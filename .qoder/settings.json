@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "ask": [
+      "Read(!/Users/kzf/Dev/GitHub/jixoai-labs/openspecui/**)",
+      "Edit(!/Users/kzf/Dev/GitHub/jixoai-labs/openspecui/**)"
+    ],
+    "allow": [
+      "Read(/Users/kzf/Dev/GitHub/jixoai-labs/openspecui/**)",
+      "Edit(/Users/kzf/Dev/GitHub/jixoai-labs/openspecui/**)"
+    ]
+  },
+  "memoryImport": {},
+  "monitoring": {}
+}
