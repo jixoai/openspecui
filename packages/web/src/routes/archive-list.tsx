@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { trpc } from '@/lib/trpc'
 import { useRealtimeUpdates } from '@/lib/use-realtime'
+import { formatRelativeTime } from '@/lib/format-time'
 import { Link } from '@tanstack/react-router'
 import { Archive, ChevronRight } from 'lucide-react'
 
@@ -36,7 +37,10 @@ export function ArchiveList() {
               <Archive className="w-5 h-5 text-muted-foreground" />
               <div>
                 <div className="font-medium">{change.name}</div>
-                <div className="text-sm text-muted-foreground">{change.id}</div>
+                <div className="text-sm text-muted-foreground">
+                  {change.id}
+                  {change.updatedAt > 0 && <> · {formatRelativeTime(change.updatedAt)}</>}
+                </div>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-muted-foreground" />

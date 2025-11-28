@@ -26,7 +26,10 @@ interface TocProps {
 export function Toc({ items, defaultCollapsed = true, className = '' }: TocProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
 
-  if (items.length === 0) return null
+  // Return hidden placeholder when empty to keep React children stable
+  if (items.length === 0) {
+    return <aside className={`hidden ${className}`} />
+  }
 
   return (
     <aside
@@ -68,13 +71,28 @@ export function Toc({ items, defaultCollapsed = true, className = '' }: TocProps
   )
 }
 /**
+ * Find the nearest scrollable ancestor element.
+ */
+function findScrollableParent(element: HTMLElement): HTMLElement | null {
+  let parent = element.parentElement
+  while (parent) {
+    const { overflowY } = getComputedStyle(parent)
+    if (overflowY === 'auto' || overflowY === 'scroll') {
+      return parent
+    }
+    parent = parent.parentElement
+  }
+  return null
+}
+
+/**
  * Scroll element into view within its scrollable container using scrollTo.
  * NOTE: Cannot use scrollIntoView here because it triggers scroll on all ancestor
  * scrollable containers, which interferes with the main content's smooth scrolling
  * when user clicks a ToC link.
  */
 function scrollIntoViewWithinContainer(element: HTMLElement) {
-  const container = element.closest('.overflow-y-auto')
+  const container = findScrollableParent(element)
   if (!container) return
 
   // Use getBoundingClientRect to get positions relative to viewport,
@@ -169,9 +187,6 @@ const tocStyles = css`
     animation-name: toc-activate;
     animation-fill-mode: both;
     animation-range: cover 0% cover 100%;
-  }
-  .scrollbar-none {
-    scrollbar-width: none;
   }
 `
 

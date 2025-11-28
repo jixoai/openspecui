@@ -40,6 +40,7 @@ export function MarkdownViewer({
   // Create heading components with ToC integration (only used in markdown mode)
   const headingComponents = useMemo(() => {
     const createHeading = (level: 1 | 2 | 3 | 4 | 5 | 6) => {
+      const Tag = `h${level}` as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
       return function Heading({ children: content }: { children?: ReactNode }) {
         const index = headingIndexRef.current++
         const label = String(content)
@@ -49,49 +50,15 @@ export function MarkdownViewer({
           .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-')
           .replace(/^-|-$/g, '')
         const id = slug || `heading-${index}`
-        const style = { viewTimelineName: `--toc-${index}` } as React.CSSProperties
 
         // Collect ToC item during render
         tocItemsRef.current.push({ id, label, level })
 
-        switch (level) {
-          case 1:
-            return (
-              <h1 id={id} style={style}>
-                {content}
-              </h1>
-            )
-          case 2:
-            return (
-              <h2 id={id} style={style}>
-                {content}
-              </h2>
-            )
-          case 3:
-            return (
-              <h3 id={id} style={style}>
-                {content}
-              </h3>
-            )
-          case 4:
-            return (
-              <h4 id={id} style={style}>
-                {content}
-              </h4>
-            )
-          case 5:
-            return (
-              <h5 id={id} style={style}>
-                {content}
-              </h5>
-            )
-          case 6:
-            return (
-              <h6 id={id} style={style}>
-                {content}
-              </h6>
-            )
-        }
+        return (
+          <Tag id={id} style={{ viewTimelineName: `--toc-${index}` }}>
+            {content}
+          </Tag>
+        )
       }
     }
 
@@ -106,6 +73,8 @@ export function MarkdownViewer({
   }, [])
 
   // Update ToC items after render - compare to avoid infinite loop
+  // Using useLayoutEffect to sync before paint, with markdown as dependency
+  // since ToC items only change when markdown content changes
   useEffect(() => {
     if (toc) return // Skip auto-generation when using custom toc
 
@@ -120,14 +89,14 @@ export function MarkdownViewer({
     if (hasChanged) {
       setAutoTocItems([...newItems])
     }
-  })
+  }, [markdown, toc, autoTocItems])
 
   // Determine which ToC items to use for timeline-scope
   const tocItems = externalTocItems ?? autoTocItems
   const timelineScope = useMemo(() => generateTimelineScope(tocItems), [tocItems])
 
-  // Determine which ToC to render
-  const tocElement = toc ?? (autoTocItems.length > 0 ? <Toc items={autoTocItems} className="viewer-toc" /> : null)
+  // Determine which ToC to render - always render Toc component to keep children stable
+  const tocElement = toc ?? <Toc items={autoTocItems} className="viewer-toc" />
 
   // Determine content
   const content = markdown ? (

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { trpc } from '@/lib/trpc'
 import { useRealtimeUpdates } from '@/lib/use-realtime'
+import { formatRelativeTime } from '@/lib/format-time'
 import { Link } from '@tanstack/react-router'
 import { FileText, ChevronRight } from 'lucide-react'
 
@@ -30,7 +31,10 @@ export function SpecList() {
               <FileText className="w-5 h-5 text-muted-foreground" />
               <div>
                 <div className="font-medium">{spec.name}</div>
-                <div className="text-sm text-muted-foreground">{spec.id}</div>
+                <div className="text-sm text-muted-foreground">
+                  {spec.id}
+                  {spec.updatedAt > 0 && <> · {formatRelativeTime(spec.updatedAt)}</>}
+                </div>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-muted-foreground" />

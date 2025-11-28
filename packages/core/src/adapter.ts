@@ -4,6 +4,31 @@ import { MarkdownParser } from './parser.js'
 import { Validator, type ValidationResult } from './validator.js'
 import type { Spec, Change } from './schemas.js'
 
+/** Spec metadata with time info */
+export interface SpecMeta {
+  id: string
+  name: string
+  createdAt: number
+  updatedAt: number
+}
+
+/** Change metadata with time info */
+export interface ChangeMeta {
+  id: string
+  name: string
+  progress: { total: number; completed: number }
+  createdAt: number
+  updatedAt: number
+}
+
+/** Archived change metadata with time info */
+export interface ArchiveMeta {
+  id: string
+  name: string
+  createdAt: number
+  updatedAt: number
+}
+
 /**
  * OpenSpec filesystem adapter
  * Handles reading, writing, and managing OpenSpec files
@@ -44,6 +69,25 @@ export class OpenSpecAdapter {
   }
 
   // =====================
+  // File time utilities
+  // =====================
+
+  /** File time info derived from filesystem */
+  private async getFileTimeInfo(
+    filePath: string
+  ): Promise<{ createdAt: number; updatedAt: number } | null> {
+    try {
+      const fileStat = await stat(filePath)
+      return {
+        createdAt: fileStat.birthtime.getTime(),
+        updatedAt: fileStat.mtime.getTime(),
+      }
+    } catch {
+      return null
+    }
+  }
+
+  // =====================
   // List operations
   // =====================
 
@@ -57,17 +101,29 @@ export class OpenSpecAdapter {
   }
 
   /**
-   * List specs with metadata (id and name)
+   * List specs with metadata (id, name, and time info)
+   * Only returns specs that have valid spec.md
+   * Sorted by updatedAt descending (most recent first)
    */
-  async listSpecsWithMeta(): Promise<Array<{ id: string; name: string }>> {
+  async listSpecsWithMeta(): Promise<SpecMeta[]> {
     const ids = await this.listSpecs()
     const results = await Promise.all(
       ids.map(async (id) => {
         const spec = await this.readSpec(id)
-        return { id, name: spec?.name ?? id }
+        if (!spec) return null
+        const specPath = join(this.specsDir, id, 'spec.md')
+        const timeInfo = await this.getFileTimeInfo(specPath)
+        return {
+          id,
+          name: spec.name,
+          createdAt: timeInfo?.createdAt ?? 0,
+          updatedAt: timeInfo?.updatedAt ?? 0,
+        }
       })
     )
     return results
+      .filter((r): r is SpecMeta => r !== null)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
   async listChanges(): Promise<string[]> {
@@ -82,23 +138,30 @@ export class OpenSpecAdapter {
   }
 
   /**
-   * List changes with metadata (id, name, and progress)
+   * List changes with metadata (id, name, progress, and time info)
+   * Only returns changes that have valid proposal.md
+   * Sorted by updatedAt descending (most recent first)
    */
-  async listChangesWithMeta(): Promise<
-    Array<{ id: string; name: string; progress: { total: number; completed: number } }>
-  > {
+  async listChangesWithMeta(): Promise<ChangeMeta[]> {
     const ids = await this.listChanges()
     const results = await Promise.all(
       ids.map(async (id) => {
         const change = await this.readChange(id)
+        if (!change) return null
+        const proposalPath = join(this.changesDir, id, 'proposal.md')
+        const timeInfo = await this.getFileTimeInfo(proposalPath)
         return {
           id,
-          name: change?.name ?? id,
-          progress: change?.progress ?? { total: 0, completed: 0 },
+          name: change.name,
+          progress: change.progress,
+          createdAt: timeInfo?.createdAt ?? 0,
+          updatedAt: timeInfo?.updatedAt ?? 0,
         }
       })
     )
     return results
+      .filter((r): r is ChangeMeta => r !== null)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
   async listArchivedChanges(): Promise<string[]> {
@@ -111,17 +174,29 @@ export class OpenSpecAdapter {
   }
 
   /**
-   * List archived changes with metadata
+   * List archived changes with metadata and time info
+   * Only returns archives that have valid proposal.md
+   * Sorted by updatedAt descending (most recent first)
    */
-  async listArchivedChangesWithMeta(): Promise<Array<{ id: string; name: string }>> {
+  async listArchivedChangesWithMeta(): Promise<ArchiveMeta[]> {
     const ids = await this.listArchivedChanges()
     const results = await Promise.all(
       ids.map(async (id) => {
         const change = await this.readArchivedChange(id)
-        return { id, name: change?.name ?? id }
+        if (!change) return null
+        const proposalPath = join(this.archiveDir, id, 'proposal.md')
+        const timeInfo = await this.getFileTimeInfo(proposalPath)
+        return {
+          id,
+          name: change.name,
+          createdAt: timeInfo?.createdAt ?? 0,
+          updatedAt: timeInfo?.updatedAt ?? 0,
+        }
       })
     )
     return results
+      .filter((r): r is ArchiveMeta => r !== null)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
   // =====================

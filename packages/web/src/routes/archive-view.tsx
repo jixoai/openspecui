@@ -7,6 +7,7 @@ import { Archive, ArrowLeft, CheckCircle, FileText, ListTodo } from 'lucide-reac
 import { Link } from '@tanstack/react-router'
 import { MarkdownViewer } from '@/components/markdown-viewer'
 import { Tabs, type Tab } from '@/components/tabs'
+import { TasksView } from '@/components/tasks-view'
 
 const route = getRouteApi('/archive/$changeId')
 
@@ -36,21 +37,21 @@ export function ArchiveView() {
       },
     ]
 
-    if (raw?.tasks) {
+    if (change?.tasks && change.tasks.length > 0) {
       result.push({
         id: 'tasks',
-        label: 'tasks.md',
+        label: 'Tasks',
         icon: <ListTodo className="w-4 h-4" />,
         content: (
-          <div className="h-full border border-border rounded-lg">
-            <MarkdownViewer markdown={raw.tasks} />
+          <div className="h-full border border-border rounded-lg p-4 overflow-auto">
+            <TasksView tasks={change.tasks} progress={change.progress} readonly />
           </div>
         ),
       })
     }
 
     return result
-  }, [raw])
+  }, [raw, change])
 
   if (isLoading) {
     return <div className="animate-pulse">Loading archived change...</div>

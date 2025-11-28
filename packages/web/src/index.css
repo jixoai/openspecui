@@ -183,6 +183,9 @@
 .scrollbar-track-transparent {
   scrollbar-color: color-mix(in srgb, currentColor, transparent 70%) transparent;
 }
+.scrollbar-none {
+  scrollbar-width: none;
+}
 
 /* Markdown content styling */
 .markdown-content {
@@ -276,3 +279,81 @@
   background-color: var(--shiki-dark-bg) !important;
 }
 
+/* App layout - responsive with container queries */
+.app-layout {
+  display: flex;
+  flex-direction: column;
+}
+.app-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.desktop-sidebar,
+.desktop-status {
+  display: none;
+}
+.mobile-header,
+.mobile-tabbar {
+  display: flex;
+}
+.main-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 1rem;
+}
+
+/* Desktop: sidebar layout (container width >= 768px) */
+@container app (min-width: 768px) {
+  .app-layout {
+    flex-direction: row;
+  }
+  .app-body {
+    min-width: 0;
+  }
+  .desktop-sidebar,
+  .desktop-status {
+    display: flex;
+  }
+  .mobile-header,
+  .mobile-tabbar {
+    display: none;
+  }
+  .main-content {
+    padding: 1.5rem;
+  }
+}
+
+/* Animation utilities */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes slide-in-from-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.animate-in {
+  animation-duration: 200ms;
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+}
+.fade-in {
+  animation-name: fade-in;
+}
+.slide-in-from-left {
+  animation-name: slide-in-from-left;
+}
+.duration-200 {
+  animation-duration: 200ms;
+}

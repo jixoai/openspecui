@@ -10,19 +10,30 @@ import { fileURLToPath } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 /**
- * Check if a port is available by trying to listen on it
+ * Check if a port is available by trying to listen on it.
+ * Tests both 127.0.0.1 and 0.0.0.0 to ensure the port is truly available.
  */
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
-    const server = createNetServer()
-    server.once('error', () => {
+    // First check 127.0.0.1 (localhost)
+    const server1 = createNetServer()
+    server1.once('error', () => {
       resolve(false)
     })
-    server.once('listening', () => {
-      server.close(() => resolve(true))
+    server1.once('listening', () => {
+      server1.close(() => {
+        // Then check 0.0.0.0 (all interfaces)
+        const server2 = createNetServer()
+        server2.once('error', () => {
+          resolve(false)
+        })
+        server2.once('listening', () => {
+          server2.close(() => resolve(true))
+        })
+        server2.listen(port, '0.0.0.0')
+      })
     })
-    // Listen on 0.0.0.0 to detect ports in use on any interface
-    server.listen(port, '0.0.0.0')
+    server1.listen(port, '127.0.0.1')
   })
 }
 

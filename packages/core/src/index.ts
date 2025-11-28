@@ -9,7 +9,7 @@
  */
 
 // Filesystem adapter for reading/writing OpenSpec files
-export { OpenSpecAdapter } from './adapter.js'
+export { OpenSpecAdapter, type SpecMeta, type ChangeMeta, type ArchiveMeta } from './adapter.js'
 
 // Markdown parser for spec and change documents
 export { MarkdownParser } from './parser.js'

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { trpc } from '@/lib/trpc'
 import { useRealtimeUpdates } from '@/lib/use-realtime'
+import { formatRelativeTime } from '@/lib/format-time'
 import { Link } from '@tanstack/react-router'
 import { GitBranch, ChevronRight } from 'lucide-react'
 
@@ -38,7 +39,8 @@ export function ChangeList() {
               <div>
                 <div className="font-medium">{change.name}</div>
                 <div className="text-sm text-muted-foreground">
-                  {change.id} · {change.progress.completed}/{change.progress.total} tasks
+                  {change.progress.completed}/{change.progress.total} tasks
+                  {change.updatedAt > 0 && <> · {formatRelativeTime(change.updatedAt)}</>}
                 </div>
               </div>
             </div>

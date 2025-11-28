@@ -1,87 +1,13 @@
-import { memo, useCallback, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { trpc, trpcClient } from '@/lib/trpc'
 import { useChangeRealtimeUpdates } from '@/lib/use-realtime'
 import { useParams, Link, useNavigate } from '@tanstack/react-router'
-import { ArrowLeft, Archive, CheckCircle, Circle, AlertCircle, Loader2 } from 'lucide-react'
+import { ArrowLeft, Archive, AlertCircle } from 'lucide-react'
 import { MarkdownContent } from '@/components/markdown-content'
 import { MarkdownViewer } from '@/components/markdown-viewer'
 import { Toc, TocSection, type TocItem } from '@/components/toc'
-
-interface Task {
-  id: string
-  text: string
-  completed: boolean
-  section?: string
-}
-
-/** Group tasks by their section */
-interface TaskGroup {
-  section: string
-  tasks: Task[]
-  completed: number
-  total: number
-}
-
-interface TaskItemProps {
-  task: Task
-  taskIndex: number
-  isToggling: boolean
-  onToggle: (taskIndex: number, completed: boolean) => void
-}
-
-const TaskItem = memo(
-  function TaskItem({ task, taskIndex, isToggling, onToggle }: TaskItemProps) {
-    return (
-      <button
-        onClick={() => onToggle(taskIndex, !task.completed)}
-        className="w-full p-3 flex items-center gap-3 hover:bg-muted/50 transition-colors text-left"
-      >
-        {isToggling ? (
-          <Loader2 className="w-5 h-5 text-primary shrink-0 animate-spin" />
-        ) : task.completed ? (
-          <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
-        ) : (
-          <Circle className="w-5 h-5 text-muted-foreground shrink-0 hover:text-primary" />
-        )}
-        <span className={task.completed ? 'line-through text-muted-foreground' : ''}>
-          {task.text}
-        </span>
-        {task.section && (
-          <span className="ml-auto text-xs px-2 py-1 bg-muted rounded">{task.section}</span>
-        )}
-      </button>
-    )
-  },
-  (prev, next) =>
-    prev.task.id === next.task.id &&
-    prev.task.completed === next.task.completed &&
-    prev.isToggling === next.isToggling
-)
-
-/** Group tasks by section and calculate progress per group */
-function groupTasksBySection(tasks: Task[]): TaskGroup[] {
-  const groups = new Map<string, Task[]>()
-
-  for (const task of tasks) {
-    const section = task.section || 'General'
-    const existing = groups.get(section) || []
-    existing.push(task)
-    groups.set(section, existing)
-  }
-
-  return Array.from(groups.entries()).map(([section, sectionTasks]) => ({
-    section,
-    tasks: sectionTasks,
-    completed: sectionTasks.filter((t) => t.completed).length,
-    total: sectionTasks.length,
-  }))
-}
-
-/** Generate a stable ID for a section name */
-function sectionToId(section: string): string {
-  return `section-${section.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`
-}
+import { TasksView, useTaskGroups, buildTaskTocItems } from '@/components/tasks-view'
 
 export function ChangeView() {
   const { changeId } = useParams({ from: '/changes/$changeId' })
@@ -128,10 +54,7 @@ export function ChangeView() {
     : null
 
   // Group tasks by section - must be before any conditional returns
-  const taskGroups = useMemo(() => {
-    if (!change) return []
-    return groupTasksBySection(change.tasks)
-  }, [change])
+  const taskGroups = useTaskGroups(change?.tasks ?? [])
 
   // Build ToC items from change sections - must be before any conditional returns
   const tocItems = useMemo<TocItem[]>(() => {
@@ -149,13 +72,7 @@ export function ChangeView() {
     items.push({ id: 'tasks', label: 'Tasks', level: 1 })
 
     // Add task sections to ToC
-    for (const group of taskGroups) {
-      items.push({
-        id: sectionToId(group.section),
-        label: `${group.section} (${group.completed}/${group.total})`,
-        level: 2,
-      })
-    }
+    items.push(...buildTaskTocItems(taskGroups))
 
     return items
   }, [change, taskGroups])
@@ -168,19 +85,9 @@ export function ChangeView() {
     return <div className="text-red-600">Change not found</div>
   }
 
-  const progressPercent =
-    change.progress.total > 0
-      ? Math.round((change.progress.completed / change.progress.total) * 100)
-      : 0
-
-  // Calculate task index offset for each group (for toggle mutation)
-  const getTaskIndex = (groupIndex: number, taskIndexInGroup: number): number => {
-    let offset = 0
-    for (let i = 0; i < groupIndex; i++) {
-      offset += taskGroups[i].tasks.length
-    }
-    return offset + taskIndexInGroup + 1
-  }
+  // Calculate base index for TasksView ToC sections
+  // why(0) + what-changes(1) + affected-specs?(2) + tasks(3 or 2)
+  const tasksTocBaseIndex = change ? (change.deltas.length > 0 ? 3 : 2) : 0
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6">
@@ -269,62 +176,13 @@ export function ChangeView() {
             </TocSection>
           )}
 
-          <TocSection id="tasks" index={change.deltas.length > 0 ? 3 : 2}>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-semibold">
-                Tasks ({change.progress.completed}/{change.progress.total})
-              </h2>
-              <span className="text-sm text-muted-foreground">{progressPercent}%</span>
-            </div>
-
-            <div className="w-full bg-muted rounded-full h-2 mb-4">
-              <div
-                className="bg-primary h-2 rounded-full transition-all"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-
-            {/* Grouped tasks by section */}
-            <div className="space-y-6">
-              {taskGroups.map((group, groupIndex) => {
-                const sectionId = sectionToId(group.section)
-                const sectionPercent =
-                  group.total > 0 ? Math.round((group.completed / group.total) * 100) : 0
-                // Base index: why(0) + what-changes(1) + affected-specs?(2) + tasks(3 or 2) + groupIndex
-                const baseIndex = change.deltas.length > 0 ? 4 : 3
-
-                return (
-                  <TocSection key={group.section} id={sectionId} index={baseIndex + groupIndex} as="div">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-medium text-foreground">{group.section}</h3>
-                      <span className="text-xs text-muted-foreground">
-                        {group.completed}/{group.total} ({sectionPercent}%)
-                      </span>
-                    </div>
-                    <div className="border border-border rounded-lg divide-y divide-border">
-                      {group.tasks.map((task, taskIndexInGroup) => {
-                        const taskIndex = getTaskIndex(groupIndex, taskIndexInGroup)
-                        return (
-                          <TaskItem
-                            key={task.id}
-                            task={task}
-                            taskIndex={taskIndex}
-                            isToggling={togglingIndex === taskIndex}
-                            onToggle={handleToggleTask}
-                          />
-                        )
-                      })}
-                    </div>
-                  </TocSection>
-                )
-              })}
-              {taskGroups.length === 0 && (
-                <div className="p-4 text-muted-foreground text-center border border-border rounded-lg">
-                  No tasks defined
-                </div>
-              )}
-            </div>
-          </TocSection>
+          <TasksView
+            tasks={change.tasks}
+            progress={change.progress}
+            onToggleTask={handleToggleTask}
+            togglingIndex={togglingIndex}
+            tocBaseIndex={tasksTocBaseIndex}
+          />
         </div>
       </MarkdownViewer>
     </div>

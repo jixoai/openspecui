@@ -46,7 +46,7 @@ export function Tabs({ tabs, defaultTab, className = '' }: TabsProps) {
       <div className="min-h-0 flex-1">
         {tabs.map((tab) => (
           <Activity key={tab.id} mode={activeTab === tab.id ? 'visible' : 'hidden'}>
-            {tab.content}
+            <>{tab.content}</>
           </Activity>
         ))}
       </div>
