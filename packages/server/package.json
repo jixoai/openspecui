@@ -1,0 +1,39 @@
+{
+  "name": "@openspecui/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.mjs",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm --no-dts",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx watch src/standalone.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@openspecui/core": "workspace:*",
+    "@openspecui/ai-provider": "workspace:*",
+    "@hono/node-server": "^1.14.1",
+    "@trpc/server": "^11.0.0",
+    "hono": "^4.7.3",
+    "ws": "^8.18.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.5.13",
+    "tsdown": "^0.16.6",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

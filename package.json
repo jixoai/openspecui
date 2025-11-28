@@ -1,13 +1,39 @@
 {
-  "name": "openspecui",
+  "name": "openspecui-monorepo",
   "version": "0.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
+  "description": "OpenSpec Web UI - Visual interface for spec-driven development",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "pnpm run dev:web & pnpm run dev:server",
+    "dev:server": "pnpm --filter @openspecui/server dev",
+    "dev:web": "pnpm --filter @openspecui/web dev",
+    "build": "pnpm run typecheck && pnpm run build:packages && pnpm --filter openspecui build",
+    "build:packages": "pnpm --filter @openspecui/core build && pnpm --filter @openspecui/ai-provider build && pnpm --filter @openspecui/server build && pnpm --filter @openspecui/web build",
+    "typecheck": "pnpm -r --parallel run typecheck",
+    "tc": "pnpm -r --parallel run typecheck",
+    "preview": "pnpm --filter openspecui dev",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "test": "vitest"
   },
-  "keywords": [],
+  "keywords": [
+    "openspec",
+    "spec-driven",
+    "ai-assisted",
+    "development"
+  ],
   "author": "",
-  "license": "ISC",
-  "packageManager": "pnpm@10.22.0"
+  "license": "MIT",
+  "packageManager": "pnpm@10.22.0",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2",
+    "prettier": "^3.4.2",
+    "prettier-plugin-organize-imports": "^4.1.0",
+    "prettier-plugin-tailwindcss": "^0.6.9"
+  }
 }

@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@openspecui/server": ["../server/src/index.ts"],
+      "@openspecui/ai-provider": ["../ai-provider/src/index.ts"],
+      "@openspecui/core": ["../core/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*", "../server/src/**/*.ts", "../ai-provider/src/**/*.ts", "../core/src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "../*/src/**/*.test.ts"]
+}

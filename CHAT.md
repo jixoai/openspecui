@@ -21,3 +21,256 @@
       8. 一切都是“文件”，所有程序的状态都和“本地文件”进行强关联
       9. AI-Provider可以通过了解文件来了解整个openspecui的程序状态，可以通过修改文件来改变webui的界面内容。这些规则都在内置的提示词中
    2. 比如进行界面上的中英文翻译（openspec的文件默认是英文，可以翻译来显示中英双语）
+
+---
+
+请充分利用monorepo的规范，梳理我们的仓库。
+特别是一些关键的功能，作为一个子仓库，进行独立的单元测试。
+逐步验证通过后，再最终搭建出我们的webui。
+最后再将webui打包到我们的cli中。
+
+---
+
+我提醒你一下，iflow和gemini都原生支持ACP：`--experimental-acp`
+Claude Code则是有Zed团队提供的ACP适配：https://github.com/zed-industries/claude-code-acp
+OpenAI Codex也是有对应的ACP适配：https://github.com/zed-industries/codex-acp
+
+---
+
+proxy后端的端口是findPort得来的，前端就不能绑定死端口。甚至应该足够灵活，可以自适应。
+可以这样考虑，一方面是vite.config中配置proxy，使得能直接访问api接口。（当然这是我自以为是前后端的端口是同时用一个的情况下）
+同时还接收通过urlSearchParams来修改源头。
+
+另外，因为我们用了websocket，以及我们的这个服务是绑定某个dir的。
+所以我们应该在界面上展示当前的live状态，以及显示目前的dirPath。
+在title部分，也应该显示dirName，这样同时开多个实例的时候，好辨别
+
+---
+
+Dashboard 的 Recent Specs / Active Changes, 或者 Specifications 的列表,
+我觉得都应该和 Active Changes 显示 Title(spec-title) + SubTitle(spec-id)
+
+---
+
+已经很不错了，但是这个 typography 的样式有点颜色上的问题：
+首先是Project的两个md渲染好像和其它spec的渲染不是很一致，你是不是用了两套方案？
+
+比如Project中的pre-code在亮色模式下，颜色居然接近白色，不是黑色，所以看不清楚字。
+还有Project的渲染没有适配暗色模式。
+
+Spec中的渲染，只要className有prose，在暗色模式下就是字体发黑，感觉没有适配暗色模式。
+
+另外，我们是不是应该顺便引入代码高亮库，我建议使用shiki
+
+---
+
+内容加入目录导航功能：
+
+- Project页面的加入导航功能，悬浮在滚动视图内，要考虑导航条目过多可能也存在滚动。
+- 目录要跟随页面一起高亮滚动（实现方案后续我会仔细给你提示词）。
+- 目录导航可以展开收起，在移动端，这条目默认可以收起来
+- 注意 spec 页面的 Requirements ，每一个 Requirement 都是一个卡片，这里目录如何做，你得思考一下。
+- Change 页面的 Tasks，现在是全部挤在一起的，只是在右边显示了主题。我们现在有了目录，它们应该根据主题进行拆分。这更我们的目录设计也更加搭配。所以这里可能界面和交互上都需要做一定的重新设计与改进。
+
+````md
+# Task
+我需要为一个 Markdown 文章渲染页面实现“目录跟随内容滚动高亮”的功能。
+请使用纯 CSS 方案（无需 JS IntersectionObserver），基于 `view-timeline` 和 `timeline-scope` 实现。
+
+# Requirements
+1. **HTML 结构要求**：
+   - 在 `<body>` (或共同父级) 上声明 `timeline-scope`，包含所有章节的变量名（如 `--s1, --s2...`）。
+   - 在 Markdown 内容的 `h2` 或 `section` 标签上，通过内联样式注入 `view-timeline-name: --sX`。
+   - 在目录 `<a>` 标签上，通过内联样式注入 CSS 变量 `--target: --sX`。
+
+2. **CSS 核心逻辑（关键）**：
+   - 必须解决“长内容阅读时高亮消失”的问题。
+   - **Animation Range**：请使用 `animation-range: cover 0% cover 100%`。这表示只要章节在视口中（哪怕只有一部分），动画就处于播放状态。
+   - **Keyframes 设置**：请使用“平顶梯形”曲线，而不是钟形曲线。
+     - 0% (不可见): 默认样式
+     - 1% (刚进入): 高亮样式 (active)
+     - 99% (快离开): 高亮样式 (active)
+     - 100% (完全离开): 默认样式
+   - 这样设置是为了确保章节在视口中间阅读时，目录链接始终保持高亮，不会因为滚动进度变化而褪色。
+
+# DEMO
+
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Markdown ToC Highlight (Fixed)</title>
+  <style>
+    :root {
+      --w-sidebar: 240px;
+      --c-active: #2563eb;    /* 高亮色：蓝色 */
+      --c-text: #64748b;      /* 默认色：灰色 */
+      --c-bg-active: #eff6ff; /* 高亮背景 */
+    }
+
+    body {
+      margin: 0;
+      display: grid;
+      grid-template-columns: var(--w-sidebar) 1fr;
+      height: 100vh;
+      font-family: system-ui, -apple-system, sans-serif;
+      overflow: hidden; /* 锁定 body，让 main 滚动 */
+    }
+
+    /* =========================================
+       1. 侧边栏 (目录)
+       ========================================= */
+    aside {
+      border-right: 1px solid #e2e8f0;
+      padding: 20px;
+      overflow-y: auto;
+      background: #f8fafc;
+    }
+
+    .toc-link {
+      display: block;
+      padding: 8px 12px;
+      margin-bottom: 4px;
+      text-decoration: none;
+      color: var(--c-text);
+      border-radius: 6px;
+      font-size: 0.95rem;
+      border-left: 3px solid transparent;
+      transition: all 0.2s; /* 仅用于 hover 效果，不要干扰 animation */
+    }
+
+    /* 
+       ★ 核心动画逻辑 ★ 
+    */
+    @keyframes activate-link {
+      /* 0% - 刚进入视口前：默认状态 */
+      0% { 
+        color: var(--c-text); 
+        background-color: transparent;
+        border-left-color: transparent;
+        font-weight: 400;
+      }
+      
+      /* 1% - 只要有一点点进入视口：立即高亮 */
+      /* 保持高亮状态一直到 99% */
+      1%, 99% { 
+        color: var(--c-active); 
+        background-color: var(--c-bg-active);
+        border-left-color: var(--c-active);
+        font-weight: 600;
+      }
+
+      /* 100% - 完全离开视口：回到默认 */
+      100% { 
+        color: var(--c-text); 
+        background-color: transparent;
+        border-left-color: transparent;
+        font-weight: 400;
+      }
+    }
+
+    .toc-link {
+      /* 绑定时间轴：使用 HTML 中定义的变量 */
+      animation-timeline: var(--target);
+      
+      /* 引用上面的动画 */
+      animation-name: activate-link;
+      
+      /* 关键配置 1：both 确保动画状态跟随滚动位置 */
+      animation-fill-mode: both;
+      
+      /* 关键配置 2：cover 范围
+         cover 0%   = 元素头部刚进入视口底部
+         cover 100% = 元素尾部刚离开视口顶部
+         配合 1%-99% 的关键帧，实现“只要在屏即高亮” */
+      animation-range: cover 0% cover 100%;
+    }
+
+
+    /* =========================================
+       2. 主内容区域 (Markdown)
+       ========================================= */
+    main {
+      padding: 40px 60px;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+    }
+
+    /* 模拟 Markdown 生成的 Section 容器 */
+    section {
+      margin-bottom: 100px;
+      padding-top: 20px;
+    }
+
+    h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; }
+    p { line-height: 1.8; color: #334155; margin-bottom: 20px; }
+    
+    /* 占位符，模拟长文 */
+    .spacer { height: 80vh; background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 10px, #fff 10px, #fff 20px); border-radius: 8px; }
+
+  </style>
+</head>
+
+<!-- 
+  ★ STEP 1: 在共同父级声明 timeline-scope 
+  渲染器需要收集所有 ID 并填在这里
+-->
+<body style="timeline-scope: --s-intro, --s-install, --s-usage, --s-api;">
+
+  <aside>
+    <h3>Project Docs</h3>
+    <nav>
+      <!-- 
+        ★ STEP 2: 目录链接绑定目标 
+        style="--target: --[ID]"
+      -->
+      <a href="#intro" class="toc-link" style="--target: --s-intro">1. Introduction</a>
+      <a href="#install" class="toc-link" style="--target: --s-install">2. Installation</a>
+      <a href="#usage" class="toc-link" style="--target: --s-usage">3. Basic Usage</a>
+      <a href="#api" class="toc-link" style="--target: --s-api">4. API Reference</a>
+    </nav>
+  </aside>
+
+  <main>
+    <h1>Documentation</h1>
+    <p>Scroll down to see the magic.</p>
+
+    <!-- 
+      ★ STEP 3: 内容章节声明时间轴名字
+      style="view-timeline-name: --[ID]"
+      注意：建议把 ID 加在 section 容器上，而不是 h2 上，这样高亮范围更准确（包含正文）。
+    -->
+    
+    <section id="intro" style="view-timeline-name: --s-intro">
+      <h2>1. Introduction</h2>
+      <p>Start reading this section. Watch the sidebar.</p>
+      <div class="spacer">Markdown Content Area...</div>
+    </section>
+
+    <section id="install" style="view-timeline-name: --s-install">
+      <h2>2. Installation</h2>
+      <p>As you scroll past the previous section, the highlight switches instantly.</p>
+      <div class="spacer">npm install ...</div>
+    </section>
+
+    <section id="usage" style="view-timeline-name: --s-usage">
+      <h2>3. Basic Usage</h2>
+      <p>Even if you stay in the middle of this huge section, the link remains active.</p>
+      <div class="spacer">import { ... } from ...</div>
+    </section>
+    
+    <section id="api" style="view-timeline-name: --s-api">
+      <h2>4. API Reference</h2>
+      <p>Final section.</p>
+      <div class="spacer">API details...</div>
+      <div style="height: 200px;">End of page</div>
+    </section>
+
+  </main>
+</body>
+</html>
+```
+
+````
