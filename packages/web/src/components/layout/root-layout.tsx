@@ -3,6 +3,7 @@ import { DesktopSidebar } from './desktop-sidebar'
 import { MobileHeader } from './mobile-header'
 import { MobileTabBar } from './mobile-tabbar'
 import { DesktopStatusBar } from './status-bar'
+import { GlobalArchiveModal } from '@/components/global-archive-modal'
 
 /** Root layout with responsive navigation */
 export function RootLayout() {
@@ -19,6 +20,8 @@ export function RootLayout() {
           <DesktopStatusBar />
         </div>
       </div>
+      {/* 全局 Archive Modal - 在 Router 内部渲染 */}
+      <GlobalArchiveModal />
     </div>
   )
 }

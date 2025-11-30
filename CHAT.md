@@ -366,7 +366,9 @@ getConfig: tProcedure.subscription(async function* () {
 
 ---
 
-现在我对Change进行Archive之后，会出现问题，我们的对Archive本来应该在Dialog中显示我们的终端打印，然后成功后，Dialog继续现实终端打印，并且提示用户Archive已经成功。并且我们的路由自动跳转到archive页面。
+现在我对Change进行Archive之后，会出现问题:
+
+我们的对Archive本来应该在Dialog中显示我们的终端打印，然后成功后，Dialog继续现实终端打印，并且提示用户Archive已经成功。并且我们的路由自动跳转到archive页面。
 
 然而现在路由没变，界面上现实着：“Change not found”；同时我们的Arcihive的Dialog也消失不见了，导致我们连终端打印也看不到了。
 
@@ -374,3 +376,12 @@ getConfig: tProcedure.subscription(async function* () {
 ---
 
 我们现在界面上有一个全局安装cli的按钮，目前只会在全局openspec不存在的时候会可用。也应该发生`npx @fission-ai/openspec --version`的版本号高于本地的时候，那么这时候界面上应该提示用户更新，同时全局安装的cli按钮也可用。
+
+
+---
+
+init底层逻辑依赖的文件夹检测存在问题，目前你的逻辑是按需并监听，因为你觉得递归监听会导致性能问题。
+
+我建议我们应该一劳永逸引入 @parcel/watcher ，让我们用最符合直觉的方式来监听我们的一整个项目目录，同时性能还能提高！代码也能进一步简化，质量和性能也能进一步提高。
+
+要注意，我们使用tsdown在做编译，@parcel/watcher是二进制项目，所以应该被exclude，从而确保安装我们 openspecui 的时候 @parcel/watcher 也被作为依赖被安装。

@@ -52,34 +52,86 @@ export interface CliSniffResult {
   hasGlobal: boolean
   /** 全局命令的版本（仅当 hasGlobal 为 true 时有值） */
   version?: string
+  /** npm registry 上的最新版本 */
+  latestVersion?: string
+  /** 是否有可用更新 */
+  hasUpdate?: boolean
   /** 错误信息（如果检测失败） */
   error?: string
+}
+
+/**
+ * 比较两个语义化版本号
+ * @returns 正数表示 a > b，负数表示 a < b，0 表示相等
+ */
+function compareVersions(a: string, b: string): number {
+  const parseVersion = (v: string) => {
+    // 移除 'v' 前缀和预发布标签
+    const clean = v.replace(/^v/, '').split('-')[0]
+    return clean.split('.').map((n) => parseInt(n, 10) || 0)
+  }
+
+  const aParts = parseVersion(a)
+  const bParts = parseVersion(b)
+
+  for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+    const aVal = aParts[i] ?? 0
+    const bVal = bParts[i] ?? 0
+    if (aVal !== bVal) return aVal - bVal
+  }
+  return 0
+}
+
+/**
+ * 获取 npx 可用的最新版本
+ *
+ * 使用 `npx @fission-ai/openspec --version` 获取最新版本
+ * 这会下载并执行最新版本，所以超时时间较长
+ */
+async function fetchLatestVersion(): Promise<string | undefined> {
+  try {
+    // npx 会下载最新版本并执行，需要较长超时
+    const { stdout } = await execAsync('npx @fission-ai/openspec --version', { timeout: 60000 })
+    return stdout.trim()
+  } catch {
+    // 网络错误或 npx 不可用，静默失败
+    return undefined
+  }
 }
 
 /**
  * 嗅探全局 openspec 命令（无缓存）
  *
  * 使用 `openspec --version` 检测是否有全局命令可用。
+ * 同时检查 npm registry 上的最新版本。
  * 每次调用都会重新检测，不使用缓存。
  */
 export async function sniffGlobalCli(): Promise<CliSniffResult> {
-  try {
-    const { stdout } = await execAsync('openspec --version', { timeout: 10000 })
-    const version = stdout.trim()
-    // 更新缓存
-    detectedCliCommand = GLOBAL_CLI_COMMAND
-    return { hasGlobal: true, version }
-  } catch (err) {
-    // 全局命令不存在或执行失败
-    // 不更新缓存，保留之前的值
-    const error = err instanceof Error ? err.message : String(err)
+  // 并行获取本地版本和最新版本
+  const [localResult, latestVersion] = await Promise.all([
+    execAsync('openspec --version', { timeout: 10000 }).catch((err) => ({ error: err })),
+    fetchLatestVersion(),
+  ])
+
+  // 处理本地版本检测结果
+  if ('error' in localResult) {
+    const error = localResult.error instanceof Error ? localResult.error.message : String(localResult.error)
     // 检查是否是 "command not found" 类型的错误
     if (error.includes('not found') || error.includes('ENOENT') || error.includes('not recognized')) {
-      return { hasGlobal: false }
+      return { hasGlobal: false, latestVersion, hasUpdate: !!latestVersion }
     }
     // 其他错误（如网络超时等）
-    return { hasGlobal: false, error }
+    return { hasGlobal: false, latestVersion, hasUpdate: !!latestVersion, error }
   }
+
+  const version = localResult.stdout.trim()
+  // 更新缓存
+  detectedCliCommand = GLOBAL_CLI_COMMAND
+
+  // 比较版本，判断是否有更新
+  const hasUpdate = latestVersion ? compareVersions(latestVersion, version) > 0 : false
+
+  return { hasGlobal: true, version, latestVersion, hasUpdate }
 }
 
 /**

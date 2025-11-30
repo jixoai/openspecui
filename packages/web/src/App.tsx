@@ -11,6 +11,7 @@ import { ArchiveList } from './routes/archive-list'
 import { ArchiveView } from './routes/archive-view'
 import { Project } from './routes/project'
 import { Settings } from './routes/settings'
+import { ArchiveModalProvider } from './lib/archive-modal-context'
 import './index.css'
 
 // Root layout
@@ -96,7 +97,9 @@ declare module '@tanstack/react-router' {
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <ArchiveModalProvider>
+        <RouterProvider router={router} />
+      </ArchiveModalProvider>
     </QueryClientProvider>
   )
 }

@@ -4,7 +4,7 @@ import { trpc, trpcClient } from '@/lib/trpc'
 import { getApiBaseUrl } from '@/lib/api-config'
 import { useConfigSubscription, useConfiguredToolsSubscription } from '@/lib/use-subscription'
 import { useServerStatus } from '@/lib/use-server-status'
-import { Sun, Moon, Monitor, Wifi, WifiOff, FolderPlus, Terminal, CheckCircle, XCircle, Check, Loader2, FolderOpen, Download } from 'lucide-react'
+import { Sun, Moon, Monitor, Wifi, WifiOff, FolderPlus, Terminal, CheckCircle, XCircle, Check, Loader2, FolderOpen, Download, ArrowUp } from 'lucide-react'
 import { CliTerminalModal } from '@/components/cli-terminal-modal'
 import { CopyablePath } from '@/components/copyable-path'
 
@@ -237,25 +237,50 @@ export function Settings() {
                   Detecting global openspec command...
                 </span>
               ) : cliSniffResult?.hasGlobal ? (
-                <span className="flex items-center gap-2 text-sm text-green-600">
-                  <CheckCircle className="w-4 h-4" />
-                  Global CLI installed: <code className="bg-muted px-1 rounded">openspec {cliSniffResult.version}</code>
-                </span>
+                <div className="flex flex-col gap-1">
+                  <span className="flex items-center gap-2 text-sm text-green-600">
+                    <CheckCircle className="w-4 h-4" />
+                    Global CLI installed: <code className="bg-muted px-1 rounded">openspec {cliSniffResult.version}</code>
+                  </span>
+                  {cliSniffResult.hasUpdate && cliSniffResult.latestVersion && (
+                    <span className="flex items-center gap-2 text-sm text-amber-600">
+                      <ArrowUp className="w-4 h-4" />
+                      Update available: <code className="bg-muted px-1 rounded">v{cliSniffResult.latestVersion}</code>
+                    </span>
+                  )}
+                </div>
               ) : (
-                <span className="flex items-center gap-2 text-sm text-yellow-600">
-                  <XCircle className="w-4 h-4" />
-                  Global CLI not found
-                </span>
+                <div className="flex flex-col gap-1">
+                  <span className="flex items-center gap-2 text-sm text-yellow-600">
+                    <XCircle className="w-4 h-4" />
+                    Global CLI not found
+                  </span>
+                  {cliSniffResult?.latestVersion && (
+                    <span className="text-xs text-muted-foreground">
+                      Latest version: <code className="bg-muted px-1 rounded">v{cliSniffResult.latestVersion}</code>
+                    </span>
+                  )}
+                </div>
               )}
             </div>
-            {!isSniffingCli && !cliSniffResult?.hasGlobal && (
+            {/* 显示安装/更新按钮：当没有全局 CLI 或有更新可用时 */}
+            {!isSniffingCli && (!cliSniffResult?.hasGlobal || cliSniffResult?.hasUpdate) && (
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowInstallModal(true)}
                   className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:opacity-90"
                 >
-                  <Download className="w-4 h-4" />
-                  Install Globally
+                  {cliSniffResult?.hasUpdate ? (
+                    <>
+                      <ArrowUp className="w-4 h-4" />
+                      Update to v{cliSniffResult.latestVersion}
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      Install Globally
+                    </>
+                  )}
                 </button>
                 <span className="text-xs text-muted-foreground">
                   Run: <code className="bg-muted px-1 rounded">npm install -g @fission-ai/openspec</code>
@@ -482,13 +507,15 @@ export function Settings() {
 
       {/* Install Global CLI Terminal Modal */}
       <CliTerminalModal
-        title="Install OpenSpec CLI Globally"
+        title={cliSniffResult?.hasUpdate ? 'Update OpenSpec CLI' : 'Install OpenSpec CLI Globally'}
         open={showInstallModal}
         onClose={() => setShowInstallModal(false)}
         type="install-global"
         successConfig={{
-          title: 'Installation Complete',
-          description: 'OpenSpec CLI has been installed globally. You can now use the "openspec" command from anywhere.',
+          title: cliSniffResult?.hasUpdate ? 'Update Complete' : 'Installation Complete',
+          description: cliSniffResult?.hasUpdate
+            ? `OpenSpec CLI has been updated to v${cliSniffResult.latestVersion}. You can now use the latest features.`
+            : 'OpenSpec CLI has been installed globally. You can now use the "openspec" command from anywhere.',
           actions: [
             {
               label: 'Close',
