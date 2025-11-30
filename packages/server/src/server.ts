@@ -16,7 +16,13 @@ import { cors } from 'hono/cors'
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
 import { applyWSSHandler } from '@trpc/server/adapters/ws'
 import { WebSocketServer } from 'ws'
-import { OpenSpecAdapter, OpenSpecWatcher, ConfigManager, CliExecutor } from '@openspecui/core'
+import {
+  OpenSpecAdapter,
+  OpenSpecWatcher,
+  ConfigManager,
+  CliExecutor,
+  initWatcherPool,
+} from '@openspecui/core'
 import { ProviderManager, type ProviderRegistry } from '@openspecui/ai-provider'
 import { appRouter, type Context } from './router.js'
 
@@ -113,10 +119,15 @@ export function createServer(config: ServerConfig) {
 /**
  * Create WebSocket server for tRPC subscriptions
  */
-export function createWebSocketServer(
+export async function createWebSocketServer(
   server: ReturnType<typeof createServer>,
-  httpServer: { on: (event: string, handler: (...args: unknown[]) => void) => void }
+  httpServer: { on: (event: string, handler: (...args: unknown[]) => void) => void },
+  config: { projectDir: string }
 ) {
+  // Initialize reactive file system watcher for the project directory
+  // This enables real-time updates when files are created/modified/deleted
+  await initWatcherPool(config.projectDir)
+
   const wss = new WebSocketServer({ noServer: true })
 
   const handler = applyWSSHandler({
@@ -140,7 +151,7 @@ export function createWebSocketServer(
     }
   })
 
-  // Start file watcher if available
+  // Start legacy file watcher if available
   server.watcher?.start()
 
   return {

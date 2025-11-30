@@ -25,6 +25,9 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
+  "dependencies": {
+    "@parcel/watcher": "^2.5.1"
+  },
   "devDependencies": {
     "@hono/node-server": "^1.14.1",
     "@openspecui/ai-provider": "workspace:*",

@@ -8,7 +8,7 @@ import {
   getCacheSize,
 } from './reactive-fs.js'
 import { ReactiveContext } from './reactive-context.js'
-import { closeAllWatchers } from './watcher-pool.js'
+import { initWatcherPool, closeAllWatchers } from './watcher-pool.js'
 import {
   createTempDir,
   createTempFile,
@@ -24,12 +24,14 @@ describe('ReactiveFS', () => {
 
   beforeEach(async () => {
     tempDir = await createTempDir()
+    // Initialize watcher pool with temp directory as project root
+    await initWatcherPool(tempDir)
     clearCache()
   })
 
   afterEach(async () => {
     clearCache()
-    closeAllWatchers()
+    await closeAllWatchers()
     await cleanupTempDir(tempDir)
   })
 
@@ -138,10 +140,10 @@ describe('ReactiveFS', () => {
     })
 
     it('should return empty array for non-existent directory', async () => {
-      // 注意：reactiveReadDir 会尝试监听目录，如果目录不存在会抛出错误
-      // 这是预期行为，因为我们需要监听目录变化
-      // 如果需要处理不存在的目录，应该先用 reactiveExists 检查
-      await expect(reactiveReadDir(join(tempDir, 'nonexistent'))).rejects.toThrow()
+      // With @parcel/watcher, we can watch non-existent directories
+      // and they will return empty arrays until created
+      const entries = await reactiveReadDir(join(tempDir, 'nonexistent'))
+      expect(entries).toEqual([])
     })
 
     it('should filter hidden files by default', async () => {

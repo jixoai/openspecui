@@ -1,32 +1,77 @@
-import { watch, type FSWatcher } from 'node:fs'
 import { resolve } from 'node:path'
+import { realpathSync } from 'node:fs'
+import { getProjectWatcher, type ProjectWatcher } from './project-watcher.js'
 
-/** 监听器池条目 */
-interface WatcherEntry {
-  watcher: FSWatcher
-  refCount: number
+/**
+ * 获取路径的真实路径（解析符号链接）
+ */
+function getRealPath(path: string): string {
+  try {
+    return realpathSync(resolve(path))
+  } catch {
+    return resolve(path)
+  }
+}
+
+/**
+ * 全局 ProjectWatcher 实例
+ * 通过 initWatcherPool 初始化
+ */
+let globalProjectWatcher: ProjectWatcher | null = null
+let globalProjectDir: string | null = null
+
+/** 默认防抖时间 (ms) */
+const DEBOUNCE_MS = 100
+
+/** 路径订阅条目 */
+interface PathSubscription {
+  path: string
   callbacks: Set<() => void>
-  /** 错误回调，用于通知上层清理缓存 */
+  unsubscribe: () => void
   onError?: () => void
 }
 
-/** 全局监听器池，共享同一路径的监听器 */
-const watcherPool = new Map<string, WatcherEntry>()
+/** 路径订阅缓存 */
+const subscriptionCache = new Map<string, PathSubscription>()
 
 /** 防抖定时器 */
 const debounceTimers = new Map<string, NodeJS.Timeout>()
 
-/** 默认防抖时间 (ms) */
-const DEBOUNCE_MS = 100
+/**
+ * 初始化 watcher pool
+ *
+ * 必须在使用 acquireWatcher 之前调用。
+ * 通常由 server 在启动时调用。
+ *
+ * @param projectDir 项目根目录
+ */
+export async function initWatcherPool(projectDir: string): Promise<void> {
+  const normalizedDir = getRealPath(projectDir)
+
+  if (globalProjectWatcher && globalProjectDir === normalizedDir) {
+    // 已初始化为同一目录
+    return
+  }
+
+  // 关闭旧的 watcher
+  if (globalProjectWatcher) {
+    await globalProjectWatcher.close()
+  }
+
+  globalProjectDir = normalizedDir
+  globalProjectWatcher = getProjectWatcher(normalizedDir)
+  await globalProjectWatcher.init()
+}
 
 /**
  * 获取或创建文件/目录监听器
  *
  * 特性：
- * - 同一路径共享监听器
+ * - 使用 @parcel/watcher 监听项目根目录
+ * - 自动处理新创建的目录（解决 init 后无法监听的问题）
+ * - 同一路径共享订阅
  * - 引用计数管理生命周期
  * - 内置防抖机制
- * - 目录删除时自动清理
  *
  * @param path 要监听的路径
  * @param onChange 变更回调
@@ -38,92 +83,80 @@ export function acquireWatcher(
   onChange: () => void,
   options: { recursive?: boolean; debounceMs?: number; onError?: () => void } = {}
 ): () => void {
-  const normalizedPath = resolve(path)
+  if (!globalProjectWatcher || !globalProjectWatcher.isInitialized) {
+    console.warn('[watcher-pool] ProjectWatcher not initialized. Call initWatcherPool first.')
+    // 返回空操作，避免崩溃
+    return () => {}
+  }
+
+  const normalizedPath = getRealPath(path)
   const debounceMs = options.debounceMs ?? DEBOUNCE_MS
+  const isRecursive = options.recursive ?? false
 
-  let entry = watcherPool.get(normalizedPath)
+  // 生成缓存 key（包含 recursive 选项）
+  const cacheKey = `${normalizedPath}:${isRecursive}`
 
-  if (!entry) {
-    // 创建新的监听器
-    const watcher = watch(
+  let subscription = subscriptionCache.get(cacheKey)
+
+  if (!subscription) {
+    // 创建新的订阅（同步，因为 watcher 已初始化）
+    const unsubscribe = globalProjectWatcher.subscribeSync(
       normalizedPath,
-      { recursive: options.recursive ?? false, persistent: false },
       () => {
         // 防抖处理
-        const existingTimer = debounceTimers.get(normalizedPath)
+        const existingTimer = debounceTimers.get(cacheKey)
         if (existingTimer) {
           clearTimeout(existingTimer)
         }
 
         const timer = setTimeout(() => {
-          debounceTimers.delete(normalizedPath)
-          const currentEntry = watcherPool.get(normalizedPath)
-          if (currentEntry) {
-            for (const cb of currentEntry.callbacks) {
+          debounceTimers.delete(cacheKey)
+          const currentSub = subscriptionCache.get(cacheKey)
+          if (currentSub) {
+            for (const cb of currentSub.callbacks) {
               try {
                 cb()
               } catch (err) {
-                console.error(`Watcher callback error for ${normalizedPath}:`, err)
+                console.error(`[watcher-pool] Callback error for ${normalizedPath}:`, err)
               }
             }
           }
         }, debounceMs)
 
-        debounceTimers.set(normalizedPath, timer)
-      }
+        debounceTimers.set(cacheKey, timer)
+      },
+      { watchChildren: isRecursive }
     )
 
-    watcher.on('error', (err) => {
-      console.error(`Watcher error for ${normalizedPath}:`, err)
-      // 发生错误时（如目录被删除），清理该 watcher
-      const errorEntry = watcherPool.get(normalizedPath)
-      if (errorEntry) {
-        errorEntry.watcher.close()
-        watcherPool.delete(normalizedPath)
-        // 通知上层清理缓存
-        if (errorEntry.onError) {
-          errorEntry.onError()
-        }
-        // 清理防抖定时器
-        const timer = debounceTimers.get(normalizedPath)
-        if (timer) {
-          clearTimeout(timer)
-          debounceTimers.delete(normalizedPath)
-        }
-      }
-    })
-
-    entry = {
-      watcher,
-      refCount: 0,
+    subscription = {
+      path: normalizedPath,
       callbacks: new Set(),
+      unsubscribe,
       onError: options.onError,
     }
-    watcherPool.set(normalizedPath, entry)
+    subscriptionCache.set(cacheKey, subscription)
   }
 
-  // 增加引用计数
-  entry.refCount++
-  entry.callbacks.add(onChange)
+  // 添加回调
+  subscription.callbacks.add(onChange)
 
   // 返回释放函数
   return () => {
-    const currentEntry = watcherPool.get(normalizedPath)
-    if (!currentEntry) return
+    const currentSub = subscriptionCache.get(cacheKey)
+    if (!currentSub) return
 
-    currentEntry.callbacks.delete(onChange)
-    currentEntry.refCount--
+    currentSub.callbacks.delete(onChange)
 
-    // 引用计数归零时关闭监听器
-    if (currentEntry.refCount === 0) {
-      currentEntry.watcher.close()
-      watcherPool.delete(normalizedPath)
+    // 所有回调都已移除，清理订阅
+    if (currentSub.callbacks.size === 0) {
+      currentSub.unsubscribe()
+      subscriptionCache.delete(cacheKey)
 
       // 清理防抖定时器
-      const timer = debounceTimers.get(normalizedPath)
+      const timer = debounceTimers.get(cacheKey)
       if (timer) {
         clearTimeout(timer)
-        debounceTimers.delete(normalizedPath)
+        debounceTimers.delete(cacheKey)
       }
     }
   }
@@ -133,20 +166,42 @@ export function acquireWatcher(
  * 获取当前活跃的监听器数量（用于调试）
  */
 export function getActiveWatcherCount(): number {
-  return watcherPool.size
+  return subscriptionCache.size
 }
 
 /**
  * 关闭所有监听器（用于测试清理）
  */
-export function closeAllWatchers(): void {
-  for (const [path, entry] of watcherPool) {
-    entry.watcher.close()
-    const timer = debounceTimers.get(path)
+export async function closeAllWatchers(): Promise<void> {
+  // 清理所有订阅
+  for (const [key, sub] of subscriptionCache) {
+    sub.unsubscribe()
+    const timer = debounceTimers.get(key)
     if (timer) {
       clearTimeout(timer)
     }
   }
-  watcherPool.clear()
+  subscriptionCache.clear()
   debounceTimers.clear()
+
+  // 关闭 ProjectWatcher
+  if (globalProjectWatcher) {
+    await globalProjectWatcher.close()
+    globalProjectWatcher = null
+    globalProjectDir = null
+  }
+}
+
+/**
+ * 检查 watcher pool 是否已初始化
+ */
+export function isWatcherPoolInitialized(): boolean {
+  return globalProjectWatcher !== null && globalProjectWatcher.isInitialized
+}
+
+/**
+ * 获取当前监听的项目目录
+ */
+export function getWatchedProjectDir(): string | null {
+  return globalProjectDir
 }

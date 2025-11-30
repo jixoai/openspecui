@@ -45,10 +45,20 @@ export {
   reactiveStat,
   clearCache,
   getCacheSize,
-  // Watcher pool management
+  // Watcher pool management (based on @parcel/watcher)
+  initWatcherPool,
   acquireWatcher,
   getActiveWatcherCount,
   closeAllWatchers,
+  isWatcherPoolInitialized,
+  getWatchedProjectDir,
+  // Low-level project watcher
+  ProjectWatcher,
+  getProjectWatcher,
+  closeAllProjectWatchers,
+  type WatchEvent,
+  type WatchEventType,
+  type PathCallback,
 } from './reactive-fs/index.js'
 
 // Legacy file watcher (deprecated, use reactive-fs instead)

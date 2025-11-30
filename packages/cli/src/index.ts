@@ -200,7 +200,8 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
   })
 
   // Create WebSocket server for realtime subscriptions
-  const wsServer = createWebSocketServer(server, httpServer)
+  // This also initializes the reactive file watcher for the project directory
+  const wsServer = await createWebSocketServer(server, httpServer, { projectDir })
 
   const url = `http://localhost:${port}`
 

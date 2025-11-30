@@ -8,8 +8,9 @@ export default defineConfig({
   dts: false,
   // Bundle all dependencies into the output
   noExternal: [/.*/],
-  // Keep Node.js built-in modules external
-  external: [/^node:/],
+  // Keep Node.js built-in modules and native dependencies external
+  // @parcel/watcher is a native C++ module that must be installed at runtime
+  external: [/^node:/, '@parcel/watcher'],
   // No minification for better debugging
   minify: false,
   // Clean output directory before build

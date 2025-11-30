@@ -58,4 +58,5 @@ const httpServer = serve({
 })
 
 // Enable WebSocket for realtime subscriptions
-createWebSocketServer(server, httpServer)
+// This also initializes the reactive file watcher for the project directory
+await createWebSocketServer(server, httpServer, { projectDir })

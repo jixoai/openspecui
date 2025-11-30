@@ -16,6 +16,7 @@ const releaseCache = new Map<string, () => void>()
  * - 自动注册文件监听
  * - 文件变更时自动更新状态
  * - 在 ReactiveContext 中调用时自动追踪依赖
+ * - 支持监听尚未创建的文件（通过 @parcel/watcher）
  *
  * @param filepath 文件路径
  * @returns 文件内容，文件不存在时返回 null
@@ -40,8 +41,7 @@ export async function reactiveReadFile(filepath: string): Promise<string | null>
     state = new ReactiveState<string | null>(initialValue)
     stateCache.set(key, state as ReactiveState<unknown>)
 
-    // 设置文件监听
-    // 监听文件所在目录，因为文件可能被删除后重新创建
+    // 监听文件所在目录（支持文件删除后重建）
     const dirPath = dirname(normalizedPath)
     const release = acquireWatcher(
       dirPath,
@@ -50,7 +50,6 @@ export async function reactiveReadFile(filepath: string): Promise<string | null>
         state!.set(newValue)
       },
       {
-        // 当 watcher 发生错误时（如目录被删除），清理缓存
         onError: () => {
           stateCache.delete(key)
           releaseCache.delete(key)
@@ -70,6 +69,7 @@ export async function reactiveReadFile(filepath: string): Promise<string | null>
  * - 自动注册目录监听
  * - 目录变更时自动更新状态
  * - 在 ReactiveContext 中调用时自动追踪依赖
+ * - 支持监听尚未创建的目录（通过 @parcel/watcher）
  *
  * @param dirpath 目录路径
  * @param options 选项
@@ -92,13 +92,9 @@ export async function reactiveReadDir(
   const optionsKey = JSON.stringify(options)
   const key = `dir:${normalizedPath}:${optionsKey}`
 
-  /** 目录是否存在 */
-  let dirExists = true
-
   const getValue = async (): Promise<string[]> => {
     try {
       const entries = await readdir(normalizedPath, { withFileTypes: true })
-      dirExists = true
       return entries
         .filter((entry) => {
           // 隐藏文件过滤
@@ -120,31 +116,11 @@ export async function reactiveReadDir(
         })
         .map((entry) => entry.name)
     } catch {
-      dirExists = false
       return []
     }
   }
 
   let state = stateCache.get(key) as ReactiveState<string[]> | undefined
-
-  // 如果缓存存在，先检查目录是否仍然存在
-  // 如果目录不存在，清理缓存让其重新创建 watcher
-  if (state) {
-    const currentValue = await getValue()
-    if (!dirExists) {
-      // 目录被删除，清理缓存
-      const release = releaseCache.get(key)
-      if (release) {
-        release()
-        releaseCache.delete(key)
-      }
-      stateCache.delete(key)
-      state = undefined
-    } else {
-      // 目录存在，更新状态（确保数据最新）
-      state.set(currentValue)
-    }
-  }
 
   if (!state) {
     // 创建新的响应式状态
@@ -155,35 +131,23 @@ export async function reactiveReadDir(
     })
     stateCache.set(key, state as ReactiveState<unknown>)
 
-    // 只有目录存在时才设置监听
-    if (dirExists) {
-      const release = acquireWatcher(
-        normalizedPath,
-        async () => {
-          const newValue = await getValue()
-          if (!dirExists) {
-            // 目录被删除，清理缓存
-            const rel = releaseCache.get(key)
-            if (rel) {
-              rel()
-              releaseCache.delete(key)
-            }
-            stateCache.delete(key)
-          } else {
-            state!.set(newValue)
-          }
+    // 监听目录（包括目录的创建和删除）
+    // @parcel/watcher 会自动处理目录不存在的情况
+    const release = acquireWatcher(
+      normalizedPath,
+      async () => {
+        const newValue = await getValue()
+        state!.set(newValue)
+      },
+      {
+        recursive: true,
+        onError: () => {
+          stateCache.delete(key)
+          releaseCache.delete(key)
         },
-        {
-          recursive: true,
-          // 当 watcher 发生错误时（如目录被删除），清理缓存
-          onError: () => {
-            stateCache.delete(key)
-            releaseCache.delete(key)
-          },
-        }
-      )
-      releaseCache.set(key, release)
-    }
+      }
+    )
+    releaseCache.set(key, release)
   }
 
   return state.get()
@@ -224,7 +188,6 @@ export async function reactiveExists(path: string): Promise<boolean> {
         state!.set(newValue)
       },
       {
-        // 当 watcher 发生错误时（如目录被删除），清理缓存
         onError: () => {
           stateCache.delete(key)
           releaseCache.delete(key)
@@ -291,7 +254,6 @@ export async function reactiveStat(
         state!.set(newValue)
       },
       {
-        // 当 watcher 发生错误时（如目录被删除），清理缓存
         onError: () => {
           stateCache.delete(key)
           releaseCache.delete(key)
