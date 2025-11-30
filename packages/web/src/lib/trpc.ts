@@ -19,10 +19,13 @@ export const queryClient = new QueryClient({
   },
 })
 
+/** WebSocket 重连延迟（毫秒） */
+export const WS_RETRY_DELAY_MS = 3000
+
 // Create WebSocket client for subscriptions
-const wsClient = createWSClient({
+export const wsClient = createWSClient({
   url: getWsUrl(),
-  retryDelayMs: () => 1000,
+  retryDelayMs: () => WS_RETRY_DELAY_MS,
 })
 
 // tRPC client singleton with WebSocket support for subscriptions

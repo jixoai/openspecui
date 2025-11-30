@@ -35,7 +35,7 @@ export interface CliTerminalModalProps {
   /** Success configuration - if provided, shows success view instead of auto-closing */
   successConfig?: SuccessConfig
   /** Subscription type */
-  type: 'init' | 'archive'
+  type: 'init' | 'archive' | 'install-global'
   /** Init options */
   initOptions?: {
     tools: string[] | 'all' | 'none'
@@ -142,6 +142,14 @@ export function CliTerminalModal({
           },
         }
       )
+    } else if (type === 'install-global') {
+      subscriptionRef.current = trpcClient.cli.installGlobalCliStream.subscribe(undefined, {
+        onData: handleEvent,
+        onError: (err) => {
+          setOutput((prev) => [...prev, `\x1b[31mError: ${err.message}\x1b[0m`])
+          setStatus('error')
+        },
+      })
     }
 
     return () => {

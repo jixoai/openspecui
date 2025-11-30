@@ -268,7 +268,7 @@ export function useAgentsMdSubscription(): SubscriptionState<string | null> {
 
 /** OpenSpecUI 配置类型 */
 export interface OpenSpecUIConfig {
-  cli: { command: string }
+  cli: { command?: string }
   ui: { theme: 'light' | 'dark' | 'system' }
 }
 

@@ -21,10 +21,11 @@ export interface CliStreamEvent {
  *
  * 负责调用外部 openspec CLI 命令。
  * 命令前缀从 ConfigManager 获取，支持：
- * - npx @fission-ai/openspec (默认)
- * - bunx openspec
- * - openspec (本地安装)
- * - 自定义命令 (如 xspec)
+ * - ['npx', '@fission-ai/openspec'] (默认)
+ * - ['openspec'] (全局安装)
+ * - 自定义数组或字符串
+ *
+ * 注意：所有命令都使用 shell: false 执行，避免 shell 注入风险
  */
 export class CliExecutor {
   constructor(
@@ -54,14 +55,14 @@ export class CliExecutor {
   }
 
   /**
-   * 构建完整命令字符串
-   * 将命令和参数合并为单个字符串，用于 shell 执行
+   * 构建完整命令数组
+   *
+   * @param args CLI 参数，如 ['init'] 或 ['archive', 'change-id']
+   * @returns [command, ...commandArgs, ...args]
    */
-  private async buildCommand(args: string[]): Promise<string> {
-    const command = await this.configManager.getCliCommand()
-    // 将参数用空格连接，形成完整命令
-    // 注意：参数中如果包含空格需要引号包裹（由调用者负责）
-    return [command, ...args].join(' ')
+  private async buildCommandArray(args: string[]): Promise<string[]> {
+    const commandParts = await this.configManager.getCliCommand()
+    return [...commandParts, ...args]
   }
 
   /**
@@ -71,14 +72,13 @@ export class CliExecutor {
    * @returns 执行结果
    */
   async execute(args: string[]): Promise<CliResult> {
-    const fullCommand = await this.buildCommand(args)
+    const fullCommand = await this.buildCommandArray(args)
+    const [cmd, ...cmdArgs] = fullCommand
 
     return new Promise((resolve) => {
-      // 使用 shell: true 时，将完整命令作为第一个参数传递，不传 args
-      // 这样可以避免 DEP0190 警告
-      const child = spawn(fullCommand, [], {
+      const child = spawn(cmd, cmdArgs, {
         cwd: this.projectDir,
-        shell: true,
+        shell: false,
         env: this.getCleanEnv(),
       })
 
@@ -152,10 +152,16 @@ export class CliExecutor {
 
   /**
    * 检查 CLI 是否可用
+   * @param timeout 超时时间（毫秒），默认 10 秒
    */
-  async checkAvailability(): Promise<{ available: boolean; version?: string; error?: string }> {
+  async checkAvailability(timeout = 10000): Promise<{ available: boolean; version?: string; error?: string }> {
     try {
-      const result = await this.execute(['--version'])
+      const result = await Promise.race([
+        this.execute(['--version']),
+        new Promise<CliResult>((_, reject) =>
+          setTimeout(() => reject(new Error('CLI check timed out')), timeout)
+        ),
+      ])
       if (result.success) {
         return {
           available: true,
@@ -185,16 +191,15 @@ export class CliExecutor {
     args: string[],
     onEvent: (event: CliStreamEvent) => void
   ): Promise<() => void> {
-    const fullCommand = await this.buildCommand(args)
+    const fullCommand = await this.buildCommandArray(args)
+    const [cmd, ...cmdArgs] = fullCommand
 
-    // 首先发送正在执行的命令
-    onEvent({ type: 'command', data: fullCommand })
+    // 首先发送正在执行的命令（用于 UI 显示）
+    onEvent({ type: 'command', data: fullCommand.join(' ') })
 
-    // 使用 shell: true 时，将完整命令作为第一个参数传递，不传 args
-    // 这样可以避免 DEP0190 警告
-    const child = spawn(fullCommand, [], {
+    const child = spawn(cmd, cmdArgs, {
       cwd: this.projectDir,
-      shell: true,
+      shell: false,
       env: this.getCleanEnv(),
     })
 
@@ -245,5 +250,53 @@ export class CliExecutor {
     if (options.skipSpecs) args.push('--skip-specs')
     if (options.noValidate) args.push('--no-validate')
     return this.executeStream(args, onEvent)
+  }
+
+  /**
+   * 流式执行任意命令（数组形式）
+   *
+   * 用于执行不需要 openspec CLI 前缀的命令，如 npm install。
+   * 使用 shell: false 避免 shell 注入风险。
+   *
+   * @param command 命令数组，如 ['npm', 'install', '-g', '@fission-ai/openspec']
+   * @param onEvent 事件回调
+   * @returns 取消函数
+   */
+  executeCommandStream(
+    command: readonly string[],
+    onEvent: (event: CliStreamEvent) => void
+  ): () => void {
+    const [cmd, ...cmdArgs] = command
+
+    // 首先发送正在执行的命令（用于 UI 显示）
+    onEvent({ type: 'command', data: command.join(' ') })
+
+    const child = spawn(cmd, cmdArgs, {
+      cwd: this.projectDir,
+      shell: false,
+      env: this.getCleanEnv(),
+    })
+
+    child.stdout?.on('data', (data) => {
+      onEvent({ type: 'stdout', data: data.toString() })
+    })
+
+    child.stderr?.on('data', (data) => {
+      onEvent({ type: 'stderr', data: data.toString() })
+    })
+
+    child.on('close', (exitCode) => {
+      onEvent({ type: 'exit', exitCode })
+    })
+
+    child.on('error', (err) => {
+      onEvent({ type: 'stderr', data: err.message })
+      onEvent({ type: 'exit', exitCode: null })
+    })
+
+    // 返回取消函数
+    return () => {
+      child.kill()
+    }
   }
 }

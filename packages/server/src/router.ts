@@ -8,7 +8,7 @@ import type {
   ConfigManager,
   CliExecutor,
 } from '@openspecui/core'
-import { getAvailableToolIds, getConfiguredTools } from '@openspecui/core'
+import { getAvailableToolIds, getConfiguredTools, getDefaultCliCommandString, sniffGlobalCli } from '@openspecui/core'
 import type { ProviderManager } from '@openspecui/ai-provider'
 import {
   createReactiveSubscription,
@@ -483,6 +483,16 @@ export const configRouter = router({
     return ctx.configManager.readConfig()
   }),
 
+  /** 获取实际使用的 CLI 命令（检测全局命令或 fallback 到 npx，字符串形式用于 UI 显示） */
+  getEffectiveCliCommand: publicProcedure.query(async ({ ctx }) => {
+    return ctx.configManager.getCliCommandString()
+  }),
+
+  /** 获取检测到的默认 CLI 命令（不读取配置文件，字符串形式用于 UI 显示） */
+  getDefaultCliCommand: publicProcedure.query(async () => {
+    return getDefaultCliCommandString()
+  }),
+
   update: publicProcedure
     .input(
       z.object({
@@ -515,6 +525,30 @@ export const configRouter = router({
 export const cliRouter = router({
   checkAvailability: publicProcedure.query(async ({ ctx }) => {
     return ctx.cliExecutor.checkAvailability()
+  }),
+
+  /** 嗅探全局 openspec 命令（无缓存） */
+  sniffGlobalCli: publicProcedure.query(async () => {
+    return sniffGlobalCli()
+  }),
+
+  /** 流式执行全局安装命令 */
+  installGlobalCliStream: publicProcedure.subscription(({ ctx }) => {
+    return observable<{ type: 'command' | 'stdout' | 'stderr' | 'exit'; data?: string; exitCode?: number | null }>((emit) => {
+      const cancel = ctx.cliExecutor.executeCommandStream(
+        ['npm', 'install', '-g', '@fission-ai/openspec'],
+        (event) => {
+          emit.next(event)
+          if (event.type === 'exit') {
+            emit.complete()
+          }
+        }
+      )
+
+      return () => {
+        cancel()
+      }
+    })
   }),
 
   /** 获取可用的工具列表 */

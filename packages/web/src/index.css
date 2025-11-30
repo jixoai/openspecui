@@ -357,3 +357,23 @@
 .duration-200 {
   animation-duration: 200ms;
 }
+
+/* Marquee animation for long paths */
+@keyframes marquee-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(calc(-100% - var(--marquee-gap, 20px)));
+  }
+}
+.animate-marquee {
+  animation: marquee-scroll var(--marquee-duration, 10s) linear infinite;
+}
+.animate-marquee::after {
+  content: attr(data-content);
+  position: absolute;
+  left: calc(100% + var(--marquee-gap, 20px));
+  top: 0;
+  white-space: nowrap;
+}

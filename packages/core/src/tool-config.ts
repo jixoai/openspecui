@@ -118,24 +118,41 @@ async function fileExists(filePath: string): Promise<boolean> {
 }
 
 /**
- * 扫描已配置的工具
+ * 扫描已配置的工具（并行检查）
  */
 async function scanConfiguredTools(projectDir: string): Promise<string[]> {
-  const configured: string[] = []
+  // 并行检查所有工具配置文件
+  const results = await Promise.all(
+    TOOL_CONFIGS.map(async (config) => {
+      const filePath = join(projectDir, config.detectionPath)
+      const exists = await fileExists(filePath)
+      return exists ? config.toolId : null
+    })
+  )
+  return results.filter((id): id is string => id !== null)
+}
+
+/**
+ * 获取需要监听的目录列表
+ * 只监听包含工具配置的一级隐藏目录
+ */
+function getWatchDirs(projectDir: string): string[] {
+  const dirs = new Set<string>()
   for (const config of TOOL_CONFIGS) {
-    const filePath = join(projectDir, config.detectionPath)
-    if (await fileExists(filePath)) {
-      configured.push(config.toolId)
+    // 获取第一级目录（如 .claude, .cursor 等）
+    const firstDir = config.detectionPath.split('/')[0]
+    if (firstDir) {
+      dirs.add(join(projectDir, firstDir))
     }
   }
-  return configured
+  return Array.from(dirs)
 }
 
 /**
  * 检测项目中已配置的工具（响应式）
  *
- * 监听项目根目录（递归），当任何配置文件变化时自动更新。
- * 必须在 ReactiveContext 中调用才能获得响应式能力。
+ * 只监听包含工具配置的隐藏目录（如 .claude, .cursor 等），
+ * 避免递归监听整个项目导致的性能问题。
  *
  * @param projectDir 项目根目录
  * @returns 已配置的工具 ID 列表
@@ -157,16 +174,34 @@ export async function getConfiguredTools(projectDir: string): Promise<string[]> 
     })
     stateCache.set(key, state)
 
-    // 监听项目根目录（递归），捕获所有工具配置文件的变化
-    const release = acquireWatcher(
+    // 只监听工具配置目录（如 .claude, .cursor 等），而不是整个项目
+    const watchDirs = getWatchDirs(normalizedPath)
+    const releases: (() => void)[] = []
+
+    for (const dir of watchDirs) {
+      const release = acquireWatcher(
+        dir,
+        async () => {
+          const newValue = await scanConfiguredTools(normalizedPath)
+          state!.set(newValue)
+        },
+        { recursive: true }
+      )
+      releases.push(release)
+    }
+
+    // 也监听项目根目录（非递归），以捕获新创建的配置目录
+    const rootRelease = acquireWatcher(
       normalizedPath,
       async () => {
         const newValue = await scanConfiguredTools(normalizedPath)
         state!.set(newValue)
       },
-      { recursive: true }
+      { recursive: false }
     )
-    releaseCache.set(key, release)
+    releases.push(rootRelease)
+
+    releaseCache.set(key, () => releases.forEach((r) => r()))
   }
 
   return state.get()

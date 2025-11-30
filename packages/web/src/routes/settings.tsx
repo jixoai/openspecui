@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { trpc, trpcClient } from '@/lib/trpc'
 import { getApiBaseUrl } from '@/lib/api-config'
 import { useConfigSubscription, useConfiguredToolsSubscription } from '@/lib/use-subscription'
-import { Sun, Moon, Monitor, Wifi, WifiOff, FolderPlus, Terminal, CheckCircle, XCircle, Check } from 'lucide-react'
+import { useServerStatus } from '@/lib/use-server-status'
+import { Sun, Moon, Monitor, Wifi, WifiOff, FolderPlus, Terminal, CheckCircle, XCircle, Check, Loader2, FolderOpen, Download } from 'lucide-react'
 import { CliTerminalModal } from '@/components/cli-terminal-modal'
+import { CopyablePath } from '@/components/copyable-path'
 
 type Theme = 'light' | 'dark' | 'system'
 
@@ -32,13 +34,25 @@ export function Settings() {
   const [cliCommand, setCliCommand] = useState('')
   const [selectedTools, setSelectedTools] = useState<string[]>([])
   const [showInitModal, setShowInitModal] = useState(false)
+  const [showInstallModal, setShowInstallModal] = useState(false)
   const [initTools, setInitTools] = useState<string[] | 'all' | 'none'>('none')
+
+  // 服务器状态（包含项目路径）
+  const serverStatus = useServerStatus()
 
   // 订阅配置
   const { data: config } = useConfigSubscription()
 
-  // CLI 可用性检查
-  const { data: cliAvailability, refetch: recheckCli } = useQuery(trpc.cli.checkAvailability.queryOptions())
+  // 嗅探全局 CLI（每次进入 settings 页面都会重新嗅探）
+  const { data: cliSniffResult, isLoading: isSniffingCli, refetch: resniffCli } = useQuery({
+    ...trpc.cli.sniffGlobalCli.queryOptions(),
+    // 每次进入页面都重新嗅探
+    staleTime: 0,
+    gcTime: 0,
+  })
+
+  // CLI 可用性检查（基于配置或嗅探结果）
+  const { data: cliAvailability, isLoading: isCheckingCli, refetch: recheckCli } = useQuery(trpc.cli.checkAvailability.queryOptions())
 
   // 获取可用工具列表
   const { data: availableTools } = useQuery(trpc.cli.getAvailableTools.queryOptions())
@@ -46,12 +60,31 @@ export function Settings() {
   // 订阅已配置的工具列表（响应式）
   const { data: configuredTools } = useConfiguredToolsSubscription()
 
-  // 同步配置到本地状态
+  // 同步配置到本地状态（只有用户配置了才显示）
   useEffect(() => {
+    // 只有当配置中有值时才同步到 input
     if (config?.cli?.command) {
       setCliCommand(config.cli.command)
+    } else {
+      // 用户没有配置时，清空 input
+      setCliCommand('')
     }
   }, [config?.cli?.command])
+
+  // 安装完成后重新嗅探
+  const handleInstallSuccess = useCallback(() => {
+    // 重新嗅探全局 CLI
+    resniffCli()
+    // 重新检查 CLI 可用性
+    recheckCli()
+    // 关闭安装模态框
+    setShowInstallModal(false)
+  }, [resniffCli, recheckCli])
+
+  // 计算显示的 placeholder
+  const cliPlaceholder = cliSniffResult?.hasGlobal
+    ? `openspec (v${cliSniffResult.version || 'detected'})`
+    : 'npx @fission-ai/openspec'
 
   // 同步已配置的工具到选中状态
   useEffect(() => {
@@ -66,21 +99,34 @@ export function Settings() {
     setShowInitModal(true)
   }
 
-  // 切换工具选择
+  // 判断工具是否已配置（不可取消）
+  const isToolConfigured = (tool: string) => configuredTools?.includes(tool) ?? false
+
+  // 切换工具选择（已配置的工具不能取消）
   const toggleTool = (tool: string) => {
+    if (isToolConfigured(tool)) return // 已配置的工具不能取消
     setSelectedTools((prev) =>
       prev.includes(tool) ? prev.filter((t) => t !== tool) : [...prev, tool]
     )
   }
 
-  // 全选/取消全选
+  // 全选/取消全选（保留已配置的工具）
   const toggleAllTools = () => {
-    if (availableTools && selectedTools.length === availableTools.length) {
-      setSelectedTools([])
-    } else if (availableTools) {
+    if (!availableTools) return
+    const unconfiguredTools = availableTools.filter((t) => !isToolConfigured(t))
+    const allUnconfiguredSelected = unconfiguredTools.every((t) => selectedTools.includes(t))
+
+    if (allUnconfiguredSelected) {
+      // 取消所有未配置的工具，保留已配置的
+      setSelectedTools(configuredTools ?? [])
+    } else {
+      // 全选所有工具
       setSelectedTools([...availableTools])
     }
   }
+
+  // 计算新工具数量（未配置但已选中的）
+  const newToolsCount = selectedTools.filter((t) => !isToolConfigured(t)).length
 
   // 保存 CLI 命令配置
   const saveCliCommandMutation = useMutation({
@@ -162,43 +208,107 @@ export function Settings() {
         </div>
       </section>
 
+      {/* Project Directory */}
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold">Project Directory</h2>
+        <div className="border border-border rounded-lg p-4">
+          <div className="flex items-start gap-2">
+            <FolderOpen className="w-4 h-4 mt-1 text-muted-foreground flex-shrink-0" />
+            {serverStatus.projectDir ? (
+              <CopyablePath path={serverStatus.projectDir} className="flex-1" />
+            ) : (
+              <span className="text-sm text-muted-foreground">Loading...</span>
+            )}
+          </div>
+        </div>
+      </section>
+
       {/* CLI Configuration */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold">CLI Configuration</h2>
         <div className="border border-border rounded-lg p-4 space-y-4">
+          {/* Global CLI Detection */}
           <div>
-            <label className="text-sm font-medium mb-2 block">OpenSpec CLI Command</label>
+            <label className="text-sm font-medium mb-2 block">Global CLI Detection</label>
+            <div className="flex items-center gap-2 mb-2">
+              {isSniffingCli ? (
+                <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Detecting global openspec command...
+                </span>
+              ) : cliSniffResult?.hasGlobal ? (
+                <span className="flex items-center gap-2 text-sm text-green-600">
+                  <CheckCircle className="w-4 h-4" />
+                  Global CLI installed: <code className="bg-muted px-1 rounded">openspec {cliSniffResult.version}</code>
+                </span>
+              ) : (
+                <span className="flex items-center gap-2 text-sm text-yellow-600">
+                  <XCircle className="w-4 h-4" />
+                  Global CLI not found
+                </span>
+              )}
+            </div>
+            {!isSniffingCli && !cliSniffResult?.hasGlobal && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowInstallModal(true)}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:opacity-90"
+                >
+                  <Download className="w-4 h-4" />
+                  Install Globally
+                </button>
+                <span className="text-xs text-muted-foreground">
+                  Run: <code className="bg-muted px-1 rounded">npm install -g @fission-ai/openspec</code>
+                </span>
+              </div>
+            )}
+            {cliSniffResult?.error && (
+              <p className="text-sm text-red-500 mt-1">
+                Detection error: {cliSniffResult.error}
+              </p>
+            )}
+          </div>
+
+          {/* CLI Command Override */}
+          <div className="pt-3 border-t border-border">
+            <label className="text-sm font-medium mb-2 block">Custom CLI Command (Optional)</label>
             <p className="text-sm text-muted-foreground mb-3">
-              Configure the command used to run OpenSpec CLI. Install with{' '}
-              <code className="bg-muted px-1 rounded">npm install -g @fission-ai/openspec</code>.
-              Examples:
-              <code className="bg-muted px-1 mx-1 rounded">npx @fission-ai/openspec</code>,
-              <code className="bg-muted px-1 mx-1 rounded">openspec</code> (global install)
+              Override the auto-detected CLI command. Leave empty to use the detected default.
             </p>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={cliCommand}
                 onChange={(e) => setCliCommand(e.target.value)}
-                placeholder="npx @fission-ai/openspec"
+                placeholder={cliPlaceholder}
                 className="flex-1 px-3 py-2 border border-border rounded-md bg-background text-foreground font-mono text-sm"
               />
               <button
                 onClick={() => saveCliCommandMutation.mutate(cliCommand)}
-                disabled={saveCliCommandMutation.isPending || cliCommand === config?.cli?.command}
+                disabled={saveCliCommandMutation.isPending || cliCommand === (config?.cli?.command ?? '')}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
               >
                 {saveCliCommandMutation.isPending ? 'Saving...' : 'Save'}
               </button>
             </div>
+            {config?.cli?.command && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Currently using custom command: <code className="bg-muted px-1 rounded">{config.cli.command}</code>
+              </p>
+            )}
           </div>
 
           {/* CLI Status */}
-          <div className="pt-2 border-t border-border">
+          <div className="pt-3 border-t border-border">
             <div className="flex items-center gap-2">
               <Terminal className="w-4 h-4 text-muted-foreground" />
               <span className="text-sm font-medium">CLI Status:</span>
-              {cliAvailability?.available ? (
+              {isCheckingCli ? (
+                <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Checking...
+                </span>
+              ) : cliAvailability?.available ? (
                 <span className="flex items-center gap-1 text-sm text-green-600">
                   <CheckCircle className="w-4 h-4" />
                   Available {cliAvailability.version && `(${cliAvailability.version})`}
@@ -300,24 +410,42 @@ export function Settings() {
               </button>
             </div>
             <p className="text-sm text-muted-foreground mb-3">
-              Select which AI tools to configure instruction files for:
+              Select which AI tools to configure. Already configured tools cannot be deselected.
             </p>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-              {availableTools?.map((tool) => (
-                <button
-                  key={tool}
-                  onClick={() => toggleTool(tool)}
-                  className={`flex items-center gap-1 px-2 py-1.5 text-xs rounded border transition-colors ${
-                    selectedTools.includes(tool)
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border hover:bg-muted'
-                  }`}
-                >
-                  {selectedTools.includes(tool) && <Check className="w-3 h-3" />}
-                  <span className="truncate">{tool}</span>
-                </button>
-              ))}
+              {availableTools?.map((tool) => {
+                const configured = isToolConfigured(tool)
+                const selected = selectedTools.includes(tool)
+                return (
+                  <button
+                    key={tool}
+                    onClick={() => toggleTool(tool)}
+                    disabled={configured}
+                    title={configured ? 'Already configured' : undefined}
+                    className={`flex items-center gap-1 px-2 py-1.5 text-xs rounded border transition-colors ${
+                      configured
+                        ? 'border-green-500/50 bg-green-500/10 text-green-600 cursor-not-allowed'
+                        : selected
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border hover:bg-muted'
+                    }`}
+                  >
+                    {(configured || selected) && (
+                      <Check className={`w-3 h-3 ${configured ? 'text-green-600' : ''}`} />
+                    )}
+                    <span className="truncate">{tool}</span>
+                  </button>
+                )
+              })}
             </div>
+            {configuredTools && configuredTools.length > 0 && (
+              <p className="text-xs text-muted-foreground mt-2">
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-green-500/50" />
+                  {configuredTools.length} tool{configuredTools.length > 1 ? 's' : ''} already configured
+                </span>
+              </p>
+            )}
           </div>
 
           {/* Init Buttons */}
@@ -327,9 +455,11 @@ export function Settings() {
               className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90"
             >
               <FolderPlus className="w-4 h-4" />
-              {selectedTools.length > 0
-                ? `Initialize with ${selectedTools.length} tools`
-                : 'Initialize (no tools)'}
+              {newToolsCount > 0
+                ? `Add ${newToolsCount} new tool${newToolsCount > 1 ? 's' : ''}`
+                : selectedTools.length > 0
+                  ? 'Refresh configuration'
+                  : 'Initialize (no tools)'}
             </button>
             <button
               onClick={() => startInit('all')}
@@ -348,6 +478,29 @@ export function Settings() {
         onClose={() => setShowInitModal(false)}
         type="init"
         initOptions={{ tools: initTools }}
+      />
+
+      {/* Install Global CLI Terminal Modal */}
+      <CliTerminalModal
+        title="Install OpenSpec CLI Globally"
+        open={showInstallModal}
+        onClose={() => setShowInstallModal(false)}
+        type="install-global"
+        successConfig={{
+          title: 'Installation Complete',
+          description: 'OpenSpec CLI has been installed globally. You can now use the "openspec" command from anywhere.',
+          actions: [
+            {
+              label: 'Close',
+              onClick: () => setShowInstallModal(false),
+            },
+            {
+              label: 'Re-detect CLI',
+              onClick: handleInstallSuccess,
+              primary: true,
+            },
+          ],
+        }}
       />
     </div>
   )

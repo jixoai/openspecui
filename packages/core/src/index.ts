@@ -64,7 +64,12 @@ export {
   ConfigManager,
   OpenSpecUIConfigSchema,
   DEFAULT_CONFIG,
+  getDefaultCliCommand,
+  getDefaultCliCommandString,
+  sniffGlobalCli,
+  parseCliCommand,
   type OpenSpecUIConfig,
+  type CliSniffResult,
 } from './config.js'
 
 // CLI executor for calling external openspec commands
