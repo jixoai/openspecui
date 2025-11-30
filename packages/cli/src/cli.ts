@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import yargs from 'yargs'
 import { hideBin } from 'yargs/helpers'
@@ -31,6 +31,9 @@ interface Args {
 }
 
 async function main(): Promise<void> {
+  // pnpm sets INIT_CWD to the original working directory
+  const originalCwd = process.env.INIT_CWD || process.cwd()
+
   const argv = (await yargs(hideBin(process.argv))
     .scriptName('openspecui')
     .usage('$0 [project-dir]', 'Visual interface for spec-driven development')
@@ -67,8 +70,9 @@ async function main(): Promise<void> {
     .strict()
     .parse()) as Args
 
-  // Use positional argument or --dir option
-  const projectDir = argv._[0]?.toString() || argv.dir
+  // Use positional argument or --dir option, resolve to absolute path from original cwd
+  const rawDir = argv._[0]?.toString() || argv.dir
+  const projectDir = resolve(originalCwd, rawDir)
 
   console.log(`
 ┌─────────────────────────────────────────────┐

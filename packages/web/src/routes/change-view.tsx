@@ -1,7 +1,7 @@
-import { useCallback, useMemo } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { trpc, trpcClient } from '@/lib/trpc'
-import { useChangeRealtimeUpdates } from '@/lib/use-realtime'
+import { useCallback, useMemo, useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import { trpcClient } from '@/lib/trpc'
+import { useChangeSubscription } from '@/lib/use-subscription'
 import { useParams, Link, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, Archive, AlertCircle } from 'lucide-react'
 import { MarkdownContent } from '@/components/markdown-content'
@@ -12,20 +12,26 @@ import { TasksView, useTaskGroups, buildTaskTocItems } from '@/components/tasks-
 export function ChangeView() {
   const { changeId } = useParams({ from: '/changes/$changeId' })
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
+  const [archiveError, setArchiveError] = useState<string | null>(null)
 
-  // Subscribe to realtime updates for this specific change
-  useChangeRealtimeUpdates(changeId)
-
-  const { data: change, isLoading } = useQuery(trpc.change.get.queryOptions({ id: changeId }))
-  const { data: validation } = useQuery(trpc.change.validate.queryOptions({ id: changeId }))
+  const { data: change, isLoading } = useChangeSubscription(changeId)
+  // TODO: validation 暂时不支持订阅，后续可以添加
+  const validation = null as { valid: boolean; issues: Array<{ severity: string; message: string; path?: string }> } | null
 
   const archiveMutation = useMutation({
-    mutationFn: () => trpcClient.change.archive.mutate({ id: changeId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['change', 'list'] })
-      queryClient.invalidateQueries({ queryKey: ['change', 'listArchived'] })
-      navigate({ to: '/changes' })
+    mutationFn: () => trpcClient.cli.archive.mutate({ changeId }),
+    onSuccess: (result) => {
+      if (result.success) {
+        // CLI 执行成功，文件变更会自动触发订阅更新
+        setArchiveError(null)
+        navigate({ to: '/archive' })
+      } else {
+        // CLI 执行失败，显示错误
+        setArchiveError(result.stderr || 'Archive failed')
+      }
+    },
+    onError: (error) => {
+      setArchiveError(error.message)
     },
   })
 
@@ -36,10 +42,7 @@ export function ChangeView() {
         taskIndex: params.taskIndex,
         completed: params.completed,
       }),
-    onSuccess: () => {
-      // Refetch to get updated data
-      queryClient.invalidateQueries({ queryKey: [['change', 'get']] })
-    },
+    // 订阅模式下无需手动 invalidate，文件变更会自动触发更新
   })
 
   const handleToggleTask = useCallback(
@@ -111,6 +114,18 @@ export function ChangeView() {
           {archiveMutation.isPending ? 'Archiving...' : 'Archive'}
         </button>
       </div>
+
+      {archiveError && (
+        <div className="border border-red-500 bg-red-500/10 rounded-lg p-4">
+          <div className="flex items-center gap-2 text-red-600 font-medium mb-2">
+            <AlertCircle className="w-5 h-5" />
+            Archive Failed
+          </div>
+          <pre className="text-sm text-red-600 whitespace-pre-wrap overflow-auto max-h-32">
+            {archiveError}
+          </pre>
+        </div>
+      )}
 
       {validation && !validation.valid && (
         <div className="border border-red-500 bg-red-500/10 rounded-lg p-4">

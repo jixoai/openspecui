@@ -74,10 +74,12 @@ Spec中的渲染，只要className有prose，在暗色模式下就是字体发�
 
 ````md
 # Task
+
 我需要为一个 Markdown 文章渲染页面实现“目录跟随内容滚动高亮”的功能。
 请使用纯 CSS 方案（无需 JS IntersectionObserver），基于 `view-timeline` 和 `timeline-scope` 实现。
 
 # Requirements
+
 1. **HTML 结构要求**：
    - 在 `<body>` (或共同父级) 上声明 `timeline-scope`，包含所有章节的变量名（如 `--s1, --s2...`）。
    - 在 Markdown 内容的 `h2` 或 `section` 标签上，通过内联样式注入 `view-timeline-name: --sX`。
@@ -98,179 +100,246 @@ Spec中的渲染，只要className有prose，在暗色模式下就是字体发�
 ```html
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Markdown ToC Highlight (Fixed)</title>
-  <style>
-    :root {
-      --w-sidebar: 240px;
-      --c-active: #2563eb;    /* 高亮色：蓝色 */
-      --c-text: #64748b;      /* 默认色：灰色 */
-      --c-bg-active: #eff6ff; /* 高亮背景 */
-    }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Markdown ToC Highlight (Fixed)</title>
+    <style>
+      :root {
+        --w-sidebar: 240px;
+        --c-active: #2563eb; /* 高亮色：蓝色 */
+        --c-text: #64748b; /* 默认色：灰色 */
+        --c-bg-active: #eff6ff; /* 高亮背景 */
+      }
 
-    body {
-      margin: 0;
-      display: grid;
-      grid-template-columns: var(--w-sidebar) 1fr;
-      height: 100vh;
-      font-family: system-ui, -apple-system, sans-serif;
-      overflow: hidden; /* 锁定 body，让 main 滚动 */
-    }
+      body {
+        margin: 0;
+        display: grid;
+        grid-template-columns: var(--w-sidebar) 1fr;
+        height: 100vh;
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        overflow: hidden; /* 锁定 body，让 main 滚动 */
+      }
 
-    /* =========================================
+      /* =========================================
        1. 侧边栏 (目录)
        ========================================= */
-    aside {
-      border-right: 1px solid #e2e8f0;
-      padding: 20px;
-      overflow-y: auto;
-      background: #f8fafc;
-    }
+      aside {
+        border-right: 1px solid #e2e8f0;
+        padding: 20px;
+        overflow-y: auto;
+        background: #f8fafc;
+      }
 
-    .toc-link {
-      display: block;
-      padding: 8px 12px;
-      margin-bottom: 4px;
-      text-decoration: none;
-      color: var(--c-text);
-      border-radius: 6px;
-      font-size: 0.95rem;
-      border-left: 3px solid transparent;
-      transition: all 0.2s; /* 仅用于 hover 效果，不要干扰 animation */
-    }
+      .toc-link {
+        display: block;
+        padding: 8px 12px;
+        margin-bottom: 4px;
+        text-decoration: none;
+        color: var(--c-text);
+        border-radius: 6px;
+        font-size: 0.95rem;
+        border-left: 3px solid transparent;
+        transition: all 0.2s; /* 仅用于 hover 效果，不要干扰 animation */
+      }
 
-    /* 
+      /* 
        ★ 核心动画逻辑 ★ 
     */
-    @keyframes activate-link {
-      /* 0% - 刚进入视口前：默认状态 */
-      0% { 
-        color: var(--c-text); 
-        background-color: transparent;
-        border-left-color: transparent;
-        font-weight: 400;
-      }
-      
-      /* 1% - 只要有一点点进入视口：立即高亮 */
-      /* 保持高亮状态一直到 99% */
-      1%, 99% { 
-        color: var(--c-active); 
-        background-color: var(--c-bg-active);
-        border-left-color: var(--c-active);
-        font-weight: 600;
+      @keyframes activate-link {
+        /* 0% - 刚进入视口前：默认状态 */
+        0% {
+          color: var(--c-text);
+          background-color: transparent;
+          border-left-color: transparent;
+          font-weight: 400;
+        }
+
+        /* 1% - 只要有一点点进入视口：立即高亮 */
+        /* 保持高亮状态一直到 99% */
+        1%,
+        99% {
+          color: var(--c-active);
+          background-color: var(--c-bg-active);
+          border-left-color: var(--c-active);
+          font-weight: 600;
+        }
+
+        /* 100% - 完全离开视口：回到默认 */
+        100% {
+          color: var(--c-text);
+          background-color: transparent;
+          border-left-color: transparent;
+          font-weight: 400;
+        }
       }
 
-      /* 100% - 完全离开视口：回到默认 */
-      100% { 
-        color: var(--c-text); 
-        background-color: transparent;
-        border-left-color: transparent;
-        font-weight: 400;
-      }
-    }
+      .toc-link {
+        /* 绑定时间轴：使用 HTML 中定义的变量 */
+        animation-timeline: var(--target);
 
-    .toc-link {
-      /* 绑定时间轴：使用 HTML 中定义的变量 */
-      animation-timeline: var(--target);
-      
-      /* 引用上面的动画 */
-      animation-name: activate-link;
-      
-      /* 关键配置 1：both 确保动画状态跟随滚动位置 */
-      animation-fill-mode: both;
-      
-      /* 关键配置 2：cover 范围
+        /* 引用上面的动画 */
+        animation-name: activate-link;
+
+        /* 关键配置 1：both 确保动画状态跟随滚动位置 */
+        animation-fill-mode: both;
+
+        /* 关键配置 2：cover 范围
          cover 0%   = 元素头部刚进入视口底部
          cover 100% = 元素尾部刚离开视口顶部
          配合 1%-99% 的关键帧，实现“只要在屏即高亮” */
-      animation-range: cover 0% cover 100%;
-    }
+        animation-range: cover 0% cover 100%;
+      }
 
-
-    /* =========================================
+      /* =========================================
        2. 主内容区域 (Markdown)
        ========================================= */
-    main {
-      padding: 40px 60px;
-      overflow-y: auto;
-      scroll-behavior: smooth;
-    }
+      main {
+        padding: 40px 60px;
+        overflow-y: auto;
+        scroll-behavior: smooth;
+      }
 
-    /* 模拟 Markdown 生成的 Section 容器 */
-    section {
-      margin-bottom: 100px;
-      padding-top: 20px;
-    }
+      /* 模拟 Markdown 生成的 Section 容器 */
+      section {
+        margin-bottom: 100px;
+        padding-top: 20px;
+      }
 
-    h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; }
-    p { line-height: 1.8; color: #334155; margin-bottom: 20px; }
-    
-    /* 占位符，模拟长文 */
-    .spacer { height: 80vh; background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 10px, #fff 10px, #fff 20px); border-radius: 8px; }
+      h2 {
+        border-bottom: 1px solid #eee;
+        padding-bottom: 10px;
+      }
+      p {
+        line-height: 1.8;
+        color: #334155;
+        margin-bottom: 20px;
+      }
 
-  </style>
-</head>
+      /* 占位符，模拟长文 */
+      .spacer {
+        height: 80vh;
+        background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 10px, #fff 10px, #fff 20px);
+        border-radius: 8px;
+      }
+    </style>
+  </head>
 
-<!-- 
+  <!-- 
   ★ STEP 1: 在共同父级声明 timeline-scope 
   渲染器需要收集所有 ID 并填在这里
 -->
-<body style="timeline-scope: --s-intro, --s-install, --s-usage, --s-api;">
-
-  <aside>
-    <h3>Project Docs</h3>
-    <nav>
-      <!-- 
+  <body style="timeline-scope: --s-intro, --s-install, --s-usage, --s-api;">
+    <aside>
+      <h3>Project Docs</h3>
+      <nav>
+        <!-- 
         ★ STEP 2: 目录链接绑定目标 
         style="--target: --[ID]"
       -->
-      <a href="#intro" class="toc-link" style="--target: --s-intro">1. Introduction</a>
-      <a href="#install" class="toc-link" style="--target: --s-install">2. Installation</a>
-      <a href="#usage" class="toc-link" style="--target: --s-usage">3. Basic Usage</a>
-      <a href="#api" class="toc-link" style="--target: --s-api">4. API Reference</a>
-    </nav>
-  </aside>
+        <a href="#intro" class="toc-link" style="--target: --s-intro">1. Introduction</a>
+        <a href="#install" class="toc-link" style="--target: --s-install">2. Installation</a>
+        <a href="#usage" class="toc-link" style="--target: --s-usage">3. Basic Usage</a>
+        <a href="#api" class="toc-link" style="--target: --s-api">4. API Reference</a>
+      </nav>
+    </aside>
 
-  <main>
-    <h1>Documentation</h1>
-    <p>Scroll down to see the magic.</p>
+    <main>
+      <h1>Documentation</h1>
+      <p>Scroll down to see the magic.</p>
 
-    <!-- 
+      <!-- 
       ★ STEP 3: 内容章节声明时间轴名字
       style="view-timeline-name: --[ID]"
       注意：建议把 ID 加在 section 容器上，而不是 h2 上，这样高亮范围更准确（包含正文）。
     -->
-    
-    <section id="intro" style="view-timeline-name: --s-intro">
-      <h2>1. Introduction</h2>
-      <p>Start reading this section. Watch the sidebar.</p>
-      <div class="spacer">Markdown Content Area...</div>
-    </section>
 
-    <section id="install" style="view-timeline-name: --s-install">
-      <h2>2. Installation</h2>
-      <p>As you scroll past the previous section, the highlight switches instantly.</p>
-      <div class="spacer">npm install ...</div>
-    </section>
+      <section id="intro" style="view-timeline-name: --s-intro">
+        <h2>1. Introduction</h2>
+        <p>Start reading this section. Watch the sidebar.</p>
+        <div class="spacer">Markdown Content Area...</div>
+      </section>
 
-    <section id="usage" style="view-timeline-name: --s-usage">
-      <h2>3. Basic Usage</h2>
-      <p>Even if you stay in the middle of this huge section, the link remains active.</p>
-      <div class="spacer">import { ... } from ...</div>
-    </section>
-    
-    <section id="api" style="view-timeline-name: --s-api">
-      <h2>4. API Reference</h2>
-      <p>Final section.</p>
-      <div class="spacer">API details...</div>
-      <div style="height: 200px;">End of page</div>
-    </section>
+      <section id="install" style="view-timeline-name: --s-install">
+        <h2>2. Installation</h2>
+        <p>As you scroll past the previous section, the highlight switches instantly.</p>
+        <div class="spacer">npm install ...</div>
+      </section>
 
-  </main>
-</body>
+      <section id="usage" style="view-timeline-name: --s-usage">
+        <h2>3. Basic Usage</h2>
+        <p>Even if you stay in the middle of this huge section, the link remains active.</p>
+        <div class="spacer">import { ... } from ...</div>
+      </section>
+
+      <section id="api" style="view-timeline-name: --s-api">
+        <h2>4. API Reference</h2>
+        <p>Final section.</p>
+        <div class="spacer">API details...</div>
+        <div style="height: 200px;">End of page</div>
+      </section>
+    </main>
+  </body>
 </html>
 ```
-
 ````
+
+---
+
+1. 我们必须和官方的cli保持一致
+   1. 现在的界面上的“Archive按钮”，底层是调用 `openspec archive` 吗？
+   2. 界面上的“Initialize OpenSpec按钮”，底层是调用 `openspec init` 吗？
+2. 我们所有的接口都用上订阅模式了吗？这点很重要，我们整个应用都应该是实时更新的。
+
+---
+
+不能简单的流式，但确实需要存在交互，或者说，archive和init这两个命令可能没必要流式，这里的关键在于:
+我们要参考 `openspec init --help` 和 `openspec archive --help` 的打印结果，来在界面上呈现一些内容。
+这里有两种方案，一种是直接拦截`openspec init`的命令，呈现出一个终端界面到前端，在前端使用键盘来完成工作。
+一种是直接参考openspec init做一套存前端的交互，组合成最终`openspec init --tools=A,B,C`这样无交互式命令来执行。
+
+我个人的建议是直接做一套前端，跟最新版的openspec的具体实现进行强关联。我们把自己假设成官方团队来维护这个ui工具。
+
+关于配置文件，有两种方案，一种是存储在前端，一种是文件化，存储在磁盘。我建议后者，因为我们底层使用了file watch来实现了整个系统的响应式更新。
+所以我觉得可以复用这个底层，让配置文件也能实时更新。
+也就是说，我们整个系统的订阅模式，完全基于文件/文件夹的订阅来做到自动推送更新，这应该是非常优雅的架构。我不知道你是不是按我想的这样做，还是僵硬地去一个个接口去实现订阅更新？
+我的意思是说，比如我们实现一个普通的函数并在普通的trpc中使用：
+
+```ts
+async function getConfig() {
+  return (await fs.readFileOrNull(configPath)) ?? defaultConfig
+}
+getConfig: tProcedure.query(() => getConfig())
+```
+
+现在要做成响应式，只需要这样做：
+
+```ts
+async function getConfig() {
+  // fsProvider 是 watcher-fs/fs/pool-fs 等等都统一抽象，取决于用户是否开启监听模式，或者是否轮询模式等
+  return (await fsProvider.readFileOrNull(configPath)) ?? defaultConfig
+}
+getConfig: tProcedure.subscription(async function* () {
+  const effect = fsEffect(() => getConfig())
+  try {
+    yield* effect.stream()
+  } finally {
+    effect.stop()
+  }
+  /// 这里理论上代码还能再简化
+})
+```
+
+这里的思路，其实就是signal/effect的思路，在单次调用中，我们将过程路径说依赖到的文件/文件夹全部收集起来，然后进行监听。
+只要有变动，那么就进行推送。
+如果WebSocket断开，那么就释放这些监听：这里同一个文件夹/文件的监听可以共享，一个监听的引用为0的时候，就释放。
+
+还有，要实现这些功能，最关键的技术是AsyncContext这个技术，它可以实现一个异步上下文隐形传递上下文对象。从而实现文件监听的依赖收集，这点非常重要！
+是我们响应式监听能否成功的关键。我以前做过简单的技术实现，你可以参考 /Users/kzf/Dev/GitHub/jixo/packages/dev/src/reactive-fs/reactive-fs.ts
+
+---
+
+对于测试,我们可能需要做一份专门的spec,因为这次改攻动非常重要,特别是涉及到我们的内核,是我们项目代码质量飞跃的关键,所以必须附带完整的测试

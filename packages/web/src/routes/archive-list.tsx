@@ -1,14 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
-import { trpc } from '@/lib/trpc'
-import { useRealtimeUpdates } from '@/lib/use-realtime'
+import { useArchivesSubscription } from '@/lib/use-subscription'
 import { formatRelativeTime } from '@/lib/format-time'
 import { Link } from '@tanstack/react-router'
 import { Archive, ChevronRight } from 'lucide-react'
 
 export function ArchiveList() {
-  useRealtimeUpdates()
-
-  const { data: archived, isLoading } = useQuery(trpc.archive.listWithMeta.queryOptions())
+  const { data: archived, isLoading } = useArchivesSubscription()
 
   if (isLoading) {
     return <div className="animate-pulse">Loading archived changes...</div>

@@ -2,5 +2,9 @@ node_modules/
 dist/
 build/
 bundle/
+coverage/
 .log
 .report
+
+# Example directory for E2E testing
+example/

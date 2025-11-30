@@ -1,7 +1,5 @@
 import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { trpc } from '@/lib/trpc'
-import { useRealtimeUpdates } from '@/lib/use-realtime'
+import { useArchiveSubscription } from '@/lib/use-subscription'
 import { getRouteApi } from '@tanstack/react-router'
 import { Archive, ArrowLeft, CheckCircle, FileText, ListTodo } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
@@ -12,12 +10,11 @@ import { TasksView } from '@/components/tasks-view'
 const route = getRouteApi('/archive/$changeId')
 
 export function ArchiveView() {
-  useRealtimeUpdates()
-
   const { changeId } = route.useParams()
 
-  const { data: change, isLoading } = useQuery(trpc.archive.get.queryOptions({ id: changeId }))
-  const { data: raw } = useQuery(trpc.archive.getRaw.queryOptions({ id: changeId }))
+  const { data: change, isLoading } = useArchiveSubscription(changeId)
+  // TODO: raw 订阅暂未实现，后续可以添加
+  const raw = null as { proposal: string; tasks?: string } | null
 
   const tabs = useMemo<Tab[]>(() => {
     const result: Tab[] = [

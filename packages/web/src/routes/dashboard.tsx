@@ -1,15 +1,11 @@
 import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { trpc } from '@/lib/trpc'
-import { useRealtimeUpdates } from '@/lib/use-realtime'
 import { Link } from '@tanstack/react-router'
 import { FileText, GitBranch, CheckCircle, AlertCircle, Archive } from 'lucide-react'
+import { useDashboardSubscription, useInitializedSubscription } from '@/lib/use-subscription'
 
 export function Dashboard() {
-  useRealtimeUpdates()
-
-  const { data, isLoading, error } = useQuery(trpc.dashboard.getData.queryOptions())
-  const { data: initialized } = useQuery(trpc.dashboard.isInitialized.queryOptions())
+  const { data, isLoading, error } = useDashboardSubscription()
+  const { data: initialized } = useInitializedSubscription()
 
   // Sort specs by requirement count (descending)
   const sortedSpecs = useMemo(() => {

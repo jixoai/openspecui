@@ -1,9 +1,7 @@
 import { MarkdownContent } from '@/components/markdown-content'
 import { MarkdownViewer } from '@/components/markdown-viewer'
 import { Toc, TocSection, type TocItem } from '@/components/toc'
-import { trpc } from '@/lib/trpc'
-import { useSpecRealtimeUpdates } from '@/lib/use-realtime'
-import { useQuery } from '@tanstack/react-query'
+import { useSpecSubscription } from '@/lib/use-subscription'
 import { Link, useParams } from '@tanstack/react-router'
 import { AlertCircle, AlertTriangle, ArrowLeft, CheckCircle, Info } from 'lucide-react'
 import { useMemo } from 'react'
@@ -11,11 +9,9 @@ import { useMemo } from 'react'
 export function SpecView() {
   const { specId } = useParams({ from: '/specs/$specId' })
 
-  // Subscribe to realtime updates for this specific spec
-  useSpecRealtimeUpdates(specId)
-
-  const { data: spec, isLoading } = useQuery(trpc.spec.get.queryOptions({ id: specId }))
-  const { data: validation } = useQuery(trpc.spec.validate.queryOptions({ id: specId }))
+  const { data: spec, isLoading } = useSpecSubscription(specId)
+  // TODO: validation 暂时不支持订阅，后续可以添加
+  const validation = null as { valid: boolean; issues: Array<{ severity: string; message: string; path?: string }> } | null
 
   // Build ToC items from spec sections - must be before any conditional returns
   const tocItems = useMemo<TocItem[]>(() => {

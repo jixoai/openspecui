@@ -1,15 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
-import { trpc } from '@/lib/trpc'
-import { useRealtimeUpdates } from '@/lib/use-realtime'
 import { formatRelativeTime } from '@/lib/format-time'
 import { Link } from '@tanstack/react-router'
 import { FileText, ChevronRight } from 'lucide-react'
+import { useSpecsSubscription } from '@/lib/use-subscription'
 
 export function SpecList() {
-  // Subscribe to realtime updates
-  useRealtimeUpdates()
-
-  const { data: specs, isLoading } = useQuery(trpc.spec.listWithMeta.queryOptions())
+  const { data: specs, isLoading } = useSpecsSubscription()
 
   if (isLoading) {
     return <div className="animate-pulse">Loading specs...</div>

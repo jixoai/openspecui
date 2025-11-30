@@ -1,14 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
-import { trpc } from '@/lib/trpc'
-import { useRealtimeUpdates } from '@/lib/use-realtime'
+import { useChangesSubscription } from '@/lib/use-subscription'
 import { formatRelativeTime } from '@/lib/format-time'
 import { Link } from '@tanstack/react-router'
 import { GitBranch, ChevronRight } from 'lucide-react'
 
 export function ChangeList() {
-  useRealtimeUpdates()
-
-  const { data: changes, isLoading } = useQuery(trpc.change.listWithMeta.queryOptions())
+  const { data: changes, isLoading } = useChangesSubscription()
 
   if (isLoading) {
     return <div className="animate-pulse">Loading changes...</div>

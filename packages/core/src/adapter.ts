@@ -1,8 +1,9 @@
-import { readdir, readFile, stat, mkdir, writeFile, rename } from 'fs/promises'
+import { mkdir, writeFile, rename, readFile } from 'fs/promises'
 import { join } from 'path'
 import { MarkdownParser } from './parser.js'
 import { Validator, type ValidationResult } from './validator.js'
 import type { Spec, Change } from './schemas.js'
+import { reactiveReadFile, reactiveReadDir, reactiveStat } from './reactive-fs/index.js'
 
 /** Spec metadata with time info */
 export interface SpecMeta {
@@ -60,30 +61,23 @@ export class OpenSpecAdapter {
   // =====================
 
   async isInitialized(): Promise<boolean> {
-    try {
-      const openspecStat = await stat(this.openspecDir)
-      return openspecStat.isDirectory()
-    } catch {
-      return false
-    }
+    const statInfo = await reactiveStat(this.openspecDir)
+    return statInfo?.isDirectory ?? false
   }
 
   // =====================
   // File time utilities
   // =====================
 
-  /** File time info derived from filesystem */
+  /** File time info derived from filesystem (reactive) */
   private async getFileTimeInfo(
     filePath: string
   ): Promise<{ createdAt: number; updatedAt: number } | null> {
-    try {
-      const fileStat = await stat(filePath)
-      return {
-        createdAt: fileStat.birthtime.getTime(),
-        updatedAt: fileStat.mtime.getTime(),
-      }
-    } catch {
-      return null
+    const statInfo = await reactiveStat(filePath)
+    if (!statInfo) return null
+    return {
+      createdAt: statInfo.birthtime,
+      updatedAt: statInfo.mtime,
     }
   }
 
@@ -92,12 +86,7 @@ export class OpenSpecAdapter {
   // =====================
 
   async listSpecs(): Promise<string[]> {
-    try {
-      const entries = await readdir(this.specsDir, { withFileTypes: true })
-      return entries.filter((e) => e.isDirectory() && !e.name.startsWith('.')).map((e) => e.name)
-    } catch {
-      return []
-    }
+    return reactiveReadDir(this.specsDir, { directoriesOnly: true })
   }
 
   /**
@@ -127,14 +116,7 @@ export class OpenSpecAdapter {
   }
 
   async listChanges(): Promise<string[]> {
-    try {
-      const entries = await readdir(this.changesDir, { withFileTypes: true })
-      return entries
-        .filter((e) => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'archive')
-        .map((e) => e.name)
-    } catch {
-      return []
-    }
+    return reactiveReadDir(this.changesDir, { directoriesOnly: true, exclude: ['archive'] })
   }
 
   /**
@@ -165,12 +147,7 @@ export class OpenSpecAdapter {
   }
 
   async listArchivedChanges(): Promise<string[]> {
-    try {
-      const entries = await readdir(this.archiveDir, { withFileTypes: true })
-      return entries.filter((e) => e.isDirectory() && !e.name.startsWith('.')).map((e) => e.name)
-    } catch {
-      return []
-    }
+    return reactiveReadDir(this.archiveDir, { directoriesOnly: true })
   }
 
   /**
@@ -204,27 +181,19 @@ export class OpenSpecAdapter {
   // =====================
 
   /**
-   * Read project.md content
+   * Read project.md content (reactive)
    */
   async readProjectMd(): Promise<string | null> {
-    try {
-      const projectPath = join(this.openspecDir, 'project.md')
-      return await readFile(projectPath, 'utf-8')
-    } catch {
-      return null
-    }
+    const projectPath = join(this.openspecDir, 'project.md')
+    return reactiveReadFile(projectPath)
   }
 
   /**
-   * Read AGENTS.md content
+   * Read AGENTS.md content (reactive)
    */
   async readAgentsMd(): Promise<string | null> {
-    try {
-      const agentsPath = join(this.openspecDir, 'AGENTS.md')
-      return await readFile(agentsPath, 'utf-8')
-    } catch {
-      return null
-    }
+    const agentsPath = join(this.openspecDir, 'AGENTS.md')
+    return reactiveReadFile(agentsPath)
   }
 
   /**
@@ -258,12 +227,8 @@ export class OpenSpecAdapter {
   }
 
   async readSpecRaw(specId: string): Promise<string | null> {
-    try {
-      const specPath = join(this.specsDir, specId, 'spec.md')
-      return await readFile(specPath, 'utf-8')
-    } catch {
-      return null
-    }
+    const specPath = join(this.specsDir, specId, 'spec.md')
+    return reactiveReadFile(specPath)
   }
 
   async readChange(changeId: string): Promise<Change | null> {
@@ -277,19 +242,16 @@ export class OpenSpecAdapter {
   }
 
   async readChangeRaw(changeId: string): Promise<{ proposal: string; tasks: string } | null> {
-    try {
-      const proposalPath = join(this.changesDir, changeId, 'proposal.md')
-      const tasksPath = join(this.changesDir, changeId, 'tasks.md')
+    const proposalPath = join(this.changesDir, changeId, 'proposal.md')
+    const tasksPath = join(this.changesDir, changeId, 'tasks.md')
 
-      const [proposal, tasks] = await Promise.all([
-        readFile(proposalPath, 'utf-8'),
-        readFile(tasksPath, 'utf-8').catch(() => ''),
-      ])
+    const [proposal, tasks] = await Promise.all([
+      reactiveReadFile(proposalPath),
+      reactiveReadFile(tasksPath),
+    ])
 
-      return { proposal, tasks }
-    } catch {
-      return null
-    }
+    if (!proposal) return null
+    return { proposal, tasks: tasks ?? '' }
   }
 
   /**
@@ -306,22 +268,19 @@ export class OpenSpecAdapter {
   }
 
   /**
-   * Read raw archived change files
+   * Read raw archived change files (reactive)
    */
   async readArchivedChangeRaw(changeId: string): Promise<{ proposal: string; tasks: string } | null> {
-    try {
-      const proposalPath = join(this.archiveDir, changeId, 'proposal.md')
-      const tasksPath = join(this.archiveDir, changeId, 'tasks.md')
+    const proposalPath = join(this.archiveDir, changeId, 'proposal.md')
+    const tasksPath = join(this.archiveDir, changeId, 'tasks.md')
 
-      const [proposal, tasks] = await Promise.all([
-        readFile(proposalPath, 'utf-8'),
-        readFile(tasksPath, 'utf-8').catch(() => ''),
-      ])
+    const [proposal, tasks] = await Promise.all([
+      reactiveReadFile(proposalPath),
+      reactiveReadFile(tasksPath),
+    ])
 
-      return { proposal, tasks }
-    } catch {
-      return null
-    }
+    if (!proposal) return null
+    return { proposal, tasks: tasks ?? '' }
   }
 
   // =====================

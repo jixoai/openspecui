@@ -16,7 +16,7 @@ import { cors } from 'hono/cors'
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
 import { applyWSSHandler } from '@trpc/server/adapters/ws'
 import { WebSocketServer } from 'ws'
-import { OpenSpecAdapter, OpenSpecWatcher } from '@openspecui/core'
+import { OpenSpecAdapter, OpenSpecWatcher, ConfigManager, CliExecutor } from '@openspecui/core'
 import { ProviderManager, type ProviderRegistry } from '@openspecui/ai-provider'
 import { appRouter, type Context } from './router.js'
 
@@ -42,6 +42,8 @@ export interface ServerConfig {
 export function createServer(config: ServerConfig) {
   const adapter = new OpenSpecAdapter(config.projectDir)
   const providerManager = new ProviderManager(config.providers)
+  const configManager = new ConfigManager(config.projectDir)
+  const cliExecutor = new CliExecutor(configManager, config.projectDir)
 
   // Create file watcher if enabled
   const watcher = config.enableWatcher !== false ? new OpenSpecWatcher(config.projectDir) : undefined
@@ -77,6 +79,8 @@ export function createServer(config: ServerConfig) {
       createContext: (): Context => ({
         adapter,
         providerManager,
+        configManager,
+        cliExecutor,
         watcher,
       }),
     })
@@ -87,6 +91,8 @@ export function createServer(config: ServerConfig) {
   const createContext = (): Context => ({
     adapter,
     providerManager,
+    configManager,
+    cliExecutor,
     watcher,
   })
 
@@ -94,6 +100,8 @@ export function createServer(config: ServerConfig) {
     app,
     adapter,
     providerManager,
+    configManager,
+    cliExecutor,
     watcher,
     createContext,
     port: config.port ?? 3100,

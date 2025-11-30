@@ -2,7 +2,7 @@
  * @openspecui/core
  *
  * Core library for OpenSpec file operations, parsing, and validation.
- * Provides filesystem adapter, markdown parser, and file watcher for
+ * Provides filesystem adapter, markdown parser, and reactive file system for
  * spec-driven development workflows.
  *
  * @packageDocumentation
@@ -31,10 +31,41 @@ export {
   type Task,
 } from './schemas.js'
 
-// File watcher for realtime updates
+// Reactive file system for realtime updates
+export {
+  // Core classes
+  ReactiveState,
+  ReactiveContext,
+  contextStorage,
+  type ReactiveStateOptions,
+  // Reactive file operations
+  reactiveReadFile,
+  reactiveReadDir,
+  reactiveExists,
+  reactiveStat,
+  clearCache,
+  getCacheSize,
+  // Watcher pool management
+  acquireWatcher,
+  getActiveWatcherCount,
+  closeAllWatchers,
+} from './reactive-fs/index.js'
+
+// Legacy file watcher (deprecated, use reactive-fs instead)
 export {
   OpenSpecWatcher,
   createFileChangeObservable,
   type FileChangeEvent,
   type FileChangeType,
 } from './watcher.js'
+
+// Configuration management
+export {
+  ConfigManager,
+  OpenSpecUIConfigSchema,
+  DEFAULT_CONFIG,
+  type OpenSpecUIConfig,
+} from './config.js'
+
+// CLI executor for calling external openspec commands
+export { CliExecutor, type CliResult } from './cli-executor.js'

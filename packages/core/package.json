@@ -25,6 +25,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.9",
     "tsdown": "^0.16.6",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

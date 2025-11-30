@@ -1,34 +1,24 @@
 import { Activity, useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
-import { trpc, trpcClient } from '@/lib/trpc'
-import { useRealtimeUpdates } from '@/lib/use-realtime'
+import { useMutation } from '@tanstack/react-query'
+import { trpcClient } from '@/lib/trpc'
+import { useProjectMdSubscription, useAgentsMdSubscription } from '@/lib/use-subscription'
 import { FileText, Bot, Save, X, Edit2 } from 'lucide-react'
 import { MarkdownViewer } from '@/components/markdown-viewer'
 
 type ActiveTab = 'project' | 'agents'
 
 export function Project() {
-  useRealtimeUpdates()
-
   const [activeTab, setActiveTab] = useState<ActiveTab>('project')
   const [editingTab, setEditingTab] = useState<ActiveTab | null>(null)
   const [editContent, setEditContent] = useState('')
 
-  const {
-    data: projectMd,
-    isLoading: projectLoading,
-    refetch: refetchProject,
-  } = useQuery(trpc.project.getProjectMd.queryOptions())
-  const {
-    data: agentsMd,
-    isLoading: agentsLoading,
-    refetch: refetchAgents,
-  } = useQuery(trpc.project.getAgentsMd.queryOptions())
+  const { data: projectMd, isLoading: projectLoading } = useProjectMdSubscription()
+  const { data: agentsMd, isLoading: agentsLoading } = useAgentsMdSubscription()
 
   const saveProjectMutation = useMutation({
     mutationFn: (content: string) => trpcClient.project.saveProjectMd.mutate({ content }),
     onSuccess: () => {
-      refetchProject()
+      // 订阅模式下无需手动 refetch，文件变更会自动触发更新
       setEditingTab(null)
     },
   })
@@ -36,7 +26,7 @@ export function Project() {
   const saveAgentsMutation = useMutation({
     mutationFn: (content: string) => trpcClient.project.saveAgentsMd.mutate({ content }),
     onSuccess: () => {
-      refetchAgents()
+      // 订阅模式下无需手动 refetch，文件变更会自动触发更新
       setEditingTab(null)
     },
   })

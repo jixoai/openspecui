@@ -1,12 +1,24 @@
 import { initTRPC } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
 import { z } from 'zod'
-import type { OpenSpecAdapter, OpenSpecWatcher, FileChangeEvent } from '@openspecui/core'
+import type {
+  OpenSpecAdapter,
+  OpenSpecWatcher,
+  FileChangeEvent,
+  ConfigManager,
+  CliExecutor,
+} from '@openspecui/core'
 import type { ProviderManager } from '@openspecui/ai-provider'
+import {
+  createReactiveSubscription,
+  createReactiveSubscriptionWithInput,
+} from './reactive-subscription.js'
 
 export interface Context {
   adapter: OpenSpecAdapter
   providerManager: ProviderManager
+  configManager: ConfigManager
+  cliExecutor: CliExecutor
   watcher?: OpenSpecWatcher
 }
 
@@ -25,6 +37,15 @@ export const dashboardRouter = router({
 
   isInitialized: publicProcedure.query(async ({ ctx }) => {
     return ctx.adapter.isInitialized()
+  }),
+
+  // Reactive subscriptions
+  subscribe: publicProcedure.subscription(({ ctx }) => {
+    return createReactiveSubscription(() => ctx.adapter.getDashboardData())
+  }),
+
+  subscribeInitialized: publicProcedure.subscription(({ ctx }) => {
+    return createReactiveSubscription(() => ctx.adapter.isInitialized())
   }),
 })
 
@@ -58,6 +79,25 @@ export const specRouter = router({
   validate: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
     return ctx.adapter.validateSpec(input.id)
   }),
+
+  // Reactive subscriptions
+  subscribe: publicProcedure.subscription(({ ctx }) => {
+    return createReactiveSubscription(() => ctx.adapter.listSpecsWithMeta())
+  }),
+
+  subscribeOne: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .subscription(({ ctx, input }) => {
+      return createReactiveSubscriptionWithInput((id: string) => ctx.adapter.readSpec(id))(input.id)
+    }),
+
+  subscribeRaw: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .subscription(({ ctx, input }) => {
+      return createReactiveSubscriptionWithInput((id: string) => ctx.adapter.readSpecRaw(id))(
+        input.id
+      )
+    }),
 })
 
 /**
@@ -113,6 +153,27 @@ export const changeRouter = router({
         throw new Error(`Failed to toggle task ${input.taskIndex} in change ${input.changeId}`)
       }
       return { success: true }
+    }),
+
+  // Reactive subscriptions
+  subscribe: publicProcedure.subscription(({ ctx }) => {
+    return createReactiveSubscription(() => ctx.adapter.listChangesWithMeta())
+  }),
+
+  subscribeOne: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .subscription(({ ctx, input }) => {
+      return createReactiveSubscriptionWithInput((id: string) => ctx.adapter.readChange(id))(
+        input.id
+      )
+    }),
+
+  subscribeRaw: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .subscription(({ ctx, input }) => {
+      return createReactiveSubscriptionWithInput((id: string) => ctx.adapter.readChangeRaw(id))(
+        input.id
+      )
     }),
 })
 
@@ -274,6 +335,15 @@ export const projectRouter = router({
       await ctx.adapter.writeAgentsMd(input.content)
       return { success: true }
     }),
+
+  // Reactive subscriptions
+  subscribeProjectMd: publicProcedure.subscription(({ ctx }) => {
+    return createReactiveSubscription(() => ctx.adapter.readProjectMd())
+  }),
+
+  subscribeAgentsMd: publicProcedure.subscription(({ ctx }) => {
+    return createReactiveSubscription(() => ctx.adapter.readAgentsMd())
+  }),
 })
 
 /**
@@ -295,6 +365,19 @@ export const archiveRouter = router({
   getRaw: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
     return ctx.adapter.readArchivedChangeRaw(input.id)
   }),
+
+  // Reactive subscriptions
+  subscribe: publicProcedure.subscription(({ ctx }) => {
+    return createReactiveSubscription(() => ctx.adapter.listArchivedChangesWithMeta())
+  }),
+
+  subscribeOne: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .subscription(({ ctx, input }) => {
+      return createReactiveSubscriptionWithInput((id: string) =>
+        ctx.adapter.readArchivedChange(id)
+      )(input.id)
+    }),
 })
 
 /**
@@ -390,6 +473,121 @@ export const realtimeRouter = router({
 })
 
 /**
+ * Config router - configuration management
+ */
+export const configRouter = router({
+  get: publicProcedure.query(async ({ ctx }) => {
+    return ctx.configManager.readConfig()
+  }),
+
+  update: publicProcedure
+    .input(
+      z.object({
+        cli: z.object({ command: z.string() }).optional(),
+        ui: z.object({ theme: z.enum(['light', 'dark', 'system']) }).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.configManager.writeConfig(input)
+      return { success: true }
+    }),
+
+  setCliCommand: publicProcedure
+    .input(z.object({ command: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.configManager.setCliCommand(input.command)
+      return { success: true }
+    }),
+
+  // Reactive subscription
+  subscribe: publicProcedure.subscription(({ ctx }) => {
+    return createReactiveSubscription(() => ctx.configManager.readConfig())
+  }),
+})
+
+/** 可用的 AI 工具列表 */
+const AVAILABLE_TOOLS = [
+  'auggie',
+  'claude',
+  'cline',
+  'roocode',
+  'codebuddy',
+  'costrict',
+  'crush',
+  'cursor',
+  'factory',
+  'gemini',
+  'opencode',
+  'kilocode',
+  'qoder',
+  'windsurf',
+  'codex',
+  'github-copilot',
+  'amazon-q',
+  'qwen',
+] as const
+
+/**
+ * CLI router - execute external openspec CLI commands
+ */
+export const cliRouter = router({
+  checkAvailability: publicProcedure.query(async ({ ctx }) => {
+    return ctx.cliExecutor.checkAvailability()
+  }),
+
+  /** 获取可用的工具列表 */
+  getAvailableTools: publicProcedure.query(() => {
+    return AVAILABLE_TOOLS
+  }),
+
+  /** 初始化 OpenSpec（非交互式） */
+  init: publicProcedure
+    .input(
+      z
+        .object({
+          tools: z.union([z.array(z.string()), z.literal('all'), z.literal('none')]).optional(),
+        })
+        .optional()
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.cliExecutor.init(input?.tools ?? 'all')
+    }),
+
+  /** 归档 change（非交互式） */
+  archive: publicProcedure
+    .input(
+      z.object({
+        changeId: z.string(),
+        skipSpecs: z.boolean().optional(),
+        noValidate: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.cliExecutor.archive(input.changeId, {
+        skipSpecs: input.skipSpecs,
+        noValidate: input.noValidate,
+      })
+    }),
+
+  validate: publicProcedure
+    .input(
+      z.object({
+        type: z.enum(['spec', 'change']).optional(),
+        id: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.cliExecutor.validate(input.type, input.id)
+    }),
+
+  execute: publicProcedure
+    .input(z.object({ args: z.array(z.string()) }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.cliExecutor.execute(input.args)
+    }),
+})
+
+/**
  * Main app router
  */
 export const appRouter = router({
@@ -401,6 +599,8 @@ export const appRouter = router({
   ai: aiRouter,
   init: initRouter,
   realtime: realtimeRouter,
+  config: configRouter,
+  cli: cliRouter,
 })
 
 export type AppRouter = typeof appRouter
