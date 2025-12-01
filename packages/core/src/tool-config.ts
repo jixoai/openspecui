@@ -1,12 +1,13 @@
 /**
  * 工具配置检测模块
  *
- * 基于 @fission-ai/openspec 的 configurators 实现
+ * 完全对齐 @fission-ai/openspec 的官方实现
  * 用于检测项目中已配置的 AI 工具
  *
  * 重要：使用响应式文件系统实现，监听配置目录，
  * 当配置文件变化时会自动触发更新。
  *
+ * @see references/openspec/src/core/config.ts (AI_TOOLS)
  * @see references/openspec/src/core/configurators/slash/
  * @see references/openspec/src/core/init.ts (isToolConfigured)
  */
@@ -20,24 +21,44 @@ import { ReactiveState, acquireWatcher } from './reactive-fs/index.js'
  * 检测路径范围
  * - project: 相对于项目根目录
  * - global: 绝对路径（如 Codex 的 ~/.codex/prompts/）
+ * - none: 无检测路径（如 Universal AGENTS.md 通过项目 AGENTS.md 检测）
  */
-type DetectionScope = 'project' | 'global'
+type DetectionScope = 'project' | 'global' | 'none'
 
 /**
- * 工具配置信息
+ * AI 工具选项（与官方 OpenSpec CLI 完全一致）
+ * @see references/openspec/src/core/config.ts
  */
-export interface ToolConfig {
-  /** 工具 ID */
-  toolId: string
+export interface AIToolOption {
+  /** 显示名称 */
+  name: string
+  /** 工具 ID（用于 CLI 参数） */
+  value: string
+  /** 是否可用（available: false 的工具不会出现在主列表中） */
+  available: boolean
+  /** 成功消息中使用的标签 */
+  successLabel?: string
+}
+
+/**
+ * 工具检测配置
+ */
+export interface ToolDetectionConfig {
   /** 检测路径范围 */
   scope: DetectionScope
   /**
    * 检测路径
    * - scope='project': 相对于项目根目录的路径
    * - scope='global': 返回绝对路径的函数
+   * - scope='none': undefined
    */
-  detectionPath: string | (() => string)
+  detectionPath?: string | (() => string)
 }
+
+/**
+ * 完整的工具配置（元信息 + 检测配置）
+ */
+export interface ToolConfig extends AIToolOption, ToolDetectionConfig {}
 
 /**
  * 获取 Codex 全局 prompts 目录
@@ -50,85 +71,260 @@ function getCodexGlobalPromptsDir(): string {
 }
 
 /**
- * 所有支持的工具配置
+ * 所有支持的 AI 工具配置
  *
- * 检测路径使用 proposal 命令文件，因为这是 openspec init 创建的第一个文件
- * 如果该文件存在，说明工具已配置
+ * 完全对齐官方 OpenSpec CLI 的 AI_TOOLS
+ * 按字母顺序排序（与官方一致）
  *
+ * @see references/openspec/src/core/config.ts
  * @see references/openspec/src/core/configurators/slash/registry.ts
  */
-export const TOOL_CONFIGS: ToolConfig[] = [
-  // Claude Code - .claude/commands/openspec/proposal.md
-  { toolId: 'claude', scope: 'project', detectionPath: '.claude/commands/openspec/proposal.md' },
-
-  // Cursor - .cursor/commands/openspec-proposal.md
-  { toolId: 'cursor', scope: 'project', detectionPath: '.cursor/commands/openspec-proposal.md' },
-
-  // Windsurf - .windsurf/workflows/openspec-proposal.md
-  { toolId: 'windsurf', scope: 'project', detectionPath: '.windsurf/workflows/openspec-proposal.md' },
-
-  // Cline - .clinerules/workflows/openspec-proposal.md
-  { toolId: 'cline', scope: 'project', detectionPath: '.clinerules/workflows/openspec-proposal.md' },
-
-  // GitHub Copilot - .github/prompts/openspec-proposal.prompt.md
-  { toolId: 'github-copilot', scope: 'project', detectionPath: '.github/prompts/openspec-proposal.prompt.md' },
-
-  // Amazon Q - .amazonq/prompts/openspec-proposal.md
-  { toolId: 'amazon-q', scope: 'project', detectionPath: '.amazonq/prompts/openspec-proposal.md' },
-
-  // Codex - 全局目录 ~/.codex/prompts/ 或 $CODEX_HOME/prompts/
-  // @see references/openspec/src/core/configurators/slash/codex.ts
+export const AI_TOOLS: ToolConfig[] = [
+  // Amazon Q Developer
   {
-    toolId: 'codex',
+    name: 'Amazon Q Developer',
+    value: 'amazon-q',
+    available: true,
+    successLabel: 'Amazon Q Developer',
+    scope: 'project',
+    detectionPath: '.amazonq/prompts/openspec-proposal.md',
+  },
+
+  // Antigravity
+  {
+    name: 'Antigravity',
+    value: 'antigravity',
+    available: true,
+    successLabel: 'Antigravity',
+    scope: 'project',
+    detectionPath: '.agent/workflows/openspec-proposal.md',
+  },
+
+  // Auggie (Augment CLI)
+  {
+    name: 'Auggie (Augment CLI)',
+    value: 'auggie',
+    available: true,
+    successLabel: 'Auggie',
+    scope: 'project',
+    detectionPath: '.augment/commands/openspec-proposal.md',
+  },
+
+  // Claude Code
+  {
+    name: 'Claude Code',
+    value: 'claude',
+    available: true,
+    successLabel: 'Claude Code',
+    scope: 'project',
+    detectionPath: '.claude/commands/openspec/proposal.md',
+  },
+
+  // Cline
+  {
+    name: 'Cline',
+    value: 'cline',
+    available: true,
+    successLabel: 'Cline',
+    scope: 'project',
+    detectionPath: '.clinerules/workflows/openspec-proposal.md',
+  },
+
+  // Codex (全局目录)
+  {
+    name: 'Codex',
+    value: 'codex',
+    available: true,
+    successLabel: 'Codex',
     scope: 'global',
     detectionPath: () => join(getCodexGlobalPromptsDir(), 'openspec-proposal.md'),
   },
 
-  // Gemini - .gemini/commands/openspec/proposal.toml
-  { toolId: 'gemini', scope: 'project', detectionPath: '.gemini/commands/openspec/proposal.toml' },
+  // CodeBuddy Code (CLI)
+  {
+    name: 'CodeBuddy Code (CLI)',
+    value: 'codebuddy',
+    available: true,
+    successLabel: 'CodeBuddy Code',
+    scope: 'project',
+    detectionPath: '.codebuddy/commands/openspec/proposal.md',
+  },
 
-  // Auggie - .augment/commands/openspec-proposal.md
-  { toolId: 'auggie', scope: 'project', detectionPath: '.augment/commands/openspec-proposal.md' },
+  // CoStrict
+  {
+    name: 'CoStrict',
+    value: 'costrict',
+    available: true,
+    successLabel: 'CoStrict',
+    scope: 'project',
+    detectionPath: '.cospec/openspec/commands/openspec-proposal.md',
+  },
 
-  // CodeBuddy - .codebuddy/commands/openspec/proposal.md
-  { toolId: 'codebuddy', scope: 'project', detectionPath: '.codebuddy/commands/openspec/proposal.md' },
+  // Crush
+  {
+    name: 'Crush',
+    value: 'crush',
+    available: true,
+    successLabel: 'Crush',
+    scope: 'project',
+    detectionPath: '.crush/commands/openspec/proposal.md',
+  },
 
-  // Qoder - .qoder/commands/openspec/proposal.md
-  { toolId: 'qoder', scope: 'project', detectionPath: '.qoder/commands/openspec/proposal.md' },
+  // Cursor
+  {
+    name: 'Cursor',
+    value: 'cursor',
+    available: true,
+    successLabel: 'Cursor',
+    scope: 'project',
+    detectionPath: '.cursor/commands/openspec-proposal.md',
+  },
 
-  // RooCode - .roo/commands/openspec-proposal.md
-  { toolId: 'roocode', scope: 'project', detectionPath: '.roo/commands/openspec-proposal.md' },
+  // Factory Droid
+  {
+    name: 'Factory Droid',
+    value: 'factory',
+    available: true,
+    successLabel: 'Factory Droid',
+    scope: 'project',
+    detectionPath: '.factory/commands/openspec-proposal.md',
+  },
 
-  // KiloCode - .kilocode/workflows/openspec-proposal.md
-  { toolId: 'kilocode', scope: 'project', detectionPath: '.kilocode/workflows/openspec-proposal.md' },
+  // Gemini CLI
+  {
+    name: 'Gemini CLI',
+    value: 'gemini',
+    available: true,
+    successLabel: 'Gemini CLI',
+    scope: 'project',
+    detectionPath: '.gemini/commands/openspec/proposal.toml',
+  },
 
-  // OpenCode - .opencode/command/openspec-proposal.md
-  { toolId: 'opencode', scope: 'project', detectionPath: '.opencode/command/openspec-proposal.md' },
+  // GitHub Copilot
+  {
+    name: 'GitHub Copilot',
+    value: 'github-copilot',
+    available: true,
+    successLabel: 'GitHub Copilot',
+    scope: 'project',
+    detectionPath: '.github/prompts/openspec-proposal.prompt.md',
+  },
 
-  // Factory - .factory/commands/openspec-proposal.md
-  { toolId: 'factory', scope: 'project', detectionPath: '.factory/commands/openspec-proposal.md' },
+  // iFlow
+  {
+    name: 'iFlow',
+    value: 'iflow',
+    available: true,
+    successLabel: 'iFlow',
+    scope: 'project',
+    detectionPath: '.iflow/commands/openspec-proposal.md',
+  },
 
-  // Crush - .crush/commands/openspec/proposal.md
-  { toolId: 'crush', scope: 'project', detectionPath: '.crush/commands/openspec/proposal.md' },
+  // Kilo Code
+  {
+    name: 'Kilo Code',
+    value: 'kilocode',
+    available: true,
+    successLabel: 'Kilo Code',
+    scope: 'project',
+    detectionPath: '.kilocode/workflows/openspec-proposal.md',
+  },
 
-  // Costrict - .cospec/openspec/commands/openspec-proposal.md
-  { toolId: 'costrict', scope: 'project', detectionPath: '.cospec/openspec/commands/openspec-proposal.md' },
+  // OpenCode
+  {
+    name: 'OpenCode',
+    value: 'opencode',
+    available: true,
+    successLabel: 'OpenCode',
+    scope: 'project',
+    detectionPath: '.opencode/command/openspec-proposal.md',
+  },
 
-  // Qwen - .qwen/commands/openspec-proposal.toml
-  { toolId: 'qwen', scope: 'project', detectionPath: '.qwen/commands/openspec-proposal.toml' },
+  // Qoder (CLI)
+  {
+    name: 'Qoder (CLI)',
+    value: 'qoder',
+    available: true,
+    successLabel: 'Qoder',
+    scope: 'project',
+    detectionPath: '.qoder/commands/openspec/proposal.md',
+  },
 
-  // iFlow - .iflow/commands/openspec-proposal.md
-  { toolId: 'iflow', scope: 'project', detectionPath: '.iflow/commands/openspec-proposal.md' },
+  // Qwen Code
+  {
+    name: 'Qwen Code',
+    value: 'qwen',
+    available: true,
+    successLabel: 'Qwen Code',
+    scope: 'project',
+    detectionPath: '.qwen/commands/openspec-proposal.toml',
+  },
 
-  // Antigravity - .agent/workflows/openspec-proposal.md
-  { toolId: 'antigravity', scope: 'project', detectionPath: '.agent/workflows/openspec-proposal.md' },
+  // RooCode
+  {
+    name: 'RooCode',
+    value: 'roocode',
+    available: true,
+    successLabel: 'RooCode',
+    scope: 'project',
+    detectionPath: '.roo/commands/openspec-proposal.md',
+  },
+
+  // Windsurf
+  {
+    name: 'Windsurf',
+    value: 'windsurf',
+    available: true,
+    successLabel: 'Windsurf',
+    scope: 'project',
+    detectionPath: '.windsurf/workflows/openspec-proposal.md',
+  },
+
+  // Universal AGENTS.md（available: false，在 "Other tools" 分组中显示）
+  // 通过项目根目录的 AGENTS.md 检测
+  {
+    name: 'AGENTS.md (works with Amp, VS Code, …)',
+    value: 'agents',
+    available: false,
+    successLabel: 'your AGENTS.md-compatible assistant',
+    scope: 'project',
+    detectionPath: 'AGENTS.md',
+  },
 ]
 
 /**
- * 获取所有可用的工具 ID 列表
+ * 获取所有可用的工具（available: true）
+ */
+export function getAvailableTools(): ToolConfig[] {
+  return AI_TOOLS.filter((tool) => tool.available)
+}
+
+/**
+ * 获取所有可用的工具 ID 列表（available: true）
  */
 export function getAvailableToolIds(): string[] {
-  return TOOL_CONFIGS.map((config) => config.toolId)
+  return getAvailableTools().map((tool) => tool.value)
+}
+
+/**
+ * 获取所有工具（包括 available: false 的）
+ */
+export function getAllTools(): ToolConfig[] {
+  return AI_TOOLS
+}
+
+/**
+ * 获取所有工具 ID 列表（包括 available: false 的）
+ */
+export function getAllToolIds(): string[] {
+  return AI_TOOLS.map((tool) => tool.value)
+}
+
+/**
+ * 根据工具 ID 获取工具配置
+ */
+export function getToolById(toolId: string): ToolConfig | undefined {
+  return AI_TOOLS.find((tool) => tool.value === toolId)
 }
 
 /** 状态缓存：projectDir -> ReactiveState */
@@ -153,9 +349,12 @@ async function fileExists(filePath: string): Promise<boolean> {
  * 解析工具的检测路径
  * @param config 工具配置
  * @param projectDir 项目根目录
- * @returns 绝对路径
+ * @returns 绝对路径，如果无检测路径则返回 undefined
  */
-function resolveDetectionPath(config: ToolConfig, projectDir: string): string {
+function resolveDetectionPath(config: ToolConfig, projectDir: string): string | undefined {
+  if (config.scope === 'none' || !config.detectionPath) {
+    return undefined
+  }
   if (config.scope === 'global') {
     // 全局路径：调用函数获取绝对路径
     return (config.detectionPath as () => string)()
@@ -170,10 +369,11 @@ function resolveDetectionPath(config: ToolConfig, projectDir: string): string {
 async function scanConfiguredTools(projectDir: string): Promise<string[]> {
   // 并行检查所有工具配置文件
   const results = await Promise.all(
-    TOOL_CONFIGS.map(async (config) => {
+    AI_TOOLS.map(async (config) => {
       const filePath = resolveDetectionPath(config, projectDir)
+      if (!filePath) return null
       const exists = await fileExists(filePath)
-      return exists ? config.toolId : null
+      return exists ? config.value : null
     })
   )
   return results.filter((id): id is string => id !== null)
@@ -185,10 +385,11 @@ async function scanConfiguredTools(projectDir: string): Promise<string[]> {
  */
 function getProjectWatchDirs(projectDir: string): string[] {
   const dirs = new Set<string>()
-  for (const config of TOOL_CONFIGS) {
-    if (config.scope === 'project') {
+  for (const config of AI_TOOLS) {
+    if (config.scope === 'project' && config.detectionPath) {
       // 获取第一级目录（如 .claude, .cursor 等）
-      const firstDir = (config.detectionPath as string).split('/')[0]
+      const path = config.detectionPath as string
+      const firstDir = path.split('/')[0]
       if (firstDir) {
         dirs.add(join(projectDir, firstDir))
       }
@@ -203,8 +404,8 @@ function getProjectWatchDirs(projectDir: string): string[] {
  */
 function getGlobalWatchDirs(): string[] {
   const dirs = new Set<string>()
-  for (const config of TOOL_CONFIGS) {
-    if (config.scope === 'global') {
+  for (const config of AI_TOOLS) {
+    if (config.scope === 'global' && config.detectionPath) {
       const filePath = (config.detectionPath as () => string)()
       // 监听文件所在的目录
       dirs.add(dirname(filePath))

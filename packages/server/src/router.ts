@@ -8,7 +8,14 @@ import type {
   ConfigManager,
   CliExecutor,
 } from '@openspecui/core'
-import { getAvailableToolIds, getConfiguredTools, getDefaultCliCommandString, sniffGlobalCli } from '@openspecui/core'
+import {
+  getAvailableTools,
+  getAllTools,
+  getConfiguredTools,
+  getDefaultCliCommandString,
+  sniffGlobalCli,
+  type AIToolOption,
+} from '@openspecui/core'
 import type { ProviderManager } from '@openspecui/ai-provider'
 import {
   createReactiveSubscription,
@@ -551,9 +558,26 @@ export const cliRouter = router({
     })
   }),
 
-  /** 获取可用的工具列表 */
+  /** 获取可用的工具列表（available: true） */
   getAvailableTools: publicProcedure.query(() => {
-    return getAvailableToolIds()
+    // 返回完整的工具信息，去掉 scope 和 detectionPath（前端不需要）
+    return getAvailableTools().map((tool) => ({
+      name: tool.name,
+      value: tool.value,
+      available: tool.available,
+      successLabel: tool.successLabel,
+    })) satisfies AIToolOption[]
+  }),
+
+  /** 获取所有工具列表（包括 available: false 的） */
+  getAllTools: publicProcedure.query(() => {
+    // 返回完整的工具信息，去掉 scope 和 detectionPath（前端不需要）
+    return getAllTools().map((tool) => ({
+      name: tool.name,
+      value: tool.value,
+      available: tool.available,
+      successLabel: tool.successLabel,
+    })) satisfies AIToolOption[]
   }),
 
   /** 获取已配置的工具列表（检查配置文件是否存在） */

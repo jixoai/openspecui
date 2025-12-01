@@ -390,6 +390,43 @@ init底层逻辑依赖的文件夹检测存在问题，目前你的逻辑是按�
 
 基于parcel/watcher的监听机制中，我刚才做了这样的事情：
 
+我首先初始化了 example：pnpm example:setup
+然后启动了我们的ui： pnpm dev --dir example
+
+接着最关键的来了，我清理了example目录，然后重新生成了example目录：
+
 pnpm example:clean && pnpm example:setup
 
-然后我发现对于example的文件夹监听就失效了。
+接着我发现对于example的文件夹监听就失效了。我需要重启pnpm dev --dir example才能恢复正常。
+
+
+调查一下这是parcel/watcher的bug还是我们自己的bug，如果是parcel/watcher的bug，有什么规避方案吗？或者有什么本办法吗？
+
+---
+
+
+不确定你基于projectDir的删除检测是否可靠，但是我可以给你一个非常朴素的检测建议，就是轮询：
+具体工作流程是这样的：
+1. 首先我们有一个3s的debunce，它会被我们的 parcel/watcher 发出的事件重置时间计时
+2. 如果事件陷入了沉默，那么我们就要尝试性地临时生成再删除一个临时文件
+3. 如果事件还是没有发出，我们就假设认为parcel/watcher实例实效了，那么就重新创建watcher实例ß
+
+---
+
+这个检查文件，你觉得要不要用我们的配置文件做？
+好处是不会产生冗余的文件，缺点是一个文件的职责有点冗余。
+而且模式要改成只改变文件最后的变更时间但不变更内容（fs.utimesSync，我不知道只修改时间，watcher能否监听到它的变化，应该可以吧）。
+但这就意味着，openspecui在启动并发现projectDir被init好了，那么我们就得在openspec文件夹中去初始化好我们的配置文件，即便它是无配置模式。
+
+你觉得这个方案怎么样？
+
+---
+
+等一下，我突然想到一个方案：我们如果只是utimesSync我们的projectDir这个文件夹呢？这不是最符合直觉的吗？
+我们还得测试验证：
+创建testDir目录->创建A文件->监听testDir目录->删除testDir目录->再次创建testDir目录和A文件->修改A文件->watcher没有收到事件->修改testDir的时间->watcher也没有收到事件。
+
+---
+
+虽然我们监听了一整个projectDir，但其实我们只是监听特定的几个文件或者文件夹的变更。
+我们能否配置这些特点定的文件或者文件夹来提升我们监听的性能。

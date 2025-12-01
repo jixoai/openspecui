@@ -87,9 +87,15 @@ export { CliExecutor, type CliResult, type CliStreamEvent } from './cli-executor
 
 // Tool configuration detection
 export {
-  TOOL_CONFIGS,
+  AI_TOOLS,
+  getAvailableTools,
   getAvailableToolIds,
+  getAllTools,
+  getAllToolIds,
+  getToolById,
   getConfiguredTools,
   isToolConfigured,
+  type AIToolOption,
   type ToolConfig,
+  type ToolDetectionConfig,
 } from './tool-config.js'

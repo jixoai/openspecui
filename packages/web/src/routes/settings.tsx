@@ -54,8 +54,12 @@ export function Settings() {
   // CLI 可用性检查（基于配置或嗅探结果）
   const { data: cliAvailability, isLoading: isCheckingCli, refetch: recheckCli } = useQuery(trpc.cli.checkAvailability.queryOptions())
 
-  // 获取可用工具列表
-  const { data: availableTools } = useQuery(trpc.cli.getAvailableTools.queryOptions())
+  // 获取所有工具列表（包括 available: false 的）
+  const { data: allTools } = useQuery(trpc.cli.getAllTools.queryOptions())
+
+  // 分组：available: true 的工具和 available: false 的工具
+  const nativeTools = allTools?.filter((t) => t.available) ?? []
+  const otherTools = allTools?.filter((t) => !t.available) ?? []
 
   // 订阅已配置的工具列表（响应式）
   const { data: configuredTools } = useConfiguredToolsSubscription()
@@ -112,8 +116,9 @@ export function Settings() {
 
   // 全选/取消全选（保留已配置的工具）
   const toggleAllTools = () => {
-    if (!availableTools) return
-    const unconfiguredTools = availableTools.filter((t) => !isToolConfigured(t))
+    if (!allTools) return
+    const allToolIds = allTools.map((t) => t.value)
+    const unconfiguredTools = allToolIds.filter((t) => !isToolConfigured(t))
     const allUnconfiguredSelected = unconfiguredTools.every((t) => selectedTools.includes(t))
 
     if (allUnconfiguredSelected) {
@@ -121,7 +126,7 @@ export function Settings() {
       setSelectedTools(configuredTools ?? [])
     } else {
       // 全选所有工具
-      setSelectedTools([...availableTools])
+      setSelectedTools([...allToolIds])
     }
   }
 
@@ -422,49 +427,98 @@ export function Settings() {
           </p>
 
           {/* Tool Selection */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
               <label className="text-sm font-medium">AI Tools Configuration</label>
               <button
                 onClick={toggleAllTools}
                 className="text-xs text-primary hover:underline"
               >
-                {availableTools && selectedTools.length === availableTools.length
+                {allTools && selectedTools.length === allTools.length
                   ? 'Deselect All'
                   : 'Select All'}
               </button>
             </div>
-            <p className="text-sm text-muted-foreground mb-3">
+            <p className="text-sm text-muted-foreground">
               Select which AI tools to configure. Already configured tools cannot be deselected.
             </p>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-              {availableTools?.map((tool) => {
-                const configured = isToolConfigured(tool)
-                const selected = selectedTools.includes(tool)
-                return (
-                  <button
-                    key={tool}
-                    onClick={() => toggleTool(tool)}
-                    disabled={configured}
-                    title={configured ? 'Already configured' : undefined}
-                    className={`flex items-center gap-1 px-2 py-1.5 text-xs rounded border transition-colors ${
-                      configured
-                        ? 'border-green-500/50 bg-green-500/10 text-green-600 cursor-not-allowed'
-                        : selected
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-border hover:bg-muted'
-                    }`}
-                  >
-                    {(configured || selected) && (
-                      <Check className={`w-3 h-3 ${configured ? 'text-green-600' : ''}`} />
-                    )}
-                    <span className="truncate">{tool}</span>
-                  </button>
-                )
-              })}
+
+            {/* Natively supported providers */}
+            <div>
+              <p className="text-xs text-muted-foreground mb-2 font-medium">
+                Natively supported providers (✔ OpenSpec custom slash commands available)
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                {nativeTools.map((tool) => {
+                  const configured = isToolConfigured(tool.value)
+                  const selected = selectedTools.includes(tool.value)
+                  return (
+                    <button
+                      key={tool.value}
+                      onClick={() => toggleTool(tool.value)}
+                      disabled={configured}
+                      title={configured ? 'Already configured' : tool.name}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded border transition-colors text-left ${
+                        configured
+                          ? 'border-green-500/50 bg-green-500/10 text-green-600 cursor-not-allowed'
+                          : selected
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border hover:bg-muted'
+                      }`}
+                    >
+                      {(configured || selected) && (
+                        <Check className={`w-3 h-3 flex-shrink-0 ${configured ? 'text-green-600' : ''}`} />
+                      )}
+                      <span className="truncate">{tool.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
+
+            {/* Other tools (Universal AGENTS.md) */}
+            {otherTools.length > 0 && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-2 font-medium">
+                  Other tools (use Universal AGENTS.md for Amp, VS Code, GitHub Copilot, …)
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {otherTools.map((tool) => {
+                    const configured = isToolConfigured(tool.value)
+                    const selected = selectedTools.includes(tool.value)
+                    // 对于 Universal AGENTS.md，显示为 "Universal AGENTS.md (always available)"
+                    const displayName = tool.value === 'agents' ? 'Universal AGENTS.md' : tool.name
+                    const annotation = tool.value === 'agents' ? 'always available' : undefined
+                    return (
+                      <button
+                        key={tool.value}
+                        onClick={() => toggleTool(tool.value)}
+                        disabled={configured}
+                        title={configured ? 'Already configured' : tool.name}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded border transition-colors ${
+                          configured
+                            ? 'border-green-500/50 bg-green-500/10 text-green-600 cursor-not-allowed'
+                            : selected
+                              ? 'border-primary bg-primary/10 text-primary'
+                              : 'border-border hover:bg-muted'
+                        }`}
+                      >
+                        {(configured || selected) && (
+                          <Check className={`w-3 h-3 flex-shrink-0 ${configured ? 'text-green-600' : ''}`} />
+                        )}
+                        <span>{displayName}</span>
+                        {annotation && (
+                          <span className="text-muted-foreground">({annotation})</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {configuredTools && configuredTools.length > 0 && (
-              <p className="text-xs text-muted-foreground mt-2">
+              <p className="text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-green-500/50" />
                   {configuredTools.length} tool{configuredTools.length > 1 ? 's' : ''} already configured
