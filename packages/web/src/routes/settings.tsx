@@ -374,7 +374,7 @@ export function Settings() {
                 type="text"
                 value={apiUrl}
                 onChange={(e) => setApiUrl(e.target.value)}
-                placeholder="http://localhost:3100"
+                placeholder={window.location.origin}
                 className="flex-1 px-3 py-2 border border-border rounded-md bg-background text-foreground"
               />
               <button

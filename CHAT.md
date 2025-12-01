@@ -430,3 +430,11 @@ pnpm example:clean && pnpm example:setup
 
 虽然我们监听了一整个projectDir，但其实我们只是监听特定的几个文件或者文件夹的变更。
 我们能否配置这些特点定的文件或者文件夹来提升我们监听的性能。
+
+---
+
+在移动端的模式下，顶部不要单调显示 OpenSpec，而是应该显示当前的 dirName（就是dirPath的最后一段）
+
+---
+
+在设置界面，API Server URL 这里的placeholder没有客观显示“默认的api-server-url”

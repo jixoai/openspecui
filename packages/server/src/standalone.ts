@@ -1,8 +1,7 @@
 import { resolve } from 'node:path'
-import { serve } from '@hono/node-server'
 import yargs from 'yargs'
 import { hideBin } from 'yargs/helpers'
-import { createServer, createWebSocketServer } from './server.js'
+import { startServer } from './server.js'
 
 interface Args {
   dir: string
@@ -42,21 +41,20 @@ async function parseArgs(): Promise<{ projectDir: string; port: number }> {
   }
 }
 
-const { projectDir, port } = await parseArgs()
-
-const server = createServer({ projectDir, port, enableWatcher: true })
+const { projectDir, port: preferredPort } = await parseArgs()
 
 console.log(`OpenSpecUI server starting...`)
 console.log(`Project directory: ${projectDir}`)
-console.log(`Server: http://localhost:${port}`)
-console.log(`WebSocket: ws://localhost:${port}/trpc`)
-console.log(`File watcher: enabled`)
 
-const httpServer = serve({
-  fetch: server.app.fetch,
-  port,
+const server = await startServer({
+  projectDir,
+  port: preferredPort,
+  enableWatcher: true,
 })
 
-// Enable WebSocket for realtime subscriptions
-// This also initializes the reactive file watcher for the project directory
-await createWebSocketServer(server, httpServer, { projectDir })
+if (server.port !== server.preferredPort) {
+  console.log(`⚠️  Port ${server.preferredPort} is in use, using ${server.port} instead`)
+}
+console.log(`Server: ${server.url}`)
+console.log(`WebSocket: ws://localhost:${server.port}/trpc`)
+console.log(`File watcher: enabled`)

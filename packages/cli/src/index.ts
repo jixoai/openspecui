@@ -1,54 +1,11 @@
-import { serve } from '@hono/node-server'
 import { ACPAgents, type ProviderRegistry } from '@openspecui/ai-provider'
-import { createServer, createWebSocketServer } from '@openspecui/server'
-import type { Context, Next } from 'hono'
+import { startServer as serverStartServer } from '@openspecui/server'
+import type { Hono } from 'hono'
 import { existsSync, readFileSync, statSync } from 'node:fs'
-import { createServer as createNetServer } from 'node:net'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-
-/**
- * Check if a port is available by trying to listen on it.
- * Tests both 127.0.0.1 and 0.0.0.0 to ensure the port is truly available.
- */
-function isPortAvailable(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    // First check 127.0.0.1 (localhost)
-    const server1 = createNetServer()
-    server1.once('error', () => {
-      resolve(false)
-    })
-    server1.once('listening', () => {
-      server1.close(() => {
-        // Then check 0.0.0.0 (all interfaces)
-        const server2 = createNetServer()
-        server2.once('error', () => {
-          resolve(false)
-        })
-        server2.once('listening', () => {
-          server2.close(() => resolve(true))
-        })
-        server2.listen(port, '0.0.0.0')
-      })
-    })
-    server1.listen(port, '127.0.0.1')
-  })
-}
-
-/**
- * Find an available port starting from the given port
- */
-async function findAvailablePort(startPort: number, maxAttempts = 10): Promise<number> {
-  for (let i = 0; i < maxAttempts; i++) {
-    const port = startPort + i
-    if (await isPortAvailable(port)) {
-      return port
-    }
-  }
-  throw new Error(`No available port found in range ${startPort}-${startPort + maxAttempts - 1}`)
-}
 
 export interface CLIOptions {
   /** Project directory containing openspec/ */
@@ -66,6 +23,8 @@ export interface CLIOptions {
 export interface RunningServer {
   url: string
   port: number
+  /** The preferred port that was requested */
+  preferredPort: number
   close: () => Promise<void>
 }
 
@@ -121,32 +80,28 @@ function createDefaultProviders(): ProviderRegistry {
 }
 
 /**
- * Start the OpenSpec UI server with WebSocket support for realtime updates
+ * Setup static file serving middleware for the Hono app
  */
-export async function startServer(options: CLIOptions = {}): Promise<RunningServer> {
-  const {
-    projectDir = process.cwd(),
-    port: preferredPort = 3100,
-    providers = createDefaultProviders(),
-    enableWatcher = true,
-  } = options
-
-  // Find an available port starting from the preferred port
-  const port = await findAvailablePort(preferredPort)
-
-  // Create the tRPC server with file watcher
-  const server = createServer({
-    projectDir,
-    port,
-    providers,
-    enableWatcher,
-  })
-
-  // Get web assets directory
+function setupStaticFiles(app: Hono): void {
   const webDir = getWebAssetsDir()
 
-  // Serve static web assets
-  server.app.use('/*', async (c: Context, next: Next) => {
+  const mimeTypes: Record<string, string> = {
+    html: 'text/html',
+    js: 'application/javascript',
+    css: 'text/css',
+    json: 'application/json',
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    svg: 'image/svg+xml',
+    ico: 'image/x-icon',
+    woff: 'font/woff',
+    woff2: 'font/woff2',
+    ttf: 'font/ttf',
+  }
+
+  app.use('/*', async (c, next) => {
     const path = c.req.path === '/' ? '/index.html' : c.req.path
 
     // Skip API routes
@@ -160,23 +115,6 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
     if (existsSync(filePath) && statSync(filePath).isFile()) {
       const content = readFileSync(filePath)
       const ext = path.split('.').pop()
-
-      const mimeTypes: Record<string, string> = {
-        html: 'text/html',
-        js: 'application/javascript',
-        css: 'text/css',
-        json: 'application/json',
-        png: 'image/png',
-        jpg: 'image/jpeg',
-        jpeg: 'image/jpeg',
-        gif: 'image/gif',
-        svg: 'image/svg+xml',
-        ico: 'image/x-icon',
-        woff: 'font/woff',
-        woff2: 'font/woff2',
-        ttf: 'font/ttf',
-      }
-
       const contentType = mimeTypes[ext || ''] || 'application/octet-stream'
       return c.body(content, 200, { 'Content-Type': contentType })
     }
@@ -192,27 +130,31 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
 
     return c.notFound()
   })
+}
 
-  // Start the HTTP server
-  const httpServer = serve({
-    fetch: server.app.fetch,
-    port,
-  })
+/**
+ * Start the OpenSpec UI server with WebSocket support for realtime updates.
+ * Includes static file serving for the web UI.
+ */
+export async function startServer(options: CLIOptions = {}): Promise<RunningServer> {
+  const {
+    projectDir = process.cwd(),
+    port = 3100,
+    providers = createDefaultProviders(),
+    enableWatcher = true,
+  } = options
 
-  // Create WebSocket server for realtime subscriptions
-  // This also initializes the reactive file watcher for the project directory
-  const wsServer = await createWebSocketServer(server, httpServer, { projectDir })
-
-  const url = `http://localhost:${port}`
-
-  return {
-    url,
-    port,
-    close: async () => {
-      wsServer.close()
-      httpServer.close()
+  const server = await serverStartServer(
+    {
+      projectDir,
+      port,
+      providers,
+      enableWatcher,
     },
-  }
+    setupStaticFiles
+  )
+
+  return server
 }
 
 export { ACPAgents, ProviderManager, type ProviderRegistry } from '@openspecui/ai-provider'

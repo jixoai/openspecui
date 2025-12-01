@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useRouterState } from '@tanstack/react-router'
 import { Menu, X } from 'lucide-react'
 import { useDarkMode } from '@/lib/use-dark-mode'
+import { useServerStatus } from '@/lib/use-server-status'
 import { navItems, settingsItem } from './nav-items'
 import { StatusIndicator } from './status-bar'
 
@@ -11,13 +12,14 @@ export function MobileHeader() {
   const isDark = useDarkMode()
   const routerState = useRouterState()
   const currentPath = routerState.location.pathname
+  const serverStatus = useServerStatus()
 
-  // Find current page title
+  // Find current page title, fallback to dirName (project folder name)
   const currentItem = navItems.find((item) => {
     if (item.to === '/') return currentPath === '/'
     return currentPath.startsWith(item.to)
   })
-  const pageTitle = currentItem?.label ?? 'OpenSpec'
+  const pageTitle = currentItem?.label ?? serverStatus.dirName ?? 'OpenSpec'
 
   return (
     <>

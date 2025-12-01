@@ -82,7 +82,6 @@ async function main(): Promise<void> {
 `)
 
   console.log(`📁 Project: ${projectDir}`)
-  console.log(`🔌 Port: ${argv.port}`)
   console.log('')
 
   try {
@@ -92,6 +91,10 @@ async function main(): Promise<void> {
       open: argv.open,
     })
 
+    // 显示实际端口，如果和请求的不同则提示
+    if (server.port !== server.preferredPort) {
+      console.log(`⚠️  Port ${server.preferredPort} is in use, using ${server.port} instead`)
+    }
     console.log(`✅ Server running at ${server.url}`)
     console.log('')
 

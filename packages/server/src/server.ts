@@ -11,6 +11,7 @@
  * @module server
  */
 
+import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
@@ -25,6 +26,7 @@ import {
 } from '@openspecui/core'
 import { ProviderManager, type ProviderRegistry } from '@openspecui/ai-provider'
 import { appRouter, type Context } from './router.js'
+import { findAvailablePort } from './port-utils.js'
 
 /**
  * Server configuration options.
@@ -32,7 +34,7 @@ import { appRouter, type Context } from './router.js'
 export interface ServerConfig {
   /** Path to the project directory containing openspec/ */
   projectDir: string
-  /** HTTP server port (default: 3100) */
+  /** Preferred HTTP server port (default: 3100). Will find next available if occupied. */
   port?: number
   /** AI provider registry configuration */
   providers?: ProviderRegistry
@@ -161,6 +163,69 @@ export async function createWebSocketServer(
       handler.broadcastReconnectNotification()
       wss.close()
       server.watcher?.stop()
+    },
+  }
+}
+
+/**
+ * Running server instance
+ */
+export interface RunningServer {
+  /** The URL where the server is running */
+  url: string
+  /** The actual port the server is running on */
+  port: number
+  /** The preferred port that was requested */
+  preferredPort: number
+  /** Close the server */
+  close: () => Promise<void>
+}
+
+/**
+ * Start the OpenSpec UI server with WebSocket support.
+ * Automatically finds an available port if the preferred port is occupied.
+ *
+ * @param config - Server configuration
+ * @param setupApp - Optional callback to configure the Hono app before starting (e.g., add static file middleware)
+ * @returns Running server instance with actual port and close function
+ */
+export async function startServer(
+  config: ServerConfig,
+  setupApp?: (app: Hono) => void
+): Promise<RunningServer> {
+  const preferredPort = config.port ?? 3100
+
+  // Find an available port
+  const port = await findAvailablePort(preferredPort)
+
+  // Create the server
+  const server = createServer({ ...config, port })
+
+  // Allow caller to configure app (e.g., add static file middleware)
+  if (setupApp) {
+    setupApp(server.app)
+  }
+
+  // Start HTTP server
+  const httpServer = serve({
+    fetch: server.app.fetch,
+    port,
+  })
+
+  // Create WebSocket server
+  const wsServer = await createWebSocketServer(server, httpServer, {
+    projectDir: config.projectDir,
+  })
+
+  const url = `http://localhost:${port}`
+
+  return {
+    url,
+    port,
+    preferredPort,
+    close: async () => {
+      wsServer.close()
+      httpServer.close()
     },
   }
 }
