@@ -8,13 +8,15 @@
  * - 移动端友好
  */
 import { markdownPreview } from '@/lib/codemirror-markdown-preview'
+import { selectAll } from '@codemirror/commands'
 import { javascript } from '@codemirror/lang-javascript'
 import { json } from '@codemirror/lang-json'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { yaml } from '@codemirror/lang-yaml'
 import { languages } from '@codemirror/language-data'
 import type { Extension } from '@codemirror/state'
-import { EditorView } from '@codemirror/view'
+import { EditorState } from '@codemirror/state'
+import { EditorView, keymap } from '@codemirror/view'
 import CodeMirror from '@uiw/react-codemirror'
 import { useMemo } from 'react'
 
@@ -104,13 +106,79 @@ export function CodeEditor({
   const resolvedLanguage = language ?? detectLanguage(filename)
 
   const extensions = useMemo(() => {
-    const exts: Extension[] = [...getLanguageExtensions(resolvedLanguage, filename)]
+    const exts: Extension[] = [
+      EditorState.readOnly.of(readOnly),
+      ...getLanguageExtensions(resolvedLanguage, filename),
+    ]
     exts.push(
       EditorView.theme({
-        '.cm-scroller': { fontFamily: 'var(--font-mono)' },
-        '.cm-content': { fontFamily: 'var(--font-mono)' },
-        '.cm-gutters': { fontFamily: 'var(--font-mono)' },
+        '.cm-editor': {
+          backgroundColor: 'var(--background)',
+          color: 'var(--foreground)',
+          borderRadius: '6px',
+          border: '1px solid var(--border)',
+          height: '100%',
+          minHeight: '240px',
+        },
+        '.cm-content': {
+          fontFamily: 'var(--font-mono)',
+          backgroundColor: 'transparent',
+        },
+        '.cm-gutters': {
+          fontFamily: 'var(--font-mono)',
+          backgroundColor: 'var(--background)',
+          color: 'color-mix(in srgb, var(--foreground) 60%, transparent)',
+          borderRight: '1px solid var(--border)',
+        },
+        '.cm-scroller': {
+          fontFamily: 'var(--font-mono)',
+          overflow: 'auto',
+        },
+        '.cm-activeLine': {
+          backgroundColor: 'color-mix(in srgb, var(--primary) 6%, transparent)',
+        },
+        '.cm-activeLineGutter': {
+          backgroundColor: 'color-mix(in srgb, var(--primary) 6%, transparent)',
+          color: 'var(--foreground)',
+        },
+        '.cm-selectionBackground, .cm-content ::selection': {
+          backgroundColor: 'color-mix(in srgb, var(--primary) 18%, transparent)',
+        },
+        '&.cm-editor .cm-cursor': {
+          borderLeftColor: 'var(--foreground)',
+        },
+        '.cm-matchingBracket, .cm-nonmatchingBracket': {
+          backgroundColor: 'color-mix(in srgb, var(--primary) 10%, transparent)',
+          outline: '1px solid color-mix(in srgb, var(--primary) 30%, transparent)',
+        },
+        '.cm-tooltip': {
+          backgroundColor: 'var(--popover)',
+          color: 'var(--popover-foreground)',
+          border: '1px solid var(--border)',
+        },
+        '.cm-tooltip-autocomplete': {
+          '& > ul > li[aria-selected]': {
+            background: 'color-mix(in srgb, var(--primary) 10%, transparent)',
+            color: 'var(--foreground)',
+          },
+        },
+        '.cm-searchMatch': {
+          backgroundColor: 'color-mix(in srgb, var(--primary) 18%, transparent)',
+          outline: '1px solid color-mix(in srgb, var(--primary) 35%, transparent)',
+        },
+        '.cm-md-codeblock': {
+          padding: '0',
+          borderRadius: 0,
+        },
       })
+    )
+    exts.push(
+      keymap.of([
+        {
+          key: 'Mod-a',
+          run: selectAll,
+        },
+      ])
     )
     if (lineWrapping) {
       exts.push(EditorView.lineWrapping)
@@ -122,8 +190,6 @@ export function CodeEditor({
     <CodeMirror
       value={value}
       onChange={onChange}
-      readOnly={readOnly}
-      editable={!readOnly}
       placeholder={placeholder}
       basicSetup={{
         lineNumbers,
@@ -135,7 +201,7 @@ export function CodeEditor({
         bracketMatching: !readOnly,
       }}
       extensions={extensions}
-      className={`scrollbar-thin scrollbar-track-transparent ${className}`}
+      className={`scrollbar-thin scrollbar-track-transparent overflow-auto ${className}`}
       style={{ fontSize, ...style }}
     />
   )

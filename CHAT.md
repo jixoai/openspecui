@@ -551,3 +551,7 @@ interface MarkdownViewerProps{
 ---
 
 很好，接下来，我需要你将这个核心的 editor 视图独立成一个独立的组件 code-editor.tsx 来维护。
+
+---
+
+CodeEditor的统一逻辑是，非preview模式下，这些修饰全部关闭，而原始的行内容要完整展示，同时原本被隐藏起来的符号，统一是淡色的。
