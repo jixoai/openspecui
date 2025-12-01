@@ -104,7 +104,6 @@ export function CodeEditor({
   placeholder,
 }: CodeEditorProps) {
   const resolvedLanguage = language ?? detectLanguage(filename)
-
   const extensions = useMemo(() => {
     const exts: Extension[] = [
       EditorState.readOnly.of(readOnly),
@@ -112,6 +111,9 @@ export function CodeEditor({
     ]
     exts.push(
       EditorView.theme({
+        '.cm-line': {
+          lineHeight: '21px',
+        },
         '.cm-editor': {
           backgroundColor: 'var(--background)',
           color: 'var(--foreground)',
@@ -180,11 +182,14 @@ export function CodeEditor({
         },
       ])
     )
+
+    // TODO: 集成 Shiki 高亮（代码文件与 Markdown fenced code）时需采用稳定的装饰实现，避免 CM6 插件范围错误
+
     if (lineWrapping) {
       exts.push(EditorView.lineWrapping)
     }
     return exts
-  }, [resolvedLanguage, filename, lineWrapping])
+  }, [resolvedLanguage, filename, readOnly, lineWrapping])
 
   return (
     <CodeMirror
