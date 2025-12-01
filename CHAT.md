@@ -495,9 +495,6 @@ Change详情页面的顶部的header，使用容器查询来优化样式：在�
 
 ---
 
-现在AI的FolderEditorViewer在Tabs中使用的时候总是会被完全销毁，否则就会报错：
-
----
 
 你确实修复了问题，但是这不是我想看到的结果，因为现在你实在change-overfiew中自己完全实现了一套markdown-viewer的逻辑。
 我的目的是让MarkdownViewer易用，所以MarkdownViewer在参数设计上就存在多种重载的可能。
@@ -531,3 +528,7 @@ interface MarkdownViewerProps{
 }}>
 </MarkdownViewer>
 ```
+
+---
+
+很好，接下来，我需要你将这个核心的 editor 视图独立成一个独立的组件 code-editor.tsx 来维护。

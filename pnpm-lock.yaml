@@ -180,6 +180,9 @@ importers:
       '@codemirror/lang-yaml':
         specifier: ^6.1.2
         version: 6.1.2
+      '@codemirror/language':
+        specifier: ^6.11.3
+        version: 6.11.3
       '@codemirror/language-data':
         specifier: ^6.5.2
         version: 6.5.2
@@ -189,6 +192,12 @@ importers:
       '@codemirror/view':
         specifier: ^6.38.8
         version: 6.38.8
+      '@lezer/common':
+        specifier: ^1.4.0
+        version: 1.4.0
+      '@lezer/highlight':
+        specifier: ^1.2.3
+        version: 1.2.3
       '@openspecui/server':
         specifier: workspace:*
         version: link:../server

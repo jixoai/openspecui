@@ -1,3 +1,4 @@
+import { markdownPreview } from '@/lib/codemirror-markdown-preview'
 import { useArchiveFilesSubscription, useChangeFilesSubscription } from '@/lib/use-subscription'
 import { javascript } from '@codemirror/lang-javascript'
 import { json } from '@codemirror/lang-json'
@@ -13,7 +14,8 @@ import { useEffect, useMemo, useState } from 'react'
 /** 根据文件路径返回对应的 CodeMirror 语言扩展 */
 function getLanguageExtension(path: string | null): Extension[] {
   if (!path) return []
-  if (path.endsWith('.md')) return [markdown({ base: markdownLanguage, codeLanguages: languages })]
+  if (path.endsWith('.md'))
+    return [markdown({ base: markdownLanguage, codeLanguages: languages }), markdownPreview()]
   if (path.endsWith('.ts') || path.endsWith('.tsx'))
     return [javascript({ typescript: true, jsx: path.endsWith('.tsx') })]
   if (path.endsWith('.js') || path.endsWith('.jsx'))
@@ -123,6 +125,9 @@ const layoutStyles = css`
       order: 1;
       min-height: 480px;
     }
+  }
+  .CodeMirror {
+    line-height: 21px;
   }
 `
 
@@ -409,7 +414,7 @@ export function FolderEditorViewer({
                 onNavigate={setSelectedPath}
               />
               <CodeMirror
-                className="scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-auto"
+                className="scrollbar-thin scrollbar-track-transparent **:[.cm-line]:leading-6 min-h-0 flex-1 overflow-auto *:bg-sky-50"
                 key={activeFile.path}
                 value={activeFile.content ?? ''}
                 readOnly
@@ -420,7 +425,7 @@ export function FolderEditorViewer({
                   highlightActiveLine: false,
                 }}
                 extensions={[...getLanguageExtension(activeFile.path), EditorView.lineWrapping]}
-                style={{ fontSize: 13 }}
+                style={{ fontSize: 13, lineHeight: 21 }}
               />
             </>
           ) : (
