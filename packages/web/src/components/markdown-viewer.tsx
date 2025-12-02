@@ -228,6 +228,10 @@ function BuilderMarkdownContent({
 
     const createHeading = (level: HeadingLevel): HeadingComponent => {
       return function Heading({ id: fixedId, className, children }: HeadingProps) {
+        // 从 context 实时获取 levelOffset，支持 Section 嵌套
+        const ctx = useTocContext()
+        const currentLevelOffset = ctx?.levelOffset ?? levelOffset
+
         const text = extractTextFromChildren(children)
         const baseSlug = fixedId ?? (slugify(text) || 'heading')
 
@@ -237,7 +241,7 @@ function BuilderMarkdownContent({
         const id = count > 0 ? `${baseSlug}-${count + 1}` : baseSlug
 
         // 应用层级偏移
-        const adjustedLevel = Math.min(level + levelOffset, 6) as HeadingLevel
+        const adjustedLevel = Math.min(level + currentLevelOffset, 6) as HeadingLevel
         const { index } = collector.add(text, adjustedLevel, id)
 
         return (
@@ -346,7 +350,7 @@ interface MarkdownContainerProps {
 function MarkdownContainer({ children, className = '', timelineScope }: MarkdownContainerProps) {
   return (
     <div
-      className={`scrollbar-thin scrollbar-track-transparent h-full overflow-auto scroll-smooth p-6 ${className}`}
+      className={`scrollbar-thin scrollbar-track-transparent h-full overflow-auto scroll-smooth p-4 ${className}`}
       style={timelineScope ? ({ timelineScope } as React.CSSProperties) : undefined}
     >
       {children}

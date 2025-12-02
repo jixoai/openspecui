@@ -68,20 +68,18 @@ export function ChangeOverview({ change }: { change: Change }) {
 
           {/* Design */}
           {change.design && (
-            <Section>
+            <>
               <H1 id="design">Design</H1>
-              <div className="bg-muted/30 mt-2 rounded-lg p-4 [zoom:0.86]">
+              <Section className="bg-muted/30 mt-2 rounded-lg p-4 [zoom:0.86]">
                 {/* 嵌套 MarkdownViewer，Section 会自动 +1 层级 */}
-                <Section>
-                  <MarkdownViewer markdown={change.design} />
-                </Section>
-              </div>
-            </Section>
+                <MarkdownViewer markdown={change.design} />
+              </Section>
+            </>
           )}
 
           {/* Affected Specs */}
           {affectedSpecs.length > 0 && (
-            <Section>
+            <>
               <H1 id="affected-specs">Affected Specs ({affectedSpecs.length})</H1>
               <div className="divide-border border-border mt-3 divide-y rounded-lg border">
                 {affectedSpecs.map(({ spec, operation }) => (
@@ -95,12 +93,12 @@ export function ChangeOverview({ change }: { change: Change }) {
                   </div>
                 ))}
               </div>
-            </Section>
+            </>
           )}
 
           {/* Delta Specs */}
           {deltaSpecs.length > 0 && (
-            <Section>
+            <>
               <H1 id="delta-specs">Delta Specs ({deltaSpecs.length})</H1>
               <Section className="[zoom:0.86]">
                 <DeltaSpecTabs
@@ -109,7 +107,7 @@ export function ChangeOverview({ change }: { change: Change }) {
                   onActiveChange={setActiveDeltaSpecId}
                 />
               </Section>
-            </Section>
+            </>
           )}
         </div>
       )}
