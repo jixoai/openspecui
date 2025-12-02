@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "pub": "pnpm publish --access publish --no-git-checks --filter=openspecui",
-    "dev": "pnpm run dev:web & pnpm run dev:server",
+    "dev": "tsx scripts/dev.ts",
     "dev:server": "pnpm --filter @openspecui/server dev",
     "dev:web": "pnpm --filter @openspecui/web dev",
     "build": "pnpm run typecheck && pnpm run build:packages && pnpm run build:cli",

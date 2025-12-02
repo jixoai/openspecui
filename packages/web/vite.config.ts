@@ -3,26 +3,40 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  resolve: {
-    alias: {
-      '@': resolve(__dirname, './src'),
-    },
-  },
-  server: {
-    port: 5173,
-    proxy: {
-      '/trpc': {
-        target: 'http://localhost:3100',
-        changeOrigin: true,
-        // Enable WebSocket proxy for tRPC subscriptions
-        ws: true,
+function resolveBackendTarget(): string {
+  const explicit =
+    process.env.VITE_API_URL || process.env.OPENSPEC_SERVER_URL || process.env.API_URL
+  if (explicit) return explicit.replace(/\/$/, '')
+
+  const port = process.env.OPENSPEC_SERVER_PORT || process.env.SERVER_PORT || process.env.PORT
+  const targetPort = port ? Number(port) : 3100
+  return `http://localhost:${targetPort}`
+}
+
+export default defineConfig(() => {
+  const backendTarget = resolveBackendTarget()
+  console.log(`[dev-proxy] backend target => ${backendTarget}`)
+
+  return {
+    plugins: [react(), tailwindcss()],
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, './src'),
       },
-      '/api': {
-        target: 'http://localhost:3100',
-        changeOrigin: true,
+    },
+    server: {
+      port: 5173,
+      proxy: {
+        '/trpc': {
+          target: backendTarget,
+          changeOrigin: true,
+          ws: true,
+        },
+        '/api': {
+          target: backendTarget,
+          changeOrigin: true,
+        },
       },
     },
-  },
+  }
 })
