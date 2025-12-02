@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { MarkdownContent } from './markdown-content'
 import { generateTimelineScope, Toc, type TocItem } from './toc'
 import { slugify, TocCollector, TocLevelProvider, TocProvider, useTocContext } from './toc-context'
@@ -84,8 +84,8 @@ function RootMarkdownViewer({ markdown, className, onReady }: MarkdownViewerProp
   collectorRef.current = new TocCollector()
   const collector = collectorRef.current
 
-  // 渲染后更新 tocItems
-  useEffect(() => {
+  // 渲染后（首帧前）同步更新 tocItems，避免移动端 ToC 迟到导致的布局抖动
+  useLayoutEffect(() => {
     const newItems = collectorRef.current.getItems()
     setTocItems((prev) => {
       if (arraysEqual(prev, newItems)) return prev
