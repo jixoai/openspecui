@@ -22,6 +22,8 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': resolve(__dirname, './src'),
+        '@openspecui/core': resolve(__dirname, '../core/src'),
+        '@openspecui/server': resolve(__dirname, '../server/src'),
       },
     },
     server: {

@@ -151,6 +151,20 @@ export class CliExecutor {
   }
 
   /**
+   * 流式执行 openspec validate
+   */
+  validateStream(
+    type: 'spec' | 'change' | undefined,
+    id: string | undefined,
+    onEvent: (event: CliStreamEvent) => void
+  ): Promise<() => void> {
+    const args = ['validate']
+    if (type) args.push(type)
+    if (id) args.push(id)
+    return this.executeStream(args, onEvent)
+  }
+
+  /**
    * 检查 CLI 是否可用
    * @param timeout 超时时间（毫秒），默认 10 秒
    */

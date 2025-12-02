@@ -7,11 +7,11 @@
  * Creates an example project with:
  * - openspec/ directory structure
  * - Sample specs and changes
- * - openspec.config.json
+ * - .openspecui.json
  */
 
-import { mkdir, writeFile, rm } from 'fs/promises'
 import { existsSync } from 'fs'
+import { mkdir, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 
 const EXAMPLE_DIR = join(import.meta.dirname, '..', 'example')
@@ -223,12 +223,18 @@ async function setup(clean = false) {
     [join(EXAMPLE_DIR, 'openspec', 'changes', 'add-2fa', 'tasks.md'), SAMPLE_CHANGE_TASKS],
     [join(EXAMPLE_DIR, 'openspec', 'changes', 'add-2fa', 'design.md'), SAMPLE_CHANGE_DESIGN],
     [join(EXAMPLE_DIR, 'openspec', 'changes', 'add-2fa', 'notes.md'), SAMPLE_CHANGE_NOTES],
-    [join(EXAMPLE_DIR, 'openspec', 'changes', 'add-2fa', 'specs', 'auth', 'spec.md'), SAMPLE_DELTA_AUTH],
-    [join(EXAMPLE_DIR, 'openspec', 'changes', 'add-2fa', 'specs', 'user', 'spec.md'), SAMPLE_DELTA_USER],
+    [
+      join(EXAMPLE_DIR, 'openspec', 'changes', 'add-2fa', 'specs', 'auth', 'spec.md'),
+      SAMPLE_DELTA_AUTH,
+    ],
+    [
+      join(EXAMPLE_DIR, 'openspec', 'changes', 'add-2fa', 'specs', 'user', 'spec.md'),
+      SAMPLE_DELTA_USER,
+    ],
     // Project-level files
     [join(EXAMPLE_DIR, 'openspec', 'project.md'), SAMPLE_PROJECT_MD],
     [join(EXAMPLE_DIR, 'openspec', 'AGENTS.md'), SAMPLE_AGENTS_MD],
-    [join(EXAMPLE_DIR, 'openspec', 'openspec.config.json'), JSON.stringify(CONFIG, null, 2)],
+    [join(EXAMPLE_DIR, 'openspec', '.openspecui.json'), JSON.stringify(CONFIG, null, 2)],
   ]
 
   for (const [path, content] of files) {

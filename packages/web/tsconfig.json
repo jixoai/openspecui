@@ -10,7 +10,8 @@
     "paths": {
       "@/*": ["./src/*"],
       "@openspecui/server": ["../server/src/index.ts"],
-      "@openspecui/core": ["../core/src/index.ts"]
+      "@openspecui/core": ["../core/src/index.ts"],
+      "@openspecui/ai-provider": ["../ai-provider/src/index.ts"]
     }
   },
   "include": ["src"]

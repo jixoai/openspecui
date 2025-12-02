@@ -584,3 +584,71 @@ Loading文字的问题是：它现在是和我们的内容做交叉过渡的是�
 ----
 
 change-header虽然做了容器查询的响应式，但是需要更进一步：字体的大小也应该随着容器伸缩而缩放。
+
+---
+
+我在调用archive的时候，前端收到的终端打印：
+```
+openspec archive -y add-2fa
+
+Proposal warnings in proposal.md (non-blocking):
+  ⚠ Requirement must have at least one scenario
+  ⚠ Requirement must have at least one scenario
+
+Validation errors in change delta specs:
+  ✗ MODIFIED "Email And Password Login" must include at least one scenario
+
+Validation failed. Please fix the errors before archiving.
+To skip validation (not recommended), use --no-validate flag.
+Process exited with code 0
+```
+
+虽然进程返回exit code 0,但是这里我们需要做一些额外的解析：“Validation errors”
+
+我能想到的方案有两种，一种是执行之前调用一次`openspec validate add-2fa`，还有一种是直接解析处理`openspec archive -y add-2fa`。
+我的建议是调用`openspec validate add-2fa`，因为它有更加完整的 stderr，exitCode也是相对标准的:1
+
+---
+
+在此之前还有一个问题，就是我明明archive没有成功，但是我们自己居然自己推测出最终archive的文件夹，然后做了去跳转。我觉得这个有点不合理。
+
+1. 要么基于文件夹的变更检查，检测到刚才archive文件夹多了一个文件夹，并且这个文件夹的id符合 yyyy-mm-dd-{id} 的规范，说明我们archive完成了，这时候跳转的按钮才能亮起。
+2. 要么基于archive的stdout打印，去做判断.这是我强制移动后的结果打印：
+    ```
+    ❯ openspec archive add-2fa --no-validate -y
+    
+    ⚠️  WARNING: Skipping validation may archive invalid specs.
+    [2025-12-02T10:34:59.277Z] Validation skipped for change: add-2fa
+    Affected files: openspec/changes/add-2fa
+    Task status: 0/6 tasks
+    Warning: 6 incomplete task(s) found. Continuing due to --yes flag.
+    
+    Specs to update:
+      auth: update
+      user: update
+    Applying changes to openspec/specs/auth/spec.md:
+      + 1 added
+      ~ 1 modified
+    Applying changes to openspec/specs/user/spec.md:
+      + 1 added
+    Totals: + 2, ~ 1, - 0, → 0
+    Specs updated successfully.
+    Change 'add-2fa' archived as '2025-12-02-add-2fa'.
+    ```
+
+你觉得什么方案最好？
+
+---
+
+这个错误信息，得显示在我们统一的终端里面。但是你可以配置一个红色边框来代表最终的执行结果 exitCode!=0。因为这些内容本来就是来自终端。
+这个validate终端的位置也应该和archive终端的位置一样，甚至可以用同一个终端窗口来模拟显示多次执行的内容打印。
+
+对了你这个终端，是一个统一的组件吗？
+
+还有，记得，我们的内容是放在一个Dialog里面的，这里面有Header/Body/Footer三段结果，你要确保整体不能超过溢出屏幕，比如  `max-height:86vh`。
+如果超出高度，那边Body应该要能滚动
+
+---
+
+这个终端渲染应该是独立的通用组件，我们Dialog也应该是独立的通用组件。
+然后才是把它们组合在一起。

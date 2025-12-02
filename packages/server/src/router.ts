@@ -646,6 +646,15 @@ export const cliRouter = router({
       return ctx.cliExecutor.validate(input.type, input.id)
     }),
 
+  /** 流式执行 validate（实时输出） */
+  validateStream: publicProcedure
+    .input(z.object({ type: z.enum(['spec', 'change']).optional(), id: z.string().optional() }))
+    .subscription(({ ctx, input }) => {
+      return createCliStreamObservable((onEvent) =>
+        ctx.cliExecutor.validateStream(input.type, input.id, onEvent)
+      )
+    }),
+
   execute: publicProcedure
     .input(z.object({ args: z.array(z.string()) }))
     .mutation(async ({ ctx, input }) => {

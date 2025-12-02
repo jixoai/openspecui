@@ -1,6 +1,8 @@
 import { trpcClient } from '@/lib/trpc'
+import { DialogShell } from './dialog-shell'
+import { CliTerminal } from './cli-terminal'
 import type { CliStreamEvent } from '@openspecui/core'
-import { CheckCircle, Loader2, Package, Terminal, X, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Loader2, Package, Terminal } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 /** 成功后的操作按钮 */
@@ -8,55 +10,32 @@ export interface SuccessAction {
   label: string
   onClick: () => void
   primary?: boolean
+  disabled?: boolean
 }
 
 /** 成功配置 */
 export interface SuccessConfig {
-  /** 成功标题 */
   title: string
-  /** 成功描述 */
   description?: string
-  /** 操作按钮 */
   actions: SuccessAction[]
 }
 
 export interface CliTerminalModalProps {
-  /** Modal title */
   title: string
-  /** Whether the modal is open */
   open: boolean
-  /** Close handler */
   onClose: () => void
-  /**
-   * Success handler (called when CLI exits with code 0)
-   * @deprecated Use successConfig instead for better UX
-   */
   onSuccess?: () => void
-  /** Success configuration - if provided, shows success view instead of auto-closing */
   successConfig?: SuccessConfig
-  /** Subscription type */
-  type: 'init' | 'archive' | 'install-global'
-  /** Init options */
-  initOptions?: {
-    tools: string[] | 'all' | 'none'
-  }
-  /** Archive options */
-  archiveOptions?: {
-    changeId: string
-    skipSpecs?: boolean
-    noValidate?: boolean
-  }
+  type: 'init' | 'archive' | 'install-global' | 'validate'
+  initOptions?: { tools: string[] | 'all' | 'none' }
+  archiveOptions?: { changeId: string; skipSpecs?: boolean; noValidate?: boolean }
+  validateOptions?: { changeId: string }
+  onArchiveDetected?: (archiveId: string) => void
 }
 
 type Status = 'idle' | 'running' | 'success' | 'error'
+type Phase = 'idle' | 'validating' | 'archiving' | 'command'
 
-/**
- * CLI Terminal Modal
- *
- * Displays real-time CLI output in a terminal-like modal.
- * Auto-scrolls to bottom as new output arrives.
- * Shows success view with actions when completed (if successConfig provided).
- */
 export function CliTerminalModal({
   title,
   open,
@@ -66,37 +45,50 @@ export function CliTerminalModal({
   type,
   initOptions,
   archiveOptions,
+  validateOptions,
+  onArchiveDetected,
 }: CliTerminalModalProps) {
   const [output, setOutput] = useState<string[]>([])
   const [status, setStatus] = useState<Status>('idle')
   const [exitCode, setExitCode] = useState<number | null>(null)
+  const [phase, setPhase] = useState<Phase>('idle')
   const outputRef = useRef<HTMLDivElement>(null)
   const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null)
 
-  // Auto-scroll to bottom
+  // Auto-scroll
   useEffect(() => {
     if (outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight
     }
   }, [output])
 
-  // Handle stream event
-  const handleEvent = useCallback((event: CliStreamEvent) => {
-    if (event.type === 'command' && event.data) {
-      // 显示正在执行的命令（蓝色，带 $ 前缀）
-      setOutput((prev) => [...prev, `\x1b[34m$ ${event.data}\x1b[0m`])
-    } else if (event.type === 'stdout' && event.data) {
-      setOutput((prev) => [...prev, event.data!])
-    } else if (event.type === 'stderr' && event.data) {
-      setOutput((prev) => [...prev, `\x1b[31m${event.data}\x1b[0m`]) // Red for stderr
-    } else if (event.type === 'exit') {
-      setExitCode(event.exitCode ?? null)
-      setStatus(event.exitCode === 0 ? 'success' : 'error')
-    }
-  }, [])
+  const handleEvent = useCallback(
+    (event: CliStreamEvent) => {
+      if (event.type === 'command' && event.data) {
+        setOutput((prev) => [...prev, `\x1b[34m$ ${event.data}\x1b[0m`])
+      } else if (event.type === 'stdout' && event.data) {
+        setOutput((prev) => [...prev, event.data!])
+        const match = /Change ['"](.+?)['"] archived as ['"](.+?)['"]/.exec(event.data)
+        if (match?.[2]) {
+          onArchiveDetected?.(match[2])
+        }
+      } else if (event.type === 'stderr' && event.data) {
+        setOutput((prev) => [...prev, `\x1b[31m${event.data}\x1b[0m`])
+      } else if (event.type === 'exit') {
+        setExitCode(event.exitCode ?? null)
 
-  // 稳定化 options 引用，避免每次渲染都触发 useEffect
-  // 使用 JSON.stringify 作为依赖 key，只有实际值变化时才会重新创建 subscription
+        if (phase === 'validating') {
+          if (event.exitCode === 0) return
+          setStatus('error')
+          return
+        }
+
+        setStatus(event.exitCode === 0 ? 'success' : 'error')
+      }
+    },
+    [onArchiveDetected, phase]
+  )
+
   const initOptionsKey = useMemo(
     () => (initOptions ? JSON.stringify(initOptions) : null),
     [initOptions?.tools]
@@ -105,17 +97,20 @@ export function CliTerminalModal({
     () => (archiveOptions ? JSON.stringify(archiveOptions) : null),
     [archiveOptions?.changeId, archiveOptions?.skipSpecs, archiveOptions?.noValidate]
   )
+  const validateOptionsKey = useMemo(
+    () => (validateOptions ? JSON.stringify(validateOptions) : null),
+    [validateOptions?.changeId]
+  )
 
-  // Start subscription when modal opens
+  // Start subscription
   useEffect(() => {
     if (!open) return
 
-    // Reset state
     setOutput([])
     setStatus('running')
     setExitCode(null)
+    setPhase('command')
 
-    // Start subscription based on type
     if (type === 'init' && initOptions) {
       subscriptionRef.current = trpcClient.cli.initStream.subscribe(
         { tools: initOptions.tools },
@@ -128,12 +123,50 @@ export function CliTerminalModal({
         }
       )
     } else if (type === 'archive' && archiveOptions) {
-      subscriptionRef.current = trpcClient.cli.archiveStream.subscribe(
-        {
-          changeId: archiveOptions.changeId,
-          skipSpecs: archiveOptions.skipSpecs,
-          noValidate: archiveOptions.noValidate,
-        },
+      const startArchive = () => {
+        setPhase('archiving')
+        subscriptionRef.current = trpcClient.cli.archiveStream.subscribe(
+          {
+            changeId: archiveOptions.changeId,
+            skipSpecs: archiveOptions.skipSpecs,
+            noValidate: archiveOptions.noValidate,
+          },
+          {
+            onData: handleEvent,
+            onError: (err) => {
+              setOutput((prev) => [...prev, `\x1b[31mError: ${err.message}\x1b[0m`])
+              setStatus('error')
+            },
+          }
+        )
+      }
+
+      if (archiveOptions.noValidate) {
+        startArchive()
+      } else {
+        setPhase('validating')
+        subscriptionRef.current = trpcClient.cli.validateStream.subscribe(
+          { id: archiveOptions.changeId },
+          {
+            onData: (event) => {
+              if (event.type === 'exit' && event.exitCode === 0) {
+                subscriptionRef.current?.unsubscribe()
+                startArchive()
+              } else {
+                handleEvent(event)
+              }
+            },
+            onError: (err) => {
+              setOutput((prev) => [...prev, `\x1b[31mError: ${err.message}\x1b[0m`])
+              setStatus('error')
+            },
+          }
+        )
+      }
+    } else if (type === 'validate' && validateOptions) {
+      setPhase('validating')
+      subscriptionRef.current = trpcClient.cli.validateStream.subscribe(
+        { id: validateOptions.changeId },
         {
           onData: handleEvent,
           onError: (err) => {
@@ -156,18 +189,16 @@ export function CliTerminalModal({
       subscriptionRef.current?.unsubscribe()
       subscriptionRef.current = null
     }
-    // 使用稳定化的 key 作为依赖，而不是对象引用
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, type, initOptionsKey, archiveOptionsKey, handleEvent])
+  }, [open, type, initOptionsKey, archiveOptionsKey, validateOptionsKey, handleEvent])
 
-  // Call legacy onSuccess when status changes to success (only if no successConfig)
+  // legacy onSuccess
   useEffect(() => {
     if (status === 'success' && !successConfig) {
       onSuccess?.()
     }
   }, [status, onSuccess, successConfig])
 
-  // Handle close
   const handleClose = () => {
     subscriptionRef.current?.unsubscribe()
     subscriptionRef.current = null
@@ -176,159 +207,68 @@ export function CliTerminalModal({
 
   if (!open) return null
 
-  const isSuccess = status === 'success' && successConfig
+  const isSuccess = status === 'success' && !!successConfig
+  const borderVariant = status === 'error' ? 'error' : isSuccess ? 'success' : 'default'
+
+  const titleNode = (
+    <>
+      {isSuccess ? (
+        <CheckCircle className="h-5 w-5 text-green-500" />
+      ) : (
+        <Terminal className="text-muted-foreground h-5 w-5" />
+      )}
+      <h2 className="font-semibold">{isSuccess ? successConfig.title : title}</h2>
+      {status === 'running' && <Loader2 className="text-primary h-4 w-4 animate-spin" />}
+      {status === 'success' && !successConfig && <CheckCircle className="h-4 w-4 text-green-500" />}
+      {status === 'error' && <AlertTriangle className="h-4 w-4 text-red-500" />}
+    </>
+  )
+
+  const footer = isSuccess ? (
+    successConfig.actions.map((action, i) => (
+      <button
+        key={i}
+        onClick={action.onClick}
+        disabled={action.disabled}
+        className={
+          action.primary
+            ? `bg-primary text-primary-foreground rounded-md px-4 py-2 ${action.disabled ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'}`
+            : `bg-muted rounded-md px-4 py-2 ${action.disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-muted/80'}`
+        }
+      >
+        {action.label}
+      </button>
+    ))
+  ) : (
+    <button onClick={handleClose} className="bg-muted hover:bg-muted/80 rounded-md px-4 py-2">
+      {status === 'running' ? 'Cancel' : 'Close'}
+    </button>
+  )
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
+    <DialogShell
+      open={open}
+      onClose={handleClose}
+      title={titleNode}
+      footer={footer}
+      borderVariant={borderVariant}
+    >
+      <CliTerminal
+        lines={output}
+        status={(status === 'success' && !successConfig ? 'success' : status) as 'running' | 'success' | 'error'}
+        exitCode={exitCode}
+        scrollRef={outputRef as React.RefObject<HTMLDivElement>}
+        maxHeight={isSuccess ? '40vh' : '60vh'}
+      />
 
-      {/* Modal */}
-      <div className="bg-background border-border relative mx-4 w-full max-w-2xl rounded-lg border shadow-xl">
-        {/* Header */}
-        <div
-          className={`flex items-center justify-between border-b px-4 py-3 ${isSuccess ? 'border-green-500/30 bg-green-500/5' : 'border-border'}`}
-        >
-          <div className="flex items-center gap-2">
-            {isSuccess ? (
-              <CheckCircle className="h-5 w-5 text-green-500" />
-            ) : (
-              <Terminal className="text-muted-foreground h-5 w-5" />
-            )}
-            <h2 className="font-semibold">{isSuccess ? successConfig.title : title}</h2>
-            {status === 'running' && <Loader2 className="text-primary h-4 w-4 animate-spin" />}
-            {status === 'success' && !successConfig && (
-              <CheckCircle className="h-4 w-4 text-green-500" />
-            )}
-            {status === 'error' && <XCircle className="h-4 w-4 text-red-500" />}
+      {isSuccess && successConfig.description && (
+        <div className="border-border bg-muted/30 mt-3 rounded border px-4 py-3">
+          <div className="flex items-start gap-3">
+            <Package className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
+            <p className="text-muted-foreground text-sm">{successConfig.description}</p>
           </div>
-          <button onClick={handleClose} className="hover:bg-muted rounded p-1">
-            <X className="h-5 w-5" />
-          </button>
         </div>
-
-        {/* Terminal output */}
-        <div
-          ref={outputRef}
-          className={`scrollbar-thin scrollbar-track-transparent scrollbar-thumb-zinc-700 overflow-auto bg-zinc-900 p-4 font-mono text-sm text-zinc-100 ${
-            isSuccess ? 'h-48' : 'h-80'
-          }`}
-        >
-          {output.length === 0 && status === 'running' && (
-            <span className="text-zinc-500">Starting...</span>
-          )}
-          {output.map((line, i) => (
-            <div key={i} className="whitespace-pre-wrap break-all">
-              {renderAnsiLine(line)}
-            </div>
-          ))}
-          {status === 'success' && (
-            <div className="mt-2 text-green-400">Process exited with code {exitCode}</div>
-          )}
-          {status === 'error' && exitCode !== null && (
-            <div className="mt-2 text-red-400">Process exited with code {exitCode}</div>
-          )}
-        </div>
-
-        {/* Success info (only when successConfig provided) */}
-        {isSuccess && successConfig.description && (
-          <div className="border-border bg-muted/30 border-t px-4 py-3">
-            <div className="flex items-start gap-3">
-              <Package className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
-              <p className="text-muted-foreground text-sm">{successConfig.description}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="border-border flex items-center justify-end gap-2 border-t px-4 py-3">
-          {isSuccess ? (
-            // Success actions
-            successConfig.actions.map((action, i) => (
-              <button
-                key={i}
-                onClick={action.onClick}
-                className={
-                  action.primary
-                    ? 'bg-primary text-primary-foreground rounded-md px-4 py-2 hover:opacity-90'
-                    : 'bg-muted hover:bg-muted/80 rounded-md px-4 py-2'
-                }
-              >
-                {action.label}
-              </button>
-            ))
-          ) : (
-            // Default close button
-            <button
-              onClick={handleClose}
-              className="bg-muted hover:bg-muted/80 rounded-md px-4 py-2"
-            >
-              {status === 'running' ? 'Cancel' : 'Close'}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+      )}
+    </DialogShell>
   )
-}
-
-/**
- * Simple ANSI color code renderer
- * Supports basic colors: red (\x1b[31m), green (\x1b[32m), reset (\x1b[0m)
- */
-function renderAnsiLine(line: string): React.ReactNode {
-  const parts: React.ReactNode[] = []
-  let currentIndex = 0
-  let currentColor: string | null = null
-
-  const regex = /\x1b\[(\d+)m/g
-  let match
-
-  while ((match = regex.exec(line)) !== null) {
-    // Add text before this escape sequence
-    if (match.index > currentIndex) {
-      const text = line.slice(currentIndex, match.index)
-      parts.push(
-        currentColor ? (
-          <span key={currentIndex} className={currentColor}>
-            {text}
-          </span>
-        ) : (
-          text
-        )
-      )
-    }
-
-    // Update color based on escape code
-    const code = parseInt(match[1], 10)
-    if (code === 0) {
-      currentColor = null
-    } else if (code === 31) {
-      currentColor = 'text-red-400'
-    } else if (code === 32) {
-      currentColor = 'text-green-400'
-    } else if (code === 33) {
-      currentColor = 'text-yellow-400'
-    } else if (code === 34) {
-      currentColor = 'text-blue-400'
-    }
-
-    currentIndex = match.index + match[0].length
-  }
-
-  // Add remaining text
-  if (currentIndex < line.length) {
-    const text = line.slice(currentIndex)
-    parts.push(
-      currentColor ? (
-        <span key={currentIndex} className={currentColor}>
-          {text}
-        </span>
-      ) : (
-        text
-      )
-    )
-  }
-
-  return parts.length > 0 ? parts : line
 }

@@ -28,12 +28,14 @@ export function ArchiveModal({ changeId, changeName, open, onClose }: ArchiveMod
   const [step, setStep] = useState<Step>('options')
   const [skipSpecs, setSkipSpecs] = useState(false)
   const [noValidate, setNoValidate] = useState(false)
+  const [detectedArchiveId, setDetectedArchiveId] = useState<string | null>(null)
 
   // Reset state when modal closes
   const handleClose = () => {
     setStep('options')
     setSkipSpecs(false)
     setNoValidate(false)
+    setDetectedArchiveId(null)
     onClose()
   }
 
@@ -52,7 +54,7 @@ export function ArchiveModal({ changeId, changeName, open, onClose }: ArchiveMod
   const successConfig: SuccessConfig = useMemo(
     () => ({
       title: 'Archive Successful',
-      description: `"${changeName}" has been archived as ${archiveName}`,
+      description: `"${changeName}" has been archived as ${detectedArchiveId ?? archiveName}`,
       actions: [
         {
           label: 'Close',
@@ -63,15 +65,17 @@ export function ArchiveModal({ changeId, changeName, open, onClose }: ArchiveMod
         },
         {
           label: 'View Archive',
+          disabled: !detectedArchiveId,
           onClick: () => {
             handleClose()
-            navigate({ to: '/archive' })
+            if (!detectedArchiveId) return
+            navigate({ to: '/archive/$changeId', params: { changeId: detectedArchiveId } })
           },
           primary: true,
         },
       ],
     }),
-    [changeName, archiveName, navigate]
+    [changeName, archiveName, detectedArchiveId, navigate]
   )
 
   if (!open) return null
@@ -90,6 +94,7 @@ export function ArchiveModal({ changeId, changeName, open, onClose }: ArchiveMod
           skipSpecs,
           noValidate,
         }}
+        onArchiveDetected={setDetectedArchiveId}
       />
     )
   }

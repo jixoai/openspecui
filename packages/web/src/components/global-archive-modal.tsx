@@ -24,6 +24,7 @@ export function GlobalArchiveModal() {
   const [step, setStep] = useState<Step>('options')
   const [skipSpecs, setSkipSpecs] = useState(false)
   const [noValidate, setNoValidate] = useState(false)
+  const [detectedArchiveId, setDetectedArchiveId] = useState<string | null>(null)
 
   // 当 Modal 打开时重置状态
   useEffect(() => {
@@ -31,6 +32,7 @@ export function GlobalArchiveModal() {
       setStep('options')
       setSkipSpecs(false)
       setNoValidate(false)
+      setDetectedArchiveId(null)
     }
   }, [open])
 
@@ -46,19 +48,21 @@ export function GlobalArchiveModal() {
     setStep('options')
     setSkipSpecs(false)
     setNoValidate(false)
+    setDetectedArchiveId(null)
     closeArchiveModal()
   }, [closeArchiveModal])
 
   // 开始执行 archive
   const handleStartArchive = useCallback(() => {
+    if (!changeId) return
     setStep('terminal')
-  }, [])
+  }, [changeId])
 
   // Success configuration for terminal modal
   const successConfig: SuccessConfig = useMemo(
     () => ({
       title: 'Archive Successful',
-      description: `"${changeName}" has been archived as ${archiveName}`,
+      description: `"${changeName}" has been archived as ${detectedArchiveId ?? archiveName}`,
       actions: [
         {
           label: 'Close',
@@ -66,16 +70,18 @@ export function GlobalArchiveModal() {
         },
         {
           label: 'View Archive',
+          disabled: !detectedArchiveId,
           onClick: () => {
             handleClose()
+            if (!detectedArchiveId) return
             // 跳转到刚刚 archive 的 change 详情页
-            navigate({ to: '/archive/$changeId', params: { changeId: archiveName } })
+            navigate({ to: '/archive/$changeId', params: { changeId: detectedArchiveId } })
           },
           primary: true,
         },
       ],
     }),
-    [changeName, archiveName, navigate, handleClose]
+    [changeName, archiveName, detectedArchiveId, navigate, handleClose]
   )
 
   if (!open || !changeId) return null
@@ -94,6 +100,7 @@ export function GlobalArchiveModal() {
           skipSpecs,
           noValidate,
         }}
+        onArchiveDetected={setDetectedArchiveId}
       />
     )
   }
@@ -172,6 +179,7 @@ export function GlobalArchiveModal() {
                 </p>
               </div>
             </label>
+
           </div>
         </div>
 
