@@ -51,9 +51,16 @@ export function CliTerminalModal({
   const [output, setOutput] = useState<string[]>([])
   const [status, setStatus] = useState<Status>('idle')
   const [exitCode, setExitCode] = useState<number | null>(null)
-  const [phase, setPhase] = useState<Phase>('idle')
+  const [_phase, setPhase] = useState<Phase>('idle')
+  const phaseRef = useRef<Phase>('idle')
   const outputRef = useRef<HTMLDivElement>(null)
   const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null)
+
+  // 同步更新 phase state 和 ref，避免 handleEvent 依赖 phase state
+  const updatePhase = useCallback((newPhase: Phase) => {
+    phaseRef.current = newPhase
+    setPhase(newPhase)
+  }, [])
 
   // Auto-scroll
   useEffect(() => {
@@ -77,7 +84,8 @@ export function CliTerminalModal({
       } else if (event.type === 'exit') {
         setExitCode(event.exitCode ?? null)
 
-        if (phase === 'validating') {
+        // 使用 phaseRef.current 而不是 phase state，避免依赖变化导致 useEffect 重复执行
+        if (phaseRef.current === 'validating') {
           if (event.exitCode === 0) return
           setStatus('error')
           return
@@ -86,7 +94,7 @@ export function CliTerminalModal({
         setStatus(event.exitCode === 0 ? 'success' : 'error')
       }
     },
-    [onArchiveDetected, phase]
+    [onArchiveDetected]
   )
 
   const initOptionsKey = useMemo(
@@ -109,7 +117,7 @@ export function CliTerminalModal({
     setOutput([])
     setStatus('running')
     setExitCode(null)
-    setPhase('command')
+    updatePhase('command')
 
     if (type === 'init' && initOptions) {
       subscriptionRef.current = trpcClient.cli.initStream.subscribe(
@@ -124,7 +132,7 @@ export function CliTerminalModal({
       )
     } else if (type === 'archive' && archiveOptions) {
       const startArchive = () => {
-        setPhase('archiving')
+        updatePhase('archiving')
         subscriptionRef.current = trpcClient.cli.archiveStream.subscribe(
           {
             changeId: archiveOptions.changeId,
@@ -144,7 +152,7 @@ export function CliTerminalModal({
       if (archiveOptions.noValidate) {
         startArchive()
       } else {
-        setPhase('validating')
+        updatePhase('validating')
         subscriptionRef.current = trpcClient.cli.validateStream.subscribe(
           { id: archiveOptions.changeId },
           {
@@ -164,7 +172,7 @@ export function CliTerminalModal({
         )
       }
     } else if (type === 'validate' && validateOptions) {
-      setPhase('validating')
+      updatePhase('validating')
       subscriptionRef.current = trpcClient.cli.validateStream.subscribe(
         { id: validateOptions.changeId },
         {
