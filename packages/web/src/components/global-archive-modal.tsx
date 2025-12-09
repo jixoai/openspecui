@@ -2,7 +2,7 @@ import { useArchiveModal } from '@/lib/archive-modal-context'
 import { useCliRunner } from '@/lib/use-cli-runner'
 import { useNavigate } from '@tanstack/react-router'
 import { Archive, CheckCircle, Loader2 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Dialog } from './dialog'
 import { CliTerminal } from './cli-terminal'
 
@@ -39,13 +39,6 @@ export function GlobalArchiveModal() {
     }
   }, [open])
 
-  // Generate archive name (same format as CLI)
-  const archiveName = useMemo(() => {
-    if (!changeId) return ''
-    const date = new Date().toISOString().split('T')[0]
-    return `${date}-${changeId}`
-  }, [changeId])
-
   // 关闭并重置 - 使用 useCallback 稳定引用
   const handleClose = () => {
     cancel()
@@ -69,18 +62,15 @@ export function GlobalArchiveModal() {
     return queue
   }, [changeId, noValidate, skipSpecs])
 
+  const isRunning = status === 'running'
+  const isArchiveSuccess = status === 'success' && !!detectedArchiveId
+  const isArchiveOutputMissingId = status === 'success' && !detectedArchiveId
+  const archiveStatus = isArchiveSuccess ? 'success' : isArchiveOutputMissingId ? 'error' : status
+  const successArchiveId = detectedArchiveId ?? ''
+
   // 开始执行 archive（若之前失败则自动重置并重跑）
   const handleStartArchive = () => {
     if (!changeId) return
-    if (status === 'error') {
-      reset()
-      const queue = buildQueue()
-      if (queue.length) {
-        commands.replaceAll(queue)
-        commands.runAll()
-      }
-      return
-    }
     commands.runAll()
   }
 
@@ -99,10 +89,9 @@ export function GlobalArchiveModal() {
 
   if (!open || !changeId) return null
 
-  const borderVariant = status === 'error' ? 'error' : status === 'success' ? 'success' : 'default'
-  const successArchiveId = detectedArchiveId ?? archiveName
+  const borderVariant = archiveStatus === 'error' ? 'error' : archiveStatus === 'success' ? 'success' : 'default'
 
-  const footer = status === 'success' ? (
+  const footer = archiveStatus === 'success' && successArchiveId ? (
     <div className="flex w-full items-center justify-between gap-3">
       <div className="text-sm text-green-600">Archived as {successArchiveId}</div>
       <div className="flex items-center gap-2">
@@ -124,22 +113,22 @@ export function GlobalArchiveModal() {
   ) : (
     <>
       <button onClick={handleReset} className="bg-muted hover:bg-muted/80 rounded-md px-4 py-2">
-        {status === 'error' ? 'Reset & Retry' : 'Reset'}
+        {archiveStatus === 'error' ? 'Reset & Retry' : 'Reset'}
       </button>
       <button
         onClick={handleClose}
         className="bg-muted hover:bg-muted/80 rounded-md px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
-        disabled={status === 'running'}
+        disabled={isRunning}
       >
         Close
       </button>
       <button
-        onClick={status === 'error' ? handleReset : handleStartArchive}
-        disabled={status === 'running'}
+        onClick={archiveStatus === 'error' ? handleReset : handleStartArchive}
+        disabled={isRunning}
         className="flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {status === 'running' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
-        {status === 'error' ? 'Reset before Archive' : 'Archive'}
+        {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
+        {archiveStatus === 'error' ? 'Reset before Archive' : 'Archive'}
       </button>
     </>
   )
@@ -150,7 +139,7 @@ export function GlobalArchiveModal() {
       onClose={handleClose}
       title={
         <div className="flex items-center gap-2">
-          {status === 'success' ? (
+          {archiveStatus === 'success' ? (
             <CheckCircle className="h-5 w-5 text-green-500" />
           ) : (
             <Archive className="h-5 w-5 text-red-500" />
@@ -172,6 +161,12 @@ export function GlobalArchiveModal() {
           lines={lines}
           maxHeight="50vh"
         />
+
+        {isArchiveOutputMissingId && (
+          <div className="border-amber-200 bg-amber-100 text-amber-900 rounded-md border px-3 py-2 text-sm">
+            Archive output did not include the archived change name. Treating archive as failed.
+          </div>
+        )}
 
         <div className="space-y-3">
           <p className="text-sm font-medium">Options</p>
