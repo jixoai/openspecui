@@ -244,7 +244,15 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
 /**
  * Get the path to the web build directory
  */
-function getWebBuildDir(): string {
+function getWebBuildDir(useCustomBuild: boolean = false): string {
+  // If using a custom build (e.g., with custom base path), use the web package dist
+  if (useCustomBuild) {
+    const webDistPath = join(__dirname, '..', '..', 'web', 'dist')
+    if (existsSync(webDistPath)) {
+      return webDistPath
+    }
+  }
+
   // In production, web assets are in ./web
   // In development, we need to build first
   const prodPath = join(__dirname, '..', 'web')
@@ -275,6 +283,7 @@ export async function exportStaticSite(options: ExportOptions): Promise<void> {
   console.log(`🔗 Base path: ${basePath}\n`)
 
   const startTime = Date.now()
+  let useCustomBuild = false
 
   try {
     // Step 1: Clean output directory if requested
@@ -301,6 +310,13 @@ export async function exportStaticSite(options: ExportOptions): Promise<void> {
     if (basePath !== '/') {
       console.log(`🏗️  Building web app with base path ${basePath}...`)
       const webPkgDir = join(__dirname, '..', '..', 'web')
+      const webDistDir = join(webPkgDir, 'dist')
+
+      // Clean the dist directory first to avoid stale assets
+      if (existsSync(webDistDir)) {
+        console.log('  🧹 Cleaning previous build...')
+        await rm(webDistDir, { recursive: true, force: true })
+      }
 
       try {
         execSync('npm run build', {
@@ -309,20 +325,18 @@ export async function exportStaticSite(options: ExportOptions): Promise<void> {
             ...process.env,
             VITE_BASE_PATH: basePath,
           },
-          stdio: ['ignore', 'pipe', 'pipe'],
+          stdio: 'inherit',
         })
         console.log('  ✓ Web app built successfully')
+        useCustomBuild = true
       } catch (error) {
-        console.error('  ❌ Failed to build web app with custom base path')
-        throw error
+        console.error('\n  ❌ Failed to build web app with custom base path')
+        console.error(
+          '  💡 This usually means there are TypeScript errors or missing dependencies.'
+        )
+        console.error(`  📁 Build directory: ${webPkgDir}`)
+        throw new Error('Web app build failed. See output above for details.')
       }
-
-      // Copy the newly built web assets to CLI
-      const webDistDir = join(webPkgDir, 'dist')
-      const cliWebDir = join(__dirname, '..', 'web')
-      await rm(cliWebDir, { recursive: true, force: true })
-      await cp(webDistDir, cliWebDir, { recursive: true })
-      console.log('  ✓ Web assets updated in CLI package')
     }
 
     // Step 5: Write data snapshot
@@ -332,7 +346,7 @@ export async function exportStaticSite(options: ExportOptions): Promise<void> {
 
     // Step 6: Copy web build assets
     console.log('📋 Copying web assets...')
-    const webBuildDir = getWebBuildDir()
+    const webBuildDir = getWebBuildDir(useCustomBuild)
     const files = await import('node:fs/promises').then((fs) => fs.readdir(webBuildDir))
 
     for (const file of files) {

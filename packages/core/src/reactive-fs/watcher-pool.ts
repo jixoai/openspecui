@@ -1,5 +1,5 @@
-import { resolve } from 'node:path'
 import { realpathSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { getProjectWatcher, type ProjectWatcher } from './project-watcher.js'
 
 /**
@@ -84,8 +84,8 @@ export function acquireWatcher(
   options: { recursive?: boolean; debounceMs?: number; onError?: () => void } = {}
 ): () => void {
   if (!globalProjectWatcher || !globalProjectWatcher.isInitialized) {
-    console.warn('[watcher-pool] ProjectWatcher not initialized. Call initWatcherPool first.')
-    // 返回空操作，避免崩溃
+    // Watcher not initialized - this is expected during static export mode
+    // Return no-op function to avoid errors
     return () => {}
   }
 
