@@ -94,6 +94,7 @@ const TaskItem = memo(
   },
   (prev, next) =>
     prev.task.id === next.task.id &&
+    prev.task.text === next.task.text &&
     prev.task.completed === next.task.completed &&
     prev.isToggling === next.isToggling &&
     prev.readonly === next.readonly
