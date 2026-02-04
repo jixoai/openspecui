@@ -140,10 +140,35 @@ await ctx.cliExecutor.archiveStream(changeId, options, (event) => {
 
 ## Important Reference Files
 
-**At the start of each session, read `references/openspec-cognitive-report.md` to understand the OpenSpec domain model and architecture.**
+**At the start of each session, read `references/openspec-0.16.0-report.md` to understand the OpenSpec domain model and architecture.**
 
 This file contains:
 - OpenSpec core concepts and terminology
 - File structure and naming conventions
 - Workflow patterns (proposal → implementation → archive)
 - Relationship between specs, changes, and tasks
+
+## README Versioning Convention
+
+**README files are versioned by OpenSpec CLI version, not openspecui version.**
+
+### Rules
+
+1. **Current README**: `README.md` contains documentation for the current supported OpenSpec CLI version
+2. **Historical READMEs**: When OpenSpec CLI has breaking changes, archive the old README as `README-{OPENSPEC_VERSION}.md`
+3. **Version reference**: The version number (e.g., `0.16.0`) refers to the **OpenSpec CLI version**, not openspecui version
+4. **Links**: New `README.md` should reference historical README files at the bottom
+
+### Example
+
+```
+README.md              # Current (for openspec 0.17.x)
+README-0.16.0.md       # Archived (for openspec 0.16.x)
+README-0.15.0.md       # Archived (for openspec 0.15.x)
+```
+
+### When to Create New README Version
+
+- OpenSpec CLI has breaking changes that affect openspecui usage
+- Installation or configuration steps change significantly
+- API or command interface changes
