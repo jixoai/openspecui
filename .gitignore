@@ -9,3 +9,6 @@ coverage/
 # Example directory for E2E testing
 example/
 provider.json
+
+test-output/
+.opencode

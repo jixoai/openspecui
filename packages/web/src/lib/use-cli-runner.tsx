@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Check, Loader2, Sparkles, XCircle } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { isStaticMode } from './static-mode'
 import { trpcClient } from './trpc'
 
 export type CommandRunStatus = 'idle' | 'loading' | 'running' | 'success' | 'error'
@@ -47,7 +48,9 @@ interface LogLine {
 }
 
 function createId() {
-  return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2)
 }
 
 function asCommandText(command: string, args: string[]) {
@@ -76,13 +79,16 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
     optionsRef.current = options
   }, [options])
 
-  const updateCommands = useCallback((updater: (prev: CommandDescriptor[]) => CommandDescriptor[]) => {
-    setCommands((prev) => {
-      const next = updater(prev)
-      commandStateRef.current = next
-      return next
-    })
-  }, [])
+  const updateCommands = useCallback(
+    (updater: (prev: CommandDescriptor[]) => CommandDescriptor[]) => {
+      setCommands((prev) => {
+        const next = updater(prev)
+        commandStateRef.current = next
+        return next
+      })
+    },
+    []
+  )
 
   // keep ref in sync for runAll loop
   useEffect(() => {
@@ -142,30 +148,36 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
     return id
   }, [])
 
-  const remove = useCallback((id: string) => {
-    updateCommands((prev) => prev.filter((c) => c.id !== id))
-    setLogs((prev) => prev.filter((log) => log.commandId !== id))
-    if (activeCommandIdRef.current === id) {
-      cancel()
-    }
-  }, [cancel, updateCommands])
+  const remove = useCallback(
+    (id: string) => {
+      updateCommands((prev) => prev.filter((c) => c.id !== id))
+      setLogs((prev) => prev.filter((log) => log.commandId !== id))
+      if (activeCommandIdRef.current === id) {
+        cancel()
+      }
+    },
+    [cancel, updateCommands]
+  )
 
-  const replaceAll = useCallback((items: CommandInput[]) => {
-    activeSubscriptionRef.current?.unsubscribe?.()
-    activeSubscriptionRef.current = null
-    activeCommandIdRef.current = null
-    setLogs([])
-    setLastExitCode(null)
-    updateCommands(() =>
-      items.map((item) => ({
-        id: createId(),
-        command: item.command,
-        args: item.args ?? [],
-        status: 'idle',
-        exitCode: null,
-      }))
-    )
-  }, [updateCommands])
+  const replaceAll = useCallback(
+    (items: CommandInput[]) => {
+      activeSubscriptionRef.current?.unsubscribe?.()
+      activeSubscriptionRef.current = null
+      activeCommandIdRef.current = null
+      setLogs([])
+      setLastExitCode(null)
+      updateCommands(() =>
+        items.map((item) => ({
+          id: createId(),
+          command: item.command,
+          args: item.args ?? [],
+          status: 'idle',
+          exitCode: null,
+        }))
+      )
+    },
+    [updateCommands]
+  )
 
   const list = useCallback(() => [...commandStateRef.current], [])
 
@@ -175,6 +187,12 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
 
   const run = useCallback(
     async (id?: string): Promise<CommandProcess | null> => {
+      // Don't run CLI commands in static mode
+      if (isStaticMode()) {
+        console.warn('CLI runner is disabled in static mode')
+        return null
+      }
+
       const targetId = id ?? commandStateRef.current.find((c) => c.status === 'idle')?.id
       const target = commandStateRef.current.find((c) => c.id === targetId)
       if (!target) return null

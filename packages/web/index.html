@@ -6,6 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OpenSpec UI</title>
     <script>
+      // Base path configuration for static exports
+      // This will be replaced during export with the actual base path
+      window.__OPENSPEC_BASE_PATH__ = '/'
+    </script>
+    <script>
       ;(() => {
         const lang =
           (navigator.languages && navigator.languages[0]) ||

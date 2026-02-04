@@ -1,6 +1,7 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getHealthUrl } from './api-config'
-import { wsClient, WS_RETRY_DELAY_MS } from './trpc'
+import { isStaticMode } from './static-mode'
+import { getWsClientInstance, WS_RETRY_DELAY_MS } from './trpc'
 
 export interface ServerStatus {
   connected: boolean
@@ -80,6 +81,16 @@ export function useServerStatus(): ServerStatus {
 
   // 监听 WebSocket 连接状态
   useEffect(() => {
+    // Skip WebSocket monitoring in static mode
+    if (isStaticMode()) {
+      return
+    }
+
+    const wsClient = getWsClientInstance()
+    if (!wsClient) {
+      return
+    }
+
     // 订阅 wsClient 的连接状态
     const subscription = wsClient.connectionState.subscribe({
       next: (state) => {
@@ -105,6 +116,20 @@ export function useServerStatus(): ServerStatus {
 
   // HTTP 健康检查逻辑
   useEffect(() => {
+    // Skip health checks in static mode
+    if (isStaticMode()) {
+      setStatus((prev) => ({
+        ...prev,
+        connected: true,
+        projectDir: 'Static Export',
+        dirName: 'Static Export',
+        watcherEnabled: false,
+        error: null,
+      }))
+      document.title = 'OpenSpec UI (Static)'
+      return
+    }
+
     let mounted = true
     let retryTimeout: ReturnType<typeof setTimeout>
 

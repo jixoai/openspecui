@@ -1,6 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import type { ArchiveMeta, Change, ChangeFile, ChangeMeta, Spec, SpecMeta } from '@openspecui/core'
+import { useEffect, useRef, useState } from 'react'
+import * as StaticProvider from './static-data-provider'
+import { isStaticMode } from './static-mode'
 import { trpcClient } from './trpc'
-import type { Spec, Change, SpecMeta, ChangeMeta, ArchiveMeta, ChangeFile } from '@openspecui/core'
 
 /** 订阅状态 */
 export interface SubscriptionState<T> {
@@ -37,16 +39,19 @@ interface Unsubscribable {
 }
 
 /**
- * 通用订阅 Hook
+ * 通用订阅 Hook (支持静态模式)
  *
  * 替代 useQuery，直接从 WebSocket 获取数据。
  * 当订阅的数据变更时，自动更新组件。
+ * 在静态模式下，从 data.json 加载数据。
  *
  * @param subscribe 订阅函数
+ * @param staticLoader 静态数据加载函数（静态模式下使用）
  * @param deps 依赖数组
  */
 export function useSubscription<T>(
   subscribe: (callbacks: SubscriptionCallbacks<T>) => Unsubscribable,
+  staticLoader?: () => Promise<T>,
   deps: unknown[] = []
 ): SubscriptionState<T> {
   const [state, setState] = useState<SubscriptionState<T>>({
@@ -56,6 +61,7 @@ export function useSubscription<T>(
   })
 
   const subscriptionRef = useRef<Unsubscribable | null>(null)
+  const inStaticMode = isStaticMode()
 
   useEffect(() => {
     // 清理之前的订阅
@@ -64,7 +70,29 @@ export function useSubscription<T>(
     // 重置状态
     setState((prev) => ({ ...prev, isLoading: true, error: null }))
 
-    // 创建新订阅
+    // 静态模式：从 data.json 加载数据
+    if (inStaticMode) {
+      if (staticLoader) {
+        staticLoader()
+          .then((data) => {
+            setState({ data, isLoading: false, error: null })
+          })
+          .catch((error) => {
+            console.error('Static data loading error:', error)
+            setState((prev) => ({ ...prev, isLoading: false, error }))
+          })
+      } else {
+        console.warn('No static loader provided for subscription in static mode')
+        setState((prev) => ({
+          ...prev,
+          isLoading: false,
+          error: new Error('Static loader not available'),
+        }))
+      }
+      return
+    }
+
+    // 动态模式：创建 WebSocket 订阅
     const subscription = subscribe({
       onData: (data) => {
         setState({ data, isLoading: false, error: null })
@@ -81,7 +109,7 @@ export function useSubscription<T>(
       subscription.unsubscribe()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps)
+  }, [inStaticMode, ...deps])
 
   return state
 }
@@ -97,6 +125,11 @@ export function useDashboardSubscription(): SubscriptionState<DashboardData> {
         onData: callbacks.onData,
         onError: callbacks.onError,
       }),
+    async () => {
+      const data = await StaticProvider.getDashboardData()
+      if (!data) throw new Error('Failed to load dashboard data')
+      return data
+    },
     []
   )
 }
@@ -108,6 +141,7 @@ export function useInitializedSubscription(): SubscriptionState<boolean> {
         onData: callbacks.onData,
         onError: callbacks.onError,
       }),
+    StaticProvider.getInitialized,
     []
   )
 }
@@ -123,6 +157,7 @@ export function useSpecsSubscription(): SubscriptionState<SpecMeta[]> {
         onData: callbacks.onData,
         onError: callbacks.onError,
       }),
+    StaticProvider.getSpecs,
     []
   )
 }
@@ -137,6 +172,7 @@ export function useSpecSubscription(id: string): SubscriptionState<Spec | null> 
           onError: callbacks.onError,
         }
       ),
+    () => StaticProvider.getSpec(id),
     [id]
   )
 }
@@ -151,6 +187,7 @@ export function useSpecRawSubscription(id: string): SubscriptionState<string | n
           onError: callbacks.onError,
         }
       ),
+    () => StaticProvider.getSpecRaw(id),
     [id]
   )
 }
@@ -166,6 +203,7 @@ export function useChangesSubscription(): SubscriptionState<ChangeMeta[]> {
         onData: callbacks.onData,
         onError: callbacks.onError,
       }),
+    StaticProvider.getChanges,
     []
   )
 }
@@ -180,6 +218,7 @@ export function useChangeSubscription(id: string): SubscriptionState<Change | nu
           onError: callbacks.onError,
         }
       ),
+    () => StaticProvider.getChange(id),
     [id]
   )
 }
@@ -194,6 +233,7 @@ export function useChangeFilesSubscription(id: string): SubscriptionState<Change
           onError: callbacks.onError,
         }
       ),
+    () => StaticProvider.getChangeFiles(id),
     [id]
   )
 }
@@ -214,6 +254,7 @@ export function useChangeRawSubscription(id: string): SubscriptionState<ChangeRa
           onError: callbacks.onError,
         }
       ),
+    () => StaticProvider.getChangeRaw(id),
     [id]
   )
 }
@@ -229,6 +270,7 @@ export function useArchivesSubscription(): SubscriptionState<ArchiveMeta[]> {
         onData: callbacks.onData,
         onError: callbacks.onError,
       }),
+    StaticProvider.getArchives,
     []
   )
 }
@@ -246,6 +288,7 @@ export function useArchiveSubscription(id: string): SubscriptionState<ArchivedCh
           onError: callbacks.onError,
         }
       ),
+    () => StaticProvider.getArchive(id),
     [id]
   )
 }
@@ -260,6 +303,7 @@ export function useArchiveFilesSubscription(id: string): SubscriptionState<Chang
           onError: callbacks.onError,
         }
       ),
+    () => StaticProvider.getArchiveFiles(id),
     [id]
   )
 }
@@ -275,6 +319,7 @@ export function useProjectMdSubscription(): SubscriptionState<string | null> {
         onData: callbacks.onData,
         onError: callbacks.onError,
       }),
+    StaticProvider.getProjectMd,
     []
   )
 }
@@ -286,6 +331,7 @@ export function useAgentsMdSubscription(): SubscriptionState<string | null> {
         onData: callbacks.onData,
         onError: callbacks.onError,
       }),
+    StaticProvider.getAgentsMd,
     []
   )
 }
@@ -307,6 +353,7 @@ export function useConfigSubscription(): SubscriptionState<OpenSpecUIConfig> {
         onData: callbacks.onData,
         onError: callbacks.onError,
       }),
+    StaticProvider.getConfig,
     []
   )
 }
@@ -322,6 +369,7 @@ export function useConfiguredToolsSubscription(): SubscriptionState<string[]> {
         onData: callbacks.onData,
         onError: callbacks.onError,
       }),
+    StaticProvider.getConfiguredTools,
     []
   )
 }

@@ -1,6 +1,7 @@
 import { CodeEditor } from '@/components/code-editor'
 import { MarkdownViewer } from '@/components/markdown-viewer'
 import { Tabs, type Tab } from '@/components/tabs'
+import { isStaticMode } from '@/lib/static-mode'
 import { trpcClient } from '@/lib/trpc'
 import { useAgentsMdSubscription, useProjectMdSubscription } from '@/lib/use-subscription'
 import { useMutation } from '@tanstack/react-query'
@@ -157,7 +158,8 @@ export function Project() {
           <Folder className="h-6 w-6 shrink-0" />
           Project
         </h1>
-        {!isEditing && currentContent && (
+        {/* Hide edit button in static mode */}
+        {!isStaticMode() && !isEditing && currentContent && (
           <button
             onClick={handleEdit}
             className="border-border hover:bg-muted flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm"
@@ -216,15 +218,18 @@ function TabContent({
     return (
       <div className="text-muted-foreground p-8 text-center">
         <p className="mb-4">{tabName} not found.</p>
-        <button
-          onClick={() => {
-            setEditContent(defaultContent)
-            onStartEdit()
-          }}
-          className="bg-primary text-primary-foreground rounded-md px-4 py-2 hover:opacity-90"
-        >
-          Create {tabName}
-        </button>
+        {/* Hide create button in static mode */}
+        {!isStaticMode() && (
+          <button
+            onClick={() => {
+              setEditContent(defaultContent)
+              onStartEdit()
+            }}
+            className="bg-primary text-primary-foreground rounded-md px-4 py-2 hover:opacity-90"
+          >
+            Create {tabName}
+          </button>
+        )}
       </div>
     )
   }

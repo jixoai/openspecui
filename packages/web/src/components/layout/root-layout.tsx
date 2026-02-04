@@ -4,6 +4,7 @@ import { MobileHeader } from './mobile-header'
 import { MobileTabBar } from './mobile-tabbar'
 import { DesktopStatusBar } from './status-bar'
 import { GlobalArchiveModal } from '@/components/global-archive-modal'
+import { StaticModeBanner } from '@/components/StaticModeBanner'
 import { flushSync } from 'react-dom'
 import { useLayoutEffect, useState } from 'react'
 
@@ -50,6 +51,7 @@ export function RootLayout() {
       <div className="app-layout h-full">
         <DesktopSidebar />
         <div className="app-body flex flex-col flex-1 min-h-0">
+          <StaticModeBanner />
           <MobileHeader />
           <main className="main-content flex flex-col view-transition-route">
             <ViewTransitionOutlet />

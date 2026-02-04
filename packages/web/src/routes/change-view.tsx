@@ -1,11 +1,12 @@
 import { ChangeOverview } from '@/components/change-overview'
 import { FolderEditorViewer } from '@/components/folder-editor-viewer'
 import { Tabs, type Tab } from '@/components/tabs'
-import { useTabsStatusByQuery } from '@/lib/use-tabs-status-by-query'
 import { TasksView } from '@/components/tasks-view'
 import { useArchiveModal } from '@/lib/archive-modal-context'
+import { isStaticMode } from '@/lib/static-mode'
 import { trpcClient } from '@/lib/trpc'
 import { useChangeSubscription } from '@/lib/use-subscription'
+import { useTabsStatusByQuery } from '@/lib/use-tabs-status-by-query'
 import { useMutation } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import {
@@ -92,7 +93,7 @@ export function ChangeView() {
           <TasksView
             tasks={change.tasks}
             progress={change.progress}
-            onToggleTask={handleToggleTask}
+            onToggleTask={isStaticMode() ? undefined : handleToggleTask}
             togglingIndex={togglingIndex}
           />
         ),
@@ -143,18 +144,21 @@ export function ChangeView() {
           </div>
         </div>
 
-        <button
-          onClick={handleArchiveClick}
-          className="change-archive-button @sm:gap-2 @sm:px-4 flex h-10 items-center gap-1.5 rounded-md bg-red-600 px-3 py-2 text-white hover:bg-red-700"
-        >
-          <Archive className="h-4 w-4" />
-          <span
-            className="change-archive-text @sm:inline hidden"
-            style={{ fontSize: 'clamp(0.85rem, 2cqi, 1rem)' }}
+        {/* Hide archive button in static mode */}
+        {!isStaticMode() && (
+          <button
+            onClick={handleArchiveClick}
+            className="change-archive-button @sm:gap-2 @sm:px-4 flex h-10 items-center gap-1.5 rounded-md bg-red-600 px-3 py-2 text-white hover:bg-red-700"
           >
-            Archive
-          </span>
-        </button>
+            <Archive className="h-4 w-4" />
+            <span
+              className="change-archive-text @sm:inline hidden"
+              style={{ fontSize: 'clamp(0.85rem, 2cqi, 1rem)' }}
+            >
+              Archive
+            </span>
+          </button>
+        )}
       </div>
 
       {validation && !validation.valid && (

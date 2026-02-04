@@ -13,6 +13,9 @@ export function MobileHeader() {
   const serverStatus = useServerStatus()
   const pageTitle = serverStatus.dirName ?? 'OpenSpec'
 
+  // Get base path from runtime configuration
+  const basePath = window.__OPENSPEC_BASE_PATH__ || '/'
+
   return (
     <>
       <header className="mobile-header border-border bg-background flex h-12 items-center justify-between border-b px-4">
@@ -39,7 +42,11 @@ export function MobileHeader() {
           <nav className="bg-background border-border animate-in slide-in-from-left relative flex w-64 max-w-[80vw] flex-col border-r p-4 duration-200">
             <div className="mb-6 flex items-center justify-between">
               <img
-                src={isDark ? '/openspec_pixel_dark.svg' : '/openspec_pixel_light.svg'}
+                src={
+                  isDark
+                    ? `${basePath}openspec_pixel_dark.svg`
+                    : `${basePath}openspec_pixel_light.svg`
+                }
                 alt="OpenSpec"
                 className="h-5"
               />
@@ -60,9 +67,7 @@ export function MobileHeader() {
                     className="hover:bg-muted [&.active]:bg-primary [&.active]:text-primary-foreground flex items-center gap-2 rounded-md px-3 py-2"
                   >
                     <item.icon className="h-4 w-4 shrink-0" />
-                    <span className="text-[12px] font-nav tracking-[0.04em]">
-                      {item.label}
-                    </span>
+                    <span className="font-nav text-[12px] tracking-[0.04em]">{item.label}</span>
                   </Link>
                 </li>
               ))}
@@ -74,9 +79,7 @@ export function MobileHeader() {
                 className="hover:bg-muted [&.active]:bg-primary [&.active]:text-primary-foreground flex items-center gap-2 rounded-md px-3 py-2"
               >
                 <settingsItem.icon className="h-4 w-4 shrink-0" />
-                <span className="font-nav text-[12px] tracking-[0.04em]">
-                  {settingsItem.label}
-                </span>
+                <span className="font-nav text-[12px] tracking-[0.04em]">{settingsItem.label}</span>
               </Link>
             </div>
           </nav>

@@ -1,7 +1,7 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
+import { defineConfig } from 'vite'
 
 function resolveBackendTarget(): string {
   const explicit =
@@ -17,7 +17,9 @@ export default defineConfig(() => {
   const backendTarget = resolveBackendTarget()
   console.log(`[dev-proxy] backend target => ${backendTarget}`)
 
+  // Always use base: '/' - base path is now configured at runtime via window.__OPENSPEC_BASE_PATH__
   return {
+    base: '/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

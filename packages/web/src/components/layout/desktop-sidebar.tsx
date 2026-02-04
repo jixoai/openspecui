@@ -6,11 +6,16 @@ import { navItems, settingsItem } from './nav-items'
 export function DesktopSidebar() {
   const isDark = useDarkMode()
 
+  // Get base path from runtime configuration
+  const basePath = window.__OPENSPEC_BASE_PATH__ || '/'
+
   return (
     <nav className="desktop-sidebar border-border bg-muted/30 flex w-64 shrink-0 flex-col border-r p-4">
       <div className="mb-6">
         <img
-          src={isDark ? '/openspec_pixel_dark.svg' : '/openspec_pixel_light.svg'}
+          src={
+            isDark ? `${basePath}openspec_pixel_dark.svg` : `${basePath}openspec_pixel_light.svg`
+          }
           alt="OpenSpec"
           className="h-6"
         />

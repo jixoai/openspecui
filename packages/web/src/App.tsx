@@ -1,24 +1,31 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { RouterProvider, createRouter, createRootRoute, createRoute } from '@tanstack/react-router'
-import { queryClient } from './lib/trpc'
+import { RouterProvider, createRootRoute, createRoute, createRouter } from '@tanstack/react-router'
 import { RootLayout } from './components/layout'
-import { Dashboard } from './routes/dashboard'
-import { SpecList } from './routes/spec-list'
-import { SpecView } from './routes/spec-view'
-import { ChangeList } from './routes/change-list'
-import { ChangeView } from './routes/change-view'
+import './index.css'
+import { ArchiveModalProvider } from './lib/archive-modal-context'
+import { queryClient } from './lib/trpc'
 import { ArchiveList } from './routes/archive-list'
 import { ArchiveView } from './routes/archive-view'
+import { ChangeList } from './routes/change-list'
+import { ChangeView } from './routes/change-view'
+import { Dashboard } from './routes/dashboard'
 import { Project } from './routes/project'
 import { Settings } from './routes/settings'
-import { ArchiveModalProvider } from './lib/archive-modal-context'
-import './index.css'
+import { SpecList } from './routes/spec-list'
+import { SpecView } from './routes/spec-view'
+
+// Add type declaration for runtime base path
+declare global {
+  interface Window {
+    __OPENSPEC_BASE_PATH__?: string
+  }
+}
 
 // Root layout
 const rootRoute = createRootRoute({
   component: RootLayout,
   pendingComponent: () => (
-    <div className="route-loading animate-pulse p-6 text-center text-sm text-muted-foreground">
+    <div className="route-loading text-muted-foreground animate-pulse p-6 text-center text-sm">
       Loading...
     </div>
   ),
@@ -91,7 +98,13 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
 ])
 
-const router = createRouter({ routeTree })
+// Get base path from runtime configuration (injected in index.html)
+const basepath = window.__OPENSPEC_BASE_PATH__ || '/'
+
+const router = createRouter({
+  routeTree,
+  basepath,
+})
 
 declare module '@tanstack/react-router' {
   interface Register {
