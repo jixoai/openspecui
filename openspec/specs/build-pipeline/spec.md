@@ -1,7 +1,7 @@
 # build-pipeline Specification
 
 ## Purpose
-TBD - created by archiving change add-static-export. Update Purpose after archive.
+Define the static export build pipeline for OpenSpecUI, including build configuration, route generation, and deployment-ready assets.
 ## Requirements
 ### Requirement: Export Build Configuration
 
@@ -147,4 +147,3 @@ The build system SHALL optimize build performance for CI environments.
 - **THEN** the build SHALL stop immediately
 - **AND** display clear error message
 - **AND** exit with non-zero code
-

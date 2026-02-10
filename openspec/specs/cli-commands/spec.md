@@ -1,8 +1,7 @@
 # cli-commands Specification
 
 ## Purpose
-
-TBD - created by archiving change add-static-export. Update Purpose after archive.
+Define the OpenSpecUI CLI export workflow for producing a deployable static website and data snapshot.
 
 ## Requirements
 

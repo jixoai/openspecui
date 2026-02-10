@@ -1,7 +1,7 @@
 # web-rendering Specification
 
 ## Purpose
-TBD - created by archiving change add-static-export. Update Purpose after archive.
+Define OpenSpecUI runtime behavior for static export mode, including data loading, routing, and feature degradation.
 ## Requirements
 ### Requirement: Static Rendering Mode Detection
 
@@ -123,4 +123,3 @@ The web application SHALL support deployment to subdirectories via configurable 
 - **GIVEN** the app is configured with base path `/`
 - **WHEN** deployed to the root of a domain
 - **THEN** all routes and assets SHALL work without path prefix
-
