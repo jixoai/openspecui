@@ -26,7 +26,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@parcel/watcher": "^2.5.1"
+    "@parcel/watcher": "^2.5.1",
+    "yaml": "^2.8.0"
   },
   "devDependencies": {
     "@hono/node-server": "^1.14.1",

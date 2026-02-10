@@ -45,12 +45,14 @@
     "prettier": "^3.4.2",
     "prettier-plugin-organize-imports": "^4.1.0",
     "prettier-plugin-tailwindcss": "^0.6.9",
+    "shadcn": "^3.8.2",
     "tsx": "^4.20.6",
     "typescript": "^5.7.2"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "@parcel/watcher"
+      "@parcel/watcher",
+      "@lydell/node-pty"
     ],
     "patchedDependencies": {}
   },
