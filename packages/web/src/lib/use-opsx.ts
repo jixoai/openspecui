@@ -1,0 +1,423 @@
+import type {
+  ApplyInstructions,
+  ArtifactInstructions,
+  ChangeFile,
+  ChangeStatus,
+  SchemaDetail,
+  SchemaInfo,
+  SchemaResolution,
+  TemplatesMap,
+} from '@openspecui/core'
+import { useCallback } from 'react'
+import * as StaticProvider from './static-data-provider'
+import { useSubscription, type SubscriptionState } from './use-subscription'
+import { trpcClient } from './trpc'
+
+export interface OpsxTemplateContent {
+  content: string | null
+  path: string
+  source: 'project' | 'user' | 'package'
+}
+
+export type OpsxTemplateContentMap = Record<string, OpsxTemplateContent>
+
+interface OpsxStatusInput {
+  change?: string
+  schema?: string
+  refreshKey?: number
+}
+
+interface OpsxInstructionsInput {
+  change?: string
+  artifact?: string
+  schema?: string
+  refreshKey?: number
+}
+
+export function useOpsxStatusSubscription(
+  input: OpsxStatusInput
+): SubscriptionState<ChangeStatus | null> {
+  const subscribe = useCallback(
+    (callbacks: { onData: (data: ChangeStatus | null) => void; onError: (err: Error) => void }) => {
+      if (!input.change) {
+        callbacks.onData(null)
+        return { unsubscribe: () => {} }
+      }
+      return trpcClient.opsx.subscribeStatus.subscribe(
+        { change: input.change, schema: input.schema },
+        {
+          onData: callbacks.onData,
+          onError: callbacks.onError,
+        }
+      )
+    },
+    [input.change, input.schema, input.refreshKey]
+  )
+
+  return useSubscription<ChangeStatus | null>(
+    subscribe,
+    async () => null,
+    [input.change, input.schema, input.refreshKey]
+  )
+}
+
+export function useOpsxInstructionsSubscription(
+  input: OpsxInstructionsInput
+): SubscriptionState<ArtifactInstructions | null> {
+  const subscribe = useCallback(
+    (callbacks: { onData: (data: ArtifactInstructions | null) => void; onError: (err: Error) => void }) => {
+      if (!input.change || !input.artifact) {
+        callbacks.onData(null)
+        return { unsubscribe: () => {} }
+      }
+      return trpcClient.opsx.subscribeInstructions.subscribe(
+        { change: input.change, artifact: input.artifact, schema: input.schema },
+        {
+          onData: callbacks.onData,
+          onError: callbacks.onError,
+        }
+      )
+    },
+    [input.change, input.artifact, input.schema, input.refreshKey]
+  )
+
+  return useSubscription<ArtifactInstructions | null>(
+    subscribe,
+    async () => null,
+    [input.change, input.artifact, input.schema, input.refreshKey]
+  )
+}
+
+export function useOpsxSchemasSubscription(): SubscriptionState<SchemaInfo[]> {
+  const subscribe = useCallback(
+    (callbacks: { onData: (data: SchemaInfo[]) => void; onError: (err: Error) => void }) =>
+      trpcClient.opsx.subscribeSchemas.subscribe(undefined, {
+        onData: callbacks.onData,
+        onError: callbacks.onError,
+      }),
+    []
+  )
+
+  return useSubscription<SchemaInfo[]>(subscribe, StaticProvider.getOpsxSchemas, [])
+}
+
+export function useOpsxStatusListSubscription(): SubscriptionState<ChangeStatus[]> {
+  const subscribe = useCallback(
+    (callbacks: { onData: (data: ChangeStatus[]) => void; onError: (err: Error) => void }) =>
+      trpcClient.opsx.subscribeStatusList.subscribe(undefined, {
+        onData: callbacks.onData,
+        onError: callbacks.onError,
+      }),
+    []
+  )
+
+  return useSubscription<ChangeStatus[]>(subscribe, async () => [], [])
+}
+
+export function useOpsxSchemaDetailSubscription(name?: string): SubscriptionState<SchemaDetail | null> {
+  const subscribe = useCallback(
+    (callbacks: { onData: (data: SchemaDetail | null) => void; onError: (err: Error) => void }) => {
+      if (!name) {
+        callbacks.onData(null)
+        return { unsubscribe: () => {} }
+      }
+      return trpcClient.opsx.subscribeSchemaDetail.subscribe(
+        { name },
+        {
+          onData: callbacks.onData,
+          onError: callbacks.onError,
+        }
+      )
+    },
+    [name]
+  )
+
+  return useSubscription<SchemaDetail | null>(
+    subscribe,
+    () => StaticProvider.getOpsxSchemaDetail(name),
+    [name]
+  )
+}
+
+export function useOpsxSchemaResolutionSubscription(
+  name?: string
+): SubscriptionState<SchemaResolution | null> {
+  const subscribe = useCallback(
+    (callbacks: { onData: (data: SchemaResolution | null) => void; onError: (err: Error) => void }) => {
+      if (!name) {
+        callbacks.onData(null)
+        return { unsubscribe: () => {} }
+      }
+      return trpcClient.opsx.subscribeSchemaResolution.subscribe(
+        { name },
+        {
+          onData: callbacks.onData,
+          onError: callbacks.onError,
+        }
+      )
+    },
+    [name]
+  )
+
+  return useSubscription<SchemaResolution | null>(
+    subscribe,
+    () => StaticProvider.getOpsxSchemaResolution(name),
+    [name]
+  )
+}
+
+export function useOpsxTemplatesSubscription(schema?: string): SubscriptionState<TemplatesMap | null> {
+  const subscribe = useCallback(
+    (callbacks: { onData: (data: TemplatesMap) => void; onError: (err: Error) => void }) =>
+      trpcClient.opsx.subscribeTemplates.subscribe(
+        schema ? { schema } : undefined,
+        {
+          onData: callbacks.onData,
+          onError: callbacks.onError,
+        }
+      ),
+    [schema]
+  )
+
+  return useSubscription<TemplatesMap | null>(
+    subscribe,
+    () => StaticProvider.getOpsxTemplates(schema),
+    [schema]
+  )
+}
+
+export function useOpsxSchemaYamlSubscription(name?: string): SubscriptionState<string | null> {
+  const subscribe = useCallback(
+    (callbacks: { onData: (data: string | null) => void; onError: (err: Error) => void }) => {
+      if (!name) {
+        callbacks.onData(null)
+        return { unsubscribe: () => {} }
+      }
+      return trpcClient.opsx.subscribeSchemaYaml.subscribe(
+        { name },
+        {
+          onData: callbacks.onData,
+          onError: callbacks.onError,
+        }
+      )
+    },
+    [name]
+  )
+
+  return useSubscription<string | null>(
+    subscribe,
+    () => StaticProvider.getOpsxSchemaYaml(name),
+    [name]
+  )
+}
+
+export function useOpsxSchemaFilesSubscription(
+  name?: string
+): SubscriptionState<ChangeFile[] | null> {
+  const subscribe = useCallback(
+    (callbacks: { onData: (data: ChangeFile[] | null) => void; onError: (err: Error) => void }) => {
+      if (!name) {
+        callbacks.onData(null)
+        return { unsubscribe: () => {} }
+      }
+      return trpcClient.opsx.subscribeSchemaFiles.subscribe(
+        { name },
+        {
+          onData: callbacks.onData,
+          onError: callbacks.onError,
+        }
+      )
+    },
+    [name]
+  )
+
+  return useSubscription<ChangeFile[] | null>(
+    subscribe,
+    () => StaticProvider.getOpsxSchemaFiles(name),
+    [name]
+  )
+}
+
+export function useOpsxTemplateContentSubscription(
+  schema?: string,
+  artifactId?: string
+): SubscriptionState<OpsxTemplateContent | null> {
+  const subscribe = useCallback(
+    (callbacks: { onData: (data: OpsxTemplateContent | null) => void; onError: (err: Error) => void }) => {
+      if (!schema || !artifactId) {
+        callbacks.onData(null)
+        return { unsubscribe: () => {} }
+      }
+      return trpcClient.opsx.subscribeTemplateContent.subscribe(
+        { schema, artifactId },
+        {
+          onData: callbacks.onData,
+          onError: callbacks.onError,
+        }
+      )
+    },
+    [schema, artifactId]
+  )
+
+  return useSubscription<OpsxTemplateContent | null>(
+    subscribe,
+    () => StaticProvider.getOpsxTemplateContent(schema, artifactId),
+    [schema, artifactId]
+  )
+}
+
+export function useOpsxTemplateContentsSubscription(
+  schema?: string
+): SubscriptionState<OpsxTemplateContentMap | null> {
+  const subscribe = useCallback(
+    (callbacks: { onData: (data: OpsxTemplateContentMap | null) => void; onError: (err: Error) => void }) =>
+      trpcClient.opsx.subscribeTemplateContents.subscribe(
+        schema ? { schema } : undefined,
+        {
+          onData: callbacks.onData,
+          onError: callbacks.onError,
+        }
+      ),
+    [schema]
+  )
+
+  return useSubscription<OpsxTemplateContentMap | null>(
+    subscribe,
+    () => StaticProvider.getOpsxTemplateContents(),
+    [schema]
+  )
+}
+
+export function useOpsxApplyInstructionsSubscription(input: {
+  change?: string
+  schema?: string
+  refreshKey?: number
+}): SubscriptionState<ApplyInstructions | null> {
+  const subscribe = useCallback(
+    (callbacks: { onData: (data: ApplyInstructions | null) => void; onError: (err: Error) => void }) => {
+      if (!input.change) {
+        callbacks.onData(null)
+        return { unsubscribe: () => {} }
+      }
+      return trpcClient.opsx.subscribeApplyInstructions.subscribe(
+        { change: input.change, schema: input.schema },
+        {
+          onData: callbacks.onData,
+          onError: callbacks.onError,
+        }
+      )
+    },
+    [input.change, input.schema, input.refreshKey]
+  )
+
+  return useSubscription<ApplyInstructions | null>(
+    subscribe,
+    async () => null,
+    [input.change, input.schema, input.refreshKey]
+  )
+}
+
+export function useOpsxProjectConfigSubscription(): SubscriptionState<string | null> {
+  const subscribe = useCallback(
+    (callbacks: { onData: (data: string | null) => void; onError: (err: Error) => void }) =>
+      trpcClient.opsx.subscribeProjectConfig.subscribe(undefined, {
+        onData: callbacks.onData,
+        onError: callbacks.onError,
+      }),
+    []
+  )
+
+  return useSubscription<string | null>(subscribe, StaticProvider.getOpsxProjectConfig, [])
+}
+
+export function useOpsxChangeListSubscription(): SubscriptionState<string[]> {
+  const subscribe = useCallback(
+    (callbacks: { onData: (data: string[]) => void; onError: (err: Error) => void }) =>
+      trpcClient.opsx.subscribeChanges.subscribe(undefined, {
+        onData: callbacks.onData,
+        onError: callbacks.onError,
+      }),
+    []
+  )
+
+  return useSubscription<string[]>(subscribe, StaticProvider.getOpsxChangeList, [])
+}
+
+export function useOpsxChangeMetadataSubscription(changeId?: string): SubscriptionState<string | null> {
+  const subscribe = useCallback(
+    (callbacks: { onData: (data: string | null) => void; onError: (err: Error) => void }) => {
+      if (!changeId) {
+        callbacks.onData(null)
+        return { unsubscribe: () => {} }
+      }
+      return trpcClient.opsx.subscribeChangeMetadata.subscribe(
+        { changeId },
+        {
+          onData: callbacks.onData,
+          onError: callbacks.onError,
+        }
+      )
+    },
+    [changeId]
+  )
+
+  return useSubscription<string | null>(
+    subscribe,
+    () => StaticProvider.getOpsxChangeMetadata(changeId),
+    [changeId]
+  )
+}
+
+export function useOpsxArtifactOutputSubscription(
+  changeId?: string,
+  outputPath?: string
+): SubscriptionState<string | null> {
+  const subscribe = useCallback(
+    (callbacks: { onData: (data: string | null) => void; onError: (err: Error) => void }) => {
+      if (!changeId || !outputPath) {
+        callbacks.onData(null)
+        return { unsubscribe: () => {} }
+      }
+      return trpcClient.opsx.subscribeArtifactOutput.subscribe(
+        { changeId, outputPath },
+        {
+          onData: callbacks.onData,
+          onError: callbacks.onError,
+        }
+      )
+    },
+    [changeId, outputPath]
+  )
+
+  return useSubscription<string | null>(subscribe, async () => null, [changeId, outputPath])
+}
+
+export interface GlobArtifactFile {
+  path: string
+  type: 'file'
+  content: string
+}
+
+export function useOpsxGlobArtifactFilesSubscription(
+  changeId?: string,
+  outputPath?: string
+): SubscriptionState<GlobArtifactFile[]> {
+  const subscribe = useCallback(
+    (callbacks: { onData: (data: GlobArtifactFile[]) => void; onError: (err: Error) => void }) => {
+      if (!changeId || !outputPath) {
+        callbacks.onData([])
+        return { unsubscribe: () => {} }
+      }
+      return trpcClient.opsx.subscribeGlobArtifactFiles.subscribe(
+        { changeId, outputPath },
+        {
+          onData: callbacks.onData,
+          onError: callbacks.onError,
+        }
+      )
+    },
+    [changeId, outputPath]
+  )
+
+  return useSubscription<GlobArtifactFile[]>(subscribe, async () => [], [changeId, outputPath])
+}

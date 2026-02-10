@@ -13,17 +13,19 @@
   ],
   "scripts": {
     "build": "tsdown src/index.ts --format esm --no-dts",
-    "typecheck": "tsc --noEmit -p tsconfig.check.json",
+    "typecheck": "tsc --noEmit",
     "dev": "tsx watch src/standalone.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
     "@hono/node-server": "^1.14.1",
+    "@lydell/node-pty": "^1.1.0",
     "@openspecui/core": "workspace:*",
     "@trpc/server": "^11.0.0",
     "hono": "^4.7.3",
     "ws": "^8.18.0",
+    "yaml": "^2.8.0",
     "yargs": "^18.0.0",
     "zod": "^3.24.1"
   },

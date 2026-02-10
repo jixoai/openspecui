@@ -4,10 +4,7 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "types": ["node"],
-    "paths": {
-      "@openspecui/core": ["../core/src/index.ts"],
-      "@openspecui/ai-provider": ["../ai-provider/src/index.ts"]
-    }
+    "paths": {}
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]

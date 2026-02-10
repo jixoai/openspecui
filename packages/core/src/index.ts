@@ -103,8 +103,34 @@ export {
   isToolConfigured,
   type AIToolOption,
   type ToolConfig,
-  type ToolDetectionConfig,
 } from './tool-config.js'
 
 // Export types for static site generation
 export { type ExportSnapshot } from './export-types.js'
+
+// OPSX CLI output schemas and types
+export {
+  isGlobPattern,
+  ArtifactStatusSchema,
+  ChangeStatusSchema,
+  DependencyInfoSchema,
+  ApplyTaskSchema,
+  ApplyInstructionsSchema,
+  ArtifactInstructionsSchema,
+  SchemaInfoSchema,
+  SchemaResolutionSchema,
+  TemplatesSchema,
+  SchemaArtifactSchema,
+  SchemaDetailSchema,
+  type ArtifactStatus,
+  type ChangeStatus,
+  type DependencyInfo,
+  type ApplyTask,
+  type ApplyInstructions,
+  type ArtifactInstructions,
+  type SchemaInfo,
+  type SchemaResolution,
+  type TemplatesMap,
+  type SchemaArtifact,
+  type SchemaDetail,
+} from './opsx-types.js'
