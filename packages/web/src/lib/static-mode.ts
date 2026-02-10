@@ -9,9 +9,11 @@ import type { ExportSnapshot } from '../ssg/types'
 
 let staticModeDetected: boolean | null = null
 
+const isDev = import.meta.env.DEV
+
 // Check for static mode flag set by SSG at build time
 // This is the preferred detection method - no network requests needed
-if (typeof window !== 'undefined' && (window as any).__OPENSPEC_STATIC_MODE__ === true) {
+if (typeof window !== 'undefined' && window.__OPENSPEC_STATIC_MODE__ === true && !isDev) {
   staticModeDetected = true
   console.log('[static-mode] Detected static export mode (via flag)')
 }
@@ -27,12 +29,18 @@ export async function detectStaticMode(): Promise<boolean> {
     return staticModeDetected
   }
 
+  if (isDev) {
+    staticModeDetected = false
+    return staticModeDetected
+  }
+
   // Fallback: check for data.json
   try {
     const basePath = getBasePath()
     const dataUrl = `${basePath}data.json`.replace('//', '/')
-    const response = await fetch(dataUrl, { method: 'HEAD' })
-    staticModeDetected = response.ok
+    const response = await fetch(dataUrl, { method: 'HEAD', cache: 'no-store' })
+    const contentType = response.headers.get('content-type')
+    staticModeDetected = response.ok && Boolean(contentType?.includes('application/json'))
   } catch {
     staticModeDetected = false
   }
@@ -74,7 +82,7 @@ export function getBasePath(): string {
   }
   // Browser mode: use window variable
   if (typeof window !== 'undefined') {
-    return (window as any).__OPENSPEC_BASE_PATH__ || './'
+    return window.__OPENSPEC_BASE_PATH__ || './'
   }
   return './'
 }
@@ -83,8 +91,8 @@ export function getBasePath(): string {
  * Get initial data injected by SSG (if available)
  */
 export function getInitialData(): ExportSnapshot | null {
-  if (typeof window !== 'undefined' && (window as any).__INITIAL_DATA__) {
-    return (window as any).__INITIAL_DATA__ as ExportSnapshot
+  if (typeof window !== 'undefined' && window.__INITIAL_DATA__) {
+    return window.__INITIAL_DATA__
   }
   return null
 }

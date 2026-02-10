@@ -1,3 +1,4 @@
+import { TerminalToggleButton } from '@/components/terminal/terminal-toggle-button'
 import { getBasePath } from '@/lib/static-mode'
 import { useDarkMode } from '@/lib/use-dark-mode'
 import { useServerStatus } from '@/lib/use-server-status'
@@ -68,19 +69,20 @@ export function MobileHeader() {
                     className="hover:bg-muted [&.active]:bg-primary [&.active]:text-primary-foreground flex items-center gap-2 rounded-md px-3 py-2"
                   >
                     <item.icon className="h-4 w-4 shrink-0" />
-                    <span className="font-nav text-[12px] tracking-[0.04em]">{item.label}</span>
+                    <span className="font-nav text-base tracking-[0.04em]">{item.label}</span>
                   </Link>
                 </li>
               ))}
             </ul>
-            <div className="border-border border-t pt-4">
+            <div className="border-border space-y-1 border-t pt-4">
+              <TerminalToggleButton className="w-full" />
               <Link
                 to={settingsItem.to}
                 onClick={() => setMenuOpen(false)}
                 className="hover:bg-muted [&.active]:bg-primary [&.active]:text-primary-foreground flex items-center gap-2 rounded-md px-3 py-2"
               >
                 <settingsItem.icon className="h-4 w-4 shrink-0" />
-                <span className="font-nav text-[12px] tracking-[0.04em]">{settingsItem.label}</span>
+                <span className="font-nav text-base tracking-[0.04em]">{settingsItem.label}</span>
               </Link>
             </div>
           </nav>

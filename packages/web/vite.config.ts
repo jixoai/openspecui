@@ -29,7 +29,7 @@ export default defineConfig(({ isSsrBuild }) => {
       },
     },
     server: {
-      port: 5173,
+      port: 13003,
       proxy: {
         '/trpc': {
           target: backendTarget,
@@ -39,6 +39,11 @@ export default defineConfig(({ isSsrBuild }) => {
         '/api': {
           target: backendTarget,
           changeOrigin: true,
+        },
+        '/ws/pty': {
+          target: backendTarget,
+          changeOrigin: true,
+          ws: true,
         },
       },
     },

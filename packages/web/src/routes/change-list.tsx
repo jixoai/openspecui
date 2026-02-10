@@ -1,18 +1,11 @@
-import { formatRelativeTime } from '@/lib/format-time'
-import { useChangesSubscription } from '@/lib/use-subscription'
+import { useOpsxStatusListSubscription } from '@/lib/use-opsx'
 import { Link } from '@tanstack/react-router'
 import { ChevronRight, GitBranch } from 'lucide-react'
-import { useEffect, useState } from 'react'
 
 export function ChangeList() {
-  const { data: changes, isLoading } = useChangesSubscription()
-  const [firstFrameLoading, setFirstFrameLoading] = useState(true)
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setFirstFrameLoading(false))
-    return () => cancelAnimationFrame(id)
-  }, [])
+  const { data: statuses, isLoading } = useOpsxStatusListSubscription()
 
-  if (firstFrameLoading || (isLoading && !changes)) {
+  if (isLoading && !statuses) {
     return <div className="route-loading animate-pulse">Loading changes...</div>
   }
 
@@ -24,7 +17,7 @@ export function ChangeList() {
       </h1>
 
       <p className="text-muted-foreground">
-        Active change proposals. Completed changes are moved to{' '}
+        Active OPSX changes. Completed changes are moved to{' '}
         <Link to="/archive" className="text-primary hover:underline">
           Archive
         </Link>
@@ -32,29 +25,32 @@ export function ChangeList() {
       </p>
 
       <div className="border-border divide-border divide-y rounded-lg border">
-        {changes?.map((change) => (
-          <Link
-            key={change.id}
-            to="/changes/$changeId"
-            params={{ changeId: change.id }}
-            className="hover:bg-muted/50 flex items-center justify-between p-4"
-          >
-            <div className="flex items-center gap-3">
-              <GitBranch className="text-muted-foreground h-5 w-5" />
-              <div>
-                <div className="font-medium">{change.name}</div>
-                <div className="text-muted-foreground text-sm">
-                  {change.progress.completed}/{change.progress.total} tasks
-                  {change.updatedAt > 0 && <> · {formatRelativeTime(change.updatedAt)}</>}
+        {statuses?.map((status) => {
+          const done = status.artifacts.filter((artifact) => artifact.status === 'done').length
+          const total = status.artifacts.length
+          return (
+            <Link
+              key={status.changeName}
+              to="/changes/$changeId"
+              params={{ changeId: status.changeName }}
+              className="hover:bg-muted/50 flex items-center justify-between p-4"
+            >
+              <div className="flex items-center gap-3">
+                <GitBranch className="text-muted-foreground h-5 w-5" />
+                <div>
+                  <div className="font-medium">{status.changeName}</div>
+                  <div className="text-muted-foreground text-sm">
+                    {done}/{total} artifacts · schema {status.schemaName}
+                  </div>
                 </div>
               </div>
-            </div>
-            <ChevronRight className="text-muted-foreground h-4 w-4" />
-          </Link>
-        ))}
-        {changes?.length === 0 && (
+              <ChevronRight className="text-muted-foreground h-4 w-4" />
+            </Link>
+          )
+        })}
+        {statuses?.length === 0 && (
           <div className="text-muted-foreground p-4 text-center">
-            No active changes. Create one in <code>openspec/changes/</code>
+            No active changes. Use <strong>/opsx:new</strong> to create one.
           </div>
         )}
       </div>

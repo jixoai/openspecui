@@ -1,3 +1,4 @@
+import { TerminalToggleButton } from '@/components/terminal/terminal-toggle-button'
 import { getBasePath } from '@/lib/static-mode'
 import { useDarkMode } from '@/lib/use-dark-mode'
 import { Link } from '@tanstack/react-router'
@@ -34,7 +35,8 @@ export function DesktopSidebar() {
           </li>
         ))}
       </ul>
-      <div className="border-border border-t pt-4">
+      <div className="border-border space-y-1 border-t pt-4">
+        <TerminalToggleButton className="w-full" />
         <Link
           to={settingsItem.to}
           className="hover:bg-muted [&.active]:bg-primary [&.active]:text-primary-foreground flex items-center gap-2 rounded-md px-3 py-2"

@@ -21,7 +21,7 @@ import { ChangeList } from '../routes/change-list'
 import { ChangeView } from '../routes/change-view'
 import { ArchiveList } from '../routes/archive-list'
 import { ArchiveView } from '../routes/archive-view'
-import { Project } from '../routes/project'
+import { Config } from '../routes/config'
 import { Settings } from '../routes/settings'
 import type { ExportSnapshot } from '@openspecui/core'
 
@@ -36,7 +36,7 @@ function createRouteTree() {
     createRoute({ getParentRoute: () => rootRoute, path: '/changes/$changeId', component: ChangeView }),
     createRoute({ getParentRoute: () => rootRoute, path: '/archive', component: ArchiveList }),
     createRoute({ getParentRoute: () => rootRoute, path: '/archive/$changeId', component: ArchiveView }),
-    createRoute({ getParentRoute: () => rootRoute, path: '/project', component: Project }),
+    createRoute({ getParentRoute: () => rootRoute, path: '/config', component: Config }),
     createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: Settings }),
   ])
 }
@@ -79,7 +79,7 @@ export function getRoutes(snapshot: ExportSnapshot): string[] {
     '/specs',
     '/changes',
     '/archive',
-    '/project',
+    '/config',
     '/settings',
     ...snapshot.specs.map(s => `/specs/${s.id}`),
     ...snapshot.changes.map(c => `/changes/${c.id}`),
@@ -95,7 +95,7 @@ export function getTitle(path: string, snapshot: ExportSnapshot): string {
   if (path === '/specs') return 'Specifications'
   if (path === '/changes') return 'Active Changes'
   if (path === '/archive') return 'Archived Changes'
-  if (path === '/project') return 'Project'
+  if (path === '/config') return 'Config'
   if (path === '/settings') return 'Settings'
 
   const specMatch = path.match(/^\/specs\/(.+)$/)

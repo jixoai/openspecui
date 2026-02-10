@@ -7,6 +7,8 @@ export interface Tab {
   content: ReactNode
   /** Unmount the tab content when hidden to avoid heavy components lingering (e.g., Monaco) */
   unmountOnHide?: boolean
+  /** Show a close button on this tab */
+  closable?: boolean
 }
 
 interface TabsProps {
@@ -14,6 +16,10 @@ interface TabsProps {
   /** Controlled selected tab id */
   selectedTab?: string
   onTabChange?: (id: string) => void
+  /** Called when a closable tab's close button is clicked */
+  onTabClose?: (id: string) => void
+  /** Extra content rendered at the end of the tab bar (e.g. a "+" button) */
+  actions?: ReactNode
   className?: string
 }
 
@@ -94,7 +100,7 @@ const tabsStyle = (id: string) => {
  * Hidden tabs are pre-rendered at lower priority and preserve their state.
  * Supports both controlled and uncontrolled active tab.
  */
-export function Tabs({ tabs, selectedTab: controlled, onTabChange, className = '' }: TabsProps) {
+export function Tabs({ tabs, selectedTab: controlled, onTabChange, onTabClose, actions, className = '' }: TabsProps) {
   const [uncontrolled, setUncontrolled] = useState<string>(tabs[0]?.id ?? '')
   const activeTab = controlled ?? uncontrolled
 
@@ -128,21 +134,41 @@ export function Tabs({ tabs, selectedTab: controlled, onTabChange, className = '
           >
             {tab.icon}
             {tab.label}
+            {tab.closable && onTabClose && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onTabClose(tab.id)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.stopPropagation()
+                    onTabClose(tab.id)
+                  }
+                }}
+                className="text-muted-foreground hover:text-foreground -mr-1 rounded p-0.5 opacity-0 transition group-hover:opacity-100 [button:hover>&]:opacity-100"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </span>
+            )}
           </button>
         ))}
+        {actions}
       </div>
 
       {/* Tab content with Activity for state preservation */}
       {tabs.map((tab) =>
         tab.unmountOnHide ? (
           activeTab === tab.id && (
-            <div key={tab.id} className="min-h-0 flex-1">
+            <div key={tab.id} className="flex min-h-0 flex-1 flex-col">
               {tab.content}
             </div>
           )
         ) : (
           <Activity key={tab.id} mode={activeTab === tab.id ? 'visible' : 'hidden'}>
-            <div className="min-h-0 flex-1">{tab.content}</div>
+            <div className="flex min-h-0 flex-1 flex-col">{tab.content}</div>
           </Activity>
         )
       )}

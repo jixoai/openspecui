@@ -18,7 +18,7 @@ const hasPrerenderedContent = () => {
 
 // Check if we're in static mode via window flag (set by SSG)
 const isSSGMode = () => {
-  return typeof window !== 'undefined' && (window as any).__OPENSPEC_STATIC_MODE__ === true
+  return !import.meta.env.DEV && typeof window !== 'undefined' && window.__OPENSPEC_STATIC_MODE__ === true
 }
 
 async function main() {

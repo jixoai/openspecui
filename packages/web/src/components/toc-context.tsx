@@ -5,29 +5,56 @@ import type { TocItem } from './toc'
 // TocCollector - 收集 ToC items 的核心类
 // ============================================================================
 
+interface TocRegistration {
+  id: string
+  /** CSS timeline index used by ToC active-state binding */
+  timelineIndex: number
+  /** How the heading is bound for timeline tracking */
+  binding: 'section' | 'heading'
+}
+
 export class TocCollector {
   private items: TocItem[] = []
   private slugCount = new Map<string, number>()
   private levelOffset: number
+  private nextTimelineIndex = 0
+  private sectionHeadingBound = new Set<number>()
 
   constructor(levelOffset = 0) {
     this.levelOffset = levelOffset
   }
 
-  /** 添加一个 ToC item，返回分配的 index */
-  add(label: string, level: number, fixedId?: string): { id: string; index: number } {
-    const adjustedLevel = Math.min(level + this.levelOffset, 6)
-    const baseSlug = fixedId ?? (slugify(label) || 'heading')
+  /** 预留一个 Section timeline index，供 Section wrapper 绑定 viewTimelineName */
+  reserveSection(): number {
+    return this.reserveTimelineIndex()
+  }
 
-    // 处理重复 id
-    const count = this.slugCount.get(baseSlug) ?? 0
-    this.slugCount.set(baseSlug, count + 1)
-    const id = count > 0 ? `${baseSlug}-${count + 1}` : baseSlug
+  /** 添加一个独立标题（timeline 绑定在 heading 上） */
+  add(label: string, level: number, fixedId?: string): TocRegistration {
+    const timelineIndex = this.reserveTimelineIndex()
+    const id = this.createItem(label, level, timelineIndex, fixedId)
+    return { id, timelineIndex, binding: 'heading' }
+  }
 
-    const index = this.items.length
-    this.items.push({ id, label, level: adjustedLevel })
+  /**
+   * 将标题绑定到 Section timeline。
+   *
+   * 一个 section 只绑定首个标题；同 section 的后续标题会退化为 heading 绑定，
+   * 以避免多个 ToC 项共享同一 timeline 造成同时高亮。
+   */
+  bindSectionHeading(
+    sectionTimelineIndex: number,
+    label: string,
+    level: number,
+    fixedId?: string
+  ): TocRegistration {
+    if (!this.sectionHeadingBound.has(sectionTimelineIndex)) {
+      this.sectionHeadingBound.add(sectionTimelineIndex)
+      const id = this.createItem(label, level, sectionTimelineIndex, fixedId)
+      return { id, timelineIndex: sectionTimelineIndex, binding: 'section' }
+    }
 
-    return { id, index }
+    return this.add(label, level, fixedId)
   }
 
   /** 批量添加 items（用于嵌套 MarkdownViewer 合并） */
@@ -35,7 +62,8 @@ export class TocCollector {
     const startIndex = this.items.length
     for (const item of items) {
       const adjustedLevel = Math.min((item.level ?? 1) + this.levelOffset, 6)
-      this.items.push({ ...item, level: adjustedLevel })
+      const timelineIndex = item.timelineIndex ?? this.reserveTimelineIndex()
+      this.items.push({ ...item, level: adjustedLevel, timelineIndex })
     }
     return startIndex
   }
@@ -54,11 +82,36 @@ export class TocCollector {
   reset(): void {
     this.items = []
     this.slugCount.clear()
+    this.nextTimelineIndex = 0
+    this.sectionHeadingBound.clear()
   }
 
   /** 创建子 collector（用于 Section 内部，层级 +1） */
   createChild(additionalOffset = 1): TocCollector {
     return new TocCollector(this.levelOffset + additionalOffset)
+  }
+
+  private reserveTimelineIndex(): number {
+    const timelineIndex = this.nextTimelineIndex
+    this.nextTimelineIndex += 1
+    return timelineIndex
+  }
+
+  private createItem(
+    label: string,
+    level: number,
+    timelineIndex: number,
+    fixedId?: string
+  ): string {
+    const adjustedLevel = Math.min(level + this.levelOffset, 6)
+    const baseSlug = fixedId ?? (slugify(label) || 'heading')
+
+    const count = this.slugCount.get(baseSlug) ?? 0
+    this.slugCount.set(baseSlug, count + 1)
+    const id = count > 0 ? `${baseSlug}-${count + 1}` : baseSlug
+
+    this.items.push({ id, label, level: adjustedLevel, timelineIndex })
+    return id
   }
 }
 

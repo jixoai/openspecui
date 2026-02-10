@@ -1,103 +1,55 @@
-import { ChangeOverview } from '@/components/change-overview'
+import { ArtifactOutputViewer } from '@/components/opsx/artifact-output-viewer'
+import { ChangeCommandBar } from '@/components/opsx/change-command-bar'
 import { FolderEditorViewer } from '@/components/folder-editor-viewer'
 import { Tabs, type Tab } from '@/components/tabs'
-import { TasksView } from '@/components/tasks-view'
-import { useArchiveModal } from '@/lib/archive-modal-context'
-import { isStaticMode } from '@/lib/static-mode'
-import { trpcClient } from '@/lib/trpc'
-import { useChangeSubscription } from '@/lib/use-subscription'
+import { useOpsxStatusSubscription } from '@/lib/use-opsx'
+import { useTerminalContext } from '@/lib/terminal-context'
 import { useTabsStatusByQuery } from '@/lib/use-tabs-status-by-query'
-import { useMutation } from '@tanstack/react-query'
-import { Link, useNavigate, useParams } from '@tanstack/react-router'
+import { Link, useParams } from '@tanstack/react-router'
 import {
   AlertCircle,
-  Archive,
+  AlertTriangle,
   ArrowLeft,
-  FileText,
+  CheckCircle2,
+  Circle,
   FolderTree,
   GitBranch,
-  ListChecks,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo } from 'react'
+
+function StatusBadge({ status }: { status: 'done' | 'ready' | 'blocked' }) {
+  if (status === 'done') return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+  if (status === 'ready') return <Circle className="h-3.5 w-3.5 text-sky-500" />
+  return <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+}
 
 export function ChangeView() {
   const { changeId } = useParams({ from: '/changes/$changeId' })
-  const navigate = useNavigate()
-  const { openArchiveModal, state: archiveModalState } = useArchiveModal()
-  const { data: change, isLoading } = useChangeSubscription(changeId)
-  const [firstFrameLoading, setFirstFrameLoading] = useState(true)
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setFirstFrameLoading(false))
-    return () => cancelAnimationFrame(id)
-  }, [])
 
-  // 保存最后一次有效的 changeName，用于在 change 被删除后打开 Modal
-  const lastChangeNameRef = useRef(change?.name ?? changeId)
-  if (change?.name) {
-    lastChangeNameRef.current = change.name
-  }
+  const {
+    data: status,
+    isLoading,
+    error,
+  } = useOpsxStatusSubscription({ change: changeId })
 
-  // 当 change 不存在且不在加载中且 Archive Modal 打开时，自动返回到 /changes
-  useEffect(() => {
-    if (!isLoading && !change && archiveModalState.open) {
-      navigate({ to: '/changes' })
-    }
-  }, [isLoading, change, archiveModalState.open, navigate])
-  // TODO: validation 暂时不支持订阅，后续可以添加
-  const validation = null as {
-    valid: boolean
-    issues: Array<{ severity: string; message: string; path?: string }>
-  } | null
+  const { createDedicatedSession } = useTerminalContext()
 
-  const toggleTaskMutation = useMutation({
-    mutationFn: (params: { taskIndex: number; completed: boolean }) =>
-      trpcClient.change.toggleTask.mutate({
-        changeId,
-        taskIndex: params.taskIndex,
-        completed: params.completed,
-      }),
-    // 订阅模式下无需手动 invalidate，文件变更会自动触发更新
-  })
-
-  const handleToggleTask = useCallback(
-    (taskIndex: number, completed: boolean) => {
-      toggleTaskMutation.mutate({ taskIndex, completed })
+  const handleRunCommand = useCallback(
+    (command: string, args: string[]) => {
+      createDedicatedSession(command, args)
     },
-    [toggleTaskMutation]
+    [createDedicatedSession]
   )
 
-  const togglingIndex = toggleTaskMutation.isPending
-    ? (toggleTaskMutation.variables?.taskIndex ?? null)
-    : null
-
-  // 点击 Archive 按钮：打开全局 Modal
-  const handleArchiveClick = useCallback(() => {
-    openArchiveModal(changeId, lastChangeNameRef.current)
-  }, [changeId, openArchiveModal])
-
   const tabs: Tab[] = useMemo(() => {
-    if (!change) return []
-
+    if (!status) return []
     return [
-      {
-        id: 'overview',
-        label: 'Overview',
-        icon: <FileText className="h-4 w-4" />,
-        content: <ChangeOverview change={change} />,
-      },
-      {
-        id: 'tasks',
-        label: `Tasks (${change.progress.completed}/${change.progress.total})`,
-        icon: <ListChecks className="h-4 w-4" />,
-        content: (
-          <TasksView
-            tasks={change.tasks}
-            progress={change.progress}
-            onToggleTask={isStaticMode() ? undefined : handleToggleTask}
-            togglingIndex={togglingIndex}
-          />
-        ),
-      },
+      ...status.artifacts.map((artifact) => ({
+        id: artifact.id,
+        label: artifact.id,
+        icon: <StatusBadge status={artifact.status} />,
+        content: <ArtifactOutputViewer changeId={changeId} artifact={artifact} />,
+      })),
       {
         id: 'folder',
         label: 'Folder',
@@ -105,83 +57,76 @@ export function ChangeView() {
         content: <FolderEditorViewer changeId={changeId} />,
       },
     ]
-  }, [change, changeId, handleToggleTask, togglingIndex])
+  }, [status, changeId])
+
+  const selectedArtifactId = useMemo(() => {
+    if (!status) return undefined
+    return status.artifacts.find((a) => a.status === 'ready')?.id ?? status.artifacts[0]?.id
+  }, [status])
 
   const { selectedTab, setSelectedTab } = useTabsStatusByQuery({
-    tabsId: 'changeTab',
+    tabsId: 'artifact',
     tabs,
     initialTab: tabs[0]?.id,
   })
 
-  if (firstFrameLoading || (isLoading && !change)) {
-    return <div className="route-loading animate-pulse">Loading change...</div>
+  const doneCount = status?.artifacts.filter((a) => a.status === 'done').length ?? 0
+  const totalCount = status?.artifacts.length ?? 0
+
+  if (isLoading && !status) {
+    return <div className="route-loading animate-pulse">Loading change status...</div>
   }
 
-  // 当 change 不存在时，显示空白（useEffect 会自动导航到 /changes）
-  // 如果 Archive Modal 打开着，用户看到的是 Modal 覆盖的 /changes 页面
-  if (!change) {
-    return null
+  if (error && !status) {
+    return (
+      <div className="text-destructive flex items-center gap-2">
+        <AlertCircle className="h-5 w-5" />
+        Error loading change: {error.message}
+      </div>
+    )
+  }
+
+  if (!status) {
+    return (
+      <div className="text-muted-foreground flex items-center gap-2 text-sm">
+        <AlertCircle className="h-4 w-4" />
+        Change not found.
+      </div>
+    )
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6">
-      <div className="change-header @container flex items-center justify-between gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">
           <Link to="/changes" className="hover:bg-muted rounded-md p-2">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="flex flex-col gap-1">
-            <h1
-              className="font-nav flex items-center gap-2 font-bold"
-              style={{ fontSize: 'clamp(1rem, 3cqi, 1.75rem)' }}
-            >
+            <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
               <GitBranch className="h-6 w-6 shrink-0" />
-              {change.name}
+              {status.changeName}
             </h1>
-            <p className="text-muted-foreground" style={{ fontSize: 'clamp(0.7rem, 2cqi, 1rem)' }}>
-              ID: {change.id}
+            <p className="text-muted-foreground text-sm">
+              Schema: {status.schemaName} · {doneCount}/{totalCount} artifacts
             </p>
           </div>
         </div>
-
-        {/* Hide archive button in static mode */}
-        {!isStaticMode() && (
-          <button
-            onClick={handleArchiveClick}
-            className="change-archive-button @sm:gap-2 @sm:px-4 flex h-10 items-center gap-1.5 rounded-md bg-red-600 px-3 py-2 text-white hover:bg-red-700"
-          >
-            <Archive className="h-4 w-4" />
-            <span
-              className="change-archive-text @sm:inline hidden"
-              style={{ fontSize: 'clamp(0.85rem, 2cqi, 1rem)' }}
-            >
-              Archive
-            </span>
-          </button>
-        )}
+        <ChangeCommandBar
+          changeId={changeId}
+          status={status}
+          selectedArtifactId={selectedArtifactId}
+          onRunCommand={handleRunCommand}
+        />
       </div>
 
-      {validation && !validation.valid && (
-        <div className="rounded-lg border border-red-500 bg-red-500/10 p-4">
-          <div className="mb-2 flex items-center gap-2 font-medium text-red-600">
-            <AlertCircle className="h-5 w-5" />
-            Validation Issues
-          </div>
-          <ul className="space-y-1 text-sm">
-            {validation.issues.map((issue, i) => (
-              <li key={i} className="text-red-600">
-                {issue.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
+      {/* Tabs: artifacts + folder */}
       <Tabs
         tabs={tabs}
         selectedTab={selectedTab}
         onTabChange={setSelectedTab}
-        className="min-h-0 flex-1 gap-6"
+        className="min-h-0 flex-1"
       />
     </div>
   )

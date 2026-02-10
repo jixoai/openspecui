@@ -5,7 +5,7 @@ import { navItems } from './nav-items'
 export function MobileTabBar() {
   return (
     <nav className="mobile-tabbar h-14 border-t border-border bg-background flex items-stretch">
-      {navItems.slice(0, 5).map((item) => (
+      {navItems.map((item) => (
         <Link
           key={item.to}
           to={item.to}

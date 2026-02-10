@@ -1,4 +1,15 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from 'react'
+import { navigateHashAnchor } from './anchor-scroll'
 import { MarkdownContent } from './markdown-content'
 import { generateTimelineScope, Toc, type TocItem } from './toc'
 import { slugify, TocCollector, TocLevelProvider, TocProvider, useTocContext } from './toc-context'
@@ -43,6 +54,14 @@ export interface MarkdownViewerProps {
   className?: string
   /** 渲染和 ToC 建立完成后回调（用于外层占位控制） */
   onReady?: () => void
+  /** 是否参与 ToC 收集（嵌套预览内容可关闭） */
+  collectToc?: boolean
+}
+
+const SectionTimelineContext = createContext<number | null>(null)
+
+function useSectionTimeline(): number | null {
+  return useContext(SectionTimelineContext)
 }
 
 // ============================================================================
@@ -58,9 +77,18 @@ export interface MarkdownViewerProps {
  *
  * 嵌套时自动检测父级 Context，只渲染内容不显示 ToC sidebar。
  */
-export function MarkdownViewer({ markdown, className = '', onReady }: MarkdownViewerProps) {
+export function MarkdownViewer({
+  markdown,
+  className = '',
+  onReady,
+  collectToc = true,
+}: MarkdownViewerProps) {
   const parentCtx = useTocContext()
   const isNested = !!parentCtx
+
+  if (!collectToc) {
+    return <PlainMarkdownViewer markdown={markdown} className={className} />
+  }
 
   if (isNested) {
     // 嵌套模式：只渲染内容，向父级贡献 ToC items
@@ -69,6 +97,67 @@ export function MarkdownViewer({ markdown, className = '', onReady }: MarkdownVi
 
   // 顶层模式：渲染完整布局（content + ToC sidebar）
   return <RootMarkdownViewer markdown={markdown} className={className} onReady={onReady} />
+}
+
+// ============================================================================
+// PlainMarkdownViewer - 不参与 ToC 收集
+// ============================================================================
+
+function PlainMarkdownViewer({
+  markdown,
+  className = '',
+}: Pick<MarkdownViewerProps, 'markdown' | 'className'>) {
+  if (typeof markdown === 'string') {
+    return <MarkdownContent className={className}>{markdown}</MarkdownContent>
+  }
+  return <PlainBuilderMarkdownContent builder={markdown} className={className} />
+}
+
+function PlainBuilderMarkdownContent({
+  builder,
+  className,
+}: {
+  builder: MarkdownBuilderFn
+  className?: string
+}) {
+  const components = useMemo<BuilderComponents>(() => {
+    const slugCount = new Map<string, number>()
+
+    const createHeading = (level: HeadingLevel): HeadingComponent => {
+      return function Heading({ id: fixedId, className, children }: HeadingProps) {
+        const text = extractTextFromChildren(children)
+        const baseSlug = fixedId ?? (slugify(text) || 'heading')
+
+        const count = slugCount.get(baseSlug) ?? 0
+        slugCount.set(baseSlug, count + 1)
+        const id = count > 0 ? `${baseSlug}-${count + 1}` : baseSlug
+
+        return (
+          <HeadingElement level={level} id={id} className={className}>
+            {children}
+          </HeadingElement>
+        )
+      }
+    }
+
+    const Section: SectionComponent = ({ children, className }) => (
+      <section className={className ? `markdown-section ${className}` : 'markdown-section'}>
+        {children}
+      </section>
+    )
+
+    return {
+      H1: createHeading(1),
+      H2: createHeading(2),
+      H3: createHeading(3),
+      H4: createHeading(4),
+      H5: createHeading(5),
+      H6: createHeading(6),
+      Section,
+    }
+  }, [])
+
+  return <div className={`markdown-content ${className}`}>{builder(components)}</div>
 }
 
 // ============================================================================
@@ -114,7 +203,11 @@ function RootMarkdownViewer({ markdown, className, onReady }: MarkdownViewerProp
     <TocProvider collector={collector} levelOffset={0} isRoot>
       <div className={`@container-[size] h-full ${className}`}>
         <style>{viewerStyles}</style>
-        <MarkdownContainer className="viewer-layout gap-6" timelineScope={timelineScope}>
+        <MarkdownContainer
+          className="viewer-scroll viewer-layout gap-6"
+          timelineScope={timelineScope}
+          enableHashNavigation
+        >
           <Toc items={tocItems} className="viewer-toc" />
           <div className="viewer-content min-w-0">{content}</div>
         </MarkdownContainer>
@@ -166,24 +259,25 @@ function StringMarkdownContent({
 }) {
   // 为 markdown 中的标题创建自定义组件
   const components = useMemo(() => {
-    const slugCount = new Map<string, number>()
-
     const createHeading = (level: HeadingLevel) => {
       return function Heading({ children }: { children?: ReactNode }) {
         const text = extractTextFromChildren(children)
-        const baseSlug = slugify(text) || 'heading'
+        const sectionTimelineIndex = useSectionTimeline()
 
-        // 处理重复 id
-        const count = slugCount.get(baseSlug) ?? 0
-        slugCount.set(baseSlug, count + 1)
-        const id = count > 0 ? `${baseSlug}-${count + 1}` : baseSlug
-
-        // 应用层级偏移
+        // 由共享 collector 分配全局唯一 id，避免 ToC 与 DOM id 不一致
         const adjustedLevel = Math.min(level + levelOffset, 6) as HeadingLevel
-        const { index } = collector.add(text, adjustedLevel, id)
+        const registration =
+          sectionTimelineIndex === null
+            ? collector.add(text, adjustedLevel)
+            : collector.bindSectionHeading(sectionTimelineIndex, text, adjustedLevel)
 
         return (
-          <HeadingElement level={adjustedLevel} id={id} index={index}>
+          <HeadingElement
+            level={adjustedLevel}
+            id={registration.id}
+            timelineIndex={registration.timelineIndex}
+            bindTimeline={registration.binding === 'heading'}
+          >
             {children}
           </HeadingElement>
         )
@@ -224,28 +318,30 @@ function BuilderMarkdownContent({
 }) {
   // 创建 Builder 组件
   const components = useMemo<BuilderComponents>(() => {
-    const slugCount = new Map<string, number>()
-
     const createHeading = (level: HeadingLevel): HeadingComponent => {
       return function Heading({ id: fixedId, className, children }: HeadingProps) {
         // 从 context 实时获取 levelOffset，支持 Section 嵌套
         const ctx = useTocContext()
         const currentLevelOffset = ctx?.levelOffset ?? levelOffset
+        const sectionTimelineIndex = useSectionTimeline()
 
         const text = extractTextFromChildren(children)
-        const baseSlug = fixedId ?? (slugify(text) || 'heading')
 
-        // 处理重复 id
-        const count = slugCount.get(baseSlug) ?? 0
-        slugCount.set(baseSlug, count + 1)
-        const id = count > 0 ? `${baseSlug}-${count + 1}` : baseSlug
-
-        // 应用层级偏移
+        // 由共享 collector 分配最终 id，确保 ToC 与 DOM 一致
         const adjustedLevel = Math.min(level + currentLevelOffset, 6) as HeadingLevel
-        const { index } = collector.add(text, adjustedLevel, id)
+        const registration =
+          sectionTimelineIndex === null
+            ? collector.add(text, adjustedLevel, fixedId)
+            : collector.bindSectionHeading(sectionTimelineIndex, text, adjustedLevel, fixedId)
 
         return (
-          <HeadingElement level={adjustedLevel} id={id} index={index} className={className}>
+          <HeadingElement
+            level={adjustedLevel}
+            id={registration.id}
+            timelineIndex={registration.timelineIndex}
+            bindTimeline={registration.binding === 'heading'}
+            className={className}
+          >
             {children}
           </HeadingElement>
         )
@@ -253,10 +349,16 @@ function BuilderMarkdownContent({
     }
 
     const Section: SectionComponent = ({ children, className }) => {
-      // Section 通过 TocLevelProvider 提供层级 +1
+      const sectionTimelineIndex = collector.reserveSection()
+
+      // Section 通过 TocLevelProvider 提供层级 +1，并承担 timeline 绑定
       return (
         <TocLevelProvider additionalOffset={1}>
-          <section className={`markdown-section ${className}`}>{children}</section>
+          <SectionTimelineContext.Provider value={sectionTimelineIndex}>
+            <SectionElement timelineIndex={sectionTimelineIndex} className={className}>
+              {children}
+            </SectionElement>
+          </SectionTimelineContext.Provider>
         </TocLevelProvider>
       )
     }
@@ -279,20 +381,45 @@ function BuilderMarkdownContent({
 // Helper Components
 // ============================================================================
 
+function SectionElement({
+  timelineIndex,
+  children,
+  className,
+}: {
+  timelineIndex: number
+  children?: ReactNode
+  className?: string
+}) {
+  return (
+    <section
+      className={className ? `markdown-section ${className}` : 'markdown-section'}
+      style={{ viewTimelineName: `--toc-${timelineIndex}` } as React.CSSProperties}
+    >
+      {children}
+    </section>
+  )
+}
+
 function HeadingElement({
   level,
   id,
-  index,
+  timelineIndex,
+  bindTimeline = false,
   children,
   className,
 }: {
   level: HeadingLevel
   id: string
-  index: number
+  timelineIndex?: number
+  bindTimeline?: boolean
   children?: ReactNode
   className?: string
 }) {
-  const style = { viewTimelineName: `--toc-${index}` }
+  const style =
+    bindTimeline && timelineIndex !== undefined
+      ? ({ viewTimelineName: `--toc-${timelineIndex}` } as React.CSSProperties)
+      : undefined
+
   switch (level) {
     case 1:
       return (
@@ -342,16 +469,44 @@ interface MarkdownContainerProps {
   className?: string
   /** CSS timeline-scope value for ToC scroll tracking */
   timelineScope?: string
+  enableHashNavigation?: boolean
 }
 
 /**
  * Shared container for markdown-style content with consistent scrolling and padding.
  */
-function MarkdownContainer({ children, className = '', timelineScope }: MarkdownContainerProps) {
+function MarkdownContainer({
+  children,
+  className = '',
+  timelineScope,
+  enableHashNavigation = false,
+}: MarkdownContainerProps) {
+  const handleAnchorClickCapture = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!enableHashNavigation) return
+
+    const target = event.target
+    if (!(target instanceof Element)) return
+
+    const anchor = target.closest('a[href^="#"]')
+    if (!(anchor instanceof HTMLAnchorElement)) return
+
+    if (event.defaultPrevented || event.button !== 0) return
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+
+    const hash = anchor.getAttribute('href')
+    if (!hash || !hash.startsWith('#')) return
+
+    const didNavigate = navigateHashAnchor(anchor, hash)
+    if (!didNavigate) return
+
+    event.preventDefault()
+  }
+
   return (
     <div
       className={`scrollbar-thin scrollbar-track-transparent h-full overflow-auto scroll-smooth p-4 ${className}`}
       style={timelineScope ? ({ timelineScope } as React.CSSProperties) : undefined}
+      onClickCapture={handleAnchorClickCapture}
     >
       {children}
     </div>
@@ -379,7 +534,11 @@ function extractTextFromChildren(children: ReactNode): string {
 function arraysEqual(a: TocItem[], b: TocItem[]): boolean {
   if (a.length !== b.length) return false
   return a.every(
-    (item, i) => item.id === b[i].id && item.label === b[i].label && item.level === b[i].level
+    (item, i) =>
+      item.id === b[i].id &&
+      item.label === b[i].label &&
+      item.level === b[i].level &&
+      item.timelineIndex === b[i].timelineIndex
   )
 }
 
@@ -402,7 +561,7 @@ const viewerStyles = css`
   @container (min-width: 768px) {
     .viewer-layout {
       display: grid;
-      grid-template-columns: 1fr 180px;
+      grid-template-columns: minmax(0, 1fr) 180px;
     }
     .viewer-toc {
       order: 2;

@@ -7,9 +7,20 @@
  * so specs, changes, and archives can be displayed with proper rendering.
  */
 
-import type { ArchiveMeta, Change, ChangeFile, ChangeMeta, Spec, SpecMeta } from '@openspecui/core'
+import type {
+  ArchiveMeta,
+  Change,
+  ChangeFile,
+  ChangeMeta,
+  SchemaDetail,
+  SchemaInfo,
+  SchemaResolution,
+  Spec,
+  SpecMeta,
+  TemplatesMap,
+} from '@openspecui/core'
 import type { ExportSnapshot } from '../ssg/types'
-import type { ChangeRaw, DashboardData, OpenSpecUIConfig } from './use-subscription'
+import type { OpenSpecUIConfig } from './use-subscription'
 import { getBasePath, getInitialData } from './static-mode'
 
 /**
@@ -92,58 +103,6 @@ function snapshotChangeToChange(snapChange: ExportSnapshot['changes'][0]): Chang
     tasks: snapChange.parsedTasks,
     progress: snapChange.progress,
   } as Change
-}
-
-/**
- * Get dashboard data from snapshot
- */
-export async function getDashboardData(): Promise<DashboardData | null> {
-  const snapshot = await loadSnapshot()
-  if (!snapshot) return null
-
-  const specs = snapshot.specs.map(snapshotSpecToSpec)
-  const changes = snapshot.changes.map(snapshotChangeToChange)
-  const archives = snapshot.archives
-
-  // Calculate summary
-  const specCount = specs.length
-  const requirementCount = 0 // Simplified for static mode
-  const activeChangeCount = changes.length
-  const archivedChangeCount = archives.length
-
-  // Calculate task progress from snapshot data
-  let totalTasks = 0
-  let completedTasks = 0
-
-  for (const change of snapshot.changes) {
-    totalTasks += change.progress.total
-    completedTasks += change.progress.completed
-  }
-
-  const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
-
-  return {
-    specs,
-    changes,
-    archivedCount: archivedChangeCount,
-    summary: {
-      specCount,
-      requirementCount,
-      activeChangeCount,
-      archivedChangeCount,
-      totalTasks,
-      completedTasks,
-      progressPercent,
-    },
-  }
-}
-
-/**
- * Check if OpenSpec is initialized (always true in static mode)
- */
-export async function getInitialized(): Promise<boolean> {
-  const snapshot = await loadSnapshot()
-  return snapshot !== null
 }
 
 /**
@@ -261,22 +220,6 @@ export async function getChangeFiles(id: string): Promise<ChangeFile[]> {
 }
 
 /**
- * Get raw change content
- */
-export async function getChangeRaw(id: string): Promise<ChangeRaw | null> {
-  const snapshot = await loadSnapshot()
-  if (!snapshot) return null
-
-  const change = snapshot.changes.find((c) => c.id === id)
-  if (!change) return null
-
-  return {
-    proposal: change.proposal,
-    tasks: change.tasks,
-  }
-}
-
-/**
  * Get all archives metadata
  */
 export async function getArchives(): Promise<ArchiveMeta[]> {
@@ -352,22 +295,6 @@ export async function getArchiveFiles(id: string): Promise<ChangeFile[]> {
 }
 
 /**
- * Get project.md content (not in snapshot currently)
- */
-export async function getProjectMd(): Promise<string | null> {
-  const snapshot = await loadSnapshot()
-  return snapshot?.projectMd || null
-}
-
-/**
- * Get AGENTS.md content (not in snapshot currently)
- */
-export async function getAgentsMd(): Promise<string | null> {
-  const snapshot = await loadSnapshot()
-  return snapshot?.agentsMd || null
-}
-
-/**
  * Get UI config (default in static mode)
  */
 export async function getConfig(): Promise<OpenSpecUIConfig> {
@@ -383,4 +310,123 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
  */
 export async function getConfiguredTools(): Promise<string[]> {
   return []
+}
+
+// =====================
+// OPSX Config data (static mode)
+// =====================
+
+export async function getOpsxProjectConfig(): Promise<string | null> {
+  const snapshot = await loadSnapshot()
+  return snapshot?.opsx?.configYaml ?? null
+}
+
+export async function getOpsxSchemas(): Promise<SchemaInfo[]> {
+  const snapshot = await loadSnapshot()
+  return snapshot?.opsx?.schemas ?? []
+}
+
+export async function getOpsxSchemaDetail(name?: string): Promise<SchemaDetail | null> {
+  if (!name) return null
+  const snapshot = await loadSnapshot()
+  const details = snapshot?.opsx?.schemaDetails
+  return details?.[name] ?? null
+}
+
+export async function getOpsxSchemaResolution(name?: string): Promise<SchemaResolution | null> {
+  if (!name) return null
+  const snapshot = await loadSnapshot()
+  const resolutions = snapshot?.opsx?.schemaResolutions
+  return resolutions?.[name] ?? null
+}
+
+export async function getOpsxTemplates(schema?: string): Promise<TemplatesMap | null> {
+  const snapshot = await loadSnapshot()
+  if (!snapshot?.opsx?.templates) return null
+  if (!schema) {
+    const first = Object.keys(snapshot.opsx.templates)[0]
+    return first ? snapshot.opsx.templates[first] : null
+  }
+  return snapshot.opsx.templates[schema] ?? null
+}
+
+export async function getOpsxSchemaFiles(name?: string): Promise<ChangeFile[] | null> {
+  const snapshot = await loadSnapshot()
+  if (!snapshot?.opsx) return null
+
+  let schemaName = name
+  if (!schemaName) {
+    schemaName = snapshot.opsx.schemas?.[0]?.name ?? Object.keys(snapshot.opsx.schemaDetails ?? {})[0]
+  }
+  if (!schemaName) return null
+
+  const entries: ChangeFile[] = []
+  const seen = new Set<string>()
+
+  const addEntry = (entry: ChangeFile) => {
+    if (seen.has(entry.path)) return
+    seen.add(entry.path)
+    entries.push(entry)
+  }
+
+  const addDirEntries = (path: string) => {
+    const parts = path.split('/')
+    for (let i = 1; i < parts.length; i++) {
+      const dirPath = parts.slice(0, i).join('/')
+      if (dirPath) addEntry({ path: dirPath, type: 'directory' })
+    }
+  }
+
+  if (snapshot.opsx.schemaDetails?.[schemaName]) {
+    addEntry({ path: 'schema.yaml', type: 'file' })
+  }
+
+  const templates = snapshot.opsx.templates?.[schemaName]
+  if (templates) {
+    Object.values(templates).forEach((template) => {
+      addDirEntries(template.path)
+      addEntry({ path: template.path, type: 'file' })
+    })
+  }
+
+  return entries
+}
+
+export async function getOpsxSchemaYaml(_name?: string): Promise<string | null> {
+  return null
+}
+
+export async function getOpsxTemplateContent(
+  _schema?: string,
+  _artifactId?: string
+): Promise<{
+  content: string | null
+  path: string
+  source: 'project' | 'user' | 'package'
+} | null> {
+  return null
+}
+
+export async function getOpsxTemplateContents(): Promise<
+  Record<string, { content: string | null; path: string; source: 'project' | 'user' | 'package' }> | null
+> {
+  return null
+}
+
+export async function getOpsxChangeList(): Promise<string[]> {
+  const snapshot = await loadSnapshot()
+  if (snapshot?.opsx?.changeMetadata) {
+    return Object.keys(snapshot.opsx.changeMetadata)
+  }
+  return snapshot?.changes.map((change) => change.id) ?? []
+}
+
+export async function getOpsxChangeMetadata(changeId?: string): Promise<string | null> {
+  if (!changeId) return null
+  const snapshot = await loadSnapshot()
+  const meta = snapshot?.opsx?.changeMetadata
+  if (meta && changeId in meta) {
+    return meta[changeId] ?? null
+  }
+  return null
 }

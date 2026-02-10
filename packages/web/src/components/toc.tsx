@@ -1,10 +1,13 @@
 import { ChevronDown, List } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
+import { navigateHashAnchor } from './anchor-scroll'
 
 export interface TocItem {
   id: string
   label: string
   level?: number // 1 = h1, 2 = h2, etc. Default 1
+  /** CSS timeline index used for scroll-driven active state */
+  timelineIndex?: number
 }
 
 /** 树形结构节点，用于嵌套渲染 */
@@ -24,7 +27,7 @@ export function buildTocTree(items: TocItem[]): TocNode[] {
   const stack: TocNode[] = []
 
   items.forEach((item, index) => {
-    const node: TocNode = { item, index, children: [] }
+    const node: TocNode = { item, index: item.timelineIndex ?? index, children: [] }
     const level = item.level ?? 1
 
     // 找到合适的父节点：level 必须比当前小
@@ -159,12 +162,22 @@ function TocTree({ nodes, depth = 0 }: { nodes: TocNode[]; depth?: number }) {
     }
   }, [])
 
+  const handleTocClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
+    const href = e.currentTarget.getAttribute('href')
+    if (!href || !href.startsWith('#')) return
+
+    const didNavigate = navigateHashAnchor(e.currentTarget, href)
+    if (!didNavigate) return
+
+    e.preventDefault()
+  }, [])
+
   if (nodes.length === 0) return null
 
   return (
     <ul className="toc-list">
       {nodes.map((node) => (
-        <li key={node.item.id} className="toc-item">
+        <li key={`${node.item.id}-${node.index}`} className="toc-item">
           <a
             href={`#${node.item.id}`}
             className={`toc-link text-muted-foreground hover:text-foreground block overflow-hidden text-ellipsis whitespace-nowrap border-l-2 border-transparent py-1 pr-3 ${
@@ -184,6 +197,7 @@ function TocTree({ nodes, depth = 0 }: { nodes: TocNode[]; depth?: number }) {
             }
             title={node.item.label}
             onAnimationStart={handleAnimationStart}
+            onClick={handleTocClick}
           >
             {node.item.label}
           </a>
@@ -248,7 +262,11 @@ const tocStyles = css`
  * This should be applied to the common ancestor of both ToC and content.
  */
 export function generateTimelineScope(items: TocItem[]): string {
-  return items.map((_, i) => `--toc-${i}`).join(', ')
+  const names = new Set<string>()
+  items.forEach((item, index) => {
+    names.add(`--toc-${item.timelineIndex ?? index}`)
+  })
+  return Array.from(names).join(', ')
 }
 
 /**
@@ -264,7 +282,7 @@ export function generateTimelineScope(items: TocItem[]): string {
 interface TocSectionProps {
   /** DOM id for anchor links */
   id: string
-  /** Index in the ToC items array for CSS timeline binding */
+  /** CSS timeline index for view-timeline binding */
   index: number
   children: React.ReactNode
   className?: string
