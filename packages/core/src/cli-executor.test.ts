@@ -55,7 +55,7 @@ describe('CliExecutor', () => {
       await configManager.writeConfig({ cli: { command: 'bash -c' } })
       clearCache()
 
-      const result = await cliExecutor.execute(['"echo error >&2"'])
+      const result = await cliExecutor.execute(['echo error >&2'])
 
       expect(result.stderr.trim()).toBe('error')
     })
@@ -64,7 +64,7 @@ describe('CliExecutor', () => {
       await configManager.writeConfig({ cli: { command: 'bash -c' } })
       clearCache()
 
-      const result = await cliExecutor.execute(['"exit 1"'])
+      const result = await cliExecutor.execute(['exit 1'])
 
       expect(result.success).toBe(false)
       expect(result.exitCode).toBe(1)
@@ -104,7 +104,7 @@ describe('CliExecutor', () => {
 
       await cliExecutor.init()
 
-      expect(executeSpy).toHaveBeenCalledWith(['init', '--tools=all'])
+      expect(executeSpy).toHaveBeenCalledWith(['init', '--tools', 'all'])
     })
 
     it('should call execute with specific tools', async () => {
@@ -117,7 +117,7 @@ describe('CliExecutor', () => {
 
       await cliExecutor.init(['claude', 'cursor'])
 
-      expect(executeSpy).toHaveBeenCalledWith(['init', '--tools=claude,cursor'])
+      expect(executeSpy).toHaveBeenCalledWith(['init', '--tools', 'claude,cursor'])
     })
 
     it('should call execute with tools=none', async () => {
@@ -130,7 +130,7 @@ describe('CliExecutor', () => {
 
       await cliExecutor.init('none')
 
-      expect(executeSpy).toHaveBeenCalledWith(['init', '--tools=none'])
+      expect(executeSpy).toHaveBeenCalledWith(['init', '--tools', 'none'])
     })
   })
 
@@ -289,7 +289,7 @@ describe('CliExecutor', () => {
       await configManager.writeConfig({ cli: { command: 'bash -c' } })
       clearCache()
 
-      const result = await cliExecutor.execute(['"echo $HOME"'])
+      const result = await cliExecutor.execute(['echo $HOME'])
 
       expect(result.success).toBe(true)
       expect(result.stdout.trim()).toBe(process.env.HOME)

@@ -75,6 +75,15 @@ describe('Export Functions', () => {
       expect(snapshot.projectMd).toContain('Test Project')
     })
 
+    it('should include opsx config section', async () => {
+      const snapshot = await generateSnapshot(testProjectDir)
+
+      expect(snapshot.opsx).toBeDefined()
+      expect(snapshot.opsx?.schemas).toBeInstanceOf(Array)
+      expect(snapshot.opsx?.schemaDetails).toBeDefined()
+      expect(snapshot.opsx?.templates).toBeDefined()
+    })
+
     it('should parse spec files correctly', async () => {
       // Create a test spec
       const specDir = join(testProjectDir, 'openspec', 'specs', 'test-spec')

@@ -1,9 +1,24 @@
-import { OpenSpecAdapter, type ExportSnapshot } from '@openspecui/core'
+import {
+  CliExecutor,
+  ConfigManager,
+  OpenSpecAdapter,
+  SchemaDetailSchema,
+  SchemaInfoSchema,
+  SchemaResolutionSchema,
+  TemplatesSchema,
+  type ExportSnapshot,
+  type SchemaDetail,
+  type SchemaInfo,
+  type SchemaResolution,
+  type TemplatesMap,
+} from '@openspecui/core'
 import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pkg from '../package.json' with { type: 'json' }
+import { parse as parseYaml } from 'yaml'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -31,12 +46,101 @@ export interface ExportOptions {
 // Re-export ExportSnapshot from core for backwards compatibility
 export type { ExportSnapshot } from '@openspecui/core'
 
+type SafeParseResult<T> =
+  | { success: true; data: T }
+  | { success: false; error: { message: string } }
+
+function parseCliJson<T>(
+  raw: string,
+  schema: { safeParse: (value: unknown) => SafeParseResult<T> },
+  label: string
+): T {
+  const trimmed = raw.trim()
+  if (!trimmed) {
+    throw new Error(`${label} returned empty output`)
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(trimmed)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    throw new Error(`${label} returned invalid JSON: ${message}`)
+  }
+  const result = schema.safeParse(parsed)
+  if (!result.success) {
+    throw new Error(`${label} returned unexpected JSON: ${result.error.message}`)
+  }
+  return result.data
+}
+
+function parseSchemaYaml(content: string): SchemaDetail {
+  const raw = parseYaml(content) as unknown
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('Invalid schema.yaml: expected YAML object')
+  }
+
+  const schemaObj = raw as Record<string, unknown>
+  const artifactsRaw = Array.isArray(schemaObj.artifacts) ? schemaObj.artifacts : []
+  const artifacts = artifactsRaw.map((artifact) => {
+    if (!artifact || typeof artifact !== 'object') {
+      throw new Error('Invalid schema.yaml: artifacts must be objects')
+    }
+    const artifactObj = artifact as Record<string, unknown>
+    const id = typeof artifactObj.id === 'string' ? artifactObj.id : ''
+    const generates = typeof artifactObj.generates === 'string' ? artifactObj.generates : ''
+    const description = typeof artifactObj.description === 'string' ? artifactObj.description : undefined
+    const template = typeof artifactObj.template === 'string' ? artifactObj.template : undefined
+    const instruction = typeof artifactObj.instruction === 'string' ? artifactObj.instruction : undefined
+    const requires = Array.isArray(artifactObj.requires)
+      ? artifactObj.requires.filter((value): value is string => typeof value === 'string')
+      : []
+
+    return {
+      id,
+      outputPath: generates,
+      description,
+      template,
+      instruction,
+      requires,
+    }
+  })
+
+  const apply = schemaObj.apply
+  const applyObj = apply && typeof apply === 'object' ? (apply as Record<string, unknown>) : {}
+  const applyRequires = Array.isArray(applyObj.requires)
+    ? applyObj.requires.filter((value): value is string => typeof value === 'string')
+    : []
+  const applyTracks = typeof applyObj.tracks === 'string' ? applyObj.tracks : undefined
+  const applyInstruction = typeof applyObj.instruction === 'string' ? applyObj.instruction : undefined
+
+  const detail = {
+    name: typeof schemaObj.name === 'string' ? schemaObj.name : '',
+    description: typeof schemaObj.description === 'string' ? schemaObj.description : undefined,
+    version:
+      typeof schemaObj.version === 'string' || typeof schemaObj.version === 'number'
+        ? schemaObj.version
+        : undefined,
+    artifacts,
+    applyRequires,
+    applyTracks,
+    applyInstruction,
+  }
+
+  const validated = SchemaDetailSchema.safeParse(detail)
+  if (!validated.success) {
+    throw new Error(`Invalid schema.yaml detail: ${validated.error.message}`)
+  }
+  return validated.data
+}
+
 /**
  * Generate a complete data snapshot of the OpenSpec project
  * (Kept for backwards compatibility and testing)
  */
 export async function generateSnapshot(projectDir: string): Promise<ExportSnapshot> {
   const adapter = new OpenSpecAdapter(projectDir)
+  const configManager = new ConfigManager(projectDir)
+  const cliExecutor = new CliExecutor(configManager, projectDir)
 
   // Check if initialized
   const isInit = await adapter.isInitialized()
@@ -142,6 +246,81 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
     // AGENTS.md is optional
   }
 
+  // OPSX config snapshot
+  let configYaml: string | undefined
+  let schemas: SchemaInfo[] = []
+  const schemaDetails: Record<string, SchemaDetail> = {}
+  const schemaResolutions: Record<string, SchemaResolution> = {}
+  const templates: Record<string, TemplatesMap> = {}
+  const changeMetadata: Record<string, string | null> = {}
+
+  try {
+    const configPath = join(projectDir, 'openspec', 'config.yaml')
+    configYaml = await readFile(configPath, 'utf-8')
+  } catch {
+    configYaml = undefined
+  }
+
+  try {
+    const schemasResult = await cliExecutor.schemas()
+    if (schemasResult.success) {
+      schemas = parseCliJson(schemasResult.stdout, SchemaInfoSchema.array(), 'openspec schemas')
+    }
+  } catch {
+    schemas = []
+  }
+
+  for (const schema of schemas) {
+    try {
+      const resolutionResult = await cliExecutor.schemaWhich(schema.name)
+      if (resolutionResult.success) {
+        const resolution = parseCliJson(
+          resolutionResult.stdout,
+          SchemaResolutionSchema,
+          'openspec schema which'
+        )
+        schemaResolutions[schema.name] = resolution
+        try {
+          const schemaPath = join(resolution.path, 'schema.yaml')
+          const schemaContent = await readFile(schemaPath, 'utf-8')
+          schemaDetails[schema.name] = parseSchemaYaml(schemaContent)
+        } catch {
+          // Skip invalid schema detail
+        }
+      }
+    } catch {
+      // Skip schema resolution errors
+    }
+
+    try {
+      const templatesResult = await cliExecutor.templates(schema.name)
+      if (templatesResult.success) {
+        templates[schema.name] = parseCliJson(
+          templatesResult.stdout,
+          TemplatesSchema,
+          'openspec templates'
+        )
+      }
+    } catch {
+      // Skip templates errors
+    }
+  }
+
+  try {
+    const changeIds = await adapter.listChanges()
+    for (const changeId of changeIds) {
+      try {
+        const metaPath = join(projectDir, 'openspec', 'changes', changeId, '.openspec.yaml')
+        const metaContent = await readFile(metaPath, 'utf-8')
+        changeMetadata[changeId] = metaContent
+      } catch {
+        changeMetadata[changeId] = null
+      }
+    }
+  } catch {
+    // ignore change metadata errors
+  }
+
   const snapshot: ExportSnapshot = {
     meta: {
       timestamp: new Date().toISOString(),
@@ -158,6 +337,14 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
     archives,
     projectMd,
     agentsMd,
+    opsx: {
+      configYaml,
+      schemas,
+      schemaDetails,
+      schemaResolutions,
+      templates,
+      changeMetadata,
+    },
   }
 
   return snapshot

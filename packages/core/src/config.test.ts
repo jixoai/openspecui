@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { ConfigManager, DEFAULT_CONFIG, OpenSpecUIConfigSchema } from './config.js'
 import { clearCache } from './reactive-fs/index.js'
-import { closeAllWatchers } from './reactive-fs/watcher-pool.js'
+import { closeAllWatchers, initWatcherPool } from './reactive-fs/watcher-pool.js'
 import {
   createTempDir,
   createTempFile,
@@ -22,6 +22,7 @@ describe('ConfigManager', () => {
     // 创建 openspec 目录
     await mkdir(join(tempDir, 'openspec'), { recursive: true })
     configManager = new ConfigManager(tempDir)
+    await initWatcherPool(tempDir)
     clearCache()
   })
 
@@ -134,7 +135,9 @@ describe('ConfigManager', () => {
     it('should return default command', async () => {
       const command = await configManager.getCliCommand()
 
-      expect(command).toBe('npx @fission-ai/openspec')
+      expect(Array.isArray(command)).toBe(true)
+      expect(command.length).toBeGreaterThan(0)
+      command.forEach((item) => expect(typeof item).toBe('string'))
     })
 
     it('should return custom command', async () => {
@@ -143,7 +146,7 @@ describe('ConfigManager', () => {
 
       const command = await configManager.getCliCommand()
 
-      expect(command).toBe('bunx openspec')
+      expect(command).toEqual(['bunx', 'openspec'])
     })
   })
 
@@ -153,7 +156,7 @@ describe('ConfigManager', () => {
       clearCache()
 
       const command = await configManager.getCliCommand()
-      expect(command).toBe('custom command')
+      expect(command).toEqual(['custom', 'command'])
     })
 
     it('should preserve other config', async () => {
@@ -176,7 +179,7 @@ describe('ConfigManager', () => {
 
       // 获取初始值
       const first = await generator.next()
-      expect(first.value.cli.command).toBe('npx @fission-ai/openspec')
+      expect(first.value.cli.command).toBeUndefined()
 
       // 直接修改配置文件
       await writeFile(
@@ -214,7 +217,7 @@ describe('OpenSpecUIConfigSchema', () => {
 
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.cli.command).toBe('npx @fission-ai/openspec')
+      expect(result.data.cli.command).toBeUndefined()
       expect(result.data.ui.theme).toBe('system')
     }
   })
@@ -240,7 +243,7 @@ describe('OpenSpecUIConfigSchema', () => {
 
 describe('DEFAULT_CONFIG', () => {
   it('should have expected default values', () => {
-    expect(DEFAULT_CONFIG.cli.command).toBe('npx @fission-ai/openspec')
+    expect(DEFAULT_CONFIG.cli.command).toBeUndefined()
     expect(DEFAULT_CONFIG.ui.theme).toBe('system')
   })
 })

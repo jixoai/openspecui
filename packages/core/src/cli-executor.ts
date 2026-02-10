@@ -151,6 +151,29 @@ export class CliExecutor {
   }
 
   /**
+   * 执行 openspec schemas --json
+   */
+  async schemas(): Promise<CliResult> {
+    return this.execute(['schemas', '--json'])
+  }
+
+  /**
+   * 执行 openspec schema which <name> --json
+   */
+  async schemaWhich(name: string): Promise<CliResult> {
+    return this.execute(['schema', 'which', name, '--json'])
+  }
+
+  /**
+   * 执行 openspec templates --json [--schema <name>]
+   */
+  async templates(schema?: string): Promise<CliResult> {
+    const args = ['templates', '--json']
+    if (schema) args.push('--schema', schema)
+    return this.execute(args)
+  }
+
+  /**
    * 流式执行 openspec validate
    */
   validateStream(

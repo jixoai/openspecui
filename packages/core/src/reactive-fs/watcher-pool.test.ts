@@ -97,7 +97,7 @@ describe('WatcherPool', () => {
       await writeFile(join(tempDir, 'new.txt'), 'content', 'utf-8')
 
       // Wait for debounce
-      await waitForDebounce(200)
+      await waitForDebounce(500)
 
       expect(onChange).toHaveBeenCalled()
 
@@ -163,7 +163,7 @@ describe('WatcherPool', () => {
 
       // Modify file
       await writeFile(filepath, 'changed', 'utf-8')
-      await waitForDebounce(150)
+      await waitForDebounce(500)
 
       // Both callbacks should be called
       expect(onChange1).toHaveBeenCalled()

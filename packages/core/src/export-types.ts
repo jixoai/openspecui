@@ -1,6 +1,12 @@
 /**
  * Types for static export / SSG
  */
+import type {
+  SchemaDetail,
+  SchemaInfo,
+  SchemaResolution,
+  TemplatesMap,
+} from './opsx-types.js'
 
 /**
  * Complete snapshot of an OpenSpec project for static export
@@ -77,4 +83,13 @@ export interface ExportSnapshot {
   projectMd?: string
   /** AGENTS.md content */
   agentsMd?: string
+  /** OPSX configuration data (for Config view) */
+  opsx?: {
+    configYaml?: string
+    schemas: SchemaInfo[]
+    schemaDetails: Record<string, SchemaDetail>
+    schemaResolutions: Record<string, SchemaResolution>
+    templates: Record<string, TemplatesMap>
+    changeMetadata: Record<string, string | null>
+  }
 }

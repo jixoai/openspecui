@@ -108,6 +108,9 @@ export {
 // Export types for static site generation
 export { type ExportSnapshot } from './export-types.js'
 
+// OPSX Kernel - reactive in-memory data store
+export { OpsxKernel, type TemplateContentMap } from './opsx-kernel.js'
+
 // OPSX CLI output schemas and types
 export {
   isGlobPattern,
