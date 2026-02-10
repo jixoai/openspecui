@@ -22,10 +22,14 @@ import {
   OpenSpecWatcher,
   ConfigManager,
   CliExecutor,
+  OpsxKernel,
   initWatcherPool,
+  isWatcherPoolInitialized,
 } from '@openspecui/core'
 import { appRouter, type Context } from './router.js'
 import { findAvailablePort } from './port-utils.js'
+import { PtyManager } from './pty-manager.js'
+import { createPtyWebSocketHandler } from './pty-websocket.js'
 
 /**
  * Server configuration options.
@@ -44,10 +48,11 @@ export interface ServerConfig {
 /**
  * Create an OpenSpecUI HTTP server with optional WebSocket support
  */
-export function createServer(config: ServerConfig) {
+export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
   const adapter = new OpenSpecAdapter(config.projectDir)
   const configManager = new ConfigManager(config.projectDir)
   const cliExecutor = new CliExecutor(configManager, config.projectDir)
+  const kernel = config.kernel
 
   // Create file watcher if enabled
   const watcher = config.enableWatcher !== false ? new OpenSpecWatcher(config.projectDir) : undefined
@@ -84,6 +89,7 @@ export function createServer(config: ServerConfig) {
         adapter,
         configManager,
         cliExecutor,
+        kernel,
         watcher,
         projectDir: config.projectDir,
       }),
@@ -96,6 +102,7 @@ export function createServer(config: ServerConfig) {
     adapter,
     configManager,
     cliExecutor,
+    kernel,
     watcher,
     projectDir: config.projectDir,
   })
@@ -105,6 +112,7 @@ export function createServer(config: ServerConfig) {
     adapter,
     configManager,
     cliExecutor,
+    kernel,
     watcher,
     createContext,
     port: config.port ?? 3100,
@@ -112,7 +120,7 @@ export function createServer(config: ServerConfig) {
 }
 
 /**
- * Create WebSocket server for tRPC subscriptions
+ * Create WebSocket server for tRPC subscriptions and PTY terminals
  */
 export async function createWebSocketServer(
   server: ReturnType<typeof createServer>,
@@ -121,8 +129,11 @@ export async function createWebSocketServer(
 ) {
   // Initialize reactive file system watcher for the project directory
   // This enables real-time updates when files are created/modified/deleted
-  await initWatcherPool(config.projectDir)
+  if (!isWatcherPoolInitialized()) {
+    await initWatcherPool(config.projectDir)
+  }
 
+  // tRPC WebSocket server
   const wss = new WebSocketServer({ noServer: true })
 
   const handler = applyWSSHandler({
@@ -131,10 +142,25 @@ export async function createWebSocketServer(
     createContext: server.createContext,
   })
 
-  // Handle upgrade requests
+  // PTY WebSocket server
+  const ptyManager = new PtyManager(config.projectDir)
+  const ptyWss = new WebSocketServer({ noServer: true })
+  const ptyHandler = createPtyWebSocketHandler(ptyManager)
+  ptyWss.on('connection', ptyHandler)
+
+  // Handle upgrade requests - route by URL path
   httpServer.on('upgrade', (...args: unknown[]) => {
     const [request, socket, head] = args as [{ url?: string }, unknown, Buffer]
-    if (request.url?.startsWith('/trpc')) {
+    if (request.url?.startsWith('/ws/pty')) {
+      ptyWss.handleUpgrade(
+        request as Parameters<typeof ptyWss.handleUpgrade>[0],
+        socket as Parameters<typeof ptyWss.handleUpgrade>[1],
+        head,
+        (ws) => {
+          ptyWss.emit('connection', ws, request)
+        }
+      )
+    } else if (request.url?.startsWith('/trpc')) {
       wss.handleUpgrade(
         request as Parameters<typeof wss.handleUpgrade>[0],
         socket as Parameters<typeof wss.handleUpgrade>[1],
@@ -151,9 +177,13 @@ export async function createWebSocketServer(
 
   return {
     wss,
+    ptyWss,
+    ptyManager,
     handler,
     close: () => {
       handler.broadcastReconnectNotification()
+      ptyManager.closeAll()
+      ptyWss.close()
       wss.close()
       server.watcher?.stop()
     },
@@ -191,32 +221,46 @@ export async function startServer(
   // Find an available port
   const port = await findAvailablePort(preferredPort)
 
-  // Create the server
-  const server = createServer({ ...config, port })
+  // Create kernel (warmup deferred until after server is listening)
+  const configManager = new ConfigManager(config.projectDir)
+  const cliExecutor = new CliExecutor(configManager, config.projectDir)
+  const kernel = new OpsxKernel(config.projectDir, cliExecutor)
+
+  // Initialize reactive file system watcher (needed for subscriptions)
+  await initWatcherPool(config.projectDir)
+
+  // Create the server (HTTP app ready to accept requests)
+  const server = createServer({ ...config, port, kernel })
 
   // Allow caller to configure app (e.g., add static file middleware)
   if (setupApp) {
     setupApp(server.app)
   }
 
-  // Start HTTP server
+  // Start HTTP server immediately so proxy connections don't get ECONNREFUSED
   const httpServer = serve({
     fetch: server.app.fetch,
     port,
   })
 
-  // Create WebSocket server
+  // Create WebSocket server (watcher pool already initialized above)
   const wsServer = await createWebSocketServer(server, httpServer, {
     projectDir: config.projectDir,
   })
 
   const url = `http://localhost:${port}`
 
+  // Warmup kernel in background — subscriptions will push data as it arrives
+  kernel.warmup().catch((err) => {
+    console.error('Kernel warmup failed:', err)
+  })
+
   return {
     url,
     port,
     preferredPort,
     close: async () => {
+      kernel.dispose()
       wsServer.close()
       httpServer.close()
     },
