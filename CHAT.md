@@ -801,13 +801,14 @@ useEffect(() => {
 ;<CliTerminal lines={cliRunner.useLines()}></CliTerminal>
 ```
 
-等一下，我看到 use-cli-stream-runner  的代码！天啊，这是在太糟糕了，怎么能耦合各种命令的执行呢！
+等一下，我看到 use-cli-stream-runner 的代码！天啊，这是在太糟糕了，怎么能耦合各种命令的执行呢！
 请你立刻重构！按照我的思路，做好在前端运行任意终端命令的功能。你要做的，绝对不可以出现use-cli-stream-runner 这种把全部的命令全部耦合在一个 CliRunnerConfig 中的行为。
 这违反了我的工程实践规范。
 
 ---
 
 还需要继续改进你的代码：TerminalLine这个设计有一个问题，它导致cli-terminal 作为一个渲染器，失去了独立性。
+
 1. cli-terminal 是独立的，输入参数仍然是lines。有两种类型：ascii / html
 2. 我需要你丰富ascii的渲染格式
 3. html的渲染，内容就是ReactNode节点
@@ -817,3 +818,79 @@ useEffect(() => {
 ---
 
 我在使用的时候，会遇到持续这个日志：`[ProjectWatcher] Error: [Error: Events were dropped by the FSEvents client. File system must be re-scanned.]`，这个正常吗？
+
+---
+
+我不知道你做 legacy change-view 的目的是什么，我已经明确说明不用兼容，直接面向 openspec@1.1.x 去做开发。你需要给我一个可信的理由
+
+---
+
+引入搜索功能，使用后端提供搜索能力，可用技术方向：microfuzz、Fuse.js 、fuzzysort、MiniSearch
+
+---
+
+引入严格的 CI（相关工具配套到 scripts 中），来约束 PR 的质量，保证一致性：
+
+1. prettier 进行格式化
+2. oxlint 对代码质量进行约束
+3. tsc 类型检查
+4. openspec 不可以有残留的步骤没有完成
+
+---
+
+在你目前的基础上，我需要提出我的一个重构需求：
+
+1. changes页面需要进行重构，参考 Archive （但是目前 Archive 可能也是旧版的）。具体要得到的效果是：顶部是一个 Tabs，这里的 Tabs 是根据 OPSX 的标准来定义一个个Tab，然后最后一个 Tab 是 Folder，点进去就是可以看到原始文件
+2. changes 页面中有一些终端、命令。这些请统一剥离：我们需要在左侧导航栏增加一个开关：Terminal，它是一个开关，不是一个导航。打开这个状态开关（背景变成 PrimaryColor），那么底部（在状态栏的上方）就会出现一个终端面板，它将我们的主视图区域分割成上下两部分。上半部分仍然是原本的各个导航页面的内容，下半部分就是一个Tabs+Terminal的面板。这里我们将通过后端来提供一个 pty 的支持，前端使用 xtermjs 来渲染终端。我们的目的，是实现在前端直接使用命令行工具。这样就可以在我们的 openspecui 上启动codex/claude 等这些 Agent-CLI 工具，这些工具负责使用 openspec 驱动进行开发任务，我们的 openspecui 负责将这些任务进度可视化。
+
+---
+
+1. changes 这里的内容，除了 Folder，其它应该使用 Markdown 渲染，而不是用 Editor 去渲染。使用 Markdown 渲染还需要配套 ToC
+2. specs 这里，显示“Not yet generated. Use Continue to generate this artifact.”。这是为什么？我看我们opsx-config-center/specs
+   这里是有内容的，你的这些数据是自己整理的？还是通过 `openspec xxx --json` 命令得到的？
+3. changes这里顶部Tabs 我看到都有绿色“check”的图标，这是什么意思，还有其它什么状态吗？
+4. Terminal 不工作。出现的 xterm 实例没有任何内容
+5. Terminal 的 Tabs 为什么要搞特殊化，不用我们的标准 Tabs？ 而且没有关闭按钮。
+6. 移动端的导航栏缺少了 Terminal 按钮
+7. `/schemas`这个路由可以废弃移除了，因为已经有 Config 中已经有 Schema 了。
+8. changes 这里每个 tab 内容顶部都有一个bar，比如显示`proposal proposal.md Done`这个到底什么意思？什么作用
+
+---
+
+我们虽然全线使用了 trpc 订阅，但是后端这方面没有做好使用体验：后端需要缓存最后一次结果，因为我们底层是依赖 `openspec xxx --json`来进行返回结果的。然而这个过程是启动一个进程去做任务，这往往需要消耗几秒的时间，所以如果没有缓存，每次都将消耗大量的时间。
+利用 trpc 订阅依赖“异步生成器”的原理，我们可以在生成器中缓存最后一次结果。而触发生成器的更新，是基于两点：
+
+1. 文件变更（FileChange），会自动触发相应的cli 任务来重新获取数据；
+2. 用户前端进行订阅，等于进行一次“FileChange”事件触发。
+
+这些触发器最终会被统一节流，注意这里的节流本身虽然是基于时间，但是伪代码应该是：
+
+```
+loop {
+  await doJob(); // 再次期间，依然会收到 file-change 事件，但是并不会导致重入，只有等到doJob 完成了，才会重放 file-change 事件，来让 throttle 进行处理
+  await throttle(200); // 等待事件，doJob期间发生的事件会积攒起来到此时进入到节流计算中。注意，不是基于事件发生的时间，而是基于事件进入到节流器的时间为准。
+}
+```
+
+---
+
+Terminal的字体选择器它应该是个 `Array<string>`+`Input|TextArea`，用户可以直接编辑 Input 里面的东西，然后 Input 尾部有一个`+`Button，点击出现一个 Popover，提供一些Google-Font上可用的字体。Input的值默认使用`/[,\s]+/`来进行分割。
+
+另外，我还希望支持输入一个 url，如果 mime 是 `text/css` 没那么就用 CSS-API 解析，如果 mime 是 `font/*`。通过支持 url，来支持外部注入字体。
+
+---
+
+1. Terminal 实例要持久留在server内存中，触发通过 close 接口进行主动关闭（也就是说，WebSocket 断开不能作为 close 指令）
+2. 需要有专门的 list 接口，列出当前正在运行中的终端实例列表（也就是说后端自己要缓存 pty-buffer，基于配置配置的scrollback）
+3. 移动端模式下，Terminal 面板无法 resize
+4. 我们有一些任务是一次性的，执行完就可以输入任意键关闭终端，这种终端无发现你在 Tab 上做了特殊标识“done”。不要这样做，你可以用 dot 来代表状态，这对任意 Terminal 都适用：
+   1. 如果没有正在执行中的任务，就显示绿色
+   2. 正在运行中就显示蓝色
+   3. 已经终结就显示红色（底层就是 pty 实例，也就是我们的 WebSocket 已经关闭无法再重连，那么前端显示“按任意键关闭”，这个属于前端行为。理论上这时候刷新浏览器，list 接口已经找不到这个 pty 实例了。所以属于前端自己缓存着最后终端的 buffer）
+   4. pty 理论上是不支持判断是否有执行中的任务，所以只能基于终端的内容来做一个大概的判断。不过我们可以这样做：做一个多 steps 的“呼吸动画”，如果这个终端的内容在变化，那么就播放这个呼吸动画，如果内容停止更新，那么呼吸动画就停止。呼吸动画是一个 `灰色->蓝色->灰色->蓝色` 的动画循环，如果内容停止更新，那么动画会停止回落到灰色
+5. 我在配置文件中修改 Terminal 的配置（ui 字段），结果发现并没有立刻生效，得切换到设置页面，这时候才能实时生效：这里的核心是，文件是我们的单一可信源。不能依赖react 去实现实时更新。需要优化依赖路径。
+
+
+---
+
+1. `/config` 页面中的第一个 Tab：`Config` ，这里的布局有点问题，请参考 Schema 中的文件编辑，是有明确的“边框”，底部状态栏可以用来显示当前的状态，顶部状态栏可以显示具体的项目相对路径
