@@ -3,6 +3,7 @@ import { RouterProvider, createRootRoute, createRoute, createRouter } from '@tan
 import { RootLayout } from './components/layout'
 import './index.css'
 import { ArchiveModalProvider } from './lib/archive-modal-context'
+import { TerminalProvider } from './lib/terminal-context'
 import { getBasePath } from './lib/static-mode'
 import { queryClient } from './lib/trpc'
 import { ArchiveList } from './routes/archive-list'
@@ -10,17 +11,10 @@ import { ArchiveView } from './routes/archive-view'
 import { ChangeList } from './routes/change-list'
 import { ChangeView } from './routes/change-view'
 import { Dashboard } from './routes/dashboard'
-import { Project } from './routes/project'
+import { Config } from './routes/config'
 import { Settings } from './routes/settings'
 import { SpecList } from './routes/spec-list'
 import { SpecView } from './routes/spec-view'
-
-// Add type declaration for runtime base path
-declare global {
-  interface Window {
-    __OPENSPEC_BASE_PATH__?: string
-  }
-}
 
 // Root layout
 const rootRoute = createRootRoute({
@@ -39,10 +33,10 @@ const indexRoute = createRoute({
   component: Dashboard,
 })
 
-const projectRoute = createRoute({
+const configRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/project',
-  component: Project,
+  path: '/config',
+  component: Config,
 })
 
 const specsRoute = createRoute({
@@ -89,7 +83,7 @@ const settingsRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
-  projectRoute,
+  configRoute,
   specsRoute,
   specViewRoute,
   changesRoute,
@@ -105,6 +99,7 @@ const basepath = getBasePath()
 const router = createRouter({
   routeTree,
   basepath,
+  defaultViewTransition: true,
 })
 
 declare module '@tanstack/react-router' {
@@ -117,7 +112,9 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ArchiveModalProvider>
-        <RouterProvider router={router} />
+        <TerminalProvider>
+          <RouterProvider router={router} />
+        </TerminalProvider>
       </ArchiveModalProvider>
     </QueryClientProvider>
   )

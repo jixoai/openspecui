@@ -1,61 +1,46 @@
-import { Outlet, useRouterState } from '@tanstack/react-router'
+import { CliHealthGate } from '@/components/cli-health-gate'
+import { GlobalArchiveModal } from '@/components/global-archive-modal'
+import { StaticModeBanner } from '@/components/StaticModeBanner'
+import { ResizeHandle } from '@/components/terminal/resize-handle'
+import { TerminalPanel } from '@/components/terminal/terminal-panel'
+import { useTerminalContext } from '@/lib/terminal-context'
+import { Outlet } from '@tanstack/react-router'
+import { useCallback, useState } from 'react'
 import { DesktopSidebar } from './desktop-sidebar'
 import { MobileHeader } from './mobile-header'
 import { MobileTabBar } from './mobile-tabbar'
 import { DesktopStatusBar } from './status-bar'
-import { GlobalArchiveModal } from '@/components/global-archive-modal'
-import { StaticModeBanner } from '@/components/StaticModeBanner'
-import { flushSync } from 'react-dom'
-import { useLayoutEffect, useState } from 'react'
-
-type ViewTransitionCapableDocument = Document & {
-  startViewTransition?: (updateCallback: () => void) => { finished: Promise<unknown> }
-}
-
-function ViewTransitionOutlet() {
-  // Ignore hash-only changes to avoid triggering view transitions on in-page anchor jumps
-  const locationKey = useRouterState({
-    select: (state) => `${state.location.pathname}${state.location.search}`,
-  })
-  const [renderKey, setRenderKey] = useState(locationKey)
-
-  useLayoutEffect(() => {
-    if (locationKey === renderKey) return
-    const doc = document as ViewTransitionCapableDocument
-    const performUpdate = () => setRenderKey(locationKey)
-
-    if (typeof doc.startViewTransition === 'function') {
-      document.documentElement.dataset.vtRunning = '1'
-      const transition = doc.startViewTransition(() => {
-        flushSync(performUpdate)
-      })
-      transition.finished
-        .catch(() => {
-          /* swallow errors; fallback already applied */
-        })
-        .finally(() => {
-          delete document.documentElement.dataset.vtRunning
-        })
-    } else {
-      performUpdate()
-    }
-  }, [locationKey, renderKey])
-
-  return <Outlet key={renderKey} />
-}
 
 /** Root layout with responsive navigation */
 export function RootLayout() {
+  const { isOpen } = useTerminalContext()
+  const [terminalHeight, setTerminalHeight] = useState(300)
+
+  const handleResize = useCallback((height: number) => {
+    setTerminalHeight(height)
+  }, [])
+
   return (
-    <div className="fixed inset-0 @container/app" style={{ containerName: 'app' }}>
+    <div className="@container/app fixed inset-0" style={{ containerName: 'app' }}>
       <div className="app-layout h-full">
         <DesktopSidebar />
-        <div className="app-body flex flex-col flex-1 min-h-0">
+        <div className="app-body flex min-h-0 flex-1 flex-col">
           <StaticModeBanner />
+          <CliHealthGate />
           <MobileHeader />
-          <main className="main-content flex flex-col view-transition-route">
-            <ViewTransitionOutlet />
-          </main>
+          <div className="flex min-h-0 flex-1 flex-col">
+            <main className="main-content view-transition-route flex min-h-0 flex-1 flex-col">
+              <Outlet />
+            </main>
+            {isOpen && (
+              <>
+                <ResizeHandle onResize={handleResize} />
+                <div style={{ height: terminalHeight, minHeight: 100 }} className="shrink-0">
+                  <TerminalPanel className="h-full" />
+                </div>
+              </>
+            )}
+          </div>
           <MobileTabBar />
           <DesktopStatusBar />
         </div>

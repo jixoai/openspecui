@@ -57,7 +57,8 @@ export function useOpsxStatusSubscription(
   return useSubscription<ChangeStatus | null>(
     subscribe,
     async () => null,
-    [input.change, input.schema, input.refreshKey]
+    [input.change, input.schema, input.refreshKey],
+    input.change ? `opsx.subscribeStatus:${input.change}:${input.schema}:${input.refreshKey}` : undefined
   )
 }
 
@@ -84,7 +85,8 @@ export function useOpsxInstructionsSubscription(
   return useSubscription<ArtifactInstructions | null>(
     subscribe,
     async () => null,
-    [input.change, input.artifact, input.schema, input.refreshKey]
+    [input.change, input.artifact, input.schema, input.refreshKey],
+    input.change && input.artifact ? `opsx.subscribeInstructions:${input.change}:${input.artifact}:${input.schema}:${input.refreshKey}` : undefined
   )
 }
 
@@ -98,7 +100,7 @@ export function useOpsxSchemasSubscription(): SubscriptionState<SchemaInfo[]> {
     []
   )
 
-  return useSubscription<SchemaInfo[]>(subscribe, StaticProvider.getOpsxSchemas, [])
+  return useSubscription<SchemaInfo[]>(subscribe, StaticProvider.getOpsxSchemas, [], 'opsx.subscribeSchemas')
 }
 
 export function useOpsxStatusListSubscription(): SubscriptionState<ChangeStatus[]> {
@@ -111,7 +113,7 @@ export function useOpsxStatusListSubscription(): SubscriptionState<ChangeStatus[
     []
   )
 
-  return useSubscription<ChangeStatus[]>(subscribe, async () => [], [])
+  return useSubscription<ChangeStatus[]>(subscribe, async () => [], [], 'opsx.subscribeStatusList')
 }
 
 export function useOpsxSchemaDetailSubscription(name?: string): SubscriptionState<SchemaDetail | null> {
@@ -135,7 +137,8 @@ export function useOpsxSchemaDetailSubscription(name?: string): SubscriptionStat
   return useSubscription<SchemaDetail | null>(
     subscribe,
     () => StaticProvider.getOpsxSchemaDetail(name),
-    [name]
+    [name],
+    name ? `opsx.subscribeSchemaDetail:${name}` : undefined
   )
 }
 
@@ -162,7 +165,8 @@ export function useOpsxSchemaResolutionSubscription(
   return useSubscription<SchemaResolution | null>(
     subscribe,
     () => StaticProvider.getOpsxSchemaResolution(name),
-    [name]
+    [name],
+    name ? `opsx.subscribeSchemaResolution:${name}` : undefined
   )
 }
 
@@ -182,7 +186,8 @@ export function useOpsxTemplatesSubscription(schema?: string): SubscriptionState
   return useSubscription<TemplatesMap | null>(
     subscribe,
     () => StaticProvider.getOpsxTemplates(schema),
-    [schema]
+    [schema],
+    `opsx.subscribeTemplates:${schema ?? ''}`
   )
 }
 
@@ -207,7 +212,8 @@ export function useOpsxSchemaYamlSubscription(name?: string): SubscriptionState<
   return useSubscription<string | null>(
     subscribe,
     () => StaticProvider.getOpsxSchemaYaml(name),
-    [name]
+    [name],
+    name ? `opsx.subscribeSchemaYaml:${name}` : undefined
   )
 }
 
@@ -234,7 +240,8 @@ export function useOpsxSchemaFilesSubscription(
   return useSubscription<ChangeFile[] | null>(
     subscribe,
     () => StaticProvider.getOpsxSchemaFiles(name),
-    [name]
+    [name],
+    name ? `opsx.subscribeSchemaFiles:${name}` : undefined
   )
 }
 
@@ -262,7 +269,8 @@ export function useOpsxTemplateContentSubscription(
   return useSubscription<OpsxTemplateContent | null>(
     subscribe,
     () => StaticProvider.getOpsxTemplateContent(schema, artifactId),
-    [schema, artifactId]
+    [schema, artifactId],
+    schema && artifactId ? `opsx.subscribeTemplateContent:${schema}:${artifactId}` : undefined
   )
 }
 
@@ -284,7 +292,8 @@ export function useOpsxTemplateContentsSubscription(
   return useSubscription<OpsxTemplateContentMap | null>(
     subscribe,
     () => StaticProvider.getOpsxTemplateContents(),
-    [schema]
+    [schema],
+    `opsx.subscribeTemplateContents:${schema ?? ''}`
   )
 }
 
@@ -313,7 +322,8 @@ export function useOpsxApplyInstructionsSubscription(input: {
   return useSubscription<ApplyInstructions | null>(
     subscribe,
     async () => null,
-    [input.change, input.schema, input.refreshKey]
+    [input.change, input.schema, input.refreshKey],
+    input.change ? `opsx.subscribeApplyInstructions:${input.change}:${input.schema}:${input.refreshKey}` : undefined
   )
 }
 
@@ -327,7 +337,7 @@ export function useOpsxProjectConfigSubscription(): SubscriptionState<string | n
     []
   )
 
-  return useSubscription<string | null>(subscribe, StaticProvider.getOpsxProjectConfig, [])
+  return useSubscription<string | null>(subscribe, StaticProvider.getOpsxProjectConfig, [], 'opsx.subscribeProjectConfig')
 }
 
 export function useOpsxChangeListSubscription(): SubscriptionState<string[]> {
@@ -340,7 +350,7 @@ export function useOpsxChangeListSubscription(): SubscriptionState<string[]> {
     []
   )
 
-  return useSubscription<string[]>(subscribe, StaticProvider.getOpsxChangeList, [])
+  return useSubscription<string[]>(subscribe, StaticProvider.getOpsxChangeList, [], 'opsx.subscribeChanges')
 }
 
 export function useOpsxChangeMetadataSubscription(changeId?: string): SubscriptionState<string | null> {
@@ -364,7 +374,8 @@ export function useOpsxChangeMetadataSubscription(changeId?: string): Subscripti
   return useSubscription<string | null>(
     subscribe,
     () => StaticProvider.getOpsxChangeMetadata(changeId),
-    [changeId]
+    [changeId],
+    changeId ? `opsx.subscribeChangeMetadata:${changeId}` : undefined
   )
 }
 
@@ -389,7 +400,9 @@ export function useOpsxArtifactOutputSubscription(
     [changeId, outputPath]
   )
 
-  return useSubscription<string | null>(subscribe, async () => null, [changeId, outputPath])
+  return useSubscription<string | null>(subscribe, async () => null, [changeId, outputPath],
+    changeId && outputPath ? `opsx.subscribeArtifactOutput:${changeId}:${outputPath}` : undefined
+  )
 }
 
 export interface GlobArtifactFile {
@@ -419,5 +432,7 @@ export function useOpsxGlobArtifactFilesSubscription(
     [changeId, outputPath]
   )
 
-  return useSubscription<GlobArtifactFile[]>(subscribe, async () => [], [changeId, outputPath])
+  return useSubscription<GlobArtifactFile[]>(subscribe, async () => [], [changeId, outputPath],
+    changeId && outputPath ? `opsx.subscribeGlobArtifactFiles:${changeId}:${outputPath}` : undefined
+  )
 }
