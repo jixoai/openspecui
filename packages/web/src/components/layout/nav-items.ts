@@ -5,29 +5,36 @@ import {
   Archive,
   Settings,
   SlidersHorizontal,
+  Terminal,
   type LucideIcon,
 } from 'lucide-react'
 
 /** Valid top-level routes in the application */
-type AppRoute = '/' | '/config' | '/specs' | '/changes' | '/archive' | '/settings'
+export type AppRoute = '/' | '/config' | '/specs' | '/changes' | '/archive' | '/settings' | '/terminal'
 
 export interface NavItem {
   to: AppRoute
   icon: LucideIcon
   label: string
+  /** Which area this tab defaults to */
+  defaultArea: 'main' | 'bottom'
 }
 
-/** Navigation items configuration */
-export const navItems: NavItem[] = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/config', icon: SlidersHorizontal, label: 'Config' },
-  { to: '/specs', icon: FileText, label: 'Specs' },
-  { to: '/changes', icon: GitBranch, label: 'Changes' },
-  { to: '/archive', icon: Archive, label: 'Archive' },
+/** All navigation items — single source of truth */
+export const allNavItems: NavItem[] = [
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard', defaultArea: 'main' },
+  { to: '/config', icon: SlidersHorizontal, label: 'Config', defaultArea: 'main' },
+  { to: '/specs', icon: FileText, label: 'Specs', defaultArea: 'main' },
+  { to: '/changes', icon: GitBranch, label: 'Changes', defaultArea: 'main' },
+  { to: '/archive', icon: Archive, label: 'Archive', defaultArea: 'main' },
+  { to: '/settings', icon: Settings, label: 'Settings', defaultArea: 'main' },
+  { to: '/terminal', icon: Terminal, label: 'Terminal', defaultArea: 'bottom' },
 ]
 
-export const settingsItem: NavItem = {
-  to: '/settings',
-  icon: Settings,
-  label: 'Settings',
-}
+/** Main nav items (legacy compat) */
+export const navItems: NavItem[] = allNavItems.filter((i) => i.defaultArea === 'main' && i.to !== '/settings')
+
+/** Mobile tabbar items — all main + terminal */
+export const mobileNavItems: NavItem[] = allNavItems.filter((i) => i.to !== '/settings')
+
+export const settingsItem: NavItem = allNavItems.find((i) => i.to === '/settings')!

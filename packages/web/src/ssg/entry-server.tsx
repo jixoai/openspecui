@@ -6,40 +6,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   createMemoryHistory,
   createRootRoute,
-  createRoute,
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
 import { RootLayout } from '../components/layout'
 import { ArchiveModalProvider } from '../lib/archive-modal-context'
 import { setSSRBasePath } from '../lib/static-mode'
+import { createRouteTree } from '../lib/route-tree'
 import { StaticDataProvider } from './static-data-context'
-import { Dashboard } from '../routes/dashboard'
-import { SpecList } from '../routes/spec-list'
-import { SpecView } from '../routes/spec-view'
-import { ChangeList } from '../routes/change-list'
-import { ChangeView } from '../routes/change-view'
-import { ArchiveList } from '../routes/archive-list'
-import { ArchiveView } from '../routes/archive-view'
-import { Config } from '../routes/config'
-import { Settings } from '../routes/settings'
 import type { ExportSnapshot } from '@openspecui/core'
-
-function createRouteTree() {
-  const rootRoute = createRootRoute({ component: RootLayout })
-
-  return rootRoute.addChildren([
-    createRoute({ getParentRoute: () => rootRoute, path: '/', component: Dashboard }),
-    createRoute({ getParentRoute: () => rootRoute, path: '/specs', component: SpecList }),
-    createRoute({ getParentRoute: () => rootRoute, path: '/specs/$specId', component: SpecView }),
-    createRoute({ getParentRoute: () => rootRoute, path: '/changes', component: ChangeList }),
-    createRoute({ getParentRoute: () => rootRoute, path: '/changes/$changeId', component: ChangeView }),
-    createRoute({ getParentRoute: () => rootRoute, path: '/archive', component: ArchiveList }),
-    createRoute({ getParentRoute: () => rootRoute, path: '/archive/$changeId', component: ArchiveView }),
-    createRoute({ getParentRoute: () => rootRoute, path: '/config', component: Config }),
-    createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: Settings }),
-  ])
-}
 
 /**
  * Render a route to HTML string
@@ -47,8 +22,10 @@ function createRouteTree() {
 export async function render(url: string, snapshot: ExportSnapshot, basePath = '/'): Promise<string> {
   setSSRBasePath(basePath)
 
+  const rootRoute = createRootRoute({ component: RootLayout })
+
   const router = createRouter({
-    routeTree: createRouteTree(),
+    routeTree: createRouteTree(rootRoute, { includeTerminal: false }),
     history: createMemoryHistory({ initialEntries: [url] }),
     basepath: basePath,
   })

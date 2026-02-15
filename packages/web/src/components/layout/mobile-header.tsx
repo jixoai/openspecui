@@ -1,11 +1,10 @@
-import { TerminalToggleButton } from '@/components/terminal/terminal-toggle-button'
-import { getBasePath } from '@/lib/static-mode'
+import { getBasePath, isStaticMode } from '@/lib/static-mode'
 import { useDarkMode } from '@/lib/use-dark-mode'
 import { useServerStatus } from '@/lib/use-server-status'
 import { Link } from '@tanstack/react-router'
 import { Menu, X } from 'lucide-react'
 import { useState } from 'react'
-import { navItems, settingsItem } from './nav-items'
+import { allNavItems, navItems, settingsItem } from './nav-items'
 import { StatusIndicator } from './status-bar'
 
 /** Mobile header with hamburger menu */
@@ -14,9 +13,11 @@ export function MobileHeader() {
   const isDark = useDarkMode()
   const serverStatus = useServerStatus()
   const pageTitle = serverStatus.dirName ?? 'OpenSpec'
-
-  // Get base path from runtime configuration
   const basePath = getBasePath()
+  const isStatic = isStaticMode()
+
+  // In IDE mode, show all tabs (including bottom-area tabs) in hamburger
+  const menuItems = isStatic ? navItems : allNavItems.filter((i) => i.to !== '/settings')
 
   return (
     <>
@@ -61,7 +62,7 @@ export function MobileHeader() {
               </button>
             </div>
             <ul className="flex-1 space-y-1">
-              {navItems.map((item) => (
+              {menuItems.map((item) => (
                 <li key={item.to}>
                   <Link
                     to={item.to}
@@ -75,7 +76,6 @@ export function MobileHeader() {
               ))}
             </ul>
             <div className="border-border space-y-1 border-t pt-4">
-              <TerminalToggleButton className="w-full" />
               <Link
                 to={settingsItem.to}
                 onClick={() => setMenuOpen(false)}

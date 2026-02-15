@@ -365,6 +365,15 @@
   background-color: var(--shiki-dark-bg) !important;
 }
 
+/* Terminal tab status dot breathing animation */
+@keyframes terminal-breathing {
+  0%, 100% { background-color: oklch(0.7 0 0); }
+  50% { background-color: oklch(0.6 0.15 250); }
+}
+.animate-terminal-breathing {
+  animation: terminal-breathing 1.5s ease-in-out infinite;
+}
+
 /* Terminal line effects */
 .terminal-shimmer {
   background-image: linear-gradient(90deg, #a1a1aa 0%, #fafafa 50%, #a1a1aa 100%);
@@ -408,6 +417,10 @@
   overflow: auto;
   padding: 1rem;
 }
+/* Bottom area: hidden on mobile, shown on desktop */
+.bottom-area {
+  display: none;
+}
 
 /* Desktop: sidebar layout (container width >= 768px) */
 @container app (min-width: 768px) {
@@ -427,6 +440,9 @@
   }
   .main-content {
     padding: 1.5rem;
+  }
+  .bottom-area {
+    display: block;
   }
 }
 

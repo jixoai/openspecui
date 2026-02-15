@@ -2,10 +2,11 @@ import { CliHealthGate } from '@/components/cli-health-gate'
 import { GlobalArchiveModal } from '@/components/global-archive-modal'
 import { StaticModeBanner } from '@/components/StaticModeBanner'
 import { ResizeHandle } from '@/components/terminal/resize-handle'
-import { TerminalPanel } from '@/components/terminal/terminal-panel'
-import { useTerminalContext } from '@/lib/terminal-context'
+import { useNavLayout } from '@/lib/use-nav-controller'
+import { isStaticMode } from '@/lib/static-mode'
 import { Outlet } from '@tanstack/react-router'
 import { useCallback, useState } from 'react'
+import { BottomAreaRouter } from './bottom-area'
 import { DesktopSidebar } from './desktop-sidebar'
 import { MobileHeader } from './mobile-header'
 import { MobileTabBar } from './mobile-tabbar'
@@ -13,11 +14,12 @@ import { DesktopStatusBar } from './status-bar'
 
 /** Root layout with responsive navigation */
 export function RootLayout() {
-  const { isOpen } = useTerminalContext()
-  const [terminalHeight, setTerminalHeight] = useState(300)
+  const navLayout = useNavLayout()
+  const hasBottomArea = !isStaticMode() && navLayout.bottomTabs.length > 0
+  const [bottomHeight, setBottomHeight] = useState(300)
 
   const handleResize = useCallback((height: number) => {
-    setTerminalHeight(height)
+    setBottomHeight(height)
   }, [])
 
   return (
@@ -32,12 +34,10 @@ export function RootLayout() {
             <main className="main-content view-transition-route flex min-h-0 flex-1 flex-col">
               <Outlet />
             </main>
-            {isOpen && (
+            {hasBottomArea && (
               <>
                 <ResizeHandle onResize={handleResize} />
-                <div style={{ height: terminalHeight, minHeight: 100 }} className="shrink-0">
-                  <TerminalPanel className="h-full" />
-                </div>
+                <BottomAreaRouter height={bottomHeight} />
               </>
             )}
           </div>
@@ -45,7 +45,7 @@ export function RootLayout() {
           <DesktopStatusBar />
         </div>
       </div>
-      {/* 全局 Archive Modal - 在 Router 内部渲染 */}
+
       <GlobalArchiveModal />
     </div>
   )

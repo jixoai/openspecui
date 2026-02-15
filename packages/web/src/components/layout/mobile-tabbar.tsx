@@ -1,11 +1,24 @@
+import { useNavLayout } from '@/lib/use-nav-controller'
+import { isStaticMode } from '@/lib/static-mode'
 import { Link } from '@tanstack/react-router'
-import { navItems } from './nav-items'
+import { allNavItems, mobileNavItems } from './nav-items'
 
 /** Mobile bottom tab bar - quick access to main sections */
 export function MobileTabBar() {
+  const navLayout = useNavLayout()
+  const isStatic = isStaticMode()
+
+  // In static mode, use the hardcoded mobileNavItems
+  // In IDE mode, show mainTabs from navController
+  const items = isStatic
+    ? mobileNavItems
+    : navLayout.mainTabs
+        .map((tabId) => allNavItems.find((n) => n.to === tabId))
+        .filter((item): item is NonNullable<typeof item> => item != null)
+
   return (
     <nav className="mobile-tabbar h-14 border-t border-border bg-background flex items-stretch">
-      {navItems.map((item) => (
+      {items.map((item) => (
         <Link
           key={item.to}
           to={item.to}
