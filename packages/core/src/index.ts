@@ -137,3 +137,26 @@ export {
   type SchemaArtifact,
   type SchemaDetail,
 } from './opsx-types.js'
+
+// PTY WebSocket protocol schemas and types
+export {
+  PtyCreateMessageSchema,
+  PtyInputMessageSchema,
+  PtyResizeMessageSchema,
+  PtyCloseMessageSchema,
+  PtyAttachMessageSchema,
+  PtyListMessageSchema,
+  PtyClientMessageSchema,
+  PtyCreatedResponseSchema,
+  PtyOutputResponseSchema,
+  PtyExitResponseSchema,
+  PtyTitleResponseSchema,
+  PtyBufferResponseSchema,
+  PtyListResponseSchema,
+  PtyErrorCodeSchema,
+  PtyErrorResponseSchema,
+  PtyServerMessageSchema,
+  type PtyClientMessage,
+  type PtyServerMessage,
+  type PtySessionInfo,
+} from './pty-protocol.js'

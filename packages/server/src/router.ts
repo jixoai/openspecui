@@ -11,6 +11,7 @@ import type {
   FileChangeEvent,
   ConfigManager,
   CliExecutor,
+  OpsxKernel,
 } from '@openspecui/core'
 import {
   ArtifactInstructionsSchema,
@@ -41,11 +42,13 @@ import {
 } from './reactive-subscription.js'
 import { createCliStreamObservable } from './cli-stream-observable.js'
 import { parseSchemaYaml } from './opsx-schema.js'
+import { reactiveKV } from './reactive-kv.js'
 
 export interface Context {
   adapter: OpenSpecAdapter
   configManager: ConfigManager
   cliExecutor: CliExecutor
+  kernel: OpsxKernel
   watcher?: OpenSpecWatcher
   projectDir: string
 }
@@ -1233,6 +1236,51 @@ export const opsxRouter = router({
 })
 
 /**
+ * KV router - in-memory reactive key-value store
+ * No disk persistence — devices use IndexedDB for their own storage.
+ */
+export const kvRouter = router({
+  get: publicProcedure
+    .input(z.object({ key: z.string() }))
+    .query(({ input }) => {
+      return reactiveKV.get(input.key) ?? null
+    }),
+
+  set: publicProcedure
+    .input(z.object({ key: z.string(), value: z.unknown() }))
+    .mutation(({ input }) => {
+      reactiveKV.set(input.key, input.value)
+      return { success: true }
+    }),
+
+  delete: publicProcedure
+    .input(z.object({ key: z.string() }))
+    .mutation(({ input }) => {
+      reactiveKV.delete(input.key)
+      return { success: true }
+    }),
+
+  subscribe: publicProcedure
+    .input(z.object({ key: z.string() }))
+    .subscription(({ input }) => {
+      return observable<unknown>((emit) => {
+        // Emit current value immediately
+        const current = reactiveKV.get(input.key)
+        emit.next(current ?? null)
+
+        // Listen for changes
+        const unsub = reactiveKV.onKey(input.key, (value) => {
+          emit.next(value ?? null)
+        })
+
+        return () => {
+          unsub()
+        }
+      })
+    }),
+})
+
+/**
  * Main app router
  */
 export const appRouter = router({
@@ -1244,6 +1292,7 @@ export const appRouter = router({
   config: configRouter,
   cli: cliRouter,
   opsx: opsxRouter,
+  kv: kvRouter,
 })
 
 export type AppRouter = typeof appRouter
