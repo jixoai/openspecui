@@ -442,31 +442,36 @@ function reduceKernel(state: KernelState, event: KernelEvent): KernelTransition 
     }
 
     case 'CLOSE_TAB': {
-      if (!state.bottomTabs.includes(event.tabId)) {
+      const inBottom = state.bottomTabs.includes(event.tabId)
+      const inMain = state.mainTabs.includes(event.tabId)
+      if (!inBottom && !inMain) {
         return { nextState: state, changed: false, notify: [], persist: 'none' }
       }
 
-      const nextBottomTabs = state.bottomTabs.filter((tab) => tab !== event.tabId)
-      const nextMainTabs = [...state.mainTabs, event.tabId]
-      const nextBottomLocation =
-        pathToTabId(state.bottomLocation.pathname) === event.tabId
-          ? parseHref('/')
-          : state.bottomLocation
+      if (inBottom) {
+        if (pathToTabId(state.bottomLocation.pathname) !== event.tabId) {
+          return { nextState: state, changed: false, notify: [], persist: 'none' }
+        }
+
+        return {
+          nextState: { ...state, bottomLocation: parseHref('/') },
+          changed: true,
+          urlAction: 'REPLACE',
+          notify: [],
+          persist: 'none',
+        }
+      }
+
+      if (pathToTabId(state.mainLocation.pathname) !== event.tabId) {
+        return { nextState: state, changed: false, notify: [], persist: 'none' }
+      }
 
       return {
-        nextState: {
-          ...state,
-          mainTabs: nextMainTabs,
-          bottomTabs: nextBottomTabs,
-          bottomLocation: nextBottomLocation,
-        },
+        nextState: { ...state, mainLocation: parseHref('/') },
         changed: true,
         urlAction: 'REPLACE',
-        notify: [
-          { area: 'main', type: 'REPLACE' },
-          { area: 'bottom', type: 'REPLACE' },
-        ],
-        persist: 'local_and_remote',
+        notify: [],
+        persist: 'none',
       }
     }
 

@@ -47,7 +47,7 @@ export function Dashboard() {
   const hasChanges = (statuses?.length ?? 0) > 0
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
           <LayoutDashboard className="h-6 w-6 shrink-0" />

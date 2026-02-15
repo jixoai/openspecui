@@ -15,6 +15,12 @@ function resolveBackendTarget(): string {
 
 export default defineConfig(({ isSsrBuild }) => {
   const backendTarget = resolveBackendTarget()
+  const alias = {
+    '@': resolve(__dirname, './src'),
+    '@openspecui/core': resolve(__dirname, '../core/src'),
+    '@openspecui/core/pty-protocol': resolve(__dirname, '../core/src/pty-protocol.ts'),
+    '@openspecui/server': resolve(__dirname, '../server/src'),
+  }
   console.log(`[dev-proxy] backend target => ${backendTarget}`)
 
   // Always use base: '/' - base path is now configured at runtime via window.__OPENSPEC_BASE_PATH__
@@ -22,14 +28,15 @@ export default defineConfig(({ isSsrBuild }) => {
     base: '/',
     plugins: [react(), tailwindcss()],
     resolve: {
-      alias: {
-        '@': resolve(__dirname, './src'),
-        '@openspecui/core': resolve(__dirname, '../core/src'),
-        '@openspecui/server': resolve(__dirname, '../server/src'),
-      },
+      alias,
     },
     server: {
       port: 13003,
+      hmr: {
+        // 关键：可以尝试指定一个专门的端口给 HMR 使用，避开 13003 的业务代理冲突
+        port: 13004,
+        protocol: 'ws',
+      },
       proxy: {
         '/trpc': {
           target: backendTarget,
@@ -48,8 +55,22 @@ export default defineConfig(({ isSsrBuild }) => {
       },
     },
     test: {
-      environment: 'jsdom',
-      setupFiles: './src/test/setup.ts',
+      projects: [
+        // Unit tests (React components, pure logic) — jsdom
+        {
+          resolve: {
+            alias,
+          },
+          test: {
+            name: 'unit',
+            environment: 'jsdom',
+            setupFiles: './src/test/setup.ts',
+            include: ['src/**/*.test.{ts,tsx}'],
+          },
+        },
+        // Storybook browser tests — separate config file
+        './vitest.storybook.config.ts',
+      ],
     },
     ssr: {
       // SSR build: bundle all dependencies into entry-server.js

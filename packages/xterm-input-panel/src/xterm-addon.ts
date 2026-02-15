@@ -1,0 +1,662 @@
+import type { Terminal, ITerminalAddon } from '@xterm/xterm'
+
+const SENSITIVITY = 1.5
+const EDGE_SCROLL_ZONE = 30
+const EDGE_SCROLL_INTERVAL = 50
+const EDGE_SCROLL_OVERSHOOT = 15
+
+// Cursor SVG (same as TerminalCursorOverlay)
+const CURSOR_SVG = `<svg width="20" height="24" viewBox="0 0 20 24">
+  <path d="M2,2 L2,18 L7,14 L11,22 L14,20 L10,13 L16,13 Z" fill="white" stroke="black" stroke-width="1.5"/>
+</svg>`
+
+// Lucide Keyboard icon
+const KEYBOARD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2" ry="2"/><path d="M6 8h.001"/><path d="M10 8h.001"/><path d="M14 8h.001"/><path d="M18 8h.001"/><path d="M8 12h.001"/><path d="M12 12h.001"/><path d="M16 12h.001"/><path d="M7 16h10"/></svg>`
+
+function isTouchDevice(): boolean {
+  return 'ontouchstart' in window || navigator.maxTouchPoints > 0
+}
+
+/**
+ * xterm.js addon that provides full InputPanel integration.
+ *
+ * **DOM Mounting**: All addon UI (panel, FAB, cursor) mounts into the
+ * terminal's own container (`terminal.element.parentElement`) by default.
+ * For multi-terminal layouts, set `InputPanelAddon.mountTarget` to a shared
+ * ancestor so the singleton panel and FAB live in one place.
+ *
+ * **Singleton**: Only one `<input-panel>` element exists at a time across all
+ * terminal instances. When a different terminal receives focus, the panel
+ * migrates automatically (previous addon closes, new one opens).
+ *
+ * **Native FAB**: On touch devices, a draggable floating action button is
+ * created automatically inside the mount target. No React needed.
+ *
+ * Usage:
+ * ```ts
+ * import { InputPanelAddon } from 'xterm-input-panel'
+ *
+ * // Optional: shared container for multi-terminal layouts
+ * InputPanelAddon.mountTarget = document.getElementById('app')
+ *
+ * const addon = new InputPanelAddon({
+ *   onInput: (data) => pty.write(data),
+ * })
+ * terminal.loadAddon(addon)
+ * // After terminal.open(container):
+ * addon.attachListeners()
+ * ```
+ */
+export class InputPanelAddon implements ITerminalAddon {
+  // ── Singleton state ──
+
+  /** The currently active (open) addon instance, or null. */
+  private static _active: InputPanelAddon | null = null
+
+  /** The most recently focused terminal's addon (FAB opens this). */
+  private static _lastFocused: InputPanelAddon | null = null
+
+  /** All alive addon instances (for FAB fallback when _lastFocused is null). */
+  private static _instances = new Set<InputPanelAddon>()
+
+  /** Global callback for singleton state changes. */
+  private static _onActiveChangeFn: ((addon: InputPanelAddon | null) => void) | null = null
+
+  /**
+   * Shared mount target for multi-terminal scenarios.
+   * When set, both `<input-panel>` and FAB mount here instead of each
+   * terminal's individual container. Set this to a common ancestor element
+   * (e.g. the app shell or terminal panel wrapper).
+   */
+  private static _mountTarget: HTMLElement | null = null
+
+  /** Get the currently active instance (the one with the open panel). */
+  static get activeInstance(): InputPanelAddon | null { return InputPanelAddon._active }
+
+  /** Subscribe to singleton state changes (open/close/migration). */
+  static set onActiveChange(fn: ((addon: InputPanelAddon | null) => void) | null) {
+    InputPanelAddon._onActiveChangeFn = fn
+  }
+
+  /**
+   * Set a shared mount target for all InputPanelAddon instances.
+   * The `<input-panel>` element and FAB will be appended here.
+   * If null (default), each addon mounts into its own terminal container.
+   */
+  static set mountTarget(el: HTMLElement | null) {
+    InputPanelAddon._mountTarget = el
+    // Migrate existing FAB to the new target
+    if (InputPanelAddon._fabEl && el) {
+      el.appendChild(InputPanelAddon._fabEl)
+    }
+  }
+
+  static get mountTarget(): HTMLElement | null {
+    return InputPanelAddon._mountTarget
+  }
+
+  // ── Native FAB (static singleton) ──
+
+  private static _fabEl: HTMLButtonElement | null = null
+
+  /**
+   * Create the native FAB button and mount it into the given container.
+   * The FAB is a static singleton — created once, then moved between
+   * containers as terminals gain/lose focus.
+   */
+  private static _ensureFab(mountTarget: HTMLElement): void {
+    if (InputPanelAddon._fabEl) {
+      // FAB already exists — just ensure it's in the right container
+      if (InputPanelAddon._fabEl.parentElement !== mountTarget) {
+        mountTarget.appendChild(InputPanelAddon._fabEl)
+      }
+      return
+    }
+
+    if (!isTouchDevice()) return
+
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.title = 'Open InputPanel'
+    btn.innerHTML = KEYBOARD_SVG
+
+    Object.assign(btn.style, {
+      position: 'fixed',
+      zIndex: '50',
+      width: '56px',
+      height: '56px',
+      borderRadius: '50%',
+      border: '2px solid currentColor',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      touchAction: 'none',
+      userSelect: 'none',
+      webkitUserSelect: 'none',
+      cursor: 'pointer',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+      background: 'var(--primary, #e04a2f)',
+      color: 'var(--primary-foreground, #fff)',
+      padding: '0',
+      margin: '0',
+      outline: 'none',
+    })
+
+    // Load saved position
+    let posX = window.innerWidth - 72
+    let posY = window.innerHeight - 140
+    try {
+      const saved = localStorage.getItem('input-panel-fab-pos')
+      if (saved) {
+        const p = JSON.parse(saved)
+        posX = p.x ?? posX
+        posY = p.y ?? posY
+      }
+    } catch { /* ignore */ }
+    posX = Math.max(0, Math.min(window.innerWidth - 56, posX))
+    posY = Math.max(0, Math.min(window.innerHeight - 56, posY))
+    btn.style.left = `${posX}px`
+    btn.style.top = `${posY}px`
+
+    // Drag state
+    let dragging = false
+    let wasDragged = false
+    let startX = 0
+    let startY = 0
+    let origX = 0
+    let origY = 0
+
+    const doToggle = () => {
+      const target = InputPanelAddon._lastFocused
+        ?? InputPanelAddon._instances.values().next().value as InputPanelAddon | undefined
+        ?? null
+      if (target) target.toggle()
+    }
+
+    btn.addEventListener('pointerdown', (e) => {
+      dragging = true
+      wasDragged = false
+      startX = e.clientX
+      startY = e.clientY
+      origX = parseInt(btn.style.left) || 0
+      origY = parseInt(btn.style.top) || 0
+      btn.setPointerCapture(e.pointerId)
+      e.preventDefault()
+    })
+
+    btn.addEventListener('pointermove', (e) => {
+      if (!dragging) return
+      const dx = e.clientX - startX
+      const dy = e.clientY - startY
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) wasDragged = true
+      const newX = Math.max(0, Math.min(window.innerWidth - 56, origX + dx))
+      const newY = Math.max(0, Math.min(window.innerHeight - 56, origY + dy))
+      btn.style.left = `${newX}px`
+      btn.style.top = `${newY}px`
+    })
+
+    btn.addEventListener('pointerup', () => {
+      if (!dragging) return
+      dragging = false
+      try {
+        localStorage.setItem('input-panel-fab-pos', JSON.stringify({
+          x: parseInt(btn.style.left),
+          y: parseInt(btn.style.top),
+        }))
+      } catch { /* ignore */ }
+      if (!wasDragged) doToggle()
+    })
+
+    btn.addEventListener('pointercancel', () => {
+      dragging = false
+    })
+
+    // Click fallback for environments where pointer events are unreliable
+    let pointerDownFired = false
+    btn.addEventListener('pointerdown', () => { pointerDownFired = true }, { capture: true })
+    btn.addEventListener('click', () => {
+      if (pointerDownFired) {
+        pointerDownFired = false
+        return
+      }
+      doToggle()
+    })
+
+    // Keep in bounds on resize
+    window.addEventListener('resize', () => {
+      const x = Math.min(parseInt(btn.style.left) || 0, window.innerWidth - 56)
+      const y = Math.min(parseInt(btn.style.top) || 0, window.innerHeight - 56)
+      btn.style.left = `${Math.max(0, x)}px`
+      btn.style.top = `${Math.max(0, y)}px`
+    })
+
+    mountTarget.appendChild(btn)
+    InputPanelAddon._fabEl = btn
+  }
+
+  private static _setFabVisible(visible: boolean): void {
+    if (InputPanelAddon._fabEl) {
+      InputPanelAddon._fabEl.style.display = visible ? 'flex' : 'none'
+    }
+  }
+
+  // ── Instance state ──
+
+  private _terminal: Terminal | null = null
+  private _panel: HTMLElement | null = null
+  private _cursorEl: HTMLElement | null = null
+  private _cursorPos = { x: 0, y: 0 }
+  private _isDragging = false
+  private _isOpen = false
+  private _edgeScrollTimer: ReturnType<typeof setInterval> | null = null
+  private _cleanups: Array<() => void> = []
+  private _persistentCleanups: Array<() => void> = []
+  private _listenersAttached = false
+
+  private _onInput: (data: string) => void
+  private _onOpenCb: (() => void) | null
+  private _onCloseCb: (() => void) | null
+
+  constructor(opts?: {
+    onInput?: (data: string) => void
+    onOpen?: () => void
+    onClose?: () => void
+  }) {
+    this._onInput = opts?.onInput ?? (() => {})
+    this._onOpenCb = opts?.onOpen ?? null
+    this._onCloseCb = opts?.onClose ?? null
+  }
+
+  get isOpen(): boolean { return this._isOpen }
+
+  /** Allow changing callbacks after construction. */
+  set onOpen(fn: (() => void) | null) { this._onOpenCb = fn }
+  set onClose(fn: (() => void) | null) { this._onCloseCb = fn }
+  set onInput(fn: (data: string) => void) { this._onInput = fn }
+
+  /**
+   * Resolve the mount target for this addon instance.
+   * Priority: static mountTarget > terminal container > document.body
+   */
+  private _getMountTarget(): HTMLElement {
+    return InputPanelAddon._mountTarget
+      ?? this._terminal?.element?.parentElement
+      ?? document.body
+  }
+
+  activate(terminal: Terminal): void {
+    this._terminal = terminal
+    InputPanelAddon._instances.add(this)
+  }
+
+  dispose(): void {
+    this.close()
+    for (const fn of this._persistentCleanups) fn()
+    this._persistentCleanups = []
+    this._listenersAttached = false
+    InputPanelAddon._instances.delete(this)
+    if (InputPanelAddon._lastFocused === this) {
+      InputPanelAddon._lastFocused = null
+    }
+    this._terminal = null
+  }
+
+  // ── Public API ──
+
+  /**
+   * Set up persistent listeners for auto-open behavior.
+   * Must be called after terminal.open(container) so that DOM elements exist.
+   *
+   * On touch devices:
+   * - Permanently sets inputmode='none' to suppress native keyboard
+   * - Creates the native FAB inside the mount target
+   * - textarea focus → opens InputPanel (migrates from other terminal if needed)
+   */
+  attachListeners(): void {
+    if (this._listenersAttached || !this._terminal) return
+    const textarea = this._terminal.textarea
+    if (!textarea) return
+
+    this._listenersAttached = true
+
+    if (!isTouchDevice()) return
+
+    // Permanently suppress native keyboard on touch devices
+    textarea.setAttribute('inputmode', 'none')
+
+    // Ensure native FAB exists in the correct mount target
+    InputPanelAddon._ensureFab(this._getMountTarget())
+
+    // Default FAB target to the first terminal that attaches listeners
+    if (!InputPanelAddon._lastFocused) {
+      InputPanelAddon._lastFocused = this
+    }
+
+    // Track last focused terminal for FAB
+    // textarea focus → open InputPanel (migration via singleton)
+    const onFocus = () => {
+      InputPanelAddon._lastFocused = this
+      if (!this._isOpen) this.open()
+    }
+    textarea.addEventListener('focus', onFocus)
+    this._persistentCleanups.push(() => textarea.removeEventListener('focus', onFocus))
+  }
+
+  open(): void {
+    if (this._isOpen || !this._terminal) return
+
+    // Singleton: close any other active instance (migration)
+    if (InputPanelAddon._active && InputPanelAddon._active !== this) {
+      InputPanelAddon._active.close()
+    }
+
+    this._isOpen = true
+    InputPanelAddon._active = this
+    InputPanelAddon._lastFocused = this
+
+    // Hide FAB while panel is open
+    InputPanelAddon._setFabVisible(false)
+
+    this._suppressKeyboard()
+
+    // Build the element tree
+    const panel = document.createElement('input-panel')
+    panel.setAttribute('layout', 'floating')
+
+    const inputTab = document.createElement('input-method-tab')
+    inputTab.setAttribute('slot', 'input')
+    panel.appendChild(inputTab)
+
+    const keysTab = document.createElement('virtual-keyboard-tab')
+    keysTab.setAttribute('slot', 'keys')
+    keysTab.setAttribute('floating', '')
+    panel.appendChild(keysTab)
+
+    const trackpadTab = document.createElement('virtual-trackpad-tab')
+    trackpadTab.setAttribute('slot', 'trackpad')
+    trackpadTab.setAttribute('floating', '')
+    panel.appendChild(trackpadTab)
+
+    this._panel = panel
+
+    // Wire panel events
+    this._on(panel, 'input-panel:close', () => this.close())
+    this._on(panel, 'input-panel:send', (e) => {
+      const data = (e as CustomEvent).detail?.data
+      if (data) this._onInput(data)
+    })
+    this._on(panel, 'input-panel:tab-change', (e) => {
+      const tab = (e as CustomEvent).detail?.tab
+      if (tab === 'trackpad') this._showCursor()
+      else this._hideCursor()
+    })
+
+    // Wire trackpad gesture events
+    this._on(panel, 'trackpad:move', (e) => {
+      const { dx, dy } = (e as CustomEvent).detail
+      this._moveCursor(dx, dy)
+    })
+    this._on(panel, 'trackpad:tap', () => this._dispatchClick(1))
+    this._on(panel, 'trackpad:double-tap', () => this._dispatchDblClick())
+    this._on(panel, 'trackpad:long-press', () => this._dispatchRightClick())
+    this._on(panel, 'trackpad:two-finger-tap', () => this._dispatchRightClick())
+    this._on(panel, 'trackpad:drag-start', () => {
+      this._isDragging = true
+      this._dispatchMouse('mousedown', { detail: 1 })
+    })
+    this._on(panel, 'trackpad:drag-move', (e) => {
+      const { dx, dy } = (e as CustomEvent).detail
+      this._moveCursor(dx, dy)
+      this._dispatchMouse('mousemove', { buttons: 1 })
+      this._updateEdgeScroll()
+    })
+    this._on(panel, 'trackpad:drag-end', () => {
+      this._isDragging = false
+      this._stopEdgeScroll()
+      this._dispatchMouse('mouseup', { detail: 1 })
+    })
+    this._on(panel, 'trackpad:scroll', (e) => {
+      const { deltaY } = (e as CustomEvent).detail
+      this._dispatchWheel(deltaY)
+    })
+
+    // Mount panel into the terminal's container (or shared mount target)
+    this._getMountTarget().appendChild(panel)
+
+    // Create cursor overlay inside terminal container
+    this._createCursor()
+
+    // Focus terminal textarea to show blinking cursor
+    this._focusTerminal()
+
+    this._onOpenCb?.()
+    InputPanelAddon._onActiveChangeFn?.(this)
+  }
+
+  close(): void {
+    if (!this._isOpen) return
+    this._isOpen = false
+
+    if (InputPanelAddon._active === this) {
+      InputPanelAddon._active = null
+    }
+
+    this._stopEdgeScroll()
+    for (const fn of this._cleanups) fn()
+    this._cleanups = []
+
+    this._panel?.remove()
+    this._panel = null
+
+    this._cursorEl?.remove()
+    this._cursorEl = null
+
+    // On touch devices, keep inputmode='none' permanently
+    if (!this._listenersAttached) {
+      this._restoreKeyboard()
+    }
+
+    // Show FAB again
+    InputPanelAddon._setFabVisible(true)
+
+    this._onCloseCb?.()
+    InputPanelAddon._onActiveChangeFn?.(null)
+  }
+
+  toggle(): void {
+    this._isOpen ? this.close() : this.open()
+  }
+
+  // ── Terminal focus ──
+
+  private _focusTerminal(): void {
+    const textarea = this._terminal?.textarea
+    if (!textarea) return
+    textarea.setAttribute('inputmode', 'none')
+    textarea.focus()
+  }
+
+  // ── Cursor overlay ──
+
+  private _createCursor(): void {
+    const container = this._terminal?.element?.parentElement
+    if (!container) return
+
+    const el = document.createElement('div')
+    el.style.cssText = 'position:absolute;z-index:10;pointer-events:none;opacity:0;transition:opacity 0.15s;'
+    el.innerHTML = CURSOR_SVG
+    container.appendChild(el)
+    this._cursorEl = el
+
+    const rect = container.getBoundingClientRect()
+    this._cursorPos = { x: rect.width / 2, y: rect.height / 2 }
+    this._positionCursor()
+  }
+
+  private _positionCursor(): void {
+    if (!this._cursorEl) return
+    this._cursorEl.style.left = `${this._cursorPos.x - 4}px`
+    this._cursorEl.style.top = `${this._cursorPos.y - 2}px`
+  }
+
+  private _showCursor(): void {
+    if (!this._cursorEl) this._createCursor()
+    if (this._cursorEl) {
+      const container = this._terminal?.element?.parentElement
+      if (container) {
+        const rect = container.getBoundingClientRect()
+        this._cursorPos = { x: rect.width / 2, y: rect.height / 2 }
+        this._positionCursor()
+      }
+      this._cursorEl.style.opacity = '1'
+    }
+  }
+
+  private _hideCursor(): void {
+    if (this._cursorEl) this._cursorEl.style.opacity = '0.3'
+  }
+
+  private _moveCursor(dx: number, dy: number): void {
+    const container = this._terminal?.element?.parentElement
+    if (!container) return
+    const rect = container.getBoundingClientRect()
+    this._cursorPos.x = Math.max(0, Math.min(rect.width, this._cursorPos.x + dx * SENSITIVITY))
+    this._cursorPos.y = Math.max(0, Math.min(rect.height, this._cursorPos.y + dy * SENSITIVITY))
+    this._positionCursor()
+  }
+
+  // ── Mouse event dispatch ──
+
+  private _getClientCoords(): { clientX: number; clientY: number } | null {
+    const container = this._terminal?.element?.parentElement
+    if (!container) return null
+    const rect = container.getBoundingClientRect()
+    return {
+      clientX: rect.left + this._cursorPos.x,
+      clientY: rect.top + this._cursorPos.y,
+    }
+  }
+
+  private _resolveTarget(clientX: number, clientY: number): Element {
+    const container = this._terminal?.element?.parentElement
+    if (!container) return document.body
+    const el = document.elementFromPoint(clientX, clientY)
+    if (el && container.contains(el)) return el
+    return container.querySelector('.xterm-screen') ?? container
+  }
+
+  private _dispatchMouse(
+    type: string,
+    opts: { button?: number; detail?: number; buttons?: number } = {}
+  ): void {
+    const coords = this._getClientCoords()
+    if (!coords) return
+    const button = opts.button ?? 0
+    const detail = opts.detail ?? 1
+    const buttons = opts.buttons ?? (type === 'mousedown' ? (button === 0 ? 1 : button === 2 ? 2 : 4) : 0)
+    const target = this._resolveTarget(coords.clientX, coords.clientY)
+    target.dispatchEvent(
+      new MouseEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        detail,
+        clientX: coords.clientX,
+        clientY: coords.clientY,
+        button,
+        buttons,
+      })
+    )
+  }
+
+  private _dispatchClick(detail: number): void {
+    this._dispatchMouse('mousedown', { detail })
+    this._dispatchMouse('mouseup', { detail })
+    this._dispatchMouse('click', { detail })
+  }
+
+  private _dispatchDblClick(): void {
+    this._dispatchMouse('mousedown', { detail: 2 })
+    this._dispatchMouse('mouseup', { detail: 2 })
+    this._dispatchMouse('click', { detail: 2 })
+    this._dispatchMouse('dblclick', { detail: 2 })
+  }
+
+  private _dispatchRightClick(): void {
+    this._dispatchMouse('mousedown', { button: 2 })
+    this._dispatchMouse('mouseup', { button: 2 })
+    this._dispatchMouse('contextmenu', { button: 2 })
+  }
+
+  private _dispatchWheel(deltaY: number): void {
+    const coords = this._getClientCoords()
+    if (!coords) return
+    const target = this._resolveTarget(coords.clientX, coords.clientY)
+    target.dispatchEvent(
+      new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: coords.clientX,
+        clientY: coords.clientY,
+        deltaY,
+        deltaMode: WheelEvent.DOM_DELTA_PIXEL,
+      })
+    )
+  }
+
+  // ── Edge scroll (during drag selection) ──
+
+  private _updateEdgeScroll(): void {
+    const container = this._terminal?.element?.parentElement
+    if (!container || !this._isDragging) { this._stopEdgeScroll(); return }
+    const rect = container.getBoundingClientRect()
+    const nearTop = this._cursorPos.y < EDGE_SCROLL_ZONE
+    const nearBottom = this._cursorPos.y > rect.height - EDGE_SCROLL_ZONE
+    if (!nearTop && !nearBottom) { this._stopEdgeScroll(); return }
+
+    this._stopEdgeScroll()
+    this._edgeScrollTimer = setInterval(() => {
+      const container = this._terminal?.element?.parentElement
+      if (!container || !this._isDragging) { this._stopEdgeScroll(); return }
+      const rect = container.getBoundingClientRect()
+      const clientX = rect.left + this._cursorPos.x
+      const clientY = this._cursorPos.y < EDGE_SCROLL_ZONE
+        ? rect.top - EDGE_SCROLL_OVERSHOOT
+        : rect.bottom + EDGE_SCROLL_OVERSHOOT
+      const target = this._resolveTarget(rect.left + this._cursorPos.x, rect.top + this._cursorPos.y)
+      target.dispatchEvent(
+        new MouseEvent('mousemove', {
+          bubbles: true, cancelable: true, view: window,
+          clientX, clientY, button: 0, buttons: 1,
+        })
+      )
+    }, EDGE_SCROLL_INTERVAL)
+  }
+
+  private _stopEdgeScroll(): void {
+    if (this._edgeScrollTimer) {
+      clearInterval(this._edgeScrollTimer)
+      this._edgeScrollTimer = null
+    }
+  }
+
+  // ── Keyboard suppression ──
+
+  private _suppressKeyboard(): void {
+    const textarea = this._terminal?.textarea
+    if (textarea) textarea.setAttribute('inputmode', 'none')
+  }
+
+  private _restoreKeyboard(): void {
+    const textarea = this._terminal?.textarea
+    if (textarea) textarea.removeAttribute('inputmode')
+  }
+
+  // ── Event helper ──
+
+  private _on(target: EventTarget, event: string, handler: EventListener): void {
+    target.addEventListener(event, handler)
+    this._cleanups.push(() => target.removeEventListener(event, handler))
+  }
+}

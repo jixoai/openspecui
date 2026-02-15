@@ -10,7 +10,7 @@ export function ChangeList() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4">
       <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
         <GitBranch className="h-6 w-6 shrink-0" />
         Changes

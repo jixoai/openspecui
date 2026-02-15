@@ -77,7 +77,7 @@ export function ArchiveView() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-6 p-4">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link

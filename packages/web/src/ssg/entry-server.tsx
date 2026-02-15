@@ -52,7 +52,7 @@ export async function render(url: string, snapshot: ExportSnapshot, basePath = '
  */
 export function getRoutes(snapshot: ExportSnapshot): string[] {
   return [
-    '/',
+    '/dashboard',
     '/specs',
     '/changes',
     '/archive',
@@ -68,7 +68,7 @@ export function getRoutes(snapshot: ExportSnapshot): string[] {
  * Get page title for a route
  */
 export function getTitle(path: string, snapshot: ExportSnapshot): string {
-  if (path === '/') return 'Dashboard'
+  if (path === '/dashboard' || path === '/') return 'Dashboard'
   if (path === '/specs') return 'Specifications'
   if (path === '/changes') return 'Active Changes'
   if (path === '/archive') return 'Archived Changes'

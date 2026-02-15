@@ -15,7 +15,9 @@ import { DesktopStatusBar } from './status-bar'
 /** Root layout with responsive navigation */
 export function RootLayout() {
   const navLayout = useNavLayout()
-  const hasBottomArea = !isStaticMode() && navLayout.bottomTabs.length > 0
+  const isStatic = isStaticMode()
+  const hasMainContent = isStatic || navLayout.mainTabs.length > 0
+  const hasBottomContent = !isStatic && navLayout.bottomActive
   const [bottomHeight, setBottomHeight] = useState(300)
 
   const handleResize = useCallback((height: number) => {
@@ -31,14 +33,16 @@ export function RootLayout() {
           <CliHealthGate />
           <MobileHeader />
           <div className="flex min-h-0 flex-1 flex-col">
-            <main className="main-content view-transition-route flex min-h-0 flex-1 flex-col">
-              <Outlet />
-            </main>
-            {hasBottomArea && (
-              <>
-                <ResizeHandle onResize={handleResize} />
-                <BottomAreaRouter height={bottomHeight} />
-              </>
+            {hasMainContent && (
+              <main className={`main-content view-transition-route flex min-h-0 flex-col ${hasBottomContent ? 'flex-1' : 'flex-1'}`}>
+                <Outlet />
+              </main>
+            )}
+            {hasMainContent && hasBottomContent && (
+              <ResizeHandle onResize={handleResize} />
+            )}
+            {hasBottomContent && (
+              <BottomAreaRouter height={hasMainContent ? bottomHeight : undefined} />
             )}
           </div>
           <MobileTabBar />

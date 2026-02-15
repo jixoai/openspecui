@@ -7,6 +7,7 @@ coverage/
 .log
 .report
 tmp/
+.playwright-mcp/
 *.tgz
 
 # Example directory for E2E testing

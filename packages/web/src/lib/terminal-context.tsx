@@ -73,11 +73,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
 
   const closeSession = useCallback((id: string) => {
     terminalController.closeSession(id)
-    setActiveSessionId((prev) => {
-      if (prev !== id) return prev
-      const remaining = terminalController.getSnapshot().sessions.filter((s) => s.id !== id)
-      return remaining[remaining.length - 1]?.id ?? null
-    })
+    setActiveSessionId((prev) => (prev === id ? null : prev))
   }, [])
 
   const markExited = useCallback((_id: string, _exitCode: number) => {
@@ -90,6 +86,13 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const sessions: TerminalSession[] = snapshot.sessions
+
+  const resolvedActiveSessionId = useMemo(() => {
+    if (activeSessionId && sessions.some((s) => s.id === activeSessionId)) {
+      return activeSessionId
+    }
+    return sessions[sessions.length - 1]?.id ?? null
+  }, [activeSessionId, sessions])
 
   // Restore UI state when sessions are discovered from server after reconnect/refresh
   const hasRestoredRef = useRef(false)
@@ -129,7 +132,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const value = useMemo<TerminalContextValue>(
     () => ({
       sessions,
-      activeSessionId,
+      activeSessionId: resolvedActiveSessionId,
       createSession,
       createDedicatedSession,
       closeSession,
@@ -137,7 +140,15 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       markExited,
       setCustomTitle,
     }),
-    [sessions, activeSessionId, createSession, createDedicatedSession, closeSession, markExited, setCustomTitle]
+    [
+      sessions,
+      resolvedActiveSessionId,
+      createSession,
+      createDedicatedSession,
+      closeSession,
+      markExited,
+      setCustomTitle,
+    ]
   )
 
   return <TerminalContext value={value}>{children}</TerminalContext>

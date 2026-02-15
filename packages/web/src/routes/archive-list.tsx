@@ -18,7 +18,7 @@ export function ArchiveList() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4">
       <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
         <Archive className="h-6 w-6 shrink-0" />
         Archive

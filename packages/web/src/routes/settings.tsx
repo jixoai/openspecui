@@ -3,6 +3,7 @@ import { CopyablePath } from '@/components/copyable-path'
 import { Dialog } from '@/components/dialog'
 import { getApiBaseUrl } from '@/lib/api-config'
 import { isStaticMode } from '@/lib/static-mode'
+import { terminalController, GOOGLE_FONT_PRESETS } from '@/lib/terminal-controller'
 import { trpc, trpcClient } from '@/lib/trpc'
 import { useCliRunner } from '@/lib/use-cli-runner'
 import { useServerStatus } from '@/lib/use-server-status'
@@ -18,6 +19,7 @@ import {
   Loader2,
   Monitor,
   Moon,
+  Plus,
   Settings as SettingsIcon,
   Sun,
   Terminal,
@@ -45,6 +47,103 @@ function applyTheme(theme: Theme) {
   } else {
     root.classList.toggle('dark', theme === 'dark')
   }
+}
+
+function FontFamilyEditor({
+  value,
+  onChange,
+  onBlur,
+}: {
+  value: string
+  onChange: (v: string) => void
+  onBlur: () => void
+}) {
+  const popoverRef = useRef<HTMLDivElement>(null)
+  const [customUrl, setCustomUrl] = useState('')
+
+  const append = (entry: string) => {
+    const current = value.trim()
+    const next = current ? `${current}, ${entry}` : entry
+    onChange(next)
+  }
+
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-medium">Font Family</label>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
+          placeholder="e.g. JetBrains Mono, monospace"
+          className="bg-background border-border text-foreground flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+        <button
+          type="button"
+          popoverTarget="font-family-popover"
+          className="border-border hover:bg-muted rounded-md border px-2 py-2 transition-colors"
+          aria-label="Add font"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Popover for presets + custom URL */}
+      <div
+        id="font-family-popover"
+        ref={popoverRef}
+        popover="auto"
+        className="bg-popover text-popover-foreground border-border m-auto rounded-lg border p-4 shadow-lg backdrop:bg-black/20"
+      >
+        <div className="w-64 space-y-3">
+          <p className="text-sm font-medium">Google Fonts</p>
+          <div className="flex flex-wrap gap-1.5">
+            {GOOGLE_FONT_PRESETS.map((font) => (
+              <button
+                key={font}
+                type="button"
+                onClick={() => {
+                  append(font)
+                  popoverRef.current?.hidePopover()
+                }}
+                className="border-border hover:bg-muted rounded-md border px-2 py-1 text-xs transition-colors"
+              >
+                {font}
+              </button>
+            ))}
+          </div>
+
+          <hr className="border-border" />
+
+          <p className="text-sm font-medium">Custom Font URL</p>
+          <div className="flex gap-1.5">
+            <input
+              type="text"
+              value={customUrl}
+              onChange={(e) => setCustomUrl(e.target.value)}
+              placeholder="https://..."
+              className="bg-background border-border text-foreground min-w-0 flex-1 rounded-md border px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const url = customUrl.trim()
+                if (url) {
+                  append(url)
+                  setCustomUrl('')
+                  popoverRef.current?.hidePopover()
+                }
+              }}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-2 py-1 text-xs font-medium transition-colors"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export function Settings() {
@@ -257,6 +356,53 @@ export function Settings() {
     },
   })
 
+  // Terminal config — seed local state from controller's current config
+  const initialConfig = useMemo(() => terminalController.getConfig(), [])
+
+  const [termFontSize, setTermFontSize] = useState(initialConfig.fontSize)
+  const [termFontFamily, setTermFontFamily] = useState(initialConfig.fontFamily)
+  const [termCursorBlink, setTermCursorBlink] = useState(initialConfig.cursorBlink)
+  const [termCursorStyle, setTermCursorStyle] = useState<'block' | 'underline' | 'bar'>(initialConfig.cursorStyle)
+  const [termScrollback, setTermScrollback] = useState(initialConfig.scrollback)
+
+  // Re-sync local state when controller config changes (e.g. config.yaml edited on another page)
+  useEffect(() => {
+    const current = terminalController.getConfig()
+    setTermFontSize(current.fontSize)
+    setTermFontFamily(current.fontFamily)
+    setTermCursorBlink(current.cursorBlink)
+    setTermCursorStyle(current.cursorStyle)
+    setTermScrollback(current.scrollback)
+  }, [/* re-run when entering settings page — captured by loading state transition */])
+
+  // Apply immediately on local state change (live preview)
+  const applyTerminalConfig = useCallback((overrides: {
+    fontSize?: number
+    fontFamily?: string
+    cursorBlink?: boolean
+    cursorStyle?: 'block' | 'underline' | 'bar'
+    scrollback?: number
+  }) => {
+    terminalController.applyConfig({
+      fontSize: overrides.fontSize ?? termFontSize,
+      fontFamily: overrides.fontFamily ?? termFontFamily,
+      cursorBlink: overrides.cursorBlink ?? termCursorBlink,
+      cursorStyle: overrides.cursorStyle ?? termCursorStyle,
+      scrollback: overrides.scrollback ?? termScrollback,
+    })
+  }, [termFontSize, termFontFamily, termCursorBlink, termCursorStyle, termScrollback])
+
+  const saveTerminalConfigMutation = useMutation({
+    mutationFn: (uiConfig: Record<string, unknown>) =>
+      trpcClient.opsx.updateProjectConfigUi.mutate(uiConfig as {
+        'font-size'?: number
+        'font-families'?: string[]
+        'cursor-blink'?: boolean
+        'cursor-style'?: 'block' | 'underline' | 'bar'
+        scrollback?: number
+      }),
+  })
+
   useEffect(() => {
     applyTheme(theme)
     localStorage.setItem('theme', theme)
@@ -290,7 +436,7 @@ export function Settings() {
   }
 
   return (
-    <div className="max-w-2xl space-y-8">
+    <div className="max-w-2xl space-y-8 p-4">
       <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
         <SettingsIcon className="h-6 w-6 shrink-0" />
         Settings
@@ -342,6 +488,144 @@ export function Settings() {
       {/* Only show other sections in dynamic mode */}
       {!inStaticMode && (
         <>
+          {/* Terminal Settings */}
+          <section className="space-y-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Terminal className="h-5 w-5" />
+              Terminal
+            </h2>
+            <div className="border-border space-y-4 rounded-lg border p-4">
+              {/* Font Size */}
+              <div>
+                <label className="mb-2 block text-sm font-medium">
+                  Font Size: {termFontSize}px
+                </label>
+                <input
+                  type="range"
+                  min={8}
+                  max={32}
+                  value={termFontSize}
+                  onChange={(e) => {
+                    const v = Number(e.target.value)
+                    setTermFontSize(v)
+                    applyTerminalConfig({ fontSize: v })
+                  }}
+                  className="w-full accent-primary"
+                />
+                <div className="text-muted-foreground flex justify-between text-xs">
+                  <span>8</span>
+                  <span>32</span>
+                </div>
+              </div>
+
+              {/* Font Family */}
+              <FontFamilyEditor
+                value={termFontFamily}
+                onChange={(v) => {
+                  setTermFontFamily(v)
+                  applyTerminalConfig({ fontFamily: v })
+                }}
+                onBlur={() => applyTerminalConfig({ fontFamily: termFontFamily })}
+              />
+
+              {/* Cursor Style */}
+              <div>
+                <label className="mb-2 block text-sm font-medium">Cursor Style</label>
+                <div className="flex gap-2">
+                  {(['block', 'underline', 'bar'] as const).map((style) => (
+                    <button
+                      key={style}
+                      onClick={() => {
+                        setTermCursorStyle(style)
+                        applyTerminalConfig({ cursorStyle: style })
+                      }}
+                      className={`rounded-md border px-4 py-2 text-sm capitalize transition-colors ${
+                        termCursorStyle === style
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border hover:bg-muted'
+                      }`}
+                    >
+                      {style}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Cursor Blink */}
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Cursor Blink</label>
+                <button
+                  onClick={() => {
+                    const v = !termCursorBlink
+                    setTermCursorBlink(v)
+                    applyTerminalConfig({ cursorBlink: v })
+                  }}
+                  className={`relative h-6 w-11 rounded-full transition-colors ${
+                    termCursorBlink ? 'bg-primary' : 'bg-muted-foreground/30'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+                      termCursorBlink ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Scrollback */}
+              <div>
+                <label className="mb-2 block text-sm font-medium">
+                  Scrollback Lines: {termScrollback.toLocaleString()}
+                </label>
+                <input
+                  type="range"
+                  min={0}
+                  max={100000}
+                  step={1000}
+                  value={termScrollback}
+                  onChange={(e) => {
+                    const v = Number(e.target.value)
+                    setTermScrollback(v)
+                    applyTerminalConfig({ scrollback: v })
+                  }}
+                  className="w-full accent-primary"
+                />
+                <div className="text-muted-foreground flex justify-between text-xs">
+                  <span>0</span>
+                  <span>100,000</span>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <div className="flex justify-end">
+                <button
+                  onClick={() => {
+                    const families = termFontFamily
+                      .split(/[,]+/)
+                      .map((s) => s.trim())
+                      .filter(Boolean)
+                    saveTerminalConfigMutation.mutate({
+                      'font-size': termFontSize,
+                      'font-families': families.length > 0 ? families : undefined,
+                      'cursor-blink': termCursorBlink,
+                      'cursor-style': termCursorStyle,
+                      scrollback: termScrollback,
+                    })
+                  }}
+                  disabled={saveTerminalConfigMutation.isPending}
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition disabled:opacity-50"
+                >
+                  {saveTerminalConfigMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : saveTerminalConfigMutation.isSuccess ? (
+                    <Check className="h-4 w-4" />
+                  ) : null}
+                  {saveTerminalConfigMutation.isPending ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </section>
+
           {/* Project Directory */}
           <section className="space-y-4">
             <h2 className="text-lg font-semibold">Project Directory</h2>

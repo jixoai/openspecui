@@ -161,15 +161,15 @@ describe('NavController kernel lifecycle', () => {
     expect(nav.getLocation('bottom').pathname).toBe('/dashboard')
   })
 
-  it('closeTab only affects bottom area and deactivates when closing active bottom tab', () => {
+  it('closeTab deactivates active bottom tab without changing nav ownership', () => {
     nav = createController('/settings')
     nav.moveTab('/changes', 'bottom')
     nav.activateBottom('/changes')
 
     nav.closeTab('/changes')
 
-    expect(nav.mainTabs).toContain('/changes')
-    expect(nav.bottomTabs).not.toContain('/changes')
+    expect(nav.mainTabs).not.toContain('/changes')
+    expect(nav.bottomTabs).toContain('/changes')
     expect(nav.getLocation('main').pathname).toBe('/settings')
     expect(nav.getLocation('bottom').pathname).toBe('/')
   })

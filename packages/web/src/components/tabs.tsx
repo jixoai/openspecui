@@ -1,4 +1,4 @@
-import { Activity, useId, useMemo, useState, type ReactNode } from 'react'
+import { Activity, useId, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 
 export interface Tab {
   id: string
@@ -9,6 +9,8 @@ export interface Tab {
   unmountOnHide?: boolean
   /** Show a close button on this tab */
   closable?: boolean
+  /** Close button visibility behavior */
+  closeButtonVisibility?: 'hover' | 'always'
 }
 
 interface TabsProps {
@@ -20,6 +22,8 @@ interface TabsProps {
   onTabClose?: (id: string) => void
   /** Extra content rendered at the end of the tab bar (e.g. a "+" button) */
   actions?: ReactNode
+  /** Called when the tabs bar is double-clicked (usually on empty space) */
+  onTabBarDoubleClick?: () => void
   className?: string
 }
 
@@ -46,13 +50,6 @@ const tabsStyle = (id: string) => {
               overscroll-behavior-x: contain;
               scroll-snap-type: x mandatory;
               position: relative;
-              background-image: linear-gradient(
-                to bottom,
-                transparent,
-                transparent calc(100% - 1px),
-                var(--border) calc(100% - 1px),
-                var(--border)
-              );
               & > button {
                 scroll-snap-align: start;
                 text-align: center;
@@ -66,6 +63,15 @@ const tabsStyle = (id: string) => {
                   );
                 }
               }
+            }
+            .tabs-strip {
+              background-image: linear-gradient(
+                to bottom,
+                transparent,
+                transparent calc(100% - 1px),
+                var(--border) calc(100% - 1px),
+                var(--border)
+              );
             }
             .tabs-button::scroll-button(*) {
               position: absolute;
@@ -100,7 +106,15 @@ const tabsStyle = (id: string) => {
  * Hidden tabs are pre-rendered at lower priority and preserve their state.
  * Supports both controlled and uncontrolled active tab.
  */
-export function Tabs({ tabs, selectedTab: controlled, onTabChange, onTabClose, actions, className = '' }: TabsProps) {
+export function Tabs({
+  tabs,
+  selectedTab: controlled,
+  onTabChange,
+  onTabClose,
+  actions,
+  onTabBarDoubleClick,
+  className = '',
+}: TabsProps) {
   const [uncontrolled, setUncontrolled] = useState<string>(tabs[0]?.id ?? '')
   const activeTab = controlled ?? uncontrolled
 
@@ -116,46 +130,67 @@ export function Tabs({ tabs, selectedTab: controlled, onTabChange, onTabClose, a
   const id = useId()
 
   const style = useMemo(() => tabsStyle(id), [id])
+  const handleTabBarDoubleClick = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (!onTabBarDoubleClick) return
+    if ((e.target as HTMLElement).closest('[data-tab-item="true"]')) return
+    onTabBarDoubleClick()
+  }
 
   return (
-    <div id={id} className={`flex min-h-0 flex-1 flex-col ${className}`}>
+    <div id={id} className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${className}`}>
       {style}
-      {/* Tab buttons */}
-      <div className="tabs-button z-2 bg-background oveflow-x-auto scrollbar-none sticky top-0 flex gap-1">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => handleChange(tab.id)}
-            className={`m-0 flex h-full shrink-0 items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === tab.id
-                ? 'tab-selected text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
+      {/* Tab header: scrollable tabs + fixed actions */}
+      <div className="z-2 bg-background sticky top-0 flex min-w-0 items-stretch">
+        <div className="tabs-strip min-w-0 flex-1 px-4">
+          <div
+            className="tabs-button scrollbar-none flex min-w-0 gap-1 overflow-x-auto"
+            onDoubleClick={handleTabBarDoubleClick}
           >
-            {tab.icon}
-            {tab.label}
-            {tab.closable && onTabClose && (
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onTabClose(tab.id)
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.stopPropagation()
-                    onTabClose(tab.id)
-                  }
-                }}
-                className="text-muted-foreground hover:text-foreground -mr-1 rounded p-0.5 opacity-0 transition group-hover:opacity-100 [button:hover>&]:opacity-100"
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                data-tab-item="true"
+                onClick={() => handleChange(tab.id)}
+                className={`m-0 flex h-full shrink-0 items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === tab.id
+                    ? 'tab-selected text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-              </span>
-            )}
-          </button>
-        ))}
-        {actions}
+                {tab.icon}
+                {tab.label}
+                {tab.closable && onTabClose && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onTabClose(tab.id)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation()
+                        onTabClose(tab.id)
+                      }
+                    }}
+                    className={`text-muted-foreground hover:text-foreground -mr-1 rounded p-0.5 transition ${
+                      tab.closeButtonVisibility === 'always'
+                        ? 'opacity-100'
+                        : 'opacity-0 group-hover:opacity-100 [button:hover>&]:opacity-100'
+                    }`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+        {actions && (
+          <div className="border-border bg-background flex shrink-0 items-center border-b px-1">
+            {actions}
+          </div>
+        )}
       </div>
 
       {/* Tab content with Activity for state preservation */}

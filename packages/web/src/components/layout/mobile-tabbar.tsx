@@ -17,15 +17,15 @@ export function MobileTabBar() {
         .filter((item): item is NonNullable<typeof item> => item != null)
 
   return (
-    <nav className="mobile-tabbar h-14 border-t border-border bg-background flex items-stretch">
+    <nav className="mobile-tabbar border-border bg-background flex h-14 items-stretch border-t">
       {items.map((item) => (
         <Link
           key={item.to}
           to={item.to}
-          className="flex-1 flex flex-col items-center justify-center gap-0.5 text-muted-foreground hover:text-foreground [&.active]:text-primary"
+          className="text-muted-foreground hover:text-foreground [&.active]:text-primary flex flex-1 flex-col items-center justify-center gap-0.5"
         >
-          <item.icon className="w-5 h-5 shrink-0" />
-          <span className="text-[10px] font-nav tracking-[0.03em]">{item.label}</span>
+          <item.icon className="h-5 w-5 shrink-0" />
+          <span className="font-nav text-[10px] tracking-[0.03em]">{item.label}</span>
         </Link>
       ))}
     </nav>

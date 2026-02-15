@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 
 /** Valid top-level routes in the application */
-export type AppRoute = '/' | '/config' | '/specs' | '/changes' | '/archive' | '/settings' | '/terminal'
+export type AppRoute = '/dashboard' | '/config' | '/specs' | '/changes' | '/archive' | '/settings' | '/terminal'
 
 export interface NavItem {
   to: AppRoute
@@ -22,7 +22,7 @@ export interface NavItem {
 
 /** All navigation items — single source of truth */
 export const allNavItems: NavItem[] = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard', defaultArea: 'main' },
+  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', defaultArea: 'main' },
   { to: '/config', icon: SlidersHorizontal, label: 'Config', defaultArea: 'main' },
   { to: '/specs', icon: FileText, label: 'Specs', defaultArea: 'main' },
   { to: '/changes', icon: GitBranch, label: 'Changes', defaultArea: 'main' },

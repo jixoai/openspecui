@@ -1,53 +1,15 @@
 import { RouterProvider, type AnyRouter } from '@tanstack/react-router'
 import { Outlet } from '@tanstack/react-router'
-import { useNavLayout } from '@/lib/use-nav-controller'
-import { navController } from '@/lib/nav-controller'
-import { allNavItems } from './nav-items'
 
 /**
  * Bottom area root layout — rendered by the bottom router.
- * Shows a tab bar for bottom-area tabs + Outlet.
+ * The sidebar's bottom-area-nav acts as the tab bar, so this
+ * component only renders the Outlet.
  */
 export function BottomArea() {
-  const { bottomTabs, bottomLocation } = useNavLayout()
-
-  // Determine which bottom tab is active based on bottomLocation
-  const activeTabId = bottomTabs.find((t) =>
-    bottomLocation.pathname === t || bottomLocation.pathname.startsWith(t + '/')
-  ) ?? bottomTabs[0]
-
   return (
-    <div className="flex h-full flex-col">
-      {/* Tab bar for bottom area tabs */}
-      {bottomTabs.length > 1 && (
-        <div className="border-border bg-background flex shrink-0 items-center gap-1 border-b px-1">
-          {bottomTabs.map((tabId) => {
-            const item = allNavItems.find((n) => n.to === tabId)
-            if (!item) return null
-            const isActive = tabId === activeTabId
-            return (
-              <button
-                key={tabId}
-                type="button"
-                onClick={() => navController.activateBottom(tabId)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs transition ${
-                  isActive
-                    ? 'bg-muted text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <item.icon className="h-3.5 w-3.5" />
-                <span>{item.label}</span>
-              </button>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Route content */}
-      <div className="flex-1 min-h-0">
-        <Outlet />
-      </div>
+    <div className="flex h-full min-h-0 flex-col overflow-auto">
+      <Outlet />
     </div>
   )
 }
@@ -63,12 +25,17 @@ export function setBottomRouter(router: AnyRouter | null): void {
 /**
  * BottomAreaRouter — mounts the bottom router's RouterProvider.
  * Rendered inside root-layout when bottomTabs.length > 0.
+ * When height is provided (both areas active): fixed height, shrink-0.
+ * When height is undefined (only bottom active): flex-1, takes all space.
  */
-export function BottomAreaRouter({ height }: { height: number }) {
+export function BottomAreaRouter({ height }: { height?: number }) {
   if (!_bottomRouter) return null
 
   return (
-    <div className="bottom-area shrink-0" style={{ height, minHeight: 100 }}>
+    <div
+      className={`bottom-area min-h-0 overflow-auto ${height != null ? 'shrink-0' : 'flex-1'}`}
+      style={height != null ? { height, minHeight: 100 } : undefined}
+    >
       <RouterProvider router={_bottomRouter} />
     </div>
   )

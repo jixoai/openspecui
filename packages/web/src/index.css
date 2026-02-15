@@ -374,6 +374,11 @@
   animation: terminal-breathing 1.5s ease-in-out infinite;
 }
 
+.xterm .xterm-scrollable-element,
+.xterm .xterm-scrollable-element.xterm-mac {
+  background-color: var(--terminal) !important;
+}
+
 /* Terminal line effects */
 .terminal-shimmer {
   background-image: linear-gradient(90deg, #a1a1aa 0%, #fafafa 50%, #a1a1aa 100%);
@@ -415,11 +420,10 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 1rem;
 }
-/* Bottom area: hidden on mobile, shown on desktop */
 .bottom-area {
-  display: none;
+  display: block;
+  min-width: 0;
 }
 
 /* Desktop: sidebar layout (container width >= 768px) */
@@ -437,9 +441,6 @@
   .mobile-header,
   .mobile-tabbar {
     display: none;
-  }
-  .main-content {
-    padding: 1.5rem;
   }
   .bottom-area {
     display: block;

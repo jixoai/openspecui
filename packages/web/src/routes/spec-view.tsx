@@ -36,7 +36,7 @@ function SpecContent({
   } | null
 }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-6 p-4">
       <div className="flex items-center gap-4">
         <Link to="/specs" className="hover:bg-muted rounded-md p-2">
           <ArrowLeft className="h-5 w-5" />
