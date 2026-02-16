@@ -1,4 +1,4 @@
-import { LitElement, html, css } from 'lit'
+import { LitElement, css, html } from 'lit'
 
 const SETTINGS_KEY = 'xtermInputPanelSettings'
 
@@ -6,7 +6,9 @@ function mergeSettings(updates: Record<string, unknown>) {
   try {
     const existing = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')
     localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...existing, ...updates }))
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 /**
@@ -21,6 +23,7 @@ export class InputPanelSettings extends LitElement {
       floatingWidth: { type: Number, attribute: 'floating-width' },
       floatingHeight: { type: Number, attribute: 'floating-height' },
       vibrationIntensity: { type: Number, attribute: 'vibration-intensity' },
+      historyLimit: { type: Number, attribute: 'history-limit' },
       visible: { type: Boolean },
     }
   }
@@ -28,12 +31,15 @@ export class InputPanelSettings extends LitElement {
   static styles = css`
     :host {
       display: block;
+      height: 100%;
+      min-height: 0;
     }
 
     .overlay {
       display: none;
       position: relative;
       height: 100%;
+      min-height: 0;
       background: var(--terminal, #1a1a1a);
       flex-direction: column;
       padding: 12px;
@@ -63,7 +69,7 @@ export class InputPanelSettings extends LitElement {
       font-weight: 600;
     }
 
-    input[type="range"] {
+    input[type='range'] {
       width: 100%;
       accent-color: var(--primary, #e04a2f);
     }
@@ -73,6 +79,7 @@ export class InputPanelSettings extends LitElement {
   declare floatingWidth: number
   declare floatingHeight: number
   declare vibrationIntensity: number
+  declare historyLimit: number
   declare visible: boolean
 
   constructor() {
@@ -81,6 +88,7 @@ export class InputPanelSettings extends LitElement {
     this.floatingWidth = 60
     this.floatingHeight = 30
     this.vibrationIntensity = 50
+    this.historyLimit = 50
     this.visible = false
   }
 
@@ -100,9 +108,13 @@ export class InputPanelSettings extends LitElement {
             this.floatingHeight = data.floatingHeight
           }
         }
-        if (typeof data.vibrationIntensity === 'number') this.vibrationIntensity = data.vibrationIntensity
+        if (typeof data.vibrationIntensity === 'number')
+          this.vibrationIntensity = data.vibrationIntensity
+        if (typeof data.historyLimit === 'number') this.historyLimit = data.historyLimit
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   private _emit() {
@@ -111,6 +123,7 @@ export class InputPanelSettings extends LitElement {
       floatingWidth: this.floatingWidth,
       floatingHeight: this.floatingHeight,
       vibrationIntensity: this.vibrationIntensity,
+      historyLimit: this.historyLimit,
     })
     this.dispatchEvent(
       new CustomEvent('input-panel:settings-change', {
@@ -119,6 +132,7 @@ export class InputPanelSettings extends LitElement {
           floatingWidth: this.floatingWidth,
           floatingHeight: this.floatingHeight,
           vibrationIntensity: this.vibrationIntensity,
+          historyLimit: this.historyLimit,
         },
         bubbles: true,
         composed: true,
@@ -143,6 +157,11 @@ export class InputPanelSettings extends LitElement {
 
   private _onVibration(e: Event) {
     this.vibrationIntensity = Number((e.target as HTMLInputElement).value)
+    this._emit()
+  }
+
+  private _onHistoryLimit(e: Event) {
+    this.historyLimit = Number((e.target as HTMLInputElement).value)
     this._emit()
   }
 
@@ -202,6 +221,20 @@ export class InputPanelSettings extends LitElement {
             max="100"
             .value=${String(this.vibrationIntensity)}
             @input=${this._onVibration}
+          />
+        </div>
+
+        <div class="setting">
+          <label class="setting-label">
+            History limit
+            <span class="setting-value">${this.historyLimit}</span>
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="1000"
+            .value=${String(this.historyLimit)}
+            @input=${this._onHistoryLimit}
           />
         </div>
       </div>

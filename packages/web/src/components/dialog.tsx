@@ -1,3 +1,4 @@
+import { X } from 'lucide-react'
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 
 interface DialogProps {
@@ -138,7 +139,6 @@ export function Dialog({
             backdrop-filter: grayscale(0.5);
           }
         }
-
       `}</style>
     )
   }, [])
@@ -162,16 +162,7 @@ export function Dialog({
               className="hover:bg-muted rounded p-1"
               aria-label="Close dialog"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                className="h-4 w-4"
-                stroke="currentColor"
-                fill="none"
-                strokeWidth="2"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M6 18L18 6" />
-              </svg>
+              <X className="h-4 w-4" />
             </button>
           </div>
 

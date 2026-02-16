@@ -1,156 +1,49 @@
-import { LitElement, html, css } from 'lit'
-import { Application, Container, Graphics, Text, TextStyle, FederatedPointerEvent } from 'pixi.js'
-import { resolvePixiTheme, onThemeChange, type PixiTheme } from './pixi-theme.js'
+import { LitElement, css, html } from 'lit'
+import {
+  Application,
+  CanvasTextMetrics,
+  Container,
+  FederatedPointerEvent,
+  Graphics,
+  Text,
+  TextStyle,
+} from 'pixi.js'
+import { onThemeChange, resolvePixiTheme, type PixiTheme } from './pixi-theme.js'
+import { detectHostPlatform, type PlatformMode } from './platform.js'
+import { LAYOUTS, type KeyDef, type ModifierKey } from './virtual-keyboard-layouts.js'
 
-// --- Key definitions ---
+const KEY_PADDING = 3
+const KEY_RADIUS = 4
+const REPEAT_DELAY_MS = 400
+const REPEAT_INTERVAL_MS = 80
+const SWIPE_SHIFT_THRESHOLD = 14
+const DUAL_LABEL_MIN_SIZE = 18
+const DUAL_LABEL_MIN_RATIO = 0.92
 
-interface KeyDef {
-  label: string
-  /** Data to send. If starts with \x, sent raw. Otherwise sent as-is. */
-  data: string
-  /** Width multiplier (default 1) */
-  w?: number
-  /** Whether this is a modifier toggle */
-  modifier?: 'ctrl' | 'alt' | 'meta' | 'shift'
-  /** Shifted variant of this key */
-  shift?: { label: string; data: string }
-  /** Special action */
-  action?: 'layer-toggle'
+interface RenderedKey {
+  container: Container
+  gfx: Graphics
+  primaryText: Text
+  secondaryText: Text | null
+  def: KeyDef
+  row: number
+  col: number
+  width: number
+  height: number
 }
 
-// --- Layer 1: Terminal keys (existing) ---
-
-const TERMINAL_ROW_0: KeyDef[] = [
-  { label: 'QWERTY', data: '', action: 'layer-toggle', w: 1.5 },
-  { label: 'Tab', data: '\t', w: 1.2 },
-  { label: 'Esc', data: '\x1b', w: 1.2 },
-  { label: 'Ctrl', data: '', modifier: 'ctrl', w: 1.2 },
-  { label: 'Alt', data: '', modifier: 'alt', w: 1.2 },
-  { label: 'Meta', data: '', modifier: 'meta', w: 1.2 },
-]
-
-const TERMINAL_ROW_1: KeyDef[] = [
-  { label: '`', data: '`' },
-  { label: '~', data: '~' },
-  { label: '|', data: '|' },
-  { label: '\\', data: '\\' },
-  { label: '/', data: '/' },
-  { label: '{', data: '{' },
-  { label: '}', data: '}' },
-  { label: '[', data: '[' },
-  { label: ']', data: ']' },
-  { label: '<', data: '<' },
-  { label: '>', data: '>' },
-  { label: '_', data: '_' },
-]
-
-const TERMINAL_ROW_2: KeyDef[] = [
-  { label: '\u2190', data: '\x1b[D' },
-  { label: '\u2191', data: '\x1b[A' },
-  { label: '\u2193', data: '\x1b[B' },
-  { label: '\u2192', data: '\x1b[C' },
-  { label: 'Home', data: '\x1b[H', w: 1.3 },
-  { label: 'End', data: '\x1b[F', w: 1.3 },
-  { label: 'PgUp', data: '\x1b[5~', w: 1.3 },
-  { label: 'PgDn', data: '\x1b[6~', w: 1.3 },
-]
-
-const TERMINAL_ROW_3: KeyDef[] = [
-  { label: 'C-c', data: '\x03', w: 1.2 },
-  { label: 'C-d', data: '\x04', w: 1.2 },
-  { label: 'C-z', data: '\x1a', w: 1.2 },
-  { label: 'C-l', data: '\x0c', w: 1.2 },
-  { label: 'C-a', data: '\x01', w: 1.2 },
-  { label: 'C-r', data: '\x12', w: 1.2 },
-]
-
-const TERMINAL_ROWS = [TERMINAL_ROW_0, TERMINAL_ROW_1, TERMINAL_ROW_2, TERMINAL_ROW_3]
-
-// --- Layer 0: QWERTY keyboard ---
-
-const QWERTY_ROW_NUMBERS: KeyDef[] = [
-  { label: '1', data: '1', shift: { label: '!', data: '!' } },
-  { label: '2', data: '2', shift: { label: '@', data: '@' } },
-  { label: '3', data: '3', shift: { label: '#', data: '#' } },
-  { label: '4', data: '4', shift: { label: '$', data: '$' } },
-  { label: '5', data: '5', shift: { label: '%', data: '%' } },
-  { label: '6', data: '6', shift: { label: '^', data: '^' } },
-  { label: '7', data: '7', shift: { label: '&', data: '&' } },
-  { label: '8', data: '8', shift: { label: '*', data: '*' } },
-  { label: '9', data: '9', shift: { label: '(', data: '(' } },
-  { label: '0', data: '0', shift: { label: ')', data: ')' } },
-  { label: '-', data: '-', shift: { label: '_', data: '_' } },
-  { label: '=', data: '=', shift: { label: '+', data: '+' } },
-  { label: 'Bksp', data: '\x7f', w: 1.5 },
-]
-
-const QWERTY_ROW_1: KeyDef[] = [
-  { label: 'Tab', data: '\t', w: 1.5 },
-  { label: 'q', data: 'q', shift: { label: 'Q', data: 'Q' } },
-  { label: 'w', data: 'w', shift: { label: 'W', data: 'W' } },
-  { label: 'e', data: 'e', shift: { label: 'E', data: 'E' } },
-  { label: 'r', data: 'r', shift: { label: 'R', data: 'R' } },
-  { label: 't', data: 't', shift: { label: 'T', data: 'T' } },
-  { label: 'y', data: 'y', shift: { label: 'Y', data: 'Y' } },
-  { label: 'u', data: 'u', shift: { label: 'U', data: 'U' } },
-  { label: 'i', data: 'i', shift: { label: 'I', data: 'I' } },
-  { label: 'o', data: 'o', shift: { label: 'O', data: 'O' } },
-  { label: 'p', data: 'p', shift: { label: 'P', data: 'P' } },
-  { label: '[', data: '[', shift: { label: '{', data: '{' } },
-  { label: ']', data: ']', shift: { label: '}', data: '}' } },
-  { label: '\\', data: '\\', shift: { label: '|', data: '|' } },
-]
-
-const QWERTY_ROW_2: KeyDef[] = [
-  { label: 'Ctrl', data: '', modifier: 'ctrl', w: 1.7 },
-  { label: 'a', data: 'a', shift: { label: 'A', data: 'A' } },
-  { label: 's', data: 's', shift: { label: 'S', data: 'S' } },
-  { label: 'd', data: 'd', shift: { label: 'D', data: 'D' } },
-  { label: 'f', data: 'f', shift: { label: 'F', data: 'F' } },
-  { label: 'g', data: 'g', shift: { label: 'G', data: 'G' } },
-  { label: 'h', data: 'h', shift: { label: 'H', data: 'H' } },
-  { label: 'j', data: 'j', shift: { label: 'J', data: 'J' } },
-  { label: 'k', data: 'k', shift: { label: 'K', data: 'K' } },
-  { label: 'l', data: 'l', shift: { label: 'L', data: 'L' } },
-  { label: ';', data: ';', shift: { label: ':', data: ':' } },
-  { label: "'", data: "'", shift: { label: '"', data: '"' } },
-  { label: 'Enter', data: '\r', w: 1.7 },
-]
-
-const QWERTY_ROW_3: KeyDef[] = [
-  { label: 'Shift', data: '', modifier: 'shift', w: 2.2 },
-  { label: 'z', data: 'z', shift: { label: 'Z', data: 'Z' } },
-  { label: 'x', data: 'x', shift: { label: 'X', data: 'X' } },
-  { label: 'c', data: 'c', shift: { label: 'C', data: 'C' } },
-  { label: 'v', data: 'v', shift: { label: 'V', data: 'V' } },
-  { label: 'b', data: 'b', shift: { label: 'B', data: 'B' } },
-  { label: 'n', data: 'n', shift: { label: 'N', data: 'N' } },
-  { label: 'm', data: 'm', shift: { label: 'M', data: 'M' } },
-  { label: ',', data: ',', shift: { label: '<', data: '<' } },
-  { label: '.', data: '.', shift: { label: '>', data: '>' } },
-  { label: '/', data: '/', shift: { label: '?', data: '?' } },
-  { label: 'Shift', data: '', modifier: 'shift', w: 2.2 },
-]
-
-const QWERTY_ROW_SPACE: KeyDef[] = [
-  { label: 'Term', data: '', action: 'layer-toggle', w: 1.5 },
-  { label: 'Alt', data: '', modifier: 'alt', w: 1.2 },
-  { label: 'Meta', data: '', modifier: 'meta', w: 1.2 },
-  { label: ' ', data: ' ', w: 4 },
-  { label: 'Esc', data: '\x1b', w: 1.2 },
-  { label: '\u2190', data: '\x1b[D' },
-  { label: '\u2192', data: '\x1b[C' },
-]
-
-const QWERTY_ROWS = [QWERTY_ROW_NUMBERS, QWERTY_ROW_1, QWERTY_ROW_2, QWERTY_ROW_3, QWERTY_ROW_SPACE]
-
-// --- Component ---
+interface KeyDisplay {
+  single: string
+  top?: string
+  bottom?: string
+  topActive: boolean
+}
 
 export class VirtualKeyboardTab extends LitElement {
   static get properties() {
     return {
       floating: { type: Boolean },
-      _activeLayer: { state: true },
+      platform: { type: String, reflect: true },
     }
   }
 
@@ -164,32 +57,43 @@ export class VirtualKeyboardTab extends LitElement {
   `
 
   declare floating: boolean
-  declare _activeLayer: number
+  declare platform: PlatformMode
+
+  private _app: Application | null = null
+  private _container: Container | null = null
+  private _keys: RenderedKey[] = []
+  private _modifiers: Record<ModifierKey, boolean> = {
+    ctrl: false,
+    alt: false,
+    meta: false,
+    shift: false,
+    caps: false,
+  }
+  private _resizeObserver: ResizeObserver | null = null
+  private _theme: PixiTheme = resolvePixiTheme(this)
+  private _unsubTheme: (() => void) | null = null
+  private _repeatTimer: ReturnType<typeof setTimeout> | null = null
+  private _repeatInterval: ReturnType<typeof setInterval> | null = null
+
+  private _activeKey: RenderedKey | null = null
+  private _activeStartY = 0
+  private _activeSwipeShift = false
+  private _activePointerId: number | null = null
+  private _stickyModifierMode = false
 
   constructor() {
     super()
     this.floating = false
-    this._activeLayer = 0 // 0 = QWERTY, 1 = Terminal
+    this.platform = 'auto'
   }
-
-  private _app: Application | null = null
-  private _container: Container | null = null
-  private _keys: { container: Container; gfx: Graphics; text: Text; def: KeyDef; row: number; col: number }[] = []
-  private _modifiers = { ctrl: false, alt: false, meta: false, shift: false }
-  private _resizeObserver: ResizeObserver | null = null
-  private _theme: PixiTheme = resolvePixiTheme()
-  private _unsubTheme: (() => void) | null = null
-  private _repeatTimer: ReturnType<typeof setTimeout> | null = null
-  private _repeatInterval: ReturnType<typeof setInterval> | null = null
-  private _activeKeyDef: KeyDef | null = null
 
   async connectedCallback() {
     super.connectedCallback()
-    this._theme = resolvePixiTheme()
+    this._theme = resolvePixiTheme(this)
     this._unsubTheme = onThemeChange((theme) => {
       this._theme = theme
       this._layoutKeys()
-    })
+    }, this)
     await this.updateComplete
     await this._initPixi()
   }
@@ -201,8 +105,19 @@ export class VirtualKeyboardTab extends LitElement {
     this._resizeObserver = null
     this._unsubTheme?.()
     this._unsubTheme = null
-    this._app?.destroy(true)
+    this._app?.destroy()
     this._app = null
+    this._container = null
+    this._activeKey = null
+    this._activePointerId = null
+  }
+
+  private getRows(): KeyDef[][] {
+    const hostPlatform =
+      this.platform === 'windows' || this.platform === 'macos' || this.platform === 'common'
+        ? this.platform
+        : detectHostPlatform()
+    return LAYOUTS[hostPlatform]
   }
 
   private async _initPixi() {
@@ -221,42 +136,47 @@ export class VirtualKeyboardTab extends LitElement {
     host.appendChild(app.canvas as HTMLCanvasElement)
     this._app = app
 
-    // CSS sizing: canvas fills host
     const canvas = app.canvas as HTMLCanvasElement
     canvas.style.width = '100%'
     canvas.style.height = '100%'
     canvas.style.display = 'block'
     canvas.addEventListener('contextmenu', (e) => e.preventDefault())
-
-    // Prevent passive touch warnings
     canvas.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false })
     canvas.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false })
 
-    // Initial size
-    const w = host.clientWidth
-    const h = host.clientHeight
-    if (w > 0 && h > 0) {
-      app.renderer.resize(w, h)
+    const width = host.clientWidth
+    const height = host.clientHeight
+    if (width > 0 && height > 0) {
+      app.renderer.resize(width, height)
     }
 
     this._container = new Container()
     app.stage.addChild(this._container)
-
+    app.stage.eventMode = 'static'
+    app.stage.hitArea = app.screen
+    app.stage.on('globalpointermove', (event: FederatedPointerEvent) => {
+      this._onActivePointerMove(event)
+    })
+    app.stage.on('pointerup', () => {
+      this._onActivePointerUp()
+    })
+    app.stage.on('pointerupoutside', () => {
+      this._onActivePointerUp()
+    })
+    app.stage.on('pointercancel', () => {
+      this._onActivePointerUp()
+    })
     this._layoutKeys()
 
     this._resizeObserver = new ResizeObserver(() => {
-      const w = host.clientWidth
-      const h = host.clientHeight
-      if (w > 0 && h > 0) {
-        app.renderer.resize(w, h)
+      const nextWidth = host.clientWidth
+      const nextHeight = host.clientHeight
+      if (nextWidth > 0 && nextHeight > 0) {
+        app.renderer.resize(nextWidth, nextHeight)
         this._layoutKeys()
       }
     })
     this._resizeObserver.observe(host)
-  }
-
-  private _getRows(): KeyDef[][] {
-    return this._activeLayer === 0 ? QWERTY_ROWS : TERMINAL_ROWS
   }
 
   private _layoutKeys() {
@@ -267,174 +187,398 @@ export class VirtualKeyboardTab extends LitElement {
     container.removeChildren()
     this._keys = []
 
-    const theme = this._theme
-    const rows = this._getRows()
-    const w = app.screen.width
-    const h = app.screen.height
-    const numRows = rows.length
-    const padding = 3
-    const rowHeight = (h - padding * (numRows + 1)) / numRows
-    const keyHeight = Math.min(rowHeight, 44)
+    const rows = this.getRows()
+    const width = app.screen.width
+    const height = app.screen.height
+    const rowCount = rows.length
+    const rowHeight = (height - KEY_PADDING * (rowCount + 1)) / rowCount
 
-    for (let r = 0; r < numRows; r++) {
-      const row = rows[r]
-      const totalW = row.reduce((sum, k) => sum + (k.w ?? 1), 0)
-      const keyUnitW = (w - padding * (row.length + 1)) / totalW
-      let x = padding
+    for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+      const row = rows[rowIndex] ?? []
+      const totalUnits = row.reduce((sum, def) => sum + (def.w ?? 1), 0)
+      const keyUnitWidth = (width - KEY_PADDING * (row.length + 1)) / totalUnits
+      let x = KEY_PADDING
 
-      for (let c = 0; c < row.length; c++) {
-        const def = row[c]
-        const kw = keyUnitW * (def.w ?? 1)
-        const y = padding + r * (keyHeight + padding)
+      for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+        const def = row[colIndex]!
+        const keyWidth = keyUnitWidth * (def.w ?? 1)
+        const y = KEY_PADDING + rowIndex * (rowHeight + KEY_PADDING)
 
-        const isModifier = !!def.modifier
-        const isAction = !!def.action
-        const isActiveModifier = isModifier && this._modifiers[def.modifier!]
-
-        const gfx = new Graphics()
-        this._drawKey(gfx, 0, 0, kw, keyHeight, isActiveModifier, isModifier || isAction)
-
-        // Determine display label (shifted or normal)
-        const shiftActive = this._modifiers.shift
-        const displayLabel = (shiftActive && def.shift) ? def.shift.label : def.label
-
-        const style = new TextStyle({
-          fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-          fontSize: displayLabel.length > 3 ? 10 : 13,
-          fill: isActiveModifier ? theme.accent : theme.text,
-          align: 'center',
-        })
-        const text = new Text({ text: displayLabel, style })
-        text.anchor.set(0.5)
-        text.x = kw / 2
-        text.y = keyHeight / 2
-
-        // Wrap in Container to avoid "addChild: Only Containers" deprecation
         const keyContainer = new Container()
         keyContainer.x = x
         keyContainer.y = y
         keyContainer.eventMode = 'static'
         keyContainer.cursor = 'pointer'
+
+        const gfx = new Graphics()
         keyContainer.addChild(gfx)
-        keyContainer.addChild(text)
+
+        const primaryText = new Text({
+          text: '',
+          style: new TextStyle({
+            fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+            fontSize: 13,
+            fill: this._theme.text,
+            align: 'center',
+          }),
+        })
+        primaryText.anchor.set(0.5)
+        keyContainer.addChild(primaryText)
+
+        let secondaryText: Text | null = null
+        if (
+          this._shouldShowDualLabels(keyWidth, rowHeight) &&
+          !def.modifier &&
+          Boolean(def.shift)
+        ) {
+          primaryText.style = new TextStyle({
+            fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+            fontSize: 10,
+            fill: this._theme.text,
+            align: 'center',
+          })
+          primaryText.x = keyWidth / 2
+          primaryText.y = rowHeight * 0.35
+
+          secondaryText = new Text({
+            text: '',
+            style: new TextStyle({
+              fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+              fontSize: 10,
+              fill: this._theme.textMuted,
+              align: 'center',
+            }),
+          })
+          secondaryText.anchor.set(0.5)
+          secondaryText.x = keyWidth / 2
+          secondaryText.y = rowHeight * 0.74
+          keyContainer.addChild(secondaryText)
+        } else {
+          primaryText.x = keyWidth / 2
+          primaryText.y = rowHeight / 2
+        }
+
         container.addChild(keyContainer)
 
-        keyContainer.on('pointerdown', (e: FederatedPointerEvent) => this._onKeyDown(def, gfx, text, kw, keyHeight, e))
-        keyContainer.on('pointerup', () => this._onKeyUp(def, gfx, text, kw, keyHeight))
-        keyContainer.on('pointerupoutside', () => this._onKeyUp(def, gfx, text, kw, keyHeight))
-        // Cancel repeat when finger slides off the key (real keyboard behavior)
-        keyContainer.on('pointerleave', () => this._onKeyLeave(def, gfx, kw, keyHeight))
+        const rendered: RenderedKey = {
+          container: keyContainer,
+          gfx,
+          primaryText,
+          secondaryText,
+          def,
+          row: rowIndex,
+          col: colIndex,
+          width: keyWidth,
+          height: rowHeight,
+        }
 
-        this._keys.push({ container: keyContainer, gfx, text, def, row: r, col: c })
-        x += kw + padding
+        this._updateKeyVisual(rendered, {
+          pressed: false,
+          forceShift: false,
+        })
+
+        keyContainer.on('pointerdown', (e: FederatedPointerEvent) => {
+          this._onKeyDown(rendered, e)
+        })
+        keyContainer.on('pointermove', (e: FederatedPointerEvent) => {
+          this._onKeyMove(rendered, e)
+        })
+        keyContainer.on('pointerup', () => this._onKeyUp(rendered))
+        keyContainer.on('pointerupoutside', () => this._onKeyUp(rendered))
+        keyContainer.on('pointerleave', () => this._onKeyLeave(rendered))
+
+        this._keys.push(rendered)
+        x += keyWidth + KEY_PADDING
       }
     }
   }
 
-  private _drawKey(gfx: Graphics, x: number, y: number, w: number, h: number, pressed: boolean, isModifier: boolean) {
-    const theme = this._theme
+  private _drawKey(
+    gfx: Graphics,
+    width: number,
+    height: number,
+    options: {
+      pressed: boolean
+      modifier: boolean
+      modifierActive: boolean
+      forceShift: boolean
+    }
+  ) {
+    const { pressed, modifier, modifierActive, forceShift } = options
+    const bg = pressed
+      ? this._theme.keyPressed
+      : modifier
+        ? modifierActive
+          ? this._theme.keyPressed
+          : this._theme.keyModifier
+        : this._theme.keyNormal
+
     gfx.clear()
-    const bg = pressed ? theme.keyPressed : isModifier ? theme.keyModifier : theme.keyNormal
-    gfx.roundRect(x, y, w, h, 4)
+    gfx.roundRect(0, 0, width, height, KEY_RADIUS)
     gfx.fill({ color: bg })
-    gfx.stroke({ color: theme.surfaceBorder, width: 1 })
+    gfx.stroke({
+      color: forceShift ? this._theme.accent : this._theme.surfaceBorder,
+      width: forceShift ? 1.5 : 1,
+    })
   }
 
-  private _onKeyDown(def: KeyDef, gfx: Graphics, text: Text, kw: number, kh: number, _e: FederatedPointerEvent) {
-    if (def.action === 'layer-toggle') {
-      this._drawKey(gfx, 0, 0, kw, kh, true, true)
+  private _measureTextWidth(text: Text): number {
+    const content = typeof text.text === 'string' ? text.text : String(text.text ?? '')
+    if (!content) return 0
+    try {
+      return CanvasTextMetrics.measureText(content, text.style).width
+    } catch {
+      return text.width / Math.max(text.scale.x, 0.0001)
+    }
+  }
+
+  private _fitText(text: Text, maxWidth: number, minScale = 0.45) {
+    if (maxWidth <= 0) return
+    text.scale.set(1)
+    const width = this._measureTextWidth(text)
+    if (width <= maxWidth) {
+      return
+    }
+    const scale = Math.max(minScale, maxWidth / width)
+    text.scale.set(scale)
+  }
+
+  private _isLetterKey(def: KeyDef): boolean {
+    return def.data.length === 1 && /[a-z]/i.test(def.data)
+  }
+
+  private _shouldShowDualLabels(keyWidth: number, keyHeight: number): boolean {
+    if (keyHeight < DUAL_LABEL_MIN_SIZE) {
+      return false
+    }
+    return keyHeight / keyWidth >= DUAL_LABEL_MIN_RATIO
+  }
+
+  private _isShifted(def: KeyDef, forceShift: boolean): boolean {
+    const baseShift = this._modifiers.shift || forceShift
+    if (this._isLetterKey(def) && this._modifiers.caps) {
+      return !baseShift
+    }
+    return baseShift
+  }
+
+  private _resolveDisplay(def: KeyDef, forceShift: boolean): KeyDisplay {
+    if (this._isLetterKey(def)) {
+      const upper = def.shift?.label ?? def.label.toUpperCase()
+      const lower = def.label.toLowerCase()
+      const topActive = this._isShifted(def, forceShift)
+      return {
+        single: topActive ? upper : lower,
+        top: upper,
+        bottom: lower,
+        topActive,
+      }
+    }
+
+    if (def.shift) {
+      const topActive = this._isShifted(def, forceShift)
+      return {
+        single: topActive ? def.shift.label : def.label,
+        top: def.shift.label,
+        bottom: def.label,
+        topActive,
+      }
+    }
+
+    return {
+      single: def.label,
+      topActive: false,
+    }
+  }
+
+  private _updateKeyVisual(
+    rendered: RenderedKey,
+    options: {
+      pressed: boolean
+      forceShift: boolean
+    }
+  ) {
+    const { def, primaryText, secondaryText, gfx, width, height } = rendered
+    const modifier = Boolean(def.modifier || def.special === 'chord')
+    const modifierActive = def.modifier
+      ? this._modifiers[def.modifier]
+      : def.special === 'chord'
+        ? this._stickyModifierMode
+        : false
+    const display = this._resolveDisplay(def, options.forceShift)
+
+    this._drawKey(gfx, width, height, {
+      pressed: options.pressed,
+      modifier,
+      modifierActive,
+      forceShift: options.forceShift,
+    })
+
+    if (secondaryText && display.top && display.bottom) {
+      primaryText.text = display.top
+      secondaryText.text = display.bottom
+      this._fitText(primaryText, width - 8)
+      this._fitText(secondaryText, width - 8)
+
+      if (options.pressed) {
+        primaryText.style.fill = this._theme.accentFg
+        secondaryText.style.fill = this._theme.accentFg
+      } else if (display.topActive) {
+        primaryText.style.fill = this._theme.text
+        secondaryText.style.fill = this._theme.textMuted
+      } else {
+        primaryText.style.fill = this._theme.textMuted
+        secondaryText.style.fill = this._theme.text
+      }
+      return
+    }
+
+    primaryText.text = display.single
+    this._fitText(primaryText, width - 8)
+    if (options.pressed) {
+      primaryText.style.fill = this._theme.accentFg
+      return
+    }
+
+    if (modifierActive) {
+      primaryText.style.fill = this._theme.accent
+      return
+    }
+
+    primaryText.style.fill = this._theme.text
+  }
+
+  private _canSwipeShift(def: KeyDef): boolean {
+    return !def.modifier && (Boolean(def.shift) || this._isLetterKey(def))
+  }
+
+  private _onKeyDown(rendered: RenderedKey, event: FederatedPointerEvent) {
+    const { def } = rendered
+
+    if (def.special === 'chord') {
+      this._stickyModifierMode = !this._stickyModifierMode
+      if (!this._stickyModifierMode) {
+        this._resetTransientModifiers()
+      }
       this._vibrate(10)
+      this._layoutKeys()
       return
     }
 
     if (def.modifier) {
-      const mod = def.modifier
-      this._modifiers[mod] = !this._modifiers[mod]
-      // For shift, re-layout to show shifted labels
-      if (mod === 'shift') {
-        this._layoutKeys()
-      } else {
-        this._drawKey(gfx, 0, 0, kw, kh, this._modifiers[mod], true)
-        text.style.fill = this._modifiers[mod] ? this._theme.accent : this._theme.text
-      }
+      this._modifiers[def.modifier] = !this._modifiers[def.modifier]
       this._vibrate(10)
+      this._layoutKeys()
       return
     }
 
-    this._drawKey(gfx, 0, 0, kw, kh, true, false)
-    this._vibrate(5)
-    this._activeKeyDef = def
+    this._activeKey = rendered
+    this._setPointerCapture(event.pointerId)
+    this._activeStartY = event.global?.y ?? 0
+    this._activeSwipeShift = false
 
-    // Start key repeat for regular keys (like a real keyboard:
-    // initial delay 400ms, then repeat every 80ms)
+    this._updateKeyVisual(rendered, { pressed: true, forceShift: false })
+    this._vibrate(5)
+
     this._cancelRepeat()
     this._repeatTimer = setTimeout(() => {
       this._repeatTimer = null
       this._repeatInterval = setInterval(() => {
-        this._sendKey(def)
+        this._sendKey(def, this._activeSwipeShift)
         this._vibrate(3)
-      }, 80)
-    }, 400)
+      }, REPEAT_INTERVAL_MS)
+    }, REPEAT_DELAY_MS)
   }
 
-  /**
-   * Finger slid off the key — cancel repeat and restore key visual.
-   * Do NOT send the key (real keyboards cancel when you slide off).
-   */
-  private _onKeyLeave(def: KeyDef, gfx: Graphics, kw: number, kh: number) {
-    // Only handle the key that's actively pressed
-    if (this._activeKeyDef !== def) return
-    this._cancelRepeat()
-    this._activeKeyDef = null
-    if (!def.modifier && !def.action) {
-      this._drawKey(gfx, 0, 0, kw, kh, false, false)
-    }
+  private _onActivePointerMove(event: FederatedPointerEvent) {
+    const activeKey = this._activeKey
+    if (!activeKey) return
+    this._onKeyMove(activeKey, event)
   }
 
-  private _onKeyUp(def: KeyDef, gfx: Graphics, _text: Text, kw: number, kh: number) {
+  private _onActivePointerUp() {
+    const activeKey = this._activeKey
+    if (!activeKey) return
+    this._onKeyUp(activeKey)
+  }
+
+  private _onKeyMove(rendered: RenderedKey, event: FederatedPointerEvent) {
+    if (this._activeKey !== rendered) return
+    if (!this._canSwipeShift(rendered.def)) return
+
+    const pointerY = event.global?.y ?? this._activeStartY
+    const nextSwipeShift = this._activeStartY - pointerY >= SWIPE_SHIFT_THRESHOLD
+    if (nextSwipeShift === this._activeSwipeShift) return
+
+    this._activeSwipeShift = nextSwipeShift
+    this._updateKeyVisual(rendered, {
+      pressed: true,
+      forceShift: this._activeSwipeShift,
+    })
+  }
+
+  private _onKeyLeave(rendered: RenderedKey) {
+    if (this._activeKey !== rendered) return
+  }
+
+  private _resetTransientModifiers() {
+    if (this._stickyModifierMode) {
+      return
+    }
+    this._modifiers.ctrl = false
+    this._modifiers.alt = false
+    this._modifiers.meta = false
+    this._modifiers.shift = false
+  }
+
+  private _onKeyUp(rendered: RenderedKey) {
     this._cancelRepeat()
 
-    if (def.action === 'layer-toggle') {
-      this._activeLayer = this._activeLayer === 0 ? 1 : 0
-      this._layoutKeys()
-      this._vibrate(10)
-      return
-    }
+    if (rendered.def.modifier) return
+    if (this._activeKey !== rendered) return
 
-    if (def.modifier) return // modifiers handled in pointerdown
+    const forceShift = this._activeSwipeShift
+    this._activeKey = null
+    this._activeSwipeShift = false
 
-    // If the finger slid off (pointerleave cleared _activeKeyDef),
-    // do not send the key on release — the gesture was cancelled.
-    if (this._activeKeyDef !== def) {
-      this._activeKeyDef = null
-      return
-    }
-    this._activeKeyDef = null
+    this._updateKeyVisual(rendered, {
+      pressed: false,
+      forceShift: false,
+    })
 
-    this._drawKey(gfx, 0, 0, kw, kh, false, false)
-
-    this._sendKey(def)
-
-    // Clear modifiers after use
-    this._modifiers = { ctrl: false, alt: false, meta: false, shift: false }
+    this._sendKey(rendered.def, forceShift)
+    this._resetTransientModifiers()
     this._layoutKeys()
+    this._releasePointerCapture()
   }
 
-  /** Send a key event, applying current modifiers. */
-  private _sendKey(def: KeyDef) {
-    let data: string
-    if (this._modifiers.shift && def.shift) {
-      data = def.shift.data
-    } else {
-      data = def.data
+  private _resolveOutputData(def: KeyDef, forceShift: boolean): string {
+    if (this._isLetterKey(def)) {
+      const upper = def.shift?.data ?? def.data.toUpperCase()
+      const lower = def.data.toLowerCase()
+      return this._isShifted(def, forceShift) ? upper : lower
     }
 
-    // Apply ctrl modifier
+    if (this._isShifted(def, forceShift) && def.shift) {
+      return def.shift.data
+    }
+
+    return def.data
+  }
+
+  private _sendKey(def: KeyDef, forceShift: boolean) {
+    let data = this._resolveOutputData(def, forceShift)
+    if (!data) return
+
     if (this._modifiers.ctrl && data.length === 1) {
       const code = data.toUpperCase().charCodeAt(0) - 64
       if (code > 0 && code < 32) {
         data = String.fromCharCode(code)
       }
+    }
+
+    if (this._modifiers.alt || this._modifiers.meta) {
+      data = `\x1b${data}`
     }
 
     this.dispatchEvent(
@@ -457,9 +601,34 @@ export class VirtualKeyboardTab extends LitElement {
     }
   }
 
+  private _setPointerCapture(pointerId: number) {
+    this._activePointerId = pointerId
+    const canvas = this._app?.canvas as HTMLCanvasElement | undefined
+    if (!canvas?.setPointerCapture) return
+    try {
+      canvas.setPointerCapture(pointerId)
+    } catch {
+      // ignore pointer capture failures
+    }
+  }
+
+  private _releasePointerCapture() {
+    const pointerId = this._activePointerId
+    this._activePointerId = null
+    if (pointerId == null) return
+    const canvas = this._app?.canvas as HTMLCanvasElement | undefined
+    if (!canvas?.releasePointerCapture) return
+    try {
+      if (!canvas.hasPointerCapture?.(pointerId)) return
+      canvas.releasePointerCapture(pointerId)
+    } catch {
+      // ignore pointer capture failures
+    }
+  }
+
   private _vibrate(ms: number) {
     try {
-      navigator?.vibrate?.(ms)
+      navigator.vibrate?.(ms)
     } catch {
       // ignore
     }

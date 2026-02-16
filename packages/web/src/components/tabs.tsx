@@ -1,4 +1,12 @@
-import { Activity, useId, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
+import { X } from 'lucide-react'
+import {
+  Activity,
+  useId,
+  useMemo,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from 'react'
 
 export interface Tab {
   id: string
@@ -151,7 +159,7 @@ export function Tabs({
                 key={tab.id}
                 data-tab-item="true"
                 onClick={() => handleChange(tab.id)}
-                className={`m-0 flex h-full shrink-0 items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+                className={`m-0 flex h-full shrink-0 items-center gap-2 px-2 py-2 text-sm font-medium transition-colors ${
                   activeTab === tab.id
                     ? 'tab-selected text-foreground'
                     : 'text-muted-foreground hover:text-foreground'
@@ -179,7 +187,7 @@ export function Tabs({
                         : 'opacity-0 group-hover:opacity-100 [button:hover>&]:opacity-100'
                     }`}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    <X className="h-3 w-3" />
                   </span>
                 )}
               </button>

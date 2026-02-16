@@ -1,17 +1,23 @@
 import { Tabs, type Tab } from '@/components/tabs'
-import { useTerminalContext } from '@/lib/terminal-context'
 import { navController } from '@/lib/nav-controller'
-import { useNavLayout } from '@/lib/use-nav-controller'
+import { useTerminalContext } from '@/lib/terminal-context'
 import { terminalController } from '@/lib/terminal-controller'
+import { useNavLayout } from '@/lib/use-nav-controller'
 import { PanelBottomClose, PanelTopClose, Plus, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { XtermTerminal } from './xterm-terminal'
 
 function EditableTabLabel({
   session,
   onRename,
 }: {
-  session: { id: string; displayTitle: string; isExited: boolean; exitCode: number | null; outputActive: boolean }
+  session: {
+    id: string
+    displayTitle: string
+    isExited: boolean
+    exitCode: number | null
+    outputActive: boolean
+  }
   onRename: (id: string, title: string) => void
 }) {
   const [editing, setEditing] = useState(false)
@@ -39,7 +45,7 @@ function EditableTabLabel({
   const statusLight = (
     <span
       className={[
-        'inline-block h-1.5 w-1.5 shrink-0 rounded-full',
+        'inline-block h-2 w-2 shrink-0 rounded-full',
         session.isExited
           ? session.exitCode === 0
             ? 'bg-emerald-500'
@@ -81,11 +87,7 @@ function EditableTabLabel({
   )
 }
 
-export function TerminalPanel({
-  className,
-}: {
-  className?: string
-}) {
+export function TerminalPanel({ className }: { className?: string }) {
   const {
     sessions,
     activeSessionId,
@@ -134,6 +136,10 @@ export function TerminalPanel({
   const navLayout = useNavLayout()
   const isInBottom = navLayout.bottomTabs.includes('/terminal')
 
+  useLayoutEffect(() => {
+    terminalController.setInputPanelDefaultLayout(isInBottom ? 'floating' : 'fixed')
+  }, [isInBottom])
+
   const handleSwitchArea = useCallback(() => {
     navController.moveTab('/terminal', isInBottom ? 'main' : 'bottom')
   }, [isInBottom])
@@ -164,7 +170,11 @@ export function TerminalPanel({
         className="text-muted-foreground hover:text-foreground hover:bg-muted shrink-0 rounded-md p-1.5 transition"
         title={isInBottom ? 'Move to main area' : 'Move to bottom area'}
       >
-        {isInBottom ? <PanelTopClose className="h-3.5 w-3.5" /> : <PanelBottomClose className="h-3.5 w-3.5" />}
+        {isInBottom ? (
+          <PanelTopClose className="h-3.5 w-3.5" />
+        ) : (
+          <PanelBottomClose className="h-3.5 w-3.5" />
+        )}
       </button>
       {isInBottom && (
         <button

@@ -1,11 +1,10 @@
-import type { WebSocket } from 'ws'
 import {
   PtyClientMessageSchema,
   type PtyClientMessage,
   type PtyServerMessage,
 } from '@openspecui/core'
-import type { PtyManager } from './pty-manager.js'
-import type { PtySession } from './pty-manager.js'
+import type { WebSocket } from 'ws'
+import type { PtyManager, PtySession } from './pty-manager.js'
 
 type PtyErrorCode = 'INVALID_JSON' | 'INVALID_MESSAGE' | 'SESSION_NOT_FOUND'
 type PtyErrorMessage = {
@@ -14,7 +13,13 @@ type PtyErrorMessage = {
   message: string
   sessionId?: string
 }
-type PtyOutgoingMessage = PtyServerMessage | PtyErrorMessage
+type PtyCreatedMessage = {
+  type: 'created'
+  requestId: string
+  sessionId: string
+  platform: 'windows' | 'macos' | 'common'
+}
+type PtyOutgoingMessage = PtyServerMessage | PtyErrorMessage | PtyCreatedMessage
 
 export function createPtyWebSocketHandler(ptyManager: PtyManager) {
   return (ws: WebSocket) => {
@@ -26,11 +31,7 @@ export function createPtyWebSocketHandler(ptyManager: PtyManager) {
         ws.send(JSON.stringify(msg))
       }
     }
-    const sendError = (
-      code: PtyErrorCode,
-      message: string,
-      opts?: { sessionId?: string }
-    ) => {
+    const sendError = (code: PtyErrorCode, message: string, opts?: { sessionId?: string }) => {
       send({ type: 'error', code, message, sessionId: opts?.sessionId })
     }
 
@@ -94,7 +95,12 @@ export function createPtyWebSocketHandler(ptyManager: PtyManager) {
             args: msg.args,
           })
 
-          send({ type: 'created', requestId: msg.requestId, sessionId: session.id })
+          send({
+            type: 'created',
+            requestId: msg.requestId,
+            sessionId: session.id,
+            platform: session.platform,
+          })
           attachToSession(session)
           break
         }
@@ -140,6 +146,7 @@ export function createPtyWebSocketHandler(ptyManager: PtyManager) {
               title: s.title,
               command: s.command,
               args: s.args,
+              platform: s.platform,
               isExited: s.isExited,
               exitCode: s.exitCode,
             })),

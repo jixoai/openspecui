@@ -9,7 +9,9 @@ const meta: Meta = {
   tags: ['autodocs'],
   decorators: [
     (story) => html`
-      <div style="width: 300px; height: 250px; background: #1a1a1a; color: #fff; font-family: monospace; position: relative;">
+      <div
+        style="width: 300px; height: 250px; background: #1a1a1a; color: #fff; font-family: monospace; position: relative;"
+      >
         ${story()}
       </div>
     `,
@@ -45,7 +47,9 @@ export const SliderChange: StoryObj = {
     ></input-panel-settings>
   `,
   play: async ({ canvasElement }) => {
-    const el = canvasElement.querySelector('input-panel-settings') as HTMLElement & { updateComplete: Promise<boolean> }
+    const el = canvasElement.querySelector('input-panel-settings') as HTMLElement & {
+      updateComplete: Promise<boolean>
+    }
     await el.updateComplete
 
     const settingsHandler = fn()
@@ -53,7 +57,7 @@ export const SliderChange: StoryObj = {
 
     const shadow = el.shadowRoot!
     const ranges = shadow.querySelectorAll('input[type="range"]')
-    expect(ranges.length).toBe(3)
+    expect(ranges.length).toBe(5)
 
     // Change the first slider (fixed height)
     const fixedSlider = ranges[0] as HTMLInputElement

@@ -1,21 +1,21 @@
 /**
- * Theme bridge: reads CSS custom properties from the document,
+ * Theme bridge: reads CSS custom properties from component scope,
  * converts oklch → hex for PixiJS, and notifies components on theme changes.
  */
 
 export interface PixiTheme {
-  background: number       // --terminal
-  surface: number          // --muted
-  surfaceBorder: number    // --border
-  keyNormal: number        // slightly lighter than --muted
-  keyModifier: number      // between surface and keyNormal
-  keyPressed: number       // lighter still
-  text: number             // --foreground
-  textMuted: number        // --muted-foreground
-  accent: number           // --primary
-  accentFg: number         // --primary-foreground
-  feedbackColor: number    // --primary (for trackpad touch feedback)
-  hintText: number         // dimmed text for trackpad hints
+  background: number // --terminal
+  surface: number // --muted
+  surfaceBorder: number // --border
+  keyNormal: number // slightly lighter than --muted
+  keyModifier: number // between surface and keyNormal
+  keyPressed: number // lighter still
+  text: number // --terminal-foreground
+  textMuted: number // --muted-foreground
+  accent: number // --primary
+  accentFg: number // --primary-foreground
+  feedbackColor: number // --primary (for trackpad touch feedback)
+  hintText: number // dimmed text for trackpad hints
 }
 
 // --- oklch → hex conversion via canvas ---
@@ -53,9 +53,9 @@ export function cssColorToHex(cssColor: string): number | null {
   return null
 }
 
-/** Read a CSS custom property from :root computed style and convert to hex. */
-function cssVarToHex(varName: string, fallback: number): number {
-  const value = getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
+/** Read a CSS custom property from computed style and convert to hex. */
+function cssVarToHex(style: CSSStyleDeclaration, varName: string, fallback: number): number {
+  const value = style.getPropertyValue(varName).trim()
   if (!value) return fallback
   const hex = cssColorToHex(value)
   return hex ?? fallback
@@ -63,23 +63,32 @@ function cssVarToHex(varName: string, fallback: number): number {
 
 /** Blend two hex colors by a factor (0 = a, 1 = b). */
 export function blendHex(a: number, b: number, t: number): number {
-  const ar = (a >> 16) & 0xff, ag = (a >> 8) & 0xff, ab = a & 0xff
-  const br = (b >> 16) & 0xff, bg = (b >> 8) & 0xff, bb = b & 0xff
+  const ar = (a >> 16) & 0xff,
+    ag = (a >> 8) & 0xff,
+    ab = a & 0xff
+  const br = (b >> 16) & 0xff,
+    bg = (b >> 8) & 0xff,
+    bb = b & 0xff
   const r = Math.round(ar + (br - ar) * t)
   const g = Math.round(ag + (bg - ag) * t)
   const bl = Math.round(ab + (bb - ab) * t)
   return (r << 16) | (g << 8) | bl
 }
 
-/** Build the current PixiTheme from document CSS custom properties. */
-export function resolvePixiTheme(): PixiTheme {
-  const background = cssVarToHex('--terminal', 0x1a1a1a)
-  const surface = cssVarToHex('--muted', 0x222222)
-  const border = cssVarToHex('--border', 0x555555)
-  const fg = cssVarToHex('--foreground', 0xffffff)
-  const mutedFg = cssVarToHex('--muted-foreground', 0x888888)
-  const primary = cssVarToHex('--primary', 0xe04a2f)
-  const primaryFg = cssVarToHex('--primary-foreground', 0xffffff)
+/** Build the current PixiTheme from scoped CSS custom properties. */
+export function resolvePixiTheme(scope: Element = document.documentElement): PixiTheme {
+  const style = getComputedStyle(scope)
+  const background = cssVarToHex(style, '--terminal', 0x1a1a1a)
+  const surface = cssVarToHex(style, '--muted', 0x222222)
+  const border = cssVarToHex(style, '--border', 0x555555)
+  const fg = cssVarToHex(
+    style,
+    '--terminal-foreground',
+    cssVarToHex(style, '--foreground', 0xffffff)
+  )
+  const mutedFg = cssVarToHex(style, '--muted-foreground', 0x888888)
+  const primary = cssVarToHex(style, '--primary', 0xe04a2f)
+  const primaryFg = cssVarToHex(style, '--primary-foreground', 0xffffff)
 
   // Derive key colors from surface
   const keyNormal = blendHex(surface, fg, 0.12)
@@ -106,14 +115,18 @@ export function resolvePixiTheme(): PixiTheme {
 
 type ThemeCallback = (theme: PixiTheme) => void
 
-const subscribers = new Set<ThemeCallback>()
+interface ThemeSubscriber {
+  callback: ThemeCallback
+  scope: Element
+}
+
+const subscribers = new Set<ThemeSubscriber>()
 let observer: MutationObserver | null = null
 let mediaQuery: MediaQueryList | null = null
 
 function notifyAll(): void {
-  const theme = resolvePixiTheme()
-  for (const cb of subscribers) {
-    cb(theme)
+  for (const subscriber of subscribers) {
+    subscriber.callback(resolvePixiTheme(subscriber.scope))
   }
 }
 
@@ -152,11 +165,15 @@ function maybeCleanupObserver(): void {
 }
 
 /** Subscribe to theme changes. Returns an unsubscribe function. */
-export function onThemeChange(callback: ThemeCallback): () => void {
-  subscribers.add(callback)
+export function onThemeChange(
+  callback: ThemeCallback,
+  scope: Element = document.documentElement
+): () => void {
+  const subscriber: ThemeSubscriber = { callback, scope }
+  subscribers.add(subscriber)
   ensureObserver()
   return () => {
-    subscribers.delete(callback)
+    subscribers.delete(subscriber)
     maybeCleanupObserver()
   }
 }

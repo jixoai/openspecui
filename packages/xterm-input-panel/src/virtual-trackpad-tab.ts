@@ -1,6 +1,6 @@
-import { LitElement, html, css } from 'lit'
-import { Application, Graphics, Text, TextStyle, Container } from 'pixi.js'
-import { resolvePixiTheme, onThemeChange, type PixiTheme } from './pixi-theme.js'
+import { LitElement, css, html } from 'lit'
+import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js'
+import { onThemeChange, resolvePixiTheme, type PixiTheme } from './pixi-theme.js'
 
 // Gesture thresholds
 const DRAG_THRESHOLD = 8
@@ -9,9 +9,9 @@ const DOUBLE_TAP_MS = 300
 const SCROLL_STEP = 20
 
 // Edge zone infinite sliding
-const EDGE_TICK_MS = 16     // ~60fps emission rate during infinite slide
-const EDGE_MIN_SPEED = 1    // px/tick at zone boundary (depth=0)
-const EDGE_MAX_SPEED = 12   // px/tick at actual edge (depth=1)
+const EDGE_TICK_MS = 16 // ~60fps emission rate during infinite slide
+const EDGE_MIN_SPEED = 1 // px/tick at zone boundary (depth=0)
+const EDGE_MAX_SPEED = 12 // px/tick at actual edge (depth=1)
 
 // Edge zone adaptive sizing: clamp(minPx, pct * min(w,h), maxPx)
 const EDGE_MIN_PX = 20
@@ -81,7 +81,7 @@ export class VirtualTrackpadTab extends LitElement {
   private _container: Container | null = null
   private _feedbackGfx: Graphics | null = null
   private _resizeObserver: ResizeObserver | null = null
-  private _theme: PixiTheme = resolvePixiTheme()
+  private _theme: PixiTheme = resolvePixiTheme(this)
   private _unsubTheme: (() => void) | null = null
 
   // Gesture state
@@ -105,13 +105,13 @@ export class VirtualTrackpadTab extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback()
-    this._theme = resolvePixiTheme()
+    this._theme = resolvePixiTheme(this)
     this._syncAccentRgb()
     this._unsubTheme = onThemeChange((theme) => {
       this._theme = theme
       this._syncAccentRgb()
       this._drawSurface()
-    })
+    }, this)
     await this.updateComplete
     await this._initPixi()
   }
@@ -124,8 +124,9 @@ export class VirtualTrackpadTab extends LitElement {
     this._resizeObserver = null
     this._unsubTheme?.()
     this._unsubTheme = null
-    this._app?.destroy(true)
+    this._app?.destroy()
     this._app = null
+    this._container = null
   }
 
   /** Cache accent color as "r,g,b" string for box-shadow rgba(). */
@@ -333,7 +334,7 @@ export class VirtualTrackpadTab extends LitElement {
     this._isDragging = false
 
     // Is this the second touch of a double-tap sequence?
-    this._isSecondTouch = (now - this._lastTapTime) < DOUBLE_TAP_MS
+    this._isSecondTouch = now - this._lastTapTime < DOUBLE_TAP_MS
 
     this._showFeedback(x, y)
 
@@ -432,7 +433,10 @@ export class VirtualTrackpadTab extends LitElement {
 
   // --- Edge zone helpers ---
 
-  private _getEdgeDepths(x: number, y: number): { left: number; right: number; top: number; bottom: number } {
+  private _getEdgeDepths(
+    x: number,
+    y: number
+  ): { left: number; right: number; top: number; bottom: number } {
     const app = this._app
     if (!app) return { left: 0, right: 0, top: 0, bottom: 0 }
 
@@ -444,9 +448,9 @@ export class VirtualTrackpadTab extends LitElement {
     const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 
     return {
-      left:   clamp01((edge - (x - pad)) / edge),
-      right:  clamp01((edge - (w - pad - x)) / edge),
-      top:    clamp01((edge - (y - pad)) / edge),
+      left: clamp01((edge - (x - pad)) / edge),
+      right: clamp01((edge - (w - pad - x)) / edge),
+      top: clamp01((edge - (y - pad)) / edge),
       bottom: clamp01((edge - (h - pad - y)) / edge),
     }
   }
@@ -510,9 +514,7 @@ export class VirtualTrackpadTab extends LitElement {
   // --- General helpers ---
 
   private _dispatch(name: string, detail: Record<string, unknown>) {
-    this.dispatchEvent(
-      new CustomEvent(name, { detail, bubbles: true, composed: true })
-    )
+    this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }))
   }
 
   private _cancelLongPress() {

@@ -1,5 +1,6 @@
 import { LitElement, css, html } from 'lit'
 import {
+  iconCombine,
   iconKeyboard,
   iconMove,
   iconPin,
@@ -9,13 +10,13 @@ import {
   iconX,
 } from './icons.js'
 
-export type InputPanelTab = 'input' | 'keys' | 'trackpad' | 'settings'
+export type InputPanelTab = 'input' | 'keys' | 'shortcuts' | 'trackpad' | 'settings'
 export type InputPanelLayout = 'fixed' | 'floating'
 
 interface FloatingGeometry {
-  leftPct: number   // 0-100, vw%
-  topPct: number    // 0-100, vh%
-  widthPct: number  // 20-95, vw%
+  leftPct: number // 0-100, vw%
+  topPct: number // 0-100, vh%
+  widthPct: number // 20-95, vw%
   heightPct: number // 15-85, vh%
 }
 
@@ -30,13 +31,17 @@ function mergeSettings(updates: Record<string, unknown>) {
   try {
     const existing = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')
     localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...existing, ...updates }))
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 function loadSettings(): Record<string, unknown> {
   try {
     return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')
-  } catch { return {} }
+  } catch {
+    return {}
+  }
 }
 
 /**
@@ -52,6 +57,8 @@ export class InputPanel extends LitElement {
     return {
       activeTab: { type: String, attribute: 'active-tab' },
       layout: { type: String, reflect: true },
+      fixedHeight: { type: Number, attribute: 'fixed-height' },
+      historyLimit: { type: Number, attribute: 'history-limit' },
     }
   }
 
@@ -59,6 +66,32 @@ export class InputPanel extends LitElement {
     :host {
       display: flex;
       flex-direction: column;
+      --input-panel-fixed-height: 250px;
+      --_ip-bg: var(--input-panel-background, var(--terminal, var(--background, #1a1a1a)));
+      --_ip-fg: var(
+        --input-panel-foreground,
+        var(--terminal-foreground, var(--foreground, #ffffff))
+      );
+      --_ip-primary: var(--input-panel-primary, var(--primary, #e04a2f));
+      --_ip-primary-fg: var(--input-panel-primary-foreground, var(--primary-foreground, #ffffff));
+      --_ip-border: var(--input-panel-border, color-mix(in srgb, var(--_ip-fg) 24%, transparent));
+      --_ip-muted: var(
+        --input-panel-muted,
+        color-mix(in srgb, var(--_ip-bg) 86%, var(--_ip-fg) 14%)
+      );
+      --_ip-muted-fg: var(
+        --input-panel-muted-foreground,
+        color-mix(in srgb, var(--_ip-fg) 62%, transparent)
+      );
+      --background: var(--_ip-bg);
+      --foreground: var(--_ip-fg);
+      --primary: var(--_ip-primary);
+      --primary-foreground: var(--_ip-primary-fg);
+      --border: var(--_ip-border);
+      --muted: var(--_ip-muted);
+      --muted-foreground: var(--_ip-muted-fg);
+      --terminal: var(--_ip-bg);
+      --terminal-foreground: var(--_ip-fg);
       font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
       font-size: 13px;
       color: var(--foreground, #fff);
@@ -67,6 +100,13 @@ export class InputPanel extends LitElement {
 
     :host([layout='floating']) {
       display: contents;
+    }
+
+    :host([layout='fixed']) {
+      height: var(--input-panel-fixed-height);
+      min-height: 150px;
+      max-height: 500px;
+      border-top: 1px solid var(--primary, #e04a2f) !important;
     }
 
     :host([layout='floating']) .toolbar {
@@ -84,7 +124,6 @@ export class InputPanel extends LitElement {
       gap: 2px;
       padding: 4px 8px;
       border-bottom: 1px solid var(--border, #333);
-      min-height: 36px;
       flex-shrink: 0;
     }
 
@@ -162,8 +201,13 @@ export class InputPanel extends LitElement {
     }
 
     @keyframes breathing {
-      0%, 100% { opacity: 0.05; }
-      50% { opacity: 0.5; }
+      0%,
+      100% {
+        opacity: 0.5;
+      }
+      50% {
+        opacity: 0.05;
+      }
     }
 
     /* Fix 7: breathing animation on entire panel (including toolbar) */
@@ -180,18 +224,11 @@ export class InputPanel extends LitElement {
       background: var(--background, #1a1a1a);
       color: var(--foreground, #fff);
       overflow: hidden;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
       display: flex;
       flex-direction: column;
       font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
       font-size: 13px;
-    }
-
-    .backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.3);
-      z-index: 9998;
     }
 
     .panel-dialog {
@@ -208,37 +245,90 @@ export class InputPanel extends LitElement {
       border: 1.5px solid var(--muted-foreground, #888);
       border-color: transparent;
       opacity: 0.4;
-      transition: border-color 0.15s, opacity 0.15s;
+      transition:
+        border-color 0.15s,
+        opacity 0.15s;
     }
-    .resize-tl { top: 2px; left: 2px; cursor: nwse-resize; border-top-color: var(--muted-foreground, #888); border-left-color: var(--muted-foreground, #888); border-top-left-radius: 4px; }
-    .resize-tr { top: 2px; right: 2px; cursor: nesw-resize; border-top-color: var(--muted-foreground, #888); border-right-color: var(--muted-foreground, #888); border-top-right-radius: 4px; }
-    .resize-bl { bottom: 2px; left: 2px; cursor: nesw-resize; border-bottom-color: var(--muted-foreground, #888); border-left-color: var(--muted-foreground, #888); border-bottom-left-radius: 4px; }
-    .resize-br { bottom: 2px; right: 2px; cursor: nwse-resize; border-bottom-color: var(--muted-foreground, #888); border-right-color: var(--muted-foreground, #888); border-bottom-right-radius: 4px; }
+    .resize-tl {
+      top: 2px;
+      left: 2px;
+      cursor: nwse-resize;
+      border-top-color: var(--muted-foreground, #888);
+      border-left-color: var(--muted-foreground, #888);
+      border-top-left-radius: 4px;
+    }
+    .resize-tr {
+      top: 2px;
+      right: 2px;
+      cursor: nesw-resize;
+      border-top-color: var(--muted-foreground, #888);
+      border-right-color: var(--muted-foreground, #888);
+      border-top-right-radius: 4px;
+    }
+    .resize-bl {
+      bottom: 2px;
+      left: 2px;
+      cursor: nesw-resize;
+      border-bottom-color: var(--muted-foreground, #888);
+      border-left-color: var(--muted-foreground, #888);
+      border-bottom-left-radius: 4px;
+    }
+    .resize-br {
+      bottom: 2px;
+      right: 2px;
+      cursor: nwse-resize;
+      border-bottom-color: var(--muted-foreground, #888);
+      border-right-color: var(--muted-foreground, #888);
+      border-bottom-right-radius: 4px;
+    }
 
     /* Highlight on hover or while interacting */
     :host([data-interacting]) .resize-tl,
-    .resize-tl:hover { border-top-color: var(--primary, #e04a2f); border-left-color: var(--primary, #e04a2f); opacity: 1; }
+    .resize-tl:hover {
+      border-top-color: var(--primary, #e04a2f);
+      border-left-color: var(--primary, #e04a2f);
+      opacity: 1;
+    }
     :host([data-interacting]) .resize-tr,
-    .resize-tr:hover { border-top-color: var(--primary, #e04a2f); border-right-color: var(--primary, #e04a2f); opacity: 1; }
+    .resize-tr:hover {
+      border-top-color: var(--primary, #e04a2f);
+      border-right-color: var(--primary, #e04a2f);
+      opacity: 1;
+    }
     :host([data-interacting]) .resize-bl,
-    .resize-bl:hover { border-bottom-color: var(--primary, #e04a2f); border-left-color: var(--primary, #e04a2f); opacity: 1; }
+    .resize-bl:hover {
+      border-bottom-color: var(--primary, #e04a2f);
+      border-left-color: var(--primary, #e04a2f);
+      opacity: 1;
+    }
     :host([data-interacting]) .resize-br,
-    .resize-br:hover { border-bottom-color: var(--primary, #e04a2f); border-right-color: var(--primary, #e04a2f); opacity: 1; }
+    .resize-br:hover {
+      border-bottom-color: var(--primary, #e04a2f);
+      border-right-color: var(--primary, #e04a2f);
+      opacity: 1;
+    }
   `
 
   declare activeTab: InputPanelTab
   declare layout: InputPanelLayout
+  declare fixedHeight: number
+  declare historyLimit: number
 
   private _dragState: {
-    startX: number; startY: number
-    origLeft: number; origTop: number
+    startX: number
+    startY: number
+    origLeft: number
+    origTop: number
   } | null = null
 
   private _resizeState: {
     corner: 'tl' | 'tr' | 'bl' | 'br'
-    startX: number; startY: number
-    origLeft: number; origTop: number
-    origWidth: number; origHeight: number
+    startX: number
+    startY: number
+    origLeft: number
+    origTop: number
+    origWidth: number
+    origHeight: number
   } | null = null
 
   private _geo: FloatingGeometry = this._defaultGeometry()
@@ -251,6 +341,8 @@ export class InputPanel extends LitElement {
     super()
     this.activeTab = 'input'
     this.layout = 'floating'
+    this.fixedHeight = 250
+    this.historyLimit = 50
   }
 
   connectedCallback() {
@@ -262,7 +354,9 @@ export class InputPanel extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback()
-    this.dispatchEvent(new CustomEvent('input-panel:disconnected', { bubbles: true, composed: true }))
+    this.dispatchEvent(
+      new CustomEvent('input-panel:disconnected', { bubbles: true, composed: true })
+    )
     window.removeEventListener('resize', this._boundOnWindowResize)
     document.removeEventListener('pointermove', this._boundOnResizeMove)
     document.removeEventListener('pointerup', this._boundOnResizeEnd)
@@ -282,10 +376,14 @@ export class InputPanel extends LitElement {
 
   private _loadGeometry() {
     const data = loadSettings()
-    const hasGeo = typeof data.floatingLeft === 'number'
-      && typeof data.floatingTop === 'number'
-      && typeof data.floatingWidth === 'number'
-      && typeof data.floatingHeight === 'number'
+    this._setFixedHeight(typeof data.fixedHeight === 'number' ? data.fixedHeight : 250)
+    this._setHistoryLimit(typeof data.historyLimit === 'number' ? data.historyLimit : 50)
+
+    const hasGeo =
+      typeof data.floatingLeft === 'number' &&
+      typeof data.floatingTop === 'number' &&
+      typeof data.floatingWidth === 'number' &&
+      typeof data.floatingHeight === 'number'
     if (hasGeo) {
       let h = data.floatingHeight as number
       // Backward compat: if > 100 treat as px
@@ -301,6 +399,16 @@ export class InputPanel extends LitElement {
     }
   }
 
+  private _setFixedHeight(nextHeight: number) {
+    const normalized = Math.max(150, Math.min(500, Math.round(nextHeight)))
+    this.fixedHeight = normalized
+    this.style.setProperty('--input-panel-fixed-height', `${normalized}px`)
+  }
+
+  private _setHistoryLimit(nextLimit: number) {
+    this.historyLimit = Math.max(1, Math.min(1000, Math.round(nextLimit)))
+  }
+
   private _saveGeometry() {
     mergeSettings({
       floatingLeft: Math.round(this._geo.leftPct * 10) / 10,
@@ -311,8 +419,10 @@ export class InputPanel extends LitElement {
   }
 
   private _clampPosition(leftPx: number, topPx: number, wPx: number, hPx: number) {
-    const vw = window.innerWidth, vh = window.innerHeight
-    const maxOverX = wPx / 3, maxOverY = hPx / 3
+    const vw = window.innerWidth,
+      vh = window.innerHeight
+    const maxOverX = wPx / 3,
+      maxOverY = hPx / 3
     return {
       left: Math.max(-maxOverX, Math.min(vw - wPx + maxOverX, leftPx)),
       // Top edge: never go above 0 — toolbar must stay accessible for dragging
@@ -322,7 +432,8 @@ export class InputPanel extends LitElement {
 
   private _applyGeometry(dialog: HTMLDialogElement) {
     const geo = this._geo
-    const vw = window.innerWidth, vh = window.innerHeight
+    const vw = window.innerWidth,
+      vh = window.innerHeight
 
     // Enforce dynamic min % based on pixel minimums
     const minWidthPct = Math.max(20, (MIN_WIDTH_PX / vw) * 100)
@@ -401,6 +512,9 @@ export class InputPanel extends LitElement {
 
   updated(changed: Map<string, unknown>) {
     super.updated(changed)
+    if (changed.has('fixedHeight')) {
+      this.style.setProperty('--input-panel-fixed-height', `${this.fixedHeight}px`)
+    }
     if (this.layout === 'floating') {
       const dialog = this.shadowRoot?.querySelector('.panel-dialog') as HTMLDialogElement | null
       if (dialog) {
@@ -452,7 +566,8 @@ export class InputPanel extends LitElement {
     const { left, top } = this._clampPosition(
       this._dragState.origLeft + dx,
       this._dragState.origTop + dy,
-      wPx, hPx
+      wPx,
+      hPx
     )
 
     dialog.style.transform = 'none'
@@ -508,9 +623,13 @@ export class InputPanel extends LitElement {
     const { corner, startX, startY, origLeft, origTop, origWidth, origHeight } = this._resizeState
     const dx = e.clientX - startX
     const dy = e.clientY - startY
-    const vw = window.innerWidth, vh = window.innerHeight
+    const vw = window.innerWidth,
+      vh = window.innerHeight
 
-    let newLeft = origLeft, newTop = origTop, newWidth = origWidth, newHeight = origHeight
+    let newLeft = origLeft,
+      newTop = origTop,
+      newWidth = origWidth,
+      newHeight = origHeight
 
     if (corner === 'br') {
       newWidth = origWidth + dx
@@ -523,7 +642,8 @@ export class InputPanel extends LitElement {
       newTop = origTop + dy
       newWidth = origWidth + dx
       newHeight = origHeight - dy
-    } else { // tl
+    } else {
+      // tl
       newLeft = origLeft + dx
       newTop = origTop + dy
       newWidth = origWidth - dx
@@ -563,7 +683,8 @@ export class InputPanel extends LitElement {
     const dialog = this.shadowRoot?.querySelector('.panel-dialog') as HTMLDialogElement | null
     if (dialog) {
       const rect = dialog.getBoundingClientRect()
-      const vw = window.innerWidth, vh = window.innerHeight
+      const vw = window.innerWidth,
+        vh = window.innerHeight
       this._geo = {
         leftPct: (rect.left / vw) * 100,
         topPct: (rect.top / vh) * 100,
@@ -579,10 +700,11 @@ export class InputPanel extends LitElement {
     this.dispatchEvent(
       new CustomEvent('input-panel:settings-change', {
         detail: {
-          fixedHeight: loadSettings().fixedHeight ?? 250,
+          fixedHeight: this.fixedHeight,
           floatingWidth: Math.round(this._geo.widthPct),
           floatingHeight: Math.round(this._geo.heightPct),
           vibrationIntensity: loadSettings().vibrationIntensity ?? 50,
+          historyLimit: this.historyLimit,
         },
         bubbles: true,
         composed: true,
@@ -592,6 +714,12 @@ export class InputPanel extends LitElement {
 
   private _onSettingsChange(e: Event) {
     const detail = (e as CustomEvent).detail
+    if (typeof detail.fixedHeight === 'number') {
+      this._setFixedHeight(detail.fixedHeight)
+    }
+    if (typeof detail.historyLimit === 'number') {
+      this._setHistoryLimit(detail.historyLimit)
+    }
     if (typeof detail.floatingWidth === 'number') {
       this._geo.widthPct = detail.floatingWidth
     }
@@ -601,12 +729,14 @@ export class InputPanel extends LitElement {
     this._saveGeometry()
     const dialog = this.shadowRoot?.querySelector('.panel-dialog') as HTMLDialogElement | null
     if (dialog) this._applyGeometry(dialog)
+    this._dispatchSettingsChange()
   }
 
   render() {
     const tabs: { id: InputPanelTab; label: string; icon: SVGElement }[] = [
       { id: 'input', label: 'Input', icon: iconType() },
       { id: 'keys', label: 'Keys', icon: iconKeyboard() },
+      { id: 'shortcuts', label: 'Shortcuts', icon: iconCombine() },
       { id: 'trackpad', label: 'Trackpad', icon: iconMove() },
       { id: 'settings', label: 'Settings', icon: iconSettings() },
     ]
@@ -644,7 +774,10 @@ export class InputPanel extends LitElement {
       </div>
       <div class="content" part="content">
         ${this.activeTab === 'settings'
-          ? html`<input-panel-settings visible
+          ? html`<input-panel-settings
+              visible
+              fixed-height=${this.fixedHeight}
+              history-limit=${this.historyLimit}
               floating-width=${Math.round(this._geo.widthPct)}
               floating-height=${Math.round(this._geo.heightPct)}
               @input-panel:settings-change=${(e: Event) => this._onSettingsChange(e)}
@@ -654,15 +787,25 @@ export class InputPanel extends LitElement {
     `
 
     if (this.layout === 'floating') {
-      return html`
-        <div class="backdrop" @click=${this._close}></div>
-        <dialog class="panel-dialog">
-          <div class="resize-handle resize-tl" @pointerdown=${(e: PointerEvent) => this._onResizeStart(e, 'tl')}></div>
-          <div class="resize-handle resize-tr" @pointerdown=${(e: PointerEvent) => this._onResizeStart(e, 'tr')}></div>
-          <div class="resize-handle resize-bl" @pointerdown=${(e: PointerEvent) => this._onResizeStart(e, 'bl')}></div>
-          <div class="resize-handle resize-br" @pointerdown=${(e: PointerEvent) => this._onResizeStart(e, 'br')}></div>
-          ${inner}
-        </dialog>`
+      return html` <dialog class="panel-dialog">
+        <div
+          class="resize-handle resize-tl"
+          @pointerdown=${(e: PointerEvent) => this._onResizeStart(e, 'tl')}
+        ></div>
+        <div
+          class="resize-handle resize-tr"
+          @pointerdown=${(e: PointerEvent) => this._onResizeStart(e, 'tr')}
+        ></div>
+        <div
+          class="resize-handle resize-bl"
+          @pointerdown=${(e: PointerEvent) => this._onResizeStart(e, 'bl')}
+        ></div>
+        <div
+          class="resize-handle resize-br"
+          @pointerdown=${(e: PointerEvent) => this._onResizeStart(e, 'br')}
+        ></div>
+        ${inner}
+      </dialog>`
     }
 
     return inner

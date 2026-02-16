@@ -73,6 +73,14 @@ class MockInputPanelAddon {
   attachListeners(): void {
     // noop
   }
+
+  setPlatform(_platform: 'windows' | 'macos' | 'common'): void {
+    // noop
+  }
+
+  setDefaultLayout(_layout: 'fixed' | 'floating'): void {
+    // noop
+  }
 }
 
 vi.mock('@xterm/xterm', () => ({
@@ -139,6 +147,16 @@ function parseSent(ws: MockWebSocket): Array<Record<string, unknown>> {
   return ws.sent.map((raw) => JSON.parse(raw) as Record<string, unknown>)
 }
 
+function getPtySockets(): MockWebSocket[] {
+  return MockWebSocket.instances.filter((ws) => ws.url.includes('/ws/pty'))
+}
+
+function getPtySocket(index: number): MockWebSocket {
+  const ws = getPtySockets()[index]
+  expect(ws).toBeDefined()
+  return ws as MockWebSocket
+}
+
 async function loadTerminalController() {
   vi.resetModules()
   const mod = await import('./terminal-controller')
@@ -161,12 +179,11 @@ describe('terminal-controller PTY behavior', () => {
   it('maps local requestId to server sessionId for PTY input', async () => {
     const terminalController = await loadTerminalController()
     const unsubscribe = terminalController.subscribe(() => {})
-    const ws = MockWebSocket.instances[0]
-    expect(ws).toBeDefined()
+    const ws = getPtySocket(0)
     ws.emitOpen()
 
     const localId = terminalController.createSession()
-    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-100' })
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-100', platform: 'common' })
     terminalController.writeToSession(localId, 'echo hi\n')
 
     const sent = parseSent(ws)
@@ -180,18 +197,17 @@ describe('terminal-controller PTY behavior', () => {
   it('flushes explicit close after reconnect when close happens offline', async () => {
     const terminalController = await loadTerminalController()
     const unsubscribe = terminalController.subscribe(() => {})
-    const ws1 = MockWebSocket.instances[0]
+    const ws1 = getPtySocket(0)
     ws1.emitOpen()
 
     const localId = terminalController.createSession()
-    ws1.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-200' })
+    ws1.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-200', platform: 'common' })
 
     ws1.close()
     terminalController.closeSession(localId)
 
     vi.advanceTimersByTime(1000)
-    const ws2 = MockWebSocket.instances[1]
-    expect(ws2).toBeDefined()
+    const ws2 = getPtySocket(1)
     ws2.emitOpen()
 
     const sent2 = parseSent(ws2)
@@ -203,15 +219,15 @@ describe('terminal-controller PTY behavior', () => {
   it('re-attaches existing session on reconnect after list discovery', async () => {
     const terminalController = await loadTerminalController()
     const unsubscribe = terminalController.subscribe(() => {})
-    const ws1 = MockWebSocket.instances[0]
+    const ws1 = getPtySocket(0)
     ws1.emitOpen()
 
     const localId = terminalController.createSession()
-    ws1.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-300' })
+    ws1.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-300', platform: 'common' })
 
     ws1.close()
     vi.advanceTimersByTime(1000)
-    const ws2 = MockWebSocket.instances[1]
+    const ws2 = getPtySocket(1)
     ws2.emitOpen()
     ws2.emitJson({
       type: 'list',
@@ -221,6 +237,7 @@ describe('terminal-controller PTY behavior', () => {
           title: 'bash',
           command: '/bin/bash',
           args: [],
+          platform: 'common',
           isExited: false,
           exitCode: null,
         },
@@ -237,11 +254,11 @@ describe('terminal-controller PTY behavior', () => {
   it('closes exited session when user presses any key', async () => {
     const terminalController = await loadTerminalController()
     const unsubscribe = terminalController.subscribe(() => {})
-    const ws = MockWebSocket.instances[0]
+    const ws = getPtySocket(0)
     ws.emitOpen()
 
     const localId = terminalController.createSession()
-    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-400' })
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-400', platform: 'common' })
     ws.emitJson({ type: 'exit', sessionId: 'pty-400', exitCode: 0 })
 
     const terminal = MockTerminal.instances.at(-1)

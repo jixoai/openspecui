@@ -1,20 +1,28 @@
-import type { Terminal, ITerminalAddon } from '@xterm/xterm'
+import type { ITerminalAddon, Terminal } from '@xterm/xterm'
+import { iconKeyboard, iconMousePointer2 } from './icons.js'
+import type { InputPanelLayout } from './input-panel.js'
+import type { HostPlatform } from './platform.js'
 
 const SENSITIVITY = 1.5
 const EDGE_SCROLL_ZONE = 30
 const EDGE_SCROLL_INTERVAL = 50
 const EDGE_SCROLL_OVERSHOOT = 15
 
-// Cursor SVG (same as TerminalCursorOverlay)
-const CURSOR_SVG = `<svg width="20" height="24" viewBox="0 0 20 24">
-  <path d="M2,2 L2,18 L7,14 L11,22 L14,20 L10,13 L16,13 Z" fill="white" stroke="black" stroke-width="1.5"/>
-</svg>`
-
-// Lucide Keyboard icon
-const KEYBOARD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2" ry="2"/><path d="M6 8h.001"/><path d="M10 8h.001"/><path d="M14 8h.001"/><path d="M18 8h.001"/><path d="M8 12h.001"/><path d="M12 12h.001"/><path d="M16 12h.001"/><path d="M7 16h10"/></svg>`
-
 function isTouchDevice(): boolean {
   return 'ontouchstart' in window || navigator.maxTouchPoints > 0
+}
+
+export interface InputPanelHistoryItem {
+  text: string
+  time: number
+}
+
+export interface InputPanelSettingsPayload {
+  fixedHeight: number
+  floatingWidth: number
+  floatingHeight: number
+  vibrationIntensity: number
+  historyLimit: number
 }
 
 /**
@@ -71,7 +79,9 @@ export class InputPanelAddon implements ITerminalAddon {
   private static _mountTarget: HTMLElement | null = null
 
   /** Get the currently active instance (the one with the open panel). */
-  static get activeInstance(): InputPanelAddon | null { return InputPanelAddon._active }
+  static get activeInstance(): InputPanelAddon | null {
+    return InputPanelAddon._active
+  }
 
   /** Subscribe to singleton state changes (open/close/migration). */
   static set onActiveChange(fn: ((addon: InputPanelAddon | null) => void) | null) {
@@ -118,7 +128,7 @@ export class InputPanelAddon implements ITerminalAddon {
     const btn = document.createElement('button')
     btn.type = 'button'
     btn.title = 'Open InputPanel'
-    btn.innerHTML = KEYBOARD_SVG
+    btn.replaceChildren(iconKeyboard(24))
 
     Object.assign(btn.style, {
       position: 'fixed',
@@ -133,6 +143,7 @@ export class InputPanelAddon implements ITerminalAddon {
       touchAction: 'none',
       userSelect: 'none',
       webkitUserSelect: 'none',
+      webkitTouchCallout: 'none',
       cursor: 'pointer',
       boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
       background: 'var(--primary, #e04a2f)',
@@ -152,7 +163,9 @@ export class InputPanelAddon implements ITerminalAddon {
         posX = p.x ?? posX
         posY = p.y ?? posY
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     posX = Math.max(0, Math.min(window.innerWidth - 56, posX))
     posY = Math.max(0, Math.min(window.innerHeight - 56, posY))
     btn.style.left = `${posX}px`
@@ -166,11 +179,17 @@ export class InputPanelAddon implements ITerminalAddon {
     let origX = 0
     let origY = 0
 
-    const doToggle = () => {
-      const target = InputPanelAddon._lastFocused
-        ?? InputPanelAddon._instances.values().next().value as InputPanelAddon | undefined
-        ?? null
-      if (target) target.toggle()
+    const doOpen = () => {
+      const preferred = InputPanelAddon._lastFocused
+      const target =
+        (preferred && InputPanelAddon._instances.has(preferred) ? preferred : null) ??
+        [...InputPanelAddon._instances].find((instance) => instance._terminal != null) ??
+        null
+
+      if (target) {
+        InputPanelAddon._lastFocused = target
+        target.open()
+      }
     }
 
     btn.addEventListener('pointerdown', (e) => {
@@ -199,12 +218,17 @@ export class InputPanelAddon implements ITerminalAddon {
       if (!dragging) return
       dragging = false
       try {
-        localStorage.setItem('input-panel-fab-pos', JSON.stringify({
-          x: parseInt(btn.style.left),
-          y: parseInt(btn.style.top),
-        }))
-      } catch { /* ignore */ }
-      if (!wasDragged) doToggle()
+        localStorage.setItem(
+          'input-panel-fab-pos',
+          JSON.stringify({
+            x: parseInt(btn.style.left),
+            y: parseInt(btn.style.top),
+          })
+        )
+      } catch {
+        /* ignore */
+      }
+      if (!wasDragged) doOpen()
     })
 
     btn.addEventListener('pointercancel', () => {
@@ -213,13 +237,28 @@ export class InputPanelAddon implements ITerminalAddon {
 
     // Click fallback for environments where pointer events are unreliable
     let pointerDownFired = false
-    btn.addEventListener('pointerdown', () => { pointerDownFired = true }, { capture: true })
+    btn.addEventListener(
+      'pointerdown',
+      () => {
+        pointerDownFired = true
+      },
+      { capture: true }
+    )
     btn.addEventListener('click', () => {
       if (pointerDownFired) {
         pointerDownFired = false
         return
       }
-      doToggle()
+      doOpen()
+    })
+
+    btn.addEventListener('contextmenu', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+    })
+
+    btn.addEventListener('dragstart', (e) => {
+      e.preventDefault()
     })
 
     // Keep in bounds on resize
@@ -256,32 +295,67 @@ export class InputPanelAddon implements ITerminalAddon {
   private _onInput: (data: string) => void
   private _onOpenCb: (() => void) | null
   private _onCloseCb: (() => void) | null
+  private _getHistory: (() => Promise<readonly InputPanelHistoryItem[]>) | null
+  private _addHistory: ((text: string) => Promise<void> | void) | null
+  private _subscribeHistory:
+    | ((listener: (items: readonly InputPanelHistoryItem[]) => void) => () => void)
+    | null
+  private _onSettingsChange: ((settings: InputPanelSettingsPayload) => Promise<void> | void) | null
+  private _platform: HostPlatform
+  private _defaultLayout: InputPanelLayout
 
   constructor(opts?: {
     onInput?: (data: string) => void
     onOpen?: () => void
     onClose?: () => void
+    getHistory?: () => Promise<readonly InputPanelHistoryItem[]>
+    addHistory?: (text: string) => Promise<void> | void
+    subscribeHistory?: (listener: (items: readonly InputPanelHistoryItem[]) => void) => () => void
+    onSettingsChange?: (settings: InputPanelSettingsPayload) => Promise<void> | void
+    platform?: HostPlatform
+    defaultLayout?: InputPanelLayout
   }) {
     this._onInput = opts?.onInput ?? (() => {})
     this._onOpenCb = opts?.onOpen ?? null
     this._onCloseCb = opts?.onClose ?? null
+    this._getHistory = opts?.getHistory ?? null
+    this._addHistory = opts?.addHistory ?? null
+    this._subscribeHistory = opts?.subscribeHistory ?? null
+    this._onSettingsChange = opts?.onSettingsChange ?? null
+    this._platform = opts?.platform ?? 'common'
+    this._defaultLayout = opts?.defaultLayout ?? 'floating'
   }
 
-  get isOpen(): boolean { return this._isOpen }
+  get isOpen(): boolean {
+    return this._isOpen
+  }
 
   /** Allow changing callbacks after construction. */
-  set onOpen(fn: (() => void) | null) { this._onOpenCb = fn }
-  set onClose(fn: (() => void) | null) { this._onCloseCb = fn }
-  set onInput(fn: (data: string) => void) { this._onInput = fn }
+  set onOpen(fn: (() => void) | null) {
+    this._onOpenCb = fn
+  }
+  set onClose(fn: (() => void) | null) {
+    this._onCloseCb = fn
+  }
+  set onInput(fn: (data: string) => void) {
+    this._onInput = fn
+  }
+
+  setPlatform(platform: HostPlatform): void {
+    this._platform = platform
+    this._applyPlatformToPanel()
+  }
+
+  setDefaultLayout(layout: InputPanelLayout): void {
+    this._defaultLayout = layout
+  }
 
   /**
    * Resolve the mount target for this addon instance.
    * Priority: static mountTarget > terminal container > document.body
    */
   private _getMountTarget(): HTMLElement {
-    return InputPanelAddon._mountTarget
-      ?? this._terminal?.element?.parentElement
-      ?? document.body
+    return InputPanelAddon._mountTarget ?? this._terminal?.element?.parentElement ?? document.body
   }
 
   activate(terminal: Terminal): void {
@@ -361,7 +435,8 @@ export class InputPanelAddon implements ITerminalAddon {
 
     // Build the element tree
     const panel = document.createElement('input-panel')
-    panel.setAttribute('layout', 'floating')
+    panel.setAttribute('layout', this._defaultLayout)
+    this._applyPanelThemeBindings(panel)
 
     const inputTab = document.createElement('input-method-tab')
     inputTab.setAttribute('slot', 'input')
@@ -370,7 +445,13 @@ export class InputPanelAddon implements ITerminalAddon {
     const keysTab = document.createElement('virtual-keyboard-tab')
     keysTab.setAttribute('slot', 'keys')
     keysTab.setAttribute('floating', '')
+    keysTab.setAttribute('platform', this._platform)
     panel.appendChild(keysTab)
+
+    const shortcutsTab = document.createElement('shortcut-tab')
+    shortcutsTab.setAttribute('slot', 'shortcuts')
+    shortcutsTab.setAttribute('platform', this._platform)
+    panel.appendChild(shortcutsTab)
 
     const trackpadTab = document.createElement('virtual-trackpad-tab')
     trackpadTab.setAttribute('slot', 'trackpad')
@@ -379,16 +460,73 @@ export class InputPanelAddon implements ITerminalAddon {
 
     this._panel = panel
 
+    const renderHistory = (items: readonly InputPanelHistoryItem[]) => {
+      this._renderHistory(inputTab, items)
+    }
+
+    if (this._getHistory) {
+      void this._getHistory()
+        .then((items) => renderHistory(items))
+        .catch(() => {})
+    }
+
+    if (this._subscribeHistory) {
+      try {
+        const unsubscribe = this._subscribeHistory((items) => {
+          renderHistory(items)
+        })
+        this._cleanups.push(unsubscribe)
+      } catch {
+        // ignore history subscription failures
+      }
+    }
+
     // Wire panel events
     this._on(panel, 'input-panel:close', () => this.close())
     this._on(panel, 'input-panel:send', (e) => {
       const data = (e as CustomEvent).detail?.data
       if (data) this._onInput(data)
+
+      const source = e.composedPath()[0]
+      if (source === inputTab && this._addHistory && data) {
+        const normalized = this._normalizeHistoryText(data)
+        if (normalized) {
+          Promise.resolve(this._addHistory(normalized))
+            .then(() => this._getHistory?.())
+            .then((items) => {
+              if (items) renderHistory(items)
+            })
+            .catch(() => {})
+        }
+      }
     })
     this._on(panel, 'input-panel:tab-change', (e) => {
       const tab = (e as CustomEvent).detail?.tab
       if (tab === 'trackpad') this._showCursor()
       else this._hideCursor()
+    })
+    this._on(panel, 'input-panel:settings-change', (e) => {
+      if (!this._onSettingsChange) return
+      const detail = (e as CustomEvent).detail
+      if (typeof detail !== 'object' || detail == null) return
+      const payload = detail as Partial<InputPanelSettingsPayload>
+      if (
+        typeof payload.fixedHeight !== 'number' ||
+        typeof payload.floatingWidth !== 'number' ||
+        typeof payload.floatingHeight !== 'number' ||
+        typeof payload.vibrationIntensity !== 'number' ||
+        typeof payload.historyLimit !== 'number'
+      ) {
+        return
+      }
+
+      void this._onSettingsChange({
+        fixedHeight: payload.fixedHeight,
+        floatingWidth: payload.floatingWidth,
+        floatingHeight: payload.floatingHeight,
+        vibrationIntensity: payload.vibrationIntensity,
+        historyLimit: payload.historyLimit,
+      })
     })
 
     // Wire trackpad gesture events
@@ -431,6 +569,71 @@ export class InputPanelAddon implements ITerminalAddon {
 
     this._onOpenCb?.()
     InputPanelAddon._onActiveChangeFn?.(this)
+  }
+
+  private _applyPlatformToPanel(): void {
+    if (!this._panel) return
+    const keysTab = this._panel.querySelector('virtual-keyboard-tab')
+    const shortcutsTab = this._panel.querySelector('shortcut-tab')
+    keysTab?.setAttribute('platform', this._platform)
+    shortcutsTab?.setAttribute('platform', this._platform)
+  }
+
+  private _readThemeVar(
+    style: CSSStyleDeclaration,
+    names: readonly string[],
+    fallback: string
+  ): string {
+    for (const name of names) {
+      const value = style.getPropertyValue(name).trim()
+      if (value) return value
+    }
+    return fallback
+  }
+
+  private _applyPanelThemeBindings(panel: HTMLElement): void {
+    const scope = this._terminal?.element?.parentElement ?? this._getMountTarget()
+    const style = getComputedStyle(scope)
+
+    const background = this._readThemeVar(
+      style,
+      ['--input-panel-background', '--terminal', '--background'],
+      '#1a1a1a'
+    )
+    const foreground = this._readThemeVar(
+      style,
+      ['--input-panel-foreground', '--terminal-foreground', '--foreground'],
+      '#ffffff'
+    )
+    const primary = this._readThemeVar(style, ['--input-panel-primary', '--primary'], '#e04a2f')
+    const primaryForeground = this._readThemeVar(
+      style,
+      ['--input-panel-primary-foreground', '--primary-foreground'],
+      '#ffffff'
+    )
+    const border = this._readThemeVar(
+      style,
+      ['--input-panel-border', '--border'],
+      `color-mix(in srgb, ${foreground} 24%, transparent)`
+    )
+    const muted = this._readThemeVar(
+      style,
+      ['--input-panel-muted', '--muted'],
+      `color-mix(in srgb, ${background} 86%, ${foreground} 14%)`
+    )
+    const mutedForeground = this._readThemeVar(
+      style,
+      ['--input-panel-muted-foreground', '--muted-foreground'],
+      `color-mix(in srgb, ${foreground} 62%, transparent)`
+    )
+
+    panel.style.setProperty('--input-panel-background', background)
+    panel.style.setProperty('--input-panel-foreground', foreground)
+    panel.style.setProperty('--input-panel-primary', primary)
+    panel.style.setProperty('--input-panel-primary-foreground', primaryForeground)
+    panel.style.setProperty('--input-panel-border', border)
+    panel.style.setProperty('--input-panel-muted', muted)
+    panel.style.setProperty('--input-panel-muted-foreground', mutedForeground)
   }
 
   close(): void {
@@ -483,8 +686,11 @@ export class InputPanelAddon implements ITerminalAddon {
     if (!container) return
 
     const el = document.createElement('div')
-    el.style.cssText = 'position:absolute;z-index:10;pointer-events:none;opacity:0;transition:opacity 0.15s;'
-    el.innerHTML = CURSOR_SVG
+    el.style.cssText =
+      'position:absolute;z-index:10;pointer-events:none;opacity:0;transition:opacity 0.15s;color:#fff;'
+    const pointer = iconMousePointer2(20)
+    pointer.style.filter = 'drop-shadow(0 0 1px rgba(0,0,0,0.9))'
+    el.replaceChildren(pointer)
     container.appendChild(el)
     this._cursorEl = el
 
@@ -553,7 +759,8 @@ export class InputPanelAddon implements ITerminalAddon {
     if (!coords) return
     const button = opts.button ?? 0
     const detail = opts.detail ?? 1
-    const buttons = opts.buttons ?? (type === 'mousedown' ? (button === 0 ? 1 : button === 2 ? 2 : 4) : 0)
+    const buttons =
+      opts.buttons ?? (type === 'mousedown' ? (button === 0 ? 1 : button === 2 ? 2 : 4) : 0)
     const target = this._resolveTarget(coords.clientX, coords.clientY)
     target.dispatchEvent(
       new MouseEvent(type, {
@@ -609,26 +816,44 @@ export class InputPanelAddon implements ITerminalAddon {
 
   private _updateEdgeScroll(): void {
     const container = this._terminal?.element?.parentElement
-    if (!container || !this._isDragging) { this._stopEdgeScroll(); return }
+    if (!container || !this._isDragging) {
+      this._stopEdgeScroll()
+      return
+    }
     const rect = container.getBoundingClientRect()
     const nearTop = this._cursorPos.y < EDGE_SCROLL_ZONE
     const nearBottom = this._cursorPos.y > rect.height - EDGE_SCROLL_ZONE
-    if (!nearTop && !nearBottom) { this._stopEdgeScroll(); return }
+    if (!nearTop && !nearBottom) {
+      this._stopEdgeScroll()
+      return
+    }
 
     this._stopEdgeScroll()
     this._edgeScrollTimer = setInterval(() => {
       const container = this._terminal?.element?.parentElement
-      if (!container || !this._isDragging) { this._stopEdgeScroll(); return }
+      if (!container || !this._isDragging) {
+        this._stopEdgeScroll()
+        return
+      }
       const rect = container.getBoundingClientRect()
       const clientX = rect.left + this._cursorPos.x
-      const clientY = this._cursorPos.y < EDGE_SCROLL_ZONE
-        ? rect.top - EDGE_SCROLL_OVERSHOOT
-        : rect.bottom + EDGE_SCROLL_OVERSHOOT
-      const target = this._resolveTarget(rect.left + this._cursorPos.x, rect.top + this._cursorPos.y)
+      const clientY =
+        this._cursorPos.y < EDGE_SCROLL_ZONE
+          ? rect.top - EDGE_SCROLL_OVERSHOOT
+          : rect.bottom + EDGE_SCROLL_OVERSHOOT
+      const target = this._resolveTarget(
+        rect.left + this._cursorPos.x,
+        rect.top + this._cursorPos.y
+      )
       target.dispatchEvent(
         new MouseEvent('mousemove', {
-          bubbles: true, cancelable: true, view: window,
-          clientX, clientY, button: 0, buttons: 1,
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          clientX,
+          clientY,
+          button: 0,
+          buttons: 1,
         })
       )
     }, EDGE_SCROLL_INTERVAL)
@@ -658,5 +883,65 @@ export class InputPanelAddon implements ITerminalAddon {
   private _on(target: EventTarget, event: string, handler: EventListener): void {
     target.addEventListener(event, handler)
     this._cleanups.push(() => target.removeEventListener(event, handler))
+  }
+
+  private _normalizeHistoryText(raw: string): string | null {
+    const text = raw.replace(/[\r\n]+$/u, '').trim()
+    return text ? text : null
+  }
+
+  private _renderHistory(inputTab: HTMLElement, items: readonly InputPanelHistoryItem[]): void {
+    inputTab.querySelectorAll('[data-input-history-root="true"]').forEach((node) => node.remove())
+    if (items.length === 0) return
+
+    const root = document.createElement('div')
+    root.dataset.inputHistoryRoot = 'true'
+    root.setAttribute('slot', 'history')
+    root.style.display = 'flex'
+    root.style.flexDirection = 'column'
+    root.style.gap = '4px'
+    root.style.padding = '4px 0'
+
+    for (const item of items) {
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.title = item.text
+      button.style.display = 'flex'
+      button.style.alignItems = 'center'
+      button.style.gap = '8px'
+      button.style.width = '100%'
+      button.style.padding = '4px 6px'
+      button.style.border = '1px solid transparent'
+      button.style.borderRadius = '4px'
+      button.style.background = 'transparent'
+      button.style.color = 'var(--muted-foreground, #888)'
+      button.style.fontFamily = 'inherit'
+      button.style.fontSize = '12px'
+      button.style.textAlign = 'left'
+
+      const time = document.createElement('span')
+      time.textContent = new Date(item.time).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+      time.style.opacity = '0.65'
+      time.style.fontSize = '10px'
+      time.style.flexShrink = '0'
+
+      const content = document.createElement('span')
+      content.textContent = item.text
+      content.style.overflow = 'hidden'
+      content.style.textOverflow = 'ellipsis'
+      content.style.whiteSpace = 'nowrap'
+
+      button.appendChild(time)
+      button.appendChild(content)
+      button.addEventListener('click', () => {
+        this._onInput(`${item.text}\n`)
+      })
+      root.appendChild(button)
+    }
+
+    inputTab.appendChild(root)
   }
 }

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/web-components-vite'
+import { Terminal } from '@xterm/xterm'
 import { html } from 'lit'
 import { expect, fn, waitFor } from 'storybook/test'
-import { Terminal } from '@xterm/xterm'
 import { InputPanelAddon } from './xterm-addon.js'
 
 // Register all custom elements (critical — xterm-addon.ts does NOT import these)
@@ -41,7 +41,9 @@ const meta: Meta = {
   tags: ['autodocs'],
   decorators: [
     (story) => html`
-      <div style="width: 600px; height: 400px; background: #1a1a1a; color: #fff; font-family: monospace; position: relative;">
+      <div
+        style="width: 600px; height: 400px; background: #1a1a1a; color: #fff; font-family: monospace; position: relative;"
+      >
         ${story()}
       </div>
     `,
@@ -288,9 +290,9 @@ export const CustomElementRegistered: StoryObj = {
     // firstUpdated should have called dialog.show()
     expect(dialog.open).toBe(true)
 
-    // The backdrop should also exist
+    // Floating mode intentionally has no backdrop.
     const backdrop = shadow.querySelector('.backdrop')
-    expect(backdrop).not.toBeNull()
+    expect(backdrop).toBeNull()
 
     el.remove()
   },

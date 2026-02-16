@@ -18,7 +18,9 @@ const meta: Meta = {
   tags: ['autodocs'],
   decorators: [
     (story) => html`
-      <div style="width: 400px; height: 300px; background: #1a1a1a; color: #fff; font-family: monospace;">
+      <div
+        style="width: 400px; height: 300px; background: #1a1a1a; color: #fff; font-family: monospace;"
+      >
         ${story()}
       </div>
     `,
@@ -36,6 +38,7 @@ export const Default: StoryObj = {
     <input-panel layout="fixed" style="height: 100%;">
       <input-method-tab slot="input"></input-method-tab>
       <virtual-keyboard-tab slot="keys"></virtual-keyboard-tab>
+      <shortcut-tab slot="shortcuts"></shortcut-tab>
       <virtual-trackpad-tab slot="trackpad"></virtual-trackpad-tab>
     </input-panel>
   `,
@@ -49,6 +52,7 @@ export const FloatingLayout: StoryObj = {
     <input-panel layout="floating" style="height: 100%;">
       <input-method-tab slot="input"></input-method-tab>
       <virtual-keyboard-tab slot="keys" floating></virtual-keyboard-tab>
+      <shortcut-tab slot="shortcuts"></shortcut-tab>
       <virtual-trackpad-tab slot="trackpad" floating></virtual-trackpad-tab>
     </input-panel>
   `,
@@ -62,6 +66,7 @@ export const KeysTab: StoryObj = {
     <input-panel layout="fixed" active-tab="keys" style="height: 100%;">
       <input-method-tab slot="input"></input-method-tab>
       <virtual-keyboard-tab slot="keys"></virtual-keyboard-tab>
+      <shortcut-tab slot="shortcuts"></shortcut-tab>
       <virtual-trackpad-tab slot="trackpad"></virtual-trackpad-tab>
     </input-panel>
   `,
@@ -75,6 +80,7 @@ export const TrackpadTab: StoryObj = {
     <input-panel layout="fixed" active-tab="trackpad" style="height: 100%;">
       <input-method-tab slot="input"></input-method-tab>
       <virtual-keyboard-tab slot="keys"></virtual-keyboard-tab>
+      <shortcut-tab slot="shortcuts"></shortcut-tab>
       <virtual-trackpad-tab slot="trackpad"></virtual-trackpad-tab>
     </input-panel>
   `,
@@ -88,6 +94,7 @@ export const SettingsTab: StoryObj = {
     <input-panel layout="fixed" active-tab="settings" style="height: 100%;">
       <input-method-tab slot="input"></input-method-tab>
       <virtual-keyboard-tab slot="keys"></virtual-keyboard-tab>
+      <shortcut-tab slot="shortcuts"></shortcut-tab>
       <virtual-trackpad-tab slot="trackpad"></virtual-trackpad-tab>
     </input-panel>
   `,
@@ -95,13 +102,14 @@ export const SettingsTab: StoryObj = {
 
 /**
  * Verifies that tab switching works by clicking the "Keys" tab button.
- * Now expects 4 tab buttons (Input, Keys, Trackpad, Settings).
+ * Now expects 5 tab buttons (Input, Keys, Shortcuts, Trackpad, Settings).
  */
 export const TabSwitching: StoryObj = {
   render: () => html`
     <input-panel layout="fixed" style="height: 100%;">
       <input-method-tab slot="input"></input-method-tab>
       <virtual-keyboard-tab slot="keys"></virtual-keyboard-tab>
+      <shortcut-tab slot="shortcuts"></shortcut-tab>
       <virtual-trackpad-tab slot="trackpad"></virtual-trackpad-tab>
     </input-panel>
   `,
@@ -110,7 +118,7 @@ export const TabSwitching: StoryObj = {
 
     const shadow = panel.shadowRoot!
     const tabButtons = shadow.querySelectorAll('.tab-btn')
-    expect(tabButtons.length).toBe(4)
+    expect(tabButtons.length).toBe(5)
 
     // Click "Keys" tab
     const keysTab = tabButtons[1] as HTMLButtonElement
@@ -183,6 +191,7 @@ export const FloatingResize: StoryObj = {
     <input-panel layout="floating" style="height: 100%;">
       <input-method-tab slot="input"></input-method-tab>
       <virtual-keyboard-tab slot="keys" floating></virtual-keyboard-tab>
+      <shortcut-tab slot="shortcuts"></shortcut-tab>
       <virtual-trackpad-tab slot="trackpad" floating></virtual-trackpad-tab>
     </input-panel>
   `,
@@ -200,5 +209,33 @@ export const FloatingResize: StoryObj = {
     expect(shadow.querySelector('.resize-tr')).toBeTruthy()
     expect(shadow.querySelector('.resize-bl')).toBeTruthy()
     expect(shadow.querySelector('.resize-br')).toBeTruthy()
+  },
+}
+
+/**
+ * Verifies Fixed mode height slider updates InputPanel internal style variable.
+ */
+export const FixedHeightSync: StoryObj = {
+  render: () => html`
+    <input-panel layout="fixed" active-tab="settings">
+      <input-method-tab slot="input"></input-method-tab>
+      <virtual-keyboard-tab slot="keys"></virtual-keyboard-tab>
+      <shortcut-tab slot="shortcuts"></shortcut-tab>
+      <virtual-trackpad-tab slot="trackpad"></virtual-trackpad-tab>
+    </input-panel>
+  `,
+  play: async ({ canvasElement }) => {
+    const panel = await getLitElement(canvasElement, 'input-panel')
+    const settings = panel.shadowRoot?.querySelector('input-panel-settings') as LitElement
+    await settings.updateComplete
+
+    const slider = settings.shadowRoot?.querySelector('input[type="range"]') as HTMLInputElement
+    slider.value = '320'
+    slider.dispatchEvent(new Event('input', { bubbles: true }))
+
+    await settings.updateComplete
+    await panel.updateComplete
+
+    expect(panel.style.getPropertyValue('--input-panel-fixed-height').trim()).toBe('320px')
   },
 }

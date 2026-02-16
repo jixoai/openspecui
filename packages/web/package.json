@@ -58,6 +58,8 @@
     "@xterm/addon-fit": "0.12.0-beta.152",
     "@xterm/addon-web-links": "0.13.0-beta.152",
     "@xterm/xterm": "6.1.0-beta.152",
+    "baseline-browser-mapping": "^2.9.19",
+    "clsx": "^2.1.1",
     "jsdom": "^25.0.1",
     "lucide-react": "^0.472.0",
     "playwright": "^1.58.2",
@@ -67,15 +69,14 @@
     "remark-gfm": "^4.0.1",
     "shiki": "^3.17.0",
     "storybook": "^10.2.8",
+    "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.18",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vite": "^7.3.1",
     "vitest": "^4.0.18",
+    "xterm-input-panel": "workspace:*",
     "yaml": "^2.8.0",
-    "yargs": "^18.0.0",
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^3.4.0",
-    "xterm-input-panel": "workspace:*"
+    "yargs": "^18.0.0"
   }
 }

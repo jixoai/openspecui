@@ -176,6 +176,10 @@
     @apply border-border;
     corner-shape: bevel;
   }
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-mono);
@@ -367,8 +371,13 @@
 
 /* Terminal tab status dot breathing animation */
 @keyframes terminal-breathing {
-  0%, 100% { background-color: oklch(0.7 0 0); }
-  50% { background-color: oklch(0.6 0.15 250); }
+  0%,
+  100% {
+    background-color: oklch(0.7 0 0);
+  }
+  50% {
+    background-color: oklch(0.73 0.13 210.82);
+  }
 }
 .animate-terminal-breathing {
   animation: terminal-breathing 1.5s ease-in-out infinite;

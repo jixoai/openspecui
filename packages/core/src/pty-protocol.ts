@@ -1,12 +1,14 @@
 import { z } from 'zod'
 
 const PositiveInt = z.number().int().positive()
+export const PtyPlatformSchema = z.enum(['windows', 'macos', 'common'])
 
 const PtySessionInfoSchema = z.object({
   id: z.string().min(1),
   title: z.string(),
   command: z.string(),
   args: z.array(z.string()),
+  platform: PtyPlatformSchema,
   isExited: z.boolean(),
   exitCode: z.number().int().nullable(),
 })
@@ -62,6 +64,7 @@ export const PtyCreatedResponseSchema = z.object({
   type: z.literal('created'),
   requestId: z.string().min(1),
   sessionId: z.string().min(1),
+  platform: PtyPlatformSchema,
 })
 
 export const PtyOutputResponseSchema = z.object({
@@ -93,11 +96,7 @@ export const PtyListResponseSchema = z.object({
   sessions: z.array(PtySessionInfoSchema),
 })
 
-export const PtyErrorCodeSchema = z.enum([
-  'INVALID_JSON',
-  'INVALID_MESSAGE',
-  'SESSION_NOT_FOUND',
-])
+export const PtyErrorCodeSchema = z.enum(['INVALID_JSON', 'INVALID_MESSAGE', 'SESSION_NOT_FOUND'])
 
 export const PtyErrorResponseSchema = z.object({
   type: z.literal('error'),
@@ -119,3 +118,4 @@ export const PtyServerMessageSchema = z.discriminatedUnion('type', [
 export type PtyClientMessage = z.infer<typeof PtyClientMessageSchema>
 export type PtyServerMessage = z.infer<typeof PtyServerMessageSchema>
 export type PtySessionInfo = z.infer<typeof PtySessionInfoSchema>
+export type PtyPlatform = z.infer<typeof PtyPlatformSchema>

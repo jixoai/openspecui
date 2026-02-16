@@ -1,13 +1,19 @@
-import { FitAddon } from '@xterm/addon-fit'
-import { WebLinksAddon } from '@xterm/addon-web-links'
-import { Terminal } from '@xterm/xterm'
 import {
   PtyServerMessageSchema,
   type PtyClientMessage,
+  type PtyPlatform,
   type PtyServerMessage,
 } from '@openspecui/core/pty-protocol'
+import { FitAddon } from '@xterm/addon-fit'
+import { WebLinksAddon } from '@xterm/addon-web-links'
+import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
-import { InputPanelAddon } from 'xterm-input-panel'
+import {
+  InputPanelAddon,
+  type InputPanelLayout,
+  type InputPanelSettingsPayload,
+} from 'xterm-input-panel'
+import { TerminalInputHistoryStore } from './terminal-input-history'
 
 // --- Types ---
 
@@ -32,6 +38,7 @@ const DEFAULT_TERMINAL_CONFIG: TerminalConfig = {
 const OUTPUT_IDLE_THRESHOLD = 1500
 const RECONNECT_DELAY = 1000
 const MAX_RECONNECT_DELAY = 10000
+const DEFAULT_PTY_PLATFORM: PtyPlatform = 'common'
 
 const FONT_SIZE_MIN = 8
 const FONT_SIZE_MAX = 32
@@ -156,6 +163,7 @@ interface TerminalInstance {
   outputIdleTimer: ReturnType<typeof setTimeout> | null
   /** Whether this session was restored from a server-side list (not locally created) */
   restored: boolean
+  platform: PtyPlatform
 }
 
 export interface TerminalSessionSnapshot {
@@ -170,6 +178,7 @@ export interface TerminalSessionSnapshot {
   outputActive: boolean
   command?: string
   args?: string[]
+  platform: PtyPlatform
 }
 
 export interface TerminalSnapshot {
@@ -191,6 +200,7 @@ class TerminalController {
   private idCounter = 0
   private config: TerminalConfig = { ...DEFAULT_TERMINAL_CONFIG }
   private snapshotCache: TerminalSnapshot | null = null
+  private inputHistoryStore = new TerminalInputHistoryStore()
 
   // Shared WebSocket
   private ws: WebSocket | null = null
@@ -207,6 +217,7 @@ class TerminalController {
   private pendingCloseSessionIds = new Set<string>()
   private serverToLocalSessionId = new Map<string, string>()
   private hasDiscoveredSessions = false
+  private inputPanelDefaultLayout: InputPanelLayout = 'floating'
 
   // --- Session lifecycle ---
 
@@ -226,6 +237,7 @@ class TerminalController {
       isDedicated: opts?.isDedicated ?? false,
       restored: false,
       serverSessionId: null,
+      platform: DEFAULT_PTY_PLATFORM,
     })
 
     this.instances.set(id, instance)
@@ -278,6 +290,7 @@ class TerminalController {
       isDedicated: boolean
       restored: boolean
       serverSessionId: string | null
+      platform: PtyPlatform
     }
   ): TerminalInstance {
     const terminal = new Terminal({
@@ -299,6 +312,14 @@ class TerminalController {
 
     const inputPanelAddon = new InputPanelAddon({
       onInput: (data) => this.writeToSession(id, data),
+      getHistory: async () => this.inputHistoryStore.list(),
+      addHistory: async (text) => this.inputHistoryStore.add(text),
+      subscribeHistory: (listener) => this.inputHistoryStore.subscribe(listener),
+      platform: opts.platform,
+      defaultLayout: this.inputPanelDefaultLayout,
+      onSettingsChange: async (settings: InputPanelSettingsPayload) => {
+        await this.inputHistoryStore.setLimit(settings.historyLimit)
+      },
     })
     terminal.loadAddon(inputPanelAddon)
 
@@ -343,6 +364,7 @@ class TerminalController {
       lastOutputTime: 0,
       outputIdleTimer: null,
       restored: opts.restored,
+      platform: opts.platform,
     }
   }
 
@@ -562,11 +584,15 @@ class TerminalController {
     if (this.configPersistTimer) clearTimeout(this.configPersistTimer)
     this.configPersistTimer = setTimeout(() => {
       this.configPersistTimer = null
-      import('./trpc').then(({ trpcClient }) => {
-        trpcClient.opsx.updateProjectConfigUi.mutate({
-          'font-size': this.config.fontSize,
+      import('./trpc')
+        .then(({ trpcClient }) => {
+          trpcClient.opsx.updateProjectConfigUi.mutate({
+            'font-size': this.config.fontSize,
+          })
         })
-      }).catch(() => { /* ignore */ })
+        .catch(() => {
+          /* ignore */
+        })
     }, CONFIG_PERSIST_DEBOUNCE)
   }
 
@@ -606,23 +632,21 @@ class TerminalController {
     return this.serverToLocalSessionId.get(serverSessionId) ?? serverSessionId
   }
 
-  private handleCreatedResponse(
-    msg: Extract<PtyServerMessage, { type: 'created' }>
-  ): void {
+  private handleCreatedResponse(msg: Extract<PtyServerMessage, { type: 'created' }>): void {
     const instance = this.instances.get(msg.requestId)
     if (!instance) {
       this.wsSend({ type: 'close', sessionId: msg.sessionId })
       return
     }
     instance.serverSessionId = msg.sessionId
+    instance.platform = msg.platform
+    instance.inputPanelAddon.setPlatform(msg.platform)
     instance.isConnected = true
     this.serverToLocalSessionId.set(msg.sessionId, msg.requestId)
     this.notify()
   }
 
-  private handleOutputResponse(
-    msg: Extract<PtyServerMessage, { type: 'output' }>
-  ): void {
+  private handleOutputResponse(msg: Extract<PtyServerMessage, { type: 'output' }>): void {
     const instance = this.getInstanceByServerSessionId(msg.sessionId)
     if (!instance) return
     instance.terminal.write(msg.data)
@@ -635,9 +659,7 @@ class TerminalController {
     }, OUTPUT_IDLE_THRESHOLD)
   }
 
-  private handleExitResponse(
-    msg: Extract<PtyServerMessage, { type: 'exit' }>
-  ): void {
+  private handleExitResponse(msg: Extract<PtyServerMessage, { type: 'exit' }>): void {
     const instance = this.getInstanceByServerSessionId(msg.sessionId)
     if (!instance) return
     instance.isExited = true
@@ -650,26 +672,20 @@ class TerminalController {
     this.notify()
   }
 
-  private handleTitleResponse(
-    msg: Extract<PtyServerMessage, { type: 'title' }>
-  ): void {
+  private handleTitleResponse(msg: Extract<PtyServerMessage, { type: 'title' }>): void {
     const instance = this.getInstanceByServerSessionId(msg.sessionId)
     if (!instance) return
     instance.processTitle = msg.title
     this.notify()
   }
 
-  private handleBufferResponse(
-    msg: Extract<PtyServerMessage, { type: 'buffer' }>
-  ): void {
+  private handleBufferResponse(msg: Extract<PtyServerMessage, { type: 'buffer' }>): void {
     const instance = this.getInstanceByServerSessionId(msg.sessionId)
     if (!instance || !msg.data) return
     instance.terminal.write(msg.data)
   }
 
-  private handleErrorResponse(
-    msg: Extract<PtyServerMessage, { type: 'error' }>
-  ): void {
+  private handleErrorResponse(msg: Extract<PtyServerMessage, { type: 'error' }>): void {
     console.warn(`[pty] ${msg.code}: ${msg.message}`, msg)
   }
 
@@ -680,6 +696,13 @@ class TerminalController {
    */
   setInputPanelMountTarget(el: HTMLElement | null): void {
     InputPanelAddon.mountTarget = el
+  }
+
+  setInputPanelDefaultLayout(layout: InputPanelLayout): void {
+    this.inputPanelDefaultLayout = layout
+    for (const instance of this.instances.values()) {
+      instance.inputPanelAddon.setDefaultLayout(layout)
+    }
   }
 
   /** Get terminal dimensions (cols/rows) for a session. */
@@ -721,6 +744,7 @@ class TerminalController {
           inst.lastOutputTime > 0 && Date.now() - inst.lastOutputTime < OUTPUT_IDLE_THRESHOLD,
         command: inst.command,
         args: inst.args,
+        platform: inst.platform,
       })
     }
 
@@ -866,9 +890,7 @@ class TerminalController {
     }
   }
 
-  private handleListResponse(
-    msg: Extract<PtyServerMessage, { type: 'list' }>
-  ): void {
+  private handleListResponse(msg: Extract<PtyServerMessage, { type: 'list' }>): void {
     const serverSessionIds = new Set(msg.sessions.map((s) => s.id))
 
     // For each server session, create a local instance if it doesn't exist, then attach
@@ -887,6 +909,7 @@ class TerminalController {
           isDedicated: false,
           restored: true,
           serverSessionId: serverSession.id,
+          platform: serverSession.platform ?? DEFAULT_PTY_PLATFORM,
         })
 
         if (serverSession.isExited) {
@@ -910,6 +933,8 @@ class TerminalController {
       } else if (!instance.serverSessionId) {
         instance.serverSessionId = serverSession.id
       }
+      instance.platform = serverSession.platform ?? DEFAULT_PTY_PLATFORM
+      instance.inputPanelAddon.setPlatform(instance.platform)
 
       this.serverToLocalSessionId.set(serverSession.id, instance.id)
 

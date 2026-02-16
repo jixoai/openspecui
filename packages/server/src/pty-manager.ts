@@ -4,6 +4,14 @@ import { EventEmitter } from 'events'
 const DEFAULT_SCROLLBACK = 1000
 const DEFAULT_MAX_BUFFER_BYTES = 2 * 1024 * 1024
 
+export type PtyPlatform = 'windows' | 'macos' | 'common'
+
+function detectPtyPlatform(): PtyPlatform {
+  if (process.platform === 'win32') return 'windows'
+  if (process.platform === 'darwin') return 'macos'
+  return 'common'
+}
+
 export interface PtySessionEvents {
   data: (data: string) => void
   exit: (exitCode: number) => void
@@ -15,6 +23,7 @@ export interface PtySessionInfo {
   title: string
   command: string
   args: string[]
+  platform: PtyPlatform
   isExited: boolean
   exitCode: number | null
   createdAt: number
@@ -24,6 +33,7 @@ export class PtySession extends EventEmitter {
   readonly id: string
   readonly command: string
   readonly args: string[]
+  readonly platform: PtyPlatform
   readonly createdAt: number
   private process: pty.IPty
   private titleInterval: ReturnType<typeof setInterval> | null = null
@@ -45,6 +55,7 @@ export class PtySession extends EventEmitter {
       cwd: string
       scrollback?: number
       maxBufferBytes?: number
+      platform: PtyPlatform
     }
   ) {
     super()
@@ -54,6 +65,7 @@ export class PtySession extends EventEmitter {
     const args = opts.command ? (opts.args ?? []) : []
     this.command = shell
     this.args = args
+    this.platform = opts.platform
     this.maxBufferLines = opts.scrollback ?? DEFAULT_SCROLLBACK
     this.maxBufferBytes = opts.maxBufferBytes ?? DEFAULT_MAX_BUFFER_BYTES
 
@@ -157,6 +169,7 @@ export class PtySession extends EventEmitter {
       title: this.lastTitle,
       command: this.command,
       args: this.args,
+      platform: this.platform,
       isExited: this.isExited,
       exitCode: this.exitCode,
       createdAt: this.createdAt,
@@ -167,8 +180,11 @@ export class PtySession extends EventEmitter {
 export class PtyManager {
   private sessions = new Map<string, PtySession>()
   private idCounter = 0
+  private readonly platform: PtyPlatform
 
-  constructor(private defaultCwd: string) {}
+  constructor(private defaultCwd: string) {
+    this.platform = detectPtyPlatform()
+  }
 
   create(opts: {
     cols?: number
@@ -187,6 +203,7 @@ export class PtyManager {
       cwd: this.defaultCwd,
       scrollback: opts.scrollback,
       maxBufferBytes: opts.maxBufferBytes,
+      platform: this.platform,
     })
 
     this.sessions.set(id, session)

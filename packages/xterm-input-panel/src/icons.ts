@@ -1,5 +1,17 @@
-import { createElement, X, SlidersHorizontal, SendHorizontal, Type, Keyboard, Move, Pin, PinOff } from 'lucide'
 import type { IconNode } from 'lucide'
+import {
+  Combine,
+  createElement,
+  Keyboard,
+  MousePointer2,
+  Move,
+  Pin,
+  PinOff,
+  SendHorizontal,
+  SlidersHorizontal,
+  Type,
+  X,
+} from 'lucide'
 
 /**
  * Icon helpers for InputPanel components.
@@ -42,6 +54,16 @@ export function iconKeyboard(size = 12) {
 /** Touchpad / Move icon — for Trackpad tab */
 export function iconMove(size = 12) {
   return createIcon(Move, size)
+}
+
+/** Mouse pointer icon — for cursor overlay */
+export function iconMousePointer2(size = 12) {
+  return createIcon(MousePointer2, size)
+}
+
+/** Combine icon — for Shortcuts tab */
+export function iconCombine(size = 12) {
+  return createIcon(Combine, size)
 }
 
 /** Pin icon — for Fixed layout */
