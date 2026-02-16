@@ -1,5 +1,11 @@
 # openspecui
 
+## 1.0.0
+
+### Major Changes
+
+- Release all workspace packages to `1.0.0` for the new major release.
+
 ## 0.9.5
 
 ### Patch Changes

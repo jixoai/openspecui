@@ -1,5 +1,16 @@
 # @openspecui/server
 
+## 1.0.0
+
+### Major Changes
+
+- Release all workspace packages to `1.0.0` for the new major release.
+
+### Patch Changes
+
+- Updated dependencies
+  - @openspecui/core@1.0.0
+
 ## 0.9.0
 
 ### Minor Changes
