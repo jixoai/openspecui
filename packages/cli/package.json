@@ -1,6 +1,6 @@
 {
   "name": "openspecui",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "OpenSpec UI - Visual interface for spec-driven development",
   "type": "module",
   "main": "dist/index.mjs",
@@ -26,6 +26,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@lydell/node-pty": "^1.1.0",
     "@parcel/watcher": "^2.5.1",
     "yaml": "^2.8.0"
   },

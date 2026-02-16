@@ -1,5 +1,11 @@
 # openspecui
 
+## 1.0.1
+
+### Patch Changes
+
+- Fix CLI runtime PTY loading in `bunx`/`npx` installs by externalizing `@lydell/node-pty` from the bundle and resolving it from runtime dependencies.
+
 ## 1.0.0
 
 ### Major Changes
