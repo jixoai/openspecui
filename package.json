@@ -5,7 +5,8 @@
   "description": "OpenSpec Web UI - Visual interface for spec-driven development",
   "type": "module",
   "scripts": {
-    "dev": "tsx scripts/dev.ts",
+    "dev": "bun run scripts/dev-tui.tsx",
+    "dev:legacy": "tsx scripts/dev.ts",
     "openspecui": "pnpm --filter openspecui dev",
     "dev:server": "pnpm --filter @openspecui/server dev",
     "dev:web": "pnpm --filter @openspecui/web dev",
@@ -41,10 +42,14 @@
   "devDependencies": {
     "@changesets/changelog-github": "^0.5.2",
     "@changesets/cli": "^2.29.8",
+    "@opentui/core": "^0.1.79",
+    "@opentui/react": "^0.1.79",
     "@types/node": "^22.10.0",
+    "@xterm/headless": "^6.0.0",
     "prettier": "^3.4.2",
     "prettier-plugin-organize-imports": "^4.1.0",
     "prettier-plugin-tailwindcss": "^0.6.9",
+    "react": "^19.2.0",
     "shadcn": "^3.8.2",
     "tsx": "^4.20.6",
     "typescript": "^5.7.2"
