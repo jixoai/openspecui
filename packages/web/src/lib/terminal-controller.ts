@@ -686,6 +686,15 @@ class TerminalController {
   }
 
   private handleErrorResponse(msg: Extract<PtyServerMessage, { type: 'error' }>): void {
+    if (msg.code === 'PTY_CREATE_FAILED' && msg.sessionId) {
+      const instance = this.instances.get(msg.sessionId)
+      if (instance && !instance.serverSessionId) {
+        instance.isExited = true
+        instance.exitCode = -1
+        instance.terminal.write(`\r\n\x1b[31m[Failed to start PTY: ${msg.message}]\x1b[0m`)
+        this.notify()
+      }
+    }
     console.warn(`[pty] ${msg.code}: ${msg.message}`, msg)
   }
 

@@ -29,6 +29,33 @@ export interface PtySessionInfo {
   createdAt: number
 }
 
+function resolveDefaultShell(platform: PtyPlatform, env: NodeJS.ProcessEnv): string {
+  if (platform === 'windows') {
+    return env.ComSpec?.trim() || 'cmd.exe'
+  }
+  return env.SHELL?.trim() || '/bin/sh'
+}
+
+export function resolvePtyCommand(opts: {
+  platform: PtyPlatform
+  command?: string
+  args?: string[]
+  env: NodeJS.ProcessEnv
+}): { command: string; args: string[] } {
+  const command = opts.command?.trim()
+  if (command) {
+    return {
+      command,
+      args: opts.args ?? [],
+    }
+  }
+
+  return {
+    command: resolveDefaultShell(opts.platform, opts.env),
+    args: [],
+  }
+}
+
 export class PtySession extends EventEmitter {
   readonly id: string
   readonly command: string
@@ -61,15 +88,19 @@ export class PtySession extends EventEmitter {
     super()
     this.id = id
     this.createdAt = Date.now()
-    const shell = opts.command ?? process.env.SHELL ?? '/bin/sh'
-    const args = opts.command ? (opts.args ?? []) : []
-    this.command = shell
-    this.args = args
+    const resolvedCommand = resolvePtyCommand({
+      platform: opts.platform,
+      command: opts.command,
+      args: opts.args,
+      env: process.env,
+    })
+    this.command = resolvedCommand.command
+    this.args = resolvedCommand.args
     this.platform = opts.platform
     this.maxBufferLines = opts.scrollback ?? DEFAULT_SCROLLBACK
     this.maxBufferBytes = opts.maxBufferBytes ?? DEFAULT_MAX_BUFFER_BYTES
 
-    this.process = pty.spawn(shell, args, {
+    this.process = pty.spawn(this.command, this.args, {
       name: 'xterm-256color',
       cols: opts.cols ?? 80,
       rows: opts.rows ?? 24,

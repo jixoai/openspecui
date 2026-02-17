@@ -6,7 +6,7 @@ import {
 import type { WebSocket } from 'ws'
 import type { PtyManager, PtySession } from './pty-manager.js'
 
-type PtyErrorCode = 'INVALID_JSON' | 'INVALID_MESSAGE' | 'SESSION_NOT_FOUND'
+type PtyErrorCode = 'INVALID_JSON' | 'INVALID_MESSAGE' | 'SESSION_NOT_FOUND' | 'PTY_CREATE_FAILED'
 type PtyErrorMessage = {
   type: 'error'
   code: PtyErrorCode
@@ -88,20 +88,25 @@ export function createPtyWebSocketHandler(ptyManager: PtyManager) {
 
       switch (msg.type) {
         case 'create': {
-          const session = ptyManager.create({
-            cols: msg.cols,
-            rows: msg.rows,
-            command: msg.command,
-            args: msg.args,
-          })
+          try {
+            const session = ptyManager.create({
+              cols: msg.cols,
+              rows: msg.rows,
+              command: msg.command,
+              args: msg.args,
+            })
 
-          send({
-            type: 'created',
-            requestId: msg.requestId,
-            sessionId: session.id,
-            platform: session.platform,
-          })
-          attachToSession(session)
+            send({
+              type: 'created',
+              requestId: msg.requestId,
+              sessionId: session.id,
+              platform: session.platform,
+            })
+            attachToSession(session)
+          } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : String(err)
+            sendError('PTY_CREATE_FAILED', errorMessage, { sessionId: msg.requestId })
+          }
           break
         }
 

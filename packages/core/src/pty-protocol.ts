@@ -96,7 +96,12 @@ export const PtyListResponseSchema = z.object({
   sessions: z.array(PtySessionInfoSchema),
 })
 
-export const PtyErrorCodeSchema = z.enum(['INVALID_JSON', 'INVALID_MESSAGE', 'SESSION_NOT_FOUND'])
+export const PtyErrorCodeSchema = z.enum([
+  'INVALID_JSON',
+  'INVALID_MESSAGE',
+  'SESSION_NOT_FOUND',
+  'PTY_CREATE_FAILED',
+])
 
 export const PtyErrorResponseSchema = z.object({
   type: z.literal('error'),
