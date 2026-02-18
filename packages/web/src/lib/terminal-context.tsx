@@ -1,8 +1,17 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
-import YAML from 'yaml'
-import { terminalController } from './terminal-controller'
-import { useOpsxProjectConfigSubscription } from './use-opsx'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react'
 import { isStaticMode } from './static-mode'
+import { terminalController } from './terminal-controller'
+import { useConfigSubscription } from './use-subscription'
 
 export interface TerminalSession {
   id: string
@@ -106,28 +115,12 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     }
   }, [sessions])
 
-  // Sync terminal config from config.yaml (always mounted, so config changes apply immediately)
-  const { data: projectConfigYaml } = useOpsxProjectConfigSubscription()
+  // Sync terminal config from .openspecui.json
+  const { data: config } = useConfigSubscription()
   useEffect(() => {
-    if (!projectConfigYaml) return
-    try {
-      const parsed = YAML.parse(projectConfigYaml)
-      const ui = parsed?.ui as Record<string, unknown> | undefined
-      if (!ui) return
-      const fontSize = typeof ui['font-size'] === 'number' ? ui['font-size'] : 13
-      const fontFamily = Array.isArray(ui['font-families'])
-        ? (ui['font-families'] as string[]).join(', ')
-        : typeof ui['font-family'] === 'string' ? ui['font-family'] : ''
-      const cursorBlink = typeof ui['cursor-blink'] === 'boolean' ? ui['cursor-blink'] : true
-      const cursorStyle = (['block', 'underline', 'bar'] as const).includes(ui['cursor-style'] as 'block' | 'underline' | 'bar')
-        ? (ui['cursor-style'] as 'block' | 'underline' | 'bar')
-        : 'block'
-      const scrollback = typeof ui['scrollback'] === 'number' ? ui['scrollback'] : 1000
-      terminalController.applyConfig({ fontSize, fontFamily, cursorBlink, cursorStyle, scrollback })
-    } catch {
-      // Invalid YAML — ignore
-    }
-  }, [projectConfigYaml])
+    if (!config?.terminal) return
+    terminalController.applyConfig(config.terminal)
+  }, [config?.terminal])
 
   const value = useMemo<TerminalContextValue>(
     () => ({

@@ -1,5 +1,5 @@
-import { spawn } from 'child_process'
-import type { ConfigManager } from './config.js'
+import { spawn, type ChildProcess } from 'child_process'
+import { createCleanCliEnv, type ConfigManager } from './config.js'
 
 /** CLI 执行结果 */
 export interface CliResult {
@@ -16,16 +16,15 @@ export interface CliStreamEvent {
   exitCode?: number | null
 }
 
+interface CliResultInternal extends CliResult {
+  errorCode?: string
+}
+
 /**
  * CLI 执行器
  *
- * 负责调用外部 openspec CLI 命令。
- * 命令前缀从 ConfigManager 获取，支持：
- * - ['npx', '@fission-ai/openspec'] (默认)
- * - ['openspec'] (全局安装)
- * - 自定义数组或字符串
- *
- * 注意：所有命令都使用 shell: false 执行，避免 shell 注入风险
+ * 负责调用外部 openspec CLI 命令，统一通过 ConfigManager 的 runner 解析结果执行。
+ * 所有命令都使用 shell: false，避免 shell 注入风险。
  */
 export class CliExecutor {
   constructor(
@@ -33,53 +32,18 @@ export class CliExecutor {
     private projectDir: string
   ) {}
 
-  /**
-   * 创建干净的环境变量，移除 pnpm 特有的配置
-   * 避免 pnpm 环境变量污染 npx/npm 执行
-   */
-  private getCleanEnv(): NodeJS.ProcessEnv {
-    const env = { ...process.env }
-    // 移除 pnpm 特有的 npm_config_* 变量，避免污染 npx/npm
-    for (const key of Object.keys(env)) {
-      if (
-        key.startsWith('npm_config_') ||
-        key.startsWith('npm_package_') ||
-        key === 'npm_execpath' ||
-        key === 'npm_lifecycle_event' ||
-        key === 'npm_lifecycle_script'
-      ) {
-        delete env[key]
-      }
-    }
-    return env
-  }
-
-  /**
-   * 构建完整命令数组
-   *
-   * @param args CLI 参数，如 ['init'] 或 ['archive', 'change-id']
-   * @returns [command, ...commandArgs, ...args]
-   */
   private async buildCommandArray(args: string[]): Promise<string[]> {
     const commandParts = await this.configManager.getCliCommand()
     return [...commandParts, ...args]
   }
 
-  /**
-   * 执行 CLI 命令
-   *
-   * @param args CLI 参数，如 ['init'] 或 ['archive', 'change-id']
-   * @returns 执行结果
-   */
-  async execute(args: string[]): Promise<CliResult> {
-    const fullCommand = await this.buildCommandArray(args)
+  private runCommandOnce(fullCommand: readonly string[]): Promise<CliResultInternal> {
     const [cmd, ...cmdArgs] = fullCommand
-
     return new Promise((resolve) => {
       const child = spawn(cmd, cmdArgs, {
         cwd: this.projectDir,
         shell: false,
-        env: this.getCleanEnv(),
+        env: createCleanCliEnv(),
       })
 
       let stdout = ''
@@ -103,32 +67,62 @@ export class CliExecutor {
       })
 
       child.on('error', (err) => {
+        const errorCode = (err as NodeJS.ErrnoException).code
+        const errorMessage = err.message + (errorCode ? ` (${errorCode})` : '')
         resolve({
           success: false,
           stdout,
-          stderr: stderr + '\n' + err.message,
+          stderr: stderr ? `${stderr}\n${errorMessage}` : errorMessage,
           exitCode: null,
+          errorCode,
         })
       })
     })
   }
 
+  private async executeInternal(args: string[], allowRetry: boolean): Promise<CliResult> {
+    let fullCommand: string[]
+    try {
+      fullCommand = await this.buildCommandArray(args)
+    } catch (err) {
+      return {
+        success: false,
+        stdout: '',
+        stderr: err instanceof Error ? err.message : String(err),
+        exitCode: null,
+      }
+    }
+
+    const result = await this.runCommandOnce(fullCommand)
+    if (allowRetry && result.errorCode === 'ENOENT') {
+      this.configManager.invalidateResolvedCliRunner()
+      return this.executeInternal(args, false)
+    }
+    return {
+      success: result.success,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      exitCode: result.exitCode,
+    }
+  }
+
+  /**
+   * 执行 CLI 命令
+   */
+  async execute(args: string[]): Promise<CliResult> {
+    return this.executeInternal(args, true)
+  }
+
   /**
    * 执行 openspec init（非交互式）
-   *
-   * @param tools 工具列表，如 ['claude', 'cursor'] 或 'all' 或 'none'
    */
   async init(tools: string[] | 'all' | 'none' = 'all'): Promise<CliResult> {
     const toolsArg = Array.isArray(tools) ? tools.join(',') : tools
-    // CLI 格式是 `--tools <value>`，不是 `--tools=<value>`
     return this.execute(['init', '--tools', toolsArg])
   }
 
   /**
    * 执行 openspec archive <changeId>（非交互式）
-   *
-   * @param changeId 要归档的 change ID
-   * @param options 选项
    */
   async archive(
     changeId: string,
@@ -189,77 +183,121 @@ export class CliExecutor {
 
   /**
    * 检查 CLI 是否可用
-   * @param timeout 超时时间（毫秒），默认 10 秒
    */
-  async checkAvailability(timeout = 10000): Promise<{ available: boolean; version?: string; error?: string }> {
+  async checkAvailability(timeout = 10000): Promise<{
+    available: boolean
+    version?: string
+    error?: string
+    effectiveCommand?: string
+    tried?: string[]
+  }> {
     try {
-      const result = await Promise.race([
-        this.execute(['--version']),
-        new Promise<CliResult>((_, reject) =>
+      const resolved = await Promise.race([
+        this.configManager.getResolvedCliRunner(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('CLI runner resolve timed out')), timeout)
+        ),
+      ])
+
+      const versionResult = await Promise.race([
+        this.runCommandOnce([...resolved.commandParts, '--version']),
+        new Promise<CliResultInternal>((_, reject) =>
           setTimeout(() => reject(new Error('CLI check timed out')), timeout)
         ),
       ])
-      if (result.success) {
+
+      if (versionResult.success) {
         return {
           available: true,
-          version: result.stdout.trim(),
+          version: versionResult.stdout.trim() || resolved.version,
+          effectiveCommand: resolved.command,
+          tried: resolved.attempts.map((attempt) => attempt.command),
         }
       }
+
       return {
         available: false,
-        error: result.stderr || 'Unknown error',
+        error: versionResult.stderr || 'Unknown error',
+        effectiveCommand: resolved.command,
+        tried: resolved.attempts.map((attempt) => attempt.command),
       }
     } catch (err) {
       return {
         available: false,
-        error: err instanceof Error ? err.message : 'Unknown error',
+        error: err instanceof Error ? err.message : String(err),
       }
     }
   }
 
   /**
    * 流式执行 CLI 命令
-   *
-   * @param args CLI 参数
-   * @param onEvent 事件回调
-   * @returns 取消函数
    */
   async executeStream(
     args: string[],
     onEvent: (event: CliStreamEvent) => void
   ): Promise<() => void> {
-    const fullCommand = await this.buildCommandArray(args)
-    const [cmd, ...cmdArgs] = fullCommand
+    let cancelled = false
+    let activeChild: ChildProcess | null = null
 
-    // 首先发送正在执行的命令（用于 UI 显示）
-    onEvent({ type: 'command', data: fullCommand.join(' ') })
+    const start = async (allowRetry: boolean): Promise<void> => {
+      if (cancelled) return
 
-    const child = spawn(cmd, cmdArgs, {
-      cwd: this.projectDir,
-      shell: false,
-      env: this.getCleanEnv(),
-    })
+      let fullCommand: string[]
+      try {
+        fullCommand = await this.buildCommandArray(args)
+      } catch (err) {
+        onEvent({ type: 'stderr', data: err instanceof Error ? err.message : String(err) })
+        onEvent({ type: 'exit', exitCode: null })
+        return
+      }
 
-    child.stdout?.on('data', (data) => {
-      onEvent({ type: 'stdout', data: data.toString() })
-    })
+      onEvent({ type: 'command', data: fullCommand.join(' ') })
+      const [cmd, ...cmdArgs] = fullCommand
 
-    child.stderr?.on('data', (data) => {
-      onEvent({ type: 'stderr', data: data.toString() })
-    })
+      const child = spawn(cmd, cmdArgs, {
+        cwd: this.projectDir,
+        shell: false,
+        env: createCleanCliEnv(),
+      })
+      activeChild = child
 
-    child.on('close', (exitCode) => {
-      onEvent({ type: 'exit', exitCode })
-    })
+      child.stdout?.on('data', (data) => {
+        onEvent({ type: 'stdout', data: data.toString() })
+      })
 
-    child.on('error', (err) => {
-      onEvent({ type: 'stderr', data: err.message })
-      onEvent({ type: 'exit', exitCode: null })
-    })
+      child.stderr?.on('data', (data) => {
+        onEvent({ type: 'stderr', data: data.toString() })
+      })
 
-    // 返回取消函数
+      child.on('close', (exitCode) => {
+        if (activeChild !== child) return
+        activeChild = null
+        onEvent({ type: 'exit', exitCode })
+      })
+
+      child.on('error', (err) => {
+        if (activeChild !== child) return
+        activeChild = null
+        const code = (err as NodeJS.ErrnoException).code
+        const message = err.message + (code ? ` (${code})` : '')
+
+        if (allowRetry && code === 'ENOENT' && !cancelled) {
+          this.configManager.invalidateResolvedCliRunner()
+          void start(false)
+          return
+        }
+
+        onEvent({ type: 'stderr', data: message })
+        onEvent({ type: 'exit', exitCode: null })
+      })
+    }
+
+    await start(true)
+
     return () => {
-      child.kill()
+      cancelled = true
+      activeChild?.kill()
+      activeChild = null
     }
   }
 
@@ -271,7 +309,6 @@ export class CliExecutor {
     onEvent: (event: CliStreamEvent) => void
   ): Promise<() => void> {
     const toolsArg = Array.isArray(tools) ? tools.join(',') : tools
-    // CLI 格式是 `--tools <value>`，不是 `--tools=<value>`
     return this.executeStream(['init', '--tools', toolsArg], onEvent)
   }
 
@@ -291,27 +328,18 @@ export class CliExecutor {
 
   /**
    * 流式执行任意命令（数组形式）
-   *
-   * 用于执行不需要 openspec CLI 前缀的命令，如 npm install。
-   * 使用 shell: false 避免 shell 注入风险。
-   *
-   * @param command 命令数组，如 ['npm', 'install', '-g', '@fission-ai/openspec']
-   * @param onEvent 事件回调
-   * @returns 取消函数
    */
   executeCommandStream(
     command: readonly string[],
     onEvent: (event: CliStreamEvent) => void
   ): () => void {
     const [cmd, ...cmdArgs] = command
-
-    // 首先发送正在执行的命令（用于 UI 显示）
     onEvent({ type: 'command', data: command.join(' ') })
 
     const child = spawn(cmd, cmdArgs, {
       cwd: this.projectDir,
       shell: false,
-      env: this.getCleanEnv(),
+      env: createCleanCliEnv(),
     })
 
     child.stdout?.on('data', (data) => {
@@ -327,11 +355,12 @@ export class CliExecutor {
     })
 
     child.on('error', (err) => {
-      onEvent({ type: 'stderr', data: err.message })
+      const code = (err as NodeJS.ErrnoException).code
+      const message = err.message + (code ? ` (${code})` : '')
+      onEvent({ type: 'stderr', data: message })
       onEvent({ type: 'exit', exitCode: null })
     })
 
-    // 返回取消函数
     return () => {
       child.kill()
     }

@@ -1,11 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mkdir, writeFile } from 'fs/promises'
+import { join } from 'path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanupTempDir, createTempDir } from './__tests__/test-utils.js'
 import { CliExecutor, type CliResult } from './cli-executor.js'
 import { ConfigManager } from './config.js'
 import { clearCache } from './reactive-fs/index.js'
 import { closeAllWatchers } from './reactive-fs/watcher-pool.js'
-import { createTempDir, createTempSubDir, cleanupTempDir } from './__tests__/test-utils.js'
-import { mkdir, writeFile } from 'fs/promises'
-import { join } from 'path'
 
 describe('CliExecutor', () => {
   let tempDir: string
@@ -51,20 +51,19 @@ describe('CliExecutor', () => {
     })
 
     it('should capture stderr', async () => {
-      // 使用 bash 命令输出到 stderr
-      await configManager.writeConfig({ cli: { command: 'bash -c' } })
+      await configManager.writeConfig({ cli: { command: 'node' } })
       clearCache()
 
-      const result = await cliExecutor.execute(['echo error >&2'])
+      const result = await cliExecutor.execute(['-e', "process.stderr.write('error')"])
 
       expect(result.stderr.trim()).toBe('error')
     })
 
     it('should return failure for non-zero exit code', async () => {
-      await configManager.writeConfig({ cli: { command: 'bash -c' } })
+      await configManager.writeConfig({ cli: { command: 'node' } })
       clearCache()
 
-      const result = await cliExecutor.execute(['exit 1'])
+      const result = await cliExecutor.execute(['-e', 'process.exit(1)'])
 
       expect(result.success).toBe(false)
       expect(result.exitCode).toBe(1)
@@ -80,10 +79,10 @@ describe('CliExecutor', () => {
     })
 
     it('should use project directory as cwd', async () => {
-      await configManager.writeConfig({ cli: { command: 'pwd' } })
+      await configManager.writeConfig({ cli: { command: 'node' } })
       clearCache()
 
-      const result = await cliExecutor.execute([])
+      const result = await cliExecutor.execute(['-e', 'process.stdout.write(process.cwd())'])
 
       expect(result.success).toBe(true)
       // macOS 上 /var 是 /private/var 的符号链接
@@ -218,41 +217,29 @@ describe('CliExecutor', () => {
 
   describe('checkAvailability()', () => {
     it('should return available when command succeeds', async () => {
-      const executeSpy = vi.spyOn(cliExecutor, 'execute').mockResolvedValue({
-        success: true,
-        stdout: '1.0.0',
-        stderr: '',
-        exitCode: 0,
-      })
+      await configManager.writeConfig({ cli: { command: 'node' } })
+      clearCache()
 
       const result = await cliExecutor.checkAvailability()
 
       expect(result.available).toBe(true)
-      expect(result.version).toBe('1.0.0')
-      expect(executeSpy).toHaveBeenCalledWith(['--version'])
+      expect(result.version).toBeDefined()
+      expect(result.effectiveCommand).toBe('node')
     })
 
-    it('should return not available when command fails', async () => {
-      vi.spyOn(cliExecutor, 'execute').mockResolvedValue({
-        success: false,
-        stdout: '',
-        stderr: 'Command not found',
-        exitCode: 127,
-      })
-
+    it('should return not available when runner resolve fails', async () => {
+      vi.spyOn(configManager, 'getResolvedCliRunner').mockRejectedValue(new Error('resolve failed'))
       const result = await cliExecutor.checkAvailability()
-
       expect(result.available).toBe(false)
-      expect(result.error).toBe('Command not found')
+      expect(result.error).toBe('resolve failed')
     })
 
-    it('should handle exceptions', async () => {
-      vi.spyOn(cliExecutor, 'execute').mockRejectedValue(new Error('Spawn failed'))
-
+    it('should report unavailable for invalid configured execute path', async () => {
+      await configManager.writeConfig({ cli: { command: 'nonexistent_command_12345' } })
+      clearCache()
       const result = await cliExecutor.checkAvailability()
-
       expect(result.available).toBe(false)
-      expect(result.error).toBe('Spawn failed')
+      expect(result.error).toContain('nonexistent_command_12345')
     })
   })
 
@@ -270,15 +257,18 @@ describe('CliExecutor', () => {
       expect(result.stdout).toContain('test message')
     })
 
-    it('should execute ls command in project directory', async () => {
+    it('should execute command in project directory', async () => {
       // 创建一些文件
       await writeFile(join(tempDir, 'file1.txt'), 'content')
       await writeFile(join(tempDir, 'file2.txt'), 'content')
 
-      await configManager.writeConfig({ cli: { command: 'ls' } })
+      await configManager.writeConfig({ cli: { command: 'node' } })
       clearCache()
 
-      const result = await cliExecutor.execute([])
+      const result = await cliExecutor.execute([
+        '-e',
+        "const fs=require('fs');process.stdout.write(fs.readdirSync('.').join('\\n'))",
+      ])
 
       expect(result.success).toBe(true)
       expect(result.stdout).toContain('file1.txt')
@@ -286,10 +276,13 @@ describe('CliExecutor', () => {
     })
 
     it('should handle command with environment variables', async () => {
-      await configManager.writeConfig({ cli: { command: 'bash -c' } })
+      await configManager.writeConfig({ cli: { command: 'node' } })
       clearCache()
 
-      const result = await cliExecutor.execute(['echo $HOME'])
+      const result = await cliExecutor.execute([
+        '-e',
+        "process.stdout.write(process.env.HOME || '')",
+      ])
 
       expect(result.success).toBe(true)
       expect(result.stdout.trim()).toBe(process.env.HOME)

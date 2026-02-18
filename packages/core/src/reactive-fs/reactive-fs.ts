@@ -63,6 +63,18 @@ export async function reactiveReadFile(filepath: string): Promise<string | null>
 }
 
 /**
+ * 主动更新响应式文件缓存（用于写入后立即推送订阅）
+ *
+ * 仅当该文件已有缓存状态时生效；不会创建新的监听器。
+ */
+export function updateReactiveFileCache(filepath: string, content: string | null): void {
+  const normalizedPath = resolve(filepath)
+  const key = `file:${normalizedPath}`
+  const state = stateCache.get(key) as ReactiveState<string | null> | undefined
+  state?.set(content)
+}
+
+/**
  * 响应式读取目录内容
  *
  * 特性：
@@ -212,7 +224,12 @@ export async function reactiveStat(
   const normalizedPath = resolve(path)
   const key = `stat:${normalizedPath}`
 
-  type StatResult = { isDirectory: boolean; isFile: boolean; mtime: number; birthtime: number } | null
+  type StatResult = {
+    isDirectory: boolean
+    isFile: boolean
+    mtime: number
+    birthtime: number
+  } | null
 
   const getValue = async (): Promise<StatResult> => {
     try {

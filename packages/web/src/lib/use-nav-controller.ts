@@ -5,6 +5,7 @@ import { navController, type NavState } from './nav-controller'
 export function useNavLayout(): NavState {
   return useSyncExternalStore(
     (cb) => navController.subscribe(cb),
+    () => navController.getSnapshot(),
     () => navController.getSnapshot()
   )
 }

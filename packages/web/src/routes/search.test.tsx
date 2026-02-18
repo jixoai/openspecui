@@ -12,6 +12,10 @@ const popAreaConfigMock = vi.hoisted(() => ({
   setConfig: vi.fn(),
   resetConfig: vi.fn(),
 }))
+const popAreaLifecycleMock = vi.hoisted(() => ({
+  requestClose: vi.fn(),
+  closeRequestVersion: 0,
+}))
 
 const useSearchMock = vi.hoisted(() => vi.fn())
 const useLocationMock = vi.hoisted(() => vi.fn())
@@ -26,6 +30,7 @@ vi.mock('@/lib/use-search', () => ({
 
 vi.mock('@/components/layout/pop-area', () => ({
   usePopAreaConfigContext: () => popAreaConfigMock,
+  usePopAreaLifecycleContext: () => popAreaLifecycleMock,
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -44,6 +49,7 @@ describe('SearchRoute', () => {
     navControllerMock.getAreaForPath.mockReset()
     popAreaConfigMock.setConfig.mockReset()
     popAreaConfigMock.resetConfig.mockReset()
+    popAreaLifecycleMock.requestClose.mockReset()
     useSearchMock.mockReset()
     useLocationMock.mockReset()
   })
@@ -77,7 +83,7 @@ describe('SearchRoute', () => {
 
     expect(navControllerMock.getAreaForPath).toHaveBeenCalledWith('/changes/add-auth')
     expect(navControllerMock.push).toHaveBeenCalledWith('bottom', '/changes/add-auth', null)
-    expect(navControllerMock.deactivatePop).toHaveBeenCalledTimes(1)
+    expect(popAreaLifecycleMock.requestClose).toHaveBeenCalledTimes(1)
   })
 
   it('syncs input query to pop route via replace', () => {

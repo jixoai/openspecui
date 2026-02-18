@@ -11,8 +11,10 @@ import type {
   ArchiveMeta,
   Change,
   ChangeFile,
+  ChangeStatus,
   ChangeMeta,
   OpenSpecUIConfig,
+  SchemaArtifact,
   SchemaDetail,
   SchemaInfo,
   SchemaResolution,
@@ -21,6 +23,7 @@ import type {
   TemplatesMap,
 } from '@openspecui/core'
 import type { SearchDocument } from '@openspecui/search'
+import { parse as parseYaml } from 'yaml'
 import type { ExportSnapshot } from '../ssg/types'
 import { getBasePath, getInitialData } from './static-mode'
 
@@ -29,6 +32,241 @@ import { getBasePath, getInitialData } from './static-mode'
  */
 let snapshotCache: ExportSnapshot | null = null
 let snapshotPromise: Promise<ExportSnapshot | null> | null = null
+
+interface GlobArtifactFile {
+  path: string
+  type: 'file'
+  content: string
+}
+
+function isGlobPattern(path: string): boolean {
+  return path.includes('*') || path.includes('?') || path.includes('[')
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/^\.?\//, '')
+}
+
+function getPathBasename(path: string): string {
+  const normalized = normalizePath(path)
+  const parts = normalized.split('/')
+  return parts[parts.length - 1] ?? normalized
+}
+
+function escapeRegexChar(char: string): string {
+  return /[\\^$.*+?()[\]{}|]/.test(char) ? `\\${char}` : char
+}
+
+function globToRegex(pattern: string): RegExp {
+  const normalized = normalizePath(pattern)
+  let source = '^'
+
+  for (let i = 0; i < normalized.length; i += 1) {
+    const char = normalized[i]
+
+    if (char === '*') {
+      if (normalized[i + 1] === '*') {
+        i += 1
+        if (normalized[i + 1] === '/') {
+          i += 1
+          source += '(?:.*/)?'
+        } else {
+          source += '.*'
+        }
+      } else {
+        source += '[^/]*'
+      }
+      continue
+    }
+
+    if (char === '?') {
+      source += '[^/]'
+      continue
+    }
+
+    if (char === '[') {
+      const closeIndex = normalized.indexOf(']', i + 1)
+      if (closeIndex > i + 1) {
+        source += normalized.slice(i, closeIndex + 1)
+        i = closeIndex
+        continue
+      }
+    }
+
+    source += escapeRegexChar(char)
+  }
+
+  source += '$'
+  return new RegExp(source)
+}
+
+function matchesGlob(path: string, pattern: string): boolean {
+  return globToRegex(pattern).test(normalizePath(path))
+}
+
+function hasContent(content: string | undefined | null): boolean {
+  return typeof content === 'string' && content.trim().length > 0
+}
+
+function getSnapshotChangeFiles(change: ExportSnapshot['changes'][number]): Record<string, string> {
+  const files: Record<string, string> = {}
+
+  if (hasContent(change.proposal)) files['proposal.md'] = change.proposal
+  if (hasContent(change.tasks)) files['tasks.md'] = change.tasks ?? ''
+  if (hasContent(change.design)) files['design.md'] = change.design ?? ''
+
+  for (const delta of change.deltas) {
+    const path = `specs/${delta.capability}/spec.md`
+    if (hasContent(delta.content)) files[path] = delta.content
+  }
+
+  return files
+}
+
+function resolveMetadataSchema(
+  snapshot: ExportSnapshot,
+  changeId: string
+): string | undefined {
+  const metadata = snapshot.opsx?.changeMetadata?.[changeId]
+  if (!metadata) return undefined
+  try {
+    const parsed = parseYaml(metadata) as Record<string, unknown> | null
+    if (typeof parsed?.schema === 'string' && parsed.schema.length > 0) {
+      return parsed.schema
+    }
+  } catch {
+    return undefined
+  }
+  return undefined
+}
+
+function resolveSchemaName(
+  snapshot: ExportSnapshot,
+  changeId: string,
+  preferredSchema?: string
+): string {
+  const detailMap = snapshot.opsx?.schemaDetails ?? {}
+
+  if (preferredSchema && detailMap[preferredSchema]) {
+    return preferredSchema
+  }
+
+  const metadataSchema = resolveMetadataSchema(snapshot, changeId)
+  if (metadataSchema && detailMap[metadataSchema]) {
+    return metadataSchema
+  }
+
+  const firstSchema = snapshot.opsx?.schemas?.[0]?.name
+  if (firstSchema) return firstSchema
+
+  const firstDetail = Object.keys(detailMap)[0]
+  if (firstDetail) return firstDetail
+
+  return preferredSchema ?? 'spec-driven'
+}
+
+function fallbackSchemaArtifacts(): SchemaArtifact[] {
+  return [
+    { id: 'proposal', outputPath: 'proposal.md', requires: [] },
+    { id: 'tasks', outputPath: 'tasks.md', requires: [] },
+    { id: 'design', outputPath: 'design.md', requires: [] },
+    { id: 'specs', outputPath: 'specs/**/*.md', requires: [] },
+  ]
+}
+
+function resolveSchemaDetail(
+  snapshot: ExportSnapshot,
+  schemaName: string
+): SchemaDetail {
+  const schemaDetail = snapshot.opsx?.schemaDetails?.[schemaName]
+  if (schemaDetail) return schemaDetail
+
+  return {
+    name: schemaName,
+    artifacts: fallbackSchemaArtifacts(),
+    applyRequires: [],
+  }
+}
+
+function resolveArtifactOutput(
+  change: ExportSnapshot['changes'][number],
+  outputPath: string,
+  artifactId?: string
+): string | null {
+  const files = getSnapshotChangeFiles(change)
+  const normalizedOutputPath = normalizePath(outputPath)
+  const directMatch = files[normalizedOutputPath]
+  if (hasContent(directMatch)) return directMatch
+
+  const basename = getPathBasename(normalizedOutputPath)
+  if (basename === 'proposal.md' && hasContent(change.proposal)) return change.proposal
+  if (basename === 'tasks.md' && hasContent(change.tasks)) return change.tasks ?? null
+  if (basename === 'design.md' && hasContent(change.design)) return change.design ?? null
+
+  if (artifactId === 'proposal' && hasContent(change.proposal)) return change.proposal
+  if (artifactId === 'tasks' && hasContent(change.tasks)) return change.tasks ?? null
+  if (artifactId === 'design' && hasContent(change.design)) return change.design ?? null
+
+  return null
+}
+
+function resolveGlobArtifactFiles(
+  change: ExportSnapshot['changes'][number],
+  outputPath: string
+): GlobArtifactFile[] {
+  const files = getSnapshotChangeFiles(change)
+  const pattern = normalizePath(outputPath)
+
+  return Object.entries(files)
+    .filter(([path]) => matchesGlob(path, pattern))
+    .map(([path, content]) => ({ path, type: 'file', content }))
+}
+
+function buildChangeStatus(
+  snapshot: ExportSnapshot,
+  change: ExportSnapshot['changes'][number],
+  preferredSchema?: string
+): ChangeStatus {
+  const schemaName = resolveSchemaName(snapshot, change.id, preferredSchema)
+  const schemaDetail = resolveSchemaDetail(snapshot, schemaName)
+
+  const doneById = new Map<string, boolean>()
+  for (const artifact of schemaDetail.artifacts) {
+    const done = isGlobPattern(artifact.outputPath)
+      ? resolveGlobArtifactFiles(change, artifact.outputPath).length > 0
+      : hasContent(resolveArtifactOutput(change, artifact.outputPath, artifact.id))
+    doneById.set(artifact.id, done)
+  }
+
+  const artifacts = schemaDetail.artifacts.map((artifact) => {
+    const done = doneById.get(artifact.id) === true
+    if (done) {
+      return {
+        id: artifact.id,
+        outputPath: artifact.outputPath,
+        status: 'done' as const,
+        relativePath: `openspec/changes/${change.id}/${artifact.outputPath}`,
+      }
+    }
+
+    const missingDeps = artifact.requires.filter((dep) => doneById.get(dep) !== true)
+    return {
+      id: artifact.id,
+      outputPath: artifact.outputPath,
+      status: missingDeps.length > 0 ? ('blocked' as const) : ('ready' as const),
+      missingDeps: missingDeps.length > 0 ? missingDeps : undefined,
+      relativePath: `openspec/changes/${change.id}/${artifact.outputPath}`,
+    }
+  })
+
+  return {
+    changeName: change.id,
+    schemaName,
+    isComplete: artifacts.every((artifact) => artifact.status === 'done'),
+    applyRequires: schemaDetail.applyRequires ?? [],
+    artifacts,
+  }
+}
 
 /**
  * Load the static snapshot once
@@ -439,6 +677,54 @@ export async function getOpsxChangeMetadata(changeId?: string): Promise<string |
     return meta[changeId] ?? null
   }
   return null
+}
+
+export async function getOpsxStatus(
+  changeId?: string,
+  schema?: string
+): Promise<ChangeStatus | null> {
+  if (!changeId) return null
+  const snapshot = await loadSnapshot()
+  if (!snapshot) return null
+  const change = snapshot.changes.find((item) => item.id === changeId)
+  if (!change) return null
+  return buildChangeStatus(snapshot, change, schema)
+}
+
+export async function getOpsxStatusList(): Promise<ChangeStatus[]> {
+  const snapshot = await loadSnapshot()
+  if (!snapshot) return []
+  return snapshot.changes.map((change) => buildChangeStatus(snapshot, change))
+}
+
+export async function getOpsxArtifactOutput(
+  changeId?: string,
+  outputPath?: string
+): Promise<string | null> {
+  if (!changeId || !outputPath) return null
+  if (isGlobPattern(outputPath)) return null
+
+  const snapshot = await loadSnapshot()
+  if (!snapshot) return null
+  const change = snapshot.changes.find((item) => item.id === changeId)
+  if (!change) return null
+
+  return resolveArtifactOutput(change, outputPath)
+}
+
+export async function getOpsxGlobArtifactFiles(
+  changeId?: string,
+  outputPath?: string
+): Promise<GlobArtifactFile[]> {
+  if (!changeId || !outputPath) return []
+  if (!isGlobPattern(outputPath)) return []
+
+  const snapshot = await loadSnapshot()
+  if (!snapshot) return []
+  const change = snapshot.changes.find((item) => item.id === changeId)
+  if (!change) return []
+
+  return resolveGlobArtifactFiles(change, outputPath)
 }
 
 export async function getSearchDocuments(): Promise<SearchDocument[]> {

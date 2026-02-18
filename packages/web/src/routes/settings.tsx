@@ -3,8 +3,8 @@ import { CopyablePath } from '@/components/copyable-path'
 import { Dialog } from '@/components/dialog'
 import { getApiBaseUrl } from '@/lib/api-config'
 import { isStaticMode } from '@/lib/static-mode'
-import { terminalController, GOOGLE_FONT_PRESETS } from '@/lib/terminal-controller'
-import { trpc, trpcClient } from '@/lib/trpc'
+import { GOOGLE_FONT_PRESETS, terminalController } from '@/lib/terminal-controller'
+import { queryClient, trpc, trpcClient } from '@/lib/trpc'
 import { useCliRunner } from '@/lib/use-cli-runner'
 import { useServerStatus } from '@/lib/use-server-status'
 import { useConfigSubscription, useConfiguredToolsSubscription } from '@/lib/use-subscription'
@@ -49,6 +49,15 @@ function applyTheme(theme: Theme) {
   }
 }
 
+function formatExecutePath(command: string, args: readonly string[] = []): string {
+  const quote = (token: string): string => {
+    if (!token) return '""'
+    if (!/[\s"'\\]/.test(token)) return token
+    return JSON.stringify(token)
+  }
+  return [command, ...args].map(quote).join(' ')
+}
+
 function FontFamilyEditor({
   value,
   onChange,
@@ -77,7 +86,7 @@ function FontFamilyEditor({
           onChange={(e) => onChange(e.target.value)}
           onBlur={onBlur}
           placeholder="e.g. JetBrains Mono, monospace"
-          className="bg-background border-border text-foreground flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          className="bg-background border-border text-foreground focus:ring-primary flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
         />
         <button
           type="button"
@@ -123,7 +132,7 @@ function FontFamilyEditor({
               value={customUrl}
               onChange={(e) => setCustomUrl(e.target.value)}
               placeholder="https://..."
-              className="bg-background border-border text-foreground min-w-0 flex-1 rounded-md border px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              className="bg-background border-border text-foreground focus:ring-primary min-w-0 flex-1 rounded-md border px-2 py-1 text-xs focus:outline-none focus:ring-1"
             />
             <button
               type="button"
@@ -213,6 +222,10 @@ export function Settings() {
     ...trpc.cli.checkAvailability.queryOptions(),
     enabled: !inStaticMode,
   })
+  const { data: effectiveCliCommand, refetch: refetchEffectiveCliCommand } = useQuery({
+    ...trpc.config.getEffectiveCliCommand.queryOptions(),
+    enabled: !inStaticMode,
+  })
 
   // 获取所有工具列表（包括 available: false 的）
   // Skip in static mode
@@ -237,12 +250,22 @@ export function Settings() {
   useEffect(() => {
     // 只有当配置中有值时才同步到 input
     if (config?.cli?.command) {
-      setCliCommand(config.cli.command)
+      setCliCommand(formatExecutePath(config.cli.command, config.cli.args ?? []))
     } else {
       // 用户没有配置时，清空 input
       setCliCommand('')
     }
-  }, [config?.cli?.command])
+  }, [config?.cli?.args, config?.cli?.command])
+
+  const savedCliCommand = useMemo(() => {
+    if (!config?.cli?.command) return ''
+    return formatExecutePath(config.cli.command, config.cli.args ?? [])
+  }, [config?.cli?.args, config?.cli?.command])
+
+  useEffect(() => {
+    if (!config?.theme) return
+    setTheme(config.theme)
+  }, [config?.theme])
 
   // 安装完成后重新嗅探
   const handleInstallSuccess = useCallback(() => {
@@ -348,12 +371,20 @@ export function Settings() {
     resetInstall()
   }
 
-  // 保存 CLI 命令配置
+  // 保存 execute-path 配置
   const saveCliCommandMutation = useMutation({
-    mutationFn: (command: string) => trpcClient.config.setCliCommand.mutate({ command }),
-    onSuccess: () => {
-      recheckCli()
+    mutationFn: (command: string) => trpcClient.config.update.mutate({ cli: { command } }),
+    onSuccess: async () => {
+      await Promise.allSettled([recheckCli(), refetchEffectiveCliCommand(), resniffCli()])
+      await Promise.allSettled([
+        queryClient.invalidateQueries(trpc.cli.checkAvailability.queryFilter()),
+        queryClient.invalidateQueries(trpc.config.getEffectiveCliCommand.queryFilter()),
+      ])
     },
+  })
+
+  const saveThemeMutation = useMutation({
+    mutationFn: (nextTheme: Theme) => trpcClient.config.update.mutate({ theme: nextTheme }),
   })
 
   // Terminal config — seed local state from controller's current config
@@ -362,45 +393,54 @@ export function Settings() {
   const [termFontSize, setTermFontSize] = useState(initialConfig.fontSize)
   const [termFontFamily, setTermFontFamily] = useState(initialConfig.fontFamily)
   const [termCursorBlink, setTermCursorBlink] = useState(initialConfig.cursorBlink)
-  const [termCursorStyle, setTermCursorStyle] = useState<'block' | 'underline' | 'bar'>(initialConfig.cursorStyle)
+  const [termCursorStyle, setTermCursorStyle] = useState<'block' | 'underline' | 'bar'>(
+    initialConfig.cursorStyle
+  )
   const [termScrollback, setTermScrollback] = useState(initialConfig.scrollback)
 
-  // Re-sync local state when controller config changes (e.g. config.yaml edited on another page)
-  useEffect(() => {
-    const current = terminalController.getConfig()
-    setTermFontSize(current.fontSize)
-    setTermFontFamily(current.fontFamily)
-    setTermCursorBlink(current.cursorBlink)
-    setTermCursorStyle(current.cursorStyle)
-    setTermScrollback(current.scrollback)
-  }, [/* re-run when entering settings page — captured by loading state transition */])
+  // Re-sync local state when controller config changes
+  useEffect(
+    () => {
+      const current = terminalController.getConfig()
+      setTermFontSize(current.fontSize)
+      setTermFontFamily(current.fontFamily)
+      setTermCursorBlink(current.cursorBlink)
+      setTermCursorStyle(current.cursorStyle)
+      setTermScrollback(current.scrollback)
+    },
+    [
+      /* re-run when entering settings page — captured by loading state transition */
+    ]
+  )
 
   // Apply immediately on local state change (live preview)
-  const applyTerminalConfig = useCallback((overrides: {
-    fontSize?: number
-    fontFamily?: string
-    cursorBlink?: boolean
-    cursorStyle?: 'block' | 'underline' | 'bar'
-    scrollback?: number
-  }) => {
-    terminalController.applyConfig({
-      fontSize: overrides.fontSize ?? termFontSize,
-      fontFamily: overrides.fontFamily ?? termFontFamily,
-      cursorBlink: overrides.cursorBlink ?? termCursorBlink,
-      cursorStyle: overrides.cursorStyle ?? termCursorStyle,
-      scrollback: overrides.scrollback ?? termScrollback,
-    })
-  }, [termFontSize, termFontFamily, termCursorBlink, termCursorStyle, termScrollback])
+  const applyTerminalConfig = useCallback(
+    (overrides: {
+      fontSize?: number
+      fontFamily?: string
+      cursorBlink?: boolean
+      cursorStyle?: 'block' | 'underline' | 'bar'
+      scrollback?: number
+    }) => {
+      terminalController.applyConfig({
+        fontSize: overrides.fontSize ?? termFontSize,
+        fontFamily: overrides.fontFamily ?? termFontFamily,
+        cursorBlink: overrides.cursorBlink ?? termCursorBlink,
+        cursorStyle: overrides.cursorStyle ?? termCursorStyle,
+        scrollback: overrides.scrollback ?? termScrollback,
+      })
+    },
+    [termFontSize, termFontFamily, termCursorBlink, termCursorStyle, termScrollback]
+  )
 
   const saveTerminalConfigMutation = useMutation({
-    mutationFn: (uiConfig: Record<string, unknown>) =>
-      trpcClient.opsx.updateProjectConfigUi.mutate(uiConfig as {
-        'font-size'?: number
-        'font-families'?: string[]
-        'cursor-blink'?: boolean
-        'cursor-style'?: 'block' | 'underline' | 'bar'
-        scrollback?: number
-      }),
+    mutationFn: (terminal: {
+      fontSize?: number
+      fontFamily?: string
+      cursorBlink?: boolean
+      cursorStyle?: 'block' | 'underline' | 'bar'
+      scrollback?: number
+    }) => trpcClient.config.update.mutate({ terminal }),
   })
 
   useEffect(() => {
@@ -449,7 +489,10 @@ export function Settings() {
           <label className="mb-3 block text-sm font-medium">Theme</label>
           <div className="flex gap-2">
             <button
-              onClick={() => setTheme('light')}
+              onClick={() => {
+                setTheme('light')
+                saveThemeMutation.mutate('light')
+              }}
               className={`flex items-center gap-2 rounded-md border px-4 py-2 transition-colors ${
                 theme === 'light'
                   ? 'border-primary bg-primary text-primary-foreground'
@@ -460,7 +503,10 @@ export function Settings() {
               Light
             </button>
             <button
-              onClick={() => setTheme('dark')}
+              onClick={() => {
+                setTheme('dark')
+                saveThemeMutation.mutate('dark')
+              }}
               className={`flex items-center gap-2 rounded-md border px-4 py-2 transition-colors ${
                 theme === 'dark'
                   ? 'border-primary bg-primary text-primary-foreground'
@@ -471,7 +517,10 @@ export function Settings() {
               Dark
             </button>
             <button
-              onClick={() => setTheme('system')}
+              onClick={() => {
+                setTheme('system')
+                saveThemeMutation.mutate('system')
+              }}
               className={`flex items-center gap-2 rounded-md border px-4 py-2 transition-colors ${
                 theme === 'system'
                   ? 'border-primary bg-primary text-primary-foreground'
@@ -490,7 +539,7 @@ export function Settings() {
         <>
           {/* Terminal Settings */}
           <section className="space-y-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
+            <h2 className="flex items-center gap-2 text-lg font-semibold">
               <Terminal className="h-5 w-5" />
               Terminal
             </h2>
@@ -510,7 +559,7 @@ export function Settings() {
                     setTermFontSize(v)
                     applyTerminalConfig({ fontSize: v })
                   }}
-                  className="w-full accent-primary"
+                  className="accent-primary w-full"
                 />
                 <div className="text-muted-foreground flex justify-between text-xs">
                   <span>8</span>
@@ -565,7 +614,7 @@ export function Settings() {
                   }`}
                 >
                   <span
-                    className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+                    className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
                       termCursorBlink ? 'translate-x-5' : 'translate-x-0'
                     }`}
                   />
@@ -588,7 +637,7 @@ export function Settings() {
                     setTermScrollback(v)
                     applyTerminalConfig({ scrollback: v })
                   }}
-                  className="w-full accent-primary"
+                  className="accent-primary w-full"
                 />
                 <div className="text-muted-foreground flex justify-between text-xs">
                   <span>0</span>
@@ -605,10 +654,10 @@ export function Settings() {
                       .map((s) => s.trim())
                       .filter(Boolean)
                     saveTerminalConfigMutation.mutate({
-                      'font-size': termFontSize,
-                      'font-families': families.length > 0 ? families : undefined,
-                      'cursor-blink': termCursorBlink,
-                      'cursor-style': termCursorStyle,
+                      fontSize: termFontSize,
+                      fontFamily: families.join(', '),
+                      cursorBlink: termCursorBlink,
+                      cursorStyle: termCursorStyle,
                       scrollback: termScrollback,
                     })
                   }}
@@ -726,11 +775,9 @@ export function Settings() {
 
               {/* CLI Command Override */}
               <div className="border-border border-t pt-3">
-                <label className="mb-2 block text-sm font-medium">
-                  Custom CLI Command (Optional)
-                </label>
+                <label className="mb-2 block text-sm font-medium">Execute Path</label>
                 <p className="text-muted-foreground mb-3 text-sm">
-                  Override the auto-detected CLI command. Leave empty to use the detected default.
+                  Override the runner command used to execute OpenSpec. Leave empty to auto-resolve.
                 </p>
                 <div className="flex gap-2">
                   <input
@@ -743,8 +790,7 @@ export function Settings() {
                   <button
                     onClick={() => saveCliCommandMutation.mutate(cliCommand)}
                     disabled={
-                      saveCliCommandMutation.isPending ||
-                      cliCommand === (config?.cli?.command ?? '')
+                      saveCliCommandMutation.isPending || cliCommand.trim() === savedCliCommand
                     }
                     className="bg-primary text-primary-foreground rounded-md px-4 py-2 hover:opacity-90 disabled:opacity-50"
                   >
@@ -753,8 +799,10 @@ export function Settings() {
                 </div>
                 {config?.cli?.command && (
                   <p className="text-muted-foreground mt-2 text-xs">
-                    Currently using custom command:{' '}
-                    <code className="bg-muted rounded px-1">{config.cli.command}</code>
+                    Saved execute path:{' '}
+                    <code className="bg-muted rounded px-1">
+                      {formatExecutePath(config.cli.command, config.cli.args ?? [])}
+                    </code>
                   </p>
                 )}
               </div>
@@ -781,8 +829,18 @@ export function Settings() {
                     </span>
                   )}
                 </div>
+                {effectiveCliCommand && (
+                  <p className="text-muted-foreground ml-6 mt-1 text-sm">
+                    Effective execute path:{' '}
+                    <code className="bg-muted rounded px-1">{effectiveCliCommand}</code>
+                  </p>
+                )}
                 {cliAvailability && !cliAvailability.available && cliAvailability.error && (
-                  <p className="text-muted-foreground ml-6 mt-1 text-sm">{cliAvailability.error}</p>
+                  <p className="text-muted-foreground ml-6 mt-1 text-sm">
+                    {cliAvailability.error}
+                    <br />
+                    Set an explicit execute path above to recover quickly.
+                  </p>
                 )}
               </div>
             </div>

@@ -56,7 +56,7 @@ export function useOpsxStatusSubscription(
 
   return useSubscription<ChangeStatus | null>(
     subscribe,
-    async () => null,
+    () => StaticProvider.getOpsxStatus(input.change, input.schema),
     [input.change, input.schema, input.refreshKey],
     input.change ? `opsx.subscribeStatus:${input.change}:${input.schema}:${input.refreshKey}` : undefined
   )
@@ -113,7 +113,7 @@ export function useOpsxStatusListSubscription(): SubscriptionState<ChangeStatus[
     []
   )
 
-  return useSubscription<ChangeStatus[]>(subscribe, async () => [], [], 'opsx.subscribeStatusList')
+  return useSubscription<ChangeStatus[]>(subscribe, StaticProvider.getOpsxStatusList, [], 'opsx.subscribeStatusList')
 }
 
 export function useOpsxSchemaDetailSubscription(name?: string): SubscriptionState<SchemaDetail | null> {
@@ -400,7 +400,10 @@ export function useOpsxArtifactOutputSubscription(
     [changeId, outputPath]
   )
 
-  return useSubscription<string | null>(subscribe, async () => null, [changeId, outputPath],
+  return useSubscription<string | null>(
+    subscribe,
+    () => StaticProvider.getOpsxArtifactOutput(changeId, outputPath),
+    [changeId, outputPath],
     changeId && outputPath ? `opsx.subscribeArtifactOutput:${changeId}:${outputPath}` : undefined
   )
 }
@@ -432,7 +435,10 @@ export function useOpsxGlobArtifactFilesSubscription(
     [changeId, outputPath]
   )
 
-  return useSubscription<GlobArtifactFile[]>(subscribe, async () => [], [changeId, outputPath],
+  return useSubscription<GlobArtifactFile[]>(
+    subscribe,
+    () => StaticProvider.getOpsxGlobArtifactFiles(changeId, outputPath),
+    [changeId, outputPath],
     changeId && outputPath ? `opsx.subscribeGlobArtifactFiles:${changeId}:${outputPath}` : undefined
   )
 }

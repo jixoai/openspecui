@@ -586,8 +586,10 @@ class TerminalController {
       this.configPersistTimer = null
       import('./trpc')
         .then(({ trpcClient }) => {
-          trpcClient.opsx.updateProjectConfigUi.mutate({
-            'font-size': this.config.fontSize,
+          trpcClient.config.update.mutate({
+            terminal: {
+              fontSize: this.config.fontSize,
+            },
           })
         })
         .catch(() => {

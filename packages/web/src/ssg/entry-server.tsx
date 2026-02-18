@@ -11,7 +11,7 @@ import {
 } from '@tanstack/react-router'
 import { RootLayout } from '../components/layout'
 import { ArchiveModalProvider } from '../lib/archive-modal-context'
-import { setSSRBasePath } from '../lib/static-mode'
+import { setSSRBasePath, setStaticMode } from '../lib/static-mode'
 import { createRouteTree } from '../lib/route-tree'
 import { StaticDataProvider } from './static-data-context'
 import type { ExportSnapshot } from '@openspecui/core'
@@ -21,6 +21,7 @@ import type { ExportSnapshot } from '@openspecui/core'
  */
 export async function render(url: string, snapshot: ExportSnapshot, basePath = '/'): Promise<string> {
   setSSRBasePath(basePath)
+  setStaticMode(true)
 
   const rootRoute = createRootRoute({ component: RootLayout })
 

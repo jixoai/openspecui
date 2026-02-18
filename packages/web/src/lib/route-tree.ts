@@ -54,6 +54,11 @@ export function createPopRouteTree(rootRoute: AnyRootRoute) {
   return rootRoute.addChildren([
     createRoute({
       getParentRoute: () => rootRoute,
+      path: '/',
+      component: () => null,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
       path: '/search',
       component: SearchRoute,
     }),

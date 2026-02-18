@@ -1,5 +1,8 @@
 import { navController } from '@/lib/nav-controller'
-import { usePopAreaConfigContext } from '@/components/layout/pop-area'
+import {
+  usePopAreaConfigContext,
+  usePopAreaLifecycleContext,
+} from '@/components/layout/pop-area'
 import { useSearch } from '@/lib/use-search'
 import { useLocation } from '@tanstack/react-router'
 import { Archive, FileText, GitBranch, Loader2, Search } from 'lucide-react'
@@ -48,7 +51,8 @@ function renderHighlightedText(text: string, terms: readonly string[]): ReactNod
 
 export function SearchRoute() {
   const location = useLocation()
-  const { setConfig, resetConfig } = usePopAreaConfigContext()
+  const { setConfig } = usePopAreaConfigContext()
+  const { requestClose } = usePopAreaLifecycleContext()
   const locationQuery = useMemo(() => {
     const params = new URLSearchParams(location.search)
     return params.get('query') ?? ''
@@ -82,19 +86,17 @@ export function SearchRoute() {
       layout: {
         alignY: 'start',
         width: 'wide',
+        topGap: 'comfortable',
       },
       panelClassName: 'w-full',
       bodyClassName: 'p-0',
-      maxHeight: '90vh',
+      maxHeight: 'min(88dvh,920px)',
     })
-    return () => {
-      resetConfig()
-    }
-  }, [resetConfig, setConfig])
+  }, [setConfig])
 
   return (
-    <div className="min-w-0 space-y-4 p-4">
-      <div className="relative">
+    <div className="flex h-full min-h-0 min-w-0 flex-col gap-4 p-3 sm:p-4">
+      <div className="relative shrink-0">
         <Search className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
         <input
           autoFocus
@@ -129,7 +131,7 @@ export function SearchRoute() {
       )}
 
       {data.length > 0 && (
-        <ul className="border-border divide-border w-full min-w-0 max-h-[58vh] divide-y overflow-auto rounded-md border">
+        <ul className="border-border divide-border min-h-0 w-full min-w-0 flex-1 divide-y overflow-y-auto rounded-md border">
           {data.map((hit) => {
             const Icon = kindIcon(hit.kind)
             return (
@@ -140,7 +142,7 @@ export function SearchRoute() {
                   onClick={() => {
                     const targetArea = navController.getAreaForPath(hit.href)
                     navController.push(targetArea, hit.href, null)
-                    navController.deactivatePop()
+                    requestClose()
                   }}
                 >
                   <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3">

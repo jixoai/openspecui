@@ -890,6 +890,112 @@ Terminal的字体选择器它应该是个 `Array<string>`+`Input|TextArea`，用
    4. pty 理论上是不支持判断是否有执行中的任务，所以只能基于终端的内容来做一个大概的判断。不过我们可以这样做：做一个多 steps 的“呼吸动画”，如果这个终端的内容在变化，那么就播放这个呼吸动画，如果内容停止更新，那么呼吸动画就停止。呼吸动画是一个 `灰色->蓝色->灰色->蓝色` 的动画循环，如果内容停止更新，那么动画会停止回落到灰色
 5. 我在配置文件中修改 Terminal 的配置（ui 字段），结果发现并没有立刻生效，得切换到设置页面，这时候才能实时生效：这里的核心是，文件是我们的单一可信源。不能依赖react 去实现实时更新。需要优化依赖路径。
 
+---
+
+1. xterm 上绑定符合使用习惯的快捷键来实现“快捷键缩放字体”，注意仍然围绕：“配置文件是单一可信原则”。
+2. 我把 xterm 升级到了 beta 版本，请你检查一下是否可以向下兼容，还是需要做出额外的适配（基于tsc检查）
+3. 改进 xterm 在移动端的使用体验，比如长按文本选择目前都还不支持
+   1. 关于移动端的改进，是一个很复杂的问题。官方 xterm 对此并不上心，我们无法改变太多只能适应。
+   2. 我个人给出的方案是，提供给一个InputPanel
+   3. InputPanel的顶部给出三个 Tab：提供三种面板：
+      1. "输入法模式"，只提供一个 textarea，可以在这类直接做原生的输入，然后提供一个发送按钮，将内容发送到 xterm 中
+      2. "虚拟键盘"，提供完整的键盘布局，这个键盘的布局基于目标操作系统来适配，同时要考虑这个键盘要专门针对移动端编程做出专门的适配。
+      3. “虚拟鼠标”，打开它就提供一个“触摸板”，用这个触摸板来模拟鼠标功能。参考 Microsoft surface pro 的触摸板和 MacOS 的妙控板来做手势适配与振动反馈。
+   4. 以上这些功能，请使用 lit.js 进行 WebComponent 的开发来实现。然后再绑定到 react 中。
+
+---
+
+关于InputPanel，有两种布局模式：
+一种是固定布局，固定布局会导致，整个页面进入到“顶部 TopBar + 上方 Terminal + 下方InputPanel”，这是一种非常特殊的布局，因为此时底部的 NavBar 是看不到的。需要关闭 InputPanel 才能恢复，通常使用 touchend 事件可以激活 InputPanel；
+第二种是浮动布局，浮动布局的模式下，此时的布局还是现在这种 Terminal 嵌入到整个页面的下方。此时浮动的 InputPanel在启动后几乎是完全透明的，但是会进入一种呼吸的状态：半透明->透明->半透明 这样的循环。此时的透明不是依靠 opacity，而是使用mask，这是因为我们需要实现一个效果，就是触摸的地方（虚拟键盘和虚拟触摸板）会立刻半透明，然后淡化。这个效果需要依靠一个 canvas 来实现这个残影淡化的效果，然后把这个canvas 拿来做 mask 的源
+
+---
+
+1. InputPanel 的顶部是一个工具栏，这里除了可以切换三种面板，还可以切换浮动模式还是固定模式
+2. 呼吸效果是 canvas 内置的功能，其实我是建议虚拟键盘和虚拟触摸板都是用 canvas 来进行开发是最好，这样性能是最好的，可以使用 pixijs 来实现。这样在布局上和特效上实现起来也比较统一和简单，使用反馈上也能比较统一
+3. 其实可以考虑提供一个“浮动按钮”，点击浮动按钮就出现这个虚拟键盘。我们可以在设置中，提供这个浮动按钮的开关：“开｜关｜自动”。其中“自动”就是基于目前的设备是否是touchable 的设备来自动启动这个“浮动按钮”，这个浮动按钮可以拖动。一旦 InputPanel 打开，那么浮动按钮就消失，InputPanel 的工具栏有“关闭 InputPanel” 的功能，关闭 InputPanel，浮动按钮就可以恢复显示
+4. 不可见的目的是为了能透过浮动的 InputPanel 来看到下方的内容。但是并不是完全不可见，因为我们在呼吸状态，所以在一半的时间里面，还是可以看到InputPanel。因很多情况下，我们是可以根据肌肉记忆和视觉残留来使用虚拟键盘的。这也是“呼吸效果”的重要所在
+
+---
+
+1. 输入法模式，使用原生的 html 即可，这里还可以基于空闲的空间提供一个历史列表（这个是存储在 server 端，server 端需要提供一个通用的响应式的KV存储接口，这是不落地到磁盘的，只在内存中存储）。我们利用浏览器的 indexedDB存储这个历史记录：Array<{time,text}>，只保留100 条数据，然后启动后，会从 server 端同步这个数据，然后和本地混合，基于时间排序，pick100，然后落地到本地 indexedDB 备份。基于这种逻辑，就可以实现多设备同步。注意，这是一个“笨同步”，就是说，每次我点击 Send，都会触发：“从 server 端同步这个数据，然后和本地混合，基于时间排序，pick100，然后落地到本地 indexedDB 备份”这个逻辑线。这个逻辑线启动的时候也会做一遍
+2. 包的大小在这里不是问题，但你只要使用 pixijs-v8 版本，这个版本体积已经优化得很好了，所以自然不是什么问题。
+3. 仍然需要 lit.js，因为它是一个基础框架，这里还有工具栏、输入法模式、甚至还有InputPanel 设置需要通过 lit.js 这个框架来提供可靠的封装和测试基础
+4. 其实我更加担心的是“固定布局”模式，你一直没有相关的疑问，所以我要主动跟你讨论：
+   1. 首先是固定布局模式下，虚拟键盘和虚拟触摸板就不需要浮动模式的那种混合模式特效了
+   2. 还有，固定模式的其实还有一种做法可以考虑，就是启用固定模式的时候，Terminal 就变成“固定 Tab”，具体体现在，这是一个特有的路由`/terminal`；同时移动端底部的 NavBar 能看到多处一个 Terminal。但也就意味着不再遮挡底部 NavBar，只是将固定模式作为一个页面来渲染，在这个页面上上下渲染 Terminal 和 InputPanel。这样实现起来会更简单。
+   3. 这也就意味着 terminal 其实有两种渲染：bottom 渲染 和 page 渲染。bottom 渲染需要配合 InputPanel 的浮动模式，目的是在看到 Terminal 的同时也能看到 openspecui 的内容；page 渲染需要配合 InputPanel 的固定模式，目的是提供最好的 Terminal 使用体验。
+
+---
+
+触摸板的边缘区域，是特殊的区域，手指移动进入到这个区域的时候，会进入“无限滑动”模式，就是会模拟手指一直朝着最后的方向去移动（基于触摸的起点和当前手势的位置来决定位置），可以发挥触摸板可视化的优势，在进入 mousemove 的时候，这边边缘就可以亮起。你可以做到一种“光晕”的效果，意味着越靠近边缘，移动速度越快。
+
+---
+
+1. 请你禁用 canvas 的右键/系统菜单功能，否则我们需要长按，这可能会和系统菜单冲突。
+2. 呼吸效果，现在直接做到整个 InputPanel 上，这样会更简单，而且效果会更好，因为目前工具栏对背景存在遮挡问题
+3. 改进一下工具栏的布局和工作原理：Input|Keys|TrackPad|Settings 作为左边四个面板，默认只显示图标，激活时显示图标和Title。右边有两个控制按钮，只有图标：“Pin/Float”｜“Close”。这里的 Pin、Float，本质上是 InputPanel 自己的行为，Float 的工作原理是：使用原生的dialog，配合 showModal来做到。
+4. BUG：InputPanelSettigns 中，修改 Fixed mode height，整个 input-panel 的高度要同步改变，现在并没有。
+5. InputPanelSettings 的数据存储在 localStorage.xtermInputPanelSettings 中
+6. 控制台存在警告：`PixiJS Deprecation Warning: addChild: Only Containers will be allowed to add children in v8.0.0 Deprecated since v8.0.0`； 还有` Handling of 'touchstart' input event was delayed for 115 ms due to main thread being busy. Consider marking event handler as 'passive' to make the page more responsive.`
+7. packages/web/src/routes/terminal.tsx 这个文件还在使用“文字符号”而不是“标准图标”
+
+---
+
+1. 拖动浮动的 InputPanel 时，要禁止手势事件被冒泡
+2. 进入浮动状态时 InputPanel 默认在底部区域
+3. 浮动模式的 InputPanel 要能 resize：四个角都要能 resize。在进行拖动的时候或者刚刚进入拖动模式的时候，四个角会高亮，意味着可以进行 resize
+4. resize 的值要能反应在 `Floating mode width|height`，但是 settings 中不显示 left/right 的值，这是隐藏的
+5. InputPanel 的所有状态需要记录在数据库中，left/right/width/height 使用% 来进行记录，这样在 屏幕 resize 的时候也能正确重放，但是需要有一个 min|max-width|height 来约束，max 是与屏幕大小有关，min 是与虚拟键盘的排版有关。
+6. InputPanel 在浮动状态下，要避免过分溢出屏幕，和屏幕边缘要有一定的碰撞关系，比如最多1/3 的 width|height 能溢出屏幕
+7. `呼吸效果，现在直接做到整个 InputPanel 上`,这个你没有完成，现在看到 toolbar 这部分仍然没有呼吸
+
+---
+
+1. 因为拖动需要InputPanel 的工具栏，所以顶部工具栏不可以溢出顶部屏幕
+2. “触摸板的边缘区域，是特殊的区域，手指移动进入到这个区域的时候，会进入“无限滑动”模式”，目前这个无限滑动的区域，你要考虑触摸板的大小，使用一种 `minmax(px, %, px)`的设计，来适应可缩放的 InputPanel
+3. 这个区域在开始 touchmove 的时候，就应该直接亮起，而不是靠近边缘的时候才亮起，并且样式上应该是一种“光晕”的效果，类似内阴影。
+
+---
+
+1. InputPanel 一旦进行 open，那么就必须和触发 textarea 的 focus（我的目的是强制显示光标）
+2. 反之，textarea一旦 focus，也需要触发 InputPanel 的 open
+3. addon 原生提供 FAB 按钮，点击 FAB 按钮可以打开 InputPanel；反之 InputPanel 的 close 会变成 FAB
+4. 如果一个页面中有多个 xterm-Terminal，也只能存在一个 InputPanel 实例，按需（focus）动态迁移到 xterm-Terimnal 的 DOM 中
+
+---
+
+我们需要彻底优化一下这个 Terminal 的半屏与全屏的控制方式，不论现在是如何控制的，请进行以下的重构和优化：
+
+1. Terminal 的顶部是 Tabs，在 tabs 的右侧，提供两个按钮：“全屏｜半屏切换按钮”、“关闭按钮”
+2. Terminal 进入全屏，路由上就是 `push /terminal`，进入半屏或者关闭，那么等同于 goBack，“半屏或者关闭”对url没有影响和改变
+3. 在移动模式下，
+
+我想了一下，需要参考 ide 的设计：“存在不同区域，但是每个区域都可以多标签，这些标签可以扩区域移动”。
+但我们这个布局最大的复杂点在于，我们是“响应式”设计，对移动端友好，因此不需要像桌面端 IDE 那样有左右上下等区域。
+而是更简单：我们始终集中在 main-area 视图区域，然后在 main-area这里扩展出 bottom-area 这个区域。
+
+在这个“上下分层”的基础上，我们围绕这个布局进行设计：
+
+1. 左边的导航部分，其实也要分成上下两个区域。一个是靠上排列，一个是靠下排列，这里本质就是一个“Tabs”
+2. 因此我们可以把目前的这些导航都放到“main-area-nav”，就是把Settings 都挪上去。然后Terminal留在底部。这个意思是：如果开启bottom-area-nav的 Terminal，那么因为现在 bottom-area 有东西，所以整个界面就分成了上下两个部分。
+3. 这时候其实就没有区分什么Terminal “全屏半屏”，Terminal 的渲染模式始终就是“铺满指定的区域”。这个时候，如果想让 Terminal 全屏渲染，只需要把底部的 bottom-area-nav/Terminal 挪到 main-area-nav/Terminal 即可。因为这个时候如果底部没有内容被激活，那么就会隐藏。
+4. 进一步说，用户可以自由改变所有 `*-area-nav/*(Tab)` 的位置，我们需要在这些 Tabs 上提供一个“拖动”标识，方便用户知道这些 Tabs 是可以排序的
+5. 在移动模式下，底部的 bottom-nav 映射的是 main-area-nav 的内容
+6. 我们需要封装一个 navController，而不是依赖 react，这个 navContaoller 需要同步存储到数据库，然后利用我们后端的 kv 临时存储来做到跨设备同步（这个我之前教过你怎么做，你可以和我确认一下思路）。
+7. Terminal-Tab 这里右上角可以提供两个按钮：“切换区域”、“关闭”：
+   1. 如果 Terminal-Tab 在 main-area，那么“切换区域”按钮就变成“切换到 bottom-area”，使用 PanelBottomClose 这个 icon
+   2. 如果 Terminal-Tab 在 bottom-area， 那么“切换区域”按钮就变成“切换到 main-area”，使用 PanelTopClose 这个 icon
+   3. 这些功能，都依赖于 navController 来进行区域切换和关闭。我们的拖动排序，本质也是依赖 navController 来进行排序后的存储。
+8. 最后是关于路由，我们的默认路由path 还是面向 main-area，而bottom-area 的路由，则是依赖于 `?bottom=` 这个 searchParams 来进行存储，比如`?bottom=${encodeURIComponent('/terminal?key=value')}`。这个你可以确定一下我这个思路能否和 TanStack Router 进行契合。如果不契合，或者不那么契合，你可以和我讨论一下其它的解决方案。
+
+---
+
+1. 我们的 Tabs 组件在溢出的时候是有提供一个 scroll-button 的，这个难道没有吗？为什么我再 Terminal 的 tabs 这里看不到这 scroll-button？
+2. 为什么我刷新页面后，重新进入到`/config`,这的 Schema 没有立刻渲染出来？而是要等一会儿，这个难道没有被统一缓存吗？
+3. 我切换 tabs 的时候会触发 `?archiveTab=`变更，这个变更能不能控制好，不要让viewTransactions 动画发生
+4. `/config`页面切换 tabs 的时候没有更新`?archiveTab=`
+5. 现在`/config`页面最后一个 tab是 Changes，这里界面上显示着：`Change metadata is stored in .openspec.yaml inside each change folder. It is created by /opsx:new and binds schema selection for the change.`，以及`No metadata file found for this change. It should live at openspec/changes/<change>/.openspec.yaml.`这个页面到底要显示什么？是什么作用？请你基于 openspec 官方的一手资料（比如源代码 references/openspec ），给我一个合理的解释。
 
 ---
 

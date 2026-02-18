@@ -35,35 +35,36 @@
  */
 
 // 核心类
-export { ReactiveState, contextStorage, type ReactiveStateOptions } from './reactive-state.js'
 export { ReactiveContext } from './reactive-context.js'
+export { ReactiveState, contextStorage, type ReactiveStateOptions } from './reactive-state.js'
 
 // 响应式文件操作
 export {
-  reactiveReadFile,
-  reactiveReadDir,
-  reactiveExists,
-  reactiveStat,
   clearCache,
   getCacheSize,
+  reactiveExists,
+  reactiveReadDir,
+  reactiveReadFile,
+  reactiveStat,
+  updateReactiveFileCache,
 } from './reactive-fs.js'
 
 // 监听器池管理（基于 @parcel/watcher）
 export {
-  initWatcherPool,
   acquireWatcher,
-  getActiveWatcherCount,
   closeAllWatchers,
-  isWatcherPoolInitialized,
+  getActiveWatcherCount,
   getWatchedProjectDir,
+  initWatcherPool,
+  isWatcherPoolInitialized,
 } from './watcher-pool.js'
 
 // 底层项目监听器（高级用法）
 export {
   ProjectWatcher,
-  getProjectWatcher,
   closeAllProjectWatchers,
+  getProjectWatcher,
+  type PathCallback,
   type WatchEvent,
   type WatchEventType,
-  type PathCallback,
 } from './project-watcher.js'

@@ -5,9 +5,11 @@ interface DialogProps {
   open: boolean
   title: ReactNode // can include icon / status chips etc.
   onClose: () => void
+  onClosed?: () => void
   children: ReactNode
   footer?: ReactNode
   dialogClassName?: string
+  contentClassName?: string
   className?: string
   bodyClassName?: string
   maxHeight?: string
@@ -23,15 +25,33 @@ export function Dialog({
   open,
   title,
   onClose,
+  onClosed,
   children,
   footer,
   dialogClassName = '',
+  contentClassName = '',
   className = '',
   bodyClassName = '',
   maxHeight = '86vh',
   borderVariant = 'default',
 }: DialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  // Close-complete callback from native dialog lifecycle
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog || !onClosed) return
+
+    const handleClosed = () => {
+      onClosed()
+    }
+
+    dialog.addEventListener('close', handleClosed)
+    return () => {
+      dialog.removeEventListener('close', handleClosed)
+    }
+  }, [onClosed])
 
   // Synchronize the native dialog with the controlled `open` prop
   useEffect(() => {
@@ -56,7 +76,9 @@ export function Dialog({
     }
 
     const handleClick = (event: MouseEvent) => {
-      const rect = dialog.getBoundingClientRect()
+      const panel = panelRef.current
+      if (!panel) return
+      const rect = panel.getBoundingClientRect()
       const isInDialog =
         event.clientX >= rect.left &&
         event.clientX <= rect.right &&
@@ -88,58 +110,29 @@ export function Dialog({
     const css = String.raw
     return (
       <style>{css`
-        /* 1. 对话框的基础状态（关闭状态） */
         dialog.openspec-dialog {
-          margin: auto;
-          opacity: 0.6;
-          transform: translateY(12px);
-          /* 必须把 overlay 也加入过渡，否则关闭时会瞬间消失 */
+          opacity: 0;
+          transform: translateY(8px);
           transition:
-            opacity 260ms cubic-bezier(0.22, 0.61, 0.36, 1),
-            transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1),
-            overlay 320ms allow-discrete,
-            display 260ms allow-discrete;
+            opacity 180ms cubic-bezier(0.22, 0.61, 0.36, 1),
+            transform 180ms cubic-bezier(0.22, 0.61, 0.36, 1);
         }
 
-        /* 2. 对话框的打开状态 */
         dialog.openspec-dialog[open] {
           opacity: 1;
           transform: translateY(0);
         }
 
-        /* 3. 对话框打开瞬间的起始帧 */
         @starting-style {
           dialog.openspec-dialog[open] {
-            opacity: 0.6;
-            transform: translateY(12px);
+            opacity: 0;
+            transform: translateY(8px);
           }
         }
 
-        /* --- 下面是 Backdrop (背景遮罩) 的动画 --- */
-
-        /* 4. 背景遮罩的基础状态 */
         dialog.openspec-dialog::backdrop {
-          background-color: rgba(0, 0, 0, 0); /* 初始透明 */
-          backdrop-filter: grayscale(0.5);
-          transition:
-            display 0.35s allow-discrete,
-            overlay 0.35s allow-discrete,
-            background-color 0.35s ease,
-            backdrop-filter 0.35s ease;
-        }
-
-        /* 5. 背景遮罩的打开状态 */
-        dialog.openspec-dialog[open]::backdrop {
           background-color: rgba(0, 0, 0, 0.5);
           backdrop-filter: grayscale(1);
-        }
-
-        /* 6. 背景遮罩的起始帧 */
-        @starting-style {
-          dialog.openspec-dialog[open]::backdrop {
-            background-color: rgba(0, 0, 0, 0);
-            backdrop-filter: grayscale(0.5);
-          }
         }
       `}</style>
     )
@@ -150,35 +143,40 @@ export function Dialog({
       {styles}
       <dialog
         ref={dialogRef}
-        className={`openspec-dialog w-[calc(100%-2rem)] max-w-2xl border-0 bg-transparent p-0 ${dialogClassName}`}
+        className={`openspec-dialog m-0 h-dvh w-screen max-w-none border-0 bg-transparent p-0 ${dialogClassName}`}
       >
         <div
-          className={`bg-background relative flex w-full flex-col overflow-hidden rounded-lg border shadow-xl ${borderClass} ${className}`}
-          style={{ maxHeight }}
+          className={`flex h-full w-full items-center justify-center px-4 py-4 ${contentClassName}`}
         >
-          {/* Header (non-shrinking) */}
-          <div className="border-border flex flex-none shrink-0 items-center justify-between border-b px-4 py-3">
-            <div className="flex items-center gap-2">{title}</div>
-            <button
-              onClick={onClose}
-              className="hover:bg-muted rounded p-1"
-              aria-label="Close dialog"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Body */}
-          <div className={`min-h-0 flex-1 overflow-auto px-4 py-3 ${bodyClassName}`}>
-            {children}
-          </div>
-
-          {/* Footer */}
-          {footer && (
-            <div className="border-border flex flex-none shrink-0 items-center justify-end gap-2 border-t px-4 py-3">
-              {footer}
+          <div
+            ref={panelRef}
+            className={`bg-background relative flex w-[calc(100%-0.5rem)] max-w-2xl flex-col overflow-hidden rounded-[var(--openspec-dialog-radius,0.75rem)] border shadow-xl ${borderClass} ${className}`}
+            style={{ maxHeight }}
+          >
+            {/* Header (non-shrinking) */}
+            <div className="border-border flex flex-none shrink-0 items-center justify-between border-b px-4 py-3">
+              <div className="flex items-center gap-2">{title}</div>
+              <button
+                onClick={onClose}
+                className="hover:bg-muted rounded p-1"
+                aria-label="Close dialog"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
-          )}
+
+            {/* Body */}
+            <div className={`min-h-0 flex-1 overflow-auto px-4 py-3 ${bodyClassName}`}>
+              {children}
+            </div>
+
+            {/* Footer */}
+            {footer && (
+              <div className="border-border flex flex-none shrink-0 items-center justify-end gap-2 border-t px-4 py-3">
+                {footer}
+              </div>
+            )}
+          </div>
         </div>
       </dialog>
     </>

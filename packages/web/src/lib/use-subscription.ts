@@ -1,4 +1,11 @@
-import type { ArchiveMeta, Change, ChangeFile, Spec, SpecMeta } from '@openspecui/core'
+import type {
+  ArchiveMeta,
+  Change,
+  ChangeFile,
+  OpenSpecUIConfig,
+  Spec,
+  SpecMeta,
+} from '@openspecui/core'
 import { useEffect, useRef, useState } from 'react'
 import * as StaticProvider from './static-data-provider'
 import { isStaticMode } from './static-mode'
@@ -234,12 +241,6 @@ export function useArchiveFilesSubscription(id: string): SubscriptionState<Chang
 // =====================
 // Config subscriptions
 // =====================
-
-/** OpenSpecUI 配置类型 */
-export interface OpenSpecUIConfig {
-  cli: { command?: string }
-  ui: { theme: 'light' | 'dark' | 'system' }
-}
 
 export function useConfigSubscription(): SubscriptionState<OpenSpecUIConfig> {
   return useSubscription<OpenSpecUIConfig>(

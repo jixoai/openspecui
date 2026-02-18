@@ -1,6 +1,6 @@
 {
   "name": "@openspecui/core",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Core OpenSpec adapter and parser",
   "type": "module",
   "main": "./dist/index.mjs",
@@ -16,6 +16,7 @@
   ],
   "scripts": {
     "build": "tsdown src/index.ts --format esm --dts",
+    "dev": "tsdown src/index.ts --format esm --dts --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
