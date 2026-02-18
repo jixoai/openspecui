@@ -7,6 +7,7 @@ interface DialogProps {
   onClose: () => void
   children: ReactNode
   footer?: ReactNode
+  dialogClassName?: string
   className?: string
   bodyClassName?: string
   maxHeight?: string
@@ -24,6 +25,7 @@ export function Dialog({
   onClose,
   children,
   footer,
+  dialogClassName = '',
   className = '',
   bodyClassName = '',
   maxHeight = '86vh',
@@ -148,7 +150,7 @@ export function Dialog({
       {styles}
       <dialog
         ref={dialogRef}
-        className="openspec-dialog w-[calc(100%-2rem)] max-w-2xl border-0 bg-transparent p-0"
+        className={`openspec-dialog w-[calc(100%-2rem)] max-w-2xl border-0 bg-transparent p-0 ${dialogClassName}`}
       >
         <div
           className={`bg-background relative flex w-full flex-col overflow-hidden rounded-lg border shadow-xl ${borderClass} ${className}`}

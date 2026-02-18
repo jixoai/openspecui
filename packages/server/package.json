@@ -1,6 +1,6 @@
 {
   "name": "@openspecui/server",
-  "version": "1.0.0",
+  "version": "1.0.4",
   "type": "module",
   "main": "dist/index.mjs",
   "exports": {
@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsdown src/index.ts --format esm --no-dts",
     "typecheck": "tsc --noEmit",
-    "dev": "tsx watch src/standalone.ts",
+    "dev": "tsx watch --include '../core/dist/**' --include '../search/dist/**' src/standalone.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -22,6 +22,7 @@
     "@hono/node-server": "^1.14.1",
     "@lydell/node-pty": "^1.1.0",
     "@openspecui/core": "workspace:*",
+    "@openspecui/search": "workspace:*",
     "@trpc/server": "^11.0.0",
     "hono": "^4.7.3",
     "ws": "^8.18.0",

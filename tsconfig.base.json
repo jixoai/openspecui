@@ -22,16 +22,10 @@
       "@/*": ["packages/web/src/*"],
       "@openspecui/server": ["packages/server/src/index.ts"],
       "@openspecui/core": ["packages/core/src/index.ts"],
+      "@openspecui/search": ["packages/search/src/index.ts"],
       "@openspecui/ai-provider": ["packages/ai-provider/src/index.ts"]
     },
     "types": ["node"]
   },
-  "exclude": [
-    "node_modules",
-    "dist",
-    ".git",
-    "**/*.test.ts",
-    "**/*.spec.ts",
-    "references/**"
-  ]
+  "exclude": ["node_modules", "dist", ".git", "**/*.test.ts", "**/*.spec.ts", "references/**"]
 }

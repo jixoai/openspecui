@@ -1,9 +1,10 @@
+import { navController } from '@/lib/nav-controller'
 import { getBasePath, isStaticMode } from '@/lib/static-mode'
 import { useDarkMode } from '@/lib/use-dark-mode'
 import { useNavLayout } from '@/lib/use-nav-controller'
 import { useServerStatus } from '@/lib/use-server-status'
 import { Link } from '@tanstack/react-router'
-import { Menu, X } from 'lucide-react'
+import { Menu, Search, X } from 'lucide-react'
 import { useState } from 'react'
 import { AreaNav } from './area-nav'
 import { navItems, settingsItem } from './nav-items'
@@ -34,7 +35,17 @@ export function MobileHeader() {
           </button>
           <span className="font-nav text-[12px] tracking-[0.04em]">{pageTitle}</span>
         </div>
-        <StatusIndicator />
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => navController.activatePop('/search')}
+            className="hover:bg-muted rounded-md p-1.5"
+            aria-label="Open search"
+          >
+            <Search className="h-4 w-4" />
+          </button>
+          <StatusIndicator />
+        </div>
       </header>
 
       {/* Mobile menu overlay — mirrors desktop sidebar layout */}
@@ -98,7 +109,13 @@ export function MobileHeader() {
               /* IDE mode (mobile): align structure with desktop sidebar */
               <div className="flex min-h-0 flex-1 flex-col gap-2">
                 <div className="min-h-0 flex-1">
-                  <AreaNav area="main" tabs={navLayout.mainTabs} className="h-full overflow-auto" useLinks onNavigate={closeMenu} />
+                  <AreaNav
+                    area="main"
+                    tabs={navLayout.mainTabs}
+                    className="h-full overflow-auto"
+                    useLinks
+                    onNavigate={closeMenu}
+                  />
                 </div>
                 <div className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">
                   Bottom

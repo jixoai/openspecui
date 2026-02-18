@@ -2,14 +2,15 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider, createRootRoute, createRouter } from '@tanstack/react-router'
 import { RootLayout } from './components/layout'
 import { BottomArea, setBottomRouter } from './components/layout/bottom-area'
+import { PopArea, setPopRouter } from './components/layout/pop-area'
 import './index.css'
 import { ArchiveModalProvider } from './lib/archive-modal-context'
-import { TerminalProvider } from './lib/terminal-context'
-import { isStaticMode, getBasePath } from './lib/static-mode'
-import { queryClient } from './lib/trpc'
-import { createRouteTree } from './lib/route-tree'
 import { navController } from './lib/nav-controller'
 import { createNavHistory } from './lib/nav-history'
+import { createPopRouteTree, createRouteTree } from './lib/route-tree'
+import { getBasePath, isStaticMode } from './lib/static-mode'
+import { TerminalProvider } from './lib/terminal-context'
+import { queryClient } from './lib/trpc'
 
 // --- Static mode: single router, standard browser history ---
 // --- IDE mode: dual routers via navController ---
@@ -53,6 +54,16 @@ if (!isStatic) {
   })
   setBottomRouter(bottomRouter)
 }
+
+const popRoot = createRootRoute({
+  component: PopArea,
+})
+const popRouter = createRouter({
+  routeTree: createPopRouteTree(popRoot),
+  history: createNavHistory('pop', navController),
+  basepath,
+})
+setPopRouter(popRouter)
 
 declare module '@tanstack/react-router' {
   interface Register {

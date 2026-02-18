@@ -11,7 +11,7 @@
     "dev:server": "pnpm --filter @openspecui/server dev",
     "dev:web": "pnpm --filter @openspecui/web dev",
     "build": "pnpm run build:deps && pnpm run typecheck && pnpm run build:packages && pnpm run build:cli",
-    "build:deps": "pnpm --filter @openspecui/core build && pnpm --filter @openspecui/ai-provider build",
+    "build:deps": "pnpm --filter @openspecui/core build && pnpm --filter @openspecui/search build && pnpm --filter @openspecui/ai-provider build",
     "build:packages": "pnpm --filter @openspecui/server build && pnpm --filter @openspecui/web build",
     "build:cli": "pnpm --filter openspecui run build:copy-web && pnpm --filter openspecui exec tsdown",
     "typecheck": "pnpm -r --parallel run typecheck",

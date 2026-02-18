@@ -43,7 +43,7 @@ function createController(url: string, layout?: NavLayout): NavController {
         mainTabs: layout.mainTabs,
         bottomTabs: layout.bottomTabs,
         updatedAt: 1,
-      }),
+      })
     )
   }
 
@@ -60,7 +60,9 @@ function assertPartition(nav: NavController): void {
   }
 }
 
-function mockHistory(notify: (event: { type: 'PUSH' | 'REPLACE' | 'BACK' }) => void): RouterHistory {
+function mockHistory(
+  notify: (event: { type: 'PUSH' | 'REPLACE' | 'BACK' }) => void
+): RouterHistory {
   return { notify } as unknown as RouterHistory
 }
 
@@ -107,6 +109,30 @@ describe('NavController kernel lifecycle', () => {
     expect(nav.getLocation('bottom').pathname).toBe('/terminal')
     expect(bottomNotify).toHaveBeenCalledWith({ type: 'PUSH' })
     expect(window.location.search).toContain('_b=%2Fterminal')
+  })
+
+  it('activatePop writes _p and deactivatePop removes it', () => {
+    nav = createController('/dashboard')
+
+    nav.activatePop('/search?query=auth')
+    expect(nav.getLocation('pop').pathname).toBe('/search')
+    expect(window.location.search).toContain('_p=%2Fsearch%3Fquery%3Dauth')
+
+    nav.deactivatePop()
+    expect(nav.getLocation('pop').pathname).toBe('/')
+    expect(window.location.search).not.toContain('_p=')
+  })
+
+  it('routes pop-area navigation within pop router', () => {
+    nav = createController('/dashboard')
+    const popNotify = vi.fn()
+    nav.setHistoryRef('pop', mockHistory(popNotify))
+
+    nav.push('pop', '/search?query=term', { source: 'pop' })
+
+    expect(nav.getLocation('main').pathname).toBe('/dashboard')
+    expect(nav.getLocation('pop').pathname).toBe('/search')
+    expect(popNotify).toHaveBeenCalledWith({ type: 'REPLACE' })
   })
 
   it('routes replace to main when bottom router navigates to a main tab', () => {
@@ -221,17 +247,25 @@ describe('NavController kernel lifecycle', () => {
     nav = createController('/dashboard')
     const mainNotify = vi.fn()
     const bottomNotify = vi.fn()
+    const popNotify = vi.fn()
 
     nav.setHistoryRef('main', mockHistory(mainNotify))
     nav.setHistoryRef('bottom', mockHistory(bottomNotify))
+    nav.setHistoryRef('pop', mockHistory(popNotify))
 
-    window.history.replaceState({ main: { from: 'pop' }, bottom: { from: 'pop' } }, '', '/specs?_b=%2Fterminal')
+    window.history.replaceState(
+      { main: { from: 'pop' }, bottom: { from: 'pop' }, pop: { from: 'pop' } },
+      '',
+      '/specs?_b=%2Fterminal&_p=%2Fsearch%3Fquery%3Dauth'
+    )
     window.dispatchEvent(new PopStateEvent('popstate'))
 
     expect(nav.getLocation('main').pathname).toBe('/specs')
     expect(nav.getLocation('bottom').pathname).toBe('/terminal')
+    expect(nav.getLocation('pop').pathname).toBe('/search')
     expect(mainNotify).toHaveBeenCalledWith({ type: 'BACK' })
     expect(bottomNotify).toHaveBeenCalledWith({ type: 'BACK' })
+    expect(popNotify).toHaveBeenCalledWith({ type: 'BACK' })
   })
 
   it('reorder persists layout and preserves tab partition', () => {

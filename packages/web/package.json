@@ -1,6 +1,6 @@
 {
   "name": "@openspecui/web",
-  "version": "1.0.0",
+  "version": "1.0.4",
   "type": "module",
   "bin": {
     "openspecui-ssg": "./dist-ssg/ssg-cli.mjs"
@@ -37,6 +37,7 @@
     "@lezer/common": "^1.4.0",
     "@lezer/highlight": "^1.2.3",
     "@openspecui/server": "workspace:*",
+    "@openspecui/search": "workspace:*",
     "@storybook/addon-vitest": "^10.2.8",
     "@storybook/web-components": "^10.2.8",
     "@storybook/web-components-vite": "^10.2.8",

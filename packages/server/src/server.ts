@@ -12,24 +12,25 @@
  */
 
 import { serve } from '@hono/node-server'
-import { Hono } from 'hono'
-import { cors } from 'hono/cors'
-import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
-import { applyWSSHandler } from '@trpc/server/adapters/ws'
-import { WebSocketServer } from 'ws'
 import {
+  CliExecutor,
+  ConfigManager,
   OpenSpecAdapter,
   OpenSpecWatcher,
-  ConfigManager,
-  CliExecutor,
   OpsxKernel,
   initWatcherPool,
   isWatcherPoolInitialized,
 } from '@openspecui/core'
-import { appRouter, type Context } from './router.js'
+import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
+import { applyWSSHandler } from '@trpc/server/adapters/ws'
+import { Hono } from 'hono'
+import { cors } from 'hono/cors'
+import { WebSocketServer } from 'ws'
 import { findAvailablePort } from './port-utils.js'
 import { PtyManager } from './pty-manager.js'
 import { createPtyWebSocketHandler } from './pty-websocket.js'
+import { appRouter, type Context } from './router.js'
+import { SearchService } from './search-service.js'
 
 /**
  * Server configuration options.
@@ -55,7 +56,9 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
   const kernel = config.kernel
 
   // Create file watcher if enabled
-  const watcher = config.enableWatcher !== false ? new OpenSpecWatcher(config.projectDir) : undefined
+  const watcher =
+    config.enableWatcher !== false ? new OpenSpecWatcher(config.projectDir) : undefined
+  const searchService = new SearchService(adapter, watcher)
 
   const app = new Hono()
 
@@ -90,6 +93,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
         configManager,
         cliExecutor,
         kernel,
+        searchService,
         watcher,
         projectDir: config.projectDir,
       }),
@@ -103,6 +107,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     configManager,
     cliExecutor,
     kernel,
+    searchService,
     watcher,
     projectDir: config.projectDir,
   })
@@ -113,6 +118,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     configManager,
     cliExecutor,
     kernel,
+    searchService,
     watcher,
     createContext,
     port: config.port ?? 3100,
@@ -186,6 +192,7 @@ export async function createWebSocketServer(
       ptyWss.close()
       wss.close()
       server.watcher?.stop()
+      server.searchService.dispose().catch(() => {})
     },
   }
 }
@@ -253,6 +260,9 @@ export async function startServer(
   // Warmup kernel in background — subscriptions will push data as it arrives
   kernel.warmup().catch((err) => {
     console.error('Kernel warmup failed:', err)
+  })
+  server.searchService.init().catch((err) => {
+    console.error('Search service warmup failed:', err)
   })
 
   return {

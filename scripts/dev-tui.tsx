@@ -1171,6 +1171,15 @@ const bootstrap = Bun.spawnSync({
 if (bootstrap.exitCode !== 0) {
   throw new Error(`Failed to build @openspecui/core (exit ${bootstrap.exitCode})`)
 }
+const searchBootstrap = Bun.spawnSync({
+  cmd: ['pnpm', '--filter', '@openspecui/search', 'build'],
+  cwd: process.cwd(),
+  stdout: 'inherit',
+  stderr: 'inherit',
+})
+if (searchBootstrap.exitCode !== 0) {
+  throw new Error(`Failed to build @openspecui/search (exit ${searchBootstrap.exitCode})`)
+}
 
 const serverArgs = ['--filter', '@openspecui/server', 'dev', '--', '--port', String(port)]
 if (options.dir) {
@@ -1184,6 +1193,14 @@ const tasks: DevTask[] = [
     description: 'Build and watch @openspecui/core dist output.',
     command: 'pnpm',
     args: ['--filter', '@openspecui/core', 'dev'],
+    autoStart: true,
+  },
+  {
+    id: 'search-dev',
+    name: 'Search Watch Build',
+    description: 'Build and watch @openspecui/search dist output.',
+    command: 'pnpm',
+    args: ['--filter', '@openspecui/search', 'dev'],
     autoStart: true,
   },
   {

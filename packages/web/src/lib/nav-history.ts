@@ -13,7 +13,7 @@ import type { NavController } from './nav-controller'
  * to make the router re-render.
  */
 export function createNavHistory(
-  area: 'main' | 'bottom',
+  area: 'main' | 'bottom' | 'pop',
   controller: NavController
 ): RouterHistory {
   const history = createHistory({

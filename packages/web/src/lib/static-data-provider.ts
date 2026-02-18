@@ -12,6 +12,7 @@ import type {
   Change,
   ChangeFile,
   ChangeMeta,
+  OpenSpecUIConfig,
   SchemaDetail,
   SchemaInfo,
   SchemaResolution,
@@ -19,8 +20,8 @@ import type {
   SpecMeta,
   TemplatesMap,
 } from '@openspecui/core'
+import type { SearchDocument } from '@openspecui/search'
 import type { ExportSnapshot } from '../ssg/types'
-import type { OpenSpecUIConfig } from './use-subscription'
 import { getBasePath, getInitialData } from './static-mode'
 
 /**
@@ -301,7 +302,14 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
   // In static mode, return default config
   return {
     cli: { command: 'openspecui' },
-    ui: { theme: 'system' },
+    theme: 'system',
+    terminal: {
+      fontSize: 13,
+      fontFamily: '',
+      cursorBlink: true,
+      cursorStyle: 'block',
+      scrollback: 1000,
+    },
   }
 }
 
@@ -356,7 +364,8 @@ export async function getOpsxSchemaFiles(name?: string): Promise<ChangeFile[] | 
 
   let schemaName = name
   if (!schemaName) {
-    schemaName = snapshot.opsx.schemas?.[0]?.name ?? Object.keys(snapshot.opsx.schemaDetails ?? {})[0]
+    schemaName =
+      snapshot.opsx.schemas?.[0]?.name ?? Object.keys(snapshot.opsx.schemaDetails ?? {})[0]
   }
   if (!schemaName) return null
 
@@ -407,9 +416,10 @@ export async function getOpsxTemplateContent(
   return null
 }
 
-export async function getOpsxTemplateContents(): Promise<
-  Record<string, { content: string | null; path: string; source: 'project' | 'user' | 'package' }> | null
-> {
+export async function getOpsxTemplateContents(): Promise<Record<
+  string,
+  { content: string | null; path: string; source: 'project' | 'user' | 'package' }
+> | null> {
   return null
 }
 
@@ -429,4 +439,60 @@ export async function getOpsxChangeMetadata(changeId?: string): Promise<string |
     return meta[changeId] ?? null
   }
   return null
+}
+
+export async function getSearchDocuments(): Promise<SearchDocument[]> {
+  const snapshot = await loadSnapshot()
+  if (!snapshot) return []
+
+  const docs: SearchDocument[] = []
+
+  for (const spec of snapshot.specs) {
+    docs.push({
+      id: `spec:${spec.id}`,
+      kind: 'spec',
+      title: spec.name,
+      href: `/specs/${encodeURIComponent(spec.id)}`,
+      path: `openspec/specs/${spec.id}/spec.md`,
+      content: spec.content,
+      updatedAt: spec.updatedAt,
+    })
+  }
+
+  for (const change of snapshot.changes) {
+    docs.push({
+      id: `change:${change.id}`,
+      kind: 'change',
+      title: change.name,
+      href: `/changes/${encodeURIComponent(change.id)}`,
+      path: `openspec/changes/${change.id}`,
+      content: [
+        change.proposal,
+        change.tasks,
+        change.design,
+        ...change.deltas.map((delta) => delta.content),
+      ]
+        .map((part) => part?.trim() ?? '')
+        .filter((part) => part.length > 0)
+        .join('\n\n'),
+      updatedAt: change.updatedAt,
+    })
+  }
+
+  for (const archive of snapshot.archives) {
+    docs.push({
+      id: `archive:${archive.id}`,
+      kind: 'archive',
+      title: archive.name,
+      href: `/archive/${encodeURIComponent(archive.id)}`,
+      path: `openspec/changes/archive/${archive.id}`,
+      content: [archive.proposal, archive.tasks, archive.design]
+        .map((part) => part?.trim() ?? '')
+        .filter((part) => part.length > 0)
+        .join('\n\n'),
+      updatedAt: archive.updatedAt,
+    })
+  }
+
+  return docs
 }

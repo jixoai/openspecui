@@ -1,13 +1,14 @@
 import { createRoute, type AnyRootRoute, type AnyRoute } from '@tanstack/react-router'
-import { Dashboard } from '../routes/dashboard'
-import { Config } from '../routes/config'
-import { SpecList } from '../routes/spec-list'
-import { SpecView } from '../routes/spec-view'
-import { ChangeList } from '../routes/change-list'
-import { ChangeView } from '../routes/change-view'
 import { ArchiveList } from '../routes/archive-list'
 import { ArchiveView } from '../routes/archive-view'
+import { ChangeList } from '../routes/change-list'
+import { ChangeView } from '../routes/change-view'
+import { Config } from '../routes/config'
+import { Dashboard } from '../routes/dashboard'
+import { SearchRoute } from '../routes/search'
 import { Settings } from '../routes/settings'
+import { SpecList } from '../routes/spec-list'
+import { SpecView } from '../routes/spec-view'
 import { TerminalPage } from '../routes/terminal'
 
 /**
@@ -47,4 +48,14 @@ export function createRouteTree(rootRoute: AnyRootRoute, opts?: { includeTermina
   }
 
   return rootRoute.addChildren(routes)
+}
+
+export function createPopRouteTree(rootRoute: AnyRootRoute) {
+  return rootRoute.addChildren([
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/search',
+      component: SearchRoute,
+    }),
+  ])
 }

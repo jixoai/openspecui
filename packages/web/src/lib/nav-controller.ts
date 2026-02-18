@@ -22,10 +22,12 @@ interface PersistedNavLayout extends NavLayout {
 export interface NavState extends NavLayout {
   mainLocation: HistoryLocation
   bottomLocation: HistoryLocation
+  popLocation: HistoryLocation
   bottomActive: boolean
+  popActive: boolean
 }
 
-type Area = 'main' | 'bottom'
+type Area = 'main' | 'bottom' | 'pop'
 type BrowserAction = 'PUSH' | 'REPLACE'
 type RouterAction = 'PUSH' | 'REPLACE' | 'BACK'
 
@@ -34,11 +36,13 @@ type PersistEffect = 'none' | 'local_and_remote' | 'local_only'
 interface UrlHistoryState {
   main?: unknown
   bottom?: unknown
+  pop?: unknown
 }
 
 interface KernelState extends PersistedNavLayout {
   mainLocation: HistoryLocation
   bottomLocation: HistoryLocation
+  popLocation: HistoryLocation
 }
 
 interface KernelTransition {
@@ -51,12 +55,19 @@ interface KernelTransition {
 
 type KernelEvent =
   | { type: 'NAVIGATE'; sourceArea: Area; action: BrowserAction; location: HistoryLocation }
-  | { type: 'POPSTATE'; mainLocation: HistoryLocation; bottomLocation: HistoryLocation }
-  | { type: 'MOVE_TAB'; tabId: TabId; targetArea: Area }
-  | { type: 'REORDER'; area: Area; tabIds: TabId[] }
+  | {
+      type: 'POPSTATE'
+      mainLocation: HistoryLocation
+      bottomLocation: HistoryLocation
+      popLocation: HistoryLocation
+    }
+  | { type: 'MOVE_TAB'; tabId: TabId; targetArea: 'main' | 'bottom' }
+  | { type: 'REORDER'; area: 'main' | 'bottom'; tabIds: TabId[] }
   | { type: 'CLOSE_TAB'; tabId: TabId }
   | { type: 'ACTIVATE_BOTTOM'; location: HistoryLocation }
   | { type: 'DEACTIVATE_BOTTOM' }
+  | { type: 'ACTIVATE_POP'; location: HistoryLocation }
+  | { type: 'DEACTIVATE_POP' }
   | { type: 'APPLY_LAYOUT'; layout: PersistedNavLayout }
 
 type BehaviorEvent = KernelEvent | { type: 'BOOTSTRAP' }
@@ -84,7 +95,8 @@ const DEFAULT_MAIN_TABS: TabId[] = [
   '/archive',
   '/settings',
 ]
-const DEFAULT_BOTTOM_TABS: TabId[] = ['/terminal']
+const DEFAULT_BOTTOM_TABS: TabId[] = isStaticMode() ? [] : ['/terminal']
+const POP_ROUTES = ['/search'] as const
 const KV_KEY = 'nav-layout'
 const LS_KEY = 'nav-layout'
 const PERSIST_DEBOUNCE = 300
@@ -152,6 +164,8 @@ function pathToTabId(path: string): TabId | null {
 }
 
 function activeTabForArea(state: KernelState, area: Area): TabId | null {
+  if (area === 'pop') return null
+
   const location = area === 'main' ? state.mainLocation : state.bottomLocation
   const tabs = area === 'main' ? state.mainTabs : state.bottomTabs
   const tabId = pathToTabId(location.pathname)
@@ -159,7 +173,12 @@ function activeTabForArea(state: KernelState, area: Area): TabId | null {
   return tabs.includes(tabId) ? tabId : null
 }
 
+function isPopPath(path: string): boolean {
+  return POP_ROUTES.some((route) => path === route || path.startsWith(route + '/'))
+}
+
 function areaForPath(layout: NavLayout, path: string): Area {
+  if (isPopPath(path)) return 'pop'
   const tabId = pathToTabId(path)
   if (tabId && layout.bottomTabs.includes(tabId)) return 'bottom'
   return 'main'
@@ -197,7 +216,10 @@ function mergeLayout(layout: NavLayout): NavLayout {
   return { mainTabs, bottomTabs }
 }
 
-function sanitizeMainLocation(location: HistoryLocation, mainTabs: readonly TabId[]): HistoryLocation {
+function sanitizeMainLocation(
+  location: HistoryLocation,
+  mainTabs: readonly TabId[]
+): HistoryLocation {
   if (mainTabs.length === 0) return parseHref('/')
 
   const tabId = pathToTabId(location.pathname)
@@ -208,7 +230,10 @@ function sanitizeMainLocation(location: HistoryLocation, mainTabs: readonly TabI
   return location
 }
 
-function sanitizeBottomLocation(location: HistoryLocation, bottomTabs: readonly TabId[]): HistoryLocation {
+function sanitizeBottomLocation(
+  location: HistoryLocation,
+  bottomTabs: readonly TabId[]
+): HistoryLocation {
   if (bottomTabs.length === 0) return parseHref('/')
   if (location.pathname === '/') return parseHref('/', location.state)
 
@@ -217,6 +242,12 @@ function sanitizeBottomLocation(location: HistoryLocation, bottomTabs: readonly 
     return parseHref('/')
   }
 
+  return location
+}
+
+function sanitizePopLocation(location: HistoryLocation): HistoryLocation {
+  if (location.pathname === '/') return parseHref('/', location.state)
+  if (!isPopPath(location.pathname)) return parseHref('/')
   return location
 }
 
@@ -229,33 +260,46 @@ function normalizeState(state: KernelState): KernelState {
     bottomTabs: merged.bottomTabs,
     mainLocation: sanitizeMainLocation(state.mainLocation, merged.mainTabs),
     bottomLocation: sanitizeBottomLocation(state.bottomLocation, merged.bottomTabs),
+    popLocation: sanitizePopLocation(state.popLocation),
   }
 }
 
-function parseBrowserLocation(loc: Location, layout: NavLayout): {
+function parseBrowserLocation(
+  loc: Location,
+  layout: NavLayout
+): {
   main: HistoryLocation
   bottom: HistoryLocation
+  pop: HistoryLocation
 } {
   const url = new URL(loc.href)
   const rawBottomHref = url.searchParams.get('_b')
+  const rawPopHref = url.searchParams.get('_p')
   url.searchParams.delete('_b')
+  url.searchParams.delete('_p')
 
   const historyState = window.history.state as UrlHistoryState | null
   const main = parseHref(`${url.pathname}${url.search}${url.hash}`, historyState?.main)
   const bottom = parseHref(rawBottomHref ?? '/', historyState?.bottom)
+  const pop = parseHref(rawPopHref ?? '/', historyState?.pop)
 
   return {
     main: sanitizeMainLocation(main, layout.mainTabs),
     bottom: sanitizeBottomLocation(bottom, layout.bottomTabs),
+    pop: sanitizePopLocation(pop),
   }
 }
 
 function buildCanonicalUrl(state: KernelState): string {
   const url = new URL(state.mainLocation.href, window.location.origin)
   url.searchParams.delete('_b')
+  url.searchParams.delete('_p')
 
   if (state.bottomTabs.length > 0) {
     url.searchParams.set('_b', state.bottomLocation.href)
+  }
+  if (state.popLocation.pathname !== '/') {
+    url.searchParams.set('_p', state.popLocation.href)
   }
 
   return `${url.pathname}${url.search}${url.hash}`
@@ -273,6 +317,7 @@ function createInitialState(): KernelState {
     updatedAt: 0,
     mainLocation: parseHref('/dashboard'),
     bottomLocation: parseHref('/'),
+    popLocation: parseHref('/'),
   }
 }
 
@@ -328,7 +373,7 @@ const BUILTIN_BEHAVIOR_PLUGINS: readonly KernelBehaviorPlugin[] = [
 function applyBehaviorPlugins(
   prevState: KernelState,
   nextState: KernelState,
-  event: BehaviorEvent,
+  event: BehaviorEvent
 ): KernelState {
   let current = nextState
   for (const plugin of BUILTIN_BEHAVIOR_PLUGINS) {
@@ -340,18 +385,20 @@ function applyBehaviorPlugins(
 function reduceKernel(state: KernelState, event: KernelEvent): KernelTransition {
   switch (event.type) {
     case 'NAVIGATE': {
-      const targetArea = areaForPath(state, event.location.pathname)
+      const targetArea =
+        event.sourceArea === 'pop' ? 'pop' : areaForPath(state, event.location.pathname)
       const nextState =
         targetArea === 'main'
           ? { ...state, mainLocation: event.location }
-          : { ...state, bottomLocation: event.location }
+          : targetArea === 'bottom'
+            ? { ...state, bottomLocation: event.location }
+            : { ...state, popLocation: event.location }
 
       return {
         nextState,
         changed: true,
         urlAction: event.action,
-        notify:
-          targetArea === event.sourceArea ? [] : [{ area: targetArea, type: event.action }],
+        notify: targetArea === event.sourceArea ? [] : [{ area: targetArea, type: event.action }],
         persist: 'none',
       }
     }
@@ -362,11 +409,13 @@ function reduceKernel(state: KernelState, event: KernelEvent): KernelTransition 
           ...state,
           mainLocation: event.mainLocation,
           bottomLocation: event.bottomLocation,
+          popLocation: event.popLocation,
         },
         changed: true,
         notify: [
           { area: 'main', type: 'BACK' },
           { area: 'bottom', type: 'BACK' },
+          { area: 'pop', type: 'BACK' },
         ],
         persist: 'none',
       }
@@ -381,7 +430,8 @@ function reduceKernel(state: KernelState, event: KernelEvent): KernelTransition 
       const mainTabs = state.mainTabs.filter((tab) => tab !== event.tabId)
       const bottomTabs = state.bottomTabs.filter((tab) => tab !== event.tabId)
       const nextMainTabs = event.targetArea === 'main' ? [...mainTabs, event.tabId] : mainTabs
-      const nextBottomTabs = event.targetArea === 'bottom' ? [...bottomTabs, event.tabId] : bottomTabs
+      const nextBottomTabs =
+        event.targetArea === 'bottom' ? [...bottomTabs, event.tabId] : bottomTabs
 
       let mainLocation = state.mainLocation
       let bottomLocation = state.bottomLocation
@@ -429,9 +479,7 @@ function reduceKernel(state: KernelState, event: KernelEvent): KernelTransition 
       }
 
       const nextState =
-        event.area === 'main'
-          ? { ...state, mainTabs: ordered }
-          : { ...state, bottomTabs: ordered }
+        event.area === 'main' ? { ...state, mainTabs: ordered } : { ...state, bottomTabs: ordered }
 
       return {
         nextState,
@@ -503,6 +551,34 @@ function reduceKernel(state: KernelState, event: KernelEvent): KernelTransition 
       }
     }
 
+    case 'ACTIVATE_POP': {
+      if (areaForPath(state, event.location.pathname) !== 'pop') {
+        return { nextState: state, changed: false, notify: [], persist: 'none' }
+      }
+
+      return {
+        nextState: { ...state, popLocation: event.location },
+        changed: true,
+        urlAction: 'PUSH',
+        notify: [{ area: 'pop', type: 'PUSH' }],
+        persist: 'none',
+      }
+    }
+
+    case 'DEACTIVATE_POP': {
+      if (state.popLocation.pathname === '/') {
+        return { nextState: state, changed: false, notify: [], persist: 'none' }
+      }
+
+      return {
+        nextState: { ...state, popLocation: parseHref('/') },
+        changed: true,
+        urlAction: 'REPLACE',
+        notify: [],
+        persist: 'none',
+      }
+    }
+
     case 'APPLY_LAYOUT': {
       if (event.layout.updatedAt <= state.updatedAt) {
         return { nextState: state, changed: false, notify: [], persist: 'none' }
@@ -530,18 +606,23 @@ function reduceKernel(state: KernelState, event: KernelEvent): KernelTransition 
 }
 
 function locationHrefChanged(prevState: KernelState, nextState: KernelState, area: Area): boolean {
-  return (area === 'main' ? prevState.mainLocation.href : prevState.bottomLocation.href)
-    !== (area === 'main' ? nextState.mainLocation.href : nextState.bottomLocation.href)
+  if (area === 'main') {
+    return prevState.mainLocation.href !== nextState.mainLocation.href
+  }
+  if (area === 'bottom') {
+    return prevState.bottomLocation.href !== nextState.bottomLocation.href
+  }
+  return prevState.popLocation.href !== nextState.popLocation.href
 }
 
 function appendLocationNotifications(
   notifications: Array<{ area: Area; type: RouterAction }>,
   prevState: KernelState,
-  nextState: KernelState,
+  nextState: KernelState
 ): Array<{ area: Area; type: RouterAction }> {
   const next = [...notifications]
 
-  for (const area of ['main', 'bottom'] as const) {
+  for (const area of ['main', 'bottom', 'pop'] as const) {
     const changed = locationHrefChanged(prevState, nextState, area)
     if (!changed) continue
     if (next.some((item) => item.area === area)) continue
@@ -554,6 +635,7 @@ function appendLocationNotifications(
 export class NavController {
   private mainHistory: RouterHistory | null = null
   private bottomHistory: RouterHistory | null = null
+  private popHistory: RouterHistory | null = null
 
   private state: KernelState = createInitialState()
 
@@ -565,10 +647,11 @@ export class NavController {
   private initialized = false
 
   constructor() {
-    if (typeof window === 'undefined' || isStaticMode()) return
+    if (typeof window === 'undefined') return
+    const staticMode = isStaticMode()
 
-    const local = readLocalStorage()
-    if (local) {
+    const local = staticMode ? null : readLocalStorage()
+    if (local != null) {
       const merged = mergeLayout(local)
       this.state = {
         ...this.state,
@@ -583,6 +666,7 @@ export class NavController {
       ...this.state,
       mainLocation: parsed.main,
       bottomLocation: parsed.bottom,
+      popLocation: parsed.pop,
     })
     bootState = normalizeState(applyBehaviorPlugins(bootState, bootState, { type: 'BOOTSTRAP' }))
     this.state = bootState
@@ -594,13 +678,17 @@ export class NavController {
   setHistoryRef(area: Area, history: RouterHistory): void {
     if (area === 'main') {
       this.mainHistory = history
-    } else {
+    } else if (area === 'bottom') {
       this.bottomHistory = history
+    } else {
+      this.popHistory = history
     }
   }
 
   getLocation(area: Area): HistoryLocation {
-    return area === 'main' ? this.state.mainLocation : this.state.bottomLocation
+    if (area === 'main') return this.state.mainLocation
+    if (area === 'bottom') return this.state.bottomLocation
+    return this.state.popLocation
   }
 
   push(area: Area, path: string, state: unknown): void {
@@ -633,11 +721,11 @@ export class NavController {
     return areaForPath(this.state, path)
   }
 
-  moveTab(tabId: TabId, targetArea: Area): void {
+  moveTab(tabId: TabId, targetArea: 'main' | 'bottom'): void {
     this.dispatch({ type: 'MOVE_TAB', tabId, targetArea })
   }
 
-  reorder(area: Area, tabIds: TabId[]): void {
+  reorder(area: 'main' | 'bottom', tabIds: TabId[]): void {
     this.dispatch({ type: 'REORDER', area, tabIds })
   }
 
@@ -651,6 +739,14 @@ export class NavController {
 
   deactivateBottom(): void {
     this.dispatch({ type: 'DEACTIVATE_BOTTOM' })
+  }
+
+  activatePop(path: string): void {
+    this.dispatch({ type: 'ACTIVATE_POP', location: parseHref(path) })
+  }
+
+  deactivatePop(): void {
+    this.dispatch({ type: 'DEACTIVATE_POP' })
   }
 
   subscribe(listener: () => void): () => void {
@@ -669,7 +765,9 @@ export class NavController {
       bottomTabs: [...this.state.bottomTabs],
       mainLocation: this.state.mainLocation,
       bottomLocation: this.state.bottomLocation,
+      popLocation: this.state.popLocation,
       bottomActive: bottomTabId != null && this.state.bottomTabs.includes(bottomTabId),
+      popActive: this.state.popLocation.pathname !== '/',
     }
 
     return this.snapshotCache
@@ -719,7 +817,7 @@ export class NavController {
             if (!incoming) return
             this.dispatch({ type: 'APPLY_LAYOUT', layout: incoming })
           },
-        },
+        }
       )
 
       this.kvUnsubscribe = () => subscription.unsubscribe()
@@ -747,10 +845,25 @@ export class NavController {
       type: 'POPSTATE',
       mainLocation: parsed.main,
       bottomLocation: parsed.bottom,
+      popLocation: parsed.pop,
     })
   }
 
   private dispatch(event: KernelEvent): void {
+    if (
+      typeof window !== 'undefined'
+      && event.type !== 'POPSTATE'
+      && this.mainHistory == null
+    ) {
+      const parsed = parseBrowserLocation(window.location, this.state)
+      this.state = normalizeState({
+        ...this.state,
+        mainLocation: parsed.main,
+        bottomLocation: parsed.bottom,
+        popLocation: parsed.pop,
+      })
+    }
+
     const transition = reduceKernel(this.state, event)
     if (!transition.changed) return
 
@@ -772,8 +885,10 @@ export class NavController {
     }
 
     const effectiveUrlAction =
-      transition.urlAction
-      ?? (locationHrefChanged(prevState, this.state, 'main') || locationHrefChanged(prevState, this.state, 'bottom')
+      transition.urlAction ??
+      (locationHrefChanged(prevState, this.state, 'main') ||
+      locationHrefChanged(prevState, this.state, 'bottom') ||
+      locationHrefChanged(prevState, this.state, 'pop')
         ? 'REPLACE'
         : undefined)
 
@@ -788,7 +903,12 @@ export class NavController {
 
   private notifyRouters(notifications: Array<{ area: Area; type: RouterAction }>): void {
     for (const notification of notifications) {
-      const history = notification.area === 'main' ? this.mainHistory : this.bottomHistory
+      const history =
+        notification.area === 'main'
+          ? this.mainHistory
+          : notification.area === 'bottom'
+            ? this.bottomHistory
+            : this.popHistory
       history?.notify({ type: notification.type })
     }
   }
@@ -809,6 +929,7 @@ export class NavController {
     const historyState: UrlHistoryState = {
       main: this.state.mainLocation.state,
       bottom: this.state.bottomLocation.state,
+      pop: this.state.popLocation.state,
     }
 
     if (action === 'PUSH') {
@@ -826,6 +947,7 @@ export class NavController {
     const historyState: UrlHistoryState = {
       main: this.state.mainLocation.state,
       bottom: this.state.bottomLocation.state,
+      pop: this.state.popLocation.state,
     }
 
     window.history.replaceState(historyState, '', canonical)
@@ -860,7 +982,7 @@ export class NavController {
               bottomTabs: this.state.bottomTabs,
               updatedAt: now,
             },
-          }),
+          })
         )
         .catch(() => {})
     }, PERSIST_DEBOUNCE)

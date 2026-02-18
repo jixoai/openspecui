@@ -12,9 +12,10 @@
       "@openspecui/server": ["../server/src/index.ts"],
       "@openspecui/core": ["../core/src/index.ts"],
       "@openspecui/core/pty-protocol": ["../core/src/pty-protocol.ts"],
+      "@openspecui/search": ["../search/src/index.ts"],
       "@openspecui/ai-provider": ["../ai-provider/src/index.ts"],
-      "xterm-input-panel": ["../xterm-input-panel/src/index.ts"],
-    },
+      "xterm-input-panel": ["../xterm-input-panel/src/index.ts"]
+    }
   },
-  "include": ["src"],
+  "include": ["src"]
 }

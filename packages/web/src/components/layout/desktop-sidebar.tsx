@@ -1,7 +1,9 @@
+import { navController } from '@/lib/nav-controller'
 import { getBasePath, isStaticMode } from '@/lib/static-mode'
 import { useDarkMode } from '@/lib/use-dark-mode'
 import { useNavLayout } from '@/lib/use-nav-controller'
 import { Link } from '@tanstack/react-router'
+import { Search } from 'lucide-react'
 import { AreaNav } from './area-nav'
 import { navItems, settingsItem } from './nav-items'
 
@@ -23,6 +25,15 @@ export function DesktopSidebar() {
           className="h-6"
         />
       </div>
+
+      <button
+        type="button"
+        onClick={() => navController.activatePop('/search')}
+        className="hover:bg-muted mb-4 flex items-center gap-2 rounded-md px-3 py-2 text-left"
+      >
+        <Search className="h-4 w-4 shrink-0" />
+        <span className="font-nav text-base tracking-[0.04em]">Search</span>
+      </button>
 
       {isStatic ? (
         /* Static mode: simple nav list */

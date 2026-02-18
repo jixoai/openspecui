@@ -52,7 +52,7 @@ if (userArgs.dir) {
   console.log(`Project dir: ${userArgs.dir}`)
 }
 
-console.log('Building @openspecui/core before starting dev processes...')
+console.log('Building @openspecui/core and @openspecui/search before starting dev processes...')
 const coreBuild = spawnSync('pnpm', ['--filter', '@openspecui/core', 'build'], {
   stdio: 'inherit',
   env: process.env,
@@ -60,8 +60,19 @@ const coreBuild = spawnSync('pnpm', ['--filter', '@openspecui/core', 'build'], {
 if (coreBuild.status !== 0) {
   process.exit(coreBuild.status ?? 1)
 }
+const searchBuild = spawnSync('pnpm', ['--filter', '@openspecui/search', 'build'], {
+  stdio: 'inherit',
+  env: process.env,
+})
+if (searchBuild.status !== 0) {
+  process.exit(searchBuild.status ?? 1)
+}
 
 const core = spawn('pnpm', ['--filter', '@openspecui/core', 'dev'], {
+  stdio: 'inherit',
+  env: process.env,
+})
+const search = spawn('pnpm', ['--filter', '@openspecui/search', 'dev'], {
   stdio: 'inherit',
   env: process.env,
 })
@@ -73,6 +84,7 @@ const shutdown = (code?: number) => {
   if (isShuttingDown) return
   isShuttingDown = true
   core.kill('SIGINT')
+  search.kill('SIGINT')
   server.kill('SIGINT')
   web.kill('SIGINT')
   if (code !== undefined) process.exit(code)
@@ -83,6 +95,11 @@ process.on('SIGTERM', () => shutdown())
 
 core.on('exit', (code) => {
   console.log(`core exited with code ${code}`)
+  shutdown(code ?? undefined)
+})
+
+search.on('exit', (code) => {
+  console.log(`search exited with code ${code}`)
   shutdown(code ?? undefined)
 })
 

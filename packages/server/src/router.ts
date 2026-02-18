@@ -1,27 +1,21 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { dirname, join, matchesGlob, relative, resolve, sep } from 'node:path'
-import { initTRPC } from '@trpc/server'
-import { observable } from '@trpc/server/observable'
-import { z } from 'zod'
-import YAML from 'yaml'
 import type {
   ChangeFile,
+  CliExecutor,
+  ConfigManager,
+  FileChangeEvent,
   OpenSpecAdapter,
   OpenSpecWatcher,
-  FileChangeEvent,
-  ConfigManager,
-  CliExecutor,
   OpsxKernel,
 } from '@openspecui/core'
 import {
+  ApplyInstructionsSchema,
   ArtifactInstructionsSchema,
   ChangeStatusSchema,
-  ApplyInstructionsSchema,
   SchemaInfoSchema,
   SchemaResolutionSchema,
   TemplatesSchema,
-  getAvailableTools,
   getAllTools,
+  getAvailableTools,
   getConfiguredTools,
   getDefaultCliCommandString,
   reactiveReadDir,
@@ -29,26 +23,34 @@ import {
   reactiveStat,
   sniffGlobalCli,
   type AIToolOption,
+  type ApplyInstructions,
   type ArtifactInstructions,
   type ChangeStatus,
-  type ApplyInstructions,
   type SchemaInfo,
   type SchemaResolution,
   type TemplatesMap,
 } from '@openspecui/core'
+import { SearchQuerySchema, type SearchQuery } from '@openspecui/search'
+import { initTRPC } from '@trpc/server'
+import { observable } from '@trpc/server/observable'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { dirname, join, matchesGlob, relative, resolve, sep } from 'node:path'
+import { z } from 'zod'
+import { createCliStreamObservable } from './cli-stream-observable.js'
+import { parseSchemaYaml } from './opsx-schema.js'
+import { reactiveKV } from './reactive-kv.js'
 import {
   createReactiveSubscription,
   createReactiveSubscriptionWithInput,
 } from './reactive-subscription.js'
-import { createCliStreamObservable } from './cli-stream-observable.js'
-import { parseSchemaYaml } from './opsx-schema.js'
-import { reactiveKV } from './reactive-kv.js'
+import type { SearchService } from './search-service.js'
 
 export interface Context {
   adapter: OpenSpecAdapter
   configManager: ConfigManager
   cliExecutor: CliExecutor
   kernel: OpsxKernel
+  searchService: SearchService
   watcher?: OpenSpecWatcher
   projectDir: string
 }
@@ -145,7 +147,10 @@ async function touchOpsxProjectDeps(projectDir: string): Promise<void> {
   const openspecDir = join(projectDir, 'openspec')
   await reactiveReadFile(join(openspecDir, 'config.yaml'))
   const schemaRoot = join(openspecDir, 'schemas')
-  const schemaDirs = await reactiveReadDir(schemaRoot, { directoriesOnly: true, includeHidden: true })
+  const schemaDirs = await reactiveReadDir(schemaRoot, {
+    directoriesOnly: true,
+    includeHidden: true,
+  })
   await Promise.all(
     schemaDirs.map((name) => reactiveReadFile(join(schemaRoot, name, 'schema.yaml')))
   )
@@ -274,19 +279,20 @@ async function fetchOpsxSchemaResolution(ctx: Context, name: string): Promise<Sc
   await touchOpsxProjectDeps(ctx.projectDir)
   const result = await ctx.cliExecutor.schemaWhich(name)
   if (!result.success) {
-    throw new Error(result.stderr || `openspec schema which failed (exit ${result.exitCode ?? 'null'})`)
+    throw new Error(
+      result.stderr || `openspec schema which failed (exit ${result.exitCode ?? 'null'})`
+    )
   }
   return parseCliJson(result.stdout, SchemaResolutionSchema, 'openspec schema which')
 }
 
-async function fetchOpsxTemplates(
-  ctx: Context,
-  schema?: string
-): Promise<TemplatesMap> {
+async function fetchOpsxTemplates(ctx: Context, schema?: string): Promise<TemplatesMap> {
   await touchOpsxProjectDeps(ctx.projectDir)
   const result = await ctx.cliExecutor.templates(schema)
   if (!result.success) {
-    throw new Error(result.stderr || `openspec templates failed (exit ${result.exitCode ?? 'null'})`)
+    throw new Error(
+      result.stderr || `openspec templates failed (exit ${result.exitCode ?? 'null'})`
+    )
   }
   return parseCliJson(result.stdout, TemplatesSchema, 'openspec templates')
 }
@@ -420,9 +426,9 @@ export const changeRouter = router({
   subscribeFiles: publicProcedure
     .input(z.object({ id: z.string() }))
     .subscription(({ ctx, input }) => {
-      return createReactiveSubscriptionWithInput((id: string) =>
-        ctx.adapter.readChangeFiles(id)
-      )(input.id)
+      return createReactiveSubscriptionWithInput((id: string) => ctx.adapter.readChangeFiles(id))(
+        input.id
+      )
     }),
 })
 
@@ -578,7 +584,7 @@ export const configRouter = router({
     return ctx.configManager.readConfig()
   }),
 
-  /** 获取实际使用的 CLI 命令（检测全局命令或 fallback 到 npx，字符串形式用于 UI 显示） */
+  /** 获取实际使用的 CLI 命令（runner 解析后的 execute-path，字符串形式用于 UI 显示） */
   getEffectiveCliCommand: publicProcedure.query(async ({ ctx }) => {
     return ctx.configManager.getCliCommandString()
   }),
@@ -591,19 +597,42 @@ export const configRouter = router({
   update: publicProcedure
     .input(
       z.object({
-        cli: z.object({ command: z.string() }).optional(),
-        ui: z.object({ theme: z.enum(['light', 'dark', 'system']) }).optional(),
+        cli: z
+          .object({
+            command: z.string().nullable().optional(),
+            args: z.array(z.string()).nullable().optional(),
+          })
+          .optional(),
+        theme: z.enum(['light', 'dark', 'system']).optional(),
+        terminal: z
+          .object({
+            fontSize: z.number().min(8).max(32).optional(),
+            fontFamily: z.string().optional(),
+            cursorBlink: z.boolean().optional(),
+            cursorStyle: z.enum(['block', 'underline', 'bar']).optional(),
+            scrollback: z.number().min(0).max(100000).optional(),
+          })
+          .optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await ctx.configManager.writeConfig(input)
-      return { success: true }
-    }),
+      const hasCliCommand =
+        input.cli !== undefined && Object.prototype.hasOwnProperty.call(input.cli, 'command')
+      const hasCliArgs =
+        input.cli !== undefined && Object.prototype.hasOwnProperty.call(input.cli, 'args')
 
-  setCliCommand: publicProcedure
-    .input(z.object({ command: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      await ctx.configManager.setCliCommand(input.command)
+      if (hasCliCommand && !hasCliArgs) {
+        await ctx.configManager.setCliCommand(input.cli?.command ?? '')
+        if (input.theme !== undefined || input.terminal !== undefined) {
+          await ctx.configManager.writeConfig({
+            theme: input.theme,
+            terminal: input.terminal,
+          })
+        }
+        return { success: true }
+      }
+
+      await ctx.configManager.writeConfig(input)
       return { success: true }
     }),
 
@@ -612,7 +641,6 @@ export const configRouter = router({
     return createReactiveSubscription(() => ctx.configManager.readConfig())
   }),
 })
-
 
 /**
  * CLI router - execute external openspec CLI commands
@@ -629,7 +657,11 @@ export const cliRouter = router({
 
   /** 流式执行全局安装命令 */
   installGlobalCliStream: publicProcedure.subscription(({ ctx }) => {
-    return observable<{ type: 'command' | 'stdout' | 'stderr' | 'exit'; data?: string; exitCode?: number | null }>((emit) => {
+    return observable<{
+      type: 'command' | 'stdout' | 'stderr' | 'exit'
+      data?: string
+      exitCode?: number | null
+    }>((emit) => {
       const cancel = ctx.cliExecutor.executeCommandStream(
         ['npm', 'install', '-g', '@fission-ai/openspec'],
         (event) => {
@@ -1117,61 +1149,36 @@ export const opsxRouter = router({
       return { success: true }
     }),
 
-  /** Update the ui: section in config.yaml (preserves other fields) */
-  updateProjectConfigUi: publicProcedure
-    .input(
-      z.object({
-        'font-size': z.number().min(8).max(32).optional(),
-        'font-families': z.array(z.string()).optional(),
-        'cursor-blink': z.boolean().optional(),
-        'cursor-style': z.enum(['block', 'underline', 'bar']).optional(),
-        scrollback: z.number().min(0).max(100000).optional(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      const configPath = join(ctx.projectDir, 'openspec', 'config.yaml')
-      let doc: YAML.Document
-      try {
-        const content = await readFile(configPath, 'utf-8')
-        doc = YAML.parseDocument(content)
-      } catch {
-        // File doesn't exist or is invalid — create a new document
-        doc = new YAML.Document({})
-      }
-
-      // Ensure ui: exists
-      if (!doc.has('ui')) {
-        doc.set('ui', doc.createNode({}))
-      }
-      const uiNode = doc.get('ui', true) as YAML.YAMLMap
-      for (const [key, value] of Object.entries(input)) {
-        if (value !== undefined) {
-          uiNode.set(key, value)
-        }
-      }
-
-      const openspecDir = join(ctx.projectDir, 'openspec')
-      await mkdir(openspecDir, { recursive: true })
-      await writeFile(configPath, doc.toString(), 'utf-8')
-      return { success: true }
-    }),
-
   listChanges: publicProcedure.query(async ({ ctx }) => {
     const changesDir = join(ctx.projectDir, 'openspec', 'changes')
-    return reactiveReadDir(changesDir, { directoriesOnly: true, exclude: ['archive'], includeHidden: false })
+    return reactiveReadDir(changesDir, {
+      directoriesOnly: true,
+      exclude: ['archive'],
+      includeHidden: false,
+    })
   }),
 
   subscribeChanges: publicProcedure.subscription(({ ctx }) => {
     return createReactiveSubscription(async () => {
       const changesDir = join(ctx.projectDir, 'openspec', 'changes')
-      return reactiveReadDir(changesDir, { directoriesOnly: true, exclude: ['archive'], includeHidden: false })
+      return reactiveReadDir(changesDir, {
+        directoriesOnly: true,
+        exclude: ['archive'],
+        includeHidden: false,
+      })
     })
   }),
 
   changeMetadata: publicProcedure
     .input(z.object({ changeId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const metadataPath = join(ctx.projectDir, 'openspec', 'changes', input.changeId, '.openspec.yaml')
+      const metadataPath = join(
+        ctx.projectDir,
+        'openspec',
+        'changes',
+        input.changeId,
+        '.openspec.yaml'
+      )
       return reactiveReadFile(metadataPath)
     }),
 
@@ -1193,7 +1200,13 @@ export const opsxRouter = router({
   readArtifactOutput: publicProcedure
     .input(z.object({ changeId: z.string(), outputPath: z.string() }))
     .query(async ({ ctx, input }) => {
-      const artifactPath = join(ctx.projectDir, 'openspec', 'changes', input.changeId, input.outputPath)
+      const artifactPath = join(
+        ctx.projectDir,
+        'openspec',
+        'changes',
+        input.changeId,
+        input.outputPath
+      )
       return reactiveReadFile(artifactPath)
     }),
 
@@ -1229,7 +1242,13 @@ export const opsxRouter = router({
   writeArtifactOutput: publicProcedure
     .input(z.object({ changeId: z.string(), outputPath: z.string(), content: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const artifactPath = join(ctx.projectDir, 'openspec', 'changes', input.changeId, input.outputPath)
+      const artifactPath = join(
+        ctx.projectDir,
+        'openspec',
+        'changes',
+        input.changeId,
+        input.outputPath
+      )
       await writeFile(artifactPath, input.content, 'utf-8')
       return { success: true }
     }),
@@ -1240,11 +1259,9 @@ export const opsxRouter = router({
  * No disk persistence — devices use IndexedDB for their own storage.
  */
 export const kvRouter = router({
-  get: publicProcedure
-    .input(z.object({ key: z.string() }))
-    .query(({ input }) => {
-      return reactiveKV.get(input.key) ?? null
-    }),
+  get: publicProcedure.input(z.object({ key: z.string() })).query(({ input }) => {
+    return reactiveKV.get(input.key) ?? null
+  }),
 
   set: publicProcedure
     .input(z.object({ key: z.string(), value: z.unknown() }))
@@ -1253,31 +1270,42 @@ export const kvRouter = router({
       return { success: true }
     }),
 
-  delete: publicProcedure
-    .input(z.object({ key: z.string() }))
-    .mutation(({ input }) => {
-      reactiveKV.delete(input.key)
-      return { success: true }
-    }),
+  delete: publicProcedure.input(z.object({ key: z.string() })).mutation(({ input }) => {
+    reactiveKV.delete(input.key)
+    return { success: true }
+  }),
 
-  subscribe: publicProcedure
-    .input(z.object({ key: z.string() }))
-    .subscription(({ input }) => {
-      return observable<unknown>((emit) => {
-        // Emit current value immediately
-        const current = reactiveKV.get(input.key)
-        emit.next(current ?? null)
+  subscribe: publicProcedure.input(z.object({ key: z.string() })).subscription(({ input }) => {
+    return observable<unknown>((emit) => {
+      // Emit current value immediately
+      const current = reactiveKV.get(input.key)
+      emit.next(current ?? null)
 
-        // Listen for changes
-        const unsub = reactiveKV.onKey(input.key, (value) => {
-          emit.next(value ?? null)
-        })
-
-        return () => {
-          unsub()
-        }
+      // Listen for changes
+      const unsub = reactiveKV.onKey(input.key, (value) => {
+        emit.next(value ?? null)
       })
-    }),
+
+      return () => {
+        unsub()
+      }
+    })
+  }),
+})
+
+/**
+ * Search router - unified fulltext search over specs/changes/archives
+ */
+export const searchRouter = router({
+  query: publicProcedure.input(SearchQuerySchema).query(async ({ ctx, input }) => {
+    return ctx.searchService.query(input)
+  }),
+
+  subscribe: publicProcedure.input(SearchQuerySchema).subscription(({ ctx, input }) => {
+    return createReactiveSubscriptionWithInput((queryInput: SearchQuery) =>
+      ctx.searchService.queryReactive(queryInput)
+    )(input)
+  }),
 })
 
 /**
@@ -1293,6 +1321,7 @@ export const appRouter = router({
   cli: cliRouter,
   opsx: opsxRouter,
   kv: kvRouter,
+  search: searchRouter,
 })
 
 export type AppRouter = typeof appRouter

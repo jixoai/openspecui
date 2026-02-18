@@ -1,0 +1,39 @@
+{
+  "name": "@openspecui/search",
+  "version": "1.0.4",
+  "description": "Shared search engine and worker providers for OpenSpecUI",
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    },
+    "./node": {
+      "import": "./dist/node.mjs",
+      "types": "./dist/node.d.mts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown src/index.ts src/node.ts --format esm --dts",
+    "dev": "tsdown src/index.ts src/node.ts --format esm --dts --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "tsdown": "^0.16.6",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

@@ -2,14 +2,15 @@ import { CliHealthGate } from '@/components/cli-health-gate'
 import { GlobalArchiveModal } from '@/components/global-archive-modal'
 import { StaticModeBanner } from '@/components/StaticModeBanner'
 import { ResizeHandle } from '@/components/terminal/resize-handle'
-import { useNavLayout } from '@/lib/use-nav-controller'
 import { isStaticMode } from '@/lib/static-mode'
+import { useNavLayout } from '@/lib/use-nav-controller'
 import { Outlet } from '@tanstack/react-router'
 import { useCallback, useState } from 'react'
 import { BottomAreaRouter } from './bottom-area'
 import { DesktopSidebar } from './desktop-sidebar'
 import { MobileHeader } from './mobile-header'
 import { MobileTabBar } from './mobile-tabbar'
+import { PopAreaRouter } from './pop-area'
 import { DesktopStatusBar } from './status-bar'
 
 /** Root layout with responsive navigation */
@@ -34,13 +35,13 @@ export function RootLayout() {
           <MobileHeader />
           <div className="flex min-h-0 flex-1 flex-col">
             {hasMainContent && (
-              <main className={`main-content view-transition-route flex min-h-0 flex-col ${hasBottomContent ? 'flex-1' : 'flex-1'}`}>
+              <main
+                className={`main-content view-transition-route flex min-h-0 flex-col ${hasBottomContent ? 'flex-1' : 'flex-1'}`}
+              >
                 <Outlet />
               </main>
             )}
-            {hasMainContent && hasBottomContent && (
-              <ResizeHandle onResize={handleResize} />
-            )}
+            {hasMainContent && hasBottomContent && <ResizeHandle onResize={handleResize} />}
             {hasBottomContent && (
               <BottomAreaRouter height={hasMainContent ? bottomHeight : undefined} />
             )}
@@ -51,6 +52,7 @@ export function RootLayout() {
       </div>
 
       <GlobalArchiveModal />
+      <PopAreaRouter />
     </div>
   )
 }
