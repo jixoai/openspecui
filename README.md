@@ -15,6 +15,10 @@ A visual web interface for spec-driven development with OpenSpec.
 - **Change Proposals** - Track change proposals with tasks and deltas
 - **Task Tracking** - Click to toggle task completion status
 - **Realtime Updates** - WebSocket-based live updates when files change
+- **Web Terminal** - Built-in PTY terminal with desktop/mobile support
+- **OPSX Compose** - Generate/edit prompts from change actions and send to active terminal
+- **Search Panel** - Reactive search in live mode and in static-export mode
+- **CLI Execute Path** - Detect/fallback runners and configurable `execute-path`
 - **Static Site Export** - Export the current state as static website to be used in CI
 - **AI Integration** - Review, translate, and suggest improvements (API & ACP)
 
@@ -29,9 +33,45 @@ openspecui
 
 # Or specify a directory
 openspecui ./my-project
+
+# Run without global install
+npx openspecui@latest
+bunx openspecui@latest
 ```
 
 The UI will open at `http://localhost:3100`.
+
+### How To Use
+
+#### 1) Web Terminal (desktop + mobile)
+
+- Open the `Terminal` tab from navigation.
+- Terminal sessions are long-lived and only close when you explicitly close the tab/session.
+- If a process exits, you can close the finished terminal via close action (including key-close behavior in terminal UI).
+- On mobile, an input panel/FAB is available; on desktop, the same panel can be opened when needed.
+
+#### 2) OPSX Compose from Change Actions
+
+- Open a change page (`/changes/:changeId`).
+- Click one of: `Continue`, `Fast-forward`, `Apply`, `Verify`, `Archive`.
+- A compose dialog opens in PopArea (`/opsx-compose`) with a generated draft prompt.
+- Edit in `CodeEditor`, then:
+  - `Send`: select a live terminal target and write prompt to that PTY.
+  - `Copy`: copy prompt to clipboard.
+  - `Save`: save prompt into terminal input history.
+
+#### 3) Reactive Search (Live + Static)
+
+- Desktop: click `Search` below the logo in sidebar.
+- Mobile: click the search icon in top header.
+- Search opens in PopArea (`/search?query=...`), supports keyword highlighting, and subscribes to data updates in live mode.
+- In static export mode, search still works with a frontend worker-based index.
+
+#### 4) OpenSpec CLI Execute Path
+
+- If OpenSpec CLI is unavailable/incompatible, `OpenSpec CLI Required` modal lets you set `Execute Path` directly and re-check immediately.
+- You can also view/update execute-path in `Settings`.
+- Useful for custom command entries (including command + args with spaces).
 
 ### CLI Options
 
@@ -95,6 +135,7 @@ The exported site includes:
 - No real-time file watching
 - No task checkbox toggling
 - No AI integration features
+- No PTY terminal runtime features
 - Read-only view of the snapshot at export time
 
 #### Test the Static Export Locally
@@ -198,8 +239,11 @@ pnpm install
 # Build all packages
 pnpm build:packages
 
-# Start development servers
+# Start Bun + OpenTUI dev dashboard
 pnpm dev
+
+# Legacy multi-process dev script
+pnpm dev:legacy
 ```
 
 ### Packages
@@ -208,9 +252,11 @@ pnpm dev
 | ------------------------- | -------------------------------------------- |
 | `openspecui`              | CLI tool and bundled web UI                  |
 | `@openspecui/core`        | File adapter, parser, validator, and watcher |
+| `@openspecui/search`      | Shared search providers and indexing          |
 | `@openspecui/server`      | tRPC HTTP/WebSocket server                   |
 | `@openspecui/ai-provider` | AI provider abstraction (API & ACP)          |
 | `@openspecui/web`         | React web application                        |
+| `xterm-input-panel`       | Terminal input panel addon (mobile/desktop)  |
 
 ### Tech Stack
 
@@ -236,6 +282,10 @@ OpenSpec 规范驱动开发的可视化 Web 界面。
 - **变更提案** - 跟踪变更提案及其任务和增量
 - **任务跟踪** - 点击切换任务完成状态
 - **实时更新** - 基于 WebSocket 的文件变更实时更新
+- **内置终端** - 支持桌面端/移动端的 PTY Web Terminal
+- **OPSX Compose** - 从变更动作生成提示词并编辑后发送到终端
+- **搜索面板** - 动态模式与静态导出模式都可搜索
+- **CLI 执行路径** - 支持 runner 探测与 `execute-path` 配置
 - **AI 集成** - 审查、翻译和改进建议（支持 API 和 ACP）
 
 ### 快速开始
@@ -249,9 +299,45 @@ openspecui
 
 # 或指定目录
 openspecui ./my-project
+
+# 不全局安装直接运行
+npx openspecui@latest
+bunx openspecui@latest
 ```
 
 界面将在 `http://localhost:3100` 打开。
+
+### 使用指南
+
+#### 1) Web Terminal（桌面 + 移动）
+
+- 从导航打开 `Terminal` 页面。
+- 终端会话默认是长生命周期，只会在你主动关闭 tab/会话时结束。
+- 进程结束后，可以通过关闭动作（包含终端内按键关闭行为）关闭该终端页签。
+- 移动端有输入面板/FAB；桌面端也可按需打开同一套输入面板。
+
+#### 2) 在 Change 页面使用 OPSX Compose
+
+- 打开变更页面（`/changes/:changeId`）。
+- 点击 `Continue`、`Fast-forward`、`Apply`、`Verify`、`Archive` 任一按钮。
+- 会在 PopArea（`/opsx-compose`）打开 Compose 对话框，并自动生成草稿提示词。
+- 在 `CodeEditor` 中编辑后可执行：
+  - `Send`：选择一个在线终端，将内容写入该 PTY。
+  - `Copy`：复制到剪贴板。
+  - `Save`：保存到终端输入历史。
+
+#### 3) 响应式搜索（动态 + 静态）
+
+- 桌面端：点击侧边栏 Logo 下方 `Search`。
+- 移动端：点击顶部栏搜索图标。
+- 搜索在 PopArea（`/search?query=...`）中展示，支持关键词高亮；动态模式下会自动订阅更新。
+- 静态导出模式下，搜索仍可用（前端 worker 索引）。
+
+#### 4) OpenSpec CLI 执行路径（execute-path）
+
+- 当 OpenSpec CLI 不可用或版本不兼容时，会弹出 `OpenSpec CLI Required`，可直接输入 `Execute Path` 并立即重检。
+- 你也可以在 `Settings` 中查看和修改 execute-path。
+- 适用于带空格路径、命令 + 参数等复杂执行入口。
 
 ### 命令行选项
 
@@ -315,6 +401,7 @@ openspecui export -o ./dist --base-path /specs --clean
 - 无实时文件监听
 - 无任务复选框切换
 - 无 AI 集成功能
+- 无 PTY 终端运行能力
 - 仅可查看导出时的只读快照
 
 #### 本地测试静态导出
@@ -418,8 +505,11 @@ pnpm install
 # 构建所有包
 pnpm build:packages
 
-# 启动开发服务器
+# 启动 Bun + OpenTUI 开发面板
 pnpm dev
+
+# 旧版多进程开发脚本
+pnpm dev:legacy
 ```
 
 ### 包说明
@@ -428,9 +518,11 @@ pnpm dev
 | ------------------------- | ---------------------------------- |
 | `openspecui`              | CLI 工具和打包的 Web UI            |
 | `@openspecui/core`        | 文件适配器、解析器、验证器和监视器 |
+| `@openspecui/search`      | 搜索 Provider 与索引能力           |
 | `@openspecui/server`      | tRPC HTTP/WebSocket 服务器         |
 | `@openspecui/ai-provider` | AI 提供者抽象层（API 和 ACP）      |
 | `@openspecui/web`         | React Web 应用                     |
+| `xterm-input-panel`       | 终端输入面板插件（移动/桌面）      |
 
 ### 技术栈
 
