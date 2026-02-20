@@ -1,12 +1,11 @@
+import { navController } from '@/lib/nav-controller'
 import { useOpsxStatusListSubscription } from '@/lib/use-opsx'
-import { useTerminalContext } from '@/lib/terminal-context'
 import { Link } from '@tanstack/react-router'
 import { AlertCircle, GitBranch, LayoutDashboard, Sparkles } from 'lucide-react'
 import { useCallback, useMemo } from 'react'
 
 export function Dashboard() {
   const { data: statuses, isLoading, error } = useOpsxStatusListSubscription()
-  const { createDedicatedSession } = useTerminalContext()
 
   const summary = useMemo(() => {
     const totalChanges = statuses?.length ?? 0
@@ -21,15 +20,8 @@ export function Dashboard() {
   }, [statuses])
 
   const runNewChange = useCallback(() => {
-    const name = window.prompt('Change name (kebab-case):')
-    if (!name) return
-    const schema = window.prompt('Schema (optional):')
-    const args = ['new', 'change', name.trim()]
-    if (schema) {
-      args.push('--schema', schema.trim())
-    }
-    createDedicatedSession('openspec', args)
-  }, [createDedicatedSession])
+    navController.activatePop('/opsx-new')
+  }, [])
 
   if (isLoading && !statuses) {
     return <div className="route-loading animate-pulse">Loading dashboard...</div>
@@ -65,13 +57,31 @@ export function Dashboard() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard label="Active Changes" value={summary.totalChanges} />
-        <StatCard label="Artifacts Complete" value={`${summary.doneArtifacts}/${summary.totalArtifacts}`} />
-        <StatCard label="Completion" value={summary.totalArtifacts > 0 ? `${Math.round((summary.doneArtifacts / summary.totalArtifacts) * 100)}%` : '0%'} />
+        <StatCard
+          label="Artifacts Complete"
+          value={`${summary.doneArtifacts}/${summary.totalArtifacts}`}
+        />
+        <StatCard
+          label="Completion"
+          value={
+            summary.totalArtifacts > 0
+              ? `${Math.round((summary.doneArtifacts / summary.totalArtifacts) * 100)}%`
+              : '0%'
+          }
+        />
       </div>
 
       {!hasChanges && (
         <div className="border-border text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
-          No active changes yet. Use <strong>/opsx:new</strong> to create your first change.
+          <div>No active changes yet.</div>
+          <button
+            type="button"
+            onClick={runNewChange}
+            className="text-primary mt-2 inline-flex items-center gap-1 hover:underline"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            /opsx:new
+          </button>
         </div>
       )}
 
@@ -106,7 +116,9 @@ export function Dashboard() {
                   </div>
                   <span className="w-12 text-right text-sm font-medium">{percent}%</span>
                 </div>
-                <div className="text-muted-foreground mt-2 text-xs">Schema: {status.schemaName}</div>
+                <div className="text-muted-foreground mt-2 text-xs">
+                  Schema: {status.schemaName}
+                </div>
               </Link>
             )
           })}

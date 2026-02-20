@@ -10,8 +10,8 @@ import type {
 } from '@openspecui/core'
 import { useCallback } from 'react'
 import * as StaticProvider from './static-data-provider'
-import { useSubscription, type SubscriptionState } from './use-subscription'
 import { trpcClient } from './trpc'
+import { useSubscription, type SubscriptionState } from './use-subscription'
 
 export interface OpsxTemplateContent {
   content: string | null
@@ -32,6 +32,12 @@ interface OpsxInstructionsInput {
   artifact?: string
   schema?: string
   refreshKey?: number
+}
+
+export interface OpsxConfigBundle {
+  schemas: SchemaInfo[]
+  schemaDetails: Record<string, SchemaDetail | null>
+  schemaResolutions: Record<string, SchemaResolution | null>
 }
 
 export function useOpsxStatusSubscription(
@@ -58,7 +64,9 @@ export function useOpsxStatusSubscription(
     subscribe,
     () => StaticProvider.getOpsxStatus(input.change, input.schema),
     [input.change, input.schema, input.refreshKey],
-    input.change ? `opsx.subscribeStatus:${input.change}:${input.schema}:${input.refreshKey}` : undefined
+    input.change
+      ? `opsx.subscribeStatus:${input.change}:${input.schema}:${input.refreshKey}`
+      : undefined
   )
 }
 
@@ -66,7 +74,10 @@ export function useOpsxInstructionsSubscription(
   input: OpsxInstructionsInput
 ): SubscriptionState<ArtifactInstructions | null> {
   const subscribe = useCallback(
-    (callbacks: { onData: (data: ArtifactInstructions | null) => void; onError: (err: Error) => void }) => {
+    (callbacks: {
+      onData: (data: ArtifactInstructions | null) => void
+      onError: (err: Error) => void
+    }) => {
       if (!input.change || !input.artifact) {
         callbacks.onData(null)
         return { unsubscribe: () => {} }
@@ -86,21 +97,28 @@ export function useOpsxInstructionsSubscription(
     subscribe,
     async () => null,
     [input.change, input.artifact, input.schema, input.refreshKey],
-    input.change && input.artifact ? `opsx.subscribeInstructions:${input.change}:${input.artifact}:${input.schema}:${input.refreshKey}` : undefined
+    input.change && input.artifact
+      ? `opsx.subscribeInstructions:${input.change}:${input.artifact}:${input.schema}:${input.refreshKey}`
+      : undefined
   )
 }
 
-export function useOpsxSchemasSubscription(): SubscriptionState<SchemaInfo[]> {
+export function useOpsxConfigBundleSubscription(): SubscriptionState<OpsxConfigBundle> {
   const subscribe = useCallback(
-    (callbacks: { onData: (data: SchemaInfo[]) => void; onError: (err: Error) => void }) =>
-      trpcClient.opsx.subscribeSchemas.subscribe(undefined, {
+    (callbacks: { onData: (data: OpsxConfigBundle) => void; onError: (err: Error) => void }) =>
+      trpcClient.opsx.subscribeConfigBundle.subscribe(undefined, {
         onData: callbacks.onData,
         onError: callbacks.onError,
       }),
     []
   )
 
-  return useSubscription<SchemaInfo[]>(subscribe, StaticProvider.getOpsxSchemas, [], 'opsx.subscribeSchemas')
+  return useSubscription<OpsxConfigBundle>(
+    subscribe,
+    StaticProvider.getOpsxConfigBundle,
+    [],
+    'opsx.subscribeConfigBundle'
+  )
 }
 
 export function useOpsxStatusListSubscription(): SubscriptionState<ChangeStatus[]> {
@@ -113,73 +131,23 @@ export function useOpsxStatusListSubscription(): SubscriptionState<ChangeStatus[
     []
   )
 
-  return useSubscription<ChangeStatus[]>(subscribe, StaticProvider.getOpsxStatusList, [], 'opsx.subscribeStatusList')
-}
-
-export function useOpsxSchemaDetailSubscription(name?: string): SubscriptionState<SchemaDetail | null> {
-  const subscribe = useCallback(
-    (callbacks: { onData: (data: SchemaDetail | null) => void; onError: (err: Error) => void }) => {
-      if (!name) {
-        callbacks.onData(null)
-        return { unsubscribe: () => {} }
-      }
-      return trpcClient.opsx.subscribeSchemaDetail.subscribe(
-        { name },
-        {
-          onData: callbacks.onData,
-          onError: callbacks.onError,
-        }
-      )
-    },
-    [name]
-  )
-
-  return useSubscription<SchemaDetail | null>(
+  return useSubscription<ChangeStatus[]>(
     subscribe,
-    () => StaticProvider.getOpsxSchemaDetail(name),
-    [name],
-    name ? `opsx.subscribeSchemaDetail:${name}` : undefined
+    StaticProvider.getOpsxStatusList,
+    [],
+    'opsx.subscribeStatusList'
   )
 }
 
-export function useOpsxSchemaResolutionSubscription(
-  name?: string
-): SubscriptionState<SchemaResolution | null> {
-  const subscribe = useCallback(
-    (callbacks: { onData: (data: SchemaResolution | null) => void; onError: (err: Error) => void }) => {
-      if (!name) {
-        callbacks.onData(null)
-        return { unsubscribe: () => {} }
-      }
-      return trpcClient.opsx.subscribeSchemaResolution.subscribe(
-        { name },
-        {
-          onData: callbacks.onData,
-          onError: callbacks.onError,
-        }
-      )
-    },
-    [name]
-  )
-
-  return useSubscription<SchemaResolution | null>(
-    subscribe,
-    () => StaticProvider.getOpsxSchemaResolution(name),
-    [name],
-    name ? `opsx.subscribeSchemaResolution:${name}` : undefined
-  )
-}
-
-export function useOpsxTemplatesSubscription(schema?: string): SubscriptionState<TemplatesMap | null> {
+export function useOpsxTemplatesSubscription(
+  schema?: string
+): SubscriptionState<TemplatesMap | null> {
   const subscribe = useCallback(
     (callbacks: { onData: (data: TemplatesMap) => void; onError: (err: Error) => void }) =>
-      trpcClient.opsx.subscribeTemplates.subscribe(
-        schema ? { schema } : undefined,
-        {
-          onData: callbacks.onData,
-          onError: callbacks.onError,
-        }
-      ),
+      trpcClient.opsx.subscribeTemplates.subscribe(schema ? { schema } : undefined, {
+        onData: callbacks.onData,
+        onError: callbacks.onError,
+      }),
     [schema]
   )
 
@@ -250,7 +218,10 @@ export function useOpsxTemplateContentSubscription(
   artifactId?: string
 ): SubscriptionState<OpsxTemplateContent | null> {
   const subscribe = useCallback(
-    (callbacks: { onData: (data: OpsxTemplateContent | null) => void; onError: (err: Error) => void }) => {
+    (callbacks: {
+      onData: (data: OpsxTemplateContent | null) => void
+      onError: (err: Error) => void
+    }) => {
       if (!schema || !artifactId) {
         callbacks.onData(null)
         return { unsubscribe: () => {} }
@@ -278,14 +249,14 @@ export function useOpsxTemplateContentsSubscription(
   schema?: string
 ): SubscriptionState<OpsxTemplateContentMap | null> {
   const subscribe = useCallback(
-    (callbacks: { onData: (data: OpsxTemplateContentMap | null) => void; onError: (err: Error) => void }) =>
-      trpcClient.opsx.subscribeTemplateContents.subscribe(
-        schema ? { schema } : undefined,
-        {
-          onData: callbacks.onData,
-          onError: callbacks.onError,
-        }
-      ),
+    (callbacks: {
+      onData: (data: OpsxTemplateContentMap | null) => void
+      onError: (err: Error) => void
+    }) =>
+      trpcClient.opsx.subscribeTemplateContents.subscribe(schema ? { schema } : undefined, {
+        onData: callbacks.onData,
+        onError: callbacks.onError,
+      }),
     [schema]
   )
 
@@ -303,7 +274,10 @@ export function useOpsxApplyInstructionsSubscription(input: {
   refreshKey?: number
 }): SubscriptionState<ApplyInstructions | null> {
   const subscribe = useCallback(
-    (callbacks: { onData: (data: ApplyInstructions | null) => void; onError: (err: Error) => void }) => {
+    (callbacks: {
+      onData: (data: ApplyInstructions | null) => void
+      onError: (err: Error) => void
+    }) => {
       if (!input.change) {
         callbacks.onData(null)
         return { unsubscribe: () => {} }
@@ -323,7 +297,9 @@ export function useOpsxApplyInstructionsSubscription(input: {
     subscribe,
     async () => null,
     [input.change, input.schema, input.refreshKey],
-    input.change ? `opsx.subscribeApplyInstructions:${input.change}:${input.schema}:${input.refreshKey}` : undefined
+    input.change
+      ? `opsx.subscribeApplyInstructions:${input.change}:${input.schema}:${input.refreshKey}`
+      : undefined
   )
 }
 
@@ -337,7 +313,12 @@ export function useOpsxProjectConfigSubscription(): SubscriptionState<string | n
     []
   )
 
-  return useSubscription<string | null>(subscribe, StaticProvider.getOpsxProjectConfig, [], 'opsx.subscribeProjectConfig')
+  return useSubscription<string | null>(
+    subscribe,
+    StaticProvider.getOpsxProjectConfig,
+    [],
+    'opsx.subscribeProjectConfig'
+  )
 }
 
 export function useOpsxChangeListSubscription(): SubscriptionState<string[]> {
@@ -350,10 +331,17 @@ export function useOpsxChangeListSubscription(): SubscriptionState<string[]> {
     []
   )
 
-  return useSubscription<string[]>(subscribe, StaticProvider.getOpsxChangeList, [], 'opsx.subscribeChanges')
+  return useSubscription<string[]>(
+    subscribe,
+    StaticProvider.getOpsxChangeList,
+    [],
+    'opsx.subscribeChanges'
+  )
 }
 
-export function useOpsxChangeMetadataSubscription(changeId?: string): SubscriptionState<string | null> {
+export function useOpsxChangeMetadataSubscription(
+  changeId?: string
+): SubscriptionState<string | null> {
   const subscribe = useCallback(
     (callbacks: { onData: (data: string | null) => void; onError: (err: Error) => void }) => {
       if (!changeId) {

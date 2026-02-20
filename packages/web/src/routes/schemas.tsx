@@ -1,9 +1,10 @@
-import { useOpsxSchemaDetailSubscription, useOpsxSchemasSubscription } from '@/lib/use-opsx'
+import { useOpsxConfigBundleSubscription } from '@/lib/use-opsx'
 import { Layers } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 export function Schemas() {
-  const { data: schemas, isLoading, error } = useOpsxSchemasSubscription()
+  const { data: configBundle, isLoading, error } = useOpsxConfigBundleSubscription()
+  const schemas = configBundle?.schemas
   const [selected, setSelected] = useState<string | null>(null)
 
   useEffect(() => {
@@ -17,7 +18,7 @@ export function Schemas() {
     [schemas, selected]
   )
 
-  const { data: detail } = useOpsxSchemaDetailSubscription(selected ?? undefined)
+  const detail = selected ? (configBundle?.schemaDetails[selected] ?? null) : null
 
   if (isLoading && !schemas) {
     return <div className="route-loading animate-pulse">Loading schemas...</div>

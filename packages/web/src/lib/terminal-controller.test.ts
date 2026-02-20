@@ -271,4 +271,50 @@ describe('terminal-controller PTY behavior', () => {
 
     unsubscribe()
   })
+
+  it('runs internal close callback for exited session', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession({
+      closeCallbackUrl: { '0': '/changes/add-search' },
+    })
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-500', platform: 'common' })
+    ws.emitJson({ type: 'exit', sessionId: 'pty-500', exitCode: 0 })
+
+    const terminal = MockTerminal.instances.at(-1)
+    expect(terminal).toBeDefined()
+    terminal!.emitData('x')
+
+    expect(window.location.pathname).toBe('/changes/add-search')
+    unsubscribe()
+  })
+
+  it('runs external close callback in a new tab', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null)
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession({
+      closeCallbackUrl: 'https://example.com/result',
+    })
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-600', platform: 'common' })
+    ws.emitJson({ type: 'exit', sessionId: 'pty-600', exitCode: 1 })
+
+    const terminal = MockTerminal.instances.at(-1)
+    expect(terminal).toBeDefined()
+    terminal!.emitData('x')
+
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://example.com/result',
+      '_blank',
+      'noopener,noreferrer'
+    )
+    openSpy.mockRestore()
+    unsubscribe()
+  })
 })

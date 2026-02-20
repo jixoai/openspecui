@@ -26,6 +26,8 @@ export interface PtySessionInfo {
   platform: PtyPlatform
   isExited: boolean
   exitCode: number | null
+  closeTip?: string
+  closeCallbackUrl?: string | Record<string, string>
   createdAt: number
 }
 
@@ -61,6 +63,8 @@ export class PtySession extends EventEmitter {
   readonly command: string
   readonly args: string[]
   readonly platform: PtyPlatform
+  readonly closeTip?: string
+  readonly closeCallbackUrl?: string | Record<string, string>
   readonly createdAt: number
   private process: pty.IPty
   private titleInterval: ReturnType<typeof setInterval> | null = null
@@ -79,6 +83,8 @@ export class PtySession extends EventEmitter {
       rows?: number
       command?: string
       args?: string[]
+      closeTip?: string
+      closeCallbackUrl?: string | Record<string, string>
       cwd: string
       scrollback?: number
       maxBufferBytes?: number
@@ -97,6 +103,8 @@ export class PtySession extends EventEmitter {
     this.command = resolvedCommand.command
     this.args = resolvedCommand.args
     this.platform = opts.platform
+    this.closeTip = opts.closeTip
+    this.closeCallbackUrl = opts.closeCallbackUrl
     this.maxBufferLines = opts.scrollback ?? DEFAULT_SCROLLBACK
     this.maxBufferBytes = opts.maxBufferBytes ?? DEFAULT_MAX_BUFFER_BYTES
 
@@ -203,6 +211,8 @@ export class PtySession extends EventEmitter {
       platform: this.platform,
       isExited: this.isExited,
       exitCode: this.exitCode,
+      closeTip: this.closeTip,
+      closeCallbackUrl: this.closeCallbackUrl,
       createdAt: this.createdAt,
     }
   }
@@ -222,6 +232,8 @@ export class PtyManager {
     rows?: number
     command?: string
     args?: string[]
+    closeTip?: string
+    closeCallbackUrl?: string | Record<string, string>
     scrollback?: number
     maxBufferBytes?: number
   }): PtySession {
@@ -231,6 +243,8 @@ export class PtyManager {
       rows: opts.rows,
       command: opts.command,
       args: opts.args,
+      closeTip: opts.closeTip,
+      closeCallbackUrl: opts.closeCallbackUrl,
       cwd: this.defaultCwd,
       scrollback: opts.scrollback,
       maxBufferBytes: opts.maxBufferBytes,

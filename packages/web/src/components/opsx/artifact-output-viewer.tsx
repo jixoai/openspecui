@@ -1,6 +1,9 @@
-import type { ArtifactStatus } from '@openspecui/core'
 import { MarkdownViewer } from '@/components/markdown-viewer'
-import { useOpsxArtifactOutputSubscription, useOpsxGlobArtifactFilesSubscription } from '@/lib/use-opsx'
+import {
+  useOpsxArtifactOutputSubscription,
+  useOpsxGlobArtifactFilesSubscription,
+} from '@/lib/use-opsx'
+import type { ArtifactStatus } from '@openspecui/core'
 import { AlertTriangle, CheckCircle2, Circle, FileText, Loader2 } from 'lucide-react'
 
 function isGlobPattern(pattern: string): boolean {
@@ -12,7 +15,10 @@ interface Props {
   artifact: ArtifactStatus
 }
 
-const statusConfig: Record<ArtifactStatus['status'], { label: string; className: string; icon: typeof Circle }> = {
+const statusConfig: Record<
+  ArtifactStatus['status'],
+  { label: string; className: string; icon: typeof Circle }
+> = {
   done: { label: 'Done', className: 'text-emerald-500', icon: CheckCircle2 },
   ready: { label: 'Ready', className: 'text-sky-500', icon: Circle },
   blocked: { label: 'Blocked', className: 'text-amber-500', icon: AlertTriangle },
@@ -24,11 +30,13 @@ function ArtifactHeader({ artifact }: { artifact: ArtifactStatus }) {
 
   return (
     <>
-      <div className="border-border flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-4 py-3">
+      <div className="border-border bg-card flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3">
         <div className="flex items-center gap-2">
           <FileText className="text-muted-foreground h-4 w-4" />
           <span className="font-medium">{artifact.id}</span>
-          <span className="text-muted-foreground text-xs">{artifact.relativePath ?? artifact.outputPath}</span>
+          <span className="text-muted-foreground text-xs">
+            {artifact.relativePath ?? artifact.outputPath}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <StatusIcon className={`h-4 w-4 ${status.className}`} />
@@ -50,7 +58,10 @@ function ArtifactHeader({ artifact }: { artifact: ArtifactStatus }) {
 }
 
 function SingleFileContent({ changeId, artifact }: Props) {
-  const { data: content, isLoading } = useOpsxArtifactOutputSubscription(changeId, artifact.outputPath)
+  const { data: content, isLoading } = useOpsxArtifactOutputSubscription(
+    changeId,
+    artifact.outputPath
+  )
 
   if (isLoading) {
     return (
@@ -66,13 +77,17 @@ function SingleFileContent({ changeId, artifact }: Props) {
 
   return (
     <div className="text-muted-foreground flex h-full items-center justify-center rounded-md border border-dashed p-6 text-sm">
-      Not yet generated. Use <strong>Continue</strong> to generate this artifact.
+      Not yet generated. Use <strong className="mx-2 font-bold">Continue</strong> to generate this
+      artifact.
     </div>
   )
 }
 
 function GlobContent({ changeId, artifact }: Props) {
-  const { data: files, isLoading } = useOpsxGlobArtifactFilesSubscription(changeId, artifact.outputPath)
+  const { data: files, isLoading } = useOpsxGlobArtifactFilesSubscription(
+    changeId,
+    artifact.outputPath
+  )
 
   if (isLoading) {
     return (
@@ -85,7 +100,8 @@ function GlobContent({ changeId, artifact }: Props) {
   if (!files?.length) {
     return (
       <div className="text-muted-foreground flex h-full items-center justify-center rounded-md border border-dashed p-6 text-sm">
-        Not yet generated. Use <strong>Continue</strong> to generate this artifact.
+        Not yet generated. Use <strong className="mx-2 font-bold">Continue</strong> to generate this
+        artifact.
       </div>
     )
   }

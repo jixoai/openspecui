@@ -120,6 +120,7 @@ export function setPopRouter(router: AnyRouter | null): void {
 
 function getTitle(pathname: string): string {
   if (pathname === '/search') return 'Search'
+  if (pathname === '/opsx-new') return 'OPSX New'
   return 'Panel'
 }
 
@@ -205,7 +206,9 @@ function PopAreaDialog() {
       }
       dialogClassName={semanticDialogClassName}
       contentClassName={semanticContentClassName}
-      className={[semanticPanelClassName, config.panelClassName].filter((v) => v.length > 0).join(' ')}
+      className={[semanticPanelClassName, config.panelClassName]
+        .filter((v) => v.length > 0)
+        .join(' ')}
       bodyClassName={config.bodyClassName}
       maxHeight={config.maxHeight}
     >

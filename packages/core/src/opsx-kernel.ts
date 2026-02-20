@@ -1,28 +1,24 @@
 import { join, matchesGlob, relative, sep } from 'node:path'
 import { z } from 'zod'
-import { ReactiveContext } from './reactive-fs/reactive-context.js'
-import { ReactiveState } from './reactive-fs/reactive-state.js'
-import {
-  reactiveReadDir,
-  reactiveReadFile,
-  reactiveStat,
-} from './reactive-fs/reactive-fs.js'
 import type { CliExecutor } from './cli-executor.js'
-import type { ChangeFile } from './schemas.js'
 import {
+  ApplyInstructionsSchema,
   ArtifactInstructionsSchema,
   ChangeStatusSchema,
-  ApplyInstructionsSchema,
   SchemaInfoSchema,
   SchemaResolutionSchema,
   TemplatesSchema,
+  type ApplyInstructions,
   type ArtifactInstructions,
   type ChangeStatus,
-  type ApplyInstructions,
   type SchemaInfo,
   type SchemaResolution,
   type TemplatesMap,
 } from './opsx-types.js'
+import { ReactiveContext } from './reactive-fs/reactive-context.js'
+import { reactiveReadDir, reactiveReadFile, reactiveStat } from './reactive-fs/reactive-fs.js'
+import { ReactiveState } from './reactive-fs/reactive-state.js'
+import type { ChangeFile } from './schemas.js'
 
 // Re-export TemplateContentMap so router and others can use it
 export type TemplateContentMap = Record<
@@ -124,7 +120,10 @@ async function touchOpsxProjectDeps(projectDir: string): Promise<void> {
   const openspecDir = join(projectDir, 'openspec')
   await reactiveReadFile(join(openspecDir, 'config.yaml'))
   const schemaRoot = join(openspecDir, 'schemas')
-  const schemaDirs = await reactiveReadDir(schemaRoot, { directoriesOnly: true, includeHidden: true })
+  const schemaDirs = await reactiveReadDir(schemaRoot, {
+    directoriesOnly: true,
+    includeHidden: true,
+  })
   await Promise.all(
     schemaDirs.map((name) => reactiveReadFile(join(schemaRoot, name, 'schema.yaml')))
   )
@@ -149,6 +148,8 @@ export class OpsxKernel {
   private readonly projectDir: string
   private readonly cliExecutor: CliExecutor
   private readonly controller = new AbortController()
+  private warmupPromise: Promise<void> | null = null
+  private readonly _streamReady = new Map<string, Promise<void>>()
 
   // ---- Global data ----
   private _statusList = new ReactiveState<ChangeStatus[]>([])
@@ -185,21 +186,34 @@ export class OpsxKernel {
   // =========================================================================
 
   async warmup(): Promise<void> {
+    if (this.warmupPromise) {
+      return this.warmupPromise
+    }
+    this.warmupPromise = this.runWarmup().catch((error) => {
+      this.warmupPromise = null
+      throw error
+    })
+    return this.warmupPromise
+  }
+
+  async waitForWarmup(): Promise<void> {
+    await this.warmup()
+  }
+
+  private async runWarmup(): Promise<void> {
     const signal = this.controller.signal
 
     // Phase 1: Global data (parallel)
     await Promise.all([
-      this.startStream(
-        this._schemas,
-        () => this.fetchSchemas(),
-        signal
-      ),
-      this.startStream(
+      this.startStreamOnce('global:schemas', this._schemas, () => this.fetchSchemas(), signal),
+      this.startStreamOnce(
+        'global:change-ids',
         this._changeIds,
         () => this.fetchChangeIds(),
         signal
       ),
-      this.startStream(
+      this.startStreamOnce(
+        'global:project-config',
         this._projectConfig,
         () => this.fetchProjectConfig(),
         signal
@@ -215,7 +229,8 @@ export class OpsxKernel {
     await Promise.all(changeIds.map((id) => this.warmupChange(id, signal)))
 
     // Phase 4: StatusList (depends on per-change statuses being ready)
-    await this.startStream(
+    await this.startStreamOnce(
+      'global:status-list',
       this._statusList,
       () => this.fetchStatusList(),
       signal
@@ -236,6 +251,8 @@ export class OpsxKernel {
       ctrl.abort()
     }
     this._entityControllers.clear()
+    this._streamReady.clear()
+    this.warmupPromise = null
   }
 
   // =========================================================================
@@ -305,12 +322,30 @@ export class OpsxKernel {
     return state.get()
   }
 
+  peekSchemaResolution(name: string): SchemaResolution | null {
+    const state = this._schemaResolutions.get(name)
+    if (!state) {
+      return null
+    }
+    const value = state.get()
+    return value ?? null
+  }
+
   getSchemaDetail(name: string): SchemaDetail {
     const state = this._schemaDetails.get(name)
     if (!state) {
       throw new Error(`Schema detail not found for "${name}"`)
     }
     return state.get()
+  }
+
+  peekSchemaDetail(name: string): SchemaDetail | null {
+    const state = this._schemaDetails.get(name)
+    if (!state) {
+      return null
+    }
+    const value = state.get()
+    return value ?? null
   }
 
   getSchemaFiles(name: string): ChangeFile[] {
@@ -358,7 +393,7 @@ export class OpsxKernel {
     task: () => Promise<T>,
     signal: AbortSignal
   ): Promise<void> {
-    return new Promise<void>((resolve) => {
+    return new Promise<void>((resolve, reject) => {
       const context = new ReactiveContext()
       let first = true
       ;(async () => {
@@ -370,12 +405,33 @@ export class OpsxKernel {
               resolve()
             }
           }
-        } catch {
-          // Ignore errors (e.g. abort)
+        } catch (error) {
+          if (first && !signal.aborted) {
+            reject(error)
+            return
+          }
         }
         if (first) resolve()
       })()
     })
+  }
+
+  private startStreamOnce<T>(
+    key: string,
+    state: ReactiveState<T>,
+    task: () => Promise<T>,
+    signal: AbortSignal
+  ): Promise<void> {
+    const existing = this._streamReady.get(key)
+    if (existing) {
+      return existing
+    }
+    const ready = this.startStream(state, task, signal).catch((error) => {
+      this._streamReady.delete(key)
+      throw error
+    })
+    this._streamReady.set(key, ready)
+    return ready
   }
 
   // =========================================================================
@@ -383,6 +439,9 @@ export class OpsxKernel {
   // =========================================================================
 
   private async warmupSchema(name: string, parentSignal: AbortSignal): Promise<void> {
+    if (this._entityControllers.has(`schema:${name}`)) {
+      return
+    }
     const entityCtrl = new AbortController()
     this._entityControllers.set(`schema:${name}`, entityCtrl)
 
@@ -394,7 +453,10 @@ export class OpsxKernel {
       this._schemaResolutions.set(name, new ReactiveState<SchemaResolution>(null!))
     }
     if (!this._schemaDetails.has(name)) {
-      this._schemaDetails.set(name, new ReactiveState<SchemaDetail>(null as unknown as SchemaDetail))
+      this._schemaDetails.set(
+        name,
+        new ReactiveState<SchemaDetail>(null as unknown as SchemaDetail)
+      )
     }
     if (!this._schemaFiles.has(name)) {
       this._schemaFiles.set(name, new ReactiveState<ChangeFile[]>([]))
@@ -418,19 +480,62 @@ export class OpsxKernel {
     }
 
     await Promise.all([
-      this.startStream(this._schemaResolutions.get(name)!, () => this.fetchSchemaResolution(name), signal),
-      this.startStream(this._schemaDetails.get(name)!, () => this.fetchSchemaDetail(name), signal),
-      this.startStream(this._schemaFiles.get(name)!, () => this.fetchSchemaFiles(name), signal),
-      this.startStream(this._schemaYamls.get(name)!, () => this.fetchSchemaYaml(name), signal),
-      this.startStream(this._templates.get(name)!, () => this.fetchTemplates(name), signal),
-      this.startStream(this._templateContents.get(name)!, () => this.fetchTemplateContents(name), signal),
+      this.startStreamOnce(
+        `schema:${name}:resolution`,
+        this._schemaResolutions.get(name)!,
+        () => this.fetchSchemaResolution(name),
+        signal
+      ),
+      this.startStreamOnce(
+        `schema:${name}:detail`,
+        this._schemaDetails.get(name)!,
+        () => this.fetchSchemaDetail(name),
+        signal
+      ),
+      this.startStreamOnce(
+        `schema:${name}:files`,
+        this._schemaFiles.get(name)!,
+        () => this.fetchSchemaFiles(name),
+        signal
+      ),
+      this.startStreamOnce(
+        `schema:${name}:yaml`,
+        this._schemaYamls.get(name)!,
+        () => this.fetchSchemaYaml(name),
+        signal
+      ),
+      this.startStreamOnce(
+        `schema:${name}:templates`,
+        this._templates.get(name)!,
+        () => this.fetchTemplates(name),
+        signal
+      ),
+      this.startStreamOnce(
+        `schema:${name}:template-contents`,
+        this._templateContents.get(name)!,
+        () => this.fetchTemplateContents(name),
+        signal
+      ),
       // Also warm up the default (no-schema) templates
-      this.startStream(this._templates.get('')!, () => this.fetchTemplates(undefined), signal),
-      this.startStream(this._templateContents.get('')!, () => this.fetchTemplateContents(undefined), signal),
+      this.startStreamOnce(
+        'schema::templates',
+        this._templates.get('')!,
+        () => this.fetchTemplates(undefined),
+        signal
+      ),
+      this.startStreamOnce(
+        'schema::template-contents',
+        this._templateContents.get('')!,
+        () => this.fetchTemplateContents(undefined),
+        signal
+      ),
     ])
   }
 
   private async warmupChange(changeId: string, parentSignal: AbortSignal): Promise<void> {
+    if (this._entityControllers.has(`change:${changeId}`)) {
+      return
+    }
     const entityCtrl = new AbortController()
     this._entityControllers.set(`change:${changeId}`, entityCtrl)
 
@@ -455,9 +560,24 @@ export class OpsxKernel {
 
     // Start status + metadata streams
     await Promise.all([
-      this.startStream(this._statuses.get(statusKey)!, () => this.fetchStatus(changeId, undefined), signal),
-      this.startStream(this._changeMetadata.get(changeId)!, () => this.fetchChangeMetadata(changeId), signal),
-      this.startStream(this._applyInstructions.get(applyKey)!, () => this.fetchApplyInstructions(changeId, undefined), signal),
+      this.startStreamOnce(
+        `change:${changeId}:status:`,
+        this._statuses.get(statusKey)!,
+        () => this.fetchStatus(changeId, undefined),
+        signal
+      ),
+      this.startStreamOnce(
+        `change:${changeId}:metadata`,
+        this._changeMetadata.get(changeId)!,
+        () => this.fetchChangeMetadata(changeId),
+        signal
+      ),
+      this.startStreamOnce(
+        `change:${changeId}:apply:`,
+        this._applyInstructions.get(applyKey)!,
+        () => this.fetchApplyInstructions(changeId, undefined),
+        signal
+      ),
     ])
 
     // Now warm up per-artifact instructions and outputs from the status
@@ -469,7 +589,8 @@ export class OpsxKernel {
           if (!this._instructions.has(instrKey)) {
             this._instructions.set(instrKey, new ReactiveState<ArtifactInstructions>(null!))
           }
-          await this.startStream(
+          await this.startStreamOnce(
+            `change:${changeId}:instructions:${artifact.id}:`,
             this._instructions.get(instrKey)!,
             () => this.fetchInstructions(changeId, artifact.id, undefined),
             signal
@@ -480,19 +601,25 @@ export class OpsxKernel {
           if (!this._artifactOutputs.has(outputKey)) {
             this._artifactOutputs.set(outputKey, new ReactiveState<string | null>(null))
           }
-          await this.startStream(
+          await this.startStreamOnce(
+            `change:${changeId}:output:${artifact.outputPath}`,
             this._artifactOutputs.get(outputKey)!,
             () => this.fetchArtifactOutput(changeId, artifact.outputPath),
             signal
           )
 
           // Warm up glob artifact files if it's a glob pattern
-          if (artifact.outputPath.includes('*') || artifact.outputPath.includes('?') || artifact.outputPath.includes('[')) {
+          if (
+            artifact.outputPath.includes('*') ||
+            artifact.outputPath.includes('?') ||
+            artifact.outputPath.includes('[')
+          ) {
             const globKey = `${changeId}:${artifact.outputPath}`
             if (!this._globArtifactFiles.has(globKey)) {
               this._globArtifactFiles.set(globKey, new ReactiveState<GlobArtifactFile[]>([]))
             }
-            await this.startStream(
+            await this.startStreamOnce(
+              `change:${changeId}:glob:${artifact.outputPath}`,
               this._globArtifactFiles.get(globKey)!,
               () => readGlobArtifactFiles(this.projectDir, changeId, artifact.outputPath),
               signal
@@ -512,13 +639,18 @@ export class OpsxKernel {
     ;(async () => {
       let prevNames = new Set(this._schemas.get().map((s) => s.name))
       try {
-        for await (const schemas of context.stream(() => Promise.resolve(this._schemas.get()), signal)) {
+        for await (const schemas of context.stream(
+          () => Promise.resolve(this._schemas.get()),
+          signal
+        )) {
           const newNames = new Set(schemas.map((s) => s.name))
 
           // Added schemas
           for (const name of newNames) {
             if (!prevNames.has(name)) {
-              this.warmupSchema(name, signal)
+              this.warmupSchema(name, signal).catch(() => {
+                // Ignore dynamic warmup errors; stream retries are reactive.
+              })
             }
           }
 
@@ -532,6 +664,7 @@ export class OpsxKernel {
               this._schemaYamls.delete(name)
               this._templates.delete(name)
               this._templateContents.delete(name)
+              this.clearStreamReadyByPrefix(`schema:${name}:`)
             }
           }
 
@@ -548,13 +681,18 @@ export class OpsxKernel {
     ;(async () => {
       let prevIds = new Set(this._changeIds.get())
       try {
-        for await (const ids of context.stream(() => Promise.resolve(this._changeIds.get()), signal)) {
+        for await (const ids of context.stream(
+          () => Promise.resolve(this._changeIds.get()),
+          signal
+        )) {
           const newIds = new Set(ids)
 
           // Added changes
           for (const id of newIds) {
             if (!prevIds.has(id)) {
-              this.warmupChange(id, signal)
+              this.warmupChange(id, signal).catch(() => {
+                // Ignore dynamic warmup errors; stream retries are reactive.
+              })
             }
           }
 
@@ -566,29 +704,37 @@ export class OpsxKernel {
               for (const key of this._statuses.keys()) {
                 if (key.startsWith(`${id}:`)) {
                   this._statuses.delete(key)
+                  this._streamReady.delete(`change:${id}:status:${key.slice(id.length + 1)}`)
                 }
               }
               for (const key of this._instructions.keys()) {
                 if (key.startsWith(`${id}:`)) {
                   this._instructions.delete(key)
+                  const suffix = key.slice(id.length + 1)
+                  this._streamReady.delete(`change:${id}:instructions:${suffix}`)
                 }
               }
               for (const key of this._applyInstructions.keys()) {
                 if (key.startsWith(`${id}:`)) {
                   this._applyInstructions.delete(key)
+                  this._streamReady.delete(`change:${id}:apply:${key.slice(id.length + 1)}`)
                 }
               }
               this._changeMetadata.delete(id)
+              this._streamReady.delete(`change:${id}:metadata`)
               for (const key of this._artifactOutputs.keys()) {
                 if (key.startsWith(`${id}:`)) {
                   this._artifactOutputs.delete(key)
+                  this._streamReady.delete(`change:${id}:output:${key.slice(id.length + 1)}`)
                 }
               }
               for (const key of this._globArtifactFiles.keys()) {
                 if (key.startsWith(`${id}:`)) {
                   this._globArtifactFiles.delete(key)
+                  this._streamReady.delete(`change:${id}:glob:${key.slice(id.length + 1)}`)
                 }
               }
+              this.clearStreamReadyByPrefix(`change:${id}:`)
             }
           }
 
@@ -608,6 +754,14 @@ export class OpsxKernel {
     }
   }
 
+  private clearStreamReadyByPrefix(prefix: string): void {
+    for (const key of this._streamReady.keys()) {
+      if (key.startsWith(prefix)) {
+        this._streamReady.delete(key)
+      }
+    }
+  }
+
   // =========================================================================
   // Fetchers (migrated from router.ts)
   // =========================================================================
@@ -616,7 +770,9 @@ export class OpsxKernel {
     await touchOpsxProjectDeps(this.projectDir)
     const result = await this.cliExecutor.schemas()
     if (!result.success) {
-      throw new Error(result.stderr || `openspec schemas failed (exit ${result.exitCode ?? 'null'})`)
+      throw new Error(
+        result.stderr || `openspec schemas failed (exit ${result.exitCode ?? 'null'})`
+      )
     }
     return parseCliJson(result.stdout, z.array(SchemaInfoSchema), 'openspec schemas')
   }
@@ -655,20 +811,17 @@ export class OpsxKernel {
   }
 
   private async fetchStatusList(): Promise<ChangeStatus[]> {
+    await this.ensureChangeIds()
     const changeIds = this._changeIds.get()
-    return Promise.all(
-      changeIds.map((id) => {
-        const key = `${id}:`
-        const state = this._statuses.get(key)
-        if (state) {
-          return Promise.resolve(state.get())
-        }
-        return this.fetchStatus(id)
-      })
-    )
+    await Promise.all(changeIds.map((id) => this.ensureStatus(id)))
+    return changeIds.map((id) => this.getStatus(id))
   }
 
-  private async fetchInstructions(changeId: string, artifact: string, schema?: string): Promise<ArtifactInstructions> {
+  private async fetchInstructions(
+    changeId: string,
+    artifact: string,
+    schema?: string
+  ): Promise<ArtifactInstructions> {
     await touchOpsxProjectDeps(this.projectDir)
     await touchOpsxChangeDeps(this.projectDir, changeId)
 
@@ -684,7 +837,10 @@ export class OpsxKernel {
     return parseCliJson(result.stdout, ArtifactInstructionsSchema, 'openspec instructions')
   }
 
-  private async fetchApplyInstructions(changeId: string, schema?: string): Promise<ApplyInstructions> {
+  private async fetchApplyInstructions(
+    changeId: string,
+    schema?: string
+  ): Promise<ApplyInstructions> {
     await touchOpsxProjectDeps(this.projectDir)
     await touchOpsxChangeDeps(this.projectDir, changeId)
 
@@ -704,14 +860,17 @@ export class OpsxKernel {
     await touchOpsxProjectDeps(this.projectDir)
     const result = await this.cliExecutor.schemaWhich(name)
     if (!result.success) {
-      throw new Error(result.stderr || `openspec schema which failed (exit ${result.exitCode ?? 'null'})`)
+      throw new Error(
+        result.stderr || `openspec schema which failed (exit ${result.exitCode ?? 'null'})`
+      )
     }
     return parseCliJson(result.stdout, SchemaResolutionSchema, 'openspec schema which')
   }
 
   private async fetchSchemaDetail(name: string): Promise<SchemaDetail> {
     await touchOpsxProjectDeps(this.projectDir)
-    const resolution = await this.fetchSchemaResolution(name)
+    await this.ensureSchemaResolution(name)
+    const resolution = this.getSchemaResolution(name)
     const schemaPath = join(resolution.path, 'schema.yaml')
     const content = await reactiveReadFile(schemaPath)
     if (!content) {
@@ -722,13 +881,15 @@ export class OpsxKernel {
 
   private async fetchSchemaFiles(name: string): Promise<ChangeFile[]> {
     await touchOpsxProjectDeps(this.projectDir)
-    const resolution = await this.fetchSchemaResolution(name)
+    await this.ensureSchemaResolution(name)
+    const resolution = this.getSchemaResolution(name)
     return readEntriesUnderRoot(resolution.path)
   }
 
   private async fetchSchemaYaml(name: string): Promise<string | null> {
     await touchOpsxProjectDeps(this.projectDir)
-    const resolution = await this.fetchSchemaResolution(name)
+    await this.ensureSchemaResolution(name)
+    const resolution = this.getSchemaResolution(name)
     const schemaPath = join(resolution.path, 'schema.yaml')
     return reactiveReadFile(schemaPath)
   }
@@ -737,13 +898,16 @@ export class OpsxKernel {
     await touchOpsxProjectDeps(this.projectDir)
     const result = await this.cliExecutor.templates(schema)
     if (!result.success) {
-      throw new Error(result.stderr || `openspec templates failed (exit ${result.exitCode ?? 'null'})`)
+      throw new Error(
+        result.stderr || `openspec templates failed (exit ${result.exitCode ?? 'null'})`
+      )
     }
     return parseCliJson(result.stdout, TemplatesSchema, 'openspec templates')
   }
 
   private async fetchTemplateContents(schema?: string): Promise<TemplateContentMap> {
-    const templates = await this.fetchTemplates(schema)
+    await this.ensureTemplates(schema)
+    const templates = this.getTemplates(schema)
     const entries = await Promise.all(
       Object.entries(templates).map(async ([artifactId, info]) => {
         const content = await reactiveReadFile(info.path)
@@ -767,147 +931,194 @@ export class OpsxKernel {
   // Utility: Ensure on-demand (lazy fallback for unknown keys)
   // =========================================================================
 
-  /**
-   * Ensure a per-change status stream exists. If not yet warmed up,
-   * creates the state and starts a stream lazily.
-   */
-  ensureStatus(changeId: string, schema?: string): void {
+  async ensureSchemas(): Promise<void> {
+    await this.startStreamOnce(
+      'global:schemas',
+      this._schemas,
+      () => this.fetchSchemas(),
+      this.controller.signal
+    )
+  }
+
+  async ensureChangeIds(): Promise<void> {
+    await this.startStreamOnce(
+      'global:change-ids',
+      this._changeIds,
+      () => this.fetchChangeIds(),
+      this.controller.signal
+    )
+  }
+
+  async ensureProjectConfig(): Promise<void> {
+    await this.startStreamOnce(
+      'global:project-config',
+      this._projectConfig,
+      () => this.fetchProjectConfig(),
+      this.controller.signal
+    )
+  }
+
+  async ensureStatusList(): Promise<void> {
+    await this.startStreamOnce(
+      'global:status-list',
+      this._statusList,
+      () => this.fetchStatusList(),
+      this.controller.signal
+    )
+  }
+
+  async ensureStatus(changeId: string, schema?: string): Promise<void> {
     const key = `${changeId}:${schema ?? ''}`
     if (!this._statuses.has(key)) {
       this._statuses.set(key, new ReactiveState<ChangeStatus>(null!))
-      this.startStream(
-        this._statuses.get(key)!,
-        () => this.fetchStatus(changeId, schema),
-        this.controller.signal
-      )
     }
+    await this.startStreamOnce(
+      `change:${changeId}:status:${schema ?? ''}`,
+      this._statuses.get(key)!,
+      () => this.fetchStatus(changeId, schema),
+      this.controller.signal
+    )
   }
 
-  ensureInstructions(changeId: string, artifact: string, schema?: string): void {
+  async ensureInstructions(changeId: string, artifact: string, schema?: string): Promise<void> {
     const key = `${changeId}:${artifact}:${schema ?? ''}`
     if (!this._instructions.has(key)) {
       this._instructions.set(key, new ReactiveState<ArtifactInstructions>(null!))
-      this.startStream(
-        this._instructions.get(key)!,
-        () => this.fetchInstructions(changeId, artifact, schema),
-        this.controller.signal
-      )
     }
+    await this.startStreamOnce(
+      `change:${changeId}:instructions:${artifact}:${schema ?? ''}`,
+      this._instructions.get(key)!,
+      () => this.fetchInstructions(changeId, artifact, schema),
+      this.controller.signal
+    )
   }
 
-  ensureApplyInstructions(changeId: string, schema?: string): void {
+  async ensureApplyInstructions(changeId: string, schema?: string): Promise<void> {
     const key = `${changeId}:${schema ?? ''}`
     if (!this._applyInstructions.has(key)) {
       this._applyInstructions.set(key, new ReactiveState<ApplyInstructions>(null!))
-      this.startStream(
-        this._applyInstructions.get(key)!,
-        () => this.fetchApplyInstructions(changeId, schema),
-        this.controller.signal
-      )
     }
+    await this.startStreamOnce(
+      `change:${changeId}:apply:${schema ?? ''}`,
+      this._applyInstructions.get(key)!,
+      () => this.fetchApplyInstructions(changeId, schema),
+      this.controller.signal
+    )
   }
 
-  ensureArtifactOutput(changeId: string, outputPath: string): void {
+  async ensureArtifactOutput(changeId: string, outputPath: string): Promise<void> {
     const key = `${changeId}:${outputPath}`
     if (!this._artifactOutputs.has(key)) {
       this._artifactOutputs.set(key, new ReactiveState<string | null>(null))
-      this.startStream(
-        this._artifactOutputs.get(key)!,
-        () => this.fetchArtifactOutput(changeId, outputPath),
-        this.controller.signal
-      )
     }
+    await this.startStreamOnce(
+      `change:${changeId}:output:${outputPath}`,
+      this._artifactOutputs.get(key)!,
+      () => this.fetchArtifactOutput(changeId, outputPath),
+      this.controller.signal
+    )
   }
 
-  ensureGlobArtifactFiles(changeId: string, outputPath: string): void {
+  async ensureGlobArtifactFiles(changeId: string, outputPath: string): Promise<void> {
     const key = `${changeId}:${outputPath}`
     if (!this._globArtifactFiles.has(key)) {
       this._globArtifactFiles.set(key, new ReactiveState<GlobArtifactFile[]>([]))
-      this.startStream(
-        this._globArtifactFiles.get(key)!,
-        () => readGlobArtifactFiles(this.projectDir, changeId, outputPath),
-        this.controller.signal
-      )
     }
+    await this.startStreamOnce(
+      `change:${changeId}:glob:${outputPath}`,
+      this._globArtifactFiles.get(key)!,
+      () => readGlobArtifactFiles(this.projectDir, changeId, outputPath),
+      this.controller.signal
+    )
   }
 
-  ensureSchemaResolution(name: string): void {
+  async ensureSchemaResolution(name: string): Promise<void> {
     if (!this._schemaResolutions.has(name)) {
       this._schemaResolutions.set(name, new ReactiveState<SchemaResolution>(null!))
-      this.startStream(
-        this._schemaResolutions.get(name)!,
-        () => this.fetchSchemaResolution(name),
-        this.controller.signal
-      )
     }
+    await this.startStreamOnce(
+      `schema:${name}:resolution`,
+      this._schemaResolutions.get(name)!,
+      () => this.fetchSchemaResolution(name),
+      this.controller.signal
+    )
   }
 
-  ensureSchemaDetail(name: string): void {
+  async ensureSchemaDetail(name: string): Promise<void> {
     if (!this._schemaDetails.has(name)) {
-      this._schemaDetails.set(name, new ReactiveState<SchemaDetail>(null as unknown as SchemaDetail))
-      this.startStream(
-        this._schemaDetails.get(name)!,
-        () => this.fetchSchemaDetail(name),
-        this.controller.signal
+      this._schemaDetails.set(
+        name,
+        new ReactiveState<SchemaDetail>(null as unknown as SchemaDetail)
       )
     }
+    await this.startStreamOnce(
+      `schema:${name}:detail`,
+      this._schemaDetails.get(name)!,
+      () => this.fetchSchemaDetail(name),
+      this.controller.signal
+    )
   }
 
-  ensureSchemaFiles(name: string): void {
+  async ensureSchemaFiles(name: string): Promise<void> {
     if (!this._schemaFiles.has(name)) {
       this._schemaFiles.set(name, new ReactiveState<ChangeFile[]>([]))
-      this.startStream(
-        this._schemaFiles.get(name)!,
-        () => this.fetchSchemaFiles(name),
-        this.controller.signal
-      )
     }
+    await this.startStreamOnce(
+      `schema:${name}:files`,
+      this._schemaFiles.get(name)!,
+      () => this.fetchSchemaFiles(name),
+      this.controller.signal
+    )
   }
 
-  ensureSchemaYaml(name: string): void {
+  async ensureSchemaYaml(name: string): Promise<void> {
     if (!this._schemaYamls.has(name)) {
       this._schemaYamls.set(name, new ReactiveState<string | null>(null))
-      this.startStream(
-        this._schemaYamls.get(name)!,
-        () => this.fetchSchemaYaml(name),
-        this.controller.signal
-      )
     }
+    await this.startStreamOnce(
+      `schema:${name}:yaml`,
+      this._schemaYamls.get(name)!,
+      () => this.fetchSchemaYaml(name),
+      this.controller.signal
+    )
   }
 
-  ensureTemplates(schema?: string): void {
+  async ensureTemplates(schema?: string): Promise<void> {
     const key = schema ?? ''
     if (!this._templates.has(key)) {
       this._templates.set(key, new ReactiveState<TemplatesMap>({}))
-      this.startStream(
-        this._templates.get(key)!,
-        () => this.fetchTemplates(schema),
-        this.controller.signal
-      )
     }
+    await this.startStreamOnce(
+      `schema:${key}:templates`,
+      this._templates.get(key)!,
+      () => this.fetchTemplates(schema),
+      this.controller.signal
+    )
   }
 
-  ensureTemplateContents(schema?: string): void {
+  async ensureTemplateContents(schema?: string): Promise<void> {
     const key = schema ?? ''
     if (!this._templateContents.has(key)) {
       this._templateContents.set(key, new ReactiveState<TemplateContentMap>({}))
-      this.startStream(
-        this._templateContents.get(key)!,
-        () => this.fetchTemplateContents(schema),
-        this.controller.signal
-      )
     }
+    await this.startStreamOnce(
+      `schema:${key}:template-contents`,
+      this._templateContents.get(key)!,
+      () => this.fetchTemplateContents(schema),
+      this.controller.signal
+    )
   }
 
-  ensureChangeMetadata(changeId: string): void {
+  async ensureChangeMetadata(changeId: string): Promise<void> {
     if (!this._changeMetadata.has(changeId)) {
       this._changeMetadata.set(changeId, new ReactiveState<string | null>(null))
-      this.startStream(
-        this._changeMetadata.get(changeId)!,
-        () => this.fetchChangeMetadata(changeId),
-        this.controller.signal
-      )
     }
+    await this.startStreamOnce(
+      `change:${changeId}:metadata`,
+      this._changeMetadata.get(changeId)!,
+      () => this.fetchChangeMetadata(changeId),
+      this.controller.signal
+    )
   }
 
   // =========================================================================

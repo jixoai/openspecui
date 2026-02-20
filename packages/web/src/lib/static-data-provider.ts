@@ -11,8 +11,8 @@ import type {
   ArchiveMeta,
   Change,
   ChangeFile,
-  ChangeStatus,
   ChangeMeta,
+  ChangeStatus,
   OpenSpecUIConfig,
   SchemaArtifact,
   SchemaDetail,
@@ -123,10 +123,7 @@ function getSnapshotChangeFiles(change: ExportSnapshot['changes'][number]): Reco
   return files
 }
 
-function resolveMetadataSchema(
-  snapshot: ExportSnapshot,
-  changeId: string
-): string | undefined {
+function resolveMetadataSchema(snapshot: ExportSnapshot, changeId: string): string | undefined {
   const metadata = snapshot.opsx?.changeMetadata?.[changeId]
   if (!metadata) return undefined
   try {
@@ -174,10 +171,7 @@ function fallbackSchemaArtifacts(): SchemaArtifact[] {
   ]
 }
 
-function resolveSchemaDetail(
-  snapshot: ExportSnapshot,
-  schemaName: string
-): SchemaDetail {
+function resolveSchemaDetail(snapshot: ExportSnapshot, schemaName: string): SchemaDetail {
   const schemaDetail = snapshot.opsx?.schemaDetails?.[schemaName]
   if (schemaDetail) return schemaDetail
 
@@ -570,6 +564,19 @@ export async function getOpsxProjectConfig(): Promise<string | null> {
 export async function getOpsxSchemas(): Promise<SchemaInfo[]> {
   const snapshot = await loadSnapshot()
   return snapshot?.opsx?.schemas ?? []
+}
+
+export async function getOpsxConfigBundle(): Promise<{
+  schemas: SchemaInfo[]
+  schemaDetails: Record<string, SchemaDetail | null>
+  schemaResolutions: Record<string, SchemaResolution | null>
+}> {
+  const snapshot = await loadSnapshot()
+  return {
+    schemas: snapshot?.opsx?.schemas ?? [],
+    schemaDetails: snapshot?.opsx?.schemaDetails ?? {},
+    schemaResolutions: snapshot?.opsx?.schemaResolutions ?? {},
+  }
 }
 
 export async function getOpsxSchemaDetail(name?: string): Promise<SchemaDetail | null> {

@@ -96,7 +96,7 @@ const DEFAULT_MAIN_TABS: TabId[] = [
   '/settings',
 ]
 const DEFAULT_BOTTOM_TABS: TabId[] = isStaticMode() ? [] : ['/terminal']
-const POP_ROUTES = ['/search'] as const
+const POP_ROUTES = ['/search', '/opsx-new'] as const
 const KV_KEY = 'nav-layout'
 const LS_KEY = 'nav-layout'
 const PERSIST_DEBOUNCE = 300
@@ -850,11 +850,7 @@ export class NavController {
   }
 
   private dispatch(event: KernelEvent): void {
-    if (
-      typeof window !== 'undefined'
-      && event.type !== 'POPSTATE'
-      && this.mainHistory == null
-    ) {
+    if (typeof window !== 'undefined' && event.type !== 'POPSTATE' && this.mainHistory == null) {
       const parsed = parseBrowserLocation(window.location, this.state)
       this.state = normalizeState({
         ...this.state,

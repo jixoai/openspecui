@@ -89,11 +89,17 @@ export function createPtyWebSocketHandler(ptyManager: PtyManager) {
       switch (msg.type) {
         case 'create': {
           try {
+            const createMessage = msg as typeof msg & {
+              closeTip?: string
+              closeCallbackUrl?: string | Record<string, string>
+            }
             const session = ptyManager.create({
               cols: msg.cols,
               rows: msg.rows,
               command: msg.command,
               args: msg.args,
+              closeTip: createMessage.closeTip,
+              closeCallbackUrl: createMessage.closeCallbackUrl,
             })
 
             send({
@@ -154,6 +160,8 @@ export function createPtyWebSocketHandler(ptyManager: PtyManager) {
               platform: s.platform,
               isExited: s.isExited,
               exitCode: s.exitCode,
+              closeTip: s.closeTip,
+              closeCallbackUrl: s.closeCallbackUrl,
             })),
           })
           break

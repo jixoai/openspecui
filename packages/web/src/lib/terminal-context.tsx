@@ -25,13 +25,25 @@ export interface TerminalSession {
   outputActive: boolean
   command?: string
   args?: string[]
+  closeTip?: string
+  closeCallbackUrl?: string | Record<string, string>
 }
 
 interface TerminalContextValue {
   sessions: TerminalSession[]
   activeSessionId: string | null
-  createSession: (opts?: { label?: string; command?: string; args?: string[] }) => string
-  createDedicatedSession: (command: string, args: string[]) => string
+  createSession: (opts?: {
+    label?: string
+    command?: string
+    args?: string[]
+    closeTip?: string
+    closeCallbackUrl?: string | Record<string, string>
+  }) => string
+  createDedicatedSession: (
+    command: string,
+    args: string[],
+    opts?: { closeTip?: string; closeCallbackUrl?: string | Record<string, string> }
+  ) => string
   closeSession: (id: string) => void
   setActiveSession: (id: string) => void
   markExited: (id: string, exitCode: number) => void
@@ -55,7 +67,13 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
 
   const createSession = useCallback(
-    (opts?: { label?: string; command?: string; args?: string[] }) => {
+    (opts?: {
+      label?: string
+      command?: string
+      args?: string[]
+      closeTip?: string
+      closeCallbackUrl?: string | Record<string, string>
+    }) => {
       if (isStatic) return ''
       const id = terminalController.createSession(opts)
       setActiveSessionId(id)
@@ -65,7 +83,11 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   )
 
   const createDedicatedSession = useCallback(
-    (command: string, args: string[]) => {
+    (
+      command: string,
+      args: string[],
+      opts?: { closeTip?: string; closeCallbackUrl?: string | Record<string, string> }
+    ) => {
       if (isStatic) return ''
       const label = `${command} ${args.join(' ')}`.trim()
       const id = terminalController.createSession({
@@ -73,6 +95,8 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         command,
         args,
         isDedicated: true,
+        closeTip: opts?.closeTip,
+        closeCallbackUrl: opts?.closeCallbackUrl,
       })
       setActiveSessionId(id)
       return id

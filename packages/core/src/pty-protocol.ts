@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 const PositiveInt = z.number().int().positive()
 export const PtyPlatformSchema = z.enum(['windows', 'macos', 'common'])
+const CloseCallbackUrlSchema = z.union([z.string(), z.record(z.string())])
 
 const PtySessionInfoSchema = z.object({
   id: z.string().min(1),
@@ -11,6 +12,8 @@ const PtySessionInfoSchema = z.object({
   platform: PtyPlatformSchema,
   isExited: z.boolean(),
   exitCode: z.number().int().nullable(),
+  closeTip: z.string().optional(),
+  closeCallbackUrl: CloseCallbackUrlSchema.optional(),
 })
 
 export const PtyCreateMessageSchema = z.object({
@@ -20,6 +23,8 @@ export const PtyCreateMessageSchema = z.object({
   rows: PositiveInt.optional(),
   command: z.string().min(1).optional(),
   args: z.array(z.string()).optional(),
+  closeTip: z.string().optional(),
+  closeCallbackUrl: CloseCallbackUrlSchema.optional(),
 })
 
 export const PtyInputMessageSchema = z.object({

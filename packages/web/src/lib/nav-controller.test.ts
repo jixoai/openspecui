@@ -123,6 +123,16 @@ describe('NavController kernel lifecycle', () => {
     expect(window.location.search).not.toContain('_p=')
   })
 
+  it('treats /opsx-new as pop-area route', () => {
+    nav = createController('/dashboard')
+
+    nav.activatePop('/opsx-new')
+
+    expect(nav.getLocation('pop').pathname).toBe('/opsx-new')
+    expect(nav.getAreaForPath('/opsx-new')).toBe('pop')
+    expect(window.location.search).toContain('_p=%2Fopsx-new')
+  })
+
   it('routes pop-area navigation within pop router', () => {
     nav = createController('/dashboard')
     const popNotify = vi.fn()

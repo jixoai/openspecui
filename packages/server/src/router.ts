@@ -8,36 +8,28 @@ import type {
   OpsxKernel,
 } from '@openspecui/core'
 import {
-  ApplyInstructionsSchema,
-  ArtifactInstructionsSchema,
-  ChangeStatusSchema,
-  SchemaInfoSchema,
-  SchemaResolutionSchema,
-  TemplatesSchema,
   getAllTools,
   getAvailableTools,
   getConfiguredTools,
   getDefaultCliCommandString,
-  reactiveReadDir,
-  reactiveReadFile,
-  reactiveStat,
   sniffGlobalCli,
   type AIToolOption,
   type ApplyInstructions,
   type ArtifactInstructions,
   type ChangeStatus,
+  type SchemaDetail,
   type SchemaInfo,
   type SchemaResolution,
+  type TemplateContentMap,
   type TemplatesMap,
 } from '@openspecui/core'
 import { SearchQuerySchema, type SearchQuery } from '@openspecui/search'
 import { initTRPC } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
-import { dirname, join, matchesGlob, relative, resolve, sep } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { createCliStreamObservable } from './cli-stream-observable.js'
-import { parseSchemaYaml } from './opsx-schema.js'
 import { reactiveKV } from './reactive-kv.js'
 import {
   createReactiveSubscription,
@@ -73,25 +65,6 @@ function ensureEditableSource(source: SchemaResolution['source'], label: string)
   }
 }
 
-function parseCliJson<T>(raw: string, schema: z.ZodSchema<T>, label: string): T {
-  const trimmed = raw.trim()
-  if (!trimmed) {
-    throw new Error(`${label} returned empty output`)
-  }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(trimmed)
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    throw new Error(`${label} returned invalid JSON: ${message}`)
-  }
-  const result = schema.safeParse(parsed)
-  if (!result.success) {
-    throw new Error(`${label} returned unexpected JSON: ${result.error.message}`)
-  }
-  return result.data
-}
-
 function resolveEntryPath(root: string, entryPath: string): string {
   const normalizedRoot = resolve(root)
   const resolvedPath = resolve(normalizedRoot, entryPath)
@@ -102,128 +75,20 @@ function resolveEntryPath(root: string, entryPath: string): string {
   return resolvedPath
 }
 
-function toRelativePath(root: string, absolutePath: string): string {
-  const rel = relative(root, absolutePath)
-  return rel.split(sep).join('/')
-}
-
-async function readEntriesUnderRoot(root: string): Promise<ChangeFile[]> {
-  const rootStat = await reactiveStat(root)
-  if (!rootStat?.isDirectory) return []
-
-  const collectEntries = async (dir: string): Promise<ChangeFile[]> => {
-    const names = await reactiveReadDir(dir, { includeHidden: false })
-    const entries: ChangeFile[] = []
-
-    for (const name of names) {
-      const fullPath = join(dir, name)
-      const statInfo = await reactiveStat(fullPath)
-      if (!statInfo) continue
-
-      const relativePath = toRelativePath(root, fullPath)
-
-      if (statInfo.isDirectory) {
-        entries.push({ path: relativePath, type: 'directory' })
-        entries.push(...(await collectEntries(fullPath)))
-      } else {
-        const content = await reactiveReadFile(fullPath)
-        const size = content ? Buffer.byteLength(content, 'utf-8') : undefined
-        entries.push({
-          path: relativePath,
-          type: 'file',
-          content: content ?? undefined,
-          size,
-        })
-      }
-    }
-
-    return entries
-  }
-
-  return collectEntries(root)
-}
-
-async function touchOpsxProjectDeps(projectDir: string): Promise<void> {
-  const openspecDir = join(projectDir, 'openspec')
-  await reactiveReadFile(join(openspecDir, 'config.yaml'))
-  const schemaRoot = join(openspecDir, 'schemas')
-  const schemaDirs = await reactiveReadDir(schemaRoot, {
-    directoriesOnly: true,
-    includeHidden: true,
-  })
-  await Promise.all(
-    schemaDirs.map((name) => reactiveReadFile(join(schemaRoot, name, 'schema.yaml')))
-  )
-  await reactiveReadDir(join(openspecDir, 'changes'), {
-    directoriesOnly: true,
-    includeHidden: true,
-    exclude: ['archive'],
-  })
-}
-
-async function touchOpsxChangeDeps(projectDir: string, changeId: string): Promise<void> {
-  const changeDir = join(projectDir, 'openspec', 'changes', changeId)
-  await reactiveReadDir(changeDir, { includeHidden: true })
-  await reactiveReadFile(join(changeDir, '.openspec.yaml'))
-}
-
-interface GlobArtifactFile {
-  path: string
-  type: 'file'
-  content: string
-}
-
-async function readGlobArtifactFiles(
-  projectDir: string,
-  changeId: string,
-  outputPath: string
-): Promise<GlobArtifactFile[]> {
-  const changeDir = join(projectDir, 'openspec', 'changes', changeId)
-  const allEntries = await readEntriesUnderRoot(changeDir)
-  return allEntries
-    .filter((entry) => entry.type === 'file' && matchesGlob(entry.path, outputPath))
-    .map((entry) => ({
-      path: entry.path,
-      type: 'file' as const,
-      content: entry.content ?? '',
-    }))
-}
-
 async function fetchOpsxStatus(
   ctx: Context,
   input: { change?: string; schema?: string }
 ): Promise<ChangeStatus> {
   const changeId = requireChangeId(input.change)
-  await touchOpsxProjectDeps(ctx.projectDir)
-  await touchOpsxChangeDeps(ctx.projectDir, changeId)
-
-  const args = ['status', '--json', '--change', changeId]
-  if (input.schema) args.push('--schema', input.schema)
-
-  const result = await ctx.cliExecutor.execute(args)
-  if (!result.success) {
-    throw new Error(result.stderr || `openspec status failed (exit ${result.exitCode ?? 'null'})`)
-  }
-  const status = parseCliJson(result.stdout, ChangeStatusSchema, 'openspec status')
-  // Add project-relative path for display purposes
-  const changeRelDir = `openspec/changes/${changeId}`
-  for (const artifact of status.artifacts) {
-    artifact.relativePath = `${changeRelDir}/${artifact.outputPath}`
-  }
-  return status
+  await ctx.kernel.waitForWarmup()
+  await ctx.kernel.ensureStatus(changeId, input.schema)
+  return ctx.kernel.getStatus(changeId, input.schema)
 }
 
 async function fetchOpsxStatusList(ctx: Context): Promise<ChangeStatus[]> {
-  const changesDir = join(ctx.projectDir, 'openspec', 'changes')
-  const changeIds = await reactiveReadDir(changesDir, {
-    directoriesOnly: true,
-    includeHidden: false,
-    exclude: ['archive'],
-  })
-  const statuses = await Promise.all(
-    changeIds.map((changeId) => fetchOpsxStatus(ctx, { change: changeId }))
-  )
-  return statuses
+  await ctx.kernel.waitForWarmup()
+  await ctx.kernel.ensureStatusList()
+  return ctx.kernel.getStatusList()
 }
 
 async function fetchOpsxInstructions(
@@ -231,19 +96,9 @@ async function fetchOpsxInstructions(
   input: { change?: string; artifact: string; schema?: string }
 ): Promise<ArtifactInstructions> {
   const changeId = requireChangeId(input.change)
-  await touchOpsxProjectDeps(ctx.projectDir)
-  await touchOpsxChangeDeps(ctx.projectDir, changeId)
-
-  const args = ['instructions', input.artifact, '--json', '--change', changeId]
-  if (input.schema) args.push('--schema', input.schema)
-
-  const result = await ctx.cliExecutor.execute(args)
-  if (!result.success) {
-    throw new Error(
-      result.stderr || `openspec instructions failed (exit ${result.exitCode ?? 'null'})`
-    )
-  }
-  return parseCliJson(result.stdout, ArtifactInstructionsSchema, 'openspec instructions')
+  await ctx.kernel.waitForWarmup()
+  await ctx.kernel.ensureInstructions(changeId, input.artifact, input.schema)
+  return ctx.kernel.getInstructions(changeId, input.artifact, input.schema)
 }
 
 async function fetchOpsxApplyInstructions(
@@ -251,69 +106,57 @@ async function fetchOpsxApplyInstructions(
   input: { change?: string; schema?: string }
 ): Promise<ApplyInstructions> {
   const changeId = requireChangeId(input.change)
-  await touchOpsxProjectDeps(ctx.projectDir)
-  await touchOpsxChangeDeps(ctx.projectDir, changeId)
-
-  const args = ['instructions', 'apply', '--json', '--change', changeId]
-  if (input.schema) args.push('--schema', input.schema)
-
-  const result = await ctx.cliExecutor.execute(args)
-  if (!result.success) {
-    throw new Error(
-      result.stderr || `openspec instructions apply failed (exit ${result.exitCode ?? 'null'})`
-    )
-  }
-  return parseCliJson(result.stdout, ApplyInstructionsSchema, 'openspec instructions apply')
+  await ctx.kernel.waitForWarmup()
+  await ctx.kernel.ensureApplyInstructions(changeId, input.schema)
+  return ctx.kernel.getApplyInstructions(changeId, input.schema)
 }
 
-async function fetchOpsxSchemas(ctx: Context): Promise<SchemaInfo[]> {
-  await touchOpsxProjectDeps(ctx.projectDir)
-  const result = await ctx.cliExecutor.schemas()
-  if (!result.success) {
-    throw new Error(result.stderr || `openspec schemas failed (exit ${result.exitCode ?? 'null'})`)
+async function fetchOpsxConfigBundle(ctx: Context): Promise<{
+  schemas: SchemaInfo[]
+  schemaDetails: Record<string, SchemaDetail | null>
+  schemaResolutions: Record<string, SchemaResolution | null>
+}> {
+  await ctx.kernel.ensureSchemas()
+  const schemas = ctx.kernel.getSchemas()
+
+  for (const schema of schemas) {
+    void ctx.kernel.ensureSchemaDetail(schema.name).catch(() => {
+      // Keep bundle responsive; errors surface from dedicated schema subscriptions/routes.
+    })
+    void ctx.kernel.ensureSchemaResolution(schema.name).catch(() => {
+      // Keep bundle responsive; errors surface from dedicated schema subscriptions/routes.
+    })
   }
-  return parseCliJson(result.stdout, z.array(SchemaInfoSchema), 'openspec schemas')
+
+  const schemaDetails: Record<string, SchemaDetail | null> = {}
+  const schemaResolutions: Record<string, SchemaResolution | null> = {}
+  for (const schema of schemas) {
+    schemaDetails[schema.name] = ctx.kernel.peekSchemaDetail(schema.name)
+    schemaResolutions[schema.name] = ctx.kernel.peekSchemaResolution(schema.name)
+  }
+
+  return { schemas, schemaDetails, schemaResolutions }
 }
 
 async function fetchOpsxSchemaResolution(ctx: Context, name: string): Promise<SchemaResolution> {
-  await touchOpsxProjectDeps(ctx.projectDir)
-  const result = await ctx.cliExecutor.schemaWhich(name)
-  if (!result.success) {
-    throw new Error(
-      result.stderr || `openspec schema which failed (exit ${result.exitCode ?? 'null'})`
-    )
-  }
-  return parseCliJson(result.stdout, SchemaResolutionSchema, 'openspec schema which')
+  await ctx.kernel.waitForWarmup()
+  await ctx.kernel.ensureSchemaResolution(name)
+  return ctx.kernel.getSchemaResolution(name)
 }
 
 async function fetchOpsxTemplates(ctx: Context, schema?: string): Promise<TemplatesMap> {
-  await touchOpsxProjectDeps(ctx.projectDir)
-  const result = await ctx.cliExecutor.templates(schema)
-  if (!result.success) {
-    throw new Error(
-      result.stderr || `openspec templates failed (exit ${result.exitCode ?? 'null'})`
-    )
-  }
-  return parseCliJson(result.stdout, TemplatesSchema, 'openspec templates')
+  await ctx.kernel.waitForWarmup()
+  await ctx.kernel.ensureTemplates(schema)
+  return ctx.kernel.getTemplates(schema)
 }
-
-type TemplateContentMap = Record<
-  string,
-  { content: string | null; path: string; source: TemplatesMap[string]['source'] }
->
 
 async function fetchOpsxTemplateContents(
   ctx: Context,
   schema?: string
 ): Promise<TemplateContentMap> {
-  const templates = await fetchOpsxTemplates(ctx, schema)
-  const entries = await Promise.all(
-    Object.entries(templates).map(async ([artifactId, info]) => {
-      const content = await reactiveReadFile(info.path)
-      return [artifactId, { content, path: info.path, source: info.source }] as const
-    })
-  )
-  return Object.fromEntries(entries)
+  await ctx.kernel.waitForWarmup()
+  await ctx.kernel.ensureTemplateContents(schema)
+  return ctx.kernel.getTemplateContents(schema)
 }
 
 /**
@@ -894,12 +737,12 @@ export const opsxRouter = router({
       return createReactiveSubscription(() => fetchOpsxApplyInstructions(ctx, input))
     }),
 
-  schemas: publicProcedure.query(async ({ ctx }): Promise<SchemaInfo[]> => {
-    return fetchOpsxSchemas(ctx)
+  configBundle: publicProcedure.query(async ({ ctx }) => {
+    return fetchOpsxConfigBundle(ctx)
   }),
 
-  subscribeSchemas: publicProcedure.subscription(({ ctx }) => {
-    return createReactiveSubscription(() => fetchOpsxSchemas(ctx))
+  subscribeConfigBundle: publicProcedure.subscription(({ ctx }) => {
+    return createReactiveSubscription(() => fetchOpsxConfigBundle(ctx))
   }),
 
   templates: publicProcedure
@@ -926,88 +769,45 @@ export const opsxRouter = router({
       return createReactiveSubscription(() => fetchOpsxTemplateContents(ctx, input?.schema))
     }),
 
-  schemaResolution: publicProcedure
-    .input(z.object({ name: z.string() }))
-    .query(async ({ ctx, input }): Promise<SchemaResolution> => {
-      return fetchOpsxSchemaResolution(ctx, input.name)
-    }),
-
-  subscribeSchemaResolution: publicProcedure
-    .input(z.object({ name: z.string() }))
-    .subscription(({ ctx, input }) => {
-      return createReactiveSubscription(() => fetchOpsxSchemaResolution(ctx, input.name))
-    }),
-
-  schemaDetail: publicProcedure
-    .input(z.object({ name: z.string() }))
-    .query(async ({ ctx, input }) => {
-      await touchOpsxProjectDeps(ctx.projectDir)
-      const resolution = await fetchOpsxSchemaResolution(ctx, input.name)
-      const schemaPath = join(resolution.path, 'schema.yaml')
-      const content = await reactiveReadFile(schemaPath)
-      if (!content) {
-        throw new Error(`schema.yaml not found at ${schemaPath}`)
-      }
-      return parseSchemaYaml(content)
-    }),
-
-  subscribeSchemaDetail: publicProcedure
-    .input(z.object({ name: z.string() }))
-    .subscription(({ ctx, input }) => {
-      return createReactiveSubscription(async () => {
-        await touchOpsxProjectDeps(ctx.projectDir)
-        const resolution = await fetchOpsxSchemaResolution(ctx, input.name)
-        const schemaPath = join(resolution.path, 'schema.yaml')
-        const content = await reactiveReadFile(schemaPath)
-        if (!content) {
-          throw new Error(`schema.yaml not found at ${schemaPath}`)
-        }
-        return parseSchemaYaml(content)
-      })
-    }),
-
   schemaFiles: publicProcedure
     .input(z.object({ name: z.string() }))
     .query(async ({ ctx, input }): Promise<ChangeFile[]> => {
-      await touchOpsxProjectDeps(ctx.projectDir)
-      const resolution = await fetchOpsxSchemaResolution(ctx, input.name)
-      return readEntriesUnderRoot(resolution.path)
+      await ctx.kernel.waitForWarmup()
+      await ctx.kernel.ensureSchemaFiles(input.name)
+      return ctx.kernel.getSchemaFiles(input.name)
     }),
 
   subscribeSchemaFiles: publicProcedure
     .input(z.object({ name: z.string() }))
     .subscription(({ ctx, input }) => {
       return createReactiveSubscription(async () => {
-        await touchOpsxProjectDeps(ctx.projectDir)
-        const resolution = await fetchOpsxSchemaResolution(ctx, input.name)
-        return readEntriesUnderRoot(resolution.path)
+        await ctx.kernel.waitForWarmup()
+        await ctx.kernel.ensureSchemaFiles(input.name)
+        return ctx.kernel.getSchemaFiles(input.name)
       })
     }),
 
   schemaYaml: publicProcedure
     .input(z.object({ name: z.string() }))
     .query(async ({ ctx, input }) => {
-      await touchOpsxProjectDeps(ctx.projectDir)
-      const resolution = await fetchOpsxSchemaResolution(ctx, input.name)
-      const schemaPath = join(resolution.path, 'schema.yaml')
-      return reactiveReadFile(schemaPath)
+      await ctx.kernel.waitForWarmup()
+      await ctx.kernel.ensureSchemaYaml(input.name)
+      return ctx.kernel.getSchemaYaml(input.name)
     }),
 
   subscribeSchemaYaml: publicProcedure
     .input(z.object({ name: z.string() }))
     .subscription(({ ctx, input }) => {
       return createReactiveSubscription(async () => {
-        await touchOpsxProjectDeps(ctx.projectDir)
-        const resolution = await fetchOpsxSchemaResolution(ctx, input.name)
-        const schemaPath = join(resolution.path, 'schema.yaml')
-        return reactiveReadFile(schemaPath)
+        await ctx.kernel.waitForWarmup()
+        await ctx.kernel.ensureSchemaYaml(input.name)
+        return ctx.kernel.getSchemaYaml(input.name)
       })
     }),
 
   writeSchemaYaml: publicProcedure
     .input(z.object({ name: z.string(), content: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await touchOpsxProjectDeps(ctx.projectDir)
       const resolution = await fetchOpsxSchemaResolution(ctx, input.name)
       ensureEditableSource(resolution.source, 'schema.yaml')
       const schemaPath = join(resolution.path, 'schema.yaml')
@@ -1019,7 +819,6 @@ export const opsxRouter = router({
   writeSchemaFile: publicProcedure
     .input(z.object({ schema: z.string(), path: z.string(), content: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await touchOpsxProjectDeps(ctx.projectDir)
       const resolution = await fetchOpsxSchemaResolution(ctx, input.schema)
       ensureEditableSource(resolution.source, 'schema file')
       if (!input.path.trim()) {
@@ -1034,7 +833,6 @@ export const opsxRouter = router({
   createSchemaFile: publicProcedure
     .input(z.object({ schema: z.string(), path: z.string(), content: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      await touchOpsxProjectDeps(ctx.projectDir)
       const resolution = await fetchOpsxSchemaResolution(ctx, input.schema)
       ensureEditableSource(resolution.source, 'schema file')
       if (!input.path.trim()) {
@@ -1049,7 +847,6 @@ export const opsxRouter = router({
   createSchemaDirectory: publicProcedure
     .input(z.object({ schema: z.string(), path: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await touchOpsxProjectDeps(ctx.projectDir)
       const resolution = await fetchOpsxSchemaResolution(ctx, input.schema)
       ensureEditableSource(resolution.source, 'schema directory')
       if (!input.path.trim()) {
@@ -1063,7 +860,6 @@ export const opsxRouter = router({
   deleteSchemaEntry: publicProcedure
     .input(z.object({ schema: z.string(), path: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await touchOpsxProjectDeps(ctx.projectDir)
       const resolution = await fetchOpsxSchemaResolution(ctx, input.schema)
       ensureEditableSource(resolution.source, 'schema entry')
       if (!input.path.trim()) {
@@ -1080,26 +876,24 @@ export const opsxRouter = router({
   templateContent: publicProcedure
     .input(z.object({ schema: z.string(), artifactId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const templates = await fetchOpsxTemplates(ctx, input.schema)
-      const info = templates[input.artifactId]
+      const templateContents = await fetchOpsxTemplateContents(ctx, input.schema)
+      const info = templateContents[input.artifactId]
       if (!info) {
         throw new Error(`Template not found for ${input.schema}:${input.artifactId}`)
       }
-      const content = await reactiveReadFile(info.path)
-      return { content, path: info.path, source: info.source }
+      return info
     }),
 
   subscribeTemplateContent: publicProcedure
     .input(z.object({ schema: z.string(), artifactId: z.string() }))
     .subscription(({ ctx, input }) => {
       return createReactiveSubscription(async () => {
-        const templates = await fetchOpsxTemplates(ctx, input.schema)
-        const info = templates[input.artifactId]
+        const templateContents = await fetchOpsxTemplateContents(ctx, input.schema)
+        const info = templateContents[input.artifactId]
         if (!info) {
           throw new Error(`Template not found for ${input.schema}:${input.artifactId}`)
         }
-        const content = await reactiveReadFile(info.path)
-        return { content, path: info.path, source: info.source }
+        return info
       })
     }),
 
@@ -1120,7 +914,6 @@ export const opsxRouter = router({
   deleteSchema: publicProcedure
     .input(z.object({ name: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await touchOpsxProjectDeps(ctx.projectDir)
       const resolution = await fetchOpsxSchemaResolution(ctx, input.name)
       ensureEditableSource(resolution.source, 'schema')
       await rm(resolution.path, { recursive: true, force: true })
@@ -1128,14 +921,16 @@ export const opsxRouter = router({
     }),
 
   projectConfig: publicProcedure.query(async ({ ctx }) => {
-    const configPath = join(ctx.projectDir, 'openspec', 'config.yaml')
-    return reactiveReadFile(configPath)
+    await ctx.kernel.waitForWarmup()
+    await ctx.kernel.ensureProjectConfig()
+    return ctx.kernel.getProjectConfig()
   }),
 
   subscribeProjectConfig: publicProcedure.subscription(({ ctx }) => {
     return createReactiveSubscription(async () => {
-      const configPath = join(ctx.projectDir, 'openspec', 'config.yaml')
-      return reactiveReadFile(configPath)
+      await ctx.kernel.waitForWarmup()
+      await ctx.kernel.ensureProjectConfig()
+      return ctx.kernel.getProjectConfig()
     })
   }),
 
@@ -1150,92 +945,70 @@ export const opsxRouter = router({
     }),
 
   listChanges: publicProcedure.query(async ({ ctx }) => {
-    const changesDir = join(ctx.projectDir, 'openspec', 'changes')
-    return reactiveReadDir(changesDir, {
-      directoriesOnly: true,
-      exclude: ['archive'],
-      includeHidden: false,
-    })
+    await ctx.kernel.waitForWarmup()
+    await ctx.kernel.ensureChangeIds()
+    return ctx.kernel.getChangeIds()
   }),
 
   subscribeChanges: publicProcedure.subscription(({ ctx }) => {
     return createReactiveSubscription(async () => {
-      const changesDir = join(ctx.projectDir, 'openspec', 'changes')
-      return reactiveReadDir(changesDir, {
-        directoriesOnly: true,
-        exclude: ['archive'],
-        includeHidden: false,
-      })
+      await ctx.kernel.waitForWarmup()
+      await ctx.kernel.ensureChangeIds()
+      return ctx.kernel.getChangeIds()
     })
   }),
 
   changeMetadata: publicProcedure
     .input(z.object({ changeId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const metadataPath = join(
-        ctx.projectDir,
-        'openspec',
-        'changes',
-        input.changeId,
-        '.openspec.yaml'
-      )
-      return reactiveReadFile(metadataPath)
+      await ctx.kernel.waitForWarmup()
+      await ctx.kernel.ensureChangeMetadata(input.changeId)
+      return ctx.kernel.getChangeMetadata(input.changeId)
     }),
 
   subscribeChangeMetadata: publicProcedure
     .input(z.object({ changeId: z.string() }))
     .subscription(({ ctx, input }) => {
       return createReactiveSubscription(async () => {
-        const metadataPath = join(
-          ctx.projectDir,
-          'openspec',
-          'changes',
-          input.changeId,
-          '.openspec.yaml'
-        )
-        return reactiveReadFile(metadataPath)
+        await ctx.kernel.waitForWarmup()
+        await ctx.kernel.ensureChangeMetadata(input.changeId)
+        return ctx.kernel.getChangeMetadata(input.changeId)
       })
     }),
 
   readArtifactOutput: publicProcedure
     .input(z.object({ changeId: z.string(), outputPath: z.string() }))
     .query(async ({ ctx, input }) => {
-      const artifactPath = join(
-        ctx.projectDir,
-        'openspec',
-        'changes',
-        input.changeId,
-        input.outputPath
-      )
-      return reactiveReadFile(artifactPath)
+      await ctx.kernel.waitForWarmup()
+      await ctx.kernel.ensureArtifactOutput(input.changeId, input.outputPath)
+      return ctx.kernel.getArtifactOutput(input.changeId, input.outputPath)
     }),
 
   subscribeArtifactOutput: publicProcedure
     .input(z.object({ changeId: z.string(), outputPath: z.string() }))
     .subscription(({ ctx, input }) => {
       return createReactiveSubscription(async () => {
-        const artifactPath = join(
-          ctx.projectDir,
-          'openspec',
-          'changes',
-          input.changeId,
-          input.outputPath
-        )
-        return reactiveReadFile(artifactPath)
+        await ctx.kernel.waitForWarmup()
+        await ctx.kernel.ensureArtifactOutput(input.changeId, input.outputPath)
+        return ctx.kernel.getArtifactOutput(input.changeId, input.outputPath)
       })
     }),
 
   readGlobArtifactFiles: publicProcedure
     .input(z.object({ changeId: z.string(), outputPath: z.string() }))
     .query(async ({ ctx, input }) => {
-      return readGlobArtifactFiles(ctx.projectDir, input.changeId, input.outputPath)
+      await ctx.kernel.waitForWarmup()
+      await ctx.kernel.ensureGlobArtifactFiles(input.changeId, input.outputPath)
+      return ctx.kernel.getGlobArtifactFiles(input.changeId, input.outputPath)
     }),
 
   subscribeGlobArtifactFiles: publicProcedure
     .input(z.object({ changeId: z.string(), outputPath: z.string() }))
     .subscription(({ ctx, input }) => {
       return createReactiveSubscription(async () => {
-        return readGlobArtifactFiles(ctx.projectDir, input.changeId, input.outputPath)
+        await ctx.kernel.waitForWarmup()
+        await ctx.kernel.ensureGlobArtifactFiles(input.changeId, input.outputPath)
+        return ctx.kernel.getGlobArtifactFiles(input.changeId, input.outputPath)
       })
     }),
 

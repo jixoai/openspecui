@@ -1,6 +1,7 @@
+import { navController } from '@/lib/nav-controller'
 import { useOpsxStatusListSubscription } from '@/lib/use-opsx'
 import { Link } from '@tanstack/react-router'
-import { ChevronRight, GitBranch } from 'lucide-react'
+import { ChevronRight, GitBranch, Sparkles } from 'lucide-react'
 
 export function ChangeList() {
   const { data: statuses, isLoading } = useOpsxStatusListSubscription()
@@ -50,7 +51,15 @@ export function ChangeList() {
         })}
         {statuses?.length === 0 && (
           <div className="text-muted-foreground p-4 text-center">
-            No active changes. Use <strong>/opsx:new</strong> to create one.
+            <div>No active changes.</div>
+            <button
+              type="button"
+              onClick={() => navController.activatePop('/opsx-new')}
+              className="text-primary mt-2 inline-flex items-center gap-1 hover:underline"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              /opsx:new
+            </button>
           </div>
         )}
       </div>

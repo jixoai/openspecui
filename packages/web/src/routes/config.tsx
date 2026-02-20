@@ -14,11 +14,9 @@ import { trpcClient } from '@/lib/trpc'
 import {
   useOpsxChangeListSubscription,
   useOpsxChangeMetadataSubscription,
+  useOpsxConfigBundleSubscription,
   useOpsxProjectConfigSubscription,
-  useOpsxSchemaDetailSubscription,
   useOpsxSchemaFilesSubscription,
-  useOpsxSchemaResolutionSubscription,
-  useOpsxSchemasSubscription,
   useOpsxTemplateContentsSubscription,
   useOpsxTemplatesSubscription,
 } from '@/lib/use-opsx'
@@ -108,14 +106,17 @@ export function Config() {
 
   const { data: configYaml, isLoading: configLoading } = useOpsxProjectConfigSubscription()
   const {
-    data: schemas,
+    data: configBundle,
     isLoading: schemasLoading,
     error: schemasError,
-  } = useOpsxSchemasSubscription()
+  } = useOpsxConfigBundleSubscription()
+  const schemas = configBundle?.schemas
   const [selectedSchema, setSelectedSchema] = useState<string | undefined>(undefined)
 
-  const { data: schemaDetail } = useOpsxSchemaDetailSubscription(selectedSchema)
-  const { data: schemaResolution } = useOpsxSchemaResolutionSubscription(selectedSchema)
+  const schemaDetail = selectedSchema ? (configBundle?.schemaDetails[selectedSchema] ?? null) : null
+  const schemaResolution = selectedSchema
+    ? (configBundle?.schemaResolutions[selectedSchema] ?? null)
+    : null
   const { data: schemaFiles, error: schemaFilesError } =
     useOpsxSchemaFilesSubscription(selectedSchema)
   const { data: templates } = useOpsxTemplatesSubscription(selectedSchema)

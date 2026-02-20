@@ -1,5 +1,25 @@
 # openspecui
 
+## 1.2.0
+
+### Minor Changes
+
+- Add a full pop-area based `/opsx:new` creation flow and unify terminal close lifecycle with callback metadata.
+  - Replace dashboard/changes prompt-based creation with `/_p=/opsx-new` workflow UI.
+  - Add advanced argument chips on `/opsx-new` while keeping official `new change` flags.
+  - Extend PTY create/list protocol with `closeTip` and `closeCallbackUrl` metadata.
+  - Execute close callbacks from a single terminal close path after process exit (internal route push or external URL open).
+  - Add tests for new pop route mapping, command assembly, and terminal close callback behavior.
+
+## 1.1.2
+
+### Patch Changes
+
+- Refactor OPSX config data flow to use a single `configBundle` subscription path.
+  - unify config/schemas page schema metadata loading through one reactive bundle
+  - remove deprecated split schema subscriptions from server and web hooks
+  - optimize kernel-backed read lifecycle for faster first paint in config views
+
 ## 1.1.1
 
 ### Patch Changes

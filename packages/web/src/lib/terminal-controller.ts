@@ -13,6 +13,7 @@ import {
   type InputPanelLayout,
   type InputPanelSettingsPayload,
 } from 'xterm-input-panel'
+import { navController } from './nav-controller'
 import { TerminalInputHistoryStore } from './terminal-input-history'
 
 // --- Types ---
@@ -155,6 +156,8 @@ interface TerminalInstance {
   exitCode: number | null
   command?: string
   args?: string[]
+  closeTip?: string
+  closeCallbackUrl?: string | Record<string, string>
   mountedContainer: HTMLElement | null
   resizeObserver: ResizeObserver | null
   /** Whether terminal.open() has been called (can only be called once) */
@@ -178,6 +181,8 @@ export interface TerminalSessionSnapshot {
   outputActive: boolean
   command?: string
   args?: string[]
+  closeTip?: string
+  closeCallbackUrl?: string | Record<string, string>
   platform: PtyPlatform
 }
 
@@ -211,6 +216,8 @@ class TerminalController {
     requestId: string
     command?: string
     args?: string[]
+    closeTip?: string
+    closeCallbackUrl?: string | Record<string, string>
     cols: number
     rows: number
   }> = []
@@ -226,6 +233,8 @@ class TerminalController {
     command?: string
     args?: string[]
     isDedicated?: boolean
+    closeTip?: string
+    closeCallbackUrl?: string | Record<string, string>
   }): string {
     const id = `term-${++this.idCounter}`
     const label = opts?.label ?? `Shell ${this.idCounter}`
@@ -235,6 +244,8 @@ class TerminalController {
       command: opts?.command,
       args: opts?.args,
       isDedicated: opts?.isDedicated ?? false,
+      closeTip: opts?.closeTip,
+      closeCallbackUrl: opts?.closeCallbackUrl,
       restored: false,
       serverSessionId: null,
       platform: DEFAULT_PTY_PLATFORM,
@@ -265,12 +276,16 @@ class TerminalController {
         rows: instance.terminal.rows || 24,
         command: opts?.command,
         args: opts?.args,
+        closeTip: opts?.closeTip,
+        closeCallbackUrl: opts?.closeCallbackUrl,
       })
     } else {
       this.pendingCreates.push({
         requestId: id,
         command: opts?.command,
         args: opts?.args,
+        closeTip: opts?.closeTip,
+        closeCallbackUrl: opts?.closeCallbackUrl,
         cols: instance.terminal.cols || 80,
         rows: instance.terminal.rows || 24,
       })
@@ -288,6 +303,8 @@ class TerminalController {
       command?: string
       args?: string[]
       isDedicated: boolean
+      closeTip?: string
+      closeCallbackUrl?: string | Record<string, string>
       restored: boolean
       serverSessionId: string | null
       platform: PtyPlatform
@@ -358,6 +375,8 @@ class TerminalController {
       exitCode: null,
       command: opts.command,
       args: opts.args,
+      closeTip: opts.closeTip,
+      closeCallbackUrl: opts.closeCallbackUrl,
       mountedContainer: null,
       resizeObserver: null,
       hasOpened: false,
@@ -368,9 +387,10 @@ class TerminalController {
     }
   }
 
-  closeSession(id: string): void {
+  closeSession(id: string, opts?: { triggerCloseCallback?: boolean }): void {
     const instance = this.instances.get(id)
     if (!instance) return
+    const shouldTriggerCloseCallback = opts?.triggerCloseCallback !== false
 
     // Unmount first if mounted
     if (instance.mountedContainer) {
@@ -399,6 +419,10 @@ class TerminalController {
     // Dispose terminal
     instance.terminal.dispose()
 
+    if (shouldTriggerCloseCallback) {
+      this.runCloseCallback(instance)
+    }
+
     // Cleanup
     this.instances.delete(id)
     this.notify()
@@ -406,7 +430,7 @@ class TerminalController {
 
   closeAll(): void {
     for (const id of [...this.instances.keys()]) {
-      this.closeSession(id)
+      this.closeSession(id, { triggerCloseCallback: false })
     }
   }
 
@@ -666,9 +690,10 @@ class TerminalController {
     if (!instance) return
     instance.isExited = true
     instance.exitCode = msg.exitCode
-    if (instance.isDedicated) {
+    if (instance.closeTip || instance.isDedicated) {
+      const tip = instance.closeTip ?? 'Press any key to close (equivalent to close action).'
       instance.terminal.write(
-        `\r\n\x1b[90m[Process exited with code ${msg.exitCode}. Press any key to close (equivalent to close action).]\x1b[0m`
+        `\r\n\x1b[90m[Process exited with code ${msg.exitCode}. ${tip}]\x1b[0m`
       )
     }
     this.notify()
@@ -755,6 +780,8 @@ class TerminalController {
           inst.lastOutputTime > 0 && Date.now() - inst.lastOutputTime < OUTPUT_IDLE_THRESHOLD,
         command: inst.command,
         args: inst.args,
+        closeTip: inst.closeTip,
+        closeCallbackUrl: inst.closeCallbackUrl,
         platform: inst.platform,
       })
     }
@@ -813,6 +840,8 @@ class TerminalController {
           rows: pending.rows,
           command: pending.command,
           args: pending.args,
+          closeTip: pending.closeTip,
+          closeCallbackUrl: pending.closeCallbackUrl,
         })
       }
       this.pendingCreates = []
@@ -918,6 +947,8 @@ class TerminalController {
           command: serverSession.command,
           args: serverSession.args,
           isDedicated: false,
+          closeTip: serverSession.closeTip,
+          closeCallbackUrl: serverSession.closeCallbackUrl,
           restored: true,
           serverSessionId: serverSession.id,
           platform: serverSession.platform ?? DEFAULT_PTY_PLATFORM,
@@ -944,6 +975,8 @@ class TerminalController {
       } else if (!instance.serverSessionId) {
         instance.serverSessionId = serverSession.id
       }
+      instance.closeTip = serverSession.closeTip
+      instance.closeCallbackUrl = serverSession.closeCallbackUrl
       instance.platform = serverSession.platform ?? DEFAULT_PTY_PLATFORM
       instance.inputPanelAddon.setPlatform(instance.platform)
 
@@ -980,11 +1013,55 @@ class TerminalController {
     return this.hasDiscoveredSessions
   }
 
+  private runCloseCallback(instance: TerminalInstance): void {
+    if (!instance.isExited) return
+
+    const callbackUrl = resolveCloseCallbackUrl(instance.closeCallbackUrl, instance.exitCode)
+    if (!callbackUrl) return
+
+    navigateCloseCallback(callbackUrl)
+  }
+
   private wsSend(msg: PtyClientMessage): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg))
     }
   }
+}
+
+function resolveCloseCallbackUrl(
+  raw: string | Record<string, string> | undefined,
+  exitCode: number | null
+): string | null {
+  if (!raw) return null
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    return trimmed.length > 0 ? trimmed : null
+  }
+
+  const exact = raw[exitCode == null ? 'null' : String(exitCode)]
+  if (typeof exact === 'string' && exact.trim().length > 0) return exact.trim()
+  const fallback = raw['*']
+  if (typeof fallback === 'string' && fallback.trim().length > 0) return fallback.trim()
+  return null
+}
+
+function navigateCloseCallback(rawUrl: string): void {
+  let parsed: URL
+  try {
+    parsed = new URL(rawUrl, window.location.origin)
+  } catch {
+    return
+  }
+
+  if (parsed.origin === window.location.origin) {
+    const href = `${parsed.pathname}${parsed.search}${parsed.hash}`
+    const targetArea = navController.getAreaForPath(parsed.pathname)
+    navController.push(targetArea, href, null)
+    return
+  }
+
+  window.open(parsed.toString(), '_blank', 'noopener,noreferrer')
 }
 
 // --- Singleton ---
