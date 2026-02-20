@@ -47,6 +47,8 @@ export interface CodeEditorProps {
   style?: React.CSSProperties
   /** 占位符文本 */
   placeholder?: string
+  /** 编辑器最小高度（默认 240px） */
+  editorMinHeight?: string
   /** 额外的内联样式（可覆盖） */
 }
 
@@ -90,7 +92,10 @@ const codeHighlightStyle = HighlightStyle.define([
   { tag: [t.typeName, t.className], color: 'var(--chart-3)' },
   { tag: [t.function(t.variableName), t.propertyName], color: 'var(--chart-5)' },
   { tag: [t.variableName], color: 'var(--foreground)' },
-  { tag: [t.comment, t.lineComment, t.blockComment], color: 'color-mix(in srgb, var(--muted-foreground) 80%, transparent)' },
+  {
+    tag: [t.comment, t.lineComment, t.blockComment],
+    color: 'color-mix(in srgb, var(--muted-foreground) 80%, transparent)',
+  },
   { tag: t.punctuation, color: 'color-mix(in srgb, var(--foreground) 70%, transparent)' },
 ])
 
@@ -117,6 +122,7 @@ export function CodeEditor({
   className = '',
   style,
   placeholder,
+  editorMinHeight = '240px',
 }: CodeEditorProps) {
   const resolvedLanguage = language ?? detectLanguage(filename)
   const extensions = useMemo(() => {
@@ -136,7 +142,7 @@ export function CodeEditor({
           borderRadius: '6px',
           border: '1px solid color-mix(in srgb, var(--border) 80%, transparent)',
           height: '100%',
-          minHeight: '240px',
+          minHeight: 'var(--code-editor-min-height, 240px)',
         },
         '.cm-content': {
           fontFamily: 'var(--font-mono)',
@@ -224,7 +230,11 @@ export function CodeEditor({
       }}
       extensions={extensions}
       className={`scrollbar-thin scrollbar-track-transparent overflow-auto ${className}`}
-      style={{ fontSize, ...style }}
+      style={{
+        fontSize,
+        ['--code-editor-min-height' as string]: editorMinHeight,
+        ...style,
+      }}
     />
   )
 }

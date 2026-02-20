@@ -1,9 +1,10 @@
+import { FolderEditorViewer } from '@/components/folder-editor-viewer'
 import { ArtifactOutputViewer } from '@/components/opsx/artifact-output-viewer'
 import { ChangeCommandBar } from '@/components/opsx/change-command-bar'
-import { FolderEditorViewer } from '@/components/folder-editor-viewer'
 import { Tabs, type Tab } from '@/components/tabs'
+import { navController } from '@/lib/nav-controller'
+import { buildOpsxComposeHref, type OpsxComposeActionId } from '@/lib/opsx-compose'
 import { useOpsxStatusSubscription } from '@/lib/use-opsx'
-import { useTerminalContext } from '@/lib/terminal-context'
 import { useTabsStatusByQuery } from '@/lib/use-tabs-status-by-query'
 import { Link, useParams } from '@tanstack/react-router'
 import {
@@ -15,7 +16,7 @@ import {
   FolderTree,
   GitBranch,
 } from 'lucide-react'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 function StatusBadge({ status }: { status: 'done' | 'ready' | 'blocked' }) {
   if (status === 'done') return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
@@ -25,21 +26,29 @@ function StatusBadge({ status }: { status: 'done' | 'ready' | 'blocked' }) {
 
 export function ChangeView() {
   const { changeId } = useParams({ from: '/changes/$changeId' })
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const {
     data: status,
     isLoading,
     error,
-  } = useOpsxStatusSubscription({ change: changeId })
+  } = useOpsxStatusSubscription({ change: changeId, refreshKey })
 
-  const { createDedicatedSession } = useTerminalContext()
-
-  const handleRunCommand = useCallback(
-    (command: string, args: string[]) => {
-      createDedicatedSession(command, args)
+  const handleComposeAction = useCallback(
+    (actionId: OpsxComposeActionId, artifactId?: string) => {
+      const href = buildOpsxComposeHref({
+        action: actionId,
+        changeId,
+        artifactId,
+      })
+      navController.activatePop(href)
     },
-    [createDedicatedSession]
+    [changeId]
   )
+
+  const handleRefresh = useCallback(() => {
+    setRefreshKey((key) => key + 1)
+  }, [])
 
   const tabs: Tab[] = useMemo(() => {
     if (!status) return []
@@ -114,10 +123,10 @@ export function ChangeView() {
           </div>
         </div>
         <ChangeCommandBar
-          changeId={changeId}
           status={status}
           selectedArtifactId={selectedArtifactId}
-          onRunCommand={handleRunCommand}
+          onComposeAction={handleComposeAction}
+          onRefresh={handleRefresh}
         />
       </div>
 

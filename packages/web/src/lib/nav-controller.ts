@@ -96,7 +96,7 @@ const DEFAULT_MAIN_TABS: TabId[] = [
   '/settings',
 ]
 const DEFAULT_BOTTOM_TABS: TabId[] = isStaticMode() ? [] : ['/terminal']
-const POP_ROUTES = ['/search', '/opsx-new'] as const
+const POP_ROUTES = ['/search', '/opsx-new', '/opsx-compose'] as const
 const KV_KEY = 'nav-layout'
 const LS_KEY = 'nav-layout'
 const PERSIST_DEBOUNCE = 300

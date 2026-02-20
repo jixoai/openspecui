@@ -5,6 +5,7 @@ import { ChangeList } from '../routes/change-list'
 import { ChangeView } from '../routes/change-view'
 import { Config } from '../routes/config'
 import { Dashboard } from '../routes/dashboard'
+import { OpsxComposeRoute } from '../routes/opsx-compose'
 import { OpsxNewRoute } from '../routes/opsx-new'
 import { SearchRoute } from '../routes/search'
 import { Settings } from '../routes/settings'
@@ -67,6 +68,11 @@ export function createPopRouteTree(rootRoute: AnyRootRoute) {
       getParentRoute: () => rootRoute,
       path: '/opsx-new',
       component: OpsxNewRoute,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/opsx-compose',
+      component: OpsxComposeRoute,
     }),
   ])
 }

@@ -637,10 +637,14 @@ class TerminalController {
 
   // --- External input ---
 
-  writeToSession(id: string, data: string): void {
+  writeToSession(id: string, data: string): boolean {
     const sessionId = this.resolveServerSessionId(id)
-    if (!sessionId) return
-    this.wsSend({ type: 'input', sessionId, data })
+    if (!sessionId) return false
+    return this.wsSend({ type: 'input', sessionId, data })
+  }
+
+  async addInputHistory(text: string): Promise<void> {
+    await this.inputHistoryStore.add(text)
   }
 
   private resolveServerSessionId(localSessionId: string): string | null {
@@ -1022,10 +1026,12 @@ class TerminalController {
     navigateCloseCallback(callbackUrl)
   }
 
-  private wsSend(msg: PtyClientMessage): void {
+  private wsSend(msg: PtyClientMessage): boolean {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg))
+      return true
     }
+    return false
   }
 }
 

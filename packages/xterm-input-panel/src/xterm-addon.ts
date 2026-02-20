@@ -123,8 +123,6 @@ export class InputPanelAddon implements ITerminalAddon {
       return
     }
 
-    if (!isTouchDevice()) return
-
     const btn = document.createElement('button')
     btn.type = 'button'
     btn.title = 'Open InputPanel'
@@ -393,11 +391,6 @@ export class InputPanelAddon implements ITerminalAddon {
 
     this._listenersAttached = true
 
-    if (!isTouchDevice()) return
-
-    // Permanently suppress native keyboard on touch devices
-    textarea.setAttribute('inputmode', 'none')
-
     // Ensure native FAB exists in the correct mount target
     InputPanelAddon._ensureFab(this._getMountTarget())
 
@@ -410,10 +403,15 @@ export class InputPanelAddon implements ITerminalAddon {
     // textarea focus → open InputPanel (migration via singleton)
     const onFocus = () => {
       InputPanelAddon._lastFocused = this
-      if (!this._isOpen) this.open()
+      if (isTouchDevice() && !this._isOpen) this.open()
     }
     textarea.addEventListener('focus', onFocus)
     this._persistentCleanups.push(() => textarea.removeEventListener('focus', onFocus))
+
+    // Permanently suppress native keyboard on touch devices only
+    if (isTouchDevice()) {
+      textarea.setAttribute('inputmode', 'none')
+    }
   }
 
   open(): void {
@@ -654,8 +652,7 @@ export class InputPanelAddon implements ITerminalAddon {
     this._cursorEl?.remove()
     this._cursorEl = null
 
-    // On touch devices, keep inputmode='none' permanently
-    if (!this._listenersAttached) {
+    if (!isTouchDevice()) {
       this._restoreKeyboard()
     }
 
@@ -675,7 +672,9 @@ export class InputPanelAddon implements ITerminalAddon {
   private _focusTerminal(): void {
     const textarea = this._terminal?.textarea
     if (!textarea) return
-    textarea.setAttribute('inputmode', 'none')
+    if (isTouchDevice()) {
+      textarea.setAttribute('inputmode', 'none')
+    }
     textarea.focus()
   }
 
@@ -869,6 +868,7 @@ export class InputPanelAddon implements ITerminalAddon {
   // ── Keyboard suppression ──
 
   private _suppressKeyboard(): void {
+    if (!isTouchDevice()) return
     const textarea = this._terminal?.textarea
     if (textarea) textarea.setAttribute('inputmode', 'none')
   }

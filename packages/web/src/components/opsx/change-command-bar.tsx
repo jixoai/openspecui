@@ -1,28 +1,29 @@
+import type { OpsxComposeActionId } from '@/lib/opsx-compose'
 import type { ChangeStatus } from '@openspecui/core'
 import { Archive, CheckCircle, Play, RefreshCw, Rocket, ShieldCheck } from 'lucide-react'
 
 interface ChangeCommandBarProps {
-  changeId: string
   status: ChangeStatus
   selectedArtifactId?: string
-  onRunCommand: (command: string, args: string[]) => void
+  onComposeAction: (actionId: OpsxComposeActionId, artifactId?: string) => void
+  onRefresh: () => void
 }
 
 export function ChangeCommandBar({
-  changeId,
   status,
   selectedArtifactId,
-  onRunCommand,
+  onComposeAction,
+  onRefresh,
 }: ChangeCommandBarProps) {
   const readyArtifact = status.artifacts.find((a) => a.status === 'ready')
   const doneSet = new Set(status.artifacts.filter((a) => a.status === 'done').map((a) => a.id))
   const missingApply = status.applyRequires.filter((id) => !doneSet.has(id))
 
   const buttons: Array<{
-    id: string
+    id: OpsxComposeActionId
     label: string
     icon: typeof Play
-    args: string[]
+    artifactId?: string
     disabled: boolean
     hint?: string
   }> = [
@@ -30,19 +31,17 @@ export function ChangeCommandBar({
       id: 'continue',
       label: 'Continue',
       icon: Play,
-      args: selectedArtifactId
-        ? ['instructions', selectedArtifactId, '--change', changeId]
-        : [],
-      disabled: !selectedArtifactId || status.artifacts.find((a) => a.id === selectedArtifactId)?.status === 'blocked',
+      artifactId: selectedArtifactId,
+      disabled:
+        !selectedArtifactId ||
+        status.artifacts.find((a) => a.id === selectedArtifactId)?.status === 'blocked',
       hint: !selectedArtifactId ? 'select an artifact' : undefined,
     },
     {
       id: 'ff',
       label: 'Fast-forward',
       icon: Rocket,
-      args: readyArtifact
-        ? ['instructions', readyArtifact.id, '--change', changeId]
-        : [],
+      artifactId: readyArtifact?.id,
       disabled: !readyArtifact,
       hint: !readyArtifact ? 'no ready artifacts' : undefined,
     },
@@ -50,7 +49,6 @@ export function ChangeCommandBar({
       id: 'apply',
       label: 'Apply',
       icon: CheckCircle,
-      args: ['instructions', 'apply', '--change', changeId],
       disabled: missingApply.length > 0,
       hint: missingApply.length > 0 ? `missing: ${missingApply.join(', ')}` : undefined,
     },
@@ -58,14 +56,12 @@ export function ChangeCommandBar({
       id: 'verify',
       label: 'Verify',
       icon: ShieldCheck,
-      args: ['validate', '--type', 'change', '--strict', changeId],
       disabled: false,
     },
     {
       id: 'archive',
       label: 'Archive',
       icon: Archive,
-      args: ['archive', '--yes', changeId],
       disabled: !status.isComplete,
       hint: !status.isComplete ? 'complete artifacts first' : undefined,
     },
@@ -80,7 +76,7 @@ export function ChangeCommandBar({
             key={btn.id}
             type="button"
             disabled={btn.disabled}
-            onClick={() => onRunCommand('openspec', btn.args)}
+            onClick={() => onComposeAction(btn.id, btn.artifactId)}
             title={btn.hint}
             className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -91,7 +87,7 @@ export function ChangeCommandBar({
       })}
       <button
         type="button"
-        onClick={() => onRunCommand('openspec', ['status', '--change', changeId])}
+        onClick={onRefresh}
         className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition"
       >
         <RefreshCw className="h-3.5 w-3.5" />
