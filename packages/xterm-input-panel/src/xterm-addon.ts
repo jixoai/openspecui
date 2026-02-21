@@ -914,7 +914,7 @@ export class InputPanelAddon implements ITerminalAddon {
       button.style.border = '1px solid transparent'
       button.style.borderRadius = '4px'
       button.style.background = 'transparent'
-      button.style.color = 'var(--muted-foreground, #888)'
+      button.style.color = 'var(--foreground, #fff)'
       button.style.fontFamily = 'inherit'
       button.style.fontSize = '12px'
       button.style.textAlign = 'left'
