@@ -2,23 +2,21 @@
 
 ## Purpose
 Define the artifact editor behavior for creating and updating OPSX artifacts from CLI instructions.
-
 ## Requirements
-
 ### Requirement: Template-First Editing
-The editor SHALL initialize content from CLI-provided templates.
+The editor SHALL initialize content from CLI-provided templates and remain read-only until the user explicitly enters edit mode.
 
-#### Scenario: Load template for new artifact
-- **GIVEN** an artifact has no existing output file
-- **WHEN** the editor loads instructions
-- **THEN** the editor SHALL prefill content from the CLI template
-- **AND** display the output path
+#### Scenario: Default to read-only
+- **GIVEN** an artifact is loaded and its dependencies are satisfied
+- **WHEN** the editor renders
+- **THEN** the editor SHALL display content in read-only mode
+- **AND** present an explicit “Edit” action to enter edit mode
 
-#### Scenario: Load existing artifact content
-- **GIVEN** the output file already exists
-- **WHEN** the editor opens the artifact
-- **THEN** the editor SHALL load the existing file content
-- **AND** preserve the file contents unless the user edits it
+#### Scenario: Enter edit mode explicitly
+- **GIVEN** the editor is read-only
+- **WHEN** the user activates the “Edit” action
+- **THEN** the editor SHALL switch to editable mode
+- **AND** expose save/cancel controls
 
 ### Requirement: Dependency Awareness
 The editor SHALL surface CLI-reported dependencies and blocking state.

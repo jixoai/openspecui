@@ -2,7 +2,7 @@
 
 ## MODIFIED Requirements
 
-### Requirement: Schema and Configuration Visibility
+### Requirement: Schema and Project Configuration Visibility
 OpenSpecUI SHALL surface schema, template, and configuration data in the Config view.
 
 #### Scenario: Display available schemas
