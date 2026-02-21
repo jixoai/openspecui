@@ -1,6 +1,6 @@
 import type { AsyncSubscription, Event } from '@parcel/watcher'
 import { dirname, resolve } from 'node:path'
-import { realpathSync, existsSync, utimesSync } from 'node:fs'
+import { existsSync, lstatSync, realpathSync } from 'node:fs'
 
 /**
  * 获取路径的真实路径（解析符号链接）
@@ -50,8 +50,27 @@ const DEBOUNCE_MS = 50
 /** 默认忽略模式 */
 const DEFAULT_IGNORE = ['node_modules', '.git', '**/.DS_Store']
 
-/** 健康检查间隔 (ms) - 3秒 */
-const HEALTH_CHECK_INTERVAL_MS = 3000
+/** 恢复重试间隔 (ms) */
+const RECOVERY_INTERVAL_MS = 3000
+
+/** 路径语义检查间隔 (ms) */
+const PATH_LIVENESS_INTERVAL_MS = 3000
+
+/** watcher 重建原因 */
+export type ProjectWatcherReinitializeReason =
+  | 'drop-events'
+  | 'watcher-error'
+  | 'missing-project-dir'
+  | 'project-dir-replaced'
+  | 'manual'
+
+/** watcher 运行时状态（用于调试和运维观测） */
+export interface ProjectWatcherRuntimeStatus {
+  generation: number
+  reinitializeCount: number
+  lastReinitializeReason: ProjectWatcherReinitializeReason | null
+  reinitializeReasonCounts: Readonly<Record<ProjectWatcherReinitializeReason, number>>
+}
 
 /**
  * 项目监听器
@@ -76,30 +95,36 @@ export class ProjectWatcher {
   private initialized = false
   private initPromise: Promise<void> | null = null
 
-  // 健康检查相关
-  private healthCheckTimer: NodeJS.Timeout | null = null
-  private lastEventTime = 0
-  private healthCheckPending = false
-  private enableHealthCheck: boolean
-
   // 错误恢复相关
   private reinitializeTimer: NodeJS.Timeout | null = null
   private reinitializePending = false
+  private reinitializeReasonPending: ProjectWatcherReinitializeReason | null = null
+  private pathLivenessTimer: NodeJS.Timeout | null = null
+  private projectDirFingerprint: string | null = null
+
+  // 运行时状态
+  private generation = 0
+  private reinitializeCount = 0
+  private lastReinitializeReason: ProjectWatcherReinitializeReason | null = null
+  private reinitializeReasonCounts: Record<ProjectWatcherReinitializeReason, number> = {
+    'drop-events': 0,
+    'watcher-error': 0,
+    'missing-project-dir': 0,
+    'project-dir-replaced': 0,
+    manual: 0,
+  }
 
   constructor(
     projectDir: string,
     options: {
       debounceMs?: number
       ignore?: string[]
-      /** 是否启用健康检查（默认 true） */
-      enableHealthCheck?: boolean
     } = {}
   ) {
     // 使用真实路径，确保与事件路径匹配（macOS 上 /var -> /private/var）
     this.projectDir = getRealPath(projectDir)
     this.debounceMs = options.debounceMs ?? DEBOUNCE_MS
     this.ignore = options.ignore ?? DEFAULT_IGNORE
-    this.enableHealthCheck = options.enableHealthCheck ?? true
   }
 
   /**
@@ -110,8 +135,11 @@ export class ProjectWatcher {
     if (this.initialized) return
     if (this.initPromise) return this.initPromise
 
-    this.initPromise = this.doInit()
-    await this.initPromise
+    this.initPromise = this.doInit().catch((error) => {
+      this.initPromise = null
+      throw error
+    })
+    return this.initPromise
   }
 
   private async doInit(): Promise<void> {
@@ -131,67 +159,120 @@ export class ProjectWatcher {
     )
 
     this.initialized = true
-    this.lastEventTime = Date.now()
-
-    // 启动健康检查
-    if (this.enableHealthCheck) {
-      this.startHealthCheck()
-    }
+    this.generation += 1
+    this.projectDirFingerprint = this.getProjectDirFingerprint()
+    this.startPathLivenessMonitor()
   }
 
   /**
    * 处理 watcher 错误
-   * 对于 FSEvents dropped 错误，触发延迟重建
+   * 统一走错误驱动重建流程
    */
   private handleWatcherError(err: Error): void {
     const errorMsg = err.message || String(err)
 
     // 检测 FSEvents dropped 错误
     if (errorMsg.includes('Events were dropped')) {
-      // 只在首次检测到时打印警告
       if (!this.reinitializePending) {
         console.warn('[ProjectWatcher] FSEvents dropped events, scheduling reinitialize...')
-        this.scheduleReinitialize()
+        this.scheduleReinitialize('drop-events')
       }
-      // 后续重复错误静默处理，避免刷屏
       return
     }
 
-    // 其他错误正常打印
-    console.error('[ProjectWatcher] Error:', err)
+    console.error('[ProjectWatcher] Watcher error, scheduling reinitialize:', err)
+    this.scheduleReinitialize('watcher-error')
   }
 
   /**
    * 延迟重建 watcher（防抖，避免频繁重建）
    */
-  private scheduleReinitialize(): void {
+  private scheduleReinitialize(reason: ProjectWatcherReinitializeReason): void {
+    this.reinitializeReasonPending = reason
     if (this.reinitializePending) return
 
     this.reinitializePending = true
 
-    // 清理现有定时器
     if (this.reinitializeTimer) {
       clearTimeout(this.reinitializeTimer)
     }
 
-    // 延迟 1 秒后重建，给 FSEvents 一些恢复时间
     this.reinitializeTimer = setTimeout(() => {
       this.reinitializeTimer = null
       this.reinitializePending = false
-      console.log('[ProjectWatcher] Reinitializing due to FSEvents error...')
-      this.reinitialize()
-    }, 1000)
+      const pendingReason = this.reinitializeReasonPending ?? reason
+      this.reinitializeReasonPending = null
+      console.log(`[ProjectWatcher] Reinitializing (reason: ${pendingReason})...`)
+      void this.reinitialize(pendingReason)
+    }, RECOVERY_INTERVAL_MS)
+    this.reinitializeTimer.unref()
+  }
+
+  /**
+   * 读取项目目录指纹（目录不存在时返回 null）
+   * 用于检测 path 对应实体是否被替换（inode/dev 漂移）
+   */
+  private getProjectDirFingerprint(): string | null {
+    try {
+      const stat = lstatSync(this.projectDir)
+      return `${stat.dev}:${stat.ino}`
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * 启动路径语义监测（避免 watcher 绑定到已失效句柄）
+   */
+  private startPathLivenessMonitor(): void {
+    this.stopPathLivenessMonitor()
+    this.pathLivenessTimer = setInterval(() => {
+      this.checkPathLiveness()
+    }, PATH_LIVENESS_INTERVAL_MS)
+    this.pathLivenessTimer.unref()
+  }
+
+  /**
+   * 停止路径语义监测
+   */
+  private stopPathLivenessMonitor(): void {
+    if (this.pathLivenessTimer) {
+      clearInterval(this.pathLivenessTimer)
+      this.pathLivenessTimer = null
+    }
+  }
+
+  /**
+   * 只读检查 projectDir 是否仍指向初始化时的目录实体
+   */
+  private checkPathLiveness(): void {
+    if (!this.initialized || this.reinitializePending) {
+      return
+    }
+
+    const current = this.getProjectDirFingerprint()
+
+    if (current === null) {
+      console.warn('[ProjectWatcher] Project directory missing, scheduling reinitialize...')
+      this.scheduleReinitialize('missing-project-dir')
+      return
+    }
+
+    if (this.projectDirFingerprint === null) {
+      this.projectDirFingerprint = current
+      return
+    }
+
+    if (current !== this.projectDirFingerprint) {
+      console.warn('[ProjectWatcher] Project directory replaced, scheduling reinitialize...')
+      this.scheduleReinitialize('project-dir-replaced')
+    }
   }
 
   /**
    * 处理原始事件
    */
   private handleEvents(events: Event[]): void {
-    // 更新最后事件时间（用于健康检查）
-    this.lastEventTime = Date.now()
-    // 收到事件说明 watcher 正常工作
-    this.healthCheckPending = false
-
     // 转换事件格式
     const watchEvents: WatchEvent[] = events.map((e) => ({
       type: e.type,
@@ -321,133 +402,95 @@ export class ProjectWatcher {
   }
 
   /**
-   * 启动健康检查定时器
+   * 获取 watcher 运行时状态
    */
-  private startHealthCheck(): void {
-    this.stopHealthCheck()
-
-    this.healthCheckTimer = setInterval(() => {
-      this.performHealthCheck()
-    }, HEALTH_CHECK_INTERVAL_MS)
-
-    // 允许进程退出
-    this.healthCheckTimer.unref()
+  get runtimeStatus(): ProjectWatcherRuntimeStatus {
+    return {
+      generation: this.generation,
+      reinitializeCount: this.reinitializeCount,
+      lastReinitializeReason: this.lastReinitializeReason,
+      reinitializeReasonCounts: { ...this.reinitializeReasonCounts },
+    }
   }
 
   /**
-   * 停止健康检查定时器
+   * 记录重建统计
    */
-  private stopHealthCheck(): void {
-    if (this.healthCheckTimer) {
-      clearInterval(this.healthCheckTimer)
-      this.healthCheckTimer = null
-    }
-    this.healthCheckPending = false
-  }
-
-  /**
-   * 执行健康检查
-   *
-   * 工作流程：
-   * 1. 如果最近有事件，无需检查
-   * 2. 如果上次探测还在等待中，说明 watcher 可能失效，尝试重建
-   * 3. 否则，创建临时文件触发事件，等待下次检查验证
-   */
-  private async performHealthCheck(): Promise<void> {
-    const now = Date.now()
-    const timeSinceLastEvent = now - this.lastEventTime
-
-    // 如果最近有事件，无需检查
-    if (timeSinceLastEvent < HEALTH_CHECK_INTERVAL_MS) {
-      this.healthCheckPending = false
-      return
-    }
-
-    // 如果上次探测还在等待中，说明 watcher 失效了
-    if (this.healthCheckPending) {
-      console.warn('[ProjectWatcher] Health check failed, watcher appears stale. Reinitializing...')
-      await this.reinitialize()
-      return
-    }
-
-    // 发送探测：创建临时目录然后删除
-    this.healthCheckPending = true
-    this.sendProbe()
-  }
-
-  /**
-   * 发送探测：通过 utimesSync 修改项目目录的时间戳来触发 watcher 事件
-   */
-  private sendProbe(): void {
-    try {
-      const now = new Date()
-      utimesSync(this.projectDir, now, now)
-    } catch {
-      // utimesSync 失败说明目录不存在，下次检查会触发重建
-    }
+  private markReinitialized(reason: ProjectWatcherReinitializeReason): void {
+    this.reinitializeCount += 1
+    this.lastReinitializeReason = reason
+    this.reinitializeReasonCounts[reason] += 1
   }
 
   /**
    * 重新初始化 watcher
    */
-  private async reinitialize(): Promise<void> {
-    this.stopHealthCheck()
+  private async reinitialize(reason: ProjectWatcherReinitializeReason): Promise<void> {
+    this.stopPathLivenessMonitor()
 
-    // 关闭旧的 subscription
     if (this.subscription) {
       try {
         await this.subscription.unsubscribe()
       } catch {
-        // 忽略关闭错误
+        // ignore unsubscribe errors
       }
       this.subscription = null
     }
 
-    // 重置状态
     this.initialized = false
     this.initPromise = null
-    this.healthCheckPending = false
+    this.projectDirFingerprint = null
 
-    // 检查项目目录是否存在
     if (!existsSync(this.projectDir)) {
       console.warn('[ProjectWatcher] Project directory does not exist, waiting for it to be created...')
-      // 启动轮询等待目录创建
-      this.waitForProjectDir()
+      this.waitForProjectDir('missing-project-dir')
       return
     }
 
-    // 重新初始化
     try {
       await this.init()
+      this.markReinitialized(reason)
       console.log('[ProjectWatcher] Reinitialized successfully')
     } catch (err) {
       console.error('[ProjectWatcher] Failed to reinitialize:', err)
-      // 稍后重试
-      setTimeout(() => this.reinitialize(), HEALTH_CHECK_INTERVAL_MS)
+      this.scheduleReinitialize(reason)
     }
   }
 
   /**
    * 等待项目目录被创建
    */
-  private waitForProjectDir(): void {
-    const checkInterval = setInterval(() => {
-      if (existsSync(this.projectDir)) {
-        clearInterval(checkInterval)
-        console.log('[ProjectWatcher] Project directory created, reinitializing...')
-        this.reinitialize()
-      }
-    }, HEALTH_CHECK_INTERVAL_MS)
+  private waitForProjectDir(reason: ProjectWatcherReinitializeReason): void {
+    this.reinitializeReasonPending = reason
+    this.reinitializePending = true
 
-    // 允许进程退出
-    checkInterval.unref()
+    if (this.reinitializeTimer) {
+      clearTimeout(this.reinitializeTimer)
+      this.reinitializeTimer = null
+    }
+
+    this.reinitializeTimer = setTimeout(() => {
+      this.reinitializeTimer = null
+      this.reinitializePending = false
+
+      if (!existsSync(this.projectDir)) {
+        this.waitForProjectDir(reason)
+        return
+      }
+
+      const pendingReason = this.reinitializeReasonPending ?? reason
+      this.reinitializeReasonPending = null
+      console.log('[ProjectWatcher] Project directory created, reinitializing...')
+      void this.reinitialize(pendingReason)
+    }, RECOVERY_INTERVAL_MS)
+    this.reinitializeTimer.unref()
   }
 
   /**
    * 关闭 watcher
    */
   async close(): Promise<void> {
-    this.stopHealthCheck()
+    this.stopPathLivenessMonitor()
 
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer)
@@ -459,6 +502,7 @@ export class ProjectWatcher {
       this.reinitializeTimer = null
     }
     this.reinitializePending = false
+    this.reinitializeReasonPending = null
 
     if (this.subscription) {
       await this.subscription.unsubscribe()
@@ -469,6 +513,7 @@ export class ProjectWatcher {
     this.pendingEvents = []
     this.initialized = false
     this.initPromise = null
+    this.projectDirFingerprint = null
   }
 }
 

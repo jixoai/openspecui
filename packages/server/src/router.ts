@@ -12,6 +12,7 @@ import {
   getAvailableTools,
   getConfiguredTools,
   getDefaultCliCommandString,
+  getWatcherRuntimeStatus,
   sniffGlobalCli,
   type AIToolOption,
   type ApplyInstructions,
@@ -157,6 +158,23 @@ async function fetchOpsxTemplateContents(
   await ctx.kernel.waitForWarmup()
   await ctx.kernel.ensureTemplateContents(schema)
   return ctx.kernel.getTemplateContents(schema)
+}
+
+function buildSystemStatus(ctx: Context): {
+  projectDir: string
+  watcherEnabled: boolean
+  watcherGeneration: number
+  watcherReinitializeCount: number
+  watcherLastReinitializeReason: string | null
+} {
+  const runtime = getWatcherRuntimeStatus()
+  return {
+    projectDir: ctx.projectDir,
+    watcherEnabled: runtime?.initialized ?? false,
+    watcherGeneration: runtime?.generation ?? 0,
+    watcherReinitializeCount: runtime?.reinitializeCount ?? 0,
+    watcherLastReinitializeReason: runtime?.lastReinitializeReason ?? null,
+  }
 }
 
 /**
@@ -1082,6 +1100,30 @@ export const searchRouter = router({
 })
 
 /**
+ * System router - runtime status and heartbeat-friendly subscription
+ */
+export const systemRouter = router({
+  status: publicProcedure.query(({ ctx }) => {
+    return buildSystemStatus(ctx)
+  }),
+
+  subscribe: publicProcedure.subscription(({ ctx }) => {
+    return observable<ReturnType<typeof buildSystemStatus>>((emit) => {
+      emit.next(buildSystemStatus(ctx))
+
+      const timer = setInterval(() => {
+        emit.next(buildSystemStatus(ctx))
+      }, 3000)
+      timer.unref()
+
+      return () => {
+        clearInterval(timer)
+      }
+    })
+  }),
+})
+
+/**
  * Main app router
  */
 export const appRouter = router({
@@ -1095,6 +1137,7 @@ export const appRouter = router({
   opsx: opsxRouter,
   kv: kvRouter,
   search: searchRouter,
+  system: systemRouter,
 })
 
 export type AppRouter = typeof appRouter

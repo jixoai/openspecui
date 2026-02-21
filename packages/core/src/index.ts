@@ -53,6 +53,7 @@ export {
   getCacheSize,
   getProjectWatcher,
   getWatchedProjectDir,
+  getWatcherRuntimeStatus,
   // Watcher pool management (based on @parcel/watcher)
   initWatcherPool,
   isWatcherPoolInitialized,
@@ -62,7 +63,10 @@ export {
   reactiveReadFile,
   reactiveStat,
   type PathCallback,
+  type ProjectWatcherReinitializeReason,
+  type ProjectWatcherRuntimeStatus,
   type ReactiveStateOptions,
+  type WatcherRuntimeStatus,
   type WatchEvent,
   type WatchEventType,
 } from './reactive-fs/index.js'

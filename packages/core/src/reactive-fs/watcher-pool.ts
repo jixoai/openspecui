@@ -1,6 +1,10 @@
 import { realpathSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { getProjectWatcher, type ProjectWatcher } from './project-watcher.js'
+import {
+  getProjectWatcher,
+  type ProjectWatcher,
+  type ProjectWatcherRuntimeStatus,
+} from './project-watcher.js'
 
 /**
  * 获取路径的真实路径（解析符号链接）
@@ -36,6 +40,13 @@ const subscriptionCache = new Map<string, PathSubscription>()
 
 /** 防抖定时器 */
 const debounceTimers = new Map<string, NodeJS.Timeout>()
+
+/** watcher 运行时状态（供 server 订阅） */
+export interface WatcherRuntimeStatus extends ProjectWatcherRuntimeStatus {
+  projectDir: string | null
+  initialized: boolean
+  subscriptionCount: number
+}
 
 /**
  * 初始化 watcher pool
@@ -204,4 +215,24 @@ export function isWatcherPoolInitialized(): boolean {
  */
 export function getWatchedProjectDir(): string | null {
   return globalProjectDir
+}
+
+/**
+ * 获取 watcher 运行时状态
+ */
+export function getWatcherRuntimeStatus(): WatcherRuntimeStatus | null {
+  if (!globalProjectWatcher) {
+    return null
+  }
+
+  const runtime = globalProjectWatcher.runtimeStatus
+  return {
+    projectDir: globalProjectDir,
+    initialized: globalProjectWatcher.isInitialized,
+    subscriptionCount: globalProjectWatcher.subscriptionCount,
+    generation: runtime.generation,
+    reinitializeCount: runtime.reinitializeCount,
+    lastReinitializeReason: runtime.lastReinitializeReason,
+    reinitializeReasonCounts: runtime.reinitializeReasonCounts,
+  }
 }

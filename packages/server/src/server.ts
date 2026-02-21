@@ -146,6 +146,11 @@ export async function createWebSocketServer(
     wss,
     router: appRouter,
     createContext: server.createContext,
+    keepAlive: {
+      enabled: true,
+      pingMs: 30000,
+      pongWaitMs: 5000,
+    },
   })
 
   // PTY WebSocket server

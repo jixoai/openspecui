@@ -55,8 +55,10 @@ export {
   closeAllWatchers,
   getActiveWatcherCount,
   getWatchedProjectDir,
+  getWatcherRuntimeStatus,
   initWatcherPool,
   isWatcherPoolInitialized,
+  type WatcherRuntimeStatus,
 } from './watcher-pool.js'
 
 // 底层项目监听器（高级用法）
@@ -65,6 +67,8 @@ export {
   closeAllProjectWatchers,
   getProjectWatcher,
   type PathCallback,
+  type ProjectWatcherReinitializeReason,
+  type ProjectWatcherRuntimeStatus,
   type WatchEvent,
   type WatchEventType,
 } from './project-watcher.js'

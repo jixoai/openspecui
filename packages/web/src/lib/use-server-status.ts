@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getHealthUrl } from './api-config'
 import { isStaticMode } from './static-mode'
-import { getWsClientInstance, WS_RETRY_DELAY_MS } from './trpc'
+import { trpcClient, getOrCreateWsClientInstance, WS_RETRY_DELAY_MS } from './trpc'
 
 export interface ServerStatus {
   connected: boolean
@@ -86,7 +85,7 @@ export function useServerStatus(): ServerStatus {
       return
     }
 
-    const wsClient = getWsClientInstance()
+    const wsClient = getOrCreateWsClientInstance()
     if (!wsClient) {
       return
     }
@@ -114,9 +113,8 @@ export function useServerStatus(): ServerStatus {
     }
   }, [startReconnectCountdown, stopReconnectCountdown])
 
-  // HTTP 健康检查逻辑
+  // 系统状态订阅（WS-first）
   useEffect(() => {
-    // Skip health checks in static mode
     if (isStaticMode()) {
       setStatus((prev) => ({
         ...prev,
@@ -130,63 +128,34 @@ export function useServerStatus(): ServerStatus {
       return
     }
 
-    let mounted = true
-    let retryTimeout: ReturnType<typeof setTimeout>
+    const subscription = trpcClient.system.subscribe.subscribe(undefined, {
+      onData: (data) => {
+        const projectDir = data.projectDir
+        const dirName = projectDir.split('/').pop() || projectDir
 
-    async function checkHealth() {
-      try {
-        const response = await fetch(getHealthUrl())
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
-        }
-        const data = await response.json()
+        setStatus((prev) => ({
+          ...prev,
+          connected: true,
+          projectDir,
+          dirName,
+          watcherEnabled: data.watcherEnabled,
+          error: null,
+        }))
 
-        if (mounted) {
-          const projectDir = data.projectDir as string
-          const dirName = projectDir.split('/').pop() || projectDir
-
-          setStatus((prev) => ({
-            ...prev,
-            connected: true,
-            projectDir,
-            dirName,
-            watcherEnabled: data.watcherEnabled,
-            error: null,
-          }))
-
-          // Update document title
-          document.title = `${dirName} - OpenSpec UI`
-        }
-      } catch (err) {
-        if (mounted) {
-          setStatus((prev) => ({
-            ...prev,
-            connected: false,
-            error: err instanceof Error ? err.message : 'Connection failed',
-          }))
-
-          // Reset title on disconnect
-          document.title = 'OpenSpec UI (Disconnected)'
-
-          // Retry after 3 seconds
-          retryTimeout = setTimeout(checkHealth, 3000)
-        }
-      }
-    }
-
-    checkHealth()
-
-    // Periodic health check every 30 seconds when connected
-    const interval = setInterval(() => {
-      if (mounted) {
-        checkHealth()
-      }
-    }, 30000)
+        document.title = `${dirName} - OpenSpec UI`
+      },
+      onError: (error) => {
+        setStatus((prev) => ({
+          ...prev,
+          connected: false,
+          error: error.message,
+        }))
+        document.title = 'OpenSpec UI (Disconnected)'
+      },
+    })
 
     return () => {
-      mounted = false
-      clearInterval(interval)
-      clearTimeout(retryTimeout)
+      subscription.unsubscribe()
     }
   }, [])
 

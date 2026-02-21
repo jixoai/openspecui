@@ -38,6 +38,11 @@ function getWsClient() {
       wsClient = createWSClient({
         url: getWsUrl(),
         retryDelayMs: () => WS_RETRY_DELAY_MS,
+        keepAlive: {
+          enabled: true,
+          intervalMs: 20000,
+          pongTimeoutMs: 5000,
+        },
         // Suppress connection errors in console
         onOpen: () => {
           // Connection opened successfully
@@ -63,6 +68,11 @@ function getWsClient() {
 // Export for cleanup if needed
 export function getWsClientInstance() {
   return wsClient
+}
+
+// Ensure WS client exists and return it
+export function getOrCreateWsClientInstance() {
+  return getWsClient()
 }
 
 // Create tRPC client only in browser environment
