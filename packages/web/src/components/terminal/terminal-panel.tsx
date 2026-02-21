@@ -5,6 +5,7 @@ import { terminalController } from '@/lib/terminal-controller'
 import { useNavLayout } from '@/lib/use-nav-controller'
 import { PanelBottomClose, PanelTopClose, Plus, X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import '@/styles/terminal-effects.css'
 import { XtermTerminal } from './xterm-terminal'
 
 function EditableTabLabel({
@@ -122,6 +123,7 @@ export function TerminalPanel({ className }: { className?: string }) {
       sessions.map((session) => ({
         id: session.id,
         label: <EditableTabLabel session={session} onRename={handleRename} />,
+        unmountOnHide: true,
         closable: true,
         closeButtonVisibility: 'always',
         content: (

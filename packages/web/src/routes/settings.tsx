@@ -3,7 +3,13 @@ import { CopyablePath } from '@/components/copyable-path'
 import { Dialog } from '@/components/dialog'
 import { getApiBaseUrl } from '@/lib/api-config'
 import { isStaticMode } from '@/lib/static-mode'
-import { GOOGLE_FONT_PRESETS, terminalController } from '@/lib/terminal-controller'
+import {
+  GOOGLE_FONT_PRESETS,
+  isTerminalRendererEngine,
+  TERMINAL_RENDERER_ENGINES,
+  terminalController,
+  type TerminalRendererEngine,
+} from '@/lib/terminal-controller'
 import { queryClient, trpc, trpcClient } from '@/lib/trpc'
 import { useCliRunner } from '@/lib/use-cli-runner'
 import { useServerStatus } from '@/lib/use-server-status'
@@ -397,6 +403,11 @@ export function Settings() {
     initialConfig.cursorStyle
   )
   const [termScrollback, setTermScrollback] = useState(initialConfig.scrollback)
+  const [termRendererEngine, setTermRendererEngine] = useState<string>(
+    initialConfig.rendererEngine
+  )
+  const [termRendererError, setTermRendererError] = useState<string | null>(null)
+  const isRendererEngineValid = isTerminalRendererEngine(termRendererEngine)
 
   // Re-sync local state when controller config changes
   useEffect(
@@ -407,11 +418,19 @@ export function Settings() {
       setTermCursorBlink(current.cursorBlink)
       setTermCursorStyle(current.cursorStyle)
       setTermScrollback(current.scrollback)
+      setTermRendererEngine(current.rendererEngine)
     },
     [
       /* re-run when entering settings page — captured by loading state transition */
     ]
   )
+
+  useEffect(() => {
+    const nextRenderer = config?.terminal?.rendererEngine
+    if (typeof nextRenderer === 'string' && nextRenderer.length > 0) {
+      setTermRendererEngine(nextRenderer)
+    }
+  }, [config?.terminal?.rendererEngine])
 
   // Apply immediately on local state change (live preview)
   const applyTerminalConfig = useCallback(
@@ -433,6 +452,20 @@ export function Settings() {
     [termFontSize, termFontFamily, termCursorBlink, termCursorStyle, termScrollback]
   )
 
+  const handleRendererEngineChange = useCallback(
+    async (nextEngine: TerminalRendererEngine) => {
+      setTermRendererError(null)
+      try {
+        await terminalController.setRendererEngine(nextEngine)
+        setTermRendererEngine(nextEngine)
+      } catch (error) {
+        setTermRendererEngine(terminalController.getConfig().rendererEngine)
+        setTermRendererError(error instanceof Error ? error.message : String(error))
+      }
+    },
+    []
+  )
+
   const saveTerminalConfigMutation = useMutation({
     mutationFn: (terminal: {
       fontSize?: number
@@ -440,6 +473,7 @@ export function Settings() {
       cursorBlink?: boolean
       cursorStyle?: 'block' | 'underline' | 'bar'
       scrollback?: number
+      rendererEngine?: TerminalRendererEngine
     }) => trpcClient.config.update.mutate({ terminal }),
   })
 
@@ -544,6 +578,47 @@ export function Settings() {
               Terminal
             </h2>
             <div className="border-border space-y-4 rounded-lg border p-4">
+              <div>
+                <label className="mb-2 block text-sm font-medium">Renderer Engine</label>
+                <select
+                  value={termRendererEngine}
+                  onChange={(e) => {
+                    const next = e.target.value
+                    setTermRendererEngine(next)
+                    if (isTerminalRendererEngine(next)) {
+                      void handleRendererEngineChange(next)
+                    } else {
+                      setTermRendererError(`Invalid renderer engine: ${next}`)
+                    }
+                  }}
+                  className="bg-background border-border text-foreground focus:ring-primary w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
+                >
+                  {TERMINAL_RENDERER_ENGINES.map((engine) => (
+                    <option key={engine} value={engine}>
+                      {engine === 'ghostty' ? 'ghostty-web' : engine}
+                    </option>
+                  ))}
+                  {!isRendererEngineValid && (
+                    <option value={termRendererEngine}>
+                      {`Invalid value: ${termRendererEngine}`}
+                    </option>
+                  )}
+                </select>
+                {termRendererError ? (
+                  <p className="mt-2 text-xs text-red-500">{termRendererError}</p>
+                ) : (
+                  <p className="text-muted-foreground mt-2 text-xs">
+                    Switches immediately and remounts current terminal sessions.
+                  </p>
+                )}
+                {!isRendererEngineValid && (
+                  <p className="mt-2 text-xs text-amber-500">
+                    Current config contains an unsupported renderer value. Select a valid one to
+                    fix it.
+                  </p>
+                )}
+              </div>
+
               {/* Font Size */}
               <div>
                 <label className="mb-2 block text-sm font-medium">
@@ -659,9 +734,10 @@ export function Settings() {
                       cursorBlink: termCursorBlink,
                       cursorStyle: termCursorStyle,
                       scrollback: termScrollback,
+                      rendererEngine: isRendererEngineValid ? termRendererEngine : undefined,
                     })
                   }}
-                  disabled={saveTerminalConfigMutation.isPending}
+                  disabled={saveTerminalConfigMutation.isPending || !isRendererEngineValid}
                   className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition disabled:opacity-50"
                 >
                   {saveTerminalConfigMutation.isPending ? (

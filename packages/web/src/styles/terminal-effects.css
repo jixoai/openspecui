@@ -1,0 +1,35 @@
+@keyframes terminal-breathing {
+  0%,
+  100% {
+    background-color: #9e9e9e;
+  }
+  50% {
+    background-color: oklch(73% 0.13 210.82);
+  }
+}
+
+.animate-terminal-breathing {
+  animation: terminal-breathing 1.5s ease-in-out infinite;
+}
+
+.xterm .xterm-scrollable-element,
+.xterm .xterm-scrollable-element.xterm-mac {
+  background-color: var(--terminal) !important;
+}
+
+.terminal-shimmer {
+  background-image: linear-gradient(90deg, #a1a1aa, #fafafa, #a1a1aa);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: terminal-shimmer 1.8s linear infinite;
+}
+
+@keyframes terminal-shimmer {
+  0% {
+    background-position: -120% 0;
+  }
+  100% {
+    background-position: 120% 0;
+  }
+}

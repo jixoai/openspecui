@@ -84,11 +84,13 @@ export {
   ConfigManager,
   DEFAULT_CONFIG,
   OpenSpecUIConfigSchema,
+  TerminalRendererEngineSchema,
   TerminalConfigSchema,
   buildCliRunnerCandidates,
   createCleanCliEnv,
   getDefaultCliCommand,
   getDefaultCliCommandString,
+  isTerminalRendererEngine,
   parseCliCommand,
   sniffGlobalCli,
   type CliRunnerAttempt,
@@ -97,6 +99,7 @@ export {
   type OpenSpecUIConfigUpdate,
   type ResolvedCliRunner,
   type TerminalConfig,
+  type TerminalRendererEngine,
 } from './config.js'
 
 // CLI executor for calling external openspec commands

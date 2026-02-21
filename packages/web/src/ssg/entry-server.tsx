@@ -9,10 +9,10 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
-import { RootLayout } from '../components/layout'
+import { RootLayoutStatic } from '../components/layout/root-layout-static'
 import { ArchiveModalProvider } from '../lib/archive-modal-context'
 import { setSSRBasePath, setStaticMode } from '../lib/static-mode'
-import { createRouteTree } from '../lib/route-tree'
+import { createStaticRouteTree } from '../lib/route-tree-static'
 import { StaticDataProvider } from './static-data-context'
 import type { ExportSnapshot } from '@openspecui/core'
 
@@ -23,10 +23,10 @@ export async function render(url: string, snapshot: ExportSnapshot, basePath = '
   setSSRBasePath(basePath)
   setStaticMode(true)
 
-  const rootRoute = createRootRoute({ component: RootLayout })
+  const rootRoute = createRootRoute({ component: RootLayoutStatic })
 
   const router = createRouter({
-    routeTree: createRouteTree(rootRoute, { includeTerminal: false }),
+    routeTree: createStaticRouteTree(rootRoute),
     history: createMemoryHistory({ initialEntries: [url] }),
     basepath: basePath,
   })

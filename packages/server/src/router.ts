@@ -14,6 +14,8 @@ import {
   getDefaultCliCommandString,
   getWatcherRuntimeStatus,
   sniffGlobalCli,
+  TerminalConfigSchema,
+  TerminalRendererEngineSchema,
   type AIToolOption,
   type ApplyInstructions,
   type ArtifactInstructions,
@@ -465,13 +467,10 @@ export const configRouter = router({
           })
           .optional(),
         theme: z.enum(['light', 'dark', 'system']).optional(),
-        terminal: z
-          .object({
-            fontSize: z.number().min(8).max(32).optional(),
-            fontFamily: z.string().optional(),
-            cursorBlink: z.boolean().optional(),
-            cursorStyle: z.enum(['block', 'underline', 'bar']).optional(),
-            scrollback: z.number().min(0).max(100000).optional(),
+        terminal: TerminalConfigSchema.omit({ rendererEngine: true })
+          .partial()
+          .extend({
+            rendererEngine: TerminalRendererEngineSchema.optional(),
           })
           .optional(),
       })

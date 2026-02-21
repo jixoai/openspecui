@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react'
 import { isStaticMode } from './static-mode'
-import { terminalController } from './terminal-controller'
+import { isTerminalRendererEngine, terminalController } from './terminal-controller'
 import { useConfigSubscription } from './use-subscription'
 
 export interface TerminalSession {
@@ -143,7 +143,15 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const { data: config } = useConfigSubscription()
   useEffect(() => {
     if (!config?.terminal) return
-    terminalController.applyConfig(config.terminal)
+    const { rendererEngine, ...terminalConfig } = config.terminal
+    if (rendererEngine && isTerminalRendererEngine(rendererEngine)) {
+      void terminalController.setRendererEngine(rendererEngine).catch((error) => {
+        console.error('[terminal] failed to apply renderer engine from config:', error)
+      })
+    } else if (rendererEngine) {
+      console.error('[terminal] invalid renderer engine in config:', rendererEngine)
+    }
+    terminalController.applyConfig(terminalConfig)
   }, [config?.terminal])
 
   const value = useMemo<TerminalContextValue>(

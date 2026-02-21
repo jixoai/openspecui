@@ -19,6 +19,11 @@ export function XtermTerminal({ sessionId }: Props) {
   }, [sessionId])
 
   return (
-    <div ref={containerRef} className="relative h-full w-full" style={{ minHeight: 0 }} />
+    <div
+      ref={containerRef}
+      className="relative h-full w-full"
+      style={{ minHeight: 0 }}
+      onPointerDown={() => terminalController.focusSession(sessionId)}
+    />
   )
 }

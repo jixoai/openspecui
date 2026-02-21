@@ -18,12 +18,53 @@ import { TerminalInputHistoryStore } from './terminal-input-history'
 
 // --- Types ---
 
+export const TERMINAL_RENDERER_ENGINES = ['xterm', 'ghostty'] as const
+export type TerminalRendererEngine = (typeof TERMINAL_RENDERER_ENGINES)[number]
+
+export function isTerminalRendererEngine(value: string): value is TerminalRendererEngine {
+  return (TERMINAL_RENDERER_ENGINES as readonly string[]).includes(value)
+}
+
 export interface TerminalConfig {
   fontSize: number
   fontFamily: string
   cursorBlink: boolean
   cursorStyle: 'block' | 'underline' | 'bar'
   scrollback: number
+  rendererEngine: TerminalRendererEngine
+}
+
+type TerminalLike = {
+  cols: number
+  rows: number
+  element: HTMLElement | null
+  options: {
+    fontSize?: number
+    fontFamily?: string
+    cursorBlink?: boolean
+    cursorStyle?: 'block' | 'underline' | 'bar'
+    scrollback?: number
+    allowTransparency?: boolean
+    theme?: {
+      background?: string
+    }
+  }
+  onData: (listener: (data: string) => void) => void
+  loadAddon: (addon: unknown) => void
+  open: (container: HTMLElement) => void
+  focus?: () => void
+  attachCustomKeyEventHandler: (handler: (event: KeyboardEvent) => boolean) => void
+  write: (data: string) => void
+  dispose: () => void
+}
+
+type FitAddonLike = {
+  fit: () => void
+}
+
+type GhosttyModule = typeof import('ghostty-web')
+type GhosttyTerminalLike = TerminalLike & {
+  registerLinkProvider?: (provider: unknown) => void
 }
 
 const DEFAULT_FONT_FAMILY = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace'
@@ -34,12 +75,14 @@ const DEFAULT_TERMINAL_CONFIG: TerminalConfig = {
   cursorBlink: true,
   cursorStyle: 'block',
   scrollback: 1000,
+  rendererEngine: 'xterm',
 }
 
 const OUTPUT_IDLE_THRESHOLD = 1500
 const RECONNECT_DELAY = 1000
 const MAX_RECONNECT_DELAY = 10000
 const DEFAULT_PTY_PLATFORM: PtyPlatform = 'common'
+const MAX_PREOPEN_OUTPUT_BYTES = 512 * 1024
 
 const FONT_SIZE_MIN = 8
 const FONT_SIZE_MAX = 32
@@ -144,8 +187,8 @@ function loadGoogleFont(fontName: string): void {
 interface TerminalInstance {
   id: string
   serverSessionId: string | null
-  terminal: Terminal
-  fitAddon: FitAddon
+  terminal: TerminalLike
+  fitAddon: FitAddonLike
   inputPanelAddon: InputPanelAddon
   isConnected: boolean
   label: string
@@ -162,11 +205,17 @@ interface TerminalInstance {
   resizeObserver: ResizeObserver | null
   /** Whether terminal.open() has been called (can only be called once) */
   hasOpened: boolean
+  /** Hook that must run after first terminal.open() */
+  afterOpenHook: (() => void) | null
+  /** Output chunks received before terminal.open() */
+  pendingOutput: string[]
+  pendingOutputBytes: number
   lastOutputTime: number
   outputIdleTimer: ReturnType<typeof setTimeout> | null
   /** Whether this session was restored from a server-side list (not locally created) */
   restored: boolean
   platform: PtyPlatform
+  rendererEngine: TerminalRendererEngine
 }
 
 export interface TerminalSessionSnapshot {
@@ -206,6 +255,8 @@ class TerminalController {
   private config: TerminalConfig = { ...DEFAULT_TERMINAL_CONFIG }
   private snapshotCache: TerminalSnapshot | null = null
   private inputHistoryStore = new TerminalInputHistoryStore()
+  private ghosttyModule: GhosttyModule | null = null
+  private ghosttyInitPromise: Promise<GhosttyModule> | null = null
 
   // Shared WebSocket
   private ws: WebSocket | null = null
@@ -256,16 +307,7 @@ class TerminalController {
     // Apply resolved fonts to the new session (async, fire-and-forget)
     this._applyFonts()
 
-    // Wire up input: terminal → WebSocket
-    instance.terminal.onData((data) => {
-      if (instance.isExited) {
-        this.closeSession(instance.id)
-        return
-      }
-      const sessionId = this.resolveServerSessionId(instance.id)
-      if (!sessionId) return
-      this.wsSend({ type: 'input', sessionId, data })
-    })
+    this.bindTerminalInput(instance)
 
     // Send create via shared WS (or queue if not connected yet)
     if (this.wsConnected && this.ws) {
@@ -310,55 +352,10 @@ class TerminalController {
       platform: PtyPlatform
     }
   ): TerminalInstance {
-    const terminal = new Terminal({
-      cursorBlink: this.config.cursorBlink,
-      cursorStyle: this.config.cursorStyle,
-      fontSize: this.config.fontSize,
-      fontFamily: DEFAULT_FONT_FAMILY,
-      theme: { background: 'transparent' },
-      allowTransparency: true,
-      convertEol: true,
-      macOptionIsMeta: true,
-      macOptionClickForcesSelection: true,
-      scrollback: this.config.scrollback,
-    })
-
-    const fitAddon = new FitAddon()
-    terminal.loadAddon(fitAddon)
-    terminal.loadAddon(new WebLinksAddon())
-
-    const inputPanelAddon = new InputPanelAddon({
-      onInput: (data) => this.writeToSession(id, data),
-      getHistory: async () => this.inputHistoryStore.list(),
-      addHistory: async (text) => this.inputHistoryStore.add(text),
-      subscribeHistory: (listener) => this.inputHistoryStore.subscribe(listener),
-      platform: opts.platform,
-      defaultLayout: this.inputPanelDefaultLayout,
-      onSettingsChange: async (settings: InputPanelSettingsPayload) => {
-        await this.inputHistoryStore.setLimit(settings.historyLimit)
-      },
-    })
+    const { terminal, fitAddon, afterOpenHook, engine } = this.createRendererTerminal()
+    const inputPanelAddon = this.createInputPanelAddon(id, opts.platform)
     terminal.loadAddon(inputPanelAddon)
-
-    // Intercept zoom keyboard shortcuts
-    terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
-      const mod = event.metaKey || event.ctrlKey
-      if (event.type !== 'keydown' || !mod) return true
-
-      if ((event.key === '=' || event.key === '+') && mod) {
-        this.zoomFont(1)
-        return false
-      }
-      if (event.key === '-' && mod) {
-        this.zoomFont(-1)
-        return false
-      }
-      if (event.key === '0' && mod) {
-        this.resetFontSize()
-        return false
-      }
-      return true
-    })
+    this.attachTerminalShortcuts(terminal, engine)
 
     return {
       id,
@@ -380,11 +377,285 @@ class TerminalController {
       mountedContainer: null,
       resizeObserver: null,
       hasOpened: false,
+      afterOpenHook,
+      pendingOutput: [],
+      pendingOutputBytes: 0,
       lastOutputTime: 0,
       outputIdleTimer: null,
       restored: opts.restored,
       platform: opts.platform,
+      rendererEngine: engine,
     }
+  }
+
+  private getTerminalOptions(): ConstructorParameters<typeof Terminal>[0] {
+    return {
+      cursorBlink: this.config.cursorBlink,
+      cursorStyle: this.config.cursorStyle,
+      fontSize: this.config.fontSize,
+      fontFamily: DEFAULT_FONT_FAMILY,
+      theme: { background: 'transparent' },
+      allowTransparency: true,
+      convertEol: true,
+      macOptionIsMeta: true,
+      macOptionClickForcesSelection: true,
+      scrollback: this.config.scrollback,
+    }
+  }
+
+  private createRendererTerminal(): {
+    terminal: TerminalLike
+    fitAddon: FitAddonLike
+    afterOpenHook: (() => void) | null
+    engine: TerminalRendererEngine
+  } {
+    const options = this.getTerminalOptions()
+    if (this.config.rendererEngine === 'xterm') {
+      const terminal = new Terminal(options)
+      const fitAddon = new FitAddon()
+      terminal.loadAddon(fitAddon)
+      terminal.loadAddon(new WebLinksAddon())
+      return {
+        terminal: terminal as TerminalLike,
+        fitAddon: fitAddon as FitAddonLike,
+        afterOpenHook: null,
+        engine: 'xterm',
+      }
+    }
+
+    const ghosttyModule = this.ghosttyModule
+    if (!ghosttyModule) {
+      throw new Error('ghostty-web is not initialized. Open Settings and switch engine again.')
+    }
+
+    const terminal = new ghosttyModule.Terminal(options)
+    const fitAddon = new ghosttyModule.FitAddon()
+    terminal.loadAddon(fitAddon)
+    const afterOpenHook = () => {
+      const ghosttyTerminal = terminal as GhosttyTerminalLike
+      if (!ghosttyTerminal.registerLinkProvider) return
+      ghosttyTerminal.registerLinkProvider(new ghosttyModule.UrlRegexProvider(terminal))
+    }
+    return {
+      terminal: terminal as unknown as TerminalLike,
+      fitAddon: fitAddon as FitAddonLike,
+      afterOpenHook,
+      engine: 'ghostty',
+    }
+  }
+
+  private createInputPanelAddon(sessionId: string, platform: PtyPlatform): InputPanelAddon {
+    return new InputPanelAddon({
+      onInput: (data) => this.writeToSession(sessionId, data),
+      getHistory: async () => this.inputHistoryStore.list(),
+      addHistory: async (text) => this.inputHistoryStore.add(text),
+      subscribeHistory: (listener) => this.inputHistoryStore.subscribe(listener),
+      platform,
+      defaultLayout: this.inputPanelDefaultLayout,
+      onSettingsChange: async (settings: InputPanelSettingsPayload) => {
+        await this.inputHistoryStore.setLimit(settings.historyLimit)
+      },
+    })
+  }
+
+  private applyGhosttyBackground(instance: TerminalInstance, container: HTMLElement): void {
+    if (instance.rendererEngine !== 'ghostty') return
+
+    const background = this.resolveNearestOpaqueBackground(container)
+    const currentTheme = instance.terminal.options.theme ?? {}
+    instance.terminal.options.allowTransparency = false
+    instance.terminal.options.theme = {
+      ...currentTheme,
+      background,
+    }
+  }
+
+  private isTransparentColor(value: string): boolean {
+    const normalized = value.trim().toLowerCase()
+    return (
+      normalized.length === 0 ||
+      normalized === 'transparent' ||
+      normalized === 'rgba(0, 0, 0, 0)' ||
+      normalized === 'rgba(0,0,0,0)'
+    )
+  }
+
+  private resolveNearestOpaqueBackground(start: HTMLElement): string {
+    let current: HTMLElement | null = start
+    while (current) {
+      const color = window.getComputedStyle(current).backgroundColor
+      if (!this.isTransparentColor(color)) {
+        return color
+      }
+      current = current.parentElement
+    }
+    return 'rgb(26, 26, 26)'
+  }
+
+  private attachTerminalShortcuts(
+    terminal: TerminalLike,
+    engine: TerminalRendererEngine
+  ): void {
+    terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+      const mod = event.metaKey || event.ctrlKey
+      if (event.type !== 'keydown' || !mod) {
+        // xterm: true => allow, false => block
+        // ghostty-web: true => block, false => allow
+        return engine === 'xterm'
+      }
+
+      let handled = false
+
+      if ((event.key === '=' || event.key === '+') && mod) {
+        this.zoomFont(1)
+        handled = true
+      }
+      if (event.key === '-' && mod && !handled) {
+        this.zoomFont(-1)
+        handled = true
+      }
+      if (event.key === '0' && mod && !handled) {
+        this.resetFontSize()
+        handled = true
+      }
+      if (engine === 'xterm') {
+        return !handled
+      }
+      return handled
+    })
+  }
+
+  private bindTerminalInput(instance: TerminalInstance): void {
+    instance.terminal.onData((data) => {
+      if (instance.isExited) {
+        this.closeSession(instance.id)
+        return
+      }
+      const sessionId = this.resolveServerSessionId(instance.id)
+      if (!sessionId) return
+      this.wsSend({ type: 'input', sessionId, data })
+    })
+  }
+
+  private isTerminalNotOpenedError(error: unknown): boolean {
+    if (!(error instanceof Error)) return false
+    const message = error.message
+    return (
+      message.includes('Terminal must be opened before use') ||
+      message.includes('Call terminal.open(parent) first')
+    )
+  }
+
+  private enqueuePendingOutput(instance: TerminalInstance, data: string): void {
+    if (!data) return
+    instance.pendingOutput.push(data)
+    instance.pendingOutputBytes += data.length
+
+    while (instance.pendingOutputBytes > MAX_PREOPEN_OUTPUT_BYTES && instance.pendingOutput.length) {
+      const removed = instance.pendingOutput.shift()
+      if (!removed) break
+      instance.pendingOutputBytes -= removed.length
+    }
+  }
+
+  private writeTerminalOutput(instance: TerminalInstance, data: string): void {
+    if (!data) return
+
+    if (!instance.hasOpened) {
+      this.enqueuePendingOutput(instance, data)
+      return
+    }
+
+    try {
+      instance.terminal.write(data)
+    } catch (error) {
+      if (this.isTerminalNotOpenedError(error)) {
+        this.enqueuePendingOutput(instance, data)
+        return
+      }
+      console.error('[terminal] failed to write output:', error)
+    }
+  }
+
+  private flushPendingOutput(instance: TerminalInstance): void {
+    if (!instance.hasOpened || instance.pendingOutput.length === 0) return
+
+    const data = instance.pendingOutput.join('')
+    instance.pendingOutput = []
+    instance.pendingOutputBytes = 0
+    this.writeTerminalOutput(instance, data)
+  }
+
+  private replaceInstanceRenderer(instance: TerminalInstance): void {
+    const mountedContainer = instance.mountedContainer
+    const serverSessionId = instance.serverSessionId
+
+    if (instance.mountedContainer) {
+      this.unmount(instance.id)
+    }
+
+    instance.terminal.dispose()
+
+    const { terminal, fitAddon, afterOpenHook, engine } = this.createRendererTerminal()
+    const inputPanelAddon = this.createInputPanelAddon(instance.id, instance.platform)
+    terminal.loadAddon(inputPanelAddon)
+    this.attachTerminalShortcuts(terminal, engine)
+
+    instance.terminal = terminal
+    instance.fitAddon = fitAddon
+    instance.inputPanelAddon = inputPanelAddon
+    instance.hasOpened = false
+    instance.afterOpenHook = afterOpenHook
+    instance.mountedContainer = null
+    instance.resizeObserver = null
+    instance.rendererEngine = engine
+    this.bindTerminalInput(instance)
+
+    if (mountedContainer) {
+      this.mount(instance.id, mountedContainer)
+    }
+
+    if (serverSessionId) {
+      this.wsSend({
+        type: 'attach',
+        sessionId: serverSessionId,
+        cols: instance.terminal.cols || 80,
+        rows: instance.terminal.rows || 24,
+      })
+    }
+  }
+
+  private async ensureGhosttyModule(): Promise<GhosttyModule> {
+    if (this.ghosttyModule) {
+      return this.ghosttyModule
+    }
+    if (!this.ghosttyInitPromise) {
+      this.ghosttyInitPromise = import('ghostty-web')
+        .then(async (mod) => {
+          await mod.init()
+          this.ghosttyModule = mod
+          return mod
+        })
+        .finally(() => {
+          this.ghosttyInitPromise = null
+        })
+    }
+    return this.ghosttyInitPromise
+  }
+
+  async setRendererEngine(engine: TerminalRendererEngine): Promise<void> {
+    if (engine === this.config.rendererEngine) return
+
+    if (engine === 'ghostty') {
+      await this.ensureGhosttyModule()
+    }
+
+    this.config.rendererEngine = engine
+    for (const instance of this.instances.values()) {
+      this.replaceInstanceRenderer(instance)
+    }
+    this._applyFonts()
+    this.notify()
   }
 
   closeSession(id: string, opts?: { triggerCloseCallback?: boolean }): void {
@@ -459,9 +730,13 @@ class TerminalController {
     }
 
     if (!instance.hasOpened) {
+      this.applyGhosttyBackground(instance, container)
       // First mount — call open() to create the xterm DOM
       instance.terminal.open(container)
       instance.hasOpened = true
+      instance.afterOpenHook?.()
+      instance.afterOpenHook = null
+      this.flushPendingOutput(instance)
 
       // Set up InputPanel auto-open listeners now that DOM elements exist
       instance.inputPanelAddon.attachListeners()
@@ -469,8 +744,15 @@ class TerminalController {
       // Re-mount — move the existing xterm DOM element into the new container
       const termEl = instance.terminal.element
       if (termEl) {
-        container.appendChild(termEl)
+        // Some engines may expose `element` as the mount container itself (or its ancestor).
+        // In that case, re-parenting would throw a HierarchyRequestError.
+        const causesCycle = termEl.contains(container)
+        if (!causesCycle && termEl.parentNode !== container) {
+          container.appendChild(termEl)
+        }
       }
+      this.flushPendingOutput(instance)
+      this.applyGhosttyBackground(instance, container)
     }
 
     instance.mountedContainer = container
@@ -504,6 +786,10 @@ class TerminalController {
     })
     observer.observe(container)
     instance.resizeObserver = observer
+
+    requestAnimationFrame(() => {
+      this.focusSession(id)
+    })
   }
 
   unmount(id: string): void {
@@ -519,6 +805,27 @@ class TerminalController {
     // Don't remove the .xterm DOM — it can't be recreated by terminal.open().
     // Just clear the reference so mount() knows to re-attach.
     instance.mountedContainer = null
+  }
+
+  focusSession(id: string): void {
+    const instance = this.instances.get(id)
+    if (!instance || !instance.hasOpened) return
+
+    try {
+      instance.terminal.focus?.()
+      return
+    } catch {
+      // Fallback below
+    }
+
+    const termEl = instance.terminal.element
+    if (termEl instanceof HTMLElement) {
+      try {
+        termEl.focus()
+      } catch {
+        // ignore
+      }
+    }
   }
 
   // --- Title ---
@@ -543,7 +850,8 @@ class TerminalController {
   }
 
   applyConfig(config: Partial<TerminalConfig>): void {
-    Object.assign(this.config, config)
+    const { rendererEngine, ...restConfig } = config
+    Object.assign(this.config, restConfig)
 
     for (const instance of this.instances.values()) {
       const t = instance.terminal
@@ -555,6 +863,12 @@ class TerminalController {
 
     // Font resolution is async — fire-and-forget
     this._applyFonts()
+
+    if (rendererEngine && rendererEngine !== this.config.rendererEngine) {
+      void this.setRendererEngine(rendererEngine).catch((error) => {
+        console.error('[terminal] failed to switch renderer engine:', error)
+      })
+    }
 
     this.notify()
   }
@@ -679,7 +993,7 @@ class TerminalController {
   private handleOutputResponse(msg: Extract<PtyServerMessage, { type: 'output' }>): void {
     const instance = this.getInstanceByServerSessionId(msg.sessionId)
     if (!instance) return
-    instance.terminal.write(msg.data)
+    this.writeTerminalOutput(instance, msg.data)
     instance.lastOutputTime = Date.now()
     this.notify()
     if (instance.outputIdleTimer) clearTimeout(instance.outputIdleTimer)
@@ -696,7 +1010,8 @@ class TerminalController {
     instance.exitCode = msg.exitCode
     if (instance.closeTip || instance.isDedicated) {
       const tip = instance.closeTip ?? 'Press any key to close (equivalent to close action).'
-      instance.terminal.write(
+      this.writeTerminalOutput(
+        instance,
         `\r\n\x1b[90m[Process exited with code ${msg.exitCode}. ${tip}]\x1b[0m`
       )
     }
@@ -713,7 +1028,7 @@ class TerminalController {
   private handleBufferResponse(msg: Extract<PtyServerMessage, { type: 'buffer' }>): void {
     const instance = this.getInstanceByServerSessionId(msg.sessionId)
     if (!instance || !msg.data) return
-    instance.terminal.write(msg.data)
+    this.writeTerminalOutput(instance, msg.data)
   }
 
   private handleErrorResponse(msg: Extract<PtyServerMessage, { type: 'error' }>): void {
@@ -722,7 +1037,10 @@ class TerminalController {
       if (instance && !instance.serverSessionId) {
         instance.isExited = true
         instance.exitCode = -1
-        instance.terminal.write(`\r\n\x1b[31m[Failed to start PTY: ${msg.message}]\x1b[0m`)
+        this.writeTerminalOutput(
+          instance,
+          `\r\n\x1b[31m[Failed to start PTY: ${msg.message}]\x1b[0m`
+        )
         this.notify()
       }
     }
@@ -963,16 +1281,7 @@ class TerminalController {
           instance.exitCode = serverSession.exitCode
         }
 
-        // Wire up input
-        instance.terminal.onData((data) => {
-          if (instance!.isExited) {
-            this.closeSession(instance!.id)
-            return
-          }
-          const sessionId = this.resolveServerSessionId(instance!.id)
-          if (!sessionId) return
-          this.wsSend({ type: 'input', sessionId, data })
-        })
+        this.bindTerminalInput(instance)
 
         this.instances.set(instance.id, instance)
         this._applyFonts()

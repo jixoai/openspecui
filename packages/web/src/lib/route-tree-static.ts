@@ -1,21 +1,20 @@
-import { createRoute, type AnyRootRoute, type AnyRoute } from '@tanstack/react-router'
+import { createRoute, type AnyRootRoute } from '@tanstack/react-router'
 import { ArchiveList } from '../routes/archive-list'
 import { ArchiveView } from '../routes/archive-view'
 import { ChangeList } from '../routes/change-list'
 import { ChangeView } from '../routes/change-view'
 import { Config } from '../routes/config'
 import { Dashboard } from '../routes/dashboard'
-import { OpsxComposeRoute } from '../routes/opsx-compose'
-import { OpsxNewRoute } from '../routes/opsx-new'
 import { SearchRoute } from '../routes/search'
-import { Settings } from '../routes/settings'
+import { SettingsStatic } from '../routes/settings-static'
 import { SpecList } from '../routes/spec-list'
 import { SpecView } from '../routes/spec-view'
-import { TerminalPage } from '../routes/terminal'
 
-/** Create the interactive route tree (includes terminal route by default). */
-export function createRouteTree(rootRoute: AnyRootRoute, opts?: { includeTerminal?: boolean }) {
-  const routes: AnyRoute[] = [
+/**
+ * Static route tree (SSG/client-static) without terminal routes.
+ */
+export function createStaticRouteTree(rootRoute: AnyRootRoute) {
+  return rootRoute.addChildren([
     createRoute({
       getParentRoute: () => rootRoute,
       path: '/',
@@ -37,19 +36,11 @@ export function createRouteTree(rootRoute: AnyRootRoute, opts?: { includeTermina
       path: '/archive/$changeId',
       component: ArchiveView,
     }),
-    createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: Settings }),
-  ]
-
-  if (opts?.includeTerminal !== false) {
-    routes.push(
-      createRoute({ getParentRoute: () => rootRoute, path: '/terminal', component: TerminalPage })
-    )
-  }
-
-  return rootRoute.addChildren(routes)
+    createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: SettingsStatic }),
+  ])
 }
 
-export function createPopRouteTree(rootRoute: AnyRootRoute) {
+export function createStaticPopRouteTree(rootRoute: AnyRootRoute) {
   return rootRoute.addChildren([
     createRoute({
       getParentRoute: () => rootRoute,
@@ -60,16 +51,6 @@ export function createPopRouteTree(rootRoute: AnyRootRoute) {
       getParentRoute: () => rootRoute,
       path: '/search',
       component: SearchRoute,
-    }),
-    createRoute({
-      getParentRoute: () => rootRoute,
-      path: '/opsx-new',
-      component: OpsxNewRoute,
-    }),
-    createRoute({
-      getParentRoute: () => rootRoute,
-      path: '/opsx-compose',
-      component: OpsxComposeRoute,
     }),
   ])
 }

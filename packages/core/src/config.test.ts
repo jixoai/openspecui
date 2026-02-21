@@ -48,6 +48,7 @@ describe('ConfigManager', () => {
           cursorBlink: true,
           cursorStyle: 'block' as const,
           scrollback: 2000,
+          rendererEngine: 'ghostty' as const,
         },
       }
       await writeFile(
@@ -62,6 +63,7 @@ describe('ConfigManager', () => {
       expect(config.cli.args).toEqual(['openspec'])
       expect(config.theme).toBe('dark')
       expect(config.terminal.fontSize).toBe(14)
+      expect(config.terminal.rendererEngine).toBe('ghostty')
     })
 
     it('should return default config for invalid JSON', async () => {
@@ -104,6 +106,7 @@ describe('ConfigManager', () => {
       expect(config.cli.command).toBe('custom')
       expect(config.theme).toBe('system') // default
       expect(config.terminal.scrollback).toBe(1000)
+      expect(config.terminal.rendererEngine).toBe('xterm')
     })
   })
 
@@ -290,6 +293,7 @@ describe('OpenSpecUIConfigSchema', () => {
         cursorBlink: true,
         cursorStyle: 'block',
         scrollback: 1000,
+        rendererEngine: 'xterm',
       },
     }
 
@@ -308,6 +312,7 @@ describe('OpenSpecUIConfigSchema', () => {
       expect(result.data.cli.command).toBeUndefined()
       expect(result.data.theme).toBe('system')
       expect(result.data.terminal.fontSize).toBe(13)
+      expect(result.data.terminal.rendererEngine).toBe('xterm')
     }
   })
 
@@ -319,6 +324,21 @@ describe('OpenSpecUIConfigSchema', () => {
     const result = OpenSpecUIConfigSchema.safeParse(config)
 
     expect(result.success).toBe(false)
+  })
+
+  it('should preserve invalid rendererEngine value from config file', () => {
+    const config = {
+      terminal: {
+        rendererEngine: 'yx',
+      },
+    }
+
+    const result = OpenSpecUIConfigSchema.safeParse(config)
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.terminal.rendererEngine).toBe('yx')
+    }
   })
 
   it('should accept all valid themes', () => {
@@ -335,6 +355,7 @@ describe('DEFAULT_CONFIG', () => {
     expect(DEFAULT_CONFIG.cli.command).toBeUndefined()
     expect(DEFAULT_CONFIG.theme).toBe('system')
     expect(DEFAULT_CONFIG.terminal.scrollback).toBe(1000)
+    expect(DEFAULT_CONFIG.terminal.rendererEngine).toBe('xterm')
   })
 })
 

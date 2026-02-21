@@ -7,6 +7,7 @@ class MockFitAddon {
 }
 
 class MockWebLinksAddon {}
+class MockUrlRegexProvider {}
 
 interface MockTerminalOptions {
   [key: string]: unknown
@@ -20,6 +21,9 @@ class MockTerminal {
   element: HTMLElement | null = null
   options: MockTerminalOptions
   private onDataListeners: Array<(data: string) => void> = []
+  protected customKeyEventHandler: ((event: KeyboardEvent) => boolean) | null = null
+  disposed = false
+  focusCalls = 0
 
   constructor(options: MockTerminalOptions) {
     this.options = options
@@ -51,17 +55,87 @@ class MockTerminal {
   }
 
   attachCustomKeyEventHandler(_handler: (event: KeyboardEvent) => boolean): void {
-    // noop
+    this.customKeyEventHandler = _handler
   }
 
   write(_data: string): void {
     // noop
   }
 
+  focus(): void {
+    this.focusCalls += 1
+  }
+
+  emitKeydown(key: string, code: string, options?: { ctrlKey?: boolean; metaKey?: boolean }): void {
+    const event = new KeyboardEvent('keydown', {
+      key,
+      code,
+      ctrlKey: options?.ctrlKey ?? false,
+      metaKey: options?.metaKey ?? false,
+      bubbles: true,
+    })
+    this.customKeyEventHandler?.(event)
+  }
+
   dispose(): void {
-    // noop
+    this.disposed = true
   }
 }
+
+class MockGhosttyTerminal extends MockTerminal {
+  static instances: MockGhosttyTerminal[] = []
+  linkProviders: unknown[] = []
+  writes: string[] = []
+
+  constructor(options: MockTerminalOptions) {
+    super(options)
+    MockGhosttyTerminal.instances.push(this)
+  }
+
+  static reset(): void {
+    MockGhosttyTerminal.instances = []
+  }
+
+  registerLinkProvider(provider: unknown): void {
+    if (!this.element) {
+      throw new Error('Terminal must be opened before registering link providers')
+    }
+    this.linkProviders.push(provider)
+  }
+
+  override open(container: HTMLElement): void {
+    // Simulate engines that treat the mount container itself as terminal.element.
+    this.element = container
+  }
+
+  override write(data: string): void {
+    if (!this.element) {
+      throw new Error('Terminal must be opened before use. Call terminal.open(parent) first.')
+    }
+    this.writes.push(data)
+  }
+
+  override emitKeydown(
+    key: string,
+    code: string,
+    options?: { ctrlKey?: boolean; metaKey?: boolean }
+  ): void {
+    const event = new KeyboardEvent('keydown', {
+      key,
+      code,
+      ctrlKey: options?.ctrlKey ?? false,
+      metaKey: options?.metaKey ?? false,
+      bubbles: true,
+    })
+    const consumed = this.customKeyEventHandler?.(event)
+    if (consumed) return
+    if (key.length === 1 && !event.ctrlKey && !event.metaKey) {
+      this.emitData(key)
+    }
+  }
+}
+
+const ghosttyInitMock = vi.fn(async () => {})
 
 class MockInputPanelAddon {
   static mountTarget: HTMLElement | null = null
@@ -93,6 +167,13 @@ vi.mock('@xterm/addon-fit', () => ({
 
 vi.mock('@xterm/addon-web-links', () => ({
   WebLinksAddon: MockWebLinksAddon,
+}))
+
+vi.mock('ghostty-web', () => ({
+  init: ghosttyInitMock,
+  Terminal: MockGhosttyTerminal,
+  FitAddon: MockFitAddon,
+  UrlRegexProvider: MockUrlRegexProvider,
 }))
 
 vi.mock('xterm-input-panel', () => ({
@@ -143,6 +224,12 @@ class MockWebSocket {
   }
 }
 
+class MockResizeObserver {
+  constructor(_callback: ResizeObserverCallback) {}
+  observe(_target: Element): void {}
+  disconnect(): void {}
+}
+
 function parseSent(ws: MockWebSocket): Array<Record<string, unknown>> {
   return ws.sent.map((raw) => JSON.parse(raw) as Record<string, unknown>)
 }
@@ -167,8 +254,12 @@ describe('terminal-controller PTY behavior', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     MockTerminal.reset()
+    MockGhosttyTerminal.reset()
     MockWebSocket.reset()
+    ghosttyInitMock.mockReset()
+    ghosttyInitMock.mockResolvedValue(undefined)
     vi.stubGlobal('WebSocket', MockWebSocket as unknown as typeof WebSocket)
+    vi.stubGlobal('ResizeObserver', MockResizeObserver as unknown as typeof ResizeObserver)
   })
 
   afterEach(() => {
@@ -316,5 +407,185 @@ describe('terminal-controller PTY behavior', () => {
     )
     openSpy.mockRestore()
     unsubscribe()
+  })
+
+  it('switches renderer engine and rebuilds terminal instances', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-700', platform: 'common' })
+
+    const beforeCount = MockTerminal.instances.length
+    const firstInstance = MockTerminal.instances[0]
+    expect(firstInstance).toBeDefined()
+
+    await terminalController.setRendererEngine('ghostty')
+
+    expect(ghosttyInitMock).toHaveBeenCalled()
+    expect(MockTerminal.instances.length).toBeGreaterThan(beforeCount)
+    expect(firstInstance?.disposed).toBe(true)
+    expect(terminalController.getConfig().rendererEngine).toBe('ghostty')
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('registers ghostty link provider after terminal open', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-710', platform: 'common' })
+
+    const container = document.createElement('div')
+    terminalController.mount(localId, container)
+
+    await expect(terminalController.setRendererEngine('ghostty')).resolves.toBeUndefined()
+
+    const ghostty = MockGhosttyTerminal.instances.at(-1)
+    expect(ghostty).toBeDefined()
+    expect(ghostty?.element).not.toBeNull()
+    expect(ghostty?.linkProviders.length).toBe(1)
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('does not throw on remount when terminal element contains next container', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-711', platform: 'common' })
+
+    const containerA = document.createElement('div')
+    terminalController.mount(localId, containerA)
+    await terminalController.setRendererEngine('ghostty')
+
+    terminalController.unmount(localId)
+    const containerB = document.createElement('div')
+    containerA.appendChild(containerB)
+
+    expect(() => terminalController.mount(localId, containerB)).not.toThrow()
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('buffers server output before mount and flushes after mount in ghostty mode', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-712', platform: 'common' })
+    await terminalController.setRendererEngine('ghostty')
+
+    expect(() => ws.emitJson({ type: 'buffer', sessionId: 'pty-712', data: 'hello-buffer' })).not.toThrow()
+
+    const ghostty = MockGhosttyTerminal.instances.at(-1)
+    expect(ghostty).toBeDefined()
+    expect(ghostty?.writes).toHaveLength(0)
+
+    const container = document.createElement('div')
+    terminalController.mount(localId, container)
+
+    expect(ghostty?.writes.join('')).toContain('hello-buffer')
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('focuses ghostty terminal when mounted', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-713', platform: 'common' })
+    await terminalController.setRendererEngine('ghostty')
+
+    const container = document.createElement('div')
+    terminalController.mount(localId, container)
+    vi.runAllTimers()
+
+    const ghostty = MockGhosttyTerminal.instances.at(-1)
+    expect(ghostty).toBeDefined()
+    expect(ghostty?.focusCalls).toBeGreaterThan(0)
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('applies nearest opaque background color for ghostty renderer', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-715', platform: 'common' })
+    await terminalController.setRendererEngine('ghostty')
+
+    const wrapper = document.createElement('div')
+    wrapper.style.backgroundColor = 'rgb(12, 34, 56)'
+    const container = document.createElement('div')
+    wrapper.appendChild(container)
+    terminalController.mount(localId, container)
+
+    const ghostty = MockGhosttyTerminal.instances.at(-1)
+    expect(ghostty).toBeDefined()
+    expect(ghostty?.options.allowTransparency).toBe(false)
+    expect(ghostty?.options.theme).toEqual(
+      expect.objectContaining({
+        background: 'rgb(12, 34, 56)',
+      })
+    )
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('allows regular key input in ghostty mode', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-714', platform: 'common' })
+    await terminalController.setRendererEngine('ghostty')
+
+    const container = document.createElement('div')
+    terminalController.mount(localId, container)
+
+    const ghostty = MockGhosttyTerminal.instances.at(-1)
+    expect(ghostty).toBeDefined()
+    ghostty?.emitKeydown('a', 'KeyA')
+
+    const sent = parseSent(ws)
+    expect(sent.some((msg) => msg.type === 'input' && msg.sessionId === 'pty-714' && msg.data === 'a')).toBe(true)
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('keeps current engine when ghostty initialization fails', async () => {
+    ghosttyInitMock.mockRejectedValueOnce(new Error('ghostty init failed'))
+    const terminalController = await loadTerminalController()
+
+    await expect(terminalController.setRendererEngine('ghostty')).rejects.toThrow(
+      'ghostty init failed'
+    )
+    expect(terminalController.getConfig().rendererEngine).toBe('xterm')
   })
 })

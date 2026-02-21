@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenSpec UI</title>
+    <script>
+      window.__OPENSPEC_BASE_PATH__ = '/'
+    </script>
+    <script>
+      ;(() => {
+        const lang =
+          (navigator.languages && navigator.languages[0]) ||
+          navigator.language ||
+          navigator.userLanguage ||
+          ''
+        const useCnCdn = /^zh\b/i.test(lang)
+        const apiHost = useCnCdn ? 'https://fonts.googleapis.cn' : 'https://fonts.googleapis.com'
+        const staticHost = useCnCdn ? 'https://fonts.gstatic.cn' : 'https://fonts.gstatic.com'
+
+        const preconnectApi = document.createElement('link')
+        preconnectApi.rel = 'preconnect'
+        preconnectApi.href = apiHost
+
+        const preconnectStatic = document.createElement('link')
+        preconnectStatic.rel = 'preconnect'
+        preconnectStatic.href = staticHost
+        preconnectStatic.crossOrigin = 'anonymous'
+
+        const stylesheet = document.createElement('link')
+        stylesheet.rel = 'stylesheet'
+        stylesheet.href = `${apiHost}/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Share+Tech+Mono&display=swap`
+
+        document.head.append(preconnectApi, preconnectStatic, stylesheet)
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"><!--app-html--></div>
+    <!--head-tags-->
+    <script type="module" src="/src/main-static.tsx"></script>
+  </body>
+</html>

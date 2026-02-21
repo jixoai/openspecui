@@ -541,6 +541,7 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
       cursorBlink: true,
       cursorStyle: 'block',
       scrollback: 1000,
+      rendererEngine: 'xterm',
     },
   }
 }

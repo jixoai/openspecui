@@ -1,5 +1,6 @@
 import { Check, Loader2, Sparkles, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import '@/styles/terminal-effects.css'
 import { isStaticMode } from './static-mode'
 import { trpcClient } from './trpc'
 
