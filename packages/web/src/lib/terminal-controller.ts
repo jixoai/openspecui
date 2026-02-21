@@ -811,21 +811,27 @@ class TerminalController {
     const instance = this.instances.get(id)
     if (!instance || !instance.hasOpened) return
 
+    let focused = false
     try {
       instance.terminal.focus?.()
-      return
+      focused = true
     } catch {
       // Fallback below
     }
 
-    const termEl = instance.terminal.element
-    if (termEl instanceof HTMLElement) {
-      try {
-        termEl.focus()
-      } catch {
-        // ignore
+    if (!focused) {
+      const termEl = instance.terminal.element
+      if (termEl instanceof HTMLElement) {
+        try {
+          termEl.focus()
+        } catch {
+          // ignore
+        }
       }
     }
+
+    // Keep InputPanel singleton lifecycle aligned with active terminal session.
+    instance.inputPanelAddon.syncFocusLifecycle()
   }
 
   // --- Title ---

@@ -139,9 +139,15 @@ const ghosttyInitMock = vi.fn(async () => {})
 
 class MockInputPanelAddon {
   static mountTarget: HTMLElement | null = null
+  static instances: MockInputPanelAddon[] = []
+  static active: MockInputPanelAddon | null = null
 
-  constructor(_options: { onInput: (data: string) => void }) {
-    // noop
+  private onInput: (data: string) => void
+  private isOpen = false
+
+  constructor(options: { onInput: (data: string) => void }) {
+    this.onInput = options.onInput
+    MockInputPanelAddon.instances.push(this)
   }
 
   attachListeners(): void {
@@ -154,6 +160,36 @@ class MockInputPanelAddon {
 
   setDefaultLayout(_layout: 'fixed' | 'floating'): void {
     // noop
+  }
+
+  open(): void {
+    if (this.isOpen) return
+    MockInputPanelAddon.active?.close()
+    this.isOpen = true
+    MockInputPanelAddon.active = this
+  }
+
+  close(): void {
+    this.isOpen = false
+    if (MockInputPanelAddon.active === this) {
+      MockInputPanelAddon.active = null
+    }
+  }
+
+  syncFocusLifecycle(): void {
+    if (MockInputPanelAddon.active && MockInputPanelAddon.active !== this) {
+      this.open()
+    }
+  }
+
+  emitInput(data: string): void {
+    this.onInput(data)
+  }
+
+  static reset(): void {
+    MockInputPanelAddon.mountTarget = null
+    MockInputPanelAddon.instances = []
+    MockInputPanelAddon.active = null
   }
 }
 
@@ -255,6 +291,7 @@ describe('terminal-controller PTY behavior', () => {
     vi.useFakeTimers()
     MockTerminal.reset()
     MockGhosttyTerminal.reset()
+    MockInputPanelAddon.reset()
     MockWebSocket.reset()
     ghosttyInitMock.mockReset()
     ghosttyInitMock.mockResolvedValue(undefined)
@@ -574,6 +611,45 @@ describe('terminal-controller PTY behavior', () => {
 
     const sent = parseSent(ws)
     expect(sent.some((msg) => msg.type === 'input' && msg.sessionId === 'pty-714' && msg.data === 'a')).toBe(true)
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('migrates input panel active target when focus switches to another session', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const firstId = terminalController.createSession()
+    const secondId = terminalController.createSession()
+    ws.emitJson({ type: 'created', requestId: firstId, sessionId: 'pty-801', platform: 'common' })
+    ws.emitJson({ type: 'created', requestId: secondId, sessionId: 'pty-802', platform: 'common' })
+
+    terminalController.mount(firstId, document.createElement('div'))
+    terminalController.mount(secondId, document.createElement('div'))
+
+    const firstAddon = MockInputPanelAddon.instances[0]
+    const secondAddon = MockInputPanelAddon.instances[1]
+    expect(firstAddon).toBeDefined()
+    expect(secondAddon).toBeDefined()
+
+    firstAddon?.open()
+    expect(MockInputPanelAddon.active).toBe(firstAddon)
+
+    terminalController.focusSession(secondId)
+    expect(MockInputPanelAddon.active).toBe(secondAddon)
+
+    MockInputPanelAddon.active?.emitInput('echo switch\n')
+
+    const sent = parseSent(ws)
+    expect(
+      sent.some(
+        (msg) =>
+          msg.type === 'input' && msg.sessionId === 'pty-802' && msg.data === 'echo switch\n'
+      )
+    ).toBe(true)
 
     terminalController.closeAll()
     unsubscribe()

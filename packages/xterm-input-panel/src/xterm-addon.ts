@@ -667,6 +667,27 @@ export class InputPanelAddon implements ITerminalAddon {
     this._isOpen ? this.close() : this.open()
   }
 
+  /**
+   * Sync addon singleton state when host marks this terminal as active.
+   *
+   * Lifecycle:
+   * 1) Always refresh `_lastFocused` so FAB targets the current terminal.
+   * 2) If another terminal owns an open panel, migrate panel ownership here.
+   * 3) If this panel is already open, keep terminal focus in sync.
+   */
+  syncFocusLifecycle(): void {
+    InputPanelAddon._lastFocused = this
+
+    if (InputPanelAddon._active && InputPanelAddon._active !== this) {
+      this.open()
+      return
+    }
+
+    if (this._isOpen) {
+      this._focusTerminal()
+    }
+  }
+
   // ── Terminal focus ──
 
   private _focusTerminal(): void {
