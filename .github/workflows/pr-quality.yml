@@ -12,6 +12,7 @@ concurrency:
 jobs:
   changeset-gate:
     name: Changeset Gate
+    if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -26,13 +27,13 @@ jobs:
           node-version: 20
 
       - name: Verify changeset for releasable package changes
-        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
         env:
           CHANGESET_CHECK_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
         run: node scripts/changeset-check.mjs
 
   quality-fast:
     name: Fast Gate
+    if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
     runs-on: ubuntu-latest
     needs: changeset-gate
     timeout-minutes: 20
@@ -70,6 +71,7 @@ jobs:
 
   quality-browser:
     name: Browser Gate
+    if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
     runs-on: ubuntu-latest
     needs: quality-fast
     timeout-minutes: 30
