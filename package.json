@@ -24,6 +24,7 @@
     "test": "vitest",
     "test:ci": "pnpm -r --workspace-concurrency=1 --if-present run test",
     "test:browser:ci": "pnpm --filter xterm-input-panel test:browser && pnpm --filter @openspecui/web test:browser",
+    "changeset:check": "node scripts/changeset-check.mjs",
     "changeset": "changeset",
     "changeversion": "changeset version",
     "release": "pnpm build && changeset publish",
