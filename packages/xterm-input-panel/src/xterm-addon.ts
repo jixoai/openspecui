@@ -467,7 +467,30 @@ export class InputPanelAddon implements ITerminalAddon {
    * Priority: static mountTarget > terminal container > document.body
    */
   private _getMountTarget(): HTMLElement {
-    return InputPanelAddon._mountTarget ?? this._terminal?.element?.parentElement ?? document.body
+    return InputPanelAddon._mountTarget ?? this._getTerminalHostElement() ?? document.body
+  }
+
+  /**
+   * Resolve the visual host element used for overlay UI (cursor/panel).
+   *
+   * xterm renderer usually exposes `.xterm` as `terminal.element`, while
+   * ghostty may expose the mount container itself.
+   */
+  private _getTerminalHostElement(): HTMLElement | null {
+    const termElement = this._terminal?.element
+    if (!(termElement instanceof HTMLElement)) return null
+    if (termElement.classList.contains('xterm')) {
+      return termElement.parentElement instanceof HTMLElement ? termElement.parentElement : termElement
+    }
+    return termElement
+  }
+
+  private _detectTerminalEngine(): 'xterm' | 'non-xterm' {
+    const termElement = this._terminal?.element
+    if (termElement instanceof HTMLElement && termElement.classList.contains('xterm')) {
+      return 'xterm'
+    }
+    return 'non-xterm'
   }
 
   activate(terminal: Terminal): void {
@@ -725,7 +748,7 @@ export class InputPanelAddon implements ITerminalAddon {
   }
 
   private _applyPanelThemeBindings(panel: HTMLElement): void {
-    const scope = this._terminal?.element?.parentElement ?? this._getMountTarget()
+    const scope = this._getTerminalHostElement() ?? this._getMountTarget()
     const style = getComputedStyle(scope)
 
     const background = this._readThemeVar(
@@ -837,10 +860,13 @@ export class InputPanelAddon implements ITerminalAddon {
   // ── Cursor overlay ──
 
   private _createCursor(): void {
-    const container = this._terminal?.element?.parentElement
+    const container = this._getTerminalHostElement()
     if (!container) return
 
     const el = document.createElement('div')
+    el.setAttribute('data-input-panel-cursor', 'virtual-mouse')
+    el.setAttribute('data-terminal-engine', this._detectTerminalEngine())
+    el.setAttribute('aria-hidden', 'true')
     el.style.cssText =
       'position:absolute;z-index:10;pointer-events:none;opacity:0;transition:opacity 0.15s;color:#fff;'
     const pointer = iconMousePointer2(20)
@@ -863,7 +889,7 @@ export class InputPanelAddon implements ITerminalAddon {
   private _showCursor(): void {
     if (!this._cursorEl) this._createCursor()
     if (this._cursorEl) {
-      const container = this._terminal?.element?.parentElement
+      const container = this._getTerminalHostElement()
       if (container) {
         const rect = container.getBoundingClientRect()
         this._cursorPos = { x: rect.width / 2, y: rect.height / 2 }
@@ -878,7 +904,7 @@ export class InputPanelAddon implements ITerminalAddon {
   }
 
   private _moveCursor(dx: number, dy: number): void {
-    const container = this._terminal?.element?.parentElement
+    const container = this._getTerminalHostElement()
     if (!container) return
     const rect = container.getBoundingClientRect()
     this._cursorPos.x = Math.max(0, Math.min(rect.width, this._cursorPos.x + dx * SENSITIVITY))
@@ -889,7 +915,7 @@ export class InputPanelAddon implements ITerminalAddon {
   // ── Mouse event dispatch ──
 
   private _getClientCoords(): { clientX: number; clientY: number } | null {
-    const container = this._terminal?.element?.parentElement
+    const container = this._getTerminalHostElement()
     if (!container) return null
     const rect = container.getBoundingClientRect()
     return {
@@ -899,7 +925,7 @@ export class InputPanelAddon implements ITerminalAddon {
   }
 
   private _resolveTarget(clientX: number, clientY: number): Element {
-    const container = this._terminal?.element?.parentElement
+    const container = this._getTerminalHostElement()
     if (!container) return document.body
     const el = document.elementFromPoint(clientX, clientY)
     if (el && container.contains(el)) return el
@@ -970,7 +996,7 @@ export class InputPanelAddon implements ITerminalAddon {
   // ── Edge scroll (during drag selection) ──
 
   private _updateEdgeScroll(): void {
-    const container = this._terminal?.element?.parentElement
+    const container = this._getTerminalHostElement()
     if (!container || !this._isDragging) {
       this._stopEdgeScroll()
       return
@@ -985,7 +1011,7 @@ export class InputPanelAddon implements ITerminalAddon {
 
     this._stopEdgeScroll()
     this._edgeScrollTimer = setInterval(() => {
-      const container = this._terminal?.element?.parentElement
+      const container = this._getTerminalHostElement()
       if (!container || !this._isDragging) {
         this._stopEdgeScroll()
         return
