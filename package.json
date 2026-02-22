@@ -26,7 +26,7 @@
     "test:browser:ci": "pnpm --filter xterm-input-panel test:browser && pnpm --filter @openspecui/web test:browser",
     "changeset:check": "node scripts/changeset-check.mjs",
     "changeset": "changeset",
-    "changeversion": "changeset version",
+    "changeversion": "bun ./scripts/changeversion-auto.ts",
     "release": "pnpm build && changeset publish",
     "example:setup": "tsx scripts/setup-example.ts",
     "example:clean": "tsx scripts/setup-example.ts --clean",
