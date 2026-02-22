@@ -57,7 +57,7 @@ describe('MarkdownViewer ToC behavior', () => {
     expect((section as HTMLElement).style.getPropertyValue('view-timeline-name')).toBe('--toc-0')
 
     const tocLink = screen.getByRole('link', { name: 'Overview', hidden: true })
-    expect(tocLink).toHaveAttribute('href', '#overview')
+    expect(tocLink.getAttribute('href')).toBe('#overview')
   })
 
   it('does not include embedded markdown headings when collectToc is false', () => {
@@ -82,9 +82,7 @@ describe('MarkdownViewer ToC behavior', () => {
       </div>
     )
 
-    expect(
-      screen.queryByRole('link', { name: 'Hidden Heading', hidden: true })
-    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Hidden Heading', hidden: true })).toBeNull()
 
     const rootLink = screen.getAllByRole('link', { name: 'Root', hidden: true })[0]
     fireEvent.click(rootLink)

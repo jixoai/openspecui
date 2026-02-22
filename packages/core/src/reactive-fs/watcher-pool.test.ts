@@ -5,6 +5,7 @@ import {
   cleanupTempDir,
   createTempDir,
   createTempFile,
+  waitFor,
   waitForDebounce,
 } from '../__tests__/test-utils.js'
 import {
@@ -76,8 +77,7 @@ describe('WatcherPool', () => {
       // Modify file
       await writeFile(filepath, 'changed', 'utf-8')
 
-      // Wait for debounce
-      await waitForDebounce(150)
+      await waitFor(() => onChange.mock.calls.length > 0, { timeout: 2000, interval: 50 })
 
       expect(onChange).toHaveBeenCalled()
 

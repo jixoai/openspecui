@@ -31,56 +31,65 @@ const createMockAdapter = () => ({
   validateSpec: vi.fn().mockResolvedValue({ valid: true, issues: [] }),
   validateChange: vi.fn().mockResolvedValue({ valid: true, issues: [] }),
   init: vi.fn().mockResolvedValue(undefined),
-  getDashboardData: vi.fn().mockResolvedValue({
-    specs: [],
-    changes: [],
-    archivedCount: 0,
-    summary: {
-      specCount: 0,
-      requirementCount: 0,
-      activeChangeCount: 0,
-      archivedChangeCount: 0,
-      totalTasks: 0,
-      completedTasks: 0,
-      progressPercent: 0,
-    },
-  }),
+  getDashboardData: vi.fn().mockResolvedValue(undefined),
 })
 
-// Mock provider manager
-const createMockProviderManager = () => ({
-  list: vi.fn().mockReturnValue([]),
-  checkAvailability: vi.fn().mockResolvedValue(new Map()),
-  get: vi.fn().mockReturnValue(undefined),
-  getDefaultApi: vi.fn().mockReturnValue(undefined),
-  getDefaultAcp: vi.fn().mockReturnValue(undefined),
-})
+const createMockContext = (adapter = createMockAdapter()): Context => {
+  const configManager = {
+    readConfig: vi.fn().mockResolvedValue({}),
+    setCliCommand: vi.fn().mockResolvedValue(undefined),
+    writeConfig: vi.fn().mockResolvedValue(undefined),
+    getCliCommandString: vi.fn().mockResolvedValue('openspec'),
+  }
 
-const createCaller = (
-  adapter = createMockAdapter(),
-  providerManager = createMockProviderManager()
-) => {
-  return appRouter.createCaller({
+  const cliExecutor = {
+    checkAvailability: vi.fn().mockResolvedValue({ available: true }),
+    init: vi.fn().mockResolvedValue({ success: true }),
+    archive: vi.fn().mockResolvedValue({ success: true }),
+    validate: vi.fn().mockResolvedValue({ valid: true, issues: [] }),
+    execute: vi.fn().mockResolvedValue({ code: 0, stdout: '', stderr: '' }),
+    initStream: vi.fn(),
+    archiveStream: vi.fn(),
+    validateStream: vi.fn(),
+    executeCommandStream: vi.fn(),
+  }
+
+  const kernel = {
+    waitForWarmup: vi.fn().mockResolvedValue(undefined),
+  }
+
+  const searchService = {
+    query: vi.fn().mockResolvedValue({ total: 0, hits: [] }),
+    queryReactive: vi.fn().mockResolvedValue({ total: 0, hits: [] }),
+  }
+
+  return {
     adapter: adapter as unknown as Context['adapter'],
-    providerManager: providerManager as unknown as Context['providerManager'],
+    configManager: configManager as unknown as Context['configManager'],
+    cliExecutor: cliExecutor as unknown as Context['cliExecutor'],
+    kernel: kernel as unknown as Context['kernel'],
+    searchService: searchService as unknown as Context['searchService'],
+    watcher: undefined,
+    projectDir: '/tmp/openspecui-router-test',
+  }
+}
+
+const createCaller = (adapter = createMockAdapter()) => {
+  return appRouter.createCaller({
+    ...createMockContext(adapter),
   })
 }
 
 describe('appRouter', () => {
-  describe('dashboard', () => {
-    it('should get dashboard data', async () => {
+  describe('system', () => {
+    it('should return runtime status', async () => {
       const caller = createCaller()
-      const data = await caller.dashboard.getData()
+      const status = await caller.system.status()
 
-      expect(data).toBeDefined()
-      expect(data.summary).toBeDefined()
-    })
-
-    it('should check if initialized', async () => {
-      const caller = createCaller()
-      const result = await caller.dashboard.isInitialized()
-
-      expect(result).toBe(true)
+      expect(status.projectDir).toBe('/tmp/openspecui-router-test')
+      expect(typeof status.watcherEnabled).toBe('boolean')
+      expect(typeof status.watcherGeneration).toBe('number')
+      expect(typeof status.watcherReinitializeCount).toBe('number')
     })
   })
 
@@ -155,15 +164,6 @@ describe('appRouter', () => {
 
       expect(result).toBe(true)
       expect(adapter.archiveChange).toHaveBeenCalledWith('add-caching')
-    })
-  })
-
-  describe('ai', () => {
-    it('should list providers', async () => {
-      const caller = createCaller()
-      const providers = await caller.ai.listProviders()
-
-      expect(Array.isArray(providers)).toBe(true)
     })
   })
 

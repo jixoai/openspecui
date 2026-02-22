@@ -22,7 +22,7 @@
     "format": "prettier --write .",
     "format:check": "tsx scripts/format-check.ts",
     "test": "vitest",
-    "test:ci": "pnpm -r --if-present run test",
+    "test:ci": "pnpm -r --workspace-concurrency=1 --if-present run test",
     "test:browser:ci": "pnpm --filter xterm-input-panel test:browser && pnpm --filter @openspecui/web test:browser",
     "changeset": "changeset",
     "changeversion": "changeset version",

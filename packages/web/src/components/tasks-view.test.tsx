@@ -22,7 +22,7 @@ describe('TasksView', () => {
 
     const { rerender } = renderTasks(tasks)
 
-    expect(screen.getByText('Initial task text')).toBeInTheDocument()
+    expect(screen.getByText('Initial task text')).toBeTruthy()
 
     const updatedTasks: Task[] = [
       {
@@ -39,7 +39,7 @@ describe('TasksView', () => {
       />
     )
 
-    expect(screen.getByText('Updated task text')).toBeInTheDocument()
-    expect(screen.queryByText('Initial task text')).not.toBeInTheDocument()
+    expect(screen.getByText('Updated task text')).toBeTruthy()
+    expect(screen.queryByText('Initial task text')).toBeNull()
   })
 })

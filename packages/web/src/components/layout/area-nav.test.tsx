@@ -59,13 +59,13 @@ describe('AreaNav drag behavior', () => {
     const links = screen.getAllByRole('link')
     expect(links).toHaveLength(2)
     for (const link of links) {
-      expect(link).toHaveAttribute('draggable', 'false')
+      expect(link.getAttribute('draggable')).toBe('false')
     }
 
     const listItems = container.querySelectorAll('li')
     expect(listItems).toHaveLength(2)
     for (const li of listItems) {
-      expect(li).toHaveAttribute('draggable', 'true')
+      expect(li.getAttribute('draggable')).toBe('true')
     }
   })
 

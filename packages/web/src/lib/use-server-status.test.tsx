@@ -62,7 +62,7 @@ describe('useServerStatus', () => {
     )
 
     const { useServerStatus } = await import('./use-server-status')
-    const { result } = renderHook(() => useServerStatus())
+    const { result, unmount } = renderHook(() => useServerStatus())
 
     await waitFor(() => {
       expect(result.current.connected).toBe(true)
@@ -81,5 +81,7 @@ describe('useServerStatus', () => {
       expect(result.current.wsState).toBe('connecting')
       expect(result.current.reconnectCountdown).not.toBeNull()
     })
+
+    unmount()
   })
 })
