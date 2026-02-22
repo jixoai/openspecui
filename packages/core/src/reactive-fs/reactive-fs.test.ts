@@ -72,7 +72,7 @@ describe('ReactiveFS', () => {
 
       // 修改文件
       await writeFile(filepath, 'updated', 'utf-8')
-      await waitForDebounce(150)
+      await waitForDebounce(300)
 
       // 获取更新后的值
       const second = await generator.next()
@@ -94,7 +94,7 @@ describe('ReactiveFS', () => {
 
       // 删除文件
       await rm(filepath)
-      await waitForDebounce(150)
+      await waitForDebounce(300)
 
       // 获取更新后的值
       const second = await generator.next()
