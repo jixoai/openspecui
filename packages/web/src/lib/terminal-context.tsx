@@ -109,6 +109,11 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     setActiveSessionId((prev) => (prev === id ? null : prev))
   }, [])
 
+  const setActiveSession = useCallback((id: string) => {
+    setActiveSessionId(id)
+    terminalController.focusSession(id)
+  }, [])
+
   const markExited = useCallback((_id: string, _exitCode: number) => {
     // Exit is now handled by the controller via WebSocket messages.
     // Kept for API compatibility — no-op.
@@ -126,6 +131,11 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     }
     return sessions[sessions.length - 1]?.id ?? null
   }, [activeSessionId, sessions])
+
+  useEffect(() => {
+    if (!resolvedActiveSessionId) return
+    terminalController.focusSession(resolvedActiveSessionId)
+  }, [resolvedActiveSessionId])
 
   // Restore UI state when sessions are discovered from server after reconnect/refresh
   const hasRestoredRef = useRef(false)
@@ -161,7 +171,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       createSession,
       createDedicatedSession,
       closeSession,
-      setActiveSession: setActiveSessionId,
+      setActiveSession,
       markExited,
       setCustomTitle,
     }),
@@ -171,6 +181,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       createSession,
       createDedicatedSession,
       closeSession,
+      setActiveSession,
       markExited,
       setCustomTitle,
     ]

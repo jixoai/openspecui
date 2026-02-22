@@ -1,12 +1,13 @@
 import type { ITerminalAddon, Terminal } from '@xterm/xterm'
 import { iconKeyboard, iconMousePointer2 } from './icons.js'
-import type { InputPanelLayout } from './input-panel.js'
+import type { InputPanelLayout, InputPanelTab } from './input-panel.js'
 import type { HostPlatform } from './platform.js'
 
 const SENSITIVITY = 1.5
 const EDGE_SCROLL_ZONE = 30
 const EDGE_SCROLL_INTERVAL = 50
 const EDGE_SCROLL_OVERSHOOT = 15
+const STATE_STORAGE_KEY = 'xtermInputPanelState'
 
 function isTouchDevice(): boolean {
   return 'ontouchstart' in window || navigator.maxTouchPoints > 0
@@ -23,6 +24,84 @@ export interface InputPanelSettingsPayload {
   floatingHeight: number
   vibrationIntensity: number
   historyLimit: number
+}
+
+interface InputPanelSessionState {
+  activeTab: InputPanelTab
+  inputDraft: string
+}
+
+interface InputMethodTabElement extends HTMLElement {
+  value: string
+}
+
+interface InputPanelElement extends HTMLElement {
+  activeTab: InputPanelTab
+}
+
+function isInputPanelTab(value: unknown): value is InputPanelTab {
+  return (
+    value === 'input' ||
+    value === 'keys' ||
+    value === 'shortcuts' ||
+    value === 'trackpad' ||
+    value === 'settings'
+  )
+}
+
+interface InputPanelStateStore {
+  lastActiveTab?: InputPanelTab
+  sessions?: Record<string, Partial<InputPanelSessionState>>
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function loadPanelStateStore(): InputPanelStateStore {
+  try {
+    const raw = localStorage.getItem(STATE_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    return isRecord(parsed) ? (parsed as InputPanelStateStore) : {}
+  } catch {
+    return {}
+  }
+}
+
+function savePanelStateStore(store: InputPanelStateStore): void {
+  try {
+    localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify(store))
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadPanelSessionState(sessionKey: string): InputPanelSessionState | null {
+  const store = loadPanelStateStore()
+  const sessions = store.sessions
+  if (!sessions) return null
+  const rawState = sessions[sessionKey]
+  if (!isRecord(rawState)) return null
+
+  const state: InputPanelSessionState = {
+    activeTab: 'input',
+    inputDraft: '',
+  }
+
+  if (isInputPanelTab(rawState.activeTab)) {
+    state.activeTab = rawState.activeTab
+  }
+  if (typeof rawState.inputDraft === 'string') {
+    state.inputDraft = rawState.inputDraft
+  }
+
+  return state
+}
+
+function loadLastActiveTab(): InputPanelTab {
+  const store = loadPanelStateStore()
+  return isInputPanelTab(store.lastActiveTab) ? store.lastActiveTab : 'input'
 }
 
 /**
@@ -56,6 +135,7 @@ export interface InputPanelSettingsPayload {
  * ```
  */
 export class InputPanelAddon implements ITerminalAddon {
+  private static _lastActiveTab: InputPanelTab = 'input'
   // ── Singleton state ──
 
   /** The currently active (open) addon instance, or null. */
@@ -301,6 +381,9 @@ export class InputPanelAddon implements ITerminalAddon {
   private _onSettingsChange: ((settings: InputPanelSettingsPayload) => Promise<void> | void) | null
   private _platform: HostPlatform
   private _defaultLayout: InputPanelLayout
+  private _panelSessionState: InputPanelSessionState
+  private _stateKey: string
+  private _hasOwnPersistedState: boolean
 
   constructor(opts?: {
     onInput?: (data: string) => void
@@ -312,6 +395,7 @@ export class InputPanelAddon implements ITerminalAddon {
     onSettingsChange?: (settings: InputPanelSettingsPayload) => Promise<void> | void
     platform?: HostPlatform
     defaultLayout?: InputPanelLayout
+    stateKey?: string
   }) {
     this._onInput = opts?.onInput ?? (() => {})
     this._onOpenCb = opts?.onOpen ?? null
@@ -322,6 +406,19 @@ export class InputPanelAddon implements ITerminalAddon {
     this._onSettingsChange = opts?.onSettingsChange ?? null
     this._platform = opts?.platform ?? 'common'
     this._defaultLayout = opts?.defaultLayout ?? 'floating'
+    this._stateKey = opts?.stateKey?.trim() ? opts.stateKey : 'default'
+    this._hasOwnPersistedState = false
+    this._panelSessionState = {
+      activeTab: 'input',
+      inputDraft: '',
+    }
+    const persistedState = loadPanelSessionState(this._stateKey)
+    if (persistedState) {
+      this._panelSessionState = persistedState
+      this._hasOwnPersistedState = true
+    } else {
+      this._panelSessionState.activeTab = InputPanelAddon._lastActiveTab || loadLastActiveTab()
+    }
   }
 
   get isOpen(): boolean {
@@ -346,6 +443,23 @@ export class InputPanelAddon implements ITerminalAddon {
 
   setDefaultLayout(layout: InputPanelLayout): void {
     this._defaultLayout = layout
+  }
+
+  private _persistPanelState(): void {
+    InputPanelAddon._lastActiveTab = this._panelSessionState.activeTab
+    const store = loadPanelStateStore()
+    const nextSessions = {
+      ...(store.sessions ?? {}),
+      [this._stateKey]: {
+        activeTab: this._panelSessionState.activeTab,
+        inputDraft: this._panelSessionState.inputDraft,
+      },
+    }
+    savePanelStateStore({
+      ...store,
+      lastActiveTab: this._panelSessionState.activeTab,
+      sessions: nextSessions,
+    })
   }
 
   /**
@@ -431,13 +545,21 @@ export class InputPanelAddon implements ITerminalAddon {
 
     this._suppressKeyboard()
 
+    if (!this._hasOwnPersistedState) {
+      const fallbackActiveTab = loadLastActiveTab()
+      this._panelSessionState.activeTab = fallbackActiveTab
+      InputPanelAddon._lastActiveTab = fallbackActiveTab
+    }
+
     // Build the element tree
-    const panel = document.createElement('input-panel')
+    const panel = document.createElement('input-panel') as InputPanelElement
     panel.setAttribute('layout', this._defaultLayout)
     this._applyPanelThemeBindings(panel)
+    panel.activeTab = this._panelSessionState.activeTab
 
-    const inputTab = document.createElement('input-method-tab')
+    const inputTab = document.createElement('input-method-tab') as InputMethodTabElement
     inputTab.setAttribute('slot', 'input')
+    inputTab.value = this._panelSessionState.inputDraft
     panel.appendChild(inputTab)
 
     const keysTab = document.createElement('virtual-keyboard-tab')
@@ -498,8 +620,21 @@ export class InputPanelAddon implements ITerminalAddon {
         }
       }
     })
+    this._on(inputTab, 'input-panel:input-change', (e) => {
+      const value = (e as CustomEvent).detail?.value
+      if (typeof value === 'string') {
+        this._panelSessionState.inputDraft = value
+        this._hasOwnPersistedState = true
+        this._persistPanelState()
+      }
+    })
     this._on(panel, 'input-panel:tab-change', (e) => {
       const tab = (e as CustomEvent).detail?.tab
+      if (isInputPanelTab(tab)) {
+        this._panelSessionState.activeTab = tab
+        this._hasOwnPersistedState = true
+        this._persistPanelState()
+      }
       if (tab === 'trackpad') this._showCursor()
       else this._hideCursor()
     })

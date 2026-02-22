@@ -10,7 +10,7 @@ import { iconSend } from './icons.js'
 export class InputMethodTab extends LitElement {
   static get properties() {
     return {
-      _inputValue: { state: true },
+      value: { type: String, attribute: false },
     }
   }
 
@@ -84,15 +84,26 @@ export class InputMethodTab extends LitElement {
     }
   `
 
-  declare _inputValue: string
+  declare value: string
 
   constructor() {
     super()
-    this._inputValue = ''
+    this.value = ''
+  }
+
+  private _emitInputChange() {
+    this.dispatchEvent(
+      new CustomEvent('input-panel:input-change', {
+        detail: { value: this.value },
+        bubbles: true,
+        composed: true,
+      })
+    )
   }
 
   private _onInput(e: Event) {
-    this._inputValue = (e.target as HTMLTextAreaElement).value
+    this.value = (e.target as HTMLTextAreaElement).value
+    this._emitInputChange()
   }
 
   private _onKeyDown(e: KeyboardEvent) {
@@ -104,7 +115,7 @@ export class InputMethodTab extends LitElement {
   }
 
   private _send() {
-    const text = this._inputValue.trim()
+    const text = this.value.trim()
     if (!text) return
 
     // Dispatch to terminal
@@ -116,7 +127,8 @@ export class InputMethodTab extends LitElement {
       })
     )
 
-    this._inputValue = ''
+    this.value = ''
+    this._emitInputChange()
   }
 
   render() {
@@ -124,7 +136,7 @@ export class InputMethodTab extends LitElement {
       <div class="input-area">
         <textarea
           placeholder="Type command and press Ctrl+Enter to send..."
-          .value=${this._inputValue}
+          .value=${this.value}
           @input=${this._onInput}
           @keydown=${this._onKeyDown}
         ></textarea>

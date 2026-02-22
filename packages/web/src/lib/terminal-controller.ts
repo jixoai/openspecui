@@ -452,6 +452,7 @@ class TerminalController {
       subscribeHistory: (listener) => this.inputHistoryStore.subscribe(listener),
       platform,
       defaultLayout: this.inputPanelDefaultLayout,
+      stateKey: sessionId,
       onSettingsChange: async (settings: InputPanelSettingsPayload) => {
         await this.inputHistoryStore.setLimit(settings.historyLimit)
       },

@@ -17,10 +17,11 @@ function resetAddonState() {
 
   // Remove any <input-panel> elements leaked into body or containers
   document.querySelectorAll('input-panel').forEach((el) => el.remove())
+  localStorage.removeItem('xtermInputPanelState')
 }
 
 /** Create a real xterm Terminal + InputPanelAddon, mount into container */
-function setupTerminal(container: HTMLElement) {
+function setupTerminal(container: HTMLElement, opts?: { stateKey?: string }) {
   const terminal = new Terminal({
     cols: 80,
     rows: 10,
@@ -29,7 +30,7 @@ function setupTerminal(container: HTMLElement) {
   })
 
   const inputHandler = fn()
-  const addon = new InputPanelAddon({ onInput: inputHandler })
+  const addon = new InputPanelAddon({ onInput: inputHandler, stateKey: opts?.stateKey })
   terminal.loadAddon(addon)
   terminal.open(container)
 
@@ -108,8 +109,8 @@ export const SingletonMigration: StoryObj = {
     resetAddonState()
     const containerA = canvasElement.querySelector('#term-a') as HTMLElement
     const containerB = canvasElement.querySelector('#term-b') as HTMLElement
-    const { addon: addonA } = setupTerminal(containerA)
-    const { addon: addonB } = setupTerminal(containerB)
+    const { addon: addonA } = setupTerminal(containerA, { stateKey: 'story-term-a' })
+    const { addon: addonB } = setupTerminal(containerB, { stateKey: 'story-term-b' })
 
     // Open A — panel should be inside container A
     addonA.open()
@@ -382,8 +383,8 @@ export const SharedMountTarget: StoryObj = {
     // Set shared mount target BEFORE creating terminals
     InputPanelAddon.mountTarget = wrapper
 
-    const { addon: addonA } = setupTerminal(containerA)
-    const { addon: addonB } = setupTerminal(containerB)
+    const { addon: addonA } = setupTerminal(containerA, { stateKey: 'switch-term-a' })
+    const { addon: addonB } = setupTerminal(containerB, { stateKey: 'switch-term-b' })
 
     // Open A — panel should be in the shared wrapper, NOT container A
     addonA.open()
@@ -409,5 +410,148 @@ export const SharedMountTarget: StoryObj = {
 
     // Cleanup
     InputPanelAddon.mountTarget = null
+  },
+}
+
+/**
+ * Persist panel runtime state between close/open cycles:
+ * - active tab (input mode)
+ * - input draft text in Input tab
+ */
+export const PersistPanelSessionState: StoryObj = {
+  render: () => html`<div id="term-container" style="width:100%;height:100%;"></div>`,
+  play: async ({ canvasElement }) => {
+    resetAddonState()
+    const container = canvasElement.querySelector('#term-container') as HTMLElement
+    const { addon } = setupTerminal(container)
+
+    addon.open()
+    const panel = container.querySelector('input-panel') as HTMLElement & {
+      activeTab: string
+      updateComplete: Promise<void>
+      shadowRoot: ShadowRoot
+    }
+    await panel.updateComplete
+
+    const inputTab = panel.querySelector('input-method-tab') as HTMLElement & {
+      updateComplete: Promise<void>
+      shadowRoot: ShadowRoot
+    }
+    await inputTab.updateComplete
+    const textarea = inputTab.shadowRoot.querySelector('textarea') as HTMLTextAreaElement
+    textarea.value = 'echo keep'
+    textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    await inputTab.updateComplete
+
+    const keysBtn = panel.shadowRoot.querySelectorAll('.tab-btn')[1] as HTMLButtonElement
+    keysBtn.click()
+    await panel.updateComplete
+    expect(panel.activeTab).toBe('keys')
+
+    addon.close()
+    addon.open()
+
+    const reopened = container.querySelector('input-panel') as HTMLElement & {
+      activeTab: string
+      updateComplete: Promise<void>
+    }
+    await reopened.updateComplete
+    expect(reopened.activeTab).toBe('keys')
+
+    const reopenedInputTab = reopened.querySelector('input-method-tab') as HTMLElement & {
+      updateComplete: Promise<void>
+      shadowRoot: ShadowRoot
+    }
+    await reopenedInputTab.updateComplete
+    const reopenedTextarea = reopenedInputTab.shadowRoot.querySelector(
+      'textarea'
+    ) as HTMLTextAreaElement
+    expect(reopenedTextarea.value).toBe('echo keep')
+
+    addon.close()
+  },
+}
+
+/**
+ * Persist session state across terminal-instance switching:
+ * A(input draft + keys) -> B -> A should restore A state.
+ */
+export const PersistStateAcrossTerminalSwitch: StoryObj = {
+  render: () => html`
+    <div style="display:flex;gap:8px;height:100%;">
+      <div id="term-a" style="flex:1;"></div>
+      <div id="term-b" style="flex:1;"></div>
+    </div>
+  `,
+  play: async ({ canvasElement }) => {
+    type PanelEl = HTMLElement & {
+      activeTab: string
+      updateComplete: Promise<void>
+    }
+
+    resetAddonState()
+    const containerA = canvasElement.querySelector('#term-a') as HTMLElement
+    const containerB = canvasElement.querySelector('#term-b') as HTMLElement
+    const { addon: addonA } = setupTerminal(containerA, { stateKey: 'switch-term-a' })
+    const { addon: addonB } = setupTerminal(containerB, { stateKey: 'switch-term-b' })
+
+    addonA.open()
+    let panelA = containerA.querySelector('input-panel') as PanelEl
+    expect(panelA).not.toBeNull()
+    await panelA.updateComplete
+
+    const inputTabA = panelA.querySelector('input-method-tab') as HTMLElement & {
+      updateComplete: Promise<void>
+      shadowRoot: ShadowRoot
+    }
+    await inputTabA.updateComplete
+    const textareaA = inputTabA.shadowRoot.querySelector('textarea') as HTMLTextAreaElement
+    textareaA.value = 'echo keep-on-a'
+    textareaA.dispatchEvent(new Event('input', { bubbles: true }))
+    await inputTabA.updateComplete
+
+    const keysBtnA = panelA.shadowRoot!.querySelectorAll('.tab-btn')[1] as HTMLButtonElement
+    keysBtnA.click()
+    await panelA.updateComplete
+    expect(panelA.activeTab).toBe('keys')
+    const persistedRaw = localStorage.getItem('xtermInputPanelState')
+    expect(persistedRaw).not.toBeNull()
+    const persisted = JSON.parse(persistedRaw ?? '{}') as {
+      sessions?: Record<string, { activeTab?: string; inputDraft?: string }>
+    }
+    expect(persisted.sessions?.['switch-term-a']?.activeTab).toBe('keys')
+    expect(persisted.sessions?.['switch-term-a']?.inputDraft).toBe('echo keep-on-a')
+
+    addonB.syncFocusLifecycle()
+    const panelB = containerB.querySelector('input-panel') as PanelEl
+    expect(panelB).not.toBeNull()
+    await panelB.updateComplete
+    expect(panelB.activeTab).toBe('keys')
+    const inputTabB = panelB.querySelector('input-method-tab') as HTMLElement & {
+      updateComplete: Promise<void>
+      shadowRoot: ShadowRoot
+    }
+    await inputTabB.updateComplete
+    const textareaB = inputTabB.shadowRoot.querySelector('textarea') as HTMLTextAreaElement
+    expect(textareaB.value).toBe('')
+
+    addonA.syncFocusLifecycle()
+    panelA = containerA.querySelector('input-panel') as PanelEl
+    expect(panelA).not.toBeNull()
+    await panelA.updateComplete
+    expect(panelA.activeTab).toBe('keys')
+
+    const reopenedInputTabA = panelA.querySelector('input-method-tab') as HTMLElement & {
+      updateComplete: Promise<void>
+      shadowRoot: ShadowRoot
+    }
+    await reopenedInputTabA.updateComplete
+    const reopenedTextareaA = reopenedInputTabA.shadowRoot.querySelector(
+      'textarea'
+    ) as HTMLTextAreaElement
+    expect(reopenedTextareaA.value).toBe('echo keep-on-a')
+
+    addonA.close()
+    addonB.close()
   },
 }
