@@ -49,7 +49,10 @@ describe('useServerStatus', () => {
     })
 
     systemSubscribeMock.mockImplementation(
-      (_input: undefined, handlers: { onData: (data: { projectDir: string; watcherEnabled: boolean }) => void }) => {
+      (
+        _input: undefined,
+        handlers: { onData: (data: { projectDir: string; watcherEnabled: boolean }) => void }
+      ) => {
         handlers.onData({
           projectDir: '/tmp/opsx-project',
           watcherEnabled: true,

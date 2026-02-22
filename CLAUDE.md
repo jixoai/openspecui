@@ -1,4 +1,3 @@
-
 # OpenSpec UI - AI Development Guidelines
 
 ## Core Architecture: Reactive File System
@@ -125,6 +124,7 @@ await ctx.cliExecutor.archiveStream(changeId, options, (event) => {
 **At the start of each session, read `references/openspec-0.16.0-report.md` to understand the OpenSpec domain model and architecture.**
 
 This file contains:
+
 - OpenSpec core concepts and terminology
 - File structure and naming conventions
 - Workflow patterns (proposal → implementation → archive)

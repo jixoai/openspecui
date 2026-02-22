@@ -1,13 +1,15 @@
+import type { SearchHit } from '@openspecui/search'
 import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SearchHit } from '@openspecui/search'
 
 const modeState = vi.hoisted(() => ({ staticMode: true }))
 const docsMock = vi.fn().mockResolvedValue([])
 const trpcQueryMock = vi.fn().mockResolvedValue([])
-const realtimeSubscribeMock = vi.fn((_input: undefined, _handlers: { onData: () => void; onError: (error: Error) => void }) => ({
-  unsubscribe: vi.fn(),
-}))
+const realtimeSubscribeMock = vi.fn(
+  (_input: undefined, _handlers: { onData: () => void; onError: (error: Error) => void }) => ({
+    unsubscribe: vi.fn(),
+  })
+)
 interface SearchSubscribeHandlers {
   onData: (data: SearchHit[]) => void
   onError: (error: Error) => void
@@ -75,9 +77,7 @@ describe('useSearch static provider recovery', () => {
   })
 
   it('retries provider initialization after a failed init', async () => {
-    initMock
-      .mockRejectedValueOnce(new Error('init failed'))
-      .mockResolvedValueOnce(undefined)
+    initMock.mockRejectedValueOnce(new Error('init failed')).mockResolvedValueOnce(undefined)
     searchMock.mockResolvedValueOnce([
       {
         documentId: 'spec:auth',
@@ -93,12 +93,9 @@ describe('useSearch static provider recovery', () => {
 
     const { useSearch } = await import('./use-search')
 
-    const { result, rerender } = renderHook(
-      ({ query }: { query: string }) => useSearch(query),
-      {
-        initialProps: { query: 'auth' },
-      }
-    )
+    const { result, rerender } = renderHook(({ query }: { query: string }) => useSearch(query), {
+      initialProps: { query: 'auth' },
+    })
 
     await waitFor(() => {
       expect(result.current.error?.message).toBe('init failed')
@@ -118,21 +115,23 @@ describe('useSearch static provider recovery', () => {
   it('uses subscription in dynamic mode', async () => {
     modeState.staticMode = false
 
-    trpcSubscribeMock.mockImplementation((_input: { query: string; limit?: number }, handlers: SearchSubscribeHandlers) => {
-      handlers.onData([
-        {
-          documentId: 'change:add-auth',
-          kind: 'change',
-          title: 'Add Auth',
-          href: '/changes/add-auth',
-          path: 'openspec/changes/add-auth',
-          score: 10,
-          snippet: 'Auth',
-          updatedAt: 1,
-        },
-      ])
-      return { unsubscribe: vi.fn() }
-    })
+    trpcSubscribeMock.mockImplementation(
+      (_input: { query: string; limit?: number }, handlers: SearchSubscribeHandlers) => {
+        handlers.onData([
+          {
+            documentId: 'change:add-auth',
+            kind: 'change',
+            title: 'Add Auth',
+            href: '/changes/add-auth',
+            path: 'openspec/changes/add-auth',
+            score: 10,
+            snippet: 'Auth',
+            updatedAt: 1,
+          },
+        ])
+        return { unsubscribe: vi.fn() }
+      }
+    )
 
     const { useSearch } = await import('./use-search')
     const { result } = renderHook(() => useSearch('auth'))
@@ -148,10 +147,12 @@ describe('useSearch static provider recovery', () => {
   it('falls back to query + realtime subscription when backend lacks search.subscribe', async () => {
     modeState.staticMode = false
 
-    trpcSubscribeMock.mockImplementation((_input: { query: string; limit?: number }, handlers: SearchSubscribeHandlers) => {
-      handlers.onError(new Error('No "subscription"-procedure on path "search.subscribe"'))
-      return { unsubscribe: vi.fn() }
-    })
+    trpcSubscribeMock.mockImplementation(
+      (_input: { query: string; limit?: number }, handlers: SearchSubscribeHandlers) => {
+        handlers.onError(new Error('No "subscription"-procedure on path "search.subscribe"'))
+        return { unsubscribe: vi.fn() }
+      }
+    )
     trpcQueryMock.mockResolvedValueOnce([
       {
         documentId: 'spec:auth',

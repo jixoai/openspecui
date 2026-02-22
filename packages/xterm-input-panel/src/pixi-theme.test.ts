@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { resolvePixiTheme, cssColorToHex, blendHex } from './pixi-theme.js'
+import { describe, expect, it } from 'vitest'
+import { blendHex, cssColorToHex, resolvePixiTheme } from './pixi-theme.js'
 
 describe('pixi-theme', () => {
   describe('resolvePixiTheme', () => {

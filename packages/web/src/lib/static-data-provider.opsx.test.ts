@@ -133,7 +133,9 @@ describe('static-data-provider opsx adapters', () => {
   it('reads artifact output and glob files from snapshot', async () => {
     const provider = await import('./static-data-provider')
 
-    await expect(provider.getOpsxArtifactOutput('add-2fa', 'proposal.md')).resolves.toBe('# Proposal')
+    await expect(provider.getOpsxArtifactOutput('add-2fa', 'proposal.md')).resolves.toBe(
+      '# Proposal'
+    )
 
     const files = await provider.getOpsxGlobArtifactFiles('add-2fa', 'specs/**/*.md')
     expect(files).toEqual([

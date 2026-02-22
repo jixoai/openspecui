@@ -1,8 +1,8 @@
 import {
+  Archive,
   FileText,
   GitBranch,
   LayoutDashboard,
-  Archive,
   Settings,
   SlidersHorizontal,
   Terminal,
@@ -10,7 +10,14 @@ import {
 } from 'lucide-react'
 
 /** Valid top-level routes in the application */
-export type AppRoute = '/dashboard' | '/config' | '/specs' | '/changes' | '/archive' | '/settings' | '/terminal'
+export type AppRoute =
+  | '/dashboard'
+  | '/config'
+  | '/specs'
+  | '/changes'
+  | '/archive'
+  | '/settings'
+  | '/terminal'
 
 export interface NavItem {
   to: AppRoute
@@ -32,7 +39,9 @@ export const allNavItems: NavItem[] = [
 ]
 
 /** Main nav items (legacy compat) */
-export const navItems: NavItem[] = allNavItems.filter((i) => i.defaultArea === 'main' && i.to !== '/settings')
+export const navItems: NavItem[] = allNavItems.filter(
+  (i) => i.defaultArea === 'main' && i.to !== '/settings'
+)
 
 /** Mobile tabbar items — all main + terminal */
 export const mobileNavItems: NavItem[] = allNavItems.filter((i) => i.to !== '/settings')

@@ -16,7 +16,9 @@ const meta: Meta = {
   tags: ['autodocs'],
   decorators: [
     (story) => html`
-      <div style="width: 400px; height: 250px; background: #1a1a1a; color: #fff; font-family: monospace;">
+      <div
+        style="width: 400px; height: 250px; background: #1a1a1a; color: #fff; font-family: monospace;"
+      >
         ${story()}
       </div>
     `,
@@ -56,7 +58,7 @@ export const SendInput: StoryObj = {
     sendBtn.click()
 
     // Wait for _send to complete
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
 
     expect(sendHandler).toHaveBeenCalledTimes(1)
     const detail = (sendHandler.mock.calls[0] as unknown[])[0] as CustomEvent
@@ -85,13 +87,15 @@ export const CtrlEnterSend: StoryObj = {
     textarea.dispatchEvent(new Event('input', { bubbles: true }))
     await tab.updateComplete
 
-    textarea.dispatchEvent(new KeyboardEvent('keydown', {
-      key: 'Enter',
-      ctrlKey: true,
-      bubbles: true,
-    }))
+    textarea.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Enter',
+        ctrlKey: true,
+        bubbles: true,
+      })
+    )
 
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
 
     expect(sendHandler).toHaveBeenCalledTimes(1)
     const detail = (sendHandler.mock.calls[0] as unknown[])[0] as CustomEvent

@@ -1,4 +1,10 @@
-import type { AIProvider, CompletionOptions, CompletionResponse, StreamChunk, APIProviderConfig } from './types.js'
+import type {
+  AIProvider,
+  APIProviderConfig,
+  CompletionOptions,
+  CompletionResponse,
+  StreamChunk,
+} from './types.js'
 
 /**
  * API-based AI provider (OpenAI ChatCompletion compatible)

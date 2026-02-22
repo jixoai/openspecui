@@ -23,7 +23,9 @@ export function ButtonGroup<T extends string>({
   className = '',
 }: ButtonGroupProps<T>) {
   return (
-    <div className={`inline-flex overflow-hidden rounded-md border border-border bg-card ${className}`}>
+    <div
+      className={`border-border bg-card inline-flex overflow-hidden rounded-md border ${className}`}
+    >
       {options.map((option, index) => {
         const active = option.value === value
         return (
@@ -34,7 +36,7 @@ export function ButtonGroup<T extends string>({
             onClick={() => onChange(option.value)}
             aria-pressed={active}
             className={`px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-              index > 0 ? 'border-l border-border' : ''
+              index > 0 ? 'border-border border-l' : ''
             } ${
               active
                 ? 'bg-primary text-primary-foreground'

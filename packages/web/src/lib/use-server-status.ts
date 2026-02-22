@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { isStaticMode } from './static-mode'
-import { trpcClient, getOrCreateWsClientInstance, WS_RETRY_DELAY_MS } from './trpc'
+import { getOrCreateWsClientInstance, trpcClient, WS_RETRY_DELAY_MS } from './trpc'
 
 export interface ServerStatus {
   connected: boolean

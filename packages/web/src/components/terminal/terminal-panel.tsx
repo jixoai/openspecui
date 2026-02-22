@@ -3,9 +3,9 @@ import { navController } from '@/lib/nav-controller'
 import { useTerminalContext } from '@/lib/terminal-context'
 import { terminalController } from '@/lib/terminal-controller'
 import { useNavLayout } from '@/lib/use-nav-controller'
+import '@/styles/terminal-effects.css'
 import { PanelBottomClose, PanelTopClose, Plus, X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import '@/styles/terminal-effects.css'
 import { XtermTerminal } from './xterm-terminal'
 
 function EditableTabLabel({

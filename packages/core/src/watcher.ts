@@ -1,6 +1,6 @@
+import { EventEmitter } from 'events'
 import { watch, type FSWatcher } from 'fs'
 import { join } from 'path'
-import { EventEmitter } from 'events'
 
 /**
  * File change event types

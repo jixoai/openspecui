@@ -13,6 +13,7 @@
 ### Task 1: Promote OpsxDashboard to Dashboard
 
 **Files:**
+
 - Modify: `packages/web/src/routes/dashboard.tsx`
 - Delete: `packages/web/src/routes/dashboard-legacy.tsx`
 
@@ -54,6 +55,7 @@ git commit -m "refactor(web): promote OpsxDashboard to Dashboard, remove legacy"
 ### Task 2: Promote OpsxChangeList to ChangeList
 
 **Files:**
+
 - Modify: `packages/web/src/routes/change-list.tsx`
 - Delete: `packages/web/src/routes/change-list-legacy.tsx`
 
@@ -95,6 +97,7 @@ git commit -m "refactor(web): promote OpsxChangeList to ChangeList, remove legac
 ### Task 3: Promote OpsxChangeView to ChangeView
 
 **Files:**
+
 - Modify: `packages/web/src/routes/change-view.tsx`
 - Delete: `packages/web/src/routes/change-view-legacy.tsx`
 
@@ -138,6 +141,7 @@ git commit -m "refactor(web): promote OpsxChangeView to ChangeView, remove legac
 ### Task 4: Remove Project route
 
 **Files:**
+
 - Delete: `packages/web/src/routes/project.tsx`
 - Modify: `packages/web/src/App.tsx` (if Project route still referenced)
 - Modify: `packages/web/src/ssg/entry-server.tsx` (if Project route still referenced)
@@ -182,6 +186,7 @@ git commit -m "refactor(web): remove Project route (replaced by Config)"
 ### Task 5: Clean up SSG entry-server.tsx
 
 **Files:**
+
 - Modify: `packages/web/src/ssg/entry-server.tsx`
 
 **Step 1: Remove Schemas route if not in SSG**
@@ -204,11 +209,13 @@ git commit -m "refactor(web): sync SSG routes with App.tsx"
 ### Task 6: Clean up unused legacy subscription hooks
 
 **Files:**
+
 - Modify: `packages/web/src/lib/use-subscription.ts`
 
 **Step 1: Identify hooks only used by deleted legacy files**
 
 After Tasks 1-4, these hooks lose all consumers:
+
 - `useDashboardSubscription` — only used by `dashboard-legacy.tsx`
 - `useInitializedSubscription` — only used by `dashboard-legacy.tsx`
 - `useChangesSubscription` — only used by `change-list-legacy.tsx`
@@ -217,6 +224,7 @@ After Tasks 1-4, these hooks lose all consumers:
 - `useProjectMdSubscription` — only used by `project.tsx`
 
 These hooks are STILL needed (used by kept routes):
+
 - `useSpecsSubscription` — `spec-list.tsx`
 - `useSpecSubscription` — `spec-view.tsx`
 - `useArchivesSubscription` — `archive-list.tsx`
@@ -247,11 +255,13 @@ git commit -m "refactor(web): remove unused legacy subscription hooks"
 ### Task 7: Clean up unused server router procedures
 
 **Files:**
+
 - Modify: `packages/server/src/router.ts`
 
 **Step 1: Identify server procedures only used by deleted legacy code**
 
 Check which tRPC procedures were consumed by the deleted hooks:
+
 - `dashboard.getData` / `dashboard.subscribe` — used by `useDashboardSubscription`
 - `dashboard.isInitialized` / `dashboard.subscribeInitialized` — used by `useInitializedSubscription`
 - `change.getAll` / `change.subscribeAll` — used by `useChangesSubscription`
@@ -264,6 +274,7 @@ Before removing, verify these are not used elsewhere (e.g., by the export/snapsh
 **Step 2: Remove unused procedures**
 
 Remove the dead procedures from `router.ts`. Be careful to keep:
+
 - `change.toggleTask` — may still be used
 - `change.getFiles` / `change.subscribeFiles` — used by `folder-editor-viewer.tsx`
 - All `opsx.*` procedures — these are the new standard
@@ -291,6 +302,7 @@ git commit -m "refactor(server): remove unused legacy router procedures"
 ### Task 8: Clean up isStaticMode usage in remaining files
 
 **Files:**
+
 - Review: `packages/web/src/components/cli-health-gate.tsx`
 - Review: `packages/web/src/routes/config.tsx`
 - Review: `packages/web/src/routes/settings.tsx`
@@ -303,6 +315,7 @@ git commit -m "refactor(server): remove unused legacy router procedures"
 **Step 1: Audit remaining isStaticMode usage**
 
 `isStaticMode()` is still legitimately needed for:
+
 - `trpc.ts` — disabling WebSocket in static mode
 - `use-subscription.ts` — returning static data instead of subscribing
 - `use-server-status.ts` — skipping server health checks
@@ -345,6 +358,7 @@ pnpm dev
 ```
 
 Verify in browser:
+
 - Dashboard loads with OPSX status cards and change list
 - `/changes` shows OPSX change list with artifact counts
 - `/changes/<id>` shows OPSX change view with artifact editor
@@ -374,21 +388,21 @@ git commit -m "fix: resolve build/test issues from legacy removal"
 
 ## Summary of deletions
 
-| File | Reason |
-|------|--------|
-| `routes/dashboard-legacy.tsx` | Replaced by OPSX Dashboard |
-| `routes/opsx-dashboard.tsx` | Merged into `dashboard.tsx` |
-| `routes/change-list-legacy.tsx` | Replaced by OPSX ChangeList |
-| `routes/change-view-legacy.tsx` | Replaced by OPSX ChangeView |
-| `routes/opsx-change-view.tsx` | Merged into `change-view.tsx` |
-| `routes/project.tsx` | Replaced by Config route |
+| File                            | Reason                        |
+| ------------------------------- | ----------------------------- |
+| `routes/dashboard-legacy.tsx`   | Replaced by OPSX Dashboard    |
+| `routes/opsx-dashboard.tsx`     | Merged into `dashboard.tsx`   |
+| `routes/change-list-legacy.tsx` | Replaced by OPSX ChangeList   |
+| `routes/change-view-legacy.tsx` | Replaced by OPSX ChangeView   |
+| `routes/opsx-change-view.tsx`   | Merged into `change-view.tsx` |
+| `routes/project.tsx`            | Replaced by Config route      |
 
 ## Summary of modifications
 
-| File | Change |
-|------|--------|
-| `routes/dashboard.tsx` | OPSX content directly, no branching |
-| `routes/change-list.tsx` | OPSX content directly, no branching |
-| `routes/change-view.tsx` | OPSX content directly, no branching |
-| `lib/use-subscription.ts` | Remove 6 unused hooks |
-| `server/src/router.ts` | Remove unused procedures (dashboard, project) |
+| File                      | Change                                        |
+| ------------------------- | --------------------------------------------- |
+| `routes/dashboard.tsx`    | OPSX content directly, no branching           |
+| `routes/change-list.tsx`  | OPSX content directly, no branching           |
+| `routes/change-view.tsx`  | OPSX content directly, no branching           |
+| `lib/use-subscription.ts` | Remove 6 unused hooks                         |
+| `server/src/router.ts`    | Remove unused procedures (dashboard, project) |

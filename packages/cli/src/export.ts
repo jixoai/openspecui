@@ -17,8 +17,8 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import pkg from '../package.json' with { type: 'json' }
 import { parse as parseYaml } from 'yaml'
+import pkg from '../package.json' with { type: 'json' }
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -88,9 +88,11 @@ function parseSchemaYaml(content: string): SchemaDetail {
     const artifactObj = artifact as Record<string, unknown>
     const id = typeof artifactObj.id === 'string' ? artifactObj.id : ''
     const generates = typeof artifactObj.generates === 'string' ? artifactObj.generates : ''
-    const description = typeof artifactObj.description === 'string' ? artifactObj.description : undefined
+    const description =
+      typeof artifactObj.description === 'string' ? artifactObj.description : undefined
     const template = typeof artifactObj.template === 'string' ? artifactObj.template : undefined
-    const instruction = typeof artifactObj.instruction === 'string' ? artifactObj.instruction : undefined
+    const instruction =
+      typeof artifactObj.instruction === 'string' ? artifactObj.instruction : undefined
     const requires = Array.isArray(artifactObj.requires)
       ? artifactObj.requires.filter((value): value is string => typeof value === 'string')
       : []
@@ -111,7 +113,8 @@ function parseSchemaYaml(content: string): SchemaDetail {
     ? applyObj.requires.filter((value): value is string => typeof value === 'string')
     : []
   const applyTracks = typeof applyObj.tracks === 'string' ? applyObj.tracks : undefined
-  const applyInstruction = typeof applyObj.instruction === 'string' ? applyObj.instruction : undefined
+  const applyInstruction =
+    typeof applyObj.instruction === 'string' ? applyObj.instruction : undefined
 
   const detail = {
     name: typeof schemaObj.name === 'string' ? schemaObj.name : '',

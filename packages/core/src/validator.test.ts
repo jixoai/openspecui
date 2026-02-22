@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
+import type { Change, Spec } from '../src/schemas.js'
 import { Validator } from '../src/validator.js'
-import type { Spec, Change } from '../src/schemas.js'
 
 describe('Validator', () => {
   const validator = new Validator()
@@ -98,9 +98,7 @@ describe('Validator', () => {
 
       expect(result.valid).toBe(true)
       expect(
-        result.issues.some(
-          (i) => i.severity === 'WARNING' && i.path?.includes('scenarios')
-        )
+        result.issues.some((i) => i.severity === 'WARNING' && i.path?.includes('scenarios'))
       ).toBe(true)
     })
   })

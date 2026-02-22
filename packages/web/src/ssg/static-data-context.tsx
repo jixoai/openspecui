@@ -1,8 +1,8 @@
 /**
  * Static data context for SSG
  */
-import { createContext, useContext, type ReactNode } from 'react'
 import type { ExportSnapshot } from '@openspecui/core'
+import { createContext, useContext, type ReactNode } from 'react'
 
 interface StaticDataContextValue {
   snapshot: ExportSnapshot | null

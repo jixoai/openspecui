@@ -1,5 +1,5 @@
 import { subscribe } from '@parcel/watcher'
-import { writeFileSync, utimesSync, existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const testDir = '/tmp/utimes-watcher-test'
@@ -16,7 +16,10 @@ const subscription = await subscribe(testDir, (err, events) => {
     console.error('Error:', err)
     return
   }
-  console.log('Events received:', events.map((e) => `${e.type}: ${e.path}`))
+  console.log(
+    'Events received:',
+    events.map((e) => `${e.type}: ${e.path}`)
+  )
 })
 
 // 等待 watcher 稳定

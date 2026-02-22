@@ -1,4 +1,4 @@
-import type { Spec, Change } from './schemas.js'
+import type { Change, Spec } from './schemas.js'
 
 export interface ValidationIssue {
   severity: 'ERROR' | 'WARNING' | 'INFO'

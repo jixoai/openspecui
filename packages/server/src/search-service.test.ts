@@ -9,17 +9,15 @@ function createAdapterMock() {
       .fn()
       .mockResolvedValue([{ id: 'auth', name: 'Auth', createdAt: 1, updatedAt: 10 }]),
     readSpecRaw: vi.fn().mockResolvedValue('# Auth spec'),
-    listChangesWithMeta: vi
-      .fn()
-      .mockResolvedValue([
-        {
-          id: 'add-auth',
-          name: 'Add Auth',
-          progress: { total: 0, completed: 0 },
-          createdAt: 1,
-          updatedAt: 20,
-        },
-      ]),
+    listChangesWithMeta: vi.fn().mockResolvedValue([
+      {
+        id: 'add-auth',
+        name: 'Add Auth',
+        progress: { total: 0, completed: 0 },
+        createdAt: 1,
+        updatedAt: 20,
+      },
+    ]),
     readChangeRaw: vi.fn().mockResolvedValue({
       proposal: 'Proposal text',
       tasks: 'Tasks text',

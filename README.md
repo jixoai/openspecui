@@ -252,7 +252,7 @@ pnpm dev:legacy
 | ------------------------- | -------------------------------------------- |
 | `openspecui`              | CLI tool and bundled web UI                  |
 | `@openspecui/core`        | File adapter, parser, validator, and watcher |
-| `@openspecui/search`      | Shared search providers and indexing          |
+| `@openspecui/search`      | Shared search providers and indexing         |
 | `@openspecui/server`      | tRPC HTTP/WebSocket server                   |
 | `@openspecui/ai-provider` | AI provider abstraction (API & ACP)          |
 | `@openspecui/web`         | React web application                        |

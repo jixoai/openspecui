@@ -1,6 +1,6 @@
-import type { AIProvider, ProviderConfig, ProviderRegistry } from './types.js'
-import { APIProvider } from './api-provider.js'
 import { ACPProvider } from './acp-provider.js'
+import { APIProvider } from './api-provider.js'
+import type { AIProvider, ProviderConfig, ProviderRegistry } from './types.js'
 
 /**
  * Factory function to create a provider from configuration
@@ -135,9 +135,7 @@ export class ProviderManager {
    * Dispose all providers
    */
   async dispose(): Promise<void> {
-    await Promise.all(
-      Array.from(this.providers.values()).map((provider) => provider.dispose?.())
-    )
+    await Promise.all(Array.from(this.providers.values()).map((provider) => provider.dispose?.()))
     this.providers.clear()
   }
 }

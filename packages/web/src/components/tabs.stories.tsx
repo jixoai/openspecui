@@ -12,7 +12,7 @@ function TabsDemo() {
 
   const [active, setActive] = useState('one')
   return (
-    <div className="h-[220px] w-[420px] border border-border">
+    <div className="border-border h-[220px] w-[420px] border">
       <Tabs tabs={demoTabs} selectedTab={active} onTabChange={setActive} />
     </div>
   )

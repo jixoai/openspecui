@@ -1,6 +1,7 @@
 # cli-commands Specification
 
 ## Purpose
+
 Define the OpenSpecUI CLI export workflow for producing a deployable static website and data snapshot.
 
 ## Requirements

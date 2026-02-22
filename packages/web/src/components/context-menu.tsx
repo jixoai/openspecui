@@ -71,8 +71,7 @@ export function ContextMenu({ open, items, position, onClose }: ContextMenuProps
     }
   }, [open, onClose])
 
-  const menuStyle =
-    adjustedPosition ??
+  const menuStyle = adjustedPosition ??
     position ?? {
       x: 0,
       y: 0,
@@ -80,10 +79,12 @@ export function ContextMenu({ open, items, position, onClose }: ContextMenuProps
   const menuStyleValues = { left: menuStyle.x, top: menuStyle.y }
 
   useEffect(() => {
-    const menu = menuRef.current as (HTMLDivElement & {
-      showPopover?: () => void
-      hidePopover?: () => void
-    }) | null
+    const menu = menuRef.current as
+      | (HTMLDivElement & {
+          showPopover?: () => void
+          hidePopover?: () => void
+        })
+      | null
     if (!menu) return
     if (shouldRender) {
       if (!menu.matches(':popover-open')) {
@@ -123,12 +124,7 @@ export function ContextMenu({ open, items, position, onClose }: ContextMenuProps
           }
         }
       `}</style>
-      <div
-        ref={anchorRef}
-        className="context-menu-anchor"
-        style={menuStyleValues}
-        aria-hidden
-      />
+      <div ref={anchorRef} className="context-menu-anchor" style={menuStyleValues} aria-hidden />
       <div
         ref={menuRef}
         popover="auto"

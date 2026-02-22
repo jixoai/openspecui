@@ -92,7 +92,7 @@ export function ResizeHandle({ onResize, minHeight = 100, maxHeight }: ResizeHan
       ref={handleRef}
       onMouseDown={onMouseDown}
       onTouchStart={onTouchStart}
-      className="border-border group flex h-1.5 shrink-0 cursor-row-resize items-center justify-center border-t transition hover:bg-muted/50"
+      className="border-border hover:bg-muted/50 group flex h-1.5 shrink-0 cursor-row-resize items-center justify-center border-t transition"
     >
       <div className="bg-muted-foreground/30 group-hover:bg-muted-foreground/60 h-0.5 w-8 rounded-full transition" />
     </div>

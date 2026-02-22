@@ -1,5 +1,11 @@
 # openspecui
 
+## 1.4.0
+
+### Minor Changes
+
+- Improve terminal interaction reliability, including InputPanel state persistence and ghostty virtual cursor behavior.
+
 ## 1.3.0
 
 ### Minor Changes

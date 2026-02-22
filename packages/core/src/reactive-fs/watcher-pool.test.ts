@@ -1,19 +1,19 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mkdir, writeFile } from 'fs/promises'
+import { join } from 'path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  initWatcherPool,
-  acquireWatcher,
-  getActiveWatcherCount,
-  closeAllWatchers,
-  isWatcherPoolInitialized,
-} from './watcher-pool.js'
-import {
+  cleanupTempDir,
   createTempDir,
   createTempFile,
-  cleanupTempDir,
   waitForDebounce,
 } from '../__tests__/test-utils.js'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
+import {
+  acquireWatcher,
+  closeAllWatchers,
+  getActiveWatcherCount,
+  initWatcherPool,
+  isWatcherPoolInitialized,
+} from './watcher-pool.js'
 
 describe('WatcherPool', () => {
   let tempDir: string

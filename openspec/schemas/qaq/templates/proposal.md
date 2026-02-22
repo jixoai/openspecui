@@ -9,9 +9,11 @@
 ## Capabilities
 
 ### New Capabilities
+
 <!-- List new capabilities -->
 
 ### Modified Capabilities
+
 <!-- List modified capabilities -->
 
 ## Impact

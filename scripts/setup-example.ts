@@ -291,7 +291,10 @@ async function setup(clean = false) {
       SAMPLE_DELTA_USER,
     ],
     // Second change files
-    [join(EXAMPLE_DIR, 'openspec', 'changes', SAMPLE_CHANGE2_ID, 'proposal.md'), SAMPLE_CHANGE2_PROPOSAL],
+    [
+      join(EXAMPLE_DIR, 'openspec', 'changes', SAMPLE_CHANGE2_ID, 'proposal.md'),
+      SAMPLE_CHANGE2_PROPOSAL,
+    ],
     [join(EXAMPLE_DIR, 'openspec', 'changes', SAMPLE_CHANGE2_ID, 'tasks.md'), SAMPLE_CHANGE2_TASKS],
     [
       join(EXAMPLE_DIR, 'openspec', 'changes', SAMPLE_CHANGE2_ID, 'specs', 'auth', 'spec.md'),

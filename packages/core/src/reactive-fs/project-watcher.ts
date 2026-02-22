@@ -1,6 +1,6 @@
 import type { AsyncSubscription, Event } from '@parcel/watcher'
-import { dirname, resolve } from 'node:path'
 import { existsSync, lstatSync, realpathSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 
 /**
  * 获取路径的真实路径（解析符号链接）
@@ -442,7 +442,9 @@ export class ProjectWatcher {
     this.projectDirFingerprint = null
 
     if (!existsSync(this.projectDir)) {
-      console.warn('[ProjectWatcher] Project directory does not exist, waiting for it to be created...')
+      console.warn(
+        '[ProjectWatcher] Project directory does not exist, waiting for it to be created...'
+      )
       this.waitForProjectDir('missing-project-dir')
       return
     }

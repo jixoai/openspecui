@@ -1,23 +1,23 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { rm, writeFile } from 'fs/promises'
+import { join } from 'path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
-  reactiveReadFile,
-  reactiveReadDir,
-  reactiveExists,
-  reactiveStat,
-  clearCache,
-  getCacheSize,
-} from './reactive-fs.js'
-import { ReactiveContext } from './reactive-context.js'
-import { initWatcherPool, closeAllWatchers } from './watcher-pool.js'
-import {
+  cleanupTempDir,
   createTempDir,
   createTempFile,
   createTempSubDir,
-  cleanupTempDir,
   waitForDebounce,
 } from '../__tests__/test-utils.js'
-import { writeFile, rm, mkdir, utimes } from 'fs/promises'
-import { join } from 'path'
+import { ReactiveContext } from './reactive-context.js'
+import {
+  clearCache,
+  getCacheSize,
+  reactiveExists,
+  reactiveReadDir,
+  reactiveReadFile,
+  reactiveStat,
+} from './reactive-fs.js'
+import { closeAllWatchers, initWatcherPool } from './watcher-pool.js'
 
 describe('ReactiveFS', () => {
   let tempDir: string

@@ -6,7 +6,10 @@ export function findContentScrollContainer(element: HTMLElement): HTMLElement | 
   return element.closest('.viewer-scroll') as HTMLElement
 }
 
-function findHeadingTargetInContainer(container: HTMLElement, headingId: string): HTMLElement | null {
+function findHeadingTargetInContainer(
+  container: HTMLElement,
+  headingId: string
+): HTMLElement | null {
   const candidates = container.querySelectorAll<HTMLElement>('[id]')
   for (const candidate of candidates) {
     if (candidate.id === headingId) {
@@ -16,7 +19,10 @@ function findHeadingTargetInContainer(container: HTMLElement, headingId: string)
   return null
 }
 
-export function resolveHashTarget(anchorElement: HTMLElement, hash: string): {
+export function resolveHashTarget(
+  anchorElement: HTMLElement,
+  hash: string
+): {
   headingId: string
   target: HTMLElement | null
   contentContainer: HTMLElement | null
@@ -36,7 +42,10 @@ export function resolveHashTarget(anchorElement: HTMLElement, hash: string): {
   return { headingId, target: document.getElementById(headingId), contentContainer }
 }
 
-export function scrollResolvedHashTarget(target: HTMLElement, contentContainer: HTMLElement | null) {
+export function scrollResolvedHashTarget(
+  target: HTMLElement,
+  contentContainer: HTMLElement | null
+) {
   if (!contentContainer) {
     target.scrollIntoView({ behavior: 'smooth', block: 'start' })
     return

@@ -40,7 +40,7 @@ function parseHistoryItems(value: unknown): TerminalInputHistoryItem[] {
 
 function mergeAndTrim(
   records: readonly TerminalInputHistoryItem[],
-  limit: number,
+  limit: number
 ): TerminalInputHistoryItem[] {
   const dedup = new Map<string, TerminalInputHistoryItem>()
   for (const record of records) {
@@ -50,14 +50,12 @@ function mergeAndTrim(
     }
   }
 
-  return [...dedup.values()]
-    .sort((a, b) => b.time - a.time)
-    .slice(0, clampLimit(limit))
+  return [...dedup.values()].sort((a, b) => b.time - a.time).slice(0, clampLimit(limit))
 }
 
 function itemsEqual(
   a: readonly TerminalInputHistoryItem[],
-  b: readonly TerminalInputHistoryItem[],
+  b: readonly TerminalInputHistoryItem[]
 ): boolean {
   if (a.length !== b.length) return false
   for (let i = 0; i < a.length; i += 1) {
@@ -127,7 +125,9 @@ async function readLocalHistoryFromIdb(): Promise<TerminalInputHistoryItem[] | n
   })
 }
 
-async function writeLocalHistoryToIdb(records: readonly TerminalInputHistoryItem[]): Promise<boolean> {
+async function writeLocalHistoryToIdb(
+  records: readonly TerminalInputHistoryItem[]
+): Promise<boolean> {
   const db = await openDatabase()
   if (!db) return false
 
@@ -224,7 +224,7 @@ export class TerminalInputHistoryStore {
     await this.ensureInitialized()
     const next = mergeAndTrim(
       [{ text: normalizedText, time: Date.now() }, ...this.records],
-      this.getLimit(),
+      this.getLimit()
     )
     await this.commit(next, { persistRemote: true })
   }
@@ -274,7 +274,7 @@ export class TerminalInputHistoryStore {
           onData: (value: unknown) => {
             void this.onRemoteData(value)
           },
-        },
+        }
       )
 
       this.kvUnsubscribe = () => subscription.unsubscribe()
@@ -291,7 +291,7 @@ export class TerminalInputHistoryStore {
 
   private async commit(
     next: TerminalInputHistoryItem[],
-    options: { persistRemote: boolean },
+    options: { persistRemote: boolean }
   ): Promise<void> {
     if (itemsEqual(this.records, next)) return
     this.records = next

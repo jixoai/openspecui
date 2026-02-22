@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProviderManager, createProvider } from '../src/manager.js'
-import type { ProviderRegistry, APIProviderConfig, ACPProviderConfig } from '../src/types.js'
+import type { ACPProviderConfig, APIProviderConfig, ProviderRegistry } from '../src/types.js'
 
 describe('createProvider', () => {
   it('should create APIProvider for api type', () => {
@@ -161,10 +161,7 @@ describe('ProviderManager', () => {
   describe('checkAvailability', () => {
     it('should check availability of all providers', async () => {
       // Mock fetch for API provider
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValue({ ok: true })
-      )
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
 
       manager.register(
         'api1',

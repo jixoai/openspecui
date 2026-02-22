@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { takeFromGenerator } from '../__tests__/test-utils.js'
 import { ReactiveContext } from './reactive-context.js'
 import { ReactiveState, contextStorage } from './reactive-state.js'
-import { takeFromGenerator, waitFor } from '../__tests__/test-utils.js'
 
 describe('ReactiveContext', () => {
   describe('track()', () => {

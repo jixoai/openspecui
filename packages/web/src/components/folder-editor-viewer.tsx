@@ -60,11 +60,7 @@ export function FolderEditorViewer({
       emptyState={<span>No files found for this change.</span>}
       renderEditor={(activeFile) =>
         activeFile ? (
-          <FileExplorerCodeEditor
-            file={activeFile}
-            value={activeFile.content ?? ''}
-            readOnly
-          />
+          <FileExplorerCodeEditor file={activeFile} value={activeFile.content ?? ''} readOnly />
         ) : (
           <div className="text-muted-foreground flex h-full items-center justify-center">
             Select a file to view

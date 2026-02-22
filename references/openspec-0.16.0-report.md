@@ -41,11 +41,11 @@ openspec/
 
 ```typescript
 interface Spec {
-  name: string           // 从 # 标题解析
-  overview: string       // Purpose 部分内容
+  name: string // 从 # 标题解析
+  overview: string // Purpose 部分内容
   requirements: Requirement[]
   metadata?: {
-    version: string      // 默认 '1.0.0'
+    version: string // 默认 '1.0.0'
     format: 'openspec'
     sourcePath?: string
   }
@@ -56,12 +56,12 @@ interface Spec {
 
 ```typescript
 interface Requirement {
-  text: string           // 需求文本，必须包含 SHALL 或 MUST
-  scenarios: Scenario[]  // 至少一个场景
+  text: string // 需求文本，必须包含 SHALL 或 MUST
+  scenarios: Scenario[] // 至少一个场景
 }
 
 interface Scenario {
-  rawText: string        // 场景的原始文本内容
+  rawText: string // 场景的原始文本内容
 }
 ```
 
@@ -69,10 +69,10 @@ interface Scenario {
 
 ```typescript
 interface Change {
-  name: string           // 从 # 标题解析
-  why: string            // Why 部分内容
-  whatChanges: string    // What Changes 部分内容
-  deltas: Delta[]        // 至少一个 delta
+  name: string // 从 # 标题解析
+  why: string // Why 部分内容
+  whatChanges: string // What Changes 部分内容
+  deltas: Delta[] // 至少一个 delta
   metadata?: {
     version: string
     format: 'openspec-change'
@@ -86,7 +86,7 @@ interface Change {
 type DeltaOperation = 'ADDED' | 'MODIFIED' | 'REMOVED' | 'RENAMED'
 
 interface Delta {
-  spec: string           // 目标 spec ID
+  spec: string // 目标 spec ID
   operation: DeltaOperation
   description: string
   requirement?: Requirement
@@ -103,23 +103,28 @@ interface Delta {
 # [Capability Name] Specification
 
 ## Purpose
+
 [描述这个能力的目的]
 
 ## Requirements
 
 ### Requirement: [需求名称]
+
 The system SHALL/MUST [需求描述]
 
 #### Scenario: [场景名称]
+
 - **WHEN** [条件]
 - **THEN** [预期结果]
 
 #### Scenario: [另一个场景]
+
 - **WHEN** [条件]
 - **THEN** [预期结果]
 ```
 
 **关键规则：**
+
 - 必须有 `## Purpose` 部分
 - 必须有 `## Requirements` 部分
 - 每个需求必须包含 `SHALL` 或 `MUST`
@@ -132,13 +137,16 @@ The system SHALL/MUST [需求描述]
 # Change: [变更简述]
 
 ## Why
+
 [1-2 句话说明问题/机会]
 
 ## What Changes
+
 - [变更列表]
 - [标记破坏性变更为 **BREAKING**]
 
 ## Impact
+
 - Affected specs: [受影响的能力列表]
 - Affected code: [关键文件/系统]
 ```
@@ -151,24 +159,29 @@ The system SHALL/MUST [需求描述]
 ## ADDED Requirements
 
 ### Requirement: [新需求名称]
+
 The system SHALL [需求描述]
 
 #### Scenario: [场景名称]
+
 - **WHEN** [条件]
 - **THEN** [预期结果]
 
 ## MODIFIED Requirements
 
 ### Requirement: [已有需求名称]
+
 [完整的修改后需求内容]
 
 ## REMOVED Requirements
 
 ### Requirement: [要移除的需求名称]
+
 **Reason**: [移除原因]
 **Migration**: [迁移方案]
 
 ## RENAMED Requirements
+
 - FROM: `### Requirement: [旧名称]`
 - TO: `### Requirement: [新名称]`
 ```
@@ -179,11 +192,13 @@ The system SHALL [需求描述]
 # Tasks: [变更名称]
 
 ## 1. [阶段名称]
+
 - [ ] 1.1 [任务描述]
 - [ ] 1.2 [任务描述]
 - [x] 1.3 [已完成的任务]
 
 ## 2. [下一阶段]
+
 - [ ] 2.1 [任务描述]
 ```
 
@@ -207,14 +222,14 @@ OpenSpec 使用自定义的 `MarkdownParser` 类解析 markdown 文件：
 
 ### 5.3 关键解析规则
 
-| 元素 | 格式要求 |
-|------|----------|
-| Spec 标题 | `# [Name] Specification` |
-| Purpose | `## Purpose` |
-| Requirements | `## Requirements` |
-| Requirement | `### Requirement: [Name]` |
-| Scenario | `#### Scenario: [Name]` |
-| Delta 操作 | `## ADDED/MODIFIED/REMOVED/RENAMED Requirements` |
+| 元素         | 格式要求                                         |
+| ------------ | ------------------------------------------------ |
+| Spec 标题    | `# [Name] Specification`                         |
+| Purpose      | `## Purpose`                                     |
+| Requirements | `## Requirements`                                |
+| Requirement  | `### Requirement: [Name]`                        |
+| Scenario     | `#### Scenario: [Name]`                          |
+| Delta 操作   | `## ADDED/MODIFIED/REMOVED/RENAMED Requirements` |
 
 ## 6. 验证规则
 
@@ -288,22 +303,27 @@ openspec/
 # combo-algorithm Specification
 
 ## Purpose
+
 TBD - created by archiving change add-levelup-combo-algorithm.
 
 ## Requirements
 
 ### Requirement: ComboList-Based Combination Algorithm
+
 The system SHALL provide a pure function `solveLevelUpCombination(rules, assets, targetValue)`...
 
 #### Scenario: Honors ordering and constraints
+
 - **WHEN** `solveLevelUpCombination` runs with a `comboList`...
 - **THEN** it SHALL select assets in list order...
 
 #### Scenario: Stops when target met or fails explicitly
+
 - **WHEN** the accumulated `used` reaches `targetValue`
 - **THEN** the algorithm SHALL stop...
 
 #### Scenario: High-precision, side-effect free
+
 - **WHEN** executing the function
 - **THEN** all numeric operations SHALL use `big.js`...
 ```
@@ -311,11 +331,13 @@ The system SHALL provide a pure function `solveLevelUpCombination(rules, assets,
 ### 8.3 Change 示例：add-multi-chain-airdrop
 
 **proposal.md 结构：**
+
 - Why: 当前空投功能硬编码使用 CCChain，需要支持多链
 - What Changes: admin-service、admin-app、user-app 的多处修改
 - Impact: 新增 `multi-chain-airdrop` 能力规格
 
 **tasks.md 结构：**
+
 - 13 个主要阶段
 - 115+ 个具体任务
 - 覆盖数据模型、API、UI、测试等
@@ -324,13 +346,13 @@ The system SHALL provide a pure function `solveLevelUpCombination(rules, assets,
 
 ### 9.1 当前 OpenSpecUI 实现
 
-| 特性 | OpenSpec CLI | OpenSpecUI 当前实现 |
-|------|-------------|-------------------|
-| Spec 解析 | 完整的 Purpose/Requirements 解析 | 简化版本 |
-| Change 解析 | 支持 delta specs 目录 | 仅解析 proposal.md |
-| Tasks 解析 | 支持 checkbox 状态 | 支持 checkbox 状态 |
-| 验证 | 完整的 Zod schema 验证 | 基础验证 |
-| Delta 操作 | ADDED/MODIFIED/REMOVED/RENAMED | 支持 |
+| 特性        | OpenSpec CLI                     | OpenSpecUI 当前实现 |
+| ----------- | -------------------------------- | ------------------- |
+| Spec 解析   | 完整的 Purpose/Requirements 解析 | 简化版本            |
+| Change 解析 | 支持 delta specs 目录            | 仅解析 proposal.md  |
+| Tasks 解析  | 支持 checkbox 状态               | 支持 checkbox 状态  |
+| 验证        | 完整的 Zod schema 验证           | 基础验证            |
+| Delta 操作  | ADDED/MODIFIED/REMOVED/RENAMED   | 支持                |
 
 ### 9.2 需要对齐的关键点
 
@@ -361,5 +383,5 @@ The system SHALL provide a pure function `solveLevelUpCombination(rules, assets,
 
 ---
 
-*报告生成时间：2025-11-28*
-*基于 OpenSpec CLI 源码和 chain-services 项目分析*
+_报告生成时间：2025-11-28_
+_基于 OpenSpec CLI 源码和 chain-services 项目分析_

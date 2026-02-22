@@ -7,7 +7,10 @@ import { ProjectWatcher } from './project-watcher.js'
 const tempDirs: string[] = []
 
 async function createTempRoot(): Promise<string> {
-  const root = join(tmpdir(), `openspecui-project-watcher-${Date.now()}-${Math.random().toString(16).slice(2)}`)
+  const root = join(
+    tmpdir(),
+    `openspecui-project-watcher-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  )
   await mkdir(root, { recursive: true })
   tempDirs.push(root)
   return root
@@ -29,7 +32,10 @@ describe('ProjectWatcher path liveness', () => {
     ;(watcher as unknown as { projectDirFingerprint: string | null }).projectDirFingerprint = '1:1'
 
     const scheduleSpy = vi
-      .spyOn(watcher as unknown as { scheduleReinitialize: (reason: string) => void }, 'scheduleReinitialize')
+      .spyOn(
+        watcher as unknown as { scheduleReinitialize: (reason: string) => void },
+        'scheduleReinitialize'
+      )
       .mockImplementation(() => {})
 
     await rm(projectDir, { recursive: true, force: true })
@@ -50,7 +56,10 @@ describe('ProjectWatcher path liveness', () => {
     ).getProjectDirFingerprint()
 
     const scheduleSpy = vi
-      .spyOn(watcher as unknown as { scheduleReinitialize: (reason: string) => void }, 'scheduleReinitialize')
+      .spyOn(
+        watcher as unknown as { scheduleReinitialize: (reason: string) => void },
+        'scheduleReinitialize'
+      )
       .mockImplementation(() => {})
 
     ;(watcher as unknown as { checkPathLiveness: () => void }).checkPathLiveness()
@@ -75,7 +84,10 @@ describe('ProjectWatcher path liveness', () => {
     ).getProjectDirFingerprint()
 
     const scheduleSpy = vi
-      .spyOn(watcher as unknown as { scheduleReinitialize: (reason: string) => void }, 'scheduleReinitialize')
+      .spyOn(
+        watcher as unknown as { scheduleReinitialize: (reason: string) => void },
+        'scheduleReinitialize'
+      )
       .mockImplementation(() => {})
 
     await rename(projectDir, movedDir)

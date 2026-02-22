@@ -16,10 +16,10 @@ vi.mock('node:worker_threads', () => ({
         }
 
         if (
-          typeof payload !== 'object'
-          || payload == null
-          || !('id' in payload)
-          || !('type' in payload)
+          typeof payload !== 'object' ||
+          payload == null ||
+          !('id' in payload) ||
+          !('type' in payload)
         ) {
           return
         }

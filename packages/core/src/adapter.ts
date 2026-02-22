@@ -1,9 +1,9 @@
-import { mkdir, writeFile, rename, readFile } from 'fs/promises'
+import { mkdir, readFile, rename, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { MarkdownParser } from './parser.js'
+import { reactiveReadDir, reactiveReadFile, reactiveStat } from './reactive-fs/index.js'
+import type { Change, ChangeFile, DeltaSpec, Spec } from './schemas.js'
 import { Validator, type ValidationResult } from './validator.js'
-import type { Spec, Change, DeltaSpec, ChangeFile } from './schemas.js'
-import { reactiveReadFile, reactiveReadDir, reactiveStat } from './reactive-fs/index.js'
 
 /** Spec metadata with time info */
 export interface SpecMeta {

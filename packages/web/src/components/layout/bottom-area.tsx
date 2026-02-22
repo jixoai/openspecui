@@ -1,5 +1,4 @@
-import { RouterProvider, type AnyRouter } from '@tanstack/react-router'
-import { Outlet } from '@tanstack/react-router'
+import { Outlet, RouterProvider, type AnyRouter } from '@tanstack/react-router'
 
 /**
  * Bottom area root layout — rendered by the bottom router.

@@ -1,8 +1,5 @@
+import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
 import { navController } from '@/lib/nav-controller'
-import {
-  usePopAreaConfigContext,
-  usePopAreaLifecycleContext,
-} from '@/components/layout/pop-area'
 import { useSearch } from '@/lib/use-search'
 import { useLocation } from '@tanstack/react-router'
 import { Archive, FileText, GitBranch, Loader2, Search } from 'lucide-react'
@@ -42,7 +39,7 @@ function renderHighlightedText(text: string, terms: readonly string[]): ReactNod
     const matched = terms.some((term) => term.toLowerCase() === part.toLowerCase())
     if (!matched) return <span key={index}>{part}</span>
     return (
-      <mark key={index} className="bg-amber-400/35 text-foreground rounded px-[1px]">
+      <mark key={index} className="text-foreground rounded bg-amber-400/35 px-[1px]">
         {part}
       </mark>
     )
@@ -148,7 +145,7 @@ export function SearchRoute() {
                   <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
                     <div className="flex min-w-0 items-center gap-2">
                       <Icon className="text-muted-foreground h-4 w-4 shrink-0" />
-                      <span className="line-clamp-2 text-sm font-medium break-words">
+                      <span className="line-clamp-2 break-words text-sm font-medium">
                         {renderHighlightedText(hit.title, highlightTerms)}
                       </span>
                     </div>
@@ -156,10 +153,10 @@ export function SearchRoute() {
                       {hit.kind}
                     </span>
                   </div>
-                  <div className="text-muted-foreground w-full text-xs break-all">
+                  <div className="text-muted-foreground w-full break-all text-xs">
                     {renderHighlightedText(hit.path, highlightTerms)}
                   </div>
-                  <div className="text-muted-foreground line-clamp-3 w-full text-xs break-words">
+                  <div className="text-muted-foreground line-clamp-3 w-full break-words text-xs">
                     {renderHighlightedText(hit.snippet, highlightTerms)}
                   </div>
                 </button>

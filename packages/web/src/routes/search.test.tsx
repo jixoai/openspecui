@@ -103,11 +103,9 @@ describe('SearchRoute', () => {
       target: { value: 'api auth' },
     })
 
-    expect(navControllerMock.replace).toHaveBeenCalledWith(
-      'pop',
-      '/search?query=api+auth',
-      { from: 'search-test' }
-    )
+    expect(navControllerMock.replace).toHaveBeenCalledWith('pop', '/search?query=api+auth', {
+      from: 'search-test',
+    })
   })
 
   it('highlights matched terms in result text', () => {

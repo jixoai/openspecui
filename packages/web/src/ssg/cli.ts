@@ -10,15 +10,15 @@
  *   npx openspecui-ssg -d ./data.json -o ./dist --base-path /docs
  */
 import {
+  copyFileSync,
   cpSync,
   existsSync,
   mkdirSync,
   readFileSync,
-  writeFileSync,
-  copyFileSync,
   rmSync,
+  writeFileSync,
 } from 'node:fs'
-import { join, resolve, dirname } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))

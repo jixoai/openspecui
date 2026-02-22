@@ -1,6 +1,6 @@
+import { PathMarquee } from '@/components/path-marquee'
 import { loadSnapshot } from '@/lib/static-data-provider'
 import { isStaticMode } from '@/lib/static-mode'
-import { PathMarquee } from '@/components/path-marquee'
 import { useManualReconnect, useServerStatus } from '@/lib/use-server-status'
 import { Camera, FolderOpen, RefreshCw, Wifi, WifiOff } from 'lucide-react'
 import { useEffect, useState } from 'react'

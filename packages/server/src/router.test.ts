@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { appRouter } from '../src/router.js'
+import { describe, expect, it, vi } from 'vitest'
 import type { Context } from '../src/router.js'
+import { appRouter } from '../src/router.js'
 
 // Mock adapter
 const createMockAdapter = () => ({
@@ -56,7 +56,10 @@ const createMockProviderManager = () => ({
   getDefaultAcp: vi.fn().mockReturnValue(undefined),
 })
 
-const createCaller = (adapter = createMockAdapter(), providerManager = createMockProviderManager()) => {
+const createCaller = (
+  adapter = createMockAdapter(),
+  providerManager = createMockProviderManager()
+) => {
   return appRouter.createCaller({
     adapter: adapter as unknown as Context['adapter'],
     providerManager: providerManager as unknown as Context['providerManager'],

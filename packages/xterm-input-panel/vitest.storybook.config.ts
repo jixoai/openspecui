@@ -1,7 +1,7 @@
 import { storybookTest } from '@storybook/addon-vitest/vitest-plugin'
 import { playwright } from '@vitest/browser-playwright'
-import { defineConfig } from 'vitest/config'
 import { resolve } from 'path'
+import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   plugins: [

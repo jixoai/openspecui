@@ -10,12 +10,7 @@ const tabs: Tab[] = [
 describe('Tabs double-click behavior', () => {
   it('calls onTabBarDoubleClick when double-clicking tab bar empty area', () => {
     const onTabBarDoubleClick = vi.fn()
-    const { container } = render(
-      <Tabs
-        tabs={tabs}
-        onTabBarDoubleClick={onTabBarDoubleClick}
-      />,
-    )
+    const { container } = render(<Tabs tabs={tabs} onTabBarDoubleClick={onTabBarDoubleClick} />)
 
     const tabsButton = container.querySelector('.tabs-button')
     expect(tabsButton).not.toBeNull()
@@ -27,12 +22,7 @@ describe('Tabs double-click behavior', () => {
 
   it('does not call onTabBarDoubleClick when double-clicking a tab button', () => {
     const onTabBarDoubleClick = vi.fn()
-    const { container } = render(
-      <Tabs
-        tabs={tabs}
-        onTabBarDoubleClick={onTabBarDoubleClick}
-      />,
-    )
+    const { container } = render(<Tabs tabs={tabs} onTabBarDoubleClick={onTabBarDoubleClick} />)
 
     fireEvent.doubleClick(within(container).getByRole('button', { name: 'A' }))
 

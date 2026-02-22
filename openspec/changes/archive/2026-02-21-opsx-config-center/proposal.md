@@ -23,9 +23,11 @@ OpenSpecUI still exposes a legacy “Project” tab that hard-binds `project.md`
 ## Capabilities
 
 ### New Capabilities
+
 - `opsx-config-center`: Dedicated OPSX configuration hub covering config.yaml, schemas/templates, and change metadata with explicit edit modes.
 
 ### Modified Capabilities
+
 - `opsx-ui-views`: Replace Project entry with Config, add tabbed layout, and align section organization.
 - `opsx-workflow-ui`: Expand configuration visibility to include templates embedded in schema detail and edit affordances where allowed.
 - `openspec-cli-integration`: Add CLI queries for schema list, schema resolution, and template mapping.

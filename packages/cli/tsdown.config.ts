@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { resolve, dirname } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'tsdown'
 
@@ -29,6 +29,6 @@ export default defineConfig({
   sourcemap: false,
   // Replace version placeholder at build time
   define: {
-    '__WEB_PACKAGE_VERSION__': JSON.stringify(webVersion),
+    __WEB_PACKAGE_VERSION__: JSON.stringify(webVersion),
   },
 })

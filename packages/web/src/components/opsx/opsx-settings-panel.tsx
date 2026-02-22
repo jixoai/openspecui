@@ -1,5 +1,9 @@
 import { CodeEditor } from '@/components/code-editor'
-import { useOpsxChangeListSubscription, useOpsxChangeMetadataSubscription, useOpsxProjectConfigSubscription } from '@/lib/use-opsx'
+import {
+  useOpsxChangeListSubscription,
+  useOpsxChangeMetadataSubscription,
+  useOpsxProjectConfigSubscription,
+} from '@/lib/use-opsx'
 import { useEffect, useState } from 'react'
 
 export function OpsxSettingsPanel() {
@@ -35,7 +39,7 @@ export function OpsxSettingsPanel() {
             <select
               value={selectedChange}
               onChange={(e) => setSelectedChange(e.target.value)}
-              className="border-border rounded-md border bg-card px-2 py-1 text-xs"
+              className="border-border bg-card rounded-md border px-2 py-1 text-xs"
             >
               {changeIds.map((id) => (
                 <option key={id} value={id}>

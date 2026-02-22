@@ -102,11 +102,7 @@ function setupStaticFiles(app: Hono): void {
  * Includes static file serving for the web UI.
  */
 export async function startServer(options: CLIOptions = {}): Promise<RunningServer> {
-  const {
-    projectDir = process.cwd(),
-    port = 3100,
-    enableWatcher = true,
-  } = options
+  const { projectDir = process.cwd(), port = 3100, enableWatcher = true } = options
 
   const server = await serverStartServer(
     {

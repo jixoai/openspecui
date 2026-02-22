@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { ReactiveState, contextStorage } from './reactive-state.js'
+import { describe, expect, it, vi } from 'vitest'
 import { ReactiveContext } from './reactive-context.js'
+import { ReactiveState, contextStorage } from './reactive-state.js'
 
 describe('ReactiveState', () => {
   describe('基础功能', () => {
@@ -34,10 +34,7 @@ describe('ReactiveState', () => {
 
   describe('自定义相等性', () => {
     it('should use custom equals function', () => {
-      const state = new ReactiveState(
-        { id: 1, name: 'test' },
-        { equals: (a, b) => a.id === b.id }
-      )
+      const state = new ReactiveState({ id: 1, name: 'test' }, { equals: (a, b) => a.id === b.id })
 
       // 相同 id，不同 name，应该被认为相等
       expect(state.set({ id: 1, name: 'different' })).toBe(false)
@@ -110,12 +107,20 @@ describe('ReactiveState', () => {
       await contextStorage.run(context1, async () => {
         state.get()
       })
-      context1['changePromise'] = { resolve: notified1, reject: vi.fn(), promise: Promise.resolve() }
+      context1['changePromise'] = {
+        resolve: notified1,
+        reject: vi.fn(),
+        promise: Promise.resolve(),
+      }
 
       await contextStorage.run(context2, async () => {
         state.get()
       })
-      context2['changePromise'] = { resolve: notified2, reject: vi.fn(), promise: Promise.resolve() }
+      context2['changePromise'] = {
+        resolve: notified2,
+        reject: vi.fn(),
+        promise: Promise.resolve(),
+      }
 
       // 修改值
       state.set('changed')
@@ -159,7 +164,11 @@ describe('ReactiveState', () => {
 
         const notified = vi.fn()
         notifiers.push(notified)
-        context['changePromise'] = { resolve: notified, reject: vi.fn(), promise: Promise.resolve() }
+        context['changePromise'] = {
+          resolve: notified,
+          reject: vi.fn(),
+          promise: Promise.resolve(),
+        }
       }
 
       // 修改值
@@ -239,8 +248,16 @@ describe('ReactiveState', () => {
       const notified1 = vi.fn()
       const notified2 = vi.fn()
 
-      context1['changePromise'] = { resolve: notified1, reject: vi.fn(), promise: Promise.resolve() }
-      context2['changePromise'] = { resolve: notified2, reject: vi.fn(), promise: Promise.resolve() }
+      context1['changePromise'] = {
+        resolve: notified1,
+        reject: vi.fn(),
+        promise: Promise.resolve(),
+      }
+      context2['changePromise'] = {
+        resolve: notified2,
+        reject: vi.fn(),
+        promise: Promise.resolve(),
+      }
 
       // 修改 state1，只有 context1 被通知
       state1.set('new s1')

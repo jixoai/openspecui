@@ -1,5 +1,5 @@
-import { observable } from '@trpc/server/observable'
 import type { CliStreamEvent } from '@openspecui/core'
+import { observable } from '@trpc/server/observable'
 
 /**
  * 创建安全的 CLI 流式 observable

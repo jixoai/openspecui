@@ -66,9 +66,9 @@ export {
   type ProjectWatcherReinitializeReason,
   type ProjectWatcherRuntimeStatus,
   type ReactiveStateOptions,
-  type WatcherRuntimeStatus,
   type WatchEvent,
   type WatchEventType,
+  type WatcherRuntimeStatus,
 } from './reactive-fs/index.js'
 
 // Legacy file watcher (deprecated, use reactive-fs instead)
@@ -84,8 +84,8 @@ export {
   ConfigManager,
   DEFAULT_CONFIG,
   OpenSpecUIConfigSchema,
-  TerminalRendererEngineSchema,
   TerminalConfigSchema,
+  TerminalRendererEngineSchema,
   buildCliRunnerCandidates,
   createCleanCliEnv,
   getDefaultCliCommand,

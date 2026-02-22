@@ -9,7 +9,9 @@ const meta: Meta = {
   tags: ['autodocs'],
   decorators: [
     (story) => html`
-      <div style="width: 400px; height: 200px; background: #1a1a1a; color: #fff; font-family: monospace;">
+      <div
+        style="width: 400px; height: 200px; background: #1a1a1a; color: #fff; font-family: monospace;"
+      >
         ${story()}
       </div>
     `,
@@ -20,9 +22,11 @@ export default meta
 
 /** Helper to get a ready trackpad element and its canvas. */
 async function setup(canvasElement: HTMLElement) {
-  const el = canvasElement.querySelector('virtual-trackpad-tab') as HTMLElement & { updateComplete: Promise<boolean> }
+  const el = canvasElement.querySelector('virtual-trackpad-tab') as HTMLElement & {
+    updateComplete: Promise<boolean>
+  }
   await el.updateComplete
-  await new Promise(resolve => setTimeout(resolve, 500))
+  await new Promise((resolve) => setTimeout(resolve, 500))
   const shadow = el.shadowRoot!
   const canvas = shadow.querySelector('canvas')!
   const rect = canvas.getBoundingClientRect()
@@ -30,10 +34,15 @@ async function setup(canvasElement: HTMLElement) {
 }
 
 function pointer(canvas: HTMLCanvasElement, type: string, x: number, y: number, id = 1) {
-  canvas.dispatchEvent(new PointerEvent(type, {
-    clientX: x, clientY: y,
-    pointerId: id, pointerType: 'mouse', bubbles: true,
-  }))
+  canvas.dispatchEvent(
+    new PointerEvent(type, {
+      clientX: x,
+      clientY: y,
+      pointerId: id,
+      pointerType: 'mouse',
+      bubbles: true,
+    })
+  )
 }
 
 /**
@@ -64,7 +73,7 @@ export const MoveEvent: StoryObj = {
     pointer(canvas, 'pointermove', cx + 20, cy + 10)
     pointer(canvas, 'pointerup', cx + 20, cy + 10)
 
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
 
     expect(handler).toHaveBeenCalled()
     const detail = (handler.mock.calls[0] as unknown[])[0] as CustomEvent
@@ -91,7 +100,7 @@ export const TapEvent: StoryObj = {
     pointer(canvas, 'pointerdown', cx, cy)
     pointer(canvas, 'pointerup', cx, cy)
 
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
 
     expect(handler).toHaveBeenCalled()
     const detail = (handler.mock.calls[0] as unknown[])[0] as CustomEvent
@@ -120,13 +129,13 @@ export const DoubleTapEvent: StoryObj = {
     pointer(canvas, 'pointerdown', cx, cy)
     pointer(canvas, 'pointerup', cx, cy)
 
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 50))
 
     // Second tap (within 300ms)
     pointer(canvas, 'pointerdown', cx, cy)
     pointer(canvas, 'pointerup', cx, cy)
 
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
 
     expect(tapHandler).toHaveBeenCalledTimes(1)
     expect(doubleTapHandler).toHaveBeenCalledTimes(1)
@@ -150,7 +159,7 @@ export const LongPressEvent: StoryObj = {
     el.addEventListener('trackpad:long-press', handler)
 
     pointer(canvas, 'pointerdown', cx, cy)
-    await new Promise(resolve => setTimeout(resolve, 600))
+    await new Promise((resolve) => setTimeout(resolve, 600))
 
     expect(handler).toHaveBeenCalled()
     const detail = (handler.mock.calls[0] as unknown[])[0] as CustomEvent
@@ -185,7 +194,7 @@ export const DragEvent: StoryObj = {
     pointer(canvas, 'pointerdown', cx, cy)
     pointer(canvas, 'pointerup', cx, cy)
 
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 50))
 
     // Second: tap-and-hold then drag (within 300ms of first tap)
     pointer(canvas, 'pointerdown', cx, cy)
@@ -193,12 +202,12 @@ export const DragEvent: StoryObj = {
     pointer(canvas, 'pointermove', cx + 40, cy)
     pointer(canvas, 'pointerup', cx + 40, cy)
 
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
 
-    expect(tapHandler).toHaveBeenCalledTimes(1)       // First touch was a tap
-    expect(dragStartHandler).toHaveBeenCalledTimes(1)  // Drag started on second touch
-    expect(dragMoveHandler).toHaveBeenCalled()         // At least one drag-move
-    expect(dragEndHandler).toHaveBeenCalledTimes(1)    // Drag ended
+    expect(tapHandler).toHaveBeenCalledTimes(1) // First touch was a tap
+    expect(dragStartHandler).toHaveBeenCalledTimes(1) // Drag started on second touch
+    expect(dragMoveHandler).toHaveBeenCalled() // At least one drag-move
+    expect(dragEndHandler).toHaveBeenCalledTimes(1) // Drag ended
 
     el.removeEventListener('trackpad:tap', tapHandler)
     el.removeEventListener('trackpad:drag-start', dragStartHandler)
@@ -223,14 +232,14 @@ export const DragMoveDeltas: StoryObj = {
     // Tap first
     pointer(canvas, 'pointerdown', cx, cy)
     pointer(canvas, 'pointerup', cx, cy)
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 50))
 
     // Tap-and-drag
     pointer(canvas, 'pointerdown', cx, cy)
-    pointer(canvas, 'pointermove', cx + 15, cy + 5)  // Pass drag threshold
+    pointer(canvas, 'pointermove', cx + 15, cy + 5) // Pass drag threshold
     pointer(canvas, 'pointermove', cx + 30, cy + 10) // Second move
     pointer(canvas, 'pointerup', cx + 30, cy + 10)
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
 
     expect(dragMoveHandler).toHaveBeenCalled()
     // Check delta detail has numeric dx/dy
@@ -263,7 +272,7 @@ export const SmallMoveNoEvent: StoryObj = {
     pointer(canvas, 'pointermove', cx + 3, cy + 2)
     pointer(canvas, 'pointerup', cx + 3, cy + 2)
 
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
 
     // Should still be interpreted as a tap, not a move
     expect(moveHandler).not.toHaveBeenCalled()
@@ -294,13 +303,15 @@ export const ScrollEvent: StoryObj = {
 
     // Programmatically dispatch a trackpad:scroll event to verify
     // the component's event structure works end-to-end through bubbling.
-    el.dispatchEvent(new CustomEvent('trackpad:scroll', {
-      detail: { deltaY: 40 },
-      bubbles: true,
-      composed: true,
-    }))
+    el.dispatchEvent(
+      new CustomEvent('trackpad:scroll', {
+        detail: { deltaY: 40 },
+        bubbles: true,
+        composed: true,
+      })
+    )
 
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 50))
 
     expect(handler).toHaveBeenCalledTimes(1)
     const detail = (handler.mock.calls[0] as unknown[])[0] as CustomEvent
@@ -329,7 +340,7 @@ export const EdgeSlideRight: StoryObj = {
     pointer(canvas, 'pointermove', rect.right - 12, cy) // deep into right edge zone
 
     // Wait for edge slide interval to fire multiple times
-    await new Promise(resolve => setTimeout(resolve, 200))
+    await new Promise((resolve) => setTimeout(resolve, 200))
 
     // Should have received multiple move events from the interval
     const callCount = handler.mock.calls.length
@@ -363,14 +374,14 @@ export const EdgeSlideStopsOnRelease: StoryObj = {
     // Drag to right edge
     pointer(canvas, 'pointerdown', cx, cy)
     pointer(canvas, 'pointermove', rect.right - 12, cy)
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
 
     // Release finger
     pointer(canvas, 'pointerup', rect.right - 12, cy)
     const countAtRelease = handler.mock.calls.length
 
     // Wait and verify no more events
-    await new Promise(resolve => setTimeout(resolve, 150))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     expect(handler.mock.calls.length).toBe(countAtRelease)
 
     el.removeEventListener('trackpad:move', handler)
@@ -394,7 +405,7 @@ export const EdgeSlideCorner: StoryObj = {
     pointer(canvas, 'pointerdown', cx, cy)
     pointer(canvas, 'pointermove', rect.right - 12, rect.top + 12)
 
-    await new Promise(resolve => setTimeout(resolve, 200))
+    await new Promise((resolve) => setTimeout(resolve, 200))
 
     // Should have interval-emitted events
     expect(handler.mock.calls.length).toBeGreaterThanOrEqual(3)
@@ -431,7 +442,7 @@ export const NoEdgeSlideInCenter: StoryObj = {
     const countAfterMove = handler.mock.calls.length
 
     // Wait to see if interval fires
-    await new Promise(resolve => setTimeout(resolve, 150))
+    await new Promise((resolve) => setTimeout(resolve, 150))
 
     // No additional events beyond the initial move
     expect(handler.mock.calls.length).toBe(countAfterMove)

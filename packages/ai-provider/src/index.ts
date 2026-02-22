@@ -15,28 +15,28 @@
 
 // Types
 export type {
-  MessageRole,
-  Message,
-  CompletionOptions,
-  CompletionResponse,
-  StreamChunk,
+  ACPProviderConfig,
   AIProvider,
   APIProviderConfig,
-  ACPProviderConfig,
+  CompletionOptions,
+  CompletionResponse,
+  Message,
+  MessageRole,
   ProviderConfig,
   ProviderRegistry,
+  StreamChunk,
 } from './types.js'
 
 export {
-  APIProviderConfigSchema,
   ACPProviderConfigSchema,
+  APIProviderConfigSchema,
   ProviderConfigSchema,
   ProviderRegistrySchema,
 } from './types.js'
 
 // Providers
+export { ACPAgents, ACPProvider } from './acp-provider.js'
 export { APIProvider } from './api-provider.js'
-export { ACPProvider, ACPAgents } from './acp-provider.js'
 
 // Manager
-export { createProvider, ProviderManager } from './manager.js'
+export { ProviderManager, createProvider } from './manager.js'

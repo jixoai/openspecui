@@ -4,7 +4,7 @@
  * 提供临时文件/目录管理、防抖等待等测试辅助功能
  */
 
-import { mkdtemp, writeFile, rm, mkdir, access } from 'fs/promises'
+import { access, mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { vi } from 'vitest'
@@ -15,11 +15,7 @@ export async function createTempDir(): Promise<string> {
 }
 
 /** 创建临时文件 */
-export async function createTempFile(
-  dir: string,
-  name: string,
-  content: string
-): Promise<string> {
+export async function createTempFile(dir: string, name: string, content: string): Promise<string> {
   const filepath = join(dir, name)
   // 确保父目录存在
   const parentDir = filepath.substring(0, filepath.lastIndexOf('/'))

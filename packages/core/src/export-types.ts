@@ -1,12 +1,7 @@
 /**
  * Types for static export / SSG
  */
-import type {
-  SchemaDetail,
-  SchemaInfo,
-  SchemaResolution,
-  TemplatesMap,
-} from './opsx-types.js'
+import type { SchemaDetail, SchemaInfo, SchemaResolution, TemplatesMap } from './opsx-types.js'
 
 /**
  * Complete snapshot of an OpenSpec project for static export

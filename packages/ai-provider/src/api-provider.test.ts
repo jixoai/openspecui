@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { APIProvider } from '../src/api-provider.js'
 import type { APIProviderConfig } from '../src/types.js'
 
@@ -118,30 +118,21 @@ describe('APIProvider', () => {
 
   describe('isAvailable', () => {
     it('should return true when API responds OK', async () => {
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValue({ ok: true })
-      )
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
 
       const result = await provider.isAvailable()
       expect(result).toBe(true)
     })
 
     it('should return false when API fails', async () => {
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValue({ ok: false })
-      )
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }))
 
       const result = await provider.isAvailable()
       expect(result).toBe(false)
     })
 
     it('should return false on network error', async () => {
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockRejectedValue(new Error('Network error'))
-      )
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')))
 
       const result = await provider.isAvailable()
       expect(result).toBe(false)

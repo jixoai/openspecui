@@ -1,9 +1,22 @@
-import { LitElement, css, html } from 'lit'
-import { Application, CanvasTextMetrics, Container, FederatedPointerEvent, Graphics, Text, TextStyle } from 'pixi.js'
+import { css, html, LitElement } from 'lit'
 import { createElement, SquareSlash, SquareTerminal } from 'lucide'
-import { resolvePixiTheme, onThemeChange, type PixiTheme } from './pixi-theme.js'
-import { buildShortcutPages, type ShortcutAction, type ShortcutItem, type ShortcutPage } from './shortcut-pages.js'
+import {
+  Application,
+  CanvasTextMetrics,
+  Container,
+  FederatedPointerEvent,
+  Graphics,
+  Text,
+  TextStyle,
+} from 'pixi.js'
+import { onThemeChange, resolvePixiTheme, type PixiTheme } from './pixi-theme.js'
 import { detectHostPlatform, type PlatformMode } from './platform.js'
+import {
+  buildShortcutPages,
+  type ShortcutAction,
+  type ShortcutItem,
+  type ShortcutPage,
+} from './shortcut-pages.js'
 
 const GRID_GAP = 8
 const GRID_PADDING = 10
@@ -66,7 +79,10 @@ export class ShortcutTab extends LitElement {
       justify-content: center;
       padding: 0;
       cursor: pointer;
-      transition: border-color 0.15s, color 0.15s, background 0.15s;
+      transition:
+        border-color 0.15s,
+        color 0.15s,
+        background 0.15s;
     }
 
     .page-btn:hover {
@@ -247,9 +263,7 @@ export class ShortcutTab extends LitElement {
     gfx.clear()
     gfx.roundRect(0, 0, width, height, CARD_RADIUS)
     gfx.fill({
-      color: pressed
-        ? this._theme.keyPressed
-        : this._theme.keyNormal,
+      color: pressed ? this._theme.keyPressed : this._theme.keyNormal,
     })
     gfx.stroke({
       color: pressed ? this._theme.accent : this._theme.surfaceBorder,
@@ -409,7 +423,7 @@ export class ShortcutTab extends LitElement {
         detail: { data },
         bubbles: true,
         composed: true,
-      }),
+      })
     )
   }
 
@@ -443,7 +457,12 @@ export class ShortcutTab extends LitElement {
     document.execCommand('selectAll')
   }
 
-  private _dpadData(event: FederatedPointerEvent, width: number, height: number, container: Container): string {
+  private _dpadData(
+    event: FederatedPointerEvent,
+    width: number,
+    height: number,
+    container: Container
+  ): string {
     const local = container.toLocal(event.global)
     const dx = local.x - width / 2
     const dy = local.y - height / 2
@@ -463,7 +482,7 @@ export class ShortcutTab extends LitElement {
     event: FederatedPointerEvent,
     width: number,
     height: number,
-    container: Container,
+    container: Container
   ) {
     if (item.kind === 'dpad') {
       this._send(this._dpadData(event, width, height, container))
@@ -518,19 +537,21 @@ export class ShortcutTab extends LitElement {
     return html`
       <div class="layout">
         <div class="pages">
-          ${pages.map((page) => html`
-            <button
-              type="button"
-              class="page-btn"
-              title=${page.title}
-              aria-label=${page.title}
-              ?data-active=${page.id === activePage.id}
-              @click=${() => this._setActivePage(page.id)}
-            >
-              ${this._renderPageIcon(page.id)}
-              <span class="sr-only">${page.title}</span>
-            </button>
-          `)}
+          ${pages.map(
+            (page) => html`
+              <button
+                type="button"
+                class="page-btn"
+                title=${page.title}
+                aria-label=${page.title}
+                ?data-active=${page.id === activePage.id}
+                @click=${() => this._setActivePage(page.id)}
+              >
+                ${this._renderPageIcon(page.id)}
+                <span class="sr-only">${page.title}</span>
+              </button>
+            `
+          )}
         </div>
         <div class="canvas-wrap">
           <div class="pixi-host"></div>

@@ -1,9 +1,9 @@
+export { findAvailablePort, isPortAvailable } from './port-utils.js'
+export { type AppRouter, type Context } from './router.js'
 export {
   createServer,
   createWebSocketServer,
   startServer,
-  type ServerConfig,
   type RunningServer,
+  type ServerConfig,
 } from './server.js'
-export { type AppRouter, type Context } from './router.js'
-export { isPortAvailable, findAvailablePort } from './port-utils.js'

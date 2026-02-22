@@ -1,6 +1,6 @@
-import { z } from 'zod'
-import { parse } from 'yaml'
 import { SchemaDetailSchema, type SchemaDetail } from '@openspecui/core'
+import { parse } from 'yaml'
+import { z } from 'zod'
 
 const SchemaYamlArtifactSchema = z.object({
   id: z.string(),

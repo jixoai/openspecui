@@ -1,5 +1,5 @@
-import { useNavLayout } from '@/lib/use-nav-controller'
 import { isStaticMode } from '@/lib/static-mode'
+import { useNavLayout } from '@/lib/use-nav-controller'
 import { Link } from '@tanstack/react-router'
 import { allNavItems, mobileNavItems } from './nav-items'
 

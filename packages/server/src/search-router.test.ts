@@ -3,8 +3,8 @@ import { appRouter } from './router.js'
 
 describe('search router', () => {
   it('registers search.subscribe procedure', () => {
-    const procedures = (appRouter as unknown as { _def: { procedures: Record<string, unknown> } })._def
-      .procedures
+    const procedures = (appRouter as unknown as { _def: { procedures: Record<string, unknown> } })
+      ._def.procedures
     expect(procedures['search.subscribe']).toBeDefined()
   })
 

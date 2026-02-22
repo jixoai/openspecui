@@ -75,4 +75,3 @@ export function useTabsStatusByQuery({ tabsId, tabs, initialTab }: UseTabsStatus
 
   return { selectedTab, setSelectedTab: setBoth }
 }
-

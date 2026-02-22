@@ -526,7 +526,9 @@ describe('terminal-controller PTY behavior', () => {
     ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-712', platform: 'common' })
     await terminalController.setRendererEngine('ghostty')
 
-    expect(() => ws.emitJson({ type: 'buffer', sessionId: 'pty-712', data: 'hello-buffer' })).not.toThrow()
+    expect(() =>
+      ws.emitJson({ type: 'buffer', sessionId: 'pty-712', data: 'hello-buffer' })
+    ).not.toThrow()
 
     const ghostty = MockGhosttyTerminal.instances.at(-1)
     expect(ghostty).toBeDefined()
@@ -610,7 +612,9 @@ describe('terminal-controller PTY behavior', () => {
     ghostty?.emitKeydown('a', 'KeyA')
 
     const sent = parseSent(ws)
-    expect(sent.some((msg) => msg.type === 'input' && msg.sessionId === 'pty-714' && msg.data === 'a')).toBe(true)
+    expect(
+      sent.some((msg) => msg.type === 'input' && msg.sessionId === 'pty-714' && msg.data === 'a')
+    ).toBe(true)
 
     terminalController.closeAll()
     unsubscribe()
@@ -646,8 +650,7 @@ describe('terminal-controller PTY behavior', () => {
     const sent = parseSent(ws)
     expect(
       sent.some(
-        (msg) =>
-          msg.type === 'input' && msg.sessionId === 'pty-802' && msg.data === 'echo switch\n'
+        (msg) => msg.type === 'input' && msg.sessionId === 'pty-802' && msg.data === 'echo switch\n'
       )
     ).toBe(true)
 

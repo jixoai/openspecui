@@ -1,4 +1,9 @@
-import type { AIProvider, CompletionOptions, CompletionResponse, ACPProviderConfig } from './types.js'
+import type {
+  ACPProviderConfig,
+  AIProvider,
+  CompletionOptions,
+  CompletionResponse,
+} from './types.js'
 
 /**
  * ACP-based AI provider (Agent Client Protocol)
