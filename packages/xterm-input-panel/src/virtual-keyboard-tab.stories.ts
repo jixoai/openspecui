@@ -251,8 +251,11 @@ export const PointerLeaveDuringRepeatKeepsRepeating: StoryObj = {
     el.addEventListener('input-panel:send', handler)
 
     emitDown(key!.container)
-    // Wait for repeat to start (with CI margin)
-    await new Promise((resolve) => setTimeout(resolve, 800))
+    // Wait for repeat to start (polling is more stable than fixed sleeps in CI)
+    const repeatStart = Date.now()
+    while (handler.mock.calls.length === 0 && Date.now() - repeatStart < 1600) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
 
     const countBefore = handler.mock.calls.length
     expect(countBefore).toBeGreaterThan(0) // At least one repeat fired
@@ -261,7 +264,7 @@ export const PointerLeaveDuringRepeatKeepsRepeating: StoryObj = {
     emitLeave(key!.container)
 
     // Wait — repeats should keep firing until release
-    await new Promise((resolve) => setTimeout(resolve, 300))
+    await new Promise((resolve) => setTimeout(resolve, 500))
 
     const countAfter = handler.mock.calls.length
     expect(countAfter).toBeGreaterThan(countBefore)

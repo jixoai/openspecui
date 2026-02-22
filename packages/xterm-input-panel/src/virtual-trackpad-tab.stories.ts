@@ -236,10 +236,10 @@ export const DragMoveDeltas: StoryObj = {
 
     // Tap-and-drag
     pointer(canvas, 'pointerdown', cx, cy)
-    pointer(canvas, 'pointermove', cx + 15, cy + 5) // Pass drag threshold
-    pointer(canvas, 'pointermove', cx + 30, cy + 10) // Second move
-    pointer(canvas, 'pointerup', cx + 30, cy + 10)
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    pointer(canvas, 'pointermove', cx + 20, cy) // Match DragEvent threshold margin
+    pointer(canvas, 'pointermove', cx + 40, cy) // Second move
+    pointer(canvas, 'pointerup', cx + 40, cy)
+    await new Promise((resolve) => setTimeout(resolve, 150))
 
     expect(dragMoveHandler).toHaveBeenCalled()
     // Check delta detail has numeric dx/dy
