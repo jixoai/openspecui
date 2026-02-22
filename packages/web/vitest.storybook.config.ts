@@ -9,6 +9,8 @@ export default defineConfig({
       '@': resolve(__dirname, './src'),
       '@openspecui/core': resolve(__dirname, '../core/src'),
       '@openspecui/core/pty-protocol': resolve(__dirname, '../core/src/pty-protocol.ts'),
+      '@openspecui/search': resolve(__dirname, '../search/src'),
+      '@openspecui/search/node': resolve(__dirname, '../search/src/node.ts'),
       '@openspecui/server': resolve(__dirname, '../server/src'),
     },
   },
