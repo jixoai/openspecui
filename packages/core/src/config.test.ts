@@ -164,12 +164,12 @@ describe('ConfigManager', () => {
     })
 
     it('should return custom command', async () => {
-      await configManager.writeConfig({ cli: { command: 'bunx', args: ['openspec'] } })
+      await configManager.writeConfig({ cli: { command: process.execPath, args: ['--version'] } })
       clearCache()
 
       const command = await configManager.getCliCommand()
 
-      expect(command).toEqual(['bunx', 'openspec'])
+      expect(command).toEqual([process.execPath, '--version'])
     })
 
     it('should not fallback when configured command is invalid', async () => {
