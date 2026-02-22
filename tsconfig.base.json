@@ -23,6 +23,7 @@
       "@openspecui/server": ["packages/server/src/index.ts"],
       "@openspecui/core": ["packages/core/src/index.ts"],
       "@openspecui/search": ["packages/search/src/index.ts"],
+      "@openspecui/search/node": ["packages/search/src/node.ts"],
       "@openspecui/ai-provider": ["packages/ai-provider/src/index.ts"]
     },
     "types": ["node"]
