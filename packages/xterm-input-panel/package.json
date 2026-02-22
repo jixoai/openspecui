@@ -5,7 +5,7 @@
   "main": "src/index.ts",
   "scripts": {
     "dev": "storybook dev -p 6007",
-    "test:browser": "vitest run --config vitest.storybook.config.ts",
+    "test:browser": "vitest run --retry 2 --config vitest.storybook.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

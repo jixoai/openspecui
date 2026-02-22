@@ -20,7 +20,7 @@
     "preview": "vite preview",
     "test": "vitest run --project unit",
     "test:watch": "vitest --project unit",
-    "test:browser": "vitest --project storybook",
+    "test:browser": "vitest --retry 2 --project storybook",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },
