@@ -37,9 +37,25 @@ openspecui ./my-project
 # Run without global install
 npx openspecui@latest
 bunx openspecui@latest
+
+# Run via Nix Flake
+nix run github:jixoai/openspecui -- --help
 ```
 
 The UI will open at `http://localhost:3100`.
+
+### Nix Usage
+
+```bash
+# Run OpenSpecUI directly
+nix run github:jixoai/openspecui -- --help
+
+# Install into your profile
+nix profile install github:jixoai/openspecui
+
+# Enter development shell
+nix develop
+```
 
 ### How To Use
 
@@ -181,6 +197,14 @@ jobs:
           publish_dir: ./dist
 ```
 
+Nix-based CI export example:
+
+```yaml
+- uses: DeterminateSystems/nix-installer-action@v21
+- uses: DeterminateSystems/magic-nix-cache-action@v13
+- run: nix run github:jixoai/openspecui -- export -o ./dist --base-path /my-repo/
+```
+
 #### Deploy to Subdirectory (e.g., /docs/)
 
 If you're deploying to a subdirectory, use the `--base-path` option:
@@ -244,6 +268,9 @@ pnpm dev
 
 # Legacy multi-process dev script
 pnpm dev:legacy
+
+# Optional: use Nix development shell
+nix develop
 ```
 
 ### Packages
@@ -303,9 +330,25 @@ openspecui ./my-project
 # 不全局安装直接运行
 npx openspecui@latest
 bunx openspecui@latest
+
+# 使用 Nix Flake 运行
+nix run github:jixoai/openspecui -- --help
 ```
 
 界面将在 `http://localhost:3100` 打开。
+
+### Nix 用法
+
+```bash
+# 直接运行 OpenSpecUI
+nix run github:jixoai/openspecui -- --help
+
+# 安装到本地 profile
+nix profile install github:jixoai/openspecui
+
+# 进入开发环境
+nix develop
+```
 
 ### 使用指南
 
@@ -447,6 +490,14 @@ jobs:
           publish_dir: ./dist
 ```
 
+基于 Nix 的 CI 导出示例：
+
+```yaml
+- uses: DeterminateSystems/nix-installer-action@v21
+- uses: DeterminateSystems/magic-nix-cache-action@v13
+- run: nix run github:jixoai/openspecui -- export -o ./dist --base-path /my-repo/
+```
+
 #### 部署到子目录（例如 /docs/）
 
 如果要部署到子目录，请使用 `--base-path` 选项：
@@ -510,6 +561,9 @@ pnpm dev
 
 # 旧版多进程开发脚本
 pnpm dev:legacy
+
+# 可选：使用 Nix 开发环境
+nix develop
 ```
 
 ### 包说明
