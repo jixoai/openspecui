@@ -13,6 +13,7 @@ import type {
   ChangeFile,
   ChangeMeta,
   ChangeStatus,
+  DashboardOverview,
   OpenSpecUIConfig,
   SchemaArtifact,
   SchemaDetail,
@@ -351,6 +352,67 @@ export async function getSpecs(): Promise<SpecMeta[]> {
     createdAt: spec.createdAt,
     updatedAt: spec.updatedAt,
   }))
+}
+
+/**
+ * Get objective dashboard overview data from static snapshot.
+ */
+export async function getDashboardOverview(): Promise<DashboardOverview> {
+  const snapshot = await loadSnapshot()
+  if (!snapshot) {
+    return {
+      summary: {
+        specifications: 0,
+        requirements: 0,
+        activeChanges: 0,
+        inProgressChanges: 0,
+        completedChanges: 0,
+        tasksTotal: 0,
+        tasksCompleted: 0,
+      },
+      specifications: [],
+      activeChanges: [],
+    }
+  }
+
+  const specifications = snapshot.specs
+    .map((spec) => ({
+      id: spec.id,
+      name: spec.name,
+      requirements: spec.requirements.length,
+      updatedAt: spec.updatedAt,
+    }))
+    .sort((a, b) => b.requirements - a.requirements || b.updatedAt - a.updatedAt)
+
+  const activeChanges = snapshot.changes
+    .map((change) => ({
+      id: change.id,
+      name: change.name,
+      progress: change.progress,
+      updatedAt: change.updatedAt,
+    }))
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+
+  const requirements = specifications.reduce((sum, spec) => sum + spec.requirements, 0)
+  const tasksTotal = activeChanges.reduce((sum, change) => sum + change.progress.total, 0)
+  const tasksCompleted = activeChanges.reduce((sum, change) => sum + change.progress.completed, 0)
+  const inProgressChanges = activeChanges.filter(
+    (change) => change.progress.total > 0 && change.progress.completed < change.progress.total
+  ).length
+
+  return {
+    summary: {
+      specifications: specifications.length,
+      requirements,
+      activeChanges: activeChanges.length,
+      inProgressChanges,
+      completedChanges: snapshot.archives.length,
+      tasksTotal,
+      tasksCompleted,
+    },
+    specifications,
+    activeChanges,
+  }
 }
 
 /**

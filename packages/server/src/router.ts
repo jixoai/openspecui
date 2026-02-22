@@ -20,6 +20,7 @@ import {
   type ApplyInstructions,
   type ArtifactInstructions,
   type ChangeStatus,
+  type DashboardOverview,
   type SchemaDetail,
   type SchemaInfo,
   type SchemaResolution,
@@ -176,6 +177,59 @@ function buildSystemStatus(ctx: Context): {
     watcherGeneration: runtime?.generation ?? 0,
     watcherReinitializeCount: runtime?.reinitializeCount ?? 0,
     watcherLastReinitializeReason: runtime?.lastReinitializeReason ?? null,
+  }
+}
+
+async function fetchDashboardOverview(ctx: Context): Promise<DashboardOverview> {
+  const [specMetas, changeMetas, archiveMetas] = await Promise.all([
+    ctx.adapter.listSpecsWithMeta(),
+    ctx.adapter.listChangesWithMeta(),
+    ctx.adapter.listArchivedChangesWithMeta(),
+  ])
+
+  const specifications = (
+    await Promise.all(
+      specMetas.map(async (meta) => {
+        const spec = await ctx.adapter.readSpec(meta.id)
+        if (!spec) return null
+        return {
+          id: meta.id,
+          name: meta.name,
+          requirements: spec.requirements.length,
+          updatedAt: meta.updatedAt,
+        }
+      })
+    )
+  )
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((a, b) => b.requirements - a.requirements || b.updatedAt - a.updatedAt)
+
+  const activeChanges = changeMetas.map((change) => ({
+    id: change.id,
+    name: change.name,
+    progress: change.progress,
+    updatedAt: change.updatedAt,
+  }))
+
+  const requirements = specifications.reduce((sum, spec) => sum + spec.requirements, 0)
+  const tasksTotal = activeChanges.reduce((sum, change) => sum + change.progress.total, 0)
+  const tasksCompleted = activeChanges.reduce((sum, change) => sum + change.progress.completed, 0)
+  const inProgressChanges = activeChanges.filter(
+    (change) => change.progress.total > 0 && change.progress.completed < change.progress.total
+  ).length
+
+  return {
+    summary: {
+      specifications: specifications.length,
+      requirements,
+      activeChanges: activeChanges.length,
+      inProgressChanges,
+      completedChanges: archiveMetas.length,
+      tasksTotal,
+      tasksCompleted,
+    },
+    specifications,
+    activeChanges,
   }
 }
 
@@ -1123,9 +1177,25 @@ export const systemRouter = router({
 })
 
 /**
+ * Dashboard router - objective project overview for UI
+ */
+export const dashboardRouter = router({
+  get: publicProcedure.query(async ({ ctx }) => {
+    return fetchDashboardOverview(ctx)
+  }),
+
+  subscribe: publicProcedure.subscription(({ ctx }) => {
+    return createReactiveSubscription(async () => {
+      return fetchDashboardOverview(ctx)
+    })
+  }),
+})
+
+/**
  * Main app router
  */
 export const appRouter = router({
+  dashboard: dashboardRouter,
   spec: specRouter,
   change: changeRouter,
   archive: archiveRouter,

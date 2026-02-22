@@ -120,6 +120,7 @@ export {
 } from './tool-config.js'
 
 // Export types for static site generation
+export { type DashboardOverview } from './dashboard-types.js'
 export { type ExportSnapshot } from './export-types.js'
 
 // OPSX Kernel - reactive in-memory data store
