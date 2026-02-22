@@ -1,0 +1,48 @@
+name: Nix Flake Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'flake.nix'
+      - 'flake.lock'
+      - '.github/workflows/nix-flake.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'flake.nix'
+      - 'flake.lock'
+      - '.github/workflows/nix-flake.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: nix-flake-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nix-flake:
+    name: Nix Flake Validation
+    if: ${{ github.event_name != 'pull_request' || !startsWith(github.head_ref, 'chore/release/changeversion-') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v21
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@v13
+
+      - name: Build flake package
+        run: nix build --extra-experimental-features 'nix-command flakes'
+
+      - name: Smoke test CLI version
+        run: nix run --extra-experimental-features 'nix-command flakes' . -- --version
+
+      - name: Smoke test export command
+        run: nix run --extra-experimental-features 'nix-command flakes' . -- export --help
+
+      - name: Smoke test dev shell
+        run: nix develop --extra-experimental-features 'nix-command flakes' -c node --version

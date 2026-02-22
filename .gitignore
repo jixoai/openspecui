@@ -3,6 +3,7 @@ dist/
 dist-ssg/
 build/
 bundle/
+result
 coverage/
 .log
 .report
