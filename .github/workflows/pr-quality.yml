@@ -89,7 +89,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browser and deps
-        run: pnpm exec playwright install --with-deps chromium
+        run: |
+          pnpm --filter @openspecui/web exec playwright install --with-deps chromium
+          pnpm --filter xterm-input-panel exec playwright install --with-deps chromium
 
       - name: Browser tests (storybook + vitest)
         run: pnpm test:browser:ci
