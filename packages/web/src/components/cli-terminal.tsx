@@ -62,13 +62,22 @@ function renderAnsiLine(line: string): ReactNode {
   let currentIndex = 0
   let currentColor: string | null = null
 
+  // eslint-disable-next-line no-control-regex -- ANSI SGR sequence uses ESC control code.
   const regex = /\x1b\[(\d+)m/g
   let match
 
   while ((match = regex.exec(line)) !== null) {
     if (match.index > currentIndex) {
       const text = line.slice(currentIndex, match.index)
-      parts.push(currentColor ? <span key={currentIndex} className={currentColor}>{text}</span> : text)
+      parts.push(
+        currentColor ? (
+          <span key={currentIndex} className={currentColor}>
+            {text}
+          </span>
+        ) : (
+          text
+        )
+      )
     }
 
     const code = parseInt(match[1], 10)
@@ -86,7 +95,15 @@ function renderAnsiLine(line: string): ReactNode {
 
   if (currentIndex < line.length) {
     const text = line.slice(currentIndex)
-    parts.push(currentColor ? <span key={currentIndex} className={currentColor}>{text}</span> : text)
+    parts.push(
+      currentColor ? (
+        <span key={currentIndex} className={currentColor}>
+          {text}
+        </span>
+      ) : (
+        text
+      )
+    )
   }
 
   return parts.length > 0 ? parts : line

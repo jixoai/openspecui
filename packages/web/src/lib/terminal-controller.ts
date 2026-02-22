@@ -493,10 +493,7 @@ class TerminalController {
     return 'rgb(26, 26, 26)'
   }
 
-  private attachTerminalShortcuts(
-    terminal: TerminalLike,
-    engine: TerminalRendererEngine
-  ): void {
+  private attachTerminalShortcuts(terminal: TerminalLike, engine: TerminalRendererEngine): void {
     terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
       const mod = event.metaKey || event.ctrlKey
       if (event.type !== 'keydown' || !mod) {
@@ -552,7 +549,10 @@ class TerminalController {
     instance.pendingOutput.push(data)
     instance.pendingOutputBytes += data.length
 
-    while (instance.pendingOutputBytes > MAX_PREOPEN_OUTPUT_BYTES && instance.pendingOutput.length) {
+    while (
+      instance.pendingOutputBytes > MAX_PREOPEN_OUTPUT_BYTES &&
+      instance.pendingOutput.length
+    ) {
       const removed = instance.pendingOutput.shift()
       if (!removed) break
       instance.pendingOutputBytes -= removed.length
@@ -701,7 +701,7 @@ class TerminalController {
   }
 
   closeAll(): void {
-    for (const id of [...this.instances.keys()]) {
+    for (const id of this.instances.keys()) {
       this.closeSession(id, { triggerCloseCallback: false })
     }
   }

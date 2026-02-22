@@ -449,7 +449,7 @@ export class InputPanelAddon implements ITerminalAddon {
     InputPanelAddon._lastActiveTab = this._panelSessionState.activeTab
     const store = loadPanelStateStore()
     const nextSessions = {
-      ...(store.sessions ?? {}),
+      ...store.sessions,
       [this._stateKey]: {
         activeTab: this._panelSessionState.activeTab,
         inputDraft: this._panelSessionState.inputDraft,
@@ -480,7 +480,9 @@ export class InputPanelAddon implements ITerminalAddon {
     const termElement = this._terminal?.element
     if (!(termElement instanceof HTMLElement)) return null
     if (termElement.classList.contains('xterm')) {
-      return termElement.parentElement instanceof HTMLElement ? termElement.parentElement : termElement
+      return termElement.parentElement instanceof HTMLElement
+        ? termElement.parentElement
+        : termElement
     }
     return termElement
   }
@@ -822,7 +824,11 @@ export class InputPanelAddon implements ITerminalAddon {
   }
 
   toggle(): void {
-    this._isOpen ? this.close() : this.open()
+    if (this._isOpen) {
+      this.close()
+      return
+    }
+    this.open()
   }
 
   /**

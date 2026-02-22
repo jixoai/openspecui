@@ -291,7 +291,7 @@ export function Settings() {
   // 同步已配置的工具到选中状态
   useEffect(() => {
     if (!configuredTools || configuredTools.length === 0) return
-    const next = [...configuredTools.filter((t) => cliSupportedTools.has(t))].sort()
+    const next = configuredTools.filter((t) => cliSupportedTools.has(t)).sort()
     const signature = `${cliSupportedToolsKey}|${next.join(',')}`
     if (signature === lastSyncedToolsKeyRef.current) return
     lastSyncedToolsKeyRef.current = signature
@@ -403,9 +403,7 @@ export function Settings() {
     initialConfig.cursorStyle
   )
   const [termScrollback, setTermScrollback] = useState(initialConfig.scrollback)
-  const [termRendererEngine, setTermRendererEngine] = useState<string>(
-    initialConfig.rendererEngine
-  )
+  const [termRendererEngine, setTermRendererEngine] = useState<string>(initialConfig.rendererEngine)
   const [termRendererError, setTermRendererError] = useState<string | null>(null)
   const isRendererEngineValid = isTerminalRendererEngine(termRendererEngine)
 
@@ -452,19 +450,16 @@ export function Settings() {
     [termFontSize, termFontFamily, termCursorBlink, termCursorStyle, termScrollback]
   )
 
-  const handleRendererEngineChange = useCallback(
-    async (nextEngine: TerminalRendererEngine) => {
-      setTermRendererError(null)
-      try {
-        await terminalController.setRendererEngine(nextEngine)
-        setTermRendererEngine(nextEngine)
-      } catch (error) {
-        setTermRendererEngine(terminalController.getConfig().rendererEngine)
-        setTermRendererError(error instanceof Error ? error.message : String(error))
-      }
-    },
-    []
-  )
+  const handleRendererEngineChange = useCallback(async (nextEngine: TerminalRendererEngine) => {
+    setTermRendererError(null)
+    try {
+      await terminalController.setRendererEngine(nextEngine)
+      setTermRendererEngine(nextEngine)
+    } catch (error) {
+      setTermRendererEngine(terminalController.getConfig().rendererEngine)
+      setTermRendererError(error instanceof Error ? error.message : String(error))
+    }
+  }, [])
 
   const saveTerminalConfigMutation = useMutation({
     mutationFn: (terminal: {
@@ -613,8 +608,8 @@ export function Settings() {
                 )}
                 {!isRendererEngineValid && (
                   <p className="mt-2 text-xs text-amber-500">
-                    Current config contains an unsupported renderer value. Select a valid one to
-                    fix it.
+                    Current config contains an unsupported renderer value. Select a valid one to fix
+                    it.
                   </p>
                 )}
               </div>

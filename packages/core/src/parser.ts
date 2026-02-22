@@ -1,11 +1,11 @@
 import type {
-  Spec,
-  Requirement,
   Change,
   Delta,
-  Task,
-  DeltaSpec,
   DeltaOperation,
+  DeltaSpec,
+  Requirement,
+  Spec,
+  Task,
 } from './schemas.js'
 
 /**
@@ -49,7 +49,10 @@ export class MarkdownParser {
       }
 
       // Parse requirements (### Requirement: ...)
-      if (line.startsWith('### Requirement:') || (line.startsWith('### ') && currentSection === 'requirements')) {
+      if (
+        line.startsWith('### Requirement:') ||
+        (line.startsWith('### ') && currentSection === 'requirements')
+      ) {
         if (currentRequirement) {
           if (currentScenarioText.trim()) {
             currentRequirement.scenarios = currentRequirement.scenarios || []
@@ -218,7 +221,11 @@ export class MarkdownParser {
         operation = 'RENAMED'
       } else if (/\bremove(s|d|ing)?\b/.test(lower) || /\bdelete(s|d|ing)?\b/.test(lower)) {
         operation = 'REMOVED'
-      } else if (/\badd(s|ed|ing)?\b/.test(lower) || /\bcreate(s|d|ing)?\b/.test(lower) || /\bnew\b/.test(lower)) {
+      } else if (
+        /\badd(s|ed|ing)?\b/.test(lower) ||
+        /\bcreate(s|d|ing)?\b/.test(lower) ||
+        /\bnew\b/.test(lower)
+      ) {
         operation = 'ADDED'
       }
 
@@ -291,10 +298,16 @@ export class MarkdownParser {
         const fromMatch = line.match(/FROM:\s*`?###\s*Requirement:\s*(.+?)`?$/i)
         const toMatch = line.match(/TO:\s*`?###\s*Requirement:\s*(.+?)`?$/i)
         if (fromMatch) {
-          renameBuffer = { ...(renameBuffer ?? {}), from: fromMatch[1].trim() }
+          if (!renameBuffer) {
+            renameBuffer = {}
+          }
+          renameBuffer.from = fromMatch[1].trim()
         }
         if (toMatch) {
-          renameBuffer = { ...(renameBuffer ?? {}), to: toMatch[1].trim() }
+          if (!renameBuffer) {
+            renameBuffer = {}
+          }
+          renameBuffer.to = toMatch[1].trim()
         }
         if (renameBuffer?.from && renameBuffer?.to) {
           deltas.push({

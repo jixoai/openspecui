@@ -56,15 +56,27 @@ function toErrorMessage(error: unknown): string {
 
 function stripAnsi(input: string): string {
   // CSI + OSC + 2-byte escapes
-  return input
-    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '')
-    .replace(/\x1B\][^\u0007]*(\u0007|\x1B\\)/g, '')
-    .replace(/\x1B[@-Z\\-_]/g, '')
+  // eslint-disable-next-line no-control-regex -- ANSI CSI sequence uses ESC control code.
+  const ansiCsiRegex = /\x1B\[[0-?]*[ -/]*[@-~]/g
+  // eslint-disable-next-line no-control-regex -- ANSI OSC sequence uses ESC/BEL control codes.
+  const ansiOscRegex = /\x1B\][^\u0007]*(\u0007|\x1B\\)/g
+  // eslint-disable-next-line no-control-regex -- ANSI 2-byte escape sequence uses ESC control code.
+  const ansiTwoByteRegex = /\x1B[@-Z\\-_]/g
+  return input.replace(ansiCsiRegex, '').replace(ansiOscRegex, '').replace(ansiTwoByteRegex, '')
 }
 
 function stripUnsafeControlChars(input: string): string {
   // Keep tab/newline/carriage return, remove remaining C0 + DEL.
-  return input.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+  let output = ''
+  for (const char of input) {
+    const code = char.charCodeAt(0)
+    const isAllowedWhitespace = code === 0x09 || code === 0x0a || code === 0x0d
+    const isControl = (code >= 0x00 && code <= 0x1f) || code === 0x7f
+    if (!isControl || isAllowedWhitespace) {
+      output += char
+    }
+  }
+  return output
 }
 
 function sanitizeTerminalPayload(input: string): { text: string; modified: boolean } {
