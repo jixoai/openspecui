@@ -26,6 +26,7 @@ jobs:
           node-version: 20
 
       - name: Verify changeset for releasable package changes
+        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
         env:
           CHANGESET_CHECK_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
         run: node scripts/changeset-check.mjs

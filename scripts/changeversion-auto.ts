@@ -22,24 +22,38 @@ type InheritRunResult = {
   timedOut: boolean
 }
 
+type CaptureRunResult = {
+  status: number
+  stdout: string
+  stderr: string
+}
+
 function commandFor(bin: 'pnpm' | 'git' | 'gh'): string {
   if (process.platform === 'win32' && bin === 'pnpm') return 'pnpm.cmd'
   return bin
 }
 
-function runCapture(command: string, args: string[]): string {
+function runCaptureResult(command: string, args: string[]): CaptureRunResult {
   const result = spawnSync(command, args, {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   })
-  if (result.error) throw result.error
+  return {
+    status: result.status ?? 1,
+    stdout: result.stdout.trim(),
+    stderr: result.stderr.trim(),
+  }
+}
+
+function runCapture(command: string, args: string[]): string {
+  const result = runCaptureResult(command, args)
   if (result.status !== 0) {
-    const stderr = result.stderr.trim()
-    const stdout = result.stdout.trim()
+    const stderr = result.stderr
+    const stdout = result.stdout
     const detail = stderr || stdout || `${command} ${args.join(' ')} failed`
     throw new Error(detail)
   }
-  return result.stdout.trim()
+  return result.stdout
 }
 
 function runInherit(command: string, args: string[], timeoutMs?: number): InheritRunResult {
@@ -73,6 +87,11 @@ function runInheritAllowFailure(
   return runInherit(command, args, timeoutMs)
 }
 
+function sleepMs(ms: number): void {
+  const lock = new Int32Array(new SharedArrayBuffer(4))
+  Atomics.wait(lock, 0, 0, ms)
+}
+
 function normalizeStatusPath(rawPath: string): string {
   const arrowIndex = rawPath.lastIndexOf(' -> ')
   if (arrowIndex >= 0) {
@@ -91,8 +110,18 @@ function getDirtyPaths(): string[] {
     .filter((path) => path.length > 0)
 }
 
+function isIgnoredDirtyPath(path: string): boolean {
+  if (IGNORED_DIRTY_PATHS.has(path)) return true
+  for (const ignored of IGNORED_DIRTY_PATHS) {
+    if (path.startsWith(`${ignored}/`) || path.startsWith(`${ignored} `)) {
+      return true
+    }
+  }
+  return false
+}
+
 function hasNonIgnoredDirtyChanges(paths: string[]): boolean {
-  return paths.some((path) => !IGNORED_DIRTY_PATHS.has(path))
+  return paths.some((path) => !isIgnoredDirtyPath(path))
 }
 
 function ensureOnMainBranch(): void {
@@ -117,13 +146,16 @@ function ensureGhAuthAvailable(): void {
   runInheritOrThrow(commandFor('gh'), ['auth', 'status'])
 }
 
-function createStash(message: string): string {
-  runInheritOrThrow(commandFor('git'), ['stash', 'push', '-u', '-m', message])
+function createStash(message: string): string | null {
+  const output = runCapture(commandFor('git'), ['stash', 'push', '-u', '-m', message])
+  if (output.includes('No local changes to save')) {
+    return null
+  }
   const list = runCapture(commandFor('git'), ['stash', 'list', '--format=%gd%x09%s'])
   const lines = list.split('\n').map((line) => line.trim())
   for (const line of lines) {
     const [ref, subject] = line.split('\t')
-    if (subject === message) {
+    if (subject?.includes(message)) {
       return ref
     }
   }
@@ -181,7 +213,44 @@ function closePrAndDeleteBranch(prNumber: number, branch: string, reason: string
     '--comment',
     reason,
   ])
-  runInheritAllowFailure(commandFor('git'), ['push', REMOTE, '--delete', branch])
+}
+
+function waitForRequiredChecksToExist(prNumber: number, deadlineMs: number): void {
+  while (Date.now() < deadlineMs) {
+    const result = runCaptureResult(commandFor('gh'), [
+      'pr',
+      'checks',
+      String(prNumber),
+      '--required',
+      '--json',
+      'name',
+    ])
+    if (result.status === 0) {
+      const checks = JSON.parse(result.stdout) as Array<{ name: string }>
+      if (checks.length > 0) return
+    } else {
+      const detail = `${result.stdout}\n${result.stderr}`.toLowerCase()
+      if (!detail.includes('no checks reported')) {
+        throw new Error(result.stderr || result.stdout || 'Failed to query PR checks')
+      }
+    }
+    sleepMs(5000)
+  }
+  throw new Error('Timed out waiting for required checks to be created.')
+}
+
+function waitForPrChecks(prNumber: number, timeoutMs: number): InheritRunResult {
+  const deadlineMs = Date.now() + timeoutMs
+  waitForRequiredChecksToExist(prNumber, deadlineMs)
+  const remainingMs = deadlineMs - Date.now()
+  if (remainingMs <= 0) {
+    return { status: 1, timedOut: true }
+  }
+  return runInheritAllowFailure(
+    commandFor('gh'),
+    ['pr', 'checks', String(prNumber), '--required', '--watch', '--interval', '10'],
+    remainingMs
+  )
 }
 
 function deleteLocalBranchIfExists(branch: string): void {
@@ -200,27 +269,21 @@ function main(): void {
   ensureMainIsSyncedWithRemote()
   ensureGhAuthAvailable()
 
-  const initialDirtyPaths = getDirtyPaths()
   let stashRef: string | null = null
   let releaseBranch: string | null = null
   let prNumber: number | null = null
   let workflowError: Error | null = null
 
-  if (hasNonIgnoredDirtyChanges(initialDirtyPaths)) {
-    const stashMessage = `changeversion-auto-${Date.now()}`
-    console.log(
-      `[changeversion] Dirty working tree detected, stashing changes as '${stashMessage}'...`
-    )
-    stashRef = createStash(stashMessage)
-    const postStashDirty = getDirtyPaths()
-    if (hasNonIgnoredDirtyChanges(postStashDirty)) {
-      throw new Error(
-        'Unable to auto-stash all working tree changes. Please clean your worktree and retry.'
-      )
-    }
-  }
-
   try {
+    const initialDirtyPaths = getDirtyPaths()
+    if (hasNonIgnoredDirtyChanges(initialDirtyPaths)) {
+      const stashMessage = `changeversion-auto-${Date.now()}`
+      console.log(
+        `[changeversion] Dirty working tree detected, stashing changes as '${stashMessage}'...`
+      )
+      stashRef = createStash(stashMessage)
+    }
+
     runInheritOrThrow(commandFor('pnpm'), ['exec', 'changeset', 'version'])
 
     const changedFiles = runCapture(commandFor('git'), ['diff', '--name-only'])
@@ -267,11 +330,7 @@ function main(): void {
         }
 
         console.log(`[changeversion] PR #${prNumber} created. Waiting for checks...`)
-        const checks = runInheritAllowFailure(
-          commandFor('gh'),
-          ['pr', 'checks', String(prNumber), '--watch'],
-          CI_TIMEOUT_MS
-        )
+        const checks = waitForPrChecks(prNumber, CI_TIMEOUT_MS)
         if (checks.timedOut || checks.status !== 0) {
           const reason = checks.timedOut
             ? 'Closed automatically: CI checks timed out in changeversion automation.'
