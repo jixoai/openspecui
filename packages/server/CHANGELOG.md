@@ -1,5 +1,11 @@
 # @openspecui/server
 
+## 1.4.1
+
+### Patch Changes
+
+- 991caa1: Use `tsconfig.check.json` for server typecheck so workspace path aliases resolve in CI without requiring prebuilt dependency artifacts.
+
 ## 1.2.0
 
 ### Minor Changes
