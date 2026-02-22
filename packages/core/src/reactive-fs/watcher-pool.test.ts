@@ -189,7 +189,7 @@ describe('WatcherPool', () => {
 
       // Modify file
       await writeFile(filepath, 'changed', 'utf-8')
-      await waitForDebounce(150)
+      await waitFor(() => onChange2.mock.calls.length > 0, { timeout: 2000, interval: 50 })
 
       // Only second callback should be called
       expect(onChange1).not.toHaveBeenCalled()

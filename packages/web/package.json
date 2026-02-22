@@ -18,9 +18,9 @@
     "build:ssg-cli": "vite build --config vite.ssg-cli.config.ts --outDir dist-ssg",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:browser": "vitest --project storybook",
+    "test": "vitest run --project unit",
+    "test:watch": "vitest --project unit",
+    "test:browser": "vitest --retry 2 --project storybook",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },

@@ -6,7 +6,9 @@
     "paths": {
       "@openspecui/server": ["../server/src/index.ts"],
       "@openspecui/ai-provider": ["../ai-provider/src/index.ts"],
-      "@openspecui/core": ["../core/src/index.ts"]
+      "@openspecui/core": ["../core/src/index.ts"],
+      "@openspecui/search": ["../search/src/index.ts"],
+      "@openspecui/search/node": ["../search/src/node.ts"]
     }
   },
   "include": [
@@ -14,7 +16,8 @@
     "src/**/*.tsx",
     "../server/src/**/*.ts",
     "../ai-provider/src/**/*.ts",
-    "../core/src/**/*.ts"
+    "../core/src/**/*.ts",
+    "../search/src/**/*.ts"
   ],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "../*/src/**/*.test.ts"]
 }

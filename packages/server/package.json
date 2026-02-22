@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "build": "tsdown src/index.ts --format esm --no-dts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -p tsconfig.check.json --noEmit",
     "dev": "tsx watch --include '../core/dist/**' --include '../search/dist/**' src/standalone.ts",
     "test": "vitest run",
     "test:watch": "vitest"

@@ -39,6 +39,7 @@ describe('useServerStatus', () => {
   })
 
   it('subscribes connection state even when ws client is not pre-created', async () => {
+    // Keep this explicit mock path to validate reconnect countdown behavior in regression checks.
     getOrCreateWsClientInstanceMock.mockReturnValue({
       connectionState: {
         subscribe: (observer: ConnectionObserver) => {
