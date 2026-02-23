@@ -1,5 +1,24 @@
 # @openspecui/core
 
+## 1.5.0
+
+### Minor Changes
+
+- 67d7d16: Finalize the dashboard live workflow iteration with stronger operational context and static parity:
+  - redesign Dashboard top section into objective `Workflow Progress` + `Git Snapshot`
+  - add git snapshot model/refresh lifecycle and compact diff-focused rendering
+  - harden objective trend windowing and availability semantics
+  - archive and sync the `dashboard-live-workflow-status` OpenSpec change artifacts
+  - export and consume OpenSpecUI config in static snapshots for consistent Settings/Dashboard behavior
+
+### Patch Changes
+
+- a29c5a8: Improve dashboard with a new objective overview data model and reactive subscription:
+  - add backend `dashboard` get/subscribe API
+  - include spec/requirement counts and active/completed/in-progress change metrics
+  - show per-spec requirement breakdown and per-change task progress in UI
+  - support static export mode via dashboard overview mapping
+
 ## 1.2.0
 
 ### Minor Changes
