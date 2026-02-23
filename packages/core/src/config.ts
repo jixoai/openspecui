@@ -468,6 +468,12 @@ export const TerminalConfigSchema = z.object({
 
 export type TerminalConfig = z.infer<typeof TerminalConfigSchema>
 
+export const DashboardConfigSchema = z.object({
+  trendPointLimit: z.number().int().min(20).max(500).default(100),
+})
+
+export type DashboardConfig = z.infer<typeof DashboardConfigSchema>
+
 /**
  * OpenSpecUI 配置 Schema
  *
@@ -489,6 +495,9 @@ export const OpenSpecUIConfigSchema = z.object({
 
   /** 终端配置 */
   terminal: TerminalConfigSchema.default(TerminalConfigSchema.parse({})),
+
+  /** Dashboard 配置 */
+  dashboard: DashboardConfigSchema.default(DashboardConfigSchema.parse({})),
 })
 
 export type OpenSpecUIConfig = z.infer<typeof OpenSpecUIConfigSchema>
@@ -499,6 +508,7 @@ export type OpenSpecUIConfigUpdate = {
   }
   theme?: OpenSpecUIConfig['theme']
   terminal?: Partial<TerminalConfig>
+  dashboard?: Partial<DashboardConfig>
 }
 
 /** 默认配置（静态，用于测试和类型） */
@@ -508,6 +518,7 @@ export const DEFAULT_CONFIG: OpenSpecUIConfig = {
   },
   theme: 'system',
   terminal: TerminalConfigSchema.parse({}),
+  dashboard: DashboardConfigSchema.parse({}),
 }
 
 /**
@@ -590,6 +601,7 @@ export class ConfigManager {
       cli: nextCli,
       theme: config.theme ?? current.theme,
       terminal: { ...current.terminal, ...config.terminal },
+      dashboard: { ...current.dashboard, ...config.dashboard },
     }
     const serialized = JSON.stringify(merged, null, 2)
     await mkdir(dirname(this.configPath), { recursive: true })

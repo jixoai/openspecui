@@ -18,11 +18,3 @@ schema: spec-driven
 #       - Always include a "Non-goals" section
 #     tasks:
 #       - Break tasks into chunks of max 2 hours
-ui:
-  font-size: 12
-  cursor-blink: true
-  cursor-style: block
-  scrollback: 1000
-  font-families:
-    - JetBrains Mono
-    - Roboto Mono

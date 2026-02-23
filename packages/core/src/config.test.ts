@@ -107,6 +107,7 @@ describe('ConfigManager', () => {
       expect(config.theme).toBe('system') // default
       expect(config.terminal.scrollback).toBe(1000)
       expect(config.terminal.rendererEngine).toBe('xterm')
+      expect(config.dashboard.trendPointLimit).toBe(100)
     })
   })
 
@@ -132,6 +133,13 @@ describe('ConfigManager', () => {
       const config = await configManager.readConfig()
       expect(config.cli.command).toBe('initial') // 保留
       expect(config.theme).toBe('dark') // 更新
+    })
+
+    it('should write dashboard config', async () => {
+      await configManager.writeConfig({ dashboard: { trendPointLimit: 180 } })
+      clearCache()
+      const config = await configManager.readConfig()
+      expect(config.dashboard.trendPointLimit).toBe(180)
     })
 
     it('should create file if not exists', async () => {
@@ -356,6 +364,7 @@ describe('DEFAULT_CONFIG', () => {
     expect(DEFAULT_CONFIG.theme).toBe('system')
     expect(DEFAULT_CONFIG.terminal.scrollback).toBe(1000)
     expect(DEFAULT_CONFIG.terminal.rendererEngine).toBe('xterm')
+    expect(DEFAULT_CONFIG.dashboard.trendPointLimit).toBe(100)
   })
 })
 

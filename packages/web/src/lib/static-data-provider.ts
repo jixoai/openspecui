@@ -13,7 +13,12 @@ import type {
   ChangeFile,
   ChangeMeta,
   ChangeStatus,
+  DashboardCardAvailability,
+  DashboardMetricKey,
   DashboardOverview,
+  DashboardTrendKind,
+  DashboardTrendPoint,
+  DashboardTriColorTrendPoint,
   OpenSpecUIConfig,
   SchemaArtifact,
   SchemaDetail,
@@ -33,6 +38,188 @@ import { getBasePath, getInitialData } from './static-mode'
  */
 let snapshotCache: ExportSnapshot | null = null
 let snapshotPromise: Promise<ExportSnapshot | null> | null = null
+
+const DASHBOARD_METRIC_KEYS: DashboardMetricKey[] = [
+  'specifications',
+  'requirements',
+  'activeChanges',
+  'inProgressChanges',
+  'completedChanges',
+  'taskCompletionPercent',
+]
+const DASHBOARD_TREND_POINT_LIMIT = 100
+const DASHBOARD_TREND_BAR_COUNT = 20
+const DAY_MS = 24 * 60 * 60 * 1000
+
+interface TrendEvent {
+  ts: number
+  value: number
+}
+
+function createEmptyTrends(): Record<DashboardMetricKey, DashboardTrendPoint[]> {
+  const trends = {} as Record<DashboardMetricKey, DashboardTrendPoint[]>
+  for (const metric of DASHBOARD_METRIC_KEYS) {
+    trends[metric] = []
+  }
+  return trends
+}
+
+function createEmptyTriColorTrends(): Record<DashboardMetricKey, DashboardTriColorTrendPoint[]> {
+  const trends = {} as Record<DashboardMetricKey, DashboardTriColorTrendPoint[]>
+  for (const metric of DASHBOARD_METRIC_KEYS) {
+    trends[metric] = []
+  }
+  return trends
+}
+
+function createCardAvailability(
+  taskCompletionPercent: number | null,
+  options: {
+    hasObjectiveSpecificationTrend: boolean
+    hasObjectiveRequirementTrend: boolean
+    hasObjectiveCompletedTrend: boolean
+  }
+): Record<DashboardMetricKey, DashboardCardAvailability> {
+  return {
+    specifications: options.hasObjectiveSpecificationTrend
+      ? { state: 'ok' }
+      : { state: 'invalid', reason: 'objective-history-unavailable' },
+    requirements: options.hasObjectiveRequirementTrend
+      ? { state: 'ok' }
+      : { state: 'invalid', reason: 'objective-history-unavailable' },
+    activeChanges: { state: 'invalid', reason: 'objective-history-unavailable' },
+    inProgressChanges: { state: 'invalid', reason: 'objective-history-unavailable' },
+    completedChanges: options.hasObjectiveCompletedTrend
+      ? { state: 'ok' }
+      : { state: 'invalid', reason: 'objective-history-unavailable' },
+    taskCompletionPercent: {
+      state: 'invalid',
+      reason:
+        taskCompletionPercent === null ? 'semantic-uncomputable' : 'objective-history-unavailable',
+    },
+  }
+}
+
+function createTrendKinds(): Record<DashboardMetricKey, DashboardTrendKind> {
+  return {
+    specifications: 'monotonic',
+    requirements: 'monotonic',
+    activeChanges: 'bidirectional',
+    inProgressChanges: 'bidirectional',
+    completedChanges: 'monotonic',
+    taskCompletionPercent: 'bidirectional',
+  }
+}
+
+function resolveTrendTimestamp(
+  primary: number | undefined,
+  secondary: number | undefined
+): number | null {
+  if (typeof primary === 'number' && Number.isFinite(primary) && primary > 0) return primary
+  if (typeof secondary === 'number' && Number.isFinite(secondary) && secondary > 0) return secondary
+  return null
+}
+
+function parseDatedIdTimestamp(id: string): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:-|$)/.exec(id)
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null
+  if (month < 1 || month > 12) return null
+  if (day < 1 || day > 31) return null
+  const ts = Date.UTC(year, month - 1, day)
+  return Number.isFinite(ts) ? ts : null
+}
+
+function normalizeTrendEvents(events: TrendEvent[], pointLimit: number): TrendEvent[] {
+  return events
+    .filter((event) => Number.isFinite(event.ts) && event.ts > 0 && Number.isFinite(event.value))
+    .sort((a, b) => a.ts - b.ts)
+    .slice(-pointLimit)
+}
+
+function buildBucketedTrend(
+  events: TrendEvent[],
+  pointLimit: number,
+  mode: 'sum' | 'sum-cumulative'
+): DashboardTrendPoint[] {
+  const normalizedEvents = normalizeTrendEvents(events, pointLimit)
+  if (normalizedEvents.length === 0) {
+    return []
+  }
+
+  const end = normalizedEvents[normalizedEvents.length - 1]!.ts
+  const probeStart = normalizedEvents[0]!.ts
+  const rangeMs = Math.max(1, end - probeStart)
+  const bucketMs =
+    rangeMs >= DAY_MS
+      ? Math.max(DAY_MS, Math.ceil(rangeMs / DASHBOARD_TREND_BAR_COUNT / DAY_MS) * DAY_MS)
+      : Math.max(1, Math.ceil(rangeMs / DASHBOARD_TREND_BAR_COUNT))
+  const windowStart = end - bucketMs * DASHBOARD_TREND_BAR_COUNT
+
+  const bucketEnds = Array.from(
+    { length: DASHBOARD_TREND_BAR_COUNT },
+    (_, index) => windowStart + bucketMs * (index + 1)
+  )
+  const sums = Array.from({ length: bucketEnds.length }, () => 0)
+  let baseline = 0
+
+  for (const event of normalizedEvents) {
+    if (event.ts <= windowStart) {
+      if (mode === 'sum-cumulative') {
+        baseline += event.value
+      }
+      continue
+    }
+
+    const offset = event.ts - windowStart
+    const index = Math.max(0, Math.min(bucketEnds.length - 1, Math.ceil(offset / bucketMs) - 1))
+    sums[index] += event.value
+  }
+
+  let cumulative = baseline
+  return bucketEnds.map((ts, index) => {
+    if (mode === 'sum-cumulative') {
+      cumulative += sums[index]
+      return { ts, value: cumulative }
+    }
+    return { ts, value: sums[index] }
+  })
+}
+
+function buildStaticObjectiveTrends(snapshot: ExportSnapshot): DashboardOverview['trends'] {
+  const trends = createEmptyTrends()
+  const requirementEvents = snapshot.specs.flatMap((spec) => {
+    const ts = resolveTrendTimestamp(spec.updatedAt, spec.createdAt)
+    return ts === null ? [] : [{ ts, value: spec.requirements.length }]
+  })
+
+  trends.specifications = buildBucketedTrend(
+    snapshot.specs.flatMap((spec) => {
+      const ts = resolveTrendTimestamp(spec.createdAt, spec.updatedAt)
+      return ts === null ? [] : [{ ts, value: 1 }]
+    }),
+    DASHBOARD_TREND_POINT_LIMIT,
+    'sum'
+  )
+
+  trends.requirements = buildBucketedTrend(requirementEvents, DASHBOARD_TREND_POINT_LIMIT, 'sum')
+
+  trends.completedChanges = buildBucketedTrend(
+    snapshot.archives.flatMap((archive) => {
+      const ts =
+        parseDatedIdTimestamp(archive.id) ??
+        resolveTrendTimestamp(archive.updatedAt, archive.createdAt)
+      return ts === null ? [] : [{ ts, value: archive.parsedTasks.length }]
+    }),
+    DASHBOARD_TREND_POINT_LIMIT,
+    'sum'
+  )
+
+  return trends
+}
 
 interface GlobArtifactFile {
   path: string
@@ -360,6 +547,7 @@ export async function getSpecs(): Promise<SpecMeta[]> {
 export async function getDashboardOverview(): Promise<DashboardOverview> {
   const snapshot = await loadSnapshot()
   if (!snapshot) {
+    const taskCompletionPercent = null
     return {
       summary: {
         specifications: 0,
@@ -367,11 +555,29 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
         activeChanges: 0,
         inProgressChanges: 0,
         completedChanges: 0,
+        archivedTasksCompleted: 0,
         tasksTotal: 0,
         tasksCompleted: 0,
+        taskCompletionPercent,
+      },
+      trends: createEmptyTrends(),
+      triColorTrends: createEmptyTriColorTrends(),
+      trendKinds: createTrendKinds(),
+      cardAvailability: createCardAvailability(taskCompletionPercent, {
+        hasObjectiveSpecificationTrend: true,
+        hasObjectiveRequirementTrend: true,
+        hasObjectiveCompletedTrend: true,
+      }),
+      trendMeta: {
+        pointLimit: DASHBOARD_TREND_POINT_LIMIT,
+        lastUpdatedAt: Date.now(),
       },
       specifications: [],
       activeChanges: [],
+      git: {
+        defaultBranch: 'main',
+        worktrees: [],
+      },
     }
   }
 
@@ -396,9 +602,22 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   const requirements = specifications.reduce((sum, spec) => sum + spec.requirements, 0)
   const tasksTotal = activeChanges.reduce((sum, change) => sum + change.progress.total, 0)
   const tasksCompleted = activeChanges.reduce((sum, change) => sum + change.progress.completed, 0)
+  const archivedTasksCompleted = snapshot.archives.reduce(
+    (sum, archive) => sum + archive.parsedTasks.length,
+    0
+  )
+  const taskCompletionPercent =
+    tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : null
   const inProgressChanges = activeChanges.filter(
     (change) => change.progress.total > 0 && change.progress.completed < change.progress.total
   ).length
+
+  const trends = buildStaticObjectiveTrends(snapshot)
+  const hasObjectiveSpecificationTrend =
+    trends.specifications.length > 0 || specifications.length === 0
+  const hasObjectiveRequirementTrend = trends.requirements.length > 0 || requirements === 0
+  const hasObjectiveCompletedTrend =
+    trends.completedChanges.length > 0 || snapshot.archives.length === 0
 
   return {
     summary: {
@@ -407,11 +626,29 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       activeChanges: activeChanges.length,
       inProgressChanges,
       completedChanges: snapshot.archives.length,
+      archivedTasksCompleted,
       tasksTotal,
       tasksCompleted,
+      taskCompletionPercent,
+    },
+    trends,
+    triColorTrends: createEmptyTriColorTrends(),
+    trendKinds: createTrendKinds(),
+    cardAvailability: createCardAvailability(taskCompletionPercent, {
+      hasObjectiveSpecificationTrend,
+      hasObjectiveRequirementTrend,
+      hasObjectiveCompletedTrend,
+    }),
+    trendMeta: {
+      pointLimit: DASHBOARD_TREND_POINT_LIMIT,
+      lastUpdatedAt: Date.now(),
     },
     specifications,
     activeChanges,
+    git: {
+      defaultBranch: 'main',
+      worktrees: [],
+    },
   }
 }
 
@@ -593,10 +830,13 @@ export async function getArchiveFiles(id: string): Promise<ChangeFile[]> {
  * Get UI config (default in static mode)
  */
 export async function getConfig(): Promise<OpenSpecUIConfig> {
-  // In static mode, return default config
-  return {
+  const snapshot = await loadSnapshot()
+  const defaultConfig: OpenSpecUIConfig = {
     cli: { command: 'openspecui' },
     theme: 'system',
+    dashboard: {
+      trendPointLimit: 100,
+    },
     terminal: {
       fontSize: 13,
       fontFamily: '',
@@ -604,6 +844,28 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
       cursorStyle: 'block',
       scrollback: 1000,
       rendererEngine: 'xterm',
+    },
+  }
+
+  const fromSnapshot = snapshot?.config
+  if (!fromSnapshot) {
+    return defaultConfig
+  }
+
+  return {
+    ...defaultConfig,
+    ...fromSnapshot,
+    cli: {
+      ...defaultConfig.cli,
+      ...fromSnapshot.cli,
+    },
+    terminal: {
+      ...defaultConfig.terminal,
+      ...fromSnapshot.terminal,
+    },
+    dashboard: {
+      ...defaultConfig.dashboard,
+      ...fromSnapshot.dashboard,
     },
   }
 }
