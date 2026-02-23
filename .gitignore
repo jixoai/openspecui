@@ -19,3 +19,4 @@ test-output/
 .opencode
 packages/.DS_Store
 openspec/.openspecui.json
+openspec/.openspecui-dashboard-git-refresh.stamp

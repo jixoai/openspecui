@@ -60,6 +60,14 @@ describe('Export Functions', () => {
       expect(snapshot.dashboard.archivesCount).toBeGreaterThanOrEqual(0)
     })
 
+    it('should include ui config for static consumption', async () => {
+      const snapshot = await generateSnapshot(testProjectDir)
+
+      expect(snapshot.config).toBeDefined()
+      expect(snapshot.config?.terminal.rendererEngine).toBe('xterm')
+      expect(snapshot.config?.dashboard.trendPointLimit).toBeGreaterThanOrEqual(20)
+    })
+
     it('should include empty arrays when no specs/changes exist', async () => {
       const snapshot = await generateSnapshot(testProjectDir)
 

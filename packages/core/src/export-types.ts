@@ -1,6 +1,7 @@
 /**
  * Types for static export / SSG
  */
+import type { OpenSpecUIConfig } from './config.js'
 import type { SchemaDetail, SchemaInfo, SchemaResolution, TemplatesMap } from './opsx-types.js'
 
 /**
@@ -19,6 +20,8 @@ export interface ExportSnapshot {
     changesCount: number
     archivesCount: number
   }
+  /** OpenSpecUI runtime config captured during export */
+  config?: OpenSpecUIConfig
   /** All specs with parsed content */
   specs: Array<{
     id: string

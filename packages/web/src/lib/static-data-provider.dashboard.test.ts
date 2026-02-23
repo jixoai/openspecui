@@ -22,6 +22,19 @@ function createSnapshot(): ExportSnapshot {
       changesCount: 2,
       archivesCount: 1,
     },
+    config: {
+      cli: { command: 'openspec' },
+      theme: 'dark',
+      dashboard: { trendPointLimit: 120 },
+      terminal: {
+        fontSize: 14,
+        fontFamily: 'Menlo',
+        cursorBlink: true,
+        cursorStyle: 'block',
+        scrollback: 2000,
+        rendererEngine: 'xterm',
+      },
+    },
     specs: [
       {
         id: 'cli',
@@ -105,11 +118,87 @@ describe('static-data-provider dashboard overview', () => {
       activeChanges: 2,
       inProgressChanges: 1,
       completedChanges: 1,
+      archivedTasksCompleted: 0,
       tasksTotal: 6,
       tasksCompleted: 3,
+      taskCompletionPercent: 50,
     })
 
     expect(overview.specifications.map((spec) => spec.id)).toEqual(['cli', 'ui'])
     expect(overview.activeChanges.map((change) => change.id)).toEqual(['change-a', 'change-b'])
+    expect(overview.trends.specifications.length).toBeGreaterThan(0)
+    expect(overview.trends.requirements.length).toBeGreaterThan(0)
+    expect(overview.trends.completedChanges.length).toBeGreaterThan(0)
+    expect(overview.trends.activeChanges).toEqual([])
+    expect(overview.trends.inProgressChanges).toEqual([])
+    expect(overview.trends.taskCompletionPercent).toEqual([])
+    expect(overview.triColorTrends.specifications).toEqual([])
+    expect(overview.triColorTrends.requirements).toEqual([])
+    expect(overview.triColorTrends.completedChanges).toEqual([])
+    expect(overview.trendKinds.requirements).toBe('monotonic')
+    expect(overview.trendKinds.activeChanges).toBe('bidirectional')
+    expect(overview.cardAvailability.requirements).toEqual({ state: 'ok' })
+    expect(overview.cardAvailability.activeChanges).toEqual({
+      state: 'invalid',
+      reason: 'objective-history-unavailable',
+    })
+    expect(overview.cardAvailability.inProgressChanges).toEqual({
+      state: 'invalid',
+      reason: 'objective-history-unavailable',
+    })
+    expect(overview.cardAvailability.taskCompletionPercent).toEqual({
+      state: 'invalid',
+      reason: 'objective-history-unavailable',
+    })
+    expect(overview.trendMeta.pointLimit).toBe(100)
+    expect(overview.trendMeta.lastUpdatedAt).toBeGreaterThan(0)
+  })
+
+  it('prioritizes dated archive id for completed trend positioning', async () => {
+    staticState.snapshot = {
+      ...createSnapshot(),
+      archives: [
+        {
+          id: '2026-01-23-add-static-export',
+          name: 'Archive A',
+          proposal: '# Proposal',
+          why: 'why',
+          whatChanges: 'what',
+          parsedTasks: [{ id: '1', text: 'done', completed: true }],
+          createdAt: 2_000_000_000_000,
+          updatedAt: 2_000_000_000_000,
+        },
+        {
+          id: '2026-02-21-opsx-config-center',
+          name: 'Archive B',
+          proposal: '# Proposal',
+          why: 'why',
+          whatChanges: 'what',
+          parsedTasks: [{ id: '1', text: 'done', completed: true }],
+          createdAt: 2_000_000_000_000,
+          updatedAt: 2_000_000_000_000,
+        },
+      ],
+    }
+
+    const provider = await import('./static-data-provider')
+    const overview = await provider.getDashboardOverview()
+    const nonZeroIndexes = overview.trends.completedChanges
+      .map((point, index) => ({ point, index }))
+      .filter(({ point }) => point.value > 0)
+      .map(({ index }) => index)
+
+    expect(nonZeroIndexes).toHaveLength(2)
+    expect(nonZeroIndexes[1]! - nonZeroIndexes[0]!).toBeGreaterThan(8)
+  })
+
+  it('returns static ui config from snapshot when present', async () => {
+    const provider = await import('./static-data-provider')
+    const config = await provider.getConfig()
+
+    expect(config.theme).toBe('dark')
+    expect(config.dashboard.trendPointLimit).toBe(120)
+    expect(config.terminal.scrollback).toBe(2000)
+    expect(config.cli.command).toBe('openspec')
   })
 })

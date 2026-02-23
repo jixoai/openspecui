@@ -22,6 +22,7 @@ import {
   Download,
   FolderOpen,
   FolderPlus,
+  LayoutDashboard,
   Loader2,
   Monitor,
   Moon,
@@ -404,6 +405,7 @@ export function Settings() {
   )
   const [termScrollback, setTermScrollback] = useState(initialConfig.scrollback)
   const [termRendererEngine, setTermRendererEngine] = useState<string>(initialConfig.rendererEngine)
+  const [dashboardTrendPointLimit, setDashboardTrendPointLimit] = useState(100)
   const [termRendererError, setTermRendererError] = useState<string | null>(null)
   const isRendererEngineValid = isTerminalRendererEngine(termRendererEngine)
 
@@ -471,6 +473,21 @@ export function Settings() {
       rendererEngine?: TerminalRendererEngine
     }) => trpcClient.config.update.mutate({ terminal }),
   })
+  const saveDashboardConfigMutation = useMutation({
+    mutationFn: (trendPointLimit: number) =>
+      trpcClient.config.update.mutate({
+        dashboard: { trendPointLimit },
+      }),
+  })
+
+  useEffect(() => {
+    const nextLimit = config?.dashboard?.trendPointLimit
+    if (typeof nextLimit === 'number' && Number.isFinite(nextLimit)) {
+      setDashboardTrendPointLimit(nextLimit)
+    }
+  }, [config?.dashboard?.trendPointLimit])
+
+  const savedDashboardTrendPointLimit = config?.dashboard?.trendPointLimit ?? 100
 
   useEffect(() => {
     applyTheme(theme)
@@ -742,6 +759,58 @@ export function Settings() {
                   ) : null}
                   {saveTerminalConfigMutation.isPending ? 'Saving...' : 'Save'}
                 </button>
+              </div>
+            </div>
+          </section>
+
+          {/* Dashboard Settings */}
+          <section className="space-y-4">
+            <h2 className="flex items-center gap-2 text-lg font-semibold">
+              <LayoutDashboard className="h-5 w-5" />
+              Dashboard
+            </h2>
+            <div className="border-border space-y-4 rounded-lg border p-4">
+              <div>
+                <label className="mb-2 block text-sm font-medium">Trend Point Limit</label>
+                <p className="text-muted-foreground mb-3 text-sm">
+                  Max data points kept per top metric card trend (server-shared in-memory history).
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min={20}
+                    max={500}
+                    step={10}
+                    value={dashboardTrendPointLimit}
+                    onChange={(e) => {
+                      const next = Number(e.target.value)
+                      if (Number.isFinite(next)) {
+                        setDashboardTrendPointLimit(next)
+                      }
+                    }}
+                    className="bg-background border-border text-foreground focus:ring-primary w-36 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
+                  />
+                  <button
+                    onClick={() => {
+                      const next = Math.max(
+                        20,
+                        Math.min(500, Math.trunc(dashboardTrendPointLimit || 100))
+                      )
+                      setDashboardTrendPointLimit(next)
+                      saveDashboardConfigMutation.mutate(next)
+                    }}
+                    disabled={
+                      saveDashboardConfigMutation.isPending ||
+                      dashboardTrendPointLimit === savedDashboardTrendPointLimit
+                    }
+                    className="bg-primary text-primary-foreground rounded-md px-4 py-2 hover:opacity-90 disabled:opacity-50"
+                  >
+                    {saveDashboardConfigMutation.isPending ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+                <p className="text-muted-foreground mt-2 text-xs">
+                  Allowed range: 20-500. Lower values reduce memory and increase visual smoothing.
+                </p>
               </div>
             </div>
           </section>

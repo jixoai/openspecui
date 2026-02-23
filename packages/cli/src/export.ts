@@ -1,6 +1,7 @@
 import {
   CliExecutor,
   ConfigManager,
+  DEFAULT_CONFIG,
   OpenSpecAdapter,
   SchemaDetailSchema,
   SchemaInfoSchema,
@@ -144,6 +145,7 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
   const adapter = new OpenSpecAdapter(projectDir)
   const configManager = new ConfigManager(projectDir)
   const cliExecutor = new CliExecutor(configManager, projectDir)
+  const uiConfig = await configManager.readConfig().catch(() => DEFAULT_CONFIG)
 
   // Check if initialized
   const isInit = await adapter.isInitialized()
@@ -335,6 +337,7 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
       changesCount: changes.filter((c) => c !== null).length,
       archivesCount: archives.length,
     },
+    config: uiConfig,
     specs,
     changes: changes.filter((c): c is NonNullable<typeof c> => c !== null),
     archives,

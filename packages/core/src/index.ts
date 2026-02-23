@@ -83,6 +83,7 @@ export {
 export {
   ConfigManager,
   DEFAULT_CONFIG,
+  DashboardConfigSchema,
   OpenSpecUIConfigSchema,
   TerminalConfigSchema,
   TerminalRendererEngineSchema,
@@ -95,6 +96,7 @@ export {
   sniffGlobalCli,
   type CliRunnerAttempt,
   type CliSniffResult,
+  type DashboardConfig,
   type OpenSpecUIConfig,
   type OpenSpecUIConfigUpdate,
   type ResolvedCliRunner,
@@ -120,7 +122,23 @@ export {
 } from './tool-config.js'
 
 // Export types for static site generation
-export { type DashboardOverview } from './dashboard-types.js'
+export {
+  DASHBOARD_METRIC_KEYS,
+  type DashboardCardAvailability,
+  type DashboardGitCommitEntry,
+  type DashboardGitDiffStats,
+  type DashboardGitEntry,
+  type DashboardGitSnapshot,
+  type DashboardGitUncommittedEntry,
+  type DashboardGitWorktree,
+  type DashboardMetricKey,
+  type DashboardOverview,
+  type DashboardSummary,
+  type DashboardTrendKind,
+  type DashboardTrendMeta,
+  type DashboardTrendPoint,
+  type DashboardTriColorTrendPoint,
+} from './dashboard-types.js'
 export { type ExportSnapshot } from './export-types.js'
 
 // OPSX Kernel - reactive in-memory data store
