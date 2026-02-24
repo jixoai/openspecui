@@ -1,7 +1,13 @@
 import { CodeEditor } from '@/components/code-editor'
-import { ContextMenu, type ContextMenuItem } from '@/components/context-menu'
+import {
+  ContextMenu,
+  ContextMenuTargeter,
+  ContextMenuWrapper,
+  type ContextMenuAnchor,
+  type ContextMenuItem,
+} from '@/components/context-menu'
 import { ChevronRight, EllipsisVertical, File, FileText, Folder } from 'lucide-react'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 
 export interface FileExplorerEntry {
   path: string
@@ -16,6 +22,17 @@ export interface FileExplorerAction {
   disabled?: boolean
   tone?: 'default' | 'destructive'
   onSelect: () => void
+}
+
+function toContextMenuItems(items: FileExplorerAction[]): ContextMenuItem[] {
+  return items.map((item) => ({
+    id: item.id,
+    label: item.label,
+    icon: item.icon,
+    disabled: item.disabled,
+    tone: item.tone,
+    onSelect: item.onSelect,
+  }))
 }
 
 const css = String.raw
@@ -44,7 +61,7 @@ const layoutStyles = css`
   @container (min-width: 768px) {
     .fev-layout {
       display: grid;
-      grid-template-columns: 1fr 240px;
+      grid-template-columns: minmax(0, 1fr) minmax(240px, clamp(240px, 30%, 420px));
       gap: 1rem;
     }
     .fev-sidebar-tabs {
@@ -103,39 +120,76 @@ function getParentPath(path: string): string {
   return parts.slice(0, -1).join('/')
 }
 
+function splitBreadcrumbRoot(rootPath?: string): string[] {
+  const normalized = (rootPath ?? '').trim().replace(/\/+$/g, '')
+  if (!normalized) return []
+
+  const scopedMatch = /^([A-Za-z][A-Za-z0-9+.-]*:)(.*)$/.exec(normalized)
+  if (!scopedMatch) {
+    return normalized.split('/').filter(Boolean)
+  }
+
+  const prefix = scopedMatch[1]
+  const suffix = scopedMatch[2].replace(/^\/+/g, '')
+  const segments = [prefix]
+  if (suffix.length > 0) {
+    segments.push(...suffix.split('/').filter(Boolean))
+  }
+  return segments
+}
+
 /** 面包屑路径导航 */
 function Breadcrumb({
   path,
+  rootPath,
   entries,
   onNavigate,
 }: {
   path: string
+  rootPath?: string
   entries: FileExplorerEntry[]
   onNavigate: (path: string) => void
 }) {
-  const parts = path.split('/')
+  const rootSegments = splitBreadcrumbRoot(rootPath).map((name, index) => ({
+    key: `root-${index}-${name}`,
+    kind: 'root' as const,
+    name,
+  }))
+  const parts = path.split('/').filter(Boolean)
   const isMarkdown = path.endsWith('.md')
 
-  const segments: { name: string; path: string; isFile: boolean }[] = []
+  const fileSegments: { key: string; name: string; path: string; isFile: boolean }[] = []
   for (let i = 0; i < parts.length; i++) {
     const segmentPath = parts.slice(0, i + 1).join('/')
     const isFile = i === parts.length - 1
-    segments.push({ name: parts[i], path: segmentPath, isFile })
+    fileSegments.push({ key: `path-${segmentPath}`, name: parts[i], path: segmentPath, isFile })
   }
+  const segments = [...rootSegments, ...fileSegments]
+  const rootCount = rootSegments.length
 
   return (
     <div className="border-border/50 bg-muted/20 flex items-center gap-1 overflow-x-auto border-b px-3 py-2 text-xs">
       {segments.map((segment, i) => {
         const isLast = i === segments.length - 1
+        const isRootSegment = i < rootCount
         const canNavigate =
-          !isLast && entries.some((e) => e.type === 'file' && e.path.startsWith(segment.path + '/'))
+          !isRootSegment &&
+          !isLast &&
+          entries.some(
+            (e) => e.type === 'file' && e.path.startsWith(fileSegments[i - rootCount]!.path + '/')
+          )
 
         return (
-          <span key={segment.path} className="flex items-center gap-1">
+          <span key={segment.key} className="flex items-center gap-1">
             {i > 0 && <ChevronRight className="text-muted-foreground/50 h-3 w-3" />}
-            {isLast ? (
+            {isRootSegment ? (
+              <span className="text-muted-foreground flex items-center gap-1.5">
+                <Folder className="h-3.5 w-3.5" />
+                {segment.name}
+              </span>
+            ) : isLast ? (
               <span className="text-foreground flex items-center gap-1.5">
-                {segment.isFile ? (
+                {fileSegments[i - rootCount]!.isFile ? (
                   isMarkdown ? (
                     <FileText className="h-3.5 w-3.5" />
                   ) : (
@@ -150,19 +204,21 @@ function Breadcrumb({
               <button
                 onClick={() => {
                   const firstFile = entries.find(
-                    (e) => e.type === 'file' && e.path.startsWith(segment.path + '/')
+                    (e) =>
+                      e.type === 'file' &&
+                      e.path.startsWith(fileSegments[i - rootCount]!.path + '/')
                   )
                   if (firstFile) onNavigate(firstFile.path)
                 }}
                 className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors"
               >
                 <Folder className="h-3.5 w-3.5" />
-                {segment.name}
+                {fileSegments[i - rootCount]!.name}
               </button>
             ) : (
               <span className="text-muted-foreground flex items-center gap-1.5">
                 <Folder className="h-3.5 w-3.5" />
-                {segment.name}
+                {fileSegments[i - rootCount]!.name}
               </span>
             )}
           </span>
@@ -177,36 +233,75 @@ function FileTabs({
   entries,
   selectedPath,
   onSelect,
+  entryActions,
 }: {
   entries: FileExplorerEntry[]
   selectedPath: string | null
   onSelect: (path: string) => void
+  entryActions?: (entry: FileExplorerEntry) => FileExplorerAction[]
 }) {
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
+  const [menuAnchor, setMenuAnchor] = useState<ContextMenuAnchor | null>(null)
   const files = entries.filter((e) => e.type === 'file')
+  const selectedFile = files.find((entry) => entry.path === selectedPath) ?? files[0] ?? null
+  const selectedActions =
+    selectedFile && entryActions ? toContextMenuItems(entryActions(selectedFile)) : []
 
   return (
-    <div className="scrollbar-thin scrollbar-track-transparent border-border bg-muted/30 flex gap-1 overflow-x-auto rounded-md border p-1">
-      {files.map((entry) => {
-        const isActive = entry.path === selectedPath
-        const isMarkdown = entry.path.endsWith('.md')
+    <ContextMenuWrapper
+      ref={wrapperRef}
+      className="border-border bg-muted/30 flex items-stretch overflow-hidden rounded-md border"
+    >
+      <div className="scrollbar-thin scrollbar-track-transparent flex min-w-0 flex-1 gap-1 overflow-x-auto px-1 py-1">
+        {files.map((entry) => {
+          const isActive = entry.path === selectedPath
+          const isMarkdown = entry.path.endsWith('.md')
 
-        return (
+          return (
+            <button
+              key={entry.path}
+              onClick={() => onSelect(entry.path)}
+              title={entry.path}
+              className={`flex shrink-0 items-center gap-1.5 rounded px-2.5 py-1.5 text-xs transition-colors ${
+                isActive
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-background/50 hover:text-foreground'
+              }`}
+            >
+              {isMarkdown ? <FileText className="h-3.5 w-3.5" /> : <File className="h-3.5 w-3.5" />}
+              <span className="max-w-[120px] truncate">{getFileName(entry.path)}</span>
+            </button>
+          )
+        })}
+      </div>
+      {selectedActions.length > 0 && (
+        <ContextMenuTargeter className="text-muted-foreground inline-flex items-center">
+          <span aria-hidden="true" className="bg-border/80 block w-px self-stretch" />
           <button
-            key={entry.path}
-            onClick={() => onSelect(entry.path)}
-            title={entry.path}
-            className={`flex shrink-0 items-center gap-1.5 rounded px-2.5 py-1.5 text-xs transition-colors ${
-              isActive
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:bg-background/50 hover:text-foreground'
-            }`}
+            type="button"
+            onClick={(event) => {
+              setMenuAnchor({
+                type: 'target',
+                element: event.currentTarget,
+                placement: 'bottom-end',
+              })
+            }}
+            className="text-muted-foreground hover:text-foreground hover:bg-background/80 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded"
+            aria-label="Current file actions"
           >
-            {isMarkdown ? <FileText className="h-3.5 w-3.5" /> : <File className="h-3.5 w-3.5" />}
-            <span className="max-w-[120px] truncate">{getFileName(entry.path)}</span>
+            <EllipsisVertical className="h-4 w-4" />
           </button>
-        )
-      })}
-    </div>
+        </ContextMenuTargeter>
+      )}
+      <ContextMenu
+        open={menuAnchor !== null}
+        items={selectedActions}
+        anchor={menuAnchor}
+        wrapperElement={wrapperRef.current}
+        boundaryElement={wrapperRef.current}
+        onClose={() => setMenuAnchor(null)}
+      />
+    </ContextMenuWrapper>
   )
 }
 
@@ -226,10 +321,10 @@ function FileTree({
   entryActions?: (entry: FileExplorerEntry) => FileExplorerAction[]
 }) {
   const [menuState, setMenuState] = useState<{
-    entry: FileExplorerEntry
+    anchor: ContextMenuAnchor
     items: ContextMenuItem[]
-    position: { x: number; y: number }
   } | null>(null)
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
 
   const getIndentLevel = (entry: FileExplorerEntry): number => {
     const parentPath = getParentPath(entry.path)
@@ -242,27 +337,19 @@ function FileTree({
     return entry.path.split('/').length - 1
   }
 
-  const openMenu = (
-    entry: FileExplorerEntry,
-    position: { x: number; y: number },
-    items: FileExplorerAction[]
-  ) => {
-    const mapped: ContextMenuItem[] = items.map((item) => ({
-      id: item.id,
-      label: item.label,
-      icon: item.icon,
-      disabled: item.disabled,
-      tone: item.tone,
-      onSelect: item.onSelect,
-    }))
+  const openMenu = (anchor: ContextMenuAnchor, items: FileExplorerAction[]) => {
+    const mapped = toContextMenuItems(items)
     if (mapped.length === 0) return
-    setMenuState({ entry, items: mapped, position })
+    setMenuState({ anchor, items: mapped })
   }
 
   const closeMenu = () => setMenuState(null)
 
   return (
-    <div className="border-border bg-muted/30 flex h-full flex-col rounded-md border">
+    <ContextMenuWrapper
+      ref={wrapperRef}
+      className="border-border bg-muted/30 flex h-full flex-col rounded-md border"
+    >
       <div className="border-border/50 text-muted-foreground flex items-center justify-between border-b px-3 py-2 text-xs font-medium">
         <span className="min-w-0 truncate">{headerLabel}</span>
         {headerActions}
@@ -302,7 +389,7 @@ function FileTree({
                   if (!showActions) return
                   event.preventDefault()
                   if (isFile) onSelect(entry.path)
-                  openMenu(entry, { x: event.clientX, y: event.clientY }, actions)
+                  openMenu({ type: 'point', x: event.clientX, y: event.clientY }, actions)
                 }}
               >
                 <button
@@ -320,18 +407,22 @@ function FileTree({
                   </span>
                 </button>
                 {showActions && (
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      const rect = event.currentTarget.getBoundingClientRect()
-                      openMenu(entry, { x: rect.right, y: rect.bottom }, actions)
-                    }}
-                    className="hover:bg-muted text-muted-foreground flex h-7 w-7 items-center justify-center rounded-md"
-                    aria-label="File actions"
-                  >
-                    <EllipsisVertical className="h-4 w-4" />
-                  </button>
+                  <ContextMenuTargeter>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        openMenu(
+                          { type: 'target', element: event.currentTarget, placement: 'bottom-end' },
+                          actions
+                        )
+                      }}
+                      className="hover:bg-muted text-muted-foreground flex h-7 w-7 items-center justify-center rounded-md"
+                      aria-label="File actions"
+                    >
+                      <EllipsisVertical className="h-4 w-4" />
+                    </button>
+                  </ContextMenuTargeter>
                 )}
               </div>
             )
@@ -342,10 +433,11 @@ function FileTree({
       <ContextMenu
         open={!!menuState}
         items={menuState?.items ?? []}
-        position={menuState?.position ?? null}
+        anchor={menuState?.anchor ?? null}
+        boundaryElement={wrapperRef.current}
         onClose={closeMenu}
       />
-    </div>
+    </ContextMenuWrapper>
   )
 }
 
@@ -353,6 +445,7 @@ export function FileExplorer({
   entries,
   selectedPath,
   onSelect,
+  breadcrumbRoot,
   headerLabel = 'Files',
   headerActions,
   entryActions,
@@ -362,6 +455,7 @@ export function FileExplorer({
   entries: FileExplorerEntry[]
   selectedPath: string | null
   onSelect: (path: string) => void
+  breadcrumbRoot?: string
   headerLabel?: ReactNode
   headerActions?: ReactNode
   entryActions?: (entry: FileExplorerEntry) => FileExplorerAction[]
@@ -382,7 +476,12 @@ export function FileExplorer({
       <style>{layoutStyles}</style>
       <div className="fev-layout">
         <div className="fev-sidebar-tabs">
-          <FileTabs entries={sortedEntries} selectedPath={selectedPath} onSelect={onSelect} />
+          <FileTabs
+            entries={sortedEntries}
+            selectedPath={selectedPath}
+            onSelect={onSelect}
+            entryActions={entryActions}
+          />
         </div>
 
         <div className="fev-sidebar-tree">
@@ -399,7 +498,12 @@ export function FileExplorer({
         <div className="fev-editor-wrapper border-border bg-background overflow-hidden rounded-md border shadow-sm">
           {activeFile ? (
             <>
-              <Breadcrumb path={activeFile.path} entries={sortedEntries} onNavigate={onSelect} />
+              <Breadcrumb
+                path={activeFile.path}
+                rootPath={breadcrumbRoot}
+                entries={sortedEntries}
+                onNavigate={onSelect}
+              />
               {renderEditor(activeFile)}
             </>
           ) : (

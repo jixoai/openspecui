@@ -20,6 +20,7 @@ import {
 } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveSsgTemplatePath } from './template-path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -92,13 +93,14 @@ async function prerender(opts: {
   basePath: string
 }) {
   const snapshot = JSON.parse(readFileSync(opts.dataPath, 'utf-8'))
-  const template = readFileSync(join(opts.clientDir, 'index.html'), 'utf-8')
+  const template = readFileSync(resolveSsgTemplatePath(opts.clientDir), 'utf-8')
 
   const serverPath = join(opts.serverDir, 'entry-server.js')
   const { render, getRoutes, getTitle } = await import(serverPath)
 
   const routes = getRoutes(snapshot)
   console.log(`Routes: ${routes.length}`)
+  let hasRootRoute = false
 
   const headTags = `
     <script>
@@ -116,6 +118,7 @@ async function prerender(opts: {
       .replace('<title>OpenSpec UI</title>', `<title>${title} - OpenSpec UI</title>`)
 
     if (route === '/') {
+      hasRootRoute = true
       writeFileSync(join(opts.clientDir, 'index.html'), html)
     } else {
       const routeDir = join(opts.clientDir, route.slice(1))
@@ -123,6 +126,18 @@ async function prerender(opts: {
       writeFileSync(join(routeDir, 'index.html'), html)
     }
     console.log(`  ${route}`)
+  }
+
+  if (!hasRootRoute) {
+    const fallbackRoute = routes[0]
+    if (!fallbackRoute) {
+      throw new Error('No routes generated for static output')
+    }
+    const fallbackPath =
+      fallbackRoute === '/'
+        ? join(opts.clientDir, 'index.html')
+        : join(opts.clientDir, fallbackRoute.slice(1), 'index.html')
+    copyFileSync(fallbackPath, join(opts.clientDir, 'index.html'))
   }
 
   copyFileSync(join(opts.clientDir, 'index.html'), join(opts.clientDir, '404.html'))

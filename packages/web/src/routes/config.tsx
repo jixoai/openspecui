@@ -1,6 +1,12 @@
 import { ButtonGroup } from '@/components/button-group'
 import { CodeEditor } from '@/components/code-editor'
-import { ContextMenu, type ContextMenuItem } from '@/components/context-menu'
+import {
+  ContextMenu,
+  ContextMenuTargeter,
+  ContextMenuWrapper,
+  type ContextMenuAnchor,
+  type ContextMenuItem,
+} from '@/components/context-menu'
 import { Dialog } from '@/components/dialog'
 import {
   FileExplorer,
@@ -20,6 +26,7 @@ import {
   useOpsxTemplateContentsSubscription,
   useOpsxTemplatesSubscription,
 } from '@/lib/use-opsx'
+import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
 import { useMutation } from '@tanstack/react-query'
 import {
   Edit2,
@@ -36,7 +43,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { parse as parseYaml } from 'yaml'
 
 type ConfigTab = 'config' | 'changes' | `schema:${string}`
@@ -94,11 +101,10 @@ export function Config() {
   const [createEntryParent, setCreateEntryParent] = useState<string | null>(null)
   const [createEntryName, setCreateEntryName] = useState('')
   const [activeEntry, setActiveEntry] = useState<FileExplorerEntry | null>(null)
-  const [headerMenuPosition, setHeaderMenuPosition] = useState<{ x: number; y: number } | null>(
-    null
-  )
-  const [fileMenuPosition, setFileMenuPosition] = useState<{ x: number; y: number } | null>(null)
-  const [viewMenuPosition, setViewMenuPosition] = useState<{ x: number; y: number } | null>(null)
+  const [headerMenuAnchor, setHeaderMenuAnchor] = useState<ContextMenuAnchor | null>(null)
+  const [fileMenuAnchor, setFileMenuAnchor] = useState<ContextMenuAnchor | null>(null)
+  const [viewMenuAnchor, setViewMenuAnchor] = useState<ContextMenuAnchor | null>(null)
+  const schemaMenuWrapperRef = useRef<HTMLDivElement | null>(null)
   const [schemaEditorWrap, setSchemaEditorWrap] = useState(true)
   const [newSchemaName, setNewSchemaName] = useState('')
   const [newSchemaMode, setNewSchemaMode] = useState<SchemaCreateMode>('init')
@@ -197,9 +203,9 @@ export function Config() {
     setDirtyFiles({})
     setSchemaEntryError(null)
     setActiveEntry(null)
-    setHeaderMenuPosition(null)
-    setFileMenuPosition(null)
-    setViewMenuPosition(null)
+    setHeaderMenuAnchor(null)
+    setFileMenuAnchor(null)
+    setViewMenuAnchor(null)
   }, [selectedSchema])
 
   useEffect(() => {
@@ -314,7 +320,9 @@ export function Config() {
           : schemaEntries.filter((entry) => entry.path.startsWith(activeEntry.path + '/')).length
         : undefined
     return {
-      path: isRoot ? (schemaResolution?.path ?? '/') : activeEntry.path,
+      path: isRoot
+        ? (schemaResolution?.displayPath ?? schemaResolution?.path ?? '/')
+        : activeEntry.path,
       type: activeEntry.type,
       source: schemaResolution?.source ?? 'unknown',
       sizeBytes,
@@ -322,7 +330,13 @@ export function Config() {
     }
   }, [activeEntry, schemaEntries, schemaResolution])
 
-  const schemaRootLabel = schemaResolution?.path ?? 'Schema root'
+  const schemaRootLabel = useMemo(() => {
+    if (schemaResolution?.displayPath) return schemaResolution.displayPath
+    if (schemaResolution?.path) {
+      return toOpsxDisplayPath(schemaResolution.path, { source: schemaResolution.source })
+    }
+    return 'project:openspec/schemas'
+  }, [schemaResolution])
   const schemaRootEntry = useMemo<FileExplorerEntry>(() => ({ path: '/', type: 'directory' }), [])
 
   const saveConfigMutation = useMutation({
@@ -784,10 +798,15 @@ export function Config() {
                         <H2 id={schemaAnchor('resolution')}>Resolution</H2>
                         <div className="text-muted-foreground mt-2 space-y-1 pl-4 text-sm">
                           <div>Source: {schemaResolution.source}</div>
-                          <div className="truncate">Path: {schemaResolution.path}</div>
+                          <div className="truncate">
+                            Path: {schemaResolution.displayPath ?? schemaResolution.path}
+                          </div>
                           {schemaResolution.shadows.length > 0 && (
                             <div>
-                              Shadows: {schemaResolution.shadows.map((s) => s.source).join(', ')}
+                              Shadows:{' '}
+                              {schemaResolution.shadows
+                                .map((s) => `${s.source}(${s.displayPath ?? s.path})`)
+                                .join(', ')}
                             </div>
                           )}
                         </div>
@@ -819,6 +838,8 @@ export function Config() {
                               (typeof rawArtifact?.template === 'string'
                                 ? rawArtifact.template
                                 : undefined)
+                            const templateDisplayPath =
+                              templateInfo?.displayPath ?? templatePath ?? null
                             const draftTemplateContent =
                               templatePath !== undefined ? draftByPath.get(templatePath) : undefined
                             const templateBody =
@@ -917,7 +938,7 @@ export function Config() {
                                       <div className="text-muted-foreground pl-4 text-xs">
                                         <span className="mr-1">Template:</span>
                                         <code className="bg-muted rounded px-1">
-                                          {templatePath}
+                                          {templateDisplayPath}
                                         </code>
                                         {templateInfo?.source ? ` (${templateInfo.source})` : null}
                                       </div>
@@ -980,7 +1001,7 @@ export function Config() {
               }}
             />
           ) : (
-            <div className="h-full space-y-4">
+            <ContextMenuWrapper ref={schemaMenuWrapperRef} className="h-full space-y-4">
               {schemaFilesError && (
                 <div className="text-destructive text-xs">
                   Failed to load schema files: {schemaFilesError.message}
@@ -990,6 +1011,7 @@ export function Config() {
                 entries={schemaEntries}
                 selectedPath={selectedSchemaPath}
                 onSelect={setSelectedSchemaPath}
+                breadcrumbRoot={schemaRootLabel}
                 headerLabel={
                   <span className="flex min-w-0 items-center gap-2">
                     <span className="uppercase tracking-wide">Files</span>
@@ -1003,56 +1025,63 @@ export function Config() {
                 }
                 headerActions={
                   headerMenuItems.length > 0 ? (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        const rect = event.currentTarget.getBoundingClientRect()
-                        setFileMenuPosition(null)
-                        setViewMenuPosition(null)
-                        setHeaderMenuPosition({ x: rect.right, y: rect.bottom })
-                      }}
-                      className="hover:bg-muted rounded-md p-1"
-                      aria-label="Schema menu"
-                    >
-                      <EllipsisVertical className="h-4 w-4" />
-                    </button>
+                    <ContextMenuTargeter>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          setFileMenuAnchor(null)
+                          setViewMenuAnchor(null)
+                          setHeaderMenuAnchor({
+                            type: 'target',
+                            element: event.currentTarget,
+                            placement: 'bottom-end',
+                          })
+                        }}
+                        className="hover:bg-muted rounded-md p-1"
+                        aria-label="Schema menu"
+                      >
+                        <EllipsisVertical className="h-4 w-4" />
+                      </button>
+                    </ContextMenuTargeter>
                   ) : undefined
                 }
-                entryActions={
-                  schemaMode === 'edit' && canManageEntries
-                    ? (entry) => {
-                        const parent =
-                          entry.type === 'directory' ? entry.path : getParentPath(entry.path)
-                        return [
-                          {
-                            id: 'new-file',
-                            label: 'New file',
-                            icon: <FilePlus className="h-3.5 w-3.5" />,
-                            onSelect: () => handleOpenCreateEntry('file', parent),
-                          },
-                          {
-                            id: 'new-folder',
-                            label: 'New folder',
-                            icon: <FolderPlus className="h-3.5 w-3.5" />,
-                            onSelect: () => handleOpenCreateEntry('directory', parent),
-                          },
-                          {
-                            id: 'properties',
-                            label: 'Properties',
-                            icon: <Info className="h-3.5 w-3.5" />,
-                            onSelect: () => handleOpenEntryInfo(entry),
-                          },
-                          {
-                            id: 'delete',
-                            label: 'Delete',
-                            icon: <Trash2 className="h-3.5 w-3.5" />,
-                            tone: 'destructive',
-                            onSelect: () => handleOpenDeleteEntry(entry),
-                          },
-                        ]
-                      }
-                    : undefined
-                }
+                entryActions={(entry) => {
+                  const propertiesAction = {
+                    id: 'properties',
+                    label: 'Properties',
+                    icon: <Info className="h-3.5 w-3.5" />,
+                    onSelect: () => handleOpenEntryInfo(entry),
+                  }
+
+                  if (schemaMode !== 'edit' || !canManageEntries) {
+                    return [propertiesAction]
+                  }
+
+                  const parent = entry.type === 'directory' ? entry.path : getParentPath(entry.path)
+                  const isDirectory = entry.type === 'directory'
+                  return [
+                    {
+                      id: 'new-file',
+                      label: isDirectory ? 'New file inside' : 'New sibling file',
+                      icon: <FilePlus className="h-3.5 w-3.5" />,
+                      onSelect: () => handleOpenCreateEntry('file', parent),
+                    },
+                    {
+                      id: 'new-folder',
+                      label: isDirectory ? 'New folder inside' : 'New sibling folder',
+                      icon: <FolderPlus className="h-3.5 w-3.5" />,
+                      onSelect: () => handleOpenCreateEntry('directory', parent),
+                    },
+                    propertiesAction,
+                    {
+                      id: 'delete',
+                      label: 'Delete',
+                      icon: <Trash2 className="h-3.5 w-3.5" />,
+                      tone: 'destructive',
+                      onSelect: () => handleOpenDeleteEntry(entry),
+                    },
+                  ]
+                }}
                 emptyState={<span>No files found for this schema.</span>}
                 renderEditor={(activeFile) =>
                   activeFile ? (
@@ -1060,30 +1089,40 @@ export function Config() {
                       {schemaMode === 'edit' && (
                         <div className="border-border/50 flex items-center justify-between border-b px-3 py-2 text-xs">
                           <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                const rect = event.currentTarget.getBoundingClientRect()
-                                setHeaderMenuPosition(null)
-                                setViewMenuPosition(null)
-                                setFileMenuPosition({ x: rect.left, y: rect.bottom })
-                              }}
-                              className="hover:bg-muted rounded-md px-2 py-1 text-xs font-semibold"
-                            >
-                              File
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                const rect = event.currentTarget.getBoundingClientRect()
-                                setHeaderMenuPosition(null)
-                                setFileMenuPosition(null)
-                                setViewMenuPosition({ x: rect.left, y: rect.bottom })
-                              }}
-                              className="hover:bg-muted rounded-md px-2 py-1 text-xs font-semibold"
-                            >
-                              View
-                            </button>
+                            <ContextMenuTargeter>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  setHeaderMenuAnchor(null)
+                                  setViewMenuAnchor(null)
+                                  setFileMenuAnchor({
+                                    type: 'target',
+                                    element: event.currentTarget,
+                                    placement: 'bottom-start',
+                                  })
+                                }}
+                                className="hover:bg-muted rounded-md px-2 py-1 text-xs font-semibold"
+                              >
+                                File
+                              </button>
+                            </ContextMenuTargeter>
+                            <ContextMenuTargeter>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  setHeaderMenuAnchor(null)
+                                  setFileMenuAnchor(null)
+                                  setViewMenuAnchor({
+                                    type: 'target',
+                                    element: event.currentTarget,
+                                    placement: 'bottom-start',
+                                  })
+                                }}
+                                className="hover:bg-muted rounded-md px-2 py-1 text-xs font-semibold"
+                              >
+                                View
+                              </button>
+                            </ContextMenuTargeter>
                           </div>
                           <div className="flex items-center gap-2">
                             <button
@@ -1135,24 +1174,27 @@ export function Config() {
                 }
               />
               <ContextMenu
-                open={!!headerMenuPosition}
+                open={!!headerMenuAnchor}
                 items={headerMenuItems}
-                position={headerMenuPosition}
-                onClose={() => setHeaderMenuPosition(null)}
+                anchor={headerMenuAnchor}
+                boundaryElement={schemaMenuWrapperRef.current}
+                onClose={() => setHeaderMenuAnchor(null)}
               />
               <ContextMenu
-                open={!!fileMenuPosition}
+                open={!!fileMenuAnchor}
                 items={fileMenuItems}
-                position={fileMenuPosition}
-                onClose={() => setFileMenuPosition(null)}
+                anchor={fileMenuAnchor}
+                boundaryElement={schemaMenuWrapperRef.current}
+                onClose={() => setFileMenuAnchor(null)}
               />
               <ContextMenu
-                open={!!viewMenuPosition}
+                open={!!viewMenuAnchor}
                 items={viewMenuItems}
-                position={viewMenuPosition}
-                onClose={() => setViewMenuPosition(null)}
+                anchor={viewMenuAnchor}
+                boundaryElement={schemaMenuWrapperRef.current}
+                onClose={() => setViewMenuAnchor(null)}
               />
-            </div>
+            </ContextMenuWrapper>
           )
         ) : (
           <div className="text-muted-foreground text-sm">Select a schema to view details.</div>

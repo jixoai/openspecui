@@ -28,6 +28,7 @@ import type {
   SpecMeta,
   TemplatesMap,
 } from '@openspecui/core'
+import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
 import type { SearchDocument } from '@openspecui/search'
 import { parse as parseYaml } from 'yaml'
 import type { ExportSnapshot } from '../ssg/types'
@@ -140,29 +141,45 @@ function normalizeTrendEvents(events: TrendEvent[], pointLimit: number): TrendEv
     .slice(-pointLimit)
 }
 
-function buildBucketedTrend(
-  events: TrendEvent[],
-  pointLimit: number,
-  mode: 'sum' | 'sum-cumulative'
-): DashboardTrendPoint[] {
-  const normalizedEvents = normalizeTrendEvents(events, pointLimit)
-  if (normalizedEvents.length === 0) {
-    return []
-  }
+function buildTimeWindow(
+  probeEvents: TrendEvent[],
+  rightEdgeTs?: number | null
+): { windowStart: number; bucketMs: number; bucketEnds: number[] } | null {
+  if (probeEvents.length === 0) return null
 
-  const end = normalizedEvents[normalizedEvents.length - 1]!.ts
-  const probeStart = normalizedEvents[0]!.ts
+  const probeEnd = probeEvents[probeEvents.length - 1]!.ts
+  const hasRightEdge =
+    typeof rightEdgeTs === 'number' && Number.isFinite(rightEdgeTs) && rightEdgeTs > 0
+  const end = hasRightEdge ? Math.max(probeEnd, rightEdgeTs) : probeEnd
+  const probeStart = probeEvents[0]!.ts
   const rangeMs = Math.max(1, end - probeStart)
   const bucketMs =
     rangeMs >= DAY_MS
       ? Math.max(DAY_MS, Math.ceil(rangeMs / DASHBOARD_TREND_BAR_COUNT / DAY_MS) * DAY_MS)
       : Math.max(1, Math.ceil(rangeMs / DASHBOARD_TREND_BAR_COUNT))
   const windowStart = end - bucketMs * DASHBOARD_TREND_BAR_COUNT
-
   const bucketEnds = Array.from(
     { length: DASHBOARD_TREND_BAR_COUNT },
     (_, index) => windowStart + bucketMs * (index + 1)
   )
+
+  return { windowStart, bucketMs, bucketEnds }
+}
+
+function buildBucketedTrend(
+  events: TrendEvent[],
+  pointLimit: number,
+  mode: 'sum' | 'sum-cumulative',
+  rightEdgeTs?: number | null
+): DashboardTrendPoint[] {
+  const normalizedEvents = normalizeTrendEvents(events, pointLimit)
+  if (normalizedEvents.length === 0) {
+    return []
+  }
+
+  const timeWindow = buildTimeWindow(normalizedEvents, rightEdgeTs)
+  if (!timeWindow) return []
+  const { windowStart, bucketMs, bucketEnds } = timeWindow
   const sums = Array.from({ length: bucketEnds.length }, () => 0)
   let baseline = 0
 
@@ -189,7 +206,11 @@ function buildBucketedTrend(
   })
 }
 
-function buildStaticObjectiveTrends(snapshot: ExportSnapshot): DashboardOverview['trends'] {
+function buildStaticObjectiveTrends(
+  snapshot: ExportSnapshot,
+  pointLimit: number,
+  rightEdgeTs?: number | null
+): DashboardOverview['trends'] {
   const trends = createEmptyTrends()
   const requirementEvents = snapshot.specs.flatMap((spec) => {
     const ts = resolveTrendTimestamp(spec.updatedAt, spec.createdAt)
@@ -201,11 +222,12 @@ function buildStaticObjectiveTrends(snapshot: ExportSnapshot): DashboardOverview
       const ts = resolveTrendTimestamp(spec.createdAt, spec.updatedAt)
       return ts === null ? [] : [{ ts, value: 1 }]
     }),
-    DASHBOARD_TREND_POINT_LIMIT,
-    'sum'
+    pointLimit,
+    'sum',
+    rightEdgeTs
   )
 
-  trends.requirements = buildBucketedTrend(requirementEvents, DASHBOARD_TREND_POINT_LIMIT, 'sum')
+  trends.requirements = buildBucketedTrend(requirementEvents, pointLimit, 'sum', rightEdgeTs)
 
   trends.completedChanges = buildBucketedTrend(
     snapshot.archives.flatMap((archive) => {
@@ -214,8 +236,9 @@ function buildStaticObjectiveTrends(snapshot: ExportSnapshot): DashboardOverview
         resolveTrendTimestamp(archive.updatedAt, archive.createdAt)
       return ts === null ? [] : [{ ts, value: archive.parsedTasks.length }]
     }),
-    DASHBOARD_TREND_POINT_LIMIT,
-    'sum'
+    pointLimit,
+    'sum',
+    rightEdgeTs
   )
 
   return trends
@@ -233,6 +256,39 @@ function isGlobPattern(path: string): boolean {
 
 function normalizePath(path: string): string {
   return path.replace(/\\/g, '/').replace(/^\.?\//, '')
+}
+
+function normalizeFsPath(path: string): string {
+  return path.replace(/\\/g, '/')
+}
+
+function isAbsoluteFsPath(path: string): boolean {
+  return /^(?:[A-Za-z]:\/|\/)/.test(path)
+}
+
+function isPathInside(root: string, target: string): boolean {
+  const normalizedRoot = normalizeFsPath(root).replace(/\/+$/, '').toLowerCase()
+  const normalizedTarget = normalizeFsPath(target).toLowerCase()
+  return normalizedTarget === normalizedRoot || normalizedTarget.startsWith(`${normalizedRoot}/`)
+}
+
+function toRelativeFromRoot(root: string, target: string): string {
+  const normalizedRoot = normalizeFsPath(root).replace(/\/+$/, '')
+  const normalizedTarget = normalizeFsPath(target)
+  return normalizedTarget.slice(normalizedRoot.length + 1)
+}
+
+function toSchemaRelativePath(inputPath: string, schemaRoot?: string): string {
+  const path = normalizeFsPath(inputPath)
+  if (!isAbsoluteFsPath(path)) return normalizePath(path)
+  if (schemaRoot && isPathInside(schemaRoot, path)) {
+    return normalizePath(toRelativeFromRoot(schemaRoot, path))
+  }
+  const templatesIdx = path.lastIndexOf('/templates/')
+  if (templatesIdx >= 0) {
+    return normalizePath(path.slice(templatesIdx + 1))
+  }
+  return getPathBasename(path)
 }
 
 function getPathBasename(path: string): string {
@@ -450,6 +506,52 @@ function buildChangeStatus(
   }
 }
 
+function buildStaticGitSnapshot(snapshot: ExportSnapshot): DashboardOverview['git'] {
+  const defaultBranch = snapshot.git?.defaultBranch || 'main'
+  const repositoryUrl = snapshot.git?.repositoryUrl?.trim() || null
+  const recentCommits = snapshot.git?.recentCommits ?? []
+  if (recentCommits.length === 0) {
+    return {
+      defaultBranch,
+      worktrees: [],
+    }
+  }
+
+  const commitEntries = recentCommits.slice(0, 5).map((commit) => ({
+    type: 'commit' as const,
+    hash: commit.hash,
+    title: commit.title,
+    relatedChanges: commit.relatedChanges,
+    diff: commit.diff,
+  }))
+
+  const aggregateDiff = commitEntries.reduce(
+    (acc, entry) => {
+      acc.files += entry.diff.files
+      acc.insertions += entry.diff.insertions
+      acc.deletions += entry.diff.deletions
+      return acc
+    },
+    { files: 0, insertions: 0, deletions: 0 }
+  )
+
+  return {
+    defaultBranch,
+    worktrees: [
+      {
+        path: repositoryUrl ?? 'Repository URL unavailable',
+        relativePath: 'repo',
+        branchName: '(snapshot)',
+        isCurrent: true,
+        ahead: 0,
+        behind: 0,
+        diff: aggregateDiff,
+        entries: commitEntries,
+      },
+    ],
+  }
+}
+
 /**
  * Load the static snapshot once
  */
@@ -581,6 +683,15 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     }
   }
 
+  const trendPointLimit = Math.max(
+    20,
+    Math.min(
+      500,
+      Math.trunc(snapshot.config?.dashboard?.trendPointLimit ?? DASHBOARD_TREND_POINT_LIMIT)
+    )
+  )
+  const rightEdgeTs = snapshot.git?.latestCommitTs ?? null
+
   const specifications = snapshot.specs
     .map((spec) => ({
       id: spec.id,
@@ -612,7 +723,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     (change) => change.progress.total > 0 && change.progress.completed < change.progress.total
   ).length
 
-  const trends = buildStaticObjectiveTrends(snapshot)
+  const trends = buildStaticObjectiveTrends(snapshot, trendPointLimit, rightEdgeTs)
   const hasObjectiveSpecificationTrend =
     trends.specifications.length > 0 || specifications.length === 0
   const hasObjectiveRequirementTrend = trends.requirements.length > 0 || requirements === 0
@@ -640,15 +751,12 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       hasObjectiveCompletedTrend,
     }),
     trendMeta: {
-      pointLimit: DASHBOARD_TREND_POINT_LIMIT,
+      pointLimit: trendPointLimit,
       lastUpdatedAt: Date.now(),
     },
     specifications,
     activeChanges,
-    git: {
-      defaultBranch: 'main',
-      worktrees: [],
-    },
+    git: buildStaticGitSnapshot(snapshot),
   }
 }
 
@@ -915,7 +1023,27 @@ export async function getOpsxSchemaResolution(name?: string): Promise<SchemaReso
   if (!name) return null
   const snapshot = await loadSnapshot()
   const resolutions = snapshot?.opsx?.schemaResolutions
-  return resolutions?.[name] ?? null
+  const resolution = resolutions?.[name]
+  if (!resolution) return null
+
+  return {
+    ...resolution,
+    displayPath:
+      resolution.displayPath ??
+      toOpsxDisplayPath(resolution.path, {
+        source: resolution.source,
+        projectDir: snapshot?.meta.projectDir,
+      }),
+    shadows: resolution.shadows.map((shadow) => ({
+      ...shadow,
+      displayPath:
+        shadow.displayPath ??
+        toOpsxDisplayPath(shadow.path, {
+          source: shadow.source,
+          projectDir: snapshot?.meta.projectDir,
+        }),
+    })),
+  }
 }
 
 export async function getOpsxTemplates(schema?: string): Promise<TemplatesMap | null> {
@@ -923,9 +1051,39 @@ export async function getOpsxTemplates(schema?: string): Promise<TemplatesMap | 
   if (!snapshot?.opsx?.templates) return null
   if (!schema) {
     const first = Object.keys(snapshot.opsx.templates)[0]
-    return first ? snapshot.opsx.templates[first] : null
+    if (!first) return null
+    const templates = snapshot.opsx.templates[first]
+    return Object.fromEntries(
+      Object.entries(templates).map(([artifactId, template]) => [
+        artifactId,
+        {
+          ...template,
+          displayPath:
+            template.displayPath ??
+            toOpsxDisplayPath(template.path, {
+              source: template.source,
+              projectDir: snapshot.meta.projectDir,
+            }),
+        },
+      ])
+    )
   }
-  return snapshot.opsx.templates[schema] ?? null
+  const templates = snapshot.opsx.templates[schema]
+  if (!templates) return null
+  return Object.fromEntries(
+    Object.entries(templates).map(([artifactId, template]) => [
+      artifactId,
+      {
+        ...template,
+        displayPath:
+          template.displayPath ??
+          toOpsxDisplayPath(template.path, {
+            source: template.source,
+            projectDir: snapshot.meta.projectDir,
+          }),
+      },
+    ])
+  )
 }
 
 export async function getOpsxSchemaFiles(name?: string): Promise<ChangeFile[] | null> {
@@ -941,8 +1099,11 @@ export async function getOpsxSchemaFiles(name?: string): Promise<ChangeFile[] | 
 
   const entries: ChangeFile[] = []
   const seen = new Set<string>()
+  const schemaRoot = snapshot.opsx.schemaResolutions?.[schemaName]?.path
+  const schemaYamlContent = snapshot.opsx.schemaYamls?.[schemaName]
+  const templateContentsByArtifact = snapshot.opsx.templateContents?.[schemaName] ?? {}
 
-  const addEntry = (entry: ChangeFile) => {
+  const addEntry = (entry: ChangeFile): void => {
     if (seen.has(entry.path)) return
     seen.add(entry.path)
     entries.push(entry)
@@ -957,40 +1118,85 @@ export async function getOpsxSchemaFiles(name?: string): Promise<ChangeFile[] | 
   }
 
   if (snapshot.opsx.schemaDetails?.[schemaName]) {
-    addEntry({ path: 'schema.yaml', type: 'file' })
+    addEntry({ path: 'schema.yaml', type: 'file', content: schemaYamlContent })
   }
 
   const templates = snapshot.opsx.templates?.[schemaName]
   if (templates) {
-    Object.values(templates).forEach((template) => {
-      addDirEntries(template.path)
-      addEntry({ path: template.path, type: 'file' })
+    Object.entries(templates).forEach(([artifactId, template]) => {
+      const relativePath = toSchemaRelativePath(template.path, schemaRoot)
+      const templateContent = templateContentsByArtifact[artifactId]?.content ?? undefined
+      addDirEntries(relativePath)
+      addEntry({ path: relativePath, type: 'file', content: templateContent })
     })
   }
 
   return entries
 }
 
-export async function getOpsxSchemaYaml(_name?: string): Promise<string | null> {
-  return null
+export async function getOpsxSchemaYaml(name?: string): Promise<string | null> {
+  if (!name) return null
+  const snapshot = await loadSnapshot()
+  return snapshot?.opsx?.schemaYamls?.[name] ?? null
 }
 
 export async function getOpsxTemplateContent(
-  _schema?: string,
-  _artifactId?: string
+  schema?: string,
+  artifactId?: string
 ): Promise<{
   content: string | null
   path: string
+  displayPath?: string
   source: 'project' | 'user' | 'package'
 } | null> {
-  return null
+  if (!schema || !artifactId) return null
+  const all = await getOpsxTemplateContents(schema)
+  if (!all) return null
+  return all[artifactId] ?? null
 }
 
-export async function getOpsxTemplateContents(): Promise<Record<
+export async function getOpsxTemplateContents(schema?: string): Promise<Record<
   string,
-  { content: string | null; path: string; source: 'project' | 'user' | 'package' }
+  {
+    content: string | null
+    path: string
+    displayPath?: string
+    source: 'project' | 'user' | 'package'
+  }
 > | null> {
-  return null
+  const snapshot = await loadSnapshot()
+  if (!snapshot?.opsx) return null
+
+  const targetSchema =
+    schema ??
+    snapshot.opsx.schemas?.[0]?.name ??
+    Object.keys(snapshot.opsx.templates ?? {})[0] ??
+    null
+  if (!targetSchema) return null
+
+  const templates = snapshot.opsx.templates?.[targetSchema] ?? {}
+  const contents = snapshot.opsx.templateContents?.[targetSchema] ?? {}
+  const merged = Object.fromEntries(
+    Object.entries(templates).map(([artifactId, template]) => {
+      const contentInfo = contents[artifactId]
+      return [
+        artifactId,
+        {
+          content: contentInfo?.content ?? null,
+          path: template.path,
+          displayPath:
+            contentInfo?.displayPath ??
+            template.displayPath ??
+            toOpsxDisplayPath(template.path, {
+              source: template.source,
+              projectDir: snapshot.meta.projectDir,
+            }),
+          source: template.source,
+        },
+      ] as const
+    })
+  )
+  return merged
 }
 
 export async function getOpsxChangeList(): Promise<string[]> {

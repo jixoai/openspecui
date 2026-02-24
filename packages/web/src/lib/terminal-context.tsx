@@ -60,6 +60,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   // Subscribe to controller state via useSyncExternalStore
   const snapshot = useSyncExternalStore(
     (cb) => terminalController.subscribe(cb),
+    () => terminalController.getSnapshot(),
     () => terminalController.getSnapshot()
   )
 

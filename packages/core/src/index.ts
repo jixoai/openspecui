@@ -140,6 +140,7 @@ export {
   type DashboardTriColorTrendPoint,
 } from './dashboard-types.js'
 export { type ExportSnapshot } from './export-types.js'
+export { VIRTUAL_PROJECT_DIRNAME, toOpsxDisplayPath } from './opsx-display-path.js'
 
 // OPSX Kernel - reactive in-memory data store
 export { OpsxKernel, type TemplateContentMap } from './opsx-kernel.js'
