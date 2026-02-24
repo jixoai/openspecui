@@ -942,6 +942,9 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
   const defaultConfig: OpenSpecUIConfig = {
     cli: { command: 'openspecui' },
     theme: 'system',
+    codeEditor: {
+      theme: 'github',
+    },
     dashboard: {
       trendPointLimit: 100,
     },
@@ -970,6 +973,10 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
     terminal: {
       ...defaultConfig.terminal,
       ...fromSnapshot.terminal,
+    },
+    codeEditor: {
+      ...defaultConfig.codeEditor,
+      ...fromSnapshot.codeEditor,
     },
     dashboard: {
       ...defaultConfig.dashboard,

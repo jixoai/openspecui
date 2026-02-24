@@ -8,6 +8,7 @@ import type {
   OpsxKernel,
 } from '@openspecui/core'
 import {
+  CodeEditorThemeSchema,
   contextStorage,
   DASHBOARD_METRIC_KEYS,
   DashboardConfigSchema,
@@ -807,6 +808,11 @@ export const configRouter = router({
           })
           .optional(),
         theme: z.enum(['light', 'dark', 'system']).optional(),
+        codeEditor: z
+          .object({
+            theme: CodeEditorThemeSchema.optional(),
+          })
+          .optional(),
         terminal: TerminalConfigSchema.omit({ rendererEngine: true })
           .partial()
           .extend({
@@ -826,11 +832,13 @@ export const configRouter = router({
         await ctx.configManager.setCliCommand(input.cli?.command ?? '')
         if (
           input.theme !== undefined ||
+          input.codeEditor !== undefined ||
           input.terminal !== undefined ||
           input.dashboard !== undefined
         ) {
           await ctx.configManager.writeConfig({
             theme: input.theme,
+            codeEditor: input.codeEditor,
             terminal: input.terminal,
             dashboard: input.dashboard,
           })

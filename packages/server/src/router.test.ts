@@ -101,6 +101,9 @@ const createMockContext = (adapter = createMockAdapter()): Context => {
     readConfig: vi.fn().mockResolvedValue({
       cli: {},
       theme: 'system',
+      codeEditor: {
+        theme: 'github',
+      },
       terminal: {
         fontSize: 13,
         fontFamily: '',

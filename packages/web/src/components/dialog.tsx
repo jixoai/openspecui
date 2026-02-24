@@ -132,7 +132,10 @@ export function Dialog({
 
         dialog.openspec-dialog::backdrop {
           background-color: rgba(0, 0, 0, 0.5);
-          backdrop-filter: grayscale(1);
+          backdrop-filter: grayscale(0.5);
+        }
+        .dark dialog.openspec-dialog::backdrop {
+          background-color: rgba(255, 255, 255, 0.2);
         }
       `}</style>
     )
@@ -150,7 +153,7 @@ export function Dialog({
         >
           <div
             ref={panelRef}
-            className={`bg-background relative flex h-fit w-[calc(100%-0.5rem)] max-w-2xl flex-col overflow-hidden rounded-[var(--openspec-dialog-radius,0.75rem)] border shadow-xl ${borderClass} ${className}`}
+            className={`bg-background text-foreground relative flex h-fit w-[calc(100%-0.5rem)] max-w-2xl flex-col overflow-hidden rounded-[var(--openspec-dialog-radius,0.75rem)] border shadow-xl ${borderClass} ${className}`}
             style={{ maxHeight }}
           >
             {/* Header (non-shrinking) */}
@@ -166,7 +169,9 @@ export function Dialog({
             </div>
 
             {/* Body */}
-            <div className={`min-h-0 flex-1 overflow-auto px-4 py-3 ${bodyClassName}`}>
+            <div
+              className={`scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-auto px-4 py-3 ${bodyClassName}`}
+            >
               {children}
             </div>
 

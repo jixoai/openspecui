@@ -35,11 +35,11 @@ export function MobileHeader() {
           </button>
           <span className="font-nav text-[12px] tracking-[0.04em]">{pageTitle}</span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => navController.activatePop('/search')}
-            className="hover:bg-muted rounded-md p-1.5"
+            className="hover:bg-muted border-primary rounded-md border p-1.5"
             aria-label="Open search"
           >
             <Search className="h-4 w-4" />
@@ -112,7 +112,7 @@ export function MobileHeader() {
                   <AreaNav
                     area="main"
                     tabs={navLayout.mainTabs}
-                    className="h-full overflow-auto"
+                    className="scrollbar-thin scrollbar-track-transparent h-full overflow-auto"
                     useLinks
                     onNavigate={closeMenu}
                   />

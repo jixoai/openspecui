@@ -11,9 +11,20 @@ const CLI_PROBE_TIMEOUT_MS = 20_000
 
 const THEME_VALUES = ['light', 'dark', 'system'] as const
 const CURSOR_STYLE_VALUES = ['block', 'underline', 'bar'] as const
+export const CODE_EDITOR_THEME_VALUES = [
+  'github',
+  'material',
+  'vscode',
+  'tokyo',
+  'gruvbox',
+  'monokai',
+  'nord',
+] as const
 export const TERMINAL_RENDERER_ENGINE_VALUES = ['xterm', 'ghostty'] as const
 export const TerminalRendererEngineSchema = z.enum(TERMINAL_RENDERER_ENGINE_VALUES)
 export type TerminalRendererEngine = z.infer<typeof TerminalRendererEngineSchema>
+export const CodeEditorThemeSchema = z.enum(CODE_EDITOR_THEME_VALUES)
+export type CodeEditorTheme = z.infer<typeof CodeEditorThemeSchema>
 
 export function isTerminalRendererEngine(value: string): value is TerminalRendererEngine {
   return (TERMINAL_RENDERER_ENGINE_VALUES as readonly string[]).includes(value)
@@ -473,6 +484,10 @@ export const DashboardConfigSchema = z.object({
 })
 
 export type DashboardConfig = z.infer<typeof DashboardConfigSchema>
+export const CodeEditorConfigSchema = z.object({
+  theme: CodeEditorThemeSchema.default('github'),
+})
+export type CodeEditorConfig = z.infer<typeof CodeEditorConfigSchema>
 
 /**
  * OpenSpecUI 配置 Schema
@@ -493,6 +508,9 @@ export const OpenSpecUIConfigSchema = z.object({
   /** 主题 */
   theme: z.enum(THEME_VALUES).default('system'),
 
+  /** 代码编辑器配置 */
+  codeEditor: CodeEditorConfigSchema.default(CodeEditorConfigSchema.parse({})),
+
   /** 终端配置 */
   terminal: TerminalConfigSchema.default(TerminalConfigSchema.parse({})),
 
@@ -507,6 +525,7 @@ export type OpenSpecUIConfigUpdate = {
     args?: string[] | null
   }
   theme?: OpenSpecUIConfig['theme']
+  codeEditor?: Partial<OpenSpecUIConfig['codeEditor']>
   terminal?: Partial<TerminalConfig>
   dashboard?: Partial<DashboardConfig>
 }
@@ -517,6 +536,7 @@ export const DEFAULT_CONFIG: OpenSpecUIConfig = {
     // command 不设置，使用自动检测
   },
   theme: 'system',
+  codeEditor: CodeEditorConfigSchema.parse({}),
   terminal: TerminalConfigSchema.parse({}),
   dashboard: DashboardConfigSchema.parse({}),
 }
@@ -600,6 +620,7 @@ export class ConfigManager {
       ...current,
       cli: nextCli,
       theme: config.theme ?? current.theme,
+      codeEditor: { ...current.codeEditor, ...config.codeEditor },
       terminal: { ...current.terminal, ...config.terminal },
       dashboard: { ...current.dashboard, ...config.dashboard },
     }

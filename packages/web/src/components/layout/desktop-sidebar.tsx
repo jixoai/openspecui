@@ -29,7 +29,7 @@ export function DesktopSidebar() {
       <button
         type="button"
         onClick={() => navController.activatePop('/search')}
-        className="hover:bg-muted mb-4 flex items-center gap-2 rounded-md px-3 py-2 text-left"
+        className="hover:bg-muted border-primary mb-4 flex items-center gap-2 rounded-md border px-3 py-2 text-left"
       >
         <Search className="h-4 w-4 shrink-0" />
         <span className="font-nav text-base tracking-[0.04em]">Search</span>

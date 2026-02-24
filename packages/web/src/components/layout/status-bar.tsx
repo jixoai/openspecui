@@ -2,7 +2,7 @@ import { PathMarquee } from '@/components/path-marquee'
 import { loadSnapshot } from '@/lib/static-data-provider'
 import { isStaticMode } from '@/lib/static-mode'
 import { useManualReconnect, useServerStatus } from '@/lib/use-server-status'
-import { Camera, FolderOpen, Github, RefreshCw, Wifi, WifiOff } from 'lucide-react'
+import { Camera, FolderOpen, Github, Link2, RefreshCw, Unlink2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 /** Status indicator - simplified for mobile, full for desktop */
@@ -25,7 +25,7 @@ export function StatusIndicator() {
   if (status.connected) {
     return (
       <div className="status-indicator flex items-center gap-1.5 text-xs">
-        <Wifi className="h-3.5 w-3.5 text-green-500" />
+        <Link2 className="h-3.5 w-3.5 text-green-500" />
         <span className="status-text text-green-600">Live</span>
       </div>
     )
@@ -34,7 +34,7 @@ export function StatusIndicator() {
   // 断开连接时显示重连提示
   return (
     <div className="status-indicator flex items-center gap-1.5 text-xs">
-      <WifiOff className="h-3.5 w-3.5 text-red-500" />
+      <Unlink2 className="h-3.5 w-3.5 text-red-500" />
       <span className="status-text text-red-600">Offline</span>
       {status.reconnectCountdown !== null && (
         <button

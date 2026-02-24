@@ -477,7 +477,7 @@ export function OpsxComposeRoute() {
             language="markdown"
             lineNumbers={false}
             lineWrapping
-            className="min-h-0 flex-1 overflow-auto border"
+            className="scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-auto border"
             editorMinHeight="0px"
             placeholder="Compose prompt..."
           />

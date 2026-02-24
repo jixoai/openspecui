@@ -25,6 +25,9 @@ function createSnapshot(): ExportSnapshot {
     config: {
       cli: { command: 'openspec' },
       theme: 'dark',
+      codeEditor: {
+        theme: 'github',
+      },
       dashboard: { trendPointLimit: 120 },
       terminal: {
         fontSize: 14,

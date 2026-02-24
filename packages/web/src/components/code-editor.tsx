@@ -7,18 +7,33 @@
  * - Markdown 文件支持实时预览（隐藏语法标记）
  * - 移动端友好
  */
+import { DEFAULT_CODE_EDITOR_THEME, type CodeEditorTheme } from '@/lib/code-editor-theme'
 import { markdownPreview } from '@/lib/codemirror-markdown-preview'
+import { useDarkMode } from '@/lib/use-dark-mode'
+import { useConfigSubscription } from '@/lib/use-subscription'
 import { selectAll } from '@codemirror/commands'
 import { javascript } from '@codemirror/lang-javascript'
 import { json } from '@codemirror/lang-json'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { yaml } from '@codemirror/lang-yaml'
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
 import type { Extension } from '@codemirror/state'
 import { EditorState } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
-import { tags as t } from '@lezer/highlight'
+import {
+  githubDark,
+  githubLight,
+  gruvboxDark,
+  gruvboxLight,
+  materialDark,
+  materialLight,
+  monokai,
+  nord,
+  tokyoNightDay,
+  tokyoNightStorm,
+  vsCodeDark,
+  vsCodeLight,
+} from '@fsegurai/codemirror-theme-bundle'
 import CodeMirror from '@uiw/react-codemirror'
 import { useMemo } from 'react'
 
@@ -83,21 +98,26 @@ function getLanguageExtensions(language: LanguageType, filename?: string): Exten
   }
 }
 
-// 语法高亮：使用设计令牌，自动随 light/dark 变量切换
-const codeHighlightStyle = HighlightStyle.define([
-  { tag: [t.keyword, t.operatorKeyword, t.modifier], color: 'var(--primary)' },
-  { tag: [t.string, t.special(t.string)], color: 'var(--secondary)' },
-  { tag: [t.number, t.integer, t.float], color: 'var(--chart-4)' },
-  { tag: [t.bool, t.null, t.atom], color: 'var(--accent)' },
-  { tag: [t.typeName, t.className], color: 'var(--chart-3)' },
-  { tag: [t.function(t.variableName), t.propertyName], color: 'var(--chart-5)' },
-  { tag: [t.variableName], color: 'var(--foreground)' },
-  {
-    tag: [t.comment, t.lineComment, t.blockComment],
-    color: 'color-mix(in srgb, var(--muted-foreground) 80%, transparent)',
-  },
-  { tag: t.punctuation, color: 'color-mix(in srgb, var(--foreground) 70%, transparent)' },
-])
+function resolveBundleTheme(theme: CodeEditorTheme, isDarkMode: boolean): Extension {
+  switch (theme) {
+    case 'github':
+      return isDarkMode ? githubDark : githubLight
+    case 'material':
+      return isDarkMode ? materialDark : materialLight
+    case 'vscode':
+      return isDarkMode ? vsCodeDark : vsCodeLight
+    case 'tokyo':
+      return isDarkMode ? tokyoNightStorm : tokyoNightDay
+    case 'gruvbox':
+      return isDarkMode ? gruvboxDark : gruvboxLight
+    case 'monokai':
+      return monokai
+    case 'nord':
+      return nord
+    default:
+      return isDarkMode ? githubDark : githubLight
+  }
+}
 
 /**
  * CodeEditor 组件
@@ -125,70 +145,39 @@ export function CodeEditor({
   editorMinHeight = '240px',
 }: CodeEditorProps) {
   const resolvedLanguage = language ?? detectLanguage(filename)
+  const isDarkMode = useDarkMode()
+  const { data: config } = useConfigSubscription()
+  const codeEditorTheme = config?.codeEditor?.theme ?? DEFAULT_CODE_EDITOR_THEME
+
   const extensions = useMemo(() => {
     const exts: Extension[] = [
       EditorState.readOnly.of(readOnly),
       ...getLanguageExtensions(resolvedLanguage, filename),
-      syntaxHighlighting(codeHighlightStyle, { fallback: true }),
     ]
+
+    exts.push(resolveBundleTheme(codeEditorTheme, isDarkMode))
+
     exts.push(
       EditorView.theme({
         '.cm-line': {
           lineHeight: '21px',
         },
-        '.cm-editor': {
-          backgroundColor: 'var(--card)',
-          color: 'var(--foreground)',
+        '&': {
           borderRadius: '6px',
-          border: '1px solid color-mix(in srgb, var(--border) 80%, transparent)',
+          border: '1px solid var(--code-editor-border)',
           height: '100%',
           minHeight: 'var(--code-editor-min-height, 240px)',
         },
         '.cm-content': {
           fontFamily: 'var(--font-mono)',
-          backgroundColor: 'transparent',
         },
         '.cm-gutters': {
           fontFamily: 'var(--font-mono)',
-          backgroundColor: 'var(--card)',
-          color: 'color-mix(in srgb, var(--foreground) 60%, transparent)',
-          borderRight: '1px solid color-mix(in srgb, var(--border) 80%, transparent)',
         },
         '.cm-scroller': {
           fontFamily: 'var(--font-mono)',
           overflow: 'auto',
-        },
-        '.cm-activeLine': {
-          backgroundColor: 'color-mix(in srgb, var(--primary) 6%, transparent)',
-        },
-        '.cm-activeLineGutter': {
-          backgroundColor: 'color-mix(in srgb, var(--primary) 6%, transparent)',
-          color: 'var(--foreground)',
-        },
-        '.cm-selectionBackground, .cm-content ::selection': {
-          backgroundColor: 'color-mix(in srgb, var(--primary) 24%, transparent)',
-        },
-        '&.cm-editor .cm-cursor': {
-          borderLeftColor: 'var(--foreground)',
-        },
-        '.cm-matchingBracket, .cm-nonmatchingBracket': {
-          backgroundColor: 'color-mix(in srgb, var(--primary) 10%, transparent)',
-          outline: '1px solid color-mix(in srgb, var(--primary) 30%, transparent)',
-        },
-        '.cm-tooltip': {
-          backgroundColor: 'var(--popover)',
-          color: 'var(--popover-foreground)',
-          border: '1px solid color-mix(in srgb, var(--border) 80%, transparent)',
-        },
-        '.cm-tooltip-autocomplete': {
-          '& > ul > li[aria-selected]': {
-            background: 'color-mix(in srgb, var(--primary) 10%, transparent)',
-            color: 'var(--foreground)',
-          },
-        },
-        '.cm-searchMatch': {
-          backgroundColor: 'color-mix(in srgb, var(--primary) 18%, transparent)',
-          outline: '1px solid color-mix(in srgb, var(--primary) 35%, transparent)',
+          scrollbarWidth: 'thin',
         },
         '.cm-md-codeblock': {
           padding: '0',
@@ -211,7 +200,7 @@ export function CodeEditor({
       exts.push(EditorView.lineWrapping)
     }
     return exts
-  }, [resolvedLanguage, filename, readOnly, lineWrapping])
+  }, [resolvedLanguage, filename, readOnly, lineWrapping, codeEditorTheme, isDarkMode])
 
   return (
     <CodeMirror
