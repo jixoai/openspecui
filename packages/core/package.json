@@ -9,14 +9,18 @@
     ".": {
       "import": "./dist/index.mjs",
       "types": "./dist/index.d.mts"
+    },
+    "./opsx-display-path": {
+      "import": "./dist/opsx-display-path.mjs",
+      "types": "./dist/opsx-display-path.d.mts"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts --format esm --dts",
-    "dev": "tsdown src/index.ts --format esm --dts --watch",
+    "build": "tsdown src/index.ts src/opsx-display-path.ts --format esm --dts",
+    "dev": "tsdown src/index.ts src/opsx-display-path.ts --format esm --dts --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

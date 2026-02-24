@@ -146,4 +146,80 @@ describe('static-data-provider opsx adapters', () => {
       },
     ])
   })
+
+  it('normalizes schema paths to relative display paths', async () => {
+    staticState.snapshot = {
+      ...createSnapshot(),
+      opsx: {
+        ...createSnapshot().opsx!,
+        templates: {
+          'spec-driven': {
+            tasks: {
+              source: 'package',
+              path: '/Users/test/.bun/install/global/node_modules/@fission-ai/openspec/schemas/spec-driven/templates/tasks.md',
+              displayPath: 'npm:@fission-ai/openspec/schemas/spec-driven/templates/tasks.md',
+            },
+          },
+        },
+        templateContents: {
+          'spec-driven': {
+            tasks: {
+              source: 'package',
+              path: '/Users/test/.bun/install/global/node_modules/@fission-ai/openspec/schemas/spec-driven/templates/tasks.md',
+              displayPath: 'npm:@fission-ai/openspec/schemas/spec-driven/templates/tasks.md',
+              content: '# Tasks template',
+            },
+          },
+        },
+      },
+    }
+
+    const provider = await import('./static-data-provider')
+    const resolution = await provider.getOpsxSchemaResolution('spec-driven')
+    const files = await provider.getOpsxSchemaFiles('spec-driven')
+
+    expect(resolution?.path).toBe('/tmp/project/openspec/schemas/spec-driven')
+    expect(resolution?.displayPath).toBe('project:openspec/schemas/spec-driven')
+    expect(files).toContainEqual({
+      path: 'templates/tasks.md',
+      type: 'file',
+      content: '# Tasks template',
+    })
+  })
+
+  it('returns template contents for static schema preview', async () => {
+    staticState.snapshot = {
+      ...createSnapshot(),
+      opsx: {
+        ...createSnapshot().opsx!,
+        templates: {
+          'spec-driven': {
+            proposal: {
+              source: 'project',
+              path: '/tmp/project/openspec/schemas/spec-driven/templates/proposal.md',
+              displayPath: 'project:openspec/schemas/spec-driven/templates/proposal.md',
+            },
+          },
+        },
+        templateContents: {
+          'spec-driven': {
+            proposal: {
+              source: 'project',
+              path: '/tmp/project/openspec/schemas/spec-driven/templates/proposal.md',
+              displayPath: 'project:openspec/schemas/spec-driven/templates/proposal.md',
+              content: '# Proposal template',
+            },
+          },
+        },
+      },
+    }
+
+    const provider = await import('./static-data-provider')
+    const template = await provider.getOpsxTemplateContent('spec-driven', 'proposal')
+    const templates = await provider.getOpsxTemplateContents('spec-driven')
+
+    expect(template?.content).toBe('# Proposal template')
+    expect(template?.displayPath).toBe('project:openspec/schemas/spec-driven/templates/proposal.md')
+    expect(templates?.proposal?.content).toBe('# Proposal template')
+  })
 })

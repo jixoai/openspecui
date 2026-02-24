@@ -150,7 +150,7 @@ describe('static-data-provider dashboard overview', () => {
       state: 'invalid',
       reason: 'objective-history-unavailable',
     })
-    expect(overview.trendMeta.pointLimit).toBe(100)
+    expect(overview.trendMeta.pointLimit).toBe(120)
     expect(overview.trendMeta.lastUpdatedAt).toBeGreaterThan(0)
   })
 
@@ -200,5 +200,46 @@ describe('static-data-provider dashboard overview', () => {
     expect(config.dashboard.trendPointLimit).toBe(120)
     expect(config.terminal.scrollback).toBe(2000)
     expect(config.cli.command).toBe('openspec')
+  })
+
+  it('maps snapshot git commits into dashboard git snapshot', async () => {
+    staticState.snapshot = {
+      ...createSnapshot(),
+      git: {
+        defaultBranch: 'origin/main',
+        repositoryUrl: 'https://github.com/jixoai/openspecui',
+        latestCommitTs: 1_710_000_000_000,
+        recentCommits: [
+          {
+            hash: 'aaaaaaaa',
+            title: 'feat: add dashboard',
+            committedAt: 1_710_000_000_000,
+            relatedChanges: ['dashboard-live-workflow-status'],
+            diff: { files: 3, insertions: 20, deletions: 5 },
+          },
+          {
+            hash: 'bbbbbbbb',
+            title: 'fix: align static trends',
+            committedAt: 1_709_900_000_000,
+            relatedChanges: [],
+            diff: { files: 1, insertions: 4, deletions: 2 },
+          },
+        ],
+      },
+    }
+
+    const provider = await import('./static-data-provider')
+    const overview = await provider.getDashboardOverview()
+    const worktree = overview.git.worktrees[0]
+
+    expect(overview.git.defaultBranch).toBe('origin/main')
+    expect(worktree?.branchName).toBe('(snapshot)')
+    expect(worktree?.path).toBe('https://github.com/jixoai/openspecui')
+    expect(worktree?.entries).toHaveLength(2)
+    expect(worktree?.entries[0]).toMatchObject({
+      type: 'commit',
+      hash: 'aaaaaaaa',
+      relatedChanges: ['dashboard-live-workflow-status'],
+    })
   })
 })

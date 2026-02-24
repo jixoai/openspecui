@@ -20,6 +20,23 @@ describe('Export Functions', () => {
     await mkdir(join(testProjectDir, 'openspec', 'specs'), { recursive: true })
     await mkdir(join(testProjectDir, 'openspec', 'changes'), { recursive: true })
     await mkdir(join(testProjectDir, 'openspec', 'changes', 'archive'), { recursive: true })
+    await writeFile(
+      join(testProjectDir, 'openspec', '.openspecui.json'),
+      JSON.stringify(
+        {
+          cli: {
+            // Prevent tests from probing global/npx runners (can block on network).
+            command: '__openspec_test_no_cli__',
+          },
+          theme: 'system',
+          terminal: { rendererEngine: 'xterm' },
+          dashboard: { trendPointLimit: 40 },
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    )
 
     // Create minimal project.md
     await writeFile(

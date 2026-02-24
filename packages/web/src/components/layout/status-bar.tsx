@@ -2,14 +2,17 @@ import { PathMarquee } from '@/components/path-marquee'
 import { loadSnapshot } from '@/lib/static-data-provider'
 import { isStaticMode } from '@/lib/static-mode'
 import { useManualReconnect, useServerStatus } from '@/lib/use-server-status'
-import { Camera, FolderOpen, RefreshCw, Wifi, WifiOff } from 'lucide-react'
+import { Camera, FolderOpen, Github, RefreshCw, Wifi, WifiOff } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 /** Status indicator - simplified for mobile, full for desktop */
 export function StatusIndicator() {
   if (isStaticMode()) {
     return (
-      <div className="status-indicator flex items-center gap-1.5 text-xs">
+      <div
+        className="status-indicator flex items-center gap-1.5 text-xs"
+        title="Live features disabled (no file watching, task toggling, or AI integration)"
+      >
         <Camera className="h-3.5 w-3.5 text-blue-500" />
         <span className="status-text text-blue-600">Static</span>
       </div>
@@ -51,7 +54,7 @@ export function StatusIndicator() {
 export function DesktopStatusBar() {
   const staticMode = isStaticMode()
   const [generatedAt, setGeneratedAt] = useState('Unknown')
-  const [snapshotProjectDir, setSnapshotProjectDir] = useState<string | null>(null)
+  const [snapshotRepositoryUrl, setSnapshotRepositoryUrl] = useState<string | null>(null)
 
   useEffect(() => {
     if (!staticMode) return
@@ -62,11 +65,11 @@ export function DesktopStatusBar() {
         } else {
           setGeneratedAt('Unknown')
         }
-        setSnapshotProjectDir(snapshot?.meta?.projectDir ?? null)
+        setSnapshotRepositoryUrl(snapshot?.git?.repositoryUrl ?? null)
       })
       .catch(() => {
         setGeneratedAt('Unknown')
-        setSnapshotProjectDir(null)
+        setSnapshotRepositoryUrl(null)
       })
   }, [staticMode])
 
@@ -76,11 +79,11 @@ export function DesktopStatusBar() {
         <div className="flex min-w-0 items-center gap-4">
           <StatusIndicator />
           <span className="truncate">Generated: {generatedAt}</span>
-          {snapshotProjectDir && (
+          {snapshotRepositoryUrl && (
             <div className="flex min-w-0 items-center gap-1.5">
-              <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+              <Github className="h-3.5 w-3.5 shrink-0" />
               <PathMarquee
-                children={snapshotProjectDir}
+                children={snapshotRepositoryUrl}
                 maxWidth={280}
                 duration={12}
                 className="text-xs"
@@ -88,9 +91,6 @@ export function DesktopStatusBar() {
             </div>
           )}
         </div>
-        <span className="truncate">
-          Live features disabled (no file watching, task toggling, or AI integration)
-        </span>
       </div>
     )
   }

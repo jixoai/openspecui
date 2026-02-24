@@ -92,10 +92,12 @@ export const SchemaResolutionSchema = z.object({
   name: z.string(),
   source: z.enum(['project', 'user', 'package']),
   path: z.string(),
+  displayPath: z.string().optional(),
   shadows: z.array(
     z.object({
       source: z.enum(['project', 'user', 'package']),
       path: z.string(),
+      displayPath: z.string().optional(),
     })
   ),
 })
@@ -105,6 +107,7 @@ export type SchemaResolution = z.infer<typeof SchemaResolutionSchema>
 export const TemplatesSchema = z.record(
   z.object({
     path: z.string(),
+    displayPath: z.string().optional(),
     source: z.enum(['project', 'user', 'package']),
   })
 )

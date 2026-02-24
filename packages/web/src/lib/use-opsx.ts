@@ -16,6 +16,7 @@ import { useSubscription, type SubscriptionState } from './use-subscription'
 export interface OpsxTemplateContent {
   content: string | null
   path: string
+  displayPath?: string
   source: 'project' | 'user' | 'package'
 }
 
@@ -262,7 +263,7 @@ export function useOpsxTemplateContentsSubscription(
 
   return useSubscription<OpsxTemplateContentMap | null>(
     subscribe,
-    () => StaticProvider.getOpsxTemplateContents(),
+    () => StaticProvider.getOpsxTemplateContents(schema),
     [schema],
     `opsx.subscribeTemplateContents:${schema ?? ''}`
   )

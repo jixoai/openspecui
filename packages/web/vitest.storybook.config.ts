@@ -8,6 +8,7 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, './src'),
       '@openspecui/core': resolve(__dirname, '../core/src'),
+      '@openspecui/core/opsx-display-path': resolve(__dirname, '../core/src/opsx-display-path.ts'),
       '@openspecui/core/pty-protocol': resolve(__dirname, '../core/src/pty-protocol.ts'),
       '@openspecui/search': resolve(__dirname, '../search/src'),
       '@openspecui/search/node': resolve(__dirname, '../search/src/node.ts'),

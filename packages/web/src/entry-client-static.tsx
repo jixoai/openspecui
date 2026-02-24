@@ -1,4 +1,4 @@
-import { createRoot, hydrateRoot } from 'react-dom/client'
+import { createRoot } from 'react-dom/client'
 import { AppStatic } from './App.static'
 import { setStaticMode } from './lib/static-mode'
 
@@ -12,12 +12,11 @@ function main() {
   if (!rootElement) return
 
   setStaticMode(true)
-
+  // Use client render in static mode to avoid hydration-time store mismatch
+  // when third-party stores don't provide server snapshots.
   if (hasPrerenderedContent()) {
-    hydrateRoot(rootElement, <AppStatic />)
-    return
+    rootElement.innerHTML = ''
   }
-
   createRoot(rootElement).render(<AppStatic />)
 }
 

@@ -1,6 +1,7 @@
-import { join, matchesGlob, relative, sep } from 'node:path'
+import { join, matchesGlob, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import type { CliExecutor } from './cli-executor.js'
+import { toOpsxDisplayPath } from './opsx-display-path.js'
 import {
   ApplyInstructionsSchema,
   ArtifactInstructionsSchema,
@@ -23,7 +24,12 @@ import type { ChangeFile } from './schemas.js'
 // Re-export TemplateContentMap so router and others can use it
 export type TemplateContentMap = Record<
   string,
-  { content: string | null; path: string; source: TemplatesMap[string]['source'] }
+  {
+    content: string | null
+    path: string
+    displayPath?: string
+    source: TemplatesMap[string]['source']
+  }
 >
 
 // ---------------------------------------------------------------------------
@@ -52,6 +58,14 @@ function parseCliJson<T>(raw: string, schema: z.ZodSchema<T>, label: string): T 
 function toRelativePath(root: string, absolutePath: string): string {
   const rel = relative(root, absolutePath)
   return rel.split(sep).join('/')
+}
+
+function isAbsoluteFsPath(path: string): boolean {
+  return path.startsWith('/') || /^[A-Za-z]:\//.test(path)
+}
+
+function toAbsoluteProjectPath(projectDir: string, path: string): string {
+  return isAbsoluteFsPath(path.replace(/\\/g, '/')) ? path : resolve(projectDir, path)
 }
 
 async function readEntriesUnderRoot(root: string): Promise<ChangeFile[]> {
@@ -864,7 +878,21 @@ export class OpsxKernel {
         result.stderr || `openspec schema which failed (exit ${result.exitCode ?? 'null'})`
       )
     }
-    return parseCliJson(result.stdout, SchemaResolutionSchema, 'openspec schema which')
+    const parsed = parseCliJson(result.stdout, SchemaResolutionSchema, 'openspec schema which')
+    return {
+      ...parsed,
+      displayPath: toOpsxDisplayPath(parsed.path, {
+        source: parsed.source,
+        projectDir: this.projectDir,
+      }),
+      shadows: parsed.shadows.map((shadow) => ({
+        ...shadow,
+        displayPath: toOpsxDisplayPath(shadow.path, {
+          source: shadow.source,
+          projectDir: this.projectDir,
+        }),
+      })),
+    }
   }
 
   private async fetchSchemaDetail(name: string): Promise<SchemaDetail> {
@@ -902,7 +930,20 @@ export class OpsxKernel {
         result.stderr || `openspec templates failed (exit ${result.exitCode ?? 'null'})`
       )
     }
-    return parseCliJson(result.stdout, TemplatesSchema, 'openspec templates')
+    const templates = parseCliJson(result.stdout, TemplatesSchema, 'openspec templates')
+    return Object.fromEntries(
+      Object.entries(templates).map(([artifactId, info]) => [
+        artifactId,
+        {
+          ...info,
+          path: toAbsoluteProjectPath(this.projectDir, info.path),
+          displayPath: toOpsxDisplayPath(info.path, {
+            source: info.source,
+            projectDir: this.projectDir,
+          }),
+        },
+      ])
+    )
   }
 
   private async fetchTemplateContents(schema?: string): Promise<TemplateContentMap> {
@@ -911,7 +952,20 @@ export class OpsxKernel {
     const entries = await Promise.all(
       Object.entries(templates).map(async ([artifactId, info]) => {
         const content = await reactiveReadFile(info.path)
-        return [artifactId, { content, path: info.path, source: info.source }] as const
+        return [
+          artifactId,
+          {
+            content,
+            path: info.path,
+            displayPath:
+              info.displayPath ??
+              toOpsxDisplayPath(info.path, {
+                source: info.source,
+                projectDir: this.projectDir,
+              }),
+            source: info.source,
+          },
+        ] as const
       })
     )
     return Object.fromEntries(entries)

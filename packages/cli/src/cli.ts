@@ -151,6 +151,11 @@ async function main(): Promise<void> {
             describe: 'Port for the preview server (used with --open)',
             type: 'number',
           })
+          .option('port', {
+            alias: 'p',
+            describe: 'Alias of --open --preview-port <port>',
+            type: 'number',
+          })
           .option('preview-host', {
             describe: 'Host for the preview server (used with --open)',
             type: 'string',
@@ -159,6 +164,8 @@ async function main(): Promise<void> {
       async (argv) => {
         const projectDir = resolve(originalCwd, argv.dir || '.')
         const outputDir = resolve(originalCwd, argv.output)
+        const previewPort = argv.port ?? argv['preview-port']
+        const shouldOpen = argv.open || argv.port !== undefined
 
         try {
           await exportStaticSite({
@@ -167,13 +174,13 @@ async function main(): Promise<void> {
             format: argv.format as ExportFormat,
             basePath: argv['base-path'],
             clean: argv.clean,
-            open: argv.open,
-            previewPort: argv['preview-port'],
+            open: shouldOpen,
+            previewPort,
             previewHost: argv['preview-host'],
           })
 
           // If --open was used, the SSG CLI keeps running, so we don't exit
-          if (!argv.open) {
+          if (!shouldOpen) {
             process.exit(0)
           }
         } catch (error) {
@@ -187,6 +194,7 @@ async function main(): Promise<void> {
     .example('$0 -p 8080', 'Start server on custom port')
     .example('$0 export -o ./dist', 'Export HTML to ./dist directory')
     .example('$0 export -o ./dist -f json', 'Export JSON data only')
+    .example('$0 export -o ./dist -p 8092', 'Export and open preview on port 8092')
     .example('$0 export -o ./dist --base-path=/docs/', 'Export for subdirectory deployment')
     .example('$0 export -o ./dist --clean', 'Clean output directory before export')
     .version(getVersion())

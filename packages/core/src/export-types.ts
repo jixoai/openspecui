@@ -20,6 +20,23 @@ export interface ExportSnapshot {
     changesCount: number
     archivesCount: number
   }
+  /** Git snapshot used by static dashboard */
+  git?: {
+    defaultBranch: string
+    repositoryUrl: string | null
+    latestCommitTs: number | null
+    recentCommits: Array<{
+      hash: string
+      title: string
+      committedAt: number
+      relatedChanges: string[]
+      diff: {
+        files: number
+        insertions: number
+        deletions: number
+      }
+    }>
+  }
   /** OpenSpecUI runtime config captured during export */
   config?: OpenSpecUIConfig
   /** All specs with parsed content */
@@ -86,8 +103,21 @@ export interface ExportSnapshot {
     configYaml?: string
     schemas: SchemaInfo[]
     schemaDetails: Record<string, SchemaDetail>
+    schemaYamls?: Record<string, string>
     schemaResolutions: Record<string, SchemaResolution>
     templates: Record<string, TemplatesMap>
+    templateContents?: Record<
+      string,
+      Record<
+        string,
+        {
+          content: string | null
+          path: string
+          displayPath?: string
+          source: 'project' | 'user' | 'package'
+        }
+      >
+    >
     changeMetadata: Record<string, string | null>
   }
 }

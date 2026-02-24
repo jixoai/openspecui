@@ -80,6 +80,10 @@ function formatArtifactLabel(id: string): string {
     .join(' ')
 }
 
+function isHttpUrl(value: string): boolean {
+  return /^https?:\/\//.test(value)
+}
+
 function sortArtifactIdsForSchema(schemaName: string, artifactIds: string[]): string[] {
   if (schemaName !== 'spec-driven') return artifactIds
 
@@ -351,6 +355,9 @@ export function Dashboard() {
     defaultBranch: 'main',
     worktrees: [],
   }
+  const staticMode = isStaticMode()
+  const showGitSnapshot =
+    !staticMode || git.worktrees.some((worktree) => worktree.entries.length > 0)
 
   const hasChanges = activeChanges.length > 0
   const currentWorktree = git.worktrees.find((worktree) => worktree.isCurrent) ?? null
@@ -382,7 +389,7 @@ export function Dashboard() {
   )
 
   const renderExecutionSnapshot = () => (
-    <div className="grid min-w-0 gap-3 xl:grid-cols-2">
+    <div className={`grid min-w-0 gap-3 ${showGitSnapshot ? 'xl:grid-cols-2' : 'xl:grid-cols-1'}`}>
       <section className="@container min-w-0 space-y-2">
         <div>
           <h2 className="font-medium">Workflow Progress</h2>
@@ -463,66 +470,70 @@ export function Dashboard() {
         )}
       </section>
 
-      <section className="min-w-0 space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <h2 className="font-medium">Git Snapshot</h2>
-            <p className="text-muted-foreground truncate text-xs">
-              Default branch: {git.defaultBranch}
-            </p>
+      {showGitSnapshot ? (
+        <section className="min-w-0 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <h2 className="font-medium">Git Snapshot</h2>
+              <p className="text-muted-foreground truncate text-xs">
+                Default branch: {git.defaultBranch}
+              </p>
+            </div>
+            {!staticMode ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void triggerGitRefresh('manual-button')
+                }}
+                disabled={gitTaskStatus?.running === true}
+                className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 rounded border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${gitTaskStatus?.running ? 'text-primary animate-spin' : ''}`}
+                />
+                Refresh
+              </button>
+            ) : null}
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              void triggerGitRefresh('manual-button')
-            }}
-            disabled={gitTaskStatus?.running === true}
-            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 rounded border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCw
-              className={`h-3.5 w-3.5 ${gitTaskStatus?.running ? 'text-primary animate-spin' : ''}`}
-            />
-            Refresh
-          </button>
-        </div>
-        <div className="border-border/80 min-w-0 rounded-lg border p-3">
-          <div className="mb-2 flex items-center gap-1.5">
-            <GitBranch className="text-muted-foreground h-4 w-4 shrink-0" />
-            <span className="text-muted-foreground truncate text-xs">
-              Default branch: {git.defaultBranch}
-            </span>
-          </div>
+          <div className="border-border/80 min-w-0 rounded-lg border p-3">
+            <div className="mb-2 flex items-center gap-1.5">
+              <GitBranch className="text-muted-foreground h-4 w-4 shrink-0" />
+              <span className="text-muted-foreground truncate text-xs">
+                Default branch: {git.defaultBranch}
+              </span>
+            </div>
 
-          {currentWorktree ? (
-            <div className="space-y-0">
-              <WorktreeRow worktree={currentWorktree} emphasize />
-              <div className={`-mt-px space-y-1 border-l pl-3 pt-2 ${GIT_WORKTREE_LINE_CLASS}`}>
-                {currentWorktree.entries.map((entry) => (
-                  <GitEntryRow
-                    key={entry.type === 'commit' ? entry.hash : entry.type}
-                    entry={entry}
-                  />
+            {currentWorktree ? (
+              <div className="space-y-0">
+                <WorktreeRow worktree={currentWorktree} emphasize />
+                <div className={`-mt-px space-y-1 border-l pl-3 pt-2 ${GIT_WORKTREE_LINE_CLASS}`}>
+                  {currentWorktree.entries.map((entry) => (
+                    <GitEntryRow
+                      key={entry.type === 'commit' ? entry.hash : entry.type}
+                      entry={entry}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-muted-foreground rounded-md border border-dashed px-2.5 py-2 text-xs">
+                No worktree snapshot available.
+              </div>
+            )}
+
+            {otherWorktrees.length > 0 && (
+              <div className="border-border/70 mt-3 space-y-1 border-t pt-2">
+                <div className="text-muted-foreground text-xs uppercase tracking-wide">
+                  Other Worktrees
+                </div>
+                {otherWorktrees.map((worktree) => (
+                  <WorktreeRow key={worktree.path} worktree={worktree} emphasize={false} />
                 ))}
               </div>
-            </div>
-          ) : (
-            <div className="text-muted-foreground rounded-md border border-dashed px-2.5 py-2 text-xs">
-              No worktree snapshot available.
-            </div>
-          )}
-
-          {otherWorktrees.length > 0 && (
-            <div className="border-border/70 mt-3 space-y-1 border-t pt-2">
-              <div className="text-muted-foreground text-xs uppercase tracking-wide">
-                Other Worktrees
-              </div>
-              {otherWorktrees.map((worktree) => (
-                <WorktreeRow key={worktree.path} worktree={worktree} emphasize={false} />
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
+            )}
+          </div>
+        </section>
+      ) : null}
     </div>
   )
 
@@ -691,6 +702,10 @@ function WorktreeRow({
   worktree: DashboardGitWorktree
   emphasize: boolean
 }) {
+  const pathLabel = isHttpUrl(worktree.path)
+    ? worktree.path
+    : `${worktree.relativePath} | ${worktree.path}`
+
   return (
     <div
       className={`min-w-0 rounded-md border px-2.5 py-2 ${
@@ -705,9 +720,7 @@ function WorktreeRow({
             <GitBranch className="h-3.5 w-3.5" />
             <span className="truncate">{worktree.branchName}</span>
           </div>
-          <div className="text-muted-foreground truncate text-xs">
-            {worktree.relativePath} | {worktree.path}
-          </div>
+          <div className="text-muted-foreground truncate text-xs">{pathLabel}</div>
         </div>
         <div className="shrink-0 text-right">
           <div className="flex items-center justify-end gap-1">

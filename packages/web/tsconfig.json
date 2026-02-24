@@ -12,6 +12,7 @@
       "@/*": ["./src/*"],
       "@openspecui/server": ["../server/src/index.ts"],
       "@openspecui/core": ["../core/src/index.ts"],
+      "@openspecui/core/opsx-display-path": ["../core/src/opsx-display-path.ts"],
       "@openspecui/core/pty-protocol": ["../core/src/pty-protocol.ts"],
       "@openspecui/search": ["../search/src/index.ts"],
       "@openspecui/search/node": ["../search/src/node.ts"],
