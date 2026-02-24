@@ -14,7 +14,7 @@ import {
   type TemplatesMap,
 } from '@openspecui/core'
 import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -385,6 +385,15 @@ function runCommand(cmd: string, args: string[], cwd: string): Promise<void> {
 
 type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'deno'
 
+type MinimalPackageJson = {
+  dependencies?: Record<string, string>
+  devDependencies?: Record<string, string>
+  peerDependencies?: Record<string, string>
+  optionalDependencies?: Record<string, string>
+}
+
+const LOCAL_PACKAGE_PROTOCOLS = ['workspace:', 'file:', 'link:'] as const
+
 /**
  * Detect the package manager used in the current project
  */
@@ -428,14 +437,51 @@ function getRunCommand(pm: PackageManager, bin: string): { cmd: string; args: st
   }
 }
 
+export function findNearestPackageJson(startDir: string): string | null {
+  let currentDir = startDir
+  while (true) {
+    const packageJsonPath = join(currentDir, 'package.json')
+    if (existsSync(packageJsonPath)) {
+      return packageJsonPath
+    }
+    const parentDir = dirname(currentDir)
+    if (parentDir === currentDir) {
+      return null
+    }
+    currentDir = parentDir
+  }
+}
+
+export function readWebPackageRangeFromPackageJson(startDir: string): string | null {
+  const packageJsonPath = findNearestPackageJson(startDir)
+  if (!packageJsonPath) {
+    return null
+  }
+  try {
+    const packageJsonRaw = readFileSync(packageJsonPath, 'utf-8')
+    const parsed = JSON.parse(packageJsonRaw) as MinimalPackageJson
+    return (
+      parsed.dependencies?.['@openspecui/web'] ??
+      parsed.devDependencies?.['@openspecui/web'] ??
+      parsed.peerDependencies?.['@openspecui/web'] ??
+      parsed.optionalDependencies?.['@openspecui/web'] ??
+      null
+    )
+  } catch {
+    return null
+  }
+}
+
+export function isLocalPackageRange(range: string | null): boolean {
+  if (!range) return false
+  return LOCAL_PACKAGE_PROTOCOLS.some((protocol) => range.startsWith(protocol))
+}
+
 /**
  * Get the exec command for running a package binary
  * Uses appropriate flags to ensure the correct version of @openspecui/web is installed
  */
-function getExecCommand(pm: PackageManager): { cmd: string; args: string[] } {
-  // Use cli package version (web package is published in sync)
-  const webPkgSpec = `@openspecui/web@${pkg.devDependencies['@openspecui/web']}`
-
+function getExecCommand(pm: PackageManager, webPkgSpec: string): { cmd: string; args: string[] } {
   switch (pm) {
     case 'bun':
       // bunx -p @openspecui/web@version openspecui-ssg
@@ -497,8 +543,16 @@ async function exportHtml(options: ExportOptions): Promise<void> {
 
   // 2. Run SSG
   const localWebPkg = findLocalWebPackage()
+  const webPackageRange = readWebPackageRangeFromPackageJson(__dirname)
+  const localRangeMode = isLocalPackageRange(webPackageRange)
 
-  if (localWebPkg) {
+  if (localRangeMode) {
+    if (!localWebPkg) {
+      throw new Error(
+        `Detected local/dev @openspecui/web range "${webPackageRange}" but local web package was not found`
+      )
+    }
+
     // Local development: run SSG CLI directly via tsx
     console.log('\n[Local dev mode] Running SSG from local web package...')
     const ssgCli = join(localWebPkg, 'src', 'ssg', 'cli.ts')
@@ -512,7 +566,8 @@ async function exportHtml(options: ExportOptions): Promise<void> {
     console.log('\n[Production mode] Running SSG via @openspecui/web...')
 
     const pm = detectPackageManager()
-    const execCmd = getExecCommand(pm)
+    const webPkgSpec = `@openspecui/web@${webPackageRange || pkg.version}`
+    const execCmd = getExecCommand(pm, webPkgSpec)
 
     try {
       await runCommand(
