@@ -38,7 +38,7 @@ export function ArchiveView() {
         label: `Tasks (${change.progress.completed}/${change.progress.total})`,
         icon: <ListChecks className="h-4 w-4" />,
         content: (
-          <div className="border-border h-full overflow-auto rounded-lg border p-4">
+          <div className="border-border scrollbar-thin scrollbar-track-transparent h-full overflow-auto rounded-lg border p-4">
             <TasksView tasks={change.tasks} progress={change.progress} readonly />
           </div>
         ),

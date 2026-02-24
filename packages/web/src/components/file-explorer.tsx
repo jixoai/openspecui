@@ -54,7 +54,6 @@ const layoutStyles = css`
     display: flex;
     flex-direction: column;
     flex: 1;
-    min-height: 320px;
   }
 
   /* 宽屏：grid 布局，文件列表在右侧 */
@@ -73,7 +72,6 @@ const layoutStyles = css`
     }
     .fev-editor-wrapper {
       order: 1;
-      min-height: 480px;
     }
   }
   .CodeMirror {

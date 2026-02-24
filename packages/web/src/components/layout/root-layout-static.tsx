@@ -13,7 +13,7 @@ export function RootLayoutStatic() {
         <DesktopSidebar />
         <div className="app-body flex min-h-0 flex-1 flex-col">
           <MobileHeader />
-          <main className="main-content view-transition-route flex min-h-0 flex-1 flex-col">
+          <main className="main-content scrollbar-thin scrollbar-track-transparent view-transition-route flex min-h-0 flex-1 flex-col">
             <Outlet />
           </main>
           <MobileTabBar />

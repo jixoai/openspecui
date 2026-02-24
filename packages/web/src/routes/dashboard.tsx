@@ -408,7 +408,7 @@ export function Dashboard() {
             {workflowSchemaCards.map((schema) => (
               <section
                 key={schema.schemaName}
-                className="border-border/70 min-w-0 rounded-md border p-2"
+                className="border-border/70 bg-card min-w-0 rounded-md border p-2"
               >
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="min-w-0">
@@ -495,7 +495,7 @@ export function Dashboard() {
               </button>
             ) : null}
           </div>
-          <div className="border-border/80 min-w-0 rounded-lg border p-3">
+          <div className="border-border/80 bg-card min-w-0 rounded-lg border p-3">
             <div className="mb-2 flex items-center gap-1.5">
               <GitBranch className="text-muted-foreground h-4 w-4 shrink-0" />
               <span className="text-muted-foreground truncate text-xs">
@@ -538,14 +538,14 @@ export function Dashboard() {
   )
 
   const renderSpecificationsSection = () => (
-    <section className="border-border min-w-0 rounded-lg border">
+    <section className="border-border min-w-0 rounded-t-lg border">
       <div className="border-border flex flex-wrap items-center justify-between gap-1.5 border-b px-4 py-3">
         <h2 className="shrink-0 font-medium">Specifications</h2>
         <span className="text-muted-foreground w-full text-xs sm:w-auto sm:text-sm">
           {summary.specifications} specs · {summary.requirements} requirements
         </span>
       </div>
-      <div className="divide-border divide-y">
+      <div className="bg-card divide-border divide-y">
         {overview?.specifications.map((spec) => (
           <Link
             key={spec.id}
@@ -578,12 +578,12 @@ export function Dashboard() {
   )
 
   const renderActiveChangesSection = () => (
-    <section className="border-border rounded-lg border">
+    <section className="border-border flex flex-col rounded-t-lg border">
       <div className="border-border flex items-center justify-between border-b px-4 py-3">
         <h2 className="font-medium">Active Changes</h2>
         <span className="text-muted-foreground text-sm">{summary.activeChanges} active</span>
       </div>
-      <div className="divide-border divide-y">
+      <div className="bg-card divide-border flex-1 divide-y">
         {activeChanges.map((change) => {
           const progress = change.progress
           const taskPercent =
@@ -708,7 +708,7 @@ function WorktreeRow({
 
   return (
     <div
-      className={`min-w-0 rounded-md border px-2.5 py-2 ${
+      className={`min-w-0 rounded-e-md rounded-t-md border px-2.5 py-2 ${
         emphasize
           ? `${GIT_WORKTREE_BORDER_CLASS} ${GIT_WORKTREE_BG_CLASS}`
           : 'border-border/70 bg-muted/15'
@@ -777,11 +777,11 @@ function DiffStat({
 }) {
   return (
     <div className={`flex items-center gap-1 text-[10px] ${className}`}>
-      <span className="bg-emerald-500/12 inline-flex items-center gap-0.5 rounded border border-emerald-500/40 px-[0.15rem] py-0 font-mono text-[10px] text-emerald-700 dark:text-emerald-300">
+      <span className="bg-emerald-500/12 inline-flex items-center gap-0.5 rounded border border-emerald-500/40 px-[0.15rem] py-0 font-mono text-[10px] text-emerald-700 dark:border-emerald-300/45 dark:bg-emerald-400/20 dark:text-emerald-100">
         <Plus className="h-2.5 w-2.5" />
         <span>{diff.insertions}</span>
       </span>
-      <span className="bg-rose-500/12 inline-flex items-center gap-0.5 rounded border border-rose-500/40 px-[0.15rem] py-0 font-mono text-[10px] text-rose-700 dark:text-rose-300">
+      <span className="bg-rose-500/12 inline-flex items-center gap-0.5 rounded border border-rose-500/40 px-[0.15rem] py-0 font-mono text-[10px] text-rose-700 dark:border-rose-300/45 dark:bg-rose-400/20 dark:text-rose-100">
         <Minus className="h-2.5 w-2.5" />
         <span>{diff.deletions}</span>
       </span>
@@ -791,7 +791,7 @@ function DiffStat({
 
 function GitFilesBadge({ files }: { files: number }) {
   return (
-    <span className="text-muted-foreground inline-flex items-center rounded border border-zinc-500/35 bg-zinc-500/10 px-[0.15rem] py-0 font-mono text-[10px]">
+    <span className="inline-flex items-center rounded border border-zinc-500/35 bg-zinc-500/10 px-[0.15rem] py-0 font-mono text-[10px] text-zinc-700 dark:border-zinc-300/40 dark:bg-zinc-300/15 dark:text-zinc-100">
       {files}f
     </span>
   )
@@ -799,7 +799,7 @@ function GitFilesBadge({ files }: { files: number }) {
 
 function GitAheadBehindBadge({ ahead, behind }: { ahead: number; behind: number }) {
   return (
-    <span className="text-muted-foreground inline-flex items-center gap-1 rounded border border-zinc-500/35 bg-zinc-500/10 px-[0.15rem] py-0 font-mono text-[10px]">
+    <span className="inline-flex items-center gap-1 rounded border border-zinc-500/35 bg-zinc-500/10 px-[0.15rem] py-0 font-mono text-[10px] text-zinc-700 dark:border-zinc-300/40 dark:bg-zinc-300/15 dark:text-zinc-100">
       <span>↑{ahead}</span>
       <span>↓{behind}</span>
     </span>

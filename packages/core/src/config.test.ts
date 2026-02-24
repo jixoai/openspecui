@@ -105,6 +105,7 @@ describe('ConfigManager', () => {
 
       expect(config.cli.command).toBe('custom')
       expect(config.theme).toBe('system') // default
+      expect(config.codeEditor.theme).toBe('github')
       expect(config.terminal.scrollback).toBe(1000)
       expect(config.terminal.rendererEngine).toBe('xterm')
       expect(config.dashboard.trendPointLimit).toBe(100)
@@ -295,6 +296,7 @@ describe('OpenSpecUIConfigSchema', () => {
     const config = {
       cli: { command: 'npx @fission-ai/openspec' },
       theme: 'dark',
+      codeEditor: { theme: 'github' },
       terminal: {
         fontSize: 13,
         fontFamily: '',
@@ -319,6 +321,7 @@ describe('OpenSpecUIConfigSchema', () => {
     if (result.success) {
       expect(result.data.cli.command).toBeUndefined()
       expect(result.data.theme).toBe('system')
+      expect(result.data.codeEditor.theme).toBe('github')
       expect(result.data.terminal.fontSize).toBe(13)
       expect(result.data.terminal.rendererEngine).toBe('xterm')
     }
@@ -351,8 +354,15 @@ describe('OpenSpecUIConfigSchema', () => {
 
   it('should accept all valid themes', () => {
     for (const theme of ['light', 'dark', 'system']) {
-      const config = { ui: { theme } }
+      const config = { theme }
       const result = OpenSpecUIConfigSchema.safeParse(config)
+      expect(result.success).toBe(true)
+    }
+  })
+
+  it('should accept all valid code editor themes', () => {
+    for (const theme of ['github', 'material', 'vscode', 'tokyo', 'gruvbox', 'monokai', 'nord']) {
+      const result = OpenSpecUIConfigSchema.safeParse({ codeEditor: { theme } })
       expect(result.success).toBe(true)
     }
   })
@@ -362,6 +372,7 @@ describe('DEFAULT_CONFIG', () => {
   it('should have expected default values', () => {
     expect(DEFAULT_CONFIG.cli.command).toBeUndefined()
     expect(DEFAULT_CONFIG.theme).toBe('system')
+    expect(DEFAULT_CONFIG.codeEditor.theme).toBe('github')
     expect(DEFAULT_CONFIG.terminal.scrollback).toBe(1000)
     expect(DEFAULT_CONFIG.terminal.rendererEngine).toBe('xterm')
     expect(DEFAULT_CONFIG.dashboard.trendPointLimit).toBe(100)

@@ -80,5 +80,8 @@
     "xterm-input-panel": "workspace:*",
     "yaml": "^2.8.0",
     "yargs": "^18.0.0"
+  },
+  "dependencies": {
+    "@fsegurai/codemirror-theme-bundle": "^6.3.1"
   }
 }

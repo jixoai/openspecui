@@ -34,7 +34,7 @@ export function RootLayout() {
           <div className="flex min-h-0 flex-1 flex-col">
             {hasMainContent && (
               <main
-                className={`main-content view-transition-route flex min-h-0 flex-col ${hasBottomContent ? 'flex-1' : 'flex-1'}`}
+                className={`main-content scrollbar-thin scrollbar-track-transparent view-transition-route flex min-h-0 flex-col ${hasBottomContent ? 'flex-1' : 'flex-1'}`}
               >
                 <Outlet />
               </main>

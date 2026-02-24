@@ -7,7 +7,7 @@ import { Outlet, RouterProvider, type AnyRouter } from '@tanstack/react-router'
  */
 export function BottomArea() {
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-auto">
+    <div className="scrollbar-thin scrollbar-track-transparent flex h-full min-h-0 flex-col overflow-auto">
       <Outlet />
     </div>
   )
@@ -32,7 +32,7 @@ export function BottomAreaRouter({ height }: { height?: number }) {
 
   return (
     <div
-      className={`bottom-area min-h-0 overflow-auto ${height != null ? 'shrink-0' : 'flex-1'}`}
+      className={`bottom-area scrollbar-thin scrollbar-track-transparent min-h-0 overflow-auto ${height != null ? 'shrink-0' : 'flex-1'}`}
       style={height != null ? { height, minHeight: 100 } : undefined}
     >
       <RouterProvider router={_bottomRouter} />

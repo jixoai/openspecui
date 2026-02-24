@@ -81,6 +81,8 @@ export {
 
 // Configuration management
 export {
+  CODE_EDITOR_THEME_VALUES,
+  CodeEditorThemeSchema,
   ConfigManager,
   DEFAULT_CONFIG,
   DashboardConfigSchema,
@@ -96,6 +98,7 @@ export {
   sniffGlobalCli,
   type CliRunnerAttempt,
   type CliSniffResult,
+  type CodeEditorTheme,
   type DashboardConfig,
   type OpenSpecUIConfig,
   type OpenSpecUIConfigUpdate,

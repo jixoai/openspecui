@@ -2,6 +2,12 @@ import { CliTerminal } from '@/components/cli-terminal'
 import { CopyablePath } from '@/components/copyable-path'
 import { Dialog } from '@/components/dialog'
 import { getApiBaseUrl } from '@/lib/api-config'
+import {
+  CODE_EDITOR_THEME_OPTIONS,
+  DEFAULT_CODE_EDITOR_THEME,
+  isCodeEditorTheme,
+  type CodeEditorTheme,
+} from '@/lib/code-editor-theme'
 import { isStaticMode } from '@/lib/static-mode'
 import {
   GOOGLE_FONT_PRESETS,
@@ -23,6 +29,7 @@ import {
   FolderOpen,
   FolderPlus,
   LayoutDashboard,
+  Link2,
   Loader2,
   Monitor,
   Moon,
@@ -30,8 +37,7 @@ import {
   Settings as SettingsIcon,
   Sun,
   Terminal,
-  Wifi,
-  WifiOff,
+  Unlink2,
   XCircle,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -164,6 +170,7 @@ function FontFamilyEditor({
 
 export function Settings() {
   const [theme, setTheme] = useState<Theme>(getStoredTheme)
+  const [codeEditorTheme, setCodeEditorTheme] = useState<CodeEditorTheme>(DEFAULT_CODE_EDITOR_THEME)
   const [apiUrl, setApiUrl] = useState(getApiBaseUrl() || '')
   const [cliCommand, setCliCommand] = useState('')
   const [selectedTools, setSelectedTools] = useState<string[]>([])
@@ -273,6 +280,11 @@ export function Settings() {
     if (!config?.theme) return
     setTheme(config.theme)
   }, [config?.theme])
+  useEffect(() => {
+    const nextTheme = config?.codeEditor?.theme
+    if (!nextTheme || !isCodeEditorTheme(nextTheme)) return
+    setCodeEditorTheme(nextTheme)
+  }, [config?.codeEditor?.theme])
 
   // 安装完成后重新嗅探
   const handleInstallSuccess = useCallback(() => {
@@ -392,6 +404,10 @@ export function Settings() {
 
   const saveThemeMutation = useMutation({
     mutationFn: (nextTheme: Theme) => trpcClient.config.update.mutate({ theme: nextTheme }),
+  })
+  const saveCodeEditorThemeMutation = useMutation({
+    mutationFn: (nextTheme: CodeEditorTheme) =>
+      trpcClient.config.update.mutate({ codeEditor: { theme: nextTheme } }),
   })
 
   // Terminal config — seed local state from controller's current config
@@ -576,6 +592,38 @@ export function Settings() {
               <Monitor className="h-4 w-4" />
               System
             </button>
+          </div>
+          <div className="border-border/60 mt-4 border-t pt-4">
+            <label className="mb-2 block text-sm font-medium">Code Editor Theme</label>
+            <div className="flex items-center gap-2">
+              <select
+                value={codeEditorTheme}
+                onChange={(e) => {
+                  const nextTheme = e.target.value
+                  if (!isCodeEditorTheme(nextTheme)) return
+                  setCodeEditorTheme(nextTheme)
+                  if (!inStaticMode) {
+                    saveCodeEditorThemeMutation.mutate(nextTheme)
+                  }
+                }}
+                className="bg-background border-border text-foreground focus:ring-primary w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
+                disabled={inStaticMode || saveCodeEditorThemeMutation.isPending}
+              >
+                {CODE_EDITOR_THEME_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              {saveCodeEditorThemeMutation.isPending ? (
+                <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
+              ) : saveCodeEditorThemeMutation.isSuccess ? (
+                <Check className="h-4 w-4 text-emerald-500" />
+              ) : null}
+            </div>
+            <p className="text-muted-foreground mt-2 text-xs">
+              Changes apply immediately to all CodeMirror editors.
+            </p>
           </div>
         </div>
       </section>
@@ -1029,11 +1077,11 @@ export function Settings() {
                 the page to see if file watching is enabled.
               </p>
               <div className="flex items-center gap-2 text-sm">
-                <Wifi className="h-4 w-4 text-green-500" />
+                <Link2 className="h-4 w-4 text-green-500" />
                 <span>Enabled: Real-time updates when files change</span>
               </div>
               <div className="mt-2 flex items-center gap-2 text-sm">
-                <WifiOff className="h-4 w-4 text-yellow-500" />
+                <Unlink2 className="h-4 w-4 text-yellow-500" />
                 <span>Disabled: Manual refresh required</span>
               </div>
               <p className="text-muted-foreground mt-3 text-sm">
