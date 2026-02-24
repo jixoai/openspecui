@@ -1,5 +1,11 @@
 # openspecui
 
+## 1.5.1
+
+### Patch Changes
+
+- 9b8d4bd: Fix SSG export package resolution by dynamically reading `@openspecui/web` from nearest `package.json` and treating local package protocols (`workspace:`, `file:`, `link:`) as local/dev mode.
+
 ## 1.5.0
 
 ### Minor Changes
