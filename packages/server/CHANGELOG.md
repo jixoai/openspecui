@@ -1,5 +1,13 @@
 # @openspecui/server
 
+## 1.6.1
+
+### Patch Changes
+
+- 9966b7a: Refactor code editor config shape from `codeEditorTheme` to `codeEditor.theme`, and keep GitHub as the default editor theme.
+- Updated dependencies [9966b7a]
+  - @openspecui/core@1.6.1
+
 ## 1.6.0
 
 ### Patch Changes
