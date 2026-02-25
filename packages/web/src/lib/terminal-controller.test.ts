@@ -141,12 +141,14 @@ class MockInputPanelAddon {
   static mountTarget: HTMLElement | null = null
   static instances: MockInputPanelAddon[] = []
   static active: MockInputPanelAddon | null = null
+  static options: Array<{ showFab?: boolean }> = []
 
   private onInput: (data: string) => void
   private isOpen = false
 
-  constructor(options: { onInput: (data: string) => void }) {
+  constructor(options: { onInput: (data: string) => void; showFab?: boolean }) {
     this.onInput = options.onInput
+    MockInputPanelAddon.options.push({ showFab: options.showFab })
     MockInputPanelAddon.instances.push(this)
   }
 
@@ -190,6 +192,7 @@ class MockInputPanelAddon {
     MockInputPanelAddon.mountTarget = null
     MockInputPanelAddon.instances = []
     MockInputPanelAddon.active = null
+    MockInputPanelAddon.options = []
   }
 }
 
@@ -653,6 +656,22 @@ describe('terminal-controller PTY behavior', () => {
         (msg) => msg.type === 'input' && msg.sessionId === 'pty-802' && msg.data === 'echo switch\n'
       )
     ).toBe(true)
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('disables native input panel FAB because web uses toolbar entry', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    terminalController.createSession()
+
+    expect(MockInputPanelAddon.options).toEqual(
+      expect.arrayContaining([expect.objectContaining({ showFab: false })])
+    )
 
     terminalController.closeAll()
     unsubscribe()

@@ -188,6 +188,7 @@ export class InputPanelAddon implements ITerminalAddon {
   // ── Native FAB (static singleton) ──
 
   private static _fabEl: HTMLButtonElement | null = null
+  private static _fabSubscriberCount = 0
 
   /**
    * Create the native FAB button and mount it into the given container.
@@ -353,7 +354,8 @@ export class InputPanelAddon implements ITerminalAddon {
 
   private static _setFabVisible(visible: boolean): void {
     if (InputPanelAddon._fabEl) {
-      InputPanelAddon._fabEl.style.display = visible ? 'flex' : 'none'
+      InputPanelAddon._fabEl.style.display =
+        visible && InputPanelAddon._fabSubscriberCount > 0 ? 'flex' : 'none'
     }
   }
 
@@ -382,6 +384,7 @@ export class InputPanelAddon implements ITerminalAddon {
   private _platform: HostPlatform
   private _defaultLayout: InputPanelLayout
   private _showFab: boolean
+  private _fabSubscribed: boolean
   private _panelSessionState: InputPanelSessionState
   private _stateKey: string
   private _hasOwnPersistedState: boolean
@@ -409,6 +412,7 @@ export class InputPanelAddon implements ITerminalAddon {
     this._platform = opts?.platform ?? 'common'
     this._defaultLayout = opts?.defaultLayout ?? 'floating'
     this._showFab = opts?.showFab ?? true
+    this._fabSubscribed = false
     this._stateKey = opts?.stateKey?.trim() ? opts.stateKey : 'default'
     this._hasOwnPersistedState = false
     this._panelSessionState = {
@@ -508,6 +512,11 @@ export class InputPanelAddon implements ITerminalAddon {
     for (const fn of this._persistentCleanups) fn()
     this._persistentCleanups = []
     this._listenersAttached = false
+    if (this._fabSubscribed) {
+      InputPanelAddon._fabSubscriberCount = Math.max(0, InputPanelAddon._fabSubscriberCount - 1)
+      this._fabSubscribed = false
+      InputPanelAddon._setFabVisible(InputPanelAddon._active === null)
+    }
     InputPanelAddon._instances.delete(this)
     if (InputPanelAddon._lastFocused === this) {
       InputPanelAddon._lastFocused = null
@@ -536,6 +545,16 @@ export class InputPanelAddon implements ITerminalAddon {
     // Ensure native FAB exists in the correct mount target
     if (this._showFab) {
       InputPanelAddon._ensureFab(this._getMountTarget())
+      if (!this._fabSubscribed) {
+        InputPanelAddon._fabSubscriberCount += 1
+        this._fabSubscribed = true
+      }
+      InputPanelAddon._setFabVisible(true)
+    } else {
+      // Hide legacy/stale FAB when current runtime has no FAB subscribers.
+      if (InputPanelAddon._fabSubscriberCount === 0) {
+        InputPanelAddon._setFabVisible(false)
+      }
     }
 
     // Default FAB target to the first terminal that attaches listeners
