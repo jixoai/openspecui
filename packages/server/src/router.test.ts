@@ -133,6 +133,12 @@ const createMockContext = (adapter = createMockAdapter()): Context => {
 
   const kernel = {
     waitForWarmup: vi.fn().mockResolvedValue(undefined),
+    ensureStatusList: vi.fn().mockResolvedValue(undefined),
+    getStatusList: vi.fn().mockReturnValue([]),
+    ensureApplyInstructions: vi.fn().mockResolvedValue(undefined),
+    getApplyInstructions: vi.fn().mockReturnValue({
+      progress: { total: 0, complete: 0, remaining: 0 },
+    }),
   }
 
   const searchService = {

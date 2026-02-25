@@ -1,0 +1,64 @@
+name: opsx-collab-pr-loop
+version: 1
+description: Collaborative loop for manager and coding agent with PR+changeset and archive gates
+artifacts:
+  - id: intake
+    generates: loop/intake.md
+    description: Objective requirement intake and acceptance boundary for the loop
+    template: intake.md
+    instruction: |
+      Create loop intake content as the objective requirement contract.
+
+      Process intent:
+      1) Capture user requirement/problem objectively.
+      2) Define non-goals and acceptance boundary.
+      3) Keep objective wording (no subjective rewrite).
+
+      Required sections:
+      - User Input (objective, no rewrite)
+      - Objective Scope
+      - Non-Goals
+      - Acceptance Boundary
+    requires: []
+  - id: research-plan
+    generates: loop/research-plan.md
+    description: Research findings and approval-ready execution plan
+    template: research-plan.md
+    instruction: |
+      Convert intake into an executable plan with objective research facts.
+
+      Required sections:
+      - Research Findings
+      - Decision & Plan (for approval)
+      - Risks and Mitigations
+      - Verification Strategy
+    requires:
+      - intake
+  - id: implementation
+    generates: loop/implementation.md
+    description: Implementation notes synchronized with actual execution
+    template: implementation.md
+    instruction: |
+      Keep implementation reality synchronized with the approved plan.
+      Record scope updates, key decisions, and loopback triggers.
+    requires:
+      - research-plan
+  - id: checkpoints
+    generates: loop/checkpoints.md
+    description: Loop checklist and progress gate tracking for PR/release/archive
+    template: checkpoints.md
+    instruction: |
+      Build an actionable checkbox checklist for the loop.
+      Every item must be verifiable and mapped to implementation state.
+    requires:
+      - research-plan
+      - implementation
+apply:
+  requires:
+    - checkpoints
+  tracks: loop/checkpoints.md
+  instruction: |
+    Execute tasks in order and update task state continuously.
+    If unexpected blockers or scope changes appear, pause implementation,
+    return to intake/research-plan for re-approval, then continue.
+    Before merge, ensure changeset exists, CI passes, and change completes archive flow.

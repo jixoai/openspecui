@@ -452,6 +452,7 @@ class TerminalController {
       subscribeHistory: (listener) => this.inputHistoryStore.subscribe(listener),
       platform,
       defaultLayout: this.inputPanelDefaultLayout,
+      showFab: false,
       stateKey: sessionId,
       onSettingsChange: async (settings: InputPanelSettingsPayload) => {
         await this.inputHistoryStore.setLimit(settings.historyLimit)
@@ -962,6 +963,25 @@ class TerminalController {
     const sessionId = this.resolveServerSessionId(id)
     if (!sessionId) return false
     return this.wsSend({ type: 'input', sessionId, data })
+  }
+
+  openInputPanel(localSessionId?: string): boolean {
+    const candidates: Array<TerminalInstance | undefined> = [
+      localSessionId ? this.instances.get(localSessionId) : undefined,
+      ...this.instances.values(),
+    ]
+
+    const target =
+      candidates.find((instance) => instance && instance.mountedContainer)?.id ??
+      candidates.find((instance) => instance)?.id
+
+    if (!target) return false
+
+    this.focusSession(target)
+    const instance = this.instances.get(target)
+    if (!instance) return false
+    instance.inputPanelAddon.open()
+    return true
   }
 
   async addInputHistory(text: string): Promise<void> {

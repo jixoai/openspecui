@@ -20,6 +20,7 @@ import {
   reactiveExists,
   reactiveReadDir,
   reactiveReadFile,
+  reactiveStat,
   sniffGlobalCli,
   TerminalConfigSchema,
   TerminalRendererEngineSchema,
@@ -354,6 +355,49 @@ async function fetchDashboardOverview(
     ctx.adapter.listChangesWithMeta(),
     ctx.adapter.listArchivedChangesWithMeta(),
   ])
+  await ctx.kernel.waitForWarmup()
+  await ctx.kernel.ensureStatusList()
+  const statusList = ctx.kernel.getStatusList()
+
+  const changeMetaMap = new Map(changeMetas.map((change) => [change.id, change]))
+  const activeChangeIds = new Set<string>([
+    ...changeMetas.map((change) => change.id),
+    ...statusList.map((status) => status.changeName),
+  ])
+  const statusByChange = new Map(statusList.map((status) => [status.changeName, status]))
+
+  const activeChanges = (
+    await Promise.all(
+      [...activeChangeIds].map(async (changeId) => {
+        const status = statusByChange.get(changeId)
+        const changeMeta = changeMetaMap.get(changeId)
+        const changeDir = join(ctx.projectDir, 'openspec', 'changes', changeId)
+        const statInfo = await reactiveStat(changeDir)
+
+        let progress = changeMeta?.progress ?? { total: 0, completed: 0 }
+        if (status) {
+          try {
+            await ctx.kernel.ensureApplyInstructions(changeId, status.schemaName)
+            const apply = ctx.kernel.getApplyInstructions(changeId, status.schemaName)
+            progress = {
+              total: apply.progress.total,
+              completed: apply.progress.complete,
+            }
+          } catch {
+            // Keep fallback progress when apply instruction is unavailable.
+          }
+        }
+
+        return {
+          id: changeId,
+          name: changeMeta?.name ?? changeId,
+          progress,
+          updatedAt: changeMeta?.updatedAt ?? statInfo?.mtime ?? 0,
+        }
+      })
+    )
+  ).sort((a, b) => b.updatedAt - a.updatedAt)
+
   const archivedChanges = (
     await Promise.all(
       archiveMetas.map(async (meta) => {
@@ -385,13 +429,6 @@ async function fetchDashboardOverview(
   )
     .filter((item): item is NonNullable<typeof item> => item !== null)
     .sort((a, b) => b.requirements - a.requirements || b.updatedAt - a.updatedAt)
-
-  const activeChanges = changeMetas.map((change) => ({
-    id: change.id,
-    name: change.name,
-    progress: change.progress,
-    updatedAt: change.updatedAt,
-  }))
 
   const requirements = specifications.reduce((sum, spec) => sum + spec.requirements, 0)
   const tasksTotal = activeChanges.reduce((sum, change) => sum + change.progress.total, 0)

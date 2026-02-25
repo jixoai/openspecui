@@ -4,7 +4,7 @@ import { useTerminalContext } from '@/lib/terminal-context'
 import { terminalController } from '@/lib/terminal-controller'
 import { useNavLayout } from '@/lib/use-nav-controller'
 import '@/styles/terminal-effects.css'
-import { PanelBottomClose, PanelTopClose, Plus, X } from 'lucide-react'
+import { Keyboard, PanelBottomClose, PanelTopClose, Plus, X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { XtermTerminal } from './xterm-terminal'
 
@@ -100,8 +100,8 @@ export function TerminalPanel({ className }: { className?: string }) {
 
   const wrapperRef = useRef<HTMLDivElement>(null)
 
-  // Set a stable mount target for the InputPanel addon (FAB + panel).
-  // This persists across tab switches so the FAB doesn't get orphaned.
+  // Set a stable mount target for the InputPanel addon panel.
+  // This persists across tab switches so the singleton panel doesn't get orphaned.
   useEffect(() => {
     if (wrapperRef.current) {
       terminalController.setInputPanelMountTarget(wrapperRef.current)
@@ -152,6 +152,10 @@ export function TerminalPanel({ className }: { className?: string }) {
     }
   }, [isInBottom])
 
+  const handleOpenInputPanel = useCallback(() => {
+    terminalController.openInputPanel(activeSessionId ?? undefined)
+  }, [activeSessionId])
+
   const addButton = (
     <button
       type="button"
@@ -166,6 +170,14 @@ export function TerminalPanel({ className }: { className?: string }) {
   const areaActions = (
     <div className="ml-auto flex items-center">
       {addButton}
+      <button
+        type="button"
+        onClick={handleOpenInputPanel}
+        className="text-muted-foreground hover:text-foreground hover:bg-muted shrink-0 rounded-md p-1.5 transition"
+        title="Open InputPanel"
+      >
+        <Keyboard className="h-3.5 w-3.5" />
+      </button>
       <button
         type="button"
         onClick={handleSwitchArea}

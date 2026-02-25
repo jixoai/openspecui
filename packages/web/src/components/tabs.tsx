@@ -88,6 +88,7 @@ const tabsStyle = (id: string) => {
               font-size: 1.2rem;
               background: none;
               z-index: 2;
+              color: currentColor;
             }
             .tabs-button::scroll-button(*):disabled {
               opacity: 0;

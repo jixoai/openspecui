@@ -200,19 +200,10 @@ export class InputPanel extends LitElement {
       position: relative;
     }
 
-    @keyframes breathing {
-      0%,
-      100% {
-        opacity: 0.5;
-      }
-      50% {
-        opacity: 0.05;
-      }
-    }
-
-    /* Fix 7: breathing animation on entire panel (including toolbar) */
     :host([layout='floating']) .panel-dialog {
-      animation: breathing 6s ease-in-out infinite;
+      mix-blend-mode: exclusion;
+      backdrop-filter: blur(1px);
+      -webkit-backdrop-filter: blur(1px);
     }
 
     .panel-dialog {
