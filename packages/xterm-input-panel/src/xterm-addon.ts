@@ -381,6 +381,7 @@ export class InputPanelAddon implements ITerminalAddon {
   private _onSettingsChange: ((settings: InputPanelSettingsPayload) => Promise<void> | void) | null
   private _platform: HostPlatform
   private _defaultLayout: InputPanelLayout
+  private _showFab: boolean
   private _panelSessionState: InputPanelSessionState
   private _stateKey: string
   private _hasOwnPersistedState: boolean
@@ -395,6 +396,7 @@ export class InputPanelAddon implements ITerminalAddon {
     onSettingsChange?: (settings: InputPanelSettingsPayload) => Promise<void> | void
     platform?: HostPlatform
     defaultLayout?: InputPanelLayout
+    showFab?: boolean
     stateKey?: string
   }) {
     this._onInput = opts?.onInput ?? (() => {})
@@ -406,6 +408,7 @@ export class InputPanelAddon implements ITerminalAddon {
     this._onSettingsChange = opts?.onSettingsChange ?? null
     this._platform = opts?.platform ?? 'common'
     this._defaultLayout = opts?.defaultLayout ?? 'floating'
+    this._showFab = opts?.showFab ?? true
     this._stateKey = opts?.stateKey?.trim() ? opts.stateKey : 'default'
     this._hasOwnPersistedState = false
     this._panelSessionState = {
@@ -531,7 +534,9 @@ export class InputPanelAddon implements ITerminalAddon {
     this._listenersAttached = true
 
     // Ensure native FAB exists in the correct mount target
-    InputPanelAddon._ensureFab(this._getMountTarget())
+    if (this._showFab) {
+      InputPanelAddon._ensureFab(this._getMountTarget())
+    }
 
     // Default FAB target to the first terminal that attaches listeners
     if (!InputPanelAddon._lastFocused) {
@@ -566,7 +571,9 @@ export class InputPanelAddon implements ITerminalAddon {
     InputPanelAddon._lastFocused = this
 
     // Hide FAB while panel is open
-    InputPanelAddon._setFabVisible(false)
+    if (this._showFab) {
+      InputPanelAddon._setFabVisible(false)
+    }
 
     this._suppressKeyboard()
 
@@ -817,7 +824,9 @@ export class InputPanelAddon implements ITerminalAddon {
     }
 
     // Show FAB again
-    InputPanelAddon._setFabVisible(true)
+    if (this._showFab) {
+      InputPanelAddon._setFabVisible(true)
+    }
 
     this._onCloseCb?.()
     InputPanelAddon._onActiveChangeFn?.(null)
