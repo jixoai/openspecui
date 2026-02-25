@@ -578,7 +578,13 @@ export class InputPanelAddon implements ITerminalAddon {
   }
 
   open(): void {
-    if (this._isOpen || !this._terminal) return
+    if (!this._terminal) return
+    if (this._isOpen) {
+      // Recover from host unmount/remount: panel DOM can be removed while addon
+      // still thinks it is open. In that case, close stale state and re-open.
+      if (this._panel?.isConnected) return
+      this.close()
+    }
 
     // Singleton: close any other active instance (migration)
     if (InputPanelAddon._active && InputPanelAddon._active !== this) {
@@ -869,6 +875,11 @@ export class InputPanelAddon implements ITerminalAddon {
    */
   syncFocusLifecycle(): void {
     InputPanelAddon._lastFocused = this
+
+    if (this._isOpen && !this._panel?.isConnected) {
+      this.open()
+      return
+    }
 
     if (InputPanelAddon._active && InputPanelAddon._active !== this) {
       this.open()
