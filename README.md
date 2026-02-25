@@ -2,6 +2,8 @@
 
 [English](./README.md) | [中文](./README-zh.md)
 
+![](https://github.com/user-attachments/assets/8814f210-5183-4b63-918a-9cd5be68b70a)
+
 A visual web interface for spec-driven development with OpenSpec.
 
 ### Features

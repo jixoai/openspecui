@@ -2,6 +2,8 @@
 
 [English](./README.md) | [中文](./README-zh.md)
 
+![](https://github.com/user-attachments/assets/8814f210-5183-4b63-918a-9cd5be68b70a)
+
 OpenSpec 规范驱动开发的可视化 Web 界面。
 
 ### 功能特性
