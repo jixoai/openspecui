@@ -1,6 +1,6 @@
 {
   "name": "xterm-input-panel",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
