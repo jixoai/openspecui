@@ -1,0 +1,83 @@
+name: opsx-collab-pr-loop
+version: 1
+description: Collaborative loop for manager and coding agent with PR+changeset and archive gates
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: User request capture, research summary, and approval-ready plan
+    template: proposal.md
+    instruction: |
+      Create the proposal as the review contract between manager and coding agent.
+
+      Process intent:
+      1) Capture user requirement/problem objectively.
+      2) Add research findings from codebase/runtime/docs.
+      3) Produce a concrete execution plan for approval.
+
+      Required sections:
+      - User Input (objective, no rewrite)
+      - Research Findings
+      - Decision & Plan (for approval)
+      - Capability Scope (new/modified)
+      - PR & Release Impact
+
+      This artifact must be understandable and reviewable before implementation starts.
+    requires: []
+  - id: specs
+    generates: specs/**/*.md
+    description: Normative requirements for collaboration workflow behavior
+    template: specs/spec.md
+    instruction: |
+      Convert the approved plan into testable requirements and scenarios.
+
+      Use OpenSpec delta sections and normative language (SHALL/MUST):
+      - ADDED Requirements
+      - MODIFIED Requirements
+      - REMOVED Requirements (with Reason/Migration when applicable)
+
+      Keep requirements objective and implementation-agnostic.
+    requires:
+      - proposal
+  - id: design
+    generates: design.md
+    description: Technical plan for implementation and verification
+    template: design.md
+    instruction: |
+      Document the implementation approach after proposal review.
+
+      Must include:
+      - architecture/options and selected decisions
+      - risk and fallback plan
+      - verification strategy
+      - PR strategy and archive strategy
+
+      Design should support execution and review, not duplicate specs.
+    requires:
+      - proposal
+  - id: tasks
+    generates: tasks.md
+    description: Execution checklist with progress tracking and control gates
+    template: tasks.md
+    instruction: |
+      Build an actionable checklist that matches the collaboration loop:
+      1) research and plan
+      2) approval gate
+      3) implementation + progress updates
+      4) exception handling loopback
+      5) PR/changeset/CI gates
+      6) archive before merge
+
+      All tasks MUST use checkbox format and be verifiable.
+    requires:
+      - proposal
+      - specs
+      - design
+apply:
+  requires:
+    - tasks
+  tracks: tasks.md
+  instruction: |
+    Execute tasks in order and update task state continuously.
+    If unexpected blockers or scope changes appear, pause implementation,
+    return to proposal/spec/design updates for re-approval, then continue.
+    Before merge, ensure changeset exists, CI passes, and change completes archive flow.
