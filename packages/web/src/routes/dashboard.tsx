@@ -416,7 +416,7 @@ export function Dashboard() {
             No workflow status available.
           </div>
         ) : (
-          <div className="grid min-w-0 gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr))]">
+          <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-2">
             {workflowSchemaCards.map((schema) => (
               <section
                 key={schema.schemaName}
@@ -432,7 +432,7 @@ export function Dashboard() {
                     </span>
                   ) : null}
                 </div>
-                <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,6rem),1fr))] gap-2">
+                <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-2">
                   {schema.steps.length === 0 ? (
                     <div className="text-muted-foreground border-border/70 rounded-md border border-dashed px-2 py-1.5 text-[11px]">
                       No artifacts in schema.
@@ -454,7 +454,7 @@ export function Dashboard() {
                             className="pointer-events-none absolute right-[10%] top-1/2 h-12 w-12 -translate-y-1/2"
                             style={{ color: palette.arrow }}
                           />
-                          <div className="relative mb-0.5 truncate pr-6 text-xs font-semibold">
+                          <div className="relative mb-0.5 pr-6 text-xs font-semibold">
                             {step.label}
                           </div>
                           <div className="relative space-y-0 text-[10px]">
@@ -667,13 +667,15 @@ export function Dashboard() {
         {!hasChanges && (
           <div className="text-muted-foreground px-4 py-6 text-center text-sm">
             <div>No active changes.</div>
+            <div className="mt-1 text-xs">Recommended workflow start: /opsx:propose</div>
             <button
               type="button"
               onClick={runNewChange}
               className="text-primary mt-2 inline-flex items-center gap-1 hover:underline"
+              title="Open the advanced /opsx:new form"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              /opsx:new
+              Open /opsx:new form
             </button>
           </div>
         )}
@@ -692,9 +694,10 @@ export function Dashboard() {
           type="button"
           onClick={runNewChange}
           className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm hover:opacity-90"
+          title="Recommended workflow start is /opsx:propose; this opens the advanced /opsx:new form."
         >
           <Sparkles className="h-4 w-4" />
-          /opsx:new
+          Start (/opsx:propose)
         </button>
       </div>
 

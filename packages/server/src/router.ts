@@ -71,6 +71,20 @@ export const router = t.router
 export const publicProcedure = t.procedure
 
 const execFileAsync = promisify(execFile)
+const OPSX_CORE_PROFILE_WORKFLOWS = ['propose', 'explore', 'apply', 'archive'] as const
+
+type OpsxWorkflowProfile = 'core' | 'custom'
+type OpsxWorkflowDelivery = 'both' | 'skills' | 'commands'
+
+interface OpsxProfileState {
+  available: boolean
+  profile: OpsxWorkflowProfile | null
+  delivery: OpsxWorkflowDelivery | null
+  workflows: string[]
+  driftStatus: 'in-sync' | 'drift' | 'unknown'
+  warningText: string | null
+  error?: string
+}
 
 interface DashboardGitTaskStatus {
   running: boolean
@@ -178,6 +192,98 @@ function requireChangeId(changeId: string | undefined): string {
     throw new Error('change is required')
   }
   return changeId
+}
+
+function parseOpsxProfileListJson(stdout: string): {
+  profile: OpsxWorkflowProfile
+  delivery: OpsxWorkflowDelivery
+  workflows: string[]
+} | null {
+  try {
+    const parsed = JSON.parse(stdout) as {
+      profile?: unknown
+      delivery?: unknown
+      workflows?: unknown
+    }
+    const profile: OpsxWorkflowProfile = parsed.profile === 'custom' ? 'custom' : 'core'
+    const delivery: OpsxWorkflowDelivery =
+      parsed.delivery === 'skills' || parsed.delivery === 'commands' ? parsed.delivery : 'both'
+    const workflows = Array.isArray(parsed.workflows)
+      ? parsed.workflows.filter(
+          (item): item is string => typeof item === 'string' && item.length > 0
+        )
+      : profile === 'core'
+        ? [...OPSX_CORE_PROFILE_WORKFLOWS]
+        : []
+    return { profile, delivery, workflows }
+  } catch {
+    return null
+  }
+}
+
+function parseOpsxConfigDrift(output: string): { drift: boolean; warningText: string | null } {
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+
+  const warningLine =
+    lines.find((line) => /global config.+not applied.+project/i.test(line)) ??
+    lines.find((line) => /out of sync/i.test(line)) ??
+    lines.find((line) => /run\s+`?openspec\s+update`?/i.test(line)) ??
+    null
+
+  return { drift: warningLine !== null, warningText: warningLine }
+}
+
+async function fetchOpsxProfileState(ctx: Context): Promise<OpsxProfileState> {
+  const configListJson = await ctx.cliExecutor.execute(['config', 'list', '--json'])
+  if (!configListJson.success) {
+    return {
+      available: false,
+      profile: null,
+      delivery: null,
+      workflows: [],
+      driftStatus: 'unknown',
+      warningText: null,
+      error: configListJson.stderr || 'Failed to load profile config.',
+    }
+  }
+
+  const parsed = parseOpsxProfileListJson(configListJson.stdout)
+  if (!parsed) {
+    return {
+      available: false,
+      profile: null,
+      delivery: null,
+      workflows: [],
+      driftStatus: 'unknown',
+      warningText: null,
+      error: 'Invalid JSON from `openspec config list --json`.',
+    }
+  }
+
+  const configListText = await ctx.cliExecutor.execute(['config', 'list'])
+  if (!configListText.success) {
+    return {
+      available: true,
+      profile: parsed.profile,
+      delivery: parsed.delivery,
+      workflows: parsed.workflows,
+      driftStatus: 'unknown',
+      warningText: null,
+    }
+  }
+
+  const drift = parseOpsxConfigDrift(`${configListText.stdout}\n${configListText.stderr}`)
+  return {
+    available: true,
+    profile: parsed.profile,
+    delivery: parsed.delivery,
+    workflows: parsed.workflows,
+    driftStatus: drift.drift ? 'drift' : 'in-sync',
+    warningText: drift.warningText,
+  }
 }
 
 function ensureEditableSource(source: SchemaResolution['source'], label: string): void {
@@ -965,6 +1071,11 @@ export const cliRouter = router({
     })) satisfies AIToolOption[]
   }),
 
+  /** 获取 OpenSpec 1.2 profile/workflow 配置与当前项目漂移状态 */
+  getProfileState: publicProcedure.query(async ({ ctx }) => {
+    return fetchOpsxProfileState(ctx)
+  }),
+
   /** 获取已配置的工具列表（检查配置文件是否存在） */
   getConfiguredTools: publicProcedure.query(async ({ ctx }) => {
     return getConfiguredTools(ctx.projectDir)
@@ -981,11 +1092,15 @@ export const cliRouter = router({
       z
         .object({
           tools: z.union([z.array(z.string()), z.literal('all'), z.literal('none')]).optional(),
+          profile: z.enum(['core', 'custom']).optional(),
         })
         .optional()
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.cliExecutor.init(input?.tools ?? 'all')
+      return ctx.cliExecutor.init({
+        tools: input?.tools,
+        profile: input?.profile,
+      })
     }),
 
   /** 归档 change（非交互式） */
@@ -1036,12 +1151,19 @@ export const cliRouter = router({
       z
         .object({
           tools: z.union([z.array(z.string()), z.literal('all'), z.literal('none')]).optional(),
+          profile: z.enum(['core', 'custom']).optional(),
         })
         .optional()
     )
     .subscription(({ ctx, input }) => {
       return createCliStreamObservable((onEvent) =>
-        ctx.cliExecutor.initStream(input?.tools ?? 'all', onEvent)
+        ctx.cliExecutor.initStream(
+          {
+            tools: input?.tools,
+            profile: input?.profile,
+          },
+          onEvent
+        )
       )
     }),
 

@@ -116,9 +116,19 @@ export class CliExecutor {
   /**
    * 执行 openspec init（非交互式）
    */
-  async init(tools: string[] | 'all' | 'none' = 'all'): Promise<CliResult> {
-    const toolsArg = Array.isArray(tools) ? tools.join(',') : tools
-    return this.execute(['init', '--tools', toolsArg])
+  async init(options?: {
+    tools?: string[] | 'all' | 'none'
+    profile?: 'core' | 'custom'
+  }): Promise<CliResult> {
+    const args = ['init']
+    if (options?.tools !== undefined) {
+      const toolsArg = Array.isArray(options.tools) ? options.tools.join(',') : options.tools
+      args.push('--tools', toolsArg)
+    }
+    if (options?.profile) {
+      args.push('--profile', options.profile)
+    }
+    return this.execute(args)
   }
 
   /**
@@ -305,11 +315,21 @@ export class CliExecutor {
    * 流式执行 openspec init
    */
   initStream(
-    tools: string[] | 'all' | 'none',
+    options: {
+      tools?: string[] | 'all' | 'none'
+      profile?: 'core' | 'custom'
+    },
     onEvent: (event: CliStreamEvent) => void
   ): Promise<() => void> {
-    const toolsArg = Array.isArray(tools) ? tools.join(',') : tools
-    return this.executeStream(['init', '--tools', toolsArg], onEvent)
+    const args = ['init']
+    if (options.tools !== undefined) {
+      const toolsArg = Array.isArray(options.tools) ? options.tools.join(',') : options.tools
+      args.push('--tools', toolsArg)
+    }
+    if (options.profile) {
+      args.push('--profile', options.profile)
+    }
+    return this.executeStream(args, onEvent)
   }
 
   /**

@@ -1291,8 +1291,10 @@ export function Config() {
           <div className="text-muted-foreground text-sm">
             Change metadata is stored in{' '}
             <code className="bg-muted rounded px-1">.openspec.yaml</code> inside each change folder.
-            It is created by <code className="bg-muted rounded px-1">/opsx:new</code> and binds
-            schema selection for the change.
+            It is created when a change is scaffolded (recommended start workflow:{' '}
+            <code className="bg-muted rounded px-1">/opsx:propose</code>; advanced form:{' '}
+            <code className="bg-muted rounded px-1">/opsx:new</code>) and binds schema selection for
+            the change.
           </div>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Change Metadata</h2>

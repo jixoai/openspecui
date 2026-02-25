@@ -44,6 +44,8 @@ export const SKILL_NAMES = [
   'openspec-archive-change',
   'openspec-bulk-archive-change',
   'openspec-verify-change',
+  'openspec-onboard',
+  'openspec-propose',
 ] as const
 
 /**
@@ -139,6 +141,7 @@ export const AI_TOOLS: ToolConfig[] = [
     successLabel: 'Kilo Code',
     skillsDir: '.kilocode',
   },
+  { name: 'Kiro', value: 'kiro', available: true, successLabel: 'Kiro', skillsDir: '.kiro' },
   {
     name: 'OpenCode',
     value: 'opencode',
@@ -146,6 +149,7 @@ export const AI_TOOLS: ToolConfig[] = [
     successLabel: 'OpenCode',
     skillsDir: '.opencode',
   },
+  { name: 'Pi', value: 'pi', available: true, successLabel: 'Pi', skillsDir: '.pi' },
   { name: 'Qoder', value: 'qoder', available: true, successLabel: 'Qoder', skillsDir: '.qoder' },
   {
     name: 'Qwen Code',
