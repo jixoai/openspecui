@@ -217,7 +217,7 @@ function getStepPalette(stepName: string): {
 function classifyChangeStatus(params: {
   hasStatus: boolean
   isComplete: boolean
-  tasksArtifactStatus: 'done' | 'ready' | 'blocked' | null
+  trackedArtifactStatus: 'done' | 'ready' | 'blocked' | null
 }): { label: string; toneClass: string } {
   if (!params.hasStatus) {
     return {
@@ -233,7 +233,7 @@ function classifyChangeStatus(params: {
     }
   }
 
-  if (params.tasksArtifactStatus === 'blocked') {
+  if (params.trackedArtifactStatus === 'blocked') {
     return {
       label: 'Draft',
       toneClass: 'border-amber-500/40 text-amber-700 dark:text-amber-300',
@@ -321,6 +321,18 @@ export function Dashboard() {
     () => buildWorkflowSchemaCards(activeStatuses, workflowSchemaCatalog),
     [activeStatuses, workflowSchemaCatalog]
   )
+  const applyTrackedArtifactBySchema = useMemo(() => {
+    const details = configBundle?.schemaDetails ?? {}
+    const tracked = new Map<string, string>()
+    for (const [schemaName, detail] of Object.entries(details)) {
+      if (!detail?.applyTracks) continue
+      const artifact = detail.artifacts.find((item) => item.outputPath === detail.applyTracks)
+      if (artifact?.id) {
+        tracked.set(schemaName, artifact.id)
+      }
+    }
+    return tracked
+  }, [configBundle])
 
   if (isLoading && !overview) {
     return <div className="route-loading animate-pulse">Loading dashboard...</div>
@@ -592,12 +604,18 @@ export function Dashboard() {
           const doneArtifacts =
             status?.artifacts.filter((artifact) => artifact.status === 'done').length ?? 0
           const totalArtifacts = status?.artifacts.length ?? 0
-          const tasksArtifactStatus =
-            status?.artifacts.find((artifact) => artifact.id === 'tasks')?.status ?? null
+          const trackedArtifactId = status
+            ? applyTrackedArtifactBySchema.get(status.schemaName)
+            : undefined
+          const trackedArtifactStatus =
+            trackedArtifactId && status
+              ? (status.artifacts.find((artifact) => artifact.id === trackedArtifactId)?.status ??
+                null)
+              : null
           const phase = classifyChangeStatus({
             hasStatus: Boolean(status),
             isComplete: status?.isComplete ?? false,
-            tasksArtifactStatus,
+            trackedArtifactStatus,
           })
 
           return (

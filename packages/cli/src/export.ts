@@ -397,7 +397,6 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
   const changes = await Promise.all(
     changesMeta.map(async (meta) => {
       const change = await adapter.readChange(meta.id)
-      if (!change) return null
 
       const files = await adapter.readChangeFiles(meta.id)
       const proposalFile = files.find((f) => f.path === 'proposal.md')
@@ -405,7 +404,7 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
       const designFile = files.find((f) => f.path === 'design.md')
 
       // Get delta spec content
-      const deltas = (change.deltaSpecs || []).map((ds) => ({
+      const deltas = (change?.deltaSpecs || []).map((ds) => ({
         capability: ds.specId,
         content: ds.content || '',
       }))
@@ -416,11 +415,11 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
         proposal: proposalFile?.content || '',
         tasks: tasksFile?.content,
         design: designFile?.content,
-        why: change.why || '',
-        whatChanges: change.whatChanges || '',
-        parsedTasks: change.tasks || [],
+        why: change?.why || '',
+        whatChanges: change?.whatChanges || '',
+        parsedTasks: change?.tasks || [],
         deltas,
-        progress: meta.progress,
+        progress: change?.progress ?? meta.progress,
         createdAt: meta.createdAt,
         updatedAt: meta.updatedAt,
       }
@@ -624,7 +623,7 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
     git,
     config: uiConfig,
     specs,
-    changes: changes.filter((c): c is NonNullable<typeof c> => c !== null),
+    changes,
     archives,
     projectMd,
     agentsMd,

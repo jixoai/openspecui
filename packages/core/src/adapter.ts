@@ -121,7 +121,8 @@ export class OpenSpecAdapter {
 
   /**
    * List changes with metadata (id, name, progress, and time info)
-   * Only returns changes that have valid proposal.md
+   * Returns every change directory, including schema-specific layouts that
+   * don't use proposal.md/tasks.md.
    * Sorted by updatedAt descending (most recent first)
    */
   async listChangesWithMeta(): Promise<ChangeMeta[]> {
@@ -129,21 +130,20 @@ export class OpenSpecAdapter {
     const results = await Promise.all(
       ids.map(async (id) => {
         const change = await this.readChange(id)
-        if (!change) return null
-        const proposalPath = join(this.changesDir, id, 'proposal.md')
-        const timeInfo = await this.getFileTimeInfo(proposalPath)
+        const changeDir = join(this.changesDir, id)
+        const timeInfo = await this.getFileTimeInfo(changeDir)
         return {
           id,
-          name: change.name,
-          progress: change.progress,
+          // Legacy parser can be unavailable for custom schemas; keep the
+          // change visible with objective fallback metadata.
+          name: change?.name ?? id,
+          progress: change?.progress ?? { total: 0, completed: 0 },
           createdAt: timeInfo?.createdAt ?? 0,
           updatedAt: timeInfo?.updatedAt ?? 0,
         }
       })
     )
-    return results
-      .filter((r): r is ChangeMeta => r !== null)
-      .sort((a, b) => b.updatedAt - a.updatedAt)
+    return results.sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
   async listArchivedChanges(): Promise<string[]> {
@@ -152,7 +152,8 @@ export class OpenSpecAdapter {
 
   /**
    * List archived changes with metadata and time info
-   * Only returns archives that have valid proposal.md
+   * Returns every archive directory, including schema-specific layouts that
+   * don't use proposal.md/tasks.md.
    * Sorted by updatedAt descending (most recent first)
    */
   async listArchivedChangesWithMeta(): Promise<ArchiveMeta[]> {
@@ -160,20 +161,17 @@ export class OpenSpecAdapter {
     const results = await Promise.all(
       ids.map(async (id) => {
         const change = await this.readArchivedChange(id)
-        if (!change) return null
-        const proposalPath = join(this.archiveDir, id, 'proposal.md')
-        const timeInfo = await this.getFileTimeInfo(proposalPath)
+        const archiveDir = join(this.archiveDir, id)
+        const timeInfo = await this.getFileTimeInfo(archiveDir)
         return {
           id,
-          name: change.name,
+          name: change?.name ?? id,
           createdAt: timeInfo?.createdAt ?? 0,
           updatedAt: timeInfo?.updatedAt ?? 0,
         }
       })
     )
-    return results
-      .filter((r): r is ArchiveMeta => r !== null)
-      .sort((a, b) => b.updatedAt - a.updatedAt)
+    return results.sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
   // =====================

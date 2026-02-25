@@ -61,11 +61,13 @@ export const FloatingLayout: StoryObj = {
     const dialog = panel.shadowRoot?.querySelector('.panel-dialog') as HTMLElement
     expect(dialog).toBeTruthy()
 
-    const styles = getComputedStyle(dialog)
+    const styles = getComputedStyle(dialog) as CSSStyleDeclaration & {
+      webkitBackdropFilter?: string
+    }
     expect(styles.mixBlendMode).toBe('exclusion')
     expect(
       styles.backdropFilter.includes('blur(1px)') ||
-        styles.webkitBackdropFilter.includes('blur(1px)')
+        styles.webkitBackdropFilter?.includes('blur(1px)')
     ).toBe(true)
   },
 }
