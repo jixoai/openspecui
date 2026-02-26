@@ -265,7 +265,7 @@ export class OpenSpecAdapter {
   }
 
   private async collectChangeFiles(root: string, dir: string): Promise<ChangeFile[]> {
-    const names = await reactiveReadDir(dir, { includeHidden: false })
+    const names = await reactiveReadDir(dir, { includeHidden: true })
     const files: ChangeFile[] = []
 
     for (const name of names) {

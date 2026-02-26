@@ -250,7 +250,7 @@ export function OpsxComposeRoute() {
       },
       dialogClassName: 'overflow-hidden',
       panelClassName: 'w-full',
-      bodyClassName: 'p-0 !overflow-hidden',
+      bodyClassName: 'p-0',
       maxHeight: 'min(86dvh,920px)',
     })
   }, [setConfig])

@@ -340,34 +340,6 @@ export function useOpsxChangeListSubscription(): SubscriptionState<string[]> {
   )
 }
 
-export function useOpsxChangeMetadataSubscription(
-  changeId?: string
-): SubscriptionState<string | null> {
-  const subscribe = useCallback(
-    (callbacks: { onData: (data: string | null) => void; onError: (err: Error) => void }) => {
-      if (!changeId) {
-        callbacks.onData(null)
-        return { unsubscribe: () => {} }
-      }
-      return trpcClient.opsx.subscribeChangeMetadata.subscribe(
-        { changeId },
-        {
-          onData: callbacks.onData,
-          onError: callbacks.onError,
-        }
-      )
-    },
-    [changeId]
-  )
-
-  return useSubscription<string | null>(
-    subscribe,
-    () => StaticProvider.getOpsxChangeMetadata(changeId),
-    [changeId],
-    changeId ? `opsx.subscribeChangeMetadata:${changeId}` : undefined
-  )
-}
-
 export function useOpsxArtifactOutputSubscription(
   changeId?: string,
   outputPath?: string

@@ -22,6 +22,7 @@ import { useServerStatus } from '@/lib/use-server-status'
 import { useConfigSubscription, useConfiguredToolsSubscription } from '@/lib/use-subscription'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
+  AlertTriangle,
   ArrowUp,
   Check,
   CheckCircle,
@@ -34,6 +35,7 @@ import {
   Monitor,
   Moon,
   Plus,
+  RefreshCw,
   Settings as SettingsIcon,
   Sun,
   Terminal,
@@ -43,6 +45,8 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type Theme = 'light' | 'dark' | 'system'
+type InitToolsMode = 'auto' | 'selected' | 'all'
+type InitProfileOverride = 'default' | 'core' | 'custom'
 
 function getStoredTheme(): Theme {
   const stored = localStorage.getItem('theme')
@@ -176,7 +180,8 @@ export function Settings() {
   const [selectedTools, setSelectedTools] = useState<string[]>([])
   const [showInitModal, setShowInitModal] = useState(false)
   const [showInstallModal, setShowInstallModal] = useState(false)
-  const [initTools, setInitTools] = useState<string[] | 'all' | 'none'>('none')
+  const [initToolsMode, setInitToolsMode] = useState<InitToolsMode>('auto')
+  const [initProfileOverride, setInitProfileOverride] = useState<InitProfileOverride>('default')
 
   const initRunner = useCliRunner()
   const installRunner = useCliRunner()
@@ -247,6 +252,14 @@ export function Settings() {
     ...trpc.cli.getAllTools.queryOptions(),
     enabled: !inStaticMode,
   })
+  const {
+    data: opsxProfileState,
+    isLoading: isLoadingOpsxProfileState,
+    refetch: refetchOpsxProfileState,
+  } = useQuery({
+    ...trpc.cli.getProfileState.queryOptions(),
+    enabled: !inStaticMode,
+  })
 
   // 分组：available: true 的工具和 available: false 的工具
   const nativeTools = useMemo(() => allTools?.filter((t) => t.available) ?? [], [allTools])
@@ -312,8 +325,8 @@ export function Settings() {
   }, [configuredTools, cliSupportedToolsKey])
 
   // 打开 init modal
-  const startInit = (tools: string[] | 'all' | 'none') => {
-    setInitTools(tools)
+  const startInit = (mode: InitToolsMode) => {
+    setInitToolsMode(mode)
     setShowInitModal(true)
   }
 
@@ -328,10 +341,25 @@ export function Settings() {
 
   useEffect(() => {
     if (!showInitModal) return
-    const tools = initTools
-    const toolsArg = Array.isArray(tools) ? tools.join(',') : tools
-    initCommands.replaceAll([{ command: 'openspec', args: ['init', '--tools', toolsArg] }])
-  }, [initCommands, initTools, showInitModal])
+    const args = ['init']
+    if (initToolsMode === 'selected') {
+      const selectedCliTools = selectedTools.filter((toolId) => cliSupportedTools.has(toolId))
+      args.push('--tools', selectedCliTools.length > 0 ? selectedCliTools.join(',') : 'none')
+    } else if (initToolsMode === 'all') {
+      args.push('--tools', 'all')
+    }
+    if (initProfileOverride !== 'default') {
+      args.push('--profile', initProfileOverride)
+    }
+    initCommands.replaceAll([{ command: 'openspec', args }])
+  }, [
+    cliSupportedTools,
+    initCommands,
+    initProfileOverride,
+    initToolsMode,
+    selectedTools,
+    showInitModal,
+  ])
 
   useEffect(() => {
     if (showInstallModal) {
@@ -344,6 +372,11 @@ export function Settings() {
       resetInstall()
     }
   }, [showInstallModal, installCommands, cancelInstall, resetInstall])
+
+  useEffect(() => {
+    if (initStatus !== 'success') return
+    void Promise.allSettled([refetchOpsxProfileState(), recheckCli(), resniffCli()])
+  }, [initStatus, refetchOpsxProfileState, recheckCli, resniffCli])
 
   // 判断工具是否已配置（不可取消）
   const isToolConfigured = (tool: string) => configuredTools?.includes(tool) ?? false
@@ -377,6 +410,7 @@ export function Settings() {
   const newToolsCount = selectedTools.filter(
     (t) => cliSupportedTools.has(t) && !isToolConfigured(t)
   ).length
+  const isManualToolsMode = initToolsMode === 'selected'
 
   const handleCloseInit = () => {
     setShowInitModal(false)
@@ -399,6 +433,25 @@ export function Settings() {
         queryClient.invalidateQueries(trpc.cli.checkAvailability.queryFilter()),
         queryClient.invalidateQueries(trpc.config.getEffectiveCliCommand.queryFilter()),
       ])
+    },
+  })
+
+  const syncOpsxProjectMutation = useMutation({
+    mutationFn: () => trpcClient.cli.execute.mutate({ args: ['update'] }),
+    onSuccess: async () => {
+      await Promise.allSettled([
+        refetchOpsxProfileState(),
+        recheckCli(),
+        resniffCli(),
+        queryClient.invalidateQueries(trpc.cli.checkAvailability.queryFilter()),
+      ])
+    },
+  })
+
+  const setCoreProfileMutation = useMutation({
+    mutationFn: () => trpcClient.cli.execute.mutate({ args: ['config', 'profile', 'core'] }),
+    onSuccess: async () => {
+      await Promise.allSettled([refetchOpsxProfileState()])
     },
   })
 
@@ -1034,6 +1087,131 @@ export function Settings() {
             </div>
           </section>
 
+          {/* OpenSpec 1.2 Profile & Sync */}
+          <section className="space-y-4">
+            <h2 className="text-lg font-semibold">OpenSpec 1.2 Profile &amp; Sync</h2>
+            <div className="border-border space-y-4 rounded-lg border p-4">
+              {isLoadingOpsxProfileState ? (
+                <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading profile state...
+                </div>
+              ) : !opsxProfileState?.available ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-red-600">
+                    <XCircle className="h-4 w-4" />
+                    Unable to read profile state from OpenSpec CLI.
+                  </div>
+                  {opsxProfileState?.error && (
+                    <p className="text-muted-foreground text-xs">{opsxProfileState.error}</p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="border-border bg-muted/30 rounded-md border px-3 py-2">
+                      <div className="text-muted-foreground text-xs">Profile</div>
+                      <div className="mt-1 text-sm font-medium">{opsxProfileState.profile}</div>
+                    </div>
+                    <div className="border-border bg-muted/30 rounded-md border px-3 py-2">
+                      <div className="text-muted-foreground text-xs">Delivery</div>
+                      <div className="mt-1 text-sm font-medium">{opsxProfileState.delivery}</div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-muted-foreground mb-1 text-xs">Workflows</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {opsxProfileState.workflows.length > 0 ? (
+                        opsxProfileState.workflows.map((workflow) => (
+                          <span
+                            key={workflow}
+                            className="border-border bg-muted rounded border px-1.5 py-0.5 text-xs"
+                          >
+                            {workflow}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-muted-foreground text-xs">(none)</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="border-border flex flex-wrap items-center gap-2 border-t pt-3">
+                    {opsxProfileState.driftStatus === 'drift' ? (
+                      <span className="flex items-center gap-1.5 text-sm text-amber-600">
+                        <AlertTriangle className="h-4 w-4" />
+                        Global profile is not fully applied to this project.
+                      </span>
+                    ) : opsxProfileState.driftStatus === 'in-sync' ? (
+                      <span className="flex items-center gap-1.5 text-sm text-green-600">
+                        <CheckCircle className="h-4 w-4" />
+                        Project files are in sync with global profile.
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">
+                        Drift status unavailable.
+                      </span>
+                    )}
+                    {opsxProfileState.warningText && (
+                      <span className="text-muted-foreground text-xs">
+                        {opsxProfileState.warningText}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="border-border flex flex-wrap items-center gap-2 border-t pt-3">
+                    <button
+                      type="button"
+                      onClick={() => syncOpsxProjectMutation.mutate()}
+                      disabled={syncOpsxProjectMutation.isPending}
+                      className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm disabled:opacity-50"
+                    >
+                      {syncOpsxProjectMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                      Run openspec update
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCoreProfileMutation.mutate()}
+                      disabled={setCoreProfileMutation.isPending}
+                      className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
+                    >
+                      {setCoreProfileMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Check className="h-4 w-4" />
+                      )}
+                      Set profile to core
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void refetchOpsxProfileState()}
+                      className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      Refresh state
+                    </button>
+                  </div>
+
+                  <p className="text-muted-foreground text-xs">
+                    Note: <code className="bg-muted rounded px-1">openspec update</code> follows
+                    OpenSpec 1.2 behavior and prunes deselected workflow command/skill files.
+                  </p>
+
+                  <p className="text-muted-foreground text-xs">
+                    For interactive custom profile editing, run{' '}
+                    <code className="bg-muted rounded px-1">openspec config profile</code> in a
+                    local terminal.
+                  </p>
+                </>
+              )}
+            </div>
+          </section>
+
           {/* API Configuration */}
           <section className="space-y-4">
             <h2 className="text-lg font-semibold">API Configuration</h2>
@@ -1101,11 +1279,51 @@ export function Settings() {
                 archive directories.
               </p>
 
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="space-y-1.5">
+                  <span className="text-sm font-medium">Init Mode</span>
+                  <select
+                    value={initToolsMode}
+                    onChange={(event) => setInitToolsMode(event.target.value as InitToolsMode)}
+                    className="border-border bg-background w-full rounded-md border px-2 py-2 text-sm"
+                  >
+                    <option value="auto">Auto-detect tools (recommended)</option>
+                    <option value="selected">Use selected tools</option>
+                    <option value="all">Use all tools</option>
+                  </select>
+                  <p className="text-muted-foreground text-xs">
+                    OpenSpec 1.2 can auto-detect existing tool directories.
+                  </p>
+                </label>
+
+                <label className="space-y-1.5">
+                  <span className="text-sm font-medium">Profile Override</span>
+                  <select
+                    value={initProfileOverride}
+                    onChange={(event) =>
+                      setInitProfileOverride(event.target.value as InitProfileOverride)
+                    }
+                    className="border-border bg-background w-full rounded-md border px-2 py-2 text-sm"
+                  >
+                    <option value="default">Use global default</option>
+                    <option value="core">core</option>
+                    <option value="custom">custom</option>
+                  </select>
+                  <p className="text-muted-foreground text-xs">
+                    Adds <code className="bg-muted rounded px-1">--profile</code> when set.
+                  </p>
+                </label>
+              </div>
+
               {/* Tool Selection */}
-              <div className="space-y-4">
+              <div className={`space-y-4 ${isManualToolsMode ? '' : 'opacity-60'}`}>
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium">AI Tools Configuration</label>
-                  <button onClick={toggleAllTools} className="text-primary text-xs hover:underline">
+                  <button
+                    onClick={toggleAllTools}
+                    disabled={!isManualToolsMode}
+                    className="text-primary text-xs hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                  >
                     {selectedTools.filter((t) => selectableToolIds.includes(t)).length ===
                     selectableToolIds.length
                       ? 'Deselect All'
@@ -1113,7 +1331,9 @@ export function Settings() {
                   </button>
                 </div>
                 <p className="text-muted-foreground text-sm">
-                  Select which AI tools to configure. Already configured tools cannot be deselected.
+                  Select which AI tools to configure when using{' '}
+                  <code className="bg-muted rounded px-1">Use selected tools</code>.
+                  Already-configured tools cannot be deselected.
                 </p>
 
                 {/* Natively supported providers */}
@@ -1129,7 +1349,7 @@ export function Settings() {
                         <button
                           key={tool.value}
                           onClick={() => toggleTool(tool.value)}
-                          disabled={configured}
+                          disabled={configured || !isManualToolsMode}
                           title={configured ? 'Already configured' : tool.name}
                           className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-left text-xs transition-colors ${
                             configured
@@ -1169,7 +1389,7 @@ export function Settings() {
                           <button
                             key={tool.value}
                             onClick={() => toggleTool(tool.value)}
-                            disabled={configured || !tool.available}
+                            disabled={configured || !tool.available || !isManualToolsMode}
                             title={
                               configured
                                 ? 'Already configured'
@@ -1217,24 +1437,26 @@ export function Settings() {
               {/* Init Buttons */}
               <div className="border-border flex flex-wrap gap-2 border-t pt-2">
                 <button
-                  onClick={() => {
-                    const tools = selectedTools.filter((t) => cliSupportedTools.has(t))
-                    startInit(tools.length > 0 ? tools : 'none')
-                  }}
+                  onClick={() => startInit('auto')}
                   className="bg-primary text-primary-foreground flex items-center gap-2 rounded-md px-4 py-2 hover:opacity-90"
                 >
                   <FolderPlus className="h-4 w-4" />
+                  Initialize (auto-detect)
+                </button>
+                <button
+                  onClick={() => startInit('selected')}
+                  disabled={!isManualToolsMode}
+                  className="border-border hover:bg-muted rounded-md border px-4 py-2"
+                >
                   {newToolsCount > 0
-                    ? `Add ${newToolsCount} new tool${newToolsCount > 1 ? 's' : ''}`
-                    : selectedTools.length > 0
-                      ? 'Refresh configuration'
-                      : 'Initialize (no tools)'}
+                    ? `Initialize selected (${newToolsCount} new)`
+                    : 'Initialize selected'}
                 </button>
                 <button
                   onClick={() => startInit('all')}
                   className="border-border hover:bg-muted rounded-md border px-4 py-2"
                 >
-                  Initialize with All Tools
+                  Initialize with all tools
                 </button>
               </div>
             </div>

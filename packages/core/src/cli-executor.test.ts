@@ -93,7 +93,7 @@ describe('CliExecutor', () => {
   })
 
   describe('init()', () => {
-    it('should call execute with init args and default tools=all', async () => {
+    it('should call execute with init args and no tools (auto-detect)', async () => {
       const executeSpy = vi.spyOn(cliExecutor, 'execute').mockResolvedValue({
         success: true,
         stdout: 'Initialized',
@@ -103,7 +103,7 @@ describe('CliExecutor', () => {
 
       await cliExecutor.init()
 
-      expect(executeSpy).toHaveBeenCalledWith(['init', '--tools', 'all'])
+      expect(executeSpy).toHaveBeenCalledWith(['init'])
     })
 
     it('should call execute with specific tools', async () => {
@@ -114,7 +114,7 @@ describe('CliExecutor', () => {
         exitCode: 0,
       })
 
-      await cliExecutor.init(['claude', 'cursor'])
+      await cliExecutor.init({ tools: ['claude', 'cursor'] })
 
       expect(executeSpy).toHaveBeenCalledWith(['init', '--tools', 'claude,cursor'])
     })
@@ -127,9 +127,35 @@ describe('CliExecutor', () => {
         exitCode: 0,
       })
 
-      await cliExecutor.init('none')
+      await cliExecutor.init({ tools: 'none' })
 
       expect(executeSpy).toHaveBeenCalledWith(['init', '--tools', 'none'])
+    })
+
+    it('should call execute with profile override', async () => {
+      const executeSpy = vi.spyOn(cliExecutor, 'execute').mockResolvedValue({
+        success: true,
+        stdout: 'Initialized',
+        stderr: '',
+        exitCode: 0,
+      })
+
+      await cliExecutor.init({ profile: 'core' })
+
+      expect(executeSpy).toHaveBeenCalledWith(['init', '--profile', 'core'])
+    })
+
+    it('should call execute with force flag', async () => {
+      const executeSpy = vi.spyOn(cliExecutor, 'execute').mockResolvedValue({
+        success: true,
+        stdout: 'Initialized',
+        stderr: '',
+        exitCode: 0,
+      })
+
+      await cliExecutor.init({ force: true })
+
+      expect(executeSpy).toHaveBeenCalledWith(['init', '--force'])
     })
   })
 

@@ -124,7 +124,7 @@ const createMockContext = (adapter = createMockAdapter()): Context => {
     init: vi.fn().mockResolvedValue({ success: true }),
     archive: vi.fn().mockResolvedValue({ success: true }),
     validate: vi.fn().mockResolvedValue({ valid: true, issues: [] }),
-    execute: vi.fn().mockResolvedValue({ code: 0, stdout: '', stderr: '' }),
+    execute: vi.fn().mockResolvedValue({ success: true, stdout: '{}', stderr: '', exitCode: 0 }),
     initStream: vi.fn(),
     archiveStream: vi.fn(),
     validateStream: vi.fn(),
@@ -361,6 +361,110 @@ describe('appRouter', () => {
 
       expect(result.success).toBe(true)
       expect(adapter.init).toHaveBeenCalled()
+    })
+  })
+
+  describe('cli', () => {
+    it('reads and writes global config via path resolution', async () => {
+      const context = createMockContext()
+      const executeMock = context.cliExecutor.execute as unknown as ReturnType<typeof vi.fn>
+
+      executeMock
+        .mockResolvedValueOnce({
+          success: true,
+          stdout: '/tmp/mock-openspec-config.json\n',
+          stderr: '',
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          stdout: '{"profile":"core","delivery":"both","workflows":["propose"]}',
+          stderr: '',
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          stdout: '/tmp/mock-openspec-config.json\n',
+          stderr: '',
+          exitCode: 0,
+        })
+
+      const caller = appRouter.createCaller(context)
+      const path = await caller.cli.getGlobalConfigPath()
+      const config = await caller.cli.getGlobalConfig()
+      const setResult = await caller.cli.setGlobalConfig({
+        config: { profile: 'core', delivery: 'both', workflows: ['propose'] },
+      })
+
+      expect(path.path).toBe('/tmp/mock-openspec-config.json')
+      expect(config).toMatchObject({ profile: 'core', delivery: 'both' })
+      expect(setResult.success).toBe(true)
+    })
+
+    it('passes force flag to init command', async () => {
+      const context = createMockContext()
+      const caller = appRouter.createCaller(context)
+
+      await caller.cli.init({ force: true })
+
+      const initMock = context.cliExecutor.init as unknown as ReturnType<typeof vi.fn>
+      expect(initMock).toHaveBeenCalledWith({ force: true, profile: undefined, tools: undefined })
+    })
+
+    it('parses profile state and detects drift warning', async () => {
+      const context = createMockContext()
+      const executeMock = context.cliExecutor.execute as unknown as ReturnType<typeof vi.fn>
+      executeMock
+        .mockResolvedValueOnce({
+          success: true,
+          stdout: '{"profile":"custom","delivery":"skills","workflows":["propose","apply"]}',
+          stderr: '',
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          stdout:
+            'Warning: Global config is not applied to this project. Run `openspec update` to sync.\n',
+          stderr: '',
+          exitCode: 0,
+        })
+
+      const caller = appRouter.createCaller(context)
+      const state = await caller.cli.getProfileState()
+
+      expect(state.available).toBe(true)
+      expect(state.profile).toBe('custom')
+      expect(state.delivery).toBe('skills')
+      expect(state.workflows).toEqual(['propose', 'apply'])
+      expect(state.driftStatus).toBe('drift')
+      expect(state.warningText).toContain('Run `openspec update`')
+    })
+
+    it('falls back to core workflows when omitted from JSON config', async () => {
+      const context = createMockContext()
+      const executeMock = context.cliExecutor.execute as unknown as ReturnType<typeof vi.fn>
+      executeMock
+        .mockResolvedValueOnce({
+          success: true,
+          stdout: '{"profile":"core","delivery":"both"}',
+          stderr: '',
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          stdout: 'profile: core\ndelivery: both\n',
+          stderr: '',
+          exitCode: 0,
+        })
+
+      const caller = appRouter.createCaller(context)
+      const state = await caller.cli.getProfileState()
+
+      expect(state.available).toBe(true)
+      expect(state.profile).toBe('core')
+      expect(state.delivery).toBe('both')
+      expect(state.workflows).toEqual(['propose', 'explore', 'apply', 'archive'])
+      expect(state.driftStatus).toBe('in-sync')
     })
   })
 })

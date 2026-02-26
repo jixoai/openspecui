@@ -24,6 +24,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
 
       - name: Setup Node
         if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
@@ -67,6 +68,10 @@ jobs:
       - name: Install dependencies
         if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
         run: pnpm install --frozen-lockfile
+
+      - name: Verify OpenSpec reference version
+        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
+        run: pnpm openspec:check-reference
 
       - name: Format check
         if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}

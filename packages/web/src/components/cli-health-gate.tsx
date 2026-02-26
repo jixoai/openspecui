@@ -11,7 +11,7 @@ interface Semver {
   patch: number
 }
 
-const MIN_VERSION: Semver = { major: 1, minor: 1, patch: 0 }
+const MIN_VERSION: Semver = { major: 1, minor: 2, patch: 0 }
 
 function parseVersion(raw: string | undefined): Semver | null {
   if (!raw) return null
@@ -104,7 +104,7 @@ export function CliHealthGate() {
       <div className="border-border bg-background mx-4 max-w-xl space-y-4 rounded-lg border p-6 shadow-xl">
         <div className="flex items-center gap-2 text-lg font-semibold">
           <AlertCircle className="h-5 w-5 text-amber-500" />
-          OpenSpec CLI Required
+          OpenSpec CLI 1.2+ Required
         </div>
         <p className="text-muted-foreground text-sm">{reason}</p>
         <div className="space-y-2">
