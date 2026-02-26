@@ -1,8 +1,8 @@
 ---
-"openspecui": major
-"@openspecui/core": major
-"@openspecui/server": major
-"@openspecui/web": major
+'openspecui': major
+'@openspecui/core': major
+'@openspecui/server': major
+'@openspecui/web': major
 ---
 
 Release OpenSpecUI 2.0 aligned with OpenSpec 1.2 workflows.
