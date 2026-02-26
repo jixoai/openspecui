@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 
 function run(command) {
   return execSync(command, {
@@ -8,6 +9,9 @@ function run(command) {
 }
 
 try {
+  if (!existsSync('references/openspec/.git')) {
+    run('git submodule update --init --depth 1 references/openspec')
+  }
   const describe = run('git -C references/openspec describe --tags --match "v1.2.*" --always')
   if (!describe.startsWith('v1.2.')) {
     throw new Error(`references/openspec must point to OpenSpec v1.2.x, but got "${describe}".`)
