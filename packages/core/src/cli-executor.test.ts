@@ -144,6 +144,19 @@ describe('CliExecutor', () => {
 
       expect(executeSpy).toHaveBeenCalledWith(['init', '--profile', 'core'])
     })
+
+    it('should call execute with force flag', async () => {
+      const executeSpy = vi.spyOn(cliExecutor, 'execute').mockResolvedValue({
+        success: true,
+        stdout: 'Initialized',
+        stderr: '',
+        exitCode: 0,
+      })
+
+      await cliExecutor.init({ force: true })
+
+      expect(executeSpy).toHaveBeenCalledWith(['init', '--force'])
+    })
   })
 
   describe('archive()', () => {

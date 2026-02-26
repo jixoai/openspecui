@@ -286,6 +286,35 @@ async function fetchOpsxProfileState(ctx: Context): Promise<OpsxProfileState> {
   }
 }
 
+async function resolveGlobalConfigPath(ctx: Context): Promise<string> {
+  const result = await ctx.cliExecutor.execute(['config', 'path'])
+  if (!result.success) {
+    throw new Error(result.stderr || 'Failed to resolve OpenSpec global config path.')
+  }
+  const path = result.stdout.trim()
+  if (!path) {
+    throw new Error('OpenSpec global config path is empty.')
+  }
+  return path
+}
+
+async function fetchGlobalConfigJson(ctx: Context): Promise<Record<string, unknown>> {
+  const result = await ctx.cliExecutor.execute(['config', 'list', '--json'])
+  if (!result.success) {
+    throw new Error(result.stderr || 'Failed to load OpenSpec global config.')
+  }
+  try {
+    const parsed = JSON.parse(result.stdout) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('OpenSpec global config must be a JSON object.')
+    }
+    return parsed as Record<string, unknown>
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Invalid JSON from \`openspec config list --json\`: ${message}`)
+  }
+}
+
 function ensureEditableSource(source: SchemaResolution['source'], label: string): void {
   if (source === 'package') {
     throw new Error(`${label} is read-only (package source)`)
@@ -1076,6 +1105,24 @@ export const cliRouter = router({
     return fetchOpsxProfileState(ctx)
   }),
 
+  getGlobalConfigPath: publicProcedure.query(async ({ ctx }) => {
+    const path = await resolveGlobalConfigPath(ctx)
+    return { path }
+  }),
+
+  getGlobalConfig: publicProcedure.query(async ({ ctx }) => {
+    return fetchGlobalConfigJson(ctx)
+  }),
+
+  setGlobalConfig: publicProcedure
+    .input(z.object({ config: z.record(z.string(), z.unknown()) }))
+    .mutation(async ({ ctx, input }) => {
+      const configPath = await resolveGlobalConfigPath(ctx)
+      await mkdir(dirname(configPath), { recursive: true })
+      await writeFile(configPath, `${JSON.stringify(input.config, null, 2)}\n`, 'utf8')
+      return { success: true }
+    }),
+
   /** 获取已配置的工具列表（检查配置文件是否存在） */
   getConfiguredTools: publicProcedure.query(async ({ ctx }) => {
     return getConfiguredTools(ctx.projectDir)
@@ -1093,6 +1140,7 @@ export const cliRouter = router({
         .object({
           tools: z.union([z.array(z.string()), z.literal('all'), z.literal('none')]).optional(),
           profile: z.enum(['core', 'custom']).optional(),
+          force: z.boolean().optional(),
         })
         .optional()
     )
@@ -1100,6 +1148,7 @@ export const cliRouter = router({
       return ctx.cliExecutor.init({
         tools: input?.tools,
         profile: input?.profile,
+        force: input?.force,
       })
     }),
 
@@ -1152,6 +1201,7 @@ export const cliRouter = router({
         .object({
           tools: z.union([z.array(z.string()), z.literal('all'), z.literal('none')]).optional(),
           profile: z.enum(['core', 'custom']).optional(),
+          force: z.boolean().optional(),
         })
         .optional()
     )
@@ -1161,6 +1211,7 @@ export const cliRouter = router({
           {
             tools: input?.tools,
             profile: input?.profile,
+            force: input?.force,
           },
           onEvent
         )
@@ -1487,24 +1538,6 @@ export const opsxRouter = router({
       return ctx.kernel.getChangeIds()
     })
   }),
-
-  changeMetadata: publicProcedure
-    .input(z.object({ changeId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      await ctx.kernel.waitForWarmup()
-      await ctx.kernel.ensureChangeMetadata(input.changeId)
-      return ctx.kernel.getChangeMetadata(input.changeId)
-    }),
-
-  subscribeChangeMetadata: publicProcedure
-    .input(z.object({ changeId: z.string() }))
-    .subscription(({ ctx, input }) => {
-      return createReactiveSubscription(async () => {
-        await ctx.kernel.waitForWarmup()
-        await ctx.kernel.ensureChangeMetadata(input.changeId)
-        return ctx.kernel.getChangeMetadata(input.changeId)
-      })
-    }),
 
   readArtifactOutput: publicProcedure
     .input(z.object({ changeId: z.string(), outputPath: z.string() }))

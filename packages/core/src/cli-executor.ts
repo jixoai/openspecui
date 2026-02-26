@@ -119,6 +119,7 @@ export class CliExecutor {
   async init(options?: {
     tools?: string[] | 'all' | 'none'
     profile?: 'core' | 'custom'
+    force?: boolean
   }): Promise<CliResult> {
     const args = ['init']
     if (options?.tools !== undefined) {
@@ -127,6 +128,9 @@ export class CliExecutor {
     }
     if (options?.profile) {
       args.push('--profile', options.profile)
+    }
+    if (options?.force) {
+      args.push('--force')
     }
     return this.execute(args)
   }
@@ -318,6 +322,7 @@ export class CliExecutor {
     options: {
       tools?: string[] | 'all' | 'none'
       profile?: 'core' | 'custom'
+      force?: boolean
     },
     onEvent: (event: CliStreamEvent) => void
   ): Promise<() => void> {
@@ -328,6 +333,9 @@ export class CliExecutor {
     }
     if (options.profile) {
       args.push('--profile', options.profile)
+    }
+    if (options.force) {
+      args.push('--force')
     }
     return this.executeStream(args, onEvent)
   }
