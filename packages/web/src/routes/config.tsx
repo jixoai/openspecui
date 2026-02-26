@@ -1,4 +1,5 @@
 import { ButtonGroup } from '@/components/button-group'
+import { CliTerminal } from '@/components/cli-terminal'
 import { CodeEditor } from '@/components/code-editor'
 import {
   ContextMenu,
@@ -15,11 +16,12 @@ import {
 } from '@/components/file-explorer'
 import { MarkdownViewer } from '@/components/markdown-viewer'
 import { Tabs, type Tab } from '@/components/tabs'
+import { navController } from '@/lib/nav-controller'
 import { isStaticMode } from '@/lib/static-mode'
-import { trpcClient } from '@/lib/trpc'
+import { useTerminalContext } from '@/lib/terminal-context'
+import { queryClient, trpc, trpcClient } from '@/lib/trpc'
+import { useCliRunner, type CliRunnerLine } from '@/lib/use-cli-runner'
 import {
-  useOpsxChangeListSubscription,
-  useOpsxChangeMetadataSubscription,
   useOpsxConfigBundleSubscription,
   useOpsxProjectConfigSubscription,
   useOpsxSchemaFilesSubscription,
@@ -27,30 +29,63 @@ import {
   useOpsxTemplatesSubscription,
 } from '@/lib/use-opsx'
 import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import {
+  Check,
   Edit2,
   EllipsisVertical,
   FilePlus,
   FileText,
   FolderPlus,
-  GitBranch,
   Info,
   Layers,
+  Loader2,
   Plus,
+  RefreshCw,
   Save,
   SlidersHorizontal,
+  TerminalSquare,
   Trash2,
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { parse as parseYaml } from 'yaml'
 
-type ConfigTab = 'config' | 'changes' | `schema:${string}`
+type ConfigTab = 'project-config' | 'global-config' | `schema:${string}`
 type SchemaMode = 'read' | 'preview' | 'edit'
 type SchemaCreateMode = 'init' | 'fork'
+type ProfileEditMode = 'both' | 'delivery' | 'workflows'
+type DeliveryMode = 'both' | 'skills' | 'commands'
+type GlobalConfigTab = 'preview' | 'editor' | 'profile'
 
 const DEFAULT_CONFIG_TEMPLATE = `schema: spec-driven\n\ncontext: |\n  \n\nrules:\n  proposal:\n    - \n`
+const CORE_WORKFLOWS = ['propose', 'explore', 'apply', 'archive'] as const
+const ALL_WORKFLOWS = [
+  'propose',
+  'explore',
+  'new',
+  'continue',
+  'apply',
+  'ff',
+  'sync',
+  'archive',
+  'bulk-archive',
+  'verify',
+  'onboard',
+] as const
+const WORKFLOW_LABELS: Record<string, string> = {
+  propose: 'Propose change',
+  explore: 'Explore ideas',
+  new: 'New change',
+  continue: 'Continue change',
+  apply: 'Apply tasks',
+  ff: 'Fast-forward',
+  sync: 'Sync specs',
+  archive: 'Archive change',
+  'bulk-archive': 'Bulk archive',
+  verify: 'Verify change',
+  onboard: 'Onboard',
+}
 
 const PATH_KEYS = new Set(['generates', 'template', 'path', 'outputPath'])
 const TAG_KEYS = new Set(['requires', 'tags'])
@@ -86,9 +121,75 @@ function getParentPath(path: string): string | null {
   return parent.length > 0 ? parent : null
 }
 
+function isRecordObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function normalizeWorkflowList(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === 'string' && item.length > 0)
+}
+
+function isCoreWorkflowSelection(workflows: readonly string[]): boolean {
+  return (
+    workflows.length === CORE_WORKFLOWS.length &&
+    CORE_WORKFLOWS.every((workflow) => workflows.includes(workflow))
+  )
+}
+
+function createRunnerLineId() {
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2)
+}
+
+function JsonStructuredValue({ value }: { value: unknown }) {
+  if (value === null) {
+    return <span className="text-muted-foreground font-mono text-xs">null</span>
+  }
+  if (typeof value === 'string') {
+    return <code className="bg-muted rounded px-1.5 py-0.5 text-xs">{value}</code>
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return <span className="font-mono text-xs">{String(value)}</span>
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return <span className="text-muted-foreground text-xs">[]</span>
+    }
+    return (
+      <div className="space-y-1">
+        {value.map((item, index) => (
+          <div key={`json-array-${index}`} className="border-border/60 rounded-md border px-2 py-1">
+            <div className="text-muted-foreground mb-1 font-mono text-[10px]">[{index}]</div>
+            <JsonStructuredValue value={item} />
+          </div>
+        ))}
+      </div>
+    )
+  }
+  if (isRecordObject(value)) {
+    const entries = Object.entries(value)
+    if (entries.length === 0) {
+      return <span className="text-muted-foreground text-xs">{'{}'}</span>
+    }
+    return (
+      <div className="space-y-1.5">
+        {entries.map(([key, item]) => (
+          <div key={`json-object-${key}`} className="border-border/60 rounded-md border px-2 py-1">
+            <div className="mb-1 font-mono text-[10px] font-semibold">{key}</div>
+            <JsonStructuredValue value={item} />
+          </div>
+        ))}
+      </div>
+    )
+  }
+  return <span className="font-mono text-xs">{String(value)}</span>
+}
+
 export function Config() {
   const isStatic = isStaticMode()
-  const [activeTab, setActiveTab] = useState<ConfigTab>('config')
+  const [activeTab, setActiveTab] = useState<ConfigTab>('project-config')
   const [schemaMode, setSchemaMode] = useState<SchemaMode>('read')
   const [schemaActionError, setSchemaActionError] = useState<string | null>(null)
   const [schemaEntryError, setSchemaEntryError] = useState<string | null>(null)
@@ -128,13 +229,56 @@ export function Config() {
   const { data: templates } = useOpsxTemplatesSubscription(selectedSchema)
   const { data: templateContents } = useOpsxTemplateContentsSubscription(selectedSchema)
 
-  const { data: changeIds } = useOpsxChangeListSubscription()
-  const [selectedChange, setSelectedChange] = useState<string | undefined>(undefined)
-  const { data: changeMeta } = useOpsxChangeMetadataSubscription(selectedChange)
-
   const [isConfigEditing, setIsConfigEditing] = useState(false)
   const [configDraft, setConfigDraft] = useState('')
   const [configDirty, setConfigDirty] = useState(false)
+  const [autoUpdateAfterProfileChange, setAutoUpdateAfterProfileChange] = useState(true)
+  const [profileEditMode, setProfileEditMode] = useState<ProfileEditMode>('both')
+  const [profileDelivery, setProfileDelivery] = useState<DeliveryMode>('both')
+  const [profileWorkflows, setProfileWorkflows] = useState<string[]>([...CORE_WORKFLOWS])
+  const [globalConfigTab, setGlobalConfigTab] = useState<GlobalConfigTab>('preview')
+  const [globalConfigDraft, setGlobalConfigDraft] = useState('{}')
+  const [globalConfigDraftDirty, setGlobalConfigDraftDirty] = useState(false)
+  const [globalConfigError, setGlobalConfigError] = useState<string | null>(null)
+  const [isRefreshingGlobalConfig, setIsRefreshingGlobalConfig] = useState(false)
+  const [shouldScrollRunner, setShouldScrollRunner] = useState(false)
+  const runnerOutputRef = useRef<HTMLDivElement | null>(null)
+  const [pendingCommandKind, setPendingCommandKind] = useState<'apply' | 'update' | null>(null)
+  const [isExecutingPendingCommand, setIsExecutingPendingCommand] = useState(false)
+  const [applyRunnerLines, setApplyRunnerLines] = useState<CliRunnerLine[]>([])
+
+  const { createDedicatedSession } = useTerminalContext()
+
+  const configRunner = useCliRunner()
+
+  const {
+    lines: configRunnerLines,
+    status: configRunnerStatus,
+    commands: configRunnerCommands,
+    reset: resetConfigRunner,
+  } = configRunner
+
+  const {
+    data: opsxProfileState,
+    isLoading: isLoadingOpsxProfileState,
+    refetch: refetchOpsxProfileState,
+  } = useQuery({
+    ...trpc.cli.getProfileState.queryOptions(),
+    enabled: !isStatic,
+  })
+  const {
+    data: globalConfigData,
+    isLoading: isLoadingGlobalConfig,
+    error: globalConfigQueryError,
+    refetch: refetchGlobalConfig,
+  } = useQuery({
+    ...trpc.cli.getGlobalConfig.queryOptions(),
+    enabled: !isStatic,
+  })
+  const { data: globalConfigPathData, refetch: refetchGlobalConfigPath } = useQuery({
+    ...trpc.cli.getGlobalConfigPath.queryOptions(),
+    enabled: !isStatic,
+  })
 
   const [selectedSchemaPath, setSelectedSchemaPath] = useState<string | null>(null)
   const [fileDrafts, setFileDrafts] = useState<Record<string, string>>({})
@@ -168,7 +312,7 @@ export function Config() {
     const name = activeTab.slice('schema:'.length)
     if (schemas.some((schema) => schema.name === name)) return
     const fallback = schemas[0]?.name
-    setActiveTab(fallback ? `schema:${fallback}` : 'config')
+    setActiveTab(fallback ? `schema:${fallback}` : 'project-config')
   }, [activeTab, schemas])
 
   useEffect(() => {
@@ -179,16 +323,37 @@ export function Config() {
   }, [activeTab, selectedSchema])
 
   useEffect(() => {
-    if (!selectedChange && changeIds && changeIds.length > 0) {
-      setSelectedChange(changeIds[0])
-    }
-  }, [changeIds, selectedChange])
-
-  useEffect(() => {
     if (isConfigEditing) return
     setConfigDraft(configYaml ?? '')
     setConfigDirty(false)
   }, [configYaml, isConfigEditing])
+
+  useEffect(() => {
+    if (!isRecordObject(globalConfigData)) return
+    const nextDelivery = globalConfigData.delivery
+    setProfileDelivery(
+      nextDelivery === 'skills' || nextDelivery === 'commands' || nextDelivery === 'both'
+        ? nextDelivery
+        : 'both'
+    )
+    setProfileWorkflows(normalizeWorkflowList(globalConfigData.workflows))
+  }, [globalConfigData])
+
+  useEffect(() => {
+    if (!isRecordObject(globalConfigData)) return
+    if (globalConfigDraftDirty) return
+    setGlobalConfigDraft(JSON.stringify(globalConfigData, null, 2))
+  }, [globalConfigData, globalConfigDraftDirty])
+
+  useEffect(() => {
+    if (!shouldScrollRunner) return
+    if (configRunnerStatus !== 'running' && configRunnerLines.length === 0) return
+    const raf = window.requestAnimationFrame(() => {
+      runnerOutputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    })
+    setShouldScrollRunner(false)
+    return () => window.cancelAnimationFrame(raf)
+  }, [configRunnerLines.length, configRunnerStatus, shouldScrollRunner])
 
   useEffect(() => {
     if (schemaMode === 'edit' && !schemaCanEdit) {
@@ -346,6 +511,28 @@ export function Config() {
     onSuccess: () => {
       setIsConfigEditing(false)
       setConfigDirty(false)
+    },
+  })
+  const saveGlobalConfigMutation = useMutation({
+    mutationFn: async (config: Record<string, unknown>) => {
+      await trpcClient.cli.setGlobalConfig.mutate({ config })
+    },
+    onSuccess: async () => {
+      setGlobalConfigDraftDirty(false)
+      setGlobalConfigError(null)
+      await Promise.allSettled([
+        queryClient.invalidateQueries(trpc.cli.getGlobalConfig.queryFilter()),
+        queryClient.invalidateQueries(trpc.cli.getProfileState.queryFilter()),
+        queryClient.invalidateQueries(trpc.cli.getGlobalConfigPath.queryFilter()),
+      ])
+      await Promise.allSettled([
+        refetchGlobalConfig(),
+        refetchOpsxProfileState(),
+        refetchGlobalConfigPath(),
+      ])
+    },
+    onError: (error) => {
+      setGlobalConfigError(error instanceof Error ? error.message : String(error))
     },
   })
 
@@ -663,6 +850,163 @@ export function Config() {
     })
   }, [deleteSchemaMutation])
 
+  const runConfigCommands = useCallback(
+    (commands: Array<{ command: string; args: string[] }>) => {
+      if (isStatic) return
+      setShouldScrollRunner(true)
+      configRunnerCommands.replaceAll(commands)
+      void configRunnerCommands.runAll()
+    },
+    [configRunnerCommands, isStatic]
+  )
+
+  const handleRefreshGlobalConfig = useCallback(async () => {
+    if (isStatic) return
+    setIsRefreshingGlobalConfig(true)
+    try {
+      await Promise.allSettled([
+        queryClient.invalidateQueries(trpc.cli.getGlobalConfig.queryFilter()),
+        queryClient.invalidateQueries(trpc.cli.getGlobalConfigPath.queryFilter()),
+        queryClient.invalidateQueries(trpc.cli.getProfileState.queryFilter()),
+      ])
+      await Promise.allSettled([
+        refetchGlobalConfig(),
+        refetchGlobalConfigPath(),
+        refetchOpsxProfileState(),
+      ])
+    } finally {
+      setIsRefreshingGlobalConfig(false)
+    }
+  }, [isStatic, refetchGlobalConfig, refetchGlobalConfigPath, refetchOpsxProfileState])
+
+  const handleLaunchInteractiveProfile = useCallback(() => {
+    createDedicatedSession('openspec', ['config', 'profile'])
+    const terminalArea = navController.getAreaForPath('/terminal')
+    navController.push(terminalArea, '/terminal', null)
+  }, [createDedicatedSession])
+
+  const executeApplyProfile = useCallback(async () => {
+    if (!isRecordObject(globalConfigData)) return
+    const nextConfig = JSON.parse(JSON.stringify(globalConfigData)) as Record<string, unknown>
+
+    if (profileEditMode === 'both' || profileEditMode === 'delivery') {
+      nextConfig.delivery = profileDelivery
+    }
+    if (profileEditMode === 'both' || profileEditMode === 'workflows') {
+      nextConfig.workflows = [...profileWorkflows]
+      nextConfig.profile = isCoreWorkflowSelection(profileWorkflows) ? 'core' : 'custom'
+    }
+
+    setGlobalConfigError(null)
+    setApplyRunnerLines((previous) => [
+      ...previous,
+      {
+        id: createRunnerLineId(),
+        kind: 'ascii',
+        text: 'Applying profile settings to global config...',
+      },
+    ])
+    try {
+      await saveGlobalConfigMutation.mutateAsync(nextConfig)
+      setApplyRunnerLines((previous) => [
+        ...previous,
+        {
+          id: createRunnerLineId(),
+          kind: 'ascii',
+          text: 'Profile settings applied successfully.',
+          tone: 'success',
+        },
+      ])
+      if (autoUpdateAfterProfileChange) {
+        setApplyRunnerLines((previous) => [
+          ...previous,
+          {
+            id: createRunnerLineId(),
+            kind: 'ascii',
+            text: 'Starting openspec update...',
+          },
+        ])
+        runConfigCommands([{ command: 'openspec', args: ['update'] }])
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setApplyRunnerLines((previous) => [
+        ...previous,
+        {
+          id: createRunnerLineId(),
+          kind: 'ascii',
+          text: `Apply failed: ${message}`,
+          tone: 'error',
+        },
+      ])
+      throw error
+    }
+  }, [
+    autoUpdateAfterProfileChange,
+    globalConfigData,
+    profileDelivery,
+    profileEditMode,
+    profileWorkflows,
+    runConfigCommands,
+    saveGlobalConfigMutation,
+  ])
+
+  const handleApplyProfile = useCallback(() => {
+    setGlobalConfigError(null)
+    resetConfigRunner()
+    setApplyRunnerLines([])
+    setPendingCommandKind('apply')
+  }, [resetConfigRunner])
+
+  const handleRunUpdate = useCallback(() => {
+    resetConfigRunner()
+    setApplyRunnerLines([])
+    setPendingCommandKind('update')
+  }, [resetConfigRunner])
+
+  const handleConfirmPendingCommand = useCallback(async () => {
+    if (!pendingCommandKind) return
+    setIsExecutingPendingCommand(true)
+    setShouldScrollRunner(true)
+    try {
+      if (pendingCommandKind === 'apply') {
+        await executeApplyProfile()
+      } else {
+        runConfigCommands([{ command: 'openspec', args: ['update'] }])
+      }
+    } catch {
+      // errors are already surfaced via mutation state and terminal lines
+    } finally {
+      setIsExecutingPendingCommand(false)
+    }
+  }, [executeApplyProfile, pendingCommandKind, runConfigCommands])
+
+  const handleSaveGlobalConfigEditor = useCallback(() => {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(globalConfigDraft)
+    } catch (error) {
+      setGlobalConfigError(error instanceof Error ? error.message : String(error))
+      return
+    }
+    if (!isRecordObject(parsed)) {
+      setGlobalConfigError('Global config must be a JSON object.')
+      return
+    }
+    setGlobalConfigError(null)
+    saveGlobalConfigMutation.mutate(parsed, {
+      onSuccess: async () => {
+        setGlobalConfigTab('preview')
+        await handleRefreshGlobalConfig()
+      },
+    })
+  }, [globalConfigDraft, handleRefreshGlobalConfig, saveGlobalConfigMutation])
+
+  useEffect(() => {
+    if (configRunnerStatus !== 'success') return
+    void handleRefreshGlobalConfig()
+  }, [configRunnerStatus, handleRefreshGlobalConfig])
+
   const renderFieldValue = useCallback((key: string, value: unknown) => {
     if (value === null || value === undefined) {
       return <span className="text-muted-foreground">—</span>
@@ -726,6 +1070,60 @@ export function Config() {
     }
     return <span>{String(value)}</span>
   }, [])
+
+  const globalConfigOtherFields = useMemo(() => {
+    if (!isRecordObject(globalConfigData)) return {}
+    const entries = Object.entries(globalConfigData).filter(
+      ([key]) => !['profile', 'delivery', 'workflows', 'featureFlags', 'telemetry'].includes(key)
+    )
+    return Object.fromEntries(entries)
+  }, [globalConfigData])
+
+  const selectedWorkflowSet = useMemo(() => new Set(profileWorkflows), [profileWorkflows])
+  const activeWorkflowSet = useMemo(() => {
+    if (!isRecordObject(globalConfigData)) return new Set<string>()
+    return new Set(normalizeWorkflowList(globalConfigData.workflows))
+  }, [globalConfigData])
+  const selectedWorkflowList = useMemo(
+    () => ALL_WORKFLOWS.filter((workflow) => selectedWorkflowSet.has(workflow)),
+    [selectedWorkflowSet]
+  )
+  const unselectedWorkflowList = useMemo(
+    () => ALL_WORKFLOWS.filter((workflow) => !selectedWorkflowSet.has(workflow)),
+    [selectedWorkflowSet]
+  )
+  const profileRequiresWorkflowSelection =
+    profileEditMode === 'both' || profileEditMode === 'workflows'
+  const canApplyProfile =
+    isRecordObject(globalConfigData) &&
+    !saveGlobalConfigMutation.isPending &&
+    (!profileRequiresWorkflowSelection || profileWorkflows.length > 0)
+  const canSaveGlobalConfigEditor = !saveGlobalConfigMutation.isPending && globalConfigDraftDirty
+  const pendingCommandLines = useMemo(() => {
+    if (pendingCommandKind === 'update') {
+      return ['openspec update']
+    }
+    if (pendingCommandKind === 'apply') {
+      const lines = ['apply profile settings to global config']
+      if (autoUpdateAfterProfileChange) lines.push('openspec update')
+      return lines
+    }
+    return []
+  }, [autoUpdateAfterProfileChange, pendingCommandKind])
+  const pendingCommandOutputLines = useMemo(
+    () =>
+      pendingCommandKind === 'apply'
+        ? [...applyRunnerLines, ...configRunnerLines]
+        : configRunnerLines,
+    [applyRunnerLines, configRunnerLines, pendingCommandKind]
+  )
+  const isPendingCommandRunning = isExecutingPendingCommand || configRunnerStatus === 'running'
+  const pendingCommandTitle = pendingCommandKind === 'apply' ? 'Apply profile' : 'Run update'
+  const pendingCommandActionLabel = pendingCommandKind === 'apply' ? 'Apply profile' : 'Run command'
+  const handleClosePendingCommandDialog = useCallback(() => {
+    if (isPendingCommandRunning) return
+    setPendingCommandKind(null)
+  }, [isPendingCommandRunning])
 
   const schemaTabContent = (
     <section className="flex min-h-0 flex-1 flex-col gap-4">
@@ -1210,120 +1608,406 @@ export function Config() {
     content: schemaTabContent,
   }))
 
-  const tabs: Tab[] = [
-    {
-      id: 'config',
-      label: 'Config',
-      icon: <FileText className="h-4 w-4" />,
-      content: (
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">OpenSpec Config</h2>
-            {!isStatic && configYaml && !isConfigEditing && (
+  const projectConfigTabContent = (
+    <section className="space-y-4">
+      <section className="border-border bg-card space-y-4 rounded-lg border p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">OpenSpec Project Config</h2>
+          {!isStatic && configYaml && !isConfigEditing && (
+            <button
+              type="button"
+              onClick={handleConfigEdit}
+              className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium"
+            >
+              <Edit2 className="h-3.5 w-3.5" />
+              Edit
+            </button>
+          )}
+          {isConfigEditing && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleConfigCancel}
+                className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium"
+              >
+                <X className="h-3.5 w-3.5" />
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => saveConfigMutation.mutate()}
+                disabled={!configDirty || saveConfigMutation.isPending}
+                className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Save className="h-3.5 w-3.5" />
+                {saveConfigMutation.isPending ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {configYaml || isConfigEditing ? (
+          <CodeEditor
+            value={configDraft}
+            onChange={(value) => {
+              setConfigDraft(value)
+              setConfigDirty(true)
+            }}
+            readOnly={!isConfigEditing}
+            filename="config.yaml"
+          />
+        ) : configLoading ? (
+          <div className="route-loading animate-pulse">Loading config…</div>
+        ) : (
+          <div className="text-muted-foreground rounded-md border border-dashed p-4 text-sm">
+            <p className="mb-3">openspec/config.yaml not found.</p>
+            {!isStatic && (
               <button
                 type="button"
                 onClick={handleConfigEdit}
-                className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium"
+                className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium"
               >
-                <Edit2 className="h-3.5 w-3.5" />
-                Edit
+                Create config.yaml
               </button>
             )}
-            {isConfigEditing && (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleConfigCancel}
-                  className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium"
-                >
-                  <X className="h-3.5 w-3.5" />
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => saveConfigMutation.mutate()}
-                  disabled={!configDirty || saveConfigMutation.isPending}
-                  className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Save className="h-3.5 w-3.5" />
-                  {saveConfigMutation.isPending ? 'Saving…' : 'Save'}
-                </button>
-              </div>
-            )}
           </div>
+        )}
+      </section>
+    </section>
+  )
 
-          {configYaml || isConfigEditing ? (
-            <CodeEditor
-              value={configDraft}
-              onChange={(value) => {
-                setConfigDraft(value)
-                setConfigDirty(true)
-              }}
-              readOnly={!isConfigEditing}
-              filename="config.yaml"
-            />
-          ) : configLoading ? (
-            <div className="route-loading animate-pulse">Loading config…</div>
-          ) : (
-            <div className="text-muted-foreground rounded-md border border-dashed p-4 text-sm">
-              <p className="mb-3">openspec/config.yaml not found.</p>
-              {!isStatic && (
-                <button
-                  type="button"
-                  onClick={handleConfigEdit}
-                  className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium"
-                >
-                  Create config.yaml
-                </button>
+  const globalConfigTabContent = isStatic ? (
+    <section className="space-y-3">
+      <h2 className="text-sm font-semibold">OpenSpec Global Config</h2>
+      <div className="text-muted-foreground rounded-md border border-dashed p-4 text-sm">
+        Global config commands are unavailable in static export mode.
+      </div>
+    </section>
+  ) : (
+    <section className="space-y-4">
+      <section className="border-border bg-card space-y-4 rounded-lg border p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold">OpenSpec Global Config</h2>
+            <div className="text-muted-foreground mt-1 text-xs">
+              <span className="mr-1">Path:</span>
+              <code className="bg-muted rounded px-1">
+                {globalConfigPathData?.path ?? 'Unavailable'}
+              </code>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleLaunchInteractiveProfile}
+              className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
+            >
+              <TerminalSquare className="h-3.5 w-3.5" />
+              Interactive
+            </button>
+            <button
+              type="button"
+              onClick={handleRefreshGlobalConfig}
+              disabled={isRefreshingGlobalConfig}
+              className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
+            >
+              {isRefreshingGlobalConfig ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div className="text-muted-foreground text-xs">
+          Reads from <code>openspec config list --json</code> and writes to the global config file.
+        </div>
+
+        <ButtonGroup<GlobalConfigTab>
+          value={globalConfigTab}
+          onChange={setGlobalConfigTab}
+          options={[
+            { value: 'preview', label: 'Preview' },
+            { value: 'editor', label: 'Editor' },
+            { value: 'profile', label: 'Profile' },
+          ]}
+        />
+
+        {(globalConfigQueryError || globalConfigError) && (
+          <div className="text-destructive border-destructive/40 bg-destructive/10 rounded-md border px-3 py-2 text-xs">
+            {globalConfigQueryError?.message ?? globalConfigError}
+          </div>
+        )}
+
+        {globalConfigTab === 'preview' ? (
+          isLoadingGlobalConfig ? (
+            <div className="text-muted-foreground text-sm">Loading global config…</div>
+          ) : isRecordObject(globalConfigData) ? (
+            <div className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="border-border rounded-md border px-3 py-2 text-xs">
+                  <div className="text-muted-foreground">profile</div>
+                  <div className="mt-1 font-medium">
+                    {typeof globalConfigData.profile === 'string'
+                      ? globalConfigData.profile
+                      : 'N/A'}
+                  </div>
+                </div>
+                <div className="border-border rounded-md border px-3 py-2 text-xs">
+                  <div className="text-muted-foreground">delivery</div>
+                  <div className="mt-1 font-medium">
+                    {typeof globalConfigData.delivery === 'string'
+                      ? globalConfigData.delivery
+                      : 'N/A'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="text-muted-foreground text-xs">workflows</div>
+                {normalizeWorkflowList(globalConfigData.workflows).length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {normalizeWorkflowList(globalConfigData.workflows).map((workflow) => (
+                      <span key={workflow} className="bg-muted rounded px-2 py-0.5 text-[10px]">
+                        {workflow}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-muted-foreground text-xs">—</div>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <div className="text-muted-foreground text-xs">featureFlags</div>
+                <JsonStructuredValue value={globalConfigData.featureFlags ?? {}} />
+              </div>
+
+              <div className="space-y-1">
+                <div className="text-muted-foreground text-xs">telemetry</div>
+                <JsonStructuredValue value={globalConfigData.telemetry ?? {}} />
+              </div>
+
+              {Object.keys(globalConfigOtherFields).length > 0 && (
+                <div className="space-y-1">
+                  <div className="text-muted-foreground text-xs">other fields</div>
+                  <JsonStructuredValue value={globalConfigOtherFields} />
+                </div>
               )}
             </div>
-          )}
-        </section>
-      ),
+          ) : (
+            <div className="text-muted-foreground text-sm">Global config unavailable.</div>
+          )
+        ) : globalConfigTab === 'editor' ? (
+          <div className="space-y-2">
+            <CodeEditor
+              value={globalConfigDraft}
+              onChange={(value) => {
+                setGlobalConfigDraft(value)
+                setGlobalConfigDraftDirty(true)
+                setGlobalConfigError(null)
+              }}
+              readOnly={saveGlobalConfigMutation.isPending}
+              filename="openspec.global.config.json"
+              language="json"
+              editorMinHeight="260px"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isRecordObject(globalConfigData)) return
+                  setGlobalConfigDraft(JSON.stringify(globalConfigData, null, 2))
+                  setGlobalConfigDraftDirty(false)
+                  setGlobalConfigError(null)
+                }}
+                className="border-border hover:bg-muted rounded-md border px-3 py-1.5 text-xs"
+              >
+                Revert
+              </button>
+              <button
+                type="button"
+                disabled={!canSaveGlobalConfigEditor}
+                onClick={handleSaveGlobalConfigEditor}
+                className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Save className="h-3.5 w-3.5" />
+                Save
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-[minmax(18rem,0.9fr)_minmax(0,1.1fr)]">
+            <section className="space-y-4">
+              <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
+                <div className="border-border rounded-md border px-3 py-2 text-xs">
+                  <div className="text-muted-foreground">Profile</div>
+                  <div className="mt-1 font-medium">
+                    {isLoadingOpsxProfileState ? 'Loading…' : (opsxProfileState?.profile ?? 'N/A')}
+                  </div>
+                </div>
+                <div className="border-border rounded-md border px-3 py-2 text-xs">
+                  <div className="text-muted-foreground">Delivery</div>
+                  <div className="mt-1 font-medium">
+                    {isLoadingOpsxProfileState ? 'Loading…' : (opsxProfileState?.delivery ?? 'N/A')}
+                  </div>
+                </div>
+                <div className="border-border rounded-md border px-3 py-2 text-xs">
+                  <div className="text-muted-foreground">Drift</div>
+                  <div className="mt-1 font-medium">
+                    {isLoadingOpsxProfileState
+                      ? 'Loading…'
+                      : (opsxProfileState?.driftStatus ?? 'unknown')}
+                  </div>
+                </div>
+              </div>
+
+              {opsxProfileState?.warningText && (
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
+                  {opsxProfileState.warningText}
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <div className="text-muted-foreground text-xs">Apply mode</div>
+                  <ButtonGroup<ProfileEditMode>
+                    value={profileEditMode}
+                    onChange={setProfileEditMode}
+                    options={[
+                      { value: 'both', label: 'Delivery + Workflows' },
+                      { value: 'delivery', label: 'Delivery only' },
+                      { value: 'workflows', label: 'Workflows only' },
+                    ]}
+                  />
+                </div>
+
+                {(profileEditMode === 'both' || profileEditMode === 'delivery') && (
+                  <label className="space-y-1">
+                    <div className="text-muted-foreground text-xs">Delivery</div>
+                    <select
+                      value={profileDelivery}
+                      onChange={(event) => setProfileDelivery(event.target.value as DeliveryMode)}
+                      className="border-border bg-background w-full rounded-md border px-3 py-2 text-sm"
+                    >
+                      <option value="both">both</option>
+                      <option value="skills">skills</option>
+                      <option value="commands">commands</option>
+                    </select>
+                  </label>
+                )}
+
+                <label className="inline-flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    className="accent-primary"
+                    checked={autoUpdateAfterProfileChange}
+                    onChange={(event) => setAutoUpdateAfterProfileChange(event.target.checked)}
+                  />
+                  Run <code>openspec update</code> automatically after apply
+                </label>
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              {profileEditMode === 'both' || profileEditMode === 'workflows' ? (
+                <>
+                  <div className="text-muted-foreground text-xs">Workflows</div>
+                  <div className="border-border/70 bg-muted/20 rounded-md border border-dashed px-3 py-2">
+                    <div className="text-muted-foreground mb-1 text-[10px] font-medium uppercase tracking-wide">
+                      Reference
+                    </div>
+                    <div className="text-muted-foreground space-y-0.5 font-mono text-[11px] leading-relaxed">
+                      <div>selected: [{selectedWorkflowList.join(', ')}]</div>
+                      <div>unselected: [{unselectedWorkflowList.join(', ')}]</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2">
+                    {ALL_WORKFLOWS.map((workflow) => {
+                      const isSelected = selectedWorkflowSet.has(workflow)
+                      const isActive = activeWorkflowSet.has(workflow)
+                      const isDirty = isSelected !== isActive
+                      return (
+                        <button
+                          type="button"
+                          key={workflow}
+                          onClick={() =>
+                            setProfileWorkflows((previous) =>
+                              previous.includes(workflow)
+                                ? previous.filter((item) => item !== workflow)
+                                : [...previous, workflow]
+                            )
+                          }
+                          className={`flex items-center justify-between gap-2 rounded border px-2.5 py-1.5 text-left text-xs transition-colors ${
+                            isSelected && !isDirty
+                              ? 'border-primary bg-primary/10 text-primary'
+                              : !isSelected && !isDirty
+                                ? 'border-border hover:bg-muted'
+                                : isSelected
+                                  ? 'rounded border border-amber-500/60 bg-amber-500/15 text-amber-700 dark:text-amber-200'
+                                  : 'rounded border border-amber-500/50 bg-amber-500/5 text-amber-700/90 dark:text-amber-200'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            {isSelected && <Check className="h-3 w-3 shrink-0" />}
+                            <span>{WORKFLOW_LABELS[workflow] ?? workflow}</span>
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-xs">
+                  Switch apply mode to include workflows to edit the workflow set.
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={!canApplyProfile}
+                  onClick={handleApplyProfile}
+                  className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  Apply
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRunUpdate}
+                  className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Run update
+                </button>
+                {saveGlobalConfigMutation.isPending && (
+                  <span className="text-muted-foreground text-xs">Saving…</span>
+                )}
+              </div>
+            </section>
+          </div>
+        )}
+      </section>
+    </section>
+  )
+
+  const tabs: Tab[] = [
+    {
+      id: 'project-config',
+      label: 'Project Config',
+      icon: <FileText className="h-4 w-4" />,
+      content: projectConfigTabContent,
+    },
+    {
+      id: 'global-config',
+      label: 'Global Config',
+      icon: <SlidersHorizontal className="h-4 w-4" />,
+      content: globalConfigTabContent,
     },
     ...schemaTabs,
-    {
-      id: 'changes',
-      label: 'Changes',
-      icon: <GitBranch className="h-4 w-4" />,
-      content: (
-        <section className="space-y-4">
-          <div className="text-muted-foreground text-sm">
-            Change metadata is stored in{' '}
-            <code className="bg-muted rounded px-1">.openspec.yaml</code> inside each change folder.
-            It is created when a change is scaffolded (recommended start workflow:{' '}
-            <code className="bg-muted rounded px-1">/opsx:propose</code>; advanced form:{' '}
-            <code className="bg-muted rounded px-1">/opsx:new</code>) and binds schema selection for
-            the change.
-          </div>
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Change Metadata</h2>
-            {changeIds && changeIds.length > 0 && (
-              <select
-                value={selectedChange}
-                onChange={(e) => setSelectedChange(e.target.value)}
-                className="border-border bg-card rounded-md border px-2 py-1 text-xs"
-              >
-                {changeIds.map((id) => (
-                  <option key={id} value={id}>
-                    {id}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-          {selectedChange && changeMeta ? (
-            <CodeEditor value={changeMeta} readOnly filename=".openspec.yaml" />
-          ) : (
-            <div className="text-muted-foreground rounded-md border border-dashed p-3 text-sm">
-              {selectedChange
-                ? 'No metadata file found for this change. It should live at openspec/changes/<change>/.openspec.yaml.'
-                : 'No changes available.'}
-            </div>
-          )}
-        </section>
-      ),
-    },
   ]
 
   return (
@@ -1615,6 +2299,60 @@ export function Config() {
           ) : (
             <div className="text-muted-foreground text-sm">No entry selected.</div>
           )}
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={pendingCommandKind !== null}
+        onClose={handleClosePendingCommandDialog}
+        bodyClassName="space-y-3"
+        title={
+          <div className="flex items-center gap-2">
+            <TerminalSquare className="h-4 w-4" />
+            <span className="text-sm font-semibold">{pendingCommandTitle}</span>
+          </div>
+        }
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={handleClosePendingCommandDialog}
+              disabled={isPendingCommandRunning}
+              className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              disabled={isPendingCommandRunning || !pendingCommandKind}
+              onClick={() => void handleConfirmPendingCommand()}
+              className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isPendingCommandRunning ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Check className="h-3.5 w-3.5" />
+              )}
+              {isPendingCommandRunning ? 'Running…' : pendingCommandActionLabel}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3 text-sm">
+          <div>
+            <div className="text-muted-foreground mb-1 text-xs">Command plan</div>
+            <div className="bg-muted rounded-md px-3 py-2">
+              {pendingCommandLines.map((line, index) => (
+                <div key={`${line}-${index}`} className="font-mono text-xs">
+                  {line}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div ref={runnerOutputRef}>
+            <CliTerminal lines={pendingCommandOutputLines} maxHeight="42vh" />
+          </div>
         </div>
       </Dialog>
 
