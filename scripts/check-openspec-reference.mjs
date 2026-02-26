@@ -10,7 +10,7 @@ function run(command) {
 
 try {
   if (!existsSync('references/openspec/.git')) {
-    run('git submodule update --init --depth 1 references/openspec')
+    run('git submodule update --init references/openspec')
   }
   const describe = run('git -C references/openspec describe --tags --match "v1.2.*" --always')
   if (!describe.startsWith('v1.2.')) {
