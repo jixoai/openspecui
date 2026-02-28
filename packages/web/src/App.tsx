@@ -3,6 +3,7 @@ import { RouterProvider, createRootRoute, createRouter } from '@tanstack/react-r
 import { RootLayout } from './components/layout'
 import { BottomArea, setBottomRouter } from './components/layout/bottom-area'
 import { PopArea, setPopRouter } from './components/layout/pop-area'
+import { ThemeBootstrap } from './components/theme-bootstrap'
 import './index.css'
 import { ArchiveModalProvider } from './lib/archive-modal-context'
 import { navController } from './lib/nav-controller'
@@ -76,6 +77,7 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <ArchiveModalProvider>
         <TerminalProvider>
+          <ThemeBootstrap />
           <RouterProvider router={mainRouter} />
         </TerminalProvider>
       </ArchiveModalProvider>

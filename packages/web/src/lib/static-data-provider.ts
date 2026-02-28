@@ -824,6 +824,15 @@ export async function getChangeFiles(id: string): Promise<ChangeFile[]> {
   if (!change) return []
 
   const files: ChangeFile[] = []
+  const metadata = snapshot.opsx?.changeMetadata?.[id]
+
+  if (typeof metadata === 'string') {
+    files.push({
+      path: '.openspec.yaml',
+      type: 'file' as const,
+      content: metadata,
+    })
+  }
 
   files.push({
     path: 'proposal.md',
@@ -908,6 +917,15 @@ export async function getArchiveFiles(id: string): Promise<ChangeFile[]> {
   if (!archive) return []
 
   const files: ChangeFile[] = []
+  const metadata = snapshot.opsx?.changeMetadata?.[id]
+
+  if (typeof metadata === 'string') {
+    files.push({
+      path: '.openspec.yaml',
+      type: 'file' as const,
+      content: metadata,
+    })
+  }
 
   files.push({
     path: 'proposal.md',

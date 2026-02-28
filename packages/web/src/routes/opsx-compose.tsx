@@ -28,7 +28,6 @@ const ACTION_LABELS = {
   continue: 'Continue',
   ff: 'Fast-forward',
   apply: 'Apply',
-  verify: 'Verify',
   archive: 'Archive',
 } as const
 
