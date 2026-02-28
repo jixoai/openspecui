@@ -16,6 +16,7 @@ import {
   terminalController,
   type TerminalRendererEngine,
 } from '@/lib/terminal-controller'
+import { applyTheme, getStoredTheme, persistTheme, type Theme } from '@/lib/theme'
 import { queryClient, trpc, trpcClient } from '@/lib/trpc'
 import { useCliRunner } from '@/lib/use-cli-runner'
 import { useServerStatus } from '@/lib/use-server-status'
@@ -44,27 +45,8 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-type Theme = 'light' | 'dark' | 'system'
 type InitToolsMode = 'auto' | 'selected' | 'all'
 type InitProfileOverride = 'default' | 'core' | 'custom'
-
-function getStoredTheme(): Theme {
-  const stored = localStorage.getItem('theme')
-  if (stored === 'light' || stored === 'dark' || stored === 'system') {
-    return stored
-  }
-  return 'system'
-}
-
-function applyTheme(theme: Theme) {
-  const root = document.documentElement
-  if (theme === 'system') {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    root.classList.toggle('dark', prefersDark)
-  } else {
-    root.classList.toggle('dark', theme === 'dark')
-  }
-}
 
 function formatExecutePath(command: string, args: readonly string[] = []): string {
   const quote = (token: string): string => {
@@ -560,7 +542,7 @@ export function Settings() {
 
   useEffect(() => {
     applyTheme(theme)
-    localStorage.setItem('theme', theme)
+    persistTheme(theme)
   }, [theme])
 
   // Listen for system theme changes

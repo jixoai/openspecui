@@ -252,6 +252,10 @@ export function Dashboard() {
   const { data: configBundle } = useOpsxConfigBundleSubscription()
   const { data: gitTaskStatus } = useDashboardGitTaskStatusSubscription()
 
+  const runPropose = useCallback(() => {
+    navController.activatePop('/opsx-propose')
+  }, [])
+
   const runNewChange = useCallback(() => {
     navController.activatePop('/opsx-new')
   }, [])
@@ -692,9 +696,9 @@ export function Dashboard() {
         </h1>
         <button
           type="button"
-          onClick={runNewChange}
+          onClick={runPropose}
           className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm hover:opacity-90"
-          title="Recommended workflow start is /opsx:propose; this opens the advanced /opsx:new form."
+          title="Recommended workflow start is /opsx:propose."
         >
           <Sparkles className="h-4 w-4" />
           Start (/opsx:propose)

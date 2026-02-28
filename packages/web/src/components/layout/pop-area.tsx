@@ -121,6 +121,8 @@ export function setPopRouter(router: AnyRouter | null): void {
 function getTitle(pathname: string): string {
   if (pathname === '/search') return 'Search'
   if (pathname === '/opsx-new') return 'OPSX New'
+  if (pathname === '/opsx-propose') return 'OPSX Propose'
+  if (pathname === '/opsx-verify') return 'OPSX Verify'
   if (pathname === '/opsx-compose') return 'OPSX Compose'
   return 'Panel'
 }

@@ -147,6 +147,16 @@ describe('static-data-provider opsx adapters', () => {
     ])
   })
 
+  it('includes .openspec.yaml in change files when metadata exists', async () => {
+    const provider = await import('./static-data-provider')
+    const files = await provider.getChangeFiles('add-2fa')
+
+    expect(files.some((entry) => entry.path === '.openspec.yaml')).toBe(true)
+    expect(files.find((entry) => entry.path === '.openspec.yaml')?.content).toBe(
+      'schema: spec-driven'
+    )
+  })
+
   it('normalizes schema paths to relative display paths', async () => {
     staticState.snapshot = {
       ...createSnapshot(),

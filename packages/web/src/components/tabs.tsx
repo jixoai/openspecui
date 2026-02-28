@@ -146,7 +146,7 @@ export function Tabs({
   }
 
   return (
-    <div id={id} className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${className}`}>
+    <div id={id} className={`flex min-h-0 min-w-0 flex-1 flex-col ${className}`}>
       {style}
       {/* Tab header: scrollable tabs + fixed actions */}
       <div className="z-2 bg-background sticky top-0 flex min-w-0 items-stretch">
