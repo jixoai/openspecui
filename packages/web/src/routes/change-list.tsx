@@ -55,12 +55,21 @@ export function ChangeList() {
             <div className="mt-1 text-xs">Recommended workflow start: /opsx:propose</div>
             <button
               type="button"
+              onClick={() => navController.activatePop('/opsx-propose')}
+              className="text-primary mt-2 inline-flex items-center gap-1 hover:underline"
+              title="Open quick /opsx:propose input"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Start /opsx:propose
+            </button>
+            <button
+              type="button"
               onClick={() => navController.activatePop('/opsx-new')}
               className="text-primary mt-2 inline-flex items-center gap-1 hover:underline"
               title="Open the advanced /opsx:new form"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              Open /opsx:new form
+              Open advanced /opsx:new form
             </button>
           </div>
         )}

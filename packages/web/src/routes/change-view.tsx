@@ -46,6 +46,10 @@ export function ChangeView() {
     [changeId]
   )
 
+  const handleVerify = useCallback(() => {
+    navController.activatePop(`/opsx-verify?change=${encodeURIComponent(changeId)}`)
+  }, [changeId])
+
   const handleRefresh = useCallback(() => {
     setRefreshKey((key) => key + 1)
   }, [])
@@ -126,6 +130,7 @@ export function ChangeView() {
           status={status}
           selectedArtifactId={selectedArtifactId}
           onComposeAction={handleComposeAction}
+          onVerify={handleVerify}
           onRefresh={handleRefresh}
         />
       </div>

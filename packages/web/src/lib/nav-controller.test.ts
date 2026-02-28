@@ -136,11 +136,25 @@ describe('NavController kernel lifecycle', () => {
   it('treats /opsx-compose as pop-area route', () => {
     nav = createController('/dashboard')
 
-    nav.activatePop('/opsx-compose?action=verify&change=demo')
+    nav.activatePop('/opsx-compose?action=archive&change=demo')
 
     expect(nav.getLocation('pop').pathname).toBe('/opsx-compose')
     expect(nav.getAreaForPath('/opsx-compose')).toBe('pop')
-    expect(window.location.search).toContain('_p=%2Fopsx-compose%3Faction%3Dverify%26change%3Ddemo')
+    expect(window.location.search).toContain(
+      '_p=%2Fopsx-compose%3Faction%3Darchive%26change%3Ddemo'
+    )
+  })
+
+  it('treats /opsx-propose and /opsx-verify as pop-area routes', () => {
+    nav = createController('/dashboard')
+
+    nav.activatePop('/opsx-propose')
+    expect(nav.getAreaForPath('/opsx-propose')).toBe('pop')
+    expect(nav.getLocation('pop').pathname).toBe('/opsx-propose')
+
+    nav.activatePop('/opsx-verify?change=demo')
+    expect(nav.getAreaForPath('/opsx-verify')).toBe('pop')
+    expect(nav.getLocation('pop').pathname).toBe('/opsx-verify')
   })
 
   it('routes pop-area navigation within pop router', () => {

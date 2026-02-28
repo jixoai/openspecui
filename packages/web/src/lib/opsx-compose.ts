@@ -1,4 +1,4 @@
-export type OpsxComposeActionId = 'continue' | 'ff' | 'apply' | 'verify' | 'archive'
+export type OpsxComposeActionId = 'continue' | 'ff' | 'apply' | 'archive'
 
 export interface OpsxComposeInput {
   action: OpsxComposeActionId
@@ -15,7 +15,7 @@ const ACTION_QUERY_KEY = 'action'
 const CHANGE_QUERY_KEY = 'change'
 const ARTIFACT_QUERY_KEY = 'artifact'
 
-const ACTION_SET = new Set<OpsxComposeActionId>(['continue', 'ff', 'apply', 'verify', 'archive'])
+const ACTION_SET = new Set<OpsxComposeActionId>(['continue', 'ff', 'apply', 'archive'])
 
 export function isOpsxComposeActionId(value: string): value is OpsxComposeActionId {
   return ACTION_SET.has(value as OpsxComposeActionId)
@@ -63,11 +63,6 @@ export function resolveOpsxPromptSource(input: OpsxComposeInput): OpsxPromptSour
         command: 'openspec',
         args: ['instructions', 'apply', '--change', input.changeId],
       }
-    case 'verify':
-      return {
-        command: 'openspec',
-        args: ['validate', '--type', 'change', '--strict', input.changeId],
-      }
     case 'archive':
       return {
         command: 'openspec',
@@ -86,8 +81,6 @@ export function buildOpsxComposeFallbackPrompt(input: OpsxComposeInput): string 
       return `Fast-forward artifact ${input.artifactId ?? '<missing-artifact>'} for change ${input.changeId}.`
     case 'apply':
       return `Apply change ${input.changeId} based on current completed artifacts.`
-    case 'verify':
-      return `Verify change ${input.changeId} with strict validation and summarize blockers.`
     case 'archive':
       return `Archive change ${input.changeId} after verifying completion and risks.`
   }

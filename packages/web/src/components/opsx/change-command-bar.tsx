@@ -2,10 +2,13 @@ import type { OpsxComposeActionId } from '@/lib/opsx-compose'
 import type { ChangeStatus } from '@openspecui/core'
 import { Archive, CheckCircle, Play, RefreshCw, Rocket, ShieldCheck } from 'lucide-react'
 
+type ComposeActionId = OpsxComposeActionId
+
 interface ChangeCommandBarProps {
   status: ChangeStatus
   selectedArtifactId?: string
-  onComposeAction: (actionId: OpsxComposeActionId, artifactId?: string) => void
+  onComposeAction: (actionId: ComposeActionId, artifactId?: string) => void
+  onVerify: () => void
   onRefresh: () => void
 }
 
@@ -13,6 +16,7 @@ export function ChangeCommandBar({
   status,
   selectedArtifactId,
   onComposeAction,
+  onVerify,
   onRefresh,
 }: ChangeCommandBarProps) {
   const readyArtifact = status.artifacts.find((a) => a.status === 'ready')
@@ -20,7 +24,7 @@ export function ChangeCommandBar({
   const missingApply = status.applyRequires.filter((id) => !doneSet.has(id))
 
   const buttons: Array<{
-    id: OpsxComposeActionId
+    id: ComposeActionId
     label: string
     icon: typeof Play
     artifactId?: string
@@ -53,12 +57,6 @@ export function ChangeCommandBar({
       hint: missingApply.length > 0 ? `missing: ${missingApply.join(', ')}` : undefined,
     },
     {
-      id: 'verify',
-      label: 'Verify',
-      icon: ShieldCheck,
-      disabled: false,
-    },
-    {
       id: 'archive',
       label: 'Archive',
       icon: Archive,
@@ -85,6 +83,14 @@ export function ChangeCommandBar({
           </button>
         )
       })}
+      <button
+        type="button"
+        onClick={onVerify}
+        className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition"
+      >
+        <ShieldCheck className="h-3.5 w-3.5" />
+        Verify
+      </button>
       <button
         type="button"
         onClick={onRefresh}

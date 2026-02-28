@@ -82,11 +82,9 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
 
   const updateCommands = useCallback(
     (updater: (prev: CommandDescriptor[]) => CommandDescriptor[]) => {
-      setCommands((prev) => {
-        const next = updater(prev)
-        commandStateRef.current = next
-        return next
-      })
+      const next = updater(commandStateRef.current)
+      commandStateRef.current = next
+      setCommands(next)
     },
     []
   )
