@@ -1,5 +1,13 @@
 # openspecui
 
+## 2.0.2
+
+### Patch Changes
+
+- 8ed4585: Move dashboard git refresh stamp into Git metadata (`.git`/worktree `gitdir`) so OpenSpecUI no longer creates `openspec/.openspecui-dashboard-git-refresh.stamp` in user projects.
+
+  When Git metadata is unavailable, dashboard refresh becomes a no-op instead of writing a fallback project file.
+
 ## 2.0.1
 
 ### Patch Changes
