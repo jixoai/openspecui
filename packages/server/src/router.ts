@@ -17,7 +17,6 @@ import {
   getConfiguredTools,
   getDefaultCliCommandString,
   getWatcherRuntimeStatus,
-  reactiveExists,
   reactiveReadDir,
   reactiveReadFile,
   reactiveStat,
@@ -41,7 +40,7 @@ import { initTRPC } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
 import { execFile } from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import { z } from 'zod'
@@ -134,24 +133,49 @@ function endDashboardGitTask(error: unknown): void {
   emitDashboardGitTaskStatus()
 }
 
-function parseGitDirFromDotGitFile(content: string): string | null {
-  const line = content
-    .split(/\r?\n/)
-    .map((item) => item.trim())
-    .find((item) => item.startsWith('gitdir:'))
-  if (!line) return null
-  const rawPath = line.slice('gitdir:'.length).trim()
-  return rawPath.length > 0 ? rawPath : null
+const DASHBOARD_GIT_REFRESH_STAMP_NAME = 'openspecui-dashboard-git-refresh.stamp'
+
+async function resolveGitMetadataDir(projectDir: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync('git', ['rev-parse', '--git-dir'], {
+      cwd: projectDir,
+      maxBuffer: 1024 * 1024,
+      encoding: 'utf8',
+    })
+    const gitDirRaw = stdout.trim()
+    if (!gitDirRaw) return null
+    const gitDirPath = resolve(projectDir, gitDirRaw)
+    const gitDirStat = await stat(gitDirPath)
+    if (!gitDirStat.isDirectory()) return null
+    return gitDirPath
+  } catch {
+    return null
+  }
 }
 
-function getDashboardGitRefreshStampPath(projectDir: string): string {
-  return join(projectDir, 'openspec', '.openspecui-dashboard-git-refresh.stamp')
+async function resolveGitMetadataDirReactive(projectDir: string): Promise<string | null> {
+  const gitMetadataDir = await resolveGitMetadataDir(projectDir)
+  if (!gitMetadataDir) return null
+  await reactiveReadDir(gitMetadataDir, { includeHidden: true })
+  return gitMetadataDir
 }
 
-async function touchDashboardGitRefreshStamp(projectDir: string, reason: string): Promise<void> {
-  const stampPath = getDashboardGitRefreshStampPath(projectDir)
+function getDashboardGitRefreshStampPath(gitMetadataDir: string): string {
+  return join(gitMetadataDir, DASHBOARD_GIT_REFRESH_STAMP_NAME)
+}
+
+async function touchDashboardGitRefreshStamp(
+  projectDir: string,
+  reason: string
+): Promise<{ skipped: boolean }> {
+  const gitMetadataDir = await resolveGitMetadataDir(projectDir)
+  if (!gitMetadataDir) {
+    return { skipped: true }
+  }
+  const stampPath = getDashboardGitRefreshStampPath(gitMetadataDir)
   await mkdir(dirname(stampPath), { recursive: true })
   await writeFile(stampPath, `${Date.now()} ${reason}\n`, 'utf8')
+  return { skipped: false }
 }
 
 async function registerDashboardGitReactiveDeps(projectDir: string): Promise<void> {
@@ -161,30 +185,14 @@ async function registerDashboardGitReactiveDeps(projectDir: string): Promise<voi
     exclude: ['node_modules'],
   })
 
-  // Fallback trigger file for manual refresh requests
-  await reactiveReadFile(getDashboardGitRefreshStampPath(projectDir))
+  // Source 2: git metadata (includes refresh stamp under git metadata dir)
+  const gitMetadataDir = await resolveGitMetadataDirReactive(projectDir)
+  if (!gitMetadataDir) return
 
-  // Source 2: git metadata
-  const dotGitPath = join(projectDir, '.git')
-  const dotGitExists = await reactiveExists(dotGitPath)
-  if (!dotGitExists) return
-
-  const dotGitFileContent = await reactiveReadFile(dotGitPath)
-  if (dotGitFileContent !== null) {
-    const gitDirRaw = parseGitDirFromDotGitFile(dotGitFileContent)
-    if (!gitDirRaw) return
-    const gitDirPath = resolve(projectDir, gitDirRaw)
-    await reactiveReadDir(gitDirPath, { includeHidden: true })
-    await reactiveReadFile(join(gitDirPath, 'HEAD'))
-    await reactiveReadFile(join(gitDirPath, 'index'))
-    await reactiveReadFile(join(gitDirPath, 'packed-refs'))
-    return
-  }
-
-  await reactiveReadDir(dotGitPath, { includeHidden: true })
-  await reactiveReadFile(join(dotGitPath, 'HEAD'))
-  await reactiveReadFile(join(dotGitPath, 'index'))
-  await reactiveReadFile(join(dotGitPath, 'packed-refs'))
+  await reactiveReadFile(getDashboardGitRefreshStampPath(gitMetadataDir))
+  await reactiveReadFile(join(gitMetadataDir, 'HEAD'))
+  await reactiveReadFile(join(gitMetadataDir, 'index'))
+  await reactiveReadFile(join(gitMetadataDir, 'packed-refs'))
 }
 
 function requireChangeId(changeId: string | undefined): string {
