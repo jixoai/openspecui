@@ -1,4 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { execFile } from 'node:child_process'
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve as resolvePath } from 'node:path'
+import { promisify } from 'node:util'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '../src/router.js'
 import { appRouter } from '../src/router.js'
 
@@ -96,7 +101,56 @@ const createMockAdapter = () => ({
   getDashboardData: vi.fn().mockResolvedValue(undefined),
 })
 
-const createMockContext = (adapter = createMockAdapter()): Context => {
+const tempDirs: string[] = []
+const execFileAsync = promisify(execFile)
+
+async function createTempProjectDir(prefix: string): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), prefix))
+  tempDirs.push(dir)
+  return dir
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function runGit(cwd: string, args: string[]): Promise<string> {
+  const { stdout } = await execFileAsync('git', args, {
+    cwd,
+    maxBuffer: 1024 * 1024,
+    encoding: 'utf8',
+  })
+  return stdout.trim()
+}
+
+async function initGitRepo(dir: string): Promise<void> {
+  await runGit(dir, ['init'])
+  await runGit(dir, ['config', 'user.name', 'OpenSpecUI Test'])
+  await runGit(dir, ['config', 'user.email', 'test@openspecui.local'])
+  await writeFile(join(dir, 'README.md'), 'init\n', 'utf8')
+  await runGit(dir, ['add', 'README.md'])
+  await runGit(dir, ['commit', '-m', 'init'])
+}
+
+afterEach(async () => {
+  while (tempDirs.length > 0) {
+    const dir = tempDirs.pop()
+    if (!dir) continue
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+const createMockContext = (
+  adapter = createMockAdapter(),
+  options: {
+    projectDir?: string
+  } = {}
+): Context => {
   const configManager = {
     readConfig: vi.fn().mockResolvedValue({
       cli: {},
@@ -153,13 +207,18 @@ const createMockContext = (adapter = createMockAdapter()): Context => {
     kernel: kernel as unknown as Context['kernel'],
     searchService: searchService as unknown as Context['searchService'],
     watcher: undefined,
-    projectDir: '/tmp/openspecui-router-test',
+    projectDir: options.projectDir ?? '/tmp/openspecui-router-test',
   }
 }
 
-const createCaller = (adapter = createMockAdapter()) => {
+const createCaller = (
+  adapter = createMockAdapter(),
+  options: {
+    projectDir?: string
+  } = {}
+) => {
   return appRouter.createCaller({
-    ...createMockContext(adapter),
+    ...createMockContext(adapter, options),
   })
 }
 
@@ -270,11 +329,47 @@ describe('appRouter', () => {
       expect(status.lastReason === null || typeof status.lastReason === 'string').toBe(true)
     })
 
-    it('accepts manual git snapshot refresh trigger', async () => {
-      const caller = createCaller()
+    it('writes refresh stamp under .git when repository has git directory', async () => {
+      const projectDir = await createTempProjectDir('openspecui-router-test-')
+      await initGitRepo(projectDir)
+      const dotGitDir = await runGit(projectDir, ['rev-parse', '--git-dir'])
+      const caller = createCaller(createMockAdapter(), { projectDir })
       const result = await caller.dashboard.refreshGitSnapshot({ reason: 'test-manual' })
+      const stampPath = resolvePath(projectDir, dotGitDir, 'openspecui-dashboard-git-refresh.stamp')
 
       expect(result.success).toBe(true)
+      expect(await pathExists(stampPath)).toBe(true)
+      const content = await readFile(stampPath, 'utf8')
+      expect(content).toContain('test-manual')
+    })
+
+    it('writes refresh stamp under resolved gitdir for worktree repositories', async () => {
+      const baseRepoDir = await createTempProjectDir('openspecui-router-base-')
+      await initGitRepo(baseRepoDir)
+      const projectDir = await createTempProjectDir('openspecui-router-worktree-')
+      await runGit(baseRepoDir, ['worktree', 'add', projectDir, '-b', 'feature-refresh-stamp'])
+
+      const caller = createCaller(createMockAdapter(), { projectDir })
+      const result = await caller.dashboard.refreshGitSnapshot({ reason: 'worktree' })
+      const gitDir = await runGit(projectDir, ['rev-parse', '--git-dir'])
+      const stampPath = resolvePath(projectDir, gitDir, 'openspecui-dashboard-git-refresh.stamp')
+
+      expect(result.success).toBe(true)
+      expect(await pathExists(stampPath)).toBe(true)
+      const content = await readFile(stampPath, 'utf8')
+      expect(content).toContain('worktree')
+    })
+
+    it('does not create legacy stamp file when git metadata is unavailable', async () => {
+      const projectDir = await createTempProjectDir('openspecui-router-nogit-')
+      const caller = createCaller(createMockAdapter(), { projectDir })
+
+      const result = await caller.dashboard.refreshGitSnapshot({ reason: 'no-git' })
+
+      expect(result.success).toBe(true)
+      expect(
+        await pathExists(join(projectDir, 'openspec', '.openspecui-dashboard-git-refresh.stamp'))
+      ).toBe(false)
     })
   })
 
