@@ -11,6 +11,12 @@ type CommandSpec = {
 
 type LogFn = (line: string) => void
 
+type SpawnStdio = {
+  stderr: 'inherit' | 'pipe'
+  stdin: 'ignore' | 'inherit'
+  stdout: 'inherit' | 'pipe'
+}
+
 const DEFAULT_WAIT_TIMEOUT_MS = 5 * 60 * 1000
 const DEFAULT_WAIT_INTERVAL_MS = 5000
 
@@ -25,49 +31,29 @@ function toCommandLine(spec: CommandSpec): string {
   return [spec.cmd, ...spec.args].join(' ')
 }
 
-function cleanEnv(overrides?: Record<string, string>): Record<string, string> {
+export function cloneCommandEnv(overrides?: Record<string, string>): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [key, value] of Object.entries(process.env)) {
     if (value !== undefined) env[key] = value
   }
   return {
     ...env,
-    CI: '1',
-    FORCE_COLOR: '0',
-    NO_COLOR: '1',
     ...overrides,
   }
 }
 
-async function streamLines(
-  stream: ReadableStream<Uint8Array> | null,
-  onLine: LogFn,
-  prefix?: string
-): Promise<void> {
-  if (!stream) return
-
-  const reader = stream.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-
-    while (true) {
-      const newlineIndex = buffer.indexOf('\n')
-      if (newlineIndex < 0) break
-      const rawLine = buffer.slice(0, newlineIndex).replace(/\r/g, '')
-      onLine(prefix ? `${prefix}${rawLine}` : rawLine)
-      buffer = buffer.slice(newlineIndex + 1)
+export function resolveCommandStdio(mode: 'capture' | 'inherit'): SpawnStdio {
+  if (mode === 'inherit') {
+    return {
+      stdin: 'inherit',
+      stdout: 'inherit',
+      stderr: 'inherit',
     }
   }
-
-  buffer += decoder.decode()
-  const finalLine = buffer.replace(/\r/g, '')
-  if (finalLine.length > 0) {
-    onLine(prefix ? `${prefix}${finalLine}` : finalLine)
+  return {
+    stdin: 'ignore',
+    stdout: 'pipe',
+    stderr: 'pipe',
   }
 }
 
@@ -75,10 +61,8 @@ async function runAndCapture(spec: CommandSpec): Promise<{ exitCode: number; std
   const child = Bun.spawn({
     cmd: [spec.cmd, ...spec.args],
     cwd: spec.cwd,
-    env: cleanEnv(spec.env),
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'pipe',
+    env: cloneCommandEnv(spec.env),
+    ...resolveCommandStdio('capture'),
   })
 
   const stdoutPromise = new Response(child.stdout).text()
@@ -100,16 +84,9 @@ export async function runLoggedCommand(spec: CommandSpec, onLine: LogFn): Promis
   const child = Bun.spawn({
     cmd: [spec.cmd, ...spec.args],
     cwd: spec.cwd,
-    env: cleanEnv(spec.env),
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'pipe',
+    env: cloneCommandEnv(spec.env),
+    ...resolveCommandStdio('inherit'),
   })
-
-  await Promise.all([
-    streamLines(child.stdout, onLine),
-    streamLines(child.stderr, onLine, '[stderr] '),
-  ])
 
   const exitCode = await child.exited
   if (exitCode !== 0) {
