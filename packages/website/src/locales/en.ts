@@ -56,7 +56,6 @@ export const en = {
     githubBody: 'Source, issues, release history, and contribution flow.',
   },
   footer: {
-    deployment: 'Deployed as a static site on www.openspecui.com.',
     canonical:
       'Canonical apex redirect should be configured in Cloudflare, not in the site bundle.',
     note: 'Language can be forced with ?lang=en or ?lang=zh and then persists locally.',

@@ -43,6 +43,7 @@ function ExternalLink(props: {
 
 export function App() {
   const { t, i18n } = useTranslation()
+  const copyrightYear = new Date().getFullYear()
   const language: WebsiteLanguage = (i18n.resolvedLanguage ?? i18n.language ?? 'en').startsWith(
     'zh'
   )
@@ -231,7 +232,7 @@ export function App() {
 
       <footer className="border-border border-t px-4 py-4 sm:px-6 lg:px-8">
         <div className="text-muted-foreground mx-auto flex max-w-6xl flex-col gap-1 text-sm leading-6">
-          <p>{t('footer.deployment')}</p>
+          <p>{`Copyright © ${copyrightYear} OpenSpecUI`}</p>
           <p>{t('footer.canonical')}</p>
           <p>{t('footer.note')}</p>
         </div>

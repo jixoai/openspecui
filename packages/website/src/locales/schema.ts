@@ -48,7 +48,6 @@ export interface WebsiteLocale {
     githubBody: string
   }
   footer: {
-    deployment: string
     canonical: string
     note: string
   }

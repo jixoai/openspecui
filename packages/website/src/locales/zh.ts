@@ -51,7 +51,6 @@ export const zh = {
     githubBody: '源码、issues、版本历史与贡献流程。',
   },
   footer: {
-    deployment: '站点以静态方式部署在 www.openspecui.com。',
     canonical: '根域名到 www 的规范跳转应在 Cloudflare 中配置，而不是放在站点产物里。',
     note: '可通过 ?lang=en 或 ?lang=zh 强制语言，之后会在本地持久化。',
   },
