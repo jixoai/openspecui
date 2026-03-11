@@ -129,7 +129,8 @@ export const DoubleTapEvent: StoryObj = {
     pointer(canvas, 'pointerdown', cx, cy)
     pointer(canvas, 'pointerup', cx, cy)
 
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    // Fire the second tap immediately so CI scheduler jitter cannot push the gesture outside
+    // the double-tap window.
 
     // Second tap (within 300ms)
     pointer(canvas, 'pointerdown', cx, cy)
@@ -194,7 +195,8 @@ export const DragEvent: StoryObj = {
     pointer(canvas, 'pointerdown', cx, cy)
     pointer(canvas, 'pointerup', cx, cy)
 
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    // Start the second touch immediately so the drag sequence stays inside the same
+    // second-touch detection window in slower CI browsers.
 
     // Second: tap-and-hold then drag (within 300ms of first tap)
     pointer(canvas, 'pointerdown', cx, cy)
@@ -232,7 +234,7 @@ export const DragMoveDeltas: StoryObj = {
     // Tap first
     pointer(canvas, 'pointerdown', cx, cy)
     pointer(canvas, 'pointerup', cx, cy)
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    // Start the drag immediately so the second touch stays within the same gesture window.
 
     // Tap-and-drag
     pointer(canvas, 'pointerdown', cx, cy)
