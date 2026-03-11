@@ -3,9 +3,9 @@
 
 import {
   createCliRenderer,
-  type KeyEvent,
   RGBA,
   StyledText,
+  type KeyEvent,
   type TabSelectOption,
   type TabSelectRenderable,
   type TextChunk,
@@ -18,19 +18,11 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { createDevTasks, getHostedAppWebDistPath, type DevTask } from './lib/dev-task-definitions'
+
 type CliOptions = {
   dir?: string
   port?: number
-}
-
-type DevTask = {
-  id: string
-  name: string
-  description: string
-  command: string
-  args: string[]
-  env?: Record<string, string>
-  autoStart: boolean
 }
 
 type TaskSession = {
@@ -1177,7 +1169,7 @@ const preferredPort =
 const port = await findAvailablePort(preferredPort, 10)
 const apiUrl = process.env.VITE_API_URL || `http://localhost:${port}`
 const repoRoot = process.cwd()
-const webDistDir = join(repoRoot, 'packages', 'web', 'dist')
+const webDistDir = getHostedAppWebDistPath(repoRoot)
 const webDistIndexPath = join(webDistDir, 'index.html')
 const webPackageVersion = await readWorkspacePackageVersion(
   join(repoRoot, 'packages', 'web', 'package.json')
@@ -1216,71 +1208,13 @@ if (!existsSync(webDistIndexPath)) {
   }
 }
 
-const serverArgs = ['--filter', '@openspecui/server', 'dev', '--', '--port', String(port)]
-if (options.dir) {
-  serverArgs.push('--dir', options.dir)
-}
-
-const tasks: DevTask[] = [
-  {
-    id: 'core-dev',
-    name: 'Core Watch Build',
-    description: 'Build and watch @openspecui/core dist output.',
-    command: 'pnpm',
-    args: ['--filter', '@openspecui/core', 'dev'],
-    autoStart: true,
-  },
-  {
-    id: 'search-dev',
-    name: 'Search Watch Build',
-    description: 'Build and watch @openspecui/search dist output.',
-    command: 'pnpm',
-    args: ['--filter', '@openspecui/search', 'dev'],
-    autoStart: true,
-  },
-  {
-    id: 'server-dev',
-    name: 'Server Dev',
-    description: `Run @openspecui/server on port ${port}.`,
-    command: 'pnpm',
-    args: serverArgs,
-    autoStart: true,
-  },
-  {
-    id: 'web-dev',
-    name: 'Web Dev',
-    description: `Run @openspecui/web with VITE_API_URL=${apiUrl}.`,
-    command: 'pnpm',
-    args: ['--filter', '@openspecui/web', 'dev'],
-    env: {
-      VITE_API_URL: apiUrl,
-      OPENSPEC_SERVER_PORT: String(port),
-    },
-    autoStart: true,
-  },
-  {
-    id: 'app-dev',
-    name: 'Hosted App Dev',
-    description: `Run @openspecui/app and seed the hosted shell with ${apiUrl}.`,
-    command: 'pnpm',
-    args: ['--filter', '@openspecui/app', 'dev'],
-    env: {
-      OPENSPECUI_APP_DEV_MODE: '1',
-      OPENSPECUI_APP_DEV_WEB_DIST: webDistDir,
-      OPENSPECUI_APP_DEV_VERSION: webPackageVersion,
-      VITE_OPENSPECUI_APP_DEFAULT_API_URL: apiUrl,
-    },
-    autoStart: true,
-  },
-  {
-    id: 'web-tsc-watch',
-    name: 'Web Typecheck Watch',
-    description: 'Optional task. Starts only when you press Enter.',
-    command: 'pnpm',
-    args: ['--filter', '@openspecui/web', 'exec', 'tsc', '--noEmit', '--watch'],
-    autoStart: false,
-  },
-]
+const tasks: DevTask[] = createDevTasks({
+  apiUrl,
+  dir: options.dir,
+  port,
+  webDistDir,
+  webPackageVersion,
+})
 
 const renderer = await createCliRenderer({ exitOnCtrlC: false })
 createRoot(renderer).render(<DevApp tasks={tasks} />)
