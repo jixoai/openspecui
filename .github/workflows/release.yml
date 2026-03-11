@@ -42,6 +42,9 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -50,7 +53,7 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
 
-      - name: Publish packages with Changesets
+      - name: Publish packages
         env:
           NPM_CONFIG_PROVENANCE: 'true'
         run: pnpm release:packages
