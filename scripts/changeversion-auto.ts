@@ -1,6 +1,11 @@
 #!/usr/bin/env bun
 import { spawnSync } from 'node:child_process'
-import process from 'node:process'
+
+import {
+  type InheritRunResult,
+  waitForWorkflowRunToAppear,
+  watchWorkflowRun,
+} from './lib/changeversion/release-workflow'
 
 const MAIN_BRANCH = 'main'
 const REMOTE = 'origin'
@@ -12,15 +17,14 @@ const PR_BODY = [
   '- Run `changeset version`',
   '- Commit version/changelog updates',
   '- Create PR and wait for required checks',
-  '- Merge PR and sync local main',
+  '- Merge PR, sync local main, and wait for GitHub release automation',
 ].join('\n')
-const CI_TIMEOUT_MS = Number(process.env.CHANGEVERSION_AUTO_CI_TIMEOUT_MS ?? 45 * 60 * 1000)
+const PR_CHECK_TIMEOUT_MS = Number(process.env.CHANGEVERSION_AUTO_CI_TIMEOUT_MS ?? 45 * 60 * 1000)
+const RELEASE_TIMEOUT_MS = Number(
+  process.env.CHANGEVERSION_AUTO_RELEASE_TIMEOUT_MS ?? 45 * 60 * 1000
+)
+const RELEASE_WORKFLOW_FILE = 'release.yml'
 const IGNORED_DIRTY_PATHS = new Set(['references/openspec'])
-
-type InheritRunResult = {
-  status: number
-  timedOut: boolean
-}
 
 type CaptureRunResult = {
   status: number
@@ -48,9 +52,7 @@ function runCaptureResult(command: string, args: string[]): CaptureRunResult {
 function runCapture(command: string, args: string[]): string {
   const result = runCaptureResult(command, args)
   if (result.status !== 0) {
-    const stderr = result.stderr
-    const stdout = result.stdout
-    const detail = stderr || stdout || `${command} ${args.join(' ')} failed`
+    const detail = result.stderr || result.stdout || `${command} ${args.join(' ')} failed`
     throw new Error(detail)
   }
   return result.stdout
@@ -112,7 +114,7 @@ function getDirtyPaths(): string[] {
 
 function isIgnoredDirtyPath(path: string): boolean {
   if (IGNORED_DIRTY_PATHS.has(path)) return true
-  for (const ignored of IGNORED_DIRTY_PATHS) {
+  for (const ignored of Array.from(IGNORED_DIRTY_PATHS)) {
     if (path.startsWith(`${ignored}/`) || path.startsWith(`${ignored} `)) {
       return true
     }
@@ -200,8 +202,7 @@ function findOpenPrByHeadBranch(branch: string): { number: number; url: string }
     'number,url',
   ])
   const parsed = JSON.parse(raw) as Array<{ number: number; url: string }>
-  if (parsed.length === 0) return null
-  return parsed[0]
+  return parsed[0] ?? null
 }
 
 function closePrAndDeleteBranch(prNumber: number, branch: string, reason: string): void {
@@ -264,6 +265,34 @@ function ensureBackToMain(): void {
   runInheritAllowFailure(commandFor('git'), ['pull', '--ff-only', REMOTE, MAIN_BRANCH])
 }
 
+function waitForReleaseWorkflow(headCommit: string): void {
+  const deadlineMs = Date.now() + RELEASE_TIMEOUT_MS
+  console.log(
+    `[changeversion] Waiting for ${RELEASE_WORKFLOW_FILE} on ${MAIN_BRANCH} at ${headCommit}...`
+  )
+
+  const run = waitForWorkflowRunToAppear(
+    RELEASE_WORKFLOW_FILE,
+    MAIN_BRANCH,
+    headCommit,
+    Math.max(deadlineMs - Date.now(), 1)
+  )
+  console.log(`[changeversion] Release workflow detected: ${run.url}`)
+
+  const remainingMs = deadlineMs - Date.now()
+  if (remainingMs <= 0) {
+    throw new Error(`Release workflow '${RELEASE_WORKFLOW_FILE}' timed out before it could finish.`)
+  }
+
+  const watchResult = watchWorkflowRun(run.databaseId, remainingMs)
+  if (watchResult.timedOut) {
+    throw new Error(`Release workflow timed out: ${run.url}`)
+  }
+  if (watchResult.status !== 0) {
+    throw new Error(`Release workflow failed: ${run.url}`)
+  }
+}
+
 function main(): void {
   ensureOnMainBranch()
   ensureMainIsSyncedWithRemote()
@@ -272,6 +301,7 @@ function main(): void {
   let stashRef: string | null = null
   let releaseBranch: string | null = null
   let prNumber: number | null = null
+  let prMerged = false
   let workflowError: Error | null = null
 
   try {
@@ -330,7 +360,7 @@ function main(): void {
         }
 
         console.log(`[changeversion] PR #${prNumber} created. Waiting for checks...`)
-        const checks = waitForPrChecks(prNumber, CI_TIMEOUT_MS)
+        const checks = waitForPrChecks(prNumber, PR_CHECK_TIMEOUT_MS)
         if (checks.timedOut || checks.status !== 0) {
           const reason = checks.timedOut
             ? 'Closed automatically: CI checks timed out in changeversion automation.'
@@ -351,22 +381,31 @@ function main(): void {
           '--admin',
           '--delete-branch',
         ])
+        prMerged = true
 
         runInheritOrThrow(commandFor('git'), ['switch', MAIN_BRANCH])
         runInheritOrThrow(commandFor('git'), ['pull', '--ff-only', REMOTE, MAIN_BRANCH])
         deleteLocalBranchIfExists(releaseBranch)
-        console.log('[changeversion] Completed. Local main is synced and ready for `pnpm release`.')
+
+        const mergedHead = runCapture(commandFor('git'), ['rev-parse', 'HEAD'])
+        waitForReleaseWorkflow(mergedHead)
+
+        releaseBranch = null
+        prNumber = null
+        console.log(
+          '[changeversion] Completed. Local main is synced and GitHub release automation succeeded.'
+        )
       }
     }
   } catch (error) {
     workflowError = error instanceof Error ? error : new Error(String(error))
-    if (prNumber !== null && releaseBranch !== null) {
+    if (!prMerged && prNumber !== null && releaseBranch !== null) {
       closePrAndDeleteBranch(
         prNumber,
         releaseBranch,
         'Closed automatically due to changeversion automation failure.'
       )
-    } else if (releaseBranch !== null) {
+    } else if (!prMerged && releaseBranch !== null) {
       const existingPr = findOpenPrByHeadBranch(releaseBranch)
       if (existingPr) {
         closePrAndDeleteBranch(
