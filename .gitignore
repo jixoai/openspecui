@@ -17,7 +17,7 @@ provider.json
 
 test-output/
 .opencode
-packages/.DS_Store
+.DS_Store
 openspec/.openspecui.json
 
 .wrangler/

@@ -48,4 +48,5 @@ MUST READ: CLAUDE.md
   1. run `pnpm changeversion`
   2. wait for the changeversion PR checks to pass
   3. auto-merge the changeversion PR
-  4. notify manager that `pnpm release` is ready to run
+  4. wait for GitHub Actions `release.yml` on `main` to publish packages and push tags
+  5. notify manager only after the GitHub release automation succeeds
