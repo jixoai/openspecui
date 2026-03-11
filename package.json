@@ -8,8 +8,10 @@
     "dev": "bun run scripts/dev-tui.tsx",
     "dev:legacy": "tsx scripts/dev.ts",
     "openspecui": "pnpm --filter openspecui dev",
+    "dev:app": "pnpm --filter @openspecui/app dev",
     "dev:server": "pnpm --filter @openspecui/server dev",
     "dev:web": "pnpm --filter @openspecui/web dev",
+    "dev:website": "pnpm --filter @openspecui/website dev",
     "build": "pnpm run build:deps && pnpm run typecheck && pnpm run build:packages && pnpm run build:cli",
     "build:deps": "pnpm --filter @openspecui/core build && pnpm --filter @openspecui/search build && pnpm --filter @openspecui/ai-provider build",
     "build:packages": "pnpm --filter @openspecui/server build && pnpm --filter @openspecui/web build",
@@ -23,7 +25,7 @@
     "format:check": "tsx scripts/format-check.ts",
     "test": "vitest",
     "test:ci": "pnpm -r --workspace-concurrency=1 --if-present run test",
-    "test:browser:ci": "pnpm --filter xterm-input-panel test:browser && pnpm --filter @openspecui/web test:browser",
+    "test:browser:ci": "pnpm --filter xterm-input-panel test:browser && pnpm --filter @openspecui/web test:browser:ci",
     "changeset:check": "node scripts/changeset-check.mjs",
     "changeset": "changeset",
     "changeversion": "bun ./scripts/changeversion-auto.ts",
@@ -36,7 +38,9 @@
     "nix:show": "nix flake show --extra-experimental-features nix-command --extra-experimental-features flakes",
     "example:setup": "tsx scripts/setup-example.ts",
     "example:clean": "tsx scripts/setup-example.ts --clean",
-    "example:dev": "pnpm example:setup && pnpm preview --dir ./example"
+    "example:dev": "pnpm example:setup && pnpm preview --dir ./example",
+    "deploy:app:cf": "pnpm --filter @openspecui/app cf:deploy",
+    "deploy:website:cf": "pnpm --filter @openspecui/website cf:deploy"
   },
   "keywords": [
     "openspec",

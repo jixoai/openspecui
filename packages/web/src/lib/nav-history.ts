@@ -39,7 +39,7 @@ export function createNavHistory(
       window.history.forward()
     },
     createHref(path: string) {
-      return path
+      return controller.createHref(area, path)
     },
   })
 

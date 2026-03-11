@@ -19,7 +19,6 @@ import {
   getWatcherRuntimeStatus,
   reactiveReadDir,
   reactiveReadFile,
-  reactiveStat,
   sniffGlobalCli,
   TerminalConfigSchema,
   TerminalRendererEngineSchema,
@@ -498,48 +497,14 @@ async function fetchDashboardOverview(
     ctx.adapter.listChangesWithMeta(),
     ctx.adapter.listArchivedChangesWithMeta(),
   ])
-  await ctx.kernel.waitForWarmup()
-  await ctx.kernel.ensureStatusList()
-  const statusList = ctx.kernel.getStatusList()
-
-  const changeMetaMap = new Map(changeMetas.map((change) => [change.id, change]))
-  const activeChangeIds = new Set<string>([
-    ...changeMetas.map((change) => change.id),
-    ...statusList.map((status) => status.changeName),
-  ])
-  const statusByChange = new Map(statusList.map((status) => [status.changeName, status]))
-
-  const activeChanges = (
-    await Promise.all(
-      [...activeChangeIds].map(async (changeId) => {
-        const status = statusByChange.get(changeId)
-        const changeMeta = changeMetaMap.get(changeId)
-        const changeDir = join(ctx.projectDir, 'openspec', 'changes', changeId)
-        const statInfo = await reactiveStat(changeDir)
-
-        let progress = changeMeta?.progress ?? { total: 0, completed: 0 }
-        if (status) {
-          try {
-            await ctx.kernel.ensureApplyInstructions(changeId, status.schemaName)
-            const apply = ctx.kernel.getApplyInstructions(changeId, status.schemaName)
-            progress = {
-              total: apply.progress.total,
-              completed: apply.progress.complete,
-            }
-          } catch {
-            // Keep fallback progress when apply instruction is unavailable.
-          }
-        }
-
-        return {
-          id: changeId,
-          name: changeMeta?.name ?? changeId,
-          progress,
-          updatedAt: changeMeta?.updatedAt ?? statInfo?.mtime ?? 0,
-        }
-      })
-    )
-  ).sort((a, b) => b.updatedAt - a.updatedAt)
+  const activeChanges = changeMetas
+    .map((changeMeta) => ({
+      id: changeMeta.id,
+      name: changeMeta.name ?? changeMeta.id,
+      progress: changeMeta.progress,
+      updatedAt: changeMeta.updatedAt,
+    }))
+    .sort((a, b) => b.updatedAt - a.updatedAt)
 
   const archivedChanges = (
     await Promise.all(
@@ -993,6 +958,7 @@ export const configRouter = router({
             theme: CodeEditorThemeSchema.optional(),
           })
           .optional(),
+        appBaseUrl: z.string().optional(),
         terminal: TerminalConfigSchema.omit({ rendererEngine: true })
           .partial()
           .extend({
@@ -1013,12 +979,14 @@ export const configRouter = router({
         if (
           input.theme !== undefined ||
           input.codeEditor !== undefined ||
+          input.appBaseUrl !== undefined ||
           input.terminal !== undefined ||
           input.dashboard !== undefined
         ) {
           await ctx.configManager.writeConfig({
             theme: input.theme,
             codeEditor: input.codeEditor,
+            appBaseUrl: input.appBaseUrl,
             terminal: input.terminal,
             dashboard: input.dashboard,
           })

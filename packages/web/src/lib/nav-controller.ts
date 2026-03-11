@@ -1,5 +1,6 @@
 import type { HistoryLocation, RouterHistory } from '@tanstack/react-router'
-import { isStaticMode } from './static-mode'
+import { getHostedScopedStorageKey } from './hosted-session'
+import { getBasePath, isStaticMode } from './static-mode'
 
 export type TabId =
   | '/dashboard'
@@ -103,8 +104,13 @@ const POP_ROUTES = [
   '/opsx-verify',
   '/opsx-compose',
 ] as const
-const KV_KEY = 'nav-layout'
-const LS_KEY = 'nav-layout'
+function getRemoteStorageKey(): string {
+  return getHostedScopedStorageKey('nav-layout', window.location)
+}
+
+function getLocalStorageKey(): string {
+  return getHostedScopedStorageKey('nav-layout', window.location)
+}
 const PERSIST_DEBOUNCE = 300
 
 function isTabId(value: string): value is TabId {
@@ -157,6 +163,46 @@ function parseHref(href: string, state?: unknown): HistoryLocation {
     search: url.search,
     hash: url.hash,
     state: toParsedHistoryState(state, key),
+  }
+}
+
+function normalizeBasePath(basePath: string): string {
+  const trimmed = basePath.trim()
+  if (!trimmed || trimmed === './' || trimmed === '.') return '/'
+  const withLeadingSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+  const normalized = withLeadingSlash.endsWith('/') ? withLeadingSlash : `${withLeadingSlash}/`
+  return normalized.replace(/\/+/g, '/')
+}
+
+function stripBasePath(pathname: string, basePath: string): string {
+  if (basePath === '/') return pathname || '/'
+  if (pathname === basePath.slice(0, -1)) return '/'
+  if (!pathname.startsWith(basePath)) return pathname || '/'
+  const stripped = pathname.slice(basePath.length - 1)
+  return stripped || '/'
+}
+
+function applyBasePath(pathname: string, basePath: string): string {
+  if (basePath === '/') return pathname || '/'
+  const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`
+  if (normalizedPath === '/') return basePath.slice(0, -1) || '/'
+  return `${basePath.slice(0, -1)}${normalizedPath}`
+}
+
+function normalizeNavigationHref(href: string): string {
+  if (typeof window === 'undefined') return href
+  const url = new URL(href, window.location.origin)
+  const basePath = normalizeBasePath(getBasePath())
+  url.pathname = stripBasePath(url.pathname, basePath)
+  return `${url.pathname}${url.search}${url.hash}`
+}
+
+function preserveHostedSearchParams(target: URL, source: URL): void {
+  for (const key of ['api', 'session']) {
+    const value = source.searchParams.get(key)
+    if (value && !target.searchParams.has(key)) {
+      target.searchParams.set(key, value)
+    }
   }
 }
 
@@ -279,6 +325,8 @@ function parseBrowserLocation(
   pop: HistoryLocation
 } {
   const url = new URL(loc.href)
+  const basePath = normalizeBasePath(getBasePath())
+  url.pathname = stripBasePath(url.pathname, basePath)
   const rawBottomHref = url.searchParams.get('_b')
   const rawPopHref = url.searchParams.get('_p')
   url.searchParams.delete('_b')
@@ -297,7 +345,11 @@ function parseBrowserLocation(
 }
 
 function buildCanonicalUrl(state: KernelState): string {
+  const currentUrl = new URL(window.location.href)
   const url = new URL(state.mainLocation.href, window.location.origin)
+  const basePath = normalizeBasePath(getBasePath())
+  url.pathname = applyBasePath(url.pathname, basePath)
+  preserveHostedSearchParams(url, currentUrl)
   url.searchParams.delete('_b')
   url.searchParams.delete('_p')
 
@@ -329,7 +381,7 @@ function createInitialState(): KernelState {
 
 function readLocalStorage(): PersistedNavLayout | null {
   try {
-    const raw = localStorage.getItem(LS_KEY)
+    const raw = localStorage.getItem(getLocalStorageKey())
     if (!raw) return null
     return parsePersistedLayout(JSON.parse(raw))
   } catch {
@@ -339,7 +391,7 @@ function readLocalStorage(): PersistedNavLayout | null {
 
 function writeLocalStorage(layout: PersistedNavLayout): void {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(layout))
+    localStorage.setItem(getLocalStorageKey(), JSON.stringify(layout))
   } catch {
     // ignore
   }
@@ -702,7 +754,7 @@ export class NavController {
       type: 'NAVIGATE',
       sourceArea: area,
       action: 'PUSH',
-      location: parseHref(path, state),
+      location: parseHref(normalizeNavigationHref(path), state),
     })
   }
 
@@ -711,8 +763,21 @@ export class NavController {
       type: 'NAVIGATE',
       sourceArea: area,
       action: 'REPLACE',
-      location: parseHref(path, state),
+      location: parseHref(normalizeNavigationHref(path), state),
     })
+  }
+
+  createHref(area: Area, path: string, state?: unknown): string {
+    if (typeof window === 'undefined') return path
+
+    const { nextState } = this.computeTransition({
+      type: 'NAVIGATE',
+      sourceArea: area,
+      action: 'PUSH',
+      location: parseHref(normalizeNavigationHref(path), state),
+    })
+
+    return buildCanonicalUrl(nextState)
   }
 
   get mainTabs(): readonly TabId[] {
@@ -785,7 +850,9 @@ export class NavController {
 
     try {
       const { trpcClient } = await import('./trpc')
-      const remote = parsePersistedLayout(await trpcClient.kv.get.query({ key: KV_KEY }))
+      const remote = parsePersistedLayout(
+        await trpcClient.kv.get.query({ key: getRemoteStorageKey() })
+      )
 
       if (remote) {
         if (remote.updatedAt > this.state.updatedAt) {
@@ -793,7 +860,7 @@ export class NavController {
         } else if (this.state.updatedAt > remote.updatedAt) {
           trpcClient.kv.set
             .mutate({
-              key: KV_KEY,
+              key: getRemoteStorageKey(),
               value: {
                 mainTabs: this.state.mainTabs,
                 bottomTabs: this.state.bottomTabs,
@@ -805,7 +872,7 @@ export class NavController {
       } else if (this.state.updatedAt > 0) {
         trpcClient.kv.set
           .mutate({
-            key: KV_KEY,
+            key: getRemoteStorageKey(),
             value: {
               mainTabs: this.state.mainTabs,
               bottomTabs: this.state.bottomTabs,
@@ -816,7 +883,7 @@ export class NavController {
       }
 
       const subscription = trpcClient.kv.subscribe.subscribe(
-        { key: KV_KEY },
+        { key: getRemoteStorageKey() },
         {
           onData: (data: unknown) => {
             const incoming = parsePersistedLayout(data)
@@ -853,6 +920,20 @@ export class NavController {
       bottomLocation: parsed.bottom,
       popLocation: parsed.pop,
     })
+  }
+
+  private computeTransition(event: KernelEvent): {
+    transition: KernelTransition
+    nextState: KernelState
+  } {
+    const transition = reduceKernel(this.state, event)
+    if (!transition.changed) {
+      return { transition, nextState: this.state }
+    }
+
+    let nextState = applyBehaviorPlugins(this.state, transition.nextState, event)
+    nextState = normalizeState(nextState)
+    return { transition, nextState }
   }
 
   private dispatch(event: KernelEvent): void {
@@ -978,7 +1059,7 @@ export class NavController {
       import('./trpc')
         .then(({ trpcClient }) =>
           trpcClient.kv.set.mutate({
-            key: KV_KEY,
+            key: getRemoteStorageKey(),
             value: {
               mainTabs: this.state.mainTabs,
               bottomTabs: this.state.bottomTabs,

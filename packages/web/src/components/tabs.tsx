@@ -21,6 +21,8 @@ export interface Tab {
   closeButtonVisibility?: 'hover' | 'always'
 }
 
+export type TabsVariant = 'default' | 'terminal'
+
 interface TabsProps {
   tabs: Tab[]
   /** Controlled selected tab id */
@@ -33,6 +35,7 @@ interface TabsProps {
   /** Called when the tabs bar is double-clicked (usually on empty space) */
   onTabBarDoubleClick?: () => void
   className?: string
+  variant?: TabsVariant
 }
 
 const tabsStyle = (id: string) => {
@@ -61,7 +64,11 @@ const tabsStyle = (id: string) => {
               & > button {
                 scroll-snap-align: start;
                 text-align: center;
-                &.tab-selected {
+              }
+            }
+            &[data-tabs-variant='default'] {
+              .tabs-button {
+                & > button.tab-selected {
                   background-image: linear-gradient(
                     to bottom,
                     transparent,
@@ -123,6 +130,7 @@ export function Tabs({
   actions,
   onTabBarDoubleClick,
   className = '',
+  variant = 'default',
 }: TabsProps) {
   const [uncontrolled, setUncontrolled] = useState<string>(tabs[0]?.id ?? '')
   const activeTab = controlled ?? uncontrolled
@@ -137,8 +145,37 @@ export function Tabs({
   if (tabs.length === 0) return null
 
   const id = useId()
-
   const style = useMemo(() => tabsStyle(id), [id])
+
+  const headerClassName =
+    variant === 'terminal'
+      ? 'tabs-header z-2 bg-terminal text-terminal-foreground sticky top-0 flex min-w-0 items-stretch'
+      : 'tabs-header z-2 bg-background sticky top-0 flex min-w-0 items-stretch'
+
+  const stripClassName =
+    variant === 'terminal'
+      ? 'tabs-strip min-w-0 flex-1 bg-terminal px-4'
+      : 'tabs-strip min-w-0 flex-1 px-4'
+
+  const listClassName = 'tabs-button scrollbar-none flex min-w-0 gap-1 overflow-x-auto'
+
+  const buttonBaseClassName = `m-0 flex h-full shrink-0 items-center gap-2 px-2 py-2 text-sm font-medium transition-colors ${variant === 'terminal' ? 'rounded-t-[8px]' : ''}`
+
+  const activeButtonClassName =
+    variant === 'terminal'
+      ? 'tab-selected bg-background text-foreground'
+      : 'tab-selected text-foreground'
+
+  const inactiveButtonClassName =
+    variant === 'terminal'
+      ? 'bg-terminal text-terminal-foreground hover:bg-background hover:text-foreground'
+      : 'text-muted-foreground hover:text-foreground'
+
+  const actionsClassName =
+    variant === 'terminal'
+      ? 'tabs-actions border-border bg-terminal text-terminal-foreground flex shrink-0 items-center border-b px-1'
+      : 'tabs-actions border-border bg-background flex shrink-0 items-center border-b px-1'
+
   const handleTabBarDoubleClick = (e: ReactMouseEvent<HTMLDivElement>) => {
     if (!onTabBarDoubleClick) return
     if ((e.target as HTMLElement).closest('[data-tab-item="true"]')) return
@@ -146,24 +183,22 @@ export function Tabs({
   }
 
   return (
-    <div id={id} className={`flex min-h-0 min-w-0 flex-1 flex-col ${className}`}>
+    <div
+      id={id}
+      data-tabs-variant={variant}
+      className={`flex min-h-0 min-w-0 flex-1 flex-col ${className}`}
+    >
       {style}
-      {/* Tab header: scrollable tabs + fixed actions */}
-      <div className="z-2 bg-background sticky top-0 flex min-w-0 items-stretch">
-        <div className="tabs-strip min-w-0 flex-1 px-4">
-          <div
-            className="tabs-button scrollbar-none flex min-w-0 gap-1 overflow-x-auto"
-            onDoubleClick={handleTabBarDoubleClick}
-          >
+      <div className={headerClassName}>
+        <div className={stripClassName}>
+          <div className={listClassName} onDoubleClick={handleTabBarDoubleClick}>
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 data-tab-item="true"
                 onClick={() => handleChange(tab.id)}
-                className={`m-0 flex h-full shrink-0 items-center gap-2 px-2 py-2 text-sm font-medium transition-colors ${
-                  activeTab === tab.id
-                    ? 'tab-selected text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
+                className={`${buttonBaseClassName} ${
+                  activeTab === tab.id ? activeButtonClassName : inactiveButtonClassName
                 }`}
               >
                 {tab.icon}
@@ -182,11 +217,11 @@ export function Tabs({
                         onTabClose(tab.id)
                       }
                     }}
-                    className={`text-muted-foreground hover:text-foreground -mr-1 rounded p-0.5 transition ${
+                    className={`hover:text-foreground -mr-1 rounded p-0.5 transition ${
                       tab.closeButtonVisibility === 'always'
                         ? 'opacity-100'
                         : 'opacity-0 group-hover:opacity-100 [button:hover>&]:opacity-100'
-                    }`}
+                    } ${activeTab === tab.id ? 'text-current/80' : 'text-muted-foreground'}`}
                   >
                     <X className="h-3 w-3" />
                   </span>
@@ -196,13 +231,12 @@ export function Tabs({
           </div>
         </div>
         {actions && (
-          <div className="border-border bg-background flex shrink-0 items-center border-b px-1">
+          <div data-tabs-actions="true" className={actionsClassName}>
             {actions}
           </div>
         )}
       </div>
 
-      {/* Tab content with Activity for state preservation */}
       {tabs.map((tab) =>
         tab.unmountOnHide ? (
           activeTab === tab.id && (

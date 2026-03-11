@@ -511,6 +511,9 @@ export const OpenSpecUIConfigSchema = z.object({
   /** 代码编辑器配置 */
   codeEditor: CodeEditorConfigSchema.default(CodeEditorConfigSchema.parse({})),
 
+  /** Hosted app 基础 URL（空字符串表示使用官方默认值） */
+  appBaseUrl: z.string().default(''),
+
   /** 终端配置 */
   terminal: TerminalConfigSchema.default(TerminalConfigSchema.parse({})),
 
@@ -526,6 +529,7 @@ export type OpenSpecUIConfigUpdate = {
   }
   theme?: OpenSpecUIConfig['theme']
   codeEditor?: Partial<OpenSpecUIConfig['codeEditor']>
+  appBaseUrl?: OpenSpecUIConfig['appBaseUrl']
   terminal?: Partial<TerminalConfig>
   dashboard?: Partial<DashboardConfig>
 }
@@ -537,6 +541,7 @@ export const DEFAULT_CONFIG: OpenSpecUIConfig = {
   },
   theme: 'system',
   codeEditor: CodeEditorConfigSchema.parse({}),
+  appBaseUrl: '',
   terminal: TerminalConfigSchema.parse({}),
   dashboard: DashboardConfigSchema.parse({}),
 }
@@ -621,6 +626,7 @@ export class ConfigManager {
       cli: nextCli,
       theme: config.theme ?? current.theme,
       codeEditor: { ...current.codeEditor, ...config.codeEditor },
+      appBaseUrl: config.appBaseUrl ?? current.appBaseUrl,
       terminal: { ...current.terminal, ...config.terminal },
       dashboard: { ...current.dashboard, ...config.dashboard },
     }

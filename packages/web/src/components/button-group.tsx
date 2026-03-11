@@ -11,6 +11,7 @@ interface ButtonGroupProps<T extends string = string> {
   options: ButtonGroupOption<T>[]
   onChange: (value: T) => void
   className?: string
+  tone?: 'default' | 'terminal'
 }
 
 /**
@@ -21,13 +22,25 @@ export function ButtonGroup<T extends string>({
   options,
   onChange,
   className = '',
+  tone = 'default',
 }: ButtonGroupProps<T>) {
+  const containerClassName =
+    tone === 'terminal'
+      ? 'border-terminal-foreground/25 bg-terminal/70 text-terminal-foreground'
+      : 'border-border bg-card'
+
   return (
     <div
-      className={`border-border bg-card inline-flex overflow-hidden rounded-md border ${className}`}
+      className={`inline-flex overflow-hidden rounded-md border ${containerClassName} ${className}`}
     >
       {options.map((option, index) => {
         const active = option.value === value
+        const stateClassName = active
+          ? 'bg-primary text-primary-foreground'
+          : tone === 'terminal'
+            ? 'text-terminal-foreground/72 hover:bg-terminal-foreground/10 hover:text-terminal-foreground'
+            : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+
         return (
           <button
             key={option.value}
@@ -36,12 +49,12 @@ export function ButtonGroup<T extends string>({
             onClick={() => onChange(option.value)}
             aria-pressed={active}
             className={`px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-              index > 0 ? 'border-border border-l' : ''
-            } ${
-              active
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-            }`}
+              index > 0
+                ? tone === 'terminal'
+                  ? 'border-terminal-foreground/20 border-l'
+                  : 'border-border border-l'
+                : ''
+            } ${stateClassName}`}
           >
             {option.label}
           </button>

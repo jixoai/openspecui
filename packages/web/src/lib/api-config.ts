@@ -1,71 +1,58 @@
-/**
- * API configuration with support for URL parameters
- *
- * Supports:
- * - Same-origin requests (production mode)
- * - URL parameter override: ?api=http://localhost:3100
- */
+import { getHostedApiBootstrapState } from './hosted-session'
 
-/**
- * Check if running in browser environment
- */
 function isBrowser(): boolean {
   return typeof window !== 'undefined' && typeof window.location !== 'undefined'
 }
 
-/**
- * Get API base URL from URL search params or use same-origin
- */
-export function getApiBaseUrl(): string {
+export function getHostedApiState(): ReturnType<typeof getHostedApiBootstrapState> {
   if (!isBrowser()) {
-    return '' // SSR: return empty string
+    return {
+      hosted: false,
+      apiBaseUrl: null,
+      sessionId: null,
+    }
   }
 
-  const params = new URLSearchParams(window.location.search)
-  const apiUrl = params.get('api')
-
-  if (apiUrl) {
-    // Remove trailing slash if present
-    return apiUrl.replace(/\/$/, '')
-  }
-
-  // Default: same-origin (works in production when served from CLI)
-  return ''
+  return getHostedApiBootstrapState(window.location)
 }
 
-/**
- * Get WebSocket URL based on API base URL
- */
-export function getWsUrl(): string {
+export function getApiBaseUrl(): string {
   if (!isBrowser()) {
-    return '' // SSR: return empty string
+    return ''
+  }
+
+  return getHostedApiState().apiBaseUrl ?? ''
+}
+
+function buildWebSocketUrl(pathname: string): string {
+  if (!isBrowser()) {
+    return ''
   }
 
   const baseUrl = getApiBaseUrl()
-
   if (baseUrl) {
-    // Convert http(s) to ws(s)
     const url = new URL(baseUrl)
     const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${wsProtocol}//${url.host}/trpc`
+    return `${wsProtocol}//${url.host}${pathname}`
   }
 
-  // Same-origin WebSocket
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.host}/trpc`
+  return `${protocol}//${window.location.host}${pathname}`
 }
 
-/**
- * Get HTTP URL for tRPC
- */
+export function getWsUrl(): string {
+  return buildWebSocketUrl('/trpc')
+}
+
+export function getPtyWsUrl(): string {
+  return buildWebSocketUrl('/ws/pty')
+}
+
 export function getTrpcUrl(): string {
   const baseUrl = getApiBaseUrl()
   return baseUrl ? `${baseUrl}/trpc` : '/trpc'
 }
 
-/**
- * Get health check URL
- */
 export function getHealthUrl(): string {
   const baseUrl = getApiBaseUrl()
   return baseUrl ? `${baseUrl}/api/health` : '/api/health'

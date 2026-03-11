@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { ConfigManager } from '@openspecui/core'
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -7,16 +8,20 @@ import yargs from 'yargs'
 import { hideBin } from 'yargs/helpers'
 import type { ExportFormat } from './export.js'
 import { exportStaticSite } from './export.js'
+import { buildHostedAppLaunchUrl, resolveEffectiveHostedAppBaseUrl } from './hosted-app.js'
 import { startServer } from './index.js'
+import {
+  resolveLocalHostedAppWorkspace,
+  shouldUseLocalHostedAppDevMode,
+  startLocalHostedAppDev,
+  type LocalHostedAppDevSession,
+} from './local-hosted-app-dev.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+const DEFAULT_HOSTED_CORS_ORIGINS = ['http://localhost:5173', 'http://localhost:3000']
 
-/**
- * Read version from package.json
- */
 function getVersion(): string {
   try {
-    // In production, package.json is at ../package.json relative to dist/
     const pkgPath = join(__dirname, '..', 'package.json')
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
     return pkg.version || '0.0.0'
@@ -25,8 +30,13 @@ function getVersion(): string {
   }
 }
 
+function buildHostedCorsOrigins(baseUrl: string): string[] {
+  const origins = new Set(DEFAULT_HOSTED_CORS_ORIGINS)
+  origins.add(new URL(baseUrl).origin)
+  return [...origins]
+}
+
 async function main(): Promise<void> {
-  // pnpm sets INIT_CWD to the original working directory
   const originalCwd = process.env.INIT_CWD || process.cwd()
 
   await yargs(hideBin(process.argv))
@@ -56,10 +66,16 @@ async function main(): Promise<void> {
             type: 'boolean',
             default: true,
           })
+          .option('app', {
+            describe:
+              'Open the hosted app at the official or custom base URL. Supports --app and --app=<baseUrl>.',
+            type: 'string',
+          })
       },
       async (argv) => {
         const rawDir = (argv['project-dir'] as string | undefined) || argv.dir || '.'
         const projectDir = resolve(originalCwd, rawDir)
+        const useHostedApp = argv.app !== undefined
 
         console.log(`
 ┌─────────────────────────────────────────────┐
@@ -71,40 +87,82 @@ async function main(): Promise<void> {
         console.log(`📁 Project: ${projectDir}`)
         console.log('')
 
+        let server: Awaited<ReturnType<typeof startServer>> | null = null
+        let localHostedApp: LocalHostedAppDevSession | null = null
+
         try {
-          const server = await startServer({
+          const localVersion = getVersion()
+          let hostedBaseUrl: string | null = null
+
+          if (useHostedApp) {
+            const workspace = resolveLocalHostedAppWorkspace(__dirname)
+            const localHostedAppMode = { appValue: argv.app, workspace }
+
+            if (shouldUseLocalHostedAppDevMode(localHostedAppMode)) {
+              localHostedApp = await startLocalHostedAppDev({
+                workspace: localHostedAppMode.workspace,
+                resolvedVersion: localVersion,
+              })
+              hostedBaseUrl = localHostedApp.baseUrl
+            } else {
+              const configManager = new ConfigManager(projectDir)
+              const config = await configManager.readConfig()
+              hostedBaseUrl = resolveEffectiveHostedAppBaseUrl({
+                override: argv.app,
+                configured: config.appBaseUrl,
+              })
+            }
+          }
+
+          server = await startServer({
             projectDir,
             port: argv.port,
-            open: argv.open,
+            open: false,
+            corsOrigins: hostedBaseUrl ? buildHostedCorsOrigins(hostedBaseUrl) : undefined,
           })
 
           if (server.port !== server.preferredPort) {
             console.log(`⚠️  Port ${server.preferredPort} is in use, using ${server.port} instead`)
           }
           console.log(`✅ Server running at ${server.url}`)
+
+          let browserUrl = server.url
+          if (useHostedApp && hostedBaseUrl) {
+            browserUrl = buildHostedAppLaunchUrl({
+              baseUrl: hostedBaseUrl,
+              apiBaseUrl: server.url,
+            })
+
+            console.log(`🌐 Hosted app base: ${hostedBaseUrl}`)
+            console.log(`🔗 Hosted URL: ${browserUrl}`)
+          }
+
           console.log('')
 
           if (argv.open) {
             const open = await import('open')
-            await open.default(server.url)
-            console.log('🌐 Browser opened')
+            await open.default(browserUrl)
+            console.log(useHostedApp ? '🌐 Hosted app opened' : '🌐 Browser opened')
           }
 
           console.log('')
           console.log('Press Ctrl+C to stop the server')
 
-          // Handle graceful shutdown
           process.on('SIGINT', async () => {
             console.log('\n\n👋 Shutting down...')
-            await server.close()
+            await localHostedApp?.close()
+            await server?.close()
             process.exit(0)
           })
 
           process.on('SIGTERM', async () => {
-            await server.close()
+            await localHostedApp?.close()
+            await server?.close()
             process.exit(0)
           })
         } catch (error) {
+          await localHostedApp?.close()
+          await server?.close()
           console.error('❌ Failed to start server:', error)
           process.exit(1)
         }
@@ -179,7 +237,6 @@ async function main(): Promise<void> {
             previewHost: argv['preview-host'],
           })
 
-          // If --open was used, the SSG CLI keeps running, so we don't exit
           if (!shouldOpen) {
             process.exit(0)
           }
@@ -189,19 +246,16 @@ async function main(): Promise<void> {
         }
       }
     )
-    .example('$0', 'Start server in current directory')
-    .example('$0 ./my-project', 'Start server with specific project')
-    .example('$0 -p 8080', 'Start server on custom port')
-    .example('$0 export -o ./dist', 'Export HTML to ./dist directory')
-    .example('$0 export -o ./dist -f json', 'Export JSON data only')
-    .example('$0 export -o ./dist -p 8092', 'Export and open preview on port 8092')
-    .example('$0 export -o ./dist --base-path=/docs/', 'Export for subdirectory deployment')
-    .example('$0 export -o ./dist --clean', 'Clean output directory before export')
-    .version(getVersion())
-    .alias('v', 'version')
     .help()
-    .alias('h', 'help')
-    .parse()
+    .alias('help', 'h')
+    .version(getVersion())
+    .alias('version', 'v')
+    .strict()
+    .parseAsync()
 }
 
-main()
+// Run CLI
+main().catch((error) => {
+  console.error('Fatal error:', error)
+  process.exit(1)
+})

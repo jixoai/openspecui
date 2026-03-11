@@ -12,7 +12,9 @@ import {
 } from '@opentui/core'
 import { createRoot, useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/react'
 import { Terminal as HeadlessTerminal } from '@xterm/headless'
+import { existsSync } from 'node:fs'
 import { createServer } from 'node:net'
+import { join } from 'node:path'
 import process from 'node:process'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -86,6 +88,19 @@ function getTerminalViewport(
 
 function plainStyledText(content: string): StyledText {
   return new StyledText([{ __isChunk: true, text: content }])
+}
+
+async function readWorkspacePackageVersion(packageJsonPath: string): Promise<string> {
+  const content = await Bun.file(packageJsonPath).json()
+  if (
+    typeof content === 'object' &&
+    content !== null &&
+    'version' in content &&
+    typeof content.version === 'string'
+  ) {
+    return content.version
+  }
+  return '0.0.0-dev'
 }
 
 const ANSI_16_RGB: ReadonlyArray<readonly [number, number, number]> = [
@@ -980,7 +995,7 @@ function DevApp({ tasks }: { tasks: readonly DevTask[] }) {
       return
     }
 
-    if (keyName >= '1' && keyName <= '4') {
+    if (keyName >= '1' && keyName <= '9') {
       const dynamicTabs = tabs.slice(1)
       const target = dynamicTabs[Number(keyName) - 1]
       if (target) setActiveTabId(target.id)
@@ -1096,7 +1111,7 @@ function DevApp({ tasks }: { tasks: readonly DevTask[] }) {
 
   const innerWidth = Math.max(8, width - 2)
   const messageLine = renderFullLine(
-    'Enter:start  S:stop  R:restart  <-/->:tab  1-4  `:home  Q/Ctrl+C:quit',
+    'Enter:start  S:stop  R:restart  <-/->:tab  1-9:task tab  `:home  Q/Ctrl+C:quit',
     innerWidth
   )
   const divider = '─'.repeat(Math.max(8, width - 2))
@@ -1161,6 +1176,12 @@ const preferredPort =
   options.port ?? Number(process.env.OPENSPEC_SERVER_PORT || process.env.PORT || 3100)
 const port = await findAvailablePort(preferredPort, 10)
 const apiUrl = process.env.VITE_API_URL || `http://localhost:${port}`
+const repoRoot = process.cwd()
+const webDistDir = join(repoRoot, 'packages', 'web', 'dist')
+const webDistIndexPath = join(webDistDir, 'index.html')
+const webPackageVersion = await readWorkspacePackageVersion(
+  join(repoRoot, 'packages', 'web', 'package.json')
+)
 
 const bootstrap = Bun.spawnSync({
   cmd: ['pnpm', '--filter', '@openspecui/core', 'build'],
@@ -1179,6 +1200,20 @@ const searchBootstrap = Bun.spawnSync({
 })
 if (searchBootstrap.exitCode !== 0) {
   throw new Error(`Failed to build @openspecui/search (exit ${searchBootstrap.exitCode})`)
+}
+
+if (!existsSync(webDistIndexPath)) {
+  const webBootstrap = Bun.spawnSync({
+    cmd: ['pnpm', '--filter', '@openspecui/web', 'build'],
+    cwd: repoRoot,
+    stdout: 'inherit',
+    stderr: 'inherit',
+  })
+  if (webBootstrap.exitCode !== 0) {
+    throw new Error(
+      `Failed to build @openspecui/web for hosted app dev (exit ${webBootstrap.exitCode})`
+    )
+  }
 }
 
 const serverArgs = ['--filter', '@openspecui/server', 'dev', '--', '--port', String(port)]
@@ -1220,6 +1255,20 @@ const tasks: DevTask[] = [
     env: {
       VITE_API_URL: apiUrl,
       OPENSPEC_SERVER_PORT: String(port),
+    },
+    autoStart: true,
+  },
+  {
+    id: 'app-dev',
+    name: 'Hosted App Dev',
+    description: `Run @openspecui/app and seed the hosted shell with ${apiUrl}.`,
+    command: 'pnpm',
+    args: ['--filter', '@openspecui/app', 'dev'],
+    env: {
+      OPENSPECUI_APP_DEV_MODE: '1',
+      OPENSPECUI_APP_DEV_WEB_DIST: webDistDir,
+      OPENSPECUI_APP_DEV_VERSION: webPackageVersion,
+      VITE_OPENSPECUI_APP_DEFAULT_API_URL: apiUrl,
     },
     autoStart: true,
   },

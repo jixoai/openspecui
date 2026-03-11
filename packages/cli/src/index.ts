@@ -15,6 +15,8 @@ export interface CLIOptions {
   open?: boolean
   /** Enable realtime file watching (default: true) */
   enableWatcher?: boolean
+  /** Extra CORS origins to allow for hosted app mode */
+  corsOrigins?: string[]
 }
 
 export interface RunningServer {
@@ -25,12 +27,7 @@ export interface RunningServer {
   close: () => Promise<void>
 }
 
-/**
- * Get the path to the web assets directory
- */
 function getWebAssetsDir(): string {
-  // In development, web assets are in ../web/dist
-  // In production (after build), they're in ./web
   const devPath = join(__dirname, '..', '..', 'web', 'dist')
   const prodPath = join(__dirname, '..', 'web')
 
@@ -44,9 +41,6 @@ function getWebAssetsDir(): string {
   throw new Error('Web assets not found. Make sure to build the web package first.')
 }
 
-/**
- * Setup static file serving middleware for the Hono app
- */
 function setupStaticFiles(app: Hono): void {
   const webDir = getWebAssetsDir()
 
@@ -69,14 +63,11 @@ function setupStaticFiles(app: Hono): void {
   app.use('/*', async (c, next) => {
     const path = c.req.path === '/' ? '/index.html' : c.req.path
 
-    // Skip API routes
     if (path.startsWith('/trpc')) {
       return next()
     }
 
     const filePath = join(webDir, path)
-
-    // Check if file exists
     if (existsSync(filePath) && statSync(filePath).isFile()) {
       const content = readFileSync(filePath)
       const ext = path.split('.').pop()
@@ -84,7 +75,6 @@ function setupStaticFiles(app: Hono): void {
       return c.body(content, 200, { 'Content-Type': contentType })
     }
 
-    // SPA fallback - serve index.html for non-file routes
     if (!path.includes('.')) {
       const indexPath = join(webDir, 'index.html')
       if (existsSync(indexPath)) {
@@ -97,18 +87,15 @@ function setupStaticFiles(app: Hono): void {
   })
 }
 
-/**
- * Start the OpenSpec UI server with WebSocket support for realtime updates.
- * Includes static file serving for the web UI.
- */
 export async function startServer(options: CLIOptions = {}): Promise<RunningServer> {
-  const { projectDir = process.cwd(), port = 3100, enableWatcher = true } = options
+  const { projectDir = process.cwd(), port = 3100, enableWatcher = true, corsOrigins } = options
 
   const server = await serverStartServer(
     {
       projectDir,
       port,
       enableWatcher,
+      corsOrigins,
     },
     setupStaticFiles
   )

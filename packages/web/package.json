@@ -22,7 +22,8 @@
     "test:watch": "vitest --project unit",
     "test:browser": "vitest --retry 2 --project storybook",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "test:browser:ci": "vitest run --retry 2 --project storybook"
   },
   "devDependencies": {
     "@codemirror/commands": "^6.10.0",

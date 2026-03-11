@@ -1,0 +1,36 @@
+{
+  "name": "@openspecui/app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "cf:dev": "pnpm build && wrangler pages dev dist",
+    "cf:deploy": "pnpm build && wrangler pages deploy dist --project-name openspecui-app",
+    "cf:project:create": "wrangler pages project create openspecui-app --production-branch main"
+  },
+  "devDependencies": {
+    "@openspecui/core": "workspace:*",
+    "@tailwindcss/vite": "^4.1.18",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.2.0",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.4",
+    "@types/react-dom": "^19.0.2",
+    "@types/semver": "^7.7.1",
+    "@vitejs/plugin-react": "^5.1.3",
+    "jsdom": "^25.0.1",
+    "lucide-react": "^0.472.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "semver": "^7.7.3",
+    "tar": "^7.4.3",
+    "typescript": "^5.7.2",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18",
+    "wrangler": "^4.72.0"
+  }
+}

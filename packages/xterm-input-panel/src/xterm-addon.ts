@@ -2,12 +2,12 @@ import type { ITerminalAddon, Terminal } from '@xterm/xterm'
 import { iconKeyboard, iconMousePointer2 } from './icons.js'
 import type { InputPanelLayout, InputPanelTab } from './input-panel.js'
 import type { HostPlatform } from './platform.js'
+import { getSessionScopedStorageKey } from './storage-namespace.js'
 
 const SENSITIVITY = 1.5
 const EDGE_SCROLL_ZONE = 30
 const EDGE_SCROLL_INTERVAL = 50
 const EDGE_SCROLL_OVERSHOOT = 15
-const STATE_STORAGE_KEY = 'xtermInputPanelState'
 
 function isTouchDevice(): boolean {
   return 'ontouchstart' in window || navigator.maxTouchPoints > 0
@@ -60,7 +60,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function loadPanelStateStore(): InputPanelStateStore {
   try {
-    const raw = localStorage.getItem(STATE_STORAGE_KEY)
+    const raw = localStorage.getItem(getSessionScopedStorageKey('xtermInputPanelState'))
     if (!raw) return {}
     const parsed = JSON.parse(raw)
     return isRecord(parsed) ? (parsed as InputPanelStateStore) : {}
@@ -71,7 +71,7 @@ function loadPanelStateStore(): InputPanelStateStore {
 
 function savePanelStateStore(store: InputPanelStateStore): void {
   try {
-    localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify(store))
+    localStorage.setItem(getSessionScopedStorageKey('xtermInputPanelState'), JSON.stringify(store))
   } catch {
     /* ignore */
   }

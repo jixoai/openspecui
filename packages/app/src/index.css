@@ -1,0 +1,16 @@
+@import '../../web/src/index.css';
+@source './';
+@source '../../web/src';
+
+:root {
+  --hosted-pwa-titlebar-left: 0px;
+  --hosted-pwa-titlebar-right: 0px;
+  --hosted-pwa-titlebar-top: 0px;
+  --hosted-pwa-titlebar-height: 0px;
+}
+
+.hosted-shell-root[data-titlebar-overlay='true'] .tabs-header {
+  padding-inline-start: var(--hosted-pwa-titlebar-left);
+  padding-inline-end: var(--hosted-pwa-titlebar-right);
+  min-height: max(2.75rem, var(--hosted-pwa-titlebar-height));
+}

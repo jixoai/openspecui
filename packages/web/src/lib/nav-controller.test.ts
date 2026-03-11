@@ -1,7 +1,11 @@
 import type { RouterHistory } from '@tanstack/react-router'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
-vi.mock('./static-mode', () => ({ isStaticMode: () => false }))
+vi.mock('./static-mode', () => ({
+  isStaticMode: () => false,
+  getBasePath: () =>
+    (globalThis as { __TEST_NAV_BASE_PATH__?: string }).__TEST_NAV_BASE_PATH__ ?? '/',
+}))
 vi.mock('./trpc', () => ({
   trpcClient: {
     kv: {
@@ -13,6 +17,7 @@ vi.mock('./trpc', () => ({
 }))
 
 import { NavController, navController, type NavLayout, type TabId } from './nav-controller'
+import { createNavHistory } from './nav-history'
 
 const DEFAULT_MAIN_TABS: TabId[] = [
   '/dashboard',
@@ -33,21 +38,31 @@ const ALL_TABS: TabId[] = [
   '/terminal',
 ]
 
-function createController(url: string, layout?: NavLayout): NavController {
+function createController(
+  url: string,
+  layout?: NavLayout,
+  options?: { basePath?: string }
+): NavController {
   localStorage.clear()
+  ;(globalThis as { __TEST_NAV_BASE_PATH__?: string }).__TEST_NAV_BASE_PATH__ =
+    options?.basePath ?? '/'
+  window.history.replaceState({}, '', url)
 
   if (layout) {
-    localStorage.setItem(
-      'nav-layout',
-      JSON.stringify({
-        mainTabs: layout.mainTabs,
-        bottomTabs: layout.bottomTabs,
-        updatedAt: 1,
-      })
-    )
+    const payload = JSON.stringify({
+      mainTabs: layout.mainTabs,
+      bottomTabs: layout.bottomTabs,
+      updatedAt: 1,
+    })
+    localStorage.setItem('nav-layout', payload)
+
+    const locationUrl = new URL(window.location.href)
+    const sessionId = locationUrl.searchParams.get('session')
+    if (locationUrl.pathname.startsWith('/versions/') && sessionId) {
+      localStorage.setItem(`hosted-session:${sessionId}:nav-layout`, payload)
+    }
   }
 
-  window.history.replaceState({}, '', url)
   return new NavController()
 }
 
@@ -75,6 +90,73 @@ describe('NavController kernel lifecycle', () => {
 
   afterEach(() => {
     nav.destroy()
+    ;(globalThis as { __TEST_NAV_BASE_PATH__?: string }).__TEST_NAV_BASE_PATH__ = undefined
+  })
+
+  it('preserves hosted base path and launch params during bootstrap normalization', () => {
+    nav = createController(
+      '/versions/latest/index.html?api=http%3A%2F%2F127.0.0.1%3A3102&session=test-session',
+      undefined,
+      { basePath: '/versions/latest/' }
+    )
+
+    expect(nav.getLocation('main').pathname).toBe('/dashboard')
+    expect(window.location.pathname).toBe('/versions/latest/dashboard')
+    expect(window.location.search).toContain('api=http%3A%2F%2F127.0.0.1%3A3102')
+    expect(window.location.search).toContain('session=test-session')
+    expect(window.location.search).toContain('_b=%2F')
+  })
+
+  it('preserves hosted launch params when navigating to another main tab', () => {
+    nav = createController(
+      '/versions/latest/dashboard?api=http%3A%2F%2F127.0.0.1%3A3102&session=test-session&_b=%2F',
+      undefined,
+      { basePath: '/versions/latest/' }
+    )
+
+    nav.push('main', '/archive', null)
+
+    expect(window.location.pathname).toBe('/versions/latest/archive')
+    expect(window.location.search).toContain('api=http%3A%2F%2F127.0.0.1%3A3102')
+    expect(window.location.search).toContain('session=test-session')
+    expect(window.location.search).toContain('_b=%2F')
+  })
+
+  it('creates hosted hrefs that keep launch params when TanStack passes a basepathed path', () => {
+    nav = createController(
+      '/versions/latest/dashboard?api=http%3A%2F%2F127.0.0.1%3A3102&session=test-session&_b=%2F',
+      undefined,
+      { basePath: '/versions/latest/' }
+    )
+
+    const history = createNavHistory('main', nav)
+    const href = history.createHref('/versions/latest/archive')
+    const url = new URL(href, 'http://nav.test')
+
+    expect(url.pathname).toBe('/versions/latest/archive')
+    expect(url.searchParams.get('api')).toBe('http://127.0.0.1:3102')
+    expect(url.searchParams.get('session')).toBe('test-session')
+    expect(url.searchParams.get('_b')).toBe('/')
+  })
+
+  it('creates hosted hrefs that route to bottom-owned tabs without dropping launch params', () => {
+    nav = createController(
+      '/versions/latest/dashboard?api=http%3A%2F%2F127.0.0.1%3A3102&session=test-session&_b=%2F',
+      {
+        mainTabs: ['/dashboard', '/config', '/specs', '/changes', '/settings'],
+        bottomTabs: ['/terminal', '/archive'],
+      },
+      { basePath: '/versions/latest/' }
+    )
+
+    const history = createNavHistory('main', nav)
+    const href = history.createHref('/versions/latest/archive')
+    const url = new URL(href, 'http://nav.test')
+
+    expect(url.pathname).toBe('/versions/latest/dashboard')
+    expect(url.searchParams.get('api')).toBe('http://127.0.0.1:3102')
+    expect(url.searchParams.get('session')).toBe('test-session')
+    expect(url.searchParams.get('_b')).toBe('/archive')
   })
 
   it('bootstraps from URL and writes canonical _b mapping', () => {
