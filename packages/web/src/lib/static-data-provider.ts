@@ -963,6 +963,7 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
     codeEditor: {
       theme: 'github',
     },
+    appBaseUrl: '',
     dashboard: {
       trendPointLimit: 100,
     },

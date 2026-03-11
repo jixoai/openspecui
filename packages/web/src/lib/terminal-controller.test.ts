@@ -291,6 +291,7 @@ async function loadTerminalController() {
 
 describe('terminal-controller PTY behavior', () => {
   beforeEach(() => {
+    window.history.replaceState({}, '', '/')
     vi.useFakeTimers()
     MockTerminal.reset()
     MockGhosttyTerminal.reset()
@@ -305,6 +306,19 @@ describe('terminal-controller PTY behavior', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
+  })
+
+  it('uses hosted api base URL for PTY websocket connections', async () => {
+    window.history.replaceState({}, '', '/versions/latest/index.html?api=http://127.0.0.1:3102/')
+
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+
+    expect(ws.url).toBe('ws://127.0.0.1:3102/ws/pty')
+
+    terminalController.closeAll()
+    unsubscribe()
   })
 
   it('maps local requestId to server sessionId for PTY input', async () => {

@@ -21,6 +21,7 @@ import { queryClient, trpc, trpcClient } from '@/lib/trpc'
 import { useCliRunner } from '@/lib/use-cli-runner'
 import { useServerStatus } from '@/lib/use-server-status'
 import { useConfigSubscription, useConfiguredToolsSubscription } from '@/lib/use-subscription'
+import { OFFICIAL_APP_BASE_URL } from '@openspecui/core/hosted-app'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
@@ -158,6 +159,7 @@ export function Settings() {
   const [theme, setTheme] = useState<Theme>(getStoredTheme)
   const [codeEditorTheme, setCodeEditorTheme] = useState<CodeEditorTheme>(DEFAULT_CODE_EDITOR_THEME)
   const [apiUrl, setApiUrl] = useState(getApiBaseUrl() || '')
+  const [appBaseUrl, setAppBaseUrl] = useState('')
   const [cliCommand, setCliCommand] = useState('')
   const [selectedTools, setSelectedTools] = useState<string[]>([])
   const [showInitModal, setShowInitModal] = useState(false)
@@ -280,6 +282,9 @@ export function Settings() {
     if (!nextTheme || !isCodeEditorTheme(nextTheme)) return
     setCodeEditorTheme(nextTheme)
   }, [config?.codeEditor?.theme])
+  useEffect(() => {
+    setAppBaseUrl(config?.appBaseUrl ?? '')
+  }, [config?.appBaseUrl])
 
   // 安装完成后重新嗅探
   const handleInstallSuccess = useCallback(() => {
@@ -444,6 +449,10 @@ export function Settings() {
     mutationFn: (nextTheme: CodeEditorTheme) =>
       trpcClient.config.update.mutate({ codeEditor: { theme: nextTheme } }),
   })
+  const saveAppBaseUrlMutation = useMutation({
+    mutationFn: (nextAppBaseUrl: string) =>
+      trpcClient.config.update.mutate({ appBaseUrl: nextAppBaseUrl.trim() }),
+  })
 
   // Terminal config — seed local state from controller's current config
   const initialConfig = useMemo(() => terminalController.getConfig(), [])
@@ -539,6 +548,7 @@ export function Settings() {
   }, [config?.dashboard?.trendPointLimit])
 
   const savedDashboardTrendPointLimit = config?.dashboard?.trendPointLimit ?? 100
+  const savedAppBaseUrl = config?.appBaseUrl ?? ''
 
   useEffect(() => {
     applyTheme(theme)
@@ -1224,6 +1234,43 @@ export function Settings() {
                     Current: <code className="bg-muted rounded px-1">{getApiBaseUrl()}</code>
                   </p>
                 )}
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <h2 className="text-lg font-semibold">Hosted App</h2>
+            <div className="border-border space-y-4 rounded-lg border p-4">
+              <div>
+                <label className="mb-2 block text-sm font-medium">Base URL</label>
+                <p className="text-muted-foreground mb-3 text-sm">
+                  Used by <code className="bg-muted rounded px-1">openspecui --app</code> when no
+                  explicit base URL is passed. Leave empty to use the official hosted app.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={appBaseUrl}
+                    onChange={(e) => setAppBaseUrl(e.target.value)}
+                    placeholder={OFFICIAL_APP_BASE_URL}
+                    className="border-border bg-background text-foreground flex-1 rounded-md border px-3 py-2"
+                  />
+                  <button
+                    onClick={() => saveAppBaseUrlMutation.mutate(appBaseUrl)}
+                    disabled={
+                      saveAppBaseUrlMutation.isPending || appBaseUrl.trim() === savedAppBaseUrl
+                    }
+                    className="bg-primary text-primary-foreground rounded-md px-4 py-2 hover:opacity-90 disabled:opacity-50"
+                  >
+                    {saveAppBaseUrlMutation.isPending ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+                <p className="text-muted-foreground mt-2 text-sm">
+                  Effective default:{' '}
+                  <code className="bg-muted rounded px-1">
+                    {savedAppBaseUrl || OFFICIAL_APP_BASE_URL}
+                  </code>
+                </p>
               </div>
             </div>
           </section>

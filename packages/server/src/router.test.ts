@@ -237,7 +237,8 @@ describe('appRouter', () => {
 
   describe('dashboard', () => {
     it('returns objective overview with trend metadata', async () => {
-      const caller = createCaller()
+      const context = createMockContext()
+      const caller = appRouter.createCaller(context)
       const overview = await caller.dashboard.get()
 
       expect(overview.summary.specifications).toBe(2)
@@ -268,6 +269,8 @@ describe('appRouter', () => {
       expect(overview.triColorTrends.specifications).toEqual([])
       expect(overview.git.defaultBranch).toBe('origin/main')
       expect(overview.git.worktrees[0]?.branchName).toBe('main')
+      expect(context.kernel.waitForWarmup).not.toHaveBeenCalled()
+      expect(context.kernel.ensureApplyInstructions).not.toHaveBeenCalled()
     })
 
     it('marks objective trend cards unavailable when timestamps are missing', async () => {

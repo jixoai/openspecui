@@ -28,4 +28,30 @@ describe('Tabs double-click behavior', () => {
 
     expect(onTabBarDoubleClick).not.toHaveBeenCalled()
   })
+
+  it('supports the terminal variant used by the hosted shell', () => {
+    const { container } = render(
+      <Tabs
+        tabs={tabs}
+        variant="terminal"
+        selectedTab="a"
+        actions={<button type="button">+</button>}
+      />
+    )
+
+    const root = container.firstElementChild
+    expect(root?.getAttribute('data-tabs-variant')).toBe('terminal')
+
+    const selected = within(container).getByRole('button', { name: 'A' })
+    expect(selected.className).toContain('bg-background')
+    expect(selected.className).toContain('text-foreground')
+    expect(selected.className).toContain('rounded-t-[8px]')
+
+    const unselected = within(container).getByRole('button', { name: 'B' })
+    expect(unselected.className).toContain('bg-terminal')
+    expect(unselected.className).toContain('text-terminal-foreground')
+
+    const actions = container.querySelector('[data-tabs-actions="true"]')
+    expect(actions?.className).toContain('bg-terminal')
+  })
 })

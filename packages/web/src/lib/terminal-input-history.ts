@@ -1,3 +1,4 @@
+import { getHostedScopedStorageKey } from './hosted-session'
 import { isStaticMode } from './static-mode'
 import { trpcClient } from './trpc'
 
@@ -7,16 +8,28 @@ export interface TerminalInputHistoryItem {
 }
 
 const SETTINGS_KEY = 'xtermInputPanelSettings'
-const KV_KEY = 'terminal-input-history'
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 1000
 const MIN_LIMIT = 1
 
-const DB_NAME = 'openspecui-terminal'
 const DB_VERSION = 1
 const STORE_NAME = 'terminal-meta'
-const STORE_KEY = 'input-history'
-const FALLBACK_KEY = 'terminal-input-history-fallback'
+
+function getKvKey(): string {
+  return getHostedScopedStorageKey('terminal-input-history', window.location)
+}
+
+function getDbName(): string {
+  return getHostedScopedStorageKey('openspecui-terminal', window.location)
+}
+
+function getStoreKey(): string {
+  return getHostedScopedStorageKey('input-history', window.location)
+}
+
+function getFallbackKey(): string {
+  return getHostedScopedStorageKey('terminal-input-history-fallback', window.location)
+}
 
 function clampLimit(value: number): number {
   return Math.max(MIN_LIMIT, Math.min(MAX_LIMIT, Math.round(value)))
@@ -92,7 +105,7 @@ async function openDatabase(): Promise<IDBDatabase | null> {
   }
 
   return await new Promise((resolve) => {
-    const request = window.indexedDB.open(DB_NAME, DB_VERSION)
+    const request = window.indexedDB.open(getDbName(), DB_VERSION)
 
     request.onupgradeneeded = () => {
       const db = request.result
@@ -113,7 +126,7 @@ async function readLocalHistoryFromIdb(): Promise<TerminalInputHistoryItem[] | n
   return await new Promise((resolve) => {
     const tx = db.transaction(STORE_NAME, 'readonly')
     const store = tx.objectStore(STORE_NAME)
-    const request = store.get(STORE_KEY)
+    const request = store.get(getStoreKey())
 
     request.onsuccess = () => {
       resolve(parseHistoryItems(request.result))
@@ -134,7 +147,7 @@ async function writeLocalHistoryToIdb(
   return await new Promise((resolve) => {
     const tx = db.transaction(STORE_NAME, 'readwrite')
     const store = tx.objectStore(STORE_NAME)
-    store.put(records, STORE_KEY)
+    store.put(records, getStoreKey())
     tx.oncomplete = () => {
       db.close()
       resolve(true)
@@ -152,7 +165,7 @@ async function writeLocalHistoryToIdb(
 
 function readLocalHistoryFallback(): TerminalInputHistoryItem[] {
   try {
-    const raw = localStorage.getItem(FALLBACK_KEY)
+    const raw = localStorage.getItem(getFallbackKey())
     if (!raw) return []
     return parseHistoryItems(JSON.parse(raw))
   } catch {
@@ -162,7 +175,7 @@ function readLocalHistoryFallback(): TerminalInputHistoryItem[] {
 
 function writeLocalHistoryFallback(records: readonly TerminalInputHistoryItem[]): void {
   try {
-    localStorage.setItem(FALLBACK_KEY, JSON.stringify(records))
+    localStorage.setItem(getFallbackKey(), JSON.stringify(records))
   } catch {
     // ignore
   }
@@ -254,7 +267,7 @@ export class TerminalInputHistoryStore {
     if (isStaticMode()) return
 
     try {
-      const remoteValue = await trpcClient.kv.get.query({ key: KV_KEY })
+      const remoteValue = await trpcClient.kv.get.query({ key: getKvKey() })
       const remoteRecords = parseHistoryItems(remoteValue)
       const merged = mergeAndTrim([...this.records, ...remoteRecords], this.getLimit())
       const changed = !itemsEqual(this.records, merged)
@@ -269,7 +282,7 @@ export class TerminalInputHistoryStore {
       }
 
       const subscription = trpcClient.kv.subscribe.subscribe(
-        { key: KV_KEY },
+        { key: getKvKey() },
         {
           onData: (value: unknown) => {
             void this.onRemoteData(value)
@@ -305,7 +318,7 @@ export class TerminalInputHistoryStore {
 
   private async persistRemote(records: readonly TerminalInputHistoryItem[]): Promise<void> {
     try {
-      await trpcClient.kv.set.mutate({ key: KV_KEY, value: records })
+      await trpcClient.kv.set.mutate({ key: getKvKey(), value: records })
     } catch {
       // local-first: keep IndexedDB data even when remote sync fails
     }

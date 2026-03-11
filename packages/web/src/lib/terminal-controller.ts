@@ -13,6 +13,7 @@ import {
   type InputPanelLayout,
   type InputPanelSettingsPayload,
 } from 'xterm-input-panel'
+import { getPtyWsUrl } from './api-config'
 import { navController } from './nav-controller'
 import { TerminalInputHistoryStore } from './terminal-input-history'
 
@@ -237,13 +238,6 @@ export interface TerminalSessionSnapshot {
 
 export interface TerminalSnapshot {
   sessions: TerminalSessionSnapshot[]
-}
-
-// --- WebSocket URL ---
-
-function getWsUrl(): string {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.host}/ws/pty`
 }
 
 // --- Controller ---
@@ -1164,7 +1158,7 @@ class TerminalController {
       this.reconnectTimer = null
     }
 
-    const ws = new WebSocket(getWsUrl())
+    const ws = new WebSocket(getPtyWsUrl())
     this.ws = ws
 
     ws.onopen = () => {

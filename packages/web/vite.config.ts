@@ -18,6 +18,7 @@ export default defineConfig(({ isSsrBuild }) => {
   const alias = {
     '@': resolve(__dirname, './src'),
     '@openspecui/core': resolve(__dirname, '../core/src'),
+    '@openspecui/core/hosted-app': resolve(__dirname, '../core/src/hosted-app.ts'),
     '@openspecui/core/opsx-display-path': resolve(__dirname, '../core/src/opsx-display-path.ts'),
     '@openspecui/core/pty-protocol': resolve(__dirname, '../core/src/pty-protocol.ts'),
     '@openspecui/search': resolve(__dirname, '../search/src'),

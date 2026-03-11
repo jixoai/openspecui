@@ -1,0 +1,58 @@
+import type { WebsiteLocale } from './schema'
+
+export const zh = {
+  meta: {
+    siteTitle: 'OpenSpec UI',
+    siteSubtitle: '面向 OpenSpec 工作流的可视化前端',
+    languageLabel: '语言',
+  },
+  hero: {
+    eyebrow: '规格驱动界面',
+    title: '用一个贴近 CLI 本质的 UI 来操作 OpenSpec。',
+    summary:
+      'OpenSpecUI 为 OpenSpec 项目提供可视化的 dashboard、config 界面、change 工作流视图、terminal tabs，以及静态导出能力，同时不遮蔽底层工作流。',
+    primaryCta: '打开 Hosted App',
+    secondaryCta: '查看 GitHub',
+    badges: {
+      live: '实时模式',
+      hosted: '托管前端',
+      static: '静态导出',
+    },
+  },
+  commands: {
+    title: '开始使用',
+    summary: '优先建议不全局安装直接运行，这样每次会话都能拿到当前发布线的版本。',
+    liveLabel: '本地实时服务',
+    liveSummary: '启动本地后端与本地 Web UI。',
+    hostedLabel: '共享 Hosted 前端',
+    hostedSummary: '启动本地后端，但改为打开共享托管前端，而不是本地 Web bundle。',
+    exportLabel: '静态导出',
+    exportSummary: '生成可部署的静态快照，用于文档站点或离线审阅。',
+    compatibility: 'OpenSpecUI 2.x 面向 OpenSpec CLI 1.2+。',
+  },
+  modes: {
+    title: '选择合适的界面',
+    summary: '产品保持客观：不同工作阶段，使用不同的界面承载。',
+    liveTitle: '实时模式',
+    liveBody: '适合编辑 specs、审阅 changes、使用 terminal，以及实时观察项目状态。',
+    hostedTitle: 'Hosted app 模式',
+    hostedBody: '适合复用一套维护中的前端，同时连接多个本地后端或私有部署的服务。',
+    exportTitle: '静态导出',
+    exportBody: '适合发布快照、做设计评审链接，或只读查看项目。',
+  },
+  links: {
+    title: '继续深入',
+    summary: '先进入 app，再查看上游工作流与源码仓库。',
+    appTitle: 'app.openspecui.com',
+    appBody: '提供最新兼容 OpenSpecUI 前端的 Hosted Shell。',
+    openspecTitle: 'openspec.dev',
+    openspecBody: 'OpenSpec 官方站点与工作流参考。',
+    githubTitle: 'GitHub',
+    githubBody: '源码、issues、版本历史与贡献流程。',
+  },
+  footer: {
+    deployment: '站点以静态方式部署在 www.openspecui.com。',
+    canonical: '根域名到 www 的规范跳转应在 Cloudflare 中配置，而不是放在站点产物里。',
+    note: '可通过 ?lang=en 或 ?lang=zh 强制语言，之后会在本地持久化。',
+  },
+} satisfies WebsiteLocale

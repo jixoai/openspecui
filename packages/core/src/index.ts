@@ -143,6 +143,21 @@ export {
   type DashboardTriColorTrendPoint,
 } from './dashboard-types.js'
 export { type ExportSnapshot } from './export-types.js'
+export {
+  OFFICIAL_APP_BASE_URL,
+  buildHostedLaunchUrl,
+  buildHostedVersionManifestUrl,
+  isHostedAppVersionManifest,
+  isHostedBackendHealthResponse,
+  normalizeHostedAppBaseUrl,
+  resolveHostedAppBaseUrl,
+  resolveHostedChannelForVersion,
+  type HostedAppChannelKind,
+  type HostedAppChannelManifest,
+  type HostedAppCompatibilityEntry,
+  type HostedAppVersionManifest,
+  type HostedBackendHealthResponse,
+} from './hosted-app.js'
 export { VIRTUAL_PROJECT_DIRNAME, toOpsxDisplayPath } from './opsx-display-path.js'
 
 // OPSX Kernel - reactive in-memory data store

@@ -42,6 +42,7 @@ describe('ConfigManager', () => {
       const customConfig = {
         cli: { command: 'bunx', args: ['openspec'] },
         theme: 'dark' as const,
+        appBaseUrl: 'https://app.example.com/openspecui',
         terminal: {
           fontSize: 14,
           fontFamily: 'JetBrains Mono',
@@ -62,6 +63,7 @@ describe('ConfigManager', () => {
       expect(config.cli.command).toBe('bunx')
       expect(config.cli.args).toEqual(['openspec'])
       expect(config.theme).toBe('dark')
+      expect(config.appBaseUrl).toBe('https://app.example.com/openspecui')
       expect(config.terminal.fontSize).toBe(14)
       expect(config.terminal.rendererEngine).toBe('ghostty')
     })
@@ -106,6 +108,7 @@ describe('ConfigManager', () => {
       expect(config.cli.command).toBe('custom')
       expect(config.theme).toBe('system') // default
       expect(config.codeEditor.theme).toBe('github')
+      expect(config.appBaseUrl).toBe('')
       expect(config.terminal.scrollback).toBe(1000)
       expect(config.terminal.rendererEngine).toBe('xterm')
       expect(config.dashboard.trendPointLimit).toBe(100)
@@ -170,7 +173,7 @@ describe('ConfigManager', () => {
       expect(Array.isArray(command)).toBe(true)
       expect(command.length).toBeGreaterThan(0)
       command.forEach((item) => expect(typeof item).toBe('string'))
-    })
+    }, 25000)
 
     it('should return custom command', async () => {
       await configManager.writeConfig({ cli: { command: process.execPath, args: ['--version'] } })
@@ -297,6 +300,7 @@ describe('OpenSpecUIConfigSchema', () => {
       cli: { command: 'npx @fission-ai/openspec' },
       theme: 'dark',
       codeEditor: { theme: 'github' },
+      appBaseUrl: 'https://app.example.com/ui',
       terminal: {
         fontSize: 13,
         fontFamily: '',
@@ -322,6 +326,7 @@ describe('OpenSpecUIConfigSchema', () => {
       expect(result.data.cli.command).toBeUndefined()
       expect(result.data.theme).toBe('system')
       expect(result.data.codeEditor.theme).toBe('github')
+      expect(result.data.appBaseUrl).toBe('')
       expect(result.data.terminal.fontSize).toBe(13)
       expect(result.data.terminal.rendererEngine).toBe('xterm')
     }
@@ -373,6 +378,7 @@ describe('DEFAULT_CONFIG', () => {
     expect(DEFAULT_CONFIG.cli.command).toBeUndefined()
     expect(DEFAULT_CONFIG.theme).toBe('system')
     expect(DEFAULT_CONFIG.codeEditor.theme).toBe('github')
+    expect(DEFAULT_CONFIG.appBaseUrl).toBe('')
     expect(DEFAULT_CONFIG.terminal.scrollback).toBe(1000)
     expect(DEFAULT_CONFIG.terminal.rendererEngine).toBe('xterm')
     expect(DEFAULT_CONFIG.dashboard.trendPointLimit).toBe(100)

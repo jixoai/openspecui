@@ -2,7 +2,7 @@
 
 [English](./README.md) | [中文](./README-zh.md)
 
-OpenSpecUI is a web interface for OpenSpec workflows (live mode + static export).
+OpenSpecUI is a web interface for OpenSpec workflows (live mode + hosted app + static export).
 
 ## Version Compatibility
 
@@ -30,28 +30,26 @@ openspecui
 
 Default URL: `http://localhost:3100`.
 
-## OpenSpec 1.2 Notes
-
-- OpenSpecUI 2.x requires OpenSpec CLI `>=1.2.0`.
-- If your CLI is older, UI shows `OpenSpec CLI Required` and blocks core interactions until upgraded.
-- Default workflow guidance is now `/opsx:propose` (quick path).
-- OpenSpec profile/workflow sync can be inspected from **Settings → OpenSpec 1.2 Profile & Sync**.
-
-Upgrade CLI:
-
-```bash
-npm install -g @fission-ai/openspec@latest
-```
-
 ## Common Flows
 
-### Start server
+### Start local live mode
 
 ```bash
 openspecui
 openspecui ./my-project
 openspecui --port 3200
 ```
+
+### Start with the hosted frontend
+
+```bash
+openspecui --app
+openspecui --app=https://app.example.com
+```
+
+`--app` still runs the local backend, but opens the hosted frontend instead of a local web bundle.
+When no explicit URL is passed, OpenSpecUI uses the configured `appBaseUrl` or the official
+`https://app.openspecui.com`.
 
 ### Static export
 
@@ -67,11 +65,32 @@ nix run github:jixoai/openspecui -- --help
 nix develop
 ```
 
+## Public Entry Points
+
+- Hosted app: `https://app.openspecui.com`
+- Website: `https://www.openspecui.com`
+- OpenSpec official site: `https://openspec.dev`
+- GitHub: `https://github.com/jixoai/openspecui`
+
+## OpenSpec 1.2 Notes
+
+- OpenSpecUI 2.x requires OpenSpec CLI `>=1.2.0`.
+- If your CLI is older, UI shows `OpenSpec CLI Required` and blocks core interactions until upgraded.
+- Default workflow guidance is now `/opsx:propose` (quick path).
+- OpenSpec profile/workflow sync can be inspected from **Settings → OpenSpec 1.2 Profile & Sync**.
+
+Upgrade CLI:
+
+```bash
+npm install -g @fission-ai/openspec@latest
+```
+
 ## Key Features
 
 - Dashboard for specs/changes/tasks status
 - Config/Schema viewers and editors
 - OPSX compose panel for change actions
 - Multi-tab PTY terminal (xterm + ghostty-web)
+- Hosted app shell for shared frontend deployments
 - Search in live mode and static mode
 - Static snapshot export for docs hosting

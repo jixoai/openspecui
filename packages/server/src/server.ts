@@ -25,7 +25,24 @@ import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
 import { applyWSSHandler } from '@trpc/server/adapters/ws'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { readFileSync } from 'node:fs'
+import { basename, dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { WebSocketServer } from 'ws'
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+function getServerPackageVersion(): string {
+  try {
+    const packageJsonPath = join(__dirname, '..', 'package.json')
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as { version?: unknown }
+    return typeof packageJson.version === 'string' ? packageJson.version : '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
+}
+
+const SERVER_PACKAGE_VERSION = getServerPackageVersion()
+
 import { findAvailablePort } from './port-utils.js'
 import { PtyManager } from './pty-manager.js'
 import { createPtyWebSocketHandler } from './pty-websocket.js'
@@ -78,7 +95,9 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     return c.json({
       status: 'ok',
       projectDir: config.projectDir,
+      projectName: basename(config.projectDir) || config.projectDir,
       watcherEnabled: !!watcher,
+      openspecuiVersion: SERVER_PACKAGE_VERSION,
     })
   })
 
