@@ -42,7 +42,7 @@
     "deploy:app:cf": "pnpm --filter @openspecui/app cf:deploy",
     "deploy:website:cf": "pnpm --filter @openspecui/website cf:deploy",
     "test:root": "node scripts/test-root.mjs",
-    "release:packages": "pnpm build && pnpm exec changeset publish"
+    "release:packages": "pnpm build && bun ./scripts/publish-packages.ts"
   },
   "keywords": [
     "openspec",

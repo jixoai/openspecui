@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - .github/workflows/release.yml
+      - package.json
+      - scripts/**
       - packages/*/package.json
       - packages/*/CHANGELOG.md
   workflow_dispatch:
