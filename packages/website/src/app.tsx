@@ -6,7 +6,7 @@ import {
   PanelsTopLeft,
   TerminalSquare,
 } from 'lucide-react'
-import { useEffect, type ComponentType } from 'react'
+import { useEffect, useMemo, useState, type ComponentType } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LanguageSwitcher, type WebsiteLanguage } from './components/language-switcher'
 import { SectionCard } from './components/section-card'
@@ -14,6 +14,26 @@ import { SectionCard } from './components/section-card'
 const APP_URL = 'https://app.openspecui.com'
 const OPENSPEC_URL = 'https://openspec.dev'
 const GITHUB_URL = 'https://github.com/jixoai/openspecui'
+const RUNNER_STORAGE_KEY = 'openspecui-website:runner'
+
+type RunnerId = 'npm' | 'pnpm' | 'bun'
+
+function getInitialRunner(): RunnerId {
+  if (typeof window === 'undefined') return 'npm'
+  const stored = window.localStorage.getItem(RUNNER_STORAGE_KEY)
+  return stored === 'pnpm' || stored === 'bun' || stored === 'npm' ? stored : 'npm'
+}
+
+function getRunnerCommandPrefix(runner: RunnerId): string {
+  switch (runner) {
+    case 'pnpm':
+      return 'pnpx'
+    case 'bun':
+      return 'bunx'
+    default:
+      return 'npx'
+  }
+}
 
 function ExternalLink(props: {
   href: string
@@ -43,6 +63,7 @@ function ExternalLink(props: {
 
 export function App() {
   const { t, i18n } = useTranslation()
+  const [runner, setRunner] = useState<RunnerId>(() => getInitialRunner())
   const copyrightYear = new Date().getFullYear()
   const language: WebsiteLanguage = (i18n.resolvedLanguage ?? i18n.language ?? 'en').startsWith(
     'zh'
@@ -54,23 +75,30 @@ export function App() {
     document.title = t('meta.siteTitle')
   }, [t])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(RUNNER_STORAGE_KEY, runner)
+  }, [runner])
+
+  const runnerCommandPrefix = useMemo(() => getRunnerCommandPrefix(runner), [runner])
+
   const commandCards = [
     {
       title: t('commands.liveLabel'),
       description: t('commands.liveSummary'),
-      command: 'bunx openspecui@latest',
+      command: `${runnerCommandPrefix} openspecui@latest`,
       icon: TerminalSquare,
     },
     {
       title: t('commands.hostedLabel'),
       description: t('commands.hostedSummary'),
-      command: 'bunx openspecui@latest --app',
+      command: `${runnerCommandPrefix} openspecui@latest --app`,
       icon: PanelsTopLeft,
     },
     {
       title: t('commands.exportLabel'),
       description: t('commands.exportSummary'),
-      command: 'bunx openspecui@latest export -o ./dist',
+      command: `${runnerCommandPrefix} openspecui@latest export -o ./dist`,
       icon: FileOutput,
     },
   ]
@@ -186,6 +214,23 @@ export function App() {
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
           <SectionCard title={t('commands.title')} summary={t('commands.summary')}>
             <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3 border px-3 py-2">
+                <label htmlFor="website-runner-select" className="text-muted-foreground text-sm">
+                  {t('commands.runnerLabel')}
+                </label>
+                <select
+                  id="website-runner-select"
+                  value={runner}
+                  onChange={(event) => {
+                    setRunner(event.target.value as RunnerId)
+                  }}
+                  className="border-border bg-background min-w-28 border px-2 py-1 text-sm"
+                >
+                  <option value="npm">npm / npx</option>
+                  <option value="pnpm">pnpm / pnpx</option>
+                  <option value="bun">bun / bunx</option>
+                </select>
+              </div>
               {commandCards.map((item) => {
                 const Icon = item.icon
                 return (
@@ -231,10 +276,8 @@ export function App() {
       </main>
 
       <footer className="border-border border-t px-4 py-4 sm:px-6 lg:px-8">
-        <div className="text-muted-foreground mx-auto flex max-w-6xl flex-col gap-1 text-sm leading-6">
+        <div className="text-muted-foreground mx-auto max-w-6xl text-sm leading-6">
           <p>{`Copyright © ${copyrightYear} OpenSpecUI`}</p>
-          <p>{t('footer.canonical')}</p>
-          <p>{t('footer.note')}</p>
         </div>
       </footer>
     </div>

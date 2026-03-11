@@ -19,6 +19,7 @@ export interface WebsiteLocale {
   commands: {
     title: string
     summary: string
+    runnerLabel: string
     liveLabel: string
     liveSummary: string
     hostedLabel: string
@@ -46,9 +47,5 @@ export interface WebsiteLocale {
     openspecBody: string
     githubTitle: string
     githubBody: string
-  }
-  footer: {
-    canonical: string
-    note: string
   }
 }

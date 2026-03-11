@@ -23,4 +23,20 @@ describe('website app', () => {
     })
     expect(document.documentElement.lang).toBe('zh-CN')
   })
+
+  it('switches command prefixes when the runner changes', async () => {
+    render(<App />)
+
+    expect(screen.getByText('npx openspecui@latest')).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText('Runner'), {
+      target: { value: 'pnpm' },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('pnpx openspecui@latest')).toBeTruthy()
+    })
+    expect(screen.getByText('pnpx openspecui@latest --app')).toBeTruthy()
+    expect(screen.getByText('pnpx openspecui@latest export -o ./dist')).toBeTruthy()
+  })
 })

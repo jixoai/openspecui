@@ -22,6 +22,7 @@ export const zh = {
   commands: {
     title: '开始使用',
     summary: '优先建议不全局安装直接运行，这样每次会话都能拿到当前发布线的版本。',
+    runnerLabel: '入口',
     liveLabel: '本地实时服务',
     liveSummary: '启动本地后端与本地 Web UI。',
     hostedLabel: '共享 Hosted 前端',
@@ -49,9 +50,5 @@ export const zh = {
     openspecBody: 'OpenSpec 官方站点与工作流参考。',
     githubTitle: 'GitHub',
     githubBody: '源码、issues、版本历史与贡献流程。',
-  },
-  footer: {
-    canonical: '根域名到 www 的规范跳转应在 Cloudflare 中配置，而不是放在站点产物里。',
-    note: '可通过 ?lang=en 或 ?lang=zh 强制语言，之后会在本地持久化。',
   },
 } satisfies WebsiteLocale

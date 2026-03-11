@@ -23,6 +23,7 @@ export const en = {
     title: 'Run it',
     summary:
       'Prefer running without a global install so each session picks up the current release line.',
+    runnerLabel: 'Runner',
     liveLabel: 'Local live server',
     liveSummary: 'Start the local backend plus the local web UI.',
     hostedLabel: 'Shared hosted frontend',
@@ -54,10 +55,5 @@ export const en = {
     openspecBody: 'Official OpenSpec project site and workflow reference.',
     githubTitle: 'GitHub',
     githubBody: 'Source, issues, release history, and contribution flow.',
-  },
-  footer: {
-    canonical:
-      'Canonical apex redirect should be configured in Cloudflare, not in the site bundle.',
-    note: 'Language can be forced with ?lang=en or ?lang=zh and then persists locally.',
   },
 } satisfies WebsiteLocale
