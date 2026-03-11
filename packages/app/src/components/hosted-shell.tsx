@@ -1,8 +1,28 @@
 import { resolveHostedChannelForVersion } from '@openspecui/core/hosted-app'
 import { Dialog } from '@openspecui/web-src/components/dialog'
 import { Tabs, type Tab } from '@openspecui/web-src/components/tabs'
-import { AlertCircle, Link2, LoaderCircle, Plus, RefreshCw, Unlink2 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { AlertCircle, Download, Link2, LoaderCircle, Plus, RefreshCw, Unlink2 } from 'lucide-react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+} from 'react'
+import { parseHostedLaunchParams } from '../lib/bootstrap'
+import { createHostedLaunchRelay } from '../lib/launch-relay'
+import {
+  computeHostedAppDisplayMode,
+  EMPTY_TITLEBAR_INSETS,
+  isBeforeInstallPromptEvent,
+  readHostedAppTitlebarInsets,
+  type BeforeInstallPromptEventLike,
+  type HostedAppDisplayMode,
+  type HostedAppTitlebarInsets,
+  type HostedAppWindowControlsOverlayLike,
+} from '../lib/pwa-runtime'
 import {
   fetchHostedAppManifest,
   probeHostedBackend,
@@ -38,6 +58,31 @@ interface HostedTabRuntimeState {
   errorMessage: string | null
 }
 
+interface HostedShellPwaState {
+  canInstall: boolean
+  isInstalling: boolean
+  isInstalled: boolean
+  displayMode: HostedAppDisplayMode
+  titlebarInsets: HostedAppTitlebarInsets
+}
+
+interface HostedShellRootStyle extends CSSProperties {
+  '--hosted-pwa-titlebar-left': string
+  '--hosted-pwa-titlebar-right': string
+  '--hosted-pwa-titlebar-top': string
+  '--hosted-pwa-titlebar-height': string
+}
+
+interface LaunchQueueLike {
+  setConsumer(consumer: (params: { targetURL?: URL | null }) => void): void
+}
+
+interface HostedNavigator extends Navigator {
+  standalone?: boolean
+  windowControlsOverlay?: HostedAppWindowControlsOverlayLike
+  launchQueue?: LaunchQueueLike
+}
+
 const DEFAULT_RUNTIME_STATE: HostedTabRuntimeState = {
   reachability: 'checking',
   projectName: null,
@@ -46,29 +91,72 @@ const DEFAULT_RUNTIME_STATE: HostedTabRuntimeState = {
   errorMessage: null,
 }
 
+const DEFAULT_PWA_STATE: HostedShellPwaState = {
+  canInstall: false,
+  isInstalling: false,
+  isInstalled: false,
+  displayMode: 'browser',
+  titlebarInsets: EMPTY_TITLEBAR_INSETS,
+}
+
 function cx(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(' ')
+}
+
+function createBrowserPwaSnapshot(deferredPrompt: BeforeInstallPromptEventLike | null) {
+  const hostedNavigator = navigator as HostedNavigator
+  const runtime = {
+    matchMedia: (query: string) => window.matchMedia(query),
+    innerWidth: window.innerWidth,
+    navigatorStandalone: hostedNavigator.standalone,
+    windowControlsOverlay: hostedNavigator.windowControlsOverlay,
+  }
+  const displayMode = computeHostedAppDisplayMode(runtime)
+  return {
+    canInstall: deferredPrompt !== null && displayMode === 'browser',
+    isInstalling: false,
+    isInstalled: displayMode !== 'browser',
+    displayMode,
+    titlebarInsets: readHostedAppTitlebarInsets(runtime),
+  } satisfies HostedShellPwaState
 }
 
 function HostedShellActions(props: {
   isRefreshing: boolean
   onRefresh: () => void
   onAdd: () => void
+  canInstall: boolean
+  isInstalling: boolean
+  onInstall: () => void
+  showRefresh?: boolean
 }) {
   const buttonClassName =
     'border-border bg-terminal text-terminal-foreground hover:bg-background hover:text-foreground cursor-hover inline-flex items-center justify-center border-l p-4 text-sm transition-colors'
 
   return (
     <div className="flex h-full items-stretch">
-      <button
-        type="button"
-        onClick={props.onRefresh}
-        className={buttonClassName}
-        aria-label="Refresh backend metadata"
-        title="Refresh backend metadata"
-      >
-        <RefreshCw className={cx('h-3.5 w-3.5', props.isRefreshing && 'animate-spin')} />
-      </button>
+      {props.showRefresh !== false && (
+        <button
+          type="button"
+          onClick={props.onRefresh}
+          className={buttonClassName}
+          aria-label="Refresh backend metadata"
+          title="Refresh backend metadata"
+        >
+          <RefreshCw className={cx('h-3.5 w-3.5', props.isRefreshing && 'animate-spin')} />
+        </button>
+      )}
+      {props.canInstall && (
+        <button
+          type="button"
+          onClick={props.onInstall}
+          className={buttonClassName}
+          aria-label="Install OpenSpec UI App"
+          title="Install OpenSpec UI App"
+        >
+          <Download className={cx('h-4 w-4', props.isInstalling && 'animate-pulse')} />
+        </button>
+      )}
       <button
         type="button"
         onClick={props.onAdd}
@@ -195,9 +283,6 @@ export function HostedShell({
   const [errorMessage, setErrorMessage] = useState(initialError)
   const [shellState, setShellState] = useState(() => {
     const persisted = loadHostedShellState(window.localStorage)
-    if (initialLaunchRequest) {
-      return applyHostedLaunchRequest(persisted, initialLaunchRequest)
-    }
     if (persisted.tabs.length === 0 && fallbackLaunchRequest) {
       return applyHostedLaunchRequest(persisted, fallbackLaunchRequest)
     }
@@ -209,7 +294,15 @@ export function HostedShell({
   const [apiDraft, setApiDraft] = useState('')
   const [addDialogError, setAddDialogError] = useState<string | null>(null)
   const [manifestError, setManifestError] = useState<string | null>(null)
+  const [pwaState, setPwaState] = useState<HostedShellPwaState>(DEFAULT_PWA_STATE)
   const manifestRef = useRef<Awaited<ReturnType<typeof fetchHostedAppManifest>> | null>(null)
+  const installPromptRef = useRef<BeforeInstallPromptEventLike | null>(null)
+  const initialLaunchHandledRef = useRef(false)
+
+  const submitApi = useCallback((apiBaseUrl: string) => {
+    setShellState((current) => applyHostedLaunchRequest(current, { apiBaseUrl }))
+    setErrorMessage(null)
+  }, [])
 
   useEffect(() => {
     saveHostedShellState(window.localStorage, shellState)
@@ -224,6 +317,123 @@ export function HostedShell({
       return next
     })
   }, [shellState.tabs])
+
+  const syncPwaState = useCallback(() => {
+    setPwaState((current) => ({
+      ...createBrowserPwaSnapshot(installPromptRef.current),
+      isInstalling: current.isInstalling,
+    }))
+  }, [])
+
+  useEffect(() => {
+    syncPwaState()
+
+    const hostedNavigator = navigator as HostedNavigator
+    const onDisplayChange = () => {
+      syncPwaState()
+    }
+    const onBeforeInstallPrompt = (event: Event) => {
+      if (!isBeforeInstallPromptEvent(event)) {
+        return
+      }
+      event.preventDefault()
+      installPromptRef.current = event
+      setPwaState((current) => ({
+        ...createBrowserPwaSnapshot(event),
+        isInstalling: current.isInstalling,
+      }))
+    }
+    const onAppInstalled = () => {
+      installPromptRef.current = null
+      setPwaState(() => ({
+        ...createBrowserPwaSnapshot(null),
+        isInstalling: false,
+        isInstalled: true,
+      }))
+    }
+
+    const standaloneMedia = window.matchMedia('(display-mode: standalone)')
+    const overlayMedia = window.matchMedia('(display-mode: window-controls-overlay)')
+    standaloneMedia.addEventListener('change', onDisplayChange)
+    overlayMedia.addEventListener('change', onDisplayChange)
+    window.addEventListener('resize', onDisplayChange)
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener)
+    window.addEventListener('appinstalled', onAppInstalled)
+    hostedNavigator.windowControlsOverlay?.addEventListener('geometrychange', onDisplayChange)
+
+    return () => {
+      standaloneMedia.removeEventListener('change', onDisplayChange)
+      overlayMedia.removeEventListener('change', onDisplayChange)
+      window.removeEventListener('resize', onDisplayChange)
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener)
+      window.removeEventListener('appinstalled', onAppInstalled)
+      hostedNavigator.windowControlsOverlay?.removeEventListener('geometrychange', onDisplayChange)
+    }
+  }, [syncPwaState])
+
+  const handleInstall = useCallback(async () => {
+    const promptEvent = installPromptRef.current
+    if (!promptEvent) {
+      return
+    }
+
+    setPwaState((current) => ({ ...current, isInstalling: true }))
+    installPromptRef.current = null
+
+    try {
+      await promptEvent.prompt()
+      await promptEvent.userChoice
+    } finally {
+      setPwaState(() => ({
+        ...createBrowserPwaSnapshot(installPromptRef.current),
+        isInstalling: false,
+      }))
+    }
+  }, [])
+
+  useEffect(() => {
+    const relay = createHostedLaunchRelay({
+      storage: window.localStorage,
+    })
+    const dispatchLaunch = async (request: HostedShellLaunchRequest) => {
+      const result = await relay.dispatch(request)
+      if (result === 'forwarded') {
+        setErrorMessage('Launch forwarded to the active OpenSpec UI App window.')
+        return
+      }
+      setErrorMessage(null)
+    }
+
+    const stop = relay.start((request) => {
+      submitApi(request.apiBaseUrl)
+    })
+
+    if (initialLaunchRequest && !initialLaunchHandledRef.current) {
+      initialLaunchHandledRef.current = true
+      void dispatchLaunch(initialLaunchRequest)
+    }
+
+    const hostedNavigator = navigator as HostedNavigator
+    hostedNavigator.launchQueue?.setConsumer((params) => {
+      const targetUrl = params.targetURL
+      if (!(targetUrl instanceof URL)) {
+        return
+      }
+      const launch = parseHostedLaunchParams(targetUrl.search)
+      if (launch.error) {
+        setErrorMessage(launch.error)
+        return
+      }
+      if (launch.request) {
+        void dispatchLaunch(launch.request)
+      }
+    })
+
+    return () => {
+      hostedNavigator.launchQueue?.setConsumer(() => {})
+      stop()
+    }
+  }, [initialLaunchRequest, submitApi])
 
   const loadManifest = useCallback(async (force = false) => {
     if (!force && manifestRef.current) {
@@ -374,11 +584,6 @@ export function HostedShell({
     [probeTabs, shellState.tabs, tabRuntime]
   )
 
-  const submitApi = useCallback((apiBaseUrl: string) => {
-    setShellState((current) => applyHostedLaunchRequest(current, { apiBaseUrl }))
-    setErrorMessage(null)
-  }, [])
-
   const handleAddSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault()
@@ -396,28 +601,44 @@ export function HostedShell({
     [apiDraft, submitApi]
   )
 
-  const addButtonClassName =
-    'border-border bg-background text-foreground hover:bg-muted inline-flex items-center justify-center border px-3 py-2 text-sm transition-colors'
-
-  const addButton = (
-    <button
-      type="button"
-      onClick={() => {
-        setAddDialogError(null)
-        setIsAddDialogOpen(true)
-      }}
-      className={addButtonClassName}
-    >
-      Add API
-    </button>
-  )
+  const rootStyle: HostedShellRootStyle = {
+    '--hosted-pwa-titlebar-left': `${pwaState.titlebarInsets.left}px`,
+    '--hosted-pwa-titlebar-right': `${pwaState.titlebarInsets.right}px`,
+    '--hosted-pwa-titlebar-top': `${pwaState.titlebarInsets.top}px`,
+    '--hosted-pwa-titlebar-height': `${pwaState.titlebarInsets.height}px`,
+  }
 
   return (
-    <div className="bg-background text-foreground flex min-h-screen min-w-0 flex-col">
+    <div
+      className="hosted-shell-root bg-background text-foreground flex min-h-screen min-w-0 flex-col"
+      data-titlebar-overlay={pwaState.displayMode === 'window-controls-overlay'}
+      style={rootStyle}
+    >
       <HostedShellThemeBootstrap />
 
       {tabs.length === 0 ? (
         <div className="flex min-h-screen min-w-0 flex-col">
+          <div className="tabs-header border-border bg-terminal text-terminal-foreground flex min-w-0 items-stretch border-b">
+            <div className="tabs-strip bg-terminal min-w-0 flex-1 px-4 py-3">
+              <p className="font-nav text-xs uppercase tracking-[0.16em]">OpenSpec UI App</p>
+            </div>
+            <div className="tabs-actions border-border bg-terminal text-terminal-foreground flex shrink-0 items-center border-l">
+              <HostedShellActions
+                isRefreshing={false}
+                onRefresh={() => {}}
+                onAdd={() => {
+                  setAddDialogError(null)
+                  setIsAddDialogOpen(true)
+                }}
+                canInstall={pwaState.canInstall}
+                isInstalling={pwaState.isInstalling}
+                onInstall={() => {
+                  void handleInstall()
+                }}
+                showRefresh={false}
+              />
+            </div>
+          </div>
           {errorMessage && (
             <div className="border-border bg-muted/30 border-b px-3 py-2 text-xs">
               {errorMessage}
@@ -429,7 +650,6 @@ export function HostedShell({
               <p className="text-muted-foreground max-w-sm text-sm">
                 Open a backend connection to start a hosted OpenSpec UI tab.
               </p>
-              <div className="flex items-center justify-center">{addButton}</div>
             </div>
           </div>
         </div>
@@ -455,9 +675,14 @@ export function HostedShell({
                 setAddDialogError(null)
                 setIsAddDialogOpen(true)
               }}
+              canInstall={pwaState.canInstall}
+              isInstalling={pwaState.isInstalling}
+              onInstall={() => {
+                void handleInstall()
+              }}
             />
           }
-          className="min-h-screen"
+          className="hosted-shell-tabs min-h-screen"
         />
       )}
 

@@ -7,7 +7,10 @@
     "dev": "vite --host=127.0.0.1 --port 13006",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "cf:dev": "pnpm build && wrangler pages dev dist",
+    "cf:deploy": "pnpm build && wrangler pages deploy dist --project-name openspecui-website",
+    "cf:project:create": "wrangler pages project create openspecui-website --production-branch main"
   },
   "dependencies": {
     "i18next": "^25.8.17",
@@ -27,6 +30,7 @@
     "lucide-react": "^0.472.0",
     "typescript": "^5.7.2",
     "vite": "^7.3.1",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "wrangler": "^4.72.0"
   }
 }

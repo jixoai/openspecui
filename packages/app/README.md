@@ -40,6 +40,7 @@ Tabs remain in the root shell and can be reopened on later visits.
 ```bash
 pnpm --filter @openspecui/app dev
 pnpm openspecui --app
+pnpm --filter @openspecui/app cf:dev
 ```
 
 Use `pnpm openspecui --app` from the repo root when you want the local backend plus the local hosted shell together.
@@ -50,14 +51,38 @@ Use `pnpm openspecui --app` from the repo root when you want the local backend p
 pnpm --filter @openspecui/app build
 ```
 
+## Deploy with Wrangler
+
+One-time setup:
+
+```bash
+pnpm --filter @openspecui/app cf:project:create
+```
+
+Production deploy:
+
+```bash
+pnpm --filter @openspecui/app cf:deploy
+```
+
+Required auth:
+
+- `wrangler login`, or
+- `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`
+
+Source of truth:
+
+- deploy config: `packages/app/wrangler.jsonc`
+- cache headers: `packages/app/public/_headers`
+- deep-link rewrites: `packages/app/public/_worker.js`
+
+Custom domains remain a Cloudflare-side concern. Attach `app.openspecui.com` to the Pages project after the first successful deploy.
+
 ## Deploy
 
 ### Cloudflare Pages
 
-1. Build the workspace.
-2. Deploy `packages/app/dist`.
-3. Attach the custom domain `app.openspecui.com`.
-4. Keep `public/_headers` in the published output so cache behavior stays correct.
+This workspace is ready for direct upload with Wrangler. The output directory is `packages/app/dist`.
 
 ### Docker
 

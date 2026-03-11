@@ -121,6 +121,13 @@ self.addEventListener('fetch', (event) => {
   if (
     url.pathname === '/' ||
     url.pathname === '/index.html' ||
+    url.pathname === '/manifest.webmanifest' ||
+    url.pathname === '/apple-touch-icon.png' ||
+    url.pathname === '/pwa-192x192.png' ||
+    url.pathname === '/pwa-512x512.png' ||
+    url.pathname === '/icon.svg' ||
+    url.pathname === '/icon.dark.svg' ||
+    url.pathname === '/icon.rounded.svg' ||
     url.pathname.startsWith('/assets/') ||
     url.pathname === '/logo.svg'
   ) {

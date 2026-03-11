@@ -10,6 +10,7 @@ import {
   getMimeType,
   resolveLocalDevBundleRelativePath,
 } from './src/lib/dev-server'
+import { createHostedAppPwaManifest } from './src/lib/pwa-manifest'
 import { hostedAppPlugin } from './src/vite-plugin-hosted-app'
 
 function hostedAppDevPlugin(): Plugin {
@@ -21,10 +22,6 @@ function hostedAppDevPlugin(): Plugin {
     name: 'openspecui-hosted-app-dev',
     apply: 'serve',
     configureServer(server) {
-      if (!enabled || !localWebDist) {
-        return
-      }
-
       server.middlewares.use(async (req, res, next) => {
         if (req.method !== 'GET' || !req.url) {
           next()
@@ -32,6 +29,17 @@ function hostedAppDevPlugin(): Plugin {
         }
 
         const requestUrl = new URL(req.url, 'http://localhost')
+        if (requestUrl.pathname === '/manifest.webmanifest') {
+          res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8')
+          res.end(`${JSON.stringify(createHostedAppPwaManifest(), null, 2)}\n`)
+          return
+        }
+
+        if (!enabled || !localWebDist) {
+          next()
+          return
+        }
+
         if (requestUrl.pathname === '/version.json') {
           const manifest = createLocalDevManifest(localVersion)
           res.setHeader('Content-Type', 'application/json; charset=utf-8')

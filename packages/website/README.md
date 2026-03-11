@@ -19,6 +19,7 @@ It is not a docs portal or CMS.
 pnpm --filter @openspecui/website dev
 pnpm --filter @openspecui/website test
 pnpm --filter @openspecui/website build
+pnpm --filter @openspecui/website cf:dev
 ```
 
 ## Internationalization
@@ -45,13 +46,35 @@ Supported languages:
 
 The website reuses shared product tokens from `packages/web/src/index.css` so the public site stays visually aligned with OpenSpecUI.
 
-## Deployment
+## Deploy with Wrangler
 
-Build output is static and can be deployed to Cloudflare Pages.
+One-time setup:
 
-Recommended custom-domain setup:
+```bash
+pnpm --filter @openspecui/website cf:project:create
+```
+
+Production deploy:
+
+```bash
+pnpm --filter @openspecui/website cf:deploy
+```
+
+Required auth:
+
+- `wrangler login`, or
+- `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`
+
+Source of truth:
+
+- deploy config: `packages/website/wrangler.jsonc`
+- cache headers: `packages/website/public/_headers`
+
+Custom domains remain a Cloudflare-side concern:
 
 - `www.openspecui.com` serves this workspace output
-- `openspecui.com` redirects to `https://www.openspecui.com/*` via Cloudflare Redirect Rules
+- `openspecui.com` should redirect to `https://www.openspecui.com/*` via Cloudflare Redirect Rules
 
-The included `public/_headers` file keeps HTML revalidating while allowing hashed assets to stay immutable.
+## Deployment
+
+Build output is static and ready for direct upload to Cloudflare Pages.

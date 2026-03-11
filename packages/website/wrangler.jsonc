@@ -1,0 +1,7 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "openspecui-website",
+  "compatibility_date": "2026-03-11",
+  "pages_build_output_dir": "./dist",
+  "send_metrics": false,
+}

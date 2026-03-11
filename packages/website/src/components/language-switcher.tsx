@@ -11,11 +11,12 @@ interface LanguageSwitcherProps {
 export function LanguageSwitcher({ label, value, onChange }: LanguageSwitcherProps) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-muted-foreground text-xs">{label}</span>
+      <span className="text-terminal-foreground/72 text-xs">{label}</span>
       <ButtonGroup
         value={value}
         onChange={onChange}
-        className="border-border bg-background/80 text-foreground"
+        tone="terminal"
+        className="shadow-none"
         options={[
           { value: 'en', label: 'EN' },
           { value: 'zh', label: '中文' },

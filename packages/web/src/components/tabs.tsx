@@ -149,8 +149,8 @@ export function Tabs({
 
   const headerClassName =
     variant === 'terminal'
-      ? 'z-2 bg-terminal text-terminal-foreground sticky top-0 flex min-w-0 items-stretch'
-      : 'z-2 bg-background sticky top-0 flex min-w-0 items-stretch'
+      ? 'tabs-header z-2 bg-terminal text-terminal-foreground sticky top-0 flex min-w-0 items-stretch'
+      : 'tabs-header z-2 bg-background sticky top-0 flex min-w-0 items-stretch'
 
   const stripClassName =
     variant === 'terminal'
@@ -173,8 +173,8 @@ export function Tabs({
 
   const actionsClassName =
     variant === 'terminal'
-      ? 'border-border bg-terminal text-terminal-foreground flex shrink-0 items-center border-b px-1'
-      : 'border-border bg-background flex shrink-0 items-center border-b px-1'
+      ? 'tabs-actions border-border bg-terminal text-terminal-foreground flex shrink-0 items-center border-b px-1'
+      : 'tabs-actions border-border bg-background flex shrink-0 items-center border-b px-1'
 
   const handleTabBarDoubleClick = (e: ReactMouseEvent<HTMLDivElement>) => {
     if (!onTabBarDoubleClick) return
