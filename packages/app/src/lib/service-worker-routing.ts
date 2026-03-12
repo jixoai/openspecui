@@ -42,6 +42,17 @@ export function resolveVersionedNavigationShell(
   return isVersionRouteShellPath(channel, requestUrl.pathname) ? channel : null
 }
 
+export function buildVersionedNavigationShellUrl(
+  channel: HostedAppChannelManifest,
+  requestUrl: URL
+): URL {
+  return new URL(channel.shellPath, requestUrl.origin)
+}
+
+export function hasHostedLaunchNavigationParams(requestUrl: URL): boolean {
+  return requestUrl.searchParams.has('api') || requestUrl.searchParams.has('session')
+}
+
 export function renderServiceWorkerError(message: string, status = 404): Response {
   return new Response(
     `<!doctype html><html><body><main><h1>OpenSpec UI App</h1><p>${message}</p></main></body></html>`,

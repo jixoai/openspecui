@@ -1,6 +1,16 @@
 <svg width="180" height="180" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-  <rect x="2" y="2" width="60" height="60" rx="16" fill="#FFFFFF" stroke="#D4D4D8" stroke-width="2" />
-  <g transform="translate(12 8) scale(0.8)">
+  <defs>
+    <!-- 定义线性渐变，从左上到右下，营造高光感 -->
+    <linearGradient id="borderGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:E2E8F0;" />
+      <stop offset="45%" style="stop-color:color(display-p3 1 1 1);" />
+      <stop offset="55%" style="stop-color:color(display-p3 1 1 1);" />
+      <stop offset="100%" style="stop-color:color(display-p3 0 0 0);" />
+    </linearGradient>
+  </defs>
+
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="#F0F0F0" stroke="url(#borderGradient)" stroke-width="1" />
+  <g transform="translate(9.5 5) scale(0.9)">
     <path fill="#FF2424" d="M10,0 h30 v10 h-30 z M0,10 h10 v40 h-10 z" />
     <path fill="#000000" d="M40,10 h10 v40 h-10 z M10,50 h30 v10 h-30 z" />
   </g>

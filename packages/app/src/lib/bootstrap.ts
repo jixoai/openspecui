@@ -85,7 +85,8 @@ export async function registerHostedServiceWorker(
     return
   }
 
-  await runtime.serviceWorker.register('/service-worker.js', {
+  const registration = await runtime.serviceWorker.register('/service-worker.js', {
     scope: '/',
   })
+  await registration.update()
 }

@@ -19,31 +19,19 @@ if (typeof window !== 'undefined' && window.__OPENSPEC_STATIC_MODE__ === true &&
 }
 
 /**
- * Check if running in static export mode
- * Static mode is detected by:
- * 1. window.__OPENSPEC_STATIC_MODE__ flag (set by SSG)
- * 2. Fallback: attempting to load data.json
+ * Check if running in static export mode.
+ *
+ * Static mode must be declared explicitly by the runtime via
+ * window.__OPENSPEC_STATIC_MODE__. We no longer probe data.json at runtime,
+ * because that creates false positives/noise for live deployments.
  */
 export async function detectStaticMode(): Promise<boolean> {
   if (staticModeDetected !== null) {
     return staticModeDetected
   }
 
-  if (isDev) {
-    staticModeDetected = false
-    return staticModeDetected
-  }
-
-  // Fallback: check for data.json
-  try {
-    const basePath = getBasePath()
-    const dataUrl = `${basePath}data.json`.replace('//', '/')
-    const response = await fetch(dataUrl, { method: 'HEAD', cache: 'no-store' })
-    const contentType = response.headers.get('content-type')
-    staticModeDetected = response.ok && Boolean(contentType?.includes('application/json'))
-  } catch {
-    staticModeDetected = false
-  }
+  staticModeDetected =
+    !isDev && typeof window !== 'undefined' && window.__OPENSPEC_STATIC_MODE__ === true
 
   return staticModeDetected
 }

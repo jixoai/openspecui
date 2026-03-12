@@ -43,6 +43,8 @@ function getServerPackageVersion(): string {
 
 const SERVER_PACKAGE_VERSION = getServerPackageVersion()
 
+import { DashboardOverviewService } from './dashboard-overview-service.js'
+import { loadDashboardOverview } from './dashboard-overview.js'
 import { findAvailablePort } from './port-utils.js'
 import { PtyManager } from './pty-manager.js'
 import { createPtyWebSocketHandler } from './pty-websocket.js'
@@ -76,6 +78,18 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
   const watcher =
     config.enableWatcher !== false ? new OpenSpecWatcher(config.projectDir) : undefined
   const searchService = new SearchService(adapter, watcher)
+  const dashboardOverviewService = new DashboardOverviewService(
+    (reason) =>
+      loadDashboardOverview(
+        {
+          adapter,
+          configManager,
+          projectDir: config.projectDir,
+        },
+        reason
+      ),
+    watcher
+  )
 
   const app = new Hono()
 
@@ -113,6 +127,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
         cliExecutor,
         kernel,
         searchService,
+        dashboardOverviewService,
         watcher,
         projectDir: config.projectDir,
       }),
@@ -127,6 +142,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     cliExecutor,
     kernel,
     searchService,
+    dashboardOverviewService,
     watcher,
     projectDir: config.projectDir,
   })
@@ -138,6 +154,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     cliExecutor,
     kernel,
     searchService,
+    dashboardOverviewService,
     watcher,
     createContext,
     port: config.port ?? 3100,
@@ -217,6 +234,7 @@ export async function createWebSocketServer(
       wss.close()
       server.watcher?.stop()
       server.searchService.dispose().catch(() => {})
+      server.dashboardOverviewService.dispose()
     },
   }
 }
@@ -287,6 +305,9 @@ export async function startServer(
   })
   server.searchService.init().catch((err) => {
     console.error('Search service warmup failed:', err)
+  })
+  server.dashboardOverviewService.init().catch((err) => {
+    console.error('Dashboard overview warmup failed:', err)
   })
 
   return {

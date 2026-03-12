@@ -12,6 +12,7 @@ import {
   type FormEvent,
 } from 'react'
 import { parseHostedLaunchParams } from '../lib/bootstrap'
+import { createHostedShellSync } from '../lib/hosted-shell-sync'
 import { createHostedLaunchRelay } from '../lib/launch-relay'
 import {
   computeHostedAppDisplayMode,
@@ -31,18 +32,24 @@ import {
 import {
   activateHostedTab,
   applyHostedLaunchRequest,
+  areHostedShellStatesEqual,
   buildHostedVersionEntryUrl,
   getHostedTabLabel,
-  loadHostedShellState,
+  hasHostedTabForApi,
   normalizeHostedApiBaseUrl,
   removeHostedTab,
-  saveHostedShellState,
+  reorderHostedTabs,
   type HostedShellLaunchRequest,
+  type HostedShellState,
   type HostedShellTab,
 } from '../lib/shell-state'
 import { HostedShellThemeBootstrap } from './hosted-shell-theme'
 
 const PROBE_INTERVAL_MS = 15000
+const REFRESH_FEEDBACK_MS = 1200
+const FORWARDED_LAUNCH_MESSAGE = 'Launch forwarded to the active OpenSpec UI App window.'
+const FORWARDED_SYNC_TIMEOUT_MS = 1600
+const FORWARDED_SYNC_INTERVAL_MS = 120
 
 interface HostedShellProps {
   initialLaunchRequest: HostedShellLaunchRequest | null
@@ -123,6 +130,7 @@ function createBrowserPwaSnapshot(deferredPrompt: BeforeInstallPromptEventLike |
 
 function HostedShellActions(props: {
   isRefreshing: boolean
+  isRefreshFeedbackActive: boolean
   onRefresh: () => void
   onAdd: () => void
   canInstall: boolean
@@ -131,7 +139,8 @@ function HostedShellActions(props: {
   showRefresh?: boolean
 }) {
   const buttonClassName =
-    'border-border bg-terminal text-terminal-foreground hover:bg-background hover:text-foreground cursor-hover inline-flex items-center justify-center border-l p-4 text-sm transition-colors'
+    'border-border bg-terminal text-terminal-foreground hover:bg-background hover:text-foreground cursor-hover inline-flex items-center justify-center border-l p-4 text-sm transition-colors duration-200'
+  const refreshActive = props.isRefreshing || props.isRefreshFeedbackActive
 
   return (
     <div className="flex h-full items-stretch">
@@ -139,11 +148,11 @@ function HostedShellActions(props: {
         <button
           type="button"
           onClick={props.onRefresh}
-          className={buttonClassName}
+          className={cx(buttonClassName, refreshActive && 'bg-background text-foreground')}
           aria-label="Refresh backend metadata"
           title="Refresh backend metadata"
         >
-          <RefreshCw className={cx('h-3.5 w-3.5', props.isRefreshing && 'animate-spin')} />
+          <RefreshCw className={cx('h-3.5 w-3.5', refreshActive && 'animate-spin')} />
         </button>
       )}
       {props.canInstall && (
@@ -280,9 +289,16 @@ export function HostedShell({
   fallbackLaunchRequest = null,
   initialError,
 }: HostedShellProps) {
+  const shellSync = useMemo(
+    () =>
+      createHostedShellSync({
+        storage: window.localStorage,
+      }),
+    []
+  )
   const [errorMessage, setErrorMessage] = useState(initialError)
   const [shellState, setShellState] = useState(() => {
-    const persisted = loadHostedShellState(window.localStorage)
+    const persisted = shellSync.readCurrent()
     if (persisted.tabs.length === 0 && fallbackLaunchRequest) {
       return applyHostedLaunchRequest(persisted, fallbackLaunchRequest)
     }
@@ -290,6 +306,7 @@ export function HostedShell({
   })
   const [tabRuntime, setTabRuntime] = useState<Record<string, HostedTabRuntimeState>>({})
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isRefreshFeedbackActive, setIsRefreshFeedbackActive] = useState(false)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [apiDraft, setApiDraft] = useState('')
   const [addDialogError, setAddDialogError] = useState<string | null>(null)
@@ -298,15 +315,87 @@ export function HostedShell({
   const manifestRef = useRef<Awaited<ReturnType<typeof fetchHostedAppManifest>> | null>(null)
   const installPromptRef = useRef<BeforeInstallPromptEventLike | null>(null)
   const initialLaunchHandledRef = useRef(false)
+  const refreshFeedbackTimerRef = useRef<number | null>(null)
 
   const submitApi = useCallback((apiBaseUrl: string) => {
     setShellState((current) => applyHostedLaunchRequest(current, { apiBaseUrl }))
     setErrorMessage(null)
   }, [])
 
+  const startRefreshFeedback = useCallback(() => {
+    setIsRefreshFeedbackActive(true)
+    if (refreshFeedbackTimerRef.current !== null) {
+      window.clearTimeout(refreshFeedbackTimerRef.current)
+    }
+    refreshFeedbackTimerRef.current = window.setTimeout(() => {
+      refreshFeedbackTimerRef.current = null
+      setIsRefreshFeedbackActive(false)
+    }, REFRESH_FEEDBACK_MS)
+  }, [])
+
+  const applySyncedShellState = useCallback((nextState: HostedShellState) => {
+    setShellState((current) =>
+      areHostedShellStatesEqual(current, nextState) ? current : nextState
+    )
+    if (nextState.tabs.length > 0) {
+      setErrorMessage((current) => (current === FORWARDED_LAUNCH_MESSAGE ? null : current))
+    }
+  }, [])
+
+  const waitForForwardedLaunch = useCallback(
+    async (apiBaseUrl: string) => {
+      const deadline = Date.now() + FORWARDED_SYNC_TIMEOUT_MS
+      while (Date.now() <= deadline) {
+        const syncedState = shellSync.syncNow(applySyncedShellState)
+        const currentState = syncedState ?? shellSync.readCurrent()
+        if (hasHostedTabForApi(currentState, apiBaseUrl)) {
+          setErrorMessage((current) => (current === FORWARDED_LAUNCH_MESSAGE ? null : current))
+          return
+        }
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, FORWARDED_SYNC_INTERVAL_MS)
+        })
+      }
+    },
+    [applySyncedShellState, shellSync]
+  )
+
   useEffect(() => {
-    saveHostedShellState(window.localStorage, shellState)
-  }, [shellState])
+    shellSync.write(shellState)
+  }, [shellState, shellSync])
+
+  useEffect(() => {
+    return () => {
+      if (refreshFeedbackTimerRef.current !== null) {
+        window.clearTimeout(refreshFeedbackTimerRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    const syncNow = () => {
+      shellSync.syncNow(applySyncedShellState)
+    }
+
+    syncNow()
+    const stop = shellSync.start(applySyncedShellState)
+    const onFocus = () => {
+      syncNow()
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncNow()
+      }
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      stop()
+    }
+  }, [applySyncedShellState, shellSync])
 
   useEffect(() => {
     setTabRuntime((current) => {
@@ -398,7 +487,8 @@ export function HostedShell({
     const dispatchLaunch = async (request: HostedShellLaunchRequest) => {
       const result = await relay.dispatch(request)
       if (result === 'forwarded') {
-        setErrorMessage('Launch forwarded to the active OpenSpec UI App window.')
+        setErrorMessage(FORWARDED_LAUNCH_MESSAGE)
+        await waitForForwardedLaunch(request.apiBaseUrl)
         return
       }
       setErrorMessage(null)
@@ -433,7 +523,7 @@ export function HostedShell({
       hostedNavigator.launchQueue?.setConsumer(() => {})
       stop()
     }
-  }, [initialLaunchRequest, submitApi])
+  }, [initialLaunchRequest, submitApi, waitForForwardedLaunch])
 
   const loadManifest = useCallback(async (force = false) => {
     if (!force && manifestRef.current) {
@@ -441,7 +531,7 @@ export function HostedShell({
     }
 
     try {
-      const manifest = await fetchHostedAppManifest(window.location)
+      const manifest = await fetchHostedAppManifest(window.location, fetch, { force })
       manifestRef.current = manifest
       setManifestError(null)
       return manifest
@@ -463,6 +553,7 @@ export function HostedShell({
       if (targets.length === 0) return
 
       if (options?.visualFeedback) {
+        startRefreshFeedback()
         setIsRefreshing(true)
       }
 
@@ -478,57 +569,59 @@ export function HostedShell({
         return next
       })
 
-      const manifest = await loadManifest(options?.refetchManifest)
-      const probeResults = await Promise.all(
-        targets.map(async (tab) => ({
-          tab,
-          probe: await probeHostedBackend(tab.apiBaseUrl),
-        }))
-      )
+      try {
+        const manifest = await loadManifest(options?.refetchManifest)
+        const probeResults = await Promise.all(
+          targets.map(async (tab) => ({
+            tab,
+            probe: await probeHostedBackend(tab.apiBaseUrl),
+          }))
+        )
 
-      setTabRuntime((current) => {
-        const next = { ...current }
-        for (const { tab, probe } of probeResults) {
-          const previous = current[tab.id] ?? DEFAULT_RUNTIME_STATE
+        setTabRuntime((current) => {
+          const next = { ...current }
+          for (const { tab, probe } of probeResults) {
+            const previous = current[tab.id] ?? DEFAULT_RUNTIME_STATE
 
-          if (probe.reachability === 'offline') {
-            next[tab.id] = {
-              ...previous,
-              reachability: 'offline',
-              errorMessage: null,
+            if (probe.reachability === 'offline') {
+              next[tab.id] = {
+                ...previous,
+                reachability: 'offline',
+                errorMessage: null,
+              }
+              continue
             }
-            continue
-          }
 
-          const projectName = probe.health?.projectName ?? previous.projectName
-          const openspecuiVersion = probe.health?.openspecuiVersion ?? previous.openspecuiVersion
-          const resolvedChannel =
-            manifest && openspecuiVersion
-              ? resolveHostedChannelForVersion(manifest, openspecuiVersion)
-              : previous.resolvedChannel
+            const projectName = probe.health?.projectName ?? previous.projectName
+            const openspecuiVersion = probe.health?.openspecuiVersion ?? previous.openspecuiVersion
+            const resolvedChannel =
+              manifest && openspecuiVersion
+                ? resolveHostedChannelForVersion(manifest, openspecuiVersion)
+                : previous.resolvedChannel
 
-          next[tab.id] = {
-            reachability: 'online',
-            projectName,
-            openspecuiVersion,
-            resolvedChannel: resolvedChannel ?? null,
-            errorMessage:
-              probe.errorMessage ??
-              (!manifest && !previous.resolvedChannel
-                ? (manifestError ?? 'Hosted manifest is unavailable.')
-                : !resolvedChannel
-                  ? `No compatible hosted bundle found for openspecui@${openspecuiVersion ?? 'unknown'}.`
-                  : null),
+            next[tab.id] = {
+              reachability: 'online',
+              projectName,
+              openspecuiVersion,
+              resolvedChannel: resolvedChannel ?? null,
+              errorMessage:
+                probe.errorMessage ??
+                (!manifest && !previous.resolvedChannel
+                  ? (manifestError ?? 'Hosted manifest is unavailable.')
+                  : !resolvedChannel
+                    ? `No compatible hosted bundle found for openspecui@${openspecuiVersion ?? 'unknown'}.`
+                    : null),
+            }
           }
+          return next
+        })
+      } finally {
+        if (options?.visualFeedback) {
+          setIsRefreshing(false)
         }
-        return next
-      })
-
-      if (options?.visualFeedback) {
-        setIsRefreshing(false)
       }
     },
-    [loadManifest, manifestError, shellState.tabs]
+    [loadManifest, manifestError, shellState.tabs, startRefreshFeedback]
   )
 
   useEffect(() => {
@@ -625,6 +718,7 @@ export function HostedShell({
             <div className="tabs-actions border-border bg-terminal text-terminal-foreground flex shrink-0 items-center border-l">
               <HostedShellActions
                 isRefreshing={false}
+                isRefreshFeedbackActive={false}
                 onRefresh={() => {}}
                 onAdd={() => {
                   setAddDialogError(null)
@@ -664,9 +758,13 @@ export function HostedShell({
           onTabClose={(tabId) => {
             setShellState((current) => removeHostedTab(current, tabId))
           }}
+          onTabOrderChange={(orderedTabIds) => {
+            setShellState((current) => reorderHostedTabs(current, orderedTabIds))
+          }}
           actions={
             <HostedShellActions
               isRefreshing={isRefreshing}
+              isRefreshFeedbackActive={isRefreshFeedbackActive}
               onRefresh={() => {
                 setErrorMessage(null)
                 void probeTabs({ visualFeedback: true, refetchManifest: true })

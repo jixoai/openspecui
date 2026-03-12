@@ -74,6 +74,7 @@ export interface DashboardGitWorktree {
   path: string
   relativePath: string
   branchName: string
+  detached: boolean
   isCurrent: boolean
   ahead: number
   behind: number

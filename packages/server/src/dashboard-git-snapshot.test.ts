@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest'
-import { buildDashboardGitSnapshot } from './dashboard-git-snapshot.js'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  buildDashboardGitSnapshot,
+  removeDetachedDashboardGitWorktree,
+} from './dashboard-git-snapshot.js'
 
-describe('buildDashboardGitSnapshot', () => {
+describe('dashboard git snapshot helpers', () => {
   it('builds worktree + commit/uncommitted tree with related openspec changes', async () => {
     const projectDir = '/repo/main'
     const featureDir = '/repo/feature-a'
@@ -105,11 +108,13 @@ describe('buildDashboardGitSnapshot', () => {
     expect(snapshot.worktrees).toHaveLength(2)
     expect(snapshot.worktrees[0]?.isCurrent).toBe(true)
     expect(snapshot.worktrees[0]?.branchName).toBe('main')
+    expect(snapshot.worktrees[0]?.detached).toBe(false)
 
     const feature = snapshot.worktrees.find((worktree) => worktree.path === featureDir)
     expect(feature).toBeDefined()
     expect(feature?.ahead).toBe(3)
     expect(feature?.behind).toBe(1)
+    expect(feature?.detached).toBe(false)
     expect(feature?.diff).toEqual({ files: 3, insertions: 10, deletions: 2 })
 
     const commitEntry = feature?.entries.find((entry) => entry.type === 'commit')
@@ -119,5 +124,72 @@ describe('buildDashboardGitSnapshot', () => {
     const uncommittedEntry = feature?.entries.find((entry) => entry.type === 'uncommitted')
     expect(uncommittedEntry?.relatedChanges).toEqual(['dashboard-live-workflow-status'])
     expect(uncommittedEntry?.diff).toEqual({ files: 2, insertions: 3, deletions: 0 })
+  })
+
+  it('removes detached worktrees with a forced git worktree remove command', async () => {
+    const runGit = vi.fn(async (_cwd: string, args: string[]) => {
+      const cmd = args.join(' ')
+      if (cmd === 'worktree list --porcelain') {
+        return {
+          ok: true,
+          stdout: [
+            'worktree /repo/main',
+            'branch refs/heads/main',
+            '',
+            'worktree /tmp/detached',
+            'detached',
+            '',
+          ].join('\n'),
+        }
+      }
+      if (cmd === 'worktree remove --force /tmp/detached') {
+        return { ok: true, stdout: '' }
+      }
+      return { ok: false, stdout: '' }
+    })
+
+    await removeDetachedDashboardGitWorktree({
+      projectDir: '/repo/main',
+      targetPath: '/tmp/detached',
+      runGit,
+    })
+
+    expect(runGit).toHaveBeenCalledWith('/repo/main', ['worktree', 'list', '--porcelain'])
+    expect(runGit).toHaveBeenCalledWith('/repo/main', [
+      'worktree',
+      'remove',
+      '--force',
+      '/tmp/detached',
+    ])
+  })
+
+  it('rejects non-detached or current worktrees for dashboard removal', async () => {
+    const nonDetachedRunGit = vi.fn(async () => ({
+      ok: true,
+      stdout: [
+        'worktree /repo/main',
+        'branch refs/heads/main',
+        '',
+        'worktree /repo/feature',
+        'branch refs/heads/feature',
+        '',
+      ].join('\n'),
+    }))
+
+    await expect(
+      removeDetachedDashboardGitWorktree({
+        projectDir: '/repo/main',
+        targetPath: '/repo/main',
+        runGit: nonDetachedRunGit,
+      })
+    ).rejects.toThrow(/Cannot remove the current worktree/)
+
+    await expect(
+      removeDetachedDashboardGitWorktree({
+        projectDir: '/repo/main',
+        targetPath: '/repo/feature',
+        runGit: nonDetachedRunGit,
+      })
+    ).rejects.toThrow(/Only detached worktrees can be removed/)
   })
 })

@@ -1,7 +1,11 @@
 /// <reference lib="webworker" />
-import type { HostedAppVersionManifest } from '@openspecui/core/hosted-app'
+import type {
+  HostedAppChannelManifest,
+  HostedAppVersionManifest,
+} from '@openspecui/core/hosted-app'
 import {
   buildChannelCacheName,
+  buildVersionedNavigationShellUrl,
   renderServiceWorkerError,
   resolveChannelIdFromPathname,
   resolveVersionedNavigationShell,
@@ -11,6 +15,7 @@ declare const self: ServiceWorkerGlobalScope
 
 const APP_CACHE_NAME = 'openspecui-app:shell'
 const MANIFEST_CACHE_NAME = 'openspecui-app:manifest'
+const MANIFEST_REQUEST = new Request('/version.json')
 
 async function staleWhileRevalidate(cacheName: string, request: Request | URL): Promise<Response> {
   const cache = await caches.open(cacheName)
@@ -31,13 +36,94 @@ async function staleWhileRevalidate(cacheName: string, request: Request | URL): 
   return await networkPromise
 }
 
-async function fetchManifest(): Promise<HostedAppVersionManifest> {
-  const request = new Request('/version.json', { cache: 'no-store' })
-  const response = await staleWhileRevalidate(MANIFEST_CACHE_NAME, request)
+async function cacheFirst(cacheName: string, request: Request | URL): Promise<Response> {
+  const cache = await caches.open(cacheName)
+  const cached = await cache.match(request)
+  if (cached) {
+    return cached
+  }
+
+  const response = await fetch(request)
+  if (response.ok) {
+    await cache.put(request, response.clone())
+  }
+  return response
+}
+
+async function parseManifestResponse(response: Response): Promise<HostedAppVersionManifest> {
   if (!response.ok) {
     throw new Error(`Failed to fetch version.json: ${response.status}`)
   }
   return (await response.json()) as HostedAppVersionManifest
+}
+
+async function fetchManifest(): Promise<HostedAppVersionManifest> {
+  const response = await cacheFirst(MANIFEST_CACHE_NAME, MANIFEST_REQUEST)
+  return parseManifestResponse(response)
+}
+
+async function refreshManifest(): Promise<HostedAppVersionManifest> {
+  const cache = await caches.open(MANIFEST_CACHE_NAME)
+
+  try {
+    const response = await fetch(new Request('/version.json', { cache: 'no-store' }))
+    if (!response.ok) {
+      throw new Error(`Failed to fetch version.json: ${response.status}`)
+    }
+    await cache.put(MANIFEST_REQUEST, response.clone())
+    return (await response.json()) as HostedAppVersionManifest
+  } catch (error) {
+    const cached = await cache.match(MANIFEST_REQUEST)
+    if (cached) {
+      return parseManifestResponse(cached)
+    }
+    throw error
+  }
+}
+
+async function cacheVersionedShellDocument(
+  cacheName: string,
+  shellUrl: URL,
+  response: Response
+): Promise<void> {
+  if (!response.ok) {
+    return
+  }
+  const cache = await caches.open(cacheName)
+  await cache.put(new Request(shellUrl.toString()), response.clone())
+}
+
+async function readCachedVersionedShellDocument(
+  cacheName: string,
+  shellUrl: URL
+): Promise<Response | null> {
+  const cache = await caches.open(cacheName)
+  return (await cache.match(new Request(shellUrl.toString()))) ?? null
+}
+
+async function fetchVersionedNavigationFromNetwork(
+  request: Request,
+  shellUrl: URL,
+  channel: HostedAppChannelManifest
+): Promise<Response> {
+  const requestUrl = new URL(request.url)
+  const directResponse = await fetch(request)
+  if (directResponse.ok) {
+    await cacheVersionedShellDocument(buildChannelCacheName(channel), shellUrl, directResponse)
+    return directResponse
+  }
+
+  if (requestUrl.pathname === shellUrl.pathname) {
+    return directResponse
+  }
+
+  const shellResponse = await fetch(new Request(shellUrl.toString()))
+  if (shellResponse.ok) {
+    await cacheVersionedShellDocument(buildChannelCacheName(channel), shellUrl, shellResponse)
+    return shellResponse
+  }
+
+  return directResponse
 }
 
 async function handleVersionNavigation(request: Request): Promise<Response> {
@@ -48,10 +134,23 @@ async function handleVersionNavigation(request: Request): Promise<Response> {
     return fetch(request)
   }
 
-  const shellUrl = new URL(channel.shellPath, requestUrl.origin)
+  const shellUrl = buildVersionedNavigationShellUrl(channel, requestUrl)
+  const cacheName = buildChannelCacheName(channel)
+
   try {
-    return await staleWhileRevalidate(buildChannelCacheName(channel), shellUrl)
+    const response = await fetchVersionedNavigationFromNetwork(request, shellUrl, channel)
+    if (response.ok) {
+      return response
+    }
+
+    const cached = await readCachedVersionedShellDocument(cacheName, shellUrl)
+    return cached ?? response
   } catch (error) {
+    const cached = await readCachedVersionedShellDocument(cacheName, shellUrl)
+    if (cached) {
+      return cached
+    }
+
     return renderServiceWorkerError(
       error instanceof Error ? error.message : `Channel ${channel.id} is unavailable.`
     )
@@ -81,7 +180,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       await self.clients.claim()
-      const manifest = await fetchManifest().catch(() => null)
+      const manifest = await refreshManifest().catch(() => null)
       if (!manifest) return
       const keep = new Set([
         APP_CACHE_NAME,
@@ -109,7 +208,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (url.pathname === '/version.json') {
-    event.respondWith(staleWhileRevalidate(MANIFEST_CACHE_NAME, request))
+    event.respondWith(cacheFirst(MANIFEST_CACHE_NAME, MANIFEST_REQUEST))
     return
   }
 

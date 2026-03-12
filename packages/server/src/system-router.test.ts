@@ -21,6 +21,7 @@ function createCaller(partial: Partial<Context> = {}) {
     cliExecutor: {} as Context['cliExecutor'],
     kernel: {} as Context['kernel'],
     searchService: {} as Context['searchService'],
+    dashboardOverviewService: {} as Context['dashboardOverviewService'],
     watcher: partial.watcher,
     projectDir: partial.projectDir ?? '/tmp/opsx-project',
   })

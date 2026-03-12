@@ -68,3 +68,8 @@ export async function refreshDashboardGitSnapshot(reason: string): Promise<void>
   if (isStaticMode()) return
   await trpcClient.dashboard.refreshGitSnapshot.mutate({ reason })
 }
+
+export async function removeDetachedDashboardWorktree(path: string): Promise<void> {
+  if (isStaticMode()) return
+  await trpcClient.dashboard.removeDetachedWorktree.mutate({ path })
+}

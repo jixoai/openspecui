@@ -30,6 +30,7 @@ describe('search router', () => {
       cliExecutor: {} as never,
       kernel: {} as never,
       searchService: searchService as never,
+      dashboardOverviewService: {} as never,
       projectDir: '/tmp/project',
     })
 

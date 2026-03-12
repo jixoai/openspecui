@@ -68,6 +68,26 @@ export function getHostedShellStorageKey(): string {
   return SHELL_STORAGE_KEY
 }
 
+export function areHostedShellStatesEqual(
+  left: HostedShellState,
+  right: HostedShellState
+): boolean {
+  if (left.activeTabId !== right.activeTabId || left.tabs.length !== right.tabs.length) {
+    return false
+  }
+
+  return left.tabs.every((tab, index) => {
+    const other = right.tabs[index]
+    return (
+      other !== undefined &&
+      tab.id === other.id &&
+      tab.sessionId === other.sessionId &&
+      tab.apiBaseUrl === other.apiBaseUrl &&
+      tab.createdAt === other.createdAt
+    )
+  })
+}
+
 export function parseHostedShellState(raw: unknown): HostedShellState {
   if (!isRecord(raw)) {
     return createEmptyHostedShellState()
@@ -127,6 +147,35 @@ function findMatchingTabIndex(state: HostedShellState, request: HostedShellLaunc
   return state.tabs.findIndex((tab) => tab.apiBaseUrl === request.apiBaseUrl)
 }
 
+export function hasHostedTabForApi(state: HostedShellState, apiBaseUrl: string): boolean {
+  return state.tabs.some((tab) => tab.apiBaseUrl === apiBaseUrl)
+}
+
+export function reorderHostedTabs(
+  state: HostedShellState,
+  orderedTabIds: readonly string[]
+): HostedShellState {
+  if (orderedTabIds.length !== state.tabs.length) {
+    return state
+  }
+
+  const tabsById = new Map(state.tabs.map((tab) => [tab.id, tab] as const))
+  if (orderedTabIds.some((tabId) => !tabsById.has(tabId))) {
+    return state
+  }
+
+  const tabs = orderedTabIds.map((tabId) => tabsById.get(tabId)!)
+  const changed = tabs.some((tab, index) => tab.id !== state.tabs[index]?.id)
+  if (!changed) {
+    return state
+  }
+
+  return {
+    ...state,
+    tabs,
+  }
+}
+
 export function applyHostedLaunchRequest(
   state: HostedShellState,
   request: HostedShellLaunchRequest,
@@ -137,9 +186,13 @@ export function applyHostedLaunchRequest(
 ): HostedShellState {
   const matchingIndex = findMatchingTabIndex(state, request)
   if (matchingIndex >= 0) {
+    const nextActiveTabId = state.tabs[matchingIndex]?.id ?? state.activeTabId
+    if (nextActiveTabId === state.activeTabId) {
+      return state
+    }
     return {
       ...state,
-      activeTabId: state.tabs[matchingIndex]?.id ?? state.activeTabId,
+      activeTabId: nextActiveTabId,
     }
   }
 

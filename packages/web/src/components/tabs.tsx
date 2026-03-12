@@ -1,9 +1,13 @@
 import { X } from 'lucide-react'
 import {
   Activity,
+  useCallback,
   useId,
   useMemo,
+  useRef,
   useState,
+  type CSSProperties,
+  type DragEvent as ReactDragEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react'
@@ -30,6 +34,8 @@ interface TabsProps {
   onTabChange?: (id: string) => void
   /** Called when a closable tab's close button is clicked */
   onTabClose?: (id: string) => void
+  /** Called with the reordered tab id list after a drag-and-drop reorder */
+  onTabOrderChange?: (orderedTabIds: string[]) => void
   /** Extra content rendered at the end of the tab bar (e.g. a "+" button) */
   actions?: ReactNode
   /** Called when the tabs bar is double-clicked (usually on empty space) */
@@ -37,6 +43,13 @@ interface TabsProps {
   className?: string
   variant?: TabsVariant
 }
+
+interface DropIndicator {
+  position: 'before' | 'after'
+  tabId: string
+}
+
+let _draggedTabId: string | null = null
 
 const tabsStyle = (id: string) => {
   const css = String.raw
@@ -117,6 +130,37 @@ const tabsStyle = (id: string) => {
   )
 }
 
+function buildReorderedTabIds(
+  currentTabIds: readonly string[],
+  draggedTabId: string,
+  targetTabId: string,
+  position: 'before' | 'after'
+): string[] {
+  if (draggedTabId === targetTabId) {
+    return [...currentTabIds]
+  }
+
+  const remaining = currentTabIds.filter((tabId) => tabId !== draggedTabId)
+  const targetIndex = remaining.indexOf(targetTabId)
+  if (targetIndex < 0) {
+    return [...currentTabIds]
+  }
+
+  const insertIndex = position === 'before' ? targetIndex : targetIndex + 1
+  remaining.splice(insertIndex, 0, draggedTabId)
+  return remaining
+}
+
+function buildStableContentTabIds(
+  previousTabIds: readonly string[],
+  currentTabIds: readonly string[]
+): string[] {
+  const currentTabIdSet = new Set(currentTabIds)
+  const retained = previousTabIds.filter((tabId) => currentTabIdSet.has(tabId))
+  const additions = currentTabIds.filter((tabId) => !retained.includes(tabId))
+  return [...retained, ...additions]
+}
+
 /**
  * Tabs component with React 19 Activity for state preservation.
  * Hidden tabs are pre-rendered at lower priority and preserve their state.
@@ -127,13 +171,30 @@ export function Tabs({
   selectedTab: controlled,
   onTabChange,
   onTabClose,
+  onTabOrderChange,
   actions,
   onTabBarDoubleClick,
   className = '',
   variant = 'default',
 }: TabsProps) {
   const [uncontrolled, setUncontrolled] = useState<string>(tabs[0]?.id ?? '')
+  const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null)
+  const dropIndicatorRef = useRef<DropIndicator | null>(null)
+  const contentOrderRef = useRef<string[]>(tabs.map((tab) => tab.id))
   const activeTab = controlled ?? uncontrolled
+  const reorderable = typeof onTabOrderChange === 'function' && tabs.length > 1
+  const tabIds = tabs.map((tab) => tab.id)
+  const tabsById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab] as const)), [tabs])
+  const contentTabIds = useMemo(() => {
+    const nextOrder = buildStableContentTabIds(contentOrderRef.current, tabIds)
+    contentOrderRef.current = nextOrder
+    return nextOrder
+  }, [tabIds])
+  const contentTabs = contentTabIds
+    .map((tabId) => tabsById.get(tabId))
+    .filter((tab): tab is Tab => tab !== undefined)
+  const id = useId()
+  const style = useMemo(() => tabsStyle(id), [id])
 
   const handleChange = (id: string) => {
     if (!controlled) {
@@ -142,10 +203,118 @@ export function Tabs({
     onTabChange?.(id)
   }
 
-  if (tabs.length === 0) return null
+  const updateIndicator = useCallback((indicator: DropIndicator | null) => {
+    dropIndicatorRef.current = indicator
+    setDropIndicator(indicator)
+  }, [])
 
-  const id = useId()
-  const style = useMemo(() => tabsStyle(id), [id])
+  const resetDragState = useCallback(() => {
+    _draggedTabId = null
+    updateIndicator(null)
+  }, [updateIndicator])
+
+  const commitReorder = useCallback(
+    (targetTabId: string, position: 'before' | 'after') => {
+      if (!reorderable || !_draggedTabId) {
+        return
+      }
+
+      const nextTabIds = buildReorderedTabIds(tabIds, _draggedTabId, targetTabId, position)
+      const changed = nextTabIds.some((tabId, index) => tabId !== tabIds[index])
+      if (changed) {
+        onTabOrderChange?.(nextTabIds)
+      }
+    },
+    [onTabOrderChange, reorderable, tabIds]
+  )
+
+  const handleDragStart = useCallback(
+    (event: ReactDragEvent<HTMLButtonElement>, tabId: string) => {
+      if (!reorderable || !event.dataTransfer) {
+        return
+      }
+
+      _draggedTabId = tabId
+      event.dataTransfer.setData('text/plain', tabId)
+      event.dataTransfer.effectAllowed = 'move'
+    },
+    [reorderable]
+  )
+
+  const handleDragEnd = useCallback(() => {
+    resetDragState()
+  }, [resetDragState])
+
+  const handleItemDragOver = useCallback(
+    (event: ReactDragEvent<HTMLButtonElement>, tabId: string) => {
+      if (!reorderable || !_draggedTabId) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      event.dataTransfer.dropEffect = 'move'
+
+      if (tabId === _draggedTabId) {
+        updateIndicator(null)
+        return
+      }
+
+      const rect = event.currentTarget.getBoundingClientRect()
+      const midX = rect.left + rect.width / 2
+      const position: 'before' | 'after' = event.clientX < midX ? 'before' : 'after'
+      updateIndicator({ tabId, position })
+    },
+    [reorderable, updateIndicator]
+  )
+
+  const handleItemDrop = useCallback(
+    (event: ReactDragEvent<HTMLButtonElement>, tabId: string) => {
+      if (!reorderable) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      const indicator = dropIndicatorRef.current
+      commitReorder(tabId, indicator?.tabId === tabId ? indicator.position : 'after')
+      resetDragState()
+    },
+    [commitReorder, reorderable, resetDragState]
+  )
+
+  const handleListDrop = useCallback(
+    (event: ReactDragEvent<HTMLDivElement>) => {
+      if (!reorderable) {
+        return
+      }
+
+      event.preventDefault()
+      if (_draggedTabId && dropIndicatorRef.current === null) {
+        const remaining = tabIds.filter((tabId) => tabId !== _draggedTabId)
+        remaining.push(_draggedTabId)
+        const changed = remaining.some((tabId, index) => tabId !== tabIds[index])
+        if (changed) {
+          onTabOrderChange?.(remaining)
+        }
+      }
+      resetDragState()
+    },
+    [onTabOrderChange, reorderable, resetDragState, tabIds]
+  )
+
+  const handleListDragOver = useCallback(
+    (event: ReactDragEvent<HTMLDivElement>) => {
+      if (!reorderable || !_draggedTabId) {
+        return
+      }
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+    },
+    [reorderable]
+  )
+
+  if (tabs.length === 0) return null
 
   const headerClassName =
     variant === 'terminal'
@@ -157,9 +326,12 @@ export function Tabs({
       ? 'tabs-strip min-w-0 flex-1 bg-terminal px-4'
       : 'tabs-strip min-w-0 flex-1 px-4'
 
-  const listClassName = 'tabs-button scrollbar-none flex min-w-0 gap-1 overflow-x-auto'
+  const listClassName =
+    variant === 'terminal'
+      ? 'tabs-button scrollbar-none flex min-w-0 gap-1 overflow-x-auto pt-2'
+      : 'tabs-button scrollbar-none flex min-w-0 gap-1 overflow-x-auto'
 
-  const buttonBaseClassName = `m-0 flex h-full shrink-0 items-center gap-2 px-2 py-2 text-sm font-medium transition-colors ${variant === 'terminal' ? 'rounded-t-[8px]' : ''}`
+  const buttonBaseClassName = `group relative m-0 flex h-full shrink-0 items-center gap-2 px-2 text-sm font-medium transition-colors ${variant === 'terminal' ? 'rounded-t-[8px] py-1' : 'py-2'}`
 
   const activeButtonClassName =
     variant === 'terminal'
@@ -168,7 +340,7 @@ export function Tabs({
 
   const inactiveButtonClassName =
     variant === 'terminal'
-      ? 'bg-terminal text-terminal-foreground hover:bg-background hover:text-foreground'
+      ? 'bg-terminal text-terminal-foreground/80 hover:bg-terminal hover:text-terminal-foreground'
       : 'text-muted-foreground hover:text-foreground'
 
   const actionsClassName =
@@ -176,9 +348,9 @@ export function Tabs({
       ? 'tabs-actions border-border bg-terminal text-terminal-foreground flex shrink-0 items-center border-b px-1'
       : 'tabs-actions border-border bg-background flex shrink-0 items-center border-b px-1'
 
-  const handleTabBarDoubleClick = (e: ReactMouseEvent<HTMLDivElement>) => {
+  const handleTabBarDoubleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (!onTabBarDoubleClick) return
-    if ((e.target as HTMLElement).closest('[data-tab-item="true"]')) return
+    if ((event.target as HTMLElement).closest('[data-tab-item="true"]')) return
     onTabBarDoubleClick()
   }
 
@@ -191,43 +363,67 @@ export function Tabs({
       {style}
       <div className={headerClassName}>
         <div className={stripClassName}>
-          <div className={listClassName} onDoubleClick={handleTabBarDoubleClick}>
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                data-tab-item="true"
-                onClick={() => handleChange(tab.id)}
-                className={`${buttonBaseClassName} ${
-                  activeTab === tab.id ? activeButtonClassName : inactiveButtonClassName
-                }`}
-              >
-                {tab.icon}
-                {tab.label}
-                {tab.closable && onTabClose && (
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onTabClose(tab.id)
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.stopPropagation()
+          <div
+            className={listClassName}
+            onDoubleClick={handleTabBarDoubleClick}
+            onDragOver={handleListDragOver}
+            onDrop={handleListDrop}
+          >
+            {tabs.map((tab) => {
+              const dragIndicatorStyle: CSSProperties | undefined =
+                dropIndicator?.tabId === tab.id
+                  ? {
+                      boxShadow:
+                        dropIndicator.position === 'before'
+                          ? 'inset 2px 0 0 var(--border)'
+                          : 'inset -2px 0 0 var(--border)',
+                    }
+                  : undefined
+
+              return (
+                <button
+                  key={tab.id}
+                  data-tab-item="true"
+                  draggable={reorderable}
+                  onClick={() => handleChange(tab.id)}
+                  onDragStart={(event) => handleDragStart(event, tab.id)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(event) => handleItemDragOver(event, tab.id)}
+                  onDrop={(event) => handleItemDrop(event, tab.id)}
+                  className={`${buttonBaseClassName} ${
+                    activeTab === tab.id ? activeButtonClassName : inactiveButtonClassName
+                  } ${reorderable ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                  style={dragIndicatorStyle}
+                >
+                  {tab.icon}
+                  {tab.label}
+                  {tab.closable && onTabClose && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(event) => {
+                        event.stopPropagation()
                         onTabClose(tab.id)
-                      }
-                    }}
-                    className={`hover:text-foreground -mr-1 rounded p-0.5 transition ${
-                      tab.closeButtonVisibility === 'always'
-                        ? 'opacity-100'
-                        : 'opacity-0 group-hover:opacity-100 [button:hover>&]:opacity-100'
-                    } ${activeTab === tab.id ? 'text-current/80' : 'text-muted-foreground'}`}
-                  >
-                    <X className="h-3 w-3" />
-                  </span>
-                )}
-              </button>
-            ))}
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.stopPropagation()
+                          onTabClose(tab.id)
+                        }
+                      }}
+                      draggable={false}
+                      className={`hover:text-foreground -mr-1 rounded p-0.5 transition ${
+                        tab.closeButtonVisibility === 'always'
+                          ? 'opacity-100'
+                          : 'opacity-0 group-hover:opacity-100 [button:hover>&]:opacity-100'
+                      } ${activeTab === tab.id ? 'text-current/80' : 'text-muted-foreground'}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </span>
+                  )}
+                </button>
+              )
+            })}
           </div>
         </div>
         {actions && (
@@ -237,7 +433,7 @@ export function Tabs({
         )}
       </div>
 
-      {tabs.map((tab) =>
+      {contentTabs.map((tab) =>
         tab.unmountOnHide ? (
           activeTab === tab.id && (
             <div key={tab.id} className="flex min-h-0 flex-1 flex-col">
