@@ -15,6 +15,13 @@ export interface HostedBackendProbeResult {
   errorMessage: string | null
 }
 
+interface FetchHostedAppManifestOptions {
+  force?: boolean
+}
+
+const hostedManifestCache = new Map<string, HostedAppVersionManifest>()
+const hostedManifestRequests = new Map<string, Promise<HostedAppVersionManifest>>()
+
 function toRuntimeBaseUrl(location: Pick<Location, 'href'>): string {
   const url = new URL(location.href)
   url.hash = ''
@@ -27,24 +34,52 @@ function toRuntimeBaseUrl(location: Pick<Location, 'href'>): string {
 
 export async function fetchHostedAppManifest(
   location: Pick<Location, 'href'>,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  options: FetchHostedAppManifestOptions = {}
 ): Promise<HostedAppVersionManifest> {
   const manifestUrl = buildHostedVersionManifestUrl(toRuntimeBaseUrl(location))
-  const response = await fetchImpl(manifestUrl, {
-    headers: { accept: 'application/json' },
-    cache: 'no-store',
-  })
 
-  if (!response.ok) {
-    throw new Error(`Failed to load hosted manifest: ${response.status} ${response.statusText}`)
+  if (options.force) {
+    hostedManifestCache.delete(manifestUrl)
+    hostedManifestRequests.delete(manifestUrl)
   }
 
-  const payload = await response.json()
-  if (!isHostedAppVersionManifest(payload)) {
-    throw new Error('Hosted manifest is invalid')
+  const cachedManifest = hostedManifestCache.get(manifestUrl)
+  if (cachedManifest) {
+    return cachedManifest
   }
 
-  return payload
+  const pendingRequest = hostedManifestRequests.get(manifestUrl)
+  if (pendingRequest) {
+    return pendingRequest
+  }
+
+  const request = (async () => {
+    const response = await fetchImpl(manifestUrl, {
+      headers: { accept: 'application/json' },
+      cache: 'default',
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to load hosted manifest: ${response.status} ${response.statusText}`)
+    }
+
+    const payload = await response.json()
+    if (!isHostedAppVersionManifest(payload)) {
+      throw new Error('Hosted manifest is invalid')
+    }
+
+    hostedManifestCache.set(manifestUrl, payload)
+    return payload
+  })()
+
+  hostedManifestRequests.set(manifestUrl, request)
+
+  try {
+    return await request
+  } finally {
+    hostedManifestRequests.delete(manifestUrl)
+  }
 }
 
 export async function probeHostedBackend(

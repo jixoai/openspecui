@@ -1,4 +1,5 @@
-import { fireEvent, render, within } from '@testing-library/react'
+import { createEvent, fireEvent, render, within } from '@testing-library/react'
+import { useEffect } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { Tabs, type Tab } from './tabs'
 
@@ -6,6 +7,25 @@ const tabs: Tab[] = [
   { id: 'a', label: 'A', content: <div>A content</div> },
   { id: 'b', label: 'B', content: <div>B content</div> },
 ]
+
+function createDataTransfer() {
+  const data = new Map<string, string>()
+  return {
+    dropEffect: 'move',
+    effectAllowed: 'all',
+    clearData: vi.fn((type?: string) => {
+      if (type) {
+        data.delete(type)
+        return
+      }
+      data.clear()
+    }),
+    getData: vi.fn((type: string) => data.get(type) ?? ''),
+    setData: vi.fn((type: string, value: string) => {
+      data.set(type, value)
+    }),
+  }
+}
 
 describe('Tabs double-click behavior', () => {
   it('calls onTabBarDoubleClick when double-clicking tab bar empty area', () => {
@@ -53,5 +73,73 @@ describe('Tabs double-click behavior', () => {
 
     const actions = container.querySelector('[data-tabs-actions="true"]')
     expect(actions?.className).toContain('bg-terminal')
+  })
+
+  it('reorders tabs via drag and drop when onTabOrderChange is provided', () => {
+    const onTabOrderChange = vi.fn()
+    const { container } = render(<Tabs tabs={tabs} onTabOrderChange={onTabOrderChange} />)
+
+    const tabA = within(container).getByRole('button', { name: 'A' })
+    const tabB = within(container).getByRole('button', { name: 'B' })
+    const dataTransfer = createDataTransfer()
+
+    Object.defineProperty(tabB, 'getBoundingClientRect', {
+      value: () => ({
+        width: 100,
+        height: 32,
+        top: 0,
+        left: 100,
+        right: 200,
+        bottom: 32,
+        x: 100,
+        y: 0,
+        toJSON: () => ({}),
+      }),
+    })
+
+    fireEvent(tabA, createEvent.dragStart(tabA, { dataTransfer }))
+    fireEvent.dragOver(tabB, { dataTransfer, clientX: 190 })
+    fireEvent.drop(tabB, { dataTransfer, clientX: 190 })
+
+    expect(onTabOrderChange).toHaveBeenCalledWith(['b', 'a'])
+  })
+
+  it('preserves mounted content instances when header order changes', () => {
+    const mounts = vi.fn<(id: string) => void>()
+
+    function PersistentPane(props: { id: string }) {
+      useEffect(() => {
+        mounts(props.id)
+      }, [props.id])
+
+      return <div>{props.id} content</div>
+    }
+
+    const { rerender } = render(
+      <Tabs
+        tabs={[
+          { id: 'a', label: 'A', content: <PersistentPane id="a" /> },
+          { id: 'b', label: 'B', content: <PersistentPane id="b" /> },
+        ]}
+        selectedTab="a"
+        onTabOrderChange={() => {}}
+      />
+    )
+
+    const initialMountCount = mounts.mock.calls.length
+    expect(initialMountCount).toBeGreaterThan(0)
+
+    rerender(
+      <Tabs
+        tabs={[
+          { id: 'b', label: 'B', content: <PersistentPane id="b" /> },
+          { id: 'a', label: 'A', content: <PersistentPane id="a" /> },
+        ]}
+        selectedTab="a"
+        onTabOrderChange={() => {}}
+      />
+    )
+
+    expect(mounts.mock.calls).toHaveLength(initialMountCount)
   })
 })

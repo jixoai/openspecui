@@ -9,6 +9,30 @@
   --hosted-pwa-titlebar-height: 0px;
 }
 
+.hosted-shell-root[data-titlebar-overlay='true'] {
+  background-color: var(--terminal);
+}
+
+.hosted-shell-root .tabs-header {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.hosted-shell-root .tabs-header button,
+.hosted-shell-root .tabs-header input,
+.hosted-shell-root .tabs-header select,
+.hosted-shell-root .tabs-header textarea,
+.hosted-shell-root .tabs-header a,
+.hosted-shell-root .tabs-header [role='button'],
+.hosted-shell-root .tabs-header [data-tabs-actions='true'] {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.hosted-shell-root .hosted-shell-tabs .tabs-button {
+  padding-block-start: 0.5rem;
+}
+
 .hosted-shell-root[data-titlebar-overlay='true'] .tabs-header {
   padding-inline-start: var(--hosted-pwa-titlebar-left);
   padding-inline-end: var(--hosted-pwa-titlebar-right);

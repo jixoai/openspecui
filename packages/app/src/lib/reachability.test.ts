@@ -31,14 +31,34 @@ describe('hosted reachability helpers', () => {
 
     const result = await fetchHostedAppManifest(
       { href: 'https://app.openspecui.com/workspace?api=http://localhost:3100' },
-      fetchImpl
+      fetchImpl,
+      { force: true }
     )
 
     expect(result.defaultChannel).toBe('latest')
     expect(fetchImpl).toHaveBeenCalledWith('https://app.openspecui.com/workspace/version.json', {
       headers: { accept: 'application/json' },
-      cache: 'no-store',
+      cache: 'default',
     })
+  })
+
+  it('reuses the same manifest request until a force refresh is requested', async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify(manifest), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+    ) as typeof fetch
+    const location = { href: 'https://app.openspecui.com/?api=http://localhost:3100' }
+
+    await fetchHostedAppManifest(location, fetchImpl, { force: true })
+    await fetchHostedAppManifest(location, fetchImpl)
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+
+    await fetchHostedAppManifest(location, fetchImpl, { force: true })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
   })
 
   it('returns hosted backend metadata from /api/health', async () => {

@@ -4,10 +4,13 @@ import { tmpdir } from 'node:os'
 import { join, resolve as resolvePath } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { DashboardOverviewService } from '../src/dashboard-overview-service.js'
+import { loadDashboardOverview } from '../src/dashboard-overview.js'
 import type { Context } from '../src/router.js'
 import { appRouter } from '../src/router.js'
 
 const dashboardGitSnapshotState = vi.hoisted(() => ({
+  removeDetachedWorktree: vi.fn().mockResolvedValue(undefined),
   result: {
     defaultBranch: 'origin/main',
     worktrees: [
@@ -15,6 +18,7 @@ const dashboardGitSnapshotState = vi.hoisted(() => ({
         path: '/tmp/openspecui-router-test',
         relativePath: '.',
         branchName: 'main',
+        detached: false,
         isCurrent: true,
         ahead: 0,
         behind: 0,
@@ -25,11 +29,16 @@ const dashboardGitSnapshotState = vi.hoisted(() => ({
   },
 }))
 
-vi.mock('./dashboard-git-snapshot.js', () => ({
-  buildDashboardGitSnapshot: vi
-    .fn()
-    .mockImplementation(async () => dashboardGitSnapshotState.result),
-}))
+vi.mock('./dashboard-git-snapshot.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./dashboard-git-snapshot.js')>()
+  return {
+    ...actual,
+    buildDashboardGitSnapshot: vi
+      .fn()
+      .mockImplementation(async () => dashboardGitSnapshotState.result),
+    removeDetachedDashboardGitWorktree: dashboardGitSnapshotState.removeDetachedWorktree,
+  }
+})
 
 // Mock adapter
 const createMockAdapter = () => ({
@@ -200,14 +209,27 @@ const createMockContext = (
     queryReactive: vi.fn().mockResolvedValue({ total: 0, hits: [] }),
   }
 
+  const projectDir = options.projectDir ?? '/tmp/openspecui-router-test'
+  const dashboardOverviewService = new DashboardOverviewService((reason) =>
+    loadDashboardOverview(
+      {
+        adapter: adapter as unknown as Context['adapter'],
+        configManager: configManager as unknown as Context['configManager'],
+        projectDir,
+      },
+      reason
+    )
+  )
+
   return {
     adapter: adapter as unknown as Context['adapter'],
     configManager: configManager as unknown as Context['configManager'],
     cliExecutor: cliExecutor as unknown as Context['cliExecutor'],
     kernel: kernel as unknown as Context['kernel'],
     searchService: searchService as unknown as Context['searchService'],
+    dashboardOverviewService,
     watcher: undefined,
-    projectDir: options.projectDir ?? '/tmp/openspecui-router-test',
+    projectDir,
   }
 }
 
@@ -373,6 +395,37 @@ describe('appRouter', () => {
       expect(
         await pathExists(join(projectDir, 'openspec', '.openspecui-dashboard-git-refresh.stamp'))
       ).toBe(false)
+    })
+
+    it('removes detached worktrees from the dashboard action', async () => {
+      const projectDir = await createTempProjectDir('openspecui-router-remove-')
+      dashboardGitSnapshotState.removeDetachedWorktree.mockReset()
+      dashboardGitSnapshotState.removeDetachedWorktree.mockResolvedValue(undefined)
+
+      const caller = createCaller(createMockAdapter(), { projectDir })
+      const result = await caller.dashboard.removeDetachedWorktree({
+        path: '/tmp/detached-worktree',
+      })
+
+      expect(result.success).toBe(true)
+      expect(dashboardGitSnapshotState.removeDetachedWorktree).toHaveBeenCalledWith({
+        projectDir,
+        targetPath: '/tmp/detached-worktree',
+      })
+    })
+
+    it('surfaces detached worktree removal failures', async () => {
+      const projectDir = await createTempProjectDir('openspecui-router-remove-guard-')
+      dashboardGitSnapshotState.removeDetachedWorktree.mockReset()
+      dashboardGitSnapshotState.removeDetachedWorktree.mockRejectedValue(
+        new Error('Only detached worktrees can be removed from Dashboard.')
+      )
+
+      const caller = createCaller(createMockAdapter(), { projectDir })
+
+      await expect(caller.dashboard.removeDetachedWorktree({ path: projectDir })).rejects.toThrow(
+        /Only detached worktrees can be removed/
+      )
     })
   })
 

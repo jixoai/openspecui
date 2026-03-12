@@ -9,16 +9,12 @@ import type {
 } from '@openspecui/core'
 import {
   CodeEditorThemeSchema,
-  contextStorage,
-  DASHBOARD_METRIC_KEYS,
   DashboardConfigSchema,
   getAllTools,
   getAvailableTools,
   getConfiguredTools,
   getDefaultCliCommandString,
   getWatcherRuntimeStatus,
-  reactiveReadDir,
-  reactiveReadFile,
   sniffGlobalCli,
   TerminalConfigSchema,
   TerminalRendererEngineSchema,
@@ -27,7 +23,6 @@ import {
   type ArtifactInstructions,
   type ChangeStatus,
   type DashboardOverview,
-  type DashboardTriColorTrendPoint,
   type SchemaDetail,
   type SchemaInfo,
   type SchemaResolution,
@@ -37,15 +32,18 @@ import {
 import { SearchQuerySchema, type SearchQuery } from '@openspecui/search'
 import { initTRPC } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
-import { execFile } from 'node:child_process'
-import { EventEmitter } from 'node:events'
-import { mkdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
-import { promisify } from 'node:util'
 import { z } from 'zod'
 import { createCliStreamObservable } from './cli-stream-observable.js'
-import { buildDashboardGitSnapshot } from './dashboard-git-snapshot.js'
-import { buildDashboardTimeTrends } from './dashboard-time-trends.js'
+import { removeDetachedDashboardGitWorktree } from './dashboard-git-snapshot.js'
+import type { DashboardOverviewService } from './dashboard-overview-service.js'
+import {
+  getDashboardGitTaskStatus,
+  subscribeDashboardGitTaskStatus,
+  touchDashboardGitRefreshStamp,
+  type DashboardGitTaskStatus,
+} from './dashboard-overview.js'
 import { reactiveKV } from './reactive-kv.js'
 import {
   createReactiveSubscription,
@@ -59,6 +57,7 @@ export interface Context {
   cliExecutor: CliExecutor
   kernel: OpsxKernel
   searchService: SearchService
+  dashboardOverviewService: DashboardOverviewService
   watcher?: OpenSpecWatcher
   projectDir: string
 }
@@ -68,7 +67,6 @@ const t = initTRPC.context<Context>().create()
 export const router = t.router
 export const publicProcedure = t.procedure
 
-const execFileAsync = promisify(execFile)
 const OPSX_CORE_PROFILE_WORKFLOWS = ['propose', 'explore', 'apply', 'archive'] as const
 
 type OpsxWorkflowProfile = 'core' | 'custom'
@@ -82,116 +80,6 @@ interface OpsxProfileState {
   driftStatus: 'in-sync' | 'drift' | 'unknown'
   warningText: string | null
   error?: string
-}
-
-interface DashboardGitTaskStatus {
-  running: boolean
-  inFlight: number
-  lastStartedAt: number | null
-  lastFinishedAt: number | null
-  lastReason: string | null
-  lastError: string | null
-}
-
-const dashboardGitTaskStatusEmitter = new EventEmitter()
-dashboardGitTaskStatusEmitter.setMaxListeners(200)
-
-const dashboardGitTaskStatus: DashboardGitTaskStatus = {
-  running: false,
-  inFlight: 0,
-  lastStartedAt: null,
-  lastFinishedAt: null,
-  lastReason: null,
-  lastError: null,
-}
-
-function getDashboardGitTaskStatus(): DashboardGitTaskStatus {
-  return { ...dashboardGitTaskStatus }
-}
-
-function emitDashboardGitTaskStatus(): void {
-  dashboardGitTaskStatusEmitter.emit('change', getDashboardGitTaskStatus())
-}
-
-function beginDashboardGitTask(reason: string): void {
-  dashboardGitTaskStatus.inFlight += 1
-  dashboardGitTaskStatus.running = true
-  dashboardGitTaskStatus.lastStartedAt = Date.now()
-  dashboardGitTaskStatus.lastReason = reason
-  dashboardGitTaskStatus.lastError = null
-  emitDashboardGitTaskStatus()
-}
-
-function endDashboardGitTask(error: unknown): void {
-  dashboardGitTaskStatus.inFlight = Math.max(0, dashboardGitTaskStatus.inFlight - 1)
-  dashboardGitTaskStatus.running = dashboardGitTaskStatus.inFlight > 0
-  dashboardGitTaskStatus.lastFinishedAt = Date.now()
-  if (error) {
-    dashboardGitTaskStatus.lastError = error instanceof Error ? error.message : String(error)
-  }
-  emitDashboardGitTaskStatus()
-}
-
-const DASHBOARD_GIT_REFRESH_STAMP_NAME = 'openspecui-dashboard-git-refresh.stamp'
-
-async function resolveGitMetadataDir(projectDir: string): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync('git', ['rev-parse', '--git-dir'], {
-      cwd: projectDir,
-      maxBuffer: 1024 * 1024,
-      encoding: 'utf8',
-    })
-    const gitDirRaw = stdout.trim()
-    if (!gitDirRaw) return null
-    const gitDirPath = resolve(projectDir, gitDirRaw)
-    const gitDirStat = await stat(gitDirPath)
-    if (!gitDirStat.isDirectory()) return null
-    return gitDirPath
-  } catch {
-    return null
-  }
-}
-
-async function resolveGitMetadataDirReactive(projectDir: string): Promise<string | null> {
-  const gitMetadataDir = await resolveGitMetadataDir(projectDir)
-  if (!gitMetadataDir) return null
-  await reactiveReadDir(gitMetadataDir, { includeHidden: true })
-  return gitMetadataDir
-}
-
-function getDashboardGitRefreshStampPath(gitMetadataDir: string): string {
-  return join(gitMetadataDir, DASHBOARD_GIT_REFRESH_STAMP_NAME)
-}
-
-async function touchDashboardGitRefreshStamp(
-  projectDir: string,
-  reason: string
-): Promise<{ skipped: boolean }> {
-  const gitMetadataDir = await resolveGitMetadataDir(projectDir)
-  if (!gitMetadataDir) {
-    return { skipped: true }
-  }
-  const stampPath = getDashboardGitRefreshStampPath(gitMetadataDir)
-  await mkdir(dirname(stampPath), { recursive: true })
-  await writeFile(stampPath, `${Date.now()} ${reason}\n`, 'utf8')
-  return { skipped: false }
-}
-
-async function registerDashboardGitReactiveDeps(projectDir: string): Promise<void> {
-  // Source 1: worktree change source (project tree changes)
-  await reactiveReadDir(projectDir, {
-    includeHidden: true,
-    exclude: ['node_modules'],
-  })
-
-  // Source 2: git metadata (includes refresh stamp under git metadata dir)
-  const gitMetadataDir = await resolveGitMetadataDirReactive(projectDir)
-  if (!gitMetadataDir) return
-
-  await reactiveReadFile(getDashboardGitRefreshStampPath(gitMetadataDir))
-  await reactiveReadFile(join(gitMetadataDir, 'HEAD'))
-  await reactiveReadFile(join(gitMetadataDir, 'index'))
-  await reactiveReadFile(join(gitMetadataDir, 'packed-refs'))
 }
 
 function requireChangeId(changeId: string | undefined): string {
@@ -436,232 +324,6 @@ function buildSystemStatus(ctx: Context): {
     watcherGeneration: runtime?.generation ?? 0,
     watcherReinitializeCount: runtime?.reinitializeCount ?? 0,
     watcherLastReinitializeReason: runtime?.lastReinitializeReason ?? null,
-  }
-}
-
-function resolveTrendTimestamp(
-  primary: number | undefined,
-  secondary: number | undefined
-): number | null {
-  if (typeof primary === 'number' && Number.isFinite(primary) && primary > 0) return primary
-  if (typeof secondary === 'number' && Number.isFinite(secondary) && secondary > 0) return secondary
-  return null
-}
-
-function parseDatedIdTimestamp(id: string): number | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})(?:-|$)/.exec(id)
-  if (!match) return null
-  const year = Number(match[1])
-  const month = Number(match[2])
-  const day = Number(match[3])
-  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null
-  if (month < 1 || month > 12) return null
-  if (day < 1 || day > 31) return null
-  const ts = Date.UTC(year, month - 1, day)
-  return Number.isFinite(ts) ? ts : null
-}
-
-function createEmptyTriColorTrends(): Record<
-  keyof DashboardOverview['triColorTrends'],
-  DashboardTriColorTrendPoint[]
-> {
-  return Object.fromEntries(
-    DASHBOARD_METRIC_KEYS.map((metric) => [metric, [] as DashboardTriColorTrendPoint[]])
-  ) as Record<keyof DashboardOverview['triColorTrends'], DashboardTriColorTrendPoint[]>
-}
-
-async function readLatestCommitTimestamp(projectDir: string): Promise<number | null> {
-  try {
-    const { stdout } = await execFileAsync('git', ['log', '-1', '--format=%ct'], {
-      cwd: projectDir,
-      maxBuffer: 1024 * 1024,
-      encoding: 'utf8',
-    })
-    const seconds = Number(stdout.trim())
-    return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : null
-  } catch {
-    return null
-  }
-}
-
-async function fetchDashboardOverview(
-  ctx: Context,
-  reason: string = 'dashboard-refresh'
-): Promise<DashboardOverview> {
-  if (contextStorage.getStore()) {
-    await registerDashboardGitReactiveDeps(ctx.projectDir)
-  }
-  const now = Date.now()
-  const [specMetas, changeMetas, archiveMetas] = await Promise.all([
-    ctx.adapter.listSpecsWithMeta(),
-    ctx.adapter.listChangesWithMeta(),
-    ctx.adapter.listArchivedChangesWithMeta(),
-  ])
-  const activeChanges = changeMetas
-    .map((changeMeta) => ({
-      id: changeMeta.id,
-      name: changeMeta.name ?? changeMeta.id,
-      progress: changeMeta.progress,
-      updatedAt: changeMeta.updatedAt,
-    }))
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-
-  const archivedChanges = (
-    await Promise.all(
-      archiveMetas.map(async (meta) => {
-        const change = await ctx.adapter.readArchivedChange(meta.id)
-        if (!change) return null
-        return {
-          id: meta.id,
-          createdAt: meta.createdAt,
-          updatedAt: meta.updatedAt,
-          tasksCompleted: change.tasks.filter((task) => task.completed).length,
-        }
-      })
-    )
-  ).filter((item): item is NonNullable<typeof item> => item !== null)
-
-  const specifications = (
-    await Promise.all(
-      specMetas.map(async (meta) => {
-        const spec = await ctx.adapter.readSpec(meta.id)
-        if (!spec) return null
-        return {
-          id: meta.id,
-          name: meta.name,
-          requirements: spec.requirements.length,
-          updatedAt: meta.updatedAt,
-        }
-      })
-    )
-  )
-    .filter((item): item is NonNullable<typeof item> => item !== null)
-    .sort((a, b) => b.requirements - a.requirements || b.updatedAt - a.updatedAt)
-
-  const requirements = specifications.reduce((sum, spec) => sum + spec.requirements, 0)
-  const tasksTotal = activeChanges.reduce((sum, change) => sum + change.progress.total, 0)
-  const tasksCompleted = activeChanges.reduce((sum, change) => sum + change.progress.completed, 0)
-  const archivedTasksCompleted = archivedChanges.reduce(
-    (sum, change) => sum + change.tasksCompleted,
-    0
-  )
-  const taskCompletionPercent =
-    tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : null
-  const inProgressChanges = activeChanges.filter(
-    (change) => change.progress.total > 0 && change.progress.completed < change.progress.total
-  ).length
-
-  const specificationTrendEvents = specMetas.flatMap((spec) => {
-    const ts = resolveTrendTimestamp(spec.createdAt, spec.updatedAt)
-    return ts === null ? [] : [{ ts, value: 1 }]
-  })
-  const completedTrendEvents = archivedChanges.flatMap((archive) => {
-    const ts =
-      parseDatedIdTimestamp(archive.id) ??
-      resolveTrendTimestamp(archive.updatedAt, archive.createdAt)
-    return ts === null ? [] : [{ ts, value: archive.tasksCompleted }]
-  })
-  const specMetaById = new Map(specMetas.map((meta) => [meta.id, meta]))
-  const requirementTrendEvents = specifications.flatMap((spec) => {
-    const meta = specMetaById.get(spec.id)
-    const ts = resolveTrendTimestamp(meta?.updatedAt, meta?.createdAt)
-    return ts === null ? [] : [{ ts, value: spec.requirements }]
-  })
-  const hasObjectiveSpecificationTrend =
-    specificationTrendEvents.length > 0 || specifications.length === 0
-  const hasObjectiveRequirementTrend = requirementTrendEvents.length > 0 || requirements === 0
-  const hasObjectiveCompletedTrend = completedTrendEvents.length > 0 || archiveMetas.length === 0
-  const config = await ctx.configManager.readConfig()
-  beginDashboardGitTask(reason)
-  let latestCommitTs: number | null = null
-  let git: DashboardOverview['git']
-
-  try {
-    const gitSnapshotPromise = buildDashboardGitSnapshot({
-      projectDir: ctx.projectDir,
-    }).catch(() => ({
-      defaultBranch: 'main',
-      worktrees: [],
-    }))
-    latestCommitTs = await readLatestCommitTimestamp(ctx.projectDir)
-    git = await gitSnapshotPromise
-  } catch (error) {
-    endDashboardGitTask(error)
-    throw error
-  }
-  endDashboardGitTask(null)
-  const cardAvailability: DashboardOverview['cardAvailability'] = {
-    specifications: hasObjectiveSpecificationTrend
-      ? { state: 'ok' }
-      : { state: 'invalid', reason: 'objective-history-unavailable' },
-    requirements: hasObjectiveRequirementTrend
-      ? { state: 'ok' }
-      : { state: 'invalid', reason: 'objective-history-unavailable' },
-    activeChanges: { state: 'invalid', reason: 'objective-history-unavailable' },
-    inProgressChanges: { state: 'invalid', reason: 'objective-history-unavailable' },
-    completedChanges: hasObjectiveCompletedTrend
-      ? { state: 'ok' }
-      : { state: 'invalid', reason: 'objective-history-unavailable' },
-    taskCompletionPercent: {
-      state: 'invalid',
-      reason:
-        taskCompletionPercent === null ? 'semantic-uncomputable' : 'objective-history-unavailable',
-    },
-  }
-  const trendKinds: DashboardOverview['trendKinds'] = {
-    specifications: 'monotonic',
-    requirements: 'monotonic',
-    activeChanges: 'bidirectional',
-    inProgressChanges: 'bidirectional',
-    completedChanges: 'monotonic',
-    taskCompletionPercent: 'bidirectional',
-  }
-
-  const { trends: baselineTrends, trendMeta } = buildDashboardTimeTrends({
-    pointLimit: config.dashboard.trendPointLimit,
-    timestamp: now,
-    rightEdgeTs: latestCommitTs,
-    availability: cardAvailability,
-    events: {
-      // Reliable source-side event: spec creation time.
-      specifications: specificationTrendEvents,
-      // Use objective spec metadata timestamps and current requirement volume as event magnitudes.
-      requirements: requirementTrendEvents,
-      // Active/in-progress lifecycle requires explicit close-transition timestamps.
-      activeChanges: [],
-      inProgressChanges: [],
-      // Reliable destination-side event: archive entry creation in archive namespace.
-      completedChanges: completedTrendEvents,
-      // Task progress transitions are not reconstructable from snapshot-only metadata.
-      taskCompletionPercent: [],
-    },
-    reducers: {
-      specifications: 'sum',
-      requirements: 'sum',
-      completedChanges: 'sum',
-    },
-  })
-
-  return {
-    summary: {
-      specifications: specifications.length,
-      requirements,
-      activeChanges: activeChanges.length,
-      inProgressChanges,
-      completedChanges: archiveMetas.length,
-      archivedTasksCompleted,
-      tasksTotal,
-      tasksCompleted,
-      taskCompletionPercent,
-    },
-    trends: baselineTrends,
-    triColorTrends: createEmptyTriColorTrends(),
-    trendKinds,
-    cardAvailability,
-    trendMeta,
-    specifications,
-    activeChanges,
-    git,
   }
 }
 
@@ -1649,12 +1311,26 @@ export const systemRouter = router({
  */
 export const dashboardRouter = router({
   get: publicProcedure.query(async ({ ctx }) => {
-    return fetchDashboardOverview(ctx, 'dashboard.get')
+    return ctx.dashboardOverviewService.getCurrent()
   }),
 
   subscribe: publicProcedure.subscription(({ ctx }) => {
-    return createReactiveSubscription(async () => {
-      return fetchDashboardOverview(ctx, 'dashboard.subscribe')
+    return observable<DashboardOverview>((emit) => {
+      const unsubscribe = ctx.dashboardOverviewService.subscribe(
+        (overview) => {
+          emit.next(overview)
+        },
+        {
+          emitCurrent: true,
+          onError: (error) => {
+            emit.error(error)
+          },
+        }
+      )
+
+      return () => {
+        unsubscribe()
+      }
     })
   }),
 
@@ -1663,25 +1339,44 @@ export const dashboardRouter = router({
     .mutation(async ({ ctx, input }) => {
       const reason = input?.reason?.trim() || 'manual-refresh'
       await touchDashboardGitRefreshStamp(ctx.projectDir, reason)
+      await ctx.dashboardOverviewService.refresh(reason)
       return {
         success: true,
       }
     }),
 
-  gitTaskStatus: publicProcedure.query(() => {
+  removeDetachedWorktree: publicProcedure
+    .input(z.object({ path: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.dashboardOverviewService.getCurrent()
+      await removeDetachedDashboardGitWorktree({
+        projectDir: ctx.projectDir,
+        targetPath: input.path,
+      })
+      await touchDashboardGitRefreshStamp(ctx.projectDir, 'remove-detached-worktree')
+      await ctx.dashboardOverviewService.refresh('remove-detached-worktree')
+      return {
+        success: true,
+      }
+    }),
+
+  gitTaskStatus: publicProcedure.query(async ({ ctx }) => {
+    await ctx.dashboardOverviewService.getCurrent()
     return getDashboardGitTaskStatus()
   }),
 
-  subscribeGitTaskStatus: publicProcedure.subscription(() => {
+  subscribeGitTaskStatus: publicProcedure.subscription(({ ctx }) => {
     return observable<DashboardGitTaskStatus>((emit) => {
+      void ctx.dashboardOverviewService.getCurrent().catch(() => {
+        // Ignore warmup failures here; the overview query surfaces them.
+      })
       emit.next(getDashboardGitTaskStatus())
-      const handler = (status: DashboardGitTaskStatus) => {
+      const unsubscribe = subscribeDashboardGitTaskStatus((status) => {
         emit.next(status)
-      }
+      })
 
-      dashboardGitTaskStatusEmitter.on('change', handler)
       return () => {
-        dashboardGitTaskStatusEmitter.off('change', handler)
+        unsubscribe()
       }
     })
   }),

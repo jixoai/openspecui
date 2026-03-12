@@ -4,6 +4,7 @@ import { navController } from '@/lib/nav-controller'
 import { isStaticMode } from '@/lib/static-mode'
 import {
   refreshDashboardGitSnapshot,
+  removeDetachedDashboardWorktree,
   useDashboardGitTaskStatusSubscription,
   useDashboardOverviewSubscription,
 } from '@/lib/use-dashboard'
@@ -21,7 +22,11 @@ import {
   AlertCircle,
   Archive,
   ArrowRight,
+  Check,
+  Copy,
   FileText,
+  FolderOpen,
+  FolderOpenDot,
   GitBranch,
   GitCommitHorizontal,
   LayoutDashboard,
@@ -30,8 +35,9 @@ import {
   Plus,
   RefreshCw,
   Sparkles,
+  Trash2,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const SPEC_DRIVEN_ORDER = ['proposal', 'design', 'specs', 'tasks'] as const
 const GIT_WORKTREE_BORDER_CLASS = 'border-zinc-400/50'
@@ -82,6 +88,10 @@ function formatArtifactLabel(id: string): string {
 
 function isHttpUrl(value: string): boolean {
   return /^https?:\/\//.test(value)
+}
+
+async function copyText(value: string): Promise<void> {
+  await navigator.clipboard.writeText(value)
 }
 
 function sortArtifactIdsForSchema(schemaName: string, artifactIds: string[]): string[] {
@@ -269,6 +279,34 @@ export function Dashboard() {
   }, [])
 
   const focusRefreshAtRef = useRef(0)
+  const [removingWorktreePath, setRemovingWorktreePath] = useState<string | null>(null)
+
+  const handleRemoveDetachedWorktree = useCallback(async (worktree: DashboardGitWorktree) => {
+    if (isStaticMode() || worktree.isCurrent || !worktree.detached || isHttpUrl(worktree.path)) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      [
+        'Remove detached worktree?',
+        '',
+        worktree.path,
+        '',
+        'This runs git worktree remove --force.',
+      ].join('\n')
+    )
+    if (!confirmed) return
+
+    setRemovingWorktreePath(worktree.path)
+    try {
+      await removeDetachedDashboardWorktree(worktree.path)
+    } catch (error) {
+      console.error('[Dashboard] Failed to remove detached worktree:', error)
+      window.alert(error instanceof Error ? error.message : 'Failed to remove detached worktree.')
+    } finally {
+      setRemovingWorktreePath((current) => (current === worktree.path ? null : current))
+    }
+  }, [])
 
   useEffect(() => {
     if (isStaticMode()) return
@@ -521,7 +559,12 @@ export function Dashboard() {
 
             {currentWorktree ? (
               <div className="space-y-0">
-                <WorktreeRow worktree={currentWorktree} emphasize />
+                <WorktreeRow
+                  worktree={currentWorktree}
+                  emphasize
+                  removing={removingWorktreePath === currentWorktree.path}
+                  onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
+                />
                 <div className={`-mt-px space-y-1 border-l pl-3 pt-2 ${GIT_WORKTREE_LINE_CLASS}`}>
                   {currentWorktree.entries.map((entry) => (
                     <GitEntryRow
@@ -543,7 +586,13 @@ export function Dashboard() {
                   Other Worktrees
                 </div>
                 {otherWorktrees.map((worktree) => (
-                  <WorktreeRow key={worktree.path} worktree={worktree} emphasize={false} />
+                  <WorktreeRow
+                    key={worktree.path}
+                    worktree={worktree}
+                    emphasize={false}
+                    removing={removingWorktreePath === worktree.path}
+                    onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
+                  />
                 ))}
               </div>
             )}
@@ -720,16 +769,37 @@ export function Dashboard() {
   )
 }
 
-function WorktreeRow({
+export function WorktreeRow({
   worktree,
   emphasize,
+  removing = false,
+  onRemoveDetachedWorktree,
 }: {
   worktree: DashboardGitWorktree
   emphasize: boolean
+  removing?: boolean
+  onRemoveDetachedWorktree?: (worktree: DashboardGitWorktree) => void | Promise<void>
 }) {
-  const pathLabel = isHttpUrl(worktree.path)
+  const isRemotePath = isHttpUrl(worktree.path)
+  const canToggleRelativePath = !isRemotePath
+  const canRemoveDetached = !isRemotePath && worktree.detached && !worktree.isCurrent
+  const [showRelativePath, setShowRelativePath] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const displayPath = isRemotePath
     ? worktree.path
-    : `${worktree.relativePath} | ${worktree.path}`
+    : showRelativePath
+      ? worktree.relativePath
+      : worktree.path
+
+  const handleCopyPath = useCallback(async () => {
+    try {
+      await copyText(displayPath)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1200)
+    } catch (error) {
+      console.error('[Dashboard] Failed to copy worktree path:', error)
+    }
+  }, [displayPath])
 
   return (
     <div
@@ -740,15 +810,69 @@ function WorktreeRow({
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 text-sm font-medium">
-            <GitBranch className="h-3.5 w-3.5" />
+            <GitBranch className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">{worktree.branchName}</span>
           </div>
-          <div className="text-muted-foreground truncate text-xs">{pathLabel}</div>
+          <div className="mt-0.5 flex min-w-0 items-center gap-1">
+            {canToggleRelativePath ? (
+              <button
+                type="button"
+                onClick={() => setShowRelativePath((current) => !current)}
+                className="text-muted-foreground hover:text-foreground inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-transparent"
+                title={showRelativePath ? 'Show absolute path' : 'Show relative path'}
+                aria-label={showRelativePath ? 'Show absolute path' : 'Show relative path'}
+              >
+                {showRelativePath ? (
+                  <FolderOpenDot className="h-3.5 w-3.5" />
+                ) : (
+                  <FolderOpen className="h-3.5 w-3.5" />
+                )}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                void handleCopyPath()
+              }}
+              onDoubleClick={() => {
+                if (!canToggleRelativePath) return
+                setShowRelativePath((current) => !current)
+              }}
+              className="text-muted-foreground hover:text-foreground inline-flex min-w-0 flex-1 items-center gap-1 truncate text-left text-xs"
+              title={displayPath}
+              aria-label={`Copy ${showRelativePath && canToggleRelativePath ? 'relative' : 'absolute'} path for ${worktree.branchName}`}
+            >
+              <span className="truncate">{displayPath}</span>
+              {copied ? (
+                <Check className="h-3 w-3 shrink-0" />
+              ) : (
+                <Copy className="h-3 w-3 shrink-0" />
+              )}
+            </button>
+          </div>
         </div>
         <div className="shrink-0 text-right">
           <div className="flex items-center justify-end gap-1">
+            {canRemoveDetached ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void onRemoveDetachedWorktree?.(worktree)
+                }}
+                disabled={removing}
+                className="text-muted-foreground hover:text-destructive inline-flex h-5 w-5 items-center justify-center rounded border border-transparent disabled:cursor-not-allowed disabled:opacity-60"
+                title="Remove detached worktree"
+                aria-label="Remove detached worktree"
+              >
+                {removing ? (
+                  <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+              </button>
+            ) : null}
             <GitAheadBehindBadge ahead={worktree.ahead} behind={worktree.behind} />
             <GitFilesBadge files={worktree.diff.files} />
             <DiffStat diff={worktree.diff} className="justify-end" />

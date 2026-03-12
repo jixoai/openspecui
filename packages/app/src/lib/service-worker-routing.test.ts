@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildChannelCacheName,
+  buildVersionedNavigationShellUrl,
+  hasHostedLaunchNavigationParams,
   resolveChannelIdFromPathname,
   resolveVersionedNavigationShell,
 } from './service-worker-routing'
@@ -52,5 +54,27 @@ describe('service worker routing helpers', () => {
         new URL('https://app.openspecui.com/versions/v2.0/assets/index.js')
       )
     ).toBeNull()
+  })
+
+  it('normalizes versioned navigation fallback to the channel shell path', () => {
+    expect(
+      buildVersionedNavigationShellUrl(
+        manifest.channels['v2.0'],
+        new URL('https://app.openspecui.com/versions/v2.0/settings?api=http://localhost:3100')
+      ).toString()
+    ).toBe('https://app.openspecui.com/versions/v2.0/index.html')
+  })
+
+  it('detects launch-driven navigation params separately from internal route state', () => {
+    expect(
+      hasHostedLaunchNavigationParams(
+        new URL('https://app.openspecui.com/versions/v2.0/?api=http://localhost:3100&session=abc')
+      )
+    ).toBe(true)
+    expect(
+      hasHostedLaunchNavigationParams(
+        new URL('https://app.openspecui.com/versions/v2.0/settings?_b=%2Fterminal')
+      )
+    ).toBe(false)
   })
 })

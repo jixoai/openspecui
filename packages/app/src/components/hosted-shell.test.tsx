@@ -6,6 +6,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HostedShell } from './hosted-shell'
 
+const REFRESH_FEEDBACK_MS = 1200
+
 const originalFetch = global.fetch
 const originalMatchMedia = window.matchMedia
 const originalShowModal = HTMLDialogElement.prototype.showModal
@@ -126,6 +128,7 @@ describe('HostedShell', () => {
     window.matchMedia = originalMatchMedia
     HTMLDialogElement.prototype.showModal = originalShowModal
     HTMLDialogElement.prototype.close = originalClose
+    vi.useRealTimers()
     vi.restoreAllMocks()
     document.body.innerHTML = ''
   })
@@ -191,6 +194,32 @@ describe('HostedShell', () => {
     expect(panel?.className).not.toContain('rounded-none')
   })
 
+  it('shows transient active feedback while refresh is running', async () => {
+    vi.useFakeTimers()
+    await renderShell(
+      <HostedShell
+        initialLaunchRequest={{
+          apiBaseUrl: 'http://localhost:3100',
+        }}
+        initialError={null}
+      />
+    )
+
+    const refreshButton = screen.getByLabelText('Refresh backend metadata')
+    fireEvent.click(refreshButton)
+    await flushEffects()
+
+    expect(refreshButton.className.split(/\s+/)).toContain('bg-background')
+    const icon = refreshButton.querySelector('svg')
+    expect(icon?.getAttribute('class')).toContain('animate-spin')
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REFRESH_FEEDBACK_MS)
+    })
+    await flushEffects()
+
+    expect(refreshButton.className.split(/\s+/)).not.toContain('bg-background')
+  })
   it('seeds a fallback launch request when the shell starts empty', async () => {
     const { container } = await renderShell(
       <HostedShell
@@ -273,6 +302,43 @@ describe('HostedShell', () => {
 
     expect(container.textContent ?? '').toContain('http://localhost:3200')
     expect(container.textContent ?? '').not.toContain('http://localhost:3300')
+  })
+
+  it('syncs externally persisted shell state without a page refresh', async () => {
+    const { container } = await renderShell(
+      <HostedShell initialLaunchRequest={null} initialError={null} />
+    )
+
+    expect(container.textContent ?? '').toContain('No Hosted Sessions')
+
+    act(() => {
+      localStorage.setItem(
+        'openspecui-app:shell',
+        JSON.stringify({
+          activeTabId: 'session-a',
+          tabs: [
+            {
+              id: 'session-a',
+              sessionId: 'session-a',
+              apiBaseUrl: 'http://localhost:3100',
+              createdAt: 1,
+            },
+          ],
+        })
+      )
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'openspecui-app:shell',
+        })
+      )
+    })
+
+    await flushEffects()
+    await flushEffects()
+
+    expect(container.textContent ?? '').toContain('opsx-project')
+    const iframe = container.querySelector('iframe[title="Hosted OpenSpec UI opsx-project"]')
+    expect(iframe?.getAttribute('src')).toContain('/versions/v2.0/index.html?api=')
   })
 
   it('keeps offline tabs visible and shows retry guidance', async () => {

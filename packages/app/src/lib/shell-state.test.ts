@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyHostedLaunchRequest,
+  areHostedShellStatesEqual,
   buildHostedVersionEntryUrl,
   createEmptyHostedShellState,
   getHostedTabLabel,
   parseHostedShellState,
   removeHostedTab,
+  reorderHostedTabs,
 } from './shell-state'
 
 describe('hosted shell state helpers', () => {
@@ -88,6 +90,84 @@ describe('hosted shell state helpers', () => {
     }
 
     expect(removeHostedTab(state, 'b').activeTabId).toBe('a')
+  })
+
+  it('reorders tabs without changing the active tab identity', () => {
+    const state = {
+      activeTabId: 'b',
+      tabs: [
+        {
+          id: 'a',
+          sessionId: 'a',
+          apiBaseUrl: 'http://localhost:13000',
+          createdAt: 1,
+        },
+        {
+          id: 'b',
+          sessionId: 'b',
+          apiBaseUrl: 'http://localhost:13001',
+          createdAt: 2,
+        },
+      ],
+    }
+
+    expect(reorderHostedTabs(state, ['b', 'a'])).toEqual({
+      activeTabId: 'b',
+      tabs: [state.tabs[1], state.tabs[0]],
+    })
+  })
+
+  it('keeps the existing object when the matching tab is already active', () => {
+    const state = {
+      activeTabId: 'session-a',
+      tabs: [
+        {
+          id: 'session-a',
+          sessionId: 'session-a',
+          apiBaseUrl: 'http://localhost:13000',
+          createdAt: 1,
+        },
+      ],
+    }
+
+    expect(
+      applyHostedLaunchRequest(state, {
+        apiBaseUrl: 'http://localhost:13000',
+      })
+    ).toBe(state)
+  })
+
+  it('compares shell states by active tab and tab ordering', () => {
+    const left = {
+      activeTabId: 'session-a',
+      tabs: [
+        {
+          id: 'session-a',
+          sessionId: 'session-a',
+          apiBaseUrl: 'http://localhost:13000',
+          createdAt: 1,
+        },
+      ],
+    }
+    const right = {
+      activeTabId: 'session-a',
+      tabs: [
+        {
+          id: 'session-a',
+          sessionId: 'session-a',
+          apiBaseUrl: 'http://localhost:13000',
+          createdAt: 1,
+        },
+      ],
+    }
+
+    expect(areHostedShellStatesEqual(left, right)).toBe(true)
+    expect(
+      areHostedShellStatesEqual(left, {
+        ...right,
+        activeTabId: null,
+      })
+    ).toBe(false)
   })
 
   it('derives readable labels from api URLs', () => {

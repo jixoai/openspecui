@@ -50,8 +50,9 @@ describe('hosted app bootstrap helpers', () => {
     expect(register).not.toHaveBeenCalled()
   })
 
-  it('registers the root service worker in production mode', async () => {
-    const register = vi.fn(async () => ({ update: vi.fn(async () => {}) }))
+  it('registers and eagerly updates the root service worker in production mode', async () => {
+    const update = vi.fn(async () => {})
+    const register = vi.fn(async () => ({ update }))
     const serviceWorker: HostedServiceWorkerRuntime = {
       register,
     }
@@ -66,5 +67,6 @@ describe('hosted app bootstrap helpers', () => {
     expect(register).toHaveBeenCalledWith('/service-worker.js', {
       scope: '/',
     })
+    expect(update).toHaveBeenCalledTimes(1)
   })
 })

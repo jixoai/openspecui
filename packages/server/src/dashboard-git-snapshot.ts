@@ -288,11 +288,53 @@ async function collectWorktree(options: {
     path: worktreePath,
     relativePath: relativePath(resolvedProjectDir, worktreePath),
     branchName: parseBranchName(worktree.branchRef, worktree.detached),
+    detached: worktree.detached,
     isCurrent: resolvedProjectDir === worktreePath,
     ahead,
     behind,
     diff,
     entries,
+  }
+}
+
+export async function removeDetachedDashboardGitWorktree(options: {
+  projectDir: string
+  targetPath: string
+  runGit?: GitRunner
+}): Promise<void> {
+  const runGit = options.runGit ?? defaultRunGit
+  const resolvedProjectDir = resolve(options.projectDir)
+  const resolvedTargetPath = resolve(options.targetPath)
+
+  if (resolvedTargetPath === resolvedProjectDir) {
+    throw new Error('Cannot remove the current worktree.')
+  }
+
+  const worktreeResult = await runGit(resolvedProjectDir, ['worktree', 'list', '--porcelain'])
+  if (!worktreeResult.ok) {
+    throw new Error('Failed to inspect git worktrees.')
+  }
+
+  const matched = parseWorktreeList(worktreeResult.stdout).find(
+    (worktree) => resolve(worktree.path) === resolvedTargetPath
+  )
+
+  if (!matched) {
+    throw new Error('Worktree not found.')
+  }
+
+  if (!matched.detached) {
+    throw new Error('Only detached worktrees can be removed from Dashboard.')
+  }
+
+  const removeResult = await runGit(resolvedProjectDir, [
+    'worktree',
+    'remove',
+    '--force',
+    resolvedTargetPath,
+  ])
+  if (!removeResult.ok) {
+    throw new Error('Failed to remove detached worktree.')
   }
 }
 

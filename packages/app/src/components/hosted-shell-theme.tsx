@@ -1,11 +1,13 @@
 import { applyTheme, getStoredTheme, type Theme } from '@openspecui/web-src/lib/theme'
 import { useEffect, useState } from 'react'
+import { applyHostedShellThemeColor } from '../lib/theme-color'
 
 export function HostedShellThemeBootstrap() {
   const [theme, setTheme] = useState<Theme>(() => getStoredTheme())
 
   useEffect(() => {
     applyTheme(theme)
+    applyHostedShellThemeColor()
   }, [theme])
 
   useEffect(() => {
@@ -22,7 +24,10 @@ export function HostedShellThemeBootstrap() {
   useEffect(() => {
     if (theme !== 'system' || typeof window.matchMedia !== 'function') return
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    const handler = () => applyTheme('system')
+    const handler = () => {
+      applyTheme('system')
+      applyHostedShellThemeColor()
+    }
     mediaQuery.addEventListener('change', handler)
     return () => mediaQuery.removeEventListener('change', handler)
   }, [theme])
