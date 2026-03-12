@@ -38,10 +38,52 @@ jobs:
           CHANGESET_CHECK_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
         run: node scripts/changeset-check.mjs
 
+  ci-scope:
+    name: CI Scope
+    runs-on: ubuntu-latest
+    needs: changeset-gate
+    timeout-minutes: 5
+    outputs:
+      scope_json: ${{ steps.scope.outputs.scope_json }}
+      fast_mode: ${{ steps.scope.outputs.fast_mode }}
+      fast_required: ${{ steps.scope.outputs.fast_required }}
+      browser_required: ${{ steps.scope.outputs.browser_required }}
+      run_web: ${{ steps.scope.outputs.run_web }}
+      run_xterm: ${{ steps.scope.outputs.run_xterm }}
+    steps:
+      - name: Checkout
+        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Detect CI scope
+        id: scope
+        env:
+          CI_SCOPE_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          CI_SCOPE_HEAD_SHA: ${{ github.sha }}
+          SKIP_CHANGEVERSION: ${{ startsWith(github.head_ref, 'chore/release/changeversion-') }}
+        run: |
+          if [ "$SKIP_CHANGEVERSION" = "true" ]; then
+            echo 'scope_json={"affectedPackages":[],"browser":{"required":false,"runWeb":false,"runXterm":false},"changedFiles":[],"directPackages":[],"fast":{"lintTargets":[],"mode":"skip","required":false,"runFormatCheck":false,"runReferenceCheck":false,"runRootTests":false,"testPackages":[],"typecheckPackages":[]},"reason":"Skip automated changeversion release PR."}' >> "$GITHUB_OUTPUT"
+            echo 'fast_mode=skip' >> "$GITHUB_OUTPUT"
+            echo 'fast_required=false' >> "$GITHUB_OUTPUT"
+            echo 'browser_required=false' >> "$GITHUB_OUTPUT"
+            echo 'run_web=false' >> "$GITHUB_OUTPUT"
+            echo 'run_xterm=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          node scripts/ci-scope.mjs
+
   quality-fast:
     name: Fast Gate
     runs-on: ubuntu-latest
-    needs: changeset-gate
+    needs: [changeset-gate, ci-scope]
     timeout-minutes: 20
     steps:
       - name: Skip for changeversion release PR
@@ -54,101 +96,91 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup pnpm
-        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
-        uses: pnpm/action-setup@v4
-
       - name: Setup Node
         if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
+
+      - name: Setup pnpm
+        if: >-
+          !startsWith(github.head_ref, 'chore/release/changeversion-') &&
+          (needs.ci-scope.outputs.fast_mode == 'full' || needs.ci-scope.outputs.fast_mode == 'scoped')
+        uses: pnpm/action-setup@v4
 
       - name: Install dependencies
-        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
+        if: >-
+          !startsWith(github.head_ref, 'chore/release/changeversion-') &&
+          (needs.ci-scope.outputs.fast_mode == 'full' || needs.ci-scope.outputs.fast_mode == 'scoped')
         run: pnpm install --frozen-lockfile
 
-      - name: Verify OpenSpec reference version
-        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
-        run: pnpm openspec:check-reference
+      - name: No Fast Gate work required
+        if: >-
+          !startsWith(github.head_ref, 'chore/release/changeversion-') &&
+          needs.ci-scope.outputs.fast_mode == 'skip'
+        run: echo "No Fast Gate work required for this PR scope."
 
-      - name: Format check
-        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
+      - name: Run Fast Gate commands
+        if: >-
+          !startsWith(github.head_ref, 'chore/release/changeversion-') &&
+          needs.ci-scope.outputs.fast_mode != 'skip'
         env:
-          FORMAT_CHECK_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
-        run: pnpm format:check
-
-      - name: Lint (oxlint)
-        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
-        run: pnpm lint:ci
-
-      - name: Typecheck
-        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
-        run: pnpm typecheck
-
-      - name: Unit tests
-        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
-        run: pnpm test:ci
+          CI_SCOPE_JSON: ${{ needs.ci-scope.outputs.scope_json }}
+        run: node scripts/ci-fast-gate.mjs
 
   quality-browser-shard:
     name: Browser Gate (${{ matrix.label }})
     runs-on: ubuntu-latest
-    needs: quality-fast
+    needs: [quality-fast, ci-scope]
+    if: >-
+      !startsWith(github.head_ref, 'chore/release/changeversion-') &&
+      ((matrix.id == 'web' && needs.ci-scope.outputs.run_web == 'true') ||
+        (matrix.id == 'xterm' && needs.ci-scope.outputs.run_xterm == 'true'))
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         include:
-          - label: xterm-input-panel
+          - id: xterm
+            label: xterm-input-panel
             playwright_install: pnpm --filter xterm-input-panel exec playwright install --with-deps chromium
             test_command: pnpm --filter xterm-input-panel test:browser
-          - label: '@openspecui/web'
+          - id: web
+            label: '@openspecui/web'
             playwright_install: pnpm --filter @openspecui/web exec playwright install --with-deps chromium
             test_command: pnpm --filter @openspecui/web test:browser:ci
     steps:
-      - name: Skip for changeversion release PR
-        if: ${{ startsWith(github.head_ref, 'chore/release/changeversion-') }}
-        run: echo "Skipping Browser Gate shard for automated changeversion release PR."
-
       - name: Checkout
-        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
         uses: actions/checkout@v4
 
       - name: Setup pnpm
-        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
         uses: pnpm/action-setup@v4
 
       - name: Setup Node
-        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
 
       - name: Cache Playwright browsers
-        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml', '.github/workflows/pr-quality.yml') }}
 
       - name: Install dependencies
-        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browser and deps
-        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
         run: ${{ matrix.playwright_install }}
 
       - name: Run browser shard
-        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
         run: ${{ matrix.test_command }}
 
   quality-browser:
     name: Browser Gate
     runs-on: ubuntu-latest
-    needs: quality-browser-shard
+    needs: [ci-scope, quality-browser-shard]
     timeout-minutes: 5
     if: ${{ always() }}
     steps:
@@ -156,8 +188,16 @@ jobs:
         if: ${{ startsWith(github.head_ref, 'chore/release/changeversion-') }}
         run: echo "Skipping Browser Gate aggregation for automated changeversion release PR."
 
+      - name: Skip when browser coverage is not required
+        if: >-
+          !startsWith(github.head_ref, 'chore/release/changeversion-') &&
+          needs.ci-scope.outputs.browser_required != 'true'
+        run: echo "No browser-relevant changes detected; Browser Gate passes without shard execution."
+
       - name: Verify browser shards
-        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
+        if: >-
+          !startsWith(github.head_ref, 'chore/release/changeversion-') &&
+          needs.ci-scope.outputs.browser_required == 'true'
         env:
           SHARD_RESULT: ${{ needs.quality-browser-shard.result }}
         run: |
