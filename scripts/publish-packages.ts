@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import process from 'node:process'
 
+import { preparePublishDirectory, resolveRepositoryUrl } from './lib/publish-packages/repository'
 import {
   orderPackagesForPublish,
   readPublishablePackages,
@@ -67,12 +68,23 @@ function isVersionPublished(rootDir: string, pkg: PublishablePackage): boolean {
   )
 }
 
-function publishPackage(rootDir: string, pkg: PublishablePackage, dryRun: boolean): void {
+function publishPackage(
+  rootDir: string,
+  pkg: PublishablePackage,
+  dryRun: boolean,
+  repositoryUrl: string | null
+): void {
   const publishTarget = pkg.publishDirectory ? resolve(pkg.dir, pkg.publishDirectory) : pkg.dir
-  const args = ['publish', publishTarget, '--provenance', '--tag', 'latest', '--access', pkg.access]
+  const prepared = preparePublishDirectory(publishTarget, repositoryUrl)
+  const args = ['publish', '--provenance', '--tag', 'latest', '--access', pkg.access]
   if (dryRun) args.push('--dry-run')
   console.log(`[publish] ${pkg.name}@${pkg.version}`)
-  runInherit(commandFor('npm'), args, rootDir)
+
+  try {
+    runInherit(commandFor('npm'), args, prepared.dir)
+  } finally {
+    prepared.cleanup()
+  }
 }
 
 function createChangesetTags(rootDir: string): void {
@@ -84,6 +96,7 @@ function main(): void {
   const rootDir = process.cwd()
   const dryRun = process.env.PUBLISH_PACKAGES_DRY_RUN === '1'
   const publishablePackages = orderPackagesForPublish(readPublishablePackages(rootDir))
+  const repositoryUrl = resolveRepositoryUrl(rootDir)
   const unpublishedPackages = publishablePackages.filter((pkg) => !isVersionPublished(rootDir, pkg))
 
   if (unpublishedPackages.length === 0) {
@@ -97,7 +110,7 @@ function main(): void {
   }
 
   for (const pkg of unpublishedPackages) {
-    publishPackage(rootDir, pkg, dryRun)
+    publishPackage(rootDir, pkg, dryRun, repositoryUrl)
   }
 
   if (dryRun) {
