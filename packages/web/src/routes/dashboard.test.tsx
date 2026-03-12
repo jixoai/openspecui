@@ -35,16 +35,16 @@ describe('WorktreeRow', () => {
     render(<WorktreeRow worktree={baseWorktree} emphasize={false} />)
 
     const copyButton = screen.getByRole('button', { name: 'Copy absolute path for feature-a' })
-    expect(screen.getByText('/tmp/openspecui-feature-a')).toBeInTheDocument()
+    expect(screen.getByText('/tmp/openspecui-feature-a')).toBeTruthy()
 
     fireEvent.click(copyButton)
     expect(writeText).toHaveBeenCalledWith('/tmp/openspecui-feature-a')
 
     fireEvent.doubleClick(copyButton)
-    expect(screen.getByText('../tmp/openspecui-feature-a')).toBeInTheDocument()
+    expect(screen.getByText('../tmp/openspecui-feature-a')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Show absolute path' }))
-    expect(screen.getByText('/tmp/openspecui-feature-a')).toBeInTheDocument()
+    expect(screen.getByText('/tmp/openspecui-feature-a')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Show relative path' }))
     fireEvent.click(screen.getByRole('button', { name: 'Copy relative path for feature-a' }))
