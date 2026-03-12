@@ -26,6 +26,7 @@
 ## Divergence Notes
 
 - Requirement expanded after the initial local draft, so the workflow file was reworked before any PR was opened.
+- GitHub Actions rejected the first PR revision because job-level `if` cannot reference `matrix`, so browser shard selection was moved into `ci-scope` as a dynamic `browser_matrix` output.
 - Existing non-failing jsdom CSS parse warnings still appear in `packages/web` tests around `::scroll-button` / anchor-position CSS, but they remain unrelated to this workflow-only loop.
 
 ## Loopback Triggers
