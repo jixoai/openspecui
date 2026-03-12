@@ -34,11 +34,14 @@
 - `pnpm --filter @openspecui/app build`
 - `pnpm format:check`
 - `pnpm lint:ci`
+- `pnpm test:ci`
+- `pnpm test:browser:ci`
+- `pnpm build`
 
 ## Divergence Notes
 
 - Vitest still prints jsdom CSS parse warnings from the existing shared `Tabs` stylesheet that uses nested CSS and anchor-position syntax; tests pass, and this loop does not change that pre-existing limitation.
-- `pnpm test:browser:ci` was not run in this loop; validation focused on the packages touched by the hosted-app/dashboard cache changes.
+- Full workspace gates were run before archive: `pnpm test:ci`, `pnpm test:browser:ci`, and `pnpm build`.
 
 ## Loopback Triggers
 
