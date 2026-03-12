@@ -1,5 +1,11 @@
 # openspecui
 
+## 2.1.1
+
+### Patch Changes
+
+- a9df0b1: Fix hosted app shell synchronization, harden versioned service-worker navigation, and refine dashboard git snapshot interactions.
+
 ## 2.1.0
 
 ### Minor Changes
