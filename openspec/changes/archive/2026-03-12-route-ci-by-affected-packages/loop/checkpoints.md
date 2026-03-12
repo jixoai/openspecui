@@ -14,9 +14,9 @@
 
 - [x] 3.1 Changeset included for release-impacting package changes (N/A: workflow-only loop)
 - [x] 3.2 CI-equivalent local checks passed
-- [ ] 3.3 PR checks passed
+- [x] 3.3 PR checks passed
 
 ## 4. Merge Readiness
 
-- [ ] 4.1 OpenSpec archive flow completed
+- [x] 4.1 OpenSpec archive flow completed
 - [ ] 4.2 PR merge approved
