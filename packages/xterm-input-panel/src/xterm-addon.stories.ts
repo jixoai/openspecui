@@ -7,8 +7,19 @@ import { InputPanelAddon } from './xterm-addon.js'
 // Register all custom elements (critical — xterm-addon.ts does NOT import these)
 import './index.js'
 
+const storyCleanups = new Set<() => void>()
+
 /** Reset singleton state between stories */
 function resetAddonState() {
+  for (const cleanup of storyCleanups) {
+    try {
+      cleanup()
+    } catch {
+      /* ignore test cleanup failures */
+    }
+  }
+  storyCleanups.clear()
+
   // Force-close any active instance
   const active = InputPanelAddon.activeInstance
   if (active) active.close()
@@ -33,6 +44,10 @@ function setupTerminal(container: HTMLElement, opts?: { stateKey?: string }) {
   const addon = new InputPanelAddon({ onInput: inputHandler, stateKey: opts?.stateKey })
   terminal.loadAddon(addon)
   terminal.open(container)
+  storyCleanups.add(() => {
+    addon.dispose()
+    terminal.dispose()
+  })
 
   return { terminal, addon, inputHandler }
 }
