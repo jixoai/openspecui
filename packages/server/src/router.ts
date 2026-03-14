@@ -14,6 +14,8 @@ import {
   getAvailableTools,
   getConfiguredTools,
   getDefaultCliCommandString,
+  getDetectedProjectTools,
+  getToolInitStates,
   getWatcherRuntimeStatus,
   sniffGlobalCli,
   TerminalConfigSchema,
@@ -28,6 +30,7 @@ import {
   type SchemaResolution,
   type TemplateContentMap,
   type TemplatesMap,
+  type ToolInitDelivery,
 } from '@openspecui/core'
 import { SearchQuerySchema, type SearchQuery } from '@openspecui/search'
 import { initTRPC } from '@trpc/server'
@@ -738,10 +741,33 @@ export const cliRouter = router({
     })) satisfies AIToolOption[]
   }),
 
+  getDetectedProjectTools: publicProcedure.query(async ({ ctx }) => {
+    return (await getDetectedProjectTools(ctx.projectDir)).map((tool) => ({
+      name: tool.name,
+      value: tool.value,
+      available: tool.available,
+      successLabel: tool.successLabel,
+    })) satisfies AIToolOption[]
+  }),
+
   /** 获取 OpenSpec 1.2 profile/workflow 配置与当前项目漂移状态 */
   getProfileState: publicProcedure.query(async ({ ctx }) => {
     return fetchOpsxProfileState(ctx)
   }),
+
+  getToolInitStates: publicProcedure
+    .input(
+      z.object({
+        delivery: z.enum(['both', 'skills', 'commands']),
+        workflows: z.array(z.string()).default([]),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      return getToolInitStates(ctx.projectDir, {
+        delivery: input.delivery as ToolInitDelivery,
+        workflows: input.workflows,
+      })
+    }),
 
   getGlobalConfigPath: publicProcedure.query(async ({ ctx }) => {
     const path = await resolveGlobalConfigPath(ctx)

@@ -187,27 +187,11 @@ export class OpenSpecAdapter {
   }
 
   /**
-   * Read AGENTS.md content (reactive)
-   */
-  async readAgentsMd(): Promise<string | null> {
-    const agentsPath = join(this.openspecDir, 'AGENTS.md')
-    return reactiveReadFile(agentsPath)
-  }
-
-  /**
    * Write project.md content
    */
   async writeProjectMd(content: string): Promise<void> {
     const projectPath = join(this.openspecDir, 'project.md')
     await writeFile(projectPath, content, 'utf-8')
-  }
-
-  /**
-   * Write AGENTS.md content
-   */
-  async writeAgentsMd(content: string): Promise<void> {
-    const agentsPath = join(this.openspecDir, 'AGENTS.md')
-    await writeFile(agentsPath, content, 'utf-8')
   }
 
   // =====================
@@ -434,26 +418,6 @@ This project uses OpenSpec for spec-driven development.
 - \`changes/archive/\` - Completed changes
 `
     await writeFile(join(this.openspecDir, 'project.md'), projectMd, 'utf-8')
-
-    const agentsMd = `# AI Agent Instructions
-
-This project uses OpenSpec for spec-driven development.
-
-## Available Commands
-- \`openspec list\` - List changes or specs
-- \`openspec view\` - Dashboard view
-- \`openspec show <name>\` - Show change or spec details
-- \`openspec validate <name>\` - Validate change or spec
-- \`openspec archive <change>\` - Archive completed change
-
-## Workflow
-1. Create a change proposal in \`changes/<change-id>/proposal.md\`
-2. Define delta specs in \`changes/<change-id>/specs/\`
-3. Track tasks in \`changes/<change-id>/tasks.md\`
-4. Implement and mark tasks complete
-5. Archive when done: \`openspec archive <change-id>\`
-`
-    await writeFile(join(this.openspecDir, 'AGENTS.md'), agentsMd, 'utf-8')
   }
 
   // =====================

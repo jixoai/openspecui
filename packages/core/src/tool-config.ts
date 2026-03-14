@@ -17,7 +17,7 @@ export interface AIToolOption {
   name: string
   /** 工具 ID（用于 CLI 参数） */
   value: string
-  /** 是否可用（available: false 的工具不会出现在主列表中） */
+  /** 是否可由 openspec init 直接管理 */
   available: boolean
   /** 成功消息中使用的标签 */
   successLabel?: string
@@ -173,12 +173,6 @@ export const AI_TOOLS: ToolConfig[] = [
     successLabel: 'Windsurf',
     skillsDir: '.windsurf',
   },
-  {
-    name: 'AGENTS.md (works with Amp, VS Code, …)',
-    value: 'agents',
-    available: false,
-    successLabel: 'your AGENTS.md-compatible assistant',
-  },
 ]
 
 /**
@@ -196,14 +190,31 @@ export function getAvailableToolIds(): string[] {
 }
 
 /**
- * 获取所有工具（包括 available: false 的）
+ * 获取所有工具
  */
 export function getAllTools(): ToolConfig[] {
   return AI_TOOLS
 }
 
 /**
- * 获取所有工具 ID 列表（包括 available: false 的）
+ * 检测当前项目中已经存在的工具目录。
+ *
+ * 这里对齐 OpenSpec 官方 `getAvailableTools(projectPath)` 的语义：
+ * 仅根据项目根目录下的工具目录是否存在来判断，不读取全局命令安装状态。
+ */
+export async function getDetectedProjectTools(projectDir: string): Promise<ToolConfig[]> {
+  const results = await Promise.all(
+    AI_TOOLS.map(async (tool) => {
+      if (!tool.skillsDir) return null
+      const exists = await reactiveExists(join(projectDir, tool.skillsDir))
+      return exists ? tool : null
+    })
+  )
+  return results.filter((tool): tool is ToolConfig => tool !== null)
+}
+
+/**
+ * 获取所有工具 ID 列表
  */
 export function getAllToolIds(): string[] {
   return AI_TOOLS.map((tool) => tool.value)

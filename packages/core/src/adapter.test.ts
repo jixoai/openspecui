@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cleanupTempDir, createTempDir } from './__tests__/test-utils.js'
@@ -35,5 +35,12 @@ describe('OpenSpecAdapter change files', () => {
 
     expect(metadata).toBeDefined()
     expect(metadata?.content).toContain('schema:')
+  })
+
+  it('initializes project.md without creating openspec/AGENTS.md', async () => {
+    await adapter.init()
+
+    await expect(stat(join(tempDir, 'openspec', 'project.md'))).resolves.toBeDefined()
+    await expect(stat(join(tempDir, 'openspec', 'AGENTS.md'))).rejects.toThrow()
   })
 })

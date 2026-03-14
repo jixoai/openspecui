@@ -27,15 +27,18 @@ export interface RunningServer {
   close: () => Promise<void>
 }
 
-function getWebAssetsDir(): string {
-  const devPath = join(__dirname, '..', '..', 'web', 'dist')
-  const prodPath = join(__dirname, '..', 'web')
+export function getWebAssetsDirCandidates(runtimeDir: string): string[] {
+  const prodPath = join(runtimeDir, '..', 'web')
+  const devPath = join(runtimeDir, '..', '..', 'web', 'dist')
 
-  if (existsSync(prodPath)) {
-    return prodPath
-  }
-  if (existsSync(devPath)) {
-    return devPath
+  return [prodPath, devPath]
+}
+
+function getWebAssetsDir(): string {
+  for (const candidate of getWebAssetsDirCandidates(__dirname)) {
+    if (existsSync(candidate)) {
+      return candidate
+    }
   }
 
   throw new Error('Web assets not found. Make sure to build the web package first.')

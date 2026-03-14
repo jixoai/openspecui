@@ -534,6 +534,18 @@ export type OpenSpecUIConfigUpdate = {
   dashboard?: Partial<DashboardConfig>
 }
 
+export type PersistedOpenSpecUIConfig = {
+  cli?: {
+    command?: string
+    args?: string[]
+  }
+  theme?: OpenSpecUIConfig['theme']
+  codeEditor?: Partial<OpenSpecUIConfig['codeEditor']>
+  appBaseUrl?: OpenSpecUIConfig['appBaseUrl']
+  terminal?: Partial<TerminalConfig>
+  dashboard?: Partial<DashboardConfig>
+}
+
 /** 默认配置（静态，用于测试和类型） */
 export const DEFAULT_CONFIG: OpenSpecUIConfig = {
   cli: {
@@ -546,11 +558,117 @@ export const DEFAULT_CONFIG: OpenSpecUIConfig = {
   dashboard: DashboardConfigSchema.parse({}),
 }
 
+function areStringArraysEqual(
+  left: readonly string[] | undefined,
+  right: readonly string[] | undefined
+): boolean {
+  if (left === right) return true
+  if (!left || !right) return !left && !right
+  if (left.length !== right.length) return false
+  return left.every((value, index) => value === right[index])
+}
+
+function pruneNullish(value: unknown): unknown {
+  if (value === null || value === undefined) {
+    return undefined
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => pruneNullish(entry)).filter((entry) => entry !== undefined)
+  }
+  if (typeof value === 'object') {
+    const normalizedEntries = Object.entries(value).flatMap(([key, entryValue]) => {
+      const nextValue = pruneNullish(entryValue)
+      return nextValue === undefined ? [] : [[key, nextValue] as const]
+    })
+    return Object.fromEntries(normalizedEntries)
+  }
+  return value
+}
+
+function hasOwnEntries(value: object): boolean {
+  return Object.keys(value).length > 0
+}
+
+export function toPersistedConfig(
+  config: OpenSpecUIConfig,
+  options: {
+    defaultCliCommandParts?: readonly string[]
+  } = {}
+): PersistedOpenSpecUIConfig {
+  const persisted: PersistedOpenSpecUIConfig = {}
+
+  const command = config.cli.command?.trim()
+  const args = (config.cli.args ?? []).map((arg) => arg.trim()).filter(Boolean)
+  const cliCommandParts = command ? [command, ...args] : undefined
+
+  if (cliCommandParts && !areStringArraysEqual(cliCommandParts, options.defaultCliCommandParts)) {
+    const persistedCommand = cliCommandParts[0]
+    persisted.cli =
+      args.length > 0 ? { command: persistedCommand, args } : { command: persistedCommand }
+  }
+
+  if (config.theme !== DEFAULT_CONFIG.theme) {
+    persisted.theme = config.theme
+  }
+
+  const codeEditor: NonNullable<PersistedOpenSpecUIConfig['codeEditor']> = {}
+  if (config.codeEditor.theme !== DEFAULT_CONFIG.codeEditor.theme) {
+    codeEditor.theme = config.codeEditor.theme
+  }
+  if (hasOwnEntries(codeEditor)) {
+    persisted.codeEditor = codeEditor
+  }
+
+  if (config.appBaseUrl !== DEFAULT_CONFIG.appBaseUrl) {
+    persisted.appBaseUrl = config.appBaseUrl
+  }
+
+  const terminal: NonNullable<PersistedOpenSpecUIConfig['terminal']> = {}
+  if (config.terminal.fontSize !== DEFAULT_CONFIG.terminal.fontSize) {
+    terminal.fontSize = config.terminal.fontSize
+  }
+  if (config.terminal.fontFamily !== DEFAULT_CONFIG.terminal.fontFamily) {
+    terminal.fontFamily = config.terminal.fontFamily
+  }
+  if (config.terminal.cursorBlink !== DEFAULT_CONFIG.terminal.cursorBlink) {
+    terminal.cursorBlink = config.terminal.cursorBlink
+  }
+  if (config.terminal.cursorStyle !== DEFAULT_CONFIG.terminal.cursorStyle) {
+    terminal.cursorStyle = config.terminal.cursorStyle
+  }
+  if (config.terminal.scrollback !== DEFAULT_CONFIG.terminal.scrollback) {
+    terminal.scrollback = config.terminal.scrollback
+  }
+  if (config.terminal.rendererEngine !== DEFAULT_CONFIG.terminal.rendererEngine) {
+    terminal.rendererEngine = config.terminal.rendererEngine
+  }
+  if (hasOwnEntries(terminal)) {
+    persisted.terminal = terminal
+  }
+
+  const dashboard: NonNullable<PersistedOpenSpecUIConfig['dashboard']> = {}
+  if (config.dashboard.trendPointLimit !== DEFAULT_CONFIG.dashboard.trendPointLimit) {
+    dashboard.trendPointLimit = config.dashboard.trendPointLimit
+  }
+  if (hasOwnEntries(dashboard)) {
+    persisted.dashboard = dashboard
+  }
+
+  return persisted
+}
+
+function isPersistedConfigEmpty(config: PersistedOpenSpecUIConfig): boolean {
+  return !hasOwnEntries(config)
+}
+
 /**
  * 配置管理器
  *
  * 负责读写 openspec/.openspecui.json 配置文件。
  * 读取操作使用 reactiveReadFile，支持响应式更新。
+ *
+ * `.openspecui.json` 是预期中的项目级 UI 配置文件，但只有显式偏离默认值的
+ * override 才会落盘。仅启动 openspecui 或仅依赖默认配置时，不应触发文件写入。
  */
 export class ConfigManager {
   private configPath: string
@@ -563,22 +681,15 @@ export class ConfigManager {
     this.configPath = join(projectDir, 'openspec', '.openspecui.json')
   }
 
-  /**
-   * 读取配置（响应式）
-   *
-   * 如果配置文件不存在，返回默认配置。
-   * 如果配置文件格式错误，返回默认配置并打印警告。
-   */
-  async readConfig(): Promise<OpenSpecUIConfig> {
-    const content = await reactiveReadFile(this.configPath)
-
+  private parseConfigContent(content: string | null): OpenSpecUIConfig {
     if (!content) {
       return DEFAULT_CONFIG
     }
 
     try {
       const parsed = JSON.parse(content)
-      const result = OpenSpecUIConfigSchema.safeParse(parsed)
+      const normalized = pruneNullish(parsed) ?? {}
+      const result = OpenSpecUIConfigSchema.safeParse(normalized)
 
       if (result.success) {
         return result.data
@@ -593,12 +704,25 @@ export class ConfigManager {
   }
 
   /**
+   * 读取配置（响应式）
+   *
+   * 如果配置文件不存在，返回默认配置。
+   * 如果配置文件格式错误，返回默认配置并打印警告。
+   */
+  async readConfig(): Promise<OpenSpecUIConfig> {
+    const content = await reactiveReadFile(this.configPath)
+    return this.parseConfigContent(content)
+  }
+
+  /**
    * 写入配置
    *
    * 会触发文件监听，自动更新订阅者。
    */
   async writeConfig(config: OpenSpecUIConfigUpdate): Promise<void> {
-    const current = await this.readConfig()
+    const currentContent = await reactiveReadFile(this.configPath)
+    const fileExists = currentContent !== null
+    const current = this.parseConfigContent(currentContent)
     const nextCli = { ...current.cli }
     if (config.cli && Object.prototype.hasOwnProperty.call(config.cli, 'command')) {
       const raw = config.cli.command
@@ -630,11 +754,40 @@ export class ConfigManager {
       terminal: { ...current.terminal, ...config.terminal },
       dashboard: { ...current.dashboard, ...config.dashboard },
     }
-    const serialized = JSON.stringify(merged, null, 2)
+
+    const persisted = toPersistedConfig(merged)
+
+    if (isPersistedConfigEmpty(persisted) && !fileExists) {
+      return
+    }
+
+    const serialized = isPersistedConfigEmpty(persisted) ? '{}' : JSON.stringify(persisted, null, 2)
+
+    if (currentContent === serialized) {
+      return
+    }
+
     await mkdir(dirname(this.configPath), { recursive: true })
     await writeFile(this.configPath, serialized, 'utf-8')
     updateReactiveFileCache(this.configPath, serialized)
     this.invalidateResolvedCliRunner()
+  }
+
+  private async resolveDefaultCliCommandParts(): Promise<readonly string[]> {
+    const candidates = buildCliRunnerCandidates({
+      userAgent: process.env.npm_config_user_agent,
+    }).filter((candidate) => candidate.id !== 'configured')
+    const resolved = await resolveCliRunner(candidates, this.projectDir, createCleanCliEnv())
+    return resolved.commandParts
+  }
+
+  private async isDefaultCliCommand(commandParts: readonly string[]): Promise<boolean> {
+    try {
+      const defaultCommandParts = await this.resolveDefaultCliCommandParts()
+      return areStringArraysEqual(commandParts, defaultCommandParts)
+    } catch {
+      return false
+    }
   }
 
   /**
@@ -676,23 +829,6 @@ export class ConfigManager {
         })
     const resolved = await resolveCliRunner(candidates, this.projectDir, createCleanCliEnv())
 
-    if (!hasConfiguredCommand) {
-      const [resolvedCommand, ...resolvedArgs] = resolved.commandParts
-      const currentCommand = config.cli.command?.trim()
-      const currentArgs = config.cli.args ?? []
-      if (
-        currentCommand !== resolvedCommand ||
-        currentArgs.length !== resolvedArgs.length ||
-        currentArgs.some((arg, index) => arg !== resolvedArgs[index])
-      ) {
-        try {
-          await this.writeConfig({ cli: { command: resolvedCommand, args: resolvedArgs } })
-        } catch (err) {
-          // Runner resolution must not fail when config persistence cannot be initialized.
-          console.warn('Failed to persist auto-detected CLI command:', err)
-        }
-      }
-    }
     return resolved
   }
 
@@ -738,6 +874,10 @@ export class ConfigManager {
     }
     const commandParts = parseCliCommand(trimmed)
     if (commandParts.length === 0) {
+      await this.writeConfig({ cli: { command: null, args: null } })
+      return
+    }
+    if (await this.isDefaultCliCommand(commandParts)) {
       await this.writeConfig({ cli: { command: null, args: null } })
       return
     }

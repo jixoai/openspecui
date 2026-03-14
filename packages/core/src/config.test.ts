@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from 'fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cleanupTempDir, createTempDir, waitForDebounce } from './__tests__/test-utils.js'
@@ -113,6 +113,25 @@ describe('ConfigManager', () => {
       expect(config.terminal.rendererEngine).toBe('xterm')
       expect(config.dashboard.trendPointLimit).toBe(100)
     })
+
+    it('should treat persisted null fields as absent and keep valid sibling overrides', async () => {
+      const partialConfig = {
+        theme: null,
+        dashboard: {
+          trendPointLimit: 180,
+        },
+      }
+      await writeFile(
+        join(tempDir, 'openspec', '.openspecui.json'),
+        JSON.stringify(partialConfig),
+        'utf-8'
+      )
+
+      const config = await configManager.readConfig()
+
+      expect(config.theme).toBe('system')
+      expect(config.dashboard.trendPointLimit).toBe(180)
+    })
   })
 
   describe('writeConfig()', () => {
@@ -123,6 +142,9 @@ describe('ConfigManager', () => {
       clearCache()
       const config = await configManager.readConfig()
       expect(config.cli.command).toBe('custom')
+      await expect(readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')).resolves.toBe(
+        '{\n  "cli": {\n    "command": "custom"\n  }\n}'
+      )
     })
 
     it('should merge with existing config', async () => {
@@ -144,6 +166,9 @@ describe('ConfigManager', () => {
       clearCache()
       const config = await configManager.readConfig()
       expect(config.dashboard.trendPointLimit).toBe(180)
+      await expect(readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')).resolves.toBe(
+        '{\n  "dashboard": {\n    "trendPointLimit": 180\n  }\n}'
+      )
     })
 
     it('should create file if not exists', async () => {
@@ -164,6 +189,41 @@ describe('ConfigManager', () => {
       const config = await configManager.readConfig()
       expect(config.cli.command).toBe('openspec')
     })
+
+    it('should not create a config file when writing only default values', async () => {
+      await configManager.writeConfig({
+        theme: 'system',
+        codeEditor: { theme: 'github' },
+        appBaseUrl: '',
+        terminal: {
+          fontSize: 13,
+          fontFamily: '',
+          cursorBlink: true,
+          cursorStyle: 'block',
+          scrollback: 1000,
+          rendererEngine: 'xterm',
+        },
+        dashboard: { trendPointLimit: 100 },
+      })
+
+      await expect(
+        readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')
+      ).rejects.toThrow()
+    })
+
+    it('should preserve an existing config file as {} when values are reset to defaults', async () => {
+      await configManager.writeConfig({ theme: 'dark' })
+      clearCache()
+
+      await configManager.writeConfig({ theme: 'system' })
+      clearCache()
+
+      const content = await readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')
+      const config = await configManager.readConfig()
+
+      expect(content).toBe('{}')
+      expect(config.theme).toBe('system')
+    })
   })
 
   describe('getCliCommand()', () => {
@@ -173,6 +233,9 @@ describe('ConfigManager', () => {
       expect(Array.isArray(command)).toBe(true)
       expect(command.length).toBeGreaterThan(0)
       command.forEach((item) => expect(typeof item).toBe('string'))
+      await expect(
+        readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')
+      ).rejects.toThrow()
     }, 25000)
 
     it('should return custom command', async () => {
@@ -237,6 +300,19 @@ describe('ConfigManager', () => {
       expect(config.cli.command).toBeUndefined()
       expect(config.cli.args).toBeUndefined()
     })
+
+    it('should avoid persisting an explicit execute path that matches the default runner', async () => {
+      const defaultCommand = await configManager.getCliCommand()
+
+      await configManager.setCliCommand(defaultCommand.join(' '))
+      clearCache()
+
+      const config = await configManager.readConfig()
+      expect(config.cli.command).toBeUndefined()
+      await expect(
+        readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')
+      ).rejects.toThrow()
+    }, 25000)
 
     it('should parse quoted execute path into command and args', async () => {
       await configManager.setCliCommand(

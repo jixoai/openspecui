@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanupTempDir, createTempDir } from './__tests__/test-utils.js'
-import { CliExecutor, type CliResult } from './cli-executor.js'
+import { CliExecutor, type CliResult, type CliStreamEvent } from './cli-executor.js'
 import { ConfigManager } from './config.js'
 import { clearCache } from './reactive-fs/index.js'
 import { closeAllWatchers } from './reactive-fs/watcher-pool.js'
@@ -238,6 +238,60 @@ describe('CliExecutor', () => {
       await cliExecutor.validate('change', 'change-123')
 
       expect(executeSpy).toHaveBeenCalledWith(['validate', 'change', 'change-123'])
+    })
+  })
+
+  describe('executeCommandStream()', () => {
+    it('should resolve bare openspec through the configured runner', async () => {
+      await configManager.writeConfig({ cli: { command: 'echo' } })
+      clearCache()
+
+      const events: CliStreamEvent[] = []
+      const done = new Promise<void>((resolve) => {
+        cliExecutor.executeCommandStream(['openspec', 'hello', 'world'], (event) => {
+          events.push(event)
+          if (event.type === 'exit') {
+            resolve()
+          }
+        })
+      })
+
+      await done
+
+      expect(events[0]).toMatchObject({ type: 'command', data: 'echo hello world' })
+      expect(
+        events.some((event) => event.type === 'stdout' && event.data?.includes('hello world'))
+      ).toBe(true)
+      expect(events.at(-1)).toMatchObject({ type: 'exit', exitCode: 0 })
+    })
+
+    it('should keep raw commands independent from the configured openspec runner', async () => {
+      await configManager.writeConfig({ cli: { command: 'nonexistent_command_12345' } })
+      clearCache()
+
+      const events: CliStreamEvent[] = []
+      const done = new Promise<void>((resolve) => {
+        cliExecutor.executeCommandStream(
+          ['node', '-e', "process.stdout.write('raw-ok')"],
+          (event) => {
+            events.push(event)
+            if (event.type === 'exit') {
+              resolve()
+            }
+          }
+        )
+      })
+
+      await done
+
+      expect(events[0]).toMatchObject({
+        type: 'command',
+        data: "node -e process.stdout.write('raw-ok')",
+      })
+      expect(
+        events.some((event) => event.type === 'stdout' && event.data?.includes('raw-ok'))
+      ).toBe(true)
+      expect(events.at(-1)).toMatchObject({ type: 'exit', exitCode: 0 })
     })
   })
 
