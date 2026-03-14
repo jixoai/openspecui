@@ -24,19 +24,26 @@ describe('website app', () => {
     expect(document.documentElement.lang).toBe('zh-CN')
   })
 
-  it('switches command prefixes when the runner changes', async () => {
+  it('keeps the hero recommendation stable while the run command changes with app mode', async () => {
     render(<App />)
 
-    expect(screen.getByText('npx openspecui@latest')).toBeTruthy()
+    expect(screen.getAllByText('npx openspecui@latest --app')).toHaveLength(2)
+    expect(screen.getByText('npx openspecui@latest export -o ./dist')).toBeTruthy()
 
     fireEvent.change(screen.getByLabelText('Runner'), {
       target: { value: 'pnpm' },
     })
 
     await waitFor(() => {
+      expect(screen.getAllByText('pnpx openspecui@latest --app')).toHaveLength(2)
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'App mode' }))
+
+    await waitFor(() => {
       expect(screen.getByText('pnpx openspecui@latest')).toBeTruthy()
     })
-    expect(screen.getByText('pnpx openspecui@latest --app')).toBeTruthy()
+    expect(screen.getAllByText('pnpx openspecui@latest --app')).toHaveLength(1)
     expect(screen.getByText('pnpx openspecui@latest export -o ./dist')).toBeTruthy()
   })
 })

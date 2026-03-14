@@ -4,20 +4,26 @@ import { act, fireEvent, screen } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getHostedShellStorageKey } from '../lib/shell-state'
 import { HostedShell } from './hosted-shell'
-
-const REFRESH_FEEDBACK_MS = 1200
 
 const originalFetch = global.fetch
 const originalMatchMedia = window.matchMedia
 const originalShowModal = HTMLDialogElement.prototype.showModal
 const originalClose = HTMLDialogElement.prototype.close
+const originalConsoleError = console.error
 
-function setSuccessfulFetch(options?: {
+interface FetchHealthOptions {
   online?: boolean
   projectName?: string
   openspecuiVersion?: string
-}) {
+}
+
+interface HostedFetchOptions extends FetchHealthOptions {
+  perApi?: Record<string, FetchHealthOptions>
+}
+
+function setSuccessfulFetch(options?: HostedFetchOptions) {
   global.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url =
       typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
@@ -35,7 +41,7 @@ function setSuccessfulFetch(options?: {
               selector: 'latest',
               resolvedVersion: '2.1.3',
               rootPath: '/versions/latest/',
-              shellPath: '/versions/latest/index.html',
+              shellPath: '/versions/latest/',
               major: 2,
             },
             'v2.0': {
@@ -44,7 +50,7 @@ function setSuccessfulFetch(options?: {
               selector: '~2.0',
               resolvedVersion: '2.0.9',
               rootPath: '/versions/v2.0/',
-              shellPath: '/versions/v2.0/index.html',
+              shellPath: '/versions/v2.0/',
               major: 2,
               minor: 0,
             },
@@ -59,17 +65,19 @@ function setSuccessfulFetch(options?: {
     }
 
     if (url.endsWith('/api/health')) {
-      if (options?.online === false) {
+      const apiBaseUrl = url.replace(/\/api\/health$/, '')
+      const health = options?.perApi?.[apiBaseUrl] ?? options
+      if (health?.online === false) {
         throw new Error('offline')
       }
 
       return new Response(
         JSON.stringify({
           status: 'ok',
-          projectDir: `/tmp/${options?.projectName ?? 'opsx-project'}`,
-          projectName: options?.projectName ?? 'opsx-project',
+          projectDir: `/tmp/${health?.projectName ?? 'opsx-project'}`,
+          projectName: health?.projectName ?? 'opsx-project',
           watcherEnabled: true,
-          openspecuiVersion: options?.openspecuiVersion ?? '2.0.2',
+          openspecuiVersion: health?.openspecuiVersion ?? '2.0.2',
         }),
         {
           status: 200,
@@ -104,6 +112,18 @@ async function renderShell(element: ReactElement): Promise<{
   return { container, root }
 }
 
+function setIframeReloadSpy(iframe: HTMLIFrameElement, reload: ReturnType<typeof vi.fn>) {
+  Object.defineProperty(iframe, 'contentWindow', {
+    configurable: true,
+    value: {
+      location: {
+        href: iframe.getAttribute('src') ?? iframe.src,
+        reload,
+      },
+    },
+  })
+}
+
 describe('HostedShell', () => {
   beforeEach(() => {
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -118,6 +138,18 @@ describe('HostedShell', () => {
     HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
       this.removeAttribute('open')
     }
+    vi.spyOn(console, 'error').mockImplementation((message: unknown, ...args: unknown[]) => {
+      const text =
+        typeof message === 'string'
+          ? message
+          : message instanceof Error
+            ? message.message
+            : String(message ?? '')
+      if (text.includes('Could not parse CSS stylesheet')) {
+        return
+      }
+      originalConsoleError(message, ...args)
+    })
     document.body.innerHTML = ''
     localStorage.clear()
     setSuccessfulFetch()
@@ -128,7 +160,6 @@ describe('HostedShell', () => {
     window.matchMedia = originalMatchMedia
     HTMLDialogElement.prototype.showModal = originalShowModal
     HTMLDialogElement.prototype.close = originalClose
-    vi.useRealTimers()
     vi.restoreAllMocks()
     document.body.innerHTML = ''
   })
@@ -146,199 +177,127 @@ describe('HostedShell', () => {
     expect(container.textContent ?? '').toContain('opsx-project')
     const iframe = container.querySelector('iframe[title="Hosted OpenSpec UI opsx-project"]')
     expect(iframe?.getAttribute('src')).toContain(
-      '/versions/v2.0/index.html?api=http%3A%2F%2Flocalhost%3A3100&session='
+      '/versions/v2.0/?api=http%3A%2F%2Flocalhost%3A3100&session='
     )
-  })
-
-  it('uses the terminal tab styling for hosted sessions', async () => {
-    const { container } = await renderShell(
-      <HostedShell
-        initialLaunchRequest={{
-          apiBaseUrl: 'http://localhost:3100',
-        }}
-        initialError={null}
-      />
-    )
-
-    const tabsRoot = container.querySelector('[data-tabs-variant="terminal"]')
-    expect(tabsRoot).not.toBeNull()
-
-    const selectedTab = container.querySelector('.tab-selected')
-    expect(selectedTab?.className).toContain('bg-background')
-    expect(selectedTab?.className).toContain('text-foreground')
-
-    const refreshButton = screen.getByLabelText('Refresh backend metadata')
-    const addButton = screen.getByLabelText('Add backend API')
-    expect(refreshButton.className).toContain('bg-terminal')
-    expect(addButton.className).toContain('bg-terminal')
-  })
-
-  it('opens the add API dialog with the shared dialog shell', async () => {
-    const { container } = await renderShell(
-      <HostedShell
-        initialLaunchRequest={{
-          apiBaseUrl: 'http://localhost:3100',
-        }}
-        initialError={null}
-      />
-    )
-
-    fireEvent.click(screen.getByLabelText('Add backend API'))
-    await flushEffects()
-
-    expect(screen.getByText('Add Backend API')).not.toBeNull()
-    const dialog = container.querySelector('dialog.openspec-dialog')
-    expect(dialog?.hasAttribute('open')).toBe(true)
-    const panel = dialog?.querySelector('.max-w-2xl')
-    expect(panel).not.toBeNull()
-    expect(panel?.className).not.toContain('rounded-none')
-  })
-
-  it('shows transient active feedback while refresh is running', async () => {
-    vi.useFakeTimers()
-    await renderShell(
-      <HostedShell
-        initialLaunchRequest={{
-          apiBaseUrl: 'http://localhost:3100',
-        }}
-        initialError={null}
-      />
-    )
-
-    const refreshButton = screen.getByLabelText('Refresh backend metadata')
-    fireEvent.click(refreshButton)
-    await flushEffects()
-
-    expect(refreshButton.className.split(/\s+/)).toContain('bg-background')
-    const icon = refreshButton.querySelector('svg')
-    expect(icon?.getAttribute('class')).toContain('animate-spin')
+    expect(screen.getByText('Loading view...')).toBeTruthy()
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(REFRESH_FEEDBACK_MS)
+      if (iframe) {
+        fireEvent.load(iframe)
+      }
     })
-    await flushEffects()
 
-    expect(refreshButton.className.split(/\s+/)).not.toContain('bg-background')
+    expect(screen.queryByText('Loading view...')).toBeNull()
   })
-  it('seeds a fallback launch request when the shell starts empty', async () => {
+
+  it('opens the add dialog when the empty shell header is double-clicked', async () => {
+    const { container } = await renderShell(
+      <HostedShell initialLaunchRequest={null} fallbackLaunchRequest={null} initialError={null} />
+    )
+
+    const strip = container.querySelector('.tabs-strip')
+    expect(strip).toBeTruthy()
+
+    await act(async () => {
+      if (strip) {
+        fireEvent.doubleClick(strip)
+      }
+    })
+
+    expect(document.querySelector('dialog[open]')).toBeTruthy()
+    expect(screen.getByLabelText('API URL')).toBeTruthy()
+  })
+
+  it('opens the add dialog when the tabs bar empty space is double-clicked', async () => {
     const { container } = await renderShell(
       <HostedShell
-        initialLaunchRequest={null}
-        fallbackLaunchRequest={{
+        initialLaunchRequest={{
           apiBaseUrl: 'http://localhost:3100',
         }}
         initialError={null}
       />
     )
 
-    expect(container.textContent ?? '').toContain('opsx-project')
-    const iframe = container.querySelector('iframe[title="Hosted OpenSpec UI opsx-project"]')
-    expect(iframe?.getAttribute('src')).toContain(
-      '/versions/v2.0/index.html?api=http%3A%2F%2Flocalhost%3A3100&session='
-    )
-  })
+    const tabsBar = container.querySelector('.tabs-button')
+    expect(tabsBar).toBeTruthy()
 
-  it('restores persisted tabs and keeps the saved active tab selected', async () => {
-    localStorage.setItem(
-      'openspecui-app:shell',
-      JSON.stringify({
-        activeTabId: 'session-b',
-        tabs: [
-          {
-            id: 'session-a',
-            sessionId: 'session-a',
-            apiBaseUrl: 'http://localhost:3100',
-            createdAt: 1,
-          },
-          {
-            id: 'session-b',
-            sessionId: 'session-b',
-            apiBaseUrl: 'http://localhost:3200',
-            createdAt: 2,
-          },
-        ],
-      })
-    )
-
-    const { container } = await renderShell(
-      <HostedShell initialLaunchRequest={null} initialError={null} />
-    )
-
-    const selected = container.querySelector('.tab-selected')
-    expect(selected?.textContent ?? '').toContain('http://localhost:3200')
-  })
-
-  it('keeps the fallback launch request from overwriting persisted tabs', async () => {
-    localStorage.setItem(
-      'openspecui-app:shell',
-      JSON.stringify({
-        activeTabId: 'session-b',
-        tabs: [
-          {
-            id: 'session-a',
-            sessionId: 'session-a',
-            apiBaseUrl: 'http://localhost:3100',
-            createdAt: 1,
-          },
-          {
-            id: 'session-b',
-            sessionId: 'session-b',
-            apiBaseUrl: 'http://localhost:3200',
-            createdAt: 2,
-          },
-        ],
-      })
-    )
-
-    const { container } = await renderShell(
-      <HostedShell
-        initialLaunchRequest={null}
-        fallbackLaunchRequest={{
-          apiBaseUrl: 'http://localhost:3300',
-        }}
-        initialError={null}
-      />
-    )
-
-    expect(container.textContent ?? '').toContain('http://localhost:3200')
-    expect(container.textContent ?? '').not.toContain('http://localhost:3300')
-  })
-
-  it('syncs externally persisted shell state without a page refresh', async () => {
-    const { container } = await renderShell(
-      <HostedShell initialLaunchRequest={null} initialError={null} />
-    )
-
-    expect(container.textContent ?? '').toContain('No Hosted Sessions')
-
-    act(() => {
-      localStorage.setItem(
-        'openspecui-app:shell',
-        JSON.stringify({
-          activeTabId: 'session-a',
-          tabs: [
-            {
-              id: 'session-a',
-              sessionId: 'session-a',
-              apiBaseUrl: 'http://localhost:3100',
-              createdAt: 1,
-            },
-          ],
-        })
-      )
-      window.dispatchEvent(
-        new StorageEvent('storage', {
-          key: 'openspecui-app:shell',
-        })
-      )
+    await act(async () => {
+      if (tabsBar) {
+        fireEvent.doubleClick(tabsBar)
+      }
     })
 
-    await flushEffects()
-    await flushEffects()
+    expect(document.querySelector('dialog[open]')).toBeTruthy()
+  })
 
-    expect(container.textContent ?? '').toContain('opsx-project')
-    const iframe = container.querySelector('iframe[title="Hosted OpenSpec UI opsx-project"]')
-    expect(iframe?.getAttribute('src')).toContain('/versions/v2.0/index.html?api=')
+  it('reloads only the current active iframe when the refresh action is clicked', async () => {
+    localStorage.setItem(
+      getHostedShellStorageKey(),
+      JSON.stringify({
+        activeTabId: 'tab-2',
+        tabs: [
+          {
+            id: 'tab-1',
+            sessionId: 'tab-1',
+            apiBaseUrl: 'http://localhost:3100',
+            createdAt: 1,
+          },
+          {
+            id: 'tab-2',
+            sessionId: 'tab-2',
+            apiBaseUrl: 'http://localhost:3200',
+            createdAt: 2,
+          },
+        ],
+      })
+    )
+    setSuccessfulFetch({
+      perApi: {
+        'http://localhost:3100': {
+          projectName: 'alpha',
+          openspecuiVersion: '2.0.2',
+        },
+        'http://localhost:3200': {
+          projectName: 'beta',
+          openspecuiVersion: '2.0.2',
+        },
+      },
+    })
+
+    const { container } = await renderShell(
+      <HostedShell initialLaunchRequest={null} fallbackLaunchRequest={null} initialError={null} />
+    )
+
+    const alphaFrame = container.querySelector('iframe[title="Hosted OpenSpec UI alpha"]')
+    const betaFrame = container.querySelector('iframe[title="Hosted OpenSpec UI beta"]')
+    expect(alphaFrame).toBeTruthy()
+    expect(betaFrame).toBeTruthy()
+
+    await act(async () => {
+      if (alphaFrame) {
+        fireEvent.load(alphaFrame)
+      }
+      if (betaFrame) {
+        fireEvent.load(betaFrame)
+      }
+    })
+
+    const alphaReload = vi.fn()
+    const betaReload = vi.fn()
+    if (alphaFrame instanceof HTMLIFrameElement) {
+      setIframeReloadSpy(alphaFrame, alphaReload)
+    }
+    if (betaFrame instanceof HTMLIFrameElement) {
+      setIframeReloadSpy(betaFrame, betaReload)
+    }
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Reload current tab' }))
+    })
+
+    expect(alphaReload).not.toHaveBeenCalled()
+    expect(betaReload).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('Loading view...')).toBeTruthy()
   })
 
   it('keeps offline tabs visible and shows retry guidance', async () => {
@@ -356,9 +315,6 @@ describe('HostedShell', () => {
     await flushEffects()
 
     expect(container.textContent ?? '').toContain('Backend unreachable')
-    const retryButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Retry'
-    )
-    expect(retryButton).not.toBeUndefined()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
   })
 })

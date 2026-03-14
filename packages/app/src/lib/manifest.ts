@@ -17,7 +17,7 @@ export function createHostedAppManifest(options: {
         selector: channel.selector,
         resolvedVersion: channel.resolvedVersion,
         rootPath: `/versions/${channel.id}/`,
-        shellPath: `/versions/${channel.id}/index.html`,
+        shellPath: `/versions/${channel.id}/`,
         major: channel.major,
         minor: channel.minor,
       }

@@ -24,11 +24,14 @@ export const en = {
     summary:
       'Prefer running without a global install so each session picks up the current release line.',
     runnerLabel: 'Runner',
-    liveLabel: 'Local live server',
-    liveSummary: 'Start the local backend plus the local web UI.',
-    hostedLabel: 'Shared hosted frontend',
-    hostedSummary:
-      'Run the local backend, but open the shared hosted frontend instead of a local web bundle.',
+    appToggleLabel: 'App mode',
+    appToggleSummary: 'Open the shared hosted frontend instead of a local web bundle.',
+    appToggleEnabled: 'On',
+    appToggleDisabled: 'Off',
+    runLabel: 'Run OpenSpec UI',
+    appOnSummary:
+      'Start the local backend and open the shared app shell. Recommended when you want one maintained frontend.',
+    appOffSummary: 'Start the local backend and serve the local web UI from this machine.',
     exportLabel: 'Static export',
     exportSummary: 'Generate a deployable snapshot for docs hosting or offline review.',
     compatibility: 'OpenSpecUI 2.x targets OpenSpec CLI 1.2+.',

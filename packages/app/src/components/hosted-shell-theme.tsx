@@ -1,31 +1,37 @@
-import { applyTheme, getStoredTheme, type Theme } from '@openspecui/web-src/lib/theme'
 import { useEffect, useState } from 'react'
+import {
+  applyHostedShellTheme,
+  getHostedShellThemeStorageKey,
+  getStoredHostedShellTheme,
+  type HostedShellTheme,
+} from '../lib/app-theme'
 import { applyHostedShellThemeColor } from '../lib/theme-color'
 
 export function HostedShellThemeBootstrap() {
-  const [theme, setTheme] = useState<Theme>(() => getStoredTheme())
+  const [theme, setTheme] = useState<HostedShellTheme>(() => getStoredHostedShellTheme())
+  const themeStorageKey = getHostedShellThemeStorageKey()
 
   useEffect(() => {
-    applyTheme(theme)
+    applyHostedShellTheme(theme)
     applyHostedShellThemeColor()
   }, [theme])
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
-      if (event.key === 'theme') {
-        setTheme(getStoredTheme())
+      if (event.key === themeStorageKey) {
+        setTheme(getStoredHostedShellTheme())
       }
     }
 
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
-  }, [])
+  }, [themeStorageKey])
 
   useEffect(() => {
     if (theme !== 'system' || typeof window.matchMedia !== 'function') return
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
     const handler = () => {
-      applyTheme('system')
+      applyHostedShellTheme('system')
       applyHostedShellThemeColor()
     }
     mediaQuery.addEventListener('change', handler)

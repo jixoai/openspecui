@@ -243,7 +243,7 @@ export function buildHostedVersionEntryUrl(tab: HostedShellTab, channel: string)
     api: tab.apiBaseUrl,
     session: tab.sessionId,
   })
-  return `/versions/${channel}/index.html?${params.toString()}`
+  return `/versions/${channel}/?${params.toString()}`
 }
 
 export function getHostedTabLabel(tab: Pick<HostedShellTab, 'apiBaseUrl'>): string {

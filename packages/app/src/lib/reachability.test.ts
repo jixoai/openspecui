@@ -12,7 +12,7 @@ const manifest = {
       selector: 'latest',
       resolvedVersion: '2.1.3',
       rootPath: '/versions/latest/',
-      shellPath: '/versions/latest/index.html',
+      shellPath: '/versions/latest/',
       major: 2,
     },
   },

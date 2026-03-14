@@ -25,7 +25,7 @@ describe('createHostedAppManifest', () => {
       ],
     })
 
-    expect(manifest.channels['v2.1']?.shellPath).toBe('/versions/v2.1/index.html')
+    expect(manifest.channels['v2.1']?.shellPath).toBe('/versions/v2.1/')
     expect(manifest.compatibility).toEqual([{ range: '~2.1.0', channel: 'v2.1' }])
     expect(manifest.defaultChannel).toBe('latest')
   })
