@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { spawnSync } from 'node:child_process'
 
+import { loadGhPrMergeability, waitForPrMergeability } from './lib/changeversion/pr-mergeability'
 import {
   type InheritRunResult,
   waitForWorkflowRunToAppear,
@@ -20,6 +21,9 @@ const PR_BODY = [
   '- Merge PR, sync local main, and wait for GitHub release automation',
 ].join('\n')
 const PR_CHECK_TIMEOUT_MS = Number(process.env.CHANGEVERSION_AUTO_CI_TIMEOUT_MS ?? 45 * 60 * 1000)
+const PR_MERGEABILITY_TIMEOUT_MS = Number(
+  process.env.CHANGEVERSION_AUTO_MERGEABILITY_TIMEOUT_MS ?? 5 * 60 * 1000
+)
 const RELEASE_TIMEOUT_MS = Number(
   process.env.CHANGEVERSION_AUTO_RELEASE_TIMEOUT_MS ?? 45 * 60 * 1000
 )
@@ -372,6 +376,12 @@ function main(): void {
               : 'PR checks failed; PR was auto-closed.'
           )
         }
+
+        console.log(`[changeversion] PR #${prNumber} checks passed. Waiting for mergeability...`)
+        waitForPrMergeability(
+          () => loadGhPrMergeability(prNumber as number),
+          PR_MERGEABILITY_TIMEOUT_MS
+        )
 
         runInheritOrThrow(commandFor('gh'), [
           'pr',
