@@ -3,6 +3,7 @@ import type { Hono } from 'hono'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { getWebAssetsDirCandidates } from './web-assets.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -28,14 +29,10 @@ export interface RunningServer {
 }
 
 function getWebAssetsDir(): string {
-  const devPath = join(__dirname, '..', '..', 'web', 'dist')
-  const prodPath = join(__dirname, '..', 'web')
-
-  if (existsSync(prodPath)) {
-    return prodPath
-  }
-  if (existsSync(devPath)) {
-    return devPath
+  for (const candidate of getWebAssetsDirCandidates(__dirname)) {
+    if (existsSync(candidate)) {
+      return candidate
+    }
   }
 
   throw new Error('Web assets not found. Make sure to build the web package first.')

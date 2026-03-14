@@ -356,12 +356,40 @@ export class CliExecutor {
 
   /**
    * 流式执行任意命令（数组形式）
+   *
+   * 字面量 `openspec` 会自动通过已解析的 CLI runner 执行，
+   * 其它命令保持原始 spawn 行为。
    */
   executeCommandStream(
     command: readonly string[],
     onEvent: (event: CliStreamEvent) => void
   ): () => void {
     const [cmd, ...cmdArgs] = command
+
+    if (cmd === 'openspec') {
+      let cancelResolved: (() => void) | null = null
+      let cancelled = false
+
+      void this.executeStream([...cmdArgs], onEvent)
+        .then((cancel) => {
+          if (cancelled) {
+            cancel()
+            return
+          }
+          cancelResolved = cancel
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err)
+          onEvent({ type: 'stderr', data: message })
+          onEvent({ type: 'exit', exitCode: null })
+        })
+
+      return () => {
+        cancelled = true
+        cancelResolved?.()
+      }
+    }
+
     onEvent({ type: 'command', data: command.join(' ') })
 
     const child = spawn(cmd, cmdArgs, {

@@ -303,19 +303,6 @@ The system SHALL do second thing.
       await rm(emptyDir, { recursive: true, force: true })
     })
 
-    it('should handle project with AGENTS.md', async () => {
-      await writeFile(
-        join(testProjectDir, 'openspec', 'AGENTS.md'),
-        '# Agent Instructions\n\nInstructions for AI agents.',
-        'utf-8'
-      )
-
-      const snapshot = await generateSnapshot(testProjectDir)
-
-      expect(snapshot.agentsMd).toBeDefined()
-      expect(snapshot.agentsMd).toContain('Agent Instructions')
-    })
-
     it('should generate consistent timestamps in ISO format', async () => {
       const snapshot = await generateSnapshot(testProjectDir)
 

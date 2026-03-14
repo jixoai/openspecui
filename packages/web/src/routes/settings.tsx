@@ -20,7 +20,7 @@ import { applyTheme, getStoredTheme, persistTheme, type Theme } from '@/lib/them
 import { queryClient, trpc, trpcClient } from '@/lib/trpc'
 import { useCliRunner } from '@/lib/use-cli-runner'
 import { useServerStatus } from '@/lib/use-server-status'
-import { useConfigSubscription, useConfiguredToolsSubscription } from '@/lib/use-subscription'
+import { useConfigSubscription } from '@/lib/use-subscription'
 import { OFFICIAL_APP_BASE_URL } from '@openspecui/core/hosted-app'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
@@ -45,9 +45,16 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-
-type InitToolsMode = 'auto' | 'selected' | 'all'
-type InitProfileOverride = 'default' | 'core' | 'custom'
+import {
+  buildSettingsInitArgs,
+  canAutoInit,
+  countSelectedToolActions,
+  formatSelectedInitLabel,
+  getSettingsInitActionState,
+  getToolInitStatus,
+  type InitProfileOverride,
+  type InitToolsMode,
+} from './settings-init'
 
 function formatExecutePath(command: string, args: readonly string[] = []): string {
   const quote = (token: string): string => {
@@ -161,11 +168,12 @@ export function Settings() {
   const [apiUrl, setApiUrl] = useState(getApiBaseUrl() || '')
   const [appBaseUrl, setAppBaseUrl] = useState('')
   const [cliCommand, setCliCommand] = useState('')
-  const [selectedTools, setSelectedTools] = useState<string[]>([])
+  const [manualSelectedTools, setManualSelectedTools] = useState<string[]>([])
   const [showInitModal, setShowInitModal] = useState(false)
   const [showInstallModal, setShowInstallModal] = useState(false)
   const [initToolsMode, setInitToolsMode] = useState<InitToolsMode>('auto')
   const [initProfileOverride, setInitProfileOverride] = useState<InitProfileOverride>('default')
+  const [initForce, setInitForce] = useState(true)
 
   const initRunner = useCliRunner()
   const installRunner = useCliRunner()
@@ -209,7 +217,6 @@ export function Settings() {
     refetch: resniffCli,
   } = useQuery({
     ...trpc.cli.sniffGlobalCli.queryOptions(),
-    // 每次进入页面都重新嗅探
     staleTime: 0,
     gcTime: 0,
     enabled: !inStaticMode,
@@ -230,10 +237,18 @@ export function Settings() {
     enabled: !inStaticMode,
   })
 
-  // 获取所有工具列表（包括 available: false 的）
+  // 获取所有工具列表
   // Skip in static mode
   const { data: allTools } = useQuery({
     ...trpc.cli.getAllTools.queryOptions(),
+    enabled: !inStaticMode,
+  })
+  const {
+    data: detectedProjectTools,
+    isLoading: isLoadingDetectedProjectTools,
+    refetch: refetchDetectedProjectTools,
+  } = useQuery({
+    ...trpc.cli.getDetectedProjectTools.queryOptions(),
     enabled: !inStaticMode,
   })
   const {
@@ -245,25 +260,64 @@ export function Settings() {
     enabled: !inStaticMode,
   })
 
-  // 分组：available: true 的工具和 available: false 的工具
+  const toolInitStateInput = useMemo(() => {
+    if (!opsxProfileState?.available || !opsxProfileState.delivery) {
+      return null
+    }
+    return {
+      delivery: opsxProfileState.delivery,
+      workflows: opsxProfileState.workflows,
+    }
+  }, [opsxProfileState?.available, opsxProfileState?.delivery, opsxProfileState?.workflows])
+
+  const { data: toolInitStates, refetch: refetchToolInitStates } = useQuery({
+    ...trpc.cli.getToolInitStates.queryOptions(
+      toolInitStateInput ?? { delivery: 'both', workflows: [] }
+    ),
+    enabled: !inStaticMode && toolInitStateInput !== null,
+  })
+
   const nativeTools = useMemo(() => allTools?.filter((t) => t.available) ?? [], [allTools])
-  const otherTools = useMemo(() => allTools?.filter((t) => !t.available) ?? [], [allTools])
   const cliSupportedToolIds = useMemo(() => nativeTools.map((t) => t.value), [nativeTools])
   const cliSupportedTools = useMemo(() => new Set(cliSupportedToolIds), [cliSupportedToolIds])
-  const selectableToolIds = cliSupportedToolIds
   const cliSupportedToolsKey = useMemo(() => cliSupportedToolIds.join('|'), [cliSupportedToolIds])
-  const lastSyncedToolsKeyRef = useRef<string>('')
-
-  // 订阅已配置的工具列表（响应式）
-  const { data: configuredTools } = useConfiguredToolsSubscription()
+  const detectedProjectToolIds = useMemo(
+    () => detectedProjectTools?.map((tool) => tool.value) ?? [],
+    [detectedProjectTools]
+  )
+  const toolInitStateById = useMemo(
+    () => new Map((toolInitStates ?? []).map((state) => [state.toolId, state])),
+    [toolInitStates]
+  )
+  const initializedToolIds = useMemo(
+    () =>
+      cliSupportedToolIds.filter(
+        (toolId) => getToolInitStatus(toolInitStateById, toolId) === 'initialized'
+      ),
+    [cliSupportedToolIds, toolInitStateById]
+  )
+  const initializedToolSet = useMemo(() => new Set(initializedToolIds), [initializedToolIds])
+  const initializedToolIdsKey = useMemo(() => initializedToolIds.join('|'), [initializedToolIds])
+  const selectableToolIds = useMemo(
+    () =>
+      cliSupportedToolIds.filter(
+        (toolId) => getToolInitStatus(toolInitStateById, toolId) !== 'initialized'
+      ),
+    [cliSupportedToolIds, toolInitStateById]
+  )
+  const selectedTools = useMemo(
+    () =>
+      manualSelectedTools.filter(
+        (toolId) => cliSupportedTools.has(toolId) && !initializedToolSet.has(toolId)
+      ),
+    [cliSupportedTools, initializedToolSet, manualSelectedTools]
+  )
 
   // 同步配置到本地状态（只有用户配置了才显示）
   useEffect(() => {
-    // 只有当配置中有值时才同步到 input
     if (config?.cli?.command) {
       setCliCommand(formatExecutePath(config.cli.command, config.cli.args ?? []))
     } else {
-      // 用户没有配置时，清空 input
       setCliCommand('')
     }
   }, [config?.cli?.args, config?.cli?.command])
@@ -288,28 +342,39 @@ export function Settings() {
 
   // 安装完成后重新嗅探
   const handleInstallSuccess = useCallback(() => {
-    // 重新嗅探全局 CLI
     resniffCli()
-    // 重新检查 CLI 可用性
     recheckCli()
-    // 关闭安装模态框
     setShowInstallModal(false)
   }, [resniffCli, recheckCli])
 
   // 计算显示的 placeholder
   const cliPlaceholder = cliSniffResult?.hasGlobal
-    ? `openspec (v${cliSniffResult.version || 'detected'})`
+    ? 'openspec (v' + (cliSniffResult.version || 'detected') + ')'
     : 'npx @fission-ai/openspec'
 
-  // 同步已配置的工具到选中状态
   useEffect(() => {
-    if (!configuredTools || configuredTools.length === 0) return
-    const next = configuredTools.filter((t) => cliSupportedTools.has(t)).sort()
-    const signature = `${cliSupportedToolsKey}|${next.join(',')}`
-    if (signature === lastSyncedToolsKeyRef.current) return
-    lastSyncedToolsKeyRef.current = signature
-    setSelectedTools(next)
-  }, [configuredTools, cliSupportedToolsKey])
+    setManualSelectedTools((prev) => {
+      const next = prev.filter(
+        (toolId) => cliSupportedTools.has(toolId) && !initializedToolSet.has(toolId)
+      )
+      return prev.length === next.length && prev.every((toolId, index) => toolId === next[index])
+        ? prev
+        : next
+    })
+  }, [cliSupportedTools, cliSupportedToolsKey, initializedToolSet, initializedToolIdsKey])
+
+  const selectedToolActionCounts = useMemo(
+    () => countSelectedToolActions(toolInitStateById, selectedTools),
+    [selectedTools, toolInitStateById]
+  )
+  const initializedToolsCount = useMemo(
+    () => (toolInitStates ?? []).filter((state) => state.status === 'initialized').length,
+    [toolInitStates]
+  )
+  const repairableToolsCount = useMemo(
+    () => (toolInitStates ?? []).filter((state) => state.status === 'partial').length,
+    [toolInitStates]
+  )
 
   // 打开 init modal
   const startInit = (mode: InitToolsMode) => {
@@ -326,27 +391,22 @@ export function Settings() {
     }
   }, [showInitModal, cancelInit, resetInit])
 
+  const initArgs = useMemo(
+    () =>
+      buildSettingsInitArgs({
+        mode: initToolsMode,
+        selectedToolIds: selectedTools,
+        cliSupportedToolIds: cliSupportedTools,
+        profileOverride: initProfileOverride,
+        force: initForce,
+      }),
+    [cliSupportedTools, initForce, initProfileOverride, initToolsMode, selectedTools]
+  )
+
   useEffect(() => {
     if (!showInitModal) return
-    const args = ['init']
-    if (initToolsMode === 'selected') {
-      const selectedCliTools = selectedTools.filter((toolId) => cliSupportedTools.has(toolId))
-      args.push('--tools', selectedCliTools.length > 0 ? selectedCliTools.join(',') : 'none')
-    } else if (initToolsMode === 'all') {
-      args.push('--tools', 'all')
-    }
-    if (initProfileOverride !== 'default') {
-      args.push('--profile', initProfileOverride)
-    }
-    initCommands.replaceAll([{ command: 'openspec', args }])
-  }, [
-    cliSupportedTools,
-    initCommands,
-    initProfileOverride,
-    initToolsMode,
-    selectedTools,
-    showInitModal,
-  ])
+    initCommands.replaceAll([{ command: 'openspec', args: initArgs }])
+  }, [initArgs, initCommands, showInitModal])
 
   useEffect(() => {
     if (showInstallModal) {
@@ -362,42 +422,61 @@ export function Settings() {
 
   useEffect(() => {
     if (initStatus !== 'success') return
-    void Promise.allSettled([refetchOpsxProfileState(), recheckCli(), resniffCli()])
-  }, [initStatus, refetchOpsxProfileState, recheckCli, resniffCli])
+    void Promise.allSettled([
+      refetchOpsxProfileState(),
+      refetchDetectedProjectTools(),
+      refetchToolInitStates(),
+      recheckCli(),
+      resniffCli(),
+    ])
+  }, [
+    initStatus,
+    refetchDetectedProjectTools,
+    refetchOpsxProfileState,
+    refetchToolInitStates,
+    recheckCli,
+    resniffCli,
+  ])
 
-  // 判断工具是否已配置（不可取消）
-  const isToolConfigured = (tool: string) => configuredTools?.includes(tool) ?? false
+  const isToolInitialized = (toolId: string) =>
+    getToolInitStatus(toolInitStateById, toolId) === 'initialized'
 
-  // 切换工具选择（已配置的工具不能取消）
-  const toggleTool = (tool: string) => {
-    if (!cliSupportedTools.has(tool)) return
-    if (isToolConfigured(tool)) return // 已配置的工具不能取消
-    setSelectedTools((prev) =>
-      prev.includes(tool) ? prev.filter((t) => t !== tool) : [...prev, tool]
+  const toggleTool = (toolId: string) => {
+    if (!cliSupportedTools.has(toolId) || isToolInitialized(toolId)) return
+    setManualSelectedTools((prev) =>
+      prev.includes(toolId) ? prev.filter((id) => id !== toolId) : [...prev, toolId]
     )
   }
 
-  // 全选/取消全选（保留已配置的工具）
   const toggleAllTools = () => {
-    if (!allTools) return
-    const selectableToolIds = allTools.filter((t) => t.available).map((t) => t.value)
-    const unconfiguredTools = selectableToolIds.filter((t) => !isToolConfigured(t))
-    const allUnconfiguredSelected = unconfiguredTools.every((t) => selectedTools.includes(t))
+    const allSelectableSelected =
+      selectableToolIds.length > 0 &&
+      selectableToolIds.every((toolId) => manualSelectedTools.includes(toolId))
 
-    if (allUnconfiguredSelected) {
-      // 取消所有未配置的工具，保留已配置的
-      setSelectedTools(configuredTools ?? [])
-    } else {
-      // 全选所有可用工具
-      setSelectedTools([...selectableToolIds])
+    if (allSelectableSelected) {
+      setManualSelectedTools([])
+      return
     }
+
+    setManualSelectedTools([...selectableToolIds])
   }
 
-  // 计算新工具数量（未配置但已选中的）
-  const newToolsCount = selectedTools.filter(
-    (t) => cliSupportedTools.has(t) && !isToolConfigured(t)
-  ).length
+  const newToolsCount = selectedToolActionCounts.newCount
+  const repairToolsCount = selectedToolActionCounts.repairCount
+  const selectedInitLabel = formatSelectedInitLabel(selectedToolActionCounts)
+  const hasSelectedToolActions = newToolsCount + repairToolsCount > 0
   const isManualToolsMode = initToolsMode === 'selected'
+  const autoInitDisabled = isLoadingDetectedProjectTools || !canAutoInit(detectedProjectToolIds)
+  const currentInitAction = useMemo(
+    () =>
+      getSettingsInitActionState({
+        mode: initToolsMode,
+        selectedLabel: selectedInitLabel,
+        autoInitDisabled,
+        hasSelectedToolActions,
+      }),
+    [autoInitDisabled, hasSelectedToolActions, initToolsMode, selectedInitLabel]
+  )
 
   const handleCloseInit = () => {
     setShowInitModal(false)
@@ -1307,7 +1386,6 @@ export function Settings() {
                 <code className="bg-muted rounded px-1">openspec/</code> with specs, changes, and
                 archive directories.
               </p>
-
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="space-y-1.5">
                   <span className="text-sm font-medium">Init Mode</span>
@@ -1343,151 +1421,126 @@ export function Settings() {
                   </p>
                 </label>
               </div>
-
               {/* Tool Selection */}
               <div className={`space-y-4 ${isManualToolsMode ? '' : 'opacity-60'}`}>
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium">AI Tools Configuration</label>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">AI Tools Configuration</label>
+                    <p className="text-muted-foreground text-sm">
+                      Color encodes current init state. Hover a tool for the exact status.
+                    </p>
+                  </div>
                   <button
                     onClick={toggleAllTools}
                     disabled={!isManualToolsMode}
-                    className="text-primary text-xs hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                    className="text-primary shrink-0 text-xs hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {selectedTools.filter((t) => selectableToolIds.includes(t)).length ===
-                    selectableToolIds.length
+                    {selectedTools.length > 0 && selectedTools.length === selectableToolIds.length
                       ? 'Deselect All'
                       : 'Select All'}
                   </button>
                 </div>
-                <p className="text-muted-foreground text-sm">
-                  Select which AI tools to configure when using{' '}
-                  <code className="bg-muted rounded px-1">Use selected tools</code>.
-                  Already-configured tools cannot be deselected.
-                </p>
 
-                {/* Natively supported providers */}
                 <div>
                   <p className="text-muted-foreground mb-2 text-xs font-medium">
-                    Natively supported providers (✔ OpenSpec custom slash commands available)
+                    Natively supported providers (OpenSpec custom commands + skills)
                   </p>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
                     {nativeTools.map((tool) => {
-                      const configured = isToolConfigured(tool.value)
+                      const status = getToolInitStatus(toolInitStateById, tool.value)
+                      const initialized = status === 'initialized'
+                      const repairable = status === 'partial'
                       const selected = selectedTools.includes(tool.value)
+                      const statusTitle = initialized
+                        ? 'Initialized: exact match for current delivery/workflows'
+                        : repairable
+                          ? 'Partial: detected artifacts need repair for current delivery/workflows'
+                          : 'Uninitialized: no generated artifacts detected'
                       return (
                         <button
                           key={tool.value}
                           onClick={() => toggleTool(tool.value)}
-                          disabled={configured || !isManualToolsMode}
-                          title={configured ? 'Already configured' : tool.name}
-                          className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-left text-xs transition-colors ${
-                            configured
-                              ? 'cursor-not-allowed border-green-500/50 bg-green-500/10 text-green-600'
-                              : selected
-                                ? 'border-primary bg-primary/10 text-primary'
-                                : 'border-border hover:bg-muted'
+                          disabled={initialized || !isManualToolsMode}
+                          title={statusTitle}
+                          className={`flex min-w-0 items-center gap-1.5 rounded border px-2.5 py-1.5 text-left text-xs font-medium transition-colors ${
+                            initialized
+                              ? 'cursor-not-allowed border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                              : repairable
+                                ? 'text-foreground border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/15'
+                                : selected
+                                  ? 'border-primary bg-primary/10 text-primary'
+                                  : 'border-border hover:bg-muted'
                           }`}
                         >
-                          {(configured || selected) && (
-                            <Check
-                              className={`h-3 w-3 shrink-0 ${configured ? 'text-green-600' : ''}`}
-                            />
-                          )}
-                          <span className="truncate">{tool.name}</span>
+                          <span className="min-w-0 flex-1 truncate">{tool.name}</span>
+                          {initialized ? (
+                            <CheckCircle className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-300" />
+                          ) : repairable ? (
+                            <AlertTriangle className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-300" />
+                          ) : selected ? (
+                            <Check className="h-3 w-3 shrink-0" />
+                          ) : null}
                         </button>
                       )
                     })}
                   </div>
                 </div>
 
-                {/* Other tools (Universal AGENTS.md) */}
-                {otherTools.length > 0 && (
-                  <div>
-                    <p className="text-muted-foreground mb-2 text-xs font-medium">
-                      Other tools (use Universal AGENTS.md for Amp, VS Code, GitHub Copilot, …)
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {otherTools.map((tool) => {
-                        const configured = isToolConfigured(tool.value)
-                        const selected = selectedTools.includes(tool.value)
-                        // 对于 Universal AGENTS.md，显示为 "Universal AGENTS.md (always available)"
-                        const displayName =
-                          tool.value === 'agents' ? 'Universal AGENTS.md' : tool.name
-                        const annotation = tool.value === 'agents' ? 'always available' : undefined
-                        return (
-                          <button
-                            key={tool.value}
-                            onClick={() => toggleTool(tool.value)}
-                            disabled={configured || !tool.available || !isManualToolsMode}
-                            title={
-                              configured
-                                ? 'Already configured'
-                                : !tool.available
-                                  ? 'This helper is auto-detected via AGENTS.md (no init needed)'
-                                  : tool.name
-                            }
-                            className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-xs transition-colors ${
-                              configured
-                                ? 'cursor-not-allowed border-green-500/50 bg-green-500/10 text-green-600'
-                                : !tool.available
-                                  ? 'border-border text-muted-foreground cursor-not-allowed border-dashed'
-                                  : selected
-                                    ? 'border-primary bg-primary/10 text-primary'
-                                    : 'border-border hover:bg-muted'
-                            }`}
-                          >
-                            {(configured || selected) && (
-                              <Check
-                                className={`h-3 w-3 shrink-0 ${configured ? 'text-green-600' : ''}`}
-                              />
-                            )}
-                            <span>{displayName}</span>
-                            {annotation && (
-                              <span className="text-muted-foreground">({annotation})</span>
-                            )}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {configuredTools && configuredTools.length > 0 && (
-                  <p className="text-muted-foreground text-xs">
-                    <span className="inline-flex items-center gap-1">
-                      <span className="h-2 w-2 rounded-full bg-green-500/50" />
-                      {configuredTools.length} tool{configuredTools.length > 1 ? 's' : ''} already
-                      configured
+                <div className="text-muted-foreground flex flex-wrap gap-4 text-xs">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500/50" />
+                    {initializedToolsCount} initialized
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-amber-500/50" />
+                    {repairableToolsCount} repair needed
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="bg-primary/50 h-2 w-2 rounded-full" />
+                    {selectedTools.length} selected
+                  </span>
+                </div>
+              </div>
+              <div className="border-border flex flex-row flex-wrap gap-2.5 border-t pt-3 md:flex-nowrap">
+                {/*md:grid md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] md:items-start md:gap-4*/}
+                <button
+                  onClick={() => startInit(initToolsMode)}
+                  disabled={currentInitAction.disabled}
+                  title={currentInitAction.title}
+                  className="bg-primary text-primary-foreground inline-flex grow-0 items-start justify-start gap-2 self-start rounded-md px-3.5 py-2 text-[13px] font-medium leading-5 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 md:min-w-0 md:max-w-none md:text-balance"
+                >
+                  <FolderPlus className="mt-1 h-4 w-4 shrink-0" />
+                  {currentInitAction.label}
+                </button>
+                <label className="border-border bg-background/50 flex min-w-0 flex-col gap-1 rounded-md border px-3 py-2">
+                  <span className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="break-word text-xs font-medium leading-4">
+                      Force non-interactive init
                     </span>
-                  </p>
-                )}
+                    <button
+                      type="button"
+                      onClick={() => setInitForce((prev) => !prev)}
+                      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+                        initForce ? 'bg-primary' : 'bg-muted-foreground/30'
+                      }`}
+                      aria-pressed={initForce}
+                      aria-label="Toggle force init"
+                    >
+                      <span
+                        className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                          initForce ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </span>
+                  <span className="text-muted-foreground text-[11px] leading-4">
+                    Enabled by default so{' '}
+                    <code className="bg-muted rounded px-1">openspec init --tools ...</code> also
+                    writes <code className="bg-muted rounded px-1">openspec/config.yaml</code>.
+                  </span>
+                </label>
               </div>
-
-              {/* Init Buttons */}
-              <div className="border-border flex flex-wrap gap-2 border-t pt-2">
-                <button
-                  onClick={() => startInit('auto')}
-                  className="bg-primary text-primary-foreground flex items-center gap-2 rounded-md px-4 py-2 hover:opacity-90"
-                >
-                  <FolderPlus className="h-4 w-4" />
-                  Initialize (auto-detect)
-                </button>
-                <button
-                  onClick={() => startInit('selected')}
-                  disabled={!isManualToolsMode}
-                  className="border-border hover:bg-muted rounded-md border px-4 py-2"
-                >
-                  {newToolsCount > 0
-                    ? `Initialize selected (${newToolsCount} new)`
-                    : 'Initialize selected'}
-                </button>
-                <button
-                  onClick={() => startInit('all')}
-                  className="border-border hover:bg-muted rounded-md border px-4 py-2"
-                >
-                  Initialize with all tools
-                </button>
-              </div>
+              <p className="text-muted-foreground text-xs">{currentInitAction.helperText}</p>
             </div>
           </section>
         </>
@@ -1520,7 +1573,10 @@ export function Settings() {
                   <button
                     onClick={() => initCommands.runAll()}
                     className="bg-primary text-primary-foreground rounded-md px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={initStatus === 'running'}
+                    disabled={
+                      initStatus === 'running' ||
+                      (initToolsMode === 'selected' && !hasSelectedToolActions)
+                    }
                   >
                     {initStatus === 'running' ? (
                       <Loader2 className="h-4 w-4 animate-spin" />

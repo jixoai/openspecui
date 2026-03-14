@@ -2,6 +2,7 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 import { defineConfig } from 'vite'
+import { createCliWebSyncPlugin } from './vite.sync-cli-web'
 
 function resolveBackendTarget(): string {
   const explicit =
@@ -27,17 +28,15 @@ export default defineConfig(({ isSsrBuild }) => {
   }
   console.log(`[dev-proxy] backend target => ${backendTarget}`)
 
-  // Always use base: '/' - base path is now configured at runtime via window.__OPENSPEC_BASE_PATH__
   return {
     base: '/',
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), createCliWebSyncPlugin(__dirname)],
     resolve: {
       alias,
     },
     server: {
       port: 13003,
       hmr: {
-        // 关键：可以尝试指定一个专门的端口给 HMR 使用，避开 13003 的业务代理冲突
         port: 13004,
         protocol: 'ws',
       },
@@ -60,7 +59,6 @@ export default defineConfig(({ isSsrBuild }) => {
     },
     test: {
       projects: [
-        // Unit tests (React components, pure logic) — jsdom
         {
           resolve: {
             alias,
@@ -72,13 +70,10 @@ export default defineConfig(({ isSsrBuild }) => {
             include: ['src/**/*.test.{ts,tsx}'],
           },
         },
-        // Storybook browser tests — separate config file
         './vitest.storybook.config.ts',
       ],
     },
     ssr: {
-      // SSR build: bundle all dependencies into entry-server.js
-      // This eliminates runtime dependencies for the SSG CLI
       noExternal: isSsrBuild ? true : [],
     },
   }

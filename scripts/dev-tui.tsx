@@ -12,7 +12,6 @@ import {
 } from '@opentui/core'
 import { createRoot, useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/react'
 import { Terminal as HeadlessTerminal } from '@xterm/headless'
-import { existsSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -1170,7 +1169,6 @@ const port = await findAvailablePort(preferredPort, 10)
 const apiUrl = process.env.VITE_API_URL || `http://localhost:${port}`
 const repoRoot = process.cwd()
 const webDistDir = getHostedAppWebDistPath(repoRoot)
-const webDistIndexPath = join(webDistDir, 'index.html')
 const webPackageVersion = await readWorkspacePackageVersion(
   join(repoRoot, 'packages', 'web', 'package.json')
 )
@@ -1194,18 +1192,16 @@ if (searchBootstrap.exitCode !== 0) {
   throw new Error(`Failed to build @openspecui/search (exit ${searchBootstrap.exitCode})`)
 }
 
-if (!existsSync(webDistIndexPath)) {
-  const webBootstrap = Bun.spawnSync({
-    cmd: ['pnpm', '--filter', '@openspecui/web', 'build'],
-    cwd: repoRoot,
-    stdout: 'inherit',
-    stderr: 'inherit',
-  })
-  if (webBootstrap.exitCode !== 0) {
-    throw new Error(
-      `Failed to build @openspecui/web for hosted app dev (exit ${webBootstrap.exitCode})`
-    )
-  }
+const webBootstrap = Bun.spawnSync({
+  cmd: ['pnpm', '--filter', '@openspecui/web', 'build:dist'],
+  cwd: repoRoot,
+  stdout: 'inherit',
+  stderr: 'inherit',
+})
+if (webBootstrap.exitCode !== 0) {
+  throw new Error(
+    `Failed to build @openspecui/web dist assets for dev mode (exit ${webBootstrap.exitCode})`
+  )
 }
 
 const tasks: DevTask[] = createDevTasks({

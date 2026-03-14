@@ -96,8 +96,6 @@ export interface ExportSnapshot {
   }>
   /** Project.md content */
   projectMd?: string
-  /** AGENTS.md content */
-  agentsMd?: string
   /** OPSX configuration data (for Config view) */
   opsx?: {
     configYaml?: string

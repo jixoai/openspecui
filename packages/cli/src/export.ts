@@ -453,22 +453,14 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
     })
   )
 
-  // Get project.md and AGENTS.md
+  // Get project.md
   let projectMd: string | undefined
-  let agentsMd: string | undefined
 
   try {
     const projectMdContent = await adapter.readProjectMd()
     projectMd = projectMdContent ?? undefined
   } catch {
     // project.md is optional
-  }
-
-  try {
-    const agentsMdContent = await adapter.readAgentsMd()
-    agentsMd = agentsMdContent ?? undefined
-  } catch {
-    // AGENTS.md is optional
   }
 
   // OPSX config snapshot
@@ -626,7 +618,6 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
     changes,
     archives,
     projectMd,
-    agentsMd,
     opsx: {
       configYaml,
       schemas,

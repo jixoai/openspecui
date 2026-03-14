@@ -118,11 +118,22 @@ export {
   getAvailableToolIds,
   getAvailableTools,
   getConfiguredTools,
+  getDetectedProjectTools,
   getToolById,
   isToolConfigured,
   type AIToolOption,
   type ToolConfig,
 } from './tool-config.js'
+
+// Tool initialization state detection
+export {
+  TOOL_WORKFLOW_TO_SKILL_DIR,
+  getToolInitStates,
+  type ToolInitDelivery,
+  type ToolInitState,
+  type ToolInitStatus,
+  type ToolWorkflowId,
+} from './tool-init-state.js'
 
 // Export types for static site generation
 export {

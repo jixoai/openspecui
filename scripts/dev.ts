@@ -21,6 +21,17 @@ function parseArgs(argv: string[]): CliOptions {
   return opts
 }
 
+function runBootstrap(command: string[], env: NodeJS.ProcessEnv, label: string): void {
+  const result = spawnSync('pnpm', command, {
+    stdio: 'inherit',
+    env,
+  })
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1)
+  }
+  console.log(`Bootstrapped ${label}`)
+}
+
 const userArgs = parseArgs(process.argv.slice(2))
 
 const preferred =
@@ -52,21 +63,14 @@ if (userArgs.dir) {
   console.log(`Project dir: ${userArgs.dir}`)
 }
 
-console.log('Building @openspecui/core and @openspecui/search before starting dev processes...')
-const coreBuild = spawnSync('pnpm', ['--filter', '@openspecui/core', 'build'], {
-  stdio: 'inherit',
-  env: process.env,
-})
-if (coreBuild.status !== 0) {
-  process.exit(coreBuild.status ?? 1)
-}
-const searchBuild = spawnSync('pnpm', ['--filter', '@openspecui/search', 'build'], {
-  stdio: 'inherit',
-  env: process.env,
-})
-if (searchBuild.status !== 0) {
-  process.exit(searchBuild.status ?? 1)
-}
+console.log('Bootstrapping workspace builds before starting dev processes...')
+runBootstrap(['--filter', '@openspecui/core', 'build'], process.env, '@openspecui/core')
+runBootstrap(['--filter', '@openspecui/search', 'build'], process.env, '@openspecui/search')
+runBootstrap(
+  ['--filter', '@openspecui/web', 'build:dist'],
+  webEnv,
+  '@openspecui/web dist -> openspecui/web'
+)
 
 const core = spawn('pnpm', ['--filter', '@openspecui/core', 'dev'], {
   stdio: 'inherit',
@@ -77,6 +81,10 @@ const search = spawn('pnpm', ['--filter', '@openspecui/search', 'dev'], {
   env: process.env,
 })
 const server = spawn('pnpm', serverArgs, { stdio: 'inherit', env: serverEnv })
+const webDist = spawn('pnpm', ['--filter', '@openspecui/web', 'dev:dist'], {
+  stdio: 'inherit',
+  env: webEnv,
+})
 const web = spawn('pnpm', ['--filter', '@openspecui/web', 'dev'], { stdio: 'inherit', env: webEnv })
 
 let isShuttingDown = false
@@ -86,6 +94,7 @@ const shutdown = (code?: number) => {
   core.kill('SIGINT')
   search.kill('SIGINT')
   server.kill('SIGINT')
+  webDist.kill('SIGINT')
   web.kill('SIGINT')
   if (code !== undefined) process.exit(code)
 }
@@ -105,6 +114,11 @@ search.on('exit', (code) => {
 
 server.on('exit', (code) => {
   console.log(`server exited with code ${code}`)
+  shutdown(code ?? undefined)
+})
+
+webDist.on('exit', (code) => {
+  console.log(`web dist exited with code ${code}`)
   shutdown(code ?? undefined)
 })
 

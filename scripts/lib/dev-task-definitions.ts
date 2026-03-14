@@ -55,11 +55,11 @@ export function createDevTasks(config: DevTaskConfig): DevTask[] {
       autoStart: true,
     },
     {
-      id: 'web-dev',
-      name: 'Web Dev',
-      description: `Run @openspecui/web with VITE_API_URL=${apiUrl}.`,
+      id: 'web-dist-dev',
+      name: 'Web Dist Watch',
+      description: `Watch-build @openspecui/web dist output for the CLI with VITE_API_URL=${apiUrl}.`,
       command: 'pnpm',
-      args: ['--filter', '@openspecui/web', 'dev'],
+      args: ['--filter', '@openspecui/web', 'dev:dist'],
       env: {
         VITE_API_URL: apiUrl,
         OPENSPEC_SERVER_PORT: String(port),
@@ -79,6 +79,18 @@ export function createDevTasks(config: DevTaskConfig): DevTask[] {
         VITE_OPENSPECUI_APP_DEFAULT_API_URL: apiUrl,
       },
       autoStart: true,
+    },
+    {
+      id: 'web-dev',
+      name: 'Web Dev Server',
+      description: `Optional task. Runs the Vite HMR dev server with VITE_API_URL=${apiUrl}.`,
+      command: 'pnpm',
+      args: ['--filter', '@openspecui/web', 'dev'],
+      env: {
+        VITE_API_URL: apiUrl,
+        OPENSPEC_SERVER_PORT: String(port),
+      },
+      autoStart: false,
     },
     {
       id: 'website-dev',

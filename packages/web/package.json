@@ -23,7 +23,9 @@
     "test:browser": "vitest --retry 2 --project storybook",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
-    "test:browser:ci": "vitest run --retry 2 --project storybook"
+    "test:browser:ci": "vitest run --retry 2 --project storybook",
+    "build:dist": "vite build --minify false --emptyOutDir false",
+    "dev:dist": "vite build --watch --minify false --emptyOutDir false"
   },
   "devDependencies": {
     "@codemirror/commands": "^6.10.0",

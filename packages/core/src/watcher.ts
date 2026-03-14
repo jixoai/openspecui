@@ -104,7 +104,7 @@ export class OpenSpecWatcher extends EventEmitter {
 
     // Watch project-level files
     this.watchDir(this.openspecDir, (filename, eventType) => {
-      if (filename === 'project.md' || filename === 'AGENTS.md') {
+      if (filename === 'project.md') {
         this.emitDebounced(`project:${filename}`, {
           type: 'project',
           action: eventType === 'rename' ? 'create' : 'update',
