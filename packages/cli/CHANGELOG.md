@@ -1,5 +1,11 @@
 # openspecui
 
+## 2.1.3
+
+### Patch Changes
+
+- cb76966: Improve init/settings ergonomics, reduce noisy config persistence, and keep local web assets in sync for CLI and dev workflows.
+
 ## 2.1.2
 
 ### Patch Changes
