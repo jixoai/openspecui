@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { buildChannelCacheName } from './hosted-app-caches'
 import {
-  buildChannelCacheName,
+  buildVersionedNavigationShellMarker,
   buildVersionedNavigationShellUrl,
   hasHostedLaunchNavigationParams,
+  hasVersionedNavigationShellMarker,
+  isVersionedNavigationShellResponse,
   resolveChannelIdFromPathname,
   resolveVersionedNavigationShell,
 } from './service-worker-routing'
@@ -18,7 +21,7 @@ const manifest = {
       selector: 'latest',
       resolvedVersion: '2.1.2',
       rootPath: '/versions/latest/',
-      shellPath: '/versions/latest/index.html',
+      shellPath: '/versions/latest/',
       major: 2,
     },
     'v2.0': {
@@ -27,7 +30,7 @@ const manifest = {
       selector: '~2.0.0',
       resolvedVersion: '2.0.9',
       rootPath: '/versions/v2.0/',
-      shellPath: '/versions/v2.0/index.html',
+      shellPath: '/versions/v2.0/',
       major: 2,
       minor: 0,
     },
@@ -51,6 +54,12 @@ describe('service worker routing helpers', () => {
     expect(
       resolveVersionedNavigationShell(
         manifest,
+        new URL('https://app.openspecui.com/versions/v2.0/index.html?api=http://localhost:3100')
+      )?.id
+    ).toBe('v2.0')
+    expect(
+      resolveVersionedNavigationShell(
+        manifest,
         new URL('https://app.openspecui.com/versions/v2.0/assets/index.js')
       )
     ).toBeNull()
@@ -62,7 +71,41 @@ describe('service worker routing helpers', () => {
         manifest.channels['v2.0'],
         new URL('https://app.openspecui.com/versions/v2.0/settings?api=http://localhost:3100')
       ).toString()
-    ).toBe('https://app.openspecui.com/versions/v2.0/index.html')
+    ).toBe('https://app.openspecui.com/versions/v2.0/')
+  })
+
+  it('only accepts versioned shell responses that stay within the expected channel root', () => {
+    const requestUrl = new URL('https://app.openspecui.com/versions/v2.0/')
+
+    expect(
+      isVersionedNavigationShellResponse(
+        manifest.channels['v2.0'],
+        requestUrl,
+        'https://app.openspecui.com/versions/v2.0/',
+        'text/html; charset=utf-8'
+      )
+    ).toBe(true)
+
+    expect(
+      isVersionedNavigationShellResponse(
+        manifest.channels['v2.0'],
+        requestUrl,
+        'https://app.openspecui.com/index.html',
+        'text/html; charset=utf-8'
+      )
+    ).toBe(false)
+  })
+
+  it('detects versioned shell HTML markers in rewritten channel documents', () => {
+    const marker = buildVersionedNavigationShellMarker('v2.0')
+    expect(marker).toBe("window.__OPENSPEC_BASE_PATH__ = '/versions/v2.0/'")
+    expect(hasVersionedNavigationShellMarker('v2.0', `<script>${marker}</script>`)).toBe(true)
+    expect(
+      hasVersionedNavigationShellMarker(
+        'v2.0',
+        `<script>window.__OPENSPEC_BASE_PATH__ = '/'</script>`
+      )
+    ).toBe(false)
   })
 
   it('detects launch-driven navigation params separately from internal route state', () => {

@@ -68,49 +68,87 @@ describe('hosted launch relay', () => {
       storage,
       createChannel: () => null,
       windowId: 'window-a',
+      role: 'browser',
       ...createNoHeartbeatRuntime(),
     })
 
     const stop = relay.start(() => {})
 
     expect(relay.isLeader()).toBe(true)
-    expect(readHostedLaunchLeader(storage)?.windowId).toBe('window-a')
+    expect(readHostedLaunchLeader(storage)).toEqual({
+      windowId: 'window-a',
+      updatedAt: expect.any(Number),
+      role: 'browser',
+    })
 
     stop()
   })
 
-  it('forwards a launch to the current leader and receives an ack', async () => {
+  it('lets a pwa window take leadership from a browser window', () => {
+    const storage = createMemoryStorage()
+    const pair = createChannelPair()
+
+    const browserRelay = createHostedLaunchRelay({
+      storage,
+      createChannel: () => pair.primary,
+      windowId: 'browser-window',
+      role: 'browser',
+      ...createNoHeartbeatRuntime(),
+    })
+    const pwaRelay = createHostedLaunchRelay({
+      storage,
+      createChannel: () => pair.secondary,
+      windowId: 'pwa-window',
+      role: 'pwa',
+      ...createNoHeartbeatRuntime(),
+    })
+
+    const stopBrowser = browserRelay.start(() => {})
+    const stopPwa = pwaRelay.start(() => {})
+
+    expect(readHostedLaunchLeader(storage)?.windowId).toBe('pwa-window')
+    expect(readHostedLaunchLeader(storage)?.role).toBe('pwa')
+    expect(browserRelay.isLeader()).toBe(false)
+    expect(pwaRelay.isLeader()).toBe(true)
+
+    stopPwa()
+    stopBrowser()
+  })
+
+  it('forwards launches to the pwa leader and reports the forwarded-to-pwa result', async () => {
     vi.useFakeTimers()
     const storage = createMemoryStorage()
     const pair = createChannelPair()
     const launches: string[] = []
 
-    const leader = createHostedLaunchRelay({
+    const pwaRelay = createHostedLaunchRelay({
       storage,
       createChannel: () => pair.primary,
-      windowId: 'leader-window',
+      windowId: 'pwa-window',
+      role: 'pwa',
       ...createNoHeartbeatRuntime(),
     })
-    const follower = createHostedLaunchRelay({
+    const browserRelay = createHostedLaunchRelay({
       storage,
       createChannel: () => pair.secondary,
-      windowId: 'follower-window',
+      windowId: 'browser-window',
+      role: 'browser',
       ...createNoHeartbeatRuntime(),
     })
 
-    const stopLeader = leader.start((request) => {
+    const stopPwa = pwaRelay.start((request) => {
       launches.push(request.apiBaseUrl)
     })
-    const stopFollower = follower.start(() => {})
+    const stopBrowser = browserRelay.start(() => {})
 
-    const resultPromise = follower.dispatch({ apiBaseUrl: 'http://localhost:3100' })
+    const resultPromise = browserRelay.dispatch({ apiBaseUrl: 'http://localhost:3100' })
     await vi.advanceTimersByTimeAsync(450)
 
-    expect(await resultPromise).toBe('forwarded')
+    expect(await resultPromise).toBe('forwarded-to-pwa')
     expect(launches).toEqual(['http://localhost:3100'])
 
-    stopFollower()
-    stopLeader()
+    stopBrowser()
+    stopPwa()
     vi.useRealTimers()
   })
 
@@ -125,6 +163,7 @@ describe('hosted launch relay', () => {
       storage,
       createChannel: () => pair.primary,
       windowId: 'window-a',
+      role: 'browser',
       now: () => currentTime,
       ...createNoHeartbeatRuntime(),
     })
@@ -134,7 +173,7 @@ describe('hosted launch relay', () => {
 
     storage.setItem(
       'openspecui-app:pwa-leader',
-      JSON.stringify({ windowId: 'missing-window', updatedAt: currentTime })
+      JSON.stringify({ windowId: 'missing-window', updatedAt: currentTime, role: 'browser' })
     )
 
     const resultPromise = relay.dispatch({ apiBaseUrl: 'http://localhost:3200' })

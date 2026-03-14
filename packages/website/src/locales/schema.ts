@@ -20,10 +20,13 @@ export interface WebsiteLocale {
     title: string
     summary: string
     runnerLabel: string
-    liveLabel: string
-    liveSummary: string
-    hostedLabel: string
-    hostedSummary: string
+    appToggleLabel: string
+    appToggleSummary: string
+    appToggleEnabled: string
+    appToggleDisabled: string
+    runLabel: string
+    appOnSummary: string
+    appOffSummary: string
     exportLabel: string
     exportSummary: string
     compatibility: string

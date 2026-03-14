@@ -33,6 +33,11 @@
   padding-block-start: 0.5rem;
 }
 
+html.dark .hosted-shell-root .hosted-shell-tabs .tabs-button > button.tab-selected {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
 .hosted-shell-root[data-titlebar-overlay='true'] .tabs-header {
   padding-inline-start: var(--hosted-pwa-titlebar-left);
   padding-inline-end: var(--hosted-pwa-titlebar-right);

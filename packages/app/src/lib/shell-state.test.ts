@@ -50,7 +50,7 @@ describe('hosted shell state helpers', () => {
         },
         'v2.1'
       )
-    ).toBe('/versions/v2.1/index.html?api=http%3A%2F%2Flocalhost%3A13000&session=session-a')
+    ).toBe('/versions/v2.1/?api=http%3A%2F%2Flocalhost%3A13000&session=session-a')
   })
 
   it('normalizes persisted state and keeps the first tab active when activeTabId is invalid', () => {

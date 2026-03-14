@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createHostedAppPwaManifest } from './pwa-manifest'
 
 describe('hosted app pwa manifest', () => {
-  it('creates an installable standalone manifest with launch handling', () => {
+  it('creates an installable standalone manifest with launch handling and preferred link capture', () => {
     const manifest = createHostedAppPwaManifest()
 
     expect(manifest.id).toBe('/')
@@ -10,6 +10,7 @@ describe('hosted app pwa manifest', () => {
     expect(manifest.scope).toBe('/')
     expect(manifest.display).toBe('standalone')
     expect(manifest.display_override).toEqual(['window-controls-overlay', 'standalone'])
+    expect(manifest.handle_links).toBe('preferred')
     expect(manifest.launch_handler).toEqual({ client_mode: 'focus-existing' })
     expect(manifest.icons).toEqual([
       {

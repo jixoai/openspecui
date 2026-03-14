@@ -4,8 +4,14 @@ import type {
   HostedAppVersionManifest,
 } from '@openspecui/core/hosted-app'
 import {
+  buildAppShellCacheName,
   buildChannelCacheName,
+  MANIFEST_CACHE_NAME,
+} from './lib/hosted-app-caches'
+import {
   buildVersionedNavigationShellUrl,
+  hasVersionedNavigationShellMarker,
+  isVersionedNavigationShellResponse,
   renderServiceWorkerError,
   resolveChannelIdFromPathname,
   resolveVersionedNavigationShell,
@@ -13,9 +19,7 @@ import {
 
 declare const self: ServiceWorkerGlobalScope
 
-const APP_CACHE_NAME = 'openspecui-app:shell'
-const MANIFEST_CACHE_NAME = 'openspecui-app:manifest'
-const MANIFEST_REQUEST = new Request('/version.json')
+const MANIFEST_REQUEST = new Request(new URL('/version.json', self.location.origin).toString())
 
 async function staleWhileRevalidate(cacheName: string, request: Request | URL): Promise<Response> {
   const cache = await caches.open(cacheName)
@@ -50,6 +54,10 @@ async function cacheFirst(cacheName: string, request: Request | URL): Promise<Re
   return response
 }
 
+function shouldBypassManifestCache(request: Request): boolean {
+  return request.cache === 'no-store' || request.cache === 'reload'
+}
+
 async function parseManifestResponse(response: Response): Promise<HostedAppVersionManifest> {
   if (!response.ok) {
     throw new Error(`Failed to fetch version.json: ${response.status}`)
@@ -66,7 +74,7 @@ async function refreshManifest(): Promise<HostedAppVersionManifest> {
   const cache = await caches.open(MANIFEST_CACHE_NAME)
 
   try {
-    const response = await fetch(new Request('/version.json', { cache: 'no-store' }))
+    const response = await fetch(new Request(MANIFEST_REQUEST, { cache: 'no-store' }))
     if (!response.ok) {
       throw new Error(`Failed to fetch version.json: ${response.status}`)
     }
@@ -76,6 +84,27 @@ async function refreshManifest(): Promise<HostedAppVersionManifest> {
     const cached = await cache.match(MANIFEST_REQUEST)
     if (cached) {
       return parseManifestResponse(cached)
+    }
+    throw error
+  }
+}
+
+async function handleManifestRequest(request: Request): Promise<Response> {
+  if (!shouldBypassManifestCache(request)) {
+    return await cacheFirst(MANIFEST_CACHE_NAME, MANIFEST_REQUEST)
+  }
+
+  const cache = await caches.open(MANIFEST_CACHE_NAME)
+  try {
+    const response = await fetch(new Request(MANIFEST_REQUEST, { cache: 'no-store' }))
+    if (response.ok) {
+      await cache.put(MANIFEST_REQUEST, response.clone())
+    }
+    return response
+  } catch (error) {
+    const cached = await cache.match(MANIFEST_REQUEST)
+    if (cached) {
+      return cached
     }
     throw error
   }
@@ -91,6 +120,7 @@ async function cacheVersionedShellDocument(
   }
   const cache = await caches.open(cacheName)
   await cache.put(new Request(shellUrl.toString()), response.clone())
+  await cache.put(new Request(new URL('index.html', shellUrl).toString()), response.clone())
 }
 
 async function readCachedVersionedShellDocument(
@@ -98,7 +128,34 @@ async function readCachedVersionedShellDocument(
   shellUrl: URL
 ): Promise<Response | null> {
   const cache = await caches.open(cacheName)
-  return (await cache.match(new Request(shellUrl.toString()))) ?? null
+  const canonical = await cache.match(new Request(shellUrl.toString()))
+  if (canonical) {
+    return canonical
+  }
+  return (await cache.match(new Request(new URL('index.html', shellUrl).toString()))) ?? null
+}
+
+async function isSafeVersionedNavigationResponse(
+  channel: HostedAppChannelManifest,
+  requestUrl: URL,
+  response: Response
+): Promise<boolean> {
+  const looksLikeChannelResponse = isVersionedNavigationShellResponse(
+    channel,
+    requestUrl,
+    response.url,
+    response.headers.get('content-type')
+  )
+  if (!looksLikeChannelResponse) {
+    return false
+  }
+
+  try {
+    const content = await response.clone().text()
+    return hasVersionedNavigationShellMarker(channel.id, content)
+  } catch {
+    return false
+  }
 }
 
 async function fetchVersionedNavigationFromNetwork(
@@ -107,20 +164,31 @@ async function fetchVersionedNavigationFromNetwork(
   channel: HostedAppChannelManifest
 ): Promise<Response> {
   const requestUrl = new URL(request.url)
+  const cacheName = buildChannelCacheName(channel)
   const directResponse = await fetch(request)
-  if (directResponse.ok) {
-    await cacheVersionedShellDocument(buildChannelCacheName(channel), shellUrl, directResponse)
+
+  if (
+    directResponse.ok &&
+    (await isSafeVersionedNavigationResponse(channel, requestUrl, directResponse))
+  ) {
+    await cacheVersionedShellDocument(cacheName, shellUrl, directResponse)
     return directResponse
   }
 
-  if (requestUrl.pathname === shellUrl.pathname) {
-    return directResponse
-  }
-
-  const shellResponse = await fetch(new Request(shellUrl.toString()))
-  if (shellResponse.ok) {
-    await cacheVersionedShellDocument(buildChannelCacheName(channel), shellUrl, shellResponse)
+  const shellResponse = await fetch(new Request(shellUrl.toString(), { cache: 'no-store' }))
+  if (
+    shellResponse.ok &&
+    (await isSafeVersionedNavigationResponse(channel, shellUrl, shellResponse))
+  ) {
+    await cacheVersionedShellDocument(cacheName, shellUrl, shellResponse)
     return shellResponse
+  }
+
+  if (directResponse.ok || shellResponse.ok) {
+    return renderServiceWorkerError(
+      `Channel ${channel.id} resolved to an unexpected document.`,
+      502
+    )
   }
 
   return directResponse
@@ -172,6 +240,15 @@ async function handleVersionAsset(request: Request): Promise<Response> {
   return await staleWhileRevalidate(buildChannelCacheName(channel), request)
 }
 
+async function handleAppShellAsset(request: Request): Promise<Response> {
+  const manifest = await fetchManifest().catch(() => null)
+  if (!manifest) {
+    return fetch(request)
+  }
+
+  return await staleWhileRevalidate(buildAppShellCacheName(manifest.generatedAt), request)
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting())
 })
@@ -180,17 +257,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       await self.clients.claim()
-      const manifest = await refreshManifest().catch(() => null)
-      if (!manifest) return
-      const keep = new Set([
-        APP_CACHE_NAME,
-        MANIFEST_CACHE_NAME,
-        ...Object.values(manifest.channels).map((channel) => buildChannelCacheName(channel)),
-      ])
-      const cacheNames = await caches.keys()
-      await Promise.all(
-        cacheNames.filter((name) => !keep.has(name)).map((name) => caches.delete(name))
-      )
+      await refreshManifest().catch(() => null)
     })()
   )
 })
@@ -208,7 +275,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (url.pathname === '/version.json') {
-    event.respondWith(cacheFirst(MANIFEST_CACHE_NAME, MANIFEST_REQUEST))
+    event.respondWith(handleManifestRequest(request))
     return
   }
 
@@ -230,6 +297,6 @@ self.addEventListener('fetch', (event) => {
     url.pathname.startsWith('/assets/') ||
     url.pathname === '/logo.svg'
   ) {
-    event.respondWith(staleWhileRevalidate(APP_CACHE_NAME, request))
+    event.respondWith(handleAppShellAsset(request))
   }
 })

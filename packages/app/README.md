@@ -30,7 +30,7 @@ https://app.openspecui.com/?api=http%3A%2F%2Flocalhost%3A3100
 The shell resolves the backend's `openspecuiVersion` from the health endpoint, selects a compatible hosted channel from `version.json`, and then mounts a versioned entry like:
 
 ```text
-/versions/v2.0/index.html?api=http%3A%2F%2Flocalhost%3A3100&session=<session-id>
+/versions/v2.0/?api=http%3A%2F%2Flocalhost%3A3100&session=<session-id>
 ```
 
 Tabs remain in the root shell and can be reopened on later visits.

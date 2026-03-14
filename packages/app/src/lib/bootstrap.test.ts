@@ -66,6 +66,7 @@ describe('hosted app bootstrap helpers', () => {
 
     expect(register).toHaveBeenCalledWith('/service-worker.js', {
       scope: '/',
+      type: 'module',
     })
     expect(update).toHaveBeenCalledTimes(1)
   })

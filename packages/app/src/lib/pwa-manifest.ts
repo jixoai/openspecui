@@ -17,6 +17,7 @@ export interface HostedAppPwaManifest {
   background_color: string
   theme_color: string
   icons: readonly HostedAppPwaManifestIcon[]
+  handle_links: 'preferred'
   launch_handler: {
     client_mode: 'focus-existing'
   }
@@ -48,6 +49,7 @@ export function createHostedAppPwaManifest(): HostedAppPwaManifest {
         purpose: 'any',
       },
     ],
+    handle_links: 'preferred',
     launch_handler: {
       client_mode: 'focus-existing',
     },
