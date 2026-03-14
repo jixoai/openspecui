@@ -3,6 +3,7 @@ import type { Hono } from 'hono'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { getWebAssetsDirCandidates } from './web-assets.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -25,13 +26,6 @@ export interface RunningServer {
   /** The preferred port that was requested */
   preferredPort: number
   close: () => Promise<void>
-}
-
-export function getWebAssetsDirCandidates(runtimeDir: string): string[] {
-  const prodPath = join(runtimeDir, '..', 'web')
-  const devPath = join(runtimeDir, '..', '..', 'web', 'dist')
-
-  return [prodPath, devPath]
 }
 
 function getWebAssetsDir(): string {

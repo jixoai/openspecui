@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getWebAssetsDirCandidates } from './index.js'
+import { getWebAssetsDirCandidates } from './web-assets.js'
 
 describe('getWebAssetsDirCandidates', () => {
   it('prefers packaged cli/web and keeps web/dist as the development fallback', () => {
