@@ -1,6 +1,6 @@
 # @openspecui/app
 
-Hosted frontend workspace for `app.openspecui.com` style deployments.
+Hosted app workspace for `app.openspecui.com` style deployments.
 
 ## What It Builds
 
@@ -35,6 +35,18 @@ The shell resolves the backend's `openspecuiVersion` from the health endpoint, s
 
 Tabs remain in the root shell and can be reopened on later visits.
 
+When this deployment is installed as a PWA, browsers that support navigation capture may route the
+launch URL into that installed app window instead of a regular browser tab. That reuse only applies
+when the installed PWA comes from the same deployment scope as the URL being opened.
+
+Implications:
+
+- `openspecui --app` can reuse the installed PWA for this deployment
+- `openspecui --app=https://app.example.com` can only reuse a PWA installed from
+  `https://app.example.com`
+- if no matching PWA is installed, or the browser chooses not to capture the navigation, the same
+  URL still works in a browser tab
+
 ## Local Development
 
 ```bash
@@ -43,7 +55,8 @@ pnpm openspecui --app
 pnpm --filter @openspecui/app cf:dev
 ```
 
-Use `pnpm openspecui --app` from the repo root when you want the local backend plus the local hosted shell together.
+Use `pnpm openspecui --app` from the repo root when you want the local backend plus the local
+hosted shell together.
 
 ## Build
 
