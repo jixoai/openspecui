@@ -16,6 +16,7 @@ import {
   startLocalHostedAppDev,
   type LocalHostedAppDevSession,
 } from './local-hosted-app-dev.js'
+import { buildStartupBanner } from './startup-banner.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DEFAULT_HOSTED_CORS_ORIGINS = ['http://localhost:5173', 'http://localhost:3000']
@@ -76,22 +77,15 @@ async function main(): Promise<void> {
         const rawDir = (argv['project-dir'] as string | undefined) || argv.dir || '.'
         const projectDir = resolve(originalCwd, rawDir)
         const useHostedApp = argv.app !== undefined
+        const localVersion = getVersion()
 
-        console.log(`
-┌─────────────────────────────────────────────┐
-│           OpenSpec UI                       │
-│   Visual interface for spec-driven dev      │
-└─────────────────────────────────────────────┘
-`)
-
-        console.log(`📁 Project: ${projectDir}`)
+        console.log(buildStartupBanner({ projectDir, version: localVersion }))
         console.log('')
 
         let server: Awaited<ReturnType<typeof startServer>> | null = null
         let localHostedApp: LocalHostedAppDevSession | null = null
 
         try {
-          const localVersion = getVersion()
           let hostedBaseUrl: string | null = null
 
           if (useHostedApp) {
