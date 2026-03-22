@@ -1,5 +1,11 @@
 # openspecui
 
+## 2.1.6
+
+### Patch Changes
+
+- bbf350d: Fix the CLI startup banner to show the current package version and prevent stale cross-project navigation state from breaking change detail pages.
+
 ## 2.1.5
 
 ### Patch Changes
