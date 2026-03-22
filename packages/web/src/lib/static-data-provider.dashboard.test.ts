@@ -59,7 +59,7 @@ function createSnapshot(): ExportSnapshot {
         overview: 'overview',
         requirements: [{ id: 'req-1', text: 'a', scenarios: [{ rawText: 's1' }] }],
         createdAt: 1,
-        updatedAt: 10,
+        updatedAt: 30,
       },
     ],
     changes: [
@@ -127,7 +127,7 @@ describe('static-data-provider dashboard overview', () => {
       taskCompletionPercent: 50,
     })
 
-    expect(overview.specifications.map((spec) => spec.id)).toEqual(['cli', 'ui'])
+    expect(overview.specifications.map((spec) => spec.id)).toEqual(['ui', 'cli'])
     expect(overview.activeChanges.map((change) => change.id)).toEqual(['change-a', 'change-b'])
     expect(overview.trends.specifications.length).toBeGreaterThan(0)
     expect(overview.trends.requirements.length).toBeGreaterThan(0)
@@ -155,6 +155,70 @@ describe('static-data-provider dashboard overview', () => {
     })
     expect(overview.trendMeta.pointLimit).toBe(120)
     expect(overview.trendMeta.lastUpdatedAt).toBeGreaterThan(0)
+  })
+
+  it('limits dashboard lists to the 10 most recent items while keeping summary totals intact', async () => {
+    staticState.snapshot = {
+      ...createSnapshot(),
+      specs: Array.from({ length: 12 }, (_, index) => ({
+        id: `spec-${index}`,
+        name: `Spec ${index}`,
+        content: `# Spec ${index}`,
+        overview: 'overview',
+        requirements: Array.from({ length: 12 - index }, (_, requirementIndex) => ({
+          id: `req-${index}-${requirementIndex}`,
+          text: 'requirement',
+          scenarios: [{ rawText: 'scenario' }],
+        })),
+        createdAt: 1,
+        updatedAt: index + 1,
+      })),
+      changes: Array.from({ length: 12 }, (_, index) => ({
+        id: `change-${index}`,
+        name: `Change ${index}`,
+        proposal: '# Proposal',
+        tasks: '- [ ] task',
+        why: 'why',
+        whatChanges: 'what',
+        parsedTasks: [],
+        deltas: [],
+        progress: { total: 1, completed: index % 2 },
+        createdAt: 1,
+        updatedAt: index + 1,
+      })),
+    }
+
+    const provider = await import('./static-data-provider')
+    const overview = await provider.getDashboardOverview()
+
+    expect(overview.summary.specifications).toBe(12)
+    expect(overview.summary.activeChanges).toBe(12)
+    expect(overview.specifications).toHaveLength(10)
+    expect(overview.activeChanges).toHaveLength(10)
+    expect(overview.specifications.map((spec) => spec.id)).toEqual([
+      'spec-11',
+      'spec-10',
+      'spec-9',
+      'spec-8',
+      'spec-7',
+      'spec-6',
+      'spec-5',
+      'spec-4',
+      'spec-3',
+      'spec-2',
+    ])
+    expect(overview.activeChanges.map((change) => change.id)).toEqual([
+      'change-11',
+      'change-10',
+      'change-9',
+      'change-8',
+      'change-7',
+      'change-6',
+      'change-5',
+      'change-4',
+      'change-3',
+      'change-2',
+    ])
   })
 
   it('prioritizes dated archive id for completed trend positioning', async () => {

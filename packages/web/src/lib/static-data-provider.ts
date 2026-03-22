@@ -28,6 +28,7 @@ import type {
   SpecMeta,
   TemplatesMap,
 } from '@openspecui/core'
+import { selectRecentDashboardItems } from '@openspecui/core/dashboard-display'
 import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
 import type { SearchDocument } from '@openspecui/search'
 import { parse as parseYaml } from 'yaml'
@@ -693,49 +694,50 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   )
   const rightEdgeTs = snapshot.git?.latestCommitTs ?? null
 
-  const specifications = snapshot.specs
-    .map((spec) => ({
-      id: spec.id,
-      name: spec.name,
-      requirements: spec.requirements.length,
-      updatedAt: spec.updatedAt,
-    }))
-    .sort((a, b) => b.requirements - a.requirements || b.updatedAt - a.updatedAt)
+  const allSpecifications = snapshot.specs.map((spec) => ({
+    id: spec.id,
+    name: spec.name,
+    requirements: spec.requirements.length,
+    updatedAt: spec.updatedAt,
+  }))
+  const specifications = selectRecentDashboardItems(allSpecifications)
 
-  const activeChanges = snapshot.changes
-    .map((change) => ({
-      id: change.id,
-      name: change.name,
-      progress: change.progress,
-      updatedAt: change.updatedAt,
-    }))
-    .sort((a, b) => b.updatedAt - a.updatedAt)
+  const allActiveChanges = snapshot.changes.map((change) => ({
+    id: change.id,
+    name: change.name,
+    progress: change.progress,
+    updatedAt: change.updatedAt,
+  }))
+  const activeChanges = selectRecentDashboardItems(allActiveChanges)
 
-  const requirements = specifications.reduce((sum, spec) => sum + spec.requirements, 0)
-  const tasksTotal = activeChanges.reduce((sum, change) => sum + change.progress.total, 0)
-  const tasksCompleted = activeChanges.reduce((sum, change) => sum + change.progress.completed, 0)
+  const requirements = allSpecifications.reduce((sum, spec) => sum + spec.requirements, 0)
+  const tasksTotal = allActiveChanges.reduce((sum, change) => sum + change.progress.total, 0)
+  const tasksCompleted = allActiveChanges.reduce(
+    (sum, change) => sum + change.progress.completed,
+    0
+  )
   const archivedTasksCompleted = snapshot.archives.reduce(
     (sum, archive) => sum + archive.parsedTasks.length,
     0
   )
   const taskCompletionPercent =
     tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : null
-  const inProgressChanges = activeChanges.filter(
+  const inProgressChanges = allActiveChanges.filter(
     (change) => change.progress.total > 0 && change.progress.completed < change.progress.total
   ).length
 
   const trends = buildStaticObjectiveTrends(snapshot, trendPointLimit, rightEdgeTs)
   const hasObjectiveSpecificationTrend =
-    trends.specifications.length > 0 || specifications.length === 0
+    trends.specifications.length > 0 || allSpecifications.length === 0
   const hasObjectiveRequirementTrend = trends.requirements.length > 0 || requirements === 0
   const hasObjectiveCompletedTrend =
     trends.completedChanges.length > 0 || snapshot.archives.length === 0
 
   return {
     summary: {
-      specifications: specifications.length,
+      specifications: allSpecifications.length,
       requirements,
-      activeChanges: activeChanges.length,
+      activeChanges: allActiveChanges.length,
       inProgressChanges,
       completedChanges: snapshot.archives.length,
       archivedTasksCompleted,
