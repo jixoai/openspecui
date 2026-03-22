@@ -68,7 +68,7 @@ async function main(): Promise<void> {
           })
           .option('app', {
             describe:
-              'Open the hosted app at the official or custom base URL. Supports --app and --app=<baseUrl>.',
+              'Launch the hosted app at the official or custom base URL. Uses the installed PWA when the browser captures that same-scope URL, otherwise falls back to a browser page. Supports --app and --app=<baseUrl>.',
             type: 'string',
           })
       },
@@ -135,6 +135,9 @@ async function main(): Promise<void> {
 
             console.log(`🌐 Hosted app base: ${hostedBaseUrl}`)
             console.log(`🔗 Hosted URL: ${browserUrl}`)
+            console.log(
+              '📦 Launch mode: prefer an installed hosted-app PWA on the same deployment scope; otherwise open the browser page.'
+            )
           }
 
           console.log('')
@@ -142,7 +145,11 @@ async function main(): Promise<void> {
           if (argv.open) {
             const open = await import('open')
             await open.default(browserUrl)
-            console.log(useHostedApp ? '🌐 Hosted app opened' : '🌐 Browser opened')
+            console.log(
+              useHostedApp
+                ? '🌐 Hosted app launch requested (browser page or installed PWA, depending on browser capture).'
+                : '🌐 Browser opened'
+            )
           }
 
           console.log('')

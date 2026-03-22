@@ -40,16 +40,24 @@ openspecui ./my-project
 openspecui --port 3200
 ```
 
-### 使用 Hosted 前端启动
+### 使用 Hosted App 启动
 
 ```bash
 openspecui --app
 openspecui --app=https://app.example.com
 ```
 
-`--app` 仍然会启动本地后端，但浏览器里打开的是 Hosted 前端，而不是本地构建出来的 Web bundle。
+`--app` 仍然会启动本地后端，但发起的是 Hosted App 链接，而不是本地构建出来的 Web
+bundle。
 如果没有显式传入 URL，OpenSpecUI 会优先读取配置中的 `appBaseUrl`，否则使用官方地址
 `https://app.openspecui.com`。
+
+启动契约：
+
+- 若浏览器能把该 Hosted App URL 捕获到同一部署范围内已安装的 PWA，则优先进入 PWA
+- 若没有匹配的 PWA、浏览器关闭了链接捕获，或浏览器本身不支持，则回退到普通网页标签
+- `--app=https://app.example.com` 只能复用从 `https://app.example.com` 这一部署安装的 PWA，
+  不能复用 `app.openspecui.com` 的已安装应用
 
 ### 静态导出
 

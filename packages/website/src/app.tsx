@@ -227,15 +227,14 @@ export function App() {
               <aside className="border-border bg-background/70 p-4.5 space-y-4 border lg:mt-1">
                 <div>
                   <p className="font-nav text-primary text-[11px] uppercase tracking-[0.24em]">
-                    Default path
+                    {t('hero.sidebarEyebrow')}
                   </p>
                   <h3 className="font-nav mt-2 text-balance text-[17px] tracking-tight">
-                    Hosted app first
+                    {t('hero.sidebarTitle')}
                   </h3>
                 </div>
                 <p className={`${SUPPORTING_COPY_CLASS_NAME} max-w-none`}>
-                  Start the local backend, then reuse the maintained frontend instead of serving
-                  another local web bundle.
+                  {t('hero.sidebarBody')}
                 </p>
                 <code className="bg-terminal text-terminal-foreground scrollbar-thin scrollbar-track-transparent block overflow-x-auto px-3 py-2 text-sm">
                   {hostedAppCommand}

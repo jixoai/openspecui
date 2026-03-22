@@ -40,16 +40,25 @@ openspecui ./my-project
 openspecui --port 3200
 ```
 
-### Start with the hosted frontend
+### Start with the hosted app
 
 ```bash
 openspecui --app
 openspecui --app=https://app.example.com
 ```
 
-`--app` still runs the local backend, but opens the hosted frontend instead of a local web bundle.
+`--app` still runs the local backend, but launches the hosted app instead of a local web bundle.
 When no explicit URL is passed, OpenSpecUI uses the configured `appBaseUrl` or the official
 `https://app.openspecui.com`.
+
+Launch contract:
+
+- PWA-first when the browser can capture the hosted app URL into an installed PWA from the same
+  deployment scope
+- browser-page fallback when no matching hosted-app PWA is installed, link capture is disabled, or
+  the browser does not support it
+- `--app=https://app.example.com` only works with the PWA installed from that same deployment; an
+  installed `app.openspecui.com` PWA will not capture a different origin
 
 ### Static export
 

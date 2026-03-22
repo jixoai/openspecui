@@ -10,6 +10,9 @@ export interface WebsiteLocale {
     summary: string
     primaryCta: string
     secondaryCta: string
+    sidebarEyebrow: string
+    sidebarTitle: string
+    sidebarBody: string
     badges: {
       live: string
       hosted: string
