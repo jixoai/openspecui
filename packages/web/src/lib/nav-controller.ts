@@ -1,4 +1,5 @@
 import type { HistoryLocation, RouterHistory } from '@tanstack/react-router'
+import { getHealthUrl } from './api-config'
 import { getHostedScopedStorageKey } from './hosted-session'
 import { getBasePath, isStaticMode } from './static-mode'
 
@@ -104,12 +105,12 @@ const POP_ROUTES = [
   '/opsx-verify',
   '/opsx-compose',
 ] as const
-function getRemoteStorageKey(): string {
+function getLocalStorageKey(): string {
   return getHostedScopedStorageKey('nav-layout', window.location)
 }
 
-function getLocalStorageKey(): string {
-  return getHostedScopedStorageKey('nav-layout', window.location)
+function buildProjectScopedStorageKey(projectDir: string): string {
+  return getHostedScopedStorageKey(`nav-layout:${encodeURIComponent(projectDir)}`, window.location)
 }
 const PERSIST_DEBOUNCE = 300
 
@@ -389,12 +390,32 @@ function readLocalStorage(): PersistedNavLayout | null {
   }
 }
 
-function writeLocalStorage(layout: PersistedNavLayout): void {
+function readLocalStorageByKey(key: string): PersistedNavLayout | null {
   try {
-    localStorage.setItem(getLocalStorageKey(), JSON.stringify(layout))
+    const raw = localStorage.getItem(key)
+    if (!raw) return null
+    return parsePersistedLayout(JSON.parse(raw))
+  } catch {
+    return null
+  }
+}
+
+function writeLocalStorage(layout: PersistedNavLayout, key = getLocalStorageKey()): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(layout))
   } catch {
     // ignore
   }
+}
+
+function collapseProjectDetailLocation(location: HistoryLocation): HistoryLocation {
+  const tabId = pathToTabId(location.pathname)
+  if (!tabId) return location
+  if (location.pathname === tabId) return location
+  if (tabId === '/changes' || tabId === '/specs' || tabId === '/archive') {
+    return parseHref(tabId, location.state)
+  }
+  return location
 }
 
 const carryActiveOnMovePlugin: KernelBehaviorPlugin = ({ prevState, nextState, event }) => {
@@ -703,6 +724,10 @@ export class NavController {
   private persistTimer: ReturnType<typeof setTimeout> | null = null
   private kvUnsubscribe: (() => void) | null = null
   private initialized = false
+  private storageKey =
+    typeof window === 'undefined'
+      ? 'nav-layout'
+      : getHostedScopedStorageKey('nav-layout', window.location)
 
   constructor() {
     if (typeof window === 'undefined') return
@@ -849,10 +874,14 @@ export class NavController {
     this.initialized = true
 
     try {
+      const scopedStorageKey = await this.resolveProjectScopedStorageKey()
+      if (scopedStorageKey && scopedStorageKey !== this.storageKey) {
+        this.storageKey = scopedStorageKey
+        this.rebindProjectScopedLayout(scopedStorageKey)
+      }
+
       const { trpcClient } = await import('./trpc')
-      const remote = parsePersistedLayout(
-        await trpcClient.kv.get.query({ key: getRemoteStorageKey() })
-      )
+      const remote = parsePersistedLayout(await trpcClient.kv.get.query({ key: this.storageKey }))
 
       if (remote) {
         if (remote.updatedAt > this.state.updatedAt) {
@@ -860,7 +889,7 @@ export class NavController {
         } else if (this.state.updatedAt > remote.updatedAt) {
           trpcClient.kv.set
             .mutate({
-              key: getRemoteStorageKey(),
+              key: this.storageKey,
               value: {
                 mainTabs: this.state.mainTabs,
                 bottomTabs: this.state.bottomTabs,
@@ -872,7 +901,7 @@ export class NavController {
       } else if (this.state.updatedAt > 0) {
         trpcClient.kv.set
           .mutate({
-            key: getRemoteStorageKey(),
+            key: this.storageKey,
             value: {
               mainTabs: this.state.mainTabs,
               bottomTabs: this.state.bottomTabs,
@@ -883,7 +912,7 @@ export class NavController {
       }
 
       const subscription = trpcClient.kv.subscribe.subscribe(
-        { key: getRemoteStorageKey() },
+        { key: this.storageKey },
         {
           onData: (data: unknown) => {
             const incoming = parsePersistedLayout(data)
@@ -960,11 +989,14 @@ export class NavController {
       this.persistLayout()
     } else if (transition.persist === 'local_only') {
       this.cancelPersistTimer()
-      writeLocalStorage({
-        mainTabs: this.state.mainTabs,
-        bottomTabs: this.state.bottomTabs,
-        updatedAt: this.state.updatedAt,
-      })
+      writeLocalStorage(
+        {
+          mainTabs: this.state.mainTabs,
+          bottomTabs: this.state.bottomTabs,
+          updatedAt: this.state.updatedAt,
+        },
+        this.storageKey
+      )
     }
 
     const effectiveUrlAction =
@@ -1046,11 +1078,14 @@ export class NavController {
     const now = Date.now()
     this.state = { ...this.state, updatedAt: now }
 
-    writeLocalStorage({
-      mainTabs: this.state.mainTabs,
-      bottomTabs: this.state.bottomTabs,
-      updatedAt: now,
-    })
+    writeLocalStorage(
+      {
+        mainTabs: this.state.mainTabs,
+        bottomTabs: this.state.bottomTabs,
+        updatedAt: now,
+      },
+      this.storageKey
+    )
 
     this.cancelPersistTimer()
     this.persistTimer = setTimeout(() => {
@@ -1059,7 +1094,7 @@ export class NavController {
       import('./trpc')
         .then(({ trpcClient }) =>
           trpcClient.kv.set.mutate({
-            key: getRemoteStorageKey(),
+            key: this.storageKey,
             value: {
               mainTabs: this.state.mainTabs,
               bottomTabs: this.state.bottomTabs,
@@ -1069,6 +1104,42 @@ export class NavController {
         )
         .catch(() => {})
     }, PERSIST_DEBOUNCE)
+  }
+
+  private async resolveProjectScopedStorageKey(): Promise<string | null> {
+    try {
+      const response = await fetch(getHealthUrl())
+      if (!response.ok) return null
+      const payload = (await response.json()) as { projectDir?: unknown }
+      if (typeof payload.projectDir !== 'string' || payload.projectDir.length === 0) return null
+      return buildProjectScopedStorageKey(payload.projectDir)
+    } catch {
+      return null
+    }
+  }
+
+  private rebindProjectScopedLayout(storageKey: string): void {
+    const scopedLocal = readLocalStorageByKey(storageKey)
+    if (scopedLocal) {
+      const merged = mergeLayout(scopedLocal)
+      this.state = normalizeState({
+        ...this.state,
+        mainTabs: merged.mainTabs,
+        bottomTabs: merged.bottomTabs,
+        updatedAt: scopedLocal.updatedAt,
+      })
+      this.normalizeUrl()
+      return
+    }
+
+    this.state = normalizeState({
+      ...this.state,
+      mainLocation: collapseProjectDetailLocation(this.state.mainLocation),
+      bottomLocation: collapseProjectDetailLocation(this.state.bottomLocation),
+      updatedAt: 0,
+    })
+    this.normalizeUrl()
+    this.notifyListeners()
   }
 }
 

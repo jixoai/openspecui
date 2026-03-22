@@ -85,9 +85,28 @@ export function ChangeView() {
 
   const doneCount = status?.artifacts.filter((a) => a.status === 'done').length ?? 0
   const totalCount = status?.artifacts.length ?? 0
+  const isMissingChangeError =
+    error?.message.includes(`Change '${changeId}' not found`) ||
+    error?.message.includes(`Change "${changeId}" not found`)
 
   if (isLoading && !status) {
     return <div className="route-loading animate-pulse">Loading change status...</div>
+  }
+
+  if (isMissingChangeError && !status) {
+    return (
+      <div className="flex flex-col gap-3 p-4">
+        <div className="text-muted-foreground flex items-center gap-2 text-sm">
+          <AlertCircle className="h-4 w-4" />
+          Change not found in the current project.
+        </div>
+        <div>
+          <Link to="/changes" className="text-primary hover:underline">
+            Back to Changes
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   if (error && !status) {

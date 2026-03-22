@@ -19,6 +19,8 @@ vi.mock('./trpc', () => ({
 import { NavController, navController, type NavLayout, type TabId } from './nav-controller'
 import { createNavHistory } from './nav-history'
 
+const fetchMock = vi.fn<typeof fetch>()
+
 const DEFAULT_MAIN_TABS: TabId[] = [
   '/dashboard',
   '/config',
@@ -66,6 +68,17 @@ function createController(
   return new NavController()
 }
 
+function setProjectScopedLayout(projectDir: string, layout: NavLayout): void {
+  localStorage.setItem(
+    `nav-layout:${encodeURIComponent(projectDir)}`,
+    JSON.stringify({
+      mainTabs: layout.mainTabs,
+      bottomTabs: layout.bottomTabs,
+      updatedAt: 1,
+    })
+  )
+}
+
 function assertPartition(nav: NavController): void {
   const allPlaced = [...nav.mainTabs, ...nav.bottomTabs]
   expect(allPlaced.length).toBe(ALL_TABS.length)
@@ -83,12 +96,15 @@ function mockHistory(
 
 beforeAll(() => {
   navController.destroy()
+  vi.stubGlobal('fetch', fetchMock)
 })
 
 describe('NavController kernel lifecycle', () => {
   let nav: NavController
 
   afterEach(() => {
+    fetchMock.mockReset()
+    fetchMock.mockRejectedValue(new Error('health unavailable'))
     nav.destroy()
     ;(globalThis as { __TEST_NAV_BASE_PATH__?: string }).__TEST_NAV_BASE_PATH__ = undefined
   })
@@ -396,5 +412,45 @@ describe('NavController kernel lifecycle', () => {
     expect(parsed.mainTabs[0]).toBe('/specs')
     expect(typeof parsed.updatedAt).toBe('number')
     assertPartition(nav)
+  })
+
+  it('rebinding to a project-specific scope collapses stale detail routes', async () => {
+    nav = createController('/changes/extract-terminal-view-webcomponent')
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ projectDir: '/repo/current' }),
+    } as Response)
+
+    await nav.init()
+
+    expect(nav.getLocation('main').pathname).toBe('/changes')
+    expect(window.location.pathname).toBe('/changes')
+  })
+
+  it('prefers project-scoped layout over the generic persisted layout', async () => {
+    nav = createController('/dashboard', {
+      mainTabs: ['/archive', '/dashboard', '/config', '/specs', '/changes', '/settings'],
+      bottomTabs: ['/terminal'],
+    })
+    setProjectScopedLayout('/repo/current', {
+      mainTabs: ['/specs', '/dashboard', '/config', '/changes', '/archive', '/settings'],
+      bottomTabs: ['/terminal'],
+    })
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ projectDir: '/repo/current' }),
+    } as Response)
+
+    await nav.init()
+
+    expect(nav.mainTabs[0]).toBe('/specs')
+    expect(nav.mainTabs).not.toEqual([
+      '/archive',
+      '/dashboard',
+      '/config',
+      '/specs',
+      '/changes',
+      '/settings',
+    ])
   })
 })
