@@ -1,5 +1,12 @@
 # @openspecui/web
 
+## 2.1.4
+
+### Patch Changes
+
+- 164ab2c: Clarify the hosted app launch contract for `openspecui --app[=baseUrl]`, including same-scope PWA reuse, browser fallback behavior, and matching UI/docs messaging across the CLI, settings page, and website.
+- 6dcad78: Upgrade the Vite toolchain to Vite 8 and align the related React, Storybook, and Vitest integrations used by local build and browser-test workflows.
+
 ## 2.1.3
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # xterm-input-panel
 
+## 1.2.3
+
+### Patch Changes
+
+- 6dcad78: Upgrade the Vite toolchain to Vite 8 and align the related React, Storybook, and Vitest integrations used by local build and browser-test workflows.
+
 ## 1.2.2
 
 ### Patch Changes
