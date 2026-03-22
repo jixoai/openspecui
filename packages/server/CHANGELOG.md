@@ -1,5 +1,13 @@
 # @openspecui/server
 
+## 2.1.5
+
+### Patch Changes
+
+- 6f2f1b3: Fix dashboard recency ordering and make local CLI dev prefer the latest web build.
+- Updated dependencies [6f2f1b3]
+  - @openspecui/core@2.1.5
+
 ## 2.1.3
 
 ### Patch Changes
