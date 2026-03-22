@@ -1,5 +1,11 @@
 # openspecui
 
+## 2.1.4
+
+### Patch Changes
+
+- 164ab2c: Clarify the hosted app launch contract for `openspecui --app[=baseUrl]`, including same-scope PWA reuse, browser fallback behavior, and matching UI/docs messaging across the CLI, settings page, and website.
+
 ## 2.1.3
 
 ### Patch Changes
