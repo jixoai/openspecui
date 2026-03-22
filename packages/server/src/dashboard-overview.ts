@@ -1,14 +1,16 @@
-import type { ConfigManager, OpenSpecAdapter } from '@openspecui/core'
 import {
   DASHBOARD_METRIC_KEYS,
+  type ConfigManager,
   type DashboardOverview,
   type DashboardTriColorTrendPoint,
+  type OpenSpecAdapter,
 } from '@openspecui/core'
 import { execFile } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
+import { selectRecentDashboardItems } from '../../core/src/dashboard-display.js'
 import { buildDashboardGitSnapshot } from './dashboard-git-snapshot.js'
 import { buildDashboardTimeTrends } from './dashboard-time-trends.js'
 
@@ -171,14 +173,13 @@ export async function loadDashboardOverview(
     ctx.adapter.listArchivedChangesWithMeta(),
   ])
 
-  const activeChanges = changeMetas
-    .map((changeMeta) => ({
-      id: changeMeta.id,
-      name: changeMeta.name ?? changeMeta.id,
-      progress: changeMeta.progress,
-      updatedAt: changeMeta.updatedAt,
-    }))
-    .sort((a, b) => b.updatedAt - a.updatedAt)
+  const allActiveChanges = changeMetas.map((changeMeta) => ({
+    id: changeMeta.id,
+    name: changeMeta.name ?? changeMeta.id,
+    progress: changeMeta.progress,
+    updatedAt: changeMeta.updatedAt,
+  }))
+  const activeChanges = selectRecentDashboardItems(allActiveChanges)
 
   const archivedChanges = (
     await Promise.all(
@@ -195,7 +196,7 @@ export async function loadDashboardOverview(
     )
   ).filter((item): item is NonNullable<typeof item> => item !== null)
 
-  const specifications = (
+  const allSpecifications = (
     await Promise.all(
       specMetas.map(async (meta) => {
         const spec = await ctx.adapter.readSpec(meta.id)
@@ -208,20 +209,22 @@ export async function loadDashboardOverview(
         }
       })
     )
-  )
-    .filter((item): item is NonNullable<typeof item> => item !== null)
-    .sort((a, b) => b.requirements - a.requirements || b.updatedAt - a.updatedAt)
+  ).filter((item): item is NonNullable<typeof item> => item !== null)
+  const specifications = selectRecentDashboardItems(allSpecifications)
 
-  const requirements = specifications.reduce((sum, spec) => sum + spec.requirements, 0)
-  const tasksTotal = activeChanges.reduce((sum, change) => sum + change.progress.total, 0)
-  const tasksCompleted = activeChanges.reduce((sum, change) => sum + change.progress.completed, 0)
+  const requirements = allSpecifications.reduce((sum, spec) => sum + spec.requirements, 0)
+  const tasksTotal = allActiveChanges.reduce((sum, change) => sum + change.progress.total, 0)
+  const tasksCompleted = allActiveChanges.reduce(
+    (sum, change) => sum + change.progress.completed,
+    0
+  )
   const archivedTasksCompleted = archivedChanges.reduce(
     (sum, change) => sum + change.tasksCompleted,
     0
   )
   const taskCompletionPercent =
     tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : null
-  const inProgressChanges = activeChanges.filter(
+  const inProgressChanges = allActiveChanges.filter(
     (change) => change.progress.total > 0 && change.progress.completed < change.progress.total
   ).length
 
@@ -236,13 +239,13 @@ export async function loadDashboardOverview(
     return ts === null ? [] : [{ ts, value: archive.tasksCompleted }]
   })
   const specMetaById = new Map(specMetas.map((meta) => [meta.id, meta] as const))
-  const requirementTrendEvents = specifications.flatMap((spec) => {
+  const requirementTrendEvents = allSpecifications.flatMap((spec) => {
     const meta = specMetaById.get(spec.id)
     const ts = resolveTrendTimestamp(meta?.updatedAt, meta?.createdAt)
     return ts === null ? [] : [{ ts, value: spec.requirements }]
   })
   const hasObjectiveSpecificationTrend =
-    specificationTrendEvents.length > 0 || specifications.length === 0
+    specificationTrendEvents.length > 0 || allSpecifications.length === 0
   const hasObjectiveRequirementTrend = requirementTrendEvents.length > 0 || requirements === 0
   const hasObjectiveCompletedTrend = completedTrendEvents.length > 0 || archiveMetas.length === 0
   const config = await ctx.configManager.readConfig()
@@ -315,9 +318,9 @@ export async function loadDashboardOverview(
 
   return {
     summary: {
-      specifications: specifications.length,
+      specifications: allSpecifications.length,
       requirements,
-      activeChanges: activeChanges.length,
+      activeChanges: allActiveChanges.length,
       inProgressChanges,
       completedChanges: archiveMetas.length,
       archivedTasksCompleted,

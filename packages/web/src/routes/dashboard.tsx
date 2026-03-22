@@ -762,8 +762,8 @@ export function Dashboard() {
       {renderExecutionSnapshot()}
 
       <div className="grid gap-3 xl:grid-cols-2">
-        {renderSpecificationsSection()}
         {renderActiveChangesSection()}
+        {renderSpecificationsSection()}
       </div>
     </div>
   )

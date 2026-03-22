@@ -10,6 +10,10 @@
       "import": "./dist/index.mjs",
       "types": "./dist/index.d.mts"
     },
+    "./dashboard-display": {
+      "import": "./dist/dashboard-display.mjs",
+      "types": "./dist/dashboard-display.d.mts"
+    },
     "./hosted-app": {
       "import": "./dist/hosted-app.mjs",
       "types": "./dist/hosted-app.d.mts"
@@ -23,8 +27,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts src/opsx-display-path.ts src/hosted-app.ts --format esm --dts",
-    "dev": "tsdown src/index.ts src/opsx-display-path.ts src/hosted-app.ts --format esm --dts --watch",
+    "build": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/hosted-app.ts --format esm --dts",
+    "dev": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/hosted-app.ts --format esm --dts --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

@@ -316,6 +316,72 @@ describe('appRouter', () => {
       })
     })
 
+    it('limits dashboard lists to the 10 most recent items while keeping summary totals intact', async () => {
+      const adapter = createMockAdapter()
+      adapter.listSpecsWithMeta.mockResolvedValue(
+        Array.from({ length: 12 }, (_, index) => ({
+          id: `spec-${index}`,
+          name: `Spec ${index}`,
+          createdAt: 1,
+          updatedAt: index + 1,
+        }))
+      )
+      adapter.readSpec.mockImplementation(async (id: string) => {
+        const index = Number(id.split('-')[1] ?? '0')
+        return {
+          id,
+          name: `Spec ${index}`,
+          overview: 'Spec overview',
+          requirements: Array.from({ length: 12 - index }, (_, requirementIndex) => ({
+            id: `${id}-req-${requirementIndex}`,
+            text: 'requirement',
+            scenarios: [{ rawText: 'scenario' }],
+          })),
+        }
+      })
+      adapter.listChangesWithMeta.mockResolvedValue(
+        Array.from({ length: 12 }, (_, index) => ({
+          id: `change-${index}`,
+          name: `Change ${index}`,
+          progress: { total: 1, completed: index % 2 },
+          createdAt: 1,
+          updatedAt: index + 1,
+        }))
+      )
+
+      const caller = createCaller(adapter)
+      const overview = await caller.dashboard.get()
+
+      expect(overview.summary.specifications).toBe(12)
+      expect(overview.summary.activeChanges).toBe(12)
+      expect(overview.specifications).toHaveLength(10)
+      expect(overview.activeChanges).toHaveLength(10)
+      expect(overview.specifications.map((spec) => spec.id)).toEqual([
+        'spec-11',
+        'spec-10',
+        'spec-9',
+        'spec-8',
+        'spec-7',
+        'spec-6',
+        'spec-5',
+        'spec-4',
+        'spec-3',
+        'spec-2',
+      ])
+      expect(overview.activeChanges.map((change) => change.id)).toEqual([
+        'change-11',
+        'change-10',
+        'change-9',
+        'change-8',
+        'change-7',
+        'change-6',
+        'change-5',
+        'change-4',
+        'change-3',
+        'change-2',
+      ])
+    })
+
     it('uses dated archive id as completed trend timestamp source', async () => {
       const adapter = createMockAdapter()
       adapter.listArchivedChangesWithMeta.mockResolvedValue([
