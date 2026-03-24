@@ -522,6 +522,7 @@ function buildStaticGitSnapshot(snapshot: ExportSnapshot): DashboardOverview['gi
     type: 'commit' as const,
     hash: commit.hash,
     title: commit.title,
+    committedAt: commit.committedAt,
     relatedChanges: commit.relatedChanges,
     diff: commit.diff,
   }))

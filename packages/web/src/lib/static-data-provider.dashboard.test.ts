@@ -306,6 +306,7 @@ describe('static-data-provider dashboard overview', () => {
     expect(worktree?.entries[0]).toMatchObject({
       type: 'commit',
       hash: 'aaaaaaaa',
+      committedAt: 1_710_000_000_000,
       relatedChanges: ['dashboard-live-workflow-status'],
     })
   })

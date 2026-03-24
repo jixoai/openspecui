@@ -8,6 +8,11 @@ describe('dashboard git snapshot helpers', () => {
   it('builds worktree + commit/uncommitted tree with related openspec changes', async () => {
     const projectDir = '/repo/main'
     const featureDir = '/repo/feature-a'
+    const readPathTimestampMs = vi.fn(async (absolutePath: string) => {
+      if (absolutePath.endsWith('/spec.md')) return 1_710_100_000_000
+      if (absolutePath.endsWith('/tasks.md')) return 1_710_200_000_000
+      return null
+    })
 
     const runGit = async (cwd: string, args: string[]) => {
       const cmd = args.join(' ')
@@ -43,11 +48,11 @@ describe('dashboard git snapshot helpers', () => {
         }
       }
 
-      if (cwd === projectDir && cmd === 'log --format=%H%x1f%s -n8 origin/main..HEAD') {
+      if (cwd === projectDir && cmd === 'log --format=%H%x1f%ct%x1f%s -n8 origin/main..HEAD') {
         return { ok: true, stdout: '' }
       }
-      if (cwd === featureDir && cmd === 'log --format=%H%x1f%s -n8 origin/main..HEAD') {
-        return { ok: true, stdout: 'abc123\u001ffeat: wire dashboard\n' }
+      if (cwd === featureDir && cmd === 'log --format=%H%x1f%ct%x1f%s -n8 origin/main..HEAD') {
+        return { ok: true, stdout: 'abc123\u001f1710000000\u001ffeat: wire dashboard\n' }
       }
 
       if (cwd === featureDir && cmd === 'show --numstat --format= abc123') {
@@ -102,6 +107,7 @@ describe('dashboard git snapshot helpers', () => {
       projectDir,
       runGit,
       maxCommitEntries: 8,
+      readPathTimestampMs,
     })
 
     expect(snapshot.defaultBranch).toBe('origin/main')
@@ -117,8 +123,14 @@ describe('dashboard git snapshot helpers', () => {
     expect(feature?.detached).toBe(false)
     expect(feature?.diff).toEqual({ files: 3, insertions: 10, deletions: 2 })
 
+    expect(feature?.entries[0]).toMatchObject({
+      type: 'uncommitted',
+      updatedAt: 1_710_200_000_000,
+    })
+
     const commitEntry = feature?.entries.find((entry) => entry.type === 'commit')
     expect(commitEntry?.relatedChanges).toEqual(['dashboard-live-workflow-status'])
+    expect(commitEntry?.committedAt).toBe(1_710_000_000_000)
     expect(commitEntry?.diff).toEqual({ files: 1, insertions: 5, deletions: 1 })
 
     const uncommittedEntry = feature?.entries.find((entry) => entry.type === 'uncommitted')

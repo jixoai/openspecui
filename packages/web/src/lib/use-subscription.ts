@@ -2,6 +2,7 @@ import type {
   ArchiveMeta,
   Change,
   ChangeFile,
+  ChangeMeta,
   OpenSpecUIConfig,
   Spec,
   SpecMeta,
@@ -169,6 +170,19 @@ export function useSpecRawSubscription(id: string): SubscriptionState<string | n
 // =====================
 // Change subscriptions
 // =====================
+
+export function useChangesSubscription(): SubscriptionState<ChangeMeta[]> {
+  return useSubscription<ChangeMeta[]>(
+    (callbacks) =>
+      trpcClient.change.subscribe.subscribe(undefined, {
+        onData: callbacks.onData,
+        onError: callbacks.onError,
+      }),
+    StaticProvider.getChanges,
+    [],
+    'change.subscribe'
+  )
+}
 
 export function useChangeFilesSubscription(id: string): SubscriptionState<ChangeFile[]> {
   return useSubscription<ChangeFile[]>(

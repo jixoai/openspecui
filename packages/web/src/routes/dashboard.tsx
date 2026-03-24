@@ -1,5 +1,21 @@
 import { DashboardMetricCard } from '@/components/dashboard/metric-card'
-import { formatRelativeTime } from '@/lib/format-time'
+import { Select, type SelectOption } from '@/components/select'
+import { Tooltip } from '@/components/tooltip'
+import {
+  classifyChangeWorkflowPhase,
+  inferTrackedArtifactStatus,
+} from '@/lib/change-workflow-phase'
+import {
+  getDashboardGitAutoRefreshIntervalMs,
+  getDashboardGitAutoRefreshProgress,
+  getDashboardGitAutoRefreshReason,
+  getDashboardGitEntryTimestamp,
+  loadDashboardGitAutoRefreshPreset,
+  persistDashboardGitAutoRefreshPreset,
+  sortDashboardGitEntries,
+  type DashboardGitAutoRefreshPreset,
+} from '@/lib/dashboard-git'
+import { formatDateTime, formatRelativeTime } from '@/lib/format-time'
 import { navController } from '@/lib/nav-controller'
 import { isStaticMode } from '@/lib/static-mode'
 import {
@@ -23,6 +39,10 @@ import {
   Archive,
   ArrowRight,
   Check,
+  ChevronDown,
+  Clock1,
+  Clock3,
+  Clock6,
   Copy,
   FileText,
   FolderOpen,
@@ -43,6 +63,16 @@ const SPEC_DRIVEN_ORDER = ['proposal', 'design', 'specs', 'tasks'] as const
 const GIT_WORKTREE_BORDER_CLASS = 'border-zinc-400/50'
 const GIT_WORKTREE_BG_CLASS = 'bg-zinc-500/8'
 const GIT_WORKTREE_LINE_CLASS = 'border-zinc-400/50'
+const GIT_AUTO_REFRESH_OPTIONS: SelectOption<DashboardGitAutoRefreshPreset>[] = [
+  { value: '30s', label: '30s' },
+  { value: '5min', label: '5min' },
+  { value: '30min', label: '30min' },
+  { value: 'none', label: 'none' },
+]
+
+function isAnimatedGitRefreshReason(reason: string | null): boolean {
+  return reason === 'manual-button' || reason?.startsWith('auto-refresh:') === true
+}
 
 function createDefaultCardAvailability(
   taskCompletionPercent: number | null
@@ -114,7 +144,8 @@ function sortArtifactIdsForSchema(schemaName: string, artifactIds: string[]): st
 
 function buildWorkflowSchemaCards(
   statuses: ChangeStatus[],
-  schemaCatalog: Array<{ schemaName: string; artifactIds: string[] }>
+  schemaCatalog: Array<{ schemaName: string; artifactIds: string[] }>,
+  taskCompleteChangeIds: ReadonlySet<string>
 ): Array<{
   schemaName: string
   readyToArchive: number
@@ -188,7 +219,9 @@ function buildWorkflowSchemaCards(
 
       return {
         schemaName,
-        readyToArchive: schemaStatuses.filter((status) => status.isComplete).length,
+        readyToArchive: schemaStatuses.filter(
+          (status) => status.isComplete && taskCompleteChangeIds.has(status.changeName)
+        ).length,
         steps,
       }
     })
@@ -224,43 +257,26 @@ function getStepPalette(stepName: string): {
   }
 }
 
-function classifyChangeStatus(params: {
-  hasStatus: boolean
-  isComplete: boolean
-  trackedArtifactStatus: 'done' | 'ready' | 'blocked' | null
-}): { label: string; toneClass: string } {
-  if (!params.hasStatus) {
-    return {
-      label: 'Unknown',
-      toneClass: 'border-border text-muted-foreground',
-    }
-  }
-
-  if (params.isComplete) {
-    return {
-      label: 'Ready to Archive',
-      toneClass: 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300',
-    }
-  }
-
-  if (params.trackedArtifactStatus === 'blocked') {
-    return {
-      label: 'Draft',
-      toneClass: 'border-amber-500/40 text-amber-700 dark:text-amber-300',
-    }
-  }
-
-  return {
-    label: 'In Execution',
-    toneClass: 'border-primary/40 text-primary',
-  }
-}
-
 export function Dashboard() {
+  const staticMode = isStaticMode()
   const { data: overview, isLoading, error } = useDashboardOverviewSubscription()
+  const { data: gitTaskStatus } = useDashboardGitTaskStatusSubscription()
   const { data: statuses } = useOpsxStatusListSubscription()
   const { data: configBundle } = useOpsxConfigBundleSubscription()
-  const { data: gitTaskStatus } = useDashboardGitTaskStatusSubscription()
+  const [gitAutoRefreshPreset, setGitAutoRefreshPreset] = useState<DashboardGitAutoRefreshPreset>(
+    () => loadDashboardGitAutoRefreshPreset()
+  )
+  const [gitAutoRefreshCycleStartedAt, setGitAutoRefreshCycleStartedAt] = useState<number | null>(
+    null
+  )
+  const [gitAutoRefreshNow, setGitAutoRefreshNow] = useState(() => Date.now())
+  const [isDocumentVisible, setIsDocumentVisible] = useState(() =>
+    typeof document === 'undefined' ? true : document.visibilityState === 'visible'
+  )
+  const [gitRefreshRequest, setGitRefreshRequest] = useState<{
+    reason: string
+    requestedAt: number
+  } | null>(null)
 
   const runPropose = useCallback(() => {
     navController.activatePop('/opsx-propose')
@@ -270,16 +286,91 @@ export function Dashboard() {
     navController.activatePop('/opsx-new')
   }, [])
 
-  const triggerGitRefresh = useCallback(async (reason: string) => {
-    try {
-      await refreshDashboardGitSnapshot(reason)
-    } catch (err) {
-      console.error('[Dashboard] Failed to refresh git snapshot:', err)
-    }
-  }, [])
+  const triggerGitRefresh = useCallback(
+    async (reason: string) => refreshDashboardGitSnapshot(reason),
+    []
+  )
 
   const focusRefreshAtRef = useRef(0)
   const [removingWorktreePath, setRemovingWorktreePath] = useState<string | null>(null)
+  const gitAutoRefreshTimerRef = useRef<number | null>(null)
+  const gitTaskStatusRef = useRef(gitTaskStatus)
+  const gitRefreshRequestRef = useRef(gitRefreshRequest)
+  const gitRefreshReason = gitRefreshRequest?.reason ?? null
+
+  const clearGitAutoRefreshTimer = useCallback(() => {
+    if (gitAutoRefreshTimerRef.current === null) return
+    window.clearTimeout(gitAutoRefreshTimerRef.current)
+    gitAutoRefreshTimerRef.current = null
+  }, [])
+
+  const runDashboardGitRefresh = useCallback(
+    (reason: string) => {
+      const requestedAt = Date.now()
+      setGitRefreshRequest({ reason, requestedAt })
+
+      void triggerGitRefresh(reason)
+        .then(() => {
+          const latestTaskStatus = gitTaskStatusRef.current
+          if (latestTaskStatus?.running) return
+          setGitRefreshRequest((current) =>
+            current?.reason === reason && current.requestedAt === requestedAt ? null : current
+          )
+        })
+        .catch((err) => {
+          console.error('[Dashboard] Failed to refresh git snapshot:', err)
+          setGitRefreshRequest((current) =>
+            current?.reason === reason && current.requestedAt === requestedAt ? null : current
+          )
+        })
+    },
+    [triggerGitRefresh]
+  )
+
+  const scheduleGitAutoRefresh = useCallback(() => {
+    clearGitAutoRefreshTimer()
+
+    const intervalMs = getDashboardGitAutoRefreshIntervalMs(gitAutoRefreshPreset)
+    const autoRefreshReason =
+      gitAutoRefreshPreset === 'none'
+        ? null
+        : getDashboardGitAutoRefreshReason(gitAutoRefreshPreset)
+    if (
+      staticMode ||
+      intervalMs === null ||
+      autoRefreshReason === null ||
+      gitRefreshRequest !== null ||
+      !isDocumentVisible
+    ) {
+      setGitAutoRefreshCycleStartedAt(null)
+      return
+    }
+
+    const startedAt = Date.now()
+    setGitAutoRefreshCycleStartedAt(startedAt)
+    setGitAutoRefreshNow(startedAt)
+
+    gitAutoRefreshTimerRef.current = window.setTimeout(() => {
+      gitAutoRefreshTimerRef.current = null
+      setGitAutoRefreshCycleStartedAt(null)
+      setGitAutoRefreshNow(Date.now())
+      runDashboardGitRefresh(autoRefreshReason)
+    }, intervalMs)
+  }, [
+    clearGitAutoRefreshTimer,
+    gitAutoRefreshPreset,
+    gitRefreshRequest,
+    isDocumentVisible,
+    runDashboardGitRefresh,
+    staticMode,
+  ])
+
+  const handleManualGitRefresh = useCallback(() => {
+    clearGitAutoRefreshTimer()
+    setGitAutoRefreshCycleStartedAt(null)
+    setGitAutoRefreshNow(Date.now())
+    runDashboardGitRefresh('manual-button')
+  }, [clearGitAutoRefreshTimer, runDashboardGitRefresh])
 
   const handleRemoveDetachedWorktree = useCallback(async (worktree: DashboardGitWorktree) => {
     if (isStaticMode() || worktree.isCurrent || !worktree.detached || isHttpUrl(worktree.path)) {
@@ -309,13 +400,21 @@ export function Dashboard() {
   }, [])
 
   useEffect(() => {
-    if (isStaticMode()) return
+    gitRefreshRequestRef.current = gitRefreshRequest
+  }, [gitRefreshRequest])
+
+  useEffect(() => {
+    if (staticMode) return
 
     const triggerOnce = (reason: string) => {
+      if (gitRefreshRequestRef.current !== null) return
       const now = Date.now()
       if (now - focusRefreshAtRef.current < 700) return
       focusRefreshAtRef.current = now
-      void triggerGitRefresh(reason)
+      clearGitAutoRefreshTimer()
+      setGitAutoRefreshCycleStartedAt(null)
+      setGitAutoRefreshNow(Date.now())
+      runDashboardGitRefresh(reason)
     }
 
     const onFocus = () => {
@@ -323,7 +422,9 @@ export function Dashboard() {
     }
 
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      const visible = document.visibilityState === 'visible'
+      setIsDocumentVisible(visible)
+      if (visible) {
         triggerOnce('document-visible')
       }
     }
@@ -337,7 +438,56 @@ export function Dashboard() {
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [triggerGitRefresh])
+  }, [clearGitAutoRefreshTimer, runDashboardGitRefresh, staticMode])
+
+  useEffect(() => {
+    gitTaskStatusRef.current = gitTaskStatus
+  }, [gitTaskStatus])
+
+  useEffect(() => {
+    if (!gitRefreshRequest || !gitTaskStatus) return
+
+    const finishedAfterRequest =
+      gitTaskStatus.running === false &&
+      (gitTaskStatus.lastFinishedAt ?? 0) >= gitRefreshRequest.requestedAt
+
+    if (!finishedAfterRequest) return
+
+    setGitRefreshRequest((current) =>
+      current?.reason === gitRefreshRequest.reason &&
+      current.requestedAt === gitRefreshRequest.requestedAt
+        ? null
+        : current
+    )
+  }, [gitRefreshRequest, gitTaskStatus])
+
+  useEffect(() => {
+    if (staticMode) return
+    persistDashboardGitAutoRefreshPreset(gitAutoRefreshPreset)
+  }, [gitAutoRefreshPreset, staticMode])
+
+  useEffect(() => {
+    if (staticMode) return
+    scheduleGitAutoRefresh()
+    return () => {
+      clearGitAutoRefreshTimer()
+    }
+  }, [clearGitAutoRefreshTimer, scheduleGitAutoRefresh, staticMode])
+
+  useEffect(() => {
+    const intervalMs = getDashboardGitAutoRefreshIntervalMs(gitAutoRefreshPreset)
+    if (staticMode || intervalMs === null || gitAutoRefreshCycleStartedAt === null) return
+
+    const updateNow = () => {
+      setGitAutoRefreshNow(Date.now())
+    }
+
+    updateNow()
+    const timer = window.setInterval(updateNow, 250)
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [gitAutoRefreshCycleStartedAt, gitAutoRefreshPreset, staticMode])
 
   const activeChanges = overview?.activeChanges ?? []
   const activeChangeIdSet = useMemo(
@@ -359,9 +509,21 @@ export function Dashboard() {
       }
     })
   }, [configBundle])
+  const taskCompleteChangeIds = useMemo(
+    () =>
+      new Set(
+        activeChanges
+          .filter(
+            (change) =>
+              change.progress.total === 0 || change.progress.completed >= change.progress.total
+          )
+          .map((change) => change.id)
+      ),
+    [activeChanges]
+  )
   const workflowSchemaCards = useMemo(
-    () => buildWorkflowSchemaCards(activeStatuses, workflowSchemaCatalog),
-    [activeStatuses, workflowSchemaCatalog]
+    () => buildWorkflowSchemaCards(activeStatuses, workflowSchemaCatalog, taskCompleteChangeIds),
+    [activeStatuses, taskCompleteChangeIds, workflowSchemaCatalog]
   )
   const applyTrackedArtifactBySchema = useMemo(() => {
     const details = configBundle?.schemaDetails ?? {}
@@ -409,13 +571,25 @@ export function Dashboard() {
     defaultBranch: 'main',
     worktrees: [],
   }
-  const staticMode = isStaticMode()
   const showGitSnapshot =
     !staticMode || git.worktrees.some((worktree) => worktree.entries.length > 0)
 
   const hasChanges = activeChanges.length > 0
   const currentWorktree = git.worktrees.find((worktree) => worktree.isCurrent) ?? null
   const otherWorktrees = git.worktrees.filter((worktree) => !worktree.isCurrent)
+  const gitAutoRefreshIntervalMs = getDashboardGitAutoRefreshIntervalMs(gitAutoRefreshPreset)
+  const gitAutoRefreshProgress =
+    gitRefreshRequest !== null
+      ? 0
+      : getDashboardGitAutoRefreshProgress(
+          gitAutoRefreshCycleStartedAt,
+          gitAutoRefreshIntervalMs,
+          gitAutoRefreshNow
+        )
+  const showGitRefreshProgress = gitAutoRefreshIntervalMs !== null && gitRefreshRequest === null
+  const animateRefreshButton =
+    gitRefreshRequest !== null && isAnimatedGitRefreshReason(gitRefreshReason)
+  const disableRefreshButton = gitRefreshRequest !== null
 
   const renderHistoryCards = () => (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -534,19 +708,48 @@ export function Dashboard() {
               </p>
             </div>
             {!staticMode ? (
-              <button
-                type="button"
-                onClick={() => {
-                  void triggerGitRefresh('manual-button')
-                }}
-                disabled={gitTaskStatus?.running === true}
-                className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 rounded border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <RefreshCw
-                  className={`h-3.5 w-3.5 ${gitTaskStatus?.running ? 'text-primary animate-spin' : ''}`}
+              <div className="border-border bg-card inline-flex overflow-hidden rounded-md border">
+                <Select
+                  value={gitAutoRefreshPreset}
+                  options={GIT_AUTO_REFRESH_OPTIONS}
+                  onValueChange={setGitAutoRefreshPreset}
+                  ariaLabel="Git auto refresh"
+                  className="text-foreground/75 hover:text-foreground border-r-current/10 bg-muted/20 relative isolate h-7 w-9 shrink-0 justify-center rounded-none border-0 border-r px-0"
+                  positionerClassName="z-50"
+                  popupClassName="min-w-[7rem]"
+                  renderTrigger={({ selectedOption }) => (
+                    <span className="relative inline-flex h-full w-full items-center justify-center overflow-hidden">
+                      <span className="bg-muted/20 pointer-events-none absolute inset-0" />
+                      {showGitRefreshProgress ? (
+                        <span
+                          className="bg-primary/30 dark:bg-primary/35 pointer-events-none absolute inset-y-0 left-0 transition-[width]"
+                          style={{ width: `${gitAutoRefreshProgress * 100}%` }}
+                        />
+                      ) : null}
+                      <span className="relative z-10 inline-flex items-center justify-center">
+                        <GitAutoRefreshPresetIcon
+                          preset={selectedOption?.value ?? gitAutoRefreshPreset}
+                        />
+                      </span>
+                    </span>
+                  )}
                 />
-                Refresh
-              </button>
+                <button
+                  type="button"
+                  onClick={handleManualGitRefresh}
+                  disabled={disableRefreshButton}
+                  className={`inline-flex h-7 items-center gap-1 px-2 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
+                    animateRefreshButton
+                      ? 'text-primary bg-primary/10'
+                      : 'text-foreground/75 hover:text-foreground'
+                  }`}
+                >
+                  <RefreshCw
+                    className={`h-3.5 w-3.5 ${animateRefreshButton ? 'animate-spin' : ''}`}
+                  />
+                  Refresh
+                </button>
+              </div>
             ) : null}
           </div>
           <div className="border-border/80 bg-card min-w-0 rounded-lg border p-3">
@@ -566,9 +769,13 @@ export function Dashboard() {
                   onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
                 />
                 <div className={`-mt-px space-y-1 border-l pl-3 pt-2 ${GIT_WORKTREE_LINE_CLASS}`}>
-                  {currentWorktree.entries.map((entry) => (
+                  {sortDashboardGitEntries(currentWorktree.entries).map((entry) => (
                     <GitEntryRow
-                      key={entry.type === 'commit' ? entry.hash : entry.type}
+                      key={
+                        entry.type === 'commit'
+                          ? entry.hash
+                          : `${entry.type}:${entry.updatedAt ?? 'none'}`
+                      }
                       entry={entry}
                     />
                   ))}
@@ -663,11 +870,14 @@ export function Dashboard() {
           const trackedArtifactStatus =
             trackedArtifactId && status
               ? (status.artifacts.find((artifact) => artifact.id === trackedArtifactId)?.status ??
-                null)
-              : null
-          const phase = classifyChangeStatus({
+                inferTrackedArtifactStatus(status.artifacts.map((artifact) => artifact.status)))
+              : inferTrackedArtifactStatus(
+                  status?.artifacts.map((artifact) => artifact.status) ?? []
+                )
+          const phase = classifyChangeWorkflowPhase({
             hasStatus: Boolean(status),
             isComplete: status?.isComplete ?? false,
+            tasksComplete: progress.total === 0 || progress.completed >= progress.total,
             trackedArtifactStatus,
           })
 
@@ -883,8 +1093,23 @@ export function WorktreeRow({
   )
 }
 
+function GitAutoRefreshPresetIcon({ preset }: { preset: DashboardGitAutoRefreshPreset }) {
+  if (preset === '30s') return <Clock1 className="h-3.5 w-3.5" />
+  if (preset === '5min') return <Clock3 className="h-3.5 w-3.5" />
+  if (preset === '30min') return <Clock6 className="h-3.5 w-3.5" />
+  return <ChevronDown className="h-3.5 w-3.5" />
+}
+
 function GitEntryRow({ entry }: { entry: DashboardGitEntry }) {
   const isCommit = entry.type === 'commit'
+  const timestamp = getDashboardGitEntryTimestamp(entry)
+  const timeLabel = timestamp
+    ? formatRelativeTime(timestamp)
+    : isCommit
+      ? 'unknown time'
+      : 'working tree'
+  const timeTooltip = timestamp ? formatDateTime(timestamp) : undefined
+
   return (
     <div
       className={`min-w-0 rounded-md border px-2 py-1.5 ${
@@ -911,6 +1136,16 @@ function GitEntryRow({ entry }: { entry: DashboardGitEntry }) {
             <GitFilesBadge files={entry.diff.files} />
             <DiffStat diff={entry.diff} className="justify-end" />
           </div>
+          <Tooltip content={timeTooltip} delay={0}>
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-foreground mt-0.5 inline-flex min-h-5 items-center rounded-sm bg-transparent px-1 py-0 text-[10px]"
+              aria-label={timeTooltip ? `${timeLabel} (${timeTooltip})` : timeLabel}
+              title={timeTooltip}
+            >
+              {timeLabel}
+            </button>
+          </Tooltip>
         </div>
       </div>
     </div>

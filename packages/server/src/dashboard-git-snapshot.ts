@@ -5,6 +5,7 @@ import type {
   DashboardGitWorktree,
 } from '@openspecui/core'
 import { execFile } from 'node:child_process'
+import { stat } from 'node:fs/promises'
 import { relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
@@ -16,11 +17,13 @@ interface GitCommandResult {
 }
 
 type GitRunner = (cwd: string, args: string[]) => Promise<GitCommandResult>
+type PathTimestampReader = (absolutePath: string) => Promise<number | null>
 
 interface BuildDashboardGitSnapshotOptions {
   projectDir: string
   runGit?: GitRunner
   maxCommitEntries?: number
+  readPathTimestampMs?: PathTimestampReader
 }
 
 interface ParsedWorktree {
@@ -45,6 +48,15 @@ async function defaultRunGit(cwd: string, args: string[]): Promise<GitCommandRes
     return { ok: true, stdout }
   } catch {
     return { ok: false, stdout: '' }
+  }
+}
+
+async function defaultReadPathTimestampMs(absolutePath: string): Promise<number | null> {
+  try {
+    const stats = await stat(absolutePath)
+    return Number.isFinite(stats.mtimeMs) && stats.mtimeMs > 0 ? stats.mtimeMs : null
+  } catch {
+    return null
   }
 }
 
@@ -179,13 +191,14 @@ async function collectCommitEntries(options: {
   defaultBranch: string
   maxCommitEntries: number
   runGit: GitRunner
+  readPathTimestampMs: PathTimestampReader
 }): Promise<DashboardGitEntry[]> {
-  const { worktreePath, defaultBranch, maxCommitEntries, runGit } = options
-  const entries: DashboardGitEntry[] = []
+  const { worktreePath, defaultBranch, maxCommitEntries, runGit, readPathTimestampMs } = options
+  const commitEntries: DashboardGitEntry[] = []
 
   const commits = await runGit(worktreePath, [
     'log',
-    '--format=%H%x1f%s',
+    '--format=%H%x1f%ct%x1f%s',
     `-n${maxCommitEntries}`,
     `${defaultBranch}..HEAD`,
   ])
@@ -193,7 +206,7 @@ async function collectCommitEntries(options: {
   if (commits.ok) {
     for (const line of commits.stdout.split('\n')) {
       if (!line.trim()) continue
-      const [hash, title = ''] = line.split('\u001f')
+      const [hash, committedAtRaw = '0', title = ''] = line.split('\u001f')
       if (!hash) continue
 
       const diffResult = await runGit(worktreePath, ['show', '--numstat', '--format=', hash])
@@ -209,10 +222,13 @@ async function collectCommitEntries(options: {
         .map((item) => item.trim())
         .filter((item) => item.length > 0)
 
-      entries.push({
+      const committedAt = Number(committedAtRaw) * 1000
+
+      commitEntries.push({
         type: 'commit',
         hash,
         title: title.trim() || hash.slice(0, 7),
+        committedAt: Number.isFinite(committedAt) && committedAt > 0 ? committedAt : 0,
         relatedChanges: parseRelatedChanges(changedFiles),
         diff: diffResult.ok ? parseNumStat(diffResult.stdout) : EMPTY_DIFF,
       })
@@ -234,19 +250,34 @@ async function collectCommitEntries(options: {
 
   const allUncommittedFiles = new Set<string>([...trackedFiles, ...untrackedFiles])
   const trackedDiff = trackedResult.ok ? parseNumStat(trackedResult.stdout) : EMPTY_DIFF
+  const updatedAtCandidates = await Promise.all(
+    [...allUncommittedFiles].map((path) => readPathTimestampMs(resolve(worktreePath, path)))
+  )
+  const updatedAt =
+    updatedAtCandidates.reduce<number | null>((latest, current) => {
+      if (!current || !Number.isFinite(current) || current <= 0) return latest
+      return latest === null || current > latest ? current : latest
+    }, null) ?? null
 
-  entries.push({
-    type: 'uncommitted',
-    title: 'Uncommitted',
-    relatedChanges: parseRelatedChanges([...allUncommittedFiles]),
-    diff: {
-      files: allUncommittedFiles.size,
-      insertions: trackedDiff.insertions,
-      deletions: trackedDiff.deletions,
-    },
+  commitEntries.sort((left, right) => {
+    if (left.type !== 'commit' || right.type !== 'commit') return 0
+    return right.committedAt - left.committedAt
   })
 
-  return entries
+  return [
+    {
+      type: 'uncommitted',
+      title: 'Uncommitted',
+      updatedAt,
+      relatedChanges: parseRelatedChanges([...allUncommittedFiles]),
+      diff: {
+        files: allUncommittedFiles.size,
+        insertions: trackedDiff.insertions,
+        deletions: trackedDiff.deletions,
+      },
+    },
+    ...commitEntries,
+  ]
 }
 
 async function collectWorktree(options: {
@@ -255,8 +286,10 @@ async function collectWorktree(options: {
   defaultBranch: string
   runGit: GitRunner
   maxCommitEntries: number
+  readPathTimestampMs: PathTimestampReader
 }): Promise<DashboardGitWorktree> {
-  const { projectDir, worktree, defaultBranch, runGit, maxCommitEntries } = options
+  const { projectDir, worktree, defaultBranch, runGit, maxCommitEntries, readPathTimestampMs } =
+    options
   const worktreePath = resolve(worktree.path)
   const resolvedProjectDir = resolve(projectDir)
 
@@ -282,6 +315,7 @@ async function collectWorktree(options: {
     defaultBranch,
     maxCommitEntries,
     runGit,
+    readPathTimestampMs,
   })
 
   return {
@@ -343,6 +377,7 @@ export async function buildDashboardGitSnapshot(
 ): Promise<DashboardGitSnapshot> {
   const runGit = options.runGit ?? defaultRunGit
   const maxCommitEntries = options.maxCommitEntries ?? 8
+  const readPathTimestampMs = options.readPathTimestampMs ?? defaultReadPathTimestampMs
   const resolvedProjectDir = resolve(options.projectDir)
 
   const defaultBranch = await resolveDefaultBranch(resolvedProjectDir, runGit)
@@ -370,6 +405,7 @@ export async function buildDashboardGitSnapshot(
         defaultBranch,
         runGit,
         maxCommitEntries,
+        readPathTimestampMs,
       })
     )
   )

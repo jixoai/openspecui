@@ -1,12 +1,25 @@
+import {
+  classifyChangeWorkflowPhase,
+  inferTrackedArtifactStatus,
+} from '@/lib/change-workflow-phase'
+import { formatRelativeTime } from '@/lib/format-time'
 import { navController } from '@/lib/nav-controller'
 import { useOpsxStatusListSubscription } from '@/lib/use-opsx'
+import { useChangesSubscription } from '@/lib/use-subscription'
+import type { ChangeStatus } from '@openspecui/core'
 import { Link } from '@tanstack/react-router'
 import { ChevronRight, GitBranch, Sparkles } from 'lucide-react'
 
-export function ChangeList() {
-  const { data: statuses, isLoading } = useOpsxStatusListSubscription()
+function buildStatusMap(statuses: ChangeStatus[] | undefined): Map<string, ChangeStatus> {
+  return new Map((statuses ?? []).map((status) => [status.changeName, status]))
+}
 
-  if (isLoading && !statuses) {
+export function ChangeList() {
+  const { data: changes, isLoading } = useChangesSubscription()
+  const { data: statuses } = useOpsxStatusListSubscription()
+  const statusMap = buildStatusMap(statuses)
+
+  if (isLoading && !changes) {
     return <div className="route-loading animate-pulse">Loading changes...</div>
   }
 
@@ -26,30 +39,79 @@ export function ChangeList() {
       </p>
 
       <div className="border-border divide-border divide-y rounded-lg border">
-        {statuses?.map((status) => {
-          const done = status.artifacts.filter((artifact) => artifact.status === 'done').length
-          const total = status.artifacts.length
+        {changes?.map((change) => {
+          const status = statusMap.get(change.id)
+          const doneArtifacts =
+            status?.artifacts.filter((artifact) => artifact.status === 'done').length ?? 0
+          const totalArtifacts = status?.artifacts.length ?? 0
+          const phase = classifyChangeWorkflowPhase({
+            hasStatus: Boolean(status),
+            isComplete: status?.isComplete ?? false,
+            tasksComplete:
+              change.progress.total === 0 || change.progress.completed >= change.progress.total,
+            trackedArtifactStatus: inferTrackedArtifactStatus(
+              status?.artifacts.map((artifact) => artifact.status) ?? []
+            ),
+          })
+          const taskPercent =
+            change.progress.total > 0
+              ? Math.round((change.progress.completed / change.progress.total) * 100)
+              : 0
           return (
             <Link
-              key={status.changeName}
+              key={change.id}
               to="/changes/$changeId"
-              params={{ changeId: status.changeName }}
-              className="hover:bg-muted/50 flex items-center justify-between p-4"
+              params={{ changeId: change.id }}
+              className="hover:bg-muted/50 block px-4 py-3"
             >
-              <div className="flex items-center gap-3">
-                <GitBranch className="text-muted-foreground h-5 w-5" />
-                <div>
-                  <div className="font-medium">{status.changeName}</div>
-                  <div className="text-muted-foreground text-sm">
-                    {done}/{total} artifacts · schema {status.schemaName}
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <GitBranch className="text-muted-foreground mt-0.5 h-5 w-5 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{change.name}</div>
+                    <div className="text-muted-foreground truncate text-sm">
+                      {change.id}
+                      {change.updatedAt > 0 && <> · {formatRelativeTime(change.updatedAt)}</>}
+                    </div>
                   </div>
                 </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex flex-col items-end gap-1 text-right text-sm">
+                    <span
+                      className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${phase.toneClass}`}
+                    >
+                      {phase.label}
+                    </span>
+                    <div className="font-medium">
+                      {change.progress.completed}/{change.progress.total}
+                    </div>
+                    <div className="text-muted-foreground text-xs">tasks</div>
+                  </div>
+                  <ChevronRight className="text-muted-foreground h-4 w-4 shrink-0" />
+                </div>
               </div>
-              <ChevronRight className="text-muted-foreground h-4 w-4" />
+
+              <div className="bg-muted h-1.5 rounded-full">
+                <div
+                  className="bg-primary h-full rounded-full transition-all"
+                  style={{ width: `${taskPercent}%` }}
+                />
+              </div>
+
+              <div className="text-muted-foreground mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span>{taskPercent}% task completion</span>
+                {status ? (
+                  <span className="truncate">
+                    {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
+                  </span>
+                ) : (
+                  <span>Loading workflow status…</span>
+                )}
+              </div>
             </Link>
           )
         })}
-        {statuses?.length === 0 && (
+        {changes?.length === 0 && (
           <div className="text-muted-foreground p-4 text-center">
             <div>No active changes.</div>
             <div className="mt-1 text-xs">Recommended workflow start: /opsx:propose</div>
