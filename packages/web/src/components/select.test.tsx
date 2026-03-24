@@ -29,6 +29,6 @@ describe('Select', () => {
     fireEvent.mouseMove(option)
     fireEvent.click(option)
 
-    expect(screen.getByTestId('selected-value')).toHaveTextContent('5min')
+    expect(screen.getByTestId('selected-value').textContent).toBe('5min')
   })
 })

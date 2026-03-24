@@ -68,6 +68,10 @@ vi.mock('@tanstack/react-router', () => ({
 describe('Dashboard', () => {
   const writeText = vi.fn<(value: string) => Promise<void>>()
 
+  function isDisabled(name: string): boolean {
+    return (screen.getByRole('button', { name }) as HTMLButtonElement).disabled
+  }
+
   function createOverviewData() {
     return {
       summary: {
@@ -342,7 +346,7 @@ describe('Dashboard', () => {
       lastReason: 'dashboard-mount',
     }
     view.rerender(<Dashboard />)
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).not.toBeDisabled())
+    await waitFor(() => expect(isDisabled('Refresh')).toBe(false))
 
     refreshDashboardGitSnapshotMock.mockClear()
 
@@ -365,7 +369,7 @@ describe('Dashboard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
     expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledWith('manual-button')
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled())
+    await waitFor(() => expect(isDisabled('Refresh')).toBe(true))
     expect(view.container.querySelector('svg.animate-spin')).toBeTruthy()
 
     gitTaskStatus = {
@@ -376,7 +380,7 @@ describe('Dashboard', () => {
       lastReason: 'watcher-change',
     }
     view.rerender(<Dashboard />)
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).not.toBeDisabled())
+    await waitFor(() => expect(isDisabled('Refresh')).toBe(false))
     dateNowSpy.mockRestore()
   })
 
@@ -409,7 +413,7 @@ describe('Dashboard', () => {
     }
     view.rerender(<Dashboard />)
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).not.toBeDisabled())
+    await waitFor(() => expect(isDisabled('Refresh')).toBe(false))
     expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledTimes(1)
   })
 })
