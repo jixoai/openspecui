@@ -1,5 +1,11 @@
 # @openspecui/web
 
+## 2.1.7
+
+### Patch Changes
+
+- 750405c: Improve the dashboard Git Snapshot panel with chronological entry ordering, commit/uncommitted timestamps, and optional auto-refresh presets.
+
 ## 2.1.6
 
 ### Patch Changes
