@@ -437,6 +437,10 @@ export const changeRouter = router({
     }),
 
   // Reactive subscriptions
+  subscribe: publicProcedure.subscription(({ ctx }) => {
+    return createReactiveSubscription(() => ctx.adapter.listChangesWithMeta())
+  }),
+
   subscribeFiles: publicProcedure
     .input(z.object({ id: z.string() }))
     .subscription(({ ctx, input }) => {
@@ -1364,8 +1368,8 @@ export const dashboardRouter = router({
     .input(z.object({ reason: z.string().optional() }).optional())
     .mutation(async ({ ctx, input }) => {
       const reason = input?.reason?.trim() || 'manual-refresh'
-      await touchDashboardGitRefreshStamp(ctx.projectDir, reason)
       await ctx.dashboardOverviewService.refresh(reason)
+      await touchDashboardGitRefreshStamp(ctx.projectDir, reason)
       return {
         success: true,
       }
@@ -1379,8 +1383,8 @@ export const dashboardRouter = router({
         projectDir: ctx.projectDir,
         targetPath: input.path,
       })
-      await touchDashboardGitRefreshStamp(ctx.projectDir, 'remove-detached-worktree')
       await ctx.dashboardOverviewService.refresh('remove-detached-worktree')
+      await touchDashboardGitRefreshStamp(ctx.projectDir, 'remove-detached-worktree')
       return {
         success: true,
       }

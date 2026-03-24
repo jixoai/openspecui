@@ -57,6 +57,7 @@ export interface DashboardGitCommitEntry {
   type: 'commit'
   hash: string
   title: string
+  committedAt: number
   relatedChanges: string[]
   diff: DashboardGitDiffStats
 }
@@ -64,6 +65,7 @@ export interface DashboardGitCommitEntry {
 export interface DashboardGitUncommittedEntry {
   type: 'uncommitted'
   title: string
+  updatedAt: number | null
   relatedChanges: string[]
   diff: DashboardGitDiffStats
 }
