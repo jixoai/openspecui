@@ -1,5 +1,13 @@
 # @openspecui/server
 
+## 2.1.7
+
+### Patch Changes
+
+- 750405c: Improve the dashboard Git Snapshot panel with chronological entry ordering, commit/uncommitted timestamps, and optional auto-refresh presets.
+- Updated dependencies [750405c]
+  - @openspecui/core@2.1.7
+
 ## 2.1.5
 
 ### Patch Changes
