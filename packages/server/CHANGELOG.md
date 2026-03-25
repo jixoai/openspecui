@@ -1,5 +1,16 @@
 # @openspecui/server
 
+## 2.2.0
+
+### Minor Changes
+
+- abe56de: Add a dedicated live Git panel with changed-file detail, worktree switching handoff, and shared Git snapshot UI primitives.
+
+### Patch Changes
+
+- Updated dependencies [abe56de]
+  - @openspecui/core@2.2.0
+
 ## 2.1.7
 
 ### Patch Changes
