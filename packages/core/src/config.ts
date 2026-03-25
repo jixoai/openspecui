@@ -1,4 +1,4 @@
-import { exec, spawn } from 'child_process'
+import { exec, execFile, spawn } from 'child_process'
 import { mkdir, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
 import { promisify } from 'util'
@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { reactiveReadFile, updateReactiveFileCache } from './reactive-fs/index.js'
 
 const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
 
 const CLI_PROBE_TIMEOUT_MS = 20_000
 
@@ -196,6 +197,92 @@ function commandToString(commandParts: readonly string[]): string {
   return commandParts.map(formatToken).join(' ').trim()
 }
 
+function isBareExecutableCommand(command: string): boolean {
+  if (!command) return false
+  if (command === '.' || command === '..') return false
+  return !/[\\/]/.test(command)
+}
+
+function quotePosixShellArg(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+async function resolveShellExecutablePath(
+  command: string,
+  cwd: string,
+  env: NodeJS.ProcessEnv
+): Promise<string | null> {
+  if (!isBareExecutableCommand(command)) {
+    return null
+  }
+
+  try {
+    if (process.platform === 'win32') {
+      const { stdout } = await execFileAsync('where', [command], {
+        cwd,
+        env,
+        encoding: 'utf8',
+        timeout: 5_000,
+      })
+      const resolved = stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find((line) => line.length > 0)
+      return resolved || null
+    }
+
+    const shell = env.SHELL || process.env.SHELL || '/bin/sh'
+    const { stdout } = await execFileAsync(
+      shell,
+      ['-lc', `command -v -- ${quotePosixShellArg(command)}`],
+      {
+        cwd,
+        env,
+        encoding: 'utf8',
+        timeout: 5_000,
+      }
+    )
+    const resolved = stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line.startsWith('/'))
+    return resolved || null
+  } catch {
+    return null
+  }
+}
+
+async function expandCliRunnerCandidates(
+  candidates: readonly CliRunnerCandidate[],
+  cwd: string,
+  env: NodeJS.ProcessEnv
+): Promise<readonly CliRunnerCandidate[]> {
+  const expanded: CliRunnerCandidate[] = []
+
+  for (const candidate of candidates) {
+    const [command, ...rest] = candidate.commandParts
+
+    const shouldResolveViaShell =
+      candidate.id === 'openspec' ||
+      (candidate.id === 'configured' && command.trim().toLowerCase() === 'openspec')
+
+    if (shouldResolveViaShell && command) {
+      const shellResolved = await resolveShellExecutablePath(command, cwd, env)
+      if (shellResolved && shellResolved !== command) {
+        expanded.push({
+          ...candidate,
+          source: `${candidate.source} (shell)`,
+          commandParts: [shellResolved, ...rest],
+        })
+      }
+    }
+
+    expanded.push(candidate)
+  }
+
+  return expanded
+}
+
 function getRunnerPriorityFromUserAgent(userAgent?: string | null): RunnerId | null {
   if (!userAgent) return null
   if (userAgent.startsWith('bun')) return 'bunx'
@@ -337,8 +424,9 @@ async function resolveCliRunner(
   cwd: string,
   env: NodeJS.ProcessEnv
 ): Promise<ResolvedCliRunner> {
+  const expandedCandidates = await expandCliRunnerCandidates(candidates, cwd, env)
   const attempts: CliRunnerAttempt[] = []
-  for (const candidate of candidates) {
+  for (const candidate of expandedCandidates) {
     const attempt = await probeCliRunner(candidate, cwd, env)
     attempts.push(attempt)
     if (attempt.success) {
@@ -418,9 +506,17 @@ async function fetchLatestVersion(): Promise<string | undefined> {
  * 每次调用都会重新检测，不使用缓存。
  */
 export async function sniffGlobalCli(): Promise<CliSniffResult> {
+  const env = createCleanCliEnv()
+  const resolvedCommand =
+    (await resolveShellExecutablePath('openspec', process.cwd(), env)) ?? 'openspec'
+
   // 并行获取本地版本和最新版本
   const [localResult, latestVersion] = await Promise.all([
-    execAsync('openspec --version', { timeout: 10000 }).catch((err) => ({ error: err })),
+    execFileAsync(resolvedCommand, ['--version'], {
+      env,
+      timeout: 10000,
+      encoding: 'utf8',
+    }).catch((err) => ({ error: err })),
     fetchLatestVersion(),
   ])
 

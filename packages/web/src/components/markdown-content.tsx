@@ -89,7 +89,7 @@ export function CodeBlock({ children, className }: CodeBlockProps) {
 
   if (!html) {
     return (
-      <pre className="bg-muted/50 border-border overflow-x-auto rounded-md border p-4">
+      <pre className="readonly-code-surface overflow-x-auto rounded-md p-4">
         <code className="text-foreground font-mono text-sm">{code}</code>
       </pre>
     )

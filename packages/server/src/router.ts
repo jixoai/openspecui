@@ -3,6 +3,13 @@ import type {
   CliExecutor,
   ConfigManager,
   FileChangeEvent,
+  GitEntriesPage,
+  GitEntryDetail,
+  GitEntryPatch,
+  GitEntrySelector,
+  GitEntryShell,
+  GitWorktreeHandoff,
+  GitWorktreeOverview,
   OpenSpecAdapter,
   OpenSpecWatcher,
   OpsxKernel,
@@ -47,6 +54,14 @@ import {
   touchDashboardGitRefreshStamp,
   type DashboardGitTaskStatus,
 } from './dashboard-overview.js'
+import {
+  buildGitWorktreeOverview,
+  getCurrentWorktreeGitEntryDetail,
+  getCurrentWorktreeGitEntryPatch,
+  getCurrentWorktreeGitEntryShell,
+  listCurrentWorktreeGitEntries,
+} from './git-panel-data.js'
+import { sameGitPath } from './git-shared.js'
 import { reactiveKV } from './reactive-kv.js'
 import {
   createReactiveSubscription,
@@ -61,8 +76,13 @@ export interface Context {
   kernel: OpsxKernel
   searchService: SearchService
   dashboardOverviewService: DashboardOverviewService
+  gitWorktreeHandoff?: GitWorktreeHandoffService
   watcher?: OpenSpecWatcher
   projectDir: string
+}
+
+export interface GitWorktreeHandoffService {
+  ensureWorktreeServer(input: { targetPath: string }): Promise<GitWorktreeHandoff>
 }
 
 const t = initTRPC.context<Context>().create()
@@ -71,6 +91,10 @@ export const router = t.router
 export const publicProcedure = t.procedure
 
 const OPSX_CORE_PROFILE_WORKFLOWS = ['propose', 'explore', 'apply', 'archive'] as const
+const gitEntrySelectorSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('uncommitted') }),
+  z.object({ type: z.literal('commit'), hash: z.string().min(1) }),
+])
 
 type OpsxWorkflowProfile = 'core' | 'custom'
 type OpsxWorkflowDelivery = 'both' | 'skills' | 'commands'
@@ -1412,11 +1436,105 @@ export const dashboardRouter = router({
   }),
 })
 
+export const gitRouter = router({
+  overview: publicProcedure.query(async ({ ctx }): Promise<GitWorktreeOverview> => {
+    return buildGitWorktreeOverview({ projectDir: ctx.projectDir })
+  }),
+
+  listEntries: publicProcedure
+    .input(
+      z
+        .object({
+          cursor: z.string().optional(),
+          limit: z.number().int().min(1).max(100).optional(),
+        })
+        .optional()
+    )
+    .query(async ({ ctx, input }): Promise<GitEntriesPage> => {
+      return listCurrentWorktreeGitEntries({
+        projectDir: ctx.projectDir,
+        cursor: input?.cursor,
+        limit: input?.limit,
+      })
+    }),
+
+  getEntryDetail: publicProcedure
+    .input(z.object({ selector: gitEntrySelectorSchema }))
+    .query(async ({ ctx, input }): Promise<GitEntryDetail> => {
+      return getCurrentWorktreeGitEntryDetail({
+        projectDir: ctx.projectDir,
+        selector: input.selector as GitEntrySelector,
+      })
+    }),
+
+  getEntryShell: publicProcedure
+    .input(z.object({ selector: gitEntrySelectorSchema }))
+    .query(async ({ ctx, input }): Promise<GitEntryShell> => {
+      return getCurrentWorktreeGitEntryShell({
+        projectDir: ctx.projectDir,
+        selector: input.selector as GitEntrySelector,
+      })
+    }),
+
+  getEntryPatch: publicProcedure
+    .input(
+      z.object({
+        selector: gitEntrySelectorSchema,
+        fileId: z.string().min(1),
+      })
+    )
+    .query(async ({ ctx, input }): Promise<GitEntryPatch> => {
+      return getCurrentWorktreeGitEntryPatch({
+        projectDir: ctx.projectDir,
+        selector: input.selector as GitEntrySelector,
+        fileId: input.fileId,
+      })
+    }),
+
+  switchWorktree: publicProcedure
+    .input(z.object({ path: z.string().min(1) }))
+    .mutation(async ({ ctx, input }): Promise<GitWorktreeHandoff> => {
+      if (!ctx.gitWorktreeHandoff) {
+        throw new Error('Worktree handoff is unavailable in this runtime.')
+      }
+
+      const overview = await buildGitWorktreeOverview({ projectDir: ctx.projectDir })
+      const resolvedInputPath = resolve(input.path)
+      let target = null
+
+      if (
+        overview.currentWorktree &&
+        (await sameGitPath(overview.currentWorktree.path, resolvedInputPath))
+      ) {
+        target = overview.currentWorktree
+      } else {
+        for (const worktree of overview.otherWorktrees) {
+          if (await sameGitPath(worktree.path, resolvedInputPath)) {
+            target = worktree
+            break
+          }
+        }
+      }
+
+      if (!target) {
+        throw new Error('Worktree not found.')
+      }
+      if (!target.pathAvailable) {
+        throw new Error(
+          'Worktree path is no longer available. Remove the stale worktree entry first.'
+        )
+      }
+
+      return ctx.gitWorktreeHandoff.ensureWorktreeServer({ targetPath: target.path })
+    }),
+})
+
 /**
  * Main app router
  */
 export const appRouter = router({
   dashboard: dashboardRouter,
+  git: gitRouter,
   spec: specRouter,
   change: changeRouter,
   archive: archiveRouter,

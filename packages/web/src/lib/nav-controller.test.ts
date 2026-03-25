@@ -33,6 +33,7 @@ const DEFAULT_MAIN_TABS: TabId[] = [
 const ALL_TABS: TabId[] = [
   '/dashboard',
   '/config',
+  '/git',
   '/specs',
   '/changes',
   '/archive',
@@ -179,7 +180,7 @@ describe('NavController kernel lifecycle', () => {
     nav = createController('/dashboard')
 
     expect([...nav.mainTabs]).toEqual(DEFAULT_MAIN_TABS)
-    expect([...nav.bottomTabs]).toEqual(['/terminal'])
+    expect([...nav.bottomTabs]).toEqual(['/git', '/terminal'])
     expect(nav.getLocation('main').pathname).toBe('/dashboard')
     expect(nav.getLocation('bottom').pathname).toBe('/')
     expect(window.location.search).toContain('_b=%2F')
@@ -298,9 +299,9 @@ describe('NavController kernel lifecycle', () => {
 
     expect(nav.getLocation('main').pathname).toBe('/terminal')
     expect(nav.getLocation('bottom').pathname).toBe('/')
-    expect(nav.bottomTabs).toHaveLength(0)
+    expect(nav.bottomTabs).toEqual(['/git'])
     expect(window.location.pathname).toBe('/terminal')
-    expect(window.location.search).toBe('')
+    expect(window.location.search).toBe('?_b=%2F')
   })
 
   it('auto-activates first main tab when main has no active item', () => {
@@ -363,6 +364,15 @@ describe('NavController kernel lifecycle', () => {
     expect(nav.getLocation('main').pathname).toBe('/specs')
     expect(nav.getLocation('bottom').pathname).toBe('/')
     expect(window.location.search).toContain('_b=%2F')
+  })
+
+  it('infers bottom ownership from direct bottom-path deep links', () => {
+    nav = createController('/git')
+
+    expect(nav.getLocation('main').pathname).toBe('/dashboard')
+    expect(nav.getLocation('bottom').pathname).toBe('/git')
+    expect(window.location.pathname).toBe('/dashboard')
+    expect(window.location.search).toContain('_b=%2Fgit')
   })
 
   it('activates first main tab when URL points to a tab currently owned by bottom', () => {

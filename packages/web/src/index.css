@@ -62,6 +62,16 @@
   --tracking-normal: 0em;
   --spacing: 0.25rem;
   --code-editor-border: oklch(0.86 0 0);
+  --readonly-code-bg: color-mix(in oklab, var(--muted) 42%, var(--background));
+  --readonly-code-border: color-mix(in oklab, var(--border) 18%, transparent);
+  --readonly-code-meta-bg: color-mix(in oklab, var(--accent) 12%, var(--background));
+  --readonly-code-meta-fg: color-mix(in oklab, var(--accent) 58%, var(--foreground));
+  --readonly-code-file-bg: color-mix(in oklab, var(--muted) 70%, var(--background));
+  --readonly-code-file-fg: color-mix(in oklab, var(--foreground) 92%, white);
+  --readonly-code-add-bg: color-mix(in oklab, oklch(0.78 0.16 151) 24%, var(--background));
+  --readonly-code-add-fg: color-mix(in oklab, oklch(0.48 0.12 151) 82%, var(--foreground));
+  --readonly-code-del-bg: color-mix(in oklab, oklch(0.76 0.16 22) 24%, var(--background));
+  --readonly-code-del-fg: color-mix(in oklab, oklch(0.5 0.14 22) 82%, var(--foreground));
 }
 
 .dark {
@@ -122,6 +132,16 @@
   --shadow-xl: 4px 4px 0px 0px hsl(0 0% 100% / 1), 4px 8px 10px -1px hsl(0 0% 0% / 1);
   --shadow-2xl: 4px 4px 0px 0px hsl(0 0% 100% / 2.5);
   --code-editor-border: oklch(0.56 0 0 / 0.7);
+  --readonly-code-bg: color-mix(in oklab, var(--muted) 78%, var(--background));
+  --readonly-code-border: color-mix(in oklab, var(--border) 18%, transparent);
+  --readonly-code-meta-bg: color-mix(in oklab, var(--accent) 18%, var(--background));
+  --readonly-code-meta-fg: color-mix(in oklab, var(--accent) 60%, white);
+  --readonly-code-file-bg: color-mix(in oklab, var(--muted) 86%, var(--background));
+  --readonly-code-file-fg: color-mix(in oklab, white 86%, var(--foreground));
+  --readonly-code-add-bg: color-mix(in oklab, oklch(0.39 0.1 151) 64%, var(--background));
+  --readonly-code-add-fg: color-mix(in oklab, oklch(0.9 0.08 151) 84%, white);
+  --readonly-code-del-bg: color-mix(in oklab, oklch(0.36 0.09 22) 64%, var(--background));
+  --readonly-code-del-fg: color-mix(in oklab, oklch(0.92 0.08 22) 84%, white);
 }
 
 @theme inline {
@@ -364,8 +384,34 @@
 }
 
 /* Shiki dual theme support */
+.readonly-code-surface {
+  background: var(--readonly-code-bg);
+  border: 1px solid var(--readonly-code-border);
+}
+.readonly-diff-line {
+  color: var(--foreground);
+  padding-inline: 0.75rem;
+  padding-block: 0.125rem;
+}
+.readonly-diff-line-meta {
+  background: var(--readonly-code-meta-bg);
+  color: var(--readonly-code-meta-fg);
+}
+.readonly-diff-line-file {
+  background: var(--readonly-code-file-bg);
+  color: var(--readonly-code-file-fg);
+}
+.readonly-diff-line-add {
+  background: var(--readonly-code-add-bg);
+  color: var(--readonly-code-add-fg);
+}
+.readonly-diff-line-del {
+  background: var(--readonly-code-del-bg);
+  color: var(--readonly-code-del-fg);
+}
 .shiki-wrapper {
-  border: 1px solid var(--border);
+  background: var(--readonly-code-bg);
+  border: 1px solid var(--readonly-code-border);
 }
 .shiki,
 .shiki span {

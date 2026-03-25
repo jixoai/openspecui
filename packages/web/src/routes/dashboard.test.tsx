@@ -148,6 +148,7 @@ describe('Dashboard', () => {
   const baseWorktree: DashboardGitWorktree = {
     path: '/tmp/openspecui-feature-a',
     relativePath: '../tmp/openspecui-feature-a',
+    pathAvailable: true,
     branchName: 'feature-a',
     detached: false,
     isCurrent: false,

@@ -48,7 +48,7 @@ import { loadDashboardOverview } from './dashboard-overview.js'
 import { findAvailablePort } from './port-utils.js'
 import { PtyManager } from './pty-manager.js'
 import { createPtyWebSocketHandler } from './pty-websocket.js'
-import { appRouter, type Context } from './router.js'
+import { appRouter, type Context, type GitWorktreeHandoffService } from './router.js'
 import { SearchService } from './search-service.js'
 
 /**
@@ -63,6 +63,8 @@ export interface ServerConfig {
   enableWatcher?: boolean
   /** CORS origins (defaults to localhost dev servers) */
   corsOrigins?: string[]
+  /** Optional worktree handoff provider for runtimes that can spawn sibling instances */
+  gitWorktreeHandoff?: GitWorktreeHandoffService
 }
 
 /**
@@ -128,6 +130,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
         kernel,
         searchService,
         dashboardOverviewService,
+        gitWorktreeHandoff: config.gitWorktreeHandoff,
         watcher,
         projectDir: config.projectDir,
       }),
@@ -143,6 +146,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     kernel,
     searchService,
     dashboardOverviewService,
+    gitWorktreeHandoff: config.gitWorktreeHandoff,
     watcher,
     projectDir: config.projectDir,
   })

@@ -48,24 +48,22 @@ describe('dashboard git snapshot helpers', () => {
         }
       }
 
-      if (cwd === projectDir && cmd === 'log --format=%H%x1f%ct%x1f%s -n8 origin/main..HEAD') {
+      if (
+        cwd === projectDir &&
+        cmd === 'log --format=%x1e%H%x1f%ct%x1f%s --numstat --skip=0 -n9 origin/main..HEAD'
+      ) {
         return { ok: true, stdout: '' }
       }
-      if (cwd === featureDir && cmd === 'log --format=%H%x1f%ct%x1f%s -n8 origin/main..HEAD') {
-        return { ok: true, stdout: 'abc123\u001f1710000000\u001ffeat: wire dashboard\n' }
-      }
-
-      if (cwd === featureDir && cmd === 'show --numstat --format= abc123') {
+      if (
+        cwd === featureDir &&
+        cmd === 'log --format=%x1e%H%x1f%ct%x1f%s --numstat --skip=0 -n9 origin/main..HEAD'
+      ) {
         return {
           ok: true,
-          stdout: '5\t1\topenspec/changes/dashboard-live-workflow-status/proposal.md\n',
-        }
-      }
-      if (cwd === featureDir && cmd === 'show --name-only --format= abc123') {
-        return {
-          ok: true,
-          stdout:
-            'openspec/changes/dashboard-live-workflow-status/proposal.md\npackages/web/src/routes/dashboard.tsx\n',
+          stdout: [
+            '\u001eabc123\u001f1710000000\u001ffeat: wire dashboard',
+            '5\t1\topenspec/changes/dashboard-live-workflow-status/proposal.md',
+          ].join('\n'),
         }
       }
 

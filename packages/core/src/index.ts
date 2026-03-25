@@ -155,6 +155,24 @@ export {
 } from './dashboard-types.js'
 export { type ExportSnapshot } from './export-types.js'
 export {
+  type GitEntriesPage,
+  type GitEntryCursor,
+  type GitEntryDetail,
+  type GitEntryFileDiff,
+  type GitEntryFilePatch,
+  type GitEntryFileSource,
+  type GitEntryFileSummary,
+  type GitEntryPatch,
+  type GitEntrySelector,
+  type GitEntryShell,
+  type GitFileChangeType,
+  type GitPatchFile,
+  type GitPatchState,
+  type GitWorktreeHandoff,
+  type GitWorktreeOverview,
+  type GitWorktreeSummary,
+} from './git-panel-types.js'
+export {
   OFFICIAL_APP_BASE_URL,
   buildHostedLaunchUrl,
   buildHostedVersionManifestUrl,

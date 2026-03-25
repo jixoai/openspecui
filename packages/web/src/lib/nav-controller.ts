@@ -6,6 +6,7 @@ import { getBasePath, isStaticMode } from './static-mode'
 export type TabId =
   | '/dashboard'
   | '/config'
+  | '/git'
   | '/specs'
   | '/changes'
   | '/archive'
@@ -83,6 +84,7 @@ type KernelBehaviorPlugin = (ctx: {
 const ALL_TABS: readonly TabId[] = [
   '/dashboard',
   '/config',
+  '/git',
   '/specs',
   '/changes',
   '/archive',
@@ -97,7 +99,7 @@ const DEFAULT_MAIN_TABS: TabId[] = [
   '/archive',
   '/settings',
 ]
-const DEFAULT_BOTTOM_TABS: TabId[] = isStaticMode() ? [] : ['/terminal']
+const DEFAULT_BOTTOM_TABS: TabId[] = isStaticMode() ? [] : ['/git', '/terminal']
 const POP_ROUTES = [
   '/search',
   '/opsx-new',
@@ -334,9 +336,22 @@ function parseBrowserLocation(
   url.searchParams.delete('_p')
 
   const historyState = window.history.state as UrlHistoryState | null
-  const main = parseHref(`${url.pathname}${url.search}${url.hash}`, historyState?.main)
-  const bottom = parseHref(rawBottomHref ?? '/', historyState?.bottom)
-  const pop = parseHref(rawPopHref ?? '/', historyState?.pop)
+  let main = parseHref(`${url.pathname}${url.search}${url.hash}`, historyState?.main)
+  let bottom = parseHref(rawBottomHref ?? '/', historyState?.bottom)
+  let pop = parseHref(rawPopHref ?? '/', historyState?.pop)
+
+  // If a deep link targets bottom/pop directly without explicit area params,
+  // infer the owning area from the path and canonicalize it into _b/_p.
+  if (!rawBottomHref && !rawPopHref) {
+    const inferredArea = areaForPath(layout, main.pathname)
+    if (inferredArea === 'bottom') {
+      bottom = main
+      main = parseHref('/', historyState?.main)
+    } else if (inferredArea === 'pop') {
+      pop = main
+      main = parseHref('/', historyState?.main)
+    }
+  }
 
   return {
     main: sanitizeMainLocation(main, layout.mainTabs),

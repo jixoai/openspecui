@@ -75,6 +75,30 @@ describe('Tabs double-click behavior', () => {
     expect(actions?.className).toContain('bg-terminal')
   })
 
+  it('renders the default variant with a surfaced header background', () => {
+    const { container } = render(<Tabs tabs={tabs} selectedTab="a" actions={<button>x</button>} />)
+
+    const header = container.querySelector('.tabs-header')
+    expect(header?.className).toContain('bg-card/95')
+    expect(header?.className).toContain('rounded-md')
+
+    const selected = within(container).getByRole('button', { name: 'A' })
+    expect(selected.className).toContain('bg-background/70')
+
+    const actions = container.querySelector('[data-tabs-actions="true"]')
+    expect(actions?.className).toContain('bg-card/95')
+  })
+
+  it('mounts tab styles in document head instead of rendering style text in the body', () => {
+    const { container } = render(<Tabs tabs={tabs} />)
+
+    expect(container.querySelector('style')).toBeNull()
+
+    const style = document.head.querySelector('[data-head-style^="tabs:"]')
+    expect(style).not.toBeNull()
+    expect(style?.textContent).toContain('.tabs-button')
+  })
+
   it('reorders tabs via drag and drop when onTabOrderChange is provided', () => {
     const onTabOrderChange = vi.fn()
     const { container } = render(<Tabs tabs={tabs} onTabOrderChange={onTabOrderChange} />)
