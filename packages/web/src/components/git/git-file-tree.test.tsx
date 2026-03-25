@@ -44,10 +44,15 @@ describe('GitFileTree', () => {
     render(<GitFileTree files={files} activeFileId="file-a" onSelectFile={onSelectFile} />)
 
     expect(screen.getByRole('tree', { name: 'Changed files' })).toBeTruthy()
-    expect(screen.getByRole('treeitem', { name: 'src' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('treeitem', { name: 'src' }).getAttribute('aria-expanded')).toBe('true')
     expect(
       screen.getByRole('treeitem', { name: 'src/components/git/git-file-tree.tsx' })
-    ).toHaveAttribute('aria-selected', 'true')
+    ).toBeTruthy()
+    expect(
+      screen
+        .getByRole('treeitem', { name: 'src/components/git/git-file-tree.tsx' })
+        .getAttribute('aria-selected')
+    ).toBe('true')
     expect(screen.getByText('components/git')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('treeitem', { name: 'src/routes/git.tsx' }))
@@ -93,12 +98,12 @@ describe('GitFileTree', () => {
 
     fireEvent.click(srcDirectory)
 
-    expect(srcDirectory).toHaveAttribute('aria-expanded', 'false')
+    expect(srcDirectory.getAttribute('aria-expanded')).toBe('false')
     expect(screen.queryByRole('treeitem', { name: 'src/routes/git.tsx' })).toBeNull()
 
     fireEvent.click(srcDirectory)
 
-    expect(srcDirectory).toHaveAttribute('aria-expanded', 'true')
+    expect(srcDirectory.getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByRole('treeitem', { name: 'src/routes/git.tsx' })).toBeTruthy()
   })
 
@@ -116,14 +121,14 @@ describe('GitFileTree', () => {
     expect(document.activeElement).toBe(componentsDirectory)
 
     fireEvent.keyDown(componentsDirectory, { key: 'ArrowLeft' })
-    expect(componentsDirectory).toHaveAttribute('aria-expanded', 'false')
+    expect(componentsDirectory.getAttribute('aria-expanded')).toBe('false')
     expect(
       screen.queryByRole('treeitem', { name: 'src/components/git/git-file-tree.tsx' })
     ).toBeNull()
     expect(document.activeElement).toBe(componentsDirectory)
 
     fireEvent.keyDown(componentsDirectory, { key: 'ArrowRight' })
-    expect(componentsDirectory).toHaveAttribute('aria-expanded', 'true')
+    expect(componentsDirectory.getAttribute('aria-expanded')).toBe('true')
 
     fireEvent.keyDown(componentsDirectory, { key: 'ArrowRight' })
     const componentFile = screen.getByRole('treeitem', {

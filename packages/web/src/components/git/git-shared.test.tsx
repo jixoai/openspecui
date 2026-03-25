@@ -23,7 +23,7 @@ describe('DiffStat', () => {
       <DiffStat diff={{ state: 'ready', files: 1, insertions: 0, deletions: 0 }} />
     )
 
-    expect(container).toBeEmptyDOMElement()
+    expect(container.firstChild).toBeNull()
   })
 })
 
@@ -31,6 +31,6 @@ describe('GitFilesBadge', () => {
   it('hides file counts when the count is zero', () => {
     const { container } = render(<GitFilesBadge files={0} />)
 
-    expect(container).toBeEmptyDOMElement()
+    expect(container.firstChild).toBeNull()
   })
 })

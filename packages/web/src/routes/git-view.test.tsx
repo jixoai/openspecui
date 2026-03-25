@@ -104,10 +104,12 @@ describe('Git entry routes', () => {
     renderWithQueryClient(<GitCommitViewRoute />)
 
     await waitFor(() => {
-      expect(screen.getByRole('link', { name: 'Back to commits' })).toHaveAttribute('href', '/git')
+      expect(screen.getByRole('link', { name: 'Back to commits' }).getAttribute('href')).toBe(
+        '/git'
+      )
     })
 
-    expect(screen.getByTestId('git-entry-detail-panel')).toHaveTextContent(
+    expect(screen.getByTestId('git-entry-detail-panel').textContent).toContain(
       `commit:abc12345:${projectDir}`
     )
   })
@@ -154,7 +156,7 @@ describe('Git entry routes', () => {
     renderWithQueryClient(<GitUncommittedViewRoute />)
 
     await waitFor(() => {
-      expect(screen.getByTestId('git-entry-detail-panel')).toHaveTextContent(
+      expect(screen.getByTestId('git-entry-detail-panel').textContent).toContain(
         `uncommitted:${projectDir}`
       )
     })
