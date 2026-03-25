@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'fs/promises'
+import { chmod, mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cleanupTempDir, createTempDir, waitForDebounce } from './__tests__/test-utils.js'
@@ -256,6 +256,37 @@ describe('ConfigManager', () => {
       const config = await configManager.readConfig()
       expect(config.cli.command).toBe('nonexistent_command_12345')
       expect(config.cli.args).toBeUndefined()
+    })
+
+    it('should resolve openspec via shell lookup when PATH misses the shim directory', async () => {
+      const fakeCliPath = join(tempDir, 'openspec-cli')
+      const fakeShellPath = join(tempDir, 'lookup-shell.sh')
+
+      await writeFile(
+        fakeCliPath,
+        '#!/bin/sh\nif [ "$1" = "--version" ]; then\n  echo "1.2.0"\n  exit 0\nfi\nexit 1\n',
+        'utf8'
+      )
+      await writeFile(
+        fakeShellPath,
+        `#!/bin/sh\nif [ "$1" = "-lc" ]; then\n  printf '%s\\n' '${fakeCliPath}'\n  exit 0\nfi\nexit 1\n`,
+        'utf8'
+      )
+      await Promise.all([chmod(fakeCliPath, 0o755), chmod(fakeShellPath, 0o755)])
+
+      const previousPath = process.env.PATH
+      const previousShell = process.env.SHELL
+
+      process.env.PATH = '/usr/bin:/bin'
+      process.env.SHELL = fakeShellPath
+
+      try {
+        const command = await configManager.getCliCommand()
+        expect(command).toEqual([fakeCliPath])
+      } finally {
+        process.env.PATH = previousPath
+        process.env.SHELL = previousShell
+      }
     })
   })
 

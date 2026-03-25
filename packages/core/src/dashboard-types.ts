@@ -75,6 +75,7 @@ export type DashboardGitEntry = DashboardGitCommitEntry | DashboardGitUncommitte
 export interface DashboardGitWorktree {
   path: string
   relativePath: string
+  pathAvailable: boolean
   branchName: string
   detached: boolean
   isCurrent: boolean

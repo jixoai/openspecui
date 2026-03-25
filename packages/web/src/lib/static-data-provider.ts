@@ -543,6 +543,7 @@ function buildStaticGitSnapshot(snapshot: ExportSnapshot): DashboardOverview['gi
       {
         path: repositoryUrl ?? 'Repository URL unavailable',
         relativePath: 'repo',
+        pathAvailable: true,
         branchName: '(snapshot)',
         detached: false,
         isCurrent: true,

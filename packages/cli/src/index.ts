@@ -4,6 +4,10 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { getWebAssetsDirCandidates } from './web-assets.js'
+import {
+  createWorktreeInstanceManager,
+  type WorktreeInstanceManager,
+} from './worktree-instance-manager.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -86,6 +90,15 @@ function setupStaticFiles(app: Hono): void {
 
 export async function startServer(options: CLIOptions = {}): Promise<RunningServer> {
   const { projectDir = process.cwd(), port = 3100, enableWatcher = true, corsOrigins } = options
+  let worktreeManager: WorktreeInstanceManager | null = null
+  const gitWorktreeHandoff = {
+    ensureWorktreeServer: async ({ targetPath }: { targetPath: string }) => {
+      if (!worktreeManager) {
+        throw new Error('Worktree handoff is not ready yet.')
+      }
+      return worktreeManager.ensureWorktreeServer({ targetPath })
+    },
+  }
 
   const server = await serverStartServer(
     {
@@ -93,11 +106,24 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
       port,
       enableWatcher,
       corsOrigins,
+      gitWorktreeHandoff,
     },
     setupStaticFiles
   )
 
-  return server
+  worktreeManager = createWorktreeInstanceManager({
+    currentProjectDir: projectDir,
+    currentServerUrl: server.url,
+    runtimeDir: __dirname,
+  })
+
+  return {
+    ...server,
+    close: async () => {
+      await worktreeManager?.close()
+      await server.close()
+    },
+  }
 }
 
 export { createServer } from '@openspecui/server'

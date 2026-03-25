@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useHeadStyle } from './use-head-style'
 
 interface DialogProps {
   open: boolean
@@ -106,84 +107,81 @@ export function Dialog({
         ? 'border-green-500/50'
         : 'border-border'
 
-  const styles = useMemo(() => {
-    const css = String.raw
-    return (
-      <style>{css`
-        dialog.openspec-dialog {
+  const styles = useMemo(
+    () => String.raw`
+      dialog.openspec-dialog {
+        opacity: 0;
+        transform: translateY(8px);
+        transition:
+          opacity 180ms cubic-bezier(0.22, 0.61, 0.36, 1),
+          transform 180ms cubic-bezier(0.22, 0.61, 0.36, 1);
+      }
+
+      dialog.openspec-dialog[open] {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      @starting-style {
+        dialog.openspec-dialog[open] {
           opacity: 0;
           transform: translateY(8px);
-          transition:
-            opacity 180ms cubic-bezier(0.22, 0.61, 0.36, 1),
-            transform 180ms cubic-bezier(0.22, 0.61, 0.36, 1);
         }
+      }
 
-        dialog.openspec-dialog[open] {
-          opacity: 1;
-          transform: translateY(0);
-        }
+      dialog.openspec-dialog::backdrop {
+        background-color: rgba(0, 0, 0, 0.5);
+        backdrop-filter: grayscale(0.5);
+      }
 
-        @starting-style {
-          dialog.openspec-dialog[open] {
-            opacity: 0;
-            transform: translateY(8px);
-          }
-        }
-
-        dialog.openspec-dialog::backdrop {
-          background-color: rgba(0, 0, 0, 0.5);
-          backdrop-filter: grayscale(0.5);
-        }
-        .dark dialog.openspec-dialog::backdrop {
-          background-color: rgba(255, 255, 255, 0.2);
-        }
-      `}</style>
-    )
-  }, [])
+      .dark dialog.openspec-dialog::backdrop {
+        background-color: rgba(255, 255, 255, 0.2);
+      }
+    `,
+    []
+  )
+  useHeadStyle('dialog:openspec-dialog', styles)
 
   return (
-    <>
-      {styles}
-      <dialog
-        ref={dialogRef}
-        className={`openspec-dialog m-0 h-dvh w-screen max-w-none border-0 bg-transparent p-0 ${dialogClassName}`}
+    <dialog
+      ref={dialogRef}
+      className={`openspec-dialog m-0 h-dvh w-screen max-w-none border-0 bg-transparent p-0 ${dialogClassName}`}
+    >
+      <div
+        className={`flex h-full w-full items-center justify-center px-4 py-4 ${contentClassName}`}
       >
         <div
-          className={`flex h-full w-full items-center justify-center px-4 py-4 ${contentClassName}`}
+          ref={panelRef}
+          className={`bg-background text-foreground relative flex h-fit w-[calc(100%-0.5rem)] max-w-2xl flex-col overflow-hidden rounded-[var(--openspec-dialog-radius,0.75rem)] border shadow-xl ${borderClass} ${className}`}
+          style={{ maxHeight }}
         >
-          <div
-            ref={panelRef}
-            className={`bg-background text-foreground relative flex h-fit w-[calc(100%-0.5rem)] max-w-2xl flex-col overflow-hidden rounded-[var(--openspec-dialog-radius,0.75rem)] border shadow-xl ${borderClass} ${className}`}
-            style={{ maxHeight }}
-          >
-            {/* Header (non-shrinking) */}
-            <div className="border-border flex flex-none shrink-0 items-center justify-between border-b px-4 py-3">
-              <div className="flex items-center gap-2">{title}</div>
-              <button
-                onClick={onClose}
-                className="hover:bg-muted rounded p-1"
-                aria-label="Close dialog"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Body */}
-            <div
-              className={`scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-auto px-4 py-3 ${bodyClassName}`}
+          {/* Header (non-shrinking) */}
+          <div className="border-border flex flex-none shrink-0 items-center justify-between border-b px-4 py-3">
+            <div className="flex items-center gap-2">{title}</div>
+            <button
+              onClick={onClose}
+              className="hover:bg-muted rounded p-1"
+              aria-label="Close dialog"
             >
-              {children}
-            </div>
-
-            {/* Footer */}
-            {footer && (
-              <div className="border-border flex flex-none shrink-0 items-center justify-end gap-2 border-t px-4 py-3">
-                {footer}
-              </div>
-            )}
+              <X className="h-4 w-4" />
+            </button>
           </div>
+
+          {/* Body */}
+          <div
+            className={`scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-auto px-4 py-3 ${bodyClassName}`}
+          >
+            {children}
+          </div>
+
+          {/* Footer */}
+          {footer && (
+            <div className="border-border flex flex-none shrink-0 items-center justify-end gap-2 border-t px-4 py-3">
+              {footer}
+            </div>
+          )}
         </div>
-      </dialog>
-    </>
+      </div>
+    </dialog>
   )
 }

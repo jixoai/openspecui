@@ -5,6 +5,8 @@ import { ChangeList } from '../routes/change-list'
 import { ChangeView } from '../routes/change-view'
 import { Config } from '../routes/config'
 import { Dashboard } from '../routes/dashboard'
+import { GitRoute } from '../routes/git'
+import { GitCommitViewRoute, GitUncommittedViewRoute } from '../routes/git-view'
 import { OpsxComposeRoute } from '../routes/opsx-compose'
 import { OpsxNewRoute } from '../routes/opsx-new'
 import { OpsxProposeRoute } from '../routes/opsx-propose'
@@ -25,6 +27,17 @@ export function createRouteTree(rootRoute: AnyRootRoute, opts?: { includeTermina
     }),
     createRoute({ getParentRoute: () => rootRoute, path: '/dashboard', component: Dashboard }),
     createRoute({ getParentRoute: () => rootRoute, path: '/config', component: Config }),
+    createRoute({ getParentRoute: () => rootRoute, path: '/git', component: GitRoute }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/git/uncommitted',
+      component: GitUncommittedViewRoute,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/git/commit/$hash',
+      component: GitCommitViewRoute,
+    }),
     createRoute({ getParentRoute: () => rootRoute, path: '/specs', component: SpecList }),
     createRoute({ getParentRoute: () => rootRoute, path: '/specs/$specId', component: SpecView }),
     createRoute({ getParentRoute: () => rootRoute, path: '/changes', component: ChangeList }),

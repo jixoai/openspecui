@@ -1,11 +1,12 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve as resolvePath } from 'node:path'
+import { dirname, join, resolve as resolvePath } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DashboardOverviewService } from '../src/dashboard-overview-service.js'
 import { loadDashboardOverview } from '../src/dashboard-overview.js'
+import { sameGitPath } from '../src/git-shared.js'
 import type { Context } from '../src/router.js'
 import { appRouter } from '../src/router.js'
 
@@ -146,6 +147,12 @@ async function initGitRepo(dir: string): Promise<void> {
   await runGit(dir, ['commit', '-m', 'init'])
 }
 
+async function writeGitFile(cwd: string, relativePath: string, content: string): Promise<void> {
+  const absolutePath = join(cwd, relativePath)
+  await mkdir(dirname(absolutePath), { recursive: true })
+  await writeFile(absolutePath, content, 'utf8')
+}
+
 afterEach(async () => {
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop()
@@ -158,6 +165,7 @@ const createMockContext = (
   adapter = createMockAdapter(),
   options: {
     projectDir?: string
+    gitWorktreeHandoff?: Context['gitWorktreeHandoff']
   } = {}
 ): Context => {
   const configManager = {
@@ -228,6 +236,7 @@ const createMockContext = (
     kernel: kernel as unknown as Context['kernel'],
     searchService: searchService as unknown as Context['searchService'],
     dashboardOverviewService,
+    gitWorktreeHandoff: options.gitWorktreeHandoff,
     watcher: undefined,
     projectDir,
   }
@@ -237,6 +246,7 @@ const createCaller = (
   adapter = createMockAdapter(),
   options: {
     projectDir?: string
+    gitWorktreeHandoff?: Context['gitWorktreeHandoff']
   } = {}
 ) => {
   return appRouter.createCaller({
@@ -493,6 +503,142 @@ describe('appRouter', () => {
         /Only detached worktrees can be removed/
       )
     })
+  })
+
+  describe('git', () => {
+    it('returns overview, paged entries, and detail for the current worktree', async () => {
+      const projectDir = await createTempProjectDir('openspecui-router-git-')
+      const remoteDir = await createTempProjectDir('openspecui-router-git-remote-')
+      await initGitRepo(projectDir)
+      await runGit(remoteDir, ['init', '--bare'])
+      await runGit(projectDir, ['branch', '-M', 'main'])
+      await runGit(projectDir, ['remote', 'add', 'origin', remoteDir])
+      await runGit(projectDir, ['push', '-u', 'origin', 'main'])
+      await runGit(projectDir, ['remote', 'set-head', 'origin', 'main'])
+      await runGit(projectDir, ['checkout', '-b', 'feature-git-panel'])
+
+      await writeGitFile(
+        projectDir,
+        'openspec/changes/add-git-panel-worktree-handoff/loop/intake.md',
+        'feature entry\n'
+      )
+      await runGit(projectDir, [
+        'add',
+        'openspec/changes/add-git-panel-worktree-handoff/loop/intake.md',
+      ])
+      await runGit(projectDir, ['commit', '-m', 'feat: add git panel intake'])
+
+      await writeGitFile(projectDir, 'src/git-panel.ts', 'export const value = 1\n')
+
+      const otherWorktreeDir = await createTempProjectDir('openspecui-router-git-worktree-')
+      await runGit(projectDir, [
+        'worktree',
+        'add',
+        otherWorktreeDir,
+        '-b',
+        'feature-other-worktree',
+      ])
+
+      const caller = createCaller(createMockAdapter(), { projectDir })
+      const overview = await caller.git.overview()
+      const entries = await caller.git.listEntries()
+
+      expect(overview.defaultBranch).toBe('origin/main')
+      expect(overview.currentWorktree?.branchName).toBe('feature-git-panel')
+      expect(overview.otherWorktrees).toHaveLength(1)
+      expect(await sameGitPath(overview.otherWorktrees[0]?.path ?? '', otherWorktreeDir)).toBe(true)
+
+      expect(entries.items[0]).toMatchObject({
+        type: 'uncommitted',
+        relatedChanges: [],
+        diff: { files: 1, insertions: 0, deletions: 0 },
+      })
+      expect(entries.items[1]).toMatchObject({
+        type: 'commit',
+        title: 'feat: add git panel intake',
+        relatedChanges: ['add-git-panel-worktree-handoff'],
+      })
+
+      const uncommittedShell = await caller.git.getEntryShell({
+        selector: { type: 'uncommitted' },
+      })
+      expect(uncommittedShell.files[0]).toMatchObject({
+        path: 'src/git-panel.ts',
+        changeType: 'added',
+      })
+      expect(uncommittedShell.files[0]?.fileId).toEqual(expect.any(String))
+
+      const uncommittedPatch = await caller.git.getEntryPatch({
+        selector: { type: 'uncommitted' },
+        fileId: uncommittedShell.files[0]!.fileId,
+      })
+      expect(uncommittedPatch.file).toMatchObject({
+        path: 'src/git-panel.ts',
+        state: 'available',
+        source: 'untracked',
+      })
+
+      const commitEntry = entries.items.find((entry) => entry.type === 'commit')
+      if (!commitEntry || commitEntry.type !== 'commit') {
+        throw new Error('Expected a commit entry in git history')
+      }
+
+      const commitShell = await caller.git.getEntryShell({
+        selector: { type: 'commit', hash: commitEntry.hash },
+      })
+      expect(commitShell.entry).toMatchObject({
+        type: 'commit',
+        hash: commitEntry.hash,
+      })
+      expect(commitShell.files[0]?.path).toBe(
+        'openspec/changes/add-git-panel-worktree-handoff/loop/intake.md'
+      )
+
+      const commitPatch = await caller.git.getEntryPatch({
+        selector: { type: 'commit', hash: commitEntry.hash },
+        fileId: commitShell.files[0]!.fileId,
+      })
+      expect(commitPatch.file?.path).toBe(
+        'openspec/changes/add-git-panel-worktree-handoff/loop/intake.md'
+      )
+    }, 20_000)
+
+    it('hands off to a sibling worktree server through the configured service', async () => {
+      const projectDir = await createTempProjectDir('openspecui-router-git-switch-')
+      await initGitRepo(projectDir)
+      await runGit(projectDir, ['branch', '-M', 'main'])
+
+      const otherWorktreeDir = await createTempProjectDir('openspecui-router-git-switch-target-')
+      await runGit(projectDir, ['worktree', 'add', otherWorktreeDir, '-b', 'feature-switch-target'])
+
+      const ensureWorktreeServer = vi.fn().mockResolvedValue({
+        projectDir: resolvePath(otherWorktreeDir),
+        serverUrl: 'http://127.0.0.1:3300',
+      })
+
+      const caller = createCaller(createMockAdapter(), {
+        projectDir,
+        gitWorktreeHandoff: {
+          ensureWorktreeServer,
+        },
+      })
+
+      const overview = await caller.git.overview()
+      const targetPath = overview.otherWorktrees[0]?.path
+      if (!targetPath) {
+        throw new Error('Expected overview to include the sibling worktree')
+      }
+
+      const handoff = await caller.git.switchWorktree({ path: targetPath })
+
+      expect(ensureWorktreeServer).toHaveBeenCalledWith({
+        targetPath,
+      })
+      expect(handoff).toEqual({
+        projectDir: resolvePath(otherWorktreeDir),
+        serverUrl: 'http://127.0.0.1:3300',
+      })
+    }, 20_000)
   })
 
   describe('spec', () => {

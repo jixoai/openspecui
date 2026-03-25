@@ -1,5 +1,6 @@
 import {
   Archive,
+  FileCode2,
   FileText,
   GitBranch,
   LayoutDashboard,
@@ -13,6 +14,7 @@ import {
 export type AppRoute =
   | '/dashboard'
   | '/config'
+  | '/git'
   | '/specs'
   | '/changes'
   | '/archive'
@@ -31,6 +33,7 @@ export interface NavItem {
 export const allNavItems: NavItem[] = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', defaultArea: 'main' },
   { to: '/config', icon: SlidersHorizontal, label: 'Config', defaultArea: 'main' },
+  { to: '/git', icon: FileCode2, label: 'Git', defaultArea: 'bottom' },
   { to: '/specs', icon: FileText, label: 'Specs', defaultArea: 'main' },
   { to: '/changes', icon: GitBranch, label: 'Changes', defaultArea: 'main' },
   { to: '/archive', icon: Archive, label: 'Archive', defaultArea: 'main' },

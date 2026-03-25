@@ -11,6 +11,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react'
+import { useHeadStyle } from './use-head-style'
 
 export interface Tab {
   id: string
@@ -51,83 +52,70 @@ interface DropIndicator {
 
 let _draggedTabId: string | null = null
 
-const tabsStyle = (id: string) => {
-  const css = String.raw
+const tabsStyleText = (id: string) => {
   const anchorName = `--tabs-button-${id}`
-  return (
-    <style>
-      {css`
-        #${id} {
-          .tabs-button {
-            anchor-name: ${anchorName};
-          }
-          .tabs-button::scroll-button(*) {
-            position-anchor: ${anchorName};
-          }
-        }
-      ` +
-        css`
-          #${id} {
-            .tabs-button {
-              overflow-x: auto;
-              scroll-behavior: smooth;
-              overscroll-behavior-x: contain;
-              scroll-snap-type: x mandatory;
-              position: relative;
-              & > button {
-                scroll-snap-align: start;
-                text-align: center;
-              }
-            }
-            &[data-tabs-variant='default'] {
-              .tabs-button {
-                & > button.tab-selected {
-                  background-image: linear-gradient(
-                    to bottom,
-                    transparent,
-                    transparent calc(100% - 2px),
-                    var(--primary) calc(100% - 2px),
-                    var(--primary)
-                  );
-                }
-              }
-            }
-            .tabs-strip {
-              background-image: linear-gradient(
-                to bottom,
-                transparent,
-                transparent calc(100% - 1px),
-                var(--border) calc(100% - 1px),
-                var(--border)
-              );
-            }
-            .tabs-button::scroll-button(*) {
-              position: absolute;
-              align-self: anchor-center;
-              border: 0;
-              font-size: 1.2rem;
-              background: none;
-              z-index: 2;
-              color: currentColor;
-            }
-            .tabs-button::scroll-button(*):disabled {
-              opacity: 0;
-            }
-            .tabs-button::scroll-button(left) {
-              content: '◄';
-              right: calc(anchor(left) - 0.5rem);
-              transform: scaleX(0.5);
-            }
+  return String.raw`
+    #${id} .tabs-button {
+      anchor-name: ${anchorName};
+      overflow-x: auto;
+      scroll-behavior: smooth;
+      overscroll-behavior-x: contain;
+      scroll-snap-type: x mandatory;
+      position: relative;
+    }
 
-            .tabs-button::scroll-button(right) {
-              content: '►';
-              left: calc(anchor(right) - 0.5rem);
-              transform: scaleX(0.5);
-            }
-          }
-        `}
-    </style>
-  )
+    #${id} .tabs-button > button {
+      scroll-snap-align: start;
+      text-align: center;
+    }
+
+    #${id} .tabs-button::scroll-button(*) {
+      position-anchor: ${anchorName};
+      position: absolute;
+      align-self: anchor-center;
+      border: 0;
+      font-size: 1.2rem;
+      background: none;
+      z-index: 2;
+      color: currentColor;
+    }
+
+    #${id} .tabs-button::scroll-button(*):disabled {
+      opacity: 0;
+    }
+
+    #${id} .tabs-button::scroll-button(left) {
+      content: '◄';
+      right: calc(anchor(left) - 0.5rem);
+      transform: scaleX(0.5);
+    }
+
+    #${id} .tabs-button::scroll-button(right) {
+      content: '►';
+      left: calc(anchor(right) - 0.5rem);
+      transform: scaleX(0.5);
+    }
+
+    #${id}[data-tabs-variant='default'] .tabs-button > button.tab-selected {
+      background-image: linear-gradient(
+        to bottom,
+        transparent,
+        transparent calc(100% - 2px),
+        var(--primary) calc(100% - 2px),
+        var(--primary)
+      );
+    }
+
+    #${id} .tabs-strip {
+      background-image: linear-gradient(
+        to bottom,
+        transparent,
+        transparent calc(100% - 1px),
+        var(--border) calc(100% - 1px),
+        var(--border)
+      );
+    }
+  `
 }
 
 function buildReorderedTabIds(
@@ -193,8 +181,9 @@ export function Tabs({
   const contentTabs = contentTabIds
     .map((tabId) => tabsById.get(tabId))
     .filter((tab): tab is Tab => tab !== undefined)
-  const id = useId()
-  const style = useMemo(() => tabsStyle(id), [id])
+  const id = useId().replace(/:/g, '_')
+  const headStyleText = useMemo(() => tabsStyleText(id), [id])
+  useHeadStyle(`tabs:${id}`, headStyleText)
 
   const handleChange = (id: string) => {
     if (!controlled) {
@@ -318,13 +307,13 @@ export function Tabs({
 
   const headerClassName =
     variant === 'terminal'
-      ? 'tabs-header z-2 bg-terminal text-terminal-foreground sticky top-0 flex min-w-0 items-stretch'
-      : 'tabs-header z-2 bg-background sticky top-0 flex min-w-0 items-stretch'
+      ? 'tabs-header bg-terminal text-terminal-foreground sticky top-0 z-20 flex min-w-0 items-stretch'
+      : 'tabs-header bg-card/95 sticky top-0 z-20 flex min-w-0 items-stretch rounded-md border border-zinc-500/15 shadow-[inset_0_-1px_0_color-mix(in_srgb,var(--border)_85%,transparent)] backdrop-blur-sm'
 
   const stripClassName =
     variant === 'terminal'
       ? 'tabs-strip min-w-0 flex-1 bg-terminal px-4'
-      : 'tabs-strip min-w-0 flex-1 px-4'
+      : 'tabs-strip bg-card/95 min-w-0 flex-1 rounded-l-md px-4'
 
   const listClassName =
     variant === 'terminal'
@@ -336,17 +325,17 @@ export function Tabs({
   const activeButtonClassName =
     variant === 'terminal'
       ? 'tab-selected bg-background text-foreground'
-      : 'tab-selected text-foreground'
+      : 'tab-selected bg-background/70 text-foreground'
 
   const inactiveButtonClassName =
     variant === 'terminal'
       ? 'bg-terminal text-terminal-foreground/80 hover:bg-terminal hover:text-terminal-foreground'
-      : 'text-muted-foreground hover:text-foreground'
+      : 'text-muted-foreground hover:bg-background/35 hover:text-foreground'
 
   const actionsClassName =
     variant === 'terminal'
       ? 'tabs-actions border-border bg-terminal text-terminal-foreground flex shrink-0 items-center border-b px-1'
-      : 'tabs-actions border-border bg-background flex shrink-0 items-center border-b px-1'
+      : 'tabs-actions bg-card/95 border-zinc-500/15 flex shrink-0 items-center rounded-r-md border-l px-1'
 
   const handleTabBarDoubleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (!onTabBarDoubleClick) return
@@ -358,9 +347,8 @@ export function Tabs({
     <div
       id={id}
       data-tabs-variant={variant}
-      className={`flex min-h-0 min-w-0 flex-1 flex-col ${className}`}
+      className={`relative isolate flex min-h-0 min-w-0 flex-1 flex-col ${className}`}
     >
-      {style}
       <div className={headerClassName}>
         <div className={stripClassName}>
           <div
