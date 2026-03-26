@@ -11,7 +11,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 
-import { revealElementInContainer } from '../scroll-spy'
+import { isVerticalScrollIntentKey, revealElementInContainer } from '../scroll-spy'
 import { buildGitFileTreeModel, type GitFileTreeNode } from './git-file-tree-model'
 import { useGitFileTreeNavigation } from './git-file-tree-navigation'
 import {
@@ -409,6 +409,7 @@ export function GitFileTree({
   onSelectFile,
   revealRequest = null,
   className,
+  onUserScrollIntent,
 }: {
   files: GitEntryFileSummary[]
   projectDir?: string | null
@@ -416,6 +417,7 @@ export function GitFileTree({
   onSelectFile: (fileId: string) => void
   revealRequest?: GitFileTreeRevealRequest | null
   className?: string
+  onUserScrollIntent?: () => void
 }) {
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(new Set())
   const treeRef = useRef<HTMLDivElement | null>(null)
@@ -592,6 +594,20 @@ export function GitFileTree({
         ref={scrollContainerRef}
         role="tree"
         aria-label="Changed files"
+        onKeyDownCapture={(event) => {
+          if (isVerticalScrollIntentKey(event.key)) {
+            onUserScrollIntent?.()
+          }
+        }}
+        onPointerDownCapture={() => {
+          onUserScrollIntent?.()
+        }}
+        onTouchMoveCapture={() => {
+          onUserScrollIntent?.()
+        }}
+        onWheelCapture={() => {
+          onUserScrollIntent?.()
+        }}
         className="scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2"
       >
         <div ref={treeContentRef} className="relative">
