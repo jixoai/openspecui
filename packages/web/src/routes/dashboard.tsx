@@ -21,6 +21,7 @@ import {
   type DashboardGitAutoRefreshPreset,
 } from '@/lib/dashboard-git'
 import { formatRelativeTime } from '@/lib/format-time'
+import { buildGitEntryHrefFromEntry } from '@/lib/git-panel'
 import { navController } from '@/lib/nav-controller'
 import { isStaticMode } from '@/lib/static-mode'
 import {
@@ -754,6 +755,13 @@ export function Dashboard() {
                           : `${entry.type}:${entry.updatedAt ?? 'none'}`
                       }
                       entry={entry}
+                      onSelect={
+                        staticMode
+                          ? undefined
+                          : () => {
+                              navController.push('bottom', buildGitEntryHrefFromEntry(entry), null)
+                            }
+                      }
                     />
                   ))}
                 </div>
