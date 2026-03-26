@@ -8,7 +8,7 @@
 
 - [x] 2.1 Implementation started from approved plan
 - [x] 2.2 Progress synchronized with implementation artifact
-- [ ] 2.3 Unexpected issues loop back to intake/research-plan
+- [x] 2.3 Unexpected issues loop back to intake/research-plan
 
 ## 3. PR and Release Gates
 
@@ -20,3 +20,8 @@
 
 - [ ] 4.1 OpenSpec archive flow completed
 - [ ] 4.2 PR merge approved
+
+## Notes
+
+- `2.3` is now checked because real-device feedback exposed follow-up scroll-layout defects, the implementation artifact was updated with those objective regressions and fixes, and implementation continued on the corrected contract.
+- Remaining unchecked items are still external gate/archive events and were not advanced during this implementation session.
