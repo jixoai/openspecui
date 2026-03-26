@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -77,6 +77,118 @@ function createDeferred<T>() {
   return { promise, resolve, reject }
 }
 
+function stubWideResizeObserver() {
+  class MockResizeObserver {
+    private readonly callback: ResizeObserverCallback
+
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback
+    }
+
+    observe() {
+      this.callback(
+        [
+          {
+            contentRect: { width: 1200 } as DOMRectReadOnly,
+          } as ResizeObserverEntry,
+        ],
+        this as unknown as ResizeObserver
+      )
+    }
+
+    disconnect() {}
+    unobserve() {}
+  }
+
+  vi.stubGlobal('ResizeObserver', MockResizeObserver)
+}
+
+class MockIntersectionObserver {
+  static instances: MockIntersectionObserver[] = []
+
+  readonly observedElements = new Set<Element>()
+  readonly options: IntersectionObserverInit
+  private readonly callback: IntersectionObserverCallback
+
+  constructor(callback: IntersectionObserverCallback, options: IntersectionObserverInit = {}) {
+    this.callback = callback
+    this.options = options
+    MockIntersectionObserver.instances.push(this)
+  }
+
+  observe(element: Element) {
+    this.observedElements.add(element)
+  }
+
+  unobserve(element: Element) {
+    this.observedElements.delete(element)
+  }
+
+  disconnect() {
+    this.observedElements.clear()
+    MockIntersectionObserver.instances = MockIntersectionObserver.instances.filter(
+      (instance) => instance !== this
+    )
+  }
+
+  takeRecords(): IntersectionObserverEntry[] {
+    return []
+  }
+
+  emitVisibleForFile(fileId: string) {
+    const node = Array.from(this.observedElements).find(
+      (element) =>
+        element instanceof HTMLElement &&
+        element.tagName === 'SECTION' &&
+        element.dataset.fileId === fileId
+    )
+    if (!(node instanceof HTMLElement)) {
+      return
+    }
+
+    const rect = node.getBoundingClientRect()
+    const root =
+      this.options.root instanceof HTMLElement ? this.options.root.getBoundingClientRect() : null
+
+    this.callback(
+      [
+        {
+          target: node,
+          time: 0,
+          isIntersecting: true,
+          intersectionRatio: 1,
+          boundingClientRect: rect,
+          intersectionRect: rect,
+          rootBounds: root,
+        } as IntersectionObserverEntry,
+      ],
+      this as unknown as IntersectionObserver
+    )
+  }
+
+  static reset() {
+    MockIntersectionObserver.instances = []
+  }
+}
+
+function emitVisibleFileThroughVisibilityObserver(fileId: string) {
+  for (const observer of MockIntersectionObserver.instances) {
+    if (!Array.isArray(observer.options.threshold) || observer.options.threshold.length <= 1) {
+      continue
+    }
+    observer.emitVisibleForFile(fileId)
+  }
+}
+
+function hasReadyVisibilityObserver() {
+  return MockIntersectionObserver.instances.some(
+    (observer) =>
+      Array.isArray(observer.options.threshold) &&
+      observer.options.threshold.length > 1 &&
+      observer.observedElements.size > 0
+  )
+}
+
 const baseEntry = {
   type: 'commit' as const,
   hash: 'abc12345',
@@ -96,10 +208,27 @@ const baseFile = {
   diff: { state: 'ready' as const, files: 1, insertions: 3, deletions: 1 },
 }
 
+const revealFiles = [
+  baseFile,
+  {
+    ...baseFile,
+    fileId: 'file-2',
+    path: 'src/second-file.ts',
+    displayPath: 'src/second-file.ts',
+  },
+  {
+    ...baseFile,
+    fileId: 'file-3',
+    path: 'src/third-file.ts',
+    displayPath: 'src/third-file.ts',
+  },
+]
+
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
   vi.unstubAllGlobals()
+  MockIntersectionObserver.reset()
 })
 
 beforeEach(() => {
@@ -296,29 +425,7 @@ describe('GitEntryDetailPanel', () => {
   })
 
   it('switches to dual-pane layout when the container is wide enough', async () => {
-    class MockResizeObserver {
-      private readonly callback: ResizeObserverCallback
-
-      constructor(callback: ResizeObserverCallback) {
-        this.callback = callback
-      }
-
-      observe() {
-        this.callback(
-          [
-            {
-              contentRect: { width: 1200 } as DOMRectReadOnly,
-            } as ResizeObserverEntry,
-          ],
-          this as unknown as ResizeObserver
-        )
-      }
-
-      disconnect() {}
-      unobserve() {}
-    }
-
-    vi.stubGlobal('ResizeObserver', MockResizeObserver)
+    stubWideResizeObserver()
 
     renderWithQueryClient(
       <GitEntryDetailPanel
@@ -338,29 +445,7 @@ describe('GitEntryDetailPanel', () => {
   })
 
   it('constrains the wide file-tree viewport to the visible scroll shell height', async () => {
-    class MockResizeObserver {
-      private readonly callback: ResizeObserverCallback
-
-      constructor(callback: ResizeObserverCallback) {
-        this.callback = callback
-      }
-
-      observe() {
-        this.callback(
-          [
-            {
-              contentRect: { width: 1200 } as DOMRectReadOnly,
-            } as ResizeObserverEntry,
-          ],
-          this as unknown as ResizeObserver
-        )
-      }
-
-      disconnect() {}
-      unobserve() {}
-    }
-
-    vi.stubGlobal('ResizeObserver', MockResizeObserver)
+    stubWideResizeObserver()
 
     const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
 
@@ -436,29 +521,7 @@ describe('GitEntryDetailPanel', () => {
   })
 
   it('retries wide-layout tree scrolling after patch layout changes', async () => {
-    class MockResizeObserver {
-      private readonly callback: ResizeObserverCallback
-
-      constructor(callback: ResizeObserverCallback) {
-        this.callback = callback
-      }
-
-      observe() {
-        this.callback(
-          [
-            {
-              contentRect: { width: 1200 } as DOMRectReadOnly,
-            } as ResizeObserverEntry,
-          ],
-          this as unknown as ResizeObserver
-        )
-      }
-
-      disconnect() {}
-      unobserve() {}
-    }
-
-    vi.stubGlobal('ResizeObserver', MockResizeObserver)
+    stubWideResizeObserver()
 
     const deferredPatch = createDeferred<{
       entry: typeof baseEntry
@@ -566,6 +629,315 @@ describe('GitEntryDetailPanel', () => {
       writable: true,
       value: originalScrollTo,
     })
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      writable: true,
+      value: originalGetBoundingClientRect,
+    })
+  })
+
+  it('does not auto-reveal the tree while tree scrolling owns the navigation intent', async () => {
+    stubWideResizeObserver()
+    vi.stubGlobal(
+      'IntersectionObserver',
+      MockIntersectionObserver as unknown as typeof IntersectionObserver
+    )
+
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      writable: true,
+      value: function mockGetBoundingClientRect(this: HTMLElement) {
+        if (this.getAttribute('role') === 'tree') {
+          return {
+            x: 0,
+            y: 0,
+            width: 320,
+            height: 60,
+            top: 0,
+            right: 320,
+            bottom: 60,
+            left: 0,
+            toJSON: () => ({}),
+          } satisfies DOMRect
+        }
+
+        if (this.getAttribute('role') === 'treeitem') {
+          switch (this.dataset.fileId) {
+            case 'file-1':
+              return {
+                x: 0,
+                y: 18,
+                width: 320,
+                height: 18,
+                top: 18,
+                right: 320,
+                bottom: 36,
+                left: 0,
+                toJSON: () => ({}),
+              } satisfies DOMRect
+            case 'file-2':
+              return {
+                x: 0,
+                y: 44,
+                width: 320,
+                height: 18,
+                top: 44,
+                right: 320,
+                bottom: 62,
+                left: 0,
+                toJSON: () => ({}),
+              } satisfies DOMRect
+            case 'file-3':
+              return {
+                x: 0,
+                y: 120,
+                width: 320,
+                height: 18,
+                top: 120,
+                right: 320,
+                bottom: 138,
+                left: 0,
+                toJSON: () => ({}),
+              } satisfies DOMRect
+          }
+        }
+
+        if (this.tagName === 'SECTION') {
+          const fileId = this.dataset.fileId
+          if (fileId === 'file-1') {
+            return {
+              x: 0,
+              y: 0,
+              width: 800,
+              height: 120,
+              top: 0,
+              right: 800,
+              bottom: 120,
+              left: 0,
+              toJSON: () => ({}),
+            } satisfies DOMRect
+          }
+
+          if (fileId === 'file-2') {
+            return {
+              x: 0,
+              y: 130,
+              width: 800,
+              height: 120,
+              top: 130,
+              right: 800,
+              bottom: 250,
+              left: 0,
+              toJSON: () => ({}),
+            } satisfies DOMRect
+          }
+
+          if (fileId === 'file-3') {
+            return {
+              x: 0,
+              y: 260,
+              width: 800,
+              height: 120,
+              top: 260,
+              right: 800,
+              bottom: 380,
+              left: 0,
+              toJSON: () => ({}),
+            } satisfies DOMRect
+          }
+        }
+
+        return originalGetBoundingClientRect.call(this)
+      },
+    })
+
+    renderWithQueryClient(
+      <GitEntryDetailPanel
+        selector={{ type: 'commit', hash: baseEntry.hash }}
+        entry={{ ...baseEntry, diff: { files: 3, insertions: 9, deletions: 3 } }}
+        files={revealFiles}
+        isLoading={false}
+        error={null}
+        patchLoader={async () => null}
+      />
+    )
+
+    const tree = await screen.findByRole('tree')
+    const treeScrollToMock = vi.fn()
+    Object.defineProperty(tree, 'scrollTo', {
+      configurable: true,
+      writable: true,
+      value: treeScrollToMock,
+    })
+
+    await waitFor(() => {
+      expect(hasReadyVisibilityObserver()).toBe(true)
+    })
+
+    fireEvent.wheel(tree, { deltaY: 120 })
+    await act(async () => {
+      emitVisibleFileThroughVisibilityObserver('file-3')
+    })
+
+    expect(treeScrollToMock).not.toHaveBeenCalled()
+
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      writable: true,
+      value: originalGetBoundingClientRect,
+    })
+  })
+
+  it('reveals the tree when diff scrolling owns the navigation intent', async () => {
+    stubWideResizeObserver()
+    vi.stubGlobal(
+      'IntersectionObserver',
+      MockIntersectionObserver as unknown as typeof IntersectionObserver
+    )
+
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      writable: true,
+      value: function mockGetBoundingClientRect(this: HTMLElement) {
+        if (this.getAttribute('role') === 'tree') {
+          return {
+            x: 0,
+            y: 0,
+            width: 320,
+            height: 60,
+            top: 0,
+            right: 320,
+            bottom: 60,
+            left: 0,
+            toJSON: () => ({}),
+          } satisfies DOMRect
+        }
+
+        if (this.getAttribute('role') === 'treeitem') {
+          switch (this.dataset.fileId) {
+            case 'file-1':
+              return {
+                x: 0,
+                y: 18,
+                width: 320,
+                height: 18,
+                top: 18,
+                right: 320,
+                bottom: 36,
+                left: 0,
+                toJSON: () => ({}),
+              } satisfies DOMRect
+            case 'file-2':
+              return {
+                x: 0,
+                y: 44,
+                width: 320,
+                height: 18,
+                top: 44,
+                right: 320,
+                bottom: 62,
+                left: 0,
+                toJSON: () => ({}),
+              } satisfies DOMRect
+            case 'file-3':
+              return {
+                x: 0,
+                y: 120,
+                width: 320,
+                height: 18,
+                top: 120,
+                right: 320,
+                bottom: 138,
+                left: 0,
+                toJSON: () => ({}),
+              } satisfies DOMRect
+          }
+        }
+
+        if (this.tagName === 'SECTION') {
+          const fileId = this.dataset.fileId
+          if (fileId === 'file-1') {
+            return {
+              x: 0,
+              y: 0,
+              width: 800,
+              height: 120,
+              top: 0,
+              right: 800,
+              bottom: 120,
+              left: 0,
+              toJSON: () => ({}),
+            } satisfies DOMRect
+          }
+
+          if (fileId === 'file-2') {
+            return {
+              x: 0,
+              y: 130,
+              width: 800,
+              height: 120,
+              top: 130,
+              right: 800,
+              bottom: 250,
+              left: 0,
+              toJSON: () => ({}),
+            } satisfies DOMRect
+          }
+
+          if (fileId === 'file-3') {
+            return {
+              x: 0,
+              y: 260,
+              width: 800,
+              height: 120,
+              top: 260,
+              right: 800,
+              bottom: 380,
+              left: 0,
+              toJSON: () => ({}),
+            } satisfies DOMRect
+          }
+        }
+
+        return originalGetBoundingClientRect.call(this)
+      },
+    })
+
+    renderWithQueryClient(
+      <GitEntryDetailPanel
+        selector={{ type: 'commit', hash: baseEntry.hash }}
+        entry={{ ...baseEntry, diff: { files: 3, insertions: 9, deletions: 3 } }}
+        files={revealFiles}
+        isLoading={false}
+        error={null}
+        patchLoader={async () => null}
+      />
+    )
+
+    const tree = await screen.findByRole('tree')
+    const treeScrollToMock = vi.fn()
+    Object.defineProperty(tree, 'scrollTo', {
+      configurable: true,
+      writable: true,
+      value: treeScrollToMock,
+    })
+
+    await waitFor(() => {
+      expect(hasReadyVisibilityObserver()).toBe(true)
+    })
+
+    const diffSection = screen.getByText('Diff Stream').closest('section') as HTMLElement
+    fireEvent.wheel(diffSection, { deltaY: 120 })
+    emitVisibleFileThroughVisibilityObserver('file-3')
+
+    await waitFor(() => {
+      expect(treeScrollToMock).toHaveBeenCalled()
+    })
+
     Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
       configurable: true,
       writable: true,

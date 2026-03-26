@@ -8,11 +8,12 @@ import type {
 } from '@openspecui/core'
 import { useQueries } from '@tanstack/react-query'
 import { AlertCircle, Files, GitCommitHorizontal, ListTree, LoaderCircle } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 
 import {
   buildIntersectionThresholds,
   findVerticalScrollContainer,
+  isVerticalScrollIntentKey,
   pickRevealTargetId,
   useIntersectionVisibilityMap,
   useViewportConstrainedHeight,
@@ -65,6 +66,10 @@ function useWideDetailLayout() {
 function selectorCacheKey(selector: GitEntrySelector | null): string {
   if (!selector) return 'none'
   return selector.type === 'commit' ? `commit:${selector.hash}` : 'uncommitted'
+}
+
+function isScrollIntentEventKey(event: KeyboardEvent<HTMLElement>): boolean {
+  return isVerticalScrollIntentKey(event.key)
 }
 
 function detectDiffScrollRoot(cardNodes: Iterable<HTMLElement>): HTMLElement | null {
@@ -162,11 +167,20 @@ export function GitEntryDetailPanel({
   const diffViewportRef = useRef<HTMLDivElement | null>(null)
   const tabsRootRef = useRef<HTMLDivElement | null>(null)
   const treeRevealNonceRef = useRef(0)
+  const revealNavigationSourceRef = useRef<'diff' | 'tree' | null>(null)
   const [wideTreeViewportNode, setWideTreeViewportNode] = useState<HTMLDivElement | null>(null)
   const wideTreeHeight = useViewportConstrainedHeight({
     target: wideTreeViewportNode,
     enabled: wide,
   })
+
+  const markTreeNavigation = useCallback(() => {
+    revealNavigationSourceRef.current = 'tree'
+  }, [])
+
+  const markDiffNavigation = useCallback(() => {
+    revealNavigationSourceRef.current = 'diff'
+  }, [])
 
   const requestPatch = useCallback((fileId: string) => {
     setRequestedFileIds((current) => (current.includes(fileId) ? current : [...current, fileId]))
@@ -194,6 +208,7 @@ export function GitEntryDetailPanel({
     setRequestedFileIds([])
     setDiffScrollRoot(null)
     setTreeRevealRequest(null)
+    revealNavigationSourceRef.current = null
     cardNodesRef.current.clear()
     pendingScrollFileIdRef.current = null
     pendingScrollDeadlineRef.current = 0
@@ -293,6 +308,10 @@ export function GitEntryDetailPanel({
   )
 
   const handleFilesBecameVisible = useCallback((entries: VisibilityBatchEntry<string>[]) => {
+    if (revealNavigationSourceRef.current !== 'diff') {
+      return
+    }
+
     const revealFileId = pickRevealTargetId(entries)
     if (!revealFileId) {
       return
@@ -470,6 +489,23 @@ export function GitEntryDetailPanel({
   )
 
   useEffect(() => {
+    if (!diffScrollRoot) {
+      return
+    }
+
+    const handleScroll = () => {
+      if (revealNavigationSourceRef.current !== 'tree') {
+        revealNavigationSourceRef.current = 'diff'
+      }
+    }
+
+    diffScrollRoot.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      diffScrollRoot.removeEventListener('scroll', handleScroll)
+    }
+  }, [diffScrollRoot])
+
+  useEffect(() => {
     if (diffScrollRoot || cardNodesRef.current.size === 0) {
       return
     }
@@ -534,6 +570,7 @@ export function GitEntryDetailPanel({
           onSelectFile={handleSelectFile}
           revealRequest={treeRevealRequest}
           className="h-full min-h-0"
+          onUserScrollIntent={markTreeNavigation}
         />
       </div>
     )
@@ -551,6 +588,7 @@ export function GitEntryDetailPanel({
           visibilityRatioByFileId={treeVisibilityRatioByFileId}
           onSelectFile={handleSelectFile}
           revealRequest={treeRevealRequest}
+          onUserScrollIntent={markTreeNavigation}
         />
       </div>
     )
@@ -621,7 +659,17 @@ export function GitEntryDetailPanel({
               {wideTreeContent}
             </div>
           </section>
-          <section className="min-w-0 space-y-2">
+          <section
+            className="min-w-0 space-y-2"
+            onKeyDownCapture={(event) => {
+              if (isScrollIntentEventKey(event)) {
+                markDiffNavigation()
+              }
+            }}
+            onPointerDownCapture={markDiffNavigation}
+            onTouchMoveCapture={markDiffNavigation}
+            onWheelCapture={markDiffNavigation}
+          >
             <div className="flex items-center gap-2 text-sm font-medium">
               <Files className="h-4 w-4 shrink-0" />
               <span>Diff Stream</span>

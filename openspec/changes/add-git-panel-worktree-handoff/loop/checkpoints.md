@@ -24,4 +24,5 @@
 ## Notes
 
 - `2.3` is now checked because real-device feedback exposed follow-up scroll-layout defects, the implementation artifact was updated with those objective regressions and fixes, and implementation continued on the corrected contract.
+- A later post-release user validation reopened the same loop because the earlier Storybook/browser acceptance had not actually covered the wide-tree manual-scroll race; this session updates the implementation artifact and test strategy before re-entering PR/release gates.
 - Remaining unchecked items are still external gate/archive events and were not advanced during this implementation session.

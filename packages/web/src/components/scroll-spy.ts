@@ -17,6 +17,18 @@ export function buildIntersectionThresholds(steps: number): number[] {
   return Array.from({ length: steps + 1 }, (_, index) => index / steps)
 }
 
+export function isVerticalScrollIntentKey(key: string): boolean {
+  return (
+    key === 'ArrowDown' ||
+    key === 'ArrowUp' ||
+    key === 'PageDown' ||
+    key === 'PageUp' ||
+    key === 'Home' ||
+    key === 'End' ||
+    key === ' '
+  )
+}
+
 function hasVerticalScrollBehavior(overflowY: string): boolean {
   return overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay'
 }
