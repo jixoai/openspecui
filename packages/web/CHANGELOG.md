@@ -1,5 +1,11 @@
 # @openspecui/web
 
+## 2.2.2
+
+### Patch Changes
+
+- bb10935: Fix wide Git commit detail file-tree navigation so observer-driven reveal only runs while the diff stream owns navigation, preventing the left tree from snapping back during manual tree scrolling and adding regression coverage in Storybook and unit tests.
+
 ## 2.2.1
 
 ### Patch Changes
