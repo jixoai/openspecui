@@ -10,18 +10,13 @@ import {
 
 import type { GitFileTreeVisibleItem } from './git-file-tree-visible-items'
 
-function findSelectedItemKey(items: readonly GitFileTreeVisibleItem[]): string | null {
-  return items.find((item) => item.kind === 'file' && item.selected)?.key ?? null
-}
-
 function resolveFocusableKey(options: {
   currentKey: string | null
   visibleKeySet: ReadonlySet<string>
   parentByKey: ReadonlyMap<string, string | null>
-  selectedItemKey: string | null
   firstItemKey: string | null
 }): string | null {
-  const { currentKey, visibleKeySet, parentByKey, selectedItemKey, firstItemKey } = options
+  const { currentKey, visibleKeySet, parentByKey, firstItemKey } = options
 
   if (currentKey && visibleKeySet.has(currentKey)) {
     return currentKey
@@ -35,7 +30,7 @@ function resolveFocusableKey(options: {
     ancestorKey = parentByKey.get(ancestorKey) ?? null
   }
 
-  return selectedItemKey ?? firstItemKey
+  return firstItemKey
 }
 
 export function useGitFileTreeNavigation({
@@ -61,14 +56,12 @@ export function useGitFileTreeNavigation({
     () => new Map(items.map((item, index) => [item.key, index])),
     [items]
   )
-  const selectedItemKey = useMemo(() => findSelectedItemKey(items), [items])
   const firstItemKey = items[0]?.key ?? null
 
   const effectiveFocusedKey = resolveFocusableKey({
     currentKey: focusedKey,
     visibleKeySet,
     parentByKey,
-    selectedItemKey,
     firstItemKey,
   })
 

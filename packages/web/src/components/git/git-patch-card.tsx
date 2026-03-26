@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
 import type { GitEntryFilePatch, GitEntryFileSummary } from '@openspecui/core'
 import { FileCode2, FileWarning, LoaderCircle } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 
 import { DiffStat } from './git-shared'
 
@@ -70,7 +70,6 @@ export function GitPatchCard({
   patch,
   status,
   error,
-  onRequest,
   onRegisterCard,
   scrollMarginTop,
 }: {
@@ -78,39 +77,16 @@ export function GitPatchCard({
   patch: GitEntryFilePatch | null
   status: GitPatchCardStatus
   error: Error | null
-  onRequest: (fileId: string) => void
   onRegisterCard?: (fileId: string, node: HTMLElement | null) => void
   scrollMarginTop?: number
 }) {
   const ref = useRef<HTMLElement | null>(null)
 
-  useEffect(() => {
-    const node = ref.current
-    if (!node || status !== 'idle') return
-    if (typeof IntersectionObserver === 'undefined') {
-      onRequest(file.fileId)
-      return
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((entry) => entry.isIntersecting)) return
-        onRequest(file.fileId)
-        observer.disconnect()
-      },
-      { rootMargin: '180px 0px' }
-    )
-
-    observer.observe(node)
-    return () => {
-      observer.disconnect()
-    }
-  }, [file.fileId, onRequest, status])
-
   const message = patchStateMessage(patch)
 
   return (
     <section
+      data-file-id={file.fileId}
       ref={(node) => {
         ref.current = node
         onRegisterCard?.(file.fileId, node)

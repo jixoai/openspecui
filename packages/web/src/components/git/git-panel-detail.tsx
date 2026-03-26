@@ -10,7 +10,15 @@ import { useQueries } from '@tanstack/react-query'
 import { AlertCircle, Files, GitCommitHorizontal, ListTree, LoaderCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { GitFileTree } from './git-file-tree'
+import {
+  buildIntersectionThresholds,
+  findVerticalScrollContainer,
+  pickRevealTargetId,
+  useIntersectionVisibilityMap,
+  useViewportConstrainedHeight,
+  type VisibilityBatchEntry,
+} from '../scroll-spy'
+import { GitFileTree, type GitFileTreeRevealRequest } from './git-file-tree'
 import { GitPatchCard, type GitPatchCardStatus } from './git-patch-card'
 import { DiffStat, GitFilesBadge, formatRelatedChanges } from './git-shared'
 
@@ -19,6 +27,19 @@ const WIDE_DETAIL_MIN_WIDTH = 960
 const DIFF_SCROLL_PADDING = 12
 const DIFF_SCROLL_ALIGNMENT_TOLERANCE = 16
 const DIFF_SCROLL_DEADLINE_MS = 4_000
+const FILE_TREE_NARROW_MARGIN_BLOCK = 12
+const PATCH_PREFETCH_ROOT_MARGIN = '180px 0px'
+const VISIBILITY_THRESHOLDS = buildIntersectionThresholds(20)
+
+interface GitEntryPatchResponse {
+  entry: DashboardGitEntry
+  file: GitEntryFilePatch | null
+}
+
+type GitPatchLoader = (options: {
+  selector: GitEntrySelector
+  fileId: string
+}) => Promise<GitEntryPatchResponse | null>
 
 function useWideDetailLayout() {
   const ref = useRef<HTMLDivElement | null>(null)
@@ -46,18 +67,12 @@ function selectorCacheKey(selector: GitEntrySelector | null): string {
   return selector.type === 'commit' ? `commit:${selector.hash}` : 'uncommitted'
 }
 
-function findVerticalScrollContainer(node: HTMLElement | null): HTMLElement | null {
-  let current = node?.parentElement ?? null
-
-  while (current) {
-    const style = window.getComputedStyle(current)
-    if (
-      (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
-      current.scrollHeight > current.clientHeight
-    ) {
-      return current
+function detectDiffScrollRoot(cardNodes: Iterable<HTMLElement>): HTMLElement | null {
+  for (const node of cardNodes) {
+    const root = findVerticalScrollContainer(node, { allowNonScrollable: true })
+    if (root) {
+      return root
     }
-    current = current.parentElement
   }
 
   return null
@@ -69,7 +84,8 @@ function scrollCardIntoView(
   topOffset: number
 ): void {
   const scrollContainer =
-    findVerticalScrollContainer(node) ?? findVerticalScrollContainer(fallbackRoot)
+    findVerticalScrollContainer(node, { allowNonScrollable: true }) ??
+    findVerticalScrollContainer(fallbackRoot, { allowNonScrollable: true })
 
   if (!scrollContainer) {
     node.scrollIntoView({ block: 'start', behavior: 'auto' })
@@ -92,7 +108,8 @@ function isCardAligned(
   topOffset: number
 ): boolean {
   const scrollContainer =
-    findVerticalScrollContainer(node) ?? findVerticalScrollContainer(fallbackRoot)
+    findVerticalScrollContainer(node, { allowNonScrollable: true }) ??
+    findVerticalScrollContainer(fallbackRoot, { allowNonScrollable: true })
   const nodeRect = node.getBoundingClientRect()
 
   if (!scrollContainer) {
@@ -120,6 +137,7 @@ export function GitEntryDetailPanel({
   isLoading,
   error,
   showEntrySummary = true,
+  patchLoader,
 }: {
   selector: GitEntrySelector | null
   entry: DashboardGitEntry | null
@@ -128,28 +146,54 @@ export function GitEntryDetailPanel({
   isLoading: boolean
   error: Error | null
   showEntrySummary?: boolean
+  patchLoader?: GitPatchLoader
 }) {
   const { ref, wide } = useWideDetailLayout()
   const selectorKey = selectorCacheKey(selector)
   const [activePane, setActivePane] = useState<'diff' | 'files'>('diff')
-  const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
   const [requestedFileIds, setRequestedFileIds] = useState<string[]>([])
   const [diffScrollOffset, setDiffScrollOffset] = useState(DIFF_SCROLL_PADDING)
+  const [diffScrollRoot, setDiffScrollRoot] = useState<HTMLElement | null>(null)
+  const [treeRevealRequest, setTreeRevealRequest] = useState<GitFileTreeRevealRequest | null>(null)
   const cardNodesRef = useRef(new Map<string, HTMLElement>())
   const pendingScrollFileIdRef = useRef<string | null>(null)
   const pendingScrollDeadlineRef = useRef(0)
   const pendingScrollFrameRef = useRef<number | null>(null)
   const diffViewportRef = useRef<HTMLDivElement | null>(null)
   const tabsRootRef = useRef<HTMLDivElement | null>(null)
+  const treeRevealNonceRef = useRef(0)
+  const [wideTreeViewportNode, setWideTreeViewportNode] = useState<HTMLDivElement | null>(null)
+  const wideTreeHeight = useViewportConstrainedHeight({
+    target: wideTreeViewportNode,
+    enabled: wide,
+  })
 
   const requestPatch = useCallback((fileId: string) => {
     setRequestedFileIds((current) => (current.includes(fileId) ? current : [...current, fileId]))
   }, [])
 
+  const fileIds = useMemo(() => files.map((file) => file.fileId), [files])
+
+  const loadPatch = useCallback(
+    async (fileId: string) => {
+      if (!selector) {
+        return null
+      }
+
+      if (patchLoader) {
+        return patchLoader({ selector, fileId })
+      }
+
+      return trpcClient.git.getEntryPatch.query({ selector, fileId })
+    },
+    [patchLoader, selector]
+  )
+
   useEffect(() => {
     setActivePane('diff')
-    setSelectedFileId(null)
     setRequestedFileIds([])
+    setDiffScrollRoot(null)
+    setTreeRevealRequest(null)
     cardNodesRef.current.clear()
     pendingScrollFileIdRef.current = null
     pendingScrollDeadlineRef.current = 0
@@ -161,10 +205,6 @@ export function GitEntryDetailPanel({
 
   useEffect(() => {
     if (files.length === 0) return
-
-    setSelectedFileId((current) =>
-      current && files.some((file) => file.fileId === current) ? current : files[0]!.fileId
-    )
 
     setRequestedFileIds((current) => {
       const next = new Set(current.filter((fileId) => files.some((file) => file.fileId === fileId)))
@@ -188,10 +228,7 @@ export function GitEntryDetailPanel({
   const patchQueries = useQueries({
     queries: requestedOrderedFileIds.map((fileId) => ({
       queryKey: ['git', 'patch', selectorKey, fileId],
-      queryFn: async () => {
-        if (!selector) return null
-        return trpcClient.git.getEntryPatch.query({ selector, fileId })
-      },
+      queryFn: () => loadPatch(fileId),
       enabled: selector !== null,
       staleTime: 5 * 60 * 1000,
       gcTime: 15 * 60 * 1000,
@@ -246,23 +283,66 @@ export function GitEntryDetailPanel({
     [files, patchStateByFileId]
   )
 
-  const syncDiffScrollOffset = useCallback(() => {
+  const handlePrefetchVisible = useCallback(
+    (entries: VisibilityBatchEntry<string>[]) => {
+      for (const { id } of entries) {
+        requestPatch(id)
+      }
+    },
+    [requestPatch]
+  )
+
+  const handleFilesBecameVisible = useCallback((entries: VisibilityBatchEntry<string>[]) => {
+    const revealFileId = pickRevealTargetId(entries)
+    if (!revealFileId) {
+      return
+    }
+
+    treeRevealNonceRef.current += 1
+    setTreeRevealRequest({
+      fileId: revealFileId,
+      nonce: treeRevealNonceRef.current,
+    })
+  }, [])
+
+  const { ratioById: visibilityRatioByFileId, setObservedNode: setVisibleObservedNode } =
+    useIntersectionVisibilityMap<string>({
+      ids: fileIds,
+      root: diffScrollRoot,
+      threshold: VISIBILITY_THRESHOLDS,
+      onBecomeVisible: handleFilesBecameVisible,
+    })
+
+  const treeVisibilityRatioByFileId = useMemo<ReadonlyMap<string, number>>(() => {
+    if (visibilityRatioByFileId.size > 0 || !treeRevealRequest) {
+      return visibilityRatioByFileId
+    }
+
+    return new Map([[treeRevealRequest.fileId, 1]])
+  }, [treeRevealRequest, visibilityRatioByFileId])
+
+  const { setObservedNode: setPrefetchObservedNode } = useIntersectionVisibilityMap<string>({
+    ids: fileIds,
+    root: diffScrollRoot,
+    rootMargin: PATCH_PREFETCH_ROOT_MARGIN,
+    threshold: [0],
+    onBecomeVisible: handlePrefetchVisible,
+  })
+
+  const syncDetailOffsets = useCallback(() => {
     if (wide) {
       setDiffScrollOffset(DIFF_SCROLL_PADDING)
       return
     }
 
     const strip = tabsRootRef.current?.querySelector<HTMLElement>('.tabs-strip')
-    if (!strip) {
-      setDiffScrollOffset(DIFF_SCROLL_PADDING)
-      return
-    }
+    const stripHeight = strip ? Math.ceil(strip.getBoundingClientRect().height) : 0
 
-    setDiffScrollOffset(Math.ceil(strip.getBoundingClientRect().height) + DIFF_SCROLL_PADDING)
+    setDiffScrollOffset(stripHeight > 0 ? stripHeight + DIFF_SCROLL_PADDING : DIFF_SCROLL_PADDING)
   }, [wide])
 
   useEffect(() => {
-    syncDiffScrollOffset()
+    syncDetailOffsets()
 
     if (wide) return
     if (typeof ResizeObserver === 'undefined') return
@@ -271,14 +351,20 @@ export function GitEntryDetailPanel({
     if (!strip) return
 
     const observer = new ResizeObserver(() => {
-      syncDiffScrollOffset()
+      syncDetailOffsets()
     })
 
+    const handleWindowResize = () => {
+      syncDetailOffsets()
+    }
+
     observer.observe(strip)
+    window.addEventListener('resize', handleWindowResize)
     return () => {
       observer.disconnect()
+      window.removeEventListener('resize', handleWindowResize)
     }
-  }, [syncDiffScrollOffset, wide])
+  }, [syncDetailOffsets, wide])
 
   const flushPendingScroll = useCallback(() => {
     if (!wide && activePane !== 'diff') {
@@ -355,7 +441,6 @@ export function GitEntryDetailPanel({
 
   const handleSelectFile = useCallback(
     (fileId: string) => {
-      setSelectedFileId(fileId)
       requestPatch(fileId)
       queueScrollToFile(fileId)
       if (!wide) {
@@ -365,13 +450,44 @@ export function GitEntryDetailPanel({
     [queueScrollToFile, requestPatch, wide]
   )
 
-  const registerCardNode = useCallback((fileId: string, node: HTMLElement | null) => {
-    if (!node) {
-      cardNodesRef.current.delete(fileId)
+  const registerCardNode = useCallback(
+    (fileId: string, node: HTMLElement | null) => {
+      setVisibleObservedNode(fileId, node)
+      setPrefetchObservedNode(fileId, node)
+
+      if (!node) {
+        cardNodesRef.current.delete(fileId)
+        return
+      }
+
+      cardNodesRef.current.set(fileId, node)
+      setDiffScrollRoot(
+        (currentRoot) =>
+          currentRoot ?? findVerticalScrollContainer(node, { allowNonScrollable: true })
+      )
+    },
+    [setPrefetchObservedNode, setVisibleObservedNode]
+  )
+
+  useEffect(() => {
+    if (diffScrollRoot || cardNodesRef.current.size === 0) {
       return
     }
-    cardNodesRef.current.set(fileId, node)
-  }, [])
+
+    const resolveRoot = () => {
+      const nextRoot = detectDiffScrollRoot(cardNodesRef.current.values())
+      if (nextRoot) {
+        setDiffScrollRoot(nextRoot)
+      }
+    }
+
+    resolveRoot()
+    const frame = window.requestAnimationFrame(resolveRoot)
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+    }
+  }, [diffScrollRoot, patchLayoutVersion])
 
   if (error) {
     return (
@@ -399,18 +515,44 @@ export function GitEntryDetailPanel({
     )
   }
 
-  const fileTreeContent =
+  const wideTreeContent =
     isLoading && files.length === 0 ? (
       <div className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm">
         Loading changed files…
       </div>
     ) : (
-      <GitFileTree
-        files={treeFiles}
-        projectDir={projectDir}
-        activeFileId={selectedFileId}
-        onSelectFile={handleSelectFile}
-      />
+      <div
+        ref={setWideTreeViewportNode}
+        data-testid="git-file-tree-viewport"
+        className="min-h-0 shrink-0"
+        style={wideTreeHeight != null ? { height: `${wideTreeHeight}px` } : undefined}
+      >
+        <GitFileTree
+          files={treeFiles}
+          projectDir={projectDir}
+          visibilityRatioByFileId={treeVisibilityRatioByFileId}
+          onSelectFile={handleSelectFile}
+          revealRequest={treeRevealRequest}
+          className="h-full min-h-0"
+        />
+      </div>
+    )
+
+  const narrowTreeContent =
+    isLoading && files.length === 0 ? (
+      <div className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm">
+        Loading changed files…
+      </div>
+    ) : (
+      <div className="py-3" style={{ marginBlock: `${FILE_TREE_NARROW_MARGIN_BLOCK}px` }}>
+        <GitFileTree
+          files={treeFiles}
+          projectDir={projectDir}
+          visibilityRatioByFileId={treeVisibilityRatioByFileId}
+          onSelectFile={handleSelectFile}
+          revealRequest={treeRevealRequest}
+        />
+      </div>
     )
 
   const diffViewportStyle = {
@@ -437,7 +579,6 @@ export function GitEntryDetailPanel({
               patch={patchState?.file ?? null}
               status={patchState?.status ?? 'idle'}
               error={patchState?.error ?? null}
-              onRequest={requestPatch}
               onRegisterCard={registerCardNode}
               scrollMarginTop={diffScrollOffset}
             />
@@ -471,12 +612,14 @@ export function GitEntryDetailPanel({
 
       {wide ? (
         <div className="grid min-w-0 gap-3 [grid-template-columns:minmax(18rem,20rem)_minmax(0,1fr)]">
-          <section className="min-w-0 space-y-2">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <ListTree className="h-4 w-4 shrink-0" />
-              <span>File Tree</span>
+          <section className="sticky top-0 flex min-h-0 self-start">
+            <div className="flex min-h-0 flex-1 flex-col gap-2">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <ListTree className="h-4 w-4 shrink-0" />
+                <span>File Tree</span>
+              </div>
+              {wideTreeContent}
             </div>
-            {fileTreeContent}
           </section>
           <section className="min-w-0 space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
@@ -514,7 +657,7 @@ export function GitEntryDetailPanel({
                 id: 'files',
                 label: 'File Tree',
                 icon: <ListTree className="h-4 w-4" />,
-                content: <div className="pt-3">{fileTreeContent}</div>,
+                content: narrowTreeContent,
               },
             ]}
           />

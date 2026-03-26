@@ -11,6 +11,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 
+import { revealElementInContainer } from '../scroll-spy'
 import { buildGitFileTreeModel, type GitFileTreeNode } from './git-file-tree-model'
 import { useGitFileTreeNavigation } from './git-file-tree-navigation'
 import {
@@ -21,6 +22,7 @@ import { DiffStat } from './git-shared'
 
 const TREE_CONNECTOR_COLUMN_WIDTH = 14
 const TREE_BRANCH_END_INSET = 3.5
+const EMPTY_VISIBILITY_RATIO_MAP = new Map<string, number>()
 
 function changeTypeTone(changeType: GitEntryFileSummary['changeType']): string {
   switch (changeType) {
@@ -80,7 +82,12 @@ interface TreeConnectorMetric {
   level: number
   parentKey: string | null
   isLastSibling: boolean
-  selected: boolean
+  visibilityRatio: number
+}
+
+export interface GitFileTreeRevealRequest {
+  fileId: string
+  nonce: number
 }
 
 function buildEndElbowGeometry(options: {
@@ -194,14 +201,14 @@ function TreeConnectorOverlay({
                   midY: child.midY,
                   horizontalEndX,
                 })}
-                opacity={child.selected ? 0.24 : 0.48}
+                opacity={0.22 + child.visibilityRatio * 0.34}
                 vectorEffect="non-scaling-stroke"
               />
             ))}
 
             <path
               d={endElbow.path}
-              opacity={lastChild.selected ? 0.24 : 0.62}
+              opacity={0.3 + lastChild.visibilityRatio * 0.32}
               vectorEffect="non-scaling-stroke"
             />
           </g>
@@ -231,10 +238,14 @@ function GitFileTreeItem({
   const label =
     item.kind === 'directory' ? item.node.name : renderFileLabel(item.node.file, item.node.name)
   const connectorWidth = item.guideMask.length * TREE_CONNECTOR_COLUMN_WIDTH
+  const visibilityRatio = item.visibilityRatio
+  const highlightOpacity = visibilityRatio <= 0 ? 0 : Math.min(0.88, 0.22 + visibilityRatio * 0.66)
 
   return (
     <div
       id={`git-file-tree-item-${encodeURIComponent(item.key)}`}
+      data-file-id={item.kind === 'file' ? item.node.file.fileId : undefined}
+      data-visibility-ratio={visibilityRatio.toFixed(3)}
       ref={(node) => {
         registerItemRef(item.key)(node)
         registerOverlayItemRef(item.key)(node)
@@ -246,37 +257,54 @@ function GitFileTreeItem({
       aria-setsize={item.setSize}
       aria-posinset={item.posInSet}
       aria-expanded={item.kind === 'directory' ? item.expanded : undefined}
-      aria-selected={item.kind === 'file' ? item.selected : undefined}
       onClick={() => onItemClick(item.key)}
       onFocus={() => onItemFocus(item.key)}
       onKeyDown={(event) => onItemKeyDown(event, item.key)}
       className={cn(
         'relative grid min-w-0 cursor-default grid-cols-[auto_minmax(0,1fr)_auto] items-stretch gap-1.5 rounded-md py-0.5 text-left outline-none transition-colors',
         'focus-visible:ring-ring/60 focus-visible:ring-2',
-        item.kind === 'file' && item.selected
-          ? 'text-foreground'
-          : item.kind === 'directory'
-            ? 'text-foreground hover:bg-muted/35'
-            : 'text-foreground/90 hover:bg-muted/35'
+        item.kind === 'directory'
+          ? 'text-foreground hover:bg-muted/35'
+          : 'text-foreground/90 hover:bg-muted/35'
       )}
       title={item.kind === 'directory' ? item.node.name : item.node.file.displayPath}
     >
-      {item.kind === 'file' && item.selected ? (
+      {highlightOpacity > 0 ? (
         <span
           aria-hidden="true"
-          className="bg-primary/8 pointer-events-none absolute inset-y-0 rounded-md"
-          style={{ left: `${Math.max(0, connectorWidth - 1)}px`, right: 0 }}
+          className={cn(
+            'pointer-events-none absolute inset-y-0 rounded-md',
+            item.kind === 'directory'
+              ? 'bg-primary/10 ring-primary/10 ring-1'
+              : 'bg-primary/16 ring-primary/15 ring-1'
+          )}
+          style={{
+            left: `${Math.max(0, connectorWidth - 1)}px`,
+            right: 0,
+            opacity: highlightOpacity,
+          }}
         />
       ) : null}
 
       <TreeConnector guideMask={item.guideMask} />
 
       {item.kind === 'directory' ? (
-        <div className="text-muted-foreground relative z-10 flex min-w-0 items-start gap-1.5 text-[11px] font-medium">
+        <div
+          className={cn(
+            'relative z-10 flex min-w-0 items-start gap-1.5 text-[11px] font-medium transition-colors',
+            visibilityRatio > 0 ? 'text-foreground' : 'text-muted-foreground'
+          )}
+        >
           {item.expanded ? (
-            <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <FolderOpen
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 transition-opacity"
+              style={{ opacity: Math.min(1, 0.65 + visibilityRatio * 0.35) }}
+            />
           ) : (
-            <FolderClosed className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <FolderClosed
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 transition-opacity"
+              style={{ opacity: Math.min(1, 0.65 + visibilityRatio * 0.35) }}
+            />
           )}
           <span className="min-w-0 leading-4 [overflow-wrap:anywhere]">{label}</span>
         </div>
@@ -284,16 +312,29 @@ function GitFileTreeItem({
         <div className="relative z-10 flex min-w-0 items-start gap-1.5">
           <FileCode2
             className={cn(
-              'mt-0.5 h-3.5 w-3.5 shrink-0',
-              changeTypeTone(item.node.file.changeType),
-              item.selected && 'text-primary'
+              'mt-0.5 h-3.5 w-3.5 shrink-0 transition-colors',
+              visibilityRatio > 0 ? 'text-primary' : changeTypeTone(item.node.file.changeType)
             )}
+            style={{ opacity: Math.min(1, 0.7 + visibilityRatio * 0.3) }}
           />
-          <span className="min-w-0 text-[11px] leading-4 [overflow-wrap:anywhere]">{label}</span>
+          <span
+            className={cn(
+              'min-w-0 text-[11px] leading-4 transition-colors [overflow-wrap:anywhere]',
+              visibilityRatio > 0 ? 'text-foreground font-medium' : ''
+            )}
+          >
+            {label}
+          </span>
         </div>
       )}
 
-      <div className="text-muted-foreground relative z-10 flex min-h-4 shrink-0 items-center gap-1">
+      <div
+        className={cn(
+          'relative z-10 flex min-h-4 shrink-0 items-center gap-1 transition-opacity',
+          visibilityRatio > 0 ? 'text-foreground/80' : 'text-muted-foreground'
+        )}
+        style={{ opacity: Math.min(1, 0.68 + visibilityRatio * 0.32) }}
+      >
         <DiffStat diff={item.node.diff} />
       </div>
     </div>
@@ -364,18 +405,24 @@ function GitFileTreeNodes({
 export function GitFileTree({
   files,
   projectDir,
-  activeFileId,
+  visibilityRatioByFileId = EMPTY_VISIBILITY_RATIO_MAP,
   onSelectFile,
+  revealRequest = null,
+  className,
 }: {
   files: GitEntryFileSummary[]
   projectDir?: string | null
-  activeFileId: string | null
+  visibilityRatioByFileId?: ReadonlyMap<string, number>
   onSelectFile: (fileId: string) => void
+  revealRequest?: GitFileTreeRevealRequest | null
+  className?: string
 }) {
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(new Set())
   const treeRef = useRef<HTMLDivElement | null>(null)
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const treeContentRef = useRef<HTMLDivElement | null>(null)
   const overlayItemNodesRef = useRef<Map<string, HTMLElement>>(new Map())
+  const lastHandledRevealNonceRef = useRef<number | null>(null)
   const [connectorMetrics, setConnectorMetrics] = useState<TreeConnectorMetric[]>([])
   const [connectorWidth, setConnectorWidth] = useState(0)
   const [connectorHeight, setConnectorHeight] = useState(0)
@@ -393,8 +440,8 @@ export function GitFileTree({
     })
   }, [])
   const visibleModel = useMemo(
-    () => buildGitFileTreeVisibleModel(tree, collapsedKeys, activeFileId),
-    [activeFileId, collapsedKeys, tree]
+    () => buildGitFileTreeVisibleModel(tree, collapsedKeys, visibilityRatioByFileId),
+    [collapsedKeys, tree, visibilityRatioByFileId]
   )
 
   useEffect(() => {
@@ -429,6 +476,43 @@ export function GitFileTree({
     []
   )
 
+  useEffect(() => {
+    if (!revealRequest) {
+      return
+    }
+
+    if (lastHandledRevealNonceRef.current === revealRequest.nonce) {
+      return
+    }
+
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) {
+      return
+    }
+
+    let itemKey = visibleModel.keyByFileId.get(revealRequest.fileId) ?? null
+    while (itemKey && !visibleModel.itemsByKey.has(itemKey)) {
+      itemKey = visibleModel.parentByKey.get(itemKey) ?? null
+    }
+
+    if (!itemKey) {
+      return
+    }
+
+    const itemNode = overlayItemNodesRef.current.get(itemKey)
+    if (!itemNode) {
+      return
+    }
+
+    revealElementInContainer({
+      container: scrollContainer,
+      element: itemNode,
+      behavior: 'auto',
+      margin: 12,
+    })
+    lastHandledRevealNonceRef.current = revealRequest.nonce
+  }, [revealRequest, visibleModel.itemsByKey, visibleModel.keyByFileId, visibleModel.parentByKey])
+
   useLayoutEffect(() => {
     const contentNode = treeContentRef.current
     if (!contentNode) {
@@ -462,7 +546,7 @@ export function GitFileTree({
             level: item.level,
             parentKey: item.parentKey,
             isLastSibling: item.isLastSibling,
-            selected: item.kind === 'file' && item.selected,
+            visibilityRatio: item.visibilityRatio,
           },
         ]
       })
@@ -499,26 +583,34 @@ export function GitFileTree({
   return (
     <div
       ref={treeRef}
-      role="tree"
-      aria-label="Changed files"
-      className="rounded-md border border-zinc-500/15 bg-zinc-500/5 px-2 py-2"
+      className={cn(
+        'flex min-h-0 flex-col overflow-hidden rounded-md border border-zinc-500/15 bg-zinc-500/5',
+        className
+      )}
     >
-      <div ref={treeContentRef} className="relative">
-        <TreeConnectorOverlay
-          metrics={connectorMetrics}
-          width={connectorWidth}
-          height={connectorHeight}
-        />
-        <GitFileTreeNodes
-          nodes={tree}
-          itemsByKey={visibleModel.itemsByKey}
-          focusedKey={focusedKey}
-          onItemClick={handleItemClick}
-          onItemFocus={handleItemFocus}
-          onItemKeyDown={handleItemKeyDown}
-          registerItemRef={registerItemRef}
-          registerOverlayItemRef={registerOverlayItemRef}
-        />
+      <div
+        ref={scrollContainerRef}
+        role="tree"
+        aria-label="Changed files"
+        className="scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2"
+      >
+        <div ref={treeContentRef} className="relative">
+          <TreeConnectorOverlay
+            metrics={connectorMetrics}
+            width={connectorWidth}
+            height={connectorHeight}
+          />
+          <GitFileTreeNodes
+            nodes={tree}
+            itemsByKey={visibleModel.itemsByKey}
+            focusedKey={focusedKey}
+            onItemClick={handleItemClick}
+            onItemFocus={handleItemFocus}
+            onItemKeyDown={handleItemKeyDown}
+            registerItemRef={registerItemRef}
+            registerOverlayItemRef={registerOverlayItemRef}
+          />
+        </div>
       </div>
     </div>
   )

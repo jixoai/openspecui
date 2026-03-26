@@ -156,6 +156,7 @@ describe('GitEntryDetailPanel', () => {
     })
 
     fireEvent.click(screen.getByRole('button', { name: /File Tree/i }))
+    expect(screen.getByRole('tree').style.maxHeight).toBe('')
     fireEvent.click(screen.getByRole('treeitem', { name: /src\/git-panel\.ts/i }))
 
     await waitFor(() => {
@@ -333,6 +334,104 @@ describe('GitEntryDetailPanel', () => {
       expect(screen.queryByTestId('tabs')).toBeNull()
       expect(screen.getByText('File Tree')).toBeTruthy()
       expect(screen.getByText('Diff Stream')).toBeTruthy()
+    })
+  })
+
+  it('constrains the wide file-tree viewport to the visible scroll shell height', async () => {
+    class MockResizeObserver {
+      private readonly callback: ResizeObserverCallback
+
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback
+      }
+
+      observe() {
+        this.callback(
+          [
+            {
+              contentRect: { width: 1200 } as DOMRectReadOnly,
+            } as ResizeObserverEntry,
+          ],
+          this as unknown as ResizeObserver
+        )
+      }
+
+      disconnect() {}
+      unobserve() {}
+    }
+
+    vi.stubGlobal('ResizeObserver', MockResizeObserver)
+
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      writable: true,
+      value: function mockGetBoundingClientRect(this: HTMLElement) {
+        if (this.dataset.testid === 'scroll-shell') {
+          return {
+            x: 0,
+            y: 40,
+            width: 960,
+            height: 320,
+            top: 40,
+            right: 960,
+            bottom: 360,
+            left: 0,
+            toJSON: () => ({}),
+          } satisfies DOMRect
+        }
+
+        if (this.dataset.testid === 'git-file-tree-viewport') {
+          return {
+            x: 0,
+            y: 120,
+            width: 320,
+            height: 80,
+            top: 120,
+            right: 320,
+            bottom: 200,
+            left: 0,
+            toJSON: () => ({}),
+          } satisfies DOMRect
+        }
+
+        return originalGetBoundingClientRect.call(this)
+      },
+    })
+
+    renderWithQueryClient(
+      <div data-testid="scroll-shell" style={{ height: '320px', overflowY: 'auto' }}>
+        <GitEntryDetailPanel
+          selector={{ type: 'commit', hash: baseEntry.hash }}
+          entry={baseEntry}
+          files={[baseFile]}
+          isLoading={false}
+          error={null}
+        />
+      </div>
+    )
+
+    const scrollShell = screen.getByTestId('scroll-shell')
+    Object.defineProperty(scrollShell, 'clientHeight', {
+      configurable: true,
+      value: 320,
+    })
+    Object.defineProperty(scrollShell, 'scrollHeight', {
+      configurable: true,
+      value: 1200,
+    })
+
+    fireEvent(window, new Event('resize'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('git-file-tree-viewport').style.height).toBe('240px')
+    })
+
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      writable: true,
+      value: originalGetBoundingClientRect,
     })
   })
 

@@ -22,12 +22,13 @@ export interface GitFileTreeVisibleDirectoryItem extends GitFileTreeVisibleItemB
   node: GitFileTreeDirectoryNode
   expanded: boolean
   firstChildKey: string | null
+  visibilityRatio: number
 }
 
 export interface GitFileTreeVisibleFileItem extends GitFileTreeVisibleItemBase {
   kind: 'file'
   node: GitFileTreeFileNode
-  selected: boolean
+  visibilityRatio: number
 }
 
 export type GitFileTreeVisibleItem = GitFileTreeVisibleDirectoryItem | GitFileTreeVisibleFileItem
@@ -37,28 +38,60 @@ export interface GitFileTreeVisibleModel {
   itemsByKey: Map<string, GitFileTreeVisibleItem>
   directoryKeys: Set<string>
   parentByKey: Map<string, string | null>
+  keyByFileId: Map<string, string>
 }
 
 function collectNodeMetadata(
   nodes: GitFileTreeNode[],
   parentKey: string | null,
   parentByKey: Map<string, string | null>,
-  directoryKeys: Set<string>
+  directoryKeys: Set<string>,
+  keyByFileId: Map<string, string>
 ): void {
   for (const node of nodes) {
     parentByKey.set(node.key, parentKey)
 
     if (node.kind === 'directory') {
       directoryKeys.add(node.key)
-      collectNodeMetadata(node.children, node.key, parentByKey, directoryKeys)
+      collectNodeMetadata(node.children, node.key, parentByKey, directoryKeys, keyByFileId)
+      continue
     }
+
+    keyByFileId.set(node.file.fileId, node.key)
   }
+}
+
+function collectVisibilityRatios(
+  nodes: GitFileTreeNode[],
+  visibilityRatioByFileId: ReadonlyMap<string, number>,
+  visibilityRatioByKey: Map<string, number>
+): number {
+  let maxVisibilityRatio = 0
+
+  for (const node of nodes) {
+    if (node.kind === 'directory') {
+      const ratio = collectVisibilityRatios(
+        node.children,
+        visibilityRatioByFileId,
+        visibilityRatioByKey
+      )
+      visibilityRatioByKey.set(node.key, ratio)
+      maxVisibilityRatio = Math.max(maxVisibilityRatio, ratio)
+      continue
+    }
+
+    const ratio = visibilityRatioByFileId.get(node.file.fileId) ?? 0
+    visibilityRatioByKey.set(node.key, ratio)
+    maxVisibilityRatio = Math.max(maxVisibilityRatio, ratio)
+  }
+
+  return maxVisibilityRatio
 }
 
 function collectVisibleItems(
   nodes: GitFileTreeNode[],
   collapsedKeys: ReadonlySet<string>,
-  activeFileId: string | null,
+  visibilityRatioByKey: ReadonlyMap<string, number>,
   level: number,
   parentKey: string | null,
   guideMask: boolean[],
@@ -84,13 +117,14 @@ function collectVisibleItems(
         guideMask,
         expanded,
         firstChildKey: node.children[0]?.key ?? null,
+        visibilityRatio: visibilityRatioByKey.get(node.key) ?? 0,
       })
 
       if (expanded && node.children.length > 0) {
         collectVisibleItems(
           node.children,
           collapsedKeys,
-          activeFileId,
+          visibilityRatioByKey,
           level + 1,
           node.key,
           [...guideMask, !isLastSibling],
@@ -111,7 +145,7 @@ function collectVisibleItems(
       setSize,
       isLastSibling,
       guideMask,
-      selected: node.file.fileId === activeFileId,
+      visibilityRatio: visibilityRatioByKey.get(node.key) ?? 0,
     })
   })
 }
@@ -119,19 +153,23 @@ function collectVisibleItems(
 export function buildGitFileTreeVisibleModel(
   nodes: GitFileTreeNode[],
   collapsedKeys: ReadonlySet<string>,
-  activeFileId: string | null
+  visibilityRatioByFileId: ReadonlyMap<string, number> = new Map()
 ): GitFileTreeVisibleModel {
   const parentByKey = new Map<string, string | null>()
   const directoryKeys = new Set<string>()
+  const keyByFileId = new Map<string, string>()
   const items: GitFileTreeVisibleItem[] = []
+  const visibilityRatioByKey = new Map<string, number>()
 
-  collectNodeMetadata(nodes, null, parentByKey, directoryKeys)
-  collectVisibleItems(nodes, collapsedKeys, activeFileId, 1, null, [], items)
+  collectNodeMetadata(nodes, null, parentByKey, directoryKeys, keyByFileId)
+  collectVisibilityRatios(nodes, visibilityRatioByFileId, visibilityRatioByKey)
+  collectVisibleItems(nodes, collapsedKeys, visibilityRatioByKey, 1, null, [], items)
 
   return {
     items,
     itemsByKey: new Map(items.map((item) => [item.key, item])),
     directoryKeys,
     parentByKey,
+    keyByFileId,
   }
 }

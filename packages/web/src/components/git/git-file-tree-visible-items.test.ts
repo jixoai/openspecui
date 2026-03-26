@@ -35,7 +35,14 @@ describe('buildGitFileTreeVisibleModel', () => {
       },
     ])
 
-    const model = buildGitFileTreeVisibleModel(tree, new Set(), null)
+    const model = buildGitFileTreeVisibleModel(
+      tree,
+      new Set(),
+      new Map([
+        ['button-file', 0.75],
+        ['test-file', 0.25],
+      ])
+    )
 
     expect(model.items.map((item) => item.key)).toEqual([
       'src',
@@ -59,8 +66,13 @@ describe('buildGitFileTreeVisibleModel', () => {
       posInSet: 1,
       setSize: 1,
       guideMask: [true, true],
+      visibilityRatio: 0.75,
+    })
+    expect(model.itemsByKey.get('src/components')).toMatchObject({
+      visibilityRatio: 0.75,
     })
     expect(model.parentByKey.get('test-file')).toBe('test/unit')
+    expect(model.keyByFileId.get('routes-file')).toBe('routes-file')
   })
 
   it('keeps full parent metadata while filtering hidden descendants', () => {
@@ -85,11 +97,18 @@ describe('buildGitFileTreeVisibleModel', () => {
       },
     ])
 
-    const model = buildGitFileTreeVisibleModel(tree, new Set(['openspec/change']), null)
+    const model = buildGitFileTreeVisibleModel(
+      tree,
+      new Set(['openspec/change']),
+      new Map([['proposal-file', 0.5]])
+    )
 
     expect(model.items.map((item) => item.key)).toEqual(['openspec/change'])
     expect(model.parentByKey.get('proposal-file')).toBe('openspec/change')
     expect(model.parentByKey.get('tasks-file')).toBe('openspec/change')
     expect(model.directoryKeys.has('openspec/change')).toBe(true)
+    expect(model.itemsByKey.get('openspec/change')).toMatchObject({
+      visibilityRatio: 0.5,
+    })
   })
 })

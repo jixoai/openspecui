@@ -20,6 +20,7 @@ const {
   opsxConfigBundleMock: vi.fn(),
   navControllerMock: {
     activatePop: vi.fn(),
+    push: vi.fn(),
   },
   staticModeMock: vi.fn(() => true),
 }))
@@ -188,6 +189,7 @@ describe('Dashboard', () => {
     opsxStatusListMock.mockReturnValue({ data: [] })
     opsxConfigBundleMock.mockReturnValue({ data: null })
     navControllerMock.activatePop.mockReset()
+    navControllerMock.push.mockReset()
   })
 
   afterEach(() => {
@@ -416,5 +418,54 @@ describe('Dashboard', () => {
 
     await waitFor(() => expect(isDisabled('Refresh')).toBe(false))
     expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens git snapshot entries in the bottom git panel during live mode', () => {
+    staticModeMock.mockReturnValue(false)
+    dashboardOverviewMock.mockReturnValue({
+      data: {
+        ...createOverviewData(),
+        summary: {
+          specifications: 0,
+          requirements: 0,
+          activeChanges: 0,
+          inProgressChanges: 0,
+          completedChanges: 0,
+          archivedTasksCompleted: 0,
+          tasksTotal: 0,
+          tasksCompleted: 0,
+          taskCompletionPercent: null,
+        },
+        specifications: [],
+        activeChanges: [],
+        git: {
+          defaultBranch: 'main',
+          worktrees: [
+            {
+              ...baseWorktree,
+              isCurrent: true,
+              entries: [
+                {
+                  type: 'commit',
+                  hash: 'deadbeef',
+                  title: 'Open me',
+                  committedAt: 1_710_200_000_000,
+                  relatedChanges: [],
+                  diff: { files: 1, insertions: 4, deletions: 2 },
+                },
+              ],
+            },
+          ],
+        },
+      },
+      isLoading: false,
+      error: null,
+    })
+
+    render(<Dashboard />)
+
+    fireEvent.click(screen.getByText('Open me').closest('button') as HTMLButtonElement)
+
+    expect(navControllerMock.push).toHaveBeenCalledWith('bottom', '/git/commit/deadbeef', null)
   })
 })
