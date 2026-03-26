@@ -31,7 +31,7 @@
   "devDependencies": {
     "tsdown": "^0.16.6",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^4.1.0"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
