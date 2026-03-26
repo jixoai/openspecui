@@ -560,7 +560,7 @@ export function GitEntryDetailPanel({
       <div
         ref={setWideTreeViewportNode}
         data-testid="git-file-tree-viewport"
-        className="min-h-0 shrink-0"
+        className="min-h-0 shrink-0 pb-1"
         style={wideTreeHeight != null ? { height: `${wideTreeHeight}px` } : undefined}
       >
         <GitFileTree
