@@ -1,5 +1,13 @@
 # openspecui
 
+## 2.2.4
+
+### Patch Changes
+
+- 8823a45: Align dev dist output behavior and publish CLI patch alongside the web package update.
+  - Update `@openspecui/web` `dev:dist` to use `--emptyOutDir true` in watch mode.
+  - Publish a matching `openspecui` patch release so CLI consumers pick up the latest bundled web assets.
+
 ## 2.2.0
 
 ### Minor Changes
