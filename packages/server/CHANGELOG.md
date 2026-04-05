@@ -1,5 +1,16 @@
 # @openspecui/server
 
+## 2.3.0
+
+### Minor Changes
+
+- 2023e8b: Add native view-transition navigation for top-level routes, shared-element detail handoffs, and routed tab carousels, while restructuring Git detail loading for faster patch delivery and smoother bottom-panel interactions.
+
+### Patch Changes
+
+- Updated dependencies [2023e8b]
+  - @openspecui/core@2.3.0
+
 ## 2.2.0
 
 ### Minor Changes
