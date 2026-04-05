@@ -1,6 +1,6 @@
 import { Dialog } from '@/components/dialog'
-import { navController } from '@/lib/nav-controller'
 import { useNavLayout } from '@/lib/use-nav-controller'
+import { vtNavController } from '@/lib/view-transitions/navigation'
 import { Outlet, RouterProvider, type AnyRouter } from '@tanstack/react-router'
 import {
   createContext,
@@ -131,8 +131,6 @@ function PopAreaDialog() {
   const navLayout = useNavLayout()
   const { config, resetConfig } = usePopAreaConfigContext()
   const { requestClose, closeRequestVersion } = usePopAreaLifecycleContext()
-  const [dialogOpen, setDialogOpen] = useState(navLayout.popActive)
-  const [deactivateAfterClose, setDeactivateAfterClose] = useState(false)
   const handledCloseRequestVersionRef = useRef(0)
 
   const semanticDialogClassName = useMemo(() => {
@@ -168,38 +166,22 @@ function PopAreaDialog() {
   }, [config.layout.width])
 
   useEffect(() => {
-    if (navLayout.popActive) {
-      if (!deactivateAfterClose) {
-        setDialogOpen(true)
-      }
-      return
-    }
-
-    setDialogOpen(false)
-  }, [deactivateAfterClose, navLayout.popActive])
-
-  useEffect(() => {
     if (closeRequestVersion <= handledCloseRequestVersionRef.current) return
     handledCloseRequestVersionRef.current = closeRequestVersion
     if (!navLayout.popActive) return
 
-    setDeactivateAfterClose(true)
-    setDialogOpen(false)
+    void vtNavController.deactivatePop()
   }, [closeRequestVersion, navLayout.popActive])
 
   const handleClosed = useCallback(() => {
-    if (deactivateAfterClose) {
-      navController.deactivatePop()
-      setDeactivateAfterClose(false)
-    }
     resetConfig()
-  }, [deactivateAfterClose, resetConfig])
+  }, [resetConfig])
 
   if (!_popRouter) return null
 
   return (
     <Dialog
-      open={dialogOpen}
+      open={navLayout.popActive}
       onClose={requestClose}
       onClosed={handleClosed}
       title={
@@ -209,7 +191,7 @@ function PopAreaDialog() {
       }
       dialogClassName={semanticDialogClassName}
       contentClassName={semanticContentClassName}
-      className={[semanticPanelClassName, config.panelClassName]
+      className={['pop-area-panel', semanticPanelClassName, config.panelClassName]
         .filter((v) => v.length > 0)
         .join(' ')}
       bodyClassName={config.bodyClassName}

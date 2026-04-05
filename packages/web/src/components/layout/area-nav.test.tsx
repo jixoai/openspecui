@@ -50,6 +50,13 @@ vi.mock('@tanstack/react-router', () => ({
       {children}
     </a>
   ),
+  useLocation: () => ({
+    pathname: '/dashboard',
+    search: '',
+    hash: '',
+    state: null,
+  }),
+  useNavigate: () => vi.fn(),
 }))
 
 describe('AreaNav drag behavior', () => {

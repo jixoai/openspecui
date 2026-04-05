@@ -1,12 +1,14 @@
 import { X } from 'lucide-react'
 import {
-  Activity,
+  forwardRef,
   useCallback,
   useId,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
+  type ForwardedRef,
   type DragEvent as ReactDragEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
@@ -43,6 +45,13 @@ interface TabsProps {
   onTabBarDoubleClick?: () => void
   className?: string
   variant?: TabsVariant
+}
+
+export interface TabsHandle {
+  root: HTMLElement | null
+  getTrigger: (tabId: string) => HTMLElement | null
+  getPanel: (tabId: string) => HTMLElement | null
+  getActiveTabId: () => string | null
 }
 
 interface DropIndicator {
@@ -154,21 +163,27 @@ function buildStableContentTabIds(
  * Hidden tabs are pre-rendered at lower priority and preserve their state.
  * Supports both controlled and uncontrolled active tab.
  */
-export function Tabs({
-  tabs,
-  selectedTab: controlled,
-  onTabChange,
-  onTabClose,
-  onTabOrderChange,
-  actions,
-  onTabBarDoubleClick,
-  className = '',
-  variant = 'default',
-}: TabsProps) {
+function TabsImpl(
+  {
+    tabs,
+    selectedTab: controlled,
+    onTabChange,
+    onTabClose,
+    onTabOrderChange,
+    actions,
+    onTabBarDoubleClick,
+    className = '',
+    variant = 'default',
+  }: TabsProps,
+  ref: ForwardedRef<TabsHandle>
+) {
   const [uncontrolled, setUncontrolled] = useState<string>(tabs[0]?.id ?? '')
   const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null)
   const dropIndicatorRef = useRef<DropIndicator | null>(null)
   const contentOrderRef = useRef<string[]>(tabs.map((tab) => tab.id))
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const triggerRefs = useRef(new Map<string, HTMLButtonElement | null>())
+  const panelRefs = useRef(new Map<string, HTMLDivElement | null>())
   const activeTab = controlled ?? uncontrolled
   const reorderable = typeof onTabOrderChange === 'function' && tabs.length > 1
   const tabIds = tabs.map((tab) => tab.id)
@@ -184,6 +199,25 @@ export function Tabs({
   const id = useId().replace(/:/g, '_')
   const headStyleText = useMemo(() => tabsStyleText(id), [id])
   useHeadStyle(`tabs:${id}`, headStyleText)
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      get root() {
+        return rootRef.current
+      },
+      getTrigger(tabId: string) {
+        return triggerRefs.current.get(tabId) ?? null
+      },
+      getPanel(tabId: string) {
+        return panelRefs.current.get(tabId) ?? null
+      },
+      getActiveTabId() {
+        return activeTab || null
+      },
+    }),
+    [activeTab]
+  )
 
   const handleChange = (id: string) => {
     if (!controlled) {
@@ -346,6 +380,7 @@ export function Tabs({
   return (
     <div
       id={id}
+      ref={rootRef}
       data-tabs-variant={variant}
       className={`relative isolate flex min-h-0 min-w-0 flex-1 flex-col ${className}`}
     >
@@ -371,7 +406,11 @@ export function Tabs({
               return (
                 <button
                   key={tab.id}
+                  ref={(element) => {
+                    triggerRefs.current.set(tab.id, element)
+                  }}
                   data-tab-item="true"
+                  data-tab-id={tab.id}
                   draggable={reorderable}
                   onClick={() => handleChange(tab.id)}
                   onDragStart={(event) => handleDragStart(event, tab.id)}
@@ -421,19 +460,44 @@ export function Tabs({
         )}
       </div>
 
-      {contentTabs.map((tab) =>
-        tab.unmountOnHide ? (
-          activeTab === tab.id && (
-            <div key={tab.id} className="flex min-h-0 flex-1 flex-col">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        {contentTabs.map((tab) =>
+          tab.unmountOnHide ? (
+            activeTab === tab.id && (
+              <div
+                key={tab.id}
+                ref={(element) => {
+                  panelRefs.current.set(tab.id, element)
+                }}
+                data-tab-panel={tab.id}
+                data-tab-panel-state="active"
+                className="flex min-h-0 flex-1 flex-col"
+              >
+                {tab.content}
+              </div>
+            )
+          ) : (
+            <div
+              key={tab.id}
+              ref={(element) => {
+                panelRefs.current.set(tab.id, element)
+              }}
+              data-tab-panel={tab.id}
+              data-tab-panel-state={activeTab === tab.id ? 'active' : 'inactive'}
+              aria-hidden={activeTab === tab.id ? undefined : true}
+              className={
+                activeTab === tab.id
+                  ? 'relative flex min-h-0 flex-1 flex-col'
+                  : 'pointer-events-none absolute inset-0 flex min-h-0 flex-col overflow-hidden opacity-0'
+              }
+            >
               {tab.content}
             </div>
           )
-        ) : (
-          <Activity key={tab.id} mode={activeTab === tab.id ? 'visible' : 'hidden'}>
-            <div className="flex min-h-0 flex-1 flex-col">{tab.content}</div>
-          </Activity>
-        )
-      )}
+        )}
+      </div>
     </div>
   )
 }
+
+export const Tabs = forwardRef<TabsHandle, TabsProps>(TabsImpl)

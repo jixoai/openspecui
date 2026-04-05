@@ -5,18 +5,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { GitCommitViewRoute, GitUncommittedViewRoute } from './git-view'
 
-const { getEntryShellQueryMock, staticModeMock, useParamsMock, projectDir } = vi.hoisted(() => ({
-  getEntryShellQueryMock: vi.fn(),
-  staticModeMock: vi.fn(() => false),
-  useParamsMock: vi.fn(() => ({ hash: 'abc12345' })),
-  projectDir: '/Users/kzf/Dev/GitHub/jixoai-labs/agenter',
-}))
+const { getEntryMetaQueryMock, getEntryFilesQueryMock, staticModeMock, useParamsMock, projectDir } =
+  vi.hoisted(() => ({
+    getEntryMetaQueryMock: vi.fn(),
+    getEntryFilesQueryMock: vi.fn(),
+    staticModeMock: vi.fn(() => false),
+    useParamsMock: vi.fn(() => ({ hash: 'abc12345' })),
+    projectDir: '/Users/kzf/Dev/GitHub/jixoai-labs/agenter',
+  }))
 
 vi.mock('@/lib/trpc', () => ({
   trpcClient: {
     git: {
-      getEntryShell: {
-        query: getEntryShellQueryMock,
+      getEntryMeta: {
+        query: getEntryMetaQueryMock,
+      },
+      getEntryFiles: {
+        query: getEntryFilesQueryMock,
       },
     },
   },
@@ -24,6 +29,7 @@ vi.mock('@/lib/trpc', () => ({
 
 vi.mock('@/lib/static-mode', () => ({
   isStaticMode: staticModeMock,
+  getBasePath: () => '/',
 }))
 
 vi.mock('@/lib/use-server-status', () => ({
@@ -60,6 +66,13 @@ vi.mock('@tanstack/react-router', () => ({
       {children}
     </a>
   ),
+  useLocation: () => ({
+    pathname: '/git/commit/abc12345',
+    search: '',
+    hash: '',
+    state: null,
+  }),
+  useNavigate: () => vi.fn(),
   useParams: () => useParamsMock(),
 }))
 
@@ -82,16 +95,19 @@ describe('Git entry routes', () => {
   beforeEach(() => {
     staticModeMock.mockReturnValue(false)
     useParamsMock.mockReturnValue({ hash: 'abc12345' })
-    getEntryShellQueryMock.mockResolvedValue({
-      entry: {
-        type: 'commit',
-        hash: 'abc12345',
-        title: 'feat: add git panel',
-        committedAt: 1,
-        relatedChanges: ['add-git-panel-worktree-handoff'],
-        diff: { files: 1, insertions: 3, deletions: 1 },
-      },
+    getEntryMetaQueryMock.mockResolvedValue({
+      type: 'commit',
+      hash: 'abc12345',
+      title: 'feat: add git panel',
+      committedAt: 1,
+      relatedChanges: ['add-git-panel-worktree-handoff'],
+      diff: { files: 1, insertions: 3, deletions: 1 },
+    })
+    getEntryFilesQueryMock.mockResolvedValue({
       files: [],
+      eagerFiles: [],
+      eagerPatchLineBudget: 1000,
+      eagerPatchLineCount: 0,
     })
   })
 
@@ -115,16 +131,13 @@ describe('Git entry routes', () => {
   })
 
   it('keeps the commit title and subtitle fully wrappable instead of truncating them', async () => {
-    getEntryShellQueryMock.mockResolvedValue({
-      entry: {
-        type: 'commit',
-        hash: 'abc12345',
-        title: 'docs(spec): archive chat layout and history pagination follow-up summary',
-        committedAt: 1,
-        relatedChanges: ['compact-chat-density-and-layout-rubric'],
-        diff: { files: 41, insertions: 196, deletions: 18 },
-      },
-      files: [],
+    getEntryMetaQueryMock.mockResolvedValue({
+      type: 'commit',
+      hash: 'abc12345',
+      title: 'docs(spec): archive chat layout and history pagination follow-up summary',
+      committedAt: 1,
+      relatedChanges: ['compact-chat-density-and-layout-rubric'],
+      diff: { files: 41, insertions: 196, deletions: 18 },
     })
 
     renderWithQueryClient(<GitCommitViewRoute />)
@@ -142,15 +155,12 @@ describe('Git entry routes', () => {
   })
 
   it('renders the uncommitted detail route with the uncommitted selector', async () => {
-    getEntryShellQueryMock.mockResolvedValue({
-      entry: {
-        type: 'uncommitted',
-        title: 'working tree',
-        updatedAt: 1,
-        relatedChanges: [],
-        diff: { files: 1, insertions: 3, deletions: 1 },
-      },
-      files: [],
+    getEntryMetaQueryMock.mockResolvedValue({
+      type: 'uncommitted',
+      title: 'working tree',
+      updatedAt: 1,
+      relatedChanges: [],
+      diff: { files: 1, insertions: 3, deletions: 1 },
     })
 
     renderWithQueryClient(<GitUncommittedViewRoute />)
@@ -159,6 +169,19 @@ describe('Git entry routes', () => {
       expect(screen.getByTestId('git-entry-detail-panel').textContent).toContain(
         `uncommitted:${projectDir}`
       )
+    })
+  })
+
+  it('keeps git detail content in document flow so the shell can scroll long diffs', async () => {
+    renderWithQueryClient(<GitCommitViewRoute />)
+
+    await waitFor(() => {
+      const detailContainer = screen
+        .getByTestId('git-entry-detail-panel')
+        .closest('.vt-detail-content')
+      expect(detailContainer).toBeTruthy()
+      expect(detailContainer?.className).not.toContain('flex-1')
+      expect(detailContainer?.className).not.toContain('min-h-0')
     })
   })
 })

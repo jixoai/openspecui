@@ -112,6 +112,7 @@ describe('ConfigManager', () => {
       expect(config.terminal.scrollback).toBe(1000)
       expect(config.terminal.rendererEngine).toBe('xterm')
       expect(config.dashboard.trendPointLimit).toBe(100)
+      expect(config.git.diffEagerLineBudget).toBe(1000)
     })
 
     it('should treat persisted null fields as absent and keep valid sibling overrides', async () => {
@@ -171,6 +172,16 @@ describe('ConfigManager', () => {
       )
     })
 
+    it('should write git config', async () => {
+      await configManager.writeConfig({ git: { diffEagerLineBudget: 1500 } })
+      clearCache()
+      const config = await configManager.readConfig()
+      expect(config.git.diffEagerLineBudget).toBe(1500)
+      await expect(readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')).resolves.toBe(
+        '{\n  "git": {\n    "diffEagerLineBudget": 1500\n  }\n}'
+      )
+    })
+
     it('should create file if not exists', async () => {
       await configManager.writeConfig({ cli: { command: 'new' } })
 
@@ -204,6 +215,7 @@ describe('ConfigManager', () => {
           rendererEngine: 'xterm',
         },
         dashboard: { trendPointLimit: 100 },
+        git: { diffEagerLineBudget: 1000 },
       })
 
       await expect(
@@ -436,6 +448,7 @@ describe('OpenSpecUIConfigSchema', () => {
       expect(result.data.appBaseUrl).toBe('')
       expect(result.data.terminal.fontSize).toBe(13)
       expect(result.data.terminal.rendererEngine).toBe('xterm')
+      expect(result.data.git.diffEagerLineBudget).toBe(1000)
     }
   })
 
@@ -489,6 +502,7 @@ describe('DEFAULT_CONFIG', () => {
     expect(DEFAULT_CONFIG.terminal.scrollback).toBe(1000)
     expect(DEFAULT_CONFIG.terminal.rendererEngine).toBe('xterm')
     expect(DEFAULT_CONFIG.dashboard.trendPointLimit).toBe(100)
+    expect(DEFAULT_CONFIG.git.diffEagerLineBudget).toBe(1000)
   })
 })
 

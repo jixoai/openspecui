@@ -184,6 +184,7 @@ const createMockContext = (
         rendererEngine: 'xterm',
       },
       dashboard: { trendPointLimit: 100 },
+      git: { diffEagerLineBudget: 1000 },
     }),
     setCliCommand: vi.fn().mockResolvedValue(undefined),
     writeConfig: vi.fn().mockResolvedValue(undefined),
@@ -559,18 +560,31 @@ describe('appRouter', () => {
         relatedChanges: ['add-git-panel-worktree-handoff'],
       })
 
-      const uncommittedShell = await caller.git.getEntryShell({
+      const uncommittedMeta = await caller.git.getEntryMeta({
         selector: { type: 'uncommitted' },
       })
-      expect(uncommittedShell.files[0]).toMatchObject({
+      expect(uncommittedMeta).toMatchObject({
+        type: 'uncommitted',
+        diff: { files: 1, insertions: 0, deletions: 0 },
+      })
+
+      const uncommittedFiles = await caller.git.getEntryFiles({
+        selector: { type: 'uncommitted' },
+      })
+      expect(uncommittedFiles.files[0]).toMatchObject({
         path: 'src/git-panel.ts',
         changeType: 'added',
       })
-      expect(uncommittedShell.files[0]?.fileId).toEqual(expect.any(String))
+      expect(uncommittedFiles.files[0]?.fileId).toEqual(expect.any(String))
+      expect(uncommittedFiles.eagerFiles[0]).toMatchObject({
+        path: 'src/git-panel.ts',
+        state: 'available',
+        source: 'untracked',
+      })
 
       const uncommittedPatch = await caller.git.getEntryPatch({
         selector: { type: 'uncommitted' },
-        fileId: uncommittedShell.files[0]!.fileId,
+        fileId: uncommittedFiles.files[0]!.fileId,
       })
       expect(uncommittedPatch.file).toMatchObject({
         path: 'src/git-panel.ts',
@@ -583,20 +597,27 @@ describe('appRouter', () => {
         throw new Error('Expected a commit entry in git history')
       }
 
-      const commitShell = await caller.git.getEntryShell({
+      const commitMeta = await caller.git.getEntryMeta({
         selector: { type: 'commit', hash: commitEntry.hash },
       })
-      expect(commitShell.entry).toMatchObject({
+      expect(commitMeta).toMatchObject({
         type: 'commit',
         hash: commitEntry.hash,
       })
-      expect(commitShell.files[0]?.path).toBe(
+
+      const commitFiles = await caller.git.getEntryFiles({
+        selector: { type: 'commit', hash: commitEntry.hash },
+      })
+      expect(commitFiles.files[0]?.path).toBe(
+        'openspec/changes/add-git-panel-worktree-handoff/loop/intake.md'
+      )
+      expect(commitFiles.eagerFiles[0]?.path).toBe(
         'openspec/changes/add-git-panel-worktree-handoff/loop/intake.md'
       )
 
       const commitPatch = await caller.git.getEntryPatch({
         selector: { type: 'commit', hash: commitEntry.hash },
-        fileId: commitShell.files[0]!.fileId,
+        fileId: commitFiles.files[0]!.fileId,
       })
       expect(commitPatch.file?.path).toBe(
         'openspec/changes/add-git-panel-worktree-handoff/loop/intake.md'

@@ -28,6 +28,8 @@ import {
   useOpsxTemplateContentsSubscription,
   useOpsxTemplatesSubscription,
 } from '@/lib/use-opsx'
+import { vtNavController } from '@/lib/view-transitions/navigation'
+import { useRoutedCarouselTabs } from '@/lib/view-transitions/tabs'
 import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
@@ -189,7 +191,6 @@ function JsonStructuredValue({ value }: { value: unknown }) {
 
 export function Config() {
   const isStatic = isStaticMode()
-  const [activeTab, setActiveTab] = useState<ConfigTab>('project-config')
   const [schemaMode, setSchemaMode] = useState<SchemaMode>('read')
   const [schemaActionError, setSchemaActionError] = useState<string | null>(null)
   const [schemaEntryError, setSchemaEntryError] = useState<string | null>(null)
@@ -219,6 +220,25 @@ export function Config() {
   } = useOpsxConfigBundleSubscription()
   const schemas = configBundle?.schemas
   const [selectedSchema, setSelectedSchema] = useState<string | undefined>(undefined)
+  const configTabIds = useMemo<ConfigTab[]>(
+    () => [
+      'project-config',
+      'global-config',
+      ...(schemas?.map((schema) => `schema:${schema.name}` as const) ?? []),
+    ],
+    [schemas]
+  )
+  const {
+    tabsRef,
+    selectedTab: activeTab,
+    setSelectedTab: setActiveTab,
+    onTabChange: onConfigTabChange,
+  } = useRoutedCarouselTabs<ConfigTab>({
+    queryKey: 'configTab',
+    tabs: configTabIds.map((id) => ({ id })),
+    initialTab: 'project-config',
+    allowUnknownSelection: true,
+  })
 
   const schemaDetail = selectedSchema ? (configBundle?.schemaDetails[selectedSchema] ?? null) : null
   const schemaResolution = selectedSchema
@@ -882,7 +902,7 @@ export function Config() {
   const handleLaunchInteractiveProfile = useCallback(() => {
     createDedicatedSession('openspec', ['config', 'profile'])
     const terminalArea = navController.getAreaForPath('/terminal')
-    navController.push(terminalArea, '/terminal', null)
+    void vtNavController.push(terminalArea, '/terminal', null)
   }, [createDedicatedSession])
 
   const executeApplyProfile = useCallback(async () => {
@@ -2362,11 +2382,11 @@ export function Config() {
       </h1>
 
       <Tabs
+        ref={tabsRef}
         tabs={tabs}
         selectedTab={activeTab}
         onTabChange={(id) => {
-          const next = id as ConfigTab
-          setActiveTab(next)
+          onConfigTabChange(id)
           if (typeof id === 'string' && id.startsWith('schema:')) {
             setSelectedSchema(id.slice('schema:'.length))
           }

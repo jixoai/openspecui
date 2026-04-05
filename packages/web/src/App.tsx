@@ -12,6 +12,7 @@ import { createPopRouteTree, createRouteTree } from './lib/route-tree'
 import { getBasePath, isStaticMode } from './lib/static-mode'
 import { TerminalProvider } from './lib/terminal-context'
 import { queryClient } from './lib/trpc'
+import { ViewTransitionsBootstrap } from './lib/view-transitions/bootstrap'
 
 // --- Static mode: single router, standard browser history ---
 // --- IDE mode: dual routers via navController ---
@@ -34,13 +35,11 @@ const mainRouter = isStatic
   ? createRouter({
       routeTree: createRouteTree(mainRoot),
       basepath,
-      defaultViewTransition: true,
     })
   : createRouter({
       routeTree: createRouteTree(mainRoot),
       history: createNavHistory('main', navController),
       basepath,
-      defaultViewTransition: true,
     })
 
 // Bottom router (only in IDE mode)
@@ -77,6 +76,7 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <ArchiveModalProvider>
         <TerminalProvider>
+          <ViewTransitionsBootstrap />
           <ThemeBootstrap />
           <RouterProvider router={mainRouter} />
         </TerminalProvider>

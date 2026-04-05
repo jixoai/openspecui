@@ -1,11 +1,20 @@
 import { MarkdownViewer } from '@/components/markdown-viewer'
 import { useSpecSubscription } from '@/lib/use-subscription'
+import { VTLink } from '@/lib/view-transitions/navigation'
+import {
+  getSharedElementBinding,
+  readSharedElementHandoffState,
+} from '@/lib/view-transitions/shared-elements'
 import type { Spec } from '@openspecui/core'
-import { Link, useParams } from '@tanstack/react-router'
+import { useLocation, useParams } from '@tanstack/react-router'
 import { AlertCircle, AlertTriangle, ArrowLeft, CheckCircle, FileText, Info } from 'lucide-react'
+import { useMemo, useRef } from 'react'
 
 export function SpecView() {
   const { specId } = useParams({ from: '/specs/$specId' })
+  const location = useLocation()
+  const handoff = readSharedElementHandoffState(location.state)
+  const sharedDescriptor = useMemo(() => ({ family: 'specs', entityId: specId }) as const, [specId])
 
   const { data: spec, isLoading } = useSpecSubscription(specId)
   // TODO: validation 暂时不支持订阅，后续可以添加
@@ -15,6 +24,37 @@ export function SpecView() {
   } | null
 
   if (isLoading && !spec) {
+    if (handoff) {
+      return (
+        <div className="flex min-h-0 flex-1 flex-col gap-6 p-4">
+          <div className="flex items-center gap-4">
+            <VTLink
+              to="/specs"
+              vt={{ sharedElements: sharedDescriptor }}
+              className="hover:bg-muted rounded-md p-2"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </VTLink>
+            <div {...getSharedElementBinding(sharedDescriptor, 'container')}>
+              <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
+                <FileText
+                  {...getSharedElementBinding(sharedDescriptor, 'icon')}
+                  className="h-6 w-6 shrink-0"
+                />
+                <span {...getSharedElementBinding(sharedDescriptor, 'title')}>
+                  {handoff.title ?? specId}
+                </span>
+              </h1>
+              <p className="text-muted-foreground">ID: {handoff.subtitle ?? specId}</p>
+            </div>
+          </div>
+          <div className="vt-detail-content route-loading animate-pulse rounded-lg border p-4">
+            Loading spec...
+          </div>
+        </div>
+      )
+    }
+
     return <div className="route-loading animate-pulse">Loading spec...</div>
   }
 
@@ -35,16 +75,29 @@ function SpecContent({
     issues: Array<{ severity: string; message: string; path?: string }>
   } | null
 }) {
+  const headerRef = useRef<HTMLDivElement | null>(null)
+  const sharedDescriptor = useMemo(
+    () => ({ family: 'specs', entityId: spec.id }) as const,
+    [spec.id]
+  )
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 p-4">
       <div className="flex items-center gap-4">
-        <Link to="/specs" className="hover:bg-muted rounded-md p-2">
+        <VTLink
+          to="/specs"
+          vt={{ source: headerRef, sharedElements: sharedDescriptor }}
+          className="hover:bg-muted rounded-md p-2"
+        >
           <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <div>
+        </VTLink>
+        <div ref={headerRef} {...getSharedElementBinding(sharedDescriptor, 'container')}>
           <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
-            <FileText className="h-6 w-6 shrink-0" />
-            {spec.name}
+            <FileText
+              {...getSharedElementBinding(sharedDescriptor, 'icon')}
+              className="h-6 w-6 shrink-0"
+            />
+            <span {...getSharedElementBinding(sharedDescriptor, 'title')}>{spec.name}</span>
           </h1>
           <p className="text-muted-foreground">ID: {spec.id}</p>
         </div>
@@ -53,7 +106,7 @@ function SpecContent({
       {validation && <ValidationStatus validation={validation} />}
 
       <MarkdownViewer
-        className="min-h-0 flex-1"
+        className="vt-detail-content min-h-0 flex-1"
         markdown={({ H1, H2, Section }) => (
           <div className="space-y-6">
             {/* Overview */}

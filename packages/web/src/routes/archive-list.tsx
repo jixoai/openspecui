@@ -1,6 +1,7 @@
 import { formatRelativeTime } from '@/lib/format-time'
 import { useArchivesSubscription } from '@/lib/use-subscription'
-import { Link } from '@tanstack/react-router'
+import { VTLink } from '@/lib/view-transitions/navigation'
+import { getSharedElementBinding } from '@/lib/view-transitions/shared-elements'
 import { Archive, ChevronRight } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
@@ -29,26 +30,49 @@ export function ArchiveList() {
       </p>
 
       <div className="border-border divide-border divide-y rounded-lg border">
-        {archived?.map((change) => (
-          <Link
-            key={change.id}
-            to="/archive/$changeId"
-            params={{ changeId: change.id }}
-            className="hover:bg-muted/50 flex items-center justify-between p-4"
-          >
-            <div className="flex items-center gap-3">
-              <Archive className="text-muted-foreground h-5 w-5" />
-              <div>
-                <div className="font-medium">{change.name}</div>
-                <div className="text-muted-foreground text-sm">
-                  {change.id}
-                  {change.updatedAt > 0 && <> · {formatRelativeTime(change.updatedAt)}</>}
+        {archived?.map((change) => {
+          const sharedDescriptor = { family: 'archive', entityId: change.id } as const
+
+          return (
+            <VTLink
+              key={change.id}
+              to="/archive/$changeId"
+              params={{ changeId: change.id }}
+              state={(prev) => ({
+                ...prev,
+                __vtHandoff: {
+                  family: 'archive',
+                  entityId: change.id,
+                  title: change.name,
+                  subtitle: change.id,
+                },
+              })}
+              vt={{ sharedElements: sharedDescriptor }}
+              {...getSharedElementBinding(sharedDescriptor, 'container')}
+              className="hover:bg-muted/50 flex items-center justify-between p-4"
+            >
+              <div className="flex items-center gap-3">
+                <Archive
+                  {...getSharedElementBinding(sharedDescriptor, 'icon')}
+                  className="text-muted-foreground h-5 w-5"
+                />
+                <div>
+                  <div
+                    {...getSharedElementBinding(sharedDescriptor, 'title')}
+                    className="font-medium"
+                  >
+                    {change.name}
+                  </div>
+                  <div className="text-muted-foreground text-sm">
+                    {change.id}
+                    {change.updatedAt > 0 && <> · {formatRelativeTime(change.updatedAt)}</>}
+                  </div>
                 </div>
               </div>
-            </div>
-            <ChevronRight className="text-muted-foreground h-4 w-4" />
-          </Link>
-        ))}
+              <ChevronRight className="text-muted-foreground h-4 w-4" />
+            </VTLink>
+          )
+        })}
         {archived?.length === 0 && (
           <div className="text-muted-foreground p-8 text-center">
             <Archive className="mx-auto mb-4 h-12 w-12 opacity-50" />

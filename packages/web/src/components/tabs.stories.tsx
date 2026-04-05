@@ -32,14 +32,23 @@ export const SwitchTabs: Story = {
     const canvas = within(canvasElement)
     const oneButton = await canvas.findByRole('button', { name: 'One' })
     const twoButton = await canvas.findByRole('button', { name: 'Two' })
+    const onePanel = canvas.getByTestId('panel-one').closest('[data-tab-panel="one"]')
+    const twoPanel = canvas.getByTestId('panel-two').closest('[data-tab-panel="two"]')
+    if (!onePanel || !twoPanel) {
+      throw new Error('tab panels not found')
+    }
 
     await expect(canvas.getByTestId('panel-one')).toBeVisible()
-    await expect(canvas.queryByTestId('panel-two')).toBeNull()
+    await expect(onePanel).toHaveAttribute('data-tab-panel-state', 'active')
+    await expect(twoPanel).toHaveAttribute('data-tab-panel-state', 'inactive')
+    await expect(twoPanel).toHaveAttribute('aria-hidden', 'true')
 
     await userEvent.click(twoButton)
 
     await expect(twoButton).toHaveClass('tab-selected')
     await expect(canvas.getByTestId('panel-two')).toBeVisible()
     await expect(oneButton).not.toHaveClass('tab-selected')
+    await expect(onePanel).toHaveAttribute('data-tab-panel-state', 'inactive')
+    await expect(twoPanel).toHaveAttribute('data-tab-panel-state', 'active')
   },
 }

@@ -41,6 +41,11 @@ export interface OpsxConfigBundle {
   schemaResolutions: Record<string, SchemaResolution | null>
 }
 
+export function getOpsxStatusSubscriptionCacheKey(input: OpsxStatusInput): string | undefined {
+  if (!input.change) return undefined
+  return `opsx.subscribeStatus:${input.change}:${input.schema}:${input.refreshKey}`
+}
+
 export function useOpsxStatusSubscription(
   input: OpsxStatusInput
 ): SubscriptionState<ChangeStatus | null> {
@@ -65,9 +70,7 @@ export function useOpsxStatusSubscription(
     subscribe,
     () => StaticProvider.getOpsxStatus(input.change, input.schema),
     [input.change, input.schema, input.refreshKey],
-    input.change
-      ? `opsx.subscribeStatus:${input.change}:${input.schema}:${input.refreshKey}`
-      : undefined
+    getOpsxStatusSubscriptionCacheKey(input)
   )
 }
 

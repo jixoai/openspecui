@@ -1,8 +1,9 @@
 import { MarkdownViewer } from '@/components/markdown-viewer'
 import { Tabs, type Tab } from '@/components/tabs'
+import { useRoutedCarouselTabs } from '@/lib/view-transitions/tabs'
 import type { Change } from '@openspecui/core'
 import { FileText } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 
 type DeltaSpec = NonNullable<Change['deltaSpecs']>[number]
 
@@ -23,14 +24,6 @@ function operationBadgeClass(operation: string) {
 
 export function ChangeOverview({ change }: { change: Change }) {
   const deltaSpecs = change.deltaSpecs ?? []
-  const [activeDeltaSpecId, setActiveDeltaSpecId] = useState(deltaSpecs[0]?.specId ?? '')
-
-  // 当 deltaSpecs 变化时，确保 activeDeltaSpecId 有效
-  useEffect(() => {
-    if (!deltaSpecs.some((d) => d.specId === activeDeltaSpecId)) {
-      setActiveDeltaSpecId(deltaSpecs[0]?.specId ?? '')
-    }
-  }, [deltaSpecs, activeDeltaSpecId])
 
   const affectedSpecs = useMemo<{ spec: string; operation: string }[]>(() => {
     const map = new Map<string, Set<string>>()
@@ -101,11 +94,7 @@ export function ChangeOverview({ change }: { change: Change }) {
             <Section>
               <H1 id="delta-specs">Delta Specs ({deltaSpecs.length})</H1>
               <div className="mt-2 [zoom:0.86]">
-                <DeltaSpecTabs
-                  deltaSpecs={deltaSpecs}
-                  activeId={activeDeltaSpecId}
-                  onActiveChange={setActiveDeltaSpecId}
-                />
+                <DeltaSpecTabs deltaSpecs={deltaSpecs} />
               </div>
             </Section>
           )}
@@ -115,15 +104,7 @@ export function ChangeOverview({ change }: { change: Change }) {
   )
 }
 
-function DeltaSpecTabs({
-  deltaSpecs,
-  activeId,
-  onActiveChange,
-}: {
-  deltaSpecs: DeltaSpec[]
-  activeId: string
-  onActiveChange: (id: string) => void
-}) {
+function DeltaSpecTabs({ deltaSpecs }: { deltaSpecs: DeltaSpec[] }) {
   if (deltaSpecs.length === 1) {
     const spec = deltaSpecs[0]
     return (
@@ -145,7 +126,19 @@ function DeltaSpecTabs({
     unmountOnHide: true,
   }))
 
+  const { tabsRef, selectedTab, onTabChange } = useRoutedCarouselTabs({
+    queryKey: 'deltaSpec',
+    tabs,
+    initialTab: deltaSpecs[0]?.specId,
+  })
+
   return (
-    <Tabs tabs={tabs} selectedTab={activeId} onTabChange={onActiveChange} className="min-h-80" />
+    <Tabs
+      ref={tabsRef}
+      tabs={tabs}
+      selectedTab={selectedTab}
+      onTabChange={onTabChange}
+      className="min-h-80"
+    />
   )
 }

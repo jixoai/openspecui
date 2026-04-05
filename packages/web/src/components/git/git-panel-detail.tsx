@@ -1,5 +1,7 @@
+import { ErrorBoundary } from '@/components/error-boundary'
 import { Tabs } from '@/components/tabs'
 import { trpcClient } from '@/lib/trpc'
+import { useRoutedCarouselTabs } from '@/lib/view-transitions/tabs'
 import type {
   DashboardGitEntry,
   GitEntryFilePatch,
@@ -23,7 +25,6 @@ import { GitFileTree, type GitFileTreeRevealRequest } from './git-file-tree'
 import { GitPatchCard, type GitPatchCardStatus } from './git-patch-card'
 import { DiffStat, GitFilesBadge, formatRelatedChanges } from './git-shared'
 
-const INITIAL_PATCH_REQUEST_COUNT = 2
 const WIDE_DETAIL_MIN_WIDTH = 960
 const DIFF_SCROLL_PADDING = 12
 const DIFF_SCROLL_ALIGNMENT_TOLERANCE = 16
@@ -33,7 +34,6 @@ const PATCH_PREFETCH_ROOT_MARGIN = '180px 0px'
 const VISIBILITY_THRESHOLDS = buildIntersectionThresholds(20)
 
 interface GitEntryPatchResponse {
-  entry: DashboardGitEntry
   file: GitEntryFilePatch | null
 }
 
@@ -66,6 +66,20 @@ function useWideDetailLayout() {
 function selectorCacheKey(selector: GitEntrySelector | null): string {
   if (!selector) return 'none'
   return selector.type === 'commit' ? `commit:${selector.hash}` : 'uncommitted'
+}
+
+function isSameFileDiff(
+  left: GitEntryFileSummary['diff'],
+  right: GitEntryFileSummary['diff']
+): boolean {
+  if (left.state !== right.state) return false
+  if (left.files !== right.files) return false
+
+  if (left.state !== 'ready' || right.state !== 'ready') {
+    return true
+  }
+
+  return left.insertions === right.insertions && left.deletions === right.deletions
 }
 
 function isScrollIntentEventKey(event: KeyboardEvent<HTMLElement>): boolean {
@@ -134,10 +148,39 @@ function entryIcon(entry: DashboardGitEntry) {
   )
 }
 
+function GitFileTreeFallback({
+  files,
+  onSelectFile,
+}: {
+  files: GitEntryFileSummary[]
+  onSelectFile: (fileId: string) => void
+}) {
+  return (
+    <div className="rounded-md border border-dashed border-zinc-500/25 p-3">
+      <div className="text-muted-foreground mb-2 text-xs">
+        File tree is temporarily unavailable. Use the file list below.
+      </div>
+      <div className="space-y-1">
+        {files.map((file) => (
+          <button
+            key={file.fileId}
+            type="button"
+            onClick={() => onSelectFile(file.fileId)}
+            className="hover:bg-muted/40 block w-full rounded-md px-2 py-1.5 text-left text-sm"
+          >
+            {file.displayPath}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function GitEntryDetailPanel({
   selector,
   entry,
   files,
+  eagerFiles = [],
   projectDir,
   isLoading,
   error,
@@ -147,6 +190,7 @@ export function GitEntryDetailPanel({
   selector: GitEntrySelector | null
   entry: DashboardGitEntry | null
   files: GitEntryFileSummary[]
+  eagerFiles?: GitEntryFilePatch[]
   projectDir?: string | null
   isLoading: boolean
   error: Error | null
@@ -155,7 +199,20 @@ export function GitEntryDetailPanel({
 }) {
   const { ref, wide } = useWideDetailLayout()
   const selectorKey = selectorCacheKey(selector)
-  const [activePane, setActivePane] = useState<'diff' | 'files'>('diff')
+  const paneTabs = useMemo<Array<{ id: 'diff' | 'files' }>>(
+    () => [{ id: 'diff' }, { id: 'files' }],
+    []
+  )
+  const {
+    tabsRef,
+    selectedTab: activePane,
+    setSelectedTab,
+    onTabChange,
+  } = useRoutedCarouselTabs({
+    queryKey: 'gitPane',
+    tabs: paneTabs,
+    initialTab: 'diff',
+  })
   const [requestedFileIds, setRequestedFileIds] = useState<string[]>([])
   const [diffScrollOffset, setDiffScrollOffset] = useState(DIFF_SCROLL_PADDING)
   const [diffScrollRoot, setDiffScrollRoot] = useState<HTMLElement | null>(null)
@@ -173,6 +230,7 @@ export function GitEntryDetailPanel({
     target: wideTreeViewportNode,
     enabled: wide,
   })
+  const eagerFileIdSet = useMemo(() => new Set(eagerFiles.map((file) => file.fileId)), [eagerFiles])
 
   const markTreeNavigation = useCallback(() => {
     revealNavigationSourceRef.current = 'tree'
@@ -182,9 +240,16 @@ export function GitEntryDetailPanel({
     revealNavigationSourceRef.current = 'diff'
   }, [])
 
-  const requestPatch = useCallback((fileId: string) => {
-    setRequestedFileIds((current) => (current.includes(fileId) ? current : [...current, fileId]))
-  }, [])
+  const requestPatch = useCallback(
+    (fileId: string) => {
+      if (eagerFileIdSet.has(fileId)) {
+        return
+      }
+
+      setRequestedFileIds((current) => (current.includes(fileId) ? current : [...current, fileId]))
+    },
+    [eagerFileIdSet]
+  )
 
   const fileIds = useMemo(() => files.map((file) => file.fileId), [files])
 
@@ -204,7 +269,7 @@ export function GitEntryDetailPanel({
   )
 
   useEffect(() => {
-    setActivePane('diff')
+    setSelectedTab('diff')
     setRequestedFileIds([])
     setDiffScrollRoot(null)
     setTreeRevealRequest(null)
@@ -216,28 +281,26 @@ export function GitEntryDetailPanel({
       window.cancelAnimationFrame(pendingScrollFrameRef.current)
       pendingScrollFrameRef.current = null
     }
-  }, [selectorKey])
+  }, [selectorKey, setSelectedTab])
 
   useEffect(() => {
-    if (files.length === 0) return
-
     setRequestedFileIds((current) => {
-      const next = new Set(current.filter((fileId) => files.some((file) => file.fileId === fileId)))
-      for (const file of files.slice(0, INITIAL_PATCH_REQUEST_COUNT)) {
-        next.add(file.fileId)
-      }
-      for (const file of files) {
-        if (file.diff.state !== 'ready') {
-          next.add(file.fileId)
-        }
-      }
-      return [...next]
+      const next = current.filter(
+        (fileId) => !eagerFileIdSet.has(fileId) && files.some((file) => file.fileId === fileId)
+      )
+      return next.length === current.length &&
+        next.every((fileId, index) => fileId === current[index])
+        ? current
+        : next
     })
-  }, [files])
+  }, [eagerFileIdSet, files])
 
   const requestedOrderedFileIds = useMemo(
-    () => files.map((file) => file.fileId).filter((fileId) => requestedFileIds.includes(fileId)),
-    [files, requestedFileIds]
+    () =>
+      files
+        .map((file) => file.fileId)
+        .filter((fileId) => !eagerFileIdSet.has(fileId) && requestedFileIds.includes(fileId)),
+    [eagerFileIdSet, files, requestedFileIds]
   )
 
   const patchQueries = useQueries({
@@ -261,6 +324,14 @@ export function GitEntryDetailPanel({
       }
     >()
 
+    for (const file of eagerFiles) {
+      map.set(file.fileId, {
+        status: 'ready',
+        file,
+        error: null,
+      })
+    }
+
     requestedOrderedFileIds.forEach((fileId, index) => {
       const query = patchQueries[index]
       if (!query) return
@@ -280,21 +351,41 @@ export function GitEntryDetailPanel({
     })
 
     return map
-  }, [patchQueries, requestedOrderedFileIds])
+  }, [eagerFiles, patchQueries, requestedOrderedFileIds])
 
   const patchLayoutVersion = useMemo(
     () =>
-      patchQueries
-        .map(
-          (query) =>
-            `${query.status}:${query.fetchStatus}:${query.dataUpdatedAt}:${query.errorUpdatedAt}`
-        )
-        .join('|'),
-    [patchQueries]
+      [
+        eagerFiles
+          .map((file) => `${file.fileId}:${file.state}:${file.patch?.length ?? 0}`)
+          .join('|'),
+        patchQueries
+          .map(
+            (query) =>
+              `${query.status}:${query.fetchStatus}:${query.dataUpdatedAt}:${query.errorUpdatedAt}`
+          )
+          .join('|'),
+      ].join('|'),
+    [eagerFiles, patchQueries]
   )
 
   const treeFiles = useMemo(
-    () => files.map((file) => patchStateByFileId.get(file.fileId)?.file ?? file),
+    () =>
+      files.map((file) => {
+        const patchFile = patchStateByFileId.get(file.fileId)?.file
+        if (!patchFile) {
+          return file
+        }
+
+        if (isSameFileDiff(file.diff, patchFile.diff)) {
+          return file
+        }
+
+        return {
+          ...file,
+          diff: patchFile.diff,
+        }
+      }),
     [files, patchStateByFileId]
   )
 
@@ -349,15 +440,17 @@ export function GitEntryDetailPanel({
   })
 
   const syncDetailOffsets = useCallback(() => {
-    if (wide) {
-      setDiffScrollOffset(DIFF_SCROLL_PADDING)
-      return
-    }
+    const nextOffset = wide
+      ? DIFF_SCROLL_PADDING
+      : (() => {
+          const strip = tabsRootRef.current?.querySelector<HTMLElement>('.tabs-strip')
+          const stripHeight = strip ? Math.ceil(strip.getBoundingClientRect().height) : 0
+          return stripHeight > 0 ? stripHeight + DIFF_SCROLL_PADDING : DIFF_SCROLL_PADDING
+        })()
 
-    const strip = tabsRootRef.current?.querySelector<HTMLElement>('.tabs-strip')
-    const stripHeight = strip ? Math.ceil(strip.getBoundingClientRect().height) : 0
-
-    setDiffScrollOffset(stripHeight > 0 ? stripHeight + DIFF_SCROLL_PADDING : DIFF_SCROLL_PADDING)
+    setDiffScrollOffset((currentOffset) =>
+      currentOffset === nextOffset ? currentOffset : nextOffset
+    )
   }, [wide])
 
   useEffect(() => {
@@ -463,10 +556,10 @@ export function GitEntryDetailPanel({
       requestPatch(fileId)
       queueScrollToFile(fileId)
       if (!wide) {
-        setActivePane('diff')
+        setSelectedTab('diff')
       }
     },
-    [queueScrollToFile, requestPatch, wide]
+    [queueScrollToFile, requestPatch, setSelectedTab, wide]
   )
 
   const registerCardNode = useCallback(
@@ -563,15 +656,19 @@ export function GitEntryDetailPanel({
         className="min-h-0 shrink-0 pb-1"
         style={wideTreeHeight != null ? { height: `${wideTreeHeight}px` } : undefined}
       >
-        <GitFileTree
-          files={treeFiles}
-          projectDir={projectDir}
-          visibilityRatioByFileId={treeVisibilityRatioByFileId}
-          onSelectFile={handleSelectFile}
-          revealRequest={treeRevealRequest}
-          className="h-full min-h-0"
-          onUserScrollIntent={markTreeNavigation}
-        />
+        <ErrorBoundary
+          fallback={<GitFileTreeFallback files={treeFiles} onSelectFile={handleSelectFile} />}
+        >
+          <GitFileTree
+            files={treeFiles}
+            projectDir={projectDir}
+            visibilityRatioByFileId={treeVisibilityRatioByFileId}
+            onSelectFile={handleSelectFile}
+            revealRequest={treeRevealRequest}
+            className="h-full min-h-0"
+            onUserScrollIntent={markTreeNavigation}
+          />
+        </ErrorBoundary>
       </div>
     )
 
@@ -582,14 +679,18 @@ export function GitEntryDetailPanel({
       </div>
     ) : (
       <div className="py-3" style={{ marginBlock: `${FILE_TREE_NARROW_MARGIN_BLOCK}px` }}>
-        <GitFileTree
-          files={treeFiles}
-          projectDir={projectDir}
-          visibilityRatioByFileId={treeVisibilityRatioByFileId}
-          onSelectFile={handleSelectFile}
-          revealRequest={treeRevealRequest}
-          onUserScrollIntent={markTreeNavigation}
-        />
+        <ErrorBoundary
+          fallback={<GitFileTreeFallback files={treeFiles} onSelectFile={handleSelectFile} />}
+        >
+          <GitFileTree
+            files={treeFiles}
+            projectDir={projectDir}
+            visibilityRatioByFileId={treeVisibilityRatioByFileId}
+            onSelectFile={handleSelectFile}
+            revealRequest={treeRevealRequest}
+            onUserScrollIntent={markTreeNavigation}
+          />
+        </ErrorBoundary>
       </div>
     )
 
@@ -682,9 +783,10 @@ export function GitEntryDetailPanel({
       ) : (
         <div ref={tabsRootRef}>
           <Tabs
+            ref={tabsRef}
             variant="default"
             selectedTab={activePane}
-            onTabChange={(tabId) => setActivePane(tabId === 'files' ? 'files' : 'diff')}
+            onTabChange={onTabChange}
             tabs={[
               {
                 id: 'diff',

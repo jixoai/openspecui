@@ -1,4 +1,10 @@
-import { useCallback, useRef } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 
 interface ResizeHandleProps {
   onResize: (height: number) => void
@@ -10,7 +16,9 @@ export function ResizeHandle({ onResize, minHeight = 100, maxHeight }: ResizeHan
   const dragging = useRef(false)
   const startY = useRef(0)
   const startHeight = useRef(0)
+  const slotRef = useRef<HTMLDivElement>(null)
   const handleRef = useRef<HTMLDivElement>(null)
+  const [isDragging, setIsDragging] = useState(false)
 
   const computeHeight = useCallback(
     (clientY: number) => {
@@ -25,76 +33,73 @@ export function ResizeHandle({ onResize, minHeight = 100, maxHeight }: ResizeHan
   const initDrag = useCallback((clientY: number) => {
     dragging.current = true
     startY.current = clientY
-    const panel = handleRef.current?.nextElementSibling as HTMLElement | null
+    const panel = slotRef.current?.nextElementSibling as HTMLElement | null
     startHeight.current = panel?.offsetHeight ?? 300
-    document.body.style.cursor = 'row-resize'
+    setIsDragging(true)
     document.body.style.userSelect = 'none'
   }, [])
 
-  // --- Mouse handlers ---
+  const stopDrag = useCallback(() => {
+    if (!dragging.current) return
+    dragging.current = false
+    setIsDragging(false)
+    document.body.style.userSelect = ''
+  }, [])
 
-  const onMouseMove = useCallback(
-    (e: MouseEvent) => {
+  useEffect(() => {
+    return () => {
+      document.body.style.userSelect = ''
+    }
+  }, [])
+
+  const onPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+      initDrag(event.clientY)
+    },
+    [initDrag]
+  )
+
+  const onPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
       if (!dragging.current) return
-      computeHeight(e.clientY)
+      computeHeight(event.clientY)
     },
     [computeHeight]
   )
 
-  const onMouseUp = useCallback(() => {
-    dragging.current = false
-    document.removeEventListener('mousemove', onMouseMove)
-    document.removeEventListener('mouseup', onMouseUp)
-    document.body.style.cursor = ''
-    document.body.style.userSelect = ''
-  }, [onMouseMove])
-
-  const onMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault()
-      initDrag(e.clientY)
-      document.addEventListener('mousemove', onMouseMove)
-      document.addEventListener('mouseup', onMouseUp)
+  const onPointerEnd = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+        event.currentTarget.releasePointerCapture?.(event.pointerId)
+      }
+      stopDrag()
     },
-    [initDrag, onMouseMove, onMouseUp]
-  )
-
-  // --- Touch handlers ---
-
-  const onTouchMove = useCallback(
-    (e: TouchEvent) => {
-      if (!dragging.current) return
-      computeHeight(e.touches[0].clientY)
-    },
-    [computeHeight]
-  )
-
-  const onTouchEnd = useCallback(() => {
-    dragging.current = false
-    document.removeEventListener('touchmove', onTouchMove)
-    document.removeEventListener('touchend', onTouchEnd)
-    document.body.style.cursor = ''
-    document.body.style.userSelect = ''
-  }, [onTouchMove])
-
-  const onTouchStart = useCallback(
-    (e: React.TouchEvent) => {
-      e.preventDefault()
-      initDrag(e.touches[0].clientY)
-      document.addEventListener('touchmove', onTouchMove, { passive: false })
-      document.addEventListener('touchend', onTouchEnd)
-    },
-    [initDrag, onTouchMove, onTouchEnd]
+    [stopDrag]
   )
 
   return (
-    <div
-      ref={handleRef}
-      onMouseDown={onMouseDown}
-      onTouchStart={onTouchStart}
-      className="border-border hover:bg-muted/50 group flex h-1.5 shrink-0 cursor-row-resize items-center justify-center border-t transition"
-    >
-      <div className="bg-muted-foreground/30 group-hover:bg-muted-foreground/60 h-0.5 w-8 rounded-full transition" />
+    <div ref={slotRef} className="border-border relative h-2 shrink-0 border-t">
+      <div
+        ref={handleRef}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
+        onLostPointerCapture={stopDrag}
+        className={`group absolute inset-x-0 -bottom-1 -top-1 z-10 flex cursor-row-resize touch-none items-center justify-center transition-colors ${
+          isDragging ? 'bg-muted/50' : 'hover:bg-muted/50'
+        }`}
+      >
+        <div
+          className={`h-0.5 w-8 rounded-full transition-colors ${
+            isDragging
+              ? 'bg-muted-foreground/80'
+              : 'bg-muted-foreground/30 group-hover:bg-muted-foreground/60'
+          }`}
+        />
+      </div>
     </div>
   )
 }

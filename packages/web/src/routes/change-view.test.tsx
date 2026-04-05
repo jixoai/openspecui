@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import type { ComponentProps, ReactNode } from 'react'
+import { createContext, type ComponentProps, type ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChangeView } from './change-view'
 
@@ -43,6 +43,14 @@ vi.mock('@tanstack/react-router', () => ({
       {children}
     </a>
   ),
+  useLocation: () => ({
+    pathname: '/changes/extract-terminal-view-webcomponent',
+    search: '',
+    hash: '',
+    state: null,
+  }),
+  useNavigate: () => vi.fn(),
+  getRouterContext: () => createContext(null),
   useParams: () => ({ changeId: 'extract-terminal-view-webcomponent' }),
 }))
 

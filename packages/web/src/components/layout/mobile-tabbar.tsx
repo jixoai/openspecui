@@ -1,6 +1,6 @@
 import { isStaticMode } from '@/lib/static-mode'
 import { useNavLayout } from '@/lib/use-nav-controller'
-import { Link } from '@tanstack/react-router'
+import { VTLink } from '@/lib/view-transitions/navigation'
 import { allNavItems, mobileNavItems } from './nav-items'
 
 /** Mobile bottom tab bar - quick access to main sections */
@@ -19,14 +19,14 @@ export function MobileTabBar() {
   return (
     <nav className="mobile-tabbar border-border bg-background flex h-14 items-stretch border-t">
       {items.map((item) => (
-        <Link
+        <VTLink
           key={item.to}
           to={item.to}
           className="text-muted-foreground hover:text-foreground [&.active]:text-primary flex flex-1 flex-col items-center justify-center gap-0.5"
         >
           <item.icon className="h-5 w-5 shrink-0" />
           <span className="font-nav text-[10px] tracking-[0.03em]">{item.label}</span>
-        </Link>
+        </VTLink>
       ))}
     </nav>
   )

@@ -1,5 +1,7 @@
 import { DashboardMetricCard } from '@/components/dashboard/metric-card'
 import {
+  getGitEntrySharedDescriptor,
+  getGitEntrySharedHandoff,
   GIT_WORKTREE_LINE_CLASS,
   GitAutoRefreshPresetIcon,
   GitEntryRow,
@@ -22,7 +24,6 @@ import {
 } from '@/lib/dashboard-git'
 import { formatRelativeTime } from '@/lib/format-time'
 import { buildGitEntryHrefFromEntry } from '@/lib/git-panel'
-import { navController } from '@/lib/nav-controller'
 import { isStaticMode } from '@/lib/static-mode'
 import {
   refreshDashboardGitSnapshot,
@@ -31,6 +32,11 @@ import {
   useDashboardOverviewSubscription,
 } from '@/lib/use-dashboard'
 import { useOpsxConfigBundleSubscription, useOpsxStatusListSubscription } from '@/lib/use-opsx'
+import { VTLink, vtNavController } from '@/lib/view-transitions/navigation'
+import {
+  getSharedElementBinding,
+  withSharedElementHandoffState,
+} from '@/lib/view-transitions/shared-elements'
 import type {
   ChangeStatus,
   DashboardCardAvailability,
@@ -38,7 +44,6 @@ import type {
   DashboardMetricKey,
   DashboardTrendKind,
 } from '@openspecui/core'
-import { Link } from '@tanstack/react-router'
 import {
   AlertCircle,
   Archive,
@@ -257,11 +262,11 @@ export function Dashboard() {
   } | null>(null)
 
   const runPropose = useCallback(() => {
-    navController.activatePop('/opsx-propose')
+    vtNavController.activatePop('/opsx-propose')
   }, [])
 
   const runNewChange = useCallback(() => {
-    navController.activatePop('/opsx-new')
+    vtNavController.activatePop('/opsx-new')
   }, [])
 
   const triggerGitRefresh = useCallback(
@@ -758,8 +763,19 @@ export function Dashboard() {
                       onSelect={
                         staticMode
                           ? undefined
-                          : () => {
-                              navController.push('bottom', buildGitEntryHrefFromEntry(entry), null)
+                          : (selectedEntry, sourceElement) => {
+                              void vtNavController.push(
+                                'bottom',
+                                buildGitEntryHrefFromEntry(selectedEntry),
+                                withSharedElementHandoffState(
+                                  undefined,
+                                  getGitEntrySharedHandoff(selectedEntry)
+                                ),
+                                {
+                                  source: sourceElement,
+                                  sharedElements: getGitEntrySharedDescriptor(selectedEntry),
+                                }
+                              )
                             }
                       }
                     />
@@ -803,28 +819,48 @@ export function Dashboard() {
         </span>
       </div>
       <div className="bg-card divide-border divide-y">
-        {overview?.specifications.map((spec) => (
-          <Link
-            key={spec.id}
-            to="/specs/$specId"
-            params={{ specId: spec.id }}
-            className="hover:bg-muted/50 block px-4 py-3"
-          >
-            <div className="flex min-w-0 items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="truncate font-medium">{spec.name}</div>
-                <div className="text-muted-foreground truncate text-xs">
-                  {spec.id}
-                  {spec.updatedAt > 0 && <> · {formatRelativeTime(spec.updatedAt)}</>}
+        {overview?.specifications.map((spec) => {
+          const sharedDescriptor = { family: 'specs', entityId: spec.id } as const
+
+          return (
+            <VTLink
+              key={spec.id}
+              to="/specs/$specId"
+              params={{ specId: spec.id }}
+              state={(prev) => ({
+                ...prev,
+                __vtHandoff: {
+                  family: 'specs',
+                  entityId: spec.id,
+                  title: spec.name,
+                  subtitle: spec.id,
+                },
+              })}
+              vt={{ sharedElements: sharedDescriptor }}
+              {...getSharedElementBinding(sharedDescriptor, 'container')}
+              className="hover:bg-muted/50 block px-4 py-3"
+            >
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div
+                    {...getSharedElementBinding(sharedDescriptor, 'title')}
+                    className="truncate font-medium"
+                  >
+                    {spec.name}
+                  </div>
+                  <div className="text-muted-foreground truncate text-xs">
+                    {spec.id}
+                    {spec.updatedAt > 0 && <> · {formatRelativeTime(spec.updatedAt)}</>}
+                  </div>
+                </div>
+                <div className="shrink-0 text-right text-sm">
+                  <div className="font-medium">{spec.requirements}</div>
+                  <div className="text-muted-foreground text-xs">requirements</div>
                 </div>
               </div>
-              <div className="shrink-0 text-right text-sm">
-                <div className="font-medium">{spec.requirements}</div>
-                <div className="text-muted-foreground text-xs">requirements</div>
-              </div>
-            </div>
-          </Link>
-        ))}
+            </VTLink>
+          )
+        })}
         {overview?.specifications.length === 0 && (
           <div className="text-muted-foreground px-4 py-6 text-center text-sm">
             No specifications found.
@@ -867,15 +903,34 @@ export function Dashboard() {
           })
 
           return (
-            <Link
+            <VTLink
               key={change.id}
               to="/changes/$changeId"
               params={{ changeId: change.id }}
+              state={(prev) => ({
+                ...prev,
+                __vtHandoff: {
+                  family: 'changes',
+                  entityId: change.id,
+                  title: change.name,
+                  subtitle: change.id,
+                },
+              })}
+              vt={{ sharedElements: { family: 'changes', entityId: change.id } }}
+              {...getSharedElementBinding({ family: 'changes', entityId: change.id }, 'container')}
               className="hover:bg-muted/50 block px-4 py-3"
             >
               <div className="mb-2 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate font-medium">{change.name}</div>
+                  <div
+                    {...getSharedElementBinding(
+                      { family: 'changes', entityId: change.id },
+                      'title'
+                    )}
+                    className="truncate font-medium"
+                  >
+                    {change.name}
+                  </div>
                   <div className="text-muted-foreground truncate text-xs">
                     {change.id}
                     {change.updatedAt > 0 && <> · {formatRelativeTime(change.updatedAt)}</>}
@@ -909,7 +964,7 @@ export function Dashboard() {
                   <span>Artifacts status unavailable</span>
                 )}
               </div>
-            </Link>
+            </VTLink>
           )
         })}
         {!hasChanges && (

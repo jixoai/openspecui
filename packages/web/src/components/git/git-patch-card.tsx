@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
 import type { GitEntryFilePatch, GitEntryFileSummary } from '@openspecui/core'
 import { FileCode2, FileWarning, LoaderCircle } from 'lucide-react'
-import { useRef } from 'react'
+import { memo, useCallback } from 'react'
 
 import { DiffStat } from './git-shared'
 
@@ -65,7 +65,7 @@ function renderPatchLine(line: string, index: number) {
   )
 }
 
-export function GitPatchCard({
+function GitPatchCardImpl({
   file,
   patch,
   status,
@@ -80,17 +80,18 @@ export function GitPatchCard({
   onRegisterCard?: (fileId: string, node: HTMLElement | null) => void
   scrollMarginTop?: number
 }) {
-  const ref = useRef<HTMLElement | null>(null)
-
   const message = patchStateMessage(patch)
+  const handleRef = useCallback(
+    (node: HTMLElement | null) => {
+      onRegisterCard?.(file.fileId, node)
+    },
+    [file.fileId, onRegisterCard]
+  )
 
   return (
     <section
       data-file-id={file.fileId}
-      ref={(node) => {
-        ref.current = node
-        onRegisterCard?.(file.fileId, node)
-      }}
+      ref={handleRef}
       style={scrollMarginTop ? { scrollMarginTop: `${scrollMarginTop}px` } : undefined}
       className="overflow-hidden rounded-md border border-zinc-500/20"
     >
@@ -146,3 +147,7 @@ export function GitPatchCard({
     </section>
   )
 }
+
+GitPatchCardImpl.displayName = 'GitPatchCard'
+
+export const GitPatchCard = memo(GitPatchCardImpl)
