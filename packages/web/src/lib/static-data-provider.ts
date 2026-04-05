@@ -972,6 +972,9 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
     dashboard: {
       trendPointLimit: 100,
     },
+    git: {
+      diffEagerLineBudget: 1000,
+    },
     terminal: {
       fontSize: 13,
       fontFamily: '',
@@ -1005,6 +1008,10 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
     dashboard: {
       ...defaultConfig.dashboard,
       ...fromSnapshot.dashboard,
+    },
+    git: {
+      ...defaultConfig.git,
+      ...fromSnapshot.git,
     },
   }
 }

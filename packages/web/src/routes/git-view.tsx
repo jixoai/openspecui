@@ -13,7 +13,7 @@ import {
   getSharedElementBinding,
   readSharedElementHandoffState,
 } from '@/lib/view-transitions/shared-elements'
-import type { GitEntrySelector } from '@openspecui/core'
+import type { GitEntryFilePatch, GitEntrySelector } from '@openspecui/core'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation, useParams } from '@tanstack/react-router'
 import { AlertCircle, ArrowLeft, GitCommitHorizontal, LoaderCircle } from 'lucide-react'
@@ -33,12 +33,24 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
   const headerRef = useRef<HTMLDivElement | null>(null)
   const sharedDescriptor = useMemo(() => getGitEntrySharedDescriptor(selector), [selector])
   const handoff = readSharedElementHandoffState(location.state)
-  const shellQuery = useQuery({
+  const metaQuery = useQuery({
     queryKey:
       selector.type === 'commit'
-        ? ['git', 'shell', 'commit', selector.hash]
-        : ['git', 'shell', 'uncommitted'],
-    queryFn: () => trpcClient.git.getEntryShell.query({ selector }),
+        ? ['git', 'meta', 'commit', selector.hash]
+        : ['git', 'meta', 'uncommitted'],
+    queryFn: () => trpcClient.git.getEntryMeta.query({ selector }),
+    enabled: !staticMode,
+    placeholderData: (previousData) => previousData,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  })
+  const filesQuery = useQuery({
+    queryKey:
+      selector.type === 'commit'
+        ? ['git', 'files', 'commit', selector.hash]
+        : ['git', 'files', 'uncommitted'],
+    queryFn: () => trpcClient.git.getEntryFiles.query({ selector }),
     enabled: !staticMode,
     placeholderData: (previousData) => previousData,
     staleTime: 5 * 60 * 1000,
@@ -46,8 +58,9 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
     refetchOnWindowFocus: false,
   })
 
-  const entry = shellQuery.data?.entry ?? null
-  const files = shellQuery.data?.files ?? []
+  const entry = metaQuery.data ?? null
+  const files = filesQuery.data?.files ?? []
+  const eagerFiles = (filesQuery.data?.eagerFiles ?? []) as GitEntryFilePatch[]
   const EntryIcon = selector.type === 'commit' ? GitCommitHorizontal : LoaderCircle
 
   if (staticMode) {
@@ -59,7 +72,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
     )
   }
 
-  if (shellQuery.isLoading && !entry) {
+  if (metaQuery.isLoading && !entry) {
     if (handoff) {
       return (
         <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
@@ -104,12 +117,12 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
     return <div className="route-loading animate-pulse">Loading commit detail...</div>
   }
 
-  if (shellQuery.error && !entry) {
+  if (metaQuery.error && !entry) {
     return (
       <div className="flex flex-col gap-3 p-4">
         <div className="text-destructive flex items-center gap-2 text-sm">
           <AlertCircle className="h-4 w-4 shrink-0" />
-          Error loading commit detail: {shellQuery.error.message}
+          Error loading commit detail: {metaQuery.error.message}
         </div>
         <div>
           <VTLink to="/git" className="text-primary hover:underline">
@@ -137,7 +150,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+    <div className="flex flex-col gap-4 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-4">
           <VTLink
@@ -171,19 +184,23 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <GitFilesBadge files={files.length || entry.diff.files} />
+          <GitFilesBadge files={filesQuery.data ? files.length : entry.diff.files} />
           <DiffStat diff={entry.diff} />
         </div>
       </div>
 
-      <div className="vt-detail-content flex min-h-0 flex-1 flex-col">
+      <div className="vt-detail-content">
         <GitEntryDetailPanel
           selector={selector}
           entry={entry}
           files={files}
+          eagerFiles={eagerFiles}
           projectDir={projectDir}
-          isLoading={shellQuery.isLoading || shellQuery.isFetching}
-          error={shellQuery.error instanceof Error ? shellQuery.error : null}
+          isLoading={filesQuery.isLoading || filesQuery.isFetching}
+          error={
+            (filesQuery.error instanceof Error ? filesQuery.error : null) ??
+            (metaQuery.error instanceof Error ? metaQuery.error : null)
+          }
           showEntrySummary={false}
         />
       </div>

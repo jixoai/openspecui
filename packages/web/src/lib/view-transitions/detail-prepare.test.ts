@@ -5,7 +5,7 @@ const {
   specGetQueryMock,
   opsxStatusQueryMock,
   archiveGetQueryMock,
-  gitEntryShellQueryMock,
+  gitEntryMetaQueryMock,
   fetchQueryMock,
   primeSubscriptionCacheMock,
 } = vi.hoisted(() => ({
@@ -13,7 +13,7 @@ const {
   specGetQueryMock: vi.fn(),
   opsxStatusQueryMock: vi.fn(),
   archiveGetQueryMock: vi.fn(),
-  gitEntryShellQueryMock: vi.fn(),
+  gitEntryMetaQueryMock: vi.fn(),
   fetchQueryMock: vi.fn(async ({ queryFn }: { queryFn: () => Promise<unknown> }) => queryFn()),
   primeSubscriptionCacheMock: vi.fn(),
 }))
@@ -40,8 +40,8 @@ vi.mock('@/lib/trpc', () => ({
       },
     },
     git: {
-      getEntryShell: {
-        query: gitEntryShellQueryMock,
+      getEntryMeta: {
+        query: gitEntryMetaQueryMock,
       },
     },
   },
@@ -125,9 +125,10 @@ describe('prepareRouteDetailViewTransition', () => {
   })
 
   it('warms the git shell query cache before a forward detail VT', async () => {
-    gitEntryShellQueryMock.mockResolvedValue({
-      entry: { type: 'commit', hash: 'abc12345', title: 'feat: prepare vt' },
-      files: [],
+    gitEntryMetaQueryMock.mockResolvedValue({
+      type: 'commit',
+      hash: 'abc12345',
+      title: 'feat: prepare vt',
     })
 
     await expect(
@@ -142,7 +143,7 @@ describe('prepareRouteDetailViewTransition', () => {
     ).resolves.toBe('ready')
 
     expect(fetchQueryMock).toHaveBeenCalledTimes(1)
-    expect(gitEntryShellQueryMock).toHaveBeenCalledWith({
+    expect(gitEntryMetaQueryMock).toHaveBeenCalledWith({
       selector: { type: 'commit', hash: 'abc12345' },
     })
   })

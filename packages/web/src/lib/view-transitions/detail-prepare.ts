@@ -87,10 +87,10 @@ async function prepareArchiveDetail(changeId: string): Promise<void> {
   primeSubscriptionCache(getArchiveSubscriptionCacheKey(changeId), archive)
 }
 
-function getGitShellQueryKey(selector: GitEntrySelector): readonly unknown[] {
+function getGitMetaQueryKey(selector: GitEntrySelector): readonly unknown[] {
   return selector.type === 'commit'
-    ? ['git', 'shell', 'commit', selector.hash]
-    : ['git', 'shell', 'uncommitted']
+    ? ['git', 'meta', 'commit', selector.hash]
+    : ['git', 'meta', 'uncommitted']
 }
 
 async function prepareGitDetail(selector: GitEntrySelector): Promise<void> {
@@ -99,8 +99,8 @@ async function prepareGitDetail(selector: GitEntrySelector): Promise<void> {
   }
 
   await queryClient.fetchQuery({
-    queryKey: getGitShellQueryKey(selector),
-    queryFn: () => trpcClient.git.getEntryShell.query({ selector }),
+    queryKey: getGitMetaQueryKey(selector),
+    queryFn: () => trpcClient.git.getEntryMeta.query({ selector }),
     staleTime: QUERY_STALE_TIME_MS,
   })
 }

@@ -13,6 +13,23 @@ interface UseIntersectionVisibilityMapOptions<TId extends string> {
   onBecomeVisible?: (entries: VisibilityBatchEntry<TId>[]) => void
 }
 
+function areMapsEqual<TId extends string>(
+  left: ReadonlyMap<TId, number>,
+  right: ReadonlyMap<TId, number>
+): boolean {
+  if (left.size !== right.size) {
+    return false
+  }
+
+  for (const [id, value] of left.entries()) {
+    if (right.get(id) !== value) {
+      return false
+    }
+  }
+
+  return true
+}
+
 export function buildIntersectionThresholds(steps: number): number[] {
   return Array.from({ length: steps + 1 }, (_, index) => index / steps)
 }
@@ -224,6 +241,10 @@ export function useIntersectionVisibilityMap<TId extends string>({
   const thresholdKey = useMemo(() => JSON.stringify(threshold ?? [0]), [threshold])
 
   const setRatioById = useCallback((next: Map<TId, number>) => {
+    if (areMapsEqual(ratioByIdRef.current, next)) {
+      return
+    }
+
     ratioByIdRef.current = next
     setRatioByIdState(new Map(next))
   }, [])

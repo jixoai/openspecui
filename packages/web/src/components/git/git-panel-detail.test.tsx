@@ -268,6 +268,16 @@ const baseFile = {
   diff: { state: 'ready' as const, files: 1, insertions: 3, deletions: 1 },
 }
 
+const basePatchFile = {
+  ...baseFile,
+  patch: [
+    'diff --git a/src/git-panel.ts b/src/git-panel.ts',
+    '@@ -1 +1 @@',
+    '+export const value = 1',
+  ].join('\n'),
+  state: 'available' as const,
+}
+
 const revealFiles = [
   baseFile,
   {
@@ -293,16 +303,7 @@ afterEach(() => {
 
 beforeEach(() => {
   getEntryPatchMock.mockResolvedValue({
-    entry: baseEntry,
-    file: {
-      ...baseFile,
-      patch: [
-        'diff --git a/src/git-panel.ts b/src/git-panel.ts',
-        '@@ -1 +1 @@',
-        '+export const value = 1',
-      ].join('\n'),
-      state: 'available' as const,
-    },
+    file: basePatchFile,
   })
 })
 
@@ -322,12 +323,13 @@ describe('GitEntryDetailPanel', () => {
     expect(screen.queryByText('No changed files found for this entry.')).toBeNull()
   })
 
-  it('renders narrow detail as tabs and loads patches for visible cards', async () => {
+  it('renders narrow detail as tabs and uses eager patches without refetching', async () => {
     renderWithQueryClient(
       <GitEntryDetailPanel
         selector={{ type: 'commit', hash: baseEntry.hash }}
         entry={baseEntry}
         files={[baseFile]}
+        eagerFiles={[basePatchFile]}
         isLoading={false}
         error={null}
       />
@@ -337,12 +339,7 @@ describe('GitEntryDetailPanel', () => {
     expect(screen.getByRole('button', { name: /Diff Stream/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /File Tree/i })).toBeTruthy()
 
-    await waitFor(() => {
-      expect(getEntryPatchMock).toHaveBeenCalledWith({
-        selector: { type: 'commit', hash: baseEntry.hash },
-        fileId: baseFile.fileId,
-      })
-    })
+    expect(getEntryPatchMock).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole('button', { name: /File Tree/i }))
     expect(screen.getByRole('tree').style.maxHeight).toBe('')
@@ -372,18 +369,21 @@ describe('GitEntryDetailPanel', () => {
           diff: { files: 1, insertions: 3, deletions: 1 },
         }}
         files={[loadingFile]}
+        eagerFiles={[
+          {
+            ...basePatchFile,
+            source: 'untracked',
+            changeType: 'added',
+          },
+        ]}
         isLoading={false}
         error={null}
       />
     )
 
-    expect(screen.getAllByText('loading').length).toBeGreaterThan(0)
-
-    await waitFor(() => {
-      expect(screen.getByText('3')).toBeTruthy()
-    })
-
     expect(screen.queryAllByText('loading')).toHaveLength(0)
+    expect(screen.getAllByText('3').length).toBeGreaterThan(0)
+    expect(getEntryPatchMock).not.toHaveBeenCalled()
   })
 
   it('defers file-tree scroll until the diff tab is active', async () => {
@@ -400,6 +400,7 @@ describe('GitEntryDetailPanel', () => {
         selector={{ type: 'commit', hash: baseEntry.hash }}
         entry={baseEntry}
         files={[baseFile]}
+        eagerFiles={[basePatchFile]}
         isLoading={false}
         error={null}
       />
@@ -428,6 +429,7 @@ describe('GitEntryDetailPanel', () => {
         selector={{ type: 'commit', hash: baseEntry.hash }}
         entry={baseEntry}
         files={[baseFile]}
+        eagerFiles={[basePatchFile]}
         isLoading={false}
         error={null}
       />
@@ -520,7 +522,6 @@ describe('GitEntryDetailPanel', () => {
     stubWideResizeObserver()
 
     const deferredPatch = createDeferred<{
-      entry: typeof baseEntry
       file: typeof baseFile & {
         patch: string
         state: 'available'
@@ -608,7 +609,6 @@ describe('GitEntryDetailPanel', () => {
     })
 
     deferredPatch.resolve({
-      entry: baseEntry,
       file: {
         ...baseFile,
         patch: 'diff --git a/src/git-panel.ts b/src/git-panel.ts',

@@ -25,7 +25,6 @@ import { GitFileTree, type GitFileTreeRevealRequest } from './git-file-tree'
 import { GitPatchCard, type GitPatchCardStatus } from './git-patch-card'
 import { DiffStat, GitFilesBadge, formatRelatedChanges } from './git-shared'
 
-const INITIAL_PATCH_REQUEST_COUNT = 2
 const WIDE_DETAIL_MIN_WIDTH = 960
 const DIFF_SCROLL_PADDING = 12
 const DIFF_SCROLL_ALIGNMENT_TOLERANCE = 16
@@ -35,7 +34,6 @@ const PATCH_PREFETCH_ROOT_MARGIN = '180px 0px'
 const VISIBILITY_THRESHOLDS = buildIntersectionThresholds(20)
 
 interface GitEntryPatchResponse {
-  entry: DashboardGitEntry
   file: GitEntryFilePatch | null
 }
 
@@ -68,6 +66,20 @@ function useWideDetailLayout() {
 function selectorCacheKey(selector: GitEntrySelector | null): string {
   if (!selector) return 'none'
   return selector.type === 'commit' ? `commit:${selector.hash}` : 'uncommitted'
+}
+
+function isSameFileDiff(
+  left: GitEntryFileSummary['diff'],
+  right: GitEntryFileSummary['diff']
+): boolean {
+  if (left.state !== right.state) return false
+  if (left.files !== right.files) return false
+
+  if (left.state !== 'ready' || right.state !== 'ready') {
+    return true
+  }
+
+  return left.insertions === right.insertions && left.deletions === right.deletions
 }
 
 function isScrollIntentEventKey(event: KeyboardEvent<HTMLElement>): boolean {
@@ -168,6 +180,7 @@ export function GitEntryDetailPanel({
   selector,
   entry,
   files,
+  eagerFiles = [],
   projectDir,
   isLoading,
   error,
@@ -177,6 +190,7 @@ export function GitEntryDetailPanel({
   selector: GitEntrySelector | null
   entry: DashboardGitEntry | null
   files: GitEntryFileSummary[]
+  eagerFiles?: GitEntryFilePatch[]
   projectDir?: string | null
   isLoading: boolean
   error: Error | null
@@ -216,6 +230,7 @@ export function GitEntryDetailPanel({
     target: wideTreeViewportNode,
     enabled: wide,
   })
+  const eagerFileIdSet = useMemo(() => new Set(eagerFiles.map((file) => file.fileId)), [eagerFiles])
 
   const markTreeNavigation = useCallback(() => {
     revealNavigationSourceRef.current = 'tree'
@@ -225,9 +240,16 @@ export function GitEntryDetailPanel({
     revealNavigationSourceRef.current = 'diff'
   }, [])
 
-  const requestPatch = useCallback((fileId: string) => {
-    setRequestedFileIds((current) => (current.includes(fileId) ? current : [...current, fileId]))
-  }, [])
+  const requestPatch = useCallback(
+    (fileId: string) => {
+      if (eagerFileIdSet.has(fileId)) {
+        return
+      }
+
+      setRequestedFileIds((current) => (current.includes(fileId) ? current : [...current, fileId]))
+    },
+    [eagerFileIdSet]
+  )
 
   const fileIds = useMemo(() => files.map((file) => file.fileId), [files])
 
@@ -262,25 +284,23 @@ export function GitEntryDetailPanel({
   }, [selectorKey, setSelectedTab])
 
   useEffect(() => {
-    if (files.length === 0) return
-
     setRequestedFileIds((current) => {
-      const next = new Set(current.filter((fileId) => files.some((file) => file.fileId === fileId)))
-      for (const file of files.slice(0, INITIAL_PATCH_REQUEST_COUNT)) {
-        next.add(file.fileId)
-      }
-      for (const file of files) {
-        if (file.diff.state !== 'ready') {
-          next.add(file.fileId)
-        }
-      }
-      return [...next]
+      const next = current.filter(
+        (fileId) => !eagerFileIdSet.has(fileId) && files.some((file) => file.fileId === fileId)
+      )
+      return next.length === current.length &&
+        next.every((fileId, index) => fileId === current[index])
+        ? current
+        : next
     })
-  }, [files])
+  }, [eagerFileIdSet, files])
 
   const requestedOrderedFileIds = useMemo(
-    () => files.map((file) => file.fileId).filter((fileId) => requestedFileIds.includes(fileId)),
-    [files, requestedFileIds]
+    () =>
+      files
+        .map((file) => file.fileId)
+        .filter((fileId) => !eagerFileIdSet.has(fileId) && requestedFileIds.includes(fileId)),
+    [eagerFileIdSet, files, requestedFileIds]
   )
 
   const patchQueries = useQueries({
@@ -304,6 +324,14 @@ export function GitEntryDetailPanel({
       }
     >()
 
+    for (const file of eagerFiles) {
+      map.set(file.fileId, {
+        status: 'ready',
+        file,
+        error: null,
+      })
+    }
+
     requestedOrderedFileIds.forEach((fileId, index) => {
       const query = patchQueries[index]
       if (!query) return
@@ -323,21 +351,41 @@ export function GitEntryDetailPanel({
     })
 
     return map
-  }, [patchQueries, requestedOrderedFileIds])
+  }, [eagerFiles, patchQueries, requestedOrderedFileIds])
 
   const patchLayoutVersion = useMemo(
     () =>
-      patchQueries
-        .map(
-          (query) =>
-            `${query.status}:${query.fetchStatus}:${query.dataUpdatedAt}:${query.errorUpdatedAt}`
-        )
-        .join('|'),
-    [patchQueries]
+      [
+        eagerFiles
+          .map((file) => `${file.fileId}:${file.state}:${file.patch?.length ?? 0}`)
+          .join('|'),
+        patchQueries
+          .map(
+            (query) =>
+              `${query.status}:${query.fetchStatus}:${query.dataUpdatedAt}:${query.errorUpdatedAt}`
+          )
+          .join('|'),
+      ].join('|'),
+    [eagerFiles, patchQueries]
   )
 
   const treeFiles = useMemo(
-    () => files.map((file) => patchStateByFileId.get(file.fileId)?.file ?? file),
+    () =>
+      files.map((file) => {
+        const patchFile = patchStateByFileId.get(file.fileId)?.file
+        if (!patchFile) {
+          return file
+        }
+
+        if (isSameFileDiff(file.diff, patchFile.diff)) {
+          return file
+        }
+
+        return {
+          ...file,
+          diff: patchFile.diff,
+        }
+      }),
     [files, patchStateByFileId]
   )
 

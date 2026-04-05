@@ -288,11 +288,44 @@ export const vtNavController = {
   deactivateBottom(): void {
     navController.deactivateBottom()
   },
-  activatePop(href: string): void {
-    navController.activatePop(href)
+  activatePop(href: string): Promise<void> {
+    if (typeof navController.getLocation !== 'function') {
+      navController.activatePop(href)
+      return Promise.resolve()
+    }
+
+    const area: VTArea = 'pop'
+    const pathname = toPathname(href)
+
+    return runViewTransition({
+      intent: resolveViewTransitionIntent({
+        area,
+        fromPath: navController.getLocation(area).pathname,
+        toPath: pathname,
+      }),
+      update: () => {
+        navController.activatePop(href)
+      },
+    })
   },
-  deactivatePop(): void {
-    navController.deactivatePop()
+  deactivatePop(): Promise<void> {
+    if (typeof navController.getLocation !== 'function') {
+      navController.deactivatePop()
+      return Promise.resolve()
+    }
+
+    const area: VTArea = 'pop'
+
+    return runViewTransition({
+      intent: resolveViewTransitionIntent({
+        area,
+        fromPath: navController.getLocation(area).pathname,
+        toPath: '/',
+      }),
+      update: () => {
+        navController.deactivatePop()
+      },
+    })
   },
   moveTab(...args: Parameters<typeof navController.moveTab>) {
     return navController.moveTab(...args)

@@ -78,4 +78,32 @@ describe('resolveViewTransitionIntent', () => {
       })
     ).toBeNull()
   })
+
+  it('treats pop activation as a forward route-top transition', () => {
+    expect(
+      resolveViewTransitionIntent({
+        area: 'pop',
+        fromPath: '/',
+        toPath: '/search',
+      })
+    ).toEqual({
+      area: 'pop',
+      kind: 'route-top',
+      direction: 'forward',
+    })
+  })
+
+  it('treats pop dismissal as a backward route-top transition', () => {
+    expect(
+      resolveViewTransitionIntent({
+        area: 'pop',
+        fromPath: '/search',
+        toPath: '/',
+      })
+    ).toEqual({
+      area: 'pop',
+      kind: 'route-top',
+      direction: 'backward',
+    })
+  })
 })

@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import { useHeadStyle } from './use-head-style'
 
 interface DialogProps {
@@ -55,14 +55,22 @@ export function Dialog({
   }, [onClosed])
 
   // Synchronize the native dialog with the controlled `open` prop
-  useEffect(() => {
+  useLayoutEffect(() => {
     const dialog = dialogRef.current
     if (!dialog) return
 
     if (open && !dialog.open) {
-      dialog.showModal()
+      if (typeof dialog.showModal === 'function') {
+        dialog.showModal()
+      } else {
+        dialog.setAttribute('open', '')
+      }
     } else if (!open && dialog.open) {
-      dialog.close()
+      if (typeof dialog.close === 'function') {
+        dialog.close()
+      } else {
+        dialog.removeAttribute('open')
+      }
     }
   }, [open])
 
@@ -127,6 +135,13 @@ export function Dialog({
           opacity: 0;
           transform: translateY(8px);
         }
+      }
+
+      html[data-vt-kind='route-top'][data-vt-area='pop'] dialog.openspec-dialog,
+      html[data-vt-kind='route-top'][data-vt-area='pop'] dialog.openspec-dialog[open] {
+        opacity: 1;
+        transform: none;
+        transition: none;
       }
 
       dialog.openspec-dialog::backdrop {

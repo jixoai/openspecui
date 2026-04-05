@@ -51,8 +51,14 @@ export interface GitEntryShell {
   files: GitEntryFileSummary[]
 }
 
+export interface GitEntryFiles {
+  files: GitEntryFileSummary[]
+  eagerFiles: GitEntryFilePatch[]
+  eagerPatchLineBudget: number
+  eagerPatchLineCount: number
+}
+
 export interface GitEntryPatch {
-  entry: DashboardGitEntry | null
   file: GitEntryFilePatch | null
 }
 

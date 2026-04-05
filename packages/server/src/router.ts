@@ -4,10 +4,9 @@ import type {
   ConfigManager,
   FileChangeEvent,
   GitEntriesPage,
-  GitEntryDetail,
+  GitEntryFiles,
   GitEntryPatch,
   GitEntrySelector,
-  GitEntryShell,
   GitWorktreeHandoff,
   GitWorktreeOverview,
   OpenSpecAdapter,
@@ -24,6 +23,7 @@ import {
   getDetectedProjectTools,
   getToolInitStates,
   getWatcherRuntimeStatus,
+  GitConfigSchema,
   sniffGlobalCli,
   TerminalConfigSchema,
   TerminalRendererEngineSchema,
@@ -56,9 +56,9 @@ import {
 } from './dashboard-overview.js'
 import {
   buildGitWorktreeOverview,
-  getCurrentWorktreeGitEntryDetail,
+  getCurrentWorktreeGitEntryFiles,
+  getCurrentWorktreeGitEntryMeta,
   getCurrentWorktreeGitEntryPatch,
-  getCurrentWorktreeGitEntryShell,
   listCurrentWorktreeGitEntries,
 } from './git-panel-data.js'
 import { sameGitPath } from './git-shared.js'
@@ -659,6 +659,7 @@ export const configRouter = router({
           })
           .optional(),
         dashboard: DashboardConfigSchema.partial().optional(),
+        git: GitConfigSchema.partial().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -674,7 +675,8 @@ export const configRouter = router({
           input.codeEditor !== undefined ||
           input.appBaseUrl !== undefined ||
           input.terminal !== undefined ||
-          input.dashboard !== undefined
+          input.dashboard !== undefined ||
+          input.git !== undefined
         ) {
           await ctx.configManager.writeConfig({
             theme: input.theme,
@@ -682,6 +684,7 @@ export const configRouter = router({
             appBaseUrl: input.appBaseUrl,
             terminal: input.terminal,
             dashboard: input.dashboard,
+            git: input.git,
           })
         }
         return { success: true }
@@ -1458,21 +1461,23 @@ export const gitRouter = router({
       })
     }),
 
-  getEntryDetail: publicProcedure
+  getEntryMeta: publicProcedure
     .input(z.object({ selector: gitEntrySelectorSchema }))
-    .query(async ({ ctx, input }): Promise<GitEntryDetail> => {
-      return getCurrentWorktreeGitEntryDetail({
+    .query(async ({ ctx, input }) => {
+      return getCurrentWorktreeGitEntryMeta({
         projectDir: ctx.projectDir,
         selector: input.selector as GitEntrySelector,
       })
     }),
 
-  getEntryShell: publicProcedure
+  getEntryFiles: publicProcedure
     .input(z.object({ selector: gitEntrySelectorSchema }))
-    .query(async ({ ctx, input }): Promise<GitEntryShell> => {
-      return getCurrentWorktreeGitEntryShell({
+    .query(async ({ ctx, input }): Promise<GitEntryFiles> => {
+      const config = await ctx.configManager.readConfig()
+      return getCurrentWorktreeGitEntryFiles({
         projectDir: ctx.projectDir,
         selector: input.selector as GitEntrySelector,
+        eagerPatchLineBudget: config.git.diffEagerLineBudget,
       })
     }),
 

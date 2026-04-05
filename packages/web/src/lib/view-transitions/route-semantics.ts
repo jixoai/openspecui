@@ -64,14 +64,26 @@ export function resolveViewTransitionIntent(options: {
   fromPath: string
   toPath: string
 }): VTIntent | null {
-  if (options.area === 'pop') return null
-
   const fromPath = normalizePathname(options.fromPath)
   const toPath = normalizePathname(options.toPath)
   if (fromPath === toPath) return null
 
   const fromSemantic = describeRouteSemantic(fromPath)
   const toSemantic = describeRouteSemantic(toPath)
+
+  if (options.area === 'pop') {
+    const fromIsPop = fromSemantic.level === 'pop'
+    const toIsPop = toSemantic.level === 'pop'
+    if (!fromIsPop && !toIsPop) {
+      return null
+    }
+
+    return {
+      area: options.area,
+      kind: 'route-top',
+      direction: toIsPop ? 'forward' : 'backward',
+    }
+  }
 
   if (fromSemantic.level === 'pop' || toSemantic.level === 'pop') {
     return null

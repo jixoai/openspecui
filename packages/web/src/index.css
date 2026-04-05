@@ -228,7 +228,8 @@
 
 .main-content,
 .bottom-area,
-.vt-detail-content {
+.vt-detail-content,
+.pop-area-panel {
   contain: paint;
   isolation: isolate;
   position: relative;
@@ -264,6 +265,10 @@ html[data-vt-kind='route-top'][data-vt-area='main'] .main-content {
 
 html[data-vt-kind='route-top'][data-vt-area='bottom'] .bottom-area {
   view-transition-name: vt-area-bottom;
+}
+
+html[data-vt-kind='route-top'][data-vt-area='pop'] dialog.openspec-dialog[open] .pop-area-panel {
+  view-transition-name: vt-area-pop;
 }
 
 html[data-vt-kind='route-detail'] .vt-detail-content {
@@ -434,18 +439,21 @@ html[data-vt-kind='route-detail'] .vt-detail-content {
 }
 
 ::view-transition-group(vt-area-main),
-::view-transition-group(vt-area-bottom) {
+::view-transition-group(vt-area-bottom),
+::view-transition-group(vt-area-pop) {
   animation-duration: 340ms;
 }
 
 ::view-transition-old(vt-area-main),
-::view-transition-old(vt-area-bottom) {
+::view-transition-old(vt-area-bottom),
+::view-transition-old(vt-area-pop) {
   animation: vt-route-out 260ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
   mix-blend-mode: normal;
 }
 
 ::view-transition-new(vt-area-main),
-::view-transition-new(vt-area-bottom) {
+::view-transition-new(vt-area-bottom),
+::view-transition-new(vt-area-pop) {
   animation: vt-route-in 340ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
   mix-blend-mode: normal;
 }
@@ -574,6 +582,8 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
   ::view-transition-new(vt-area-main),
   ::view-transition-old(vt-area-bottom),
   ::view-transition-new(vt-area-bottom),
+  ::view-transition-old(vt-area-pop),
+  ::view-transition-new(vt-area-pop),
   ::view-transition-old(.vt-shared-container),
   ::view-transition-new(.vt-shared-container),
   ::view-transition-old(.vt-shared-icon),

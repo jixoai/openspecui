@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
 import type { GitEntryFilePatch, GitEntryFileSummary } from '@openspecui/core'
 import { FileCode2, FileWarning, LoaderCircle } from 'lucide-react'
-import { useCallback } from 'react'
+import { memo, useCallback } from 'react'
 
 import { DiffStat } from './git-shared'
 
@@ -65,7 +65,7 @@ function renderPatchLine(line: string, index: number) {
   )
 }
 
-export function GitPatchCard({
+function GitPatchCardImpl({
   file,
   patch,
   status,
@@ -147,3 +147,7 @@ export function GitPatchCard({
     </section>
   )
 }
+
+GitPatchCardImpl.displayName = 'GitPatchCard'
+
+export const GitPatchCard = memo(GitPatchCardImpl)

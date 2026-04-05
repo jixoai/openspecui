@@ -29,6 +29,7 @@ function createSnapshot(): ExportSnapshot {
         theme: 'github',
       },
       dashboard: { trendPointLimit: 120 },
+      git: { diffEagerLineBudget: 1500 },
       terminal: {
         fontSize: 14,
         fontFamily: 'Menlo',
@@ -265,6 +266,7 @@ describe('static-data-provider dashboard overview', () => {
 
     expect(config.theme).toBe('dark')
     expect(config.dashboard.trendPointLimit).toBe(120)
+    expect(config.git.diffEagerLineBudget).toBe(1500)
     expect(config.terminal.scrollback).toBe(2000)
     expect(config.cli.command).toBe('openspec')
   })

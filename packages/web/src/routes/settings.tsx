@@ -31,6 +31,7 @@ import {
   Download,
   FolderOpen,
   FolderPlus,
+  GitCommitHorizontal,
   LayoutDashboard,
   Link2,
   Loader2,
@@ -545,6 +546,7 @@ export function Settings() {
   const [termScrollback, setTermScrollback] = useState(initialConfig.scrollback)
   const [termRendererEngine, setTermRendererEngine] = useState<string>(initialConfig.rendererEngine)
   const [dashboardTrendPointLimit, setDashboardTrendPointLimit] = useState(100)
+  const [gitDiffEagerLineBudget, setGitDiffEagerLineBudget] = useState(1000)
   const [termRendererError, setTermRendererError] = useState<string | null>(null)
   const isRendererEngineValid = isTerminalRendererEngine(termRendererEngine)
 
@@ -618,6 +620,15 @@ export function Settings() {
         dashboard: { trendPointLimit },
       }),
   })
+  const saveGitConfigMutation = useMutation({
+    mutationFn: (diffEagerLineBudget: number) =>
+      trpcClient.config.update.mutate({
+        git: { diffEagerLineBudget },
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['git'] })
+    },
+  })
 
   useEffect(() => {
     const nextLimit = config?.dashboard?.trendPointLimit
@@ -625,8 +636,15 @@ export function Settings() {
       setDashboardTrendPointLimit(nextLimit)
     }
   }, [config?.dashboard?.trendPointLimit])
+  useEffect(() => {
+    const nextBudget = config?.git?.diffEagerLineBudget
+    if (typeof nextBudget === 'number' && Number.isFinite(nextBudget)) {
+      setGitDiffEagerLineBudget(nextBudget)
+    }
+  }, [config?.git?.diffEagerLineBudget])
 
   const savedDashboardTrendPointLimit = config?.dashboard?.trendPointLimit ?? 100
+  const savedGitDiffEagerLineBudget = config?.git?.diffEagerLineBudget ?? 1000
   const savedAppBaseUrl = config?.appBaseUrl ?? ''
 
   useEffect(() => {
@@ -982,6 +1000,58 @@ export function Settings() {
                 </div>
                 <p className="text-muted-foreground mt-2 text-xs">
                   Allowed range: 20-500. Lower values reduce memory and increase visual smoothing.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <h2 className="flex items-center gap-2 text-lg font-semibold">
+              <GitCommitHorizontal className="h-5 w-5" />
+              Git Detail
+            </h2>
+            <div className="border-border space-y-4 rounded-lg border p-4">
+              <div>
+                <label className="mb-2 block text-sm font-medium">Eager Patch Line Budget</label>
+                <p className="text-muted-foreground mb-3 text-sm">
+                  Server-side line budget for the initial Git detail payload. Files are included as
+                  a prefix, and the file that crosses the budget still ships eagerly.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={200000}
+                    step={100}
+                    value={gitDiffEagerLineBudget}
+                    onChange={(e) => {
+                      const next = Number(e.target.value)
+                      if (Number.isFinite(next)) {
+                        setGitDiffEagerLineBudget(next)
+                      }
+                    }}
+                    className="bg-background border-border text-foreground focus:ring-primary w-40 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
+                  />
+                  <button
+                    onClick={() => {
+                      const next = Math.max(
+                        0,
+                        Math.min(200000, Math.trunc(gitDiffEagerLineBudget || 0))
+                      )
+                      setGitDiffEagerLineBudget(next)
+                      saveGitConfigMutation.mutate(next)
+                    }}
+                    disabled={
+                      saveGitConfigMutation.isPending ||
+                      gitDiffEagerLineBudget === savedGitDiffEagerLineBudget
+                    }
+                    className="bg-primary text-primary-foreground rounded-md px-4 py-2 hover:opacity-90 disabled:opacity-50"
+                  >
+                    {saveGitConfigMutation.isPending ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+                <p className="text-muted-foreground mt-2 text-xs">
+                  Set to `0` to force fully lazy patch loading. Default is `1000`.
                 </p>
               </div>
             </div>

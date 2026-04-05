@@ -208,46 +208,35 @@ export function useRoutedCarouselTabs<TTabId extends string>({
     [allowUnknownSelection, initialTab, location.search, queryKey, tabs]
   )
   const [selectedTab, setSelectedTabState] = useState<TTabId>(selectedFromLocation)
+  const latestRef = useRef({
+    allowUnknownSelection,
+    area,
+    history,
+    location,
+    queryKey,
+    router,
+    selectedFromLocation,
+    selectedTab,
+    tabs,
+  })
+
+  latestRef.current = {
+    allowUnknownSelection,
+    area,
+    history,
+    location,
+    queryKey,
+    router,
+    selectedFromLocation,
+    selectedTab,
+    tabs,
+  }
 
   useEffect(() => {
     setSelectedTabState((current) =>
       current === selectedFromLocation ? current : selectedFromLocation
     )
   }, [selectedFromLocation])
-
-  const writeSelection = useCallback(
-    (nextTabId: TTabId, nextHistory: 'replace' | 'push') => {
-      const href = buildHrefWithQuery(
-        location.pathname,
-        location.search,
-        location.hash,
-        queryKey,
-        nextTabId
-      )
-
-      if (isStaticMode()) {
-        if (router) {
-          void router.navigate({
-            href,
-            replace: nextHistory === 'replace',
-            state: location.state,
-          })
-          return
-        }
-
-        writeWindowLocation(href, nextHistory === 'replace', location.state)
-        return
-      }
-
-      const nextArea = resolveTabArea(location.pathname, area)
-      if (nextHistory === 'replace') {
-        navController.replace(nextArea, href, location.state)
-        return
-      }
-      navController.push(nextArea, href, location.state)
-    },
-    [area, location.hash, location.pathname, location.search, location.state, queryKey, router]
-  )
 
   const setSelectedTab = useCallback(
     (
@@ -257,18 +246,56 @@ export function useRoutedCarouselTabs<TTabId extends string>({
         history?: 'replace' | 'push'
       }
     ) => {
-      const validIds = new Set(tabs.map((tab) => tab.id))
-      if (!validIds.has(nextTabId) && !allowUnknownSelection) return
+      const {
+        allowUnknownSelection: allowUnknown,
+        area: latestArea,
+        history: defaultHistory,
+        location: latestLocation,
+        queryKey: latestQueryKey,
+        router: latestRouter,
+        selectedFromLocation: latestSelectedFromLocation,
+        selectedTab: currentTab,
+        tabs: latestTabs,
+      } = latestRef.current
 
-      const nextHistory = options?.history ?? history
-      const currentTab = selectedTab
-      if (currentTab === nextTabId && selectedFromLocation === nextTabId) {
+      const validIds = new Set(latestTabs.map((tab) => tab.id))
+      if (!validIds.has(nextTabId) && !allowUnknown) return
+
+      const nextHistory = options?.history ?? defaultHistory
+      if (currentTab === nextTabId && latestSelectedFromLocation === nextTabId) {
         return
       }
 
       const commitSelection = () => {
         setSelectedTabState(nextTabId)
-        writeSelection(nextTabId, nextHistory)
+        const href = buildHrefWithQuery(
+          latestLocation.pathname,
+          latestLocation.search,
+          latestLocation.hash,
+          latestQueryKey,
+          nextTabId
+        )
+
+        if (isStaticMode()) {
+          if (latestRouter) {
+            void latestRouter.navigate({
+              href,
+              replace: nextHistory === 'replace',
+              state: latestLocation.state,
+            })
+            return
+          }
+
+          writeWindowLocation(href, nextHistory === 'replace', latestLocation.state)
+          return
+        }
+
+        const nextArea = resolveTabArea(latestLocation.pathname, latestArea)
+        if (nextHistory === 'replace') {
+          navController.replace(nextArea, href, latestLocation.state)
+          return
+        }
+        navController.push(nextArea, href, latestLocation.state)
       }
 
       if (!options?.animate || currentTab === nextTabId) {
@@ -276,8 +303,8 @@ export function useRoutedCarouselTabs<TTabId extends string>({
         return
       }
 
-      const currentIndex = tabs.findIndex((tab) => tab.id === currentTab)
-      const nextIndex = tabs.findIndex((tab) => tab.id === nextTabId)
+      const currentIndex = latestTabs.findIndex((tab) => tab.id === currentTab)
+      const nextIndex = latestTabs.findIndex((tab) => tab.id === nextTabId)
       if (currentIndex < 0 || nextIndex < 0) {
         commitSelection()
         return
@@ -286,7 +313,7 @@ export function useRoutedCarouselTabs<TTabId extends string>({
 
       void runViewTransition({
         intent: {
-          area: resolveTabArea(location.pathname, area),
+          area: resolveTabArea(latestLocation.pathname, latestArea),
           kind: 'tab-carousel',
           direction,
         },
@@ -295,24 +322,18 @@ export function useRoutedCarouselTabs<TTabId extends string>({
         update: commitSelection,
       })
     },
-    [
-      allowUnknownSelection,
-      area,
-      history,
-      location.pathname,
-      selectedFromLocation,
-      selectedTab,
-      tabs,
-      writeSelection,
-    ]
+    []
   )
 
   return {
     tabsRef,
     selectedTab,
     setSelectedTab,
-    onTabChange: (nextTabId: string) => {
-      setSelectedTab(nextTabId as TTabId, { animate: true })
-    },
+    onTabChange: useCallback(
+      (nextTabId: string) => {
+        setSelectedTab(nextTabId as TTabId, { animate: true })
+      },
+      [setSelectedTab]
+    ),
   }
 }

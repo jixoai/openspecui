@@ -580,6 +580,17 @@ export const DashboardConfigSchema = z.object({
 })
 
 export type DashboardConfig = z.infer<typeof DashboardConfigSchema>
+export const DEFAULT_GIT_DIFF_EAGER_LINE_BUDGET = 1000
+export const GitConfigSchema = z.object({
+  diffEagerLineBudget: z
+    .number()
+    .int()
+    .min(0)
+    .max(200_000)
+    .default(DEFAULT_GIT_DIFF_EAGER_LINE_BUDGET),
+})
+
+export type GitConfig = z.infer<typeof GitConfigSchema>
 export const CodeEditorConfigSchema = z.object({
   theme: CodeEditorThemeSchema.default('github'),
 })
@@ -615,6 +626,9 @@ export const OpenSpecUIConfigSchema = z.object({
 
   /** Dashboard 配置 */
   dashboard: DashboardConfigSchema.default(DashboardConfigSchema.parse({})),
+
+  /** Git detail 配置 */
+  git: GitConfigSchema.default(GitConfigSchema.parse({})),
 })
 
 export type OpenSpecUIConfig = z.infer<typeof OpenSpecUIConfigSchema>
@@ -628,6 +642,7 @@ export type OpenSpecUIConfigUpdate = {
   appBaseUrl?: OpenSpecUIConfig['appBaseUrl']
   terminal?: Partial<TerminalConfig>
   dashboard?: Partial<DashboardConfig>
+  git?: Partial<GitConfig>
 }
 
 export type PersistedOpenSpecUIConfig = {
@@ -640,6 +655,7 @@ export type PersistedOpenSpecUIConfig = {
   appBaseUrl?: OpenSpecUIConfig['appBaseUrl']
   terminal?: Partial<TerminalConfig>
   dashboard?: Partial<DashboardConfig>
+  git?: Partial<GitConfig>
 }
 
 /** 默认配置（静态，用于测试和类型） */
@@ -652,6 +668,7 @@ export const DEFAULT_CONFIG: OpenSpecUIConfig = {
   appBaseUrl: '',
   terminal: TerminalConfigSchema.parse({}),
   dashboard: DashboardConfigSchema.parse({}),
+  git: GitConfigSchema.parse({}),
 }
 
 function areStringArraysEqual(
@@ -748,6 +765,14 @@ export function toPersistedConfig(
   }
   if (hasOwnEntries(dashboard)) {
     persisted.dashboard = dashboard
+  }
+
+  const git: NonNullable<PersistedOpenSpecUIConfig['git']> = {}
+  if (config.git.diffEagerLineBudget !== DEFAULT_CONFIG.git.diffEagerLineBudget) {
+    git.diffEagerLineBudget = config.git.diffEagerLineBudget
+  }
+  if (hasOwnEntries(git)) {
+    persisted.git = git
   }
 
   return persisted
@@ -849,6 +874,7 @@ export class ConfigManager {
       appBaseUrl: config.appBaseUrl ?? current.appBaseUrl,
       terminal: { ...current.terminal, ...config.terminal },
       dashboard: { ...current.dashboard, ...config.dashboard },
+      git: { ...current.git, ...config.git },
     }
 
     const persisted = toPersistedConfig(merged)

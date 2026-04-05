@@ -120,7 +120,7 @@ function GitDetailStory({ width }: { width: number }) {
           error={null}
           patchLoader={async ({ fileId }) => {
             const file = storyPatchesByFileId.get(fileId) ?? null
-            return file ? { entry: storyEntry, file } : null
+            return file ? { file } : null
           }}
         />
       </div>
