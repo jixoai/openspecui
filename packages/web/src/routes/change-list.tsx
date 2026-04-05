@@ -3,11 +3,11 @@ import {
   inferTrackedArtifactStatus,
 } from '@/lib/change-workflow-phase'
 import { formatRelativeTime } from '@/lib/format-time'
-import { navController } from '@/lib/nav-controller'
 import { useOpsxStatusListSubscription } from '@/lib/use-opsx'
 import { useChangesSubscription } from '@/lib/use-subscription'
+import { VTLink, vtNavController } from '@/lib/view-transitions/navigation'
+import { getSharedElementBinding } from '@/lib/view-transitions/shared-elements'
 import type { ChangeStatus } from '@openspecui/core'
-import { Link } from '@tanstack/react-router'
 import { ChevronRight, GitBranch, Sparkles } from 'lucide-react'
 
 function buildStatusMap(statuses: ChangeStatus[] | undefined): Map<string, ChangeStatus> {
@@ -32,9 +32,9 @@ export function ChangeList() {
 
       <p className="text-muted-foreground">
         Active OPSX changes. Completed changes are moved to{' '}
-        <Link to="/archive" className="text-primary hover:underline">
+        <VTLink to="/archive" className="text-primary hover:underline">
           Archive
-        </Link>
+        </VTLink>
         .
       </p>
 
@@ -57,18 +57,38 @@ export function ChangeList() {
             change.progress.total > 0
               ? Math.round((change.progress.completed / change.progress.total) * 100)
               : 0
+          const sharedDescriptor = { family: 'changes', entityId: change.id } as const
           return (
-            <Link
+            <VTLink
               key={change.id}
               to="/changes/$changeId"
               params={{ changeId: change.id }}
+              state={(prev) => ({
+                ...prev,
+                __vtHandoff: {
+                  family: 'changes',
+                  entityId: change.id,
+                  title: change.name,
+                  subtitle: change.id,
+                },
+              })}
+              vt={{ sharedElements: sharedDescriptor }}
+              {...getSharedElementBinding(sharedDescriptor, 'container')}
               className="hover:bg-muted/50 block px-4 py-3"
             >
               <div className="mb-2 flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-3">
-                  <GitBranch className="text-muted-foreground mt-0.5 h-5 w-5 shrink-0" />
+                  <GitBranch
+                    {...getSharedElementBinding(sharedDescriptor, 'icon')}
+                    className="text-muted-foreground mt-0.5 h-5 w-5 shrink-0"
+                  />
                   <div className="min-w-0">
-                    <div className="truncate font-medium">{change.name}</div>
+                    <div
+                      {...getSharedElementBinding(sharedDescriptor, 'title')}
+                      className="truncate font-medium"
+                    >
+                      {change.name}
+                    </div>
                     <div className="text-muted-foreground truncate text-sm">
                       {change.id}
                       {change.updatedAt > 0 && <> · {formatRelativeTime(change.updatedAt)}</>}
@@ -108,7 +128,7 @@ export function ChangeList() {
                   <span>Loading workflow status…</span>
                 )}
               </div>
-            </Link>
+            </VTLink>
           )
         })}
         {changes?.length === 0 && (
@@ -117,7 +137,7 @@ export function ChangeList() {
             <div className="mt-1 text-xs">Recommended workflow start: /opsx:propose</div>
             <button
               type="button"
-              onClick={() => navController.activatePop('/opsx-propose')}
+              onClick={() => vtNavController.activatePop('/opsx-propose')}
               className="text-primary mt-2 inline-flex items-center gap-1 hover:underline"
               title="Open quick /opsx:propose input"
             >
@@ -126,7 +146,7 @@ export function ChangeList() {
             </button>
             <button
               type="button"
-              onClick={() => navController.activatePop('/opsx-new')}
+              onClick={() => vtNavController.activatePop('/opsx-new')}
               className="text-primary mt-2 inline-flex items-center gap-1 hover:underline"
               title="Open the advanced /opsx:new form"
             >

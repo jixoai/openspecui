@@ -3,6 +3,7 @@ import { navController } from '@/lib/nav-controller'
 import { CHANGE_NAME_PATTERN, buildNewChangeArgs, quoteShellToken } from '@/lib/opsx-new-command'
 import { useTerminalContext } from '@/lib/terminal-context'
 import { useOpsxConfigBundleSubscription } from '@/lib/use-opsx'
+import { vtNavController } from '@/lib/view-transitions/navigation'
 import { Sparkles, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -80,7 +81,7 @@ export function OpsxNewRoute() {
         })
 
         const terminalArea = navController.getAreaForPath('/terminal')
-        navController.push(terminalArea, '/terminal', null)
+        void vtNavController.push(terminalArea, '/terminal', null)
         requestClose()
       }}
     >

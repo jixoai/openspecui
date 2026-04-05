@@ -1,6 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { ReactNode } from 'react'
+import {
+  forwardRef,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ForwardedRef,
+  type ReactNode,
+} from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { GitEntryDetailPanel } from './git-panel-detail'
@@ -18,21 +25,51 @@ vi.mock('@/lib/trpc', () => ({
 }))
 
 vi.mock('@/components/tabs', () => ({
-  Tabs: ({
-    tabs,
-    selectedTab,
-    onTabChange,
-  }: {
-    tabs: Array<{ id: string; label: string; content: ReactNode }>
-    selectedTab?: string
-    onTabChange?: (id: string) => void
-  }) => {
+  Tabs: forwardRef(function MockTabs(
+    {
+      tabs,
+      selectedTab,
+      onTabChange,
+    }: {
+      tabs: Array<{ id: string; label: string; content: ReactNode }>
+      selectedTab?: string
+      onTabChange?: (id: string) => void
+    },
+    ref: ForwardedRef<{
+      root: HTMLElement | null
+      getTrigger: (tabId: string) => HTMLElement | null
+      getPanel: (tabId: string) => HTMLElement | null
+      getActiveTabId: () => string | null
+    }>
+  ) {
     const activeTab = tabs.find((tab) => tab.id === selectedTab) ?? tabs[0] ?? null
+    const rootRef = useRef<HTMLDivElement | null>(null)
+    const triggerRefs = useRef(new Map<string, HTMLButtonElement | null>())
+    const panelRefs = useRef(new Map<string, HTMLDivElement | null>())
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        root: rootRef.current,
+        getTrigger: (tabId: string) => triggerRefs.current.get(tabId) ?? null,
+        getPanel: (tabId: string) => panelRefs.current.get(tabId) ?? null,
+        getActiveTabId: () => activeTab?.id ?? null,
+      }),
+      [activeTab?.id]
+    )
+
     return (
-      <div data-testid="tabs" data-active-tab={activeTab?.id ?? ''}>
+      <div ref={rootRef} data-testid="tabs" data-active-tab={activeTab?.id ?? ''}>
         <div className="tabs-strip">
           {tabs.map((tab) => (
-            <button key={tab.id} type="button" onClick={() => onTabChange?.(tab.id)}>
+            <button
+              key={tab.id}
+              ref={(node) => {
+                triggerRefs.current.set(tab.id, node)
+              }}
+              type="button"
+              onClick={() => onTabChange?.(tab.id)}
+            >
               {tab.label}
             </button>
           ))}
@@ -40,6 +77,9 @@ vi.mock('@/components/tabs', () => ({
         {tabs.map((tab) => (
           <div
             key={tab.id}
+            ref={(node) => {
+              panelRefs.current.set(tab.id, node)
+            }}
             data-tab-panel={tab.id}
             hidden={tab.id !== activeTab?.id}
             aria-hidden={tab.id !== activeTab?.id}
@@ -49,6 +89,26 @@ vi.mock('@/components/tabs', () => ({
         ))}
       </div>
     )
+  }),
+}))
+
+vi.mock('@/lib/view-transitions/tabs', () => ({
+  useRoutedCarouselTabs: ({
+    tabs,
+    initialTab,
+  }: {
+    tabs: Array<{ id: string }>
+    initialTab?: string
+  }) => {
+    const tabsRef = useRef(null)
+    const [selectedTab, setSelectedTab] = useState(initialTab ?? tabs[0]?.id ?? '')
+
+    return {
+      tabsRef,
+      selectedTab,
+      setSelectedTab,
+      onTabChange: (nextTabId: string) => setSelectedTab(nextTabId),
+    }
   },
 }))
 
@@ -327,60 +387,13 @@ describe('GitEntryDetailPanel', () => {
   })
 
   it('defers file-tree scroll until the diff tab is active', async () => {
-    const scrollStates: string[] = []
-    const originalScrollIntoViewDescriptor = Object.getOwnPropertyDescriptor(
-      HTMLElement.prototype,
-      'scrollIntoView'
-    )
-    const originalScrollToDescriptor = Object.getOwnPropertyDescriptor(
-      HTMLElement.prototype,
-      'scrollTo'
-    )
-    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
-    const recordScrollState = () => {
-      scrollStates.push(screen.getByTestId('tabs').getAttribute('data-active-tab') ?? '')
-    }
-    const scrollIntoViewMock = vi.fn(function mockScrollIntoView() {
-      recordScrollState()
+    const frameStates: string[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frameStates.push(screen.getByTestId('tabs').getAttribute('data-active-tab') ?? '')
+      callback(16)
+      return 1
     })
-    const scrollToMock = vi.fn(function mockScrollTo() {
-      recordScrollState()
-    })
-
-    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
-      configurable: true,
-      writable: true,
-      value: scrollIntoViewMock,
-    })
-    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
-      configurable: true,
-      writable: true,
-      value: scrollToMock,
-    })
-    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
-      configurable: true,
-      writable: true,
-      value: function mockGetBoundingClientRect(this: HTMLElement) {
-        if (this.tagName === 'SECTION') {
-          const title = this.querySelector('header span')?.textContent
-          if (title === baseFile.displayPath) {
-            return {
-              x: 0,
-              y: 240,
-              width: 600,
-              height: 180,
-              top: 240,
-              right: 600,
-              bottom: 420,
-              left: 0,
-              toJSON: () => ({}),
-            } satisfies DOMRect
-          }
-        }
-
-        return originalGetBoundingClientRect.call(this)
-      },
-    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
 
     renderWithQueryClient(
       <GitEntryDetailPanel
@@ -393,35 +406,18 @@ describe('GitEntryDetailPanel', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: /File Tree/i }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('tabs')).toHaveAttribute('data-active-tab', 'files')
+    })
+
     fireEvent.click(screen.getByRole('treeitem', { name: /src\/git-panel\.ts/i }))
 
     await waitFor(() => {
-      expect(scrollStates.length).toBeGreaterThan(0)
+      expect(frameStates.length).toBeGreaterThan(0)
     })
 
-    expect(scrollStates.every((state) => state === 'diff')).toBe(true)
-
-    if (originalScrollIntoViewDescriptor) {
-      Object.defineProperty(
-        HTMLElement.prototype,
-        'scrollIntoView',
-        originalScrollIntoViewDescriptor
-      )
-    } else {
-      delete (HTMLElement.prototype as Partial<typeof HTMLElement.prototype>).scrollIntoView
-    }
-
-    if (originalScrollToDescriptor) {
-      Object.defineProperty(HTMLElement.prototype, 'scrollTo', originalScrollToDescriptor)
-    } else {
-      delete (HTMLElement.prototype as Partial<typeof HTMLElement.prototype>).scrollTo
-    }
-
-    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
-      configurable: true,
-      writable: true,
-      value: originalGetBoundingClientRect,
-    })
+    expect(frameStates.every((state) => state === 'diff')).toBe(true)
   })
 
   it('switches to dual-pane layout when the container is wide enough', async () => {

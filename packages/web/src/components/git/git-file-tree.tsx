@@ -4,7 +4,6 @@ import { FileCode2, FolderClosed, FolderOpen } from 'lucide-react'
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -21,7 +20,6 @@ import {
 import { DiffStat } from './git-shared'
 
 const TREE_CONNECTOR_COLUMN_WIDTH = 14
-const TREE_BRANCH_END_INSET = 3.5
 const EMPTY_VISIBILITY_RATIO_MAP = new Map<string, number>()
 
 function changeTypeTone(changeType: GitEntryFileSummary['changeType']): string {
@@ -48,20 +46,6 @@ function renderFileLabel(file: GitEntryFileSummary, fallback: string): string {
   return `${previousName} -> ${fallback}`
 }
 
-function areSetsEqual(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
-  if (left.size !== right.size) {
-    return false
-  }
-
-  for (const value of left) {
-    if (!right.has(value)) {
-      return false
-    }
-  }
-
-  return true
-}
-
 function TreeConnector({ guideMask }: { guideMask: boolean[] }) {
   const connectorWidth = guideMask.length * TREE_CONNECTOR_COLUMN_WIDTH
 
@@ -74,148 +58,9 @@ function TreeConnector({ guideMask }: { guideMask: boolean[] }) {
   )
 }
 
-interface TreeConnectorMetric {
-  key: string
-  top: number
-  bottom: number
-  midY: number
-  level: number
-  parentKey: string | null
-  isLastSibling: boolean
-  visibilityRatio: number
-}
-
 export interface GitFileTreeRevealRequest {
   fileId: string
   nonce: number
-}
-
-function buildEndElbowGeometry(options: {
-  x: number
-  parentMidY: number
-  childMidY: number
-  horizontalEndX: number
-}) {
-  const { x, parentMidY, childMidY, horizontalEndX } = options
-  const elbowRadius = Math.min(
-    3,
-    Math.max(1.75, horizontalEndX - x - 1, Math.min(4, childMidY - parentMidY))
-  )
-  const startY = Math.max(parentMidY, childMidY - elbowRadius)
-  const cornerX = Math.min(horizontalEndX, x + elbowRadius)
-
-  return {
-    startY,
-    path: [
-      `M${x} ${startY}`,
-      `Q${x} ${childMidY} ${cornerX} ${childMidY}`,
-      horizontalEndX > cornerX ? `H${horizontalEndX}` : '',
-    ]
-      .filter(Boolean)
-      .join(''),
-  }
-}
-
-function buildBranchPath(options: { x: number; midY: number; horizontalEndX: number }): string {
-  const { x, midY, horizontalEndX } = options
-  return `M${x} ${midY}H${horizontalEndX}`
-}
-
-function TreeConnectorOverlay({
-  metrics,
-  width,
-  height,
-}: {
-  metrics: TreeConnectorMetric[]
-  width: number
-  height: number
-}) {
-  if (metrics.length === 0 || width <= 0 || height <= 0) {
-    return null
-  }
-
-  const rowsByKey = new Map(metrics.map((metric) => [metric.key, metric]))
-  const childrenByParentKey = new Map<string, TreeConnectorMetric[]>()
-
-  for (const metric of metrics) {
-    if (!metric.parentKey) continue
-
-    const group = childrenByParentKey.get(metric.parentKey) ?? []
-    group.push(metric)
-    childrenByParentKey.set(metric.parentKey, group)
-  }
-
-  return (
-    <svg
-      aria-hidden="true"
-      className="text-border/50 pointer-events-none absolute inset-0 block h-full w-full overflow-visible"
-      style={{ height: `${height}px` }}
-      viewBox={`0 0 ${width} ${height}`}
-      preserveAspectRatio="none"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {Array.from(childrenByParentKey.entries()).map(([parentKey, children]) => {
-        const parentMetric = rowsByKey.get(parentKey)
-        if (!parentMetric || children.length === 0) {
-          return null
-        }
-
-        const firstChild = children[0]
-        const lastChild = children.at(-1)
-        if (!firstChild || !lastChild) {
-          return null
-        }
-
-        const x =
-          (firstChild.level - 2) * TREE_CONNECTOR_COLUMN_WIDTH +
-          TREE_CONNECTOR_COLUMN_WIDTH / 2 +
-          0.5
-        const horizontalEndX =
-          (firstChild.level - 1) * TREE_CONNECTOR_COLUMN_WIDTH - TREE_BRANCH_END_INSET
-        const endElbow = buildEndElbowGeometry({
-          x,
-          parentMidY: parentMetric.midY,
-          childMidY: lastChild.midY,
-          horizontalEndX,
-        })
-
-        return (
-          <g key={`group-${parentKey}`}>
-            {endElbow.startY > parentMetric.midY ? (
-              <path
-                d={`M${x} ${parentMetric.midY}V${endElbow.startY}`}
-                opacity={0.34}
-                vectorEffect="non-scaling-stroke"
-              />
-            ) : null}
-
-            {children.slice(0, -1).map((child) => (
-              <path
-                key={`branch-${child.key}`}
-                d={buildBranchPath({
-                  x,
-                  midY: child.midY,
-                  horizontalEndX,
-                })}
-                opacity={0.22 + child.visibilityRatio * 0.34}
-                vectorEffect="non-scaling-stroke"
-              />
-            ))}
-
-            <path
-              d={endElbow.path}
-              opacity={0.3 + lastChild.visibilityRatio * 0.32}
-              vectorEffect="non-scaling-stroke"
-            />
-          </g>
-        )
-      })}
-    </svg>
-  )
 }
 
 function GitFileTreeItem({
@@ -422,12 +267,8 @@ export function GitFileTree({
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(new Set())
   const treeRef = useRef<HTMLDivElement | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
-  const treeContentRef = useRef<HTMLDivElement | null>(null)
   const overlayItemNodesRef = useRef<Map<string, HTMLElement>>(new Map())
   const lastHandledRevealNonceRef = useRef<number | null>(null)
-  const [connectorMetrics, setConnectorMetrics] = useState<TreeConnectorMetric[]>([])
-  const [connectorWidth, setConnectorWidth] = useState(0)
-  const [connectorHeight, setConnectorHeight] = useState(0)
   const tree = useMemo(() => buildGitFileTreeModel(files, { projectDir }), [files, projectDir])
 
   const toggleDirectory = useCallback((key: string) => {
@@ -445,16 +286,6 @@ export function GitFileTree({
     () => buildGitFileTreeVisibleModel(tree, collapsedKeys, visibilityRatioByFileId),
     [collapsedKeys, tree, visibilityRatioByFileId]
   )
-
-  useEffect(() => {
-    setCollapsedKeys((current) => {
-      const next = new Set([...current].filter((key) => visibleModel.directoryKeys.has(key)))
-      if (areSetsEqual(current, next)) {
-        return current
-      }
-      return next
-    })
-  }, [visibleModel.directoryKeys])
 
   const { focusedKey, handleItemClick, handleItemFocus, handleItemKeyDown, registerItemRef } =
     useGitFileTreeNavigation({
@@ -515,65 +346,6 @@ export function GitFileTree({
     lastHandledRevealNonceRef.current = revealRequest.nonce
   }, [revealRequest, visibleModel.itemsByKey, visibleModel.keyByFileId, visibleModel.parentByKey])
 
-  useLayoutEffect(() => {
-    const contentNode = treeContentRef.current
-    if (!contentNode) {
-      setConnectorMetrics([])
-      setConnectorHeight(0)
-      return
-    }
-
-    const updateOverlay = () => {
-      const contentRect = contentNode.getBoundingClientRect()
-      const nextMetrics = visibleModel.items.flatMap<TreeConnectorMetric>((item) => {
-        if (item.guideMask.length === 0) {
-          return []
-        }
-
-        const node = overlayItemNodesRef.current.get(item.key)
-        if (!node) {
-          return []
-        }
-
-        const rowRect = node.getBoundingClientRect()
-        const top = rowRect.top - contentRect.top
-        const bottom = rowRect.bottom - contentRect.top
-
-        return [
-          {
-            key: item.key,
-            top,
-            bottom,
-            midY: top + rowRect.height / 2,
-            level: item.level,
-            parentKey: item.parentKey,
-            isLastSibling: item.isLastSibling,
-            visibilityRatio: item.visibilityRatio,
-          },
-        ]
-      })
-
-      setConnectorMetrics(nextMetrics)
-      setConnectorWidth(contentNode.clientWidth)
-      setConnectorHeight(contentNode.scrollHeight)
-    }
-
-    updateOverlay()
-
-    if (typeof ResizeObserver === 'undefined') {
-      return
-    }
-
-    const observer = new ResizeObserver(() => {
-      updateOverlay()
-    })
-
-    observer.observe(contentNode)
-    return () => {
-      observer.disconnect()
-    }
-  }, [visibleModel.items])
-
   if (files.length === 0) {
     return (
       <div className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm">
@@ -610,12 +382,7 @@ export function GitFileTree({
         }}
         className="scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2"
       >
-        <div ref={treeContentRef} className="relative">
-          <TreeConnectorOverlay
-            metrics={connectorMetrics}
-            width={connectorWidth}
-            height={connectorHeight}
-          />
+        <div className="relative">
           <GitFileTreeNodes
             nodes={tree}
             itemsByKey={visibleModel.itemsByKey}

@@ -31,6 +31,13 @@ vi.mock('@tanstack/react-router', () => ({
       {children}
     </a>
   ),
+  useLocation: () => ({
+    pathname: '/changes',
+    search: '',
+    hash: '',
+    state: null,
+  }),
+  useNavigate: () => vi.fn(),
 }))
 
 describe('ChangeList', () => {

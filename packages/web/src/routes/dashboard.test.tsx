@@ -64,6 +64,13 @@ vi.mock('@tanstack/react-router', () => ({
       {children}
     </a>
   ),
+  useLocation: () => ({
+    pathname: '/dashboard',
+    search: '',
+    hash: '',
+    state: null,
+  }),
+  useNavigate: () => vi.fn(),
 }))
 
 describe('Dashboard', () => {
@@ -466,6 +473,16 @@ describe('Dashboard', () => {
 
     fireEvent.click(screen.getByText('Open me').closest('button') as HTMLButtonElement)
 
-    expect(navControllerMock.push).toHaveBeenCalledWith('bottom', '/git/commit/deadbeef', null)
+    expect(navControllerMock.push).toHaveBeenCalledWith(
+      'bottom',
+      '/git/commit/deadbeef',
+      expect.objectContaining({
+        __vtHandoff: expect.objectContaining({
+          family: 'git',
+          entityId: 'deadbeef',
+          title: 'Open me',
+        }),
+      })
+    )
   })
 })

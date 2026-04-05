@@ -24,6 +24,7 @@ vi.mock('@/lib/trpc', () => ({
 
 vi.mock('@/lib/static-mode', () => ({
   isStaticMode: staticModeMock,
+  getBasePath: () => '/',
 }))
 
 vi.mock('@/lib/use-server-status', () => ({
@@ -60,6 +61,13 @@ vi.mock('@tanstack/react-router', () => ({
       {children}
     </a>
   ),
+  useLocation: () => ({
+    pathname: '/git/commit/abc12345',
+    search: '',
+    hash: '',
+    state: null,
+  }),
+  useNavigate: () => vi.fn(),
   useParams: () => useParamsMock(),
 }))
 

@@ -6,7 +6,7 @@ import type {
 } from '@openspecui/core'
 import type { Meta, StoryObj } from '@storybook/web-components-vite'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { expect, userEvent, waitFor, within } from 'storybook/test'
 
 import { renderReactStory } from '@/storybook/render-react-story'
@@ -230,7 +230,8 @@ function GitDetailObserverGuardStory({ width }: { width: number }) {
   )
   const originalObserverRef = useRef<typeof IntersectionObserver | null>(null)
   const originalScrollToRef = useRef<HTMLElement['scrollTo'] | null>(null)
-  const [treeRevealCallCount, setTreeRevealCallCount] = useState(0)
+  const treeRevealCallCountRef = useRef(0)
+  const outputRef = useRef<HTMLOutputElement | null>(null)
 
   useEffect(() => {
     originalObserverRef.current = window.IntersectionObserver
@@ -241,7 +242,10 @@ function GitDetailObserverGuardStory({ width }: { width: number }) {
       this: HTMLElement,
       ...args: Parameters<HTMLElement['scrollTo']>
     ) {
-      setTreeRevealCallCount((count) => count + 1)
+      treeRevealCallCountRef.current += 1
+      if (outputRef.current) {
+        outputRef.current.textContent = String(treeRevealCallCountRef.current)
+      }
       return originalScrollToRef.current?.apply(this, args)
     } as HTMLElement['scrollTo']
 
@@ -282,7 +286,9 @@ function GitDetailObserverGuardStory({ width }: { width: number }) {
             Emit file-48 visible
           </button>
         </div>
-        <output data-testid="tree-reveal-call-count">{treeRevealCallCount}</output>
+        <output ref={outputRef} data-testid="tree-reveal-call-count">
+          0
+        </output>
         <div
           data-testid="git-detail-story-shell"
           style={{

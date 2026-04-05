@@ -2,11 +2,15 @@ import { FolderEditorViewer } from '@/components/folder-editor-viewer'
 import { ArtifactOutputViewer } from '@/components/opsx/artifact-output-viewer'
 import { ChangeCommandBar } from '@/components/opsx/change-command-bar'
 import { Tabs, type Tab } from '@/components/tabs'
-import { navController } from '@/lib/nav-controller'
 import { buildOpsxComposeHref, type OpsxComposeActionId } from '@/lib/opsx-compose'
 import { useOpsxStatusSubscription } from '@/lib/use-opsx'
-import { useTabsStatusByQuery } from '@/lib/use-tabs-status-by-query'
-import { Link, useParams } from '@tanstack/react-router'
+import { VTLink, vtNavController } from '@/lib/view-transitions/navigation'
+import {
+  getSharedElementBinding,
+  readSharedElementHandoffState,
+} from '@/lib/view-transitions/shared-elements'
+import { useRoutedCarouselTabs } from '@/lib/view-transitions/tabs'
+import { useLocation, useParams } from '@tanstack/react-router'
 import {
   AlertCircle,
   AlertTriangle,
@@ -16,7 +20,7 @@ import {
   FolderTree,
   GitBranch,
 } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 
 function StatusBadge({ status }: { status: 'done' | 'ready' | 'blocked' }) {
   if (status === 'done') return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
@@ -26,7 +30,14 @@ function StatusBadge({ status }: { status: 'done' | 'ready' | 'blocked' }) {
 
 export function ChangeView() {
   const { changeId } = useParams({ from: '/changes/$changeId' })
+  const location = useLocation()
   const [refreshKey, setRefreshKey] = useState(0)
+  const headerRef = useRef<HTMLDivElement | null>(null)
+  const sharedDescriptor = useMemo(
+    () => ({ family: 'changes', entityId: changeId }) as const,
+    [changeId]
+  )
+  const handoff = readSharedElementHandoffState(location.state)
 
   const {
     data: status,
@@ -41,13 +52,13 @@ export function ChangeView() {
         changeId,
         artifactId,
       })
-      navController.activatePop(href)
+      vtNavController.activatePop(href)
     },
     [changeId]
   )
 
   const handleVerify = useCallback(() => {
-    navController.activatePop(`/opsx-verify?change=${encodeURIComponent(changeId)}`)
+    vtNavController.activatePop(`/opsx-verify?change=${encodeURIComponent(changeId)}`)
   }, [changeId])
 
   const handleRefresh = useCallback(() => {
@@ -77,10 +88,10 @@ export function ChangeView() {
     return status.artifacts.find((a) => a.status === 'ready')?.id ?? status.artifacts[0]?.id
   }, [status])
 
-  const { selectedTab, setSelectedTab } = useTabsStatusByQuery({
-    tabsId: 'artifact',
+  const { tabsRef, selectedTab, onTabChange } = useRoutedCarouselTabs({
+    queryKey: 'artifact',
     tabs,
-    initialTab: tabs[0]?.id,
+    initialTab: selectedArtifactId ?? tabs[0]?.id,
   })
 
   const doneCount = status?.artifacts.filter((a) => a.status === 'done').length ?? 0
@@ -90,6 +101,43 @@ export function ChangeView() {
     error?.message.includes(`Change "${changeId}" not found`)
 
   if (isLoading && !status) {
+    if (handoff) {
+      return (
+        <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+          <div className="flex items-center gap-4">
+            <VTLink
+              to="/changes"
+              vt={{ source: headerRef, sharedElements: sharedDescriptor }}
+              className="hover:bg-muted rounded-md p-2"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </VTLink>
+            <div
+              ref={headerRef}
+              {...getSharedElementBinding(sharedDescriptor, 'container')}
+              className="flex min-w-0 flex-col gap-1"
+            >
+              <h1 className="font-nav flex min-w-0 items-center gap-2 text-2xl font-bold">
+                <GitBranch
+                  {...getSharedElementBinding(sharedDescriptor, 'icon')}
+                  className="h-6 w-6 shrink-0"
+                />
+                <span {...getSharedElementBinding(sharedDescriptor, 'title')} className="truncate">
+                  {handoff.title ?? changeId}
+                </span>
+              </h1>
+              <p className="text-muted-foreground text-sm">
+                {handoff.subtitle ?? changeId} · Loading change status…
+              </p>
+            </div>
+          </div>
+          <div className="vt-detail-content route-loading animate-pulse rounded-lg border p-4">
+            Loading change status...
+          </div>
+        </div>
+      )
+    }
+
     return <div className="route-loading animate-pulse">Loading change status...</div>
   }
 
@@ -101,9 +149,9 @@ export function ChangeView() {
           Change not found in the current project.
         </div>
         <div>
-          <Link to="/changes" className="text-primary hover:underline">
+          <VTLink to="/changes" className="text-primary hover:underline">
             Back to Changes
-          </Link>
+          </VTLink>
         </div>
       </div>
     )
@@ -132,13 +180,26 @@ export function ChangeView() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">
-          <Link to="/changes" className="hover:bg-muted rounded-md p-2">
+          <VTLink
+            to="/changes"
+            vt={{ source: headerRef, sharedElements: sharedDescriptor }}
+            className="hover:bg-muted rounded-md p-2"
+          >
             <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <div className="flex flex-col gap-1">
+          </VTLink>
+          <div
+            ref={headerRef}
+            {...getSharedElementBinding(sharedDescriptor, 'container')}
+            className="flex min-w-0 flex-col gap-1"
+          >
             <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
-              <GitBranch className="h-6 w-6 shrink-0" />
-              {status.changeName}
+              <GitBranch
+                {...getSharedElementBinding(sharedDescriptor, 'icon')}
+                className="h-6 w-6 shrink-0"
+              />
+              <span {...getSharedElementBinding(sharedDescriptor, 'title')}>
+                {status.changeName}
+              </span>
             </h1>
             <p className="text-muted-foreground text-sm">
               Schema: {status.schemaName} · {doneCount}/{totalCount} artifacts
@@ -154,13 +215,15 @@ export function ChangeView() {
         />
       </div>
 
-      {/* Tabs: artifacts + folder */}
-      <Tabs
-        tabs={tabs}
-        selectedTab={selectedTab}
-        onTabChange={setSelectedTab}
-        className="min-h-0 flex-1"
-      />
+      <div className="vt-detail-content flex min-h-0 flex-1 flex-col">
+        <Tabs
+          ref={tabsRef}
+          tabs={tabs}
+          selectedTab={selectedTab}
+          onTabChange={onTabChange}
+          className="min-h-0 flex-1"
+        />
+      </div>
     </div>
   )
 }

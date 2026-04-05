@@ -33,6 +33,18 @@ interface Unsubscribable {
 /** Module-level cache: stores last received value per subscription key for instant re-mount */
 const subscriptionCache = new Map<string, unknown>()
 
+export function primeSubscriptionCache<T>(cacheKey: string, data: T): void {
+  subscriptionCache.set(cacheKey, data)
+}
+
+export function getSpecSubscriptionCacheKey(id: string): string {
+  return `spec.subscribeOne:${id}`
+}
+
+export function getArchiveSubscriptionCacheKey(id: string): string {
+  return `archive.subscribeOne:${id}`
+}
+
 /**
  * 通用订阅 Hook (支持静态模式)
  *
@@ -147,7 +159,7 @@ export function useSpecSubscription(id: string): SubscriptionState<Spec | null> 
       ),
     () => StaticProvider.getSpec(id),
     [id],
-    `spec.subscribeOne:${id}`
+    getSpecSubscriptionCacheKey(id)
   )
 }
 
@@ -232,7 +244,7 @@ export function useArchiveSubscription(id: string): SubscriptionState<ArchivedCh
       ),
     () => StaticProvider.getArchive(id),
     [id],
-    `archive.subscribeOne:${id}`
+    getArchiveSubscriptionCacheKey(id)
   )
 }
 

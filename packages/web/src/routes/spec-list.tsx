@@ -1,6 +1,7 @@
 import { formatRelativeTime } from '@/lib/format-time'
 import { useSpecsSubscription } from '@/lib/use-subscription'
-import { Link } from '@tanstack/react-router'
+import { VTLink } from '@/lib/view-transitions/navigation'
+import { getSharedElementBinding } from '@/lib/view-transitions/shared-elements'
 import { ChevronRight, FileText } from 'lucide-react'
 
 export function SpecList() {
@@ -18,26 +19,49 @@ export function SpecList() {
       </h1>
 
       <div className="border-border divide-border divide-y rounded-lg border">
-        {specs?.map((spec) => (
-          <Link
-            key={spec.id}
-            to="/specs/$specId"
-            params={{ specId: spec.id }}
-            className="hover:bg-muted/50 flex items-center justify-between p-4"
-          >
-            <div className="flex items-center gap-3">
-              <FileText className="text-muted-foreground h-5 w-5" />
-              <div>
-                <div className="font-medium">{spec.name}</div>
-                <div className="text-muted-foreground text-sm">
-                  {spec.id}
-                  {spec.updatedAt > 0 && <> · {formatRelativeTime(spec.updatedAt)}</>}
+        {specs?.map((spec) => {
+          const sharedDescriptor = { family: 'specs', entityId: spec.id } as const
+
+          return (
+            <VTLink
+              key={spec.id}
+              to="/specs/$specId"
+              params={{ specId: spec.id }}
+              state={(prev) => ({
+                ...prev,
+                __vtHandoff: {
+                  family: 'specs',
+                  entityId: spec.id,
+                  title: spec.name,
+                  subtitle: spec.id,
+                },
+              })}
+              vt={{ sharedElements: sharedDescriptor }}
+              {...getSharedElementBinding(sharedDescriptor, 'container')}
+              className="hover:bg-muted/50 flex items-center justify-between p-4"
+            >
+              <div className="flex items-center gap-3">
+                <FileText
+                  {...getSharedElementBinding(sharedDescriptor, 'icon')}
+                  className="text-muted-foreground h-5 w-5"
+                />
+                <div>
+                  <div
+                    {...getSharedElementBinding(sharedDescriptor, 'title')}
+                    className="font-medium"
+                  >
+                    {spec.name}
+                  </div>
+                  <div className="text-muted-foreground text-sm">
+                    {spec.id}
+                    {spec.updatedAt > 0 && <> · {formatRelativeTime(spec.updatedAt)}</>}
+                  </div>
                 </div>
               </div>
-            </div>
-            <ChevronRight className="text-muted-foreground h-4 w-4" />
-          </Link>
-        ))}
+              <ChevronRight className="text-muted-foreground h-4 w-4" />
+            </VTLink>
+          )
+        })}
         {specs?.length === 0 && (
           <div className="text-muted-foreground p-4 text-center">
             No specs found. Create a spec in <code>openspec/specs/</code>

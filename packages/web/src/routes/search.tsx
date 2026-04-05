@@ -1,6 +1,7 @@
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
 import { navController } from '@/lib/nav-controller'
 import { useSearch } from '@/lib/use-search'
+import { vtNavController } from '@/lib/view-transitions/navigation'
 import { useLocation } from '@tanstack/react-router'
 import { Archive, FileText, GitBranch, Loader2, Search } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
@@ -138,7 +139,7 @@ export function SearchRoute() {
                   className="hover:bg-muted/50 flex w-full min-w-0 flex-col items-start gap-2 p-3 text-left"
                   onClick={() => {
                     const targetArea = navController.getAreaForPath(hit.href)
-                    navController.push(targetArea, hit.href, null)
+                    void vtNavController.push(targetArea, hit.href, null)
                     requestClose()
                   }}
                 >

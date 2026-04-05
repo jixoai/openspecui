@@ -1,20 +1,23 @@
 import { GitEntryDetailPanel } from '@/components/git/git-panel-detail'
-import { DiffStat, GitFilesBadge, formatRelatedChanges } from '@/components/git/git-shared'
+import {
+  DiffStat,
+  formatRelatedChanges,
+  getGitEntrySharedDescriptor,
+  GitFilesBadge,
+} from '@/components/git/git-shared'
 import { isStaticMode } from '@/lib/static-mode'
 import { trpcClient } from '@/lib/trpc'
 import { useServerStatus } from '@/lib/use-server-status'
+import { VTLink } from '@/lib/view-transitions/navigation'
+import {
+  getSharedElementBinding,
+  readSharedElementHandoffState,
+} from '@/lib/view-transitions/shared-elements'
 import type { GitEntrySelector } from '@openspecui/core'
 import { useQuery } from '@tanstack/react-query'
-import { Link, useParams } from '@tanstack/react-router'
+import { useLocation, useParams } from '@tanstack/react-router'
 import { AlertCircle, ArrowLeft, GitCommitHorizontal, LoaderCircle } from 'lucide-react'
-
-function entryIcon(selector: GitEntrySelector) {
-  return selector.type === 'commit' ? (
-    <GitCommitHorizontal className="h-5 w-5 shrink-0 text-sky-600 dark:text-sky-300" />
-  ) : (
-    <LoaderCircle className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-300" />
-  )
-}
+import { useMemo, useRef } from 'react'
 
 function entrySubtitle(selector: GitEntrySelector, relatedChanges: string[]): string {
   if (selector.type === 'commit') {
@@ -25,7 +28,11 @@ function entrySubtitle(selector: GitEntrySelector, relatedChanges: string[]): st
 
 function GitEntryView({ selector }: { selector: GitEntrySelector }) {
   const staticMode = isStaticMode()
+  const location = useLocation()
   const { projectDir } = useServerStatus()
+  const headerRef = useRef<HTMLDivElement | null>(null)
+  const sharedDescriptor = useMemo(() => getGitEntrySharedDescriptor(selector), [selector])
+  const handoff = readSharedElementHandoffState(location.state)
   const shellQuery = useQuery({
     queryKey:
       selector.type === 'commit'
@@ -41,6 +48,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
 
   const entry = shellQuery.data?.entry ?? null
   const files = shellQuery.data?.files ?? []
+  const EntryIcon = selector.type === 'commit' ? GitCommitHorizontal : LoaderCircle
 
   if (staticMode) {
     return (
@@ -52,6 +60,47 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
   }
 
   if (shellQuery.isLoading && !entry) {
+    if (handoff) {
+      return (
+        <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+          <div className="flex items-start gap-4">
+            <VTLink
+              to="/git"
+              vt={{ source: headerRef, sharedElements: sharedDescriptor }}
+              className="hover:bg-muted rounded-md p-2"
+              aria-label="Back to commits"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </VTLink>
+            <div
+              ref={headerRef}
+              {...getSharedElementBinding(sharedDescriptor, 'container')}
+              className="min-w-0 space-y-1"
+            >
+              <h1 className="font-nav flex flex-wrap items-start gap-2 text-2xl font-bold">
+                <EntryIcon
+                  {...getSharedElementBinding(sharedDescriptor, 'icon')}
+                  className={`h-5 w-5 shrink-0 ${selector.type === 'commit' ? 'text-sky-600 dark:text-sky-300' : 'text-amber-600 dark:text-amber-300'}`}
+                />
+                <span
+                  {...getSharedElementBinding(sharedDescriptor, 'title')}
+                  className="min-w-0 whitespace-normal [overflow-wrap:anywhere]"
+                >
+                  {handoff.title ?? (selector.type === 'commit' ? selector.hash : 'working tree')}
+                </span>
+              </h1>
+              <p className="text-muted-foreground whitespace-normal text-sm [overflow-wrap:anywhere]">
+                {handoff.subtitle ?? 'Loading git entry…'}
+              </p>
+            </div>
+          </div>
+          <div className="vt-detail-content route-loading animate-pulse rounded-lg border p-4">
+            Loading commit detail...
+          </div>
+        </div>
+      )
+    }
+
     return <div className="route-loading animate-pulse">Loading commit detail...</div>
   }
 
@@ -63,9 +112,9 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
           Error loading commit detail: {shellQuery.error.message}
         </div>
         <div>
-          <Link to="/git" className="text-primary hover:underline">
+          <VTLink to="/git" className="text-primary hover:underline">
             Back to Commits
-          </Link>
+          </VTLink>
         </div>
       </div>
     )
@@ -79,9 +128,9 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
           Commit detail is unavailable in the current project.
         </div>
         <div>
-          <Link to="/git" className="text-primary hover:underline">
+          <VTLink to="/git" className="text-primary hover:underline">
             Back to Commits
-          </Link>
+          </VTLink>
         </div>
       </div>
     )
@@ -91,13 +140,28 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-4">
-          <Link to="/git" className="hover:bg-muted rounded-md p-2" aria-label="Back to commits">
+          <VTLink
+            to="/git"
+            vt={{ source: headerRef, sharedElements: sharedDescriptor }}
+            className="hover:bg-muted rounded-md p-2"
+            aria-label="Back to commits"
+          >
             <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <div className="min-w-0 space-y-1">
+          </VTLink>
+          <div
+            ref={headerRef}
+            {...getSharedElementBinding(sharedDescriptor, 'container')}
+            className="min-w-0 space-y-1"
+          >
             <h1 className="font-nav flex flex-wrap items-start gap-2 text-2xl font-bold">
-              {entryIcon(selector)}
-              <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">
+              <EntryIcon
+                {...getSharedElementBinding(sharedDescriptor, 'icon')}
+                className={`h-5 w-5 shrink-0 ${selector.type === 'commit' ? 'text-sky-600 dark:text-sky-300' : 'text-amber-600 dark:text-amber-300'}`}
+              />
+              <span
+                {...getSharedElementBinding(sharedDescriptor, 'title')}
+                className="min-w-0 whitespace-normal [overflow-wrap:anywhere]"
+              >
                 {entry.title}
               </span>
             </h1>
@@ -112,15 +176,17 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
         </div>
       </div>
 
-      <GitEntryDetailPanel
-        selector={selector}
-        entry={entry}
-        files={files}
-        projectDir={projectDir}
-        isLoading={shellQuery.isLoading || shellQuery.isFetching}
-        error={shellQuery.error instanceof Error ? shellQuery.error : null}
-        showEntrySummary={false}
-      />
+      <div className="vt-detail-content flex min-h-0 flex-1 flex-col">
+        <GitEntryDetailPanel
+          selector={selector}
+          entry={entry}
+          files={files}
+          projectDir={projectDir}
+          isLoading={shellQuery.isLoading || shellQuery.isFetching}
+          error={shellQuery.error instanceof Error ? shellQuery.error : null}
+          showEntrySummary={false}
+        />
+      </div>
     </div>
   )
 }

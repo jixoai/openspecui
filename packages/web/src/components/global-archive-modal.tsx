@@ -1,6 +1,6 @@
 import { useArchiveModal } from '@/lib/archive-modal-context'
 import { useCliRunner } from '@/lib/use-cli-runner'
-import { useNavigate } from '@tanstack/react-router'
+import { useVTHrefNavigate } from '@/lib/view-transitions/navigation'
 import { Archive, CheckCircle, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { CliTerminal } from './cli-terminal'
@@ -10,7 +10,7 @@ import { Dialog } from './dialog'
  * 全局 Archive Modal（单一对话框，点击 Archive 后直接串行 validate -> archive）
  */
 export function GlobalArchiveModal() {
-  const navigate = useNavigate()
+  const navigateByHref = useVTHrefNavigate()
   const { state, closeArchiveModal } = useArchiveModal()
   const { open, changeId, changeName } = state
 
@@ -103,7 +103,7 @@ export function GlobalArchiveModal() {
           <button
             onClick={() => {
               handleClose()
-              navigate({ to: '/archive/$changeId', params: { changeId: successArchiveId } })
+              void navigateByHref({ href: `/archive/${encodeURIComponent(successArchiveId)}` })
             }}
             className="bg-primary text-primary-foreground rounded-md px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!successArchiveId}

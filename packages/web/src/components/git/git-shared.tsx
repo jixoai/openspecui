@@ -1,11 +1,17 @@
 import type { DashboardGitAutoRefreshPreset } from '@/lib/dashboard-git'
 import { getDashboardGitEntryTimestamp } from '@/lib/dashboard-git'
 import { formatDateTime, formatRelativeTime } from '@/lib/format-time'
+import {
+  getSharedElementBinding,
+  type SharedElementDescriptor,
+  type SharedElementHandoff,
+} from '@/lib/view-transitions/shared-elements'
 import type {
   DashboardGitDiffStats,
   DashboardGitEntry,
   DashboardGitWorktree,
   GitEntryFileDiff,
+  GitEntrySelector,
   GitWorktreeSummary,
 } from '@openspecui/core'
 import {
@@ -76,6 +82,31 @@ export function GitAutoRefreshPresetIcon({ preset }: { preset: DashboardGitAutoR
   return <ChevronDown className="h-3.5 w-3.5" />
 }
 
+export function getGitEntryEntityId(entry: DashboardGitEntry | GitEntrySelector): string {
+  return entry.type === 'commit' ? entry.hash : 'uncommitted'
+}
+
+export function getGitEntrySharedDescriptor(
+  entry: DashboardGitEntry | GitEntrySelector
+): SharedElementDescriptor {
+  return {
+    family: 'git',
+    entityId: getGitEntryEntityId(entry),
+  }
+}
+
+export function getGitEntrySharedHandoff(entry: DashboardGitEntry): SharedElementHandoff {
+  return {
+    family: 'git',
+    entityId: getGitEntryEntityId(entry),
+    title: entry.title,
+    subtitle:
+      entry.type === 'commit'
+        ? `${entry.hash.slice(0, 8)} · ${formatRelatedChanges(entry.relatedChanges)}`
+        : `working tree · ${formatRelatedChanges(entry.relatedChanges)}`,
+  }
+}
+
 export function GitEntryRow({
   entry,
   selected = false,
@@ -83,7 +114,7 @@ export function GitEntryRow({
 }: {
   entry: DashboardGitEntry
   selected?: boolean
-  onSelect?: (entry: DashboardGitEntry) => void
+  onSelect?: (entry: DashboardGitEntry, sourceElement: HTMLElement) => void
 }) {
   const isCommit = entry.type === 'commit'
   const timestamp = getDashboardGitEntryTimestamp(entry)
@@ -93,11 +124,13 @@ export function GitEntryRow({
       ? 'unknown time'
       : 'working tree'
   const timeTooltip = timestamp ? formatDateTime(timestamp) : undefined
+  const sharedDescriptor = getGitEntrySharedDescriptor(entry)
 
   return (
     <button
       type="button"
-      onClick={() => onSelect?.(entry)}
+      onClick={(event) => onSelect?.(entry, event.currentTarget)}
+      {...getSharedElementBinding(sharedDescriptor, 'container')}
       className={`block w-full min-w-0 rounded-md border px-2 py-1.5 text-left ${
         isCommit ? 'bg-sky-500/7 border-sky-500/30' : 'bg-amber-500/7 border-amber-500/30'
       } ${selected ? 'ring-primary ring-1' : ''}`}
@@ -106,11 +139,19 @@ export function GitEntryRow({
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 text-xs font-medium">
             {isCommit ? (
-              <GitCommitHorizontal className="h-3.5 w-3.5 text-sky-600 dark:text-sky-300" />
+              <GitCommitHorizontal
+                {...getSharedElementBinding(sharedDescriptor, 'icon')}
+                className="h-3.5 w-3.5 text-sky-600 dark:text-sky-300"
+              />
             ) : (
-              <LoaderCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-300" />
+              <LoaderCircle
+                {...getSharedElementBinding(sharedDescriptor, 'icon')}
+                className="h-3.5 w-3.5 text-amber-600 dark:text-amber-300"
+              />
             )}
-            <span className="truncate">{entry.title}</span>
+            <span {...getSharedElementBinding(sharedDescriptor, 'title')} className="truncate">
+              {entry.title}
+            </span>
           </div>
           <div className="text-muted-foreground truncate text-[11px]">
             {isCommit ? entry.hash.slice(0, 8) : 'working tree'} ·{' '}

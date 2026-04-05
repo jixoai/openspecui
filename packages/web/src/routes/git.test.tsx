@@ -65,8 +65,26 @@ vi.mock('@/lib/use-dashboard', () => ({
 
 vi.mock('@/components/git/git-shared', () => ({
   GitAutoRefreshPresetIcon: () => <span data-testid="git-refresh-icon">icon</span>,
-  GitEntryRow: ({ entry, onSelect }: { entry: { title: string }; onSelect?: () => void }) => (
-    <button type="button" onClick={onSelect}>
+  getGitEntrySharedDescriptor: (entry: { type: string; hash?: string }) => ({
+    family: 'git',
+    entityId: entry.type === 'commit' ? (entry.hash ?? 'unknown') : 'uncommitted',
+  }),
+  getGitEntrySharedHandoff: (entry: { type: string; hash?: string; title: string }) => ({
+    family: 'git',
+    entityId: entry.type === 'commit' ? (entry.hash ?? 'unknown') : 'uncommitted',
+    title: entry.title,
+  }),
+  GitEntryRow: ({
+    entry,
+    onSelect,
+  }: {
+    entry: { type: string; hash?: string; title: string }
+    onSelect?: (
+      entry: { type: string; hash?: string; title: string },
+      sourceElement: HTMLElement
+    ) => void
+  }) => (
+    <button type="button" onClick={(event) => onSelect?.(entry, event.currentTarget)}>
       {entry.title}
     </button>
   ),
@@ -209,6 +227,16 @@ describe('GitRoute', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'feat: add git panel' }))
 
-    expect(navPushMock).toHaveBeenCalledWith('bottom', '/git/commit/abc12345', null)
+    expect(navPushMock).toHaveBeenCalledWith(
+      'bottom',
+      '/git/commit/abc12345',
+      expect.objectContaining({
+        __vtHandoff: expect.objectContaining({
+          family: 'git',
+          entityId: 'abc12345',
+          title: 'feat: add git panel',
+        }),
+      })
+    )
   })
 })

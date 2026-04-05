@@ -1,9 +1,8 @@
-import { navController } from '@/lib/nav-controller'
 import { getBasePath, isStaticMode } from '@/lib/static-mode'
 import { useDarkMode } from '@/lib/use-dark-mode'
 import { useNavLayout } from '@/lib/use-nav-controller'
 import { useServerStatus } from '@/lib/use-server-status'
-import { Link } from '@tanstack/react-router'
+import { VTLink, vtNavController } from '@/lib/view-transitions/navigation'
 import { Menu, Search, X } from 'lucide-react'
 import { useState } from 'react'
 import { AreaNav } from './area-nav'
@@ -38,7 +37,7 @@ export function MobileHeader() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => navController.activatePop('/search')}
+            onClick={() => vtNavController.activatePop('/search')}
             className="hover:bg-muted border-primary rounded-md border p-1.5"
             aria-label="Open search"
           >
@@ -81,19 +80,19 @@ export function MobileHeader() {
                 <ul className="flex-1 space-y-1">
                   {navItems.map((item) => (
                     <li key={item.to}>
-                      <Link
+                      <VTLink
                         to={item.to}
                         onClick={closeMenu}
                         className="hover:bg-muted [&.active]:bg-primary [&.active]:text-primary-foreground flex items-center gap-2 rounded-md px-3 py-2"
                       >
                         <item.icon className="h-4 w-4 shrink-0" />
                         <span className="font-nav text-base tracking-[0.04em]">{item.label}</span>
-                      </Link>
+                      </VTLink>
                     </li>
                   ))}
                 </ul>
                 <div className="border-border space-y-1 border-t pt-4">
-                  <Link
+                  <VTLink
                     to={settingsItem.to}
                     onClick={closeMenu}
                     className="hover:bg-muted [&.active]:bg-primary [&.active]:text-primary-foreground flex items-center gap-2 rounded-md px-3 py-2"
@@ -102,7 +101,7 @@ export function MobileHeader() {
                     <span className="font-nav text-base tracking-[0.04em]">
                       {settingsItem.label}
                     </span>
-                  </Link>
+                  </VTLink>
                 </div>
               </>
             ) : (

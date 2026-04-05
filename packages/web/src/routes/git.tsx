@@ -1,4 +1,10 @@
-import { GitAutoRefreshPresetIcon, GitEntryRow, WorktreeRow } from '@/components/git/git-shared'
+import {
+  getGitEntrySharedDescriptor,
+  getGitEntrySharedHandoff,
+  GitAutoRefreshPresetIcon,
+  GitEntryRow,
+  WorktreeRow,
+} from '@/components/git/git-shared'
 import { Select, type SelectOption } from '@/components/select'
 import {
   getDashboardGitAutoRefreshIntervalMs,
@@ -13,7 +19,6 @@ import {
   buildGitWorktreeHandoffHref,
   GIT_ENTRY_PAGE_SIZE,
 } from '@/lib/git-panel'
-import { navController } from '@/lib/nav-controller'
 import { isStaticMode } from '@/lib/static-mode'
 import { trpcClient } from '@/lib/trpc'
 import {
@@ -21,6 +26,8 @@ import {
   removeDetachedDashboardWorktree,
   useDashboardGitTaskStatusSubscription,
 } from '@/lib/use-dashboard'
+import { vtNavController } from '@/lib/view-transitions/navigation'
+import { withSharedElementHandoffState } from '@/lib/view-transitions/shared-elements'
 import type { GitWorktreeSummary } from '@openspecui/core'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, ArrowRightLeft, FileCode2, GitBranch, RefreshCw } from 'lucide-react'
@@ -470,8 +477,16 @@ export function GitRoute() {
             <GitEntryRow
               key={entry.type === 'commit' ? entry.hash : `uncommitted:${entry.updatedAt ?? '0'}`}
               entry={entry}
-              onSelect={() => {
-                navController.push('bottom', buildGitEntryHrefFromEntry(entry), null)
+              onSelect={(selectedEntry, sourceElement) => {
+                void vtNavController.push(
+                  'bottom',
+                  buildGitEntryHrefFromEntry(selectedEntry),
+                  withSharedElementHandoffState(undefined, getGitEntrySharedHandoff(selectedEntry)),
+                  {
+                    source: sourceElement,
+                    sharedElements: getGitEntrySharedDescriptor(selectedEntry),
+                  }
+                )
               }}
             />
           ))}

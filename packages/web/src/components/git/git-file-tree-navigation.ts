@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type RefObject,
-} from 'react'
+import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 
 import type { GitFileTreeVisibleItem } from './git-file-tree-visible-items'
 
@@ -37,7 +29,7 @@ export function useGitFileTreeNavigation({
   items,
   itemsByKey,
   parentByKey,
-  treeRef,
+  treeRef: _treeRef,
   onToggleDirectory,
   onSelectFile,
 }: {
@@ -71,22 +63,6 @@ export function useGitFileTreeNavigation({
     setFocusedKey(key)
     itemRefs.current.get(key)?.focus()
   }, [])
-
-  useEffect(() => {
-    if (effectiveFocusedKey === focusedKey) {
-      return
-    }
-
-    setFocusedKey(effectiveFocusedKey)
-
-    if (
-      effectiveFocusedKey &&
-      treeRef.current &&
-      treeRef.current.contains(document.activeElement)
-    ) {
-      itemRefs.current.get(effectiveFocusedKey)?.focus()
-    }
-  }, [effectiveFocusedKey, focusedKey, treeRef])
 
   const handleItemFocus = useCallback((key: string) => {
     setFocusedKey(key)

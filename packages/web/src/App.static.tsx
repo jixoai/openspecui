@@ -9,6 +9,7 @@ import { createNavHistory } from './lib/nav-history'
 import { createStaticPopRouteTree, createStaticRouteTree } from './lib/route-tree-static'
 import { getBasePath } from './lib/static-mode'
 import { queryClient } from './lib/trpc'
+import { ViewTransitionsBootstrap } from './lib/view-transitions/bootstrap'
 
 const basepath = getBasePath()
 
@@ -24,7 +25,6 @@ const mainRoot = createRootRoute({
 const mainRouter = createRouter({
   routeTree: createStaticRouteTree(mainRoot),
   basepath,
-  defaultViewTransition: true,
 })
 
 const popRoot = createRootRoute({
@@ -41,6 +41,7 @@ export function AppStatic() {
   return (
     <QueryClientProvider client={queryClient}>
       <ArchiveModalProvider>
+        <ViewTransitionsBootstrap />
         <RouterProvider router={mainRouter} />
       </ArchiveModalProvider>
     </QueryClientProvider>

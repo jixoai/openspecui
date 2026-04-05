@@ -1,6 +1,6 @@
 import { navController, type TabId } from '@/lib/nav-controller'
 import { useNavLayout } from '@/lib/use-nav-controller'
-import { Link } from '@tanstack/react-router'
+import { VTLink, vtNavController } from '@/lib/view-transitions/navigation'
 import { GripVertical } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { allNavItems, type NavItem } from './nav-items'
@@ -162,7 +162,7 @@ export function AreaNav({ area, tabs, className, useLinks, onNavigate }: AreaNav
               <div className="bg-border -top-0.25 pointer-events-none absolute left-4 right-4 h-0.5 -translate-y-0.5 rounded" />
             )}
             {shouldUseLink ? (
-              <Link
+              <VTLink
                 to={item.to}
                 draggable={false}
                 onDragStart={(e) => e.preventDefault()}
@@ -172,15 +172,15 @@ export function AreaNav({ area, tabs, className, useLinks, onNavigate }: AreaNav
                 <GripVertical className="-ml-2.5 -mr-1.5 h-3 w-3 shrink-0 opacity-0 group-hover:opacity-40" />
                 <item.icon className="h-4 w-4 shrink-0" />
                 <span className="font-nav text-base tracking-[0.04em]">{item.label}</span>
-              </Link>
+              </VTLink>
             ) : (
               <button
                 type="button"
                 onClick={() => {
                   if (isActiveBottom) {
-                    navController.deactivateBottom()
+                    vtNavController.deactivateBottom()
                   } else {
-                    navController.activateBottom(item.to)
+                    void vtNavController.activateBottom(item.to)
                   }
                   onNavigate?.()
                 }}
