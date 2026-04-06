@@ -1,5 +1,11 @@
 # openspecui
 
+## 2.3.2
+
+### Patch Changes
+
+- 6f24a96: Fix the Dashboard Specifications summary metadata to show relative time before the spec id.
+
 ## 2.3.1
 
 ### Patch Changes
