@@ -849,8 +849,8 @@ export function Dashboard() {
                     {spec.name}
                   </div>
                   <div className="text-muted-foreground truncate text-xs">
+                    {spec.updatedAt > 0 && <>{formatRelativeTime(spec.updatedAt)} · </>}
                     {spec.id}
-                    {spec.updatedAt > 0 && <> · {formatRelativeTime(spec.updatedAt)}</>}
                   </div>
                 </div>
                 <div className="shrink-0 text-right text-sm">
