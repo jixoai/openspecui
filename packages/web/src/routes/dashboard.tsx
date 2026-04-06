@@ -812,13 +812,13 @@ export function Dashboard() {
 
   const renderSpecificationsSection = () => (
     <section className="border-border min-w-0 rounded-t-lg border">
-      <div className="border-border flex flex-wrap items-center justify-between gap-1.5 border-b px-4 py-3">
+      <div className="border-border flex min-w-0 flex-wrap items-center justify-between gap-1.5 border-b px-4 py-3">
         <h2 className="shrink-0 font-medium">Specifications</h2>
-        <span className="text-muted-foreground w-full text-xs sm:w-auto sm:text-sm">
+        <span className="text-muted-foreground text-xs sm:text-sm">
           {summary.specifications} specs · {summary.requirements} requirements
         </span>
       </div>
-      <div className="bg-card divide-border divide-y">
+      <div className="bg-card divide-border min-w-0 divide-y">
         {overview?.specifications.map((spec) => {
           const sharedDescriptor = { family: 'specs', entityId: spec.id } as const
 
@@ -838,10 +838,10 @@ export function Dashboard() {
               })}
               vt={{ sharedElements: sharedDescriptor }}
               {...getSharedElementBinding(sharedDescriptor, 'container')}
-              className="hover:bg-muted/50 block px-4 py-3"
+              className="hover:bg-muted/50 block min-w-0 px-4 py-3"
             >
-              <div className="flex min-w-0 items-center justify-between gap-3">
-                <div className="min-w-0">
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
+                <div className="min-w-0 flex-1">
                   <div
                     {...getSharedElementBinding(sharedDescriptor, 'title')}
                     className="truncate font-medium"
@@ -871,12 +871,14 @@ export function Dashboard() {
   )
 
   const renderActiveChangesSection = () => (
-    <section className="border-border flex flex-col rounded-t-lg border">
-      <div className="border-border flex items-center justify-between border-b px-4 py-3">
+    <section className="border-border flex min-w-0 flex-col rounded-t-lg border">
+      <div className="border-border flex min-w-0 flex-wrap items-center justify-between gap-1.5 border-b px-4 py-3">
         <h2 className="font-medium">Active Changes</h2>
-        <span className="text-muted-foreground text-sm">{summary.activeChanges} active</span>
+        <span className="text-muted-foreground text-xs sm:text-sm">
+          {summary.activeChanges} active
+        </span>
       </div>
-      <div className="bg-card divide-border flex-1 divide-y">
+      <div className="bg-card divide-border flex min-w-0 flex-1 flex-col divide-y">
         {activeChanges.map((change) => {
           const progress = change.progress
           const taskPercent =
@@ -918,10 +920,10 @@ export function Dashboard() {
               })}
               vt={{ sharedElements: { family: 'changes', entityId: change.id } }}
               {...getSharedElementBinding({ family: 'changes', entityId: change.id }, 'container')}
-              className="hover:bg-muted/50 block px-4 py-3"
+              className="hover:bg-muted/50 block min-w-0 px-4 py-3"
             >
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <div className="min-w-0">
+              <div className="mb-2 flex min-w-0 flex-wrap items-start justify-between gap-3 sm:flex-nowrap sm:items-center">
+                <div className="min-w-0 flex-1">
                   <div
                     {...getSharedElementBinding(
                       { family: 'changes', entityId: change.id },
@@ -932,11 +934,11 @@ export function Dashboard() {
                     {change.name}
                   </div>
                   <div className="text-muted-foreground truncate text-xs">
+                    {change.updatedAt > 0 && <>{formatRelativeTime(change.updatedAt)} · </>}
                     {change.id}
-                    {change.updatedAt > 0 && <> · {formatRelativeTime(change.updatedAt)}</>}
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-1 text-right text-sm">
+                <div className="shrink-0 text-right text-sm">
                   <span
                     className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${phase.toneClass}`}
                   >
@@ -954,10 +956,10 @@ export function Dashboard() {
                   style={{ width: `${taskPercent}%` }}
                 />
               </div>
-              <div className="text-muted-foreground mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span>{taskPercent}% task completion</span>
+              <div className="text-muted-foreground mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="shrink-0">{taskPercent}% task completion</span>
                 {status ? (
-                  <span className="truncate">
+                  <span className="min-w-0 truncate text-right">
                     {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
                   </span>
                 ) : (
