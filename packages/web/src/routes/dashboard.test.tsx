@@ -215,6 +215,26 @@ describe('Dashboard', () => {
     )
   })
 
+  it('renders specification metadata with relative time before spec id', () => {
+    const now = 61_000
+    const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(now)
+
+    dashboardOverviewMock.mockReturnValue({
+      data: {
+        ...createOverviewData(),
+        specifications: [{ id: 'spec-1', name: 'Spec 1', requirements: 9, updatedAt: 1_000 }],
+      },
+      isLoading: false,
+      error: null,
+    })
+
+    render(<Dashboard />)
+
+    expect(screen.getByText('1m ago · spec-1')).toBeInTheDocument()
+
+    dateNowSpy.mockRestore()
+  })
+
   it('copies on click and toggles path mode via button or double click', async () => {
     render(<WorktreeRow worktree={baseWorktree} emphasize={false} />)
 
