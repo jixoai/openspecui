@@ -1,5 +1,11 @@
 # openspecui
 
+## 2.3.1
+
+### Patch Changes
+
+- 74fb6b9: Polish dashboard card metadata layout and restore Safari-compatible bottom panel resizing.
+
 ## 2.3.0
 
 ### Minor Changes
