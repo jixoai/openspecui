@@ -1,6 +1,6 @@
 import { chmod, mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanupTempDir, createTempDir, waitForDebounce } from './__tests__/test-utils.js'
 import {
   ConfigManager,
@@ -268,6 +268,22 @@ describe('ConfigManager', () => {
       const config = await configManager.readConfig()
       expect(config.cli.command).toBe('nonexistent_command_12345')
       expect(config.cli.args).toBeUndefined()
+    })
+
+    it('should surface synchronous spawn errors without arming the probe timeout', async () => {
+      const invalidCommand = 'node\u0000broken'
+      const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+
+      await configManager.writeConfig({ cli: { command: invalidCommand } })
+      clearCache()
+
+      try {
+        await expect(configManager.getCliCommand()).rejects.toThrow('without null bytes')
+        const probeTimerCall = setTimeoutSpy.mock.calls.find((call) => call[1] === 20_000)
+        expect(probeTimerCall).toBeUndefined()
+      } finally {
+        setTimeoutSpy.mockRestore()
+      }
     })
 
     it('should resolve openspec via shell lookup when PATH misses the shim directory', async () => {

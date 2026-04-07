@@ -1,5 +1,6 @@
-import { spawn, type ChildProcess } from 'child_process'
+import { type ChildProcess } from 'child_process'
 import { createCleanCliEnv, type ConfigManager } from './config.js'
+import { formatSpawnError, runBufferedCommand, spawnSafe } from './spawn-safe.js'
 
 /** CLI 执行结果 */
 export interface CliResult {
@@ -37,47 +38,33 @@ export class CliExecutor {
     return [...commandParts, ...args]
   }
 
-  private runCommandOnce(fullCommand: readonly string[]): Promise<CliResultInternal> {
+  private async runCommandOnce(fullCommand: readonly string[]): Promise<CliResultInternal> {
     const [cmd, ...cmdArgs] = fullCommand
-    return new Promise((resolve) => {
-      const child = spawn(cmd, cmdArgs, {
-        cwd: this.projectDir,
-        shell: false,
-        env: createCleanCliEnv(),
-      })
-
-      let stdout = ''
-      let stderr = ''
-
-      child.stdout?.on('data', (data) => {
-        stdout += data.toString()
-      })
-
-      child.stderr?.on('data', (data) => {
-        stderr += data.toString()
-      })
-
-      child.on('close', (exitCode) => {
-        resolve({
-          success: exitCode === 0,
-          stdout,
-          stderr,
-          exitCode,
-        })
-      })
-
-      child.on('error', (err) => {
-        const errorCode = (err as NodeJS.ErrnoException).code
-        const errorMessage = err.message + (errorCode ? ` (${errorCode})` : '')
-        resolve({
-          success: false,
-          stdout,
-          stderr: stderr ? `${stderr}\n${errorMessage}` : errorMessage,
-          exitCode: null,
-          errorCode,
-        })
-      })
+    const result = await runBufferedCommand({
+      command: cmd,
+      args: cmdArgs,
+      cwd: this.projectDir,
+      env: createCleanCliEnv(),
     })
+
+    if (result.spawnError) {
+      return {
+        success: false,
+        stdout: result.stdout,
+        stderr: result.stderr
+          ? `${result.stderr}\n${result.spawnError.message}`
+          : result.spawnError.message,
+        exitCode: null,
+        errorCode: result.spawnError.code,
+      }
+    }
+
+    return {
+      success: result.exitCode === 0,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      exitCode: result.exitCode,
+    }
   }
 
   private async executeInternal(args: string[], allowRetry: boolean): Promise<CliResult> {
@@ -268,32 +255,47 @@ export class CliExecutor {
       onEvent({ type: 'command', data: fullCommand.join(' ') })
       const [cmd, ...cmdArgs] = fullCommand
 
-      const child = spawn(cmd, cmdArgs, {
+      const started = spawnSafe(cmd, cmdArgs, {
         cwd: this.projectDir,
         shell: false,
         env: createCleanCliEnv(),
       })
+
+      if (!started.ok) {
+        const { code, message } = started.error
+
+        if (allowRetry && code === 'ENOENT' && !cancelled) {
+          this.configManager.invalidateResolvedCliRunner()
+          void start(false)
+          return
+        }
+
+        onEvent({ type: 'stderr', data: message })
+        onEvent({ type: 'exit', exitCode: null })
+        return
+      }
+
+      const child = started.child
       activeChild = child
 
-      child.stdout?.on('data', (data) => {
+      child.stdout?.on('data', (data: Buffer) => {
         onEvent({ type: 'stdout', data: data.toString() })
       })
 
-      child.stderr?.on('data', (data) => {
+      child.stderr?.on('data', (data: Buffer) => {
         onEvent({ type: 'stderr', data: data.toString() })
       })
 
-      child.on('close', (exitCode) => {
+      child.on('close', (exitCode: number | null) => {
         if (activeChild !== child) return
         activeChild = null
         onEvent({ type: 'exit', exitCode })
       })
 
-      child.on('error', (err) => {
+      child.on('error', (err: Error) => {
         if (activeChild !== child) return
         activeChild = null
-        const code = (err as NodeJS.ErrnoException).code
-        const message = err.message + (code ? ` (${code})` : '')
+        const { code, message } = formatSpawnError(err)
 
         if (allowRetry && code === 'ENOENT' && !cancelled) {
           this.configManager.invalidateResolvedCliRunner()
@@ -392,27 +394,34 @@ export class CliExecutor {
 
     onEvent({ type: 'command', data: command.join(' ') })
 
-    const child = spawn(cmd, cmdArgs, {
+    const started = spawnSafe(cmd, cmdArgs, {
       cwd: this.projectDir,
       shell: false,
       env: createCleanCliEnv(),
     })
 
-    child.stdout?.on('data', (data) => {
+    if (!started.ok) {
+      onEvent({ type: 'stderr', data: started.error.message })
+      onEvent({ type: 'exit', exitCode: null })
+      return () => {}
+    }
+
+    const child = started.child
+
+    child.stdout?.on('data', (data: Buffer) => {
       onEvent({ type: 'stdout', data: data.toString() })
     })
 
-    child.stderr?.on('data', (data) => {
+    child.stderr?.on('data', (data: Buffer) => {
       onEvent({ type: 'stderr', data: data.toString() })
     })
 
-    child.on('close', (exitCode) => {
+    child.on('close', (exitCode: number | null) => {
       onEvent({ type: 'exit', exitCode })
     })
 
-    child.on('error', (err) => {
-      const code = (err as NodeJS.ErrnoException).code
-      const message = err.message + (code ? ` (${code})` : '')
+    child.on('error', (err: Error) => {
+      const { message } = formatSpawnError(err)
       onEvent({ type: 'stderr', data: message })
       onEvent({ type: 'exit', exitCode: null })
     })
