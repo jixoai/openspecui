@@ -1,5 +1,12 @@
 # @openspecui/server
 
+## 2.3.3
+
+### Patch Changes
+
+- Updated dependencies [4b11a8a]
+  - @openspecui/core@2.3.3
+
 ## 2.3.0
 
 ### Minor Changes
