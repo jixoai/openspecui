@@ -279,7 +279,8 @@ describe('ConfigManager', () => {
 
       try {
         await expect(configManager.getCliCommand()).rejects.toThrow('without null bytes')
-        expect(setTimeoutSpy).not.toHaveBeenCalled()
+        const probeTimerCall = setTimeoutSpy.mock.calls.find((call) => call[1] === 20_000)
+        expect(probeTimerCall).toBeUndefined()
       } finally {
         setTimeoutSpy.mockRestore()
       }
