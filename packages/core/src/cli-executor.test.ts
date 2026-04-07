@@ -78,6 +78,17 @@ describe('CliExecutor', () => {
       expect(result.success).toBe(false)
     })
 
+    it('should return a failure result for synchronous spawn errors', async () => {
+      await configManager.writeConfig({ cli: { command: 'node\u0000broken' } })
+      clearCache()
+
+      const result = await cliExecutor.execute(['arg'])
+
+      expect(result.success).toBe(false)
+      expect(result.exitCode).toBeNull()
+      expect(result.stderr).toContain('without null bytes')
+    })
+
     it('should use project directory as cwd', async () => {
       await configManager.writeConfig({ cli: { command: 'node' } })
       clearCache()
@@ -292,6 +303,30 @@ describe('CliExecutor', () => {
         events.some((event) => event.type === 'stdout' && event.data?.includes('raw-ok'))
       ).toBe(true)
       expect(events.at(-1)).toMatchObject({ type: 'exit', exitCode: 0 })
+    })
+
+    it('should emit stderr and exit for synchronous spawn errors', async () => {
+      await configManager.writeConfig({ cli: { command: 'node\u0000broken' } })
+      clearCache()
+
+      const events: CliStreamEvent[] = []
+      const done = new Promise<void>((resolve) => {
+        void cliExecutor.executeStream(['arg'], (event) => {
+          events.push(event)
+          if (event.type === 'exit') {
+            resolve()
+          }
+        })
+      })
+
+      await done
+
+      expect(
+        events.some(
+          (event) => event.type === 'stderr' && event.data?.includes('without null bytes')
+        )
+      ).toBe(true)
+      expect(events.at(-1)).toMatchObject({ type: 'exit', exitCode: null })
     })
   })
 

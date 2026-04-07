@@ -1,9 +1,10 @@
-import { exec, execFile, spawn } from 'child_process'
+import { exec, execFile } from 'child_process'
 import { mkdir, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
 import { promisify } from 'util'
 import { z } from 'zod'
 import { reactiveReadFile, updateReactiveFileCache } from './reactive-fs/index.js'
+import { runBufferedCommand } from './spawn-safe.js'
 
 const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
@@ -349,74 +350,52 @@ async function probeCliRunner(
   env: NodeJS.ProcessEnv
 ): Promise<CliRunnerAttempt> {
   const [cmd, ...cmdArgs] = candidate.commandParts
-  return new Promise((resolve) => {
-    let stdout = ''
-    let stderr = ''
-    let timedOut = false
-
-    const timer = setTimeout(() => {
-      timedOut = true
-      child.kill()
-    }, CLI_PROBE_TIMEOUT_MS)
-
-    const child = spawn(cmd, [...cmdArgs, '--version'], {
-      cwd,
-      shell: false,
-      env,
-    })
-
-    child.stdout?.on('data', (data) => {
-      stdout += data.toString()
-    })
-    child.stderr?.on('data', (data) => {
-      stderr += data.toString()
-    })
-
-    child.on('error', (err) => {
-      clearTimeout(timer)
-      const code = (err as NodeJS.ErrnoException).code
-      const suffix = code ? ` (${code})` : ''
-      resolve({
-        source: candidate.source,
-        command: commandToString(candidate.commandParts),
-        success: false,
-        error: `${err.message}${suffix}`,
-        exitCode: null,
-      })
-    })
-
-    child.on('close', (exitCode) => {
-      clearTimeout(timer)
-      if (timedOut) {
-        resolve({
-          source: candidate.source,
-          command: commandToString(candidate.commandParts),
-          success: false,
-          error: 'CLI probe timed out',
-          exitCode,
-        })
-        return
-      }
-      if (exitCode === 0) {
-        const version = stdout.trim().split('\n')[0] || undefined
-        resolve({
-          source: candidate.source,
-          command: commandToString(candidate.commandParts),
-          success: true,
-          version,
-          exitCode,
-        })
-        return
-      }
-      resolve({
-        source: candidate.source,
-        command: commandToString(candidate.commandParts),
-        success: false,
-        error: stderr.trim() || `Exit code ${exitCode ?? 'null'}`,
-        exitCode,
-      })
-    })
+  const result = await runBufferedCommand({
+    command: cmd,
+    args: [...cmdArgs, '--version'],
+    cwd,
+    env,
+    timeoutMs: CLI_PROBE_TIMEOUT_MS,
   })
+
+  if (result.timedOut) {
+    return {
+      source: candidate.source,
+      command: commandToString(candidate.commandParts),
+      success: false,
+      error: 'CLI probe timed out',
+      exitCode: result.exitCode,
+    }
+  }
+
+  if (result.spawnError) {
+    return {
+      source: candidate.source,
+      command: commandToString(candidate.commandParts),
+      success: false,
+      error: result.spawnError.message,
+      exitCode: null,
+    }
+  }
+
+  if (result.exitCode === 0) {
+    const version = result.stdout.trim().split('\n')[0] || undefined
+    return {
+      source: candidate.source,
+      command: commandToString(candidate.commandParts),
+      success: true,
+      version,
+      exitCode: result.exitCode,
+    }
+  }
+
+  return {
+    source: candidate.source,
+    command: commandToString(candidate.commandParts),
+    success: false,
+    error: result.stderr.trim() || `Exit code ${result.exitCode ?? 'null'}`,
+    exitCode: result.exitCode,
+  }
 }
 
 async function resolveCliRunner(
