@@ -30,10 +30,12 @@ vi.mock('@/components/tabs', () => ({
       tabs,
       selectedTab,
       onTabChange,
+      className,
     }: {
       tabs: Array<{ id: string; label: string; content: ReactNode }>
       selectedTab?: string
       onTabChange?: (id: string) => void
+      className?: string
     },
     ref: ForwardedRef<{
       root: HTMLElement | null
@@ -59,7 +61,12 @@ vi.mock('@/components/tabs', () => ({
     )
 
     return (
-      <div ref={rootRef} data-testid="tabs" data-active-tab={activeTab?.id ?? ''}>
+      <div
+        ref={rootRef}
+        data-testid="tabs"
+        data-active-tab={activeTab?.id ?? ''}
+        className={className}
+      >
         <div className="tabs-strip">
           {tabs.map((tab) => (
             <button
@@ -145,11 +152,45 @@ function stubWideResizeObserver() {
       this.callback = callback
     }
 
-    observe() {
+    observe(target: Element) {
+      const element = target as HTMLElement
       this.callback(
         [
           {
-            contentRect: { width: 1200 } as DOMRectReadOnly,
+            contentRect: {
+              width: 1200,
+              height: element.clientHeight || 320,
+            } as DOMRectReadOnly,
+          } as ResizeObserverEntry,
+        ],
+        this as unknown as ResizeObserver
+      )
+    }
+
+    disconnect() {}
+    unobserve() {}
+  }
+
+  vi.stubGlobal('ResizeObserver', MockResizeObserver)
+}
+
+function stubNarrowResizeObserver() {
+  class MockResizeObserver {
+    private readonly callback: ResizeObserverCallback
+
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback
+    }
+
+    observe(target: Element) {
+      const element = target as HTMLElement
+      this.callback(
+        [
+          {
+            contentRect: {
+              width: 480,
+              height: element.clientHeight || 320,
+            } as DOMRectReadOnly,
           } as ResizeObserverEntry,
         ],
         this as unknown as ResizeObserver
@@ -294,6 +335,27 @@ const revealFiles = [
   },
 ]
 
+const largeDiffFiles = Array.from({ length: 28 }, (_, index) => ({
+  ...baseFile,
+  fileId: `large-file-${index + 1}`,
+  path: `src/large-file-${index + 1}.ts`,
+  displayPath: `src/large-file-${index + 1}.ts`,
+}))
+
+const largeDiffPatchFiles = largeDiffFiles.map((file, index) => ({
+  ...basePatchFile,
+  fileId: file.fileId,
+  path: file.path,
+  displayPath: file.displayPath,
+  patch: [
+    `diff --git a/${file.path} b/${file.path}`,
+    '@@ -1,3 +1,3 @@',
+    `-export const before_${index + 1} = 0`,
+    `+export const after_${index + 1} = 1`,
+    `+export const stable_${index + 1} = true`,
+  ].join('\n'),
+}))
+
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
@@ -421,6 +483,85 @@ describe('GitEntryDetailPanel', () => {
     expect(frameStates.every((state) => state === 'diff')).toBe(true)
   })
 
+  it('renders full large narrow diff lists and switches back to diff after tree selection', async () => {
+    stubNarrowResizeObserver()
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      writable: true,
+      value: function mockGetBoundingClientRect(this: HTMLElement) {
+        if (this.dataset.testid === 'scroll-shell') {
+          return {
+            x: 0,
+            y: 40,
+            width: 420,
+            height: 320,
+            top: 40,
+            right: 420,
+            bottom: 360,
+            left: 0,
+            toJSON: () => ({}),
+          } satisfies DOMRect
+        }
+
+        if (this.dataset.testid === 'git-diff-viewport') {
+          return {
+            x: 0,
+            y: 104,
+            width: 420,
+            height: 240,
+            top: 104,
+            right: 420,
+            bottom: 344,
+            left: 0,
+            toJSON: () => ({}),
+          } satisfies DOMRect
+        }
+
+        return originalGetBoundingClientRect.call(this)
+      },
+    })
+
+    try {
+      renderWithQueryClient(
+        <div data-testid="scroll-shell" style={{ height: '320px', overflowY: 'auto' }}>
+          <GitEntryDetailPanel
+            selector={{ type: 'commit', hash: baseEntry.hash }}
+            entry={{
+              ...baseEntry,
+              diff: { files: largeDiffFiles.length, insertions: 56, deletions: 28 },
+            }}
+            files={largeDiffFiles}
+            eagerFiles={largeDiffPatchFiles}
+            isLoading={false}
+            error={null}
+          />
+        </div>
+      )
+      await waitFor(() => {
+        const renderedCount = screen
+          .getByTestId('git-diff-viewport')
+          .querySelectorAll('section[data-file-id]').length
+
+        expect(renderedCount).toBe(largeDiffFiles.length)
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: /File Tree/i }))
+      fireEvent.click(screen.getByRole('treeitem', { name: /src\/large-file-28\.ts/i }))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('tabs')).toHaveAttribute('data-active-tab', 'diff')
+      })
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+        configurable: true,
+        writable: true,
+        value: originalGetBoundingClientRect,
+      })
+    }
+  })
+
   it('switches to dual-pane layout when the container is wide enough', async () => {
     stubWideResizeObserver()
 
@@ -439,6 +580,55 @@ describe('GitEntryDetailPanel', () => {
       expect(screen.queryByTestId('tabs')).toBeNull()
       expect(screen.getByText('File Tree')).toBeTruthy()
       expect(screen.getByText('Diff Stream')).toBeTruthy()
+    })
+  })
+
+  it('keeps narrow tabs on the page scroll instead of introducing an inner viewport', () => {
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      writable: true,
+      value: function mockGetBoundingClientRect(this: HTMLElement) {
+        if (this.dataset.testid === 'scroll-shell') {
+          return {
+            x: 0,
+            y: 40,
+            width: 420,
+            height: 320,
+            top: 40,
+            right: 420,
+            bottom: 360,
+            left: 0,
+            toJSON: () => ({}),
+          } satisfies DOMRect
+        }
+
+        return originalGetBoundingClientRect.call(this)
+      },
+    })
+
+    renderWithQueryClient(
+      <div data-testid="scroll-shell" style={{ height: '320px', overflowY: 'auto' }}>
+        <GitEntryDetailPanel
+          selector={{ type: 'commit', hash: baseEntry.hash }}
+          entry={baseEntry}
+          files={[baseFile]}
+          isLoading={false}
+          error={null}
+        />
+      </div>
+    )
+
+    fireEvent(window, new Event('resize'))
+
+    expect(screen.queryByTestId('git-pane-tabs-viewport')).toBeNull()
+    expect(screen.getByTestId('git-diff-viewport')).not.toHaveClass('overflow-y-auto')
+
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      writable: true,
+      value: originalGetBoundingClientRect,
     })
   })
 

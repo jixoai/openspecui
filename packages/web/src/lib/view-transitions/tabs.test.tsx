@@ -1,8 +1,28 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { Tabs, type Tab } from '@/components/tabs'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useEffect, useMemo } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useRoutedCarouselTabs } from './tabs'
+
+const { runViewTransitionMock } = vi.hoisted(() => ({
+  runViewTransitionMock: vi.fn(
+    ({
+      collectAfterEntries,
+      collectBeforeEntries,
+      update,
+    }: {
+      collectAfterEntries?: () => unknown
+      collectBeforeEntries?: () => unknown
+      update: () => void
+    }) => {
+      collectBeforeEntries?.()
+      update()
+      collectAfterEntries?.()
+      return Promise.resolve()
+    }
+  ),
+}))
 
 vi.mock('@/lib/static-mode', () => ({
   getBasePath: () => '/',
@@ -10,10 +30,7 @@ vi.mock('@/lib/static-mode', () => ({
 }))
 
 vi.mock('./runtime', () => ({
-  runViewTransition: ({ update }: { update: () => void }) => {
-    update()
-    return Promise.resolve()
-  },
+  runViewTransition: runViewTransitionMock,
 }))
 
 function RoutedTabsResetHarness() {
@@ -42,9 +59,175 @@ function RoutedTabsResetHarness() {
   )
 }
 
+function RoutedTabsScrollHarness() {
+  const tabs = useMemo<Tab[]>(
+    () => [
+      {
+        id: 'diff',
+        label: 'Diff',
+        content: (
+          <div data-testid="diff-content">
+            <div style={{ height: '1400px' }} />
+          </div>
+        ),
+      },
+      {
+        id: 'files',
+        label: 'Files',
+        content: (
+          <div data-testid="files-content">
+            <div style={{ height: '900px' }} />
+          </div>
+        ),
+      },
+    ],
+    []
+  )
+  const { tabsRef, selectedTab, setSelectedTab, onTabChange } = useRoutedCarouselTabs({
+    queryKey: 'gitPane',
+    tabs,
+    initialTab: 'diff',
+    viewportSelector: '.main-content',
+  })
+
+  return (
+    <div className="main-content" data-testid="viewport" style={{ height: 240, overflowY: 'auto' }}>
+      <div data-testid="page-shell">
+        <div style={{ height: 120 }} />
+        <Tabs ref={tabsRef} tabs={tabs} selectedTab={selectedTab} onTabChange={onTabChange} />
+      </div>
+      <button type="button" onClick={() => setSelectedTab('diff')}>
+        Restore diff
+      </button>
+      <button type="button" onClick={() => setSelectedTab('files')}>
+        Restore files
+      </button>
+    </div>
+  )
+}
+
+function installScrollableTabLayoutMocks() {
+  const viewport = screen.getByTestId('viewport')
+  const panelHeights: Record<'diff' | 'files', number> = {
+    diff: 1400,
+    files: 900,
+  }
+  const baseOffset = 168
+  const viewportHeight = 240
+  let viewportScrollTop = 0
+
+  const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+
+  Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+    configurable: true,
+    writable: true,
+    value: function mockGetBoundingClientRect(this: HTMLElement) {
+      if (this.dataset.testid === 'viewport') {
+        return {
+          x: 0,
+          y: 0,
+          width: 320,
+          height: viewportHeight,
+          top: 0,
+          right: 320,
+          bottom: viewportHeight,
+          left: 0,
+          toJSON: () => ({}),
+        } satisfies DOMRect
+      }
+
+      if (this.dataset.tabPanel) {
+        const panelId = this.dataset.tabPanel as keyof typeof panelHeights
+        const fallbackHeight = panelHeights[panelId] ?? viewportHeight
+        const height = this.style.height ? Number.parseFloat(this.style.height) : fallbackHeight
+        const top = baseOffset - viewportScrollTop
+        return {
+          x: 0,
+          y: top,
+          width: 320,
+          height,
+          top,
+          right: 320,
+          bottom: top + height,
+          left: 0,
+          toJSON: () => ({}),
+        } satisfies DOMRect
+      }
+
+      return originalGetBoundingClientRect.call(this)
+    },
+  })
+
+  Object.defineProperty(viewport, 'clientHeight', {
+    configurable: true,
+    get: () => viewportHeight,
+  })
+
+  Object.defineProperty(viewport, 'scrollHeight', {
+    configurable: true,
+    get: () => {
+      const activePanel = document.querySelector<HTMLElement>('[data-tab-panel-state="active"]')
+      const activePanelId = activePanel?.dataset.tabPanel as keyof typeof panelHeights | undefined
+      const fallbackHeight =
+        activePanelId != null ? (panelHeights[activePanelId] ?? viewportHeight) : viewportHeight
+      const renderedHeight = activePanel?.style.height
+        ? Number.parseFloat(activePanel.style.height)
+        : fallbackHeight
+      return baseOffset + renderedHeight
+    },
+  })
+
+  Object.defineProperty(viewport, 'scrollTop', {
+    configurable: true,
+    get: () => viewportScrollTop,
+    set: (value: number) => {
+      viewportScrollTop = value
+    },
+  })
+
+  for (const panel of document.querySelectorAll<HTMLElement>('[data-tab-panel]')) {
+    const panelId = panel.dataset.tabPanel as keyof typeof panelHeights | undefined
+    const naturalHeight =
+      panelId != null ? (panelHeights[panelId] ?? viewportHeight) : viewportHeight
+    let panelScrollTop = 0
+
+    Object.defineProperty(panel, 'clientHeight', {
+      configurable: true,
+      get: () => (panel.style.height ? Number.parseFloat(panel.style.height) : naturalHeight),
+    })
+    Object.defineProperty(panel, 'scrollHeight', {
+      configurable: true,
+      get: () => naturalHeight,
+    })
+    Object.defineProperty(panel, 'scrollTop', {
+      configurable: true,
+      get: () => panelScrollTop,
+      set: (value: number) => {
+        panelScrollTop = value
+      },
+    })
+  }
+
+  return {
+    viewport,
+    restore() {
+      Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+        configurable: true,
+        writable: true,
+        value: originalGetBoundingClientRect,
+      })
+    },
+  }
+}
+
 describe('useRoutedCarouselTabs', () => {
   beforeEach(() => {
     window.history.replaceState(null, '', '/git/commit/abc12345?gitPane=diff')
+    runViewTransitionMock.mockClear()
+  })
+
+  afterEach(() => {
+    cleanup()
   })
 
   it('keeps tab selection when caller effects depend on setSelectedTab identity', async () => {
@@ -57,5 +240,74 @@ describe('useRoutedCarouselTabs', () => {
     })
 
     expect(window.location.search).toBe('?gitPane=files')
+    expect(runViewTransitionMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('restores page scroll after animated tab switches when viewportSelector is provided', async () => {
+    render(<RoutedTabsScrollHarness />)
+    const { restore, viewport } = installScrollableTabLayoutMocks()
+
+    try {
+      viewport.scrollTop = 420
+
+      fireEvent.click(screen.getByRole('button', { name: 'Files' }))
+
+      await waitFor(() => {
+        const activePanel = screen
+          .getByTestId('viewport')
+          .querySelector<HTMLElement>('[data-tab-panel-state="active"]')
+        expect(activePanel?.dataset.tabPanel).toBe('files')
+      })
+
+      viewport.scrollTop = 300
+      fireEvent.click(screen.getByRole('button', { name: 'Diff' }))
+
+      await waitFor(() => {
+        const activePanel = screen
+          .getByTestId('viewport')
+          .querySelector<HTMLElement>('[data-tab-panel-state="active"]')
+        expect(activePanel?.dataset.tabPanel).toBe('diff')
+        expect(viewport.scrollTop).toBe(420)
+      })
+
+      const activePanel = screen
+        .getByTestId('viewport')
+        .querySelector<HTMLElement>('[data-tab-panel-state="active"]')
+      expect(activePanel?.style.height).toBe('')
+      expect(activePanel?.dataset.tabScrollOffset).toBeUndefined()
+    } finally {
+      restore()
+    }
+  })
+
+  it('restores page scroll for direct non-animated setSelectedTab calls', async () => {
+    render(<RoutedTabsScrollHarness />)
+    const { restore, viewport } = installScrollableTabLayoutMocks()
+
+    try {
+      viewport.scrollTop = 420
+
+      fireEvent.click(screen.getByRole('button', { name: 'Restore files' }))
+
+      await waitFor(() => {
+        const activePanel = screen
+          .getByTestId('viewport')
+          .querySelector<HTMLElement>('[data-tab-panel-state="active"]')
+        expect(activePanel?.dataset.tabPanel).toBe('files')
+      })
+
+      viewport.scrollTop = 300
+      fireEvent.click(screen.getByRole('button', { name: 'Restore diff' }))
+
+      await waitFor(() => {
+        const activePanel = screen
+          .getByTestId('viewport')
+          .querySelector<HTMLElement>('[data-tab-panel-state="active"]')
+        expect(activePanel?.dataset.tabPanel).toBe('diff')
+        expect(viewport.scrollTop).toBe(420)
+      })
+    } finally {
+      restore()
+    }
   })
 })
