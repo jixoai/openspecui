@@ -48,8 +48,9 @@ interface GitEntryPatchResponse {
 interface PendingDiffScrollCommand {
   deadline: number
   fileId: string
+  lastAppliedContainerScrollTop: number | null
   lastAttemptVersion: string | null
-  phase: 'queued' | 'verifying' | 'await-layout'
+  phase: 'queued' | 'verifying' | 'settling' | 'await-layout'
   token: number
 }
 
@@ -117,43 +118,66 @@ function scrollCardIntoView(
   node: HTMLElement,
   fallbackRoot: HTMLElement | null,
   topOffset: number
-): void {
+): {
+  appliedTop: number
+  requestedTop: number
+  wasClamped: boolean
+} | null {
   const scrollContainer =
     findVerticalScrollContainer(node, { allowNonScrollable: true }) ??
     findVerticalScrollContainer(fallbackRoot, { allowNonScrollable: true })
 
   if (!scrollContainer) {
     node.scrollIntoView({ block: 'start', behavior: 'auto' })
-    return
+    return null
   }
 
   const nodeRect = node.getBoundingClientRect()
   const containerRect = scrollContainer.getBoundingClientRect()
-  const nextTop = scrollContainer.scrollTop + nodeRect.top - containerRect.top - topOffset
+  const requestedTop = Math.max(
+    scrollContainer.scrollTop + nodeRect.top - containerRect.top - topOffset,
+    0
+  )
 
   scrollContainer.scrollTo({
-    top: Math.max(nextTop, 0),
+    top: requestedTop,
     behavior: 'auto',
   })
+
+  const appliedTop = scrollContainer.scrollTop
+  return {
+    appliedTop,
+    requestedTop,
+    wasClamped: appliedTop + 1 < requestedTop,
+  }
 }
 
 function isCardAligned(
   node: HTMLElement,
   fallbackRoot: HTMLElement | null,
   topOffset: number
-): boolean {
+): {
+  aligned: boolean
+  containerScrollTop: number | null
+} {
   const scrollContainer =
     findVerticalScrollContainer(node, { allowNonScrollable: true }) ??
     findVerticalScrollContainer(fallbackRoot, { allowNonScrollable: true })
   const nodeRect = node.getBoundingClientRect()
 
   if (!scrollContainer) {
-    return Math.abs(nodeRect.top - topOffset) <= DIFF_SCROLL_ALIGNMENT_TOLERANCE
+    return {
+      aligned: Math.abs(nodeRect.top - topOffset) <= DIFF_SCROLL_ALIGNMENT_TOLERANCE,
+      containerScrollTop: null,
+    }
   }
 
   const containerRect = scrollContainer.getBoundingClientRect()
   const targetTop = containerRect.top + topOffset
-  return Math.abs(nodeRect.top - targetTop) <= DIFF_SCROLL_ALIGNMENT_TOLERANCE
+  return {
+    aligned: Math.abs(nodeRect.top - targetTop) <= DIFF_SCROLL_ALIGNMENT_TOLERANCE,
+    containerScrollTop: scrollContainer.scrollTop,
+  }
 }
 
 function entryIcon(entry: DashboardGitEntry) {
@@ -330,7 +354,6 @@ export function GitEntryDetailPanel({
     setRequestedFileIds([])
     setTreeRevealRequest(null)
     revealNavigationSourceRef.current = null
-    cardNodesRef.current.clear()
     pendingDiffScrollCommandRef.current = null
     if (pendingScrollFrameRef.current !== null) {
       window.cancelAnimationFrame(pendingScrollFrameRef.current)
@@ -558,6 +581,16 @@ export function GitEntryDetailPanel({
       return
     }
 
+    const targetPatchStatus = patchStateByFileId.get(command.fileId)?.status ?? 'idle'
+    if (!wide && targetPatchStatus !== 'ready') {
+      pendingDiffScrollCommandRef.current = {
+        ...command,
+        lastAttemptVersion: diffContentVersion,
+        phase: 'await-layout',
+      }
+      return
+    }
+
     const node = cardNodesRef.current.get(command.fileId)
     if (!node) {
       pendingDiffScrollCommandRef.current = {
@@ -568,24 +601,63 @@ export function GitEntryDetailPanel({
       return
     }
 
-    if (isCardAligned(node, diffViewportNode, diffScrollOffset)) {
+    const alignment = isCardAligned(node, diffViewportNode, diffScrollOffset)
+    const scrollWasExternallyRestored =
+      alignment.containerScrollTop != null &&
+      command.lastAppliedContainerScrollTop != null &&
+      Math.abs(alignment.containerScrollTop - command.lastAppliedContainerScrollTop) > 1
+
+    if (alignment.aligned) {
+      if (command.phase === 'verifying') {
+        pendingDiffScrollCommandRef.current = {
+          ...command,
+          lastAttemptVersion: diffContentVersion,
+          phase: 'settling',
+        }
+        schedulePendingScrollRef.current()
+        return
+      }
+
       clearPendingDiffScroll(command.token)
       return
     }
 
-    if (command.phase === 'verifying') {
+    if (command.phase === 'verifying' || command.phase === 'settling') {
+      if (scrollWasExternallyRestored) {
+        pendingDiffScrollCommandRef.current = {
+          ...command,
+          lastAppliedContainerScrollTop: null,
+          lastAttemptVersion: diffContentVersion,
+          phase: 'queued',
+        }
+        schedulePendingScrollRef.current()
+        return
+      }
+
       pendingDiffScrollCommandRef.current = {
         ...command,
+        lastAppliedContainerScrollTop: null,
         lastAttemptVersion: diffContentVersion,
         phase: 'await-layout',
       }
       return
     }
 
-    scrollCardIntoView(node, diffViewportNode, diffScrollOffset)
+    const scrollAttempt = scrollCardIntoView(node, diffViewportNode, diffScrollOffset)
     if (pendingDiffScrollCommandRef.current?.token === command.token) {
+      if (scrollAttempt?.wasClamped) {
+        pendingDiffScrollCommandRef.current = {
+          ...command,
+          lastAppliedContainerScrollTop: scrollAttempt.appliedTop,
+          lastAttemptVersion: diffContentVersion,
+          phase: 'await-layout',
+        }
+        return
+      }
+
       pendingDiffScrollCommandRef.current = {
         ...command,
+        lastAppliedContainerScrollTop: scrollAttempt?.appliedTop ?? null,
         lastAttemptVersion: diffContentVersion,
         phase: 'verifying',
       }
@@ -597,6 +669,7 @@ export function GitEntryDetailPanel({
     diffContentVersion,
     diffScrollOffset,
     diffViewportNode,
+    patchStateByFileId,
     wide,
   ])
 
@@ -617,6 +690,7 @@ export function GitEntryDetailPanel({
       pendingDiffScrollCommandRef.current = {
         deadline: window.performance.now() + DIFF_SCROLL_DEADLINE_MS,
         fileId,
+        lastAppliedContainerScrollTop: null,
         lastAttemptVersion: null,
         phase: 'queued',
         token: ++pendingDiffScrollTokenRef.current,
@@ -672,7 +746,7 @@ export function GitEntryDetailPanel({
       requestPatch(fileId)
       queueScrollToFile(fileId)
       if (!wide) {
-        setSelectedTab('diff')
+        setSelectedTab('diff', { transferScroll: false })
       }
     },
     [queueScrollToFile, requestPatch, setSelectedTab, wide]
@@ -693,6 +767,10 @@ export function GitEntryDetailPanel({
         (currentRoot) =>
           currentRoot ?? findVerticalScrollContainer(node, { allowNonScrollable: true })
       )
+
+      if (pendingDiffScrollCommandRef.current?.fileId === fileId) {
+        schedulePendingScrollRef.current()
+      }
     },
     [setPrefetchObservedNode, setVisibleObservedNode]
   )

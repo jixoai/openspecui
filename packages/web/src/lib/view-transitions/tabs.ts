@@ -115,6 +115,22 @@ function resolveTabArea(pathname: string, area?: VTArea): VTArea {
   return isStaticMode() ? 'main' : navController.getAreaForPath(pathname)
 }
 
+function normalizeViewportSelectorOption(
+  viewportSelector?: ViewportSelector
+): readonly string[] | undefined {
+  if (!viewportSelector) {
+    return undefined
+  }
+
+  const selectors =
+    typeof viewportSelector === 'string' ? viewportSelector.split(',') : [...viewportSelector]
+  const normalized = selectors
+    .map((selector) => selector.trim())
+    .filter((selector) => selector.length > 0)
+
+  return normalized.length > 0 ? normalized : undefined
+}
+
 function readWindowLocation(): RoutedTabsLocation {
   if (typeof window === 'undefined') return SERVER_LOCATION
   return {
@@ -233,9 +249,14 @@ export function useRoutedCarouselTabs<TTabId extends string>({
 }: UseRoutedCarouselTabsOptions<TTabId>) {
   const { location, router } = useRoutedTabsLocation()
   const tabsRef = useRef<TabsHandle | null>(null)
+  const viewportSelectorValue = useMemo(
+    () => normalizeViewportSelectorOption(viewportSelector),
+    [typeof viewportSelector === 'string' ? viewportSelector : (viewportSelector ?? []).join('\0')]
+  )
   const scrollMemoryByTabRef = useRef(new Map<string, TabScrollMemory>())
   const frozenTabsRef = useRef(new Map<string, FrozenTabEntry>())
   const frozenTabTokenRef = useRef(0)
+  const skipNextRestoreTabRef = useRef<string | null>(null)
   const selectedFromLocation = useMemo(
     () =>
       resolveSelectedTab({
@@ -258,7 +279,7 @@ export function useRoutedCarouselTabs<TTabId extends string>({
     selectedFromLocation,
     selectedTab,
     tabs,
-    viewportSelector,
+    viewportSelector: viewportSelectorValue,
   })
 
   latestRef.current = {
@@ -271,7 +292,7 @@ export function useRoutedCarouselTabs<TTabId extends string>({
     selectedFromLocation,
     selectedTab,
     tabs,
-    viewportSelector,
+    viewportSelector: viewportSelectorValue,
   }
 
   const cleanupFrozenTabById = useCallback((tabId: string, token?: number) => {
@@ -381,15 +402,20 @@ export function useRoutedCarouselTabs<TTabId extends string>({
   }, [selectedFromLocation])
 
   useLayoutEffect(() => {
+    if (skipNextRestoreTabRef.current === selectedTab) {
+      skipNextRestoreTabRef.current = null
+      return
+    }
+
     const snapshot = scrollMemoryByTabRef.current.get(selectedTab)
-    const elements = resolveTabScrollElements(tabsRef.current, selectedTab, viewportSelector)
+    const elements = resolveTabScrollElements(tabsRef.current, selectedTab, viewportSelectorValue)
     const panel = elements?.panel ?? tabsRef.current?.getPanel(selectedTab) ?? null
     restorePanelContentScroll(panel, snapshot)
     restorePanelViewportScroll(panel, elements?.viewport ?? null, snapshot)
-  }, [selectedTab, viewportSelector])
+  }, [selectedTab, viewportSelectorValue])
 
   useEffect(() => {
-    const elements = resolveTabScrollElements(tabsRef.current, selectedTab, viewportSelector)
+    const elements = resolveTabScrollElements(tabsRef.current, selectedTab, viewportSelectorValue)
     const contentScrollRoot = elements?.contentScrollRoot
     if (!elements || !contentScrollRoot || contentScrollRoot === elements.panel) {
       return
@@ -413,7 +439,7 @@ export function useRoutedCarouselTabs<TTabId extends string>({
     return () => {
       contentScrollRoot.removeEventListener('scroll', rememberContentScroll)
     }
-  }, [selectedTab, viewportSelector])
+  }, [selectedTab, viewportSelectorValue])
 
   useEffect(() => {
     const validIds = new Set(tabs.map((tab) => tab.id))
@@ -449,6 +475,7 @@ export function useRoutedCarouselTabs<TTabId extends string>({
       options?: {
         animate?: boolean
         history?: 'replace' | 'push'
+        transferScroll?: boolean
       }
     ) => {
       const {
@@ -468,6 +495,7 @@ export function useRoutedCarouselTabs<TTabId extends string>({
       if (!validIds.has(nextTabId) && !allowUnknown) return
 
       const nextHistory = options?.history ?? defaultHistory
+      const transferScroll = options?.transferScroll ?? true
       if (currentTab === nextTabId && latestSelectedFromLocation === nextTabId) {
         return
       }
@@ -502,6 +530,31 @@ export function useRoutedCarouselTabs<TTabId extends string>({
           return
         }
         navController.push(nextArea, href, latestLocation.state)
+      }
+
+      if (!transferScroll) {
+        const outgoingSnapshot = captureTabSnapshot(currentTab, latestViewportSelector)
+        if (outgoingSnapshot) {
+          scrollMemoryByTabRef.current.set(currentTab, outgoingSnapshot)
+        }
+        skipNextRestoreTabRef.current = nextTabId
+
+        if (!options?.animate || currentTab === nextTabId) {
+          commitSelection()
+          return
+        }
+
+        void runViewTransition({
+          intent: {
+            area: resolveTabArea(latestLocation.pathname, latestArea),
+            kind: 'tab-carousel',
+            direction: 'forward',
+          },
+          collectBeforeEntries: () => collectTabEntries(tabsRef.current, currentTab),
+          collectAfterEntries: () => collectTabEntries(tabsRef.current, nextTabId),
+          update: commitSelection,
+        })
+        return
       }
 
       const runSelectionWithScrollTransfer = (animated: boolean) => {

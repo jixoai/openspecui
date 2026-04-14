@@ -10,7 +10,7 @@ import type {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { getRouterContext } from '@tanstack/react-router'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { useRoutedCarouselTabs } from './tabs'
@@ -216,6 +216,86 @@ function RoutedTabsViewportScrollHarness() {
       data-testid="viewport-scroll-root"
       style={{ width: '480px', height: '320px', overflowY: 'auto', padding: '16px' }}
     >
+      <div style={{ height: '72px' }} />
+      <Tabs ref={tabsRef} tabs={tabs} selectedTab={selectedTab} onTabChange={onTabChange} />
+      <div style={{ height: '240px' }} />
+    </div>
+  )
+}
+
+function RoutedTabsUnstableViewportSelectorHarness() {
+  const previousStaticModeRef = useRef(isStaticMode())
+  const [rerenderCount, setRerenderCount] = useState(0)
+
+  useEffect(() => {
+    setStaticMode(true)
+    return () => {
+      setStaticMode(previousStaticModeRef.current)
+    }
+  }, [])
+
+  const routedTabs = useMemo(
+    () =>
+      [{ id: 'diff' as const }, { id: 'files' as const }] satisfies Array<{
+        id: 'diff' | 'files'
+      }>,
+    []
+  )
+  const viewportSelector = rerenderCount % 2 === 0 ? ['.main-content'] : ['.main-content']
+  const { onTabChange, selectedTab, tabsRef } = useRoutedCarouselTabs({
+    queryKey: 'gitPane',
+    tabs: routedTabs,
+    initialTab: 'diff',
+    viewportSelector,
+  })
+
+  const tabs = useMemo<Tab[]>(
+    () => [
+      {
+        id: 'diff',
+        label: 'Diff',
+        content: (
+          <div>
+            {Array.from({ length: 500 }, (_, index) => (
+              <div
+                key={`unstable-diff-row-${index + 1}`}
+                style={{ height: '20px', borderBottom: '1px solid transparent' }}
+              >
+                Diff row {index + 1}
+              </div>
+            ))}
+          </div>
+        ),
+      },
+      {
+        id: 'files',
+        label: 'Files',
+        content: (
+          <div>
+            {Array.from({ length: 100 }, (_, index) => (
+              <div
+                key={`unstable-file-row-${index + 1}`}
+                style={{ height: '30px', borderBottom: '1px solid transparent' }}
+              >
+                File row {index + 1}
+              </div>
+            ))}
+          </div>
+        ),
+      },
+    ],
+    []
+  )
+
+  return (
+    <div
+      className="main-content"
+      data-testid="unstable-selector-viewport-scroll-root"
+      style={{ width: '480px', height: '320px', overflowY: 'auto', padding: '16px' }}
+    >
+      <button type="button" onClick={() => setRerenderCount((current) => current + 1)}>
+        Rerender
+      </button>
       <div style={{ height: '72px' }} />
       <Tabs ref={tabsRef} tabs={tabs} selectedTab={selectedTab} onTabChange={onTabChange} />
       <div style={{ height: '240px' }} />
@@ -494,5 +574,141 @@ describe('useRoutedCarouselTabs browser', () => {
       expect(getActivePanel()).toBe('files')
       expect(viewport.scrollTop).toBe(300)
     })
+  })
+
+  it('keeps commit detail viewport user-scrollable after tree-to-diff reveal in a real browser', async () => {
+    render(
+      <RoutedTabsTestRouter initialSearch="?gitPane=files">
+        <RoutedCommitDetailBrowserHarness />
+      </RoutedTabsTestRouter>
+    )
+
+    const viewport = await screen.findByTestId('commit-detail-scroll-root')
+    const targetFile = commitDetailFiles.at(-1)
+    expect(targetFile).toBeTruthy()
+    if (!targetFile) {
+      return
+    }
+
+    const getActivePanel = () =>
+      viewport.querySelector<HTMLElement>('[data-tab-panel-state="active"]')?.dataset.tabPanel
+
+    await waitFor(() => {
+      expect(getActivePanel()).toBe('files')
+    })
+
+    fireEvent.click(screen.getByRole('treeitem', { name: targetFile.displayPath }))
+
+    await waitFor(() => {
+      expect(getActivePanel()).toBe('diff')
+      expect(viewport.scrollTop).toBeGreaterThan(400)
+    })
+
+    const revealedScrollTop = viewport.scrollTop
+    const nextScrollTop = revealedScrollTop + 180
+    viewport.scrollTop = nextScrollTop
+    viewport.dispatchEvent(new Event('scroll', { bubbles: true }))
+
+    await waitFor(() => {
+      expect(viewport.scrollTop).toBe(nextScrollTop)
+    })
+
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 360)
+    })
+
+    expect(viewport.scrollTop).toBe(nextScrollTop)
+  })
+
+  it('does not restore stale viewport scroll when selector arrays rerender with the same values', async () => {
+    render(
+      <RoutedTabsTestRouter>
+        <RoutedTabsUnstableViewportSelectorHarness />
+      </RoutedTabsTestRouter>
+    )
+
+    const viewport = await screen.findByTestId('unstable-selector-viewport-scroll-root')
+    const getActivePanel = () =>
+      viewport.querySelector<HTMLElement>('[data-tab-panel-state="active"]')?.dataset.tabPanel
+
+    viewport.scrollTop = 880
+    expect(viewport.scrollTop).toBe(880)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+
+    await waitFor(() => {
+      expect(getActivePanel()).toBe('files')
+      expect(viewport.scrollTop).toBe(880)
+    })
+
+    viewport.scrollTop = 260
+    expect(viewport.scrollTop).toBe(260)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Diff' }))
+
+    await waitFor(() => {
+      expect(getActivePanel()).toBe('diff')
+      expect(viewport.scrollTop).toBe(880)
+    })
+
+    const nextScrollTop = 1120
+    viewport.scrollTop = nextScrollTop
+    expect(viewport.scrollTop).toBe(nextScrollTop)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rerender' }))
+
+    await waitFor(() => {
+      expect(viewport.scrollTop).toBe(nextScrollTop)
+    })
+
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 360)
+    })
+
+    expect(viewport.scrollTop).toBe(nextScrollTop)
+  })
+
+  it('restores the file tree viewport after returning from a tree-to-diff reveal', async () => {
+    render(
+      <RoutedTabsTestRouter initialSearch="?gitPane=files">
+        <RoutedCommitDetailBrowserHarness />
+      </RoutedTabsTestRouter>
+    )
+
+    const viewport = await screen.findByTestId('commit-detail-scroll-root')
+    const targetFile = commitDetailFiles.at(-1)
+    expect(targetFile).toBeTruthy()
+    if (!targetFile) {
+      return
+    }
+
+    const getActivePanel = () =>
+      viewport.querySelector<HTMLElement>('[data-tab-panel-state="active"]')?.dataset.tabPanel
+
+    await waitFor(() => {
+      expect(getActivePanel()).toBe('files')
+      expect(viewport.scrollTop).toBe(0)
+    })
+
+    fireEvent.click(screen.getByRole('treeitem', { name: targetFile.displayPath }))
+
+    await waitFor(() => {
+      expect(getActivePanel()).toBe('diff')
+      expect(viewport.scrollTop).toBeGreaterThan(400)
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'File Tree' }))
+
+    await waitFor(() => {
+      expect(getActivePanel()).toBe('files')
+      expect(viewport.scrollTop).toBeLessThan(80)
+    })
+
+    const treeRoot = await screen.findByRole('tree', { name: 'Changed files' })
+    const treeRect = treeRoot.getBoundingClientRect()
+    const viewportRect = viewport.getBoundingClientRect()
+
+    expect(treeRect.bottom).toBeGreaterThan(viewportRect.top + 20)
+    expect(treeRect.top).toBeLessThan(viewportRect.bottom - 20)
   })
 })
