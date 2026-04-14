@@ -1,7 +1,7 @@
 import { createEvent, fireEvent, render, within } from '@testing-library/react'
-import { useEffect } from 'react'
+import { createRef, useEffect } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { Tabs, type Tab } from './tabs'
+import { Tabs, type Tab, type TabsHandle } from './tabs'
 
 const tabs: Tab[] = [
   { id: 'a', label: 'A', content: <div>A content</div> },
@@ -73,20 +73,88 @@ describe('Tabs double-click behavior', () => {
 
     const actions = container.querySelector('[data-tabs-actions="true"]')
     expect(actions?.className).toContain('bg-terminal')
+    expect(container.querySelector('[data-tabs-selection-indicator="true"]')).toBeNull()
   })
 
   it('renders the default variant with a surfaced header background', () => {
     const { container } = render(<Tabs tabs={tabs} selectedTab="a" actions={<button>x</button>} />)
 
     const header = container.querySelector('.tabs-header')
-    expect(header?.className).toContain('bg-card/95')
-    expect(header?.className).toContain('rounded-md')
+    expect(header?.className).toContain('sticky')
 
-    const selected = within(container).getByRole('button', { name: 'A' })
-    expect(selected.className).toContain('bg-background/70')
+    const headerShell = container.querySelector('[data-tabs-header-shell="true"]')
+    expect(headerShell?.className).toContain('bg-card/95')
+    expect(headerShell?.className).toContain('rounded-md')
+
+    const indicator = container.querySelector('[data-tabs-selection-indicator="true"]')
+    expect(indicator).not.toBeNull()
 
     const actions = container.querySelector('[data-tabs-actions="true"]')
-    expect(actions?.className).toContain('bg-card/95')
+    expect(actions?.className).toContain('border-l')
+  })
+
+  it('exposes default VT layer handles and syncs the selection indicator to the active tab', () => {
+    const handleRef = createRef<TabsHandle>()
+    const rect = (left: number, top: number, width: number, height: number) =>
+      ({
+        x: left,
+        y: top,
+        left,
+        top,
+        width,
+        height,
+        right: left + width,
+        bottom: top + height,
+        toJSON: () => ({}),
+      }) satisfies DOMRect
+
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value: function mockGetBoundingClientRect(this: HTMLElement) {
+        if (this.classList.contains('tabs-header')) {
+          return rect(20, 40, 320, 44)
+        }
+
+        if (this.dataset.tabId === 'a') {
+          return rect(36, 40, 80, 36)
+        }
+
+        if (this.dataset.tabId === 'b') {
+          return rect(128, 40, 96, 36)
+        }
+
+        return originalGetBoundingClientRect.call(this)
+      },
+    })
+
+    try {
+      const { container, rerender } = render(
+        <Tabs ref={handleRef} tabs={tabs} selectedTab="a" actions={<button>x</button>} />
+      )
+
+      const indicator = handleRef.current?.getSelectionIndicator()
+      expect(handleRef.current?.getHeaderShell()).toBe(
+        container.querySelector('[data-tabs-header-shell="true"]')
+      )
+      expect(handleRef.current?.getHeaderForeground()).toBe(
+        container.querySelector('[data-tabs-header-foreground="true"]')
+      )
+      expect(indicator?.style.transform).toBe('translate(16px, 0px)')
+      expect(indicator?.style.width).toBe('80px')
+      expect(indicator?.style.height).toBe('36px')
+
+      rerender(<Tabs ref={handleRef} tabs={tabs} selectedTab="b" actions={<button>x</button>} />)
+
+      expect(indicator?.style.transform).toBe('translate(108px, 0px)')
+      expect(indicator?.style.width).toBe('96px')
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+        configurable: true,
+        value: originalGetBoundingClientRect,
+      })
+    }
   })
 
   it('mounts tab styles in document head instead of rendering style text in the body', () => {

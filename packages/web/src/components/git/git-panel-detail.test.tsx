@@ -41,11 +41,17 @@ vi.mock('@/components/tabs', () => ({
       root: HTMLElement | null
       getTrigger: (tabId: string) => HTMLElement | null
       getPanel: (tabId: string) => HTMLElement | null
+      getHeaderShell: () => HTMLElement | null
+      getHeaderForeground: () => HTMLElement | null
+      getSelectionIndicator: () => HTMLElement | null
       getActiveTabId: () => string | null
     }>
   ) {
     const activeTab = tabs.find((tab) => tab.id === selectedTab) ?? tabs[0] ?? null
     const rootRef = useRef<HTMLDivElement | null>(null)
+    const headerShellRef = useRef<HTMLDivElement | null>(null)
+    const headerForegroundRef = useRef<HTMLDivElement | null>(null)
+    const selectionIndicatorRef = useRef<HTMLDivElement | null>(null)
     const triggerRefs = useRef(new Map<string, HTMLButtonElement | null>())
     const panelRefs = useRef(new Map<string, HTMLDivElement | null>())
 
@@ -55,6 +61,9 @@ vi.mock('@/components/tabs', () => ({
         root: rootRef.current,
         getTrigger: (tabId: string) => triggerRefs.current.get(tabId) ?? null,
         getPanel: (tabId: string) => panelRefs.current.get(tabId) ?? null,
+        getHeaderShell: () => headerShellRef.current,
+        getHeaderForeground: () => headerForegroundRef.current,
+        getSelectionIndicator: () => selectionIndicatorRef.current,
         getActiveTabId: () => activeTab?.id ?? null,
       }),
       [activeTab?.id]
@@ -67,7 +76,9 @@ vi.mock('@/components/tabs', () => ({
         data-active-tab={activeTab?.id ?? ''}
         className={className}
       >
-        <div className="tabs-strip">
+        <div ref={headerShellRef} data-tabs-header-shell="true" />
+        <div ref={selectionIndicatorRef} data-tabs-selection-indicator="true" />
+        <div ref={headerForegroundRef} data-tabs-header-foreground="true" className="tabs-strip">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -356,6 +367,40 @@ const largeDiffPatchFiles = largeDiffFiles.map((file, index) => ({
   ].join('\n'),
 }))
 
+const replayScrollFiles = [
+  {
+    ...baseFile,
+    fileId: 'replay-app-kernel',
+    path: 'packages/app-server/src/app-kernel.ts',
+    displayPath: 'packages/app-server/src/app-kernel.ts',
+  },
+  {
+    ...baseFile,
+    fileId: 'replay-heartbeat-groups',
+    path: 'packages/app-server/src/heartbeat-groups.ts',
+    displayPath: 'packages/app-server/src/heartbeat-groups.ts',
+  },
+  {
+    ...baseFile,
+    fileId: 'replay-session-runtime',
+    path: 'packages/app-server/src/session-runtime.ts',
+    displayPath: 'packages/app-server/src/session-runtime.ts',
+  },
+]
+
+const replayScrollPatchFiles = replayScrollFiles.map((file, index) => ({
+  ...basePatchFile,
+  fileId: file.fileId,
+  path: file.path,
+  displayPath: file.displayPath,
+  patch: [
+    `diff --git a/${file.path} b/${file.path}`,
+    '@@ -1,3 +1,3 @@',
+    `-export const before_${index + 1} = 0`,
+    `+export const after_${index + 1} = 1`,
+  ].join('\n'),
+}))
+
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
@@ -483,6 +528,73 @@ describe('GitEntryDetailPanel', () => {
     expect(frameStates.every((state) => state === 'diff')).toBe(true)
   })
 
+  it('does not replay a completed tree-selection diff scroll on later tab activations', async () => {
+    const frameQueue: FrameRequestCallback[] = []
+    const frameStates: string[] = []
+
+    const flushFrames = (limit = 8) => {
+      for (let index = 0; index < limit && frameQueue.length > 0; index += 1) {
+        const callback = frameQueue.shift()
+        callback?.((index + 1) * 16)
+      }
+    }
+
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frameStates.push(screen.getByTestId('tabs').getAttribute('data-active-tab') ?? '')
+      frameQueue.push(callback)
+      return frameQueue.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    renderWithQueryClient(
+      <GitEntryDetailPanel
+        selector={{ type: 'commit', hash: baseEntry.hash }}
+        entry={baseEntry}
+        files={[baseFile]}
+        eagerFiles={[basePatchFile]}
+        isLoading={false}
+        error={null}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /File Tree/i }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('tabs')).toHaveAttribute('data-active-tab', 'files')
+    })
+
+    fireEvent.click(screen.getByRole('treeitem', { name: /src\/git-panel\.ts/i }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('tabs')).toHaveAttribute('data-active-tab', 'diff')
+    })
+
+    await act(async () => {
+      flushFrames()
+    })
+
+    expect(frameStates.length).toBeGreaterThan(0)
+    expect(frameStates.every((state) => state === 'diff')).toBe(true)
+
+    const initialFrameCount = frameStates.length
+
+    fireEvent.click(screen.getByRole('button', { name: /File Tree/i }))
+    await waitFor(() => {
+      expect(screen.getByTestId('tabs')).toHaveAttribute('data-active-tab', 'files')
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /Diff Stream/i }))
+    await waitFor(() => {
+      expect(screen.getByTestId('tabs')).toHaveAttribute('data-active-tab', 'diff')
+    })
+
+    await act(async () => {
+      flushFrames()
+    })
+
+    expect(frameStates).toHaveLength(initialFrameCount)
+  })
+
   it('renders full large narrow diff lists and switches back to diff after tree selection', async () => {
     stubNarrowResizeObserver()
     const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
@@ -553,6 +665,337 @@ describe('GitEntryDetailPanel', () => {
       await waitFor(() => {
         expect(screen.getByTestId('tabs')).toHaveAttribute('data-active-tab', 'diff')
       })
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+        configurable: true,
+        writable: true,
+        value: originalGetBoundingClientRect,
+      })
+    }
+  })
+
+  it('scrolls the outer narrow viewport to the selected diff card after tree navigation', async () => {
+    stubNarrowResizeObserver()
+
+    const targetFile = largeDiffFiles.at(-1)
+    expect(targetFile).toBeTruthy()
+    if (!targetFile) {
+      return
+    }
+
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(16)
+      return 1
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      writable: true,
+      value: function mockGetBoundingClientRect(this: HTMLElement) {
+        if (this.dataset.testid === 'scroll-shell') {
+          return {
+            x: 0,
+            y: 40,
+            width: 420,
+            height: 320,
+            top: 40,
+            right: 420,
+            bottom: 360,
+            left: 0,
+            toJSON: () => ({}),
+          } satisfies DOMRect
+        }
+
+        if (this.dataset.testid === 'git-diff-viewport') {
+          return {
+            x: 0,
+            y: 104,
+            width: 420,
+            height: 240,
+            top: 104,
+            right: 420,
+            bottom: 344,
+            left: 0,
+            toJSON: () => ({}),
+          } satisfies DOMRect
+        }
+
+        if (this.tagName === 'SECTION' && this.dataset.fileId === targetFile.fileId) {
+          return {
+            x: 0,
+            y: 860,
+            width: 420,
+            height: 180,
+            top: 860,
+            right: 420,
+            bottom: 1040,
+            left: 0,
+            toJSON: () => ({}),
+          } satisfies DOMRect
+        }
+
+        return originalGetBoundingClientRect.call(this)
+      },
+    })
+
+    try {
+      renderWithQueryClient(
+        <div data-testid="scroll-shell" style={{ height: '320px', overflowY: 'auto' }}>
+          <GitEntryDetailPanel
+            selector={{ type: 'commit', hash: baseEntry.hash }}
+            entry={{
+              ...baseEntry,
+              diff: { files: largeDiffFiles.length, insertions: 56, deletions: 28 },
+            }}
+            files={largeDiffFiles}
+            eagerFiles={largeDiffPatchFiles}
+            isLoading={false}
+            error={null}
+          />
+        </div>
+      )
+
+      const scrollShell = screen.getByTestId('scroll-shell')
+      Object.defineProperty(scrollShell, 'clientHeight', {
+        configurable: true,
+        value: 320,
+      })
+      Object.defineProperty(scrollShell, 'scrollHeight', {
+        configurable: true,
+        value: 4000,
+      })
+
+      const scrollToMock = vi.fn(({ top }: ScrollToOptions) => {
+        Object.defineProperty(scrollShell, 'scrollTop', {
+          configurable: true,
+          value: top ?? 0,
+          writable: true,
+        })
+      })
+      Object.defineProperty(scrollShell, 'scrollTo', {
+        configurable: true,
+        writable: true,
+        value: scrollToMock,
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: /File Tree/i }))
+      fireEvent.click(screen.getByRole('treeitem', { name: new RegExp(targetFile.displayPath) }))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('tabs')).toHaveAttribute('data-active-tab', 'diff')
+      })
+
+      await waitFor(() => {
+        expect(scrollToMock).toHaveBeenCalled()
+      })
+
+      expect(scrollToMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          behavior: 'auto',
+          top: expect.any(Number),
+        })
+      )
+      expect(
+        (scrollToMock.mock.lastCall?.[0] as ScrollToOptions | undefined)?.top ?? 0
+      ).toBeGreaterThan(700)
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+        configurable: true,
+        writable: true,
+        value: originalGetBoundingClientRect,
+      })
+    }
+  })
+
+  it('retries a tree-selection reveal when another restore rewinds the viewport before verification settles', async () => {
+    stubNarrowResizeObserver()
+
+    const frameQueue: FrameRequestCallback[] = []
+    const flushNextFrame = () => {
+      const callback = frameQueue.shift()
+      callback?.(16)
+    }
+
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frameQueue.push(callback)
+      return frameQueue.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+    let scrollShell: HTMLElement | null = null
+    const absoluteTopByFileId = new Map([
+      ['replay-app-kernel', 544],
+      ['replay-heartbeat-groups', 744],
+      ['replay-session-runtime', 944],
+    ])
+
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      writable: true,
+      value: function mockGetBoundingClientRect(this: HTMLElement) {
+        if (this.dataset.testid === 'scroll-shell') {
+          return {
+            x: 0,
+            y: 40,
+            width: 420,
+            height: 320,
+            top: 40,
+            right: 420,
+            bottom: 360,
+            left: 0,
+            toJSON: () => ({}),
+          } satisfies DOMRect
+        }
+
+        if (this.dataset.testid === 'git-diff-viewport') {
+          return {
+            x: 0,
+            y: 104,
+            width: 420,
+            height: 240,
+            top: 104,
+            right: 420,
+            bottom: 344,
+            left: 0,
+            toJSON: () => ({}),
+          } satisfies DOMRect
+        }
+
+        if (this.tagName === 'SECTION') {
+          const fileId = this.dataset.fileId
+          const absoluteTop = fileId ? absoluteTopByFileId.get(fileId) : null
+          if (absoluteTop != null && scrollShell) {
+            const top = absoluteTop - scrollShell.scrollTop
+            return {
+              x: 0,
+              y: top,
+              width: 420,
+              height: 180,
+              top,
+              right: 420,
+              bottom: top + 180,
+              left: 0,
+              toJSON: () => ({}),
+            } satisfies DOMRect
+          }
+        }
+
+        return originalGetBoundingClientRect.call(this)
+      },
+    })
+
+    try {
+      renderWithQueryClient(
+        <div data-testid="scroll-shell" style={{ height: '320px', overflowY: 'auto' }}>
+          <GitEntryDetailPanel
+            selector={{ type: 'commit', hash: baseEntry.hash }}
+            entry={{
+              ...baseEntry,
+              diff: { files: replayScrollFiles.length, insertions: 9, deletions: 3 },
+            }}
+            files={replayScrollFiles}
+            eagerFiles={replayScrollPatchFiles}
+            isLoading={false}
+            error={null}
+          />
+        </div>
+      )
+
+      scrollShell = screen.getByTestId('scroll-shell')
+      Object.defineProperty(scrollShell, 'clientHeight', {
+        configurable: true,
+        value: 320,
+      })
+      Object.defineProperty(scrollShell, 'scrollHeight', {
+        configurable: true,
+        value: 4000,
+      })
+      Object.defineProperty(scrollShell, 'scrollTop', {
+        configurable: true,
+        value: 0,
+        writable: true,
+      })
+
+      const scrollToMock = vi.fn(({ top }: ScrollToOptions) => {
+        Object.defineProperty(scrollShell, 'scrollTop', {
+          configurable: true,
+          value: top ?? 0,
+          writable: true,
+        })
+      })
+      Object.defineProperty(scrollShell, 'scrollTo', {
+        configurable: true,
+        writable: true,
+        value: scrollToMock,
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: /File Tree/i }))
+      await waitFor(() => {
+        expect(screen.getByTestId('tabs')).toHaveAttribute('data-active-tab', 'files')
+      })
+
+      fireEvent.click(
+        screen.getByRole('treeitem', { name: /packages\/app-server\/src\/session-runtime\.ts/i })
+      )
+      await waitFor(() => {
+        expect(screen.getByTestId('tabs')).toHaveAttribute('data-active-tab', 'diff')
+      })
+
+      await act(async () => {
+        flushNextFrame()
+        flushNextFrame()
+      })
+
+      const sessionRuntimeTop =
+        (scrollToMock.mock.lastCall?.[0] as ScrollToOptions | undefined)?.top ?? null
+      expect(sessionRuntimeTop).toEqual(expect.any(Number))
+      expect(sessionRuntimeTop).toBeGreaterThan(0)
+      expect(scrollShell.scrollTop).toBe(sessionRuntimeTop)
+
+      scrollToMock.mockClear()
+
+      fireEvent.click(screen.getByRole('button', { name: /File Tree/i }))
+      await waitFor(() => {
+        expect(screen.getByTestId('tabs')).toHaveAttribute('data-active-tab', 'files')
+      })
+
+      fireEvent.click(
+        screen.getByRole('treeitem', { name: /packages\/app-server\/src\/app-kernel\.ts/i })
+      )
+      await waitFor(() => {
+        expect(screen.getByTestId('tabs')).toHaveAttribute('data-active-tab', 'diff')
+      })
+
+      await act(async () => {
+        flushNextFrame()
+      })
+
+      const appKernelTop =
+        (scrollToMock.mock.lastCall?.[0] as ScrollToOptions | undefined)?.top ?? null
+      expect(appKernelTop).toEqual(expect.any(Number))
+      expect(appKernelTop).toBeLessThan(sessionRuntimeTop ?? Number.POSITIVE_INFINITY)
+      expect(scrollShell.scrollTop).toBe(appKernelTop)
+
+      Object.defineProperty(scrollShell, 'scrollTop', {
+        configurable: true,
+        value: sessionRuntimeTop,
+        writable: true,
+      })
+
+      await act(async () => {
+        flushNextFrame()
+        flushNextFrame()
+      })
+
+      const scrollTargets = scrollToMock.mock.calls.map(
+        ([options]) => (options as ScrollToOptions | undefined)?.top ?? null
+      )
+      expect(scrollTargets.filter((top) => top === appKernelTop).length).toBeGreaterThanOrEqual(2)
+      expect(scrollShell.scrollTop).toBe(appKernelTop)
     } finally {
       Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
         configurable: true,

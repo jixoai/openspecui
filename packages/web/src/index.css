@@ -255,6 +255,18 @@
   view-transition-class: vt-tab-panel;
 }
 
+[data-tabs-header-shell] {
+  view-transition-class: vt-tab-header-shell;
+}
+
+[data-tabs-header-foreground] {
+  view-transition-class: vt-tab-header-foreground;
+}
+
+[data-tabs-selection-indicator] {
+  view-transition-class: vt-tab-edge;
+}
+
 html[data-vt-kind='route-detail'] .vt-detail-content.route-loading {
   view-transition-name: vt-detail-content;
 }
@@ -429,6 +441,46 @@ html[data-vt-kind='route-detail'] .vt-detail-content {
   }
 }
 
+@keyframes vt-tab-edge-new {
+  from {
+    opacity: 0.72;
+    filter: saturate(0.9);
+  }
+  to {
+    opacity: 1;
+    filter: saturate(1);
+  }
+}
+
+@keyframes vt-tab-edge-old {
+  from {
+    opacity: 1;
+    filter: saturate(1);
+  }
+  to {
+    opacity: 0.72;
+    filter: saturate(0.94);
+  }
+}
+
+@keyframes vt-tab-layer-new {
+  from {
+    opacity: 0.78;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes vt-tab-layer-old {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.72;
+  }
+}
+
 ::view-transition-group(root) {
   animation-duration: 1ms;
 }
@@ -538,7 +590,87 @@ html[data-vt-kind='route-detail']::view-transition-new(vt-detail-content) {
   mix-blend-mode: normal;
 }
 
+html[data-vt-kind='tab-carousel'] [data-tabs-selection-indicator] {
+  transition: none;
+}
+
+html[data-vt-kind='tab-carousel']::view-transition-group(.vt-tab-header-shell) {
+  z-index: 2;
+  animation-duration: 220ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  isolation: isolate;
+  overflow: clip;
+}
+
+html[data-vt-kind='tab-carousel']::view-transition-old(.vt-tab-header-shell),
+html[data-vt-kind='tab-carousel']::view-transition-new(.vt-tab-header-shell) {
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  mix-blend-mode: normal;
+}
+
+html[data-vt-kind='tab-carousel']::view-transition-old(.vt-tab-header-shell) {
+  animation: vt-tab-layer-old 160ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+html[data-vt-kind='tab-carousel']::view-transition-new(.vt-tab-header-shell) {
+  animation: vt-tab-layer-new 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  mix-blend-mode: normal;
+}
+
+html[data-vt-kind='tab-carousel']::view-transition-group(.vt-tab-edge) {
+  z-index: 3;
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  isolation: isolate;
+  overflow: clip;
+}
+
+html[data-vt-kind='tab-carousel']::view-transition-old(.vt-tab-edge),
+html[data-vt-kind='tab-carousel']::view-transition-new(.vt-tab-edge) {
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+
+html[data-vt-kind='tab-carousel']::view-transition-old(.vt-tab-edge) {
+  animation: vt-tab-edge-old 180ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  mix-blend-mode: normal;
+}
+
+html[data-vt-kind='tab-carousel']::view-transition-new(.vt-tab-edge) {
+  animation: vt-tab-edge-new 260ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  mix-blend-mode: normal;
+}
+
+html[data-vt-kind='tab-carousel']::view-transition-group(.vt-tab-header-foreground) {
+  z-index: 4;
+  animation-duration: 240ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  isolation: isolate;
+  overflow: clip;
+}
+
+html[data-vt-kind='tab-carousel']::view-transition-old(.vt-tab-header-foreground),
+html[data-vt-kind='tab-carousel']::view-transition-new(.vt-tab-header-foreground) {
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  mix-blend-mode: normal;
+}
+
+html[data-vt-kind='tab-carousel']::view-transition-old(.vt-tab-header-foreground) {
+  animation: vt-tab-layer-old 160ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+html[data-vt-kind='tab-carousel']::view-transition-new(.vt-tab-header-foreground) {
+  animation: vt-tab-layer-new 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  mix-blend-mode: normal;
+}
+
 html[data-vt-kind='tab-carousel']::view-transition-group(.vt-tab-panel) {
+  z-index: 1;
   animation-duration: 280ms;
   animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   isolation: isolate;
@@ -592,6 +724,12 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
   ::view-transition-new(.vt-shared-title),
   ::view-transition-old(vt-detail-content),
   ::view-transition-new(vt-detail-content),
+  ::view-transition-old(.vt-tab-header-shell),
+  ::view-transition-new(.vt-tab-header-shell),
+  ::view-transition-old(.vt-tab-edge),
+  ::view-transition-new(.vt-tab-edge),
+  ::view-transition-old(.vt-tab-header-foreground),
+  ::view-transition-new(.vt-tab-header-foreground),
   ::view-transition-old(.vt-tab-panel),
   ::view-transition-new(.vt-tab-panel) {
     animation: none;

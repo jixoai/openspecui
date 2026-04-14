@@ -6,6 +6,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -21,9 +22,17 @@ import {
   freezeIncomingTab,
   freezeOutgoingTab,
   resolveTabScrollElements,
+  restorePanelContentScroll,
+  restorePanelViewportScroll,
   type FrozenTabState,
   type TabScrollMemory,
+  type ViewportSelector,
 } from './tab-scroll-freeze'
+
+interface FrozenTabEntry {
+  state: FrozenTabState
+  token: number
+}
 
 export interface UseRoutedCarouselTabsOptions<TTabId extends string> {
   queryKey: string
@@ -32,7 +41,7 @@ export interface UseRoutedCarouselTabsOptions<TTabId extends string> {
   area?: VTArea
   history?: 'replace' | 'push'
   allowUnknownSelection?: boolean
-  viewportSelector?: string
+  viewportSelector?: string | readonly string[]
 }
 
 interface RoutedTabsLocation {
@@ -104,6 +113,22 @@ function buildHrefWithQuery(
 function resolveTabArea(pathname: string, area?: VTArea): VTArea {
   if (area) return area
   return isStaticMode() ? 'main' : navController.getAreaForPath(pathname)
+}
+
+function normalizeViewportSelectorOption(
+  viewportSelector?: ViewportSelector
+): readonly string[] | undefined {
+  if (!viewportSelector) {
+    return undefined
+  }
+
+  const selectors =
+    typeof viewportSelector === 'string' ? viewportSelector.split(',') : [...viewportSelector]
+  const normalized = selectors
+    .map((selector) => selector.trim())
+    .filter((selector) => selector.length > 0)
+
+  return normalized.length > 0 ? normalized : undefined
 }
 
 function readWindowLocation(): RoutedTabsLocation {
@@ -191,6 +216,21 @@ function collectTabEntries(handle: TabsHandle | null, tabId: string): Array<[HTM
   if (!handle) return []
 
   const entries: Array<[HTMLElement, string]> = []
+  const headerShell = handle.getHeaderShell()
+  if (headerShell) {
+    entries.push([headerShell, 'vt-tab-header-shell'])
+  }
+
+  const selectionIndicator = handle.getSelectionIndicator()
+  if (selectionIndicator) {
+    entries.push([selectionIndicator, 'vt-tab-edge'])
+  }
+
+  const headerForeground = handle.getHeaderForeground()
+  if (headerForeground) {
+    entries.push([headerForeground, 'vt-tab-header-foreground'])
+  }
+
   const panel = handle.getPanel(tabId)
   if (panel) {
     entries.push([panel, 'vt-tab-panel'])
@@ -209,8 +249,14 @@ export function useRoutedCarouselTabs<TTabId extends string>({
 }: UseRoutedCarouselTabsOptions<TTabId>) {
   const { location, router } = useRoutedTabsLocation()
   const tabsRef = useRef<TabsHandle | null>(null)
+  const viewportSelectorValue = useMemo(
+    () => normalizeViewportSelectorOption(viewportSelector),
+    [typeof viewportSelector === 'string' ? viewportSelector : (viewportSelector ?? []).join('\0')]
+  )
   const scrollMemoryByTabRef = useRef(new Map<string, TabScrollMemory>())
-  const frozenTabsRef = useRef(new Map<string, FrozenTabState>())
+  const frozenTabsRef = useRef(new Map<string, FrozenTabEntry>())
+  const frozenTabTokenRef = useRef(0)
+  const skipNextRestoreTabRef = useRef<string | null>(null)
   const selectedFromLocation = useMemo(
     () =>
       resolveSelectedTab({
@@ -233,7 +279,7 @@ export function useRoutedCarouselTabs<TTabId extends string>({
     selectedFromLocation,
     selectedTab,
     tabs,
-    viewportSelector,
+    viewportSelector: viewportSelectorValue,
   })
 
   latestRef.current = {
@@ -246,71 +292,106 @@ export function useRoutedCarouselTabs<TTabId extends string>({
     selectedFromLocation,
     selectedTab,
     tabs,
-    viewportSelector,
+    viewportSelector: viewportSelectorValue,
   }
 
-  const cleanupFrozenTabById = useCallback((tabId: string) => {
-    const frozenState = frozenTabsRef.current.get(tabId)
-    if (!frozenState) {
+  const cleanupFrozenTabById = useCallback((tabId: string, token?: number) => {
+    const frozenEntry = frozenTabsRef.current.get(tabId)
+    if (!frozenEntry || (token != null && frozenEntry.token !== token)) {
       return
     }
 
-    cleanupFrozenTab(frozenState)
+    cleanupFrozenTab(frozenEntry.state)
     frozenTabsRef.current.delete(tabId)
   }, [])
 
   const cleanupAllFrozenTabs = useCallback(() => {
-    for (const frozenState of frozenTabsRef.current.values()) {
-      cleanupFrozenTab(frozenState)
+    for (const frozenEntry of frozenTabsRef.current.values()) {
+      cleanupFrozenTab(frozenEntry.state)
     }
     frozenTabsRef.current.clear()
   }, [])
 
+  const captureTabSnapshot = useCallback(
+    (tabId: string, nextViewportSelector?: ViewportSelector) => {
+      const elements = resolveTabScrollElements(tabsRef.current, tabId, nextViewportSelector)
+      if (!elements) {
+        return null
+      }
+
+      return captureTabScrollMemory(elements)
+    },
+    []
+  )
+
   const captureOutgoingTab = useCallback(
-    (tabId: string, nextViewportSelector?: string) => {
+    (
+      tabId: string,
+      nextViewportSelector?: ViewportSelector,
+      snapshotOverride?: TabScrollMemory | null
+    ) => {
       const elements = resolveTabScrollElements(tabsRef.current, tabId, nextViewportSelector)
       if (!elements) {
         return
       }
 
-      const snapshot = captureTabScrollMemory(elements)
+      const snapshot = snapshotOverride ?? captureTabScrollMemory(elements)
       if (!snapshot) {
         return
       }
 
       scrollMemoryByTabRef.current.set(tabId, snapshot)
       cleanupFrozenTabById(tabId)
-      frozenTabsRef.current.set(tabId, freezeOutgoingTab(elements, snapshot))
+      const token = ++frozenTabTokenRef.current
+      frozenTabsRef.current.set(tabId, {
+        token,
+        state: freezeOutgoingTab(elements, snapshot),
+      })
+      return token
     },
     [cleanupFrozenTabById]
   )
 
   const prepareIncomingTab = useCallback(
-    (tabId: string, nextViewportSelector?: string) => {
+    (
+      tabId: string,
+      nextViewportSelector?: ViewportSelector,
+      fallbackSnapshot?: TabScrollMemory | null
+    ) => {
       const elements = resolveTabScrollElements(tabsRef.current, tabId, nextViewportSelector)
       if (!elements) {
-        return false
+        return null
       }
 
-      const snapshot = scrollMemoryByTabRef.current.get(tabId) ?? captureTabScrollMemory(elements)
+      const snapshot =
+        scrollMemoryByTabRef.current.get(tabId) ??
+        fallbackSnapshot ??
+        captureTabScrollMemory(elements)
       if (!snapshot) {
-        return false
+        return null
       }
 
+      if (!scrollMemoryByTabRef.current.has(tabId)) {
+        scrollMemoryByTabRef.current.set(tabId, snapshot)
+      }
       cleanupFrozenTabById(tabId)
-      frozenTabsRef.current.set(tabId, freezeIncomingTab(elements, snapshot))
-      return true
+      const token = ++frozenTabTokenRef.current
+      frozenTabsRef.current.set(tabId, {
+        token,
+        state: freezeIncomingTab(elements, snapshot),
+      })
+      return token
     },
     [cleanupFrozenTabById]
   )
 
-  const finalizeIncomingTab = useCallback((tabId: string) => {
-    const frozenState = frozenTabsRef.current.get(tabId)
-    if (!frozenState) {
+  const finalizeIncomingTab = useCallback((tabId: string, token?: number) => {
+    const frozenEntry = frozenTabsRef.current.get(tabId)
+    if (!frozenEntry || (token != null && frozenEntry.token !== token)) {
       return
     }
 
-    finalizeFrozenIncomingTab(frozenState)
+    finalizeFrozenIncomingTab(frozenEntry.state)
     frozenTabsRef.current.delete(tabId)
   }, [])
 
@@ -319,6 +400,46 @@ export function useRoutedCarouselTabs<TTabId extends string>({
       current === selectedFromLocation ? current : selectedFromLocation
     )
   }, [selectedFromLocation])
+
+  useLayoutEffect(() => {
+    if (skipNextRestoreTabRef.current === selectedTab) {
+      skipNextRestoreTabRef.current = null
+      return
+    }
+
+    const snapshot = scrollMemoryByTabRef.current.get(selectedTab)
+    const elements = resolveTabScrollElements(tabsRef.current, selectedTab, viewportSelectorValue)
+    const panel = elements?.panel ?? tabsRef.current?.getPanel(selectedTab) ?? null
+    restorePanelContentScroll(panel, snapshot)
+    restorePanelViewportScroll(panel, elements?.viewport ?? null, snapshot)
+  }, [selectedTab, viewportSelectorValue])
+
+  useEffect(() => {
+    const elements = resolveTabScrollElements(tabsRef.current, selectedTab, viewportSelectorValue)
+    const contentScrollRoot = elements?.contentScrollRoot
+    if (!elements || !contentScrollRoot || contentScrollRoot === elements.panel) {
+      return
+    }
+
+    const rememberContentScroll = () => {
+      const existingSnapshot = scrollMemoryByTabRef.current.get(selectedTab)
+      if (!existingSnapshot) {
+        return
+      }
+
+      scrollMemoryByTabRef.current.set(selectedTab, {
+        ...existingSnapshot,
+        contentScrollTop: contentScrollRoot.scrollTop,
+      })
+    }
+
+    rememberContentScroll()
+    contentScrollRoot.addEventListener('scroll', rememberContentScroll, { passive: true })
+
+    return () => {
+      contentScrollRoot.removeEventListener('scroll', rememberContentScroll)
+    }
+  }, [selectedTab, viewportSelectorValue])
 
   useEffect(() => {
     const validIds = new Set(tabs.map((tab) => tab.id))
@@ -354,6 +475,7 @@ export function useRoutedCarouselTabs<TTabId extends string>({
       options?: {
         animate?: boolean
         history?: 'replace' | 'push'
+        transferScroll?: boolean
       }
     ) => {
       const {
@@ -373,6 +495,7 @@ export function useRoutedCarouselTabs<TTabId extends string>({
       if (!validIds.has(nextTabId) && !allowUnknown) return
 
       const nextHistory = options?.history ?? defaultHistory
+      const transferScroll = options?.transferScroll ?? true
       if (currentTab === nextTabId && latestSelectedFromLocation === nextTabId) {
         return
       }
@@ -409,20 +532,62 @@ export function useRoutedCarouselTabs<TTabId extends string>({
         navController.push(nextArea, href, latestLocation.state)
       }
 
+      if (!transferScroll) {
+        const outgoingSnapshot = captureTabSnapshot(currentTab, latestViewportSelector)
+        if (outgoingSnapshot) {
+          scrollMemoryByTabRef.current.set(currentTab, outgoingSnapshot)
+        }
+        skipNextRestoreTabRef.current = nextTabId
+
+        if (!options?.animate || currentTab === nextTabId) {
+          commitSelection()
+          return
+        }
+
+        void runViewTransition({
+          intent: {
+            area: resolveTabArea(latestLocation.pathname, latestArea),
+            kind: 'tab-carousel',
+            direction: 'forward',
+          },
+          collectBeforeEntries: () => collectTabEntries(tabsRef.current, currentTab),
+          collectAfterEntries: () => collectTabEntries(tabsRef.current, nextTabId),
+          update: commitSelection,
+        })
+        return
+      }
+
       const runSelectionWithScrollTransfer = (animated: boolean) => {
-        captureOutgoingTab(currentTab, latestViewportSelector)
+        const outgoingSnapshot = captureTabSnapshot(currentTab, latestViewportSelector)
+        const incomingSeedSnapshot =
+          scrollMemoryByTabRef.current.get(nextTabId) ??
+          outgoingSnapshot ??
+          captureTabSnapshot(nextTabId, latestViewportSelector)
+        const outgoingToken = captureOutgoingTab(
+          currentTab,
+          latestViewportSelector,
+          outgoingSnapshot
+        )
 
         if (!animated) {
           flushSync(() => {
             commitSelection()
           })
-          prepareIncomingTab(nextTabId, latestViewportSelector)
-          finalizeIncomingTab(nextTabId)
-          cleanupFrozenTabById(currentTab)
+          const incomingToken = prepareIncomingTab(
+            nextTabId,
+            latestViewportSelector,
+            incomingSeedSnapshot
+          )
+          if (incomingToken != null) {
+            finalizeIncomingTab(nextTabId, incomingToken)
+          }
+          if (outgoingToken != null) {
+            cleanupFrozenTabById(currentTab, outgoingToken)
+          }
           return
         }
 
-        let hasPreparedIncoming = false
+        let incomingToken: number | null = null
         void runViewTransition({
           intent: {
             area: resolveTabArea(latestLocation.pathname, latestArea),
@@ -431,18 +596,30 @@ export function useRoutedCarouselTabs<TTabId extends string>({
           },
           collectBeforeEntries: () => collectTabEntries(tabsRef.current, currentTab),
           collectAfterEntries: () => {
-            if (!hasPreparedIncoming) {
-              hasPreparedIncoming = prepareIncomingTab(nextTabId, latestViewportSelector)
+            if (incomingToken == null) {
+              incomingToken = prepareIncomingTab(
+                nextTabId,
+                latestViewportSelector,
+                incomingSeedSnapshot
+              )
             }
             return collectTabEntries(tabsRef.current, nextTabId)
           },
           update: commitSelection,
         }).finally(() => {
-          if (!hasPreparedIncoming) {
-            prepareIncomingTab(nextTabId, latestViewportSelector)
+          if (incomingToken == null) {
+            incomingToken = prepareIncomingTab(
+              nextTabId,
+              latestViewportSelector,
+              incomingSeedSnapshot
+            )
           }
-          finalizeIncomingTab(nextTabId)
-          cleanupFrozenTabById(currentTab)
+          if (incomingToken != null) {
+            finalizeIncomingTab(nextTabId, incomingToken)
+          }
+          if (outgoingToken != null) {
+            cleanupFrozenTabById(currentTab, outgoingToken)
+          }
         })
       }
 
@@ -460,7 +637,13 @@ export function useRoutedCarouselTabs<TTabId extends string>({
       const direction = nextIndex >= currentIndex ? 'forward' : 'backward'
       runSelectionWithScrollTransfer(true)
     },
-    [captureOutgoingTab, cleanupFrozenTabById, finalizeIncomingTab, prepareIncomingTab]
+    [
+      captureOutgoingTab,
+      captureTabSnapshot,
+      cleanupFrozenTabById,
+      finalizeIncomingTab,
+      prepareIncomingTab,
+    ]
   )
 
   return {
