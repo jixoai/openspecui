@@ -191,6 +191,21 @@ function collectTabEntries(handle: TabsHandle | null, tabId: string): Array<[HTM
   if (!handle) return []
 
   const entries: Array<[HTMLElement, string]> = []
+  const headerShell = handle.getHeaderShell()
+  if (headerShell) {
+    entries.push([headerShell, 'vt-tab-header-shell'])
+  }
+
+  const selectionIndicator = handle.getSelectionIndicator()
+  if (selectionIndicator) {
+    entries.push([selectionIndicator, 'vt-tab-edge'])
+  }
+
+  const headerForeground = handle.getHeaderForeground()
+  if (headerForeground) {
+    entries.push([headerForeground, 'vt-tab-header-foreground'])
+  }
+
   const panel = handle.getPanel(tabId)
   if (panel) {
     entries.push([panel, 'vt-tab-panel'])

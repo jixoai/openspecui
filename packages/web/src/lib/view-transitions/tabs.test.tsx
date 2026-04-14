@@ -243,6 +243,51 @@ describe('useRoutedCarouselTabs', () => {
     expect(runViewTransitionMock).toHaveBeenCalledTimes(1)
   })
 
+  it('collects default header VT layers together with the active panel', async () => {
+    runViewTransitionMock.mockImplementationOnce(
+      ({
+        collectAfterEntries,
+        collectBeforeEntries,
+        update,
+      }: {
+        collectAfterEntries?: () => unknown
+        collectBeforeEntries?: () => unknown
+        update: () => void
+      }) => {
+        const beforeNames = ((collectBeforeEntries?.() ?? []) as Array<[HTMLElement, string]>)
+          .map(([, name]) => name)
+          .sort()
+        update()
+        const afterNames = ((collectAfterEntries?.() ?? []) as Array<[HTMLElement, string]>)
+          .map(([, name]) => name)
+          .sort()
+
+        expect(beforeNames).toEqual([
+          'vt-tab-edge',
+          'vt-tab-header-foreground',
+          'vt-tab-header-shell',
+          'vt-tab-panel',
+        ])
+        expect(afterNames).toEqual([
+          'vt-tab-edge',
+          'vt-tab-header-foreground',
+          'vt-tab-header-shell',
+          'vt-tab-panel',
+        ])
+
+        return Promise.resolve()
+      }
+    )
+
+    render(<RoutedTabsScrollHarness />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Files' }))
+
+    await waitFor(() => {
+      expect(runViewTransitionMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
   it('restores page scroll after animated tab switches when viewportSelector is provided', async () => {
     render(<RoutedTabsScrollHarness />)
     const { restore, viewport } = installScrollableTabLayoutMocks()

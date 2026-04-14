@@ -41,11 +41,17 @@ vi.mock('@/components/tabs', () => ({
       root: HTMLElement | null
       getTrigger: (tabId: string) => HTMLElement | null
       getPanel: (tabId: string) => HTMLElement | null
+      getHeaderShell: () => HTMLElement | null
+      getHeaderForeground: () => HTMLElement | null
+      getSelectionIndicator: () => HTMLElement | null
       getActiveTabId: () => string | null
     }>
   ) {
     const activeTab = tabs.find((tab) => tab.id === selectedTab) ?? tabs[0] ?? null
     const rootRef = useRef<HTMLDivElement | null>(null)
+    const headerShellRef = useRef<HTMLDivElement | null>(null)
+    const headerForegroundRef = useRef<HTMLDivElement | null>(null)
+    const selectionIndicatorRef = useRef<HTMLDivElement | null>(null)
     const triggerRefs = useRef(new Map<string, HTMLButtonElement | null>())
     const panelRefs = useRef(new Map<string, HTMLDivElement | null>())
 
@@ -55,6 +61,9 @@ vi.mock('@/components/tabs', () => ({
         root: rootRef.current,
         getTrigger: (tabId: string) => triggerRefs.current.get(tabId) ?? null,
         getPanel: (tabId: string) => panelRefs.current.get(tabId) ?? null,
+        getHeaderShell: () => headerShellRef.current,
+        getHeaderForeground: () => headerForegroundRef.current,
+        getSelectionIndicator: () => selectionIndicatorRef.current,
         getActiveTabId: () => activeTab?.id ?? null,
       }),
       [activeTab?.id]
@@ -67,7 +76,9 @@ vi.mock('@/components/tabs', () => ({
         data-active-tab={activeTab?.id ?? ''}
         className={className}
       >
-        <div className="tabs-strip">
+        <div ref={headerShellRef} data-tabs-header-shell="true" />
+        <div ref={selectionIndicatorRef} data-tabs-selection-indicator="true" />
+        <div ref={headerForegroundRef} data-tabs-header-foreground="true" className="tabs-strip">
           {tabs.map((tab) => (
             <button
               key={tab.id}

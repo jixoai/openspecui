@@ -4,6 +4,7 @@ import {
   useCallback,
   useId,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -51,6 +52,9 @@ export interface TabsHandle {
   root: HTMLElement | null
   getTrigger: (tabId: string) => HTMLElement | null
   getPanel: (tabId: string) => HTMLElement | null
+  getHeaderShell: () => HTMLElement | null
+  getHeaderForeground: () => HTMLElement | null
+  getSelectionIndicator: () => HTMLElement | null
   getActiveTabId: () => string | null
 }
 
@@ -103,16 +107,6 @@ const tabsStyleText = (id: string) => {
       content: '►';
       left: calc(anchor(right) - 0.5rem);
       transform: scaleX(0.5);
-    }
-
-    #${id}[data-tabs-variant='default'] .tabs-button > button.tab-selected {
-      background-image: linear-gradient(
-        to bottom,
-        transparent,
-        transparent calc(100% - 2px),
-        var(--primary) calc(100% - 2px),
-        var(--primary)
-      );
     }
 
     #${id} .tabs-strip {
@@ -182,11 +176,17 @@ function TabsImpl(
   const dropIndicatorRef = useRef<DropIndicator | null>(null)
   const contentOrderRef = useRef<string[]>(tabs.map((tab) => tab.id))
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const headerRef = useRef<HTMLDivElement | null>(null)
+  const headerShellRef = useRef<HTMLDivElement | null>(null)
+  const headerForegroundRef = useRef<HTMLDivElement | null>(null)
+  const selectionIndicatorRef = useRef<HTMLDivElement | null>(null)
+  const tabsButtonRef = useRef<HTMLDivElement | null>(null)
   const triggerRefs = useRef(new Map<string, HTMLButtonElement | null>())
   const panelRefs = useRef(new Map<string, HTMLDivElement | null>())
   const activeTab = controlled ?? uncontrolled
   const reorderable = typeof onTabOrderChange === 'function' && tabs.length > 1
   const tabIds = tabs.map((tab) => tab.id)
+  const tabLayoutSignature = tabIds.join('|')
   const tabsById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab] as const)), [tabs])
   const contentTabIds = useMemo(() => {
     const nextOrder = buildStableContentTabIds(contentOrderRef.current, tabIds)
@@ -212,12 +212,95 @@ function TabsImpl(
       getPanel(tabId: string) {
         return panelRefs.current.get(tabId) ?? null
       },
+      getHeaderShell() {
+        return headerShellRef.current
+      },
+      getHeaderForeground() {
+        return headerForegroundRef.current
+      },
+      getSelectionIndicator() {
+        return selectionIndicatorRef.current
+      },
       getActiveTabId() {
         return activeTab || null
       },
     }),
     [activeTab]
   )
+
+  const syncSelectionIndicator = useCallback(() => {
+    const indicator = selectionIndicatorRef.current
+    const header = headerRef.current
+    const activeTrigger = activeTab ? triggerRefs.current.get(activeTab) : null
+
+    if (!indicator) {
+      return
+    }
+
+    if (variant !== 'default' || !header || !activeTrigger) {
+      indicator.style.opacity = '0'
+      indicator.style.width = '0px'
+      indicator.style.height = '0px'
+      indicator.style.transform = 'translate(0px, 0px)'
+      return
+    }
+
+    const headerRect = header.getBoundingClientRect()
+    const triggerRect = activeTrigger.getBoundingClientRect()
+
+    indicator.style.opacity = '1'
+    indicator.style.width = `${triggerRect.width}px`
+    indicator.style.height = `${triggerRect.height}px`
+    indicator.style.transform = `translate(${triggerRect.left - headerRect.left}px, ${
+      triggerRect.top - headerRect.top
+    }px)`
+  }, [activeTab, variant])
+
+  useLayoutEffect(() => {
+    syncSelectionIndicator()
+  }, [syncSelectionIndicator, tabLayoutSignature])
+
+  useLayoutEffect(() => {
+    if (variant !== 'default') {
+      return
+    }
+
+    const tabsButton = tabsButtonRef.current
+    if (!tabsButton) {
+      return
+    }
+
+    const handleScroll = () => {
+      syncSelectionIndicator()
+    }
+
+    tabsButton.addEventListener('scroll', handleScroll, { passive: true })
+
+    if (typeof ResizeObserver === 'undefined') {
+      return () => {
+        tabsButton.removeEventListener('scroll', handleScroll)
+      }
+    }
+
+    const observer = new ResizeObserver(() => {
+      syncSelectionIndicator()
+    })
+
+    observer.observe(tabsButton)
+    if (headerRef.current) {
+      observer.observe(headerRef.current)
+    }
+
+    const activeTrigger = activeTab ? triggerRefs.current.get(activeTab) : null
+    if (activeTrigger) {
+      observer.observe(activeTrigger)
+    }
+
+    return () => {
+      tabsButton.removeEventListener('scroll', handleScroll)
+      observer.disconnect()
+    }
+  }, [activeTab, syncSelectionIndicator, tabLayoutSignature, variant])
 
   const handleChange = (id: string) => {
     if (!controlled) {
@@ -342,24 +425,24 @@ function TabsImpl(
   const headerClassName =
     variant === 'terminal'
       ? 'tabs-header bg-terminal text-terminal-foreground sticky top-0 z-20 flex min-w-0 items-stretch'
-      : 'tabs-header bg-card/95 sticky top-0 z-20 flex min-w-0 items-stretch rounded-md border border-zinc-500/15 shadow-[inset_0_-1px_0_color-mix(in_srgb,var(--border)_85%,transparent)] backdrop-blur-sm'
+      : 'tabs-header relative sticky top-0 z-20 min-w-0'
 
   const stripClassName =
     variant === 'terminal'
       ? 'tabs-strip min-w-0 flex-1 bg-terminal px-4'
-      : 'tabs-strip bg-card/95 min-w-0 flex-1 rounded-l-md px-4'
+      : 'tabs-strip min-w-0 flex-1 rounded-l-md px-4'
 
   const listClassName =
     variant === 'terminal'
       ? 'tabs-button scrollbar-none flex min-w-0 gap-1 overflow-x-auto pt-2'
       : 'tabs-button scrollbar-none flex min-w-0 gap-1 overflow-x-auto'
 
-  const buttonBaseClassName = `group relative m-0 flex h-full shrink-0 items-center gap-2 px-2 text-sm font-medium transition-colors ${variant === 'terminal' ? 'rounded-t-[8px] py-1' : 'py-2'}`
+  const buttonBaseClassName = `group relative z-10 m-0 flex h-full shrink-0 items-center gap-2 px-2 text-sm font-medium transition-colors ${variant === 'terminal' ? 'rounded-t-[8px] py-1' : 'py-2'}`
 
   const activeButtonClassName =
     variant === 'terminal'
       ? 'tab-selected bg-background text-foreground'
-      : 'tab-selected bg-background/70 text-foreground'
+      : 'tab-selected text-foreground'
 
   const inactiveButtonClassName =
     variant === 'terminal'
@@ -369,13 +452,73 @@ function TabsImpl(
   const actionsClassName =
     variant === 'terminal'
       ? 'tabs-actions border-border bg-terminal text-terminal-foreground flex shrink-0 items-center border-b px-1'
-      : 'tabs-actions bg-card/95 border-zinc-500/15 flex shrink-0 items-center rounded-r-md border-l px-1'
+      : 'tabs-actions border-zinc-500/15 flex shrink-0 items-center rounded-r-md border-l px-1'
 
   const handleTabBarDoubleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (!onTabBarDoubleClick) return
     if ((event.target as HTMLElement).closest('[data-tab-item="true"]')) return
     onTabBarDoubleClick()
   }
+
+  const tabButtons = tabs.map((tab) => {
+    const dragIndicatorStyle: CSSProperties | undefined =
+      dropIndicator?.tabId === tab.id
+        ? {
+            boxShadow:
+              dropIndicator.position === 'before'
+                ? 'inset 2px 0 0 var(--border)'
+                : 'inset -2px 0 0 var(--border)',
+          }
+        : undefined
+
+    return (
+      <button
+        key={tab.id}
+        ref={(element) => {
+          triggerRefs.current.set(tab.id, element)
+        }}
+        data-tab-item="true"
+        data-tab-id={tab.id}
+        draggable={reorderable}
+        onClick={() => handleChange(tab.id)}
+        onDragStart={(event) => handleDragStart(event, tab.id)}
+        onDragEnd={handleDragEnd}
+        onDragOver={(event) => handleItemDragOver(event, tab.id)}
+        onDrop={(event) => handleItemDrop(event, tab.id)}
+        className={`${buttonBaseClassName} ${
+          activeTab === tab.id ? activeButtonClassName : inactiveButtonClassName
+        } ${reorderable ? 'cursor-grab active:cursor-grabbing' : ''}`}
+        style={dragIndicatorStyle}
+      >
+        {tab.icon}
+        {tab.label}
+        {tab.closable && onTabClose && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(event) => {
+              event.stopPropagation()
+              onTabClose(tab.id)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.stopPropagation()
+                onTabClose(tab.id)
+              }
+            }}
+            draggable={false}
+            className={`hover:text-foreground -mr-1 rounded p-0.5 transition ${
+              tab.closeButtonVisibility === 'always'
+                ? 'opacity-100'
+                : 'opacity-0 group-hover:opacity-100 [button:hover>&]:opacity-100'
+            } ${activeTab === tab.id ? 'text-current/80' : 'text-muted-foreground'}`}
+          >
+            <X className="h-3 w-3" />
+          </span>
+        )}
+      </button>
+    )
+  })
 
   return (
     <div
@@ -384,79 +527,64 @@ function TabsImpl(
       data-tabs-variant={variant}
       className={`relative isolate flex min-h-0 min-w-0 flex-1 flex-col ${className}`}
     >
-      <div className={headerClassName}>
-        <div className={stripClassName}>
-          <div
-            className={listClassName}
-            onDoubleClick={handleTabBarDoubleClick}
-            onDragOver={handleListDragOver}
-            onDrop={handleListDrop}
-          >
-            {tabs.map((tab) => {
-              const dragIndicatorStyle: CSSProperties | undefined =
-                dropIndicator?.tabId === tab.id
-                  ? {
-                      boxShadow:
-                        dropIndicator.position === 'before'
-                          ? 'inset 2px 0 0 var(--border)'
-                          : 'inset -2px 0 0 var(--border)',
-                    }
-                  : undefined
-
-              return (
-                <button
-                  key={tab.id}
-                  ref={(element) => {
-                    triggerRefs.current.set(tab.id, element)
-                  }}
-                  data-tab-item="true"
-                  data-tab-id={tab.id}
-                  draggable={reorderable}
-                  onClick={() => handleChange(tab.id)}
-                  onDragStart={(event) => handleDragStart(event, tab.id)}
-                  onDragEnd={handleDragEnd}
-                  onDragOver={(event) => handleItemDragOver(event, tab.id)}
-                  onDrop={(event) => handleItemDrop(event, tab.id)}
-                  className={`${buttonBaseClassName} ${
-                    activeTab === tab.id ? activeButtonClassName : inactiveButtonClassName
-                  } ${reorderable ? 'cursor-grab active:cursor-grabbing' : ''}`}
-                  style={dragIndicatorStyle}
+      <div ref={headerRef} className={headerClassName}>
+        {variant === 'default' ? (
+          <>
+            <div
+              ref={headerShellRef}
+              data-tabs-header-shell="true"
+              className="tabs-header-shell bg-card/95 pointer-events-none absolute inset-0 z-0 rounded-md border border-zinc-500/15 shadow-[inset_0_-1px_0_color-mix(in_srgb,var(--border)_85%,transparent)] backdrop-blur-sm"
+            />
+            <div className="pointer-events-none absolute inset-0 z-10">
+              <div
+                ref={selectionIndicatorRef}
+                data-tabs-selection-indicator="true"
+                aria-hidden="true"
+                className="tabs-selection-indicator border-primary bg-background/70 duration-280 absolute left-0 top-0 rounded-md border-b-2 opacity-0 shadow-[inset_0_-1px_0_color-mix(in_srgb,var(--border)_85%,transparent)] transition-[transform,width,height,opacity] ease-[cubic-bezier(0.22,1,0.36,1)]"
+              />
+            </div>
+            <div
+              ref={headerForegroundRef}
+              data-tabs-header-foreground="true"
+              className="tabs-header-foreground relative z-20 flex min-w-0 items-stretch"
+            >
+              <div className={stripClassName}>
+                <div
+                  ref={tabsButtonRef}
+                  className={listClassName}
+                  onDoubleClick={handleTabBarDoubleClick}
+                  onDragOver={handleListDragOver}
+                  onDrop={handleListDrop}
                 >
-                  {tab.icon}
-                  {tab.label}
-                  {tab.closable && onTabClose && (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onTabClose(tab.id)
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.stopPropagation()
-                          onTabClose(tab.id)
-                        }
-                      }}
-                      draggable={false}
-                      className={`hover:text-foreground -mr-1 rounded p-0.5 transition ${
-                        tab.closeButtonVisibility === 'always'
-                          ? 'opacity-100'
-                          : 'opacity-0 group-hover:opacity-100 [button:hover>&]:opacity-100'
-                      } ${activeTab === tab.id ? 'text-current/80' : 'text-muted-foreground'}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-        {actions && (
-          <div data-tabs-actions="true" className={actionsClassName}>
-            {actions}
-          </div>
+                  {tabButtons}
+                </div>
+              </div>
+              {actions && (
+                <div data-tabs-actions="true" className={actionsClassName}>
+                  {actions}
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className={stripClassName}>
+              <div
+                ref={tabsButtonRef}
+                className={listClassName}
+                onDoubleClick={handleTabBarDoubleClick}
+                onDragOver={handleListDragOver}
+                onDrop={handleListDrop}
+              >
+                {tabButtons}
+              </div>
+            </div>
+            {actions && (
+              <div data-tabs-actions="true" className={actionsClassName}>
+                {actions}
+              </div>
+            )}
+          </>
         )}
       </div>
 
