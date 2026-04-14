@@ -10,7 +10,15 @@ import type {
 } from '@openspecui/core'
 import { useQueries } from '@tanstack/react-query'
 import { AlertCircle, Files, GitCommitHorizontal, ListTree, LoaderCircle } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react'
 
 import {
   buildIntersectionThresholds,
@@ -212,16 +220,19 @@ export function GitEntryDetailPanel({
     queryKey: 'gitPane',
     tabs: paneTabs,
     initialTab: 'diff',
+    viewportSelector: '.main-content, .bottom-area',
   })
+  const eagerFileIdSet = useMemo(() => new Set(eagerFiles.map((file) => file.fileId)), [eagerFiles])
   const [requestedFileIds, setRequestedFileIds] = useState<string[]>([])
   const [diffScrollOffset, setDiffScrollOffset] = useState(DIFF_SCROLL_PADDING)
   const [diffScrollRoot, setDiffScrollRoot] = useState<HTMLElement | null>(null)
+  const [diffViewportNode, setDiffViewportNode] = useState<HTMLDivElement | null>(null)
   const [treeRevealRequest, setTreeRevealRequest] = useState<GitFileTreeRevealRequest | null>(null)
   const cardNodesRef = useRef(new Map<string, HTMLElement>())
   const pendingScrollFileIdRef = useRef<string | null>(null)
   const pendingScrollDeadlineRef = useRef(0)
   const pendingScrollFrameRef = useRef<number | null>(null)
-  const diffViewportRef = useRef<HTMLDivElement | null>(null)
+  const schedulePendingScrollRef = useRef<() => void>(() => {})
   const tabsRootRef = useRef<HTMLDivElement | null>(null)
   const treeRevealNonceRef = useRef(0)
   const revealNavigationSourceRef = useRef<'diff' | 'tree' | null>(null)
@@ -230,7 +241,6 @@ export function GitEntryDetailPanel({
     target: wideTreeViewportNode,
     enabled: wide,
   })
-  const eagerFileIdSet = useMemo(() => new Set(eagerFiles.map((file) => file.fileId)), [eagerFiles])
 
   const markTreeNavigation = useCallback(() => {
     revealNavigationSourceRef.current = 'tree'
@@ -271,7 +281,6 @@ export function GitEntryDetailPanel({
   useEffect(() => {
     setSelectedTab('diff')
     setRequestedFileIds([])
-    setDiffScrollRoot(null)
     setTreeRevealRequest(null)
     revealNavigationSourceRef.current = null
     cardNodesRef.current.clear()
@@ -368,7 +377,6 @@ export function GitEntryDetailPanel({
       ].join('|'),
     [eagerFiles, patchQueries]
   )
-
   const treeFiles = useMemo(
     () =>
       files.map((file) => {
@@ -388,6 +396,13 @@ export function GitEntryDetailPanel({
       }),
     [files, patchStateByFileId]
   )
+
+  useLayoutEffect(() => {
+    const nextRoot = findVerticalScrollContainer(diffViewportNode, {
+      allowNonScrollable: true,
+    })
+    setDiffScrollRoot((currentRoot) => (currentRoot === nextRoot ? currentRoot : nextRoot))
+  }, [activePane, diffViewportNode, wide])
 
   const handlePrefetchVisible = useCallback(
     (entries: VisibilityBatchEntry<string>[]) => {
@@ -488,11 +503,6 @@ export function GitEntryDetailPanel({
       return
     }
 
-    const node = cardNodesRef.current.get(fileId)
-    if (!node) {
-      return
-    }
-
     if (
       pendingScrollDeadlineRef.current > 0 &&
       window.performance.now() > pendingScrollDeadlineRef.current
@@ -502,14 +512,19 @@ export function GitEntryDetailPanel({
       return
     }
 
-    if (isCardAligned(node, diffViewportRef.current, diffScrollOffset)) {
+    const node = cardNodesRef.current.get(fileId)
+    if (!node) {
+      return
+    }
+
+    if (isCardAligned(node, diffViewportNode, diffScrollOffset)) {
       pendingScrollFileIdRef.current = null
       pendingScrollDeadlineRef.current = 0
       return
     }
 
-    scrollCardIntoView(node, diffViewportRef.current, diffScrollOffset)
-  }, [activePane, diffScrollOffset, wide])
+    scrollCardIntoView(node, diffViewportNode, diffScrollOffset)
+  }, [activePane, diffScrollOffset, diffViewportNode, wide])
 
   const schedulePendingScroll = useCallback(() => {
     if (pendingScrollFrameRef.current !== null) {
@@ -521,6 +536,7 @@ export function GitEntryDetailPanel({
       flushPendingScroll()
     })
   }, [flushPendingScroll])
+  schedulePendingScrollRef.current = schedulePendingScroll
 
   const queueScrollToFile = useCallback(
     (fileId: string) => {
@@ -697,6 +713,20 @@ export function GitEntryDetailPanel({
   const diffViewportStyle = {
     scrollPaddingTop: `${diffScrollOffset}px`,
   }
+  const renderDiffCard = (file: GitEntryFileSummary) => {
+    const patchState = patchStateByFileId.get(file.fileId)
+    return (
+      <GitPatchCard
+        key={file.fileId}
+        file={patchState?.file ?? file}
+        patch={patchState?.file ?? null}
+        status={patchState?.status ?? 'idle'}
+        error={patchState?.error ?? null}
+        onRegisterCard={registerCardNode}
+        scrollMarginTop={diffScrollOffset}
+      />
+    )
+  }
 
   const diffStreamContent =
     isLoading && files.length === 0 ? (
@@ -708,22 +738,7 @@ export function GitEntryDetailPanel({
         No changed files found for this entry.
       </div>
     ) : (
-      <div className="space-y-3">
-        {files.map((file) => {
-          const patchState = patchStateByFileId.get(file.fileId)
-          return (
-            <GitPatchCard
-              key={file.fileId}
-              file={patchState?.file ?? file}
-              patch={patchState?.file ?? null}
-              status={patchState?.status ?? 'idle'}
-              error={patchState?.error ?? null}
-              onRegisterCard={registerCardNode}
-              scrollMarginTop={diffScrollOffset}
-            />
-          )
-        })}
-      </div>
+      <div className="space-y-3">{files.map((file) => renderDiffCard(file))}</div>
     )
 
   return (
@@ -775,7 +790,11 @@ export function GitEntryDetailPanel({
               <Files className="h-4 w-4 shrink-0" />
               <span>Diff Stream</span>
             </div>
-            <div ref={diffViewportRef} data-testid="git-diff-viewport" style={diffViewportStyle}>
+            <div
+              ref={setDiffViewportNode}
+              data-testid="git-diff-viewport"
+              style={diffViewportStyle}
+            >
               {diffStreamContent}
             </div>
           </section>
@@ -794,7 +813,7 @@ export function GitEntryDetailPanel({
                 icon: <Files className="h-4 w-4" />,
                 content: (
                   <div
-                    ref={diffViewportRef}
+                    ref={setDiffViewportNode}
                     data-testid="git-diff-viewport"
                     className="pt-3"
                     style={diffViewportStyle}
