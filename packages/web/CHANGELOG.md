@@ -1,5 +1,14 @@
 # @openspecui/web
 
+## 2.3.5
+
+### Patch Changes
+
+- 263417c: Preserve commit detail tab viewport memory during routed view transitions, including file-tree route entry and single-scroll layouts where shorter tab content would otherwise clamp the restored scroll position.
+- edf80b4: Restore routed tab inner scroll roots after remounts, guard frozen tab cleanup across overlapping view transitions, and enable shared-element reuse for tab header layers during tab view transitions.
+- ca88877: Avoid restoring stale routed-tab viewport scroll positions during Safari/WebKit tab rerenders, so commit-detail tree-to-diff reveals stay scrollable after roundtrips.
+- 1e6d944: Keep routed tab headers above animating panel snapshots by splitting default tabs into dedicated view-transition layers for the header shell, active edge, and header foreground.
+
 ## 2.3.4
 
 ### Patch Changes
