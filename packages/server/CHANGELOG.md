@@ -1,5 +1,12 @@
 # @openspecui/server
 
+## 2.3.4
+
+### Patch Changes
+
+- @openspecui/core@2.3.4
+- @openspecui/search@2.3.4
+
 ## 2.3.3
 
 ### Patch Changes

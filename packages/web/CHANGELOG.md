@@ -1,5 +1,11 @@
 # @openspecui/web
 
+## 2.3.4
+
+### Patch Changes
+
+- be63c82: Preserve page scroll during routed tab view transitions by freezing each tab panel to its visible height while transferring scroll state across the transition.
+
 ## 2.3.2
 
 ### Patch Changes
