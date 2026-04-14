@@ -365,6 +365,7 @@ export function GitFileTree({
       <div
         ref={scrollContainerRef}
         role="tree"
+        data-tab-scroll-root="true"
         aria-label="Changed files"
         onKeyDownCapture={(event) => {
           if (isVerticalScrollIntentKey(event.key)) {

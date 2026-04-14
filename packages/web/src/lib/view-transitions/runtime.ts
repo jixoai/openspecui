@@ -85,11 +85,15 @@ function waitForDomCommit(): Promise<void> {
   })
 }
 
-function filterDistinctEntries(
+function filterAfterEntries(
   entries: NamedElementEntry[],
-  beforeEntries: NamedElementEntry[]
+  beforeEntries: NamedElementEntry[],
+  intent: VTIntent
 ): NamedElementEntry[] {
   if (beforeEntries.length === 0) return entries
+  if (intent.kind === 'tab-carousel') {
+    return entries
+  }
   const beforeElements = new Set(beforeEntries.map(([element]) => element))
   return entries.filter(([element]) => !beforeElements.has(element))
 }
@@ -104,12 +108,12 @@ async function collectSettledAfterEntries(
   if (intent.kind === 'route-detail' && beforeEntries.length > 0) {
     return waitForNamedEntriesReady({
       expectedNames: beforeEntries.map(([, name]) => name),
-      collectEntries: () => filterDistinctEntries(collectAfterEntries(), beforeEntries),
+      collectEntries: () => filterAfterEntries(collectAfterEntries(), beforeEntries, intent),
     })
   }
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    const entries = filterDistinctEntries(collectAfterEntries(), beforeEntries)
+    const entries = filterAfterEntries(collectAfterEntries(), beforeEntries, intent)
     if (entries.length > 0 || beforeEntries.length === 0) {
       return entries
     }
@@ -118,7 +122,7 @@ async function collectSettledAfterEntries(
     await waitForDomCommit()
   }
 
-  return filterDistinctEntries(collectAfterEntries(), beforeEntries)
+  return filterAfterEntries(collectAfterEntries(), beforeEntries, intent)
 }
 
 function setIntentDataset(intent: VTIntent): () => void {

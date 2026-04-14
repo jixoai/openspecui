@@ -106,6 +106,48 @@ function RoutedTabsScrollHarness() {
   )
 }
 
+function RoutedTabsInnerScrollHarness() {
+  const tabs = useMemo<Tab[]>(
+    () => [
+      {
+        id: 'diff',
+        label: 'Diff',
+        content: <div data-testid="diff-content" style={{ height: 320 }} />,
+      },
+      {
+        id: 'files',
+        label: 'Files',
+        unmountOnHide: true,
+        content: (
+          <div className="py-3">
+            <div
+              data-tab-scroll-root="true"
+              data-testid="files-scroll-root"
+              style={{ height: 160, overflowY: 'auto' }}
+            >
+              <div style={{ height: 720 }} />
+            </div>
+          </div>
+        ),
+      },
+    ],
+    []
+  )
+  const { tabsRef, selectedTab, onTabChange } = useRoutedCarouselTabs({
+    queryKey: 'gitPane',
+    tabs,
+    initialTab: 'diff',
+    viewportSelector: '.main-content',
+  })
+
+  return (
+    <div className="main-content" data-testid="viewport" style={{ height: 240, overflowY: 'auto' }}>
+      <div style={{ height: 96 }} />
+      <Tabs ref={tabsRef} tabs={tabs} selectedTab={selectedTab} onTabChange={onTabChange} />
+    </div>
+  )
+}
+
 function installScrollableTabLayoutMocks() {
   const viewport = screen.getByTestId('viewport')
   const panelHeights: Record<'diff' | 'files', number> = {
@@ -210,6 +252,94 @@ function installScrollableTabLayoutMocks() {
 
   return {
     viewport,
+    restore() {
+      Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+        configurable: true,
+        writable: true,
+        value: originalGetBoundingClientRect,
+      })
+    },
+  }
+}
+
+function installInnerScrollTabLayoutMocks() {
+  const viewport = screen.getByTestId('viewport')
+  const viewportHeight = 240
+  const baseOffset = 96
+  let viewportScrollTop = 0
+  const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+
+  Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+    configurable: true,
+    writable: true,
+    value: function mockGetBoundingClientRect(this: HTMLElement) {
+      if (this.dataset.testid === 'viewport') {
+        return {
+          x: 0,
+          y: 0,
+          width: 320,
+          height: viewportHeight,
+          top: 0,
+          right: 320,
+          bottom: viewportHeight,
+          left: 0,
+          toJSON: () => ({}),
+        } satisfies DOMRect
+      }
+
+      if (this.dataset.tabPanel === 'diff') {
+        const top = baseOffset - viewportScrollTop
+        return {
+          x: 0,
+          y: top,
+          width: 320,
+          height: 320,
+          top,
+          right: 320,
+          bottom: top + 320,
+          left: 0,
+          toJSON: () => ({}),
+        } satisfies DOMRect
+      }
+
+      if (this.dataset.tabPanel === 'files') {
+        const top = baseOffset - viewportScrollTop
+        return {
+          x: 0,
+          y: top,
+          width: 320,
+          height: 184,
+          top,
+          right: 320,
+          bottom: top + 184,
+          left: 0,
+          toJSON: () => ({}),
+        } satisfies DOMRect
+      }
+
+      return originalGetBoundingClientRect.call(this)
+    },
+  })
+
+  Object.defineProperty(viewport, 'clientHeight', {
+    configurable: true,
+    get: () => viewportHeight,
+  })
+
+  Object.defineProperty(viewport, 'scrollHeight', {
+    configurable: true,
+    get: () => 640,
+  })
+
+  Object.defineProperty(viewport, 'scrollTop', {
+    configurable: true,
+    get: () => viewportScrollTop,
+    set: (value: number) => {
+      viewportScrollTop = value
+    },
+  })
+
+  return {
     restore() {
       Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
         configurable: true,
@@ -350,6 +480,81 @@ describe('useRoutedCarouselTabs', () => {
           .querySelector<HTMLElement>('[data-tab-panel-state="active"]')
         expect(activePanel?.dataset.tabPanel).toBe('diff')
         expect(viewport.scrollTop).toBe(420)
+      })
+    } finally {
+      restore()
+    }
+  })
+
+  it('restores marked inner scroll roots when the tab panel remounts', async () => {
+    render(<RoutedTabsInnerScrollHarness />)
+    const { restore } = installInnerScrollTabLayoutMocks()
+
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Files' }))
+
+      const firstScrollRoot = await screen.findByTestId('files-scroll-root')
+      firstScrollRoot.scrollTop = 240
+
+      fireEvent.click(screen.getByRole('button', { name: 'Diff' }))
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('files-scroll-root')).toBeNull()
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Files' }))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('files-scroll-root').scrollTop).toBe(240)
+      })
+    } finally {
+      restore()
+    }
+  })
+
+  it('ignores stale transition cleanup when a tab is reopened before the prior VT finishes', async () => {
+    let resolveFirstTransition: () => void = () => {}
+    runViewTransitionMock.mockImplementationOnce(
+      ({
+        collectAfterEntries,
+        collectBeforeEntries,
+        update,
+      }: {
+        collectAfterEntries?: () => unknown
+        collectBeforeEntries?: () => unknown
+        update: () => void
+      }) => {
+        collectBeforeEntries?.()
+        update()
+        collectAfterEntries?.()
+
+        return new Promise<void>((resolve) => {
+          resolveFirstTransition = resolve
+        })
+      }
+    )
+
+    render(<RoutedTabsInnerScrollHarness />)
+    const { restore } = installInnerScrollTabLayoutMocks()
+
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Files' }))
+
+      const firstScrollRoot = await screen.findByTestId('files-scroll-root')
+      firstScrollRoot.scrollTop = 240
+
+      fireEvent.click(screen.getByRole('button', { name: 'Diff' }))
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('files-scroll-root')).toBeNull()
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Files' }))
+
+      resolveFirstTransition()
+
+      await waitFor(() => {
+        expect(screen.getByTestId('files-scroll-root').scrollTop).toBe(240)
       })
     } finally {
       restore()

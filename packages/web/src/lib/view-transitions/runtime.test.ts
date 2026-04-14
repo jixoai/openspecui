@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const { setTemporaryViewTransitionNamesMock } = vi.hoisted(() => ({
+  setTemporaryViewTransitionNamesMock: vi.fn(async () => {}),
+}))
+
 vi.mock('react-dom', () => ({
   flushSync(callback: () => void) {
     callback()
@@ -17,7 +21,7 @@ vi.mock('view-transitions-toolkit/track-active-view-transition', () => ({
 }))
 
 vi.mock('view-transitions-toolkit/misc', () => ({
-  setTemporaryViewTransitionNames: vi.fn(async () => {}),
+  setTemporaryViewTransitionNames: setTemporaryViewTransitionNamesMock,
 }))
 
 import { runViewTransition } from './runtime'
@@ -41,6 +45,7 @@ describe('runViewTransition', () => {
     const doc = document as TestViewTransitionDocument
     doc.activeViewTransition = null
     delete doc.startViewTransition
+    setTemporaryViewTransitionNamesMock.mockClear()
   })
 
   it('clears previous names before collecting the next snapshot entries', async () => {
@@ -183,5 +188,40 @@ describe('runViewTransition', () => {
 
     expect(document.querySelector('[data-vt-ready-indicator]')).toBeNull()
     expect(document.documentElement.dataset.vtKind).toBeUndefined()
+  })
+
+  it('reuses the same tab-carousel element as both old and new shared entry', async () => {
+    const sharedElement = document.createElement('div')
+    document.body.append(sharedElement)
+
+    let nameDuringAfterCollection = '__unset__'
+    let nameAfterAfterCollection = '__unset__'
+
+    ;(document as TestViewTransitionDocument).startViewTransition = (update) => {
+      const pending = Promise.resolve(update()).then(() => {
+        nameAfterAfterCollection = sharedElement.style.viewTransitionName
+      })
+      return {
+        finished: pending.then(() => undefined),
+      }
+    }
+
+    await runViewTransition({
+      intent: {
+        area: 'main',
+        kind: 'tab-carousel',
+        direction: 'forward',
+      },
+      collectBeforeEntries: () => [[sharedElement, 'vt-tab-edge']],
+      collectAfterEntries: () => {
+        nameDuringAfterCollection = sharedElement.style.viewTransitionName
+        return [[sharedElement, 'vt-tab-edge']]
+      },
+      update: () => {},
+    })
+
+    expect(nameDuringAfterCollection).toBe('')
+    expect(nameAfterAfterCollection).toBe('vt-tab-edge')
+    expect(setTemporaryViewTransitionNamesMock).toHaveBeenCalledTimes(2)
   })
 })
