@@ -3,6 +3,9 @@ import type { TabsHandle } from '@/components/tabs'
 const DATA_VISIBLE_HEIGHT = 'tabVisibleHeight'
 const DATA_TOP_INSET = 'tabTopInset'
 const DATA_SCROLL_OFFSET = 'tabScrollOffset'
+const DATA_LAYOUT_BRIDGE = 'tabLayoutBridge'
+const DATA_LAYOUT_BRIDGE_BASE_PADDING = 'tabLayoutBridgeBasePadding'
+const DATA_LAYOUT_BRIDGE_INLINE_PADDING = 'tabLayoutBridgeInlinePadding'
 const TAB_SCROLL_ROOT_SELECTOR = '[data-tab-scroll-root="true"]'
 
 export interface TabScrollMemory {
@@ -10,9 +13,13 @@ export interface TabScrollMemory {
   contentScrollTop: number
   topInset: number
   visibleHeight: number
+  viewportScrollTop: number
 }
 
 export interface FrozenTabState {
+  contentScrollRoot: HTMLElement | null
+  contentScrollTop: number
+  finalViewportScrollTop: number
   panel: HTMLElement
   previousStyles: {
     height: string
@@ -29,6 +36,8 @@ interface ResolvedTabScrollElements {
   viewport: HTMLElement
 }
 
+export type ViewportSelector = string | readonly string[]
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
@@ -39,6 +48,67 @@ function maxViewportScroll(viewport: HTMLElement): number {
 
 function maxPanelScroll(panel: HTMLElement, visibleHeight: number): number {
   return Math.max(panel.scrollHeight - visibleHeight, 0)
+}
+
+function readPanelLayoutBridge(panel: HTMLElement): number {
+  return Number(panel.dataset[DATA_LAYOUT_BRIDGE] ?? '0') || 0
+}
+
+function ensurePanelLayoutBridgeState(panel: HTMLElement): void {
+  panel.dataset[DATA_LAYOUT_BRIDGE_BASE_PADDING] ||= window.getComputedStyle(panel).paddingBottom
+  panel.dataset[DATA_LAYOUT_BRIDGE_INLINE_PADDING] ||= panel.style.paddingBottom
+}
+
+function setPanelLayoutBridge(panel: HTMLElement, extraHeight: number): void {
+  ensurePanelLayoutBridgeState(panel)
+
+  const normalizedHeight = Math.max(Math.ceil(extraHeight), 0)
+  panel.dataset[DATA_LAYOUT_BRIDGE] = String(normalizedHeight)
+
+  if (normalizedHeight <= 0) {
+    panel.style.paddingBottom = panel.dataset[DATA_LAYOUT_BRIDGE_INLINE_PADDING] ?? ''
+    return
+  }
+
+  const basePadding = panel.dataset[DATA_LAYOUT_BRIDGE_BASE_PADDING] ?? '0px'
+  panel.style.paddingBottom = `calc(${basePadding} + ${normalizedHeight}px)`
+}
+
+function restoreViewportScroll(
+  viewport: HTMLElement,
+  panel: HTMLElement,
+  targetScrollTop: number
+): void {
+  const applyScrollTop = () => {
+    if (!viewport.isConnected || !panel.isConnected) {
+      return true
+    }
+
+    const existingBridge = readPanelLayoutBridge(panel)
+    const baseMaxViewportScroll = Math.max(maxViewportScroll(viewport) - existingBridge, 0)
+    const requiredBridge = Math.max(targetScrollTop - baseMaxViewportScroll, 0)
+
+    setPanelLayoutBridge(panel, requiredBridge)
+    const nextScrollTop = clamp(targetScrollTop, 0, maxViewportScroll(viewport))
+    viewport.scrollTop = nextScrollTop
+    return viewport.scrollTop === nextScrollTop
+  }
+
+  if (applyScrollTop() || typeof requestAnimationFrame !== 'function') {
+    return
+  }
+
+  let retriesRemaining = 10
+  const retry = () => {
+    if (applyScrollTop() || retriesRemaining <= 0) {
+      return
+    }
+
+    retriesRemaining -= 1
+    requestAnimationFrame(retry)
+  }
+
+  requestAnimationFrame(retry)
 }
 
 function hasVerticalScrollBehavior(overflowY: string): boolean {
@@ -71,8 +141,9 @@ function findScrollableDescendant(panel: HTMLElement): HTMLElement | null {
 }
 
 function resolveContentScrollRoot(panel: HTMLElement): HTMLElement | null {
-  const markedRoot =
-    panel.matches(TAB_SCROLL_ROOT_SELECTOR) ? panel : panel.querySelector<HTMLElement>(TAB_SCROLL_ROOT_SELECTOR)
+  const markedRoot = panel.matches(TAB_SCROLL_ROOT_SELECTOR)
+    ? panel
+    : panel.querySelector<HTMLElement>(TAB_SCROLL_ROOT_SELECTOR)
 
   if (markedRoot) {
     return markedRoot
@@ -157,10 +228,71 @@ function restoreContentScrollRoot(element: HTMLElement | null, targetScrollTop: 
   requestAnimationFrame(retry)
 }
 
+function normalizeViewportSelectors(viewportSelector: ViewportSelector): string[] {
+  return typeof viewportSelector === 'string'
+    ? viewportSelector.split(',').map((selector: string) => selector.trim())
+    : [...viewportSelector]
+}
+
+function resolveViewportBoundary(
+  panel: HTMLElement,
+  viewportSelector: ViewportSelector
+): HTMLElement | null {
+  const selectors = normalizeViewportSelectors(viewportSelector)
+
+  for (const selector of selectors) {
+    if (!selector) {
+      continue
+    }
+
+    try {
+      const match = panel.closest(selector)
+      if (match instanceof HTMLElement) {
+        return match
+      }
+    } catch {
+      return null
+    }
+  }
+
+  return null
+}
+
+function resolveScrollViewport(
+  panel: HTMLElement,
+  boundary: HTMLElement | null
+): HTMLElement | null {
+  let current: HTMLElement | null = panel.parentElement
+
+  while (current) {
+    const style = window.getComputedStyle(current)
+    if (hasVerticalScrollBehavior(style.overflowY) && current.scrollHeight > current.clientHeight) {
+      return current
+    }
+
+    if (boundary && current === boundary) {
+      break
+    }
+
+    current = current.parentElement
+  }
+
+  if (!boundary) {
+    return null
+  }
+
+  const boundaryStyle = window.getComputedStyle(boundary)
+  if (hasVerticalScrollBehavior(boundaryStyle.overflowY)) {
+    return boundary
+  }
+
+  return null
+}
+
 export function resolveTabScrollElements(
   handle: TabsHandle | null,
   tabId: string,
-  viewportSelector?: string
+  viewportSelector?: ViewportSelector
 ): ResolvedTabScrollElements | null {
   if (!viewportSelector) return null
   const panel = handle?.getPanel(tabId)
@@ -168,12 +300,8 @@ export function resolveTabScrollElements(
     return null
   }
 
-  let viewport: Element | null = null
-  try {
-    viewport = panel.closest(viewportSelector)
-  } catch {
-    return null
-  }
+  const boundary = resolveViewportBoundary(panel, viewportSelector)
+  const viewport = resolveScrollViewport(panel, boundary)
   if (!(viewport instanceof HTMLElement)) {
     return null
   }
@@ -197,6 +325,23 @@ export function restorePanelContentScroll(
   if (contentScrollRoot && contentScrollRoot !== panel) {
     restoreContentScrollRoot(contentScrollRoot, snapshot.contentScrollTop)
   }
+}
+
+export function restorePanelViewportScroll(
+  panel: HTMLElement | null,
+  viewport: HTMLElement | null,
+  snapshot: TabScrollMemory | null | undefined
+): void {
+  if (!(panel instanceof HTMLElement) || !(viewport instanceof HTMLElement)) {
+    return
+  }
+
+  if (!snapshot) {
+    setPanelLayoutBridge(panel, 0)
+    return
+  }
+
+  restoreViewportScroll(viewport, panel, snapshot.viewportScrollTop)
 }
 
 export function captureTabScrollMemory(
@@ -228,6 +373,7 @@ export function captureTabScrollMemory(
     innerScrollTop,
     topInset,
     visibleHeight,
+    viewportScrollTop: viewport.scrollTop,
   }
 }
 
@@ -251,6 +397,12 @@ export function freezeOutgoingTab(
   }
 
   return {
+    contentScrollRoot:
+      elements.contentScrollRoot && elements.contentScrollRoot !== elements.panel
+        ? elements.contentScrollRoot
+        : null,
+    contentScrollTop: snapshot.contentScrollTop,
+    finalViewportScrollTop: snapshot.viewportScrollTop,
     panel: elements.panel,
     previousStyles,
     viewport: elements.viewport,
@@ -269,6 +421,7 @@ export function freezeIncomingTab(
     topInset: clamp(snapshot.topInset, 0, elements.viewport.clientHeight),
     visibleHeight: clamp(snapshot.visibleHeight, 1, elements.viewport.clientHeight),
     innerScrollTop: 0,
+    viewportScrollTop: snapshot.viewportScrollTop,
   }
 
   normalizedSnapshot.innerScrollTop = clamp(
@@ -292,6 +445,12 @@ export function freezeIncomingTab(
   elements.panel.scrollTop = normalizedSnapshot.innerScrollTop
 
   return {
+    contentScrollRoot:
+      elements.contentScrollRoot && elements.contentScrollRoot !== elements.panel
+        ? elements.contentScrollRoot
+        : null,
+    contentScrollTop: normalizedSnapshot.contentScrollTop,
+    finalViewportScrollTop: snapshot.viewportScrollTop,
     panel: elements.panel,
     previousStyles,
     viewport: elements.viewport,
@@ -299,23 +458,11 @@ export function freezeIncomingTab(
 }
 
 export function finalizeFrozenIncomingTab(state: FrozenTabState): void {
-  const transferScrollTop = state.panel.scrollTop
-  const contentScrollRoot =
-    state.panel.matches(TAB_SCROLL_ROOT_SELECTOR)
-      ? state.panel
-      : state.panel.querySelector<HTMLElement>(TAB_SCROLL_ROOT_SELECTOR) ??
-        findScrollableDescendant(state.panel)
-  const contentScrollTop =
-    contentScrollRoot && contentScrollRoot !== state.panel ? contentScrollRoot.scrollTop : 0
   restorePanel(state.panel, state.previousStyles)
-  state.viewport.scrollTop = clamp(
-    state.viewport.scrollTop + transferScrollTop,
-    0,
-    maxViewportScroll(state.viewport)
-  )
+  restoreViewportScroll(state.viewport, state.panel, state.finalViewportScrollTop)
   state.panel.scrollTop = 0
-  if (contentScrollRoot && contentScrollRoot !== state.panel) {
-    restoreContentScrollRoot(contentScrollRoot, contentScrollTop)
+  if (state.contentScrollRoot) {
+    restoreContentScrollRoot(state.contentScrollRoot, state.contentScrollTop)
   }
 }
 

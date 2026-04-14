@@ -45,6 +45,14 @@ interface GitEntryPatchResponse {
   file: GitEntryFilePatch | null
 }
 
+interface PendingDiffScrollCommand {
+  deadline: number
+  fileId: string
+  lastAttemptVersion: string | null
+  phase: 'queued' | 'verifying' | 'await-layout'
+  token: number
+}
+
 type GitPatchLoader = (options: {
   selector: GitEntrySelector
   fileId: string
@@ -220,7 +228,7 @@ export function GitEntryDetailPanel({
     queryKey: 'gitPane',
     tabs: paneTabs,
     initialTab: 'diff',
-    viewportSelector: '.main-content, .bottom-area',
+    viewportSelector: ['.main-content', '.bottom-area'],
   })
   const eagerFileIdSet = useMemo(() => new Set(eagerFiles.map((file) => file.fileId)), [eagerFiles])
   const [requestedFileIds, setRequestedFileIds] = useState<string[]>([])
@@ -229,13 +237,14 @@ export function GitEntryDetailPanel({
   const [diffViewportNode, setDiffViewportNode] = useState<HTMLDivElement | null>(null)
   const [treeRevealRequest, setTreeRevealRequest] = useState<GitFileTreeRevealRequest | null>(null)
   const cardNodesRef = useRef(new Map<string, HTMLElement>())
-  const pendingScrollFileIdRef = useRef<string | null>(null)
-  const pendingScrollDeadlineRef = useRef(0)
+  const pendingDiffScrollCommandRef = useRef<PendingDiffScrollCommand | null>(null)
+  const pendingDiffScrollTokenRef = useRef(0)
   const pendingScrollFrameRef = useRef<number | null>(null)
   const schedulePendingScrollRef = useRef<() => void>(() => {})
   const tabsRootRef = useRef<HTMLDivElement | null>(null)
   const treeRevealNonceRef = useRef(0)
   const revealNavigationSourceRef = useRef<'diff' | 'tree' | null>(null)
+  const didInitializeSelectorRef = useRef(false)
   const [wideTreeViewportNode, setWideTreeViewportNode] = useState<HTMLDivElement | null>(null)
   const wideTreeHeight = useViewportConstrainedHeight({
     target: wideTreeViewportNode,
@@ -249,6 +258,37 @@ export function GitEntryDetailPanel({
   const markDiffNavigation = useCallback(() => {
     revealNavigationSourceRef.current = 'diff'
   }, [])
+
+  const clearPendingDiffScroll = useCallback((token?: number) => {
+    const currentCommand = pendingDiffScrollCommandRef.current
+    if (!currentCommand) {
+      return
+    }
+
+    if (token != null && currentCommand.token !== token) {
+      return
+    }
+
+    pendingDiffScrollCommandRef.current = null
+  }, [])
+
+  const cancelPendingDiffScroll = useCallback(() => {
+    clearPendingDiffScroll()
+  }, [clearPendingDiffScroll])
+
+  const handleDiffUserScrollIntent = useCallback(() => {
+    markDiffNavigation()
+    cancelPendingDiffScroll()
+  }, [cancelPendingDiffScroll, markDiffNavigation])
+
+  const handleDiffKeyDownCapture = useCallback(
+    (event: KeyboardEvent<HTMLElement>) => {
+      if (isScrollIntentEventKey(event)) {
+        handleDiffUserScrollIntent()
+      }
+    },
+    [handleDiffUserScrollIntent]
+  )
 
   const requestPatch = useCallback(
     (fileId: string) => {
@@ -279,13 +319,19 @@ export function GitEntryDetailPanel({
   )
 
   useEffect(() => {
-    setSelectedTab('diff')
+    if (didInitializeSelectorRef.current) {
+      queueMicrotask(() => {
+        setSelectedTab('diff')
+      })
+    } else {
+      didInitializeSelectorRef.current = true
+    }
+
     setRequestedFileIds([])
     setTreeRevealRequest(null)
     revealNavigationSourceRef.current = null
     cardNodesRef.current.clear()
-    pendingScrollFileIdRef.current = null
-    pendingScrollDeadlineRef.current = 0
+    pendingDiffScrollCommandRef.current = null
     if (pendingScrollFrameRef.current !== null) {
       window.cancelAnimationFrame(pendingScrollFrameRef.current)
       pendingScrollFrameRef.current = null
@@ -376,6 +422,10 @@ export function GitEntryDetailPanel({
           .join('|'),
       ].join('|'),
     [eagerFiles, patchQueries]
+  )
+  const diffContentVersion = useMemo(
+    () => [files.map((file) => file.fileId).join('|'), patchLayoutVersion].join('::'),
+    [files, patchLayoutVersion]
   )
   const treeFiles = useMemo(
     () =>
@@ -498,33 +548,57 @@ export function GitEntryDetailPanel({
       return
     }
 
-    const fileId = pendingScrollFileIdRef.current
-    if (!fileId) {
+    const command = pendingDiffScrollCommandRef.current
+    if (!command) {
       return
     }
 
-    if (
-      pendingScrollDeadlineRef.current > 0 &&
-      window.performance.now() > pendingScrollDeadlineRef.current
-    ) {
-      pendingScrollFileIdRef.current = null
-      pendingScrollDeadlineRef.current = 0
+    if (window.performance.now() > command.deadline) {
+      clearPendingDiffScroll(command.token)
       return
     }
 
-    const node = cardNodesRef.current.get(fileId)
+    const node = cardNodesRef.current.get(command.fileId)
     if (!node) {
+      pendingDiffScrollCommandRef.current = {
+        ...command,
+        lastAttemptVersion: diffContentVersion,
+        phase: 'await-layout',
+      }
       return
     }
 
     if (isCardAligned(node, diffViewportNode, diffScrollOffset)) {
-      pendingScrollFileIdRef.current = null
-      pendingScrollDeadlineRef.current = 0
+      clearPendingDiffScroll(command.token)
+      return
+    }
+
+    if (command.phase === 'verifying') {
+      pendingDiffScrollCommandRef.current = {
+        ...command,
+        lastAttemptVersion: diffContentVersion,
+        phase: 'await-layout',
+      }
       return
     }
 
     scrollCardIntoView(node, diffViewportNode, diffScrollOffset)
-  }, [activePane, diffScrollOffset, diffViewportNode, wide])
+    if (pendingDiffScrollCommandRef.current?.token === command.token) {
+      pendingDiffScrollCommandRef.current = {
+        ...command,
+        lastAttemptVersion: diffContentVersion,
+        phase: 'verifying',
+      }
+      schedulePendingScrollRef.current()
+    }
+  }, [
+    activePane,
+    clearPendingDiffScroll,
+    diffContentVersion,
+    diffScrollOffset,
+    diffViewportNode,
+    wide,
+  ])
 
   const schedulePendingScroll = useCallback(() => {
     if (pendingScrollFrameRef.current !== null) {
@@ -540,8 +614,13 @@ export function GitEntryDetailPanel({
 
   const queueScrollToFile = useCallback(
     (fileId: string) => {
-      pendingScrollFileIdRef.current = fileId
-      pendingScrollDeadlineRef.current = window.performance.now() + DIFF_SCROLL_DEADLINE_MS
+      pendingDiffScrollCommandRef.current = {
+        deadline: window.performance.now() + DIFF_SCROLL_DEADLINE_MS,
+        fileId,
+        lastAttemptVersion: null,
+        phase: 'queued',
+        token: ++pendingDiffScrollTokenRef.current,
+      }
 
       if (!wide && activePane !== 'diff') {
         return
@@ -553,10 +632,31 @@ export function GitEntryDetailPanel({
   )
 
   useEffect(() => {
-    if ((!wide && activePane !== 'diff') || pendingScrollFileIdRef.current === null) return
+    const command = pendingDiffScrollCommandRef.current
+    if ((!wide && activePane !== 'diff') || !command) return
+
+    if (command.phase === 'queued') {
+      schedulePendingScroll()
+      return
+    }
+
+    if (command.phase === 'await-layout' && command.lastAttemptVersion !== diffContentVersion) {
+      pendingDiffScrollCommandRef.current = {
+        ...command,
+        phase: 'queued',
+      }
+      schedulePendingScroll()
+    }
+  }, [activePane, diffContentVersion, schedulePendingScroll, wide])
+
+  useEffect(() => {
+    const command = pendingDiffScrollCommandRef.current
+    if (!command || command.phase !== 'verifying') {
+      return
+    }
 
     schedulePendingScroll()
-  }, [activePane, files, patchLayoutVersion, schedulePendingScroll, wide])
+  }, [diffContentVersion, schedulePendingScroll])
 
   useEffect(
     () => () => {
@@ -777,14 +877,10 @@ export function GitEntryDetailPanel({
           </section>
           <section
             className="min-w-0 space-y-2"
-            onKeyDownCapture={(event) => {
-              if (isScrollIntentEventKey(event)) {
-                markDiffNavigation()
-              }
-            }}
-            onPointerDownCapture={markDiffNavigation}
-            onTouchMoveCapture={markDiffNavigation}
-            onWheelCapture={markDiffNavigation}
+            onKeyDownCapture={handleDiffKeyDownCapture}
+            onPointerDownCapture={handleDiffUserScrollIntent}
+            onTouchMoveCapture={handleDiffUserScrollIntent}
+            onWheelCapture={handleDiffUserScrollIntent}
           >
             <div className="flex items-center gap-2 text-sm font-medium">
               <Files className="h-4 w-4 shrink-0" />
@@ -817,6 +913,10 @@ export function GitEntryDetailPanel({
                     data-testid="git-diff-viewport"
                     className="pt-3"
                     style={diffViewportStyle}
+                    onKeyDownCapture={handleDiffKeyDownCapture}
+                    onPointerDownCapture={handleDiffUserScrollIntent}
+                    onTouchMoveCapture={handleDiffUserScrollIntent}
+                    onWheelCapture={handleDiffUserScrollIntent}
                   >
                     {diffStreamContent}
                   </div>

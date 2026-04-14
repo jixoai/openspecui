@@ -1,4 +1,12 @@
+import { GitEntryDetailPanel } from '@/components/git/git-panel-detail'
 import { Tabs, type Tab } from '@/components/tabs'
+import type {
+  DashboardGitEntry,
+  GitEntryFilePatch,
+  GitEntryFileSummary,
+  GitEntrySelector,
+} from '@openspecui/core'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useEffect, useMemo } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,7 +15,7 @@ import { useRoutedCarouselTabs } from './tabs'
 
 const { runViewTransitionMock } = vi.hoisted(() => ({
   runViewTransitionMock: vi.fn(
-    ({
+    async ({
       collectAfterEntries,
       collectBeforeEntries,
       update,
@@ -18,8 +26,8 @@ const { runViewTransitionMock } = vi.hoisted(() => ({
     }) => {
       collectBeforeEntries?.()
       update()
+      await Promise.resolve()
       collectAfterEntries?.()
-      return Promise.resolve()
     }
   ),
 }))
@@ -148,14 +156,114 @@ function RoutedTabsInnerScrollHarness() {
   )
 }
 
-function installScrollableTabLayoutMocks() {
+const commitDetailEntry: DashboardGitEntry = {
+  type: 'commit',
+  hash: 'abc12345',
+  title: 'feat: preserve commit detail tab scroll',
+  committedAt: Date.UTC(2026, 3, 14),
+  relatedChanges: ['commit-detail-vt-scroll'],
+  diff: {
+    files: 24,
+    insertions: 168,
+    deletions: 42,
+  },
+}
+
+const commitDetailSelector: GitEntrySelector = {
+  type: 'commit',
+  hash: commitDetailEntry.hash,
+}
+
+const commitDetailFiles: GitEntryFileSummary[] = Array.from({ length: 24 }, (_, index) => ({
+  fileId: `commit-detail-file-${index + 1}`,
+  source: 'tracked',
+  path: `src/features/group-${Math.floor(index / 4) + 1}/file-${index + 1}.tsx`,
+  displayPath: `src/features/group-${Math.floor(index / 4) + 1}/file-${index + 1}.tsx`,
+  previousPath: null,
+  changeType:
+    index % 4 === 0
+      ? 'added'
+      : index % 4 === 1
+        ? 'modified'
+        : index % 4 === 2
+          ? 'deleted'
+          : 'renamed',
+  diff: {
+    state: 'ready',
+    files: 1,
+    insertions: 4 + index,
+    deletions: index % 3,
+  },
+}))
+
+const commitDetailPatches: GitEntryFilePatch[] = commitDetailFiles.map((file, index) => ({
+  ...file,
+  state: 'available',
+  patch: [
+    `diff --git a/${file.path} b/${file.path}`,
+    'index 0000000..1111111 100644',
+    `--- a/${file.path}`,
+    `+++ b/${file.path}`,
+    '@@ -1,6 +1,6 @@',
+    ...Array.from(
+      { length: 8 + (index % 5) * 4 },
+      (_, lineIndex) =>
+        `${lineIndex % 2 === 0 ? '+' : '-'} line ${lineIndex + 1} for ${file.fileId}`
+    ),
+  ].join('\n'),
+}))
+
+function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        staleTime: Number.POSITIVE_INFINITY,
+      },
+    },
+  })
+}
+
+function RoutedCommitDetailHarness() {
+  const queryClient = useMemo(() => createQueryClient(), [])
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <div
+        className="main-content"
+        data-testid="viewport"
+        style={{ width: 480, height: 320, overflowY: 'auto', padding: '16px' }}
+      >
+        <div style={{ height: 72 }} />
+        <GitEntryDetailPanel
+          selector={commitDetailSelector}
+          entry={commitDetailEntry}
+          files={commitDetailFiles}
+          eagerFiles={commitDetailPatches}
+          isLoading={false}
+          error={null}
+        />
+        <div style={{ height: 160 }} />
+      </div>
+    </QueryClientProvider>
+  )
+}
+
+function installScrollableTabLayoutMocks(
+  options: {
+    panelHeights?: Partial<Record<'diff' | 'files', number>>
+    baseOffset?: number
+    viewportHeight?: number
+  } = {}
+) {
   const viewport = screen.getByTestId('viewport')
   const panelHeights: Record<'diff' | 'files', number> = {
     diff: 1400,
     files: 900,
+    ...options.panelHeights,
   }
-  const baseOffset = 168
-  const viewportHeight = 240
+  const baseOffset = options.baseOffset ?? 168
+  const viewportHeight = options.viewportHeight ?? 240
   let viewportScrollTop = 0
 
   const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
@@ -252,6 +360,9 @@ function installScrollableTabLayoutMocks() {
 
   return {
     viewport,
+    getActivePanel() {
+      return viewport.querySelector<HTMLElement>('[data-tab-panel-state="active"]')
+    },
     restore() {
       Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
         configurable: true,
@@ -483,6 +594,118 @@ describe('useRoutedCarouselTabs', () => {
       })
     } finally {
       restore()
+    }
+  })
+
+  it('preserves per-tab viewport scroll memory across repeated animated switches', async () => {
+    render(<RoutedTabsScrollHarness />)
+    const { restore, viewport, getActivePanel } = installScrollableTabLayoutMocks({
+      panelHeights: {
+        diff: 500 * 20,
+        files: 100 * 30,
+      },
+    })
+
+    const diffScrollSequence = [180, 840, 1280, 1960, 2480, 3120, 3880, 4520, 5160, 5880]
+    const fileScrollSequence = [120, 260, 420, 760, 980, 1240, 1480, 1720, 1960, 2280]
+
+    try {
+      viewport.scrollTop = diffScrollSequence[0]
+
+      fireEvent.click(screen.getByRole('button', { name: 'Files' }))
+
+      await waitFor(() => {
+        expect(getActivePanel()?.dataset.tabPanel).toBe('files')
+      })
+
+      viewport.scrollTop = fileScrollSequence[0]
+
+      for (let iteration = 0; iteration < 10; iteration += 1) {
+        fireEvent.click(screen.getByRole('button', { name: 'Diff' }))
+
+        await waitFor(() => {
+          expect(getActivePanel()?.dataset.tabPanel).toBe('diff')
+          expect(viewport.scrollTop).toBe(diffScrollSequence[iteration])
+        })
+
+        const nextDiffScrollTop = diffScrollSequence[(iteration + 1) % diffScrollSequence.length]
+        viewport.scrollTop = nextDiffScrollTop
+
+        fireEvent.click(screen.getByRole('button', { name: 'Files' }))
+
+        await waitFor(() => {
+          expect(getActivePanel()?.dataset.tabPanel).toBe('files')
+          expect(viewport.scrollTop).toBe(fileScrollSequence[iteration])
+        })
+
+        const nextFileScrollTop = fileScrollSequence[(iteration + 1) % fileScrollSequence.length]
+        viewport.scrollTop = nextFileScrollTop
+      }
+    } finally {
+      restore()
+    }
+  })
+
+  it('preserves commit-detail diff scroll after VT finalization even if the frozen panel loses scrollTop', async () => {
+    const defaultImplementation = runViewTransitionMock.getMockImplementation()
+    runViewTransitionMock.mockImplementation(
+      async ({
+        collectAfterEntries,
+        collectBeforeEntries,
+        update,
+      }: {
+        collectAfterEntries?: () => unknown
+        collectBeforeEntries?: () => unknown
+        update: () => void
+      }) => {
+        collectBeforeEntries?.()
+        update()
+        await Promise.resolve()
+        collectAfterEntries?.()
+
+        const activePanel = document.querySelector<HTMLElement>('[data-tab-panel-state="active"]')
+        if (activePanel?.dataset.tabPanel === 'diff') {
+          activePanel.scrollTop = 0
+        }
+      }
+    )
+
+    render(<RoutedCommitDetailHarness />)
+    const { restore, viewport, getActivePanel } = installScrollableTabLayoutMocks({
+      panelHeights: {
+        diff: 500 * 20,
+        files: 100 * 30,
+      },
+      baseOffset: 196,
+      viewportHeight: 320,
+    })
+
+    try {
+      viewport.scrollTop = 2480
+
+      fireEvent.click(screen.getByRole('button', { name: 'File Tree' }))
+
+      await waitFor(() => {
+        expect(getActivePanel()?.dataset.tabPanel).toBe('files')
+      })
+
+      viewport.scrollTop = 760
+
+      fireEvent.click(screen.getByRole('button', { name: 'Diff Stream' }))
+
+      await waitFor(() => {
+        expect(getActivePanel()?.dataset.tabPanel).toBe('diff')
+        expect(viewport.scrollTop).toBe(2480)
+      })
+
+      await waitFor(() => {
+        expect(viewport.scrollTop).toBe(2480)
+      })
+    } finally {
+      restore()
+      if (defaultImplementation) {
+        runViewTransitionMock.mockImplementation(defaultImplementation)
+      }
     }
   })
 

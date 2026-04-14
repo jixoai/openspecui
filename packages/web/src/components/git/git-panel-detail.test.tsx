@@ -494,6 +494,73 @@ describe('GitEntryDetailPanel', () => {
     expect(frameStates.every((state) => state === 'diff')).toBe(true)
   })
 
+  it('does not replay a completed tree-selection diff scroll on later tab activations', async () => {
+    const frameQueue: FrameRequestCallback[] = []
+    const frameStates: string[] = []
+
+    const flushFrames = (limit = 8) => {
+      for (let index = 0; index < limit && frameQueue.length > 0; index += 1) {
+        const callback = frameQueue.shift()
+        callback?.((index + 1) * 16)
+      }
+    }
+
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frameStates.push(screen.getByTestId('tabs').getAttribute('data-active-tab') ?? '')
+      frameQueue.push(callback)
+      return frameQueue.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    renderWithQueryClient(
+      <GitEntryDetailPanel
+        selector={{ type: 'commit', hash: baseEntry.hash }}
+        entry={baseEntry}
+        files={[baseFile]}
+        eagerFiles={[basePatchFile]}
+        isLoading={false}
+        error={null}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /File Tree/i }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('tabs')).toHaveAttribute('data-active-tab', 'files')
+    })
+
+    fireEvent.click(screen.getByRole('treeitem', { name: /src\/git-panel\.ts/i }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('tabs')).toHaveAttribute('data-active-tab', 'diff')
+    })
+
+    await act(async () => {
+      flushFrames()
+    })
+
+    expect(frameStates.length).toBeGreaterThan(0)
+    expect(frameStates.every((state) => state === 'diff')).toBe(true)
+
+    const initialFrameCount = frameStates.length
+
+    fireEvent.click(screen.getByRole('button', { name: /File Tree/i }))
+    await waitFor(() => {
+      expect(screen.getByTestId('tabs')).toHaveAttribute('data-active-tab', 'files')
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /Diff Stream/i }))
+    await waitFor(() => {
+      expect(screen.getByTestId('tabs')).toHaveAttribute('data-active-tab', 'diff')
+    })
+
+    await act(async () => {
+      flushFrames()
+    })
+
+    expect(frameStates).toHaveLength(initialFrameCount)
+  })
+
   it('renders full large narrow diff lists and switches back to diff after tree selection', async () => {
     stubNarrowResizeObserver()
     const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
