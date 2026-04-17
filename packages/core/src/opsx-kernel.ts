@@ -17,7 +17,7 @@ import {
   type TemplatesMap,
 } from './opsx-types.js'
 import { ReactiveContext } from './reactive-fs/reactive-context.js'
-import { reactiveReadDir, reactiveReadFile, reactiveStat } from './reactive-fs/reactive-fs.js'
+import { reactiveExists, reactiveReadDir, reactiveReadFile, reactiveStat } from './reactive-fs/reactive-fs.js'
 import { ReactiveState } from './reactive-fs/reactive-state.js'
 import type { ChangeFile } from './schemas.js'
 
@@ -820,6 +820,11 @@ export class OpsxKernel {
     const changeRelDir = `openspec/changes/${changeId}`
     for (const artifact of status.artifacts) {
       artifact.relativePath = `${changeRelDir}/${artifact.outputPath}`
+      // Skip globs for simplicity, or handle their base dir
+      const fullPath = join(this.projectDir, artifact.relativePath)
+       if (!artifact.outputPath.includes('*')) {
+           await reactiveExists(fullPath)
+         }
     }
     return status
   }
