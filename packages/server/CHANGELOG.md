@@ -1,5 +1,14 @@
 # @openspecui/server
 
+## 2.3.6
+
+### Patch Changes
+
+- 7be50a7: Promote deleted-worktree recovery into a platform-level handoff flow. The watcher runtime now reports project-root eviction state, the server resolves fallback worktrees from cached Git common-dir metadata, and the web shell auto-switches to an existing default-branch worktree while preserving the current route.
+- Updated dependencies [7be50a7]
+  - @openspecui/core@2.3.6
+  - @openspecui/search@2.3.6
+
 ## 2.3.5
 
 ### Patch Changes
