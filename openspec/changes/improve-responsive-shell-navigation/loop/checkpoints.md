@@ -18,7 +18,7 @@
 - [x] 3.1 Changeset included for release-impacting package changes
 - [x] 3.2 CI-equivalent local checks passed
 - [x] 3.3 Real browser acceptance passed locally
-- [ ] 3.4 PR checks passed
+- [x] 3.4 PR checks passed
 - [ ] 3.5 Release automation published a new version
 - [ ] 3.6 Newly published package acceptance passed
 
