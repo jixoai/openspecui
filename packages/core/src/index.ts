@@ -203,6 +203,7 @@ export { OpsxKernel, type TemplateContentMap } from './opsx-kernel.js'
 
 // OPSX CLI output schemas and types
 export {
+  ApplyInstructionsContextFilesSchema,
   ApplyInstructionsSchema,
   ApplyTaskSchema,
   ArtifactInstructionsSchema,

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the OpenSpecUI screens and navigation model for OPSX workflows, driven entirely by OpenSpec CLI 1.1.x outputs.
+Define the OpenSpecUI screens and navigation model for OPSX workflows, driven entirely by supported OpenSpec CLI outputs.
 
 ## Requirements
 

@@ -114,6 +114,22 @@ describe('getToolInitStates', () => {
     expect(state?.presentExpectedCommandCount).toBe(1)
   })
 
+  it('treats OpenCode 1.2 command directory as legacy-compatible', async () => {
+    await writeArtifact(join(tempDir, '.opencode', 'command', 'opsx-explore.md'))
+
+    const states = await getToolInitStates(tempDir, {
+      delivery: 'commands',
+      workflows: ['explore'],
+    })
+    const state = states.find((entry) => entry.toolId === 'opencode')
+
+    expect(state?.status).toBe('initialized')
+    expect(state?.expectedCommandCount).toBe(1)
+    expect(state?.presentExpectedCommandCount).toBe(1)
+    expect(state?.missingCommandWorkflows).toEqual([])
+    expect(state?.legacyCommandWorkflows).toEqual(['explore'])
+  })
+
   it('refreshes stale cached file existence after init artifacts are created later', async () => {
     const before = await getToolInitStates(tempDir, {
       delivery: 'both',

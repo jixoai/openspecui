@@ -36,14 +36,23 @@ export interface ToolInitState {
   missingCommandWorkflows: ToolWorkflowId[]
   unexpectedSkillWorkflows: ToolWorkflowId[]
   unexpectedCommandWorkflows: ToolWorkflowId[]
+  legacyCommandWorkflows: ToolWorkflowId[]
 }
 
 interface ArtifactEntry {
   workflow: ToolWorkflowId
   path: string
+  legacyPaths?: readonly string[]
 }
 
 const ALL_TOOL_WORKFLOWS = Object.keys(TOOL_WORKFLOW_TO_SKILL_DIR) as ToolWorkflowId[]
+
+type CommandPathResolver = (projectDir: string, workflow: ToolWorkflowId) => string
+
+interface ToolCommandPathConfig {
+  primary: CommandPathResolver
+  legacy?: readonly CommandPathResolver[]
+}
 
 function toKnownWorkflows(workflows: readonly string[]): ToolWorkflowId[] {
   return workflows.filter(
@@ -56,60 +65,126 @@ function resolveCodexHome(): string {
   return resolve(configuredHome ? configuredHome : join(homedir(), '.codex'))
 }
 
-function resolveToolCommandPath(
+const TOOL_COMMAND_PATHS: Record<string, ToolCommandPathConfig> = {
+  'amazon-q': {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.amazonq', 'prompts', `opsx-${workflow}.md`),
+  },
+  antigravity: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.agent', 'workflows', `opsx-${workflow}.md`),
+  },
+  auggie: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.augment', 'commands', `opsx-${workflow}.md`),
+  },
+  bob: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.bob', 'commands', `opsx-${workflow}.md`),
+  },
+  claude: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.claude', 'commands', 'opsx', `${workflow}.md`),
+  },
+  cline: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.clinerules', 'workflows', `opsx-${workflow}.md`),
+  },
+  codebuddy: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.codebuddy', 'commands', 'opsx', `${workflow}.md`),
+  },
+  codex: {
+    primary: (_projectDir, workflow) =>
+      resolve(resolveCodexHome(), 'prompts', `opsx-${workflow}.md`),
+  },
+  continue: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.continue', 'prompts', `opsx-${workflow}.prompt`),
+  },
+  costrict: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.cospec', 'openspec', 'commands', `opsx-${workflow}.md`),
+  },
+  crush: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.crush', 'commands', 'opsx', `${workflow}.md`),
+  },
+  cursor: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.cursor', 'commands', `opsx-${workflow}.md`),
+  },
+  factory: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.factory', 'commands', `opsx-${workflow}.md`),
+  },
+  gemini: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.gemini', 'commands', 'opsx', `${workflow}.toml`),
+  },
+  'github-copilot': {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.github', 'prompts', `opsx-${workflow}.prompt.md`),
+  },
+  iflow: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.iflow', 'commands', `opsx-${workflow}.md`),
+  },
+  junie: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.junie', 'commands', `opsx-${workflow}.md`),
+  },
+  kilocode: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.kilocode', 'workflows', `opsx-${workflow}.md`),
+  },
+  kiro: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.kiro', 'prompts', `opsx-${workflow}.prompt.md`),
+  },
+  lingma: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.lingma', 'commands', 'opsx', `${workflow}.md`),
+  },
+  opencode: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.opencode', 'commands', `opsx-${workflow}.md`),
+    legacy: [
+      (projectDir, workflow) => resolve(projectDir, '.opencode', 'command', `opsx-${workflow}.md`),
+    ],
+  },
+  pi: {
+    primary: (projectDir, workflow) => resolve(projectDir, '.pi', 'prompts', `opsx-${workflow}.md`),
+  },
+  qoder: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.qoder', 'commands', 'opsx', `${workflow}.md`),
+  },
+  qwen: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.qwen', 'commands', `opsx-${workflow}.toml`),
+  },
+  roocode: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.roo', 'commands', `opsx-${workflow}.md`),
+  },
+  windsurf: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.windsurf', 'workflows', `opsx-${workflow}.md`),
+  },
+}
+
+function resolveToolCommandArtifact(
   projectDir: string,
   toolId: string,
   workflow: ToolWorkflowId
-): string | null {
-  switch (toolId) {
-    case 'amazon-q':
-      return resolve(projectDir, '.amazonq', 'prompts', `opsx-${workflow}.md`)
-    case 'antigravity':
-      return resolve(projectDir, '.agent', 'workflows', `opsx-${workflow}.md`)
-    case 'auggie':
-      return resolve(projectDir, '.augment', 'commands', `opsx-${workflow}.md`)
-    case 'claude':
-      return resolve(projectDir, '.claude', 'commands', 'opsx', `${workflow}.md`)
-    case 'cline':
-      return resolve(projectDir, '.clinerules', 'workflows', `opsx-${workflow}.md`)
-    case 'codebuddy':
-      return resolve(projectDir, '.codebuddy', 'commands', 'opsx', `${workflow}.md`)
-    case 'codex':
-      return resolve(resolveCodexHome(), 'prompts', `opsx-${workflow}.md`)
-    case 'continue':
-      return resolve(projectDir, '.continue', 'prompts', `opsx-${workflow}.prompt`)
-    case 'costrict':
-      return resolve(projectDir, '.cospec', 'openspec', 'commands', `opsx-${workflow}.md`)
-    case 'crush':
-      return resolve(projectDir, '.crush', 'commands', 'opsx', `${workflow}.md`)
-    case 'cursor':
-      return resolve(projectDir, '.cursor', 'commands', `opsx-${workflow}.md`)
-    case 'factory':
-      return resolve(projectDir, '.factory', 'commands', `opsx-${workflow}.md`)
-    case 'gemini':
-      return resolve(projectDir, '.gemini', 'commands', 'opsx', `${workflow}.toml`)
-    case 'github-copilot':
-      return resolve(projectDir, '.github', 'prompts', `opsx-${workflow}.prompt.md`)
-    case 'iflow':
-      return resolve(projectDir, '.iflow', 'commands', `opsx-${workflow}.md`)
-    case 'kilocode':
-      return resolve(projectDir, '.kilocode', 'workflows', `opsx-${workflow}.md`)
-    case 'kiro':
-      return resolve(projectDir, '.kiro', 'prompts', `opsx-${workflow}.prompt.md`)
-    case 'opencode':
-      return resolve(projectDir, '.opencode', 'command', `opsx-${workflow}.md`)
-    case 'pi':
-      return resolve(projectDir, '.pi', 'prompts', `opsx-${workflow}.md`)
-    case 'qoder':
-      return resolve(projectDir, '.qoder', 'commands', 'opsx', `${workflow}.md`)
-    case 'qwen':
-      return resolve(projectDir, '.qwen', 'commands', `opsx-${workflow}.toml`)
-    case 'roocode':
-      return resolve(projectDir, '.roo', 'commands', `opsx-${workflow}.md`)
-    case 'windsurf':
-      return resolve(projectDir, '.windsurf', 'workflows', `opsx-${workflow}.md`)
-    default:
-      return null
+): ArtifactEntry | null {
+  const config = TOOL_COMMAND_PATHS[toolId]
+  if (!config) return null
+  return {
+    workflow,
+    path: config.primary(projectDir, workflow),
+    legacyPaths: config.legacy?.map((resolvePath) => resolvePath(projectDir, workflow)),
   }
 }
 
@@ -128,8 +203,8 @@ function getSkillArtifacts(projectDir: string, skillsDir: string): ArtifactEntry
 
 function getCommandArtifacts(projectDir: string, toolId: string): ArtifactEntry[] {
   return ALL_TOOL_WORKFLOWS.flatMap((workflow) => {
-    const path = resolveToolCommandPath(projectDir, toolId, workflow)
-    return path ? [{ workflow, path }] : []
+    const artifact = resolveToolCommandArtifact(projectDir, toolId, workflow)
+    return artifact ? [artifact] : []
   })
 }
 
@@ -141,10 +216,10 @@ function invalidateToolInitCaches(projectDir: string): void {
       cacheRoots.add(resolve(projectDir, tool.skillsDir))
     }
 
-    for (const workflow of ALL_TOOL_WORKFLOWS) {
-      const commandPath = resolveToolCommandPath(projectDir, tool.value, workflow)
-      if (commandPath) {
-        cacheRoots.add(dirname(commandPath))
+    for (const commandArtifact of getCommandArtifacts(projectDir, tool.value)) {
+      cacheRoots.add(dirname(commandArtifact.path))
+      for (const legacyPath of commandArtifact.legacyPaths ?? []) {
+        cacheRoots.add(dirname(legacyPath))
       }
     }
   }
@@ -155,24 +230,41 @@ function invalidateToolInitCaches(projectDir: string): void {
 }
 
 async function getExistingArtifactPaths(entries: readonly ArtifactEntry[]): Promise<Set<string>> {
+  const paths = entries.flatMap((entry) => [entry.path, ...(entry.legacyPaths ?? [])])
   const presence = await Promise.all(
-    entries.map(async (entry) => ({ path: entry.path, exists: await reactiveExists(entry.path) }))
+    paths.map(async (path) => ({ path, exists: await reactiveExists(path) }))
   )
   return new Set(presence.filter((entry) => entry.exists).map((entry) => entry.path))
+}
+
+function hasExistingArtifact(entry: ArtifactEntry, existingPaths: ReadonlySet<string>): boolean {
+  return (
+    existingPaths.has(entry.path) ||
+    (entry.legacyPaths?.some((legacyPath) => existingPaths.has(legacyPath)) ?? false)
+  )
+}
+
+function hasLegacyArtifact(entry: ArtifactEntry, existingPaths: ReadonlySet<string>): boolean {
+  return entry.legacyPaths?.some((legacyPath) => existingPaths.has(legacyPath)) ?? false
 }
 
 function countExisting(
   entries: readonly ArtifactEntry[],
   existingPaths: ReadonlySet<string>
 ): number {
-  return entries.reduce((count, entry) => count + (existingPaths.has(entry.path) ? 1 : 0), 0)
+  return entries.reduce(
+    (count, entry) => count + (hasExistingArtifact(entry, existingPaths) ? 1 : 0),
+    0
+  )
 }
 
 function collectMissingWorkflows(
   entries: readonly ArtifactEntry[],
   existingPaths: ReadonlySet<string>
 ): ToolWorkflowId[] {
-  return entries.filter((entry) => !existingPaths.has(entry.path)).map((entry) => entry.workflow)
+  return entries
+    .filter((entry) => !hasExistingArtifact(entry, existingPaths))
+    .map((entry) => entry.workflow)
 }
 
 function collectUnexpectedWorkflows(
@@ -181,7 +273,19 @@ function collectUnexpectedWorkflows(
   existingPaths: ReadonlySet<string>
 ): ToolWorkflowId[] {
   return entries
-    .filter((entry) => !desiredWorkflowSet.has(entry.workflow) && existingPaths.has(entry.path))
+    .filter(
+      (entry) =>
+        !desiredWorkflowSet.has(entry.workflow) && hasExistingArtifact(entry, existingPaths)
+    )
+    .map((entry) => entry.workflow)
+}
+
+function collectLegacyWorkflows(
+  entries: readonly ArtifactEntry[],
+  existingPaths: ReadonlySet<string>
+): ToolWorkflowId[] {
+  return entries
+    .filter((entry) => hasLegacyArtifact(entry, existingPaths))
     .map((entry) => entry.workflow)
 }
 
@@ -228,6 +332,7 @@ export async function getToolInitStates(
         shouldGenerateCommands ? desiredWorkflowSet : new Set<ToolWorkflowId>(),
         existingCommandPaths
       )
+      const legacyCommandWorkflows = collectLegacyWorkflows(commandArtifacts, existingCommandPaths)
 
       const expectedSkillCount = expectedSkillArtifacts.length
       const presentExpectedSkillCount = expectedSkillCount - missingSkillWorkflows.length
@@ -259,6 +364,7 @@ export async function getToolInitStates(
         missingCommandWorkflows,
         unexpectedSkillWorkflows,
         unexpectedCommandWorkflows,
+        legacyCommandWorkflows,
       } satisfies ToolInitState
     })
   )

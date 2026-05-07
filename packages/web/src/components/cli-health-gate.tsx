@@ -1,34 +1,15 @@
 import { isStaticMode } from '@/lib/static-mode'
 import { queryClient, trpc, trpcClient } from '@/lib/trpc'
 import { useConfigSubscription } from '@/lib/use-subscription'
+import {
+  classifyOpenSpecCliVersion,
+  OPENSPEC_CLI_ACCEPTED_RANGE,
+  OPENSPEC_CLI_RECOMMENDED_RANGE,
+  OPENSPECUI_TARGET_MAJOR,
+} from '@openspecui/core/openspec-compat'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { AlertCircle, Loader2, Terminal } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-
-interface Semver {
-  major: number
-  minor: number
-  patch: number
-}
-
-const MIN_VERSION: Semver = { major: 1, minor: 2, patch: 0 }
-
-function parseVersion(raw: string | undefined): Semver | null {
-  if (!raw) return null
-  const match = raw.match(/(\d+)\.(\d+)\.(\d+)/)
-  if (!match) return null
-  return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3]),
-  }
-}
-
-function isAtLeast(version: Semver, required: Semver): boolean {
-  if (version.major !== required.major) return version.major > required.major
-  if (version.minor !== required.minor) return version.minor > required.minor
-  return version.patch >= required.patch
-}
 
 function formatExecutePath(command: string, args: readonly string[] = []): string {
   const quote = (token: string): string => {
@@ -84,27 +65,39 @@ export function CliHealthGate() {
     return null
   }
 
-  const version = parseVersion(data?.version)
-  const compatible = version ? isAtLeast(version, MIN_VERSION) : false
+  const compatibility = classifyOpenSpecCliVersion(data?.version)
 
-  if (data?.available && compatible) {
+  if (data?.available && compatibility.status === 'current') {
     return null
+  }
+
+  if (data?.available && compatibility.status === 'legacy-compatible') {
+    return (
+      <div className="fixed bottom-4 right-4 z-40 mx-4 max-w-sm rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm shadow-lg backdrop-blur-sm">
+        <div className="flex items-start gap-2">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />
+          <div className="space-y-1">
+            <div className="font-medium">OpenSpec CLI {data.version} is legacy-compatible</div>
+            <p className="text-muted-foreground text-xs">
+              OpenSpecUI {OPENSPECUI_TARGET_MAJOR}.x accepts {OPENSPEC_CLI_ACCEPTED_RANGE}. Upgrade
+              to {OPENSPEC_CLI_RECOMMENDED_RANGE} for the current line.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   const checking = isFetching || saveCliCommandMutation.isPending
 
-  const reason = !data?.available
-    ? data?.error || 'OpenSpec CLI not found.'
-    : data?.version
-      ? `Detected ${data.version}, requires >= ${MIN_VERSION.major}.${MIN_VERSION.minor}.${MIN_VERSION.patch}.`
-      : 'Unable to parse CLI version.'
+  const reason = !data?.available ? data?.error || 'OpenSpec CLI not found.' : compatibility.message
 
   return (
     <div className="bg-background/80 fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
       <div className="border-border bg-background mx-4 max-w-xl space-y-4 rounded-lg border p-6 shadow-xl">
         <div className="flex items-center gap-2 text-lg font-semibold">
           <AlertCircle className="h-5 w-5 text-amber-500" />
-          OpenSpec CLI 1.2+ Required
+          OpenSpec CLI {OPENSPEC_CLI_ACCEPTED_RANGE} Required
         </div>
         <p className="text-muted-foreground text-sm">{reason}</p>
         <div className="space-y-2">

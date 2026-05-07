@@ -23,6 +23,8 @@ export interface AIToolOption {
   successLabel?: string
   /** 技能目录（相对项目根目录） */
   skillsDir?: string
+  /** 自动检测路径；存在任一路径即表示项目已有该工具配置 */
+  detectionPaths?: string[]
 }
 
 /**
@@ -75,6 +77,13 @@ export const AI_TOOLS: ToolConfig[] = [
     skillsDir: '.augment',
   },
   {
+    name: 'Bob Shell',
+    value: 'bob',
+    available: true,
+    successLabel: 'Bob Shell',
+    skillsDir: '.bob',
+  },
+  {
     name: 'Claude Code',
     value: 'claude',
     available: true,
@@ -83,6 +92,13 @@ export const AI_TOOLS: ToolConfig[] = [
   },
   { name: 'Cline', value: 'cline', available: true, successLabel: 'Cline', skillsDir: '.cline' },
   { name: 'Codex', value: 'codex', available: true, successLabel: 'Codex', skillsDir: '.codex' },
+  {
+    name: 'ForgeCode',
+    value: 'forgecode',
+    available: true,
+    successLabel: 'ForgeCode',
+    skillsDir: '.forge',
+  },
   {
     name: 'CodeBuddy Code (CLI)',
     value: 'codebuddy',
@@ -132,8 +148,18 @@ export const AI_TOOLS: ToolConfig[] = [
     available: true,
     successLabel: 'GitHub Copilot',
     skillsDir: '.github',
+    detectionPaths: [
+      '.github/copilot-instructions.md',
+      '.github/instructions',
+      '.github/workflows/copilot-setup-steps.yml',
+      '.github/prompts',
+      '.github/agents',
+      '.github/skills',
+      '.github/.mcp.json',
+    ],
   },
   { name: 'iFlow', value: 'iflow', available: true, successLabel: 'iFlow', skillsDir: '.iflow' },
+  { name: 'Junie', value: 'junie', available: true, successLabel: 'Junie', skillsDir: '.junie' },
   {
     name: 'Kilo Code',
     value: 'kilocode',
@@ -151,6 +177,13 @@ export const AI_TOOLS: ToolConfig[] = [
   },
   { name: 'Pi', value: 'pi', available: true, successLabel: 'Pi', skillsDir: '.pi' },
   { name: 'Qoder', value: 'qoder', available: true, successLabel: 'Qoder', skillsDir: '.qoder' },
+  {
+    name: 'Lingma',
+    value: 'lingma',
+    available: true,
+    successLabel: 'Lingma',
+    skillsDir: '.lingma',
+  },
   {
     name: 'Qwen Code',
     value: 'qwen',
@@ -206,8 +239,14 @@ export async function getDetectedProjectTools(projectDir: string): Promise<ToolC
   const results = await Promise.all(
     AI_TOOLS.map(async (tool) => {
       if (!tool.skillsDir) return null
-      const exists = await reactiveExists(join(projectDir, tool.skillsDir))
-      return exists ? tool : null
+      const detectionPaths =
+        tool.detectionPaths && tool.detectionPaths.length > 0
+          ? tool.detectionPaths
+          : [tool.skillsDir]
+      const exists = await Promise.all(
+        detectionPaths.map((path) => reactiveExists(join(projectDir, path)))
+      )
+      return exists.some(Boolean) ? tool : null
     })
   )
   return results.filter((tool): tool is ToolConfig => tool !== null)

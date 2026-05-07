@@ -42,11 +42,17 @@ export const ApplyTaskSchema = z.object({
 
 export type ApplyTask = z.infer<typeof ApplyTaskSchema>
 
+const ApplyInstructionsContextFilePathsSchema = z
+  .union([z.string(), z.array(z.string())])
+  .transform((paths) => (Array.isArray(paths) ? paths : [paths]))
+
+export const ApplyInstructionsContextFilesSchema = z.record(ApplyInstructionsContextFilePathsSchema)
+
 export const ApplyInstructionsSchema = z.object({
   changeName: z.string(),
   changeDir: z.string(),
   schemaName: z.string(),
-  contextFiles: z.record(z.string()),
+  contextFiles: ApplyInstructionsContextFilesSchema,
   progress: z.object({
     total: z.number(),
     complete: z.number(),

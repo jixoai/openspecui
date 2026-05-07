@@ -38,7 +38,7 @@ export const zh = {
     appOffSummary: '启动本地后端，并由当前机器直接提供本地 Web UI。',
     exportLabel: '静态导出',
     exportSummary: '生成可部署的静态快照，用于文档站点或离线审阅。',
-    compatibility: 'OpenSpecUI 2.x 面向 OpenSpec CLI 1.2+。',
+    compatibility: 'OpenSpecUI 3.x 面向 OpenSpec CLI 1.3.x，并兼容 1.2.x 项目。',
   },
   modes: {
     title: '选择合适的界面',

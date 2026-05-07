@@ -12,9 +12,9 @@ try {
   if (!existsSync('references/openspec/.git')) {
     run('git submodule update --init references/openspec')
   }
-  const describe = run('git -C references/openspec describe --tags --match "v1.2.*" --always')
-  if (!describe.startsWith('v1.2.')) {
-    throw new Error(`references/openspec must point to OpenSpec v1.2.x, but got "${describe}".`)
+  const describe = run('git -C references/openspec describe --tags --match "v1.3.*" --always')
+  if (!describe.startsWith('v1.3.')) {
+    throw new Error(`references/openspec must point to OpenSpec v1.3.x, but got "${describe}".`)
   }
   console.log(`[openspec-ref-check] OK: ${describe}`)
 } catch (error) {

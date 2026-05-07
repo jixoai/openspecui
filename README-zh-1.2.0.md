@@ -1,0 +1,104 @@
+# OpenSpec UI
+
+[English](./README-1.2.0.md) | [中文](./README-zh-1.2.0.md)
+
+OpenSpecUI 是 OpenSpec 工作流的可视化 Web 界面（支持实时模式、Hosted App 与静态导出）。
+
+## 版本兼容矩阵
+
+| OpenSpecUI | 需要的 OpenSpec CLI |
+| ---------- | ------------------- |
+| `@^2`      | `>=1.2.0 <1.3.0`    |
+| `@^1`      | `>=1.0.0 <1.2.0`    |
+
+历史文档：
+
+- 1.x：[`README-1.x.md`](./README-1.x.md)
+- 0.16：[`README-0.16.0.md`](./README-0.16.0.md)
+
+## 快速开始
+
+```bash
+# 推荐：不全局安装直接运行
+npx openspecui@^2
+bunx openspecui@^2
+
+# 可选：全局安装
+npm install -g openspecui
+openspecui
+```
+
+默认地址：`http://localhost:3100`。
+
+## 常用流程
+
+### 启动本地实时模式
+
+```bash
+openspecui
+openspecui ./my-project
+openspecui --port 3200
+```
+
+### 使用 Hosted App 启动
+
+```bash
+openspecui --app
+openspecui --app=https://app.example.com
+```
+
+`--app` 仍然会启动本地后端，但发起的是 Hosted App 链接，而不是本地构建出来的 Web
+bundle。
+如果没有显式传入 URL，OpenSpecUI 会优先读取配置中的 `appBaseUrl`，否则使用官方地址
+`https://app.openspecui.com`。
+
+启动契约：
+
+- 若浏览器能把该 Hosted App URL 捕获到同一部署范围内已安装的 PWA，则优先进入 PWA
+- 若没有匹配的 PWA、浏览器关闭了链接捕获，或浏览器本身不支持，则回退到普通网页标签
+- `--app=https://app.example.com` 只能复用从 `https://app.example.com` 这一部署安装的 PWA，
+  不能复用 `app.openspecui.com` 的已安装应用
+
+### 静态导出
+
+```bash
+openspecui export -o ./dist
+openspecui export -o ./dist --base-path /docs --clean
+```
+
+### Nix
+
+```bash
+nix run github:jixoai/openspecui -- --help
+nix develop
+```
+
+## 公开入口
+
+- Hosted app：`https://app.openspecui.com`
+- 官网：`https://www.openspecui.com`
+- OpenSpec 官方站点：`https://openspec.dev`
+- GitHub：`https://github.com/jixoai/openspecui`
+
+## OpenSpec 1.2 说明
+
+- OpenSpecUI 2.x 需要 OpenSpec CLI `>=1.2.0`。
+- 如果本地 CLI 版本过低，界面会显示 `OpenSpec CLI Required` 并阻断核心操作，直到升级。
+- 默认工作流建议为 `/opsx:propose`（快速路径）。
+- 可在 **Settings → OpenSpec 1.2 Profile & Sync** 查看 profile/workflow 同步状态。
+
+升级 CLI：
+
+```bash
+npm install -g @fission-ai/openspec@latest
+```
+
+## 核心能力
+
+- 规格/变更/任务 Dashboard
+- Config/Schema 浏览与编辑
+- Change Action 对应的 OPSX Compose
+- 多标签 PTY 终端（xterm + ghostty-web）
+- 面向共享部署的 Hosted App Shell
+- 动态与静态模式搜索
+- 可部署的静态快照导出

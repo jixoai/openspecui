@@ -18,6 +18,10 @@
       "import": "./dist/hosted-app.mjs",
       "types": "./dist/hosted-app.d.mts"
     },
+    "./openspec-compat": {
+      "import": "./dist/openspec-compat.mjs",
+      "types": "./dist/openspec-compat.d.mts"
+    },
     "./opsx-display-path": {
       "import": "./dist/opsx-display-path.mjs",
       "types": "./dist/opsx-display-path.d.mts"
@@ -27,8 +31,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/hosted-app.ts --format esm --dts",
-    "dev": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/hosted-app.ts --format esm --dts --watch",
+    "build": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/hosted-app.ts src/openspec-compat.ts --format esm --dts",
+    "dev": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/hosted-app.ts src/openspec-compat.ts --format esm --dts --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

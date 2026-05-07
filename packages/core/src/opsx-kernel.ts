@@ -36,7 +36,7 @@ export type TemplateContentMap = Record<
 // Helpers (migrated from router.ts)
 // ---------------------------------------------------------------------------
 
-function parseCliJson<T>(raw: string, schema: z.ZodSchema<T>, label: string): T {
+function parseCliJson<S extends z.ZodTypeAny>(raw: string, schema: S, label: string): z.output<S> {
   const trimmed = raw.trim()
   if (!trimmed) {
     throw new Error(`${label} returned empty output`)

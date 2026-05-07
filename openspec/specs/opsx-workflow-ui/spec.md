@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define OpenSpecUI behavior so OPSX workflow UI is kernel-first, CLI-aligned, and strictly reactive for OpenSpec 1.x projects.
+Define OpenSpecUI behavior so OPSX workflow UI is kernel-first, CLI-aligned, and strictly reactive for supported OpenSpec CLI projects.
 
 ## Requirements
 
@@ -58,6 +58,13 @@ OpenSpecUI SHALL obtain artifact instructions exclusively from `openspec instruc
 - **WHEN** the user saves artifact content
 - **THEN** the UI SHALL write to the CLI-provided output path
 - **AND** trigger status refresh
+
+#### Scenario: Load apply instructions with multiple context files
+
+- **GIVEN** OpenSpec CLI reports apply `contextFiles` with one or more paths per artifact id
+- **WHEN** the kernel warms apply instructions
+- **THEN** OpenSpecUI SHALL preserve every CLI-provided context file path
+- **AND** legacy single-path values SHALL be normalized into one-item path arrays
 
 ### Requirement: Config-Centered Schema Metadata
 
@@ -174,12 +181,14 @@ OpenSpecUI SHALL block OPSX usage when required CLI capability is missing.
 - **THEN** UI SHALL present a blocking notice with install/upgrade guidance
 - **AND** prevent OPSX actions until resolved
 
-#### Scenario: Enforce 1.1.x baseline only
+#### Scenario: Enforce OpenSpecUI 3.x CLI compatibility
 
-- **GIVEN** project targets OpenSpec CLI 1.1.x
+- **GIVEN** OpenSpecUI 3.x evaluates a project runtime
 - **WHEN** compatibility is evaluated
-- **THEN** UI SHALL require CLI 1.1.x or newer
-- **AND** SHALL NOT implement backward compatibility for pre-1.1.x releases
+- **THEN** UI SHALL accept OpenSpec CLI `>=1.2.0 <1.4.0`
+- **AND** SHALL treat OpenSpec CLI `>=1.3.0 <1.4.0` as the current target line
+- **AND** SHALL treat OpenSpec CLI `>=1.2.0 <1.3.0` as legacy-compatible
+- **AND** SHALL block versions outside `>=1.2.0 <1.4.0`
 
 #### Scenario: Missing project config or required skills
 

@@ -789,7 +789,7 @@ export const cliRouter = router({
     })) satisfies AIToolOption[]
   }),
 
-  /** 获取 OpenSpec 1.2 profile/workflow 配置与当前项目漂移状态 */
+  /** 获取 OpenSpec CLI profile/workflow 配置与当前项目漂移状态 */
   getProfileState: publicProcedure.query(async ({ ctx }) => {
     return fetchOpsxProfileState(ctx)
   }),

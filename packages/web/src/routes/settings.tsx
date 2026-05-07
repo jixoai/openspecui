@@ -1228,9 +1228,9 @@ export function Settings() {
             </div>
           </section>
 
-          {/* OpenSpec 1.2 Profile & Sync */}
+          {/* OpenSpec Profile & Sync */}
           <section className="space-y-4">
-            <h2 className="text-lg font-semibold">OpenSpec 1.2 Profile &amp; Sync</h2>
+            <h2 className="text-lg font-semibold">OpenSpec Profile &amp; Sync</h2>
             <div className="border-border space-y-4 rounded-lg border p-4">
               {isLoadingOpsxProfileState ? (
                 <div className="text-muted-foreground flex items-center gap-2 text-sm">
@@ -1340,7 +1340,8 @@ export function Settings() {
 
                   <p className="text-muted-foreground text-xs">
                     Note: <code className="bg-muted rounded px-1">openspec update</code> follows
-                    OpenSpec 1.2 behavior and prunes deselected workflow command/skill files.
+                    OpenSpec CLI profile behavior and prunes deselected workflow command/skill
+                    files.
                   </p>
 
                   <p className="text-muted-foreground text-xs">
@@ -1471,7 +1472,8 @@ export function Settings() {
                     <option value="all">Use all tools</option>
                   </select>
                   <p className="text-muted-foreground text-xs">
-                    OpenSpec 1.2 can auto-detect existing tool directories.
+                    OpenSpec CLI can auto-detect existing tool directories. OpenSpecUI 3.x uses
+                    OpenSpec CLI 1.3.x as the current tool line.
                   </p>
                 </label>
 
@@ -1523,8 +1525,12 @@ export function Settings() {
                       const initialized = status === 'initialized'
                       const repairable = status === 'partial'
                       const selected = selectedTools.includes(tool.value)
+                      const legacyCommandWorkflows =
+                        toolInitStateById.get(tool.value)?.legacyCommandWorkflows ?? []
                       const statusTitle = initialized
-                        ? 'Initialized: exact match for current delivery/workflows'
+                        ? legacyCommandWorkflows.length > 0
+                          ? `Initialized: legacy-compatible command paths detected for ${legacyCommandWorkflows.join(', ')}`
+                          : 'Initialized: exact match for current delivery/workflows'
                         : repairable
                           ? 'Partial: detected artifacts need repair for current delivery/workflows'
                           : 'Uninitialized: no generated artifacts detected'

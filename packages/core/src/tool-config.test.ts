@@ -28,6 +28,10 @@ describe('getDetectedProjectTools', () => {
     expect(getAllToolIds()).not.toContain('agents')
   })
 
+  it('includes OpenSpec CLI 1.3 tool ids', () => {
+    expect(getAllToolIds()).toEqual(expect.arrayContaining(['bob', 'forgecode', 'junie', 'lingma']))
+  })
+
   it('detects project-local tool directories only', async () => {
     await mkdir(join(tempDir, '.claude'), { recursive: true })
     await mkdir(join(tempDir, '.cursor'), { recursive: true })
@@ -35,5 +39,21 @@ describe('getDetectedProjectTools', () => {
     const detected = await getDetectedProjectTools(tempDir)
 
     expect(detected.map((tool) => tool.value)).toEqual(['claude', 'cursor'])
+  })
+
+  it('does not detect GitHub Copilot from a bare .github directory', async () => {
+    await mkdir(join(tempDir, '.github'), { recursive: true })
+
+    const detected = await getDetectedProjectTools(tempDir)
+
+    expect(detected.map((tool) => tool.value)).not.toContain('github-copilot')
+  })
+
+  it('detects GitHub Copilot from official Copilot paths', async () => {
+    await mkdir(join(tempDir, '.github', 'prompts'), { recursive: true })
+
+    const detected = await getDetectedProjectTools(tempDir)
+
+    expect(detected.map((tool) => tool.value)).toContain('github-copilot')
   })
 })

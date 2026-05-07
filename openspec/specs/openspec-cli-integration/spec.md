@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Define how OpenSpecUI integrates with the OpenSpec CLI 1.1.x to execute OPSX workflows and stream command output.
+Define how OpenSpecUI integrates with the OpenSpec CLI to execute OPSX workflows and stream command output across the active version line.
 
 ## Requirements
 
 ### Requirement: CLI Discovery and Version Enforcement
 
-OpenSpecUI SHALL select the OpenSpec CLI command based on availability and enforce a 1.1.x baseline.
+OpenSpecUI SHALL select the OpenSpec CLI command based on availability and enforce the OpenSpecUI major-to-OpenSpec CLI minor version law.
 
 #### Scenario: Prefer global openspec
 
@@ -23,12 +23,34 @@ OpenSpecUI SHALL select the OpenSpec CLI command based on availability and enfor
 - **WHEN** OpenSpecUI resolves the CLI command
 - **THEN** the system SHALL use `npx @fission-ai/openspec`
 
-#### Scenario: Enforce 1.1.x baseline
+#### Scenario: Enforce OpenSpecUI 3.x compatibility range
 
-- **GIVEN** the CLI reports a version below 1.1.0
+- **GIVEN** OpenSpecUI 3.x evaluates an OpenSpec CLI version outside `>=1.2.0 <1.4.0`
 - **WHEN** OpenSpecUI initializes
 - **THEN** the UI SHALL block usage
 - **AND** present upgrade instructions
+
+#### Scenario: Accept legacy-compatible 1.2 runtime in 3.x
+
+- **GIVEN** OpenSpecUI 3.x evaluates OpenSpec CLI `>=1.2.0 <1.3.0`
+- **WHEN** OpenSpecUI initializes
+- **THEN** the UI SHALL allow core interactions
+- **AND** SHALL show that the CLI is legacy-compatible and recommend OpenSpec CLI `>=1.3.0 <1.4.0`
+
+#### Scenario: Treat 1.3 runtime as current in 3.x
+
+- **GIVEN** OpenSpecUI 3.x evaluates OpenSpec CLI `>=1.3.0 <1.4.0`
+- **WHEN** OpenSpecUI initializes
+- **THEN** the UI SHALL allow core interactions without a compatibility warning
+
+#### Scenario: Preserve release-line directionality
+
+- **GIVEN** OpenSpecUI release-line compatibility is evaluated
+- **WHEN** version support is declared
+- **THEN** OpenSpecUI 2.x SHALL correspond to OpenSpec CLI 1.2.x
+- **AND** OpenSpecUI 3.x SHALL correspond to OpenSpec CLI 1.3.x
+- **AND** OpenSpecUI 2.x SHALL NOT forward-support OpenSpec CLI 1.3.x
+- **AND** OpenSpecUI 3.x SHALL backward-support OpenSpec CLI 1.2.x
 
 ### Requirement: Safe CLI Execution
 
@@ -80,6 +102,13 @@ OpenSpecUI SHALL map UI actions to official OPSX CLI commands.
 - **GIVEN** an artifact is selected
 - **WHEN** the UI requests instructions
 - **THEN** the system SHALL execute `openspec instructions <artifact> --json`
+
+#### Scenario: Execute OPSX apply instructions
+
+- **GIVEN** apply guidance is requested for a change
+- **WHEN** the UI requests apply instructions
+- **THEN** the system SHALL execute `openspec instructions apply --json`
+- **AND** normalize CLI-provided `contextFiles` into artifact-id to file-path-array mappings
 
 ### Requirement: CLI Error Handling
 

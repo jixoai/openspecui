@@ -25,6 +25,7 @@ function createToolState(toolId: string, status: ToolInitState['status']): ToolI
     missingCommandWorkflows: [],
     unexpectedSkillWorkflows: [],
     unexpectedCommandWorkflows: [],
+    legacyCommandWorkflows: [],
   }
 }
 
