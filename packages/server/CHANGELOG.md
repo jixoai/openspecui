@@ -1,5 +1,13 @@
 # @openspecui/server
 
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [b57eb85]
+  - @openspecui/core@3.2.0
+  - @openspecui/search@3.2.0
+
 ## 3.1.2
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @openspecui/web
 
+## 3.2.0
+
+### Minor Changes
+
+- b57eb85: Add configurable terminal light and dark themes, follow app or system theme selection, and reduce default markdown reading density to ease visual fatigue.
+
 ## 3.1.2
 
 ## 3.1.1
