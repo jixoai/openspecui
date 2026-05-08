@@ -8,7 +8,7 @@ export interface ButtonGroupOption<T extends string = string> {
 
 interface ButtonGroupProps<T extends string = string> {
   value: T
-  options: ButtonGroupOption<T>[]
+  options: readonly ButtonGroupOption<T>[]
   onChange: (value: T) => void
   className?: string
   tone?: 'default' | 'terminal'
@@ -31,7 +31,7 @@ export function ButtonGroup<T extends string>({
 
   return (
     <div
-      className={`inline-flex overflow-hidden rounded-md border ${containerClassName} ${className}`}
+      className={`inline-flex w-fit max-w-full self-start overflow-hidden rounded-md border ${containerClassName} ${className}`}
     >
       {options.map((option, index) => {
         const active = option.value === value

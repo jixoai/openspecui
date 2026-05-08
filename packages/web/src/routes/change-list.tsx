@@ -134,15 +134,15 @@ export function ChangeList() {
         {changes?.length === 0 && (
           <div className="text-muted-foreground p-4 text-center">
             <div>No active changes.</div>
-            <div className="mt-1 text-xs">Recommended workflow start: /opsx:propose</div>
+            <div className="mt-1 text-xs">Recommended workflow start: Quick Propose</div>
             <button
               type="button"
               onClick={() => vtNavController.activatePop('/opsx-propose')}
               className="text-primary mt-2 inline-flex items-center gap-1 hover:underline"
-              title="Open quick /opsx:propose input"
+              title="Open Quick Propose"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              Start /opsx:propose
+              Start Propose
             </button>
             <button
               type="button"

@@ -23,8 +23,11 @@ export const CODE_EDITOR_THEME_VALUES = [
   'nord',
 ] as const
 export const TERMINAL_RENDERER_ENGINE_VALUES = ['xterm', 'ghostty'] as const
+export const OPSX_AGENT_INVOCATION_MODE_VALUES = ['compose', 'command'] as const
 export const TerminalRendererEngineSchema = z.enum(TERMINAL_RENDERER_ENGINE_VALUES)
 export type TerminalRendererEngine = z.infer<typeof TerminalRendererEngineSchema>
+export const OpsxAgentInvocationModeSchema = z.enum(OPSX_AGENT_INVOCATION_MODE_VALUES)
+export type OpsxAgentInvocationMode = z.infer<typeof OpsxAgentInvocationModeSchema>
 export const CodeEditorThemeSchema = z.enum(CODE_EDITOR_THEME_VALUES)
 export type CodeEditorTheme = z.infer<typeof CodeEditorThemeSchema>
 
@@ -574,6 +577,10 @@ export const CodeEditorConfigSchema = z.object({
   theme: CodeEditorThemeSchema.default('github'),
 })
 export type CodeEditorConfig = z.infer<typeof CodeEditorConfigSchema>
+export const OpsxConfigSchema = z.object({
+  agentInvocationMode: OpsxAgentInvocationModeSchema.default('compose'),
+})
+export type OpsxConfig = z.infer<typeof OpsxConfigSchema>
 
 /**
  * OpenSpecUI 配置 Schema
@@ -600,6 +607,9 @@ export const OpenSpecUIConfigSchema = z.object({
   /** Hosted app 基础 URL（空字符串表示使用官方默认值） */
   appBaseUrl: z.string().default(''),
 
+  /** OPSX workflow invocation preferences */
+  opsx: OpsxConfigSchema.default(OpsxConfigSchema.parse({})),
+
   /** 终端配置 */
   terminal: TerminalConfigSchema.default(TerminalConfigSchema.parse({})),
 
@@ -619,6 +629,7 @@ export type OpenSpecUIConfigUpdate = {
   theme?: OpenSpecUIConfig['theme']
   codeEditor?: Partial<OpenSpecUIConfig['codeEditor']>
   appBaseUrl?: OpenSpecUIConfig['appBaseUrl']
+  opsx?: Partial<OpsxConfig>
   terminal?: Partial<TerminalConfig>
   dashboard?: Partial<DashboardConfig>
   git?: Partial<GitConfig>
@@ -632,6 +643,7 @@ export type PersistedOpenSpecUIConfig = {
   theme?: OpenSpecUIConfig['theme']
   codeEditor?: Partial<OpenSpecUIConfig['codeEditor']>
   appBaseUrl?: OpenSpecUIConfig['appBaseUrl']
+  opsx?: Partial<OpsxConfig>
   terminal?: Partial<TerminalConfig>
   dashboard?: Partial<DashboardConfig>
   git?: Partial<GitConfig>
@@ -645,6 +657,7 @@ export const DEFAULT_CONFIG: OpenSpecUIConfig = {
   theme: 'system',
   codeEditor: CodeEditorConfigSchema.parse({}),
   appBaseUrl: '',
+  opsx: OpsxConfigSchema.parse({}),
   terminal: TerminalConfigSchema.parse({}),
   dashboard: DashboardConfigSchema.parse({}),
   git: GitConfigSchema.parse({}),
@@ -713,6 +726,14 @@ export function toPersistedConfig(
 
   if (config.appBaseUrl !== DEFAULT_CONFIG.appBaseUrl) {
     persisted.appBaseUrl = config.appBaseUrl
+  }
+
+  const opsx: NonNullable<PersistedOpenSpecUIConfig['opsx']> = {}
+  if (config.opsx.agentInvocationMode !== DEFAULT_CONFIG.opsx.agentInvocationMode) {
+    opsx.agentInvocationMode = config.opsx.agentInvocationMode
+  }
+  if (hasOwnEntries(opsx)) {
+    persisted.opsx = opsx
   }
 
   const terminal: NonNullable<PersistedOpenSpecUIConfig['terminal']> = {}
@@ -851,6 +872,7 @@ export class ConfigManager {
       theme: config.theme ?? current.theme,
       codeEditor: { ...current.codeEditor, ...config.codeEditor },
       appBaseUrl: config.appBaseUrl ?? current.appBaseUrl,
+      opsx: { ...current.opsx, ...config.opsx },
       terminal: { ...current.terminal, ...config.terminal },
       dashboard: { ...current.dashboard, ...config.dashboard },
       git: { ...current.git, ...config.git },

@@ -188,6 +188,9 @@ const createMockContext = (
       codeEditor: {
         theme: 'github',
       },
+      opsx: {
+        agentInvocationMode: 'compose',
+      },
       terminal: {
         fontSize: 13,
         fontFamily: '',
@@ -281,6 +284,18 @@ describe('appRouter', () => {
       expect(typeof status.watcherGeneration).toBe('number')
       expect(typeof status.watcherReinitializeCount).toBe('number')
       expect(status.projectRecovery).toEqual({ state: 'idle' })
+    })
+  })
+
+  describe('config', () => {
+    it('accepts opsx config updates', async () => {
+      const context = createMockContext()
+      const caller = appRouter.createCaller(context)
+
+      await caller.config.update({ opsx: { agentInvocationMode: 'command' } })
+
+      const writeConfig = context.configManager.writeConfig as unknown as ReturnType<typeof vi.fn>
+      expect(writeConfig).toHaveBeenCalledWith({ opsx: { agentInvocationMode: 'command' } })
     })
   })
 

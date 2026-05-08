@@ -972,7 +972,7 @@ export function Dashboard() {
         {!hasChanges && (
           <div className="text-muted-foreground px-4 py-6 text-center text-sm">
             <div>No active changes.</div>
-            <div className="mt-1 text-xs">Recommended workflow start: /opsx:propose</div>
+            <div className="mt-1 text-xs">Recommended workflow start: Quick Propose</div>
             <button
               type="button"
               onClick={runNewChange}
@@ -999,10 +999,10 @@ export function Dashboard() {
           type="button"
           onClick={runPropose}
           className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm hover:opacity-90"
-          title="Recommended workflow start is /opsx:propose."
+          title="Open Quick Propose."
         >
           <Sparkles className="h-4 w-4" />
-          Start (/opsx:propose)
+          Start Propose
         </button>
       </div>
 

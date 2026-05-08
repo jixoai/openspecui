@@ -24,6 +24,7 @@ import {
   getToolInitStates,
   getWatcherRuntimeStatus,
   GitConfigSchema,
+  OpsxConfigSchema,
   sniffGlobalCli,
   subscribeWatcherRuntimeStatus,
   TerminalConfigSchema,
@@ -660,6 +661,7 @@ export const configRouter = router({
           })
           .optional(),
         appBaseUrl: z.string().optional(),
+        opsx: OpsxConfigSchema.partial().optional(),
         terminal: TerminalConfigSchema.omit({ rendererEngine: true })
           .partial()
           .extend({
@@ -682,6 +684,7 @@ export const configRouter = router({
           input.theme !== undefined ||
           input.codeEditor !== undefined ||
           input.appBaseUrl !== undefined ||
+          input.opsx !== undefined ||
           input.terminal !== undefined ||
           input.dashboard !== undefined ||
           input.git !== undefined
@@ -690,6 +693,7 @@ export const configRouter = router({
             theme: input.theme,
             codeEditor: input.codeEditor,
             appBaseUrl: input.appBaseUrl,
+            opsx: input.opsx,
             terminal: input.terminal,
             dashboard: input.dashboard,
             git: input.git,

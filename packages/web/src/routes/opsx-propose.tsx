@@ -1,8 +1,18 @@
+import { ButtonGroup } from '@/components/button-group'
 import { CodeEditor } from '@/components/code-editor'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
 import { navController } from '@/lib/nav-controller'
+import {
+  OPSX_AGENT_INVOCATION_MODE_OPTIONS,
+  buildOpsxProposeComposePrompt,
+  buildOpsxSlashCommand,
+  type OpsxAgentInvocationMode,
+} from '@/lib/opsx-agent-invocation'
 import { useTerminalContext } from '@/lib/terminal-context'
 import { terminalController } from '@/lib/terminal-controller'
+import { trpcClient } from '@/lib/trpc'
+import { useConfigSubscription } from '@/lib/use-subscription'
+import { useMutation } from '@tanstack/react-query'
 import { ArrowRight, Copy, Save, Send, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -19,13 +29,20 @@ export function OpsxProposeRoute() {
   const { setConfig } = usePopAreaConfigContext()
   const { requestClose } = usePopAreaLifecycleContext()
   const { sessions, activeSessionId } = useTerminalContext()
+  const { data: uiConfig } = useConfigSubscription()
   const liveSessions = useMemo(() => sessions.filter((session) => !session.isExited), [sessions])
   const [draft, setDraft] = useState('')
+  const [mode, setMode] = useState<OpsxAgentInvocationMode>('compose')
   const [target, setTarget] = useState<DispatchTarget | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
   const [isSending, setIsSending] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+
+  const saveModeMutation = useMutation({
+    mutationFn: (agentInvocationMode: OpsxAgentInvocationMode) =>
+      trpcClient.config.update.mutate({ opsx: { agentInvocationMode } }),
+  })
 
   useEffect(() => {
     setConfig({
@@ -40,6 +57,13 @@ export function OpsxProposeRoute() {
       maxHeight: 'min(86dvh,900px)',
     })
   }, [setConfig])
+
+  useEffect(() => {
+    const nextMode = uiConfig?.opsx?.agentInvocationMode
+    if (nextMode) {
+      setMode(nextMode)
+    }
+  }, [uiConfig?.opsx?.agentInvocationMode])
 
   const preferredTarget = useMemo<DispatchTarget | null>(() => {
     if (activeSessionId && liveSessions.some((session) => session.id === activeSessionId)) {
@@ -59,12 +83,17 @@ export function OpsxProposeRoute() {
     })
   }, [liveSessions, preferredTarget])
 
-  const command = useMemo(() => {
-    const normalized = draft.trim()
-    if (normalized.length === 0) return '/opsx:propose'
-    if (normalized.startsWith('/opsx:')) return normalized
-    return `/opsx:propose ${normalized}`
-  }, [draft])
+  const payload = useMemo(() => {
+    if (mode === 'command') {
+      return buildOpsxSlashCommand({ action: 'propose', text: draft }) ?? '/opsx:propose'
+    }
+    return buildOpsxProposeComposePrompt(draft)
+  }, [draft, mode])
+
+  const handleModeChange = (nextMode: OpsxAgentInvocationMode) => {
+    setMode(nextMode)
+    saveModeMutation.mutate(nextMode)
+  }
 
   const handleSend = async () => {
     if (!target) {
@@ -76,7 +105,7 @@ export function OpsxProposeRoute() {
     try {
       const sessionId = parseTerminalTarget(target)
       if (!sessionId) throw new Error('Invalid terminal target.')
-      const wrote = terminalController.writeToSession(sessionId, `${command}\n`)
+      const wrote = terminalController.writeToSession(sessionId, `${payload}\n`)
       if (!wrote) {
         throw new Error('Terminal session is not ready. Wait a moment and retry.')
       }
@@ -89,13 +118,13 @@ export function OpsxProposeRoute() {
   }
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(command)
+    await navigator.clipboard.writeText(payload)
     setCopySuccess(true)
     window.setTimeout(() => setCopySuccess(false), 900)
   }
 
   const handleSave = async () => {
-    await terminalController.addInputHistory(command)
+    await terminalController.addInputHistory(payload)
     setSaveSuccess(true)
     window.setTimeout(() => setSaveSuccess(false), 900)
   }
@@ -105,7 +134,7 @@ export function OpsxProposeRoute() {
       <div className="border-border flex items-center justify-between gap-2 border-b px-4 py-3">
         <div className="flex items-center gap-2">
           <Sparkles className="text-primary h-4 w-4" />
-          <h2 className="font-nav text-base tracking-[0.04em]">Quick /opsx:propose</h2>
+          <h2 className="font-nav text-base tracking-[0.04em]">Quick Propose</h2>
         </div>
         <button
           type="button"
@@ -120,8 +149,13 @@ export function OpsxProposeRoute() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 p-4">
         <p className="text-muted-foreground text-sm">
-          Enter your idea, then send it as a slash command to the selected terminal.
+          Enter your idea, then send it to the selected terminal.
         </p>
+        <ButtonGroup<OpsxAgentInvocationMode>
+          value={mode}
+          onChange={handleModeChange}
+          options={OPSX_AGENT_INVOCATION_MODE_OPTIONS}
+        />
         <CodeEditor
           value={draft}
           onChange={setDraft}
@@ -130,32 +164,13 @@ export function OpsxProposeRoute() {
           editorMinHeight="180px"
         />
         <div className="bg-muted/30 border-border rounded-md border px-3 py-2 text-xs">
-          <span className="text-muted-foreground mr-1">Command:</span>
-          <code>{command}</code>
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="w-24 text-xs font-medium">Target</label>
-          <select
-            value={target ?? ''}
-            onChange={(event) => setTarget((event.target.value || null) as DispatchTarget | null)}
-            className="border-border bg-background min-w-0 flex-1 rounded-md border px-3 py-2 text-sm"
-          >
-            {target === null && (
-              <option value="" disabled>
-                No live terminal session
-              </option>
-            )}
-            {liveSessions.map((session) => (
-              <option key={session.id} value={`terminal:${session.id}`}>
-                {session.displayTitle}
-              </option>
-            ))}
-          </select>
+          <span className="text-muted-foreground mr-1">Invocation:</span>
+          <code className="whitespace-pre-wrap break-words">{payload}</code>
         </div>
         {sendError && <div className="text-destructive text-xs">{sendError}</div>}
       </div>
 
-      <div className="border-border flex items-center justify-between gap-2 border-t px-4 py-3">
+      <div className="border-border flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -178,23 +193,44 @@ export function OpsxProposeRoute() {
             {saveSuccess ? 'Saved' : 'Save'}
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={requestClose}
-            className="border-border hover:bg-muted rounded-md border px-3 py-1.5 text-xs"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleSend()}
-            disabled={isSending || target === null}
-            className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs disabled:opacity-50"
-          >
-            <Send className="h-3.5 w-3.5" />
-            {isSending ? 'Sending...' : 'Send'}
-          </button>
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-end">
+          <label className="flex min-w-0 flex-1 flex-col gap-1 sm:w-56 sm:flex-none">
+            <span className="text-xs font-medium">Target</span>
+            <select
+              value={target ?? ''}
+              onChange={(event) => setTarget((event.target.value || null) as DispatchTarget | null)}
+              className="border-input bg-background focus:ring-ring w-full rounded-md border px-3 py-1.5 text-xs focus:outline-none focus:ring-2"
+            >
+              {target === null && (
+                <option value="" disabled>
+                  No live terminal session
+                </option>
+              )}
+              {liveSessions.map((session) => (
+                <option key={session.id} value={`terminal:${session.id}`}>
+                  {session.displayTitle}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={requestClose}
+              className="border-border hover:bg-muted rounded-md border px-3 py-1.5 text-xs"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSend()}
+              disabled={isSending || target === null}
+              className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Send className="h-3.5 w-3.5" />
+              {isSending ? 'Sending...' : 'Send'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

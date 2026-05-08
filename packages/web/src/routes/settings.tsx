@@ -1,3 +1,4 @@
+import { ButtonGroup } from '@/components/button-group'
 import { CliTerminal } from '@/components/cli-terminal'
 import { CopyablePath } from '@/components/copyable-path'
 import { Dialog } from '@/components/dialog'
@@ -8,6 +9,10 @@ import {
   isCodeEditorTheme,
   type CodeEditorTheme,
 } from '@/lib/code-editor-theme'
+import {
+  OPSX_AGENT_INVOCATION_MODE_OPTIONS,
+  type OpsxAgentInvocationMode,
+} from '@/lib/opsx-agent-invocation'
 import { isStaticMode } from '@/lib/static-mode'
 import {
   GOOGLE_FONT_PRESETS,
@@ -40,6 +45,7 @@ import {
   Plus,
   RefreshCw,
   Settings as SettingsIcon,
+  Sparkles,
   Sun,
   Terminal,
   Unlink2,
@@ -533,6 +539,10 @@ export function Settings() {
     mutationFn: (nextAppBaseUrl: string) =>
       trpcClient.config.update.mutate({ appBaseUrl: nextAppBaseUrl.trim() }),
   })
+  const saveOpsxConfigMutation = useMutation({
+    mutationFn: (agentInvocationMode: OpsxAgentInvocationMode) =>
+      trpcClient.config.update.mutate({ opsx: { agentInvocationMode } }),
+  })
 
   // Terminal config — seed local state from controller's current config
   const initialConfig = useMemo(() => terminalController.getConfig(), [])
@@ -646,6 +656,15 @@ export function Settings() {
   const savedDashboardTrendPointLimit = config?.dashboard?.trendPointLimit ?? 100
   const savedGitDiffEagerLineBudget = config?.git?.diffEagerLineBudget ?? 1000
   const savedAppBaseUrl = config?.appBaseUrl ?? ''
+  const savedOpsxAgentInvocationMode = config?.opsx?.agentInvocationMode ?? 'compose'
+  const opsxAgentInvocationModeOptions = useMemo(
+    () =>
+      OPSX_AGENT_INVOCATION_MODE_OPTIONS.map((option) => ({
+        ...option,
+        disabled: saveOpsxConfigMutation.isPending,
+      })),
+    [saveOpsxConfigMutation.isPending]
+  )
 
   useEffect(() => {
     applyTheme(theme)
@@ -773,6 +792,24 @@ export function Settings() {
       {/* Only show other sections in dynamic mode */}
       {!inStaticMode && (
         <>
+          <section className="space-y-4">
+            <h2 className="flex items-center gap-2 text-lg font-semibold">
+              <Sparkles className="h-5 w-5" />
+              OPSX Invocation
+            </h2>
+            <div className="border-border rounded-lg border p-4">
+              <label className="mb-3 block text-sm font-medium">Agent invocation mode</label>
+              <ButtonGroup<OpsxAgentInvocationMode>
+                value={savedOpsxAgentInvocationMode}
+                onChange={(mode) => saveOpsxConfigMutation.mutate(mode)}
+                options={opsxAgentInvocationModeOptions}
+              />
+              <p className="text-muted-foreground mt-2 text-xs">
+                Unsupported command actions automatically keep compose mode.
+              </p>
+            </div>
+          </section>
+
           {/* Terminal Settings */}
           <section className="space-y-4">
             <h2 className="flex items-center gap-2 text-lg font-semibold">

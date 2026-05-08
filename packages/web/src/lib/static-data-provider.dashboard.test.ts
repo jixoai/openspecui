@@ -28,6 +28,9 @@ function createSnapshot(): ExportSnapshot {
       codeEditor: {
         theme: 'github',
       },
+      opsx: {
+        agentInvocationMode: 'compose',
+      },
       dashboard: { trendPointLimit: 120 },
       git: { diffEagerLineBudget: 1500 },
       terminal: {
@@ -267,6 +270,7 @@ describe('static-data-provider dashboard overview', () => {
     expect(config.theme).toBe('dark')
     expect(config.dashboard.trendPointLimit).toBe(120)
     expect(config.git.diffEagerLineBudget).toBe(1500)
+    expect(config.opsx.agentInvocationMode).toBe('compose')
     expect(config.terminal.scrollback).toBe(2000)
     expect(config.cli.command).toBe('openspec')
   })

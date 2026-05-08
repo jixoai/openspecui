@@ -114,6 +114,17 @@ The UI SHALL present OPSX actions with enablement based on CLI status.
 - **THEN** the UI SHALL disable actions that are blocked
 - **AND** show the blocking requirements as hints
 
+### Requirement: OPSX Invocation Mode Settings
+
+The UI SHALL surface OPSX agent invocation preference controls in runtime settings.
+
+#### Scenario: Show OPSX invocation mode setting
+
+- **GIVEN** the settings view is open in dynamic mode
+- **WHEN** runtime settings are rendered
+- **THEN** the UI SHALL show an OPSX invocation mode control with compose and command options
+- **AND** selecting an option SHALL save the project-level `opsx.agentInvocationMode` preference
+
 ### Requirement: Config View
 
 The UI SHALL provide a Config view dedicated to OPSX project configuration.

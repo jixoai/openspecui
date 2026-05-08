@@ -1,6 +1,11 @@
 import { CodeEditor } from '@/components/code-editor'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
 import {
+  buildOpsxSlashCommand,
+  resolveOpsxInvocationMode,
+  type OpsxAgentInvocationMode,
+} from '@/lib/opsx-agent-invocation'
+import {
   buildOpsxComposeDraft,
   buildOpsxComposeFallbackPrompt,
   parseOpsxComposeLocationSearch,
@@ -10,6 +15,7 @@ import { isStaticMode } from '@/lib/static-mode'
 import { useTerminalContext } from '@/lib/terminal-context'
 import { terminalController } from '@/lib/terminal-controller'
 import { trpcClient } from '@/lib/trpc'
+import { useConfigSubscription } from '@/lib/use-subscription'
 import { useLocation } from '@tanstack/react-router'
 import { AlertCircle, Check, Copy, Loader2, Save, Send } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -192,6 +198,7 @@ export function OpsxComposeRoute() {
   const { setConfig } = usePopAreaConfigContext()
   const { requestClose } = usePopAreaLifecycleContext()
   const { sessions, activeSessionId } = useTerminalContext()
+  const { data: uiConfig } = useConfigSubscription()
 
   const composeInput = useMemo(
     () => parseOpsxComposeLocationSearch(location.search),
@@ -202,6 +209,21 @@ export function OpsxComposeRoute() {
     () => (composeInput ? resolveOpsxPromptSource(composeInput) : null),
     [composeInput]
   )
+  const requestedInvocationMode: OpsxAgentInvocationMode =
+    uiConfig?.opsx?.agentInvocationMode ?? 'compose'
+  const invocationMode = useMemo(
+    () =>
+      composeInput ? resolveOpsxInvocationMode(composeInput.action, requestedInvocationMode) : null,
+    [composeInput, requestedInvocationMode]
+  )
+  const commandDraft = useMemo(() => {
+    if (!composeInput || invocationMode?.actualMode !== 'command') return null
+    return buildOpsxSlashCommand({
+      action: composeInput.action,
+      changeId: composeInput.changeId,
+      text: composeInput.changeId,
+    })
+  }, [composeInput, invocationMode?.actualMode])
 
   const liveSessions = useMemo(() => sessions.filter((session) => !session.isExited), [sessions])
 
@@ -281,6 +303,18 @@ export function OpsxComposeRoute() {
       setIsLoadingDraft(true)
       setDraftError(null)
 
+      if (invocationMode?.actualMode === 'command') {
+        if (commandDraft) {
+          setDraft(commandDraft)
+          setIsLoadingDraft(false)
+          return
+        }
+        setDraft(buildOpsxComposeFallbackPrompt(composeInput))
+        setDraftError('Slash command is not available for this action.')
+        setIsLoadingDraft(false)
+        return
+      }
+
       if (isStaticMode()) {
         setDraft(buildOpsxComposeFallbackPrompt(composeInput))
         setIsLoadingDraft(false)
@@ -329,7 +363,7 @@ export function OpsxComposeRoute() {
       canceled = true
       abortController.abort()
     }
-  }, [composeInput, promptSource])
+  }, [commandDraft, composeInput, invocationMode?.actualMode, promptSource])
 
   const actionLabel = composeInput ? ACTION_LABELS[composeInput.action] : 'Compose'
 
@@ -442,7 +476,17 @@ export function OpsxComposeRoute() {
       </div>
 
       <div className="flex max-h-full min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden p-4">
-        {promptSource && (
+        {invocationMode && (
+          <div className="bg-muted/40 border-border rounded-md border p-2 text-xs">
+            <span className="text-muted-foreground">Invocation:</span>{' '}
+            <span className="font-medium capitalize">{invocationMode.actualMode}</span>
+            {invocationMode.fallbackReason && (
+              <span className="text-muted-foreground"> · {invocationMode.fallbackReason}</span>
+            )}
+          </div>
+        )}
+
+        {promptSource && invocationMode?.actualMode !== 'command' && (
           <div className="bg-muted/40 border-border rounded-md border p-2 text-xs">
             <span className="text-muted-foreground">Prompt source:</span>{' '}
             <code className="break-all">

@@ -969,6 +969,9 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
       theme: 'github',
     },
     appBaseUrl: '',
+    opsx: {
+      agentInvocationMode: 'compose',
+    },
     dashboard: {
       trendPointLimit: 100,
     },
@@ -1004,6 +1007,10 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
     codeEditor: {
       ...defaultConfig.codeEditor,
       ...fromSnapshot.codeEditor,
+    },
+    opsx: {
+      ...defaultConfig.opsx,
+      ...fromSnapshot.opsx,
     },
     dashboard: {
       ...defaultConfig.dashboard,
