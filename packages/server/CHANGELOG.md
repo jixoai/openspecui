@@ -1,5 +1,17 @@
 # @openspecui/server
 
+## 3.1.0
+
+### Minor Changes
+
+- 0658249: Simplify the hosted app architecture so `app.openspecui.com` acts only as a PWA shell that opens backend-owned OpenSpecUI pages via the new `/api/health` embedding contract.
+
+### Patch Changes
+
+- Updated dependencies [0658249]
+  - @openspecui/core@3.1.0
+  - @openspecui/search@3.1.0
+
 ## 3.0.1
 
 ### Patch Changes
