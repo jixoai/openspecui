@@ -1,5 +1,11 @@
 # @openspecui/core
 
+## 3.0.1
+
+### Patch Changes
+
+- 2e2b59f: Add project-level OPSX agent invocation mode preference and support compose or command dispatch for eligible OPSX actions.
+
 ## 3.0.0
 
 ### Major Changes
