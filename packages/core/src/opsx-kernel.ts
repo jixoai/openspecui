@@ -9,6 +9,7 @@ import {
   SchemaInfoSchema,
   SchemaResolutionSchema,
   TemplatesSchema,
+  isGlobPattern,
   type ApplyInstructions,
   type ArtifactInstructions,
   type ChangeStatus,
@@ -17,7 +18,12 @@ import {
   type TemplatesMap,
 } from './opsx-types.js'
 import { ReactiveContext } from './reactive-fs/reactive-context.js'
-import { reactiveReadDir, reactiveReadFile, reactiveStat } from './reactive-fs/reactive-fs.js'
+import {
+  reactiveExists,
+  reactiveReadDir,
+  reactiveReadFile,
+  reactiveStat,
+} from './reactive-fs/reactive-fs.js'
 import { ReactiveState } from './reactive-fs/reactive-state.js'
 import type { ChangeFile } from './schemas.js'
 
@@ -110,6 +116,22 @@ interface GlobArtifactFile {
   content: string
 }
 
+function splitRelativePathSegments(path: string): string[] {
+  return path.replace(/\\/g, '/').split('/').filter(Boolean)
+}
+
+function getGlobStaticPrefix(outputPath: string): string {
+  const normalizedPath = outputPath.replace(/\\/g, '/')
+  const firstGlobIndex = normalizedPath.search(/[*?[]/)
+  if (firstGlobIndex === -1) {
+    return normalizedPath
+  }
+
+  const staticPrefix = normalizedPath.slice(0, firstGlobIndex)
+  const lastSlashIndex = staticPrefix.lastIndexOf('/')
+  return lastSlashIndex === -1 ? '' : staticPrefix.slice(0, lastSlashIndex)
+}
+
 async function readGlobArtifactFiles(
   projectDir: string,
   changeId: string,
@@ -152,6 +174,59 @@ async function touchOpsxChangeDeps(projectDir: string, changeId: string): Promis
   const changeDir = join(projectDir, 'openspec', 'changes', changeId)
   await reactiveReadDir(changeDir, { includeHidden: true })
   await reactiveReadFile(join(changeDir, '.openspec.yaml'))
+}
+
+async function touchDirectoryPathDeps(rootDir: string, relativePath: string): Promise<void> {
+  let currentPath = rootDir
+  for (const segment of splitRelativePathSegments(relativePath)) {
+    currentPath = join(currentPath, segment)
+    await reactiveExists(currentPath)
+  }
+}
+
+async function touchDirectoryTree(rootDir: string): Promise<void> {
+  const rootStat = await reactiveStat(rootDir)
+  if (!rootStat?.isDirectory) {
+    return
+  }
+
+  const entries = await reactiveReadDir(rootDir, { includeHidden: true })
+  await Promise.all(
+    entries.map(async (entryName) => {
+      const entryPath = join(rootDir, entryName)
+      const entryStat = await reactiveStat(entryPath)
+      if (entryStat?.isDirectory) {
+        await touchDirectoryTree(entryPath)
+      }
+    })
+  )
+}
+
+async function touchArtifactOutputDeps(
+  projectDir: string,
+  changeId: string,
+  outputPath: string
+): Promise<void> {
+  const changeDir = join(projectDir, 'openspec', 'changes', changeId)
+  const normalizedOutputPath = outputPath.replace(/\\/g, '/')
+
+  if (isGlobPattern(normalizedOutputPath)) {
+    const staticPrefix = getGlobStaticPrefix(normalizedOutputPath)
+    if (staticPrefix) {
+      await touchDirectoryPathDeps(changeDir, staticPrefix)
+    }
+
+    const globRoot = staticPrefix ? join(changeDir, staticPrefix) : changeDir
+    await touchDirectoryTree(globRoot)
+    return
+  }
+
+  const parentPath = splitRelativePathSegments(normalizedOutputPath).slice(0, -1).join('/')
+  if (parentPath) {
+    await touchDirectoryPathDeps(changeDir, parentPath)
+  }
+
+  await reactiveExists(join(changeDir, normalizedOutputPath))
 }
 
 // ---------------------------------------------------------------------------
@@ -820,6 +895,7 @@ export class OpsxKernel {
     const changeRelDir = `openspec/changes/${changeId}`
     for (const artifact of status.artifacts) {
       artifact.relativePath = `${changeRelDir}/${artifact.outputPath}`
+      await touchArtifactOutputDeps(this.projectDir, changeId, artifact.outputPath)
     }
     return status
   }
