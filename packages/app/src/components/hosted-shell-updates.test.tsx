@@ -46,8 +46,16 @@ async function renderShell(
 }
 
 describe('HostedShell updates', () => {
+  let serviceWorkerRegistration: {
+    addEventListener: ReturnType<typeof vi.fn>
+    removeEventListener: ReturnType<typeof vi.fn>
+    waiting: { postMessage: ReturnType<typeof vi.fn> } | null
+    update: ReturnType<typeof vi.fn>
+  }
+
   beforeEach(() => {
     document.body.innerHTML = ''
+    window.localStorage.clear()
     window.matchMedia = vi.fn().mockImplementation(() => ({
       matches: false,
       addEventListener: vi.fn(),
@@ -59,17 +67,21 @@ describe('HostedShell updates', () => {
     HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
       this.removeAttribute('open')
     }
+    serviceWorkerRegistration = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      waiting: {
+        postMessage: vi.fn(),
+      },
+      update: vi.fn(async () => undefined),
+    }
     Object.defineProperty(navigator, 'serviceWorker', {
       configurable: true,
       value: {
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
-        getRegistration: vi.fn(async () => ({
-          addEventListener: vi.fn(),
-          removeEventListener: vi.fn(),
-          waiting: {},
-          update: vi.fn(async () => undefined),
-        })),
+        controller: {},
+        getRegistration: vi.fn(async () => serviceWorkerRegistration),
       },
     })
 
@@ -125,5 +137,18 @@ describe('HostedShell updates', () => {
     await flushEffects(8)
 
     expect(screen.getByRole('button', { name: 'Apply app update' })).toBeTruthy()
+  })
+
+  it('keeps update actions hidden without an active backend tab', async () => {
+    await renderShell(
+      <HostedShell initialLaunchRequest={null} fallbackLaunchRequest={null} initialError={null} />
+    )
+
+    await flushEffects(8)
+
+    expect(screen.queryByRole('button', { name: 'Apply app update' })).toBeNull()
+    expect(serviceWorkerRegistration.waiting?.postMessage).toHaveBeenCalledWith({
+      type: 'SKIP_WAITING',
+    })
   })
 })

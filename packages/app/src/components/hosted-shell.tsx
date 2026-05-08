@@ -141,6 +141,23 @@ function cx(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(' ')
 }
 
+function shouldExposeHostedAppUpdate(options: {
+  hasTabs: boolean
+  registration: Pick<ServiceWorkerRegistration, 'waiting'>
+}): HostedAppUpdateState {
+  if (options.registration.waiting && options.hasTabs) {
+    return { status: 'ready', errorMessage: null }
+  }
+  return { status: 'idle', errorMessage: null }
+}
+
+function shouldAutoApplyHostedAppUpdate(options: {
+  hasTabs: boolean
+  registration: Pick<ServiceWorkerRegistration, 'waiting'>
+}): boolean {
+  return !options.hasTabs && Boolean(options.registration.waiting)
+}
+
 function buildHostedTabIframeSrc(
   tab: HostedShellTab,
   runtime: HostedTabRuntimeState
@@ -839,14 +856,30 @@ export function HostedShell({
     [shellState.tabs, startRefreshFeedback]
   )
 
-  const syncUpdateStateFromRegistration = useCallback((registration: ServiceWorkerRegistration) => {
-    serviceWorkerRegistrationRef.current = registration
-    setUpdateState(
-      registration.waiting
-        ? { status: 'ready', errorMessage: null }
-        : { status: 'idle', errorMessage: null }
-    )
+  const activateWaitingHostedAppUpdate = useCallback((registration: ServiceWorkerRegistration) => {
+    if (!registration.waiting || shouldReloadForUpdateRef.current) {
+      return false
+    }
+
+    shouldReloadForUpdateRef.current = true
+    registration.waiting.postMessage({ type: 'SKIP_WAITING' })
+    return true
   }, [])
+
+  const syncUpdateStateFromRegistration = useCallback(
+    (registration: ServiceWorkerRegistration, options?: { hasTabsOverride?: boolean }) => {
+      serviceWorkerRegistrationRef.current = registration
+      const hasTabs = options?.hasTabsOverride ?? shellState.tabs.length > 0
+      if (shouldAutoApplyHostedAppUpdate({ hasTabs, registration })) {
+        if (activateWaitingHostedAppUpdate(registration)) {
+          setUpdateState({ status: 'idle', errorMessage: null })
+        }
+        return
+      }
+      setUpdateState(shouldExposeHostedAppUpdate({ hasTabs, registration }))
+    },
+    [activateWaitingHostedAppUpdate, shellState.tabs.length]
+  )
 
   const checkForHostedAppUpdate = useCallback(async () => {
     if (
@@ -889,9 +922,21 @@ export function HostedShell({
         }
 
         const onStateChange = () => {
-          if (installing.state === 'installed' && navigator.serviceWorker.controller) {
-            syncUpdateStateFromRegistration(registration)
+          if (installing.state !== 'installed') {
+            return
           }
+
+          if (!navigator.serviceWorker.controller) {
+            syncUpdateStateFromRegistration(registration, { hasTabsOverride: false })
+            return
+          }
+
+          if (shellState.tabs.length === 0) {
+            activateWaitingHostedAppUpdate(registration)
+            return
+          }
+
+          syncUpdateStateFromRegistration(registration, { hasTabsOverride: true })
         }
 
         installing.addEventListener('statechange', onStateChange)
@@ -950,7 +995,12 @@ export function HostedShell({
       document.removeEventListener('visibilitychange', onVisibilityChange)
       window.clearInterval(interval)
     }
-  }, [checkForHostedAppUpdate, syncUpdateStateFromRegistration])
+  }, [
+    activateWaitingHostedAppUpdate,
+    checkForHostedAppUpdate,
+    shellState.tabs.length,
+    syncUpdateStateFromRegistration,
+  ])
 
   useEffect(() => {
     if (shellState.tabs.length === 0) {

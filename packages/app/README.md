@@ -154,4 +154,8 @@ Immutable hashed assets can be long-lived:
 
 - `/assets/*`
 
+The service worker cache namespace is derived from the app workspace contents. Rebuilding the same source tree keeps the same cache revision; changing the shell source or public assets produces a new revision and lets the new worker evict the old shell cache on activation.
+
+If a newer shell arrives while at least one backend tab is open, the shell exposes the update action and waits for the user to apply it. If no backend tabs are open, the waiting worker is promoted immediately so the shell can upgrade without interrupting an active session.
+
 The included `public/_headers` file is tuned for Cloudflare Pages with that split.

@@ -20,11 +20,11 @@ describe('hosted app bootstrap helpers', () => {
     })
   })
 
-  it('reports stale launch parameters without api', () => {
+  it('ignores legacy launch parameters without api', () => {
     expect(parseHostedLaunchParams('?version=v2.1')).toEqual({
       request: null,
-      error: 'Hosted launch URLs require ?api.',
-      hasLaunchParams: true,
+      error: null,
+      hasLaunchParams: false,
     })
   })
 

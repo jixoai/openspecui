@@ -1,0 +1,1 @@
+declare const __OPENSPECUI_APP_SHELL_REVISION__: string

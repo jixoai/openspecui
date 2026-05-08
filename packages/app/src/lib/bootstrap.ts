@@ -25,23 +25,13 @@ export interface HostedBootstrapRuntime {
 
 export function parseHostedLaunchParams(search: string): HostedLaunchParseResult {
   const params = new URLSearchParams(search)
-  const rawVersion = params.get('version')?.trim() ?? ''
   const rawApi = params.get('api')?.trim() ?? ''
-  const hasLaunchParams = rawApi.length > 0 || rawVersion.length > 0
 
-  if (!hasLaunchParams) {
+  if (rawApi.length === 0) {
     return {
       request: null,
       error: null,
       hasLaunchParams: false,
-    }
-  }
-
-  if (!rawApi) {
-    return {
-      request: null,
-      error: 'Hosted launch URLs require ?api.',
-      hasLaunchParams: true,
     }
   }
 

@@ -1,6 +1,8 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { resolve } from 'node:path'
+import { createHash } from 'node:crypto'
+import { readdirSync, readFileSync } from 'node:fs'
+import { relative, resolve } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 import { createHostedAppPwaManifest } from './src/lib/pwa-manifest'
 import { hostedAppPlugin } from './src/vite-plugin-hosted-app'
@@ -28,8 +30,36 @@ function hostedAppDevPlugin(): Plugin {
   }
 }
 
+function collectHostedShellRevisionSeed(rootDir: string): string {
+  const files = [
+    resolve(rootDir, 'package.json'),
+    ...collectFiles(resolve(rootDir, 'src')),
+    ...collectFiles(resolve(rootDir, 'public')),
+  ]
+  const hash = createHash('sha256')
+  for (const file of files) {
+    hash.update(relative(rootDir, file))
+    hash.update(readFileSync(file))
+  }
+  return hash.digest('hex').slice(0, 12)
+}
+
+function collectFiles(dir: string): string[] {
+  const entries = readdirSync(dir, { withFileTypes: true })
+  return entries.flatMap((entry) => {
+    const fullPath = resolve(dir, entry.name)
+    if (entry.isDirectory()) {
+      return collectFiles(fullPath)
+    }
+    return [fullPath]
+  })
+}
+
 export default defineConfig({
   base: '/',
+  define: {
+    __OPENSPECUI_APP_SHELL_REVISION__: JSON.stringify(collectHostedShellRevisionSeed(__dirname)),
+  },
   plugins: [react(), tailwindcss(), hostedAppDevPlugin(), hostedAppPlugin()],
   resolve: {
     alias: {

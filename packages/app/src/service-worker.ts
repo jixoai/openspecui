@@ -4,7 +4,7 @@ type HostedServiceWorkerGlobalScope = ServiceWorkerGlobalScope
 
 const sw = self as unknown as HostedServiceWorkerGlobalScope
 
-const APP_SHELL_CACHE = 'openspecui-app-shell-v1'
+const APP_SHELL_CACHE = `openspecui-app-shell-${__OPENSPECUI_APP_SHELL_REVISION__}`
 const APP_SHELL_PATHS = [
   '/',
   '/index.html',
