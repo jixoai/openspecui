@@ -1,9 +1,4 @@
-const HOSTED_VERSION_PATH_RE = /^\/versions\/[^/]+(?:\/|$)/
-
 function getHostedSessionId(locationLike: Pick<Location, 'pathname' | 'search'>): string | null {
-  if (!HOSTED_VERSION_PATH_RE.test(locationLike.pathname)) {
-    return null
-  }
   const value = new URLSearchParams(locationLike.search).get('session')?.trim()
   return value ? value : null
 }

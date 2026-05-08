@@ -1,5 +1,3 @@
-const HOSTED_VERSION_PATH_RE = /^\/versions\/[^/]+(?:\/|$)/
-
 export interface HostedApiBootstrapState {
   hosted: boolean
   apiBaseUrl: string | null
@@ -29,16 +27,12 @@ function getSearchParam(search: string, key: string): string | null {
   return value ? value : null
 }
 
-export function isHostedVersionEntryPath(pathname: string): boolean {
-  return HOSTED_VERSION_PATH_RE.test(pathname)
-}
-
 export function getHostedApiBootstrapState(
-  locationLike: Pick<Location, 'pathname' | 'search'>
+  locationLike: Pick<Location, 'search'>
 ): HostedApiBootstrapState {
-  const hosted = isHostedVersionEntryPath(locationLike.pathname)
+  const sessionId = getSearchParam(locationLike.search, 'session')
+  const hosted = sessionId !== null
   const apiBaseUrl = normalizeApiBaseUrl(getSearchParam(locationLike.search, 'api') ?? '')
-  const sessionId = hosted ? getSearchParam(locationLike.search, 'session') : null
 
   return {
     hosted,
@@ -49,7 +43,7 @@ export function getHostedApiBootstrapState(
 
 export function getHostedScopedStorageKey(
   baseKey: string,
-  locationLike: Pick<Location, 'pathname' | 'search'>
+  locationLike: Pick<Location, 'search'>
 ): string {
   const state = getHostedApiBootstrapState(locationLike)
   return state.hosted && state.sessionId ? `hosted-session:${state.sessionId}:${baseKey}` : baseKey

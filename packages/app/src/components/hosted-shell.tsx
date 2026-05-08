@@ -1,20 +1,6 @@
-import {
-  resolveHostedChannelForVersion,
-  type HostedAppVersionManifest,
-} from '@openspecui/core/hosted-app'
 import { Dialog } from '@openspecui/web-src/components/dialog'
 import { Tabs, type Tab } from '@openspecui/web-src/components/tabs'
-import {
-  AlertCircle,
-  CloudDownload,
-  CloudUpload,
-  Download,
-  Link2,
-  LoaderCircle,
-  Plus,
-  RefreshCw,
-  Unlink2,
-} from 'lucide-react'
+import { AlertCircle, Download, Link2, LoaderCircle, Plus, RefreshCw, Unlink2 } from 'lucide-react'
 import {
   useCallback,
   useEffect,
@@ -25,17 +11,6 @@ import {
   type FormEvent,
 } from 'react'
 import { parseHostedLaunchParams } from '../lib/bootstrap'
-import { createHostedAppCacheBroadcast } from '../lib/hosted-app-cache-broadcast'
-import {
-  buildClaimedHostedCacheNames,
-  cleanupHostedCaches,
-  collectStaleHostedCacheNames,
-  collectTargetChannelIds,
-  hasHostedDeploymentUpdate,
-  refreshHostedManifestCache,
-  warmHostedAppShell,
-  warmHostedVersionChannels,
-} from '../lib/hosted-app-update'
 import { createHostedShellSync } from '../lib/hosted-shell-sync'
 import { createHostedLaunchRelay } from '../lib/launch-relay'
 import {
@@ -48,16 +23,12 @@ import {
   type HostedAppTitlebarInsets,
   type HostedAppWindowControlsOverlayLike,
 } from '../lib/pwa-runtime'
-import {
-  fetchHostedAppManifest,
-  probeHostedBackend,
-  type HostedTabReachability,
-} from '../lib/reachability'
+import { probeHostedBackend, type HostedTabReachability } from '../lib/reachability'
 import {
   activateHostedTab,
   applyHostedLaunchRequest,
   areHostedShellStatesEqual,
-  buildHostedVersionEntryUrl,
+  buildHostedEmbeddedUiUrl,
   getHostedTabLabel,
   hasHostedTabForApi,
   normalizeHostedApiBaseUrl,
@@ -75,6 +46,7 @@ const FORWARDED_LAUNCH_MESSAGE = 'Launch forwarded to the active OpenSpec UI App
 const FORWARDED_SYNC_TIMEOUT_MS = 1600
 const FORWARDED_SYNC_INTERVAL_MS = 120
 const UPDATE_CHECK_INTERVAL_MS = 60000
+const UPDATE_READY_MESSAGE = 'A newer OpenSpec UI App shell is ready.'
 
 type HostedTabFrameStatus = 'idle' | 'loading' | 'loaded' | 'error'
 
@@ -88,7 +60,7 @@ interface HostedTabRuntimeState {
   reachability: HostedTabReachability
   projectName: string | null
   openspecuiVersion: string | null
-  resolvedChannel: string | null
+  embeddedUiUrl: string | null
   errorMessage: string | null
 }
 
@@ -105,12 +77,11 @@ interface HostedShellPwaState {
   titlebarInsets: HostedAppTitlebarInsets
 }
 
-type HostedAppUpdateStatus = 'idle' | 'checking' | 'warming' | 'ready' | 'error'
+type HostedAppUpdateStatus = 'idle' | 'ready'
 
 interface HostedAppUpdateState {
-  availableVersionId: string | null
-  errorMessage: string | null
   status: HostedAppUpdateStatus
+  errorMessage: string | null
 }
 
 interface HostedShellRootStyle extends CSSProperties {
@@ -144,7 +115,7 @@ const DEFAULT_RUNTIME_STATE: HostedTabRuntimeState = {
   reachability: 'checking',
   projectName: null,
   openspecuiVersion: null,
-  resolvedChannel: null,
+  embeddedUiUrl: null,
   errorMessage: null,
 }
 
@@ -162,9 +133,8 @@ const DEFAULT_PWA_STATE: HostedShellPwaState = {
 }
 
 const DEFAULT_UPDATE_STATE: HostedAppUpdateState = {
-  availableVersionId: null,
-  errorMessage: null,
   status: 'idle',
+  errorMessage: null,
 }
 
 function cx(...classes: Array<string | false | null | undefined>): string {
@@ -175,7 +145,7 @@ function buildHostedTabIframeSrc(
   tab: HostedShellTab,
   runtime: HostedTabRuntimeState
 ): string | null {
-  return runtime.resolvedChannel ? buildHostedVersionEntryUrl(tab, runtime.resolvedChannel) : null
+  return runtime.embeddedUiUrl ? buildHostedEmbeddedUiUrl(tab, runtime.embeddedUiUrl) : null
 }
 
 function createBrowserPwaSnapshot(deferredPrompt: BeforeInstallPromptEventLike | null) {
@@ -208,41 +178,8 @@ function closeCurrentWindowBestEffort(): void {
   }
 }
 
-function CloudSyncIcon(props: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={props.className}
-      aria-hidden="true"
-    >
-      <path d="M6 18a4.5 4.5 0 1 1 .9-8.9A5.5 5.5 0 0 1 17.5 8 4 4 0 1 1 18 16H9" />
-      <path d="m10 15 2-2 2 2" />
-      <path d="M14 13v6" />
-      <path d="m10 9-2 2-2-2" />
-      <path d="M10 11V5" />
-    </svg>
-  )
-}
-
-function HostedShellUpdateIcon(props: { status: HostedAppUpdateStatus }) {
-  if (props.status === 'ready') {
-    return <CloudSyncIcon className="h-4 w-4" />
-  }
-
-  return (
-    <span className="relative h-4 w-4">
-      <CloudDownload className="absolute inset-0 h-4 w-4 animate-pulse" />
-      <CloudUpload
-        className="absolute inset-0 h-4 w-4 animate-pulse opacity-0"
-        style={{ animationDelay: '700ms' }}
-      />
-    </span>
-  )
+function HostedShellUpdateIcon() {
+  return <RefreshCw className="h-3.5 w-3.5" />
 }
 
 function HostedShellActions(props: {
@@ -260,11 +197,6 @@ function HostedShellActions(props: {
   const buttonClassName =
     'border-border bg-terminal text-terminal-foreground hover:bg-background hover:text-foreground cursor-hover inline-flex items-center justify-center border-l p-4 text-sm transition-colors duration-200'
   const refreshActive = props.isRefreshing || props.isRefreshFeedbackActive
-  const showUpdateAction =
-    props.updateStatus === 'checking' ||
-    props.updateStatus === 'warming' ||
-    props.updateStatus === 'ready'
-  const updateInteractive = props.updateStatus === 'ready'
 
   return (
     <div className="flex h-full items-stretch" data-tabs-actions="true">
@@ -279,22 +211,15 @@ function HostedShellActions(props: {
           <RefreshCw className={cx('h-3.5 w-3.5', refreshActive && 'animate-spin')} />
         </button>
       )}
-      {showUpdateAction ? (
+      {props.updateStatus === 'ready' ? (
         <button
           type="button"
-          onClick={updateInteractive ? props.onApplyUpdate : undefined}
-          disabled={!updateInteractive}
-          className={cx(
-            buttonClassName,
-            !updateInteractive &&
-              'hover:bg-terminal hover:text-terminal-foreground cursor-default opacity-80'
-          )}
-          aria-label={
-            updateInteractive ? 'Apply hosted app update' : 'Downloading hosted app update'
-          }
-          title={updateInteractive ? 'Apply hosted app update' : 'Downloading hosted app update'}
+          onClick={props.onApplyUpdate}
+          className={buttonClassName}
+          aria-label="Apply app update"
+          title="Apply app update"
         >
-          <HostedShellUpdateIcon status={props.updateStatus} />
+          <HostedShellUpdateIcon />
         </button>
       ) : (
         props.canInstall && (
@@ -410,9 +335,9 @@ function HostedShellTabContent({
           <div className="max-w-sm space-y-2 text-sm">
             {runtime.reachability === 'checking' && (
               <>
-                <p className="font-nav text-xs uppercase tracking-[0.16em]">Resolving Bundle</p>
+                <p className="font-nav text-xs uppercase tracking-[0.16em]">Connecting Backend</p>
                 <p className="text-muted-foreground text-xs">
-                  Querying backend metadata and selecting a compatible hosted bundle.
+                  Querying backend metadata and waiting for an embedded UI entrypoint.
                 </p>
               </>
             )}
@@ -423,7 +348,7 @@ function HostedShellTabContent({
             )}
             {runtime.reachability === 'online' && runtime.errorMessage && (
               <p className="text-muted-foreground text-xs">
-                This tab is online, but the hosted shell could not resolve a compatible bundle yet.
+                This backend is reachable, but it does not expose a compatible embedded UI yet.
               </p>
             )}
           </div>
@@ -503,19 +428,15 @@ export function HostedShell({
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [apiDraft, setApiDraft] = useState('')
   const [addDialogError, setAddDialogError] = useState<string | null>(null)
-  const [manifestError, setManifestError] = useState<string | null>(null)
   const [pwaState, setPwaState] = useState<HostedShellPwaState>(DEFAULT_PWA_STATE)
   const [updateState, setUpdateState] = useState<HostedAppUpdateState>(DEFAULT_UPDATE_STATE)
-  const cacheBroadcast = useMemo(() => createHostedAppCacheBroadcast(), [])
-  const manifestRef = useRef<HostedAppVersionManifest | null>(null)
-  const preparedManifestRef = useRef<HostedAppVersionManifest | null>(null)
   const tabRuntimeRef = useRef<Record<string, HostedTabRuntimeState>>({})
-  const updateStateRef = useRef<HostedAppUpdateState>(DEFAULT_UPDATE_STATE)
   const installPromptRef = useRef<BeforeInstallPromptEventLike | null>(null)
   const initialLaunchHandledRef = useRef(false)
   const refreshFeedbackTimerRef = useRef<number | null>(null)
-  const updateCheckPromiseRef = useRef<Promise<void> | null>(null)
   const iframeRefs = useRef<Record<string, HTMLIFrameElement | null>>({})
+  const serviceWorkerRegistrationRef = useRef<ServiceWorkerRegistration | null>(null)
+  const shouldReloadForUpdateRef = useRef(false)
 
   const openAddDialog = useCallback(() => {
     setAddDialogError(null)
@@ -651,10 +572,6 @@ export function HostedShell({
   useEffect(() => {
     tabRuntimeRef.current = tabRuntime
   }, [tabRuntime])
-
-  useEffect(() => {
-    updateStateRef.current = updateState
-  }, [updateState])
 
   useEffect(() => {
     return () => {
@@ -855,153 +772,14 @@ export function HostedShell({
     }
   }, [initialLaunchRequest, submitApi, waitForForwardedLaunch])
 
-  const getResolvedChannelIds = useCallback(() => {
-    const channels = new Set<string>()
-    for (const runtime of Object.values(tabRuntimeRef.current)) {
-      if (runtime.resolvedChannel) {
-        channels.add(runtime.resolvedChannel)
-      }
-    }
-    return Array.from(channels)
-  }, [])
-
-  const getClaimedCacheNames = useCallback(() => {
-    const manifest =
-      updateStateRef.current.status === 'ready' && preparedManifestRef.current
-        ? preparedManifestRef.current
-        : manifestRef.current
-    if (!manifest) {
-      return []
-    }
-    return buildClaimedHostedCacheNames(manifest, getResolvedChannelIds())
-  }, [getResolvedChannelIds])
-
-  const loadManifest = useCallback(async () => {
-    if (manifestRef.current) {
-      return manifestRef.current
-    }
-
-    try {
-      const manifest = await fetchHostedAppManifest(window.location, fetch)
-      manifestRef.current = manifest
-      setManifestError(null)
-      return manifest
-    } catch (error) {
-      setManifestError(error instanceof Error ? error.message : String(error))
-      return manifestRef.current
-    }
-  }, [])
-
-  useEffect(() => {
-    const stopResponder = cacheBroadcast.startResponder(() => getClaimedCacheNames())
-    return () => {
-      stopResponder()
-      cacheBroadcast.stop()
-    }
-  }, [cacheBroadcast, getClaimedCacheNames])
-
-  const checkForHostedAppUpdate = useCallback(async () => {
-    if (typeof window === 'undefined' || typeof caches === 'undefined') {
-      return
-    }
-
-    if (updateCheckPromiseRef.current) {
-      await updateCheckPromiseRef.current
-      return
-    }
-
-    const job = (async () => {
-      const currentManifest = manifestRef.current ?? (await loadManifest())
-      if (!currentManifest) {
-        return
-      }
-
-      setUpdateState((current) =>
-        current.status === 'warming' || current.status === 'ready'
-          ? current
-          : {
-              availableVersionId: current.availableVersionId,
-              errorMessage: null,
-              status: 'checking',
-            }
-      )
-
-      try {
-        const registration = await navigator.serviceWorker?.getRegistration?.()
-        await registration?.update()
-      } catch {
-        // Ignore update check failures and continue with manifest warming.
-      }
-
-      try {
-        const nextManifest = await refreshHostedManifestCache(window.location, caches)
-        const targetChannelIds = collectTargetChannelIds(nextManifest, getResolvedChannelIds())
-        if (!hasHostedDeploymentUpdate(currentManifest, nextManifest, targetChannelIds)) {
-          preparedManifestRef.current = null
-          setUpdateState(DEFAULT_UPDATE_STATE)
-          return
-        }
-
-        if (preparedManifestRef.current?.generatedAt === nextManifest.generatedAt) {
-          setUpdateState({
-            availableVersionId: nextManifest.generatedAt,
-            errorMessage: null,
-            status: 'ready',
-          })
-          return
-        }
-
-        setUpdateState({
-          availableVersionId: nextManifest.generatedAt,
-          errorMessage: null,
-          status: 'warming',
-        })
-
-        await warmHostedAppShell(nextManifest, window.location, caches)
-        await warmHostedVersionChannels(nextManifest, targetChannelIds, window.location, caches)
-        const staleCacheNames = await collectStaleHostedCacheNames(caches, nextManifest)
-
-        preparedManifestRef.current = nextManifest
-        setUpdateState({
-          availableVersionId: nextManifest.generatedAt,
-          errorMessage: null,
-          status: 'ready',
-        })
-
-        const peerClaims = await cacheBroadcast.collectPeerClaims()
-        const deletableCaches = staleCacheNames.filter((cacheName) => !peerClaims.has(cacheName))
-        await cleanupHostedCaches(caches, deletableCaches)
-      } catch (error) {
-        preparedManifestRef.current = null
-        console.warn('Failed to prepare hosted app update:', error)
-        setUpdateState((current) =>
-          current.status === 'ready'
-            ? current
-            : {
-                availableVersionId: null,
-                errorMessage: error instanceof Error ? error.message : String(error),
-                status: 'error',
-              }
-        )
-      }
-    })()
-
-    updateCheckPromiseRef.current = job.finally(() => {
-      updateCheckPromiseRef.current = null
-    })
-    await updateCheckPromiseRef.current
-  }, [cacheBroadcast, getResolvedChannelIds, loadManifest])
-
   const probeTabs = useCallback(
-    async (options?: {
-      tabIds?: readonly string[]
-      visualFeedback?: boolean
-      refetchManifest?: boolean
-    }) => {
+    async (options?: { tabIds?: readonly string[]; visualFeedback?: boolean }) => {
       const targets = shellState.tabs.filter(
         (tab) => !options?.tabIds || options.tabIds.includes(tab.id)
       )
-      if (targets.length === 0) return
+      if (targets.length === 0) {
+        return
+      }
 
       if (options?.visualFeedback) {
         startRefreshFeedback()
@@ -1021,7 +799,6 @@ export function HostedShell({
       })
 
       try {
-        const manifest = await loadManifest()
         const probeResults = await Promise.all(
           targets.map(async (tab) => ({
             tab,
@@ -1043,25 +820,12 @@ export function HostedShell({
               continue
             }
 
-            const projectName = probe.health?.projectName ?? previous.projectName
-            const openspecuiVersion = probe.health?.openspecuiVersion ?? previous.openspecuiVersion
-            const resolvedChannel =
-              manifest && openspecuiVersion
-                ? resolveHostedChannelForVersion(manifest, openspecuiVersion)
-                : previous.resolvedChannel
-
             next[tab.id] = {
               reachability: 'online',
-              projectName,
-              openspecuiVersion,
-              resolvedChannel: resolvedChannel ?? null,
-              errorMessage:
-                probe.errorMessage ??
-                (!manifest && !previous.resolvedChannel
-                  ? (manifestError ?? 'Hosted manifest is unavailable.')
-                  : !resolvedChannel
-                    ? `No compatible hosted bundle found for openspecui@${openspecuiVersion ?? 'unknown'}.`
-                    : null),
+              projectName: probe.health?.projectName ?? previous.projectName,
+              openspecuiVersion: probe.health?.openspecuiVersion ?? previous.openspecuiVersion,
+              embeddedUiUrl: probe.health?.embeddedUiUrl ?? previous.embeddedUiUrl,
+              errorMessage: probe.errorMessage,
             }
           }
           return next
@@ -1072,8 +836,121 @@ export function HostedShell({
         }
       }
     },
-    [loadManifest, manifestError, shellState.tabs, startRefreshFeedback]
+    [shellState.tabs, startRefreshFeedback]
   )
+
+  const syncUpdateStateFromRegistration = useCallback((registration: ServiceWorkerRegistration) => {
+    serviceWorkerRegistrationRef.current = registration
+    setUpdateState(
+      registration.waiting
+        ? { status: 'ready', errorMessage: null }
+        : { status: 'idle', errorMessage: null }
+    )
+  }, [])
+
+  const checkForHostedAppUpdate = useCallback(async () => {
+    if (
+      typeof navigator === 'undefined' ||
+      typeof navigator.serviceWorker === 'undefined' ||
+      typeof navigator.serviceWorker.getRegistration !== 'function'
+    ) {
+      return
+    }
+
+    const registration =
+      serviceWorkerRegistrationRef.current ?? (await navigator.serviceWorker.getRegistration())
+    if (!registration) {
+      return
+    }
+
+    serviceWorkerRegistrationRef.current = registration
+    await registration.update().catch(() => {})
+    syncUpdateStateFromRegistration(registration)
+  }, [syncUpdateStateFromRegistration])
+
+  useEffect(() => {
+    if (
+      typeof navigator === 'undefined' ||
+      typeof navigator.serviceWorker === 'undefined' ||
+      typeof navigator.serviceWorker.getRegistration !== 'function' ||
+      typeof navigator.serviceWorker.addEventListener !== 'function'
+    ) {
+      return
+    }
+
+    let disposed = false
+    let cleanupRegistrationListener = () => {}
+
+    const bindRegistration = (registration: ServiceWorkerRegistration) => {
+      const onUpdateFound = () => {
+        const installing = registration.installing
+        if (!installing) {
+          return
+        }
+
+        const onStateChange = () => {
+          if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+            syncUpdateStateFromRegistration(registration)
+          }
+        }
+
+        installing.addEventListener('statechange', onStateChange)
+      }
+
+      registration.addEventListener('updatefound', onUpdateFound)
+      syncUpdateStateFromRegistration(registration)
+
+      return () => {
+        registration.removeEventListener('updatefound', onUpdateFound)
+      }
+    }
+
+    const initialize = async () => {
+      const registration = await navigator.serviceWorker.getRegistration()
+      if (disposed || !registration) {
+        return
+      }
+
+      cleanupRegistrationListener()
+      cleanupRegistrationListener = bindRegistration(registration)
+    }
+
+    const onControllerChange = () => {
+      if (shouldReloadForUpdateRef.current) {
+        shouldReloadForUpdateRef.current = false
+        window.location.reload()
+      }
+    }
+
+    const onFocus = () => {
+      void checkForHostedAppUpdate()
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void checkForHostedAppUpdate()
+      }
+    }
+
+    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    void initialize()
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void checkForHostedAppUpdate()
+      }
+    }, UPDATE_CHECK_INTERVAL_MS)
+
+    return () => {
+      disposed = true
+      cleanupRegistrationListener()
+      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.clearInterval(interval)
+    }
+  }, [checkForHostedAppUpdate, syncUpdateStateFromRegistration])
 
   useEffect(() => {
     if (shellState.tabs.length === 0) {
@@ -1103,32 +980,6 @@ export function HostedShell({
     }
   }, [probeTabs, shellState.tabs.length])
 
-  useEffect(() => {
-    void checkForHostedAppUpdate()
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        void checkForHostedAppUpdate()
-      }
-    }, UPDATE_CHECK_INTERVAL_MS)
-
-    const onFocus = () => {
-      void checkForHostedAppUpdate()
-    }
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        void checkForHostedAppUpdate()
-      }
-    }
-
-    window.addEventListener('focus', onFocus)
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    return () => {
-      window.clearInterval(interval)
-      window.removeEventListener('focus', onFocus)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-    }
-  }, [checkForHostedAppUpdate])
-
   const activeHostedTab =
     shellState.tabs.find((tab) => tab.id === shellState.activeTabId) ?? shellState.tabs[0] ?? null
   const activeRuntime = activeHostedTab
@@ -1145,17 +996,19 @@ export function HostedShell({
     void probeTabs({
       tabIds: [activeHostedTab.id],
       visualFeedback: true,
-      refetchManifest: true,
     })
     void checkForHostedAppUpdate()
   }, [activeHostedTab, checkForHostedAppUpdate, probeTabs, reloadHostedTab])
 
   const handleApplyHostedUpdate = useCallback(() => {
-    if (updateStateRef.current.status !== 'ready' || !preparedManifestRef.current) {
+    const registration = serviceWorkerRegistrationRef.current
+    if (!registration?.waiting) {
+      window.location.reload()
       return
     }
 
-    window.location.reload()
+    shouldReloadForUpdateRef.current = true
+    registration.waiting.postMessage({ type: 'SKIP_WAITING' })
   }, [])
 
   useEffect(() => {
@@ -1175,7 +1028,7 @@ export function HostedShell({
           runtime: tabRuntime[tab.id] ?? DEFAULT_RUNTIME_STATE,
           frameState: tabFrames[tab.id] ?? DEFAULT_FRAME_STATE,
           onRetry: (tabId) => {
-            void probeTabs({ tabIds: [tabId], visualFeedback: true, refetchManifest: true })
+            void probeTabs({ tabIds: [tabId], visualFeedback: true })
           },
           onSetIframeRef: setIframeRef,
           onFrameLoad: markFrameLoaded,
@@ -1224,6 +1077,12 @@ export function HostedShell({
       style={rootStyle}
     >
       <HostedShellThemeBootstrap />
+
+      {updateState.status === 'ready' && (
+        <div className="border-border bg-muted/30 text-muted-foreground border-b px-3 py-2 text-xs">
+          {updateState.errorMessage ?? UPDATE_READY_MESSAGE}
+        </div>
+      )}
 
       {tabs.length === 0 ? (
         <div className="flex min-h-screen min-w-0 flex-col">

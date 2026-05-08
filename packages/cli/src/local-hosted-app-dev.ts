@@ -8,7 +8,6 @@ export const LOCAL_HOSTED_APP_DEV_DEFAULT_PORT = 13005
 export interface LocalHostedAppWorkspace {
   repoRoot: string
   appDir: string
-  webDistDir: string
 }
 
 export interface SpawnCommandConfig {
@@ -35,7 +34,6 @@ export function resolveLocalHostedAppWorkspace(cliDir: string): LocalHostedAppWo
   return {
     repoRoot,
     appDir: join(repoRoot, 'packages', 'app'),
-    webDistDir: join(repoRoot, 'packages', 'web', 'dist'),
   }
 }
 
@@ -46,21 +44,9 @@ export function shouldUseLocalHostedAppDevMode(options: {
   return options.appValue === '' && options.workspace !== null
 }
 
-export function createHostedAppWebBuildCommand(
-  workspace: LocalHostedAppWorkspace
-): SpawnCommandConfig {
-  return {
-    command: resolvePnpmCommand(),
-    args: ['--filter', '@openspecui/web', 'build'],
-    cwd: workspace.repoRoot,
-    env: { ...process.env },
-  }
-}
-
 export function createLocalHostedAppDevCommand(options: {
   workspace: LocalHostedAppWorkspace
   port: number
-  resolvedVersion: string
 }): SpawnCommandConfig {
   return {
     command: resolvePnpmCommand(),
@@ -76,28 +62,19 @@ export function createLocalHostedAppDevCommand(options: {
       '--strictPort',
     ],
     cwd: options.workspace.repoRoot,
-    env: {
-      ...process.env,
-      OPENSPECUI_APP_DEV_MODE: '1',
-      OPENSPECUI_APP_DEV_WEB_DIST: options.workspace.webDistDir,
-      OPENSPECUI_APP_DEV_VERSION: options.resolvedVersion,
-    },
+    env: { ...process.env },
   }
 }
 
 export async function startLocalHostedAppDev(options: {
   workspace: LocalHostedAppWorkspace
-  resolvedVersion: string
   preferredPort?: number
   readinessTimeoutMs?: number
 }): Promise<LocalHostedAppDevSession> {
-  await ensureLocalHostedAppWebDist(options.workspace)
-
   const port = await findAvailablePort(options.preferredPort ?? LOCAL_HOSTED_APP_DEV_DEFAULT_PORT)
   const command = createLocalHostedAppDevCommand({
     workspace: options.workspace,
     port,
-    resolvedVersion: options.resolvedVersion,
   })
   const child = spawn(command.command, command.args, {
     cwd: command.cwd,
@@ -124,39 +101,8 @@ export async function startLocalHostedAppDev(options: {
   }
 }
 
-async function ensureLocalHostedAppWebDist(workspace: LocalHostedAppWorkspace): Promise<void> {
-  const command = createHostedAppWebBuildCommand(workspace)
-  console.log('🛠️  Building packages/web for local hosted app dev...')
-  await runCommand(command)
-}
-
 function resolvePnpmCommand(): string {
   return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
-}
-
-async function runCommand(command: SpawnCommandConfig): Promise<void> {
-  await new Promise<void>((resolvePromise, rejectPromise) => {
-    const child = spawn(command.command, command.args, {
-      cwd: command.cwd,
-      env: command.env,
-      stdio: 'inherit',
-    })
-
-    child.once('error', (error) => {
-      rejectPromise(error)
-    })
-    child.once('exit', (code, signal) => {
-      if (code === 0) {
-        resolvePromise()
-        return
-      }
-      rejectPromise(
-        new Error(
-          `Command failed: ${command.command} ${command.args.join(' ')} (${signal ? `signal ${signal}` : `exit ${code ?? 'unknown'}`})`
-        )
-      )
-    })
-  })
 }
 
 async function waitForHostedAppDevReady(options: {
@@ -184,8 +130,7 @@ async function waitForHostedAppDevReady(options: {
     }
 
     try {
-      const response = await fetch(`${options.baseUrl}/version.json`, {
-        headers: { accept: 'application/json' },
+      const response = await fetch(`${options.baseUrl}/`, {
         cache: 'no-store',
       })
       if (response.ok) {

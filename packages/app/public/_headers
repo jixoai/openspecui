@@ -4,23 +4,11 @@
 /index.html
   Cache-Control: public, max-age=0, must-revalidate
 
-/version.json
-  Cache-Control: public, max-age=0, must-revalidate
-
 /service-worker.js
   Cache-Control: public, max-age=0, must-revalidate
 
-/versions/:channel
-  Cache-Control: public, max-age=0, must-revalidate
-
-/versions/:channel/
-  Cache-Control: public, max-age=0, must-revalidate
-
-/versions/:channel/index.html
+/manifest.webmanifest
   Cache-Control: public, max-age=0, must-revalidate
 
 /assets/*
-  Cache-Control: public, max-age=31536000, immutable
-
-/versions/:channel/assets/*
   Cache-Control: public, max-age=31536000, immutable

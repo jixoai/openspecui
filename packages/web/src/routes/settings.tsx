@@ -1432,9 +1432,8 @@ export function Settings() {
                 <label className="mb-2 block text-sm font-medium">Base URL</label>
                 <p className="text-muted-foreground mb-3 text-sm">
                   Used by <code className="bg-muted rounded px-1">openspecui --app</code> when no
-                  explicit base URL is passed. Leave empty to use the official hosted app. Reusing
-                  an installed PWA only works when that PWA was installed from this same deployment
-                  scope.
+                  explicit base URL is passed. Leave empty to use the official app shell. Reusing an
+                  installed PWA only works when that PWA was installed from this same shell origin.
                 </p>
                 <div className="flex gap-2">
                   <input

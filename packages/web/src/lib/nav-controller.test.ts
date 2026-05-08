@@ -61,7 +61,7 @@ function createController(
 
     const locationUrl = new URL(window.location.href)
     const sessionId = locationUrl.searchParams.get('session')
-    if (locationUrl.pathname.startsWith('/versions/') && sessionId) {
+    if (sessionId) {
       localStorage.setItem(`hosted-session:${sessionId}:nav-layout`, payload)
     }
   }

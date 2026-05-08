@@ -1,20 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import {
-  getHostedApiBootstrapState,
-  getHostedScopedStorageKey,
-  isHostedVersionEntryPath,
-} from './hosted-session'
+import { getHostedApiBootstrapState, getHostedScopedStorageKey } from './hosted-session'
 
 describe('hosted-session helpers', () => {
-  it('detects hosted version entry paths', () => {
-    expect(isHostedVersionEntryPath('/versions/v2.1/index.html')).toBe(true)
-    expect(isHostedVersionEntryPath('/dashboard')).toBe(false)
-  })
-
   it('extracts api and session from hosted entry URLs', () => {
     expect(
       getHostedApiBootstrapState({
-        pathname: '/versions/v2.1/index.html',
         search: '?api=http://localhost:3100/&session=session-a',
       })
     ).toEqual({
@@ -24,17 +14,32 @@ describe('hosted-session helpers', () => {
     })
   })
 
-  it('scopes browser keys by hosted session only inside version entries', () => {
+  it('uses same-origin mode when no session is provided', () => {
+    expect(
+      getHostedApiBootstrapState({
+        search: '?api=http://localhost:3100/',
+      })
+    ).toEqual({
+      hosted: false,
+      apiBaseUrl: 'http://localhost:3100',
+      sessionId: null,
+    })
+  })
+
+  it('scopes browser keys by hosted session whenever a session exists', () => {
     expect(
       getHostedScopedStorageKey('nav-layout', {
-        pathname: '/versions/v2.1/dashboard',
         search: '?session=session-a',
       })
     ).toBe('hosted-session:session-a:nav-layout')
     expect(
       getHostedScopedStorageKey('nav-layout', {
-        pathname: '/dashboard',
         search: '?session=session-a',
+      })
+    ).toBe('hosted-session:session-a:nav-layout')
+    expect(
+      getHostedScopedStorageKey('nav-layout', {
+        search: '',
       })
     ).toBe('nav-layout')
   })

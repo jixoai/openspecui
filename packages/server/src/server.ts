@@ -15,6 +15,7 @@ import { serve } from '@hono/node-server'
 import {
   CliExecutor,
   ConfigManager,
+  HOSTED_SHELL_PROTOCOL_VERSION,
   OpenSpecAdapter,
   OpenSpecWatcher,
   OpsxKernel,
@@ -51,6 +52,10 @@ import { PtyManager } from './pty-manager.js'
 import { createPtyWebSocketHandler } from './pty-websocket.js'
 import { appRouter, type Context, type GitWorktreeHandoffService } from './router.js'
 import { SearchService } from './search-service.js'
+
+function buildEmbeddedUiUrlForPort(port: number): string {
+  return `http://localhost:${port}`
+}
 
 /**
  * Server configuration options.
@@ -119,6 +124,8 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
       projectName: basename(config.projectDir) || config.projectDir,
       watcherEnabled: !!watcher,
       openspecuiVersion: SERVER_PACKAGE_VERSION,
+      hostedShellProtocolVersion: HOSTED_SHELL_PROTOCOL_VERSION,
+      embeddedUiUrl: buildEmbeddedUiUrlForPort(config.port ?? 3100),
     })
   })
 

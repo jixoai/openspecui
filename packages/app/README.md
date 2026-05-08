@@ -1,23 +1,22 @@
 # @openspecui/app
 
-Hosted app workspace for `app.openspecui.com` style deployments.
+PWA shell workspace for `app.openspecui.com`.
 
 ## What It Builds
 
-The `app` workspace emits a persistent hosted shell, not a one-shot redirect page.
+The `app` workspace emits a persistent multi-tab shell, not a version-hosting site.
 
 Build output includes:
 
 - root shell: `index.html`
 - root service worker: `service-worker.js`
-- channel manifest: `version.json`
-- versioned OpenSpecUI bundles: `versions/<channel>/`
+- PWA manifest: `manifest.webmanifest`
 
-The root shell restores tabs, accepts one launch request from the URL, probes each backend, and then mounts the compatible OpenSpecUI bundle inside an iframe tab.
+The shell restores tabs, accepts one launch request from the URL, probes each backend, and then mounts the backend-owned OpenSpecUI page inside an iframe tab.
 
 ## Hosted Launch Contract
 
-The hosted shell accepts an initial backend via query parameters:
+The shell accepts an initial backend via query parameters:
 
 - `api=<backend-origin>`
 
@@ -27,25 +26,25 @@ Example:
 https://app.openspecui.com/?api=http%3A%2F%2Flocalhost%3A3100
 ```
 
-The shell resolves the backend's `openspecuiVersion` from the health endpoint, selects a compatible hosted channel from `version.json`, and then mounts a versioned entry like:
+Each backend must expose `/api/health` with:
+
+- `hostedShellProtocolVersion: 1`
+- `embeddedUiUrl: string`
+
+The shell uses `embeddedUiUrl` directly and appends:
+
+- `api=<backend-origin>`
+- `session=<session-id>`
+
+Example embedded URL:
 
 ```text
-/versions/v2.0/?api=http%3A%2F%2Flocalhost%3A3100&session=<session-id>
+http://localhost:3100/dashboard?api=http%3A%2F%2Flocalhost%3A3100&session=<session-id>
 ```
 
 Tabs remain in the root shell and can be reopened on later visits.
 
-When this deployment is installed as a PWA, browsers that support navigation capture may route the
-launch URL into that installed app window instead of a regular browser tab. That reuse only applies
-when the installed PWA comes from the same deployment scope as the URL being opened.
-
-Implications:
-
-- `openspecui --app` can reuse the installed PWA for this deployment
-- `openspecui --app=https://app.example.com` can only reuse a PWA installed from
-  `https://app.example.com`
-- if no matching PWA is installed, or the browser chooses not to capture the navigation, the same
-  URL still works in a browser tab
+When this deployment is installed as a PWA, browsers that support navigation capture may route the launch URL into that installed app window instead of a regular browser tab. That reuse only applies when the installed PWA comes from the same deployment scope as the URL being opened.
 
 ## Local Development
 
@@ -55,8 +54,7 @@ pnpm openspecui --app
 pnpm --filter @openspecui/app cf:dev
 ```
 
-Use `pnpm openspecui --app` from the repo root when you want the local backend plus the local
-hosted shell together.
+Use `pnpm openspecui --app` from the repo root when you want the local backend plus the local app shell together.
 
 ## Build
 
@@ -87,7 +85,7 @@ Source of truth:
 
 - deploy config: `packages/app/wrangler.jsonc`
 - cache headers: `packages/app/public/_headers`
-- deep-link rewrites: `packages/app/public/_worker.js`
+- worker passthrough: `packages/app/public/_worker.js`
 
 Custom domains remain a Cloudflare-side concern. Attach `app.openspecui.com` to the Pages project after the first successful deploy.
 
@@ -113,22 +111,14 @@ server {
   server_name app.openspecui.com;
   root /srv/openspecui-app;
 
-  location = /version.json {
-    add_header Cache-Control "public, max-age=0, must-revalidate";
-    try_files $uri =404;
-  }
-
   location = /service-worker.js {
     add_header Cache-Control "public, max-age=0, must-revalidate";
     try_files $uri =404;
   }
 
-  location ^~ /versions/ {
-    try_files $uri $uri/ @openspecui_version_shell;
-  }
-
-  location @openspecui_version_shell {
-    rewrite ^/versions/([^/]+)(/.*)?$ /versions/$1/index.html break;
+  location = /manifest.webmanifest {
+    add_header Cache-Control "public, max-age=0, must-revalidate";
+    try_files $uri =404;
   }
 
   location / {
@@ -143,14 +133,8 @@ server {
 app.openspecui.com {
   root * /srv/openspecui-app
 
-  @mutable path / /index.html /version.json /service-worker.js
+  @mutable path / /index.html /manifest.webmanifest /service-worker.js
   header @mutable Cache-Control "public, max-age=0, must-revalidate"
-
-  @versionRoutes path_regexp versionShell ^/versions/([^/]+)(?:/.*)?$
-  handle @versionRoutes {
-    try_files {path} /versions/{re.versionShell.1}/index.html
-    file_server
-  }
 
   try_files {path} /index.html
   file_server
@@ -163,13 +147,11 @@ Mutable entrypoints should revalidate:
 
 - `/`
 - `/index.html`
+- `/manifest.webmanifest`
 - `/service-worker.js`
-- `/version.json`
-- `/versions/<channel>/index.html`
 
 Immutable hashed assets can be long-lived:
 
 - `/assets/*`
-- `/versions/<channel>/assets/*`
 
 The included `public/_headers` file is tuned for Cloudflare Pages with that split.

@@ -1,3 +1,5 @@
+import { buildEmbeddedUiLaunchUrl } from '@openspecui/core/hosted-app'
+
 const SHELL_STORAGE_KEY = 'openspecui-app:shell'
 
 export interface HostedShellLaunchRequest {
@@ -238,12 +240,12 @@ export function activateHostedTab(state: HostedShellState, tabId: string): Hoste
   }
 }
 
-export function buildHostedVersionEntryUrl(tab: HostedShellTab, channel: string): string {
-  const params = new URLSearchParams({
-    api: tab.apiBaseUrl,
-    session: tab.sessionId,
+export function buildHostedEmbeddedUiUrl(tab: HostedShellTab, embeddedUiUrl: string): string {
+  return buildEmbeddedUiLaunchUrl({
+    embeddedUiUrl,
+    apiBaseUrl: tab.apiBaseUrl,
+    sessionId: tab.sessionId,
   })
-  return `/versions/${channel}/?${params.toString()}`
 }
 
 export function getHostedTabLabel(tab: Pick<HostedShellTab, 'apiBaseUrl'>): string {

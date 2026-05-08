@@ -1,41 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
+  HOSTED_SHELL_PROTOCOL_VERSION,
+  buildEmbeddedUiLaunchUrl,
   buildHostedLaunchUrl,
-  buildHostedVersionManifestUrl,
-  isHostedAppVersionManifest,
   isHostedBackendHealthResponse,
+  isSupportedEmbeddedUiUrl,
+  normalizeEmbeddedUiUrl,
   normalizeHostedAppBaseUrl,
   resolveHostedAppBaseUrl,
-  resolveHostedChannelForVersion,
 } from './hosted-app.js'
-
-const manifest = {
-  packageName: 'openspecui' as const,
-  generatedAt: '2026-03-09T00:00:00.000Z',
-  defaultChannel: 'latest',
-  channels: {
-    latest: {
-      id: 'latest',
-      kind: 'latest' as const,
-      selector: 'latest',
-      resolvedVersion: '2.1.3',
-      rootPath: '/versions/latest/',
-      shellPath: '/versions/latest/index.html',
-      major: 2,
-    },
-    'v2.0': {
-      id: 'v2.0',
-      kind: 'minor' as const,
-      selector: '~2.0',
-      resolvedVersion: '2.0.9',
-      rootPath: '/versions/v2.0/',
-      shellPath: '/versions/v2.0/index.html',
-      major: 2,
-      minor: 0,
-    },
-  },
-  compatibility: [{ range: '~2.0.0', channel: 'v2.0' }],
-}
 
 describe('hosted-app helpers', () => {
   it('normalizes hosted app base URLs', () => {
@@ -51,10 +24,7 @@ describe('hosted-app helpers', () => {
     expect(resolveHostedAppBaseUrl({})).toBe('https://app.openspecui.com')
   })
 
-  it('builds manifest and launch URLs from normalized base URLs', () => {
-    expect(buildHostedVersionManifestUrl('https://app.example.com/ui/')).toBe(
-      'https://app.example.com/ui/version.json'
-    )
+  it('builds launch URLs from normalized base URLs', () => {
     expect(
       buildHostedLaunchUrl({
         baseUrl: 'https://app.example.com/ui/',
@@ -63,8 +33,27 @@ describe('hosted-app helpers', () => {
     ).toBe('https://app.example.com/ui?api=http%3A%2F%2Flocalhost%3A13000')
   })
 
-  it('validates hosted app manifests and backend health payloads', () => {
-    expect(isHostedAppVersionManifest(manifest)).toBe(true)
+  it('normalizes and validates embedded UI URLs', () => {
+    expect(normalizeEmbeddedUiUrl('http://localhost:3100/dashboard/')).toBe(
+      'http://localhost:3100/dashboard'
+    )
+    expect(isSupportedEmbeddedUiUrl('https://app.example.com/dashboard')).toBe(true)
+    expect(isSupportedEmbeddedUiUrl('http://127.0.0.1:3100')).toBe(true)
+    expect(isSupportedEmbeddedUiUrl('http://dev.localhost:3100')).toBe(true)
+    expect(isSupportedEmbeddedUiUrl('http://intranet.example.com')).toBe(false)
+  })
+
+  it('builds embedded UI launch URLs from backend metadata', () => {
+    expect(
+      buildEmbeddedUiLaunchUrl({
+        embeddedUiUrl: 'http://localhost:3100/dashboard',
+        apiBaseUrl: 'http://localhost:3200',
+        sessionId: 'session-a',
+      })
+    ).toBe('http://localhost:3100/dashboard?api=http%3A%2F%2Flocalhost%3A3200&session=session-a')
+  })
+
+  it('validates backend health payloads', () => {
     expect(
       isHostedBackendHealthResponse({
         status: 'ok',
@@ -72,13 +61,9 @@ describe('hosted-app helpers', () => {
         projectName: 'demo',
         watcherEnabled: true,
         openspecuiVersion: '2.0.2',
+        hostedShellProtocolVersion: HOSTED_SHELL_PROTOCOL_VERSION,
+        embeddedUiUrl: 'http://localhost:3100',
       })
     ).toBe(true)
-  })
-
-  it('resolves the compatible channel from backend version metadata', () => {
-    expect(resolveHostedChannelForVersion(manifest, '2.0.4')).toBe('v2.0')
-    expect(resolveHostedChannelForVersion(manifest, '2.1.3')).toBe('latest')
-    expect(resolveHostedChannelForVersion(manifest, 'invalid')).toBeNull()
   })
 })

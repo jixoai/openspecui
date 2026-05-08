@@ -1,23 +1,11 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
-import { rewriteHostedBundleText } from './src/lib/bundle-rewrite'
-import {
-  createLocalDevManifest,
-  getMimeType,
-  resolveLocalDevBundleRelativePath,
-} from './src/lib/dev-server'
 import { createHostedAppPwaManifest } from './src/lib/pwa-manifest'
 import { hostedAppPlugin } from './src/vite-plugin-hosted-app'
 
 function hostedAppDevPlugin(): Plugin {
-  const enabled = process.env.OPENSPECUI_APP_DEV_MODE === '1'
-  const localWebDist = process.env.OPENSPECUI_APP_DEV_WEB_DIST
-  const localVersion = process.env.OPENSPECUI_APP_DEV_VERSION ?? '0.0.0-dev'
-
   return {
     name: 'openspecui-hosted-app-dev',
     apply: 'serve',
@@ -34,43 +22,7 @@ function hostedAppDevPlugin(): Plugin {
           res.end(`${JSON.stringify(createHostedAppPwaManifest(), null, 2)}\n`)
           return
         }
-
-        if (!enabled || !localWebDist) {
-          next()
-          return
-        }
-
-        if (requestUrl.pathname === '/version.json') {
-          const manifest = createLocalDevManifest(localVersion)
-          res.setHeader('Content-Type', 'application/json; charset=utf-8')
-          res.end(`${JSON.stringify(manifest, null, 2)}\n`)
-          return
-        }
-
-        const relativePath = resolveLocalDevBundleRelativePath(requestUrl.pathname)
-        if (!relativePath) {
-          next()
-          return
-        }
-
-        const absolutePath = join(localWebDist, relativePath)
-        if (!existsSync(absolutePath)) {
-          res.statusCode = 404
-          res.setHeader('Content-Type', 'text/html; charset=utf-8')
-          res.end(
-            `<main><h1>OpenSpec UI App</h1><p>Missing local web asset: <code>${relativePath}</code>.</p></main>`
-          )
-          return
-        }
-
-        const content = await readFile(absolutePath)
-        const mimeType = getMimeType(absolutePath)
-        res.setHeader('Content-Type', mimeType)
-        if (mimeType.startsWith('text/') || mimeType.includes('javascript')) {
-          res.end(rewriteHostedBundleText(content.toString('utf8'), 'latest'))
-          return
-        }
-        res.end(content)
+        next()
       })
     },
   }
