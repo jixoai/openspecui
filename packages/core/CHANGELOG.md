@@ -1,5 +1,11 @@
 # @openspecui/core
 
+## 3.1.2
+
+### Patch Changes
+
+- 99e74c1: Complete reactive artifact output tracking for nested and globbed outputs.
+
 ## 3.1.1
 
 ## 3.1.0

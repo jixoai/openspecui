@@ -1,6 +1,6 @@
 {
   "name": "@openspecui/search",
-  "version": "3.1.1",
+  "version": "3.1.2",
   "description": "Shared search engine and worker providers for OpenSpecUI",
   "type": "module",
   "main": "./dist/index.mjs",
