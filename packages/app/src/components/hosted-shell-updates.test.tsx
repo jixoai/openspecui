@@ -1,79 +1,17 @@
 // @vitest-environment jsdom
 
+import { HOSTED_SHELL_PROTOCOL_VERSION } from '@openspecui/core/hosted-app'
 import { act, screen } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HostedShell } from './hosted-shell'
 
-class MemoryCache {
-  private readonly entries = new Map<string, Response>()
-
-  async match(request: RequestInfo | URL): Promise<Response | undefined> {
-    return this.entries.get(resolveRequestUrl(request))?.clone()
-  }
-
-  async put(request: RequestInfo | URL, response: Response): Promise<void> {
-    this.entries.set(resolveRequestUrl(request), response.clone())
-  }
-}
-
-class MemoryCacheStorage {
-  private readonly caches = new Map<string, MemoryCache>()
-
-  async delete(cacheName: string): Promise<boolean> {
-    return this.caches.delete(cacheName)
-  }
-
-  async keys(): Promise<string[]> {
-    return Array.from(this.caches.keys())
-  }
-
-  async open(cacheName: string): Promise<MemoryCache> {
-    const existing = this.caches.get(cacheName)
-    if (existing) {
-      return existing
-    }
-    const next = new MemoryCache()
-    this.caches.set(cacheName, next)
-    return next
-  }
-}
-
 const originalFetch = global.fetch
 const originalMatchMedia = window.matchMedia
 const originalServiceWorker = navigator.serviceWorker
 const originalShowModal = HTMLDialogElement.prototype.showModal
 const originalClose = HTMLDialogElement.prototype.close
-
-const currentManifest = {
-  packageName: 'openspecui' as const,
-  generatedAt: '2026-03-13T00:00:00.000Z',
-  defaultChannel: 'latest',
-  channels: {
-    latest: {
-      id: 'latest',
-      kind: 'latest' as const,
-      selector: 'latest',
-      resolvedVersion: '2.1.2',
-      rootPath: '/versions/latest/',
-      shellPath: '/versions/latest/',
-      major: 2,
-    },
-  },
-  compatibility: [],
-}
-
-const nextManifest = {
-  ...currentManifest,
-  generatedAt: '2026-03-14T00:00:00.000Z',
-  channels: {
-    latest: {
-      ...currentManifest.channels.latest,
-      resolvedVersion: '2.1.3',
-    },
-  },
-}
 
 function resolveRequestUrl(request: RequestInfo | URL): string {
   if (typeof request === 'string') {
@@ -121,27 +59,34 @@ describe('HostedShell updates', () => {
     HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
       this.removeAttribute('open')
     }
-    Object.defineProperty(globalThis, 'caches', {
-      configurable: true,
-      value: new MemoryCacheStorage(),
-    })
     Object.defineProperty(navigator, 'serviceWorker', {
       configurable: true,
       value: {
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
         getRegistration: vi.fn(async () => ({
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          waiting: {},
           update: vi.fn(async () => undefined),
         })),
       },
     })
 
-    let manifestRequests = 0
     global.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = resolveRequestUrl(input)
 
-      if (url.endsWith('/version.json')) {
-        manifestRequests += 1
+      if (url.endsWith('/api/health')) {
         return new Response(
-          JSON.stringify(manifestRequests === 1 ? currentManifest : nextManifest),
+          JSON.stringify({
+            status: 'ok',
+            projectDir: '/tmp/demo',
+            projectName: 'demo',
+            watcherEnabled: true,
+            openspecuiVersion: '3.0.1',
+            hostedShellProtocolVersion: HOSTED_SHELL_PROTOCOL_VERSION,
+            embeddedUiUrl: 'http://localhost:3000/dashboard',
+          }),
           {
             status: 200,
             headers: { 'content-type': 'application/json' },
@@ -149,38 +94,9 @@ describe('HostedShell updates', () => {
         )
       }
 
-      if (url === 'http://localhost:3000/' || url === 'http://localhost:3000/index.html') {
-        return new Response(
-          '<!doctype html><link rel="stylesheet" href="/assets/app.css"><script type="module" src="/assets/app.js"></script>',
-          {
-            status: 200,
-            headers: { 'content-type': 'text/html; charset=utf-8' },
-          }
-        )
-      }
-
-      if (
-        url === 'http://localhost:3000/versions/latest/' ||
-        url === 'http://localhost:3000/versions/latest/index.html'
-      ) {
-        return new Response(
-          '<!doctype html><script>window.__OPENSPEC_BASE_PATH__ = \'/versions/latest/\'</script><script type="module" src="/versions/latest/assets/index.js"></script>',
-          {
-            status: 200,
-            headers: { 'content-type': 'text/html; charset=utf-8' },
-          }
-        )
-      }
-
       return new Response('ok', {
         status: 200,
-        headers: {
-          'content-type': url.endsWith('.js')
-            ? 'application/javascript; charset=utf-8'
-            : url.endsWith('.css')
-              ? 'text/css; charset=utf-8'
-              : 'text/plain; charset=utf-8',
-        },
+        headers: { 'content-type': 'text/plain; charset=utf-8' },
       })
     }) as typeof fetch
   })
@@ -194,17 +110,20 @@ describe('HostedShell updates', () => {
       configurable: true,
       value: originalServiceWorker,
     })
-    Reflect.deleteProperty(globalThis, 'caches')
     vi.restoreAllMocks()
   })
 
   it('surfaces the apply-update action after warming a newer deployment', async () => {
     await renderShell(
-      <HostedShell initialLaunchRequest={null} fallbackLaunchRequest={null} initialError={null} />
+      <HostedShell
+        initialLaunchRequest={{ apiBaseUrl: 'http://localhost:3000' }}
+        fallbackLaunchRequest={null}
+        initialError={null}
+      />
     )
 
     await flushEffects(8)
 
-    expect(screen.getByRole('button', { name: 'Apply hosted app update' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Apply app update' })).toBeTruthy()
   })
 })

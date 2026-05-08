@@ -61,7 +61,7 @@ The UI SHALL provide a schema browser backed by CLI schema data.
 
 ### Requirement: Settings View Content
 
-The UI SHALL surface runtime settings and tool status, including hosted app base URL configuration for hosted workspace launch mode.
+The UI SHALL surface runtime settings and tool status, including app shell base URL configuration for hosted workspace launch mode.
 
 #### Scenario: Display tool configuration state
 

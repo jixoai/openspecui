@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  createHostedAppWebBuildCommand,
   createLocalHostedAppDevCommand,
   resolveLocalHostedAppWorkspace,
   shouldUseLocalHostedAppDevMode,
@@ -43,7 +42,6 @@ describe('local hosted app dev helpers', () => {
     expect(resolveLocalHostedAppWorkspace(fixture.cliDir)).toEqual({
       repoRoot: fixture.repoRoot,
       appDir: join(fixture.repoRoot, 'packages', 'app'),
-      webDistDir: join(fixture.repoRoot, 'packages', 'web', 'dist'),
     })
   })
 
@@ -65,7 +63,7 @@ describe('local hosted app dev helpers', () => {
     expect(shouldUseLocalHostedAppDevMode({ appValue: '', workspace: null })).toBe(false)
   })
 
-  it('builds pnpm commands for the local app server and web dist', async () => {
+  it('builds pnpm commands for the local app dev server', async () => {
     const fixture = await createWorkspaceFixture(true)
     const workspace = resolveLocalHostedAppWorkspace(fixture.cliDir)
 
@@ -74,14 +72,9 @@ describe('local hosted app dev helpers', () => {
       throw new Error('Expected workspace fixture to resolve')
     }
 
-    const webBuild = createHostedAppWebBuildCommand(workspace)
-    expect(webBuild.args).toEqual(['--filter', '@openspecui/web', 'build'])
-    expect(webBuild.cwd).toBe(fixture.repoRoot)
-
     const devCommand = createLocalHostedAppDevCommand({
       workspace,
       port: 13009,
-      resolvedVersion: '2.0.2',
     })
     expect(devCommand.args).toEqual([
       '--filter',
@@ -94,10 +87,6 @@ describe('local hosted app dev helpers', () => {
       '13009',
       '--strictPort',
     ])
-    expect(devCommand.env.OPENSPECUI_APP_DEV_MODE).toBe('1')
-    expect(devCommand.env.OPENSPECUI_APP_DEV_WEB_DIST).toBe(
-      join(fixture.repoRoot, 'packages', 'web', 'dist')
-    )
-    expect(devCommand.env.OPENSPECUI_APP_DEV_VERSION).toBe('2.0.2')
+    expect(devCommand.cwd).toBe(fixture.repoRoot)
   })
 })

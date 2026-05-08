@@ -176,18 +176,18 @@ The hosted web application SHALL support a shell-supplied session identifier so 
 - **THEN** those global settings SHALL remain shared by design
 - **AND** they SHALL NOT force tab-local drafts or panel state to become shared
 
-### Requirement: Embeddable Version Entry Pages
+### Requirement: Backend-Owned Embedded Pages
 
-The hosted web bundles SHALL load correctly from direct version entry pages under `versions/<channel>/` inside the hosted workspace shell.
+The hosted web application SHALL load correctly from backend-owned pages when embedded inside the hosted workspace shell.
 
-#### Scenario: Load a version entry page directly inside the hosted shell
+#### Scenario: Load a backend-owned embedded page directly inside the hosted shell
 
-- **WHEN** the hosted shell renders `/versions/v2.0/index.html` for an active tab
+- **WHEN** the hosted shell renders the backend-advertised `embeddedUiUrl` for an active tab
 - **THEN** the embedded application SHALL boot successfully inside that isolated browsing context
 - **AND** it SHALL use the supplied hosted backend endpoint and session identifier for that tab
 
-#### Scenario: Embedded hosted navigation stays inside the version entry context
+#### Scenario: Embedded hosted navigation stays inside the backend-owned context
 
 - **WHEN** the embedded hosted application performs client-side navigation
-- **THEN** that navigation SHALL remain inside the embedded version entry context
+- **THEN** that navigation SHALL remain inside the embedded backend-owned context
 - **AND** it SHALL NOT replace or discard the root hosted shell

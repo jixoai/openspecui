@@ -1,9 +1,6 @@
 import {
-  buildHostedVersionManifestUrl,
-  isHostedAppVersionManifest,
-  isHostedBackendHealthResponse,
-  normalizeHostedAppBaseUrl,
-  type HostedAppVersionManifest,
+  HOSTED_SHELL_PROTOCOL_VERSION,
+  isSupportedEmbeddedUiUrl,
   type HostedBackendHealthResponse,
 } from '@openspecui/core/hosted-app'
 
@@ -15,71 +12,21 @@ export interface HostedBackendProbeResult {
   errorMessage: string | null
 }
 
-interface FetchHostedAppManifestOptions {
-  force?: boolean
-}
-
-const hostedManifestCache = new Map<string, HostedAppVersionManifest>()
-const hostedManifestRequests = new Map<string, Promise<HostedAppVersionManifest>>()
-
-function toRuntimeBaseUrl(location: Pick<Location, 'href'>): string {
-  const url = new URL(location.href)
-  url.hash = ''
-  url.search = ''
-  if (url.pathname.endsWith('/index.html')) {
-    url.pathname = url.pathname.slice(0, -'/index.html'.length) || '/'
-  }
-  return normalizeHostedAppBaseUrl(url.toString())
-}
-
-export async function fetchHostedAppManifest(
-  location: Pick<Location, 'href'>,
-  fetchImpl: typeof fetch = fetch,
-  options: FetchHostedAppManifestOptions = {}
-): Promise<HostedAppVersionManifest> {
-  const manifestUrl = buildHostedVersionManifestUrl(toRuntimeBaseUrl(location))
-
-  if (options.force) {
-    hostedManifestCache.delete(manifestUrl)
-    hostedManifestRequests.delete(manifestUrl)
+function isHostedBackendHealthPayloadShape(value: unknown): value is HostedBackendHealthResponse {
+  if (typeof value !== 'object' || value === null) {
+    return false
   }
 
-  const cachedManifest = hostedManifestCache.get(manifestUrl)
-  if (cachedManifest) {
-    return cachedManifest
-  }
-
-  const pendingRequest = hostedManifestRequests.get(manifestUrl)
-  if (pendingRequest) {
-    return pendingRequest
-  }
-
-  const request = (async () => {
-    const response = await fetchImpl(manifestUrl, {
-      headers: { accept: 'application/json' },
-      cache: 'default',
-    })
-
-    if (!response.ok) {
-      throw new Error(`Failed to load hosted manifest: ${response.status} ${response.statusText}`)
-    }
-
-    const payload = await response.json()
-    if (!isHostedAppVersionManifest(payload)) {
-      throw new Error('Hosted manifest is invalid')
-    }
-
-    hostedManifestCache.set(manifestUrl, payload)
-    return payload
-  })()
-
-  hostedManifestRequests.set(manifestUrl, request)
-
-  try {
-    return await request
-  } finally {
-    hostedManifestRequests.delete(manifestUrl)
-  }
+  const record = value as Record<string, unknown>
+  return (
+    record.status === 'ok' &&
+    typeof record.projectDir === 'string' &&
+    typeof record.projectName === 'string' &&
+    typeof record.watcherEnabled === 'boolean' &&
+    typeof record.openspecuiVersion === 'string' &&
+    record.hostedShellProtocolVersion === HOSTED_SHELL_PROTOCOL_VERSION &&
+    typeof record.embeddedUiUrl === 'string'
+  )
 }
 
 export async function probeHostedBackend(
@@ -110,11 +57,19 @@ export async function probeHostedBackend(
     }
 
     const payload = await response.json()
-    if (!isHostedBackendHealthResponse(payload)) {
+    if (!isHostedBackendHealthPayloadShape(payload)) {
       return {
         reachability: 'online',
         health: null,
-        errorMessage: 'Backend health payload is missing hosted metadata.',
+        errorMessage: 'Backend health payload is missing embedded UI metadata.',
+      }
+    }
+
+    if (!isSupportedEmbeddedUiUrl(payload.embeddedUiUrl)) {
+      return {
+        reachability: 'online',
+        health: null,
+        errorMessage: 'Backend embedded UI URL is not supported by the hosted shell.',
       }
     }
 

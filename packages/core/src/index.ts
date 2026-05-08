@@ -186,18 +186,15 @@ export {
   type GitWorktreeSummary,
 } from './git-panel-types.js'
 export {
+  HOSTED_SHELL_PROTOCOL_VERSION,
   OFFICIAL_APP_BASE_URL,
+  buildEmbeddedUiLaunchUrl,
   buildHostedLaunchUrl,
-  buildHostedVersionManifestUrl,
-  isHostedAppVersionManifest,
   isHostedBackendHealthResponse,
+  isSupportedEmbeddedUiUrl,
+  normalizeEmbeddedUiUrl,
   normalizeHostedAppBaseUrl,
   resolveHostedAppBaseUrl,
-  resolveHostedChannelForVersion,
-  type HostedAppChannelKind,
-  type HostedAppChannelManifest,
-  type HostedAppCompatibilityEntry,
-  type HostedAppVersionManifest,
   type HostedBackendHealthResponse,
 } from './hosted-app.js'
 export { VIRTUAL_PROJECT_DIRNAME, toOpsxDisplayPath } from './opsx-display-path.js'

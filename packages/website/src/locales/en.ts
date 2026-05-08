@@ -16,7 +16,7 @@ export const en = {
     sidebarEyebrow: 'Default path',
     sidebarTitle: 'PWA first, browser fallback',
     sidebarBody:
-      'Start the local backend, then launch the maintained hosted app URL. Matching installed PWAs on the same deployment scope may take over.',
+      'Start the local backend, then launch the maintained app shell URL. Matching installed PWAs on the same deployment scope may take over.',
     badges: {
       live: 'Live mode',
       hosted: 'Hosted app',
@@ -30,12 +30,12 @@ export const en = {
     runnerLabel: 'Runner',
     appToggleLabel: 'App mode',
     appToggleSummary:
-      'Launch the hosted app instead of a local web bundle. Matching installed PWAs on the same deployment scope may be reused by the browser.',
+      'Launch the app shell instead of a local web bundle. Matching installed PWAs on the same deployment scope may be reused by the browser.',
     appToggleEnabled: 'On',
     appToggleDisabled: 'Off',
     runLabel: 'Run OpenSpec UI',
     appOnSummary:
-      'Start the local backend and launch the hosted app URL. Browsers may route that same-scope URL into an installed PWA; otherwise it stays in a browser tab.',
+      'Start the local backend and launch the app shell URL. Browsers may route that same-scope URL into an installed PWA; otherwise it stays in a browser tab.',
     appOffSummary: 'Start the local backend and serve the local web UI from this machine.',
     exportLabel: 'Static export',
     exportSummary: 'Generate a deployable snapshot for docs hosting or offline review.',
@@ -49,7 +49,7 @@ export const en = {
       'Best for editing specs, reviewing changes, working with terminals, and watching project state reactively.',
     hostedTitle: 'Hosted app mode',
     hostedBody:
-      'Best when you want one maintained deployment, multiple local backends, and optional PWA reuse on that same hosted scope.',
+      'Best when you want one maintained shell deployment, multiple local backends, and optional PWA reuse on that same hosted scope.',
     exportTitle: 'Static export',
     exportBody:
       'Best for publishing snapshots, design review links, or read-only project inspection.',
@@ -59,7 +59,7 @@ export const en = {
     summary: 'Start with the app, then follow the upstream workflow and source repository.',
     appTitle: 'app.openspecui.com',
     appBody:
-      'Hosted app shell for the latest compatible OpenSpecUI frontend, with browser-managed PWA capture on the same deployment scope.',
+      'Hosted app shell that opens backend-owned OpenSpecUI pages, with browser-managed PWA capture on the same deployment scope.',
     openspecTitle: 'openspec.dev',
     openspecBody: 'Official OpenSpec project site and workflow reference.',
     githubTitle: 'GitHub',

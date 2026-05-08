@@ -8,23 +8,23 @@ import {
 } from './git-panel'
 
 describe('git-panel helpers', () => {
-  it('builds hosted handoff urls by replacing only the api query param', () => {
+  it('builds hosted handoff urls on the target backend origin while preserving session params', () => {
     const href = buildGitWorktreeHandoffHref({
       handoff: {
         projectDir: '/tmp/worktree-b',
         serverUrl: 'http://localhost:3200',
       },
       location: {
-        href: 'https://app.openspecui.com/versions/latest/git?api=http%3A%2F%2Flocalhost%3A3100&session=session-a',
-        pathname: '/versions/latest/git',
+        href: 'http://localhost:3100/git?api=http%3A%2F%2Flocalhost%3A3100&session=session-a',
+        pathname: '/git',
         search: '?api=http%3A%2F%2Flocalhost%3A3100&session=session-a',
         hash: '',
       },
     })
 
     const url = new URL(href)
-    expect(url.origin).toBe('https://app.openspecui.com')
-    expect(url.pathname).toBe('/versions/latest/git')
+    expect(url.origin).toBe('http://localhost:3200')
+    expect(url.pathname).toBe('/git')
     expect(url.searchParams.get('api')).toBe('http://localhost:3200')
     expect(url.searchParams.get('session')).toBe('session-a')
   })

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyHostedLaunchRequest,
   areHostedShellStatesEqual,
-  buildHostedVersionEntryUrl,
+  buildHostedEmbeddedUiUrl,
   createEmptyHostedShellState,
   getHostedTabLabel,
   parseHostedShellState,
@@ -39,18 +39,18 @@ describe('hosted shell state helpers', () => {
     expect(duplicate.activeTabId).toBe('session-a')
   })
 
-  it('builds iframe entry URLs with api and session', () => {
+  it('builds iframe entry URLs with backend-owned embedded UI URLs', () => {
     expect(
-      buildHostedVersionEntryUrl(
+      buildHostedEmbeddedUiUrl(
         {
           id: 'session-a',
           sessionId: 'session-a',
           apiBaseUrl: 'http://localhost:13000',
           createdAt: 1,
         },
-        'v2.1'
+        'http://localhost:3100/dashboard'
       )
-    ).toBe('/versions/v2.1/?api=http%3A%2F%2Flocalhost%3A13000&session=session-a')
+    ).toBe('http://localhost:3100/dashboard?api=http%3A%2F%2Flocalhost%3A13000&session=session-a')
   })
 
   it('normalizes persisted state and keeps the first tab active when activeTabId is invalid', () => {

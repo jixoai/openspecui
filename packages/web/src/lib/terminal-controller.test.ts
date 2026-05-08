@@ -309,7 +309,7 @@ describe('terminal-controller PTY behavior', () => {
   })
 
   it('uses hosted api base URL for PTY websocket connections', async () => {
-    window.history.replaceState({}, '', '/versions/latest/index.html?api=http://127.0.0.1:3102/')
+    window.history.replaceState({}, '', '/dashboard?api=http://127.0.0.1:3102/&session=session-a')
 
     const terminalController = await loadTerminalController()
     const unsubscribe = terminalController.subscribe(() => {})

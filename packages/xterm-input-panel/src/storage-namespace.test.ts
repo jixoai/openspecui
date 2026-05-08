@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { getSessionScopedStorageKey } from './storage-namespace'
 
 describe('storage namespace helpers', () => {
-  it('scopes hosted version entries by session', () => {
+  it('scopes hosted sessions by session', () => {
     expect(
       getSessionScopedStorageKey('xtermInputPanelState', {
-        pathname: '/versions/v2.1/index.html',
+        pathname: '/dashboard',
         search: '?session=session-a',
       })
     ).toBe('hosted-session:session-a:xtermInputPanelState')
@@ -15,7 +15,7 @@ describe('storage namespace helpers', () => {
     expect(
       getSessionScopedStorageKey('xtermInputPanelState', {
         pathname: '/dashboard',
-        search: '?session=session-a',
+        search: '',
       })
     ).toBe('xtermInputPanelState')
   })

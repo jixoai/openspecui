@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { HOSTED_SHELL_PROTOCOL_VERSION } from '@openspecui/core/hosted-app'
 import { act, fireEvent, screen } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -28,42 +29,6 @@ function setSuccessfulFetch(options?: HostedFetchOptions) {
     const url =
       typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
 
-    if (url.endsWith('/version.json')) {
-      return new Response(
-        JSON.stringify({
-          packageName: 'openspecui',
-          generatedAt: '2026-03-09T00:00:00.000Z',
-          defaultChannel: 'latest',
-          channels: {
-            latest: {
-              id: 'latest',
-              kind: 'latest',
-              selector: 'latest',
-              resolvedVersion: '2.1.3',
-              rootPath: '/versions/latest/',
-              shellPath: '/versions/latest/',
-              major: 2,
-            },
-            'v2.0': {
-              id: 'v2.0',
-              kind: 'minor',
-              selector: '~2.0',
-              resolvedVersion: '2.0.9',
-              rootPath: '/versions/v2.0/',
-              shellPath: '/versions/v2.0/',
-              major: 2,
-              minor: 0,
-            },
-          },
-          compatibility: [{ range: '~2.0.0', channel: 'v2.0' }],
-        }),
-        {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        }
-      )
-    }
-
     if (url.endsWith('/api/health')) {
       const apiBaseUrl = url.replace(/\/api\/health$/, '')
       const health = options?.perApi?.[apiBaseUrl] ?? options
@@ -78,6 +43,8 @@ function setSuccessfulFetch(options?: HostedFetchOptions) {
           projectName: health?.projectName ?? 'opsx-project',
           watcherEnabled: true,
           openspecuiVersion: health?.openspecuiVersion ?? '2.0.2',
+          hostedShellProtocolVersion: HOSTED_SHELL_PROTOCOL_VERSION,
+          embeddedUiUrl: `${apiBaseUrl}/dashboard`,
         }),
         {
           status: 200,
@@ -177,7 +144,7 @@ describe('HostedShell', () => {
     expect(container.textContent ?? '').toContain('opsx-project')
     const iframe = container.querySelector('iframe[title="Hosted OpenSpec UI opsx-project"]')
     expect(iframe?.getAttribute('src')).toContain(
-      '/versions/v2.0/?api=http%3A%2F%2Flocalhost%3A3100&session='
+      'http://localhost:3100/dashboard?api=http%3A%2F%2Flocalhost%3A3100&session='
     )
     expect(screen.getByText('Loading view...')).toBeTruthy()
 

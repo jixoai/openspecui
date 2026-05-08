@@ -364,4 +364,4 @@ The CLI SHALL support `openspecui --app[=<baseUrl>]` to start the local backend 
 - **WHEN** the user runs `openspecui --app`
 - **THEN** the CLI SHALL start the local backend service
 - **AND** it SHALL open `<baseUrl>/?api=<encoded-local-service-url>`
-- **AND** the hosted shell SHALL resolve the compatible frontend bundle after querying that backend
+- **AND** the hosted shell SHALL query that backend for embedded UI metadata after launch

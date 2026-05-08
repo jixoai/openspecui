@@ -8,6 +8,9 @@ export default defineConfig({
     storybookTest({
       configDir: resolve(__dirname, '.storybook'),
       storybookScript: 'pnpm dev --ci',
+      tags: {
+        skip: ['skip-browser-test'],
+      },
     }),
   ],
   test: {

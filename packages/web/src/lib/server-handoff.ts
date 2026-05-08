@@ -7,17 +7,19 @@ export function buildServerHandoffHref(options: {
 }): string {
   const { handoff, location } = options
   const currentUrl = new URL(location.href)
+  const targetUrl = new URL(handoff.serverUrl)
   const hostedState = getHostedApiBootstrapState({
-    pathname: location.pathname,
     search: location.search,
   })
 
   if (hostedState.hosted) {
-    currentUrl.searchParams.set('api', handoff.serverUrl)
-    return currentUrl.toString()
+    targetUrl.pathname = currentUrl.pathname
+    targetUrl.search = currentUrl.search
+    targetUrl.hash = currentUrl.hash
+    targetUrl.searchParams.set('api', handoff.serverUrl)
+    return targetUrl.toString()
   }
 
-  const targetUrl = new URL(handoff.serverUrl)
   targetUrl.pathname = currentUrl.pathname
   targetUrl.search = currentUrl.search
   targetUrl.hash = currentUrl.hash

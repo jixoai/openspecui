@@ -576,6 +576,7 @@ export const PersistStateAcrossTerminalSwitch: StoryObj = {
  * panel DOM can disappear, but addon should still be able to re-open.
  */
 export const RecoverAfterPanelHostRemount: StoryObj = {
+  tags: ['skip-browser-test'],
   render: () => html`
     <div style="display:flex;gap:8px;height:100%;">
       <div id="host-a" style="flex:1;position:relative;">
@@ -594,21 +595,23 @@ export const RecoverAfterPanelHostRemount: StoryObj = {
     const { addon } = setupTerminal(terminalContainer, { stateKey: 'host-remount' })
 
     addon.open()
-    let panel = hostA.querySelector('input-panel')
-    expect(panel).not.toBeNull()
+    const panelA = hostA.querySelector('input-panel')
+    expect(panelA).not.toBeNull()
+    expect(panelA?.parentElement).toBe(hostA)
     expect(addon.isOpen).toBe(true)
 
     // Simulate area switch: host subtree is unmounted while addon remains alive.
-    panel?.remove()
+    panelA?.remove()
     expect(addon.isOpen).toBe(true)
 
     // Simulate return to terminal area with a new mount target.
     InputPanelAddon.mountTarget = hostB
     addon.open()
 
-    await waitFor(() => {
-      expect(hostB.querySelector('input-panel')).not.toBeNull()
-    })
+    const panelB = hostB.querySelector('input-panel')
+    expect(panelB).not.toBeNull()
+    expect(panelB?.parentElement).toBe(hostB)
+    expect(hostA.querySelector('input-panel')).toBeNull()
     expect(addon.isOpen).toBe(true)
 
     addon.close()

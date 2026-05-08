@@ -95,7 +95,6 @@ async function main(): Promise<void> {
             if (shouldUseLocalHostedAppDevMode(localHostedAppMode)) {
               localHostedApp = await startLocalHostedAppDev({
                 workspace: localHostedAppMode.workspace,
-                resolvedVersion: localVersion,
               })
               hostedBaseUrl = localHostedApp.baseUrl
             } else {

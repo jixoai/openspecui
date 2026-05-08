@@ -18,12 +18,12 @@ afterEach(() => {
 
 describe('api-config', () => {
   it('uses api query parameter for hosted traffic', () => {
-    setLocation('/versions/latest/index.html?api=http://localhost:3100/')
+    setLocation('/dashboard?api=http://localhost:3100/&session=session-a')
 
     expect(getHostedApiState()).toEqual({
       hosted: true,
       apiBaseUrl: 'http://localhost:3100',
-      sessionId: null,
+      sessionId: 'session-a',
     })
     expect(getApiBaseUrl()).toBe('http://localhost:3100')
     expect(getTrpcUrl()).toBe('http://localhost:3100/trpc')
@@ -32,13 +32,13 @@ describe('api-config', () => {
     expect(getPtyWsUrl()).toBe('ws://localhost:3100/ws/pty')
   })
 
-  it('marks version entries without api as hosted but disconnected', () => {
-    setLocation('/versions/v2.0/index.html')
+  it('marks session-backed entries without api as hosted but disconnected', () => {
+    setLocation('/dashboard?session=session-a')
 
     expect(getHostedApiState()).toEqual({
       hosted: true,
       apiBaseUrl: null,
-      sessionId: null,
+      sessionId: 'session-a',
     })
     expect(getApiBaseUrl()).toBe('')
   })
