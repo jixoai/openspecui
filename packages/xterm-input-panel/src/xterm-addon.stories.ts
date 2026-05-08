@@ -589,26 +589,29 @@ export const RecoverAfterPanelHostRemount: StoryObj = {
     const hostA = canvasElement.querySelector('#host-a') as HTMLElement
     const hostB = canvasElement.querySelector('#host-b') as HTMLElement
     const terminalContainer = canvasElement.querySelector('#term') as HTMLElement
+    type PanelElement = HTMLElement & { updateComplete: Promise<void> }
 
     InputPanelAddon.mountTarget = hostA
     const { addon } = setupTerminal(terminalContainer, { stateKey: 'host-remount' })
 
     addon.open()
-    let panel = hostA.querySelector('input-panel')
-    expect(panel).not.toBeNull()
+    const panelA = hostA.querySelector('input-panel') as PanelElement | null
+    expect(panelA).not.toBeNull()
+    await panelA?.updateComplete
     expect(addon.isOpen).toBe(true)
 
     // Simulate area switch: host subtree is unmounted while addon remains alive.
-    panel?.remove()
+    panelA?.remove()
     expect(addon.isOpen).toBe(true)
 
     // Simulate return to terminal area with a new mount target.
     InputPanelAddon.mountTarget = hostB
     addon.open()
 
-    await waitFor(() => {
-      expect(hostB.querySelector('input-panel')).not.toBeNull()
-    })
+    const panelB = hostB.querySelector('input-panel') as PanelElement | null
+    expect(panelB).not.toBeNull()
+    await panelB?.updateComplete
+    expect(panelB?.parentElement).toBe(hostB)
     expect(addon.isOpen).toBe(true)
 
     addon.close()
