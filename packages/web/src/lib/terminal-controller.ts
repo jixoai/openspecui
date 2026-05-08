@@ -16,6 +16,12 @@ import {
 import { getPtyWsUrl } from './api-config'
 import { navController } from './nav-controller'
 import { TerminalInputHistoryStore } from './terminal-input-history'
+import {
+  resolveTerminalTheme,
+  type TerminalPalette,
+  type TerminalThemeId,
+  type TerminalThemeMode,
+} from './terminal-theme'
 
 // --- Types ---
 
@@ -32,6 +38,9 @@ export interface TerminalConfig {
   cursorBlink: boolean
   cursorStyle: 'block' | 'underline' | 'bar'
   scrollback: number
+  useTheme: TerminalThemeMode
+  lightTheme: TerminalThemeId
+  darkTheme: TerminalThemeId
   rendererEngine: TerminalRendererEngine
 }
 
@@ -46,9 +55,7 @@ type TerminalLike = {
     cursorStyle?: 'block' | 'underline' | 'bar'
     scrollback?: number
     allowTransparency?: boolean
-    theme?: {
-      background?: string
-    }
+    theme?: Partial<TerminalPalette>
   }
   onData: (listener: (data: string) => void) => void
   loadAddon: (addon: unknown) => void
@@ -76,6 +83,9 @@ const DEFAULT_TERMINAL_CONFIG: TerminalConfig = {
   cursorBlink: true,
   cursorStyle: 'block',
   scrollback: 1000,
+  useTheme: 'app',
+  lightTheme: 'default-light',
+  darkTheme: 'default-dark',
   rendererEngine: 'xterm',
 }
 
@@ -251,6 +261,8 @@ class TerminalController {
   private inputHistoryStore = new TerminalInputHistoryStore()
   private ghosttyModule: GhosttyModule | null = null
   private ghosttyInitPromise: Promise<GhosttyModule> | null = null
+  private appDarkMode = false
+  private systemDarkMode = false
 
   // Shared WebSocket
   private ws: WebSocket | null = null
@@ -383,13 +395,20 @@ class TerminalController {
   }
 
   private getTerminalOptions(): ConstructorParameters<typeof Terminal>[0] {
+    const resolvedTheme = resolveTerminalTheme({
+      useTheme: this.config.useTheme,
+      lightTheme: this.config.lightTheme,
+      darkTheme: this.config.darkTheme,
+      appDarkMode: this.appDarkMode,
+      systemDarkMode: this.systemDarkMode,
+    })
     return {
       cursorBlink: this.config.cursorBlink,
       cursorStyle: this.config.cursorStyle,
       fontSize: this.config.fontSize,
       fontFamily: DEFAULT_FONT_FAMILY,
-      theme: { background: 'transparent' },
-      allowTransparency: true,
+      theme: resolvedTheme.definition.palette,
+      allowTransparency: false,
       convertEol: true,
       macOptionIsMeta: true,
       macOptionClickForcesSelection: true,
@@ -457,8 +476,11 @@ class TerminalController {
   private applyGhosttyBackground(instance: TerminalInstance, container: HTMLElement): void {
     if (instance.rendererEngine !== 'ghostty') return
 
-    const background = this.resolveNearestOpaqueBackground(container)
     const currentTheme = instance.terminal.options.theme ?? {}
+    const background =
+      typeof currentTheme.background === 'string' && currentTheme.background.trim().length > 0
+        ? currentTheme.background
+        : this.resolveNearestOpaqueBackground(container)
     instance.terminal.options.allowTransparency = false
     instance.terminal.options.theme = {
       ...currentTheme,
@@ -851,6 +873,16 @@ class TerminalController {
     return { ...this.config }
   }
 
+  setThemeContext(input: { appDarkMode: boolean; systemDarkMode: boolean }): void {
+    const changed =
+      this.appDarkMode !== input.appDarkMode || this.systemDarkMode !== input.systemDarkMode
+    if (!changed) return
+
+    this.appDarkMode = input.appDarkMode
+    this.systemDarkMode = input.systemDarkMode
+    this.refreshResolvedTheme()
+  }
+
   applyConfig(config: Partial<TerminalConfig>): void {
     const { rendererEngine, ...restConfig } = config
     Object.assign(this.config, restConfig)
@@ -863,6 +895,8 @@ class TerminalController {
       t.options.scrollback = this.config.scrollback
     }
 
+    this.refreshResolvedTheme()
+
     // Font resolution is async — fire-and-forget
     this._applyFonts()
 
@@ -873,6 +907,24 @@ class TerminalController {
     }
 
     this.notify()
+  }
+
+  private refreshResolvedTheme(): void {
+    const resolvedTheme = resolveTerminalTheme({
+      useTheme: this.config.useTheme,
+      lightTheme: this.config.lightTheme,
+      darkTheme: this.config.darkTheme,
+      appDarkMode: this.appDarkMode,
+      systemDarkMode: this.systemDarkMode,
+    })
+
+    for (const instance of this.instances.values()) {
+      instance.terminal.options.theme = resolvedTheme.definition.palette
+      instance.terminal.options.allowTransparency = false
+      if (instance.mountedContainer) {
+        this.applyGhosttyBackground(instance, instance.mountedContainer)
+      }
+    }
   }
 
   private async _applyFonts(): Promise<void> {

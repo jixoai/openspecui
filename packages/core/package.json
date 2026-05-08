@@ -25,14 +25,18 @@
     "./opsx-display-path": {
       "import": "./dist/opsx-display-path.mjs",
       "types": "./dist/opsx-display-path.d.mts"
+    },
+    "./terminal-theme": {
+      "import": "./dist/terminal-theme.mjs",
+      "types": "./dist/terminal-theme.d.mts"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/hosted-app.ts src/openspec-compat.ts --format esm --dts",
-    "dev": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/hosted-app.ts src/openspec-compat.ts --format esm --dts --watch",
+    "build": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/hosted-app.ts src/openspec-compat.ts src/terminal-theme.ts --format esm --dts",
+    "dev": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/hosted-app.ts src/openspec-compat.ts src/terminal-theme.ts --format esm --dts --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

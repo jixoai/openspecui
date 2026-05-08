@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { isStaticMode } from './static-mode'
 import { isTerminalRendererEngine, terminalController } from './terminal-controller'
+import { useDarkMode } from './use-dark-mode'
 import { useConfigSubscription } from './use-subscription'
 
 export interface TerminalSession {
@@ -152,6 +153,22 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
 
   // Sync terminal config from .openspecui.json
   const { data: config } = useConfigSubscription()
+  const appDarkMode = useDarkMode()
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    const syncThemeContext = () => {
+      terminalController.setThemeContext({
+        appDarkMode,
+        systemDarkMode: mediaQuery.matches,
+      })
+    }
+
+    syncThemeContext()
+    mediaQuery.addEventListener('change', syncThemeContext)
+    return () => mediaQuery.removeEventListener('change', syncThemeContext)
+  }, [appDarkMode])
+
   useEffect(() => {
     if (!config?.terminal) return
     const { rendererEngine, ...terminalConfig } = config.terminal

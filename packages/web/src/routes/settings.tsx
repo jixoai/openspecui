@@ -21,6 +21,14 @@ import {
   terminalController,
   type TerminalRendererEngine,
 } from '@/lib/terminal-controller'
+import {
+  isTerminalThemeId,
+  isTerminalThemeMode,
+  TERMINAL_THEME_MODE_VALUES,
+  TERMINAL_THEME_OPTIONS,
+  type TerminalThemeId,
+  type TerminalThemeMode,
+} from '@/lib/terminal-theme'
 import { applyTheme, getStoredTheme, persistTheme, type Theme } from '@/lib/theme'
 import { queryClient, trpc, trpcClient } from '@/lib/trpc'
 import { useCliRunner } from '@/lib/use-cli-runner'
@@ -554,6 +562,9 @@ export function Settings() {
     initialConfig.cursorStyle
   )
   const [termScrollback, setTermScrollback] = useState(initialConfig.scrollback)
+  const [termUseTheme, setTermUseTheme] = useState<TerminalThemeMode>(initialConfig.useTheme)
+  const [termLightTheme, setTermLightTheme] = useState<TerminalThemeId>(initialConfig.lightTheme)
+  const [termDarkTheme, setTermDarkTheme] = useState<TerminalThemeId>(initialConfig.darkTheme)
   const [termRendererEngine, setTermRendererEngine] = useState<string>(initialConfig.rendererEngine)
   const [dashboardTrendPointLimit, setDashboardTrendPointLimit] = useState(100)
   const [gitDiffEagerLineBudget, setGitDiffEagerLineBudget] = useState(1000)
@@ -569,6 +580,9 @@ export function Settings() {
       setTermCursorBlink(current.cursorBlink)
       setTermCursorStyle(current.cursorStyle)
       setTermScrollback(current.scrollback)
+      setTermUseTheme(current.useTheme)
+      setTermLightTheme(current.lightTheme)
+      setTermDarkTheme(current.darkTheme)
       setTermRendererEngine(current.rendererEngine)
     },
     [
@@ -576,6 +590,24 @@ export function Settings() {
     ]
   )
 
+  useEffect(() => {
+    const nextUseTheme = config?.terminal?.useTheme
+    if (nextUseTheme && isTerminalThemeMode(nextUseTheme)) {
+      setTermUseTheme(nextUseTheme)
+    }
+  }, [config?.terminal?.useTheme])
+  useEffect(() => {
+    const nextLightTheme = config?.terminal?.lightTheme
+    if (nextLightTheme && isTerminalThemeId(nextLightTheme)) {
+      setTermLightTheme(nextLightTheme)
+    }
+  }, [config?.terminal?.lightTheme])
+  useEffect(() => {
+    const nextDarkTheme = config?.terminal?.darkTheme
+    if (nextDarkTheme && isTerminalThemeId(nextDarkTheme)) {
+      setTermDarkTheme(nextDarkTheme)
+    }
+  }, [config?.terminal?.darkTheme])
   useEffect(() => {
     const nextRenderer = config?.terminal?.rendererEngine
     if (typeof nextRenderer === 'string' && nextRenderer.length > 0) {
@@ -591,6 +623,9 @@ export function Settings() {
       cursorBlink?: boolean
       cursorStyle?: 'block' | 'underline' | 'bar'
       scrollback?: number
+      useTheme?: TerminalThemeMode
+      lightTheme?: TerminalThemeId
+      darkTheme?: TerminalThemeId
     }) => {
       terminalController.applyConfig({
         fontSize: overrides.fontSize ?? termFontSize,
@@ -598,9 +633,21 @@ export function Settings() {
         cursorBlink: overrides.cursorBlink ?? termCursorBlink,
         cursorStyle: overrides.cursorStyle ?? termCursorStyle,
         scrollback: overrides.scrollback ?? termScrollback,
+        useTheme: overrides.useTheme ?? termUseTheme,
+        lightTheme: overrides.lightTheme ?? termLightTheme,
+        darkTheme: overrides.darkTheme ?? termDarkTheme,
       })
     },
-    [termFontSize, termFontFamily, termCursorBlink, termCursorStyle, termScrollback]
+    [
+      termFontSize,
+      termFontFamily,
+      termCursorBlink,
+      termCursorStyle,
+      termScrollback,
+      termUseTheme,
+      termLightTheme,
+      termDarkTheme,
+    ]
   )
 
   const handleRendererEngineChange = useCallback(async (nextEngine: TerminalRendererEngine) => {
@@ -621,6 +668,9 @@ export function Settings() {
       cursorBlink?: boolean
       cursorStyle?: 'block' | 'underline' | 'bar'
       scrollback?: number
+      useTheme?: TerminalThemeMode
+      lightTheme?: TerminalThemeId
+      darkTheme?: TerminalThemeId
       rendererEngine?: TerminalRendererEngine
     }) => trpcClient.config.update.mutate({ terminal }),
   })
@@ -818,6 +868,77 @@ export function Settings() {
             </h2>
             <div className="border-border space-y-4 rounded-lg border p-4">
               <div>
+                <label className="mb-2 block text-sm font-medium">Use Theme</label>
+                <div className="flex flex-wrap gap-2">
+                  <ButtonGroup<TerminalThemeMode>
+                    value={termUseTheme}
+                    onChange={(nextMode) => {
+                      setTermUseTheme(nextMode)
+                      applyTerminalConfig({ useTheme: nextMode })
+                    }}
+                    options={TERMINAL_THEME_MODE_VALUES.map((value) => ({
+                      value,
+                      disabled: saveTerminalConfigMutation.isPending,
+                      label:
+                        value === 'app'
+                          ? 'App'
+                          : value === 'system'
+                            ? 'System'
+                            : value === 'light'
+                              ? 'Light'
+                              : 'Dark',
+                    }))}
+                    tone="terminal"
+                  />
+                </div>
+                <p className="text-muted-foreground mt-2 text-xs">
+                  <code>app</code> follows the current openspecui theme. <code>system</code> follows
+                  the OS color scheme.
+                </p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-medium">Light Theme</label>
+                  <select
+                    value={termLightTheme}
+                    onChange={(e) => {
+                      const next = e.target.value
+                      if (!isTerminalThemeId(next)) return
+                      setTermLightTheme(next)
+                      applyTerminalConfig({ lightTheme: next })
+                    }}
+                    className="bg-background border-border text-foreground focus:ring-primary w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
+                  >
+                    {TERMINAL_THEME_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium">Dark Theme</label>
+                  <select
+                    value={termDarkTheme}
+                    onChange={(e) => {
+                      const next = e.target.value
+                      if (!isTerminalThemeId(next)) return
+                      setTermDarkTheme(next)
+                      applyTerminalConfig({ darkTheme: next })
+                    }}
+                    className="bg-background border-border text-foreground focus:ring-primary w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
+                  >
+                    {TERMINAL_THEME_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
                 <label className="mb-2 block text-sm font-medium">Renderer Engine</label>
                 <select
                   value={termRendererEngine}
@@ -973,6 +1094,9 @@ export function Settings() {
                       cursorBlink: termCursorBlink,
                       cursorStyle: termCursorStyle,
                       scrollback: termScrollback,
+                      useTheme: termUseTheme,
+                      lightTheme: termLightTheme,
+                      darkTheme: termDarkTheme,
                       rendererEngine: isRendererEngineValid ? termRendererEngine : undefined,
                     })
                   }}

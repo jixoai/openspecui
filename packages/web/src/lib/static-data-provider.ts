@@ -984,6 +984,9 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
       cursorBlink: true,
       cursorStyle: 'block',
       scrollback: 1000,
+      useTheme: 'app',
+      lightTheme: 'default-light',
+      darkTheme: 'default-dark',
       rendererEngine: 'xterm',
     },
   }

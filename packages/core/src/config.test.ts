@@ -52,6 +52,9 @@ describe('ConfigManager', () => {
           cursorBlink: true,
           cursorStyle: 'block' as const,
           scrollback: 2000,
+          useTheme: 'system' as const,
+          lightTheme: 'solarized-light' as const,
+          darkTheme: 'monokai' as const,
           rendererEngine: 'ghostty' as const,
         },
       }
@@ -69,6 +72,9 @@ describe('ConfigManager', () => {
       expect(config.appBaseUrl).toBe('https://app.example.com/openspecui')
       expect(config.opsx.agentInvocationMode).toBe('command')
       expect(config.terminal.fontSize).toBe(14)
+      expect(config.terminal.useTheme).toBe('system')
+      expect(config.terminal.lightTheme).toBe('solarized-light')
+      expect(config.terminal.darkTheme).toBe('monokai')
       expect(config.terminal.rendererEngine).toBe('ghostty')
     })
 
@@ -115,6 +121,9 @@ describe('ConfigManager', () => {
       expect(config.appBaseUrl).toBe('')
       expect(config.opsx.agentInvocationMode).toBe('compose')
       expect(config.terminal.scrollback).toBe(1000)
+      expect(config.terminal.useTheme).toBe('app')
+      expect(config.terminal.lightTheme).toBe('default-light')
+      expect(config.terminal.darkTheme).toBe('default-dark')
       expect(config.terminal.rendererEngine).toBe('xterm')
       expect(config.dashboard.trendPointLimit).toBe(100)
       expect(config.git.diffEagerLineBudget).toBe(1000)
@@ -228,6 +237,9 @@ describe('ConfigManager', () => {
           cursorBlink: true,
           cursorStyle: 'block',
           scrollback: 1000,
+          useTheme: 'app',
+          lightTheme: 'default-light',
+          darkTheme: 'default-dark',
           rendererEngine: 'xterm',
         },
         dashboard: { trendPointLimit: 100 },
@@ -475,6 +487,9 @@ describe('OpenSpecUIConfigSchema', () => {
         cursorBlink: true,
         cursorStyle: 'block',
         scrollback: 1000,
+        useTheme: 'app',
+        lightTheme: 'default-light',
+        darkTheme: 'default-dark',
         rendererEngine: 'xterm',
       },
     }
@@ -497,6 +512,9 @@ describe('OpenSpecUIConfigSchema', () => {
       expect(result.data.appBaseUrl).toBe('')
       expect(result.data.opsx.agentInvocationMode).toBe('compose')
       expect(result.data.terminal.fontSize).toBe(13)
+      expect(result.data.terminal.useTheme).toBe('app')
+      expect(result.data.terminal.lightTheme).toBe('default-light')
+      expect(result.data.terminal.darkTheme).toBe('default-dark')
       expect(result.data.terminal.rendererEngine).toBe('xterm')
       expect(result.data.git.diffEagerLineBudget).toBe(1000)
     }
@@ -553,6 +571,29 @@ describe('OpenSpecUIConfigSchema', () => {
       expect(result.success).toBe(true)
     }
   })
+
+  it('should accept all valid terminal theme modes', () => {
+    for (const useTheme of ['app', 'light', 'dark', 'system']) {
+      const result = OpenSpecUIConfigSchema.safeParse({ terminal: { useTheme } })
+      expect(result.success).toBe(true)
+    }
+  })
+
+  it('should accept all valid terminal themes', () => {
+    for (const theme of [
+      'default-light',
+      'default-dark',
+      'monokai',
+      'nord',
+      'solarized-light',
+      'solarized-dark',
+    ]) {
+      const result = OpenSpecUIConfigSchema.safeParse({
+        terminal: { lightTheme: theme, darkTheme: theme },
+      })
+      expect(result.success).toBe(true)
+    }
+  })
 })
 
 describe('DEFAULT_CONFIG', () => {
@@ -563,6 +604,9 @@ describe('DEFAULT_CONFIG', () => {
     expect(DEFAULT_CONFIG.appBaseUrl).toBe('')
     expect(DEFAULT_CONFIG.opsx.agentInvocationMode).toBe('compose')
     expect(DEFAULT_CONFIG.terminal.scrollback).toBe(1000)
+    expect(DEFAULT_CONFIG.terminal.useTheme).toBe('app')
+    expect(DEFAULT_CONFIG.terminal.lightTheme).toBe('default-light')
+    expect(DEFAULT_CONFIG.terminal.darkTheme).toBe('default-dark')
     expect(DEFAULT_CONFIG.terminal.rendererEngine).toBe('xterm')
     expect(DEFAULT_CONFIG.dashboard.trendPointLimit).toBe(100)
     expect(DEFAULT_CONFIG.git.diffEagerLineBudget).toBe(1000)

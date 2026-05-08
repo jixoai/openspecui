@@ -98,6 +98,8 @@ export {
   OpsxConfigSchema,
   TerminalConfigSchema,
   TerminalRendererEngineSchema,
+  TerminalThemeModeSchema,
+  TerminalThemeSchema,
   buildCliRunnerCandidates,
   createCleanCliEnv,
   getDefaultCliCommand,
@@ -117,6 +119,8 @@ export {
   type ResolvedCliRunner,
   type TerminalConfig,
   type TerminalRendererEngine,
+  type TerminalThemeId,
+  type TerminalThemeMode,
 } from './config.js'
 
 // CLI executor for calling external openspec commands
@@ -199,6 +203,13 @@ export {
 } from './hosted-app.js'
 export { VIRTUAL_PROJECT_DIRNAME, toOpsxDisplayPath } from './opsx-display-path.js'
 export { type ProjectRecoveryStatus } from './runtime-types.js'
+export {
+  DEFAULT_TERMINAL_DARK_THEME,
+  DEFAULT_TERMINAL_LIGHT_THEME,
+  DEFAULT_TERMINAL_THEME_MODE,
+  TERMINAL_THEME_MODE_VALUES,
+  TERMINAL_THEME_VALUES,
+} from './terminal-theme.js'
 
 // OPSX Kernel - reactive in-memory data store
 export { OpsxKernel, type TemplateContentMap } from './opsx-kernel.js'
