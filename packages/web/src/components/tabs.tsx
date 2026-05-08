@@ -540,7 +540,7 @@ function TabsImpl(
                 ref={selectionIndicatorRef}
                 data-tabs-selection-indicator="true"
                 aria-hidden="true"
-                className="tabs-selection-indicator border-primary bg-background/70 duration-280 absolute left-0 top-0 rounded-md border-b-2 opacity-0 shadow-[inset_0_-1px_0_color-mix(in_srgb,var(--border)_85%,transparent)] transition-[transform,width,height,opacity] ease-[cubic-bezier(0.22,1,0.36,1)]"
+                className="tabs-selection-indicator border-primary bg-background/70 duration-280 absolute left-0 top-0 border-b-4 opacity-0 transition-[transform,width,height,opacity] ease-[cubic-bezier(0.22,1,0.36,1)]"
               />
             </div>
             <div

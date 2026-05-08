@@ -487,6 +487,93 @@ describe('terminal-controller PTY behavior', () => {
     unsubscribe()
   })
 
+  it('uses default terminal theme palette for new xterm sessions', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    terminalController.createSession()
+
+    const terminal = MockTerminal.instances.at(-1)
+    expect(terminal).toBeDefined()
+    expect(terminal?.options.allowTransparency).toBe(false)
+    expect(terminal?.options.theme).toEqual(
+      expect.objectContaining({
+        background: '#f6f5f2',
+        foreground: '#1b1b1b',
+      })
+    )
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('re-resolves palette when theme context changes in app mode', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    terminalController.createSession()
+    const terminal = MockTerminal.instances.at(-1)
+    expect(terminal).toBeDefined()
+
+    terminalController.setThemeContext({ appDarkMode: false, systemDarkMode: true })
+    expect(terminal?.options.theme).toEqual(
+      expect.objectContaining({
+        background: '#f6f5f2',
+        foreground: '#1b1b1b',
+      })
+    )
+
+    terminalController.setThemeContext({ appDarkMode: true, systemDarkMode: false })
+    expect(terminal?.options.theme).toEqual(
+      expect.objectContaining({
+        background: '#141414',
+        foreground: '#e5dfd2',
+      })
+    )
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('prefers system color scheme when terminal useTheme is system', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    terminalController.createSession()
+    const terminal = MockTerminal.instances.at(-1)
+    expect(terminal).toBeDefined()
+
+    terminalController.applyConfig({
+      useTheme: 'system',
+      lightTheme: 'solarized-light',
+      darkTheme: 'solarized-dark',
+    })
+    terminalController.setThemeContext({ appDarkMode: false, systemDarkMode: false })
+    expect(terminal?.options.theme).toEqual(
+      expect.objectContaining({
+        background: '#fdf6e3',
+        foreground: '#586e75',
+      })
+    )
+
+    terminalController.setThemeContext({ appDarkMode: false, systemDarkMode: true })
+    expect(terminal?.options.theme).toEqual(
+      expect.objectContaining({
+        background: '#002b36',
+        foreground: '#93a1a1',
+      })
+    )
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
   it('registers ghostty link provider after terminal open', async () => {
     const terminalController = await loadTerminalController()
     const unsubscribe = terminalController.subscribe(() => {})
@@ -582,7 +669,7 @@ describe('terminal-controller PTY behavior', () => {
     unsubscribe()
   })
 
-  it('applies nearest opaque background color for ghostty renderer', async () => {
+  it('keeps resolved terminal theme background for ghostty renderer', async () => {
     const terminalController = await loadTerminalController()
     const unsubscribe = terminalController.subscribe(() => {})
     const ws = getPtySocket(0)
@@ -590,6 +677,7 @@ describe('terminal-controller PTY behavior', () => {
 
     const localId = terminalController.createSession()
     ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-715', platform: 'common' })
+    terminalController.setThemeContext({ appDarkMode: true, systemDarkMode: false })
     await terminalController.setRendererEngine('ghostty')
 
     const wrapper = document.createElement('div')
@@ -603,7 +691,7 @@ describe('terminal-controller PTY behavior', () => {
     expect(ghostty?.options.allowTransparency).toBe(false)
     expect(ghostty?.options.theme).toEqual(
       expect.objectContaining({
-        background: 'rgb(12, 34, 56)',
+        background: '#141414',
       })
     )
 

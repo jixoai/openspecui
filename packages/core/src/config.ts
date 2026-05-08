@@ -5,6 +5,13 @@ import { promisify } from 'util'
 import { z } from 'zod'
 import { reactiveReadFile, updateReactiveFileCache } from './reactive-fs/index.js'
 import { runBufferedCommand } from './spawn-safe.js'
+import {
+  DEFAULT_TERMINAL_DARK_THEME,
+  DEFAULT_TERMINAL_LIGHT_THEME,
+  DEFAULT_TERMINAL_THEME_MODE,
+  TERMINAL_THEME_MODE_VALUES,
+  TERMINAL_THEME_VALUES,
+} from './terminal-theme.js'
 
 const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
@@ -26,6 +33,10 @@ export const TERMINAL_RENDERER_ENGINE_VALUES = ['xterm', 'ghostty'] as const
 export const OPSX_AGENT_INVOCATION_MODE_VALUES = ['compose', 'command'] as const
 export const TerminalRendererEngineSchema = z.enum(TERMINAL_RENDERER_ENGINE_VALUES)
 export type TerminalRendererEngine = z.infer<typeof TerminalRendererEngineSchema>
+export const TerminalThemeModeSchema = z.enum(TERMINAL_THEME_MODE_VALUES)
+export type TerminalThemeMode = z.infer<typeof TerminalThemeModeSchema>
+export const TerminalThemeSchema = z.enum(TERMINAL_THEME_VALUES)
+export type TerminalThemeId = z.infer<typeof TerminalThemeSchema>
 export const OpsxAgentInvocationModeSchema = z.enum(OPSX_AGENT_INVOCATION_MODE_VALUES)
 export type OpsxAgentInvocationMode = z.infer<typeof OpsxAgentInvocationModeSchema>
 export const CodeEditorThemeSchema = z.enum(CODE_EDITOR_THEME_VALUES)
@@ -552,6 +563,9 @@ export const TerminalConfigSchema = z.object({
   cursorBlink: z.boolean().default(true),
   cursorStyle: z.enum(CURSOR_STYLE_VALUES).default('block'),
   scrollback: z.number().min(0).max(100000).default(1000),
+  useTheme: TerminalThemeModeSchema.default(DEFAULT_TERMINAL_THEME_MODE),
+  lightTheme: TerminalThemeSchema.default(DEFAULT_TERMINAL_LIGHT_THEME),
+  darkTheme: TerminalThemeSchema.default(DEFAULT_TERMINAL_DARK_THEME),
   rendererEngine: z.string().default('xterm'),
 })
 
@@ -751,6 +765,15 @@ export function toPersistedConfig(
   }
   if (config.terminal.scrollback !== DEFAULT_CONFIG.terminal.scrollback) {
     terminal.scrollback = config.terminal.scrollback
+  }
+  if (config.terminal.useTheme !== DEFAULT_CONFIG.terminal.useTheme) {
+    terminal.useTheme = config.terminal.useTheme
+  }
+  if (config.terminal.lightTheme !== DEFAULT_CONFIG.terminal.lightTheme) {
+    terminal.lightTheme = config.terminal.lightTheme
+  }
+  if (config.terminal.darkTheme !== DEFAULT_CONFIG.terminal.darkTheme) {
+    terminal.darkTheme = config.terminal.darkTheme
   }
   if (config.terminal.rendererEngine !== DEFAULT_CONFIG.terminal.rendererEngine) {
     terminal.rendererEngine = config.terminal.rendererEngine
