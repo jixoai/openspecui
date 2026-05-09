@@ -34,6 +34,7 @@ export interface TabsClassNames {
   header?: string
   headerShell?: string
   headerForeground?: string
+  headerFrame?: string
   strip?: string
   list?: string
   buttonBase?: string
@@ -43,10 +44,15 @@ export interface TabsClassNames {
   activeButtonInner?: string
   inactiveButtonInner?: string
   actions?: string
+  actionsDivider?: string
   closeButtonActive?: string
   closeButtonInactive?: string
+  selectionTrack?: string
+  selectionIndicatorViewport?: string
   selectionIndicator?: string
 }
+
+export type TabsSelectionIndicatorLayout = 'underline' | 'overlay'
 
 export interface TabsProps {
   tabs: Tab[]
@@ -66,6 +72,7 @@ export interface TabsProps {
   showHeaderShell?: boolean
   showSelectionIndicator?: boolean
   decorateStrip?: boolean
+  selectionIndicatorLayout?: TabsSelectionIndicatorLayout
 }
 
 export interface TabsHandle {
@@ -129,15 +136,6 @@ const tabsStyleText = (id: string) => {
       transform: scaleX(0.5);
     }
 
-    #${id}[data-tabs-strip-decoration='on'] .tabs-strip {
-      background-image: linear-gradient(
-        to bottom,
-        transparent,
-        transparent calc(100% - 1px),
-        var(--border) calc(100% - 1px),
-        var(--border)
-      );
-    }
   `
 }
 
@@ -191,6 +189,7 @@ function TabsImpl(
     showHeaderShell = true,
     showSelectionIndicator = true,
     decorateStrip = true,
+    selectionIndicatorLayout = 'underline',
   }: TabsProps,
   ref: ForwardedRef<TabsHandle>
 ) {
@@ -202,6 +201,8 @@ function TabsImpl(
   const headerRef = useRef<HTMLDivElement | null>(null)
   const headerShellRef = useRef<HTMLDivElement | null>(null)
   const headerForegroundRef = useRef<HTMLDivElement | null>(null)
+  const headerFrameRef = useRef<HTMLDivElement | null>(null)
+  const stripRef = useRef<HTMLDivElement | null>(null)
   const selectionIndicatorRef = useRef<HTMLDivElement | null>(null)
   const tabsButtonRef = useRef<HTMLDivElement | null>(null)
   const triggerRefs = useRef(new Map<string, HTMLButtonElement | null>())
@@ -236,7 +237,7 @@ function TabsImpl(
         return panelRefs.current.get(tabId) ?? null
       },
       getHeaderShell() {
-        return headerShellRef.current
+        return headerShellRef.current ?? stripRef.current
       },
       getHeaderForeground() {
         return headerForegroundRef.current
@@ -253,31 +254,48 @@ function TabsImpl(
 
   const syncSelectionIndicator = useCallback(() => {
     const indicator = selectionIndicatorRef.current
-    const header = headerRef.current
+    const strip = stripRef.current ?? headerFrameRef.current
     const activeTrigger = activeTab ? triggerRefs.current.get(activeTab) : null
 
     if (!indicator) {
       return
     }
 
-    if (!showSelectionIndicator || !header || !activeTrigger) {
+    if (!showSelectionIndicator || !strip || !activeTrigger) {
       indicator.style.opacity = '0'
       indicator.style.width = '0px'
-      indicator.style.height = '0px'
-      indicator.style.transform = 'translate(0px, 0px)'
+      indicator.style.height = selectionIndicatorLayout === 'overlay' ? '0px' : ''
+      indicator.style.transform =
+        selectionIndicatorLayout === 'overlay' ? 'translate(0px, 0px)' : 'translateX(0px)'
       return
     }
 
-    const headerRect = header.getBoundingClientRect()
+    const stripRect = strip.getBoundingClientRect()
     const triggerRect = activeTrigger.getBoundingClientRect()
+
+    if (selectionIndicatorLayout === 'underline') {
+      const indicatorStyle = getComputedStyle(indicator)
+      const inlineInset =
+        parseFloat(indicatorStyle.getPropertyValue('--tabs-selection-inline-inset')) || 10
+      const minWidth =
+        parseFloat(indicatorStyle.getPropertyValue('--tabs-selection-min-width')) || 40
+      const width = Math.max(minWidth, triggerRect.width - inlineInset * 2)
+      const translateX = triggerRect.left - stripRect.left + (triggerRect.width - width) / 2
+
+      indicator.style.opacity = '1'
+      indicator.style.width = `${width}px`
+      indicator.style.height = ''
+      indicator.style.transform = `translateX(${translateX}px)`
+      return
+    }
 
     indicator.style.opacity = '1'
     indicator.style.width = `${triggerRect.width}px`
-    indicator.style.height = `${triggerRect.height}px`
-    indicator.style.transform = `translate(${triggerRect.left - headerRect.left}px, ${
-      triggerRect.top - headerRect.top
+    indicator.style.height = `${triggerRect.height + 1}px`
+    indicator.style.transform = `translate(${triggerRect.left - stripRect.left}px, ${
+      triggerRect.top - stripRect.top
     }px)`
-  }, [activeTab, showSelectionIndicator])
+  }, [activeTab, selectionIndicatorLayout, showSelectionIndicator])
 
   useLayoutEffect(() => {
     syncSelectionIndicator()
@@ -312,6 +330,12 @@ function TabsImpl(
     observer.observe(tabsButton)
     if (headerRef.current) {
       observer.observe(headerRef.current)
+    }
+    if (stripRef.current) {
+      observer.observe(stripRef.current)
+    }
+    if (headerFrameRef.current) {
+      observer.observe(headerFrameRef.current)
     }
 
     const activeTrigger = activeTab ? triggerRefs.current.get(activeTab) : null
@@ -451,17 +475,24 @@ function TabsImpl(
   )
 
   const headerShellClassName = cn(
-    'tabs-header-shell bg-card/95 pointer-events-none absolute inset-0 z-0 rounded-md border border-zinc-500/15 shadow-[inset_0_-1px_0_color-mix(in_srgb,var(--border)_85%,transparent)] backdrop-blur-sm',
+    selectionIndicatorLayout === 'underline'
+      ? 'tabs-header-shell bg-card/95 pointer-events-none absolute inset-0 z-0 rounded-t-md rounded-b-none border border-b-0 border-zinc-500/15 backdrop-blur-sm'
+      : 'tabs-header-shell bg-card/95 pointer-events-none absolute inset-0 z-0 rounded-md border border-zinc-500/15 shadow-[inset_0_-1px_0_color-mix(in_srgb,var(--border)_85%,transparent)] backdrop-blur-sm',
     classNames?.headerShell
   )
 
   const headerForegroundClassName = cn(
-    'tabs-header-foreground relative z-20 flex min-w-0 items-stretch',
+    'tabs-header-foreground relative z-20 flex min-w-0 flex-1',
     classNames?.headerForeground
   )
 
+  const headerFrameClassName = cn(
+    'tabs-header-frame relative flex min-w-0 flex-1 items-stretch',
+    classNames?.headerFrame
+  )
+
   const stripClassName = cn(
-    'tabs-strip flex min-w-0 flex-1 items-stretch rounded-l-md px-4',
+    'tabs-strip relative flex min-w-0 flex-1 items-stretch px-4',
     classNames?.strip
   )
 
@@ -480,7 +511,7 @@ function TabsImpl(
   const activeButtonClassName = cn('tab-selected text-foreground', classNames?.activeButton)
 
   const inactiveButtonClassName = cn(
-    'text-muted-foreground hover:bg-background/35 hover:text-foreground',
+    'text-muted-foreground hover:text-foreground',
     classNames?.inactiveButton
   )
 
@@ -489,12 +520,31 @@ function TabsImpl(
   const inactiveButtonInnerClassName = cn(classNames?.inactiveButtonInner)
 
   const actionsClassName = cn(
-    'tabs-actions border-zinc-500/15 flex shrink-0 items-center rounded-r-md border-l px-1 h-full',
+    'tabs-actions relative flex shrink-0 items-center px-1',
     classNames?.actions
   )
 
+  const actionsDividerClassName = cn(
+    'tabs-actions-divider bg-border/60 absolute inset-y-0 left-0 w-px',
+    classNames?.actionsDivider
+  )
+
+  const selectionTrackClassName = cn(
+    'tabs-selection-track bg-border/85 pointer-events-none absolute inset-x-0 bottom-0 h-px',
+    classNames?.selectionTrack
+  )
+
+  const selectionIndicatorViewportClassName = cn(
+    selectionIndicatorLayout === 'underline'
+      ? 'pointer-events-none absolute inset-x-0 top-0 bottom-[-1px] z-10 overflow-hidden'
+      : 'pointer-events-none absolute inset-0 z-10 overflow-hidden',
+    classNames?.selectionIndicatorViewport
+  )
+
   const selectionIndicatorClassName = cn(
-    'tabs-selection-indicator border-primary bg-background/70 duration-280 absolute left-0 top-0 border-b-4 opacity-0 transition-[transform,width,height,opacity] ease-[cubic-bezier(0.22,1,0.36,1)]',
+    selectionIndicatorLayout === 'underline'
+      ? 'tabs-selection-indicator absolute bottom-0 left-0 h-[3px] rounded-full bg-primary opacity-0 transition-[transform,width,opacity] duration-280 ease-[cubic-bezier(0.22,1,0.36,1)] [--tabs-selection-inline-inset:10px] [--tabs-selection-min-width:40px]'
+      : 'tabs-selection-indicator border-primary bg-background/70 duration-280 absolute left-0 top-0 border-b opacity-0 transition-[transform,width,height,opacity] ease-[cubic-bezier(0.22,1,0.36,1)]',
     classNames?.selectionIndicator
   )
 
@@ -594,37 +644,41 @@ function TabsImpl(
               className={headerShellClassName}
             />
           )}
-          {showSelectionIndicator && (
-            <div className="pointer-events-none absolute inset-0 z-10">
-              <div
-                ref={selectionIndicatorRef}
-                data-tabs-selection-indicator="true"
-                aria-hidden="true"
-                className={selectionIndicatorClassName}
-              />
-            </div>
-          )}
           <div
             ref={headerForegroundRef}
             data-tabs-header-foreground="true"
             className={headerForegroundClassName}
           >
-            <div className={stripClassName}>
-              <div
-                ref={tabsButtonRef}
-                className={listClassName}
-                onDoubleClick={handleTabBarDoubleClick}
-                onDragOver={handleListDragOver}
-                onDrop={handleListDrop}
-              >
-                {tabButtons}
+            <div ref={headerFrameRef} className={headerFrameClassName}>
+              <div ref={stripRef} className={stripClassName}>
+                <div
+                  ref={tabsButtonRef}
+                  className={listClassName}
+                  onDoubleClick={handleTabBarDoubleClick}
+                  onDragOver={handleListDragOver}
+                  onDrop={handleListDrop}
+                >
+                  {tabButtons}
+                </div>
+                {showSelectionIndicator && (
+                  <div className={selectionIndicatorViewportClassName}>
+                    <div
+                      ref={selectionIndicatorRef}
+                      data-tabs-selection-indicator="true"
+                      aria-hidden="true"
+                      className={selectionIndicatorClassName}
+                    />
+                  </div>
+                )}
               </div>
+              {actions && (
+                <div data-tabs-actions="true" className={actionsClassName}>
+                  {decorateStrip && <div aria-hidden="true" className={actionsDividerClassName} />}
+                  {actions}
+                </div>
+              )}
+              {decorateStrip && <div aria-hidden="true" className={selectionTrackClassName} />}
             </div>
-            {actions && (
-              <div data-tabs-actions="true" className={actionsClassName}>
-                {actions}
-              </div>
-            )}
           </div>
         </>
       </div>

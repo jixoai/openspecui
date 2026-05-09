@@ -13,8 +13,9 @@ import {
   useSyncExternalStore,
 } from 'react'
 import { flushSync } from 'react-dom'
-import type { VTArea } from './route-semantics'
+import type { VTArea, VTDirection } from './route-semantics'
 import { runViewTransition } from './runtime'
+import { resolveTabCarouselDirection } from './tab-direction'
 import {
   captureTabScrollMemory,
   cleanupFrozenTab,
@@ -544,11 +545,17 @@ export function useRoutedCarouselTabs<TTabId extends string>({
           return
         }
 
+        const direction = resolveTabCarouselDirection(latestTabs, currentTab, nextTabId)
+        if (!direction) {
+          commitSelection()
+          return
+        }
+
         void runViewTransition({
           intent: {
             area: resolveTabArea(latestLocation.pathname, latestArea),
             kind: 'tab-carousel',
-            direction: 'forward',
+            direction,
           },
           collectBeforeEntries: () => collectTabEntries(tabsRef.current, currentTab),
           collectAfterEntries: () => collectTabEntries(tabsRef.current, nextTabId),
@@ -557,7 +564,9 @@ export function useRoutedCarouselTabs<TTabId extends string>({
         return
       }
 
-      const runSelectionWithScrollTransfer = (animated: boolean) => {
+      const direction = resolveTabCarouselDirection(latestTabs, currentTab, nextTabId)
+
+      const runSelectionWithScrollTransfer = (animated: boolean, direction?: VTDirection) => {
         const outgoingSnapshot = captureTabSnapshot(currentTab, latestViewportSelector)
         const incomingSeedSnapshot =
           scrollMemoryByTabRef.current.get(nextTabId) ??
@@ -628,14 +637,11 @@ export function useRoutedCarouselTabs<TTabId extends string>({
         return
       }
 
-      const currentIndex = latestTabs.findIndex((tab) => tab.id === currentTab)
-      const nextIndex = latestTabs.findIndex((tab) => tab.id === nextTabId)
-      if (currentIndex < 0 || nextIndex < 0) {
+      if (!direction) {
         runSelectionWithScrollTransfer(false)
         return
       }
-      const direction = nextIndex >= currentIndex ? 'forward' : 'backward'
-      runSelectionWithScrollTransfer(true)
+      runSelectionWithScrollTransfer(true, direction)
     },
     [
       captureOutgoingTab,

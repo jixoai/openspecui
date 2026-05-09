@@ -62,6 +62,7 @@ describe('Tabs double-click behavior', () => {
           header: 'bg-terminal text-terminal-foreground',
           strip: 'px-4',
           list: 'pt-2',
+          headerFrame: 'items-end',
           buttonBase: 'rounded-t-[8px] py-1',
           buttonInner: 'gap-3 px-3',
           activeButton: 'bg-terminal-foreground/10 text-terminal-foreground',
@@ -70,9 +71,13 @@ describe('Tabs double-click behavior', () => {
           activeButtonInner: '[transform:translateY(0)]',
           inactiveButtonInner: '[transform:translateY(0.25em)]',
           actions: 'bg-terminal border-terminal-foreground/20 text-terminal-foreground',
+          actionsDivider: 'bg-terminal-foreground/20',
+          selectionTrack: 'bg-terminal-foreground/20',
+          selectionIndicatorViewport: 'inset-0',
           closeButtonActive: 'text-terminal-foreground/70 hover:text-terminal-foreground',
           closeButtonInactive: 'text-terminal-foreground/50 hover:text-terminal-foreground',
         }}
+        selectionIndicatorLayout="overlay"
       />
     )
 
@@ -112,13 +117,22 @@ describe('Tabs double-click behavior', () => {
 
     const headerShell = container.querySelector('[data-tabs-header-shell="true"]')
     expect(headerShell?.className).toContain('bg-card/95')
-    expect(headerShell?.className).toContain('rounded-md')
+    expect(headerShell?.className).toContain('rounded-t-md')
+    expect(headerShell?.className).toContain('rounded-b-none')
 
     const indicator = container.querySelector('[data-tabs-selection-indicator="true"]')
     expect(indicator).not.toBeNull()
 
     const actions = container.querySelector('[data-tabs-actions="true"]')
-    expect(actions?.className).toContain('border-l')
+    expect(actions?.className).toContain('tabs-actions')
+    expect(container.querySelector('.tabs-selection-track')).not.toBeNull()
+    expect(container.querySelector('.tabs-actions-divider')).not.toBeNull()
+    expect(container.querySelector('.tabs-actions-divider')?.className).toContain('inset-y-0')
+    expect(
+      container
+        .querySelector('.tabs-strip')
+        ?.contains(container.querySelector('[data-tabs-selection-indicator="true"]') as Node)
+    ).toBe(true)
   })
 
   it('exposes default VT layer handles and syncs the selection indicator to the active tab', () => {
@@ -145,6 +159,14 @@ describe('Tabs double-click behavior', () => {
           return rect(20, 40, 320, 44)
         }
 
+        if (this.classList.contains('tabs-header-frame')) {
+          return rect(20, 40, 320, 44)
+        }
+
+        if (this.classList.contains('tabs-strip')) {
+          return rect(30, 40, 210, 44)
+        }
+
         if (this.dataset.tabId === 'a') {
           return rect(36, 40, 80, 36)
         }
@@ -169,14 +191,14 @@ describe('Tabs double-click behavior', () => {
       expect(handleRef.current?.getHeaderForeground()).toBe(
         container.querySelector('[data-tabs-header-foreground="true"]')
       )
-      expect(indicator?.style.transform).toBe('translate(16px, 0px)')
-      expect(indicator?.style.width).toBe('80px')
-      expect(indicator?.style.height).toBe('36px')
+      expect(indicator?.style.transform).toBe('translateX(16px)')
+      expect(indicator?.style.width).toBe('60px')
+      expect(indicator?.style.height).toBe('')
 
       rerender(<Tabs ref={handleRef} tabs={tabs} selectedTab="b" actions={<button>x</button>} />)
 
-      expect(indicator?.style.transform).toBe('translate(108px, 0px)')
-      expect(indicator?.style.width).toBe('96px')
+      expect(indicator?.style.transform).toBe('translateX(108px)')
+      expect(indicator?.style.width).toBe('76px')
     } finally {
       Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
         configurable: true,
