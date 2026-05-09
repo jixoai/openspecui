@@ -31,12 +31,15 @@ pnpm dev
 ## Development Workflow
 
 1. Create a branch from `main`.
-2. Implement your changes.
-3. Run checks locally:
+2. Start the repo development environment with `pnpm dev`.
+3. Implement your changes against the source dev environment first.
+4. When you need to verify the bundled/CLI-served result, open a second terminal and run `pnpm openspecui`.
+5. Do not treat `pnpm openspecui` as the primary monorepo dev entry. It serves the built web assets and is meant for final packaged-behavior verification, so it can look stale if you skip `pnpm dev`.
+6. Run checks locally:
    - `pnpm lint`
    - `pnpm test:ci`
    - `pnpm build`
-4. Open a Pull Request.
+7. Open a Pull Request.
 
 ## Branch and PR Rules
 

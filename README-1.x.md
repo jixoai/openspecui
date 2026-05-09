@@ -264,6 +264,11 @@ pnpm build:packages
 # Start Bun + OpenTUI dev dashboard
 pnpm dev
 
+# Primary monorepo development flow:
+# keep pnpm dev running, then use pnpm openspecui in another terminal only
+# when you want to verify the bundled/CLI-served final behavior
+pnpm openspecui
+
 # Legacy multi-process dev script
 pnpm dev:legacy
 

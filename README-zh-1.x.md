@@ -263,6 +263,11 @@ pnpm build:packages
 # 启动 Bun + OpenTUI 开发面板
 pnpm dev
 
+# Monorepo 的主要开发方式：
+# 持续运行 pnpm dev，再在另一个终端中按需执行 pnpm openspecui，
+# 只用它来校验 CLI/打包态下的最终行为
+pnpm openspecui
+
 # 旧版多进程开发脚本
 pnpm dev:legacy
 
