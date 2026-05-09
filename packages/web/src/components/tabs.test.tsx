@@ -49,30 +49,58 @@ describe('Tabs double-click behavior', () => {
     expect(onTabBarDoubleClick).not.toHaveBeenCalled()
   })
 
-  it('supports the terminal variant used by the hosted shell', () => {
+  it('supports slot-style class overrides and indicator toggles', () => {
     const { container } = render(
       <Tabs
         tabs={tabs}
-        variant="terminal"
         selectedTab="a"
         actions={<button type="button">+</button>}
+        showHeaderShell={false}
+        showSelectionIndicator={false}
+        decorateStrip={false}
+        classNames={{
+          header: 'bg-terminal text-terminal-foreground',
+          strip: 'px-4',
+          list: 'pt-2',
+          buttonBase: 'rounded-t-[8px] py-1',
+          buttonInner: 'gap-3 px-3',
+          activeButton: 'bg-terminal-foreground/10 text-terminal-foreground',
+          inactiveButton:
+            'bg-terminal text-terminal-foreground/72 hover:bg-terminal-foreground/10 hover:text-terminal-foreground',
+          activeButtonInner: '[transform:translateY(0)]',
+          inactiveButtonInner: '[transform:translateY(0.25em)]',
+          actions: 'bg-terminal border-terminal-foreground/20 text-terminal-foreground',
+          closeButtonActive: 'text-terminal-foreground/70 hover:text-terminal-foreground',
+          closeButtonInactive: 'text-terminal-foreground/50 hover:text-terminal-foreground',
+        }}
       />
     )
 
-    const root = container.firstElementChild
-    expect(root?.getAttribute('data-tabs-variant')).toBe('terminal')
+    const header = container.querySelector('.tabs-header')
+    expect(header?.className).toContain('bg-terminal')
+    const strip = container.querySelector('.tabs-strip')
+    expect(strip?.className).not.toContain('bg-terminal')
+    expect(container.firstElementChild?.getAttribute('data-tabs-strip-decoration')).toBe('off')
+    expect(container.querySelector('[data-tabs-header-shell="true"]')).toBeNull()
 
     const selected = within(container).getByRole('button', { name: 'A' })
-    expect(selected.className).toContain('bg-background')
-    expect(selected.className).toContain('text-foreground')
+    expect(selected.className).toContain('bg-terminal-foreground/10')
+    expect(selected.className).toContain('text-terminal-foreground')
     expect(selected.className).toContain('rounded-t-[8px]')
+    expect(selected.querySelector('[data-tabs-button-inner="true"]')?.className).toContain(
+      '[transform:translateY(0)]'
+    )
 
     const unselected = within(container).getByRole('button', { name: 'B' })
     expect(unselected.className).toContain('bg-terminal')
-    expect(unselected.className).toContain('text-terminal-foreground')
+    expect(unselected.className).toContain('text-terminal-foreground/72')
+    expect(unselected.querySelector('[data-tabs-button-inner="true"]')?.className).toContain(
+      '[transform:translateY(0.25em)]'
+    )
 
     const actions = container.querySelector('[data-tabs-actions="true"]')
     expect(actions?.className).toContain('bg-terminal')
+    expect(actions?.className).toContain('border-terminal-foreground/20')
     expect(container.querySelector('[data-tabs-selection-indicator="true"]')).toBeNull()
   })
 

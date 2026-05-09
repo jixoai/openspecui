@@ -699,6 +699,27 @@ describe('terminal-controller PTY behavior', () => {
     unsubscribe()
   })
 
+  it('exposes the resolved terminal theme for shell consumers', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    terminalController.applyConfig({
+      useTheme: 'light',
+      lightTheme: 'solarized-light',
+      darkTheme: 'monokai',
+    })
+
+    expect(terminalController.getResolvedTheme().definition.palette.background).toBe('#fdf6e3')
+    expect(terminalController.getResolvedTheme().definition.palette.foreground).toBe('#586e75')
+
+    terminalController.applyConfig({ useTheme: 'dark' })
+
+    expect(terminalController.getResolvedTheme().definition.palette.background).toBe('#272822')
+    expect(terminalController.getResolvedTheme().definition.palette.foreground).toBe('#f8f8f2')
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
   it('allows regular key input in ghostty mode', async () => {
     const terminalController = await loadTerminalController()
     const unsubscribe = terminalController.subscribe(() => {})

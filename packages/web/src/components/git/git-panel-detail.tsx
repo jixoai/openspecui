@@ -981,7 +981,6 @@ export function GitEntryDetailPanel({
         <div ref={tabsRootRef}>
           <Tabs
             ref={tabsRef}
-            variant="default"
             selectedTab={activePane}
             onTabChange={onTabChange}
             tabs={[

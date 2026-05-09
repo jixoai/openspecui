@@ -1,11 +1,21 @@
-import { Tabs, type Tab } from '@/components/tabs'
+import type { Tab } from '@/components/tabs'
 import { navController } from '@/lib/nav-controller'
 import { useTerminalContext } from '@/lib/terminal-context'
 import { terminalController } from '@/lib/terminal-controller'
 import { useNavLayout } from '@/lib/use-nav-controller'
 import '@/styles/terminal-effects.css'
 import { Keyboard, PanelBottomClose, PanelTopClose, Plus, X } from 'lucide-react'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
+import { TerminalTabs } from './terminal-tabs'
 import { XtermTerminal } from './xterm-terminal'
 
 function EditableTabLabel({
@@ -99,6 +109,19 @@ export function TerminalPanel({ className }: { className?: string }) {
   } = useTerminalContext()
 
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const terminalSnapshot = useSyncExternalStore(
+    (cb) => terminalController.subscribe(cb),
+    () => terminalController.getSnapshot(),
+    () => terminalController.getSnapshot()
+  )
+
+  const terminalThemeStyle = useMemo(() => {
+    const resolvedTheme = terminalController.getResolvedTheme()
+    return {
+      '--terminal': resolvedTheme.definition.palette.background,
+      '--terminal-foreground': resolvedTheme.definition.palette.foreground,
+    } as CSSProperties
+  }, [terminalSnapshot])
 
   // Set a stable mount target for the InputPanel addon panel.
   // This persists across tab switches so the singleton panel doesn't get orphaned.
@@ -160,7 +183,7 @@ export function TerminalPanel({ className }: { className?: string }) {
     <button
       type="button"
       onClick={() => createSession()}
-      className="text-muted-foreground hover:text-foreground hover:bg-muted shrink-0 rounded-md p-1.5 transition"
+      className="text-terminal-foreground/72 hover:bg-terminal-foreground/10 hover:text-terminal-foreground shrink-0 rounded-md p-1.5 transition"
       title="New terminal"
     >
       <Plus className="h-3.5 w-3.5" />
@@ -173,7 +196,7 @@ export function TerminalPanel({ className }: { className?: string }) {
       <button
         type="button"
         onClick={handleOpenInputPanel}
-        className="text-muted-foreground hover:text-foreground hover:bg-muted shrink-0 rounded-md p-1.5 transition"
+        className="text-terminal-foreground/72 hover:bg-terminal-foreground/10 hover:text-terminal-foreground shrink-0 rounded-md p-1.5 transition"
         title="Open InputPanel"
       >
         <Keyboard className="h-3.5 w-3.5" />
@@ -181,7 +204,7 @@ export function TerminalPanel({ className }: { className?: string }) {
       <button
         type="button"
         onClick={handleSwitchArea}
-        className="text-muted-foreground hover:text-foreground hover:bg-muted shrink-0 rounded-md p-1.5 transition"
+        className="text-terminal-foreground/72 hover:bg-terminal-foreground/10 hover:text-terminal-foreground shrink-0 rounded-md p-1.5 transition"
         title={isInBottom ? 'Move to main area' : 'Move to bottom area'}
       >
         {isInBottom ? (
@@ -194,7 +217,7 @@ export function TerminalPanel({ className }: { className?: string }) {
         <button
           type="button"
           onClick={handleClosePanel}
-          className="text-muted-foreground hover:text-foreground hover:bg-muted shrink-0 rounded-md p-1.5 transition"
+          className="text-terminal-foreground/72 hover:bg-terminal-foreground/10 hover:text-terminal-foreground shrink-0 rounded-md p-1.5 transition"
           title="Close panel"
         >
           <X className="h-3.5 w-3.5" />
@@ -206,6 +229,7 @@ export function TerminalPanel({ className }: { className?: string }) {
   return (
     <div
       ref={wrapperRef}
+      style={terminalThemeStyle}
       className={`bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${className}`}
     >
       {sessions.length === 0 ? (
@@ -221,7 +245,7 @@ export function TerminalPanel({ className }: { className?: string }) {
           <span>to create one.</span>
         </div>
       ) : (
-        <Tabs
+        <TerminalTabs
           tabs={tabs}
           selectedTab={activeSessionId ?? undefined}
           onTabChange={setActiveSession}

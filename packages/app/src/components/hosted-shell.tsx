@@ -1,5 +1,6 @@
 import { Dialog } from '@openspecui/web-src/components/dialog'
-import { Tabs, type Tab } from '@openspecui/web-src/components/tabs'
+import { type Tab } from '@openspecui/web-src/components/tabs'
+import { TerminalTabs } from '@openspecui/web-src/components/terminal/terminal-tabs'
 import { AlertCircle, Download, Link2, LoaderCircle, Plus, RefreshCw, Unlink2 } from 'lucide-react'
 import {
   useCallback,
@@ -1175,9 +1176,8 @@ export function HostedShell({
           </div>
         </div>
       ) : (
-        <Tabs
+        <TerminalTabs
           tabs={tabs}
-          variant="terminal"
           selectedTab={shellState.activeTabId ?? tabs[0]?.id}
           onTabChange={(tabId) => {
             setShellState((current) => activateHostedTab(current, tabId))

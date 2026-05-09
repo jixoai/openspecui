@@ -14,6 +14,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react'
+import { cn } from '../lib/utils'
 import { useHeadStyle } from './use-head-style'
 
 export interface Tab {
@@ -29,9 +30,25 @@ export interface Tab {
   closeButtonVisibility?: 'hover' | 'always'
 }
 
-export type TabsVariant = 'default' | 'terminal'
+export interface TabsClassNames {
+  header?: string
+  headerShell?: string
+  headerForeground?: string
+  strip?: string
+  list?: string
+  buttonBase?: string
+  buttonInner?: string
+  activeButton?: string
+  inactiveButton?: string
+  activeButtonInner?: string
+  inactiveButtonInner?: string
+  actions?: string
+  closeButtonActive?: string
+  closeButtonInactive?: string
+  selectionIndicator?: string
+}
 
-interface TabsProps {
+export interface TabsProps {
   tabs: Tab[]
   /** Controlled selected tab id */
   selectedTab?: string
@@ -45,7 +62,10 @@ interface TabsProps {
   /** Called when the tabs bar is double-clicked (usually on empty space) */
   onTabBarDoubleClick?: () => void
   className?: string
-  variant?: TabsVariant
+  classNames?: TabsClassNames
+  showHeaderShell?: boolean
+  showSelectionIndicator?: boolean
+  decorateStrip?: boolean
 }
 
 export interface TabsHandle {
@@ -109,7 +129,7 @@ const tabsStyleText = (id: string) => {
       transform: scaleX(0.5);
     }
 
-    #${id} .tabs-strip {
+    #${id}[data-tabs-strip-decoration='on'] .tabs-strip {
       background-image: linear-gradient(
         to bottom,
         transparent,
@@ -167,7 +187,10 @@ function TabsImpl(
     actions,
     onTabBarDoubleClick,
     className = '',
-    variant = 'default',
+    classNames,
+    showHeaderShell = true,
+    showSelectionIndicator = true,
+    decorateStrip = true,
   }: TabsProps,
   ref: ForwardedRef<TabsHandle>
 ) {
@@ -237,7 +260,7 @@ function TabsImpl(
       return
     }
 
-    if (variant !== 'default' || !header || !activeTrigger) {
+    if (!showSelectionIndicator || !header || !activeTrigger) {
       indicator.style.opacity = '0'
       indicator.style.width = '0px'
       indicator.style.height = '0px'
@@ -254,14 +277,14 @@ function TabsImpl(
     indicator.style.transform = `translate(${triggerRect.left - headerRect.left}px, ${
       triggerRect.top - headerRect.top
     }px)`
-  }, [activeTab, variant])
+  }, [activeTab, showSelectionIndicator])
 
   useLayoutEffect(() => {
     syncSelectionIndicator()
   }, [syncSelectionIndicator, tabLayoutSignature])
 
   useLayoutEffect(() => {
-    if (variant !== 'default') {
+    if (!showSelectionIndicator) {
       return
     }
 
@@ -300,7 +323,7 @@ function TabsImpl(
       tabsButton.removeEventListener('scroll', handleScroll)
       observer.disconnect()
     }
-  }, [activeTab, syncSelectionIndicator, tabLayoutSignature, variant])
+  }, [activeTab, showSelectionIndicator, syncSelectionIndicator, tabLayoutSignature])
 
   const handleChange = (id: string) => {
     if (!controlled) {
@@ -422,37 +445,58 @@ function TabsImpl(
 
   if (tabs.length === 0) return null
 
-  const headerClassName =
-    variant === 'terminal'
-      ? 'tabs-header bg-terminal text-terminal-foreground sticky top-0 z-20 flex min-w-0 items-stretch'
-      : 'tabs-header relative sticky top-0 z-20 min-w-0'
+  const headerClassName = cn(
+    'tabs-header relative sticky top-0 z-20 flex min-w-0 items-stretch',
+    classNames?.header
+  )
 
-  const stripClassName =
-    variant === 'terminal'
-      ? 'tabs-strip min-w-0 flex-1 bg-terminal px-4'
-      : 'tabs-strip min-w-0 flex-1 rounded-l-md px-4'
+  const headerShellClassName = cn(
+    'tabs-header-shell bg-card/95 pointer-events-none absolute inset-0 z-0 rounded-md border border-zinc-500/15 shadow-[inset_0_-1px_0_color-mix(in_srgb,var(--border)_85%,transparent)] backdrop-blur-sm',
+    classNames?.headerShell
+  )
 
-  const listClassName =
-    variant === 'terminal'
-      ? 'tabs-button scrollbar-none flex min-w-0 gap-1 overflow-x-auto pt-2'
-      : 'tabs-button scrollbar-none flex min-w-0 gap-1 overflow-x-auto'
+  const headerForegroundClassName = cn(
+    'tabs-header-foreground relative z-20 flex min-w-0 items-stretch',
+    classNames?.headerForeground
+  )
 
-  const buttonBaseClassName = `group relative z-10 m-0 flex h-full shrink-0 items-center gap-2 px-2 text-sm font-medium transition-colors ${variant === 'terminal' ? 'rounded-t-[8px] py-1' : 'py-2'}`
+  const stripClassName = cn(
+    'tabs-strip flex min-w-0 flex-1 items-stretch rounded-l-md px-4',
+    classNames?.strip
+  )
 
-  const activeButtonClassName =
-    variant === 'terminal'
-      ? 'tab-selected bg-background text-foreground'
-      : 'tab-selected text-foreground'
+  const listClassName = cn(
+    'tabs-button scrollbar-none flex min-w-0 flex-1 gap-1 overflow-x-auto',
+    classNames?.list
+  )
 
-  const inactiveButtonClassName =
-    variant === 'terminal'
-      ? 'bg-terminal text-terminal-foreground/80 hover:bg-terminal hover:text-terminal-foreground'
-      : 'text-muted-foreground hover:bg-background/35 hover:text-foreground'
+  const buttonBaseClassName = cn(
+    'group relative z-10 m-0 flex h-full shrink-0 px-2 py-2 text-sm font-medium transition-colors',
+    classNames?.buttonBase
+  )
 
-  const actionsClassName =
-    variant === 'terminal'
-      ? 'tabs-actions border-border bg-terminal text-terminal-foreground flex shrink-0 items-center border-b px-1'
-      : 'tabs-actions border-zinc-500/15 flex shrink-0 items-center rounded-r-md border-l px-1'
+  const buttonInnerClassName = cn('inline-flex h-full items-center gap-2', classNames?.buttonInner)
+
+  const activeButtonClassName = cn('tab-selected text-foreground', classNames?.activeButton)
+
+  const inactiveButtonClassName = cn(
+    'text-muted-foreground hover:bg-background/35 hover:text-foreground',
+    classNames?.inactiveButton
+  )
+
+  const activeButtonInnerClassName = cn(classNames?.activeButtonInner)
+
+  const inactiveButtonInnerClassName = cn(classNames?.inactiveButtonInner)
+
+  const actionsClassName = cn(
+    'tabs-actions border-zinc-500/15 flex shrink-0 items-center rounded-r-md border-l px-1 h-full',
+    classNames?.actions
+  )
+
+  const selectionIndicatorClassName = cn(
+    'tabs-selection-indicator border-primary bg-background/70 duration-280 absolute left-0 top-0 border-b-4 opacity-0 transition-[transform,width,height,opacity] ease-[cubic-bezier(0.22,1,0.36,1)]',
+    classNames?.selectionIndicator
+  )
 
   const handleTabBarDoubleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (!onTabBarDoubleClick) return
@@ -490,32 +534,46 @@ function TabsImpl(
         } ${reorderable ? 'cursor-grab active:cursor-grabbing' : ''}`}
         style={dragIndicatorStyle}
       >
-        {tab.icon}
-        {tab.label}
-        {tab.closable && onTabClose && (
-          <span
-            role="button"
-            tabIndex={0}
-            onClick={(event) => {
-              event.stopPropagation()
-              onTabClose(tab.id)
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
+        <span
+          data-tabs-button-inner="true"
+          className={`${buttonInnerClassName} ${
+            activeTab === tab.id ? activeButtonInnerClassName : inactiveButtonInnerClassName
+          }`}
+        >
+          {tab.icon}
+          {tab.label}
+          {tab.closable && onTabClose && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(event) => {
                 event.stopPropagation()
                 onTabClose(tab.id)
-              }
-            }}
-            draggable={false}
-            className={`hover:text-foreground -mr-1 rounded p-0.5 transition ${
-              tab.closeButtonVisibility === 'always'
-                ? 'opacity-100'
-                : 'opacity-0 group-hover:opacity-100 [button:hover>&]:opacity-100'
-            } ${activeTab === tab.id ? 'text-current/80' : 'text-muted-foreground'}`}
-          >
-            <X className="h-3 w-3" />
-          </span>
-        )}
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.stopPropagation()
+                  onTabClose(tab.id)
+                }
+              }}
+              draggable={false}
+              className={`-mr-1 rounded p-0.5 transition ${
+                tab.closeButtonVisibility === 'always'
+                  ? 'opacity-100'
+                  : 'opacity-0 group-hover:opacity-100 [button:hover>&]:opacity-100'
+              } ${
+                activeTab === tab.id
+                  ? cn('text-current/80 hover:text-foreground', classNames?.closeButtonActive)
+                  : cn(
+                      'text-muted-foreground hover:text-foreground',
+                      classNames?.closeButtonInactive
+                    )
+              }`}
+            >
+              <X className="h-3 w-3" />
+            </span>
+          )}
+        </span>
       </button>
     )
   })
@@ -524,50 +582,33 @@ function TabsImpl(
     <div
       id={id}
       ref={rootRef}
-      data-tabs-variant={variant}
+      data-tabs-strip-decoration={decorateStrip ? 'on' : 'off'}
       className={`relative isolate flex min-h-0 min-w-0 flex-1 flex-col ${className}`}
     >
       <div ref={headerRef} className={headerClassName}>
-        {variant === 'default' ? (
-          <>
+        <>
+          {showHeaderShell && (
             <div
               ref={headerShellRef}
               data-tabs-header-shell="true"
-              className="tabs-header-shell bg-card/95 pointer-events-none absolute inset-0 z-0 rounded-md border border-zinc-500/15 shadow-[inset_0_-1px_0_color-mix(in_srgb,var(--border)_85%,transparent)] backdrop-blur-sm"
+              className={headerShellClassName}
             />
+          )}
+          {showSelectionIndicator && (
             <div className="pointer-events-none absolute inset-0 z-10">
               <div
                 ref={selectionIndicatorRef}
                 data-tabs-selection-indicator="true"
                 aria-hidden="true"
-                className="tabs-selection-indicator border-primary bg-background/70 duration-280 absolute left-0 top-0 border-b-4 opacity-0 transition-[transform,width,height,opacity] ease-[cubic-bezier(0.22,1,0.36,1)]"
+                className={selectionIndicatorClassName}
               />
             </div>
-            <div
-              ref={headerForegroundRef}
-              data-tabs-header-foreground="true"
-              className="tabs-header-foreground relative z-20 flex min-w-0 items-stretch"
-            >
-              <div className={stripClassName}>
-                <div
-                  ref={tabsButtonRef}
-                  className={listClassName}
-                  onDoubleClick={handleTabBarDoubleClick}
-                  onDragOver={handleListDragOver}
-                  onDrop={handleListDrop}
-                >
-                  {tabButtons}
-                </div>
-              </div>
-              {actions && (
-                <div data-tabs-actions="true" className={actionsClassName}>
-                  {actions}
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
+          )}
+          <div
+            ref={headerForegroundRef}
+            data-tabs-header-foreground="true"
+            className={headerForegroundClassName}
+          >
             <div className={stripClassName}>
               <div
                 ref={tabsButtonRef}
@@ -584,8 +625,8 @@ function TabsImpl(
                 {actions}
               </div>
             )}
-          </>
-        )}
+          </div>
+        </>
       </div>
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">

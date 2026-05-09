@@ -18,6 +18,7 @@ import { navController } from './nav-controller'
 import { TerminalInputHistoryStore } from './terminal-input-history'
 import {
   resolveTerminalTheme,
+  type ResolvedTerminalTheme,
   type TerminalPalette,
   type TerminalThemeId,
   type TerminalThemeMode,
@@ -263,6 +264,13 @@ class TerminalController {
   private ghosttyInitPromise: Promise<GhosttyModule> | null = null
   private appDarkMode = false
   private systemDarkMode = false
+  private resolvedTheme: ResolvedTerminalTheme = resolveTerminalTheme({
+    useTheme: DEFAULT_TERMINAL_CONFIG.useTheme,
+    lightTheme: DEFAULT_TERMINAL_CONFIG.lightTheme,
+    darkTheme: DEFAULT_TERMINAL_CONFIG.darkTheme,
+    appDarkMode: false,
+    systemDarkMode: false,
+  })
 
   // Shared WebSocket
   private ws: WebSocket | null = null
@@ -873,6 +881,10 @@ class TerminalController {
     return { ...this.config }
   }
 
+  getResolvedTheme(): ResolvedTerminalTheme {
+    return this.resolvedTheme
+  }
+
   setThemeContext(input: { appDarkMode: boolean; systemDarkMode: boolean }): void {
     const changed =
       this.appDarkMode !== input.appDarkMode || this.systemDarkMode !== input.systemDarkMode
@@ -917,6 +929,7 @@ class TerminalController {
       appDarkMode: this.appDarkMode,
       systemDarkMode: this.systemDarkMode,
     })
+    this.resolvedTheme = resolvedTheme
 
     for (const instance of this.instances.values()) {
       instance.terminal.options.theme = resolvedTheme.definition.palette

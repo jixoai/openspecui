@@ -94,7 +94,7 @@ export function ResizeHandle({ onResize, minHeight = 100, maxHeight }: ResizeHan
   )
 
   return (
-    <div ref={slotRef} className="border-border relative h-2 shrink-0 border-t">
+    <div ref={slotRef} className="border-border/20 relative h-2 shrink-0 border-b border-t">
       <div
         onMouseDown={onMouseDown}
         onTouchStart={onTouchStart}
