@@ -1,5 +1,11 @@
 # @openspecui/core
 
+## 3.2.1
+
+### Patch Changes
+
+- bdeb61d: Polish terminal theme application and terminal tab chrome so the terminal header matches the active terminal theme, tab overflow stays horizontally scrollable, and inactive tab motion uses a smoother iOS-style transform without causing vertical scroll jitter.
+
 ## 3.2.0
 
 ### Minor Changes
