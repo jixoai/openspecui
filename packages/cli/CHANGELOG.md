@@ -1,5 +1,11 @@
 # openspecui
 
+## 3.2.3
+
+### Patch Changes
+
+- 21d2393: Fix view transition masks for tabs and page navigation, and restore stable scrolling layouts in Config panels.
+
 ## 3.2.2
 
 ### Patch Changes
