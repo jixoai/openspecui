@@ -218,7 +218,7 @@ export function CodeEditor({
         bracketMatching: !readOnly,
       }}
       extensions={extensions}
-      className={`scrollbar-thin scrollbar-track-transparent overflow-auto ${className}`}
+      className={`min-h-0 overflow-hidden ${className}`}
       style={{
         fontSize,
         ['--code-editor-min-height' as string]: editorMinHeight,

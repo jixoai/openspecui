@@ -174,7 +174,7 @@ const commitDetailSelector: GitEntrySelector = {
   hash: commitDetailEntry.hash,
 }
 
-const commitDetailFiles: GitEntryFileSummary[] = Array.from({ length: 24 }, (_, index) => ({
+const commitDetailFiles: GitEntryFileSummary[] = Array.from({ length: 8 }, (_, index) => ({
   fileId: `commit-detail-file-${index + 1}`,
   source: 'tracked',
   path: `src/features/group-${Math.floor(index / 4) + 1}/file-${index + 1}.tsx`,
@@ -206,7 +206,7 @@ const commitDetailPatches: GitEntryFilePatch[] = commitDetailFiles.map((file, in
     `+++ b/${file.path}`,
     '@@ -1,6 +1,6 @@',
     ...Array.from(
-      { length: 8 + (index % 5) * 4 },
+      { length: 4 + (index % 3) * 2 },
       (_, lineIndex) =>
         `${lineIndex % 2 === 0 ? '+' : '-'} line ${lineIndex + 1} for ${file.fileId}`
     ),

@@ -15,6 +15,7 @@ import {
   type FileExplorerEntry,
 } from '@/components/file-explorer'
 import { MarkdownViewer } from '@/components/markdown-viewer'
+import { useViewportConstrainedHeight } from '@/components/scroll-spy'
 import { Tabs, type Tab } from '@/components/tabs'
 import { navController } from '@/lib/nav-controller'
 import { isStaticMode } from '@/lib/static-mode'
@@ -145,6 +146,19 @@ function createRunnerLineId() {
     : Math.random().toString(36).slice(2)
 }
 
+function useTabPanelViewportHeight() {
+  const [target, setTarget] = useState<HTMLDivElement | null>(null)
+  const height = useViewportConstrainedHeight({
+    target,
+    enabled: target !== null,
+  })
+
+  return {
+    viewportHeight: height,
+    setViewportNode: setTarget,
+  }
+}
+
 function JsonStructuredValue({ value }: { value: unknown }) {
   if (value === null) {
     return <span className="text-muted-foreground font-mono text-xs">null</span>
@@ -191,6 +205,12 @@ function JsonStructuredValue({ value }: { value: unknown }) {
 
 export function Config() {
   const isStatic = isStaticMode()
+  const { viewportHeight: schemaViewportHeight, setViewportNode: setSchemaViewportNode } =
+    useTabPanelViewportHeight()
+  const {
+    viewportHeight: projectConfigViewportHeight,
+    setViewportNode: setProjectConfigViewportNode,
+  } = useTabPanelViewportHeight()
   const [schemaMode, setSchemaMode] = useState<SchemaMode>('read')
   const [schemaActionError, setSchemaActionError] = useState<string | null>(null)
   const [schemaEntryError, setSchemaEntryError] = useState<string | null>(null)
@@ -1146,477 +1166,501 @@ export function Config() {
   }, [isPendingCommandRunning])
 
   const schemaTabContent = (
-    <section className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <ButtonGroup<SchemaMode>
-          value={schemaMode}
-          onChange={handleSchemaModeChange}
-          options={[
-            { value: 'read', label: 'Read' },
-            { value: 'preview', label: 'Preview' },
-            { value: 'edit', label: 'Edit', disabled: !schemaCanEdit },
-          ]}
-        />
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleAddSchema}
-            disabled={isStatic || createSchemaMutation.isPending}
-            className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add
-          </button>
-          <button
-            type="button"
-            onClick={handleDeleteSchema}
-            disabled={!schemaCanEdit || deleteSchemaMutation.isPending}
-            className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Delete
-          </button>
+    <section
+      data-tab-scroll-root="true"
+      className="scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-auto"
+    >
+      <div className="space-y-4 pr-1">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <ButtonGroup<SchemaMode>
+            value={schemaMode}
+            onChange={handleSchemaModeChange}
+            options={[
+              { value: 'read', label: 'Read' },
+              { value: 'preview', label: 'Preview' },
+              { value: 'edit', label: 'Edit', disabled: !schemaCanEdit },
+            ]}
+          />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleAddSchema}
+              disabled={isStatic || createSchemaMutation.isPending}
+              className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteSchema}
+              disabled={!schemaCanEdit || deleteSchemaMutation.isPending}
+              className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </button>
+          </div>
         </div>
-      </div>
 
-      {schemaActionError && <div className="text-destructive text-xs">{schemaActionError}</div>}
-      {schemaEntryError && <div className="text-destructive text-xs">{schemaEntryError}</div>}
-      {schemasError && (
-        <div className="text-destructive text-sm">
-          Failed to load schemas: {schemasError.message}
-        </div>
-      )}
-
-      <div className="flex min-h-0 flex-1 flex-col">
-        {schemasLoading && (!schemas || schemas.length === 0) && (
-          <div className="text-muted-foreground mb-3 text-sm">Loading schemas…</div>
+        {schemaActionError && <div className="text-destructive text-xs">{schemaActionError}</div>}
+        {schemaEntryError && <div className="text-destructive text-xs">{schemaEntryError}</div>}
+        {schemasError && (
+          <div className="text-destructive text-sm">
+            Failed to load schemas: {schemasError.message}
+          </div>
         )}
-        {schemas && schemas.length === 0 && (
-          <div className="text-muted-foreground mb-3 text-sm">No schemas available.</div>
-        )}
-        {selectedSchemaInfo ? (
-          schemaMode === 'preview' ? (
-            <MarkdownViewer
-              className="min-h-0 flex-1"
-              markdown={({ H1, H2, H3, Section }) => {
-                const anchorBase = `schema-${selectedSchemaInfo.name}`
-                const schemaAnchor = (suffix: string) => `${anchorBase}-${suffix}`
 
-                return (
-                  <div className="space-y-6">
-                    <Section>
-                      <H1 id={anchorBase}>{selectedSchemaInfo.name}</H1>
-                      {selectedSchemaInfo.description && (
-                        <p className="text-muted-foreground">{selectedSchemaInfo.description}</p>
-                      )}
-                    </Section>
+        <div
+          ref={setSchemaViewportNode}
+          className="flex min-h-0 flex-col"
+          style={schemaViewportHeight != null ? { height: `${schemaViewportHeight}px` } : undefined}
+        >
+          {schemasLoading && (!schemas || schemas.length === 0) && (
+            <div className="text-muted-foreground mb-3 text-sm">Loading schemas…</div>
+          )}
+          {schemas && schemas.length === 0 && (
+            <div className="text-muted-foreground mb-3 text-sm">No schemas available.</div>
+          )}
+          {selectedSchemaInfo ? (
+            schemaMode === 'preview' ? (
+              <MarkdownViewer
+                className="min-h-0 flex-1"
+                markdown={({ H1, H2, H3, Section }) => {
+                  const anchorBase = `schema-${selectedSchemaInfo.name}`
+                  const schemaAnchor = (suffix: string) => `${anchorBase}-${suffix}`
 
-                    {schemaResolution && (
+                  return (
+                    <div className="space-y-6">
                       <Section>
-                        <H2 id={schemaAnchor('resolution')}>Resolution</H2>
-                        <div className="text-muted-foreground mt-2 space-y-1 pl-4 text-sm">
-                          <div>Source: {schemaResolution.source}</div>
-                          <div className="truncate">
-                            Path: {schemaResolution.displayPath ?? schemaResolution.path}
+                        <H1 id={anchorBase}>{selectedSchemaInfo.name}</H1>
+                        {selectedSchemaInfo.description && (
+                          <p className="text-muted-foreground">{selectedSchemaInfo.description}</p>
+                        )}
+                      </Section>
+
+                      {schemaResolution && (
+                        <Section>
+                          <H2 id={schemaAnchor('resolution')}>Resolution</H2>
+                          <div className="text-muted-foreground mt-2 space-y-1 pl-4 text-sm">
+                            <div>Source: {schemaResolution.source}</div>
+                            <div className="truncate">
+                              Path: {schemaResolution.displayPath ?? schemaResolution.path}
+                            </div>
+                            {schemaResolution.shadows.length > 0 && (
+                              <div>
+                                Shadows:{' '}
+                                {schemaResolution.shadows
+                                  .map((s) => `${s.source}(${s.displayPath ?? s.path})`)
+                                  .join(', ')}
+                              </div>
+                            )}
                           </div>
-                          {schemaResolution.shadows.length > 0 && (
-                            <div>
-                              Shadows:{' '}
-                              {schemaResolution.shadows
-                                .map((s) => `${s.source}(${s.displayPath ?? s.path})`)
-                                .join(', ')}
+                        </Section>
+                      )}
+
+                      {schemaPreview.error && (
+                        <Section>
+                          <H2 id={schemaAnchor('schema-errors')}>Schema errors</H2>
+                          <div className="border-destructive/40 bg-destructive/10 text-destructive mt-2 rounded-md border px-3 py-2 text-sm">
+                            schema.yaml parse error: {schemaPreview.error}
+                          </div>
+                        </Section>
+                      )}
+
+                      <Section>
+                        <H2 id={schemaAnchor('artifacts')}>Artifacts</H2>
+                        {previewArtifacts.length > 0 ? (
+                          <div className="mt-3 space-y-6">
+                            {previewArtifacts.map((artifact) => {
+                              const rawArtifact = rawArtifactMap.get(artifact.id)
+                              const templateInfo =
+                                templateContents?.[artifact.id] ??
+                                (templates?.[artifact.id]
+                                  ? { ...templates[artifact.id], content: null }
+                                  : null)
+                              const templatePath =
+                                templateInfo?.path ??
+                                (typeof rawArtifact?.template === 'string'
+                                  ? rawArtifact.template
+                                  : undefined)
+                              const templateDisplayPath =
+                                templateInfo?.displayPath ?? templatePath ?? null
+                              const draftTemplateContent =
+                                templatePath !== undefined
+                                  ? draftByPath.get(templatePath)
+                                  : undefined
+                              const templateBody =
+                                draftTemplateContent !== undefined
+                                  ? draftTemplateContent
+                                  : templateInfo
+                                    ? templateInfo.content
+                                    : null
+                              const rawKnownFields = [
+                                ['id', rawArtifact?.id ?? artifact.id],
+                                ['generates', rawArtifact?.generates ?? artifact.outputPath],
+                                ['description', rawArtifact?.description ?? artifact.description],
+                                ['instruction', rawArtifact?.instruction],
+                                ['requires', rawArtifact?.requires ?? artifact.requires],
+                              ] as Array<[string, unknown]>
+                              const knownFields = rawKnownFields.filter(
+                                (entry): entry is [string, unknown] => entry[1] !== undefined
+                              )
+                              const unknownEntries = rawArtifact
+                                ? (Object.entries(rawArtifact) as [string, unknown][]).filter(
+                                    ([key]) => !KNOWN_ARTIFACT_KEYS.has(key)
+                                  )
+                                : []
+
+                              return (
+                                <Section key={artifact.id} className="space-y-3">
+                                  <H3 id={schemaAnchor(`artifact-${artifact.id}`)}>
+                                    {artifact.id}
+                                  </H3>
+                                  <div className="border-border space-y-4 rounded-lg border px-4 py-4 text-sm">
+                                    <div className="space-y-3">
+                                      {knownFields.map(([key, value]) => {
+                                        const isRequires = key === 'requires'
+                                        const requires = isRequires
+                                          ? Array.isArray(value)
+                                            ? value.filter(
+                                                (item): item is string => typeof item === 'string'
+                                              )
+                                            : []
+                                          : []
+
+                                        return (
+                                          <div key={key} className="space-y-2">
+                                            <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
+                                              {key}
+                                            </div>
+                                            <div className="pl-4 text-sm leading-6">
+                                              {isRequires ? (
+                                                requires.length > 0 ? (
+                                                  <div className="flex flex-wrap gap-1.5">
+                                                    {requires.map((requiredArtifactId) => {
+                                                      const exists = previewArtifacts.some(
+                                                        (candidate) =>
+                                                          candidate.id === requiredArtifactId
+                                                      )
+                                                      if (!exists) {
+                                                        return (
+                                                          <span
+                                                            key={requiredArtifactId}
+                                                            className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs"
+                                                          >
+                                                            {requiredArtifactId}
+                                                          </span>
+                                                        )
+                                                      }
+
+                                                      const targetAnchor = schemaAnchor(
+                                                        `artifact-${requiredArtifactId}`
+                                                      )
+                                                      return (
+                                                        <a
+                                                          key={requiredArtifactId}
+                                                          href={`#${targetAnchor}`}
+                                                          className="bg-primary hover:bg-primary/80 text-primary-foreground rounded-md px-2 py-0.5 text-xs transition-colors"
+                                                        >
+                                                          {requiredArtifactId}
+                                                        </a>
+                                                      )
+                                                    })}
+                                                  </div>
+                                                ) : (
+                                                  <span className="text-muted-foreground">—</span>
+                                                )
+                                              ) : (
+                                                renderFieldValue(key, value)
+                                              )}
+                                            </div>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+
+                                    {templatePath && (
+                                      <div className="space-y-2">
+                                        <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
+                                          Template
+                                        </div>
+                                        <div className="text-muted-foreground pl-4 text-xs">
+                                          <span className="mr-1">Template:</span>
+                                          <code className="bg-muted rounded px-1">
+                                            {templateDisplayPath}
+                                          </code>
+                                          {templateInfo?.source
+                                            ? ` (${templateInfo.source})`
+                                            : null}
+                                        </div>
+                                        {templateBody !== null && templateBody !== undefined ? (
+                                          <div className="pl-4">
+                                            <div className="bg-muted/30 rounded-lg p-4 [zoom:0.86]">
+                                              <MarkdownViewer
+                                                markdown={templateBody}
+                                                collectToc={false}
+                                              />
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div className="text-muted-foreground pl-4 text-sm">
+                                            Template content unavailable.
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {unknownEntries.length > 0 && (
+                                      <div className="space-y-3">
+                                        <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
+                                          Extra fields
+                                        </div>
+                                        {unknownEntries.map(([key, value]) => (
+                                          <div key={key} className="space-y-2">
+                                            <div className="text-muted-foreground text-xs">
+                                              {key}
+                                            </div>
+                                            <div className="pl-4 text-sm leading-6">
+                                              {renderFieldValue(key, value)}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </Section>
+                              )
+                            })}
+                          </div>
+                        ) : (
+                          <div className="text-muted-foreground text-sm">
+                            Select a schema to view details.
+                          </div>
+                        )}
+                        {schemaDetail?.applyRequires?.length ? (
+                          <div className="text-muted-foreground mt-3 text-xs">
+                            Apply requires: {schemaDetail.applyRequires.join(', ')}
+                          </div>
+                        ) : null}
+                      </Section>
+
+                      {hasDirtyDrafts && (
+                        <div className="text-muted-foreground text-xs">
+                          Preview is rendering draft content. Save to persist changes.
+                        </div>
+                      )}
+                    </div>
+                  )
+                }}
+              />
+            ) : (
+              <ContextMenuWrapper
+                ref={schemaMenuWrapperRef}
+                className="flex min-h-0 flex-1 flex-col gap-4"
+              >
+                {schemaFilesError && (
+                  <div className="text-destructive text-xs">
+                    Failed to load schema files: {schemaFilesError.message}
+                  </div>
+                )}
+                <div className="min-h-0 flex-1">
+                  <FileExplorer
+                    entries={schemaEntries}
+                    selectedPath={selectedSchemaPath}
+                    onSelect={setSelectedSchemaPath}
+                    breadcrumbRoot={schemaRootLabel}
+                    headerLabel={
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="uppercase tracking-wide">Files</span>
+                        <span
+                          className="text-muted-foreground/80 truncate text-[10px] normal-case"
+                          title={schemaRootLabel}
+                        >
+                          {schemaRootLabel}
+                        </span>
+                      </span>
+                    }
+                    headerActions={
+                      headerMenuItems.length > 0 ? (
+                        <ContextMenuTargeter>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              setFileMenuAnchor(null)
+                              setViewMenuAnchor(null)
+                              setHeaderMenuAnchor({
+                                type: 'target',
+                                element: event.currentTarget,
+                                placement: 'bottom-end',
+                              })
+                            }}
+                            className="hover:bg-muted rounded-md p-1"
+                            aria-label="Schema menu"
+                          >
+                            <EllipsisVertical className="h-4 w-4" />
+                          </button>
+                        </ContextMenuTargeter>
+                      ) : undefined
+                    }
+                    entryActions={(entry) => {
+                      const propertiesAction = {
+                        id: 'properties',
+                        label: 'Properties',
+                        icon: <Info className="h-3.5 w-3.5" />,
+                        onSelect: () => handleOpenEntryInfo(entry),
+                      }
+
+                      if (schemaMode !== 'edit' || !canManageEntries) {
+                        return [propertiesAction]
+                      }
+
+                      const parent =
+                        entry.type === 'directory' ? entry.path : getParentPath(entry.path)
+                      const isDirectory = entry.type === 'directory'
+                      return [
+                        {
+                          id: 'new-file',
+                          label: isDirectory ? 'New file inside' : 'New sibling file',
+                          icon: <FilePlus className="h-3.5 w-3.5" />,
+                          onSelect: () => handleOpenCreateEntry('file', parent),
+                        },
+                        {
+                          id: 'new-folder',
+                          label: isDirectory ? 'New folder inside' : 'New sibling folder',
+                          icon: <FolderPlus className="h-3.5 w-3.5" />,
+                          onSelect: () => handleOpenCreateEntry('directory', parent),
+                        },
+                        propertiesAction,
+                        {
+                          id: 'delete',
+                          label: 'Delete',
+                          icon: <Trash2 className="h-3.5 w-3.5" />,
+                          tone: 'destructive',
+                          onSelect: () => handleOpenDeleteEntry(entry),
+                        },
+                      ]
+                    }}
+                    emptyState={<span>No files found for this schema.</span>}
+                    renderEditor={(activeFile) =>
+                      activeFile ? (
+                        <div className="flex min-h-0 flex-1 flex-col">
+                          {schemaMode === 'edit' && (
+                            <div className="border-border/50 flex items-center justify-between border-b px-3 py-2 text-xs">
+                              <div className="flex items-center gap-2">
+                                <ContextMenuTargeter>
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      setHeaderMenuAnchor(null)
+                                      setViewMenuAnchor(null)
+                                      setFileMenuAnchor({
+                                        type: 'target',
+                                        element: event.currentTarget,
+                                        placement: 'bottom-start',
+                                      })
+                                    }}
+                                    className="hover:bg-muted rounded-md px-2 py-1 text-xs font-semibold"
+                                  >
+                                    File
+                                  </button>
+                                </ContextMenuTargeter>
+                                <ContextMenuTargeter>
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      setHeaderMenuAnchor(null)
+                                      setFileMenuAnchor(null)
+                                      setViewMenuAnchor({
+                                        type: 'target',
+                                        element: event.currentTarget,
+                                        placement: 'bottom-start',
+                                      })
+                                    }}
+                                    className="hover:bg-muted rounded-md px-2 py-1 text-xs font-semibold"
+                                  >
+                                    View
+                                  </button>
+                                </ContextMenuTargeter>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={handleFileCancel}
+                                  className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleFileSave}
+                                  disabled={
+                                    !activeSchemaDirty ||
+                                    saveSchemaFileMutation.isPending ||
+                                    !schemaCanEdit
+                                  }
+                                  className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <Save className="h-3.5 w-3.5" />
+                                  {saveSchemaFileMutation.isPending ? 'Saving…' : 'Save'}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          <FileExplorerCodeEditor
+                            file={activeFile}
+                            value={
+                              schemaMode === 'edit'
+                                ? (activeSchemaDraft ?? activeFile.content ?? '')
+                                : (activeFile.content ?? '')
+                            }
+                            readOnly={schemaMode !== 'edit' || !schemaCanEdit}
+                            onChange={schemaMode === 'edit' ? handleFileChange : undefined}
+                            lineWrapping={schemaEditorWrap}
+                            editorMinHeight="0px"
+                          />
+                          {schemaResolution?.source === 'package' && (
+                            <div className="text-muted-foreground border-border/50 border-t px-3 py-2 text-xs">
+                              Package-provided schemas are read-only.
                             </div>
                           )}
                         </div>
-                      </Section>
-                    )}
-
-                    {schemaPreview.error && (
-                      <Section>
-                        <H2 id={schemaAnchor('schema-errors')}>Schema errors</H2>
-                        <div className="border-destructive/40 bg-destructive/10 text-destructive mt-2 rounded-md border px-3 py-2 text-sm">
-                          schema.yaml parse error: {schemaPreview.error}
-                        </div>
-                      </Section>
-                    )}
-
-                    <Section>
-                      <H2 id={schemaAnchor('artifacts')}>Artifacts</H2>
-                      {previewArtifacts.length > 0 ? (
-                        <div className="mt-3 space-y-6">
-                          {previewArtifacts.map((artifact) => {
-                            const rawArtifact = rawArtifactMap.get(artifact.id)
-                            const templateInfo =
-                              templateContents?.[artifact.id] ??
-                              (templates?.[artifact.id]
-                                ? { ...templates[artifact.id], content: null }
-                                : null)
-                            const templatePath =
-                              templateInfo?.path ??
-                              (typeof rawArtifact?.template === 'string'
-                                ? rawArtifact.template
-                                : undefined)
-                            const templateDisplayPath =
-                              templateInfo?.displayPath ?? templatePath ?? null
-                            const draftTemplateContent =
-                              templatePath !== undefined ? draftByPath.get(templatePath) : undefined
-                            const templateBody =
-                              draftTemplateContent !== undefined
-                                ? draftTemplateContent
-                                : templateInfo
-                                  ? templateInfo.content
-                                  : null
-                            const rawKnownFields = [
-                              ['id', rawArtifact?.id ?? artifact.id],
-                              ['generates', rawArtifact?.generates ?? artifact.outputPath],
-                              ['description', rawArtifact?.description ?? artifact.description],
-                              ['instruction', rawArtifact?.instruction],
-                              ['requires', rawArtifact?.requires ?? artifact.requires],
-                            ] as Array<[string, unknown]>
-                            const knownFields = rawKnownFields.filter(
-                              (entry): entry is [string, unknown] => entry[1] !== undefined
-                            )
-                            const unknownEntries = rawArtifact
-                              ? (Object.entries(rawArtifact) as [string, unknown][]).filter(
-                                  ([key]) => !KNOWN_ARTIFACT_KEYS.has(key)
-                                )
-                              : []
-
-                            return (
-                              <Section key={artifact.id} className="space-y-3">
-                                <H3 id={schemaAnchor(`artifact-${artifact.id}`)}>{artifact.id}</H3>
-                                <div className="border-border space-y-4 rounded-lg border px-4 py-4 text-sm">
-                                  <div className="space-y-3">
-                                    {knownFields.map(([key, value]) => {
-                                      const isRequires = key === 'requires'
-                                      const requires = isRequires
-                                        ? Array.isArray(value)
-                                          ? value.filter(
-                                              (item): item is string => typeof item === 'string'
-                                            )
-                                          : []
-                                        : []
-
-                                      return (
-                                        <div key={key} className="space-y-2">
-                                          <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
-                                            {key}
-                                          </div>
-                                          <div className="pl-4 text-sm leading-6">
-                                            {isRequires ? (
-                                              requires.length > 0 ? (
-                                                <div className="flex flex-wrap gap-1.5">
-                                                  {requires.map((requiredArtifactId) => {
-                                                    const exists = previewArtifacts.some(
-                                                      (candidate) =>
-                                                        candidate.id === requiredArtifactId
-                                                    )
-                                                    if (!exists) {
-                                                      return (
-                                                        <span
-                                                          key={requiredArtifactId}
-                                                          className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs"
-                                                        >
-                                                          {requiredArtifactId}
-                                                        </span>
-                                                      )
-                                                    }
-
-                                                    const targetAnchor = schemaAnchor(
-                                                      `artifact-${requiredArtifactId}`
-                                                    )
-                                                    return (
-                                                      <a
-                                                        key={requiredArtifactId}
-                                                        href={`#${targetAnchor}`}
-                                                        className="bg-primary hover:bg-primary/80 text-primary-foreground rounded-md px-2 py-0.5 text-xs transition-colors"
-                                                      >
-                                                        {requiredArtifactId}
-                                                      </a>
-                                                    )
-                                                  })}
-                                                </div>
-                                              ) : (
-                                                <span className="text-muted-foreground">—</span>
-                                              )
-                                            ) : (
-                                              renderFieldValue(key, value)
-                                            )}
-                                          </div>
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-
-                                  {templatePath && (
-                                    <div className="space-y-2">
-                                      <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
-                                        Template
-                                      </div>
-                                      <div className="text-muted-foreground pl-4 text-xs">
-                                        <span className="mr-1">Template:</span>
-                                        <code className="bg-muted rounded px-1">
-                                          {templateDisplayPath}
-                                        </code>
-                                        {templateInfo?.source ? ` (${templateInfo.source})` : null}
-                                      </div>
-                                      {templateBody !== null && templateBody !== undefined ? (
-                                        <div className="pl-4">
-                                          <div className="bg-muted/30 rounded-lg p-4 [zoom:0.86]">
-                                            <MarkdownViewer
-                                              markdown={templateBody}
-                                              collectToc={false}
-                                            />
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <div className="text-muted-foreground pl-4 text-sm">
-                                          Template content unavailable.
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-
-                                  {unknownEntries.length > 0 && (
-                                    <div className="space-y-3">
-                                      <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
-                                        Extra fields
-                                      </div>
-                                      {unknownEntries.map(([key, value]) => (
-                                        <div key={key} className="space-y-2">
-                                          <div className="text-muted-foreground text-xs">{key}</div>
-                                          <div className="pl-4 text-sm leading-6">
-                                            {renderFieldValue(key, value)}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              </Section>
-                            )
-                          })}
-                        </div>
                       ) : (
-                        <div className="text-muted-foreground text-sm">
-                          Select a schema to view details.
+                        <div className="text-muted-foreground flex h-full items-center justify-center">
+                          Select a file to view
                         </div>
-                      )}
-                      {schemaDetail?.applyRequires?.length ? (
-                        <div className="text-muted-foreground mt-3 text-xs">
-                          Apply requires: {schemaDetail.applyRequires.join(', ')}
-                        </div>
-                      ) : null}
-                    </Section>
-
-                    {hasDirtyDrafts && (
-                      <div className="text-muted-foreground text-xs">
-                        Preview is rendering draft content. Save to persist changes.
-                      </div>
-                    )}
-                  </div>
-                )
-              }}
-            />
-          ) : (
-            <ContextMenuWrapper ref={schemaMenuWrapperRef} className="h-full space-y-4">
-              {schemaFilesError && (
-                <div className="text-destructive text-xs">
-                  Failed to load schema files: {schemaFilesError.message}
+                      )
+                    }
+                  />
                 </div>
-              )}
-              <FileExplorer
-                entries={schemaEntries}
-                selectedPath={selectedSchemaPath}
-                onSelect={setSelectedSchemaPath}
-                breadcrumbRoot={schemaRootLabel}
-                headerLabel={
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className="uppercase tracking-wide">Files</span>
-                    <span
-                      className="text-muted-foreground/80 truncate text-[10px] normal-case"
-                      title={schemaRootLabel}
-                    >
-                      {schemaRootLabel}
-                    </span>
-                  </span>
-                }
-                headerActions={
-                  headerMenuItems.length > 0 ? (
-                    <ContextMenuTargeter>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          setFileMenuAnchor(null)
-                          setViewMenuAnchor(null)
-                          setHeaderMenuAnchor({
-                            type: 'target',
-                            element: event.currentTarget,
-                            placement: 'bottom-end',
-                          })
-                        }}
-                        className="hover:bg-muted rounded-md p-1"
-                        aria-label="Schema menu"
-                      >
-                        <EllipsisVertical className="h-4 w-4" />
-                      </button>
-                    </ContextMenuTargeter>
-                  ) : undefined
-                }
-                entryActions={(entry) => {
-                  const propertiesAction = {
-                    id: 'properties',
-                    label: 'Properties',
-                    icon: <Info className="h-3.5 w-3.5" />,
-                    onSelect: () => handleOpenEntryInfo(entry),
-                  }
-
-                  if (schemaMode !== 'edit' || !canManageEntries) {
-                    return [propertiesAction]
-                  }
-
-                  const parent = entry.type === 'directory' ? entry.path : getParentPath(entry.path)
-                  const isDirectory = entry.type === 'directory'
-                  return [
-                    {
-                      id: 'new-file',
-                      label: isDirectory ? 'New file inside' : 'New sibling file',
-                      icon: <FilePlus className="h-3.5 w-3.5" />,
-                      onSelect: () => handleOpenCreateEntry('file', parent),
-                    },
-                    {
-                      id: 'new-folder',
-                      label: isDirectory ? 'New folder inside' : 'New sibling folder',
-                      icon: <FolderPlus className="h-3.5 w-3.5" />,
-                      onSelect: () => handleOpenCreateEntry('directory', parent),
-                    },
-                    propertiesAction,
-                    {
-                      id: 'delete',
-                      label: 'Delete',
-                      icon: <Trash2 className="h-3.5 w-3.5" />,
-                      tone: 'destructive',
-                      onSelect: () => handleOpenDeleteEntry(entry),
-                    },
-                  ]
-                }}
-                emptyState={<span>No files found for this schema.</span>}
-                renderEditor={(activeFile) =>
-                  activeFile ? (
-                    <div className="flex min-h-0 flex-1 flex-col">
-                      {schemaMode === 'edit' && (
-                        <div className="border-border/50 flex items-center justify-between border-b px-3 py-2 text-xs">
-                          <div className="flex items-center gap-2">
-                            <ContextMenuTargeter>
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  setHeaderMenuAnchor(null)
-                                  setViewMenuAnchor(null)
-                                  setFileMenuAnchor({
-                                    type: 'target',
-                                    element: event.currentTarget,
-                                    placement: 'bottom-start',
-                                  })
-                                }}
-                                className="hover:bg-muted rounded-md px-2 py-1 text-xs font-semibold"
-                              >
-                                File
-                              </button>
-                            </ContextMenuTargeter>
-                            <ContextMenuTargeter>
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  setHeaderMenuAnchor(null)
-                                  setFileMenuAnchor(null)
-                                  setViewMenuAnchor({
-                                    type: 'target',
-                                    element: event.currentTarget,
-                                    placement: 'bottom-start',
-                                  })
-                                }}
-                                className="hover:bg-muted rounded-md px-2 py-1 text-xs font-semibold"
-                              >
-                                View
-                              </button>
-                            </ContextMenuTargeter>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={handleFileCancel}
-                              className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleFileSave}
-                              disabled={
-                                !activeSchemaDirty ||
-                                saveSchemaFileMutation.isPending ||
-                                !schemaCanEdit
-                              }
-                              className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              <Save className="h-3.5 w-3.5" />
-                              {saveSchemaFileMutation.isPending ? 'Saving…' : 'Save'}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                      <FileExplorerCodeEditor
-                        file={activeFile}
-                        value={
-                          schemaMode === 'edit'
-                            ? (activeSchemaDraft ?? activeFile.content ?? '')
-                            : (activeFile.content ?? '')
-                        }
-                        readOnly={schemaMode !== 'edit' || !schemaCanEdit}
-                        onChange={schemaMode === 'edit' ? handleFileChange : undefined}
-                        lineWrapping={schemaEditorWrap}
-                      />
-                      {schemaResolution?.source === 'package' && (
-                        <div className="text-muted-foreground border-border/50 border-t px-3 py-2 text-xs">
-                          Package-provided schemas are read-only.
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-muted-foreground flex h-full items-center justify-center">
-                      Select a file to view
-                    </div>
-                  )
-                }
-              />
-              <ContextMenu
-                open={!!headerMenuAnchor}
-                items={headerMenuItems}
-                anchor={headerMenuAnchor}
-                boundaryElement={schemaMenuWrapperRef.current}
-                onClose={() => setHeaderMenuAnchor(null)}
-              />
-              <ContextMenu
-                open={!!fileMenuAnchor}
-                items={fileMenuItems}
-                anchor={fileMenuAnchor}
-                boundaryElement={schemaMenuWrapperRef.current}
-                onClose={() => setFileMenuAnchor(null)}
-              />
-              <ContextMenu
-                open={!!viewMenuAnchor}
-                items={viewMenuItems}
-                anchor={viewMenuAnchor}
-                boundaryElement={schemaMenuWrapperRef.current}
-                onClose={() => setViewMenuAnchor(null)}
-              />
-            </ContextMenuWrapper>
-          )
-        ) : (
-          <div className="text-muted-foreground text-sm">Select a schema to view details.</div>
-        )}
+                <ContextMenu
+                  open={!!headerMenuAnchor}
+                  items={headerMenuItems}
+                  anchor={headerMenuAnchor}
+                  boundaryElement={schemaMenuWrapperRef.current}
+                  onClose={() => setHeaderMenuAnchor(null)}
+                />
+                <ContextMenu
+                  open={!!fileMenuAnchor}
+                  items={fileMenuItems}
+                  anchor={fileMenuAnchor}
+                  boundaryElement={schemaMenuWrapperRef.current}
+                  onClose={() => setFileMenuAnchor(null)}
+                />
+                <ContextMenu
+                  open={!!viewMenuAnchor}
+                  items={viewMenuItems}
+                  anchor={viewMenuAnchor}
+                  boundaryElement={schemaMenuWrapperRef.current}
+                  onClose={() => setViewMenuAnchor(null)}
+                />
+              </ContextMenuWrapper>
+            )
+          ) : (
+            <div className="text-muted-foreground text-sm">Select a schema to view details.</div>
+          )}
+        </div>
       </div>
     </section>
   )
@@ -1629,84 +1673,113 @@ export function Config() {
   }))
 
   const projectConfigTabContent = (
-    <section className="space-y-4">
-      <section className="border-border bg-card space-y-4 rounded-lg border p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold">OpenSpec Project Config</h2>
-          {!isStatic && configYaml && !isConfigEditing && (
-            <button
-              type="button"
-              onClick={handleConfigEdit}
-              className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium"
-            >
-              <Edit2 className="h-3.5 w-3.5" />
-              Edit
-            </button>
-          )}
-          {isConfigEditing && (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleConfigCancel}
-                className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium"
-              >
-                <X className="h-3.5 w-3.5" />
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => saveConfigMutation.mutate()}
-                disabled={!configDirty || saveConfigMutation.isPending}
-                className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Save className="h-3.5 w-3.5" />
-                {saveConfigMutation.isPending ? 'Saving…' : 'Save'}
-              </button>
+    <section
+      data-tab-scroll-root="true"
+      className="scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-auto"
+    >
+      <div className="space-y-4 pr-1">
+        <div
+          ref={setProjectConfigViewportNode}
+          className="flex min-h-0 flex-col"
+          style={
+            projectConfigViewportHeight != null
+              ? { height: `${projectConfigViewportHeight}px` }
+              : undefined
+          }
+        >
+          <section className="border-border bg-card flex min-h-0 flex-1 flex-col gap-4 overflow-hidden rounded-lg border p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold">OpenSpec Project Config</h2>
+              {!isStatic && configYaml && !isConfigEditing && (
+                <button
+                  type="button"
+                  onClick={handleConfigEdit}
+                  className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium"
+                >
+                  <Edit2 className="h-3.5 w-3.5" />
+                  Edit
+                </button>
+              )}
+              {isConfigEditing && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleConfigCancel}
+                    className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => saveConfigMutation.mutate()}
+                    disabled={!configDirty || saveConfigMutation.isPending}
+                    className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Save className="h-3.5 w-3.5" />
+                    {saveConfigMutation.isPending ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        {configYaml || isConfigEditing ? (
-          <CodeEditor
-            value={configDraft}
-            onChange={(value) => {
-              setConfigDraft(value)
-              setConfigDirty(true)
-            }}
-            readOnly={!isConfigEditing}
-            filename="config.yaml"
-          />
-        ) : configLoading ? (
-          <div className="route-loading animate-pulse">Loading config…</div>
-        ) : (
-          <div className="text-muted-foreground rounded-md border border-dashed p-4 text-sm">
-            <p className="mb-3">openspec/config.yaml not found.</p>
-            {!isStatic && (
-              <button
-                type="button"
-                onClick={handleConfigEdit}
-                className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium"
-              >
-                Create config.yaml
-              </button>
+            {configYaml || isConfigEditing ? (
+              <CodeEditor
+                value={configDraft}
+                onChange={(value) => {
+                  setConfigDraft(value)
+                  setConfigDirty(true)
+                }}
+                readOnly={!isConfigEditing}
+                filename="config.yaml"
+                className="min-h-0 flex-1"
+                editorMinHeight="0px"
+              />
+            ) : configLoading ? (
+              <div className="route-loading animate-pulse">Loading config…</div>
+            ) : (
+              <div className="text-muted-foreground rounded-md border border-dashed p-4 text-sm">
+                <p className="mb-3">openspec/config.yaml not found.</p>
+                {!isStatic && (
+                  <button
+                    type="button"
+                    onClick={handleConfigEdit}
+                    className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium"
+                  >
+                    Create config.yaml
+                  </button>
+                )}
+              </div>
             )}
-          </div>
-        )}
-      </section>
+          </section>
+        </div>
+      </div>
     </section>
   )
 
   const globalConfigTabContent = isStatic ? (
-    <section className="space-y-3">
-      <h2 className="text-sm font-semibold">OpenSpec Global Config</h2>
-      <div className="text-muted-foreground rounded-md border border-dashed p-4 text-sm">
-        Global config commands are unavailable in static export mode.
-      </div>
+    <section
+      data-tab-scroll-root="true"
+      className="scrollbar-thin scrollbar-track-transparent flex min-h-0 flex-1 flex-col overflow-hidden"
+    >
+      <section className="border-border bg-card flex min-h-0 flex-1 flex-col gap-4 overflow-hidden rounded-lg border p-4">
+        <div className="flex flex-none items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">OpenSpec Global Config</h2>
+        </div>
+        <div className="text-muted-foreground min-h-0 flex-1 overflow-auto pr-1">
+          <div className="rounded-md border border-dashed p-4 text-sm">
+            Global config commands are unavailable in static export mode.
+          </div>
+        </div>
+      </section>
     </section>
   ) : (
-    <section className="space-y-4">
-      <section className="border-border bg-card space-y-4 rounded-lg border p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+    <section
+      data-tab-scroll-root="true"
+      className="scrollbar-thin scrollbar-track-transparent flex min-h-0 flex-1 flex-col overflow-hidden"
+    >
+      <section className="border-border bg-card flex min-h-0 flex-1 flex-col gap-4 overflow-hidden rounded-lg border p-4">
+        <div className="flex flex-none flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-semibold">OpenSpec Global Config</h2>
             <div className="text-muted-foreground mt-1 text-xs">
@@ -1741,7 +1814,7 @@ export function Config() {
           </div>
         </div>
 
-        <div className="text-muted-foreground text-xs">
+        <div className="text-muted-foreground flex-none text-xs">
           Reads from <code>openspec config list --json</code> and writes to the global config file.
         </div>
 
@@ -1765,7 +1838,7 @@ export function Config() {
           isLoadingGlobalConfig ? (
             <div className="text-muted-foreground text-sm">Loading global config…</div>
           ) : isRecordObject(globalConfigData) ? (
-            <div className="space-y-3">
+            <div className="min-h-0 flex-1 space-y-3 overflow-auto pr-1">
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="border-border rounded-md border px-3 py-2 text-xs">
                   <div className="text-muted-foreground">profile</div>
@@ -1821,7 +1894,7 @@ export function Config() {
             <div className="text-muted-foreground text-sm">Global config unavailable.</div>
           )
         ) : globalConfigTab === 'editor' ? (
-          <div className="space-y-2">
+          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
             <CodeEditor
               value={globalConfigDraft}
               onChange={(value) => {
@@ -1832,7 +1905,8 @@ export function Config() {
               readOnly={saveGlobalConfigMutation.isPending}
               filename="openspec.global.config.json"
               language="json"
-              editorMinHeight="260px"
+              className="min-h-0 flex-1"
+              editorMinHeight="0px"
             />
             <div className="flex items-center justify-end gap-2">
               <button
@@ -1859,8 +1933,8 @@ export function Config() {
             </div>
           </div>
         ) : (
-          <div className="grid gap-4 xl:grid-cols-[minmax(18rem,0.9fr)_minmax(0,1.1fr)]">
-            <section className="space-y-4">
+          <div className="grid min-h-0 flex-1 gap-4 overflow-hidden xl:grid-cols-[minmax(18rem,0.9fr)_minmax(0,1.1fr)]">
+            <section className="min-h-0 space-y-4 overflow-auto pr-1">
               <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
                 <div className="border-border rounded-md border px-3 py-2 text-xs">
                   <div className="text-muted-foreground">Profile</div>
@@ -1931,7 +2005,7 @@ export function Config() {
               </div>
             </section>
 
-            <section className="space-y-3">
+            <section className="space-y-3 overflow-auto pr-1">
               {profileEditMode === 'both' || profileEditMode === 'workflows' ? (
                 <>
                   <div className="text-muted-foreground text-xs">Workflows</div>

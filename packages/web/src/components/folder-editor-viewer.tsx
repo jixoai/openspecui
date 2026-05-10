@@ -1,4 +1,5 @@
 import { FileExplorer, FileExplorerCodeEditor } from '@/components/file-explorer'
+import { useViewportConstrainedHeight } from '@/components/scroll-spy'
 import { useArchiveFilesSubscription, useChangeFilesSubscription } from '@/lib/use-subscription'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -16,6 +17,11 @@ export function FolderEditorViewer({
     error,
   } = archived ? useArchiveFilesSubscription(changeId) : useChangeFilesSubscription(changeId)
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
+  const [viewportNode, setViewportNode] = useState<HTMLDivElement | null>(null)
+  const viewportHeight = useViewportConstrainedHeight({
+    target: viewportNode,
+    enabled: viewportNode !== null,
+  })
 
   const sortedEntries = useMemo(() => {
     if (!files) return []
@@ -53,20 +59,38 @@ export function FolderEditorViewer({
   }
 
   return (
-    <FileExplorer
-      entries={sortedEntries}
-      selectedPath={selectedPath}
-      onSelect={setSelectedPath}
-      emptyState={<span>No files found for this change.</span>}
-      renderEditor={(activeFile) =>
-        activeFile ? (
-          <FileExplorerCodeEditor file={activeFile} value={activeFile.content ?? ''} readOnly />
-        ) : (
-          <div className="text-muted-foreground flex h-full items-center justify-center">
-            Select a file to view
-          </div>
-        )
-      }
-    />
+    <section
+      data-tab-scroll-root="true"
+      className="scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-auto"
+    >
+      <div className="pr-1">
+        <div
+          ref={setViewportNode}
+          className="flex min-h-0 flex-col"
+          style={viewportHeight != null ? { height: `${viewportHeight}px` } : undefined}
+        >
+          <FileExplorer
+            entries={sortedEntries}
+            selectedPath={selectedPath}
+            onSelect={setSelectedPath}
+            emptyState={<span>No files found for this change.</span>}
+            renderEditor={(activeFile) =>
+              activeFile ? (
+                <FileExplorerCodeEditor
+                  file={activeFile}
+                  value={activeFile.content ?? ''}
+                  readOnly
+                  editorMinHeight="0px"
+                />
+              ) : (
+                <div className="text-muted-foreground flex h-full items-center justify-center">
+                  Select a file to view
+                </div>
+              )
+            }
+          />
+        </div>
+      </div>
+    </section>
   )
 }

@@ -54,6 +54,7 @@ const layoutStyles = css`
     display: flex;
     flex-direction: column;
     flex: 1;
+    min-height: 0;
   }
 
   /* 宽屏：grid 布局，文件列表在右侧 */
@@ -62,6 +63,7 @@ const layoutStyles = css`
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(240px, clamp(240px, 30%, 420px));
       gap: 1rem;
+      min-height: 0;
     }
     .fev-sidebar-tabs {
       display: none;
@@ -523,12 +525,14 @@ export function FileExplorerCodeEditor({
   readOnly = true,
   onChange,
   lineWrapping,
+  editorMinHeight,
 }: {
   file: FileExplorerEntry
   value: string
   readOnly?: boolean
   onChange?: (value: string) => void
   lineWrapping?: boolean
+  editorMinHeight?: string
 }) {
   return (
     <CodeEditor
@@ -538,6 +542,7 @@ export function FileExplorerCodeEditor({
       readOnly={readOnly}
       lineWrapping={lineWrapping}
       className="min-h-0 flex-1"
+      editorMinHeight={editorMinHeight}
       onChange={onChange}
     />
   )

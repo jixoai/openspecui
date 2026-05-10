@@ -31,7 +31,7 @@ export function ButtonGroup<T extends string>({
 
   return (
     <div
-      className={`inline-flex w-fit max-w-full self-start overflow-hidden rounded-md border ${containerClassName} ${className}`}
+      className={`inline-flex w-fit max-w-full shrink-0 self-start overflow-hidden rounded-md border ${containerClassName} ${className}`}
     >
       {options.map((option, index) => {
         const active = option.value === value
