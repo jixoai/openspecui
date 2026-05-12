@@ -1,0 +1,27 @@
+<script lang="ts">
+  import HookReference from '$lib/components/hook-reference.svelte'
+  import HooksGuide from '$lib/pages/hooks-guide.svelte'
+  import type { PageData } from './$types'
+
+  interface Props {
+    data: PageData
+  }
+
+  let { data }: Props = $props()
+  const hooks = $derived(data.hooks)
+</script>
+
+<svelte:head>
+  <title>{data.content.meta.hooksTitle}</title>
+  <meta name="description" content={data.content.meta.hooksDescription} />
+  <link rel="canonical" href={`https://www.openspecui.com/${data.lang}/hooks/`} />
+  <link rel="alternate" hreflang="en" href="https://www.openspecui.com/en/hooks/" />
+  <link rel="alternate" hreflang="zh-CN" href="https://www.openspecui.com/zh/hooks/" />
+</svelte:head>
+
+<HooksGuide content={data.content} lang={data.lang}>
+  <section class="grid gap-5 lg:grid-cols-2">
+    <HookReference hook={hooks.onReadDocument} />
+    <HookReference hook={hooks.onRunWorkflow} />
+  </section>
+</HooksGuide>

@@ -1,0 +1,29 @@
+@import '../../../../web/src/index.css';
+@source '../';
+@source '../../../../web/src';
+
+.shiki-code .shiki {
+  margin: 0;
+  background-color: var(--shiki-light-bg);
+  color: var(--shiki-light);
+  padding: 0.875rem;
+}
+
+.dark .shiki-code .shiki {
+  background-color: var(--shiki-dark-bg);
+  color: var(--shiki-dark);
+}
+
+.shiki-code .shiki span {
+  color: var(--shiki-light);
+  font-style: var(--shiki-light-font-style);
+  font-weight: var(--shiki-light-font-weight);
+  text-decoration: var(--shiki-light-text-decoration);
+}
+
+.dark .shiki-code .shiki span {
+  color: var(--shiki-dark);
+  font-style: var(--shiki-dark-font-style);
+  font-weight: var(--shiki-dark-font-weight);
+  text-decoration: var(--shiki-dark-text-decoration);
+}

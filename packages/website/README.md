@@ -4,19 +4,30 @@ Public landing site for `www.openspecui.com`.
 
 ## Scope
 
-This workspace is intentionally small:
+This workspace is a small static website and documentation entrypoint:
 
 - introduce OpenSpecUI
 - show the primary launch commands
+- document stable project-facing features such as `openspecui.hooks.ts`
 - link to the hosted app, OpenSpec official site, and GitHub
-- support English and Simplified Chinese switching
+- support English and Simplified Chinese URL routes
 
-It is not a docs portal or CMS.
+It is not a dynamic docs CMS. Content is versioned with the repository and prerendered as
+static HTML.
+
+## Stack
+
+- Svelte 5
+- SvelteKit
+- `@sveltejs/adapter-static`
+- mdsvex for documentation-capable pages
+- Tailwind CSS v4 through the shared OpenSpecUI token stylesheet
 
 ## Local Development
 
 ```bash
 pnpm --filter @openspecui/website dev
+pnpm --filter @openspecui/website typecheck
 pnpm --filter @openspecui/website test
 pnpm --filter @openspecui/website build
 pnpm --filter @openspecui/website cf:dev
@@ -24,27 +35,34 @@ pnpm --filter @openspecui/website cf:dev
 
 ## Internationalization
 
-The site uses:
+The public language state is URL-based:
 
-- `i18next`
-- `react-i18next`
-- `i18next-browser-languagedetector`
+- `/en/`
+- `/zh/`
+- `/en/hooks/`
+- `/zh/hooks/`
 
-Language detection order is:
+Locale content lives in `src/lib/i18n/locales`. Keep route URLs stable because they are
+the shareable and SEO-addressable contract.
 
-1. `?lang=` query parameter
-2. localStorage
-3. browser language
-4. document language
+## Content Model
 
-Supported languages:
+- Use Svelte components for interactive product surfaces.
+- Use `.svx` route pages for documentation content that benefits from Markdown authoring.
+- Keep reusable copy in typed locale content so both English and Chinese pages stay aligned.
 
-- `en`
-- `zh`
+The hooks documentation currently lives at:
+
+- `src/routes/[lang=locale]/hooks/+page.svx`
+- `src/lib/pages/hooks-guide.svelte`
+- `src/lib/components/hook-reference.svelte`
 
 ## Styling
 
 The website reuses shared product tokens from `packages/web/src/index.css` so the public site stays visually aligned with OpenSpecUI.
+
+The website must not import React components from `packages/web`. Cross-package reuse is
+limited to design tokens and small framework-neutral helpers.
 
 ## Deploy with Wrangler
 
@@ -68,7 +86,7 @@ Required auth:
 Source of truth:
 
 - deploy config: `packages/website/wrangler.jsonc`
-- cache headers: `packages/website/public/_headers`
+- cache headers: `packages/website/static/_headers`
 
 Custom domains remain a Cloudflare-side concern:
 
@@ -78,3 +96,6 @@ Custom domains remain a Cloudflare-side concern:
 ## Deployment
 
 Build output is static and ready for direct upload to Cloudflare Pages.
+
+SvelteKit static output is configured to write both pages and assets into `dist` so the
+existing Cloudflare Pages deployment command remains stable.

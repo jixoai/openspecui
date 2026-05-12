@@ -1,11 +1,25 @@
-export interface WebsiteLocale {
+export type WebsiteLanguage = 'en' | 'zh'
+export type RunnerId = 'npm' | 'pnpm' | 'bun'
+
+export interface WebsiteContent {
+  htmlLang: string
   meta: {
     siteTitle: string
     siteSubtitle: string
+    homeTitle: string
+    homeDescription: string
+    hooksTitle: string
+    hooksDescription: string
     languageLabel: string
+    themeLabel: string
+  }
+  nav: {
+    home: string
+    hooks: string
+    app: string
+    github: string
   }
   hero: {
-    eyebrow: string
     title: string
     summary: string
     primaryCta: string
@@ -37,12 +51,10 @@ export interface WebsiteLocale {
   modes: {
     title: string
     summary: string
-    liveTitle: string
-    liveBody: string
-    hostedTitle: string
-    hostedBody: string
-    exportTitle: string
-    exportBody: string
+    items: Array<{
+      title: string
+      body: string
+    }>
   }
   links: {
     title: string
@@ -54,4 +66,29 @@ export interface WebsiteLocale {
     githubTitle: string
     githubBody: string
   }
+  hooks: {
+    heroTitle: string
+    heroSummary: string
+    designTitle: string
+    designBody: string
+    contractTitle: string
+    contractBody: string
+    lifecycleTitle: string
+    lifecycleItems: string[]
+    onReadDocument: HookDoc
+    onRunWorkflow: HookDoc
+  }
+  footer: {
+    copyright: string
+  }
+}
+
+export interface HookDoc {
+  name: string
+  purpose: string
+  signature: string
+  when: string
+  stableFor: string[]
+  example: string
+  exampleHtml?: string
 }
