@@ -1044,3 +1044,51 @@ Terminal的字体选择器它应该是个 `Array<string>`+`Input|TextArea`，用
    3. 这里有两种做法：
       1. 一种是直接在所有接口添加统一的中间件来支持；
       2. 一种是不同的目录，使用不同的入口。比如我们默认的接口都是`/trpc`和`/ws/pty`，我们可以提供`/trpc?cwd=/path`和`/ws/pty?cwd=/path`
+
+---
+
+接下来我们将实现一些新的功能来满足 #98#99 这两个issues。
+
+1. #98，这是一个非常简单的功能，首先默认情况下，我们当然使用 env.SHELL (windows操作系统我不清楚，你来决定如何适配)。这个默认功能也会成为界面上配置的 Input的placeholder值。
+
+2. #99，这里我到想法和这个issue的提出者不一样，我认为，我们可以提供“快捷命令配置”，比如 `claude --dangerously-skip-permissions \$0`,这里 `\$0` 只是一个举例，意味着我可以往这里插入命令。我们可以内置一些快捷命令，比如claude/codex/gemini这类常用的。这样一来，我们在选择“发送到某个终端实例”的时候，既可以选择已经存在的终端，还可以快捷命令来创建一个新的终端，并将参数带到新的终端。
+
+3. 所以我们需要开发一个新组件：终端发送器。它是由一个Select和一组actions组成的卡片。
+   3.1. 在选中已经存在的终端的时候，那么Actions只有一个Send按钮。
+   3.2. 在选择通过预设的命令创建终端实例的时候，会根据配置来显示一些表单来满足参数的填入，然后最后 Actions 提供一个 Create 按钮。
+   3.3. 这里如何定义创建命令所需的参数？这里的本质是拼接字符串（或者字符串数组），然后将内容发送给终端。然后我们需要通过一些配置，来实现自动化的表单。对此有什么成熟的技术可以借鉴吗？
+
+你有什么问题或者建议吗？
+
+1.  spawn command 这个底层也是可以配置shell的，你不传递这个参数，它自己会有一个默认参数: [shell <boolean> | <string> If true, runs command inside of a shell. Uses '/bin/sh' on Unix, and process.env.ComSpec on Windows. A different shell can be specified as a string. See Shell requirements and Default Windows shell. Default: false (no shell).](https://nodejs.org/api/ child_process.html#child_processspawncommand-args-options)
+2.  `--dangerously-skip-permissions`到时候在ui上，就是一个toggle，打开就会启用。
+3.  我们整理一下，这里其实有两个东西，一个是配置shell，一个是配置command。我们运行配置多个shell，macOS/ Linux提供 [`/bin/sh`,SHELL]，window提供 [cmd,ps,bash(WSL)]，然后允许自定义添加，比如window用户可能需要添 加git-bash。用户可以管理这个数组，然后可以选择一个作为默认。
+4.  有了这个shell数组后，我们在配置command的时候，就可以配置它的shell是哪个，默认就是我们配置的shell。然 后还有，我们的TerminalPanel页面，点击“+”按钮，默认是打开一个默认shell，如果右键，那么会弹出一个菜单，会 显示两组menuItems，第一组就是配置好的shells，第二组就是commands，点击commands，会弹出一个Dialog，显示配 置表单，在这个表单中，我们可以配置参数，然后点击 `Create` 就可以创建一个新的终端实例
+5.  上面提到的表单，在我们的原本要解决的#99 这个问题中，可以在目标Dialog中，嵌入同样的组件。所以我的想法是，“终端发送器”这个要改一改，不用那么复杂，还是一个 Select+button(Send|Create) 即可。差别在于，如果选择 Create，那么会和 4 提到的交互一样，弹出一个新的 Dialog，而不是在原有的 Dialog 中再嵌套复杂的表单组件。所以可以叫做 TerminalSpawnCommandDialog，允许提供一些预设的参数来打开这个 Dialog，所以我们就可以把 command|compose 得出的要发给终端的内容，传递给 TerminalSpawnCommandDialog ，然后再点击 Create，就可以正式创建出 Terminal 实例。
+
+> PS: 当前目录还在做官网相关的开发，不影响你这个开发。
+
+---
+
+## implement `#100 Support for browser notifications when a terminal bell is fired`
+
+对于这个需求。我的想法是，我们在前端，实现一个 web-notifications 的功能（为了区分，我们将原生的 NotificationAPI，称为 browser-notifications）
+
+1. 渲染在 TopLayer（参考 Search），入口在底部`Watching for changes`这个位置，这里放一个🔔图标，如果有通知，通过角标来显示有新的通知。
+2. 原本的`Watching for changes`这个，在 hover 到`Live`这个文字的时候，通过 popover 来显示这个提示信息
+3. notifications的功能，就是订阅后端 notifications，收到消息后（一种结构化信息），如果和前端的某个页面有关，结构化信息也会根据前端的排布，点击进行动态跳转。比如#100提到的，TerminalPanel 的某个TerminalTab 的聚焦。
+4. 然后我们还要触发 browser-notifications（显示有几条新消息、最近的一条消息的概览），点击browser-Notification可以打开我们的 NotificationsPanel(TopLayer)
+   > 不要忘记调用 window.focus()。用户很多时候是把 WebUI 挂在后台，在看其他网页或写代码。点击系统原生通知时，首要任务是把 WebUI 所在的浏览器 Tab 切换到前台，然后再打开 NotificationsPanel 并高亮对应的 TerminalTab。
+5. web-notifications 基本和 browser-notifications 的接口设计一样（包括通知、进度控制等等能力），但是结构上会更安全，我们会通过 typescript 的类型推断来强化类型安全。我们之所以不直接用 browser-notifications，是因为部分情况下，browser-notifications不一定能用，比如说有些浏览器是嵌入在某些 app 内部的，所以如果 app 没有适配，那么就无法显示 browser-notifications，并且browser-notifications还存在权限问题。所以我们的设计上，browser-notifications只是一个统一的入口（可能公用一个 Notification-id）。真正要实现这个可靠的能力，还需要依靠 web-notifications
+6. 和 browser-notifications 类似，web-notifications 是阅后即焚，不需要持久化，我们只在后端内存中存储。
+   > 不在前端存储，是因为我们要跨终端实现同步：我在手机上读取了通知，在桌面端也可以同时焚烧。
+   > 通知可能很多，我们还需要提供一个一键清理的功能，或者在移动端提供滑动删除的功能（这里要有动画的支持，比如 1234，我删除 3，那么动画要平滑。）
+7. 我们会有列表动画的支持：关于新的 Notification 添加到 web-notifications，或者已读后自动溢移除的动画。
+8. 我们的 web-notifications 只是为了解决`OSC 9|777`的通知功能的绑定，对于#100需要的铃声绑定，这个不属于 web-Notifications的工作，而是前端的TerminalTab需要自己去适配。但是我对于提出这个issue 发起者的理解来说，他其实要的是`OSC 9|777`的通知功能的铃声功能。不过这里涉及到一个历史遗留问题，古老的终端会使用 bell声音来替代通知，所以如果发出了 bell 声音，我们可以在 web-notifications 中自动发起一条通知，比如`Terminal xxx has an Event.`
+9. 我们需要在 Settings 面板中，为 web-notifications 提供一些基础的设置，目前可以配置有两个：
+   9.1. `Notification Sound`：需要你上网搜罗一些常见的操作系统通知声音的资源，或者你找一下 cmux 这个开源项目，源代码中是不是也有一些声音资源，我们需要做一个Popover选择器，可以直接在下拉选择器中进行点击播放按钮播放声音，或者悬停一会儿也播放。或者简单一点，使用原生的 Select，然后在旁边放一个播放按钮，点击播放即可。当然，也可以选择静音。
+   9.2. `Enable System Notifications`: 申请操作系统级别的通知，这里也能知道，浏览器有没有权限或者有没有适配 browser-notifications
+10. 因为我们的 Settings 面板越来越复杂，我们需要将项目的 ToC 组件给这个页面使用，从而实现便捷的导航。
+11. 浏览器对于播放音频的自动播放策略，onBell、onNotification 都是需要我们主动播放声音的，你要么就找到一个专业的音频播放库，要么就是手动监听用户的第一次全局点击交互(`onpointerdown`)默默播放一个 0.1 秒的静音音频，从而解锁当前的 AudioContext。
+12. 我们需要根据元数据进行分组，比如某一个终端同时发出了 100 条数据，我们 web-notifications 渲染出来的效果是类似于 iOS 的通知分组功能：同一个应用的通知是规划成一组，需要手动展开才能查看全部，滑动删除可以直接删除一整组。同理，我们的 web-notifications 是强类型安全的结构化，所以通知可能来自某个 Terminal、来自某个 OpenspecChange、来自某个 HooksPlugin，所以理论上是可以实现安全可靠的分组。这能有效避免 web-notifications 面板爆炸
+13. 如果我们点击的 Notification的跳转，发现对应的实例已经被销毁了，比如 Terminal 被 killed，或者 OpenspecChange 被 archive，那么在跳转之前要能预判，直接将跳转按钮进行禁用。

@@ -2,6 +2,8 @@ import { ButtonGroup } from '@/components/button-group'
 import { CliTerminal } from '@/components/cli-terminal'
 import { CopyablePath } from '@/components/copyable-path'
 import { Dialog } from '@/components/dialog'
+import { Select, type SelectOption } from '@/components/select'
+import { TerminalInvocationSettings } from '@/components/terminal/terminal-invocation-settings'
 import { getApiBaseUrl } from '@/lib/api-config'
 import {
   CODE_EDITOR_THEME_OPTIONS,
@@ -79,6 +81,18 @@ function formatExecutePath(command: string, args: readonly string[] = []): strin
   }
   return [command, ...args].map(quote).join(' ')
 }
+
+const INIT_TOOLS_MODE_OPTIONS: SelectOption<InitToolsMode>[] = [
+  { value: 'auto', label: 'Auto-detect tools (recommended)' },
+  { value: 'selected', label: 'Use selected tools' },
+  { value: 'all', label: 'Use all tools' },
+]
+
+const INIT_PROFILE_OVERRIDE_OPTIONS: SelectOption<InitProfileOverride>[] = [
+  { value: 'default', label: 'Use global default' },
+  { value: 'core', label: 'core' },
+  { value: 'custom', label: 'custom' },
+]
 
 function FontFamilyEditor({
   value,
@@ -569,6 +583,20 @@ export function Settings() {
   const [dashboardTrendPointLimit, setDashboardTrendPointLimit] = useState(100)
   const [gitDiffEagerLineBudget, setGitDiffEagerLineBudget] = useState(1000)
   const [termRendererError, setTermRendererError] = useState<string | null>(null)
+  const codeEditorThemeOptions = CODE_EDITOR_THEME_OPTIONS satisfies SelectOption<CodeEditorTheme>[]
+  const terminalThemeOptions = TERMINAL_THEME_OPTIONS satisfies SelectOption<TerminalThemeId>[]
+  const terminalRendererOptions = useMemo<SelectOption<string>[]>(
+    () => [
+      ...TERMINAL_RENDERER_ENGINES.map((engine) => ({
+        value: engine,
+        label: engine === 'ghostty' ? 'ghostty-web' : engine,
+      })),
+      ...(isTerminalRendererEngine(termRendererEngine)
+        ? []
+        : [{ value: termRendererEngine, label: `Invalid value: ${termRendererEngine}` }]),
+    ],
+    [termRendererEngine]
+  )
   const isRendererEngineValid = isTerminalRendererEngine(termRendererEngine)
 
   // Re-sync local state when controller config changes
@@ -807,25 +835,19 @@ export function Settings() {
           <div className="border-border/60 mt-4 border-t pt-4">
             <label className="mb-2 block text-sm font-medium">Code Editor Theme</label>
             <div className="flex items-center gap-2">
-              <select
+              <Select
                 value={codeEditorTheme}
-                onChange={(e) => {
-                  const nextTheme = e.target.value
-                  if (!isCodeEditorTheme(nextTheme)) return
+                options={codeEditorThemeOptions}
+                onValueChange={(nextTheme) => {
                   setCodeEditorTheme(nextTheme)
                   if (!inStaticMode) {
                     saveCodeEditorThemeMutation.mutate(nextTheme)
                   }
                 }}
-                className="bg-background border-border text-foreground focus:ring-primary w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
+                ariaLabel="Code Editor Theme"
+                className="w-full"
                 disabled={inStaticMode || saveCodeEditorThemeMutation.isPending}
-              >
-                {CODE_EDITOR_THEME_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              />
               {saveCodeEditorThemeMutation.isPending ? (
                 <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
               ) : saveCodeEditorThemeMutation.isSuccess ? (
@@ -867,6 +889,8 @@ export function Settings() {
               Terminal
             </h2>
             <div className="border-border space-y-4 rounded-lg border p-4">
+              <TerminalInvocationSettings />
+
               <div>
                 <label className="mb-2 block text-sm font-medium">Use Theme</label>
                 <div className="flex flex-wrap gap-2">
@@ -900,50 +924,38 @@ export function Settings() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-2 block text-sm font-medium">Light Theme</label>
-                  <select
+                  <Select
                     value={termLightTheme}
-                    onChange={(e) => {
-                      const next = e.target.value
-                      if (!isTerminalThemeId(next)) return
+                    options={terminalThemeOptions}
+                    onValueChange={(next) => {
                       setTermLightTheme(next)
                       applyTerminalConfig({ lightTheme: next })
                     }}
-                    className="bg-background border-border text-foreground focus:ring-primary w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
-                  >
-                    {TERMINAL_THEME_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                    ariaLabel="Light Theme"
+                    className="w-full"
+                  />
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-medium">Dark Theme</label>
-                  <select
+                  <Select
                     value={termDarkTheme}
-                    onChange={(e) => {
-                      const next = e.target.value
-                      if (!isTerminalThemeId(next)) return
+                    options={terminalThemeOptions}
+                    onValueChange={(next) => {
                       setTermDarkTheme(next)
                       applyTerminalConfig({ darkTheme: next })
                     }}
-                    className="bg-background border-border text-foreground focus:ring-primary w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
-                  >
-                    {TERMINAL_THEME_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                    ariaLabel="Dark Theme"
+                    className="w-full"
+                  />
                 </div>
               </div>
 
               <div>
                 <label className="mb-2 block text-sm font-medium">Renderer Engine</label>
-                <select
+                <Select
                   value={termRendererEngine}
-                  onChange={(e) => {
-                    const next = e.target.value
+                  options={terminalRendererOptions}
+                  onValueChange={(next) => {
                     setTermRendererEngine(next)
                     if (isTerminalRendererEngine(next)) {
                       void handleRendererEngineChange(next)
@@ -951,19 +963,9 @@ export function Settings() {
                       setTermRendererError(`Invalid renderer engine: ${next}`)
                     }
                   }}
-                  className="bg-background border-border text-foreground focus:ring-primary w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
-                >
-                  {TERMINAL_RENDERER_ENGINES.map((engine) => (
-                    <option key={engine} value={engine}>
-                      {engine === 'ghostty' ? 'ghostty-web' : engine}
-                    </option>
-                  ))}
-                  {!isRendererEngineValid && (
-                    <option value={termRendererEngine}>
-                      {`Invalid value: ${termRendererEngine}`}
-                    </option>
-                  )}
-                </select>
+                  ariaLabel="Renderer Engine"
+                  className="w-full"
+                />
                 {termRendererError ? (
                   <p className="mt-2 text-xs text-red-500">{termRendererError}</p>
                 ) : (
@@ -1622,15 +1624,13 @@ export function Settings() {
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="space-y-1.5">
                   <span className="text-sm font-medium">Init Mode</span>
-                  <select
+                  <Select
                     value={initToolsMode}
-                    onChange={(event) => setInitToolsMode(event.target.value as InitToolsMode)}
-                    className="border-border bg-background w-full rounded-md border px-2 py-2 text-sm"
-                  >
-                    <option value="auto">Auto-detect tools (recommended)</option>
-                    <option value="selected">Use selected tools</option>
-                    <option value="all">Use all tools</option>
-                  </select>
+                    options={INIT_TOOLS_MODE_OPTIONS}
+                    onValueChange={setInitToolsMode}
+                    ariaLabel="Init Mode"
+                    className="w-full"
+                  />
                   <p className="text-muted-foreground text-xs">
                     OpenSpec CLI can auto-detect existing tool directories. OpenSpecUI 3.x uses
                     OpenSpec CLI 1.3.x as the current tool line.
@@ -1639,17 +1639,13 @@ export function Settings() {
 
                 <label className="space-y-1.5">
                   <span className="text-sm font-medium">Profile Override</span>
-                  <select
+                  <Select
                     value={initProfileOverride}
-                    onChange={(event) =>
-                      setInitProfileOverride(event.target.value as InitProfileOverride)
-                    }
-                    className="border-border bg-background w-full rounded-md border px-2 py-2 text-sm"
-                  >
-                    <option value="default">Use global default</option>
-                    <option value="core">core</option>
-                    <option value="custom">custom</option>
-                  </select>
+                    options={INIT_PROFILE_OVERRIDE_OPTIONS}
+                    onValueChange={setInitProfileOverride}
+                    ariaLabel="Profile Override"
+                    className="w-full"
+                  />
                   <p className="text-muted-foreground text-xs">
                     Adds <code className="bg-muted rounded px-1">--profile</code> when set.
                   </p>

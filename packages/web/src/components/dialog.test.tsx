@@ -1,5 +1,5 @@
-import { render } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { fireEvent, render } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import { Dialog } from './dialog'
 
 describe('Dialog', () => {
@@ -32,5 +32,18 @@ describe('Dialog', () => {
     expect(
       document.head.querySelectorAll('[data-head-style="dialog:openspec-dialog"]')
     ).toHaveLength(1)
+  })
+
+  it('does not close when a child click reports zero coordinates', () => {
+    const onClose = vi.fn()
+    const { getByText } = render(
+      <Dialog open title="Dialog title" onClose={onClose}>
+        <button type="button">Inner action</button>
+      </Dialog>
+    )
+
+    fireEvent.click(getByText('Inner action'), { clientX: 0, clientY: 0 })
+
+    expect(onClose).not.toHaveBeenCalled()
   })
 })

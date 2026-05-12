@@ -24,6 +24,10 @@ export default defineConfig(({ isSsrBuild }) => {
     '@openspecui/core/openspec-compat': resolve(__dirname, '../core/src/openspec-compat.ts'),
     '@openspecui/core/opsx-display-path': resolve(__dirname, '../core/src/opsx-display-path.ts'),
     '@openspecui/core/pty-protocol': resolve(__dirname, '../core/src/pty-protocol.ts'),
+    '@openspecui/core/terminal-invocation': resolve(
+      __dirname,
+      '../core/src/terminal-invocation.ts'
+    ),
     '@openspecui/search': resolve(__dirname, '../search/src'),
     '@openspecui/search/node': resolve(__dirname, '../search/src/node.ts'),
     '@openspecui/server': resolve(__dirname, '../server/src'),

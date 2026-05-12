@@ -5,6 +5,7 @@ import { Archive, CheckCircle, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { CliTerminal } from './cli-terminal'
 import { Dialog } from './dialog'
+import { Switch } from './switch'
 
 /**
  * 全局 Archive Modal（单一对话框，点击 Archive 后直接串行 validate -> archive）
@@ -174,36 +175,34 @@ export function GlobalArchiveModal() {
         <div className="space-y-3">
           <p className="text-sm font-medium">Options</p>
 
-          <label className="flex cursor-pointer items-start gap-3">
-            <input
-              type="checkbox"
-              checked={skipSpecs}
-              onChange={(e) => setSkipSpecs(e.target.checked)}
-              className="border-border mt-1 h-4 w-4 rounded"
-              disabled={hasStarted}
-            />
+          <label className="flex cursor-pointer items-start justify-between gap-3">
             <div>
               <p className="text-sm font-medium">Skip specs update</p>
               <p className="text-muted-foreground text-xs">
                 Don't update spec files with delta changes (--skip-specs)
               </p>
             </div>
-          </label>
-
-          <label className="flex cursor-pointer items-start gap-3">
-            <input
-              type="checkbox"
-              checked={noValidate}
-              onChange={(e) => setNoValidate(e.target.checked)}
-              className="border-border mt-1 h-4 w-4 rounded"
+            <Switch
+              checked={skipSpecs}
+              onCheckedChange={setSkipSpecs}
+              ariaLabel="Skip specs update"
               disabled={hasStarted}
             />
+          </label>
+
+          <label className="flex cursor-pointer items-start justify-between gap-3">
             <div>
               <p className="text-sm font-medium">Skip validation</p>
               <p className="text-muted-foreground text-xs">
                 Don't validate the change before archiving (--no-validate)
               </p>
             </div>
+            <Switch
+              checked={noValidate}
+              onCheckedChange={setNoValidate}
+              ariaLabel="Skip validation"
+              disabled={hasStarted}
+            />
           </label>
         </div>
       </div>

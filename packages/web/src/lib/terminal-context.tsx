@@ -1,3 +1,4 @@
+import type { TerminalShellProfile } from '@openspecui/core/terminal-invocation'
 import {
   createContext,
   useCallback,
@@ -35,15 +36,25 @@ interface TerminalContextValue {
   activeSessionId: string | null
   createSession: (opts?: {
     label?: string
+    customTitle?: string | null
     command?: string
     args?: string[]
     closeTip?: string
     closeCallbackUrl?: string | Record<string, string>
+    initialInput?: string
   }) => string
+  createShellSession: (
+    shell: TerminalShellProfile,
+    opts?: { label?: string; initialInput?: string }
+  ) => string
   createDedicatedSession: (
     command: string,
     args: string[],
-    opts?: { closeTip?: string; closeCallbackUrl?: string | Record<string, string> }
+    opts?: {
+      closeTip?: string
+      closeCallbackUrl?: string | Record<string, string>
+      initialInput?: string
+    }
   ) => string
   closeSession: (id: string) => void
   setActiveSession: (id: string) => void
@@ -71,13 +82,32 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const createSession = useCallback(
     (opts?: {
       label?: string
+      customTitle?: string | null
       command?: string
       args?: string[]
       closeTip?: string
       closeCallbackUrl?: string | Record<string, string>
+      initialInput?: string
     }) => {
       if (isStatic) return ''
       const id = terminalController.createSession(opts)
+      setActiveSessionId(id)
+      return id
+    },
+    [isStatic]
+  )
+
+  const createShellSession = useCallback(
+    (shell: TerminalShellProfile, opts?: { label?: string; initialInput?: string }) => {
+      if (isStatic) return ''
+      const label = opts?.label ?? shell.label
+      const id = terminalController.createSession({
+        label,
+        customTitle: label,
+        command: shell.command,
+        args: shell.args,
+        initialInput: opts?.initialInput,
+      })
       setActiveSessionId(id)
       return id
     },
@@ -88,7 +118,11 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     (
       command: string,
       args: string[],
-      opts?: { closeTip?: string; closeCallbackUrl?: string | Record<string, string> }
+      opts?: {
+        closeTip?: string
+        closeCallbackUrl?: string | Record<string, string>
+        initialInput?: string
+      }
     ) => {
       if (isStatic) return ''
       const label = `${command} ${args.join(' ')}`.trim()
@@ -99,6 +133,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         isDedicated: true,
         closeTip: opts?.closeTip,
         closeCallbackUrl: opts?.closeCallbackUrl,
+        initialInput: opts?.initialInput,
       })
       setActiveSessionId(id)
       return id
@@ -187,6 +222,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       sessions,
       activeSessionId: resolvedActiveSessionId,
       createSession,
+      createShellSession,
       createDedicatedSession,
       closeSession,
       setActiveSession,
@@ -197,6 +233,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       sessions,
       resolvedActiveSessionId,
       createSession,
+      createShellSession,
       createDedicatedSession,
       closeSession,
       setActiveSession,

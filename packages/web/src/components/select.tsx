@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
 import { Select as BaseSelect } from '@base-ui/react/select'
 import { Check, ChevronDown } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useCallback, useState, type FocusEventHandler, type ReactNode } from 'react'
 
 export interface SelectOption<T extends string> {
   value: T
@@ -9,11 +9,24 @@ export interface SelectOption<T extends string> {
   disabled?: boolean
 }
 
+export interface SelectOptionGroup<T extends string> {
+  label: ReactNode
+  options: readonly SelectOption<T>[]
+}
+
 interface SelectProps<T extends string> {
   value: T
-  options: readonly SelectOption<T>[]
+  options?: readonly SelectOption<T>[]
+  groups?: readonly SelectOptionGroup<T>[]
   onValueChange: (value: T) => void
   ariaLabel?: string
+  id?: string
+  name?: string
+  required?: boolean
+  disabled?: boolean
+  onBlur?: FocusEventHandler<HTMLButtonElement>
+  onFocus?: FocusEventHandler<HTMLButtonElement>
+  'data-testid'?: string
   placeholder?: ReactNode
   renderTrigger?: (args: { selectedOption: SelectOption<T> | undefined }) => ReactNode
   className?: string
@@ -27,9 +40,17 @@ interface SelectProps<T extends string> {
 
 export function Select<T extends string>({
   value,
-  options,
+  options = [],
+  groups,
   onValueChange,
   ariaLabel,
+  id,
+  name,
+  required,
+  disabled,
+  onBlur,
+  onFocus,
+  'data-testid': dataTestId,
   placeholder = 'Select…',
   renderTrigger,
   className,
@@ -40,11 +61,25 @@ export function Select<T extends string>({
   sideOffset = 8,
   modal = false,
 }: SelectProps<T>) {
-  const selectedOption = options.find((option) => option.value === value)
+  const optionGroups = groups ?? [{ label: null, options }]
+  const selectedOption = optionGroups
+    .flatMap((group) => group.options)
+    .find((option) => option.value === value)
+  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null)
+  const handleTriggerRef = useCallback((node: HTMLButtonElement | null) => {
+    const nextContainer = node?.closest('dialog') ?? null
+    setPortalContainer((currentContainer) =>
+      currentContainer === nextContainer ? currentContainer : nextContainer
+    )
+  }, [])
 
   return (
     <BaseSelect.Root
+      id={id}
+      name={name}
       value={value}
+      required={required}
+      disabled={disabled}
       modal={modal}
       onValueChange={(nextValue) => {
         if (nextValue !== null) {
@@ -53,12 +88,17 @@ export function Select<T extends string>({
       }}
     >
       <BaseSelect.Trigger
+        ref={handleTriggerRef}
         aria-label={ariaLabel}
+        data-testid={dataTestId}
+        onBlur={onBlur}
+        onFocus={onFocus}
         className={(state) =>
           cn(
-            'text-foreground inline-flex min-w-0 items-center gap-1.5 text-xs outline-none transition-colors',
-            'focus-visible:ring-ring/60 focus-visible:ring-2',
-            state.open ? 'bg-muted/40' : '',
+            'bg-background border-border text-foreground inline-flex h-9 min-w-0 items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm outline-none transition-colors',
+            'hover:bg-muted/30 focus-visible:ring-primary focus-visible:ring-1',
+            'disabled:cursor-not-allowed disabled:opacity-50',
+            state.open ? 'bg-muted/40 ring-primary ring-1' : '',
             className
           )
         }
@@ -73,50 +113,64 @@ export function Select<T extends string>({
               {() => selectedOption?.label ?? placeholder}
             </BaseSelect.Value>
             <BaseSelect.Icon className="text-muted-foreground flex shrink-0">
-              <ChevronDown className="h-3.5 w-3.5" />
+              <ChevronDown className="h-4 w-4" />
             </BaseSelect.Icon>
           </>
         )}
       </BaseSelect.Trigger>
 
-      <BaseSelect.Portal>
+      <BaseSelect.Portal container={portalContainer ?? undefined}>
         <BaseSelect.Positioner
           sideOffset={sideOffset}
           className={cn('z-50 select-none outline-none', positionerClassName)}
         >
           <BaseSelect.Popup
             className={cn(
-              'bg-card text-foreground border-border w-max min-w-28 rounded-md border p-1 shadow-lg',
+              'bg-card text-foreground border-border min-w-(--anchor-width) max-w-[min(24rem,calc(100vw-2rem))] rounded-md border p-1 shadow-lg',
               'origin-(--transform-origin) transition-[transform,opacity] duration-150',
               'data-[ending-style]:translate-y-0.5 data-[ending-style]:opacity-0',
               'data-[starting-style]:translate-y-0.5 data-[starting-style]:opacity-0',
               popupClassName
             )}
           >
-            <BaseSelect.List className={cn('max-h-64 overflow-y-auto py-0.5', listClassName)}>
-              {options.map((option) => (
-                <BaseSelect.Item
-                  key={option.value}
-                  value={option.value}
-                  disabled={option.disabled}
-                  label={typeof option.label === 'string' ? option.label : undefined}
-                  className={(state) =>
-                    cn(
-                      'grid cursor-default grid-cols-[0.8rem_minmax(0,1fr)] items-center gap-1.5 rounded-sm px-2 py-1.5 text-xs outline-none',
-                      state.highlighted && 'bg-muted text-foreground',
-                      state.selected && 'text-foreground',
-                      state.disabled && 'opacity-50',
-                      itemClassName
-                    )
-                  }
-                >
-                  <BaseSelect.ItemIndicator className="text-primary flex h-3.5 w-3.5 items-center justify-center">
-                    <Check className="h-3.5 w-3.5" />
-                  </BaseSelect.ItemIndicator>
-                  <BaseSelect.ItemText className="whitespace-nowrap">
-                    {option.label}
-                  </BaseSelect.ItemText>
-                </BaseSelect.Item>
+            <BaseSelect.List
+              className={cn(
+                'scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[color-mix(in_srgb,currentColor,transparent_78%)] max-h-[min(18rem,var(--available-height))] overflow-x-auto overflow-y-auto py-0.5',
+                listClassName
+              )}
+            >
+              {optionGroups.map((group, groupIndex) => (
+                <BaseSelect.Group key={groupIndex} className={cn(groupIndex > 0 && 'mt-1')}>
+                  {group.label && (
+                    <BaseSelect.GroupLabel className="text-muted-foreground px-2 py-1 text-[11px] font-medium uppercase tracking-wide">
+                      {group.label}
+                    </BaseSelect.GroupLabel>
+                  )}
+                  {group.options.map((option) => (
+                    <BaseSelect.Item
+                      key={option.value}
+                      value={option.value}
+                      disabled={option.disabled}
+                      label={typeof option.label === 'string' ? option.label : undefined}
+                      className={(state) =>
+                        cn(
+                          'grid cursor-default grid-cols-[1rem_minmax(0,1fr)] items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none',
+                          state.highlighted && 'bg-muted text-foreground',
+                          state.selected && 'text-foreground',
+                          state.disabled && 'opacity-50',
+                          itemClassName
+                        )
+                      }
+                    >
+                      <BaseSelect.ItemIndicator className="text-primary flex h-4 w-4 items-center justify-center">
+                        <Check className="h-4 w-4" />
+                      </BaseSelect.ItemIndicator>
+                      <BaseSelect.ItemText className="whitespace-nowrap">
+                        {option.label}
+                      </BaseSelect.ItemText>
+                    </BaseSelect.Item>
+                  ))}
+                </BaseSelect.Group>
               ))}
             </BaseSelect.List>
           </BaseSelect.Popup>

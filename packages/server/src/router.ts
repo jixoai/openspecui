@@ -25,6 +25,7 @@ import {
   getWatcherRuntimeStatus,
   GitConfigSchema,
   OpsxConfigSchema,
+  resolveTerminalShellDefaults,
   sniffGlobalCli,
   subscribeWatcherRuntimeStatus,
   TerminalConfigSchema,
@@ -748,6 +749,18 @@ export const configRouter = router({
   // Reactive subscription
   subscribe: publicProcedure.subscription(({ ctx }) => {
     return createReactiveSubscription(() => ctx.configManager.readConfig())
+  }),
+
+  getTerminalShellDefaults: publicProcedure.query(async () => {
+    const platform =
+      process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'common'
+    return resolveTerminalShellDefaults({
+      platform,
+      env: {
+        SHELL: process.env.SHELL,
+        ComSpec: process.env.ComSpec,
+      },
+    })
   }),
 })
 

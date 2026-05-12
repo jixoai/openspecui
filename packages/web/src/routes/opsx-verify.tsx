@@ -1,5 +1,6 @@
 import { CliTerminal } from '@/components/cli-terminal'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
+import { Switch } from '@/components/switch'
 import {
   prepareWorkflowInvocation,
   workflowDiagnosticsToText,
@@ -86,11 +87,10 @@ export function OpsxVerifyRoute() {
           <h2 className="font-nav text-base tracking-[0.04em]">Verify Change</h2>
         </div>
         <label className="flex items-center gap-2 text-xs">
-          <input
-            type="checkbox"
+          <Switch
             checked={strict}
-            onChange={(event) => setStrict(event.target.checked)}
-            className="border-border h-3.5 w-3.5 rounded"
+            onCheckedChange={setStrict}
+            ariaLabel="Strict"
             disabled={status === 'running'}
           />
           Strict
