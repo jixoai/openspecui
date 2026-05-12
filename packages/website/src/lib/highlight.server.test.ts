@@ -12,5 +12,6 @@ describe('highlightHookExample', () => {
     expect(hook.exampleHtml).toContain('--shiki-light-bg:#faf4ed')
     expect(hook.exampleHtml).toContain('--shiki-dark-bg:#390000')
     expect(hook.exampleHtml).toContain('onReadDocument')
+    expect(hook.exampleHtml).toContain('OnReadDocumentHookV1')
   })
 })
