@@ -1,20 +1,12 @@
 import type { HookDoc } from '$lib/i18n/schema'
-import { codeToHtml } from 'shiki'
+import { highlightCodeToHtml } from '../../syntax-highlight'
 
-const shikiThemes = {
-  light: 'rose-pine-dawn',
-  dark: 'red',
-} as const
+export { highlightCodeToHtml }
 
 export async function highlightHookExample(hook: HookDoc): Promise<HookDoc> {
   return {
     ...hook,
-    exampleHtml: await codeToHtml(hook.example, {
-      lang: 'ts',
-      themes: shikiThemes,
-      defaultColor: false,
-      cssVariablePrefix: '--shiki-',
-    }),
+    exampleHtml: await highlightCodeToHtml(hook.example, { language: 'ts' }),
   }
 }
 
