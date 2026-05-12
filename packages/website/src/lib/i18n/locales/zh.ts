@@ -88,7 +88,7 @@ export const zh = {
       'OpenSpecUI 会加载 `openspecui.hooks.ts` 作为可执行的项目策略。第一批稳定 hooks 被刻意设计得很窄：一个负责读取文档，一个负责运行 OpenSpec 工作流。',
     designTitle: '设计法则',
     designBody:
-      '`on*` hooks 是明确的拦截点。它们接收上下文和 `next` 函数，并返回平台原本会产出的同类结果。这里不暴露宽泛的 plugin bus。',
+      '`on*` hooks 是明确的拦截点。它们接收上下文和默认 runner 函数，并返回平台原本会产出的同类结果。这里不暴露宽泛的 plugin bus。',
     contractTitle: '兼容契约',
     contractBody:
       'hook 名称描述的是长期稳定的 OpenSpec 用户工作流，而不是 OpenSpecUI 内部实现阶段。这样即便内部演进，项目 hooks 仍然有保留价值。',
@@ -102,21 +102,20 @@ export const zh = {
     onReadDocument: {
       name: 'onReadDocument',
       purpose: '在 OpenSpecUI 展示 markdown 类 OpenSpec 文档前，自定义文档文本。',
-      signature:
-        'onReadDocument(ctx, document, next): Promise<OpenSpecDocument> | OpenSpecDocument',
+      signature: 'onReadDocument(ctx, read): Promise<ReadDocumentResultV1>',
       when: '适合 #103 这种预处理、文档翻译、链接重写，或者基于 frontmatter 的展示策略。',
       stableFor: ['Markdown 预处理', '翻译覆盖层', '项目本地展示策略'],
       example:
-        "export async function onReadDocument(ctx, document, next) {\n  const current = await next(document)\n  return current.path.endsWith('.md')\n    ? { ...current, text: current.text.replaceAll('{{project}}', ctx.projectName) }\n    : current\n}",
+        "import type { OnReadDocumentHookV1 } from 'openspecui/hooks'\n\nexport const onReadDocument: OnReadDocumentHookV1 = async (ctx, read) => {\n  const result = await read()\n  if (ctx.document.kind !== 'spec') return result\n\n  return {\n    ...result,\n    markdown: result.markdown.replaceAll('CLI_0003', 'CLI_0003 — CLI Recipe Execution'),\n    watchFiles: ['docs/reqstool/requirements.yml'],\n  }\n}",
     },
     onRunWorkflow: {
       name: 'onRunWorkflow',
       purpose: '在不替换 OpenSpec CLI 契约的前提下，包裹一次 OpenSpec 工作流运行。',
-      signature: 'onRunWorkflow(ctx, workflow, next): Promise<WorkflowResult>',
+      signature: 'onRunWorkflow(ctx, run): Promise<RunWorkflowResultV1>',
       when: '适合选择 workflow tools、注入安全环境变量、记录审计输出，或者基于项目策略拦截执行。',
       stableFor: ['工作流编排', '工具选择', '执行审计'],
       example:
-        "export async function onRunWorkflow(ctx, workflow, next) {\n  ctx.log.info(`running ${workflow.name}`)\n  return next({\n    ...workflow,\n    env: { ...workflow.env, OPENSPECUI_PROFILE: 'team-default' }\n  })\n}",
+        "import type { OnRunWorkflowHookV1 } from 'openspecui/hooks'\n\nexport const onRunWorkflow: OnRunWorkflowHookV1 = async (ctx, run) => {\n  const result = await run()\n  if (result.kind !== 'agent-prompt') return result\n\n  return {\n    ...result,\n    text: `${result.text}\\n\\nProject policy: include security impact in the final summary.`,\n  }\n}",
     },
   },
   footer: {

@@ -89,7 +89,7 @@ export const en = {
       'OpenSpecUI loads `openspecui.hooks.ts` as executable project policy. The first stable hooks are intentionally narrow: one for reading documents and one for running OpenSpec workflows.',
     designTitle: 'Design law',
     designBody:
-      '`on*` hooks are explicit interception points. They receive context plus a `next` function, and they must return the same kind of value the platform would have produced. No broad plugin bus is exposed.',
+      '`on*` hooks are explicit interception points. They receive context plus a default runner function, and they must return the same kind of value the platform would have produced. No broad plugin bus is exposed.',
     contractTitle: 'Compatibility contract',
     contractBody:
       'The hook names describe durable OpenSpec user workflows rather than internal implementation phases. This keeps project hooks useful even as OpenSpecUI internals evolve.',
@@ -103,21 +103,20 @@ export const en = {
     onReadDocument: {
       name: 'onReadDocument',
       purpose: 'Customize markdown-like OpenSpec document text before OpenSpecUI displays it.',
-      signature:
-        'onReadDocument(ctx, document, next): Promise<OpenSpecDocument> | OpenSpecDocument',
+      signature: 'onReadDocument(ctx, read): Promise<ReadDocumentResultV1>',
       when: 'Use it for #103-style preprocessing, documentation translation, link rewriting, or frontmatter-derived display changes.',
       stableFor: ['Markdown preprocessing', 'Translation overlays', 'Project-local display policy'],
       example:
-        "export async function onReadDocument(ctx, document, next) {\n  const current = await next(document)\n  return current.path.endsWith('.md')\n    ? { ...current, text: current.text.replaceAll('{{project}}', ctx.projectName) }\n    : current\n}",
+        "import type { OnReadDocumentHookV1 } from 'openspecui/hooks'\n\nexport const onReadDocument: OnReadDocumentHookV1 = async (ctx, read) => {\n  const result = await read()\n  if (ctx.document.kind !== 'spec') return result\n\n  return {\n    ...result,\n    markdown: result.markdown.replaceAll('CLI_0003', 'CLI_0003 — CLI Recipe Execution'),\n    watchFiles: ['docs/reqstool/requirements.yml'],\n  }\n}",
     },
     onRunWorkflow: {
       name: 'onRunWorkflow',
       purpose: 'Wrap an OpenSpec workflow run without replacing the OpenSpec CLI contract.',
-      signature: 'onRunWorkflow(ctx, workflow, next): Promise<WorkflowResult>',
+      signature: 'onRunWorkflow(ctx, run): Promise<RunWorkflowResultV1>',
       when: 'Use it to choose workflow tools, inject safe environment variables, record audit output, or gate execution by project policy.',
       stableFor: ['Workflow orchestration', 'Tool selection', 'Execution audit'],
       example:
-        "export async function onRunWorkflow(ctx, workflow, next) {\n  ctx.log.info(`running ${workflow.name}`)\n  return next({\n    ...workflow,\n    env: { ...workflow.env, OPENSPECUI_PROFILE: 'team-default' }\n  })\n}",
+        "import type { OnRunWorkflowHookV1 } from 'openspecui/hooks'\n\nexport const onRunWorkflow: OnRunWorkflowHookV1 = async (ctx, run) => {\n  const result = await run()\n  if (result.kind !== 'agent-prompt') return result\n\n  return {\n    ...result,\n    text: `${result.text}\\n\\nProject policy: include security impact in the final summary.`,\n  }\n}",
     },
   },
   footer: {

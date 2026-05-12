@@ -21,6 +21,7 @@ static HTML.
 - SvelteKit
 - `@sveltejs/adapter-static`
 - mdsvex for documentation-capable pages
+- Shiki for build-time, dual-theme syntax highlighting
 - Tailwind CSS v4 through the shared OpenSpecUI token stylesheet
 
 ## Local Development
@@ -57,12 +58,18 @@ The hooks documentation currently lives at:
 - `src/lib/pages/hooks-guide.svelte`
 - `src/lib/components/hook-reference.svelte`
 
+Code fences in `.svx` pages and repository-owned code examples are highlighted at build time with Shiki. The active themes are `rose-pine-dawn` for light mode and `red` for dark mode, matching the OpenSpecUI red primary token.
+
 ## Styling
 
 The website reuses shared product tokens from `packages/web/src/index.css` so the public site stays visually aligned with OpenSpecUI.
 
 The website must not import React components from `packages/web`. Cross-package reuse is
 limited to design tokens and small framework-neutral helpers.
+
+Theme state is a client preference with three supported values: `light`, `dark`, and
+`system`. The server injects a small bootstrap script before hydration so static pages do
+not flash the wrong color scheme.
 
 ## Deploy with Wrangler
 

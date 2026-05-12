@@ -1,6 +1,7 @@
 import adapter from '@sveltejs/adapter-static'
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import { mdsvex } from 'mdsvex'
+import { highlightCodeToHtml } from './syntax-highlight.js'
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
@@ -9,6 +10,9 @@ const config = {
     vitePreprocess({ script: true }),
     mdsvex({
       extensions: ['.svx'],
+      highlight: {
+        highlighter: (code, lang) => highlightCodeToHtml(code, { language: lang }),
+      },
     }),
   ],
   kit: {

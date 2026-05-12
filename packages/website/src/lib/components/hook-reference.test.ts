@@ -10,7 +10,7 @@ describe('HookReference', () => {
 
     expect(screen.getByText('onReadDocument')).toBeVisible()
     expect(screen.getByText(/Customize markdown-like OpenSpec document text/)).toBeVisible()
-    expect(screen.getAllByText(/onReadDocument\(ctx, document, next\)/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/onReadDocument\(ctx, read\)/).length).toBeGreaterThan(0)
     expect(screen.getByText('Markdown preprocessing')).toBeVisible()
   })
 
