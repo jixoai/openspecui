@@ -2,8 +2,8 @@ import type { HookDoc } from '$lib/i18n/schema'
 import { codeToHtml } from 'shiki'
 
 const shikiThemes = {
-  light: 'github-light-default',
-  dark: 'github-dark-default',
+  light: 'rose-pine-dawn',
+  dark: 'red',
 } as const
 
 export async function highlightHookExample(hook: HookDoc): Promise<HookDoc> {

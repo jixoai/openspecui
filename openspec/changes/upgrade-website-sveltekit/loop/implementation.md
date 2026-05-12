@@ -20,7 +20,7 @@
 - The approved plan mentioned Paraglide as the preferred SvelteKit i18n route. During implementation, a local typed content layer is used for the first static migration to avoid generated integration churn while keeping URL locale routing intact.
 - The desktop homepage smoke test exposed a hero sidebar clipping issue at 1280px. The fix raised the wide inner-grid breakpoint instead of adding content-specific text hacks.
 - The initial language picker at `/` was removed because the route should infer the best language from browser preferences instead of asking the user first.
-- Shiki uses the `github-light-default` / `github-dark-default` pair because its keyword reds align with OpenSpecUI's primary red while keeping syntax contrast predictable in both themes.
+- Shiki uses the `rose-pine-dawn` / `red` pair so light mode stays warm and readable while dark mode follows OpenSpecUI's red primary direction.
 
 ## Verification Evidence
 
@@ -36,7 +36,7 @@
 - Browser smoke verified `/` language routing: `zh-CN -> /zh/`, `fr-FR -> /en/`.
 - Browser smoke verified both locale home pages expose a page-level `h1`.
 - Browser smoke verified `/en/hooks/` exposes a page-level `h1`, includes `onReadDocument`, and renders `.shiki-code .shiki`.
-- Browser smoke verified stored `theme=dark` applies `.dark` before interaction, and Shiki dark code background is `rgb(13, 17, 23)`.
+- Browser smoke verified stored `theme=dark` applies `.dark` before interaction, and Shiki dark code background is driven by the active dark Shiki theme.
 - Browser smoke verified header theme controls persist and apply `light`, `dark`, and `system`.
 - `git diff --check` passed.
 
