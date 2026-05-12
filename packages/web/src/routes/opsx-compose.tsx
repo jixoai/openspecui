@@ -1,5 +1,6 @@
 import { CodeEditor } from '@/components/code-editor'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
+import { Select, type SelectOption } from '@/components/select'
 import {
   resolveOpsxInvocationMode,
   type OpsxAgentInvocationMode,
@@ -133,6 +134,16 @@ export function OpsxComposeRoute() {
   )
 
   const liveSessions = useMemo(() => sessions.filter((session) => !session.isExited), [sessions])
+  const targetOptions = useMemo<SelectOption<string>[]>(
+    () => [
+      ...(liveSessions.length === 0 ? [{ value: '', label: 'No live terminal' }] : []),
+      ...liveSessions.map((session) => ({
+        value: `terminal:${session.id}`,
+        label: `Terminal: ${session.displayTitle}`,
+      })),
+    ],
+    [liveSessions]
+  )
 
   const preferredTarget = useMemo<DispatchTarget | null>(() => {
     if (activeSessionId && liveSessions.some((session) => session.id === activeSessionId)) {
@@ -465,18 +476,15 @@ export function OpsxComposeRoute() {
         <div className="order-1 flex min-w-0 items-end gap-2 sm:order-2">
           <label className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="text-sm font-medium">Terminal</span>
-            <select
+            <Select
               value={target ?? ''}
-              onChange={(event) => setTarget((event.target.value || null) as DispatchTarget | null)}
-              className="border-input bg-background focus:ring-ring w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2"
-            >
-              {liveSessions.length === 0 && <option value="">No live terminal</option>}
-              {liveSessions.map((session) => (
-                <option key={session.id} value={`terminal:${session.id}`}>
-                  Terminal: {session.displayTitle}
-                </option>
-              ))}
-            </select>
+              options={targetOptions}
+              onValueChange={(nextTarget) =>
+                setTarget((nextTarget || null) as DispatchTarget | null)
+              }
+              ariaLabel="Terminal"
+              className="w-full"
+            />
           </label>
 
           <button

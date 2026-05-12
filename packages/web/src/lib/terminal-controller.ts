@@ -295,11 +295,13 @@ class TerminalController {
 
   createSession(opts?: {
     label?: string
+    customTitle?: string | null
     command?: string
     args?: string[]
     isDedicated?: boolean
     closeTip?: string
     closeCallbackUrl?: string | Record<string, string>
+    initialInput?: string
   }): string {
     const id = `term-${++this.idCounter}`
     const label = opts?.label ?? `Shell ${this.idCounter}`
@@ -311,6 +313,8 @@ class TerminalController {
       isDedicated: opts?.isDedicated ?? false,
       closeTip: opts?.closeTip,
       closeCallbackUrl: opts?.closeCallbackUrl,
+      initialInput: opts?.initialInput,
+      customTitle: opts?.customTitle ?? null,
       restored: false,
       serverSessionId: null,
       platform: DEFAULT_PTY_PLATFORM,
@@ -348,8 +352,23 @@ class TerminalController {
       this.ensureWsConnected()
     }
 
+    if (opts?.initialInput) {
+      this.scheduleInitialInput(id, opts.initialInput)
+    }
+
     this.notify()
     return id
+  }
+
+  private scheduleInitialInput(localSessionId: string, input: string): void {
+    let attempts = 0
+    const write = () => {
+      if (this.writeToSession(localSessionId, input)) return
+      attempts += 1
+      if (attempts > 75) return
+      globalThis.setTimeout(write, 80)
+    }
+    globalThis.setTimeout(write, 80)
   }
 
   private createTerminalInstance(
@@ -361,6 +380,8 @@ class TerminalController {
       isDedicated: boolean
       closeTip?: string
       closeCallbackUrl?: string | Record<string, string>
+      initialInput?: string
+      customTitle: string | null
       restored: boolean
       serverSessionId: string | null
       platform: PtyPlatform
@@ -379,7 +400,7 @@ class TerminalController {
       inputPanelAddon,
       isConnected: false,
       label: opts.label,
-      customTitle: null,
+      customTitle: opts.customTitle,
       processTitle: null,
       isDedicated: opts.isDedicated,
       isExited: false,
@@ -1357,6 +1378,8 @@ class TerminalController {
           isDedicated: false,
           closeTip: serverSession.closeTip,
           closeCallbackUrl: serverSession.closeCallbackUrl,
+          initialInput: undefined,
+          customTitle: null,
           restored: true,
           serverSessionId: serverSession.id,
           platform: serverSession.platform ?? DEFAULT_PTY_PLATFORM,

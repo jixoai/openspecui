@@ -16,6 +16,8 @@ import {
 } from '@/components/file-explorer'
 import { MarkdownViewer } from '@/components/markdown-viewer'
 import { useViewportConstrainedHeight } from '@/components/scroll-spy'
+import { Select, type SelectOption } from '@/components/select'
+import { Switch } from '@/components/switch'
 import { Tabs, type Tab } from '@/components/tabs'
 import { navController } from '@/lib/nav-controller'
 import { isStaticMode } from '@/lib/static-mode'
@@ -60,6 +62,12 @@ type SchemaCreateMode = 'init' | 'fork'
 type ProfileEditMode = 'both' | 'delivery' | 'workflows'
 type DeliveryMode = 'both' | 'skills' | 'commands'
 type GlobalConfigTab = 'preview' | 'editor' | 'profile'
+
+const DELIVERY_MODE_OPTIONS: SelectOption<DeliveryMode>[] = [
+  { value: 'both', label: 'both' },
+  { value: 'skills', label: 'skills' },
+  { value: 'commands', label: 'commands' },
+]
 
 const DEFAULT_CONFIG_TEMPLATE = `schema: spec-driven\n\ncontext: |\n  \n\nrules:\n  proposal:\n    - \n`
 const CORE_WORKFLOWS = ['propose', 'explore', 'apply', 'archive'] as const
@@ -455,6 +463,14 @@ export function Config() {
   const selectedSchemaInfo = useMemo(
     () => schemas?.find((schema) => schema.name === selectedSchema),
     [schemas, selectedSchema]
+  )
+  const schemaSourceOptions = useMemo<SelectOption<string>[]>(
+    () =>
+      schemas?.map((schema) => ({
+        value: schema.name,
+        label: schema.name,
+      })) ?? [],
+    [schemas]
   )
 
   const schemaPreviewSource = useMemo(() => {
@@ -1981,26 +1997,25 @@ export function Config() {
                 {(profileEditMode === 'both' || profileEditMode === 'delivery') && (
                   <label className="space-y-1">
                     <div className="text-muted-foreground text-xs">Delivery</div>
-                    <select
+                    <Select
                       value={profileDelivery}
-                      onChange={(event) => setProfileDelivery(event.target.value as DeliveryMode)}
-                      className="border-border bg-background w-full rounded-md border px-3 py-2 text-sm"
-                    >
-                      <option value="both">both</option>
-                      <option value="skills">skills</option>
-                      <option value="commands">commands</option>
-                    </select>
+                      options={DELIVERY_MODE_OPTIONS}
+                      onValueChange={setProfileDelivery}
+                      ariaLabel="Delivery"
+                      className="w-full"
+                    />
                   </label>
                 )}
 
-                <label className="inline-flex items-center gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    className="accent-primary"
+                <label className="border-border flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-xs">
+                  <span>
+                    Run <code>openspec update</code> automatically after apply
+                  </span>
+                  <Switch
                     checked={autoUpdateAfterProfileChange}
-                    onChange={(event) => setAutoUpdateAfterProfileChange(event.target.checked)}
+                    onCheckedChange={setAutoUpdateAfterProfileChange}
+                    ariaLabel="Run openspec update automatically after apply"
                   />
-                  Run <code>openspec update</code> automatically after apply
                 </label>
               </div>
             </section>
@@ -2165,17 +2180,13 @@ export function Config() {
           {newSchemaMode === 'fork' && (
             <label className="space-y-1">
               <div className="text-xs font-medium">Fork from</div>
-              <select
+              <Select
                 value={newSchemaSource}
-                onChange={(event) => setNewSchemaSource(event.target.value)}
-                className="border-border bg-card w-full rounded-md border px-3 py-2 text-sm"
-              >
-                {schemas?.map((schema) => (
-                  <option key={schema.name} value={schema.name}>
-                    {schema.name}
-                  </option>
-                ))}
-              </select>
+                options={schemaSourceOptions}
+                onValueChange={setNewSchemaSource}
+                ariaLabel="Fork from"
+                className="w-full"
+              />
             </label>
           )}
 

@@ -1,12 +1,29 @@
+import {
+  ContextMenu,
+  type ContextMenuAnchor,
+  type ContextMenuItem,
+} from '@/components/context-menu'
 import type { Tab } from '@/components/tabs'
 import { navController } from '@/lib/nav-controller'
 import { useTerminalContext } from '@/lib/terminal-context'
 import { terminalController } from '@/lib/terminal-controller'
 import { useNavLayout } from '@/lib/use-nav-controller'
+import { useTerminalInvocationConfig } from '@/lib/use-terminal-invocation-config'
 import '@/styles/terminal-effects.css'
-import { Keyboard, PanelBottomClose, PanelTopClose, Plus, X } from 'lucide-react'
+import type { TerminalSpawnCommand } from '@openspecui/core/terminal-invocation'
+import {
+  ChevronDown,
+  Keyboard,
+  PanelBottomClose,
+  PanelTopClose,
+  Plus,
+  Rocket,
+  Terminal,
+  X,
+} from 'lucide-react'
 import {
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -15,6 +32,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
+import { TerminalSpawnCommandDialog } from './terminal-spawn-command-dialog'
 import { TerminalTabs } from './terminal-tabs'
 import { XtermTerminal } from './xterm-terminal'
 
@@ -103,10 +121,15 @@ export function TerminalPanel({ className }: { className?: string }) {
     sessions,
     activeSessionId,
     setActiveSession,
-    createSession,
+    createShellSession,
     closeSession,
     setCustomTitle,
   } = useTerminalContext()
+  const { shellProfiles, spawnCommands, defaultShellProfile } = useTerminalInvocationConfig()
+  const [menuAnchor, setMenuAnchor] = useState<ContextMenuAnchor | null>(null)
+  const [selectedSpawnCommand, setSelectedSpawnCommand] = useState<TerminalSpawnCommand | null>(
+    null
+  )
 
   const wrapperRef = useRef<HTMLDivElement>(null)
   const terminalSnapshot = useSyncExternalStore(
@@ -179,20 +202,76 @@ export function TerminalPanel({ className }: { className?: string }) {
     terminalController.openInputPanel(activeSessionId ?? undefined)
   }, [activeSessionId])
 
+  const handleCreateDefaultShell = useCallback(() => {
+    createShellSession(defaultShellProfile)
+  }, [createShellSession, defaultShellProfile])
+
+  const handleOpenCreateMenu = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    const element = event.currentTarget
+    setMenuAnchor((current) =>
+      current?.type === 'target' && current.element === element
+        ? null
+        : { type: 'target', element, placement: 'bottom-end' }
+    )
+  }, [])
+
+  const menuItems = useMemo<ContextMenuItem[]>(() => {
+    const shellItems: ContextMenuItem[] = shellProfiles.map((shell) => ({
+      id: `shell:${shell.id}`,
+      label: shell.label,
+      icon: <Terminal className="h-3.5 w-3.5" />,
+      onSelect: () => {
+        createShellSession(shell)
+        setMenuAnchor(null)
+      },
+    }))
+    const commandItems: ContextMenuItem[] = spawnCommands.map((command) => ({
+      id: `command:${command.id}`,
+      label: command.label,
+      icon: <Rocket className="h-3.5 w-3.5" />,
+      onSelect: () => {
+        setSelectedSpawnCommand(command)
+        setMenuAnchor(null)
+      },
+    }))
+    return [
+      ...shellItems,
+      ...(shellItems.length > 0 && commandItems.length > 0
+        ? [{ id: 'separator', label: '', disabled: true, onSelect: () => {} }]
+        : []),
+      ...commandItems,
+    ]
+  }, [createShellSession, shellProfiles, spawnCommands])
+
   const addButton = (
     <button
       type="button"
-      onClick={() => createSession()}
+      onClick={handleCreateDefaultShell}
       className="text-terminal-foreground/72 hover:bg-terminal-foreground/10 hover:text-terminal-foreground shrink-0 rounded-md p-1.5 transition"
+      aria-label="New terminal"
       title="New terminal"
     >
       <Plus className="h-3.5 w-3.5" />
     </button>
   )
 
+  const createMenuButton = (
+    <button
+      type="button"
+      onClick={handleOpenCreateMenu}
+      className="text-terminal-foreground/72 hover:bg-terminal-foreground/10 hover:text-terminal-foreground shrink-0 rounded-md p-1.5 transition"
+      aria-label="New terminal options"
+      title="New terminal options"
+    >
+      <ChevronDown className="h-3.5 w-3.5" />
+    </button>
+  )
+
   const areaActions = (
     <div className="ml-auto flex items-center">
       {addButton}
+      {createMenuButton}
       <button
         type="button"
         onClick={handleOpenInputPanel}
@@ -237,12 +316,13 @@ export function TerminalPanel({ className }: { className?: string }) {
           <span>No terminal sessions. Click</span>
           <button
             type="button"
-            onClick={() => createSession()}
+            onClick={handleCreateDefaultShell}
             className="bg-primary text-primary-foreground mx-2 px-2 text-lg font-bold"
+            aria-label="New terminal"
           >
             +
-          </button>{' '}
-          <span>to create one.</span>
+          </button>
+          {createMenuButton} <span>to create one.</span>
         </div>
       ) : (
         <TerminalTabs
@@ -250,10 +330,22 @@ export function TerminalPanel({ className }: { className?: string }) {
           selectedTab={activeSessionId ?? undefined}
           onTabChange={setActiveSession}
           onTabClose={closeSession}
-          onTabBarDoubleClick={() => createSession()}
+          onTabBarDoubleClick={handleCreateDefaultShell}
           actions={areaActions}
         />
       )}
+      <ContextMenu
+        open={menuAnchor !== null}
+        anchor={menuAnchor}
+        items={menuItems}
+        wrapperElement={wrapperRef.current}
+        onClose={() => setMenuAnchor(null)}
+      />
+      <TerminalSpawnCommandDialog
+        open={selectedSpawnCommand !== null}
+        command={selectedSpawnCommand}
+        onClose={() => setSelectedSpawnCommand(null)}
+      />
     </div>
   )
 }

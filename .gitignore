@@ -12,6 +12,7 @@ tmp/
 .playwright-mcp/
 .chat/
 *.tgz
+codedb.snapshot
 
 # Example directory for E2E testing
 example/

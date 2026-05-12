@@ -17,6 +17,7 @@
       "@openspecui/core/openspec-compat": ["../core/src/openspec-compat.ts"],
       "@openspecui/core/opsx-display-path": ["../core/src/opsx-display-path.ts"],
       "@openspecui/core/pty-protocol": ["../core/src/pty-protocol.ts"],
+      "@openspecui/core/terminal-invocation": ["../core/src/terminal-invocation.ts"],
       "@openspecui/core/terminal-theme": ["../core/src/terminal-theme.ts"],
       "@openspecui/search": ["../search/src/index.ts"],
       "@openspecui/search/node": ["../search/src/node.ts"],

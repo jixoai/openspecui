@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { clampWithinBounds, resolveAnchorPosition, type ContextMenuAnchor } from './context-menu'
+import {
+  clampWithinBounds,
+  resolveAnchorPosition,
+  resolveMenuPosition,
+  type ContextMenuAnchor,
+} from './context-menu'
 
 function createRect(rect: Partial<DOMRect>): DOMRect {
   return {
@@ -53,6 +58,21 @@ describe('context menu anchor math', () => {
     expect(clampWithinBounds(raw, menuRect, boundaryRect)).toEqual({
       x: 112,
       y: 62,
+    })
+  })
+
+  it('aligns a bottom-end target menu by the target and menu right edges', () => {
+    const anchor: ContextMenuAnchor = {
+      type: 'target',
+      element: null,
+      placement: 'bottom-end',
+    }
+    const anchorPosition = { x: 180, y: 88 }
+    const menuRect = createRect({ width: 120, height: 80 })
+
+    expect(resolveMenuPosition(anchor, anchorPosition, menuRect)).toEqual({
+      x: 60,
+      y: 88,
     })
   })
 })

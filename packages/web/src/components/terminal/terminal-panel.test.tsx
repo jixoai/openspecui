@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react'
+import { fireEvent, render } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalPanel } from './terminal-panel'
@@ -14,6 +14,8 @@ const {
   subscribeMock,
   setInputPanelMountTargetMock,
   setInputPanelDefaultLayoutMock,
+  useTerminalInvocationConfigMock,
+  createShellSessionMock,
 } = vi.hoisted(() => ({
   useTerminalContextMock: vi.fn(),
   useNavLayoutMock: vi.fn(),
@@ -23,6 +25,8 @@ const {
   subscribeMock: vi.fn<() => typeof noopUnsubscribe>(() => noopUnsubscribe),
   setInputPanelMountTargetMock: vi.fn(),
   setInputPanelDefaultLayoutMock: vi.fn(),
+  useTerminalInvocationConfigMock: vi.fn(),
+  createShellSessionMock: vi.fn(),
 }))
 
 vi.mock('@/lib/terminal-context', () => ({
@@ -31,6 +35,10 @@ vi.mock('@/lib/terminal-context', () => ({
 
 vi.mock('@/lib/use-nav-controller', () => ({
   useNavLayout: () => useNavLayoutMock(),
+}))
+
+vi.mock('@/lib/use-terminal-invocation-config', () => ({
+  useTerminalInvocationConfig: () => useTerminalInvocationConfigMock(),
 }))
 
 vi.mock('@/lib/nav-controller', () => ({
@@ -90,9 +98,40 @@ describe('TerminalPanel', () => {
       ],
       activeSessionId: 'shell-1',
       setActiveSession: vi.fn(),
-      createSession: vi.fn(),
+      createShellSession: createShellSessionMock,
       closeSession: vi.fn(),
       setCustomTitle: vi.fn(),
+    })
+    createShellSessionMock.mockReset()
+    useTerminalInvocationConfigMock.mockReturnValue({
+      shellProfiles: [
+        {
+          id: 'builtin:sh',
+          label: '/bin/sh',
+          command: '/bin/sh',
+          args: [],
+          source: 'builtin',
+          quoteStyle: 'posix',
+        },
+      ],
+      spawnCommands: [
+        {
+          id: 'builtin:claude',
+          label: 'Claude',
+          command: 'claude',
+          args: [],
+          fields: [],
+          source: 'builtin',
+        },
+      ],
+      defaultShellProfile: {
+        id: 'builtin:sh',
+        label: '/bin/sh',
+        command: '/bin/sh',
+        args: [],
+        source: 'builtin',
+        quoteStyle: 'posix',
+      },
     })
     useNavLayoutMock.mockReturnValue({
       bottomTabs: ['/terminal'],
@@ -117,5 +156,43 @@ describe('TerminalPanel', () => {
     const wrapper = tabs.parentElement
     expect(wrapper?.style.getPropertyValue('--terminal')).toBe('#fdf6e3')
     expect(wrapper?.style.getPropertyValue('--terminal-foreground')).toBe('#586e75')
+  })
+
+  it('creates the default shell when clicking the terminal add button', () => {
+    const { getAllByTitle } = render(<TerminalPanel />)
+
+    fireEvent.click(getAllByTitle('New terminal')[0]!)
+
+    expect(createShellSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'builtin:sh', command: '/bin/sh' })
+    )
+  })
+
+  it('creates the default shell from the empty terminal state', () => {
+    useTerminalContextMock.mockReturnValue({
+      sessions: [],
+      activeSessionId: null,
+      setActiveSession: vi.fn(),
+      createShellSession: createShellSessionMock,
+      closeSession: vi.fn(),
+      setCustomTitle: vi.fn(),
+    })
+
+    const { getByText } = render(<TerminalPanel />)
+
+    fireEvent.click(getByText('+'))
+
+    expect(createShellSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'builtin:sh', command: '/bin/sh' })
+    )
+  })
+
+  it('opens shell and command creation choices from the terminal options button', () => {
+    const { getAllByTitle, getByText } = render(<TerminalPanel />)
+
+    fireEvent.click(getAllByTitle('New terminal options')[0]!)
+
+    expect(getByText('/bin/sh')).toBeTruthy()
+    expect(getByText('Claude')).toBeTruthy()
   })
 })

@@ -224,6 +224,30 @@ export {
 export { VIRTUAL_PROJECT_DIRNAME, toOpsxDisplayPath } from './opsx-display-path.js'
 export { type ProjectRecoveryStatus } from './runtime-types.js'
 export {
+  BUILTIN_TERMINAL_SPAWN_COMMANDS,
+  TERMINAL_COMMAND_FIELD_TYPE_VALUES,
+  TERMINAL_SHELL_QUOTE_STYLE_VALUES,
+  TerminalCommandFieldSchema,
+  TerminalInvocationSettingsSchema,
+  TerminalShellProfileSchema,
+  TerminalShellQuoteStyleSchema,
+  TerminalSpawnCommandSchema,
+  getTerminalCommandDefaultValues,
+  quoteTerminalShellArg,
+  renderTerminalCommandArgs,
+  renderTerminalSpawnCommandLine,
+  resolveTerminalShellDefaults,
+  type TerminalCommandArgument,
+  type TerminalCommandField,
+  type TerminalCommandFieldValue,
+  type TerminalCommandFieldValues,
+  type TerminalInvocationSettings,
+  type TerminalShellDefaults,
+  type TerminalShellProfile,
+  type TerminalShellQuoteStyle,
+  type TerminalSpawnCommand,
+} from './terminal-invocation.js'
+export {
   DEFAULT_TERMINAL_DARK_THEME,
   DEFAULT_TERMINAL_LIGHT_THEME,
   DEFAULT_TERMINAL_THEME_MODE,

@@ -1,4 +1,5 @@
 import * as pty from '@lydell/node-pty'
+import { resolveTerminalShellDefaults, type TerminalShellDefaults } from '@openspecui/core'
 import { EventEmitter } from 'events'
 
 const DEFAULT_SCROLLBACK = 1000
@@ -36,6 +37,19 @@ function resolveDefaultShell(platform: PtyPlatform, env: NodeJS.ProcessEnv): str
     return env.ComSpec?.trim() || 'cmd.exe'
   }
   return env.SHELL?.trim() || '/bin/sh'
+}
+
+export function resolvePtyShellDefaults(opts: {
+  platform: PtyPlatform
+  env: NodeJS.ProcessEnv
+}): TerminalShellDefaults {
+  return resolveTerminalShellDefaults({
+    platform: opts.platform,
+    env: {
+      SHELL: opts.env.SHELL,
+      ComSpec: opts.env.ComSpec,
+    },
+  })
 }
 
 export function resolvePtyCommand(opts: {
@@ -225,6 +239,13 @@ export class PtyManager {
 
   constructor(private defaultCwd: string) {
     this.platform = detectPtyPlatform()
+  }
+
+  getShellDefaults(): TerminalShellDefaults {
+    return resolvePtyShellDefaults({
+      platform: this.platform,
+      env: process.env,
+    })
   }
 
   create(opts: {

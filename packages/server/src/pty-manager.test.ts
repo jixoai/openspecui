@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolvePtyCommand, type PtyPlatform } from './pty-manager.js'
+import { resolvePtyCommand, resolvePtyShellDefaults, type PtyPlatform } from './pty-manager.js'
 
 describe('resolvePtyCommand', () => {
   it('uses explicit command and args when provided', () => {
@@ -72,5 +72,20 @@ describe('resolvePtyCommand', () => {
       command: '/bin/sh',
       args: [],
     })
+  })
+})
+
+describe('resolvePtyShellDefaults', () => {
+  it('exposes the effective unix shell and builtin shell profiles', () => {
+    const defaults = resolvePtyShellDefaults({
+      platform: 'common',
+      env: { SHELL: '/bin/fish' },
+    })
+
+    expect(defaults.effectiveDefaultShell.command).toBe('/bin/fish')
+    expect(defaults.builtinShellProfiles.map((profile) => profile.command)).toEqual([
+      '/bin/sh',
+      '/bin/fish',
+    ])
   })
 })

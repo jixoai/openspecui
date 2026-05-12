@@ -87,6 +87,9 @@ export function Dialog({
     const handleClick = (event: MouseEvent) => {
       const panel = panelRef.current
       if (!panel) return
+      if (event.target instanceof Node && panel.contains(event.target)) {
+        return
+      }
       const rect = panel.getBoundingClientRect()
       const isInDialog =
         event.clientX >= rect.left &&
