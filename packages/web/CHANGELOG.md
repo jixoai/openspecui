@@ -1,5 +1,11 @@
 # @openspecui/web
 
+## 3.3.0
+
+### Minor Changes
+
+- 1815ef5: Add project-local `openspec/openspecui.hooks.ts` support with `onReadDocument` and `onRunWorkflow` hooks, processed/source document projections for live/search/export, and OPSX workflow invocation preparation through the server runtime.
+
 ## 3.2.3
 
 ### Patch Changes
