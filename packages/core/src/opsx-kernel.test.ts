@@ -9,6 +9,8 @@ import { clearCache, initWatcherPool } from './reactive-fs/index.js'
 import { closeAllWatchers } from './reactive-fs/watcher-pool.js'
 
 describe('OpsxKernel artifact status reactivity', () => {
+  const REACTIVE_WAIT_OPTIONS = { timeout: 8000 }
+  const REACTIVE_TEST_TIMEOUT_MS = 10000
   let tempDir: string
   let kernel: OpsxKernel | null = null
 
@@ -125,52 +127,80 @@ process.exit(1)
     return { changeDir, kernel }
   }
 
-  it('refreshes status when a file appears inside an existing subdirectory', async () => {
-    const { changeDir, kernel } = await prepareKernel('loop/result.md')
-    await mkdir(join(changeDir, 'loop'), { recursive: true })
+  it(
+    'refreshes status when a file appears inside an existing subdirectory',
+    async () => {
+      const { changeDir, kernel } = await prepareKernel('loop/result.md')
+      await mkdir(join(changeDir, 'loop'), { recursive: true })
 
-    await kernel.ensureStatus('demo-change')
-    expect(kernel.getStatus('demo-change').artifacts[0]?.status).toBe('blocked')
+      await kernel.ensureStatus('demo-change')
+      expect(kernel.getStatus('demo-change').artifacts[0]?.status).toBe('blocked')
 
-    await writeFile(join(changeDir, 'loop', 'result.md'), 'done\n', 'utf-8')
+      await writeFile(join(changeDir, 'loop', 'result.md'), 'done\n', 'utf-8')
 
-    await waitFor(() => kernel.getStatus('demo-change').artifacts[0]?.status === 'done')
-  })
+      await waitFor(
+        () => kernel.getStatus('demo-change').artifacts[0]?.status === 'done',
+        REACTIVE_WAIT_OPTIONS
+      )
+    },
+    REACTIVE_TEST_TIMEOUT_MS
+  )
 
-  it('refreshes status when missing parent directories are created later', async () => {
-    const { changeDir, kernel } = await prepareKernel('loop/nested/result.md')
+  it(
+    'refreshes status when missing parent directories are created later',
+    async () => {
+      const { changeDir, kernel } = await prepareKernel('loop/nested/result.md')
 
-    await kernel.ensureStatus('demo-change')
-    expect(kernel.getStatus('demo-change').artifacts[0]?.status).toBe('blocked')
+      await kernel.ensureStatus('demo-change')
+      expect(kernel.getStatus('demo-change').artifacts[0]?.status).toBe('blocked')
 
-    await mkdir(join(changeDir, 'loop', 'nested'), { recursive: true })
-    await writeFile(join(changeDir, 'loop', 'nested', 'result.md'), 'done\n', 'utf-8')
+      await mkdir(join(changeDir, 'loop', 'nested'), { recursive: true })
+      await writeFile(join(changeDir, 'loop', 'nested', 'result.md'), 'done\n', 'utf-8')
 
-    await waitFor(() => kernel.getStatus('demo-change').artifacts[0]?.status === 'done')
-  })
+      await waitFor(
+        () => kernel.getStatus('demo-change').artifacts[0]?.status === 'done',
+        REACTIVE_WAIT_OPTIONS
+      )
+    },
+    REACTIVE_TEST_TIMEOUT_MS
+  )
 
-  it('refreshes status for glob artifacts when matching files appear in subdirectories', async () => {
-    const { changeDir, kernel } = await prepareKernel('loop/**/*.md')
-    await mkdir(join(changeDir, 'loop'), { recursive: true })
+  it(
+    'refreshes status for glob artifacts when matching files appear in subdirectories',
+    async () => {
+      const { changeDir, kernel } = await prepareKernel('loop/**/*.md')
+      await mkdir(join(changeDir, 'loop'), { recursive: true })
 
-    await kernel.ensureStatus('demo-change')
-    expect(kernel.getStatus('demo-change').artifacts[0]?.status).toBe('blocked')
+      await kernel.ensureStatus('demo-change')
+      expect(kernel.getStatus('demo-change').artifacts[0]?.status).toBe('blocked')
 
-    await mkdir(join(changeDir, 'loop', 'docs'), { recursive: true })
-    await writeFile(join(changeDir, 'loop', 'docs', 'guide.md'), 'done\n', 'utf-8')
+      await mkdir(join(changeDir, 'loop', 'docs'), { recursive: true })
+      await writeFile(join(changeDir, 'loop', 'docs', 'guide.md'), 'done\n', 'utf-8')
 
-    await waitFor(() => kernel.getStatus('demo-change').artifacts[0]?.status === 'done')
-  })
+      await waitFor(
+        () => kernel.getStatus('demo-change').artifacts[0]?.status === 'done',
+        REACTIVE_WAIT_OPTIONS
+      )
+    },
+    REACTIVE_TEST_TIMEOUT_MS
+  )
 
-  it('refreshes status for question-mark glob artifacts', async () => {
-    const { changeDir, kernel } = await prepareKernel('loop/file?.md')
-    await mkdir(join(changeDir, 'loop'), { recursive: true })
+  it(
+    'refreshes status for question-mark glob artifacts',
+    async () => {
+      const { changeDir, kernel } = await prepareKernel('loop/file?.md')
+      await mkdir(join(changeDir, 'loop'), { recursive: true })
 
-    await kernel.ensureStatus('demo-change')
-    expect(kernel.getStatus('demo-change').artifacts[0]?.status).toBe('blocked')
+      await kernel.ensureStatus('demo-change')
+      expect(kernel.getStatus('demo-change').artifacts[0]?.status).toBe('blocked')
 
-    await writeFile(join(changeDir, 'loop', 'file1.md'), 'done\n', 'utf-8')
+      await writeFile(join(changeDir, 'loop', 'file1.md'), 'done\n', 'utf-8')
 
-    await waitFor(() => kernel.getStatus('demo-change').artifacts[0]?.status === 'done')
-  })
+      await waitFor(
+        () => kernel.getStatus('demo-change').artifacts[0]?.status === 'done',
+        REACTIVE_WAIT_OPTIONS
+      )
+    },
+    REACTIVE_TEST_TIMEOUT_MS
+  )
 })

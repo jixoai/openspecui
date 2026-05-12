@@ -1,5 +1,9 @@
 import { CliTerminal } from '@/components/cli-terminal'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
+import {
+  prepareWorkflowInvocation,
+  workflowDiagnosticsToText,
+} from '@/lib/opsx-workflow-invocation'
 import { useCliRunner } from '@/lib/use-cli-runner'
 import { useLocation } from '@tanstack/react-router'
 import { CheckCircle, Loader2, ShieldCheck } from 'lucide-react'
@@ -12,6 +16,7 @@ export function OpsxVerifyRoute() {
   const runner = useCliRunner()
   const { lines, status, commands, hasStarted, reset, cancel } = runner
   const [strict, setStrict] = useState(true)
+  const [commandError, setCommandError] = useState<string | null>(null)
 
   const changeId = useMemo(() => {
     const params = new URLSearchParams(location.search)
@@ -33,19 +38,38 @@ export function OpsxVerifyRoute() {
 
   useEffect(() => {
     if (!changeId || hasStarted) return
-    const args = ['validate', changeId, '--type', 'change']
-    if (strict) args.push('--strict')
-    commands.replaceAll([{ command: 'openspec', args }])
-    void commands.runAll()
+    const prepareAndRun = async () => {
+      setCommandError(null)
+      try {
+        const fallbackArgs = ['validate', changeId, '--type', 'change']
+        if (strict) fallbackArgs.push('--strict')
+        const result = await prepareWorkflowInvocation({
+          requestedMode: 'direct',
+          workflowInput: { action: 'verify', changeId, strict },
+          staticFallback: () => ({
+            kind: 'cli-command',
+            command: 'openspec',
+            args: fallbackArgs,
+            mode: { requestedMode: 'direct', actualMode: 'direct', fallbackReason: null },
+          }),
+        })
+        if (result.kind !== 'cli-command') {
+          throw new Error('Verify workflow must return a CLI command.')
+        }
+        const diagnostics = workflowDiagnosticsToText(result)
+        if (diagnostics) setCommandError(diagnostics)
+        commands.replaceAll([{ command: result.command, args: result.args }])
+        void commands.runAll()
+      } catch (error) {
+        setCommandError(error instanceof Error ? error.message : String(error))
+      }
+    }
+    void prepareAndRun()
   }, [changeId, commands, hasStarted, strict])
 
   const rerun = () => {
     if (!changeId) return
     reset()
-    const args = ['validate', changeId, '--type', 'change']
-    if (strict) args.push('--strict')
-    commands.replaceAll([{ command: 'openspec', args }])
-    void commands.runAll()
   }
 
   const handleClose = () => {
@@ -83,6 +107,7 @@ export function OpsxVerifyRoute() {
             Missing change id. Open Verify from a change page.
           </p>
         )}
+        {commandError && <p className="text-destructive text-sm">{commandError}</p>}
         <CliTerminal lines={lines} maxHeight="56vh" />
       </div>
 

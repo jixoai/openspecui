@@ -142,6 +142,49 @@ The system SHALL support testing.
       expect(snapshot.specs[0].requirements[0].scenarios).toHaveLength(1)
     })
 
+    it('should export processed spec content while preserving source content', async () => {
+      await writeFile(
+        join(testProjectDir, 'openspec', 'openspecui.hooks.ts'),
+        `
+export async function onReadDocument(ctx, read) {
+  const result = await read()
+  if (ctx.document.kind !== 'spec') return result
+  return {
+    ...result,
+    markdown: result.markdown.replaceAll('CLI_0003', 'CLI_0003 - Reqstool enriched title'),
+  }
+}
+`,
+        'utf-8'
+      )
+
+      const specDir = join(testProjectDir, 'openspec', 'specs', 'cli')
+      await mkdir(specDir, { recursive: true })
+      await writeFile(
+        join(specDir, 'spec.md'),
+        `# CLI Spec
+
+## Purpose
+CLI_0003
+
+## Requirements
+### Requirement: CLI_0003
+The system SHALL show CLI_0003.
+
+#### Scenario: Requirement id only
+- WHEN rendering the spec
+- THEN CLI_0003 is visible
+`,
+        'utf-8'
+      )
+
+      const snapshot = await generateSnapshot(testProjectDir)
+
+      expect(snapshot.specs[0].content).toContain('Reqstool enriched title')
+      expect(snapshot.specs[0].sourceContent).toContain('CLI_0003')
+      expect(snapshot.specs[0].sourceContent).not.toContain('Reqstool enriched title')
+    })
+
     it('should parse change files correctly', async () => {
       // Create a test change
       const changeDir = join(testProjectDir, 'openspec', 'changes', 'test-change')

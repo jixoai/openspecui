@@ -43,7 +43,10 @@ export interface ExportSnapshot {
   specs: Array<{
     id: string
     name: string
+    /** Processed markdown shown by default in static OpenSpecUI. */
     content: string
+    /** Original source markdown, preserved for raw/source views. */
+    sourceContent?: string
     overview: string
     requirements: Array<{
       id: string
@@ -57,9 +60,14 @@ export interface ExportSnapshot {
   changes: Array<{
     id: string
     name: string
+    /** Processed proposal markdown shown by default in static OpenSpecUI. */
     proposal: string
+    /** Original source proposal markdown. */
+    sourceProposal?: string
     tasks?: string
+    sourceTasks?: string
     design?: string
+    sourceDesign?: string
     why: string
     whatChanges: string
     parsedTasks: Array<{
@@ -70,7 +78,10 @@ export interface ExportSnapshot {
     }>
     deltas: Array<{
       capability: string
+      /** Processed delta spec markdown. */
       content: string
+      /** Original source delta spec markdown. */
+      sourceContent?: string
     }>
     progress: { total: number; completed: number }
     createdAt: number
@@ -80,9 +91,14 @@ export interface ExportSnapshot {
   archives: Array<{
     id: string
     name: string
+    /** Processed proposal markdown shown by default in static OpenSpecUI. */
     proposal: string
+    /** Original source proposal markdown. */
+    sourceProposal?: string
     tasks?: string
+    sourceTasks?: string
     design?: string
+    sourceDesign?: string
     why: string
     whatChanges: string
     parsedTasks: Array<{

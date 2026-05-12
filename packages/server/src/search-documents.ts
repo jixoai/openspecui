@@ -1,5 +1,6 @@
 import type { OpenSpecAdapter } from '@openspecui/core'
 import type { SearchDocument } from '@openspecui/search'
+import type { DocumentService } from './document-service.js'
 
 function joinParts(parts: Array<string | undefined>): string {
   return parts
@@ -8,12 +9,17 @@ function joinParts(parts: Array<string | undefined>): string {
     .join('\n\n')
 }
 
-export async function collectSearchDocuments(adapter: OpenSpecAdapter): Promise<SearchDocument[]> {
+export async function collectSearchDocuments(
+  adapter: OpenSpecAdapter,
+  documentService?: DocumentService
+): Promise<SearchDocument[]> {
   const docs: SearchDocument[] = []
 
   const specs = await adapter.listSpecsWithMeta()
   for (const spec of specs) {
-    const raw = await adapter.readSpecRaw(spec.id)
+    const raw = documentService
+      ? await documentService.readSpecRaw(spec.id, 'search', 'processed')
+      : await adapter.readSpecRaw(spec.id)
     if (!raw) continue
 
     docs.push({
@@ -22,14 +28,16 @@ export async function collectSearchDocuments(adapter: OpenSpecAdapter): Promise<
       title: spec.name,
       href: `/specs/${encodeURIComponent(spec.id)}`,
       path: `openspec/specs/${spec.id}/spec.md`,
-      content: raw,
+      content: typeof raw === 'string' ? raw : raw.markdown,
       updatedAt: spec.updatedAt,
     })
   }
 
   const changes = await adapter.listChangesWithMeta()
   for (const change of changes) {
-    const raw = await adapter.readChangeRaw(change.id)
+    const raw = documentService
+      ? await documentService.readChangeRaw(change.id, 'search', 'processed')
+      : await adapter.readChangeRaw(change.id)
     if (!raw) continue
 
     docs.push({
@@ -39,9 +47,9 @@ export async function collectSearchDocuments(adapter: OpenSpecAdapter): Promise<
       href: `/changes/${encodeURIComponent(change.id)}`,
       path: `openspec/changes/${change.id}`,
       content: joinParts([
-        raw.proposal,
-        raw.tasks,
-        raw.design,
+        typeof raw.proposal === 'string' ? raw.proposal : raw.proposal.markdown,
+        typeof raw.tasks === 'string' ? raw.tasks : raw.tasks.markdown,
+        typeof raw.design === 'string' ? raw.design : raw.design?.markdown,
         ...raw.deltaSpecs.map((deltaSpec) => deltaSpec.content),
       ]),
       updatedAt: change.updatedAt,
@@ -50,7 +58,9 @@ export async function collectSearchDocuments(adapter: OpenSpecAdapter): Promise<
 
   const archives = await adapter.listArchivedChangesWithMeta()
   for (const archive of archives) {
-    const raw = await adapter.readArchivedChangeRaw(archive.id)
+    const raw = documentService
+      ? await documentService.readArchivedChangeRaw(archive.id, 'search', 'processed')
+      : await adapter.readArchivedChangeRaw(archive.id)
     if (!raw) continue
 
     docs.push({
@@ -60,9 +70,9 @@ export async function collectSearchDocuments(adapter: OpenSpecAdapter): Promise<
       href: `/archive/${encodeURIComponent(archive.id)}`,
       path: `openspec/changes/archive/${archive.id}`,
       content: joinParts([
-        raw.proposal,
-        raw.tasks,
-        raw.design,
+        typeof raw.proposal === 'string' ? raw.proposal : raw.proposal.markdown,
+        typeof raw.tasks === 'string' ? raw.tasks : raw.tasks.markdown,
+        typeof raw.design === 'string' ? raw.design : raw.design?.markdown,
         ...raw.deltaSpecs.map((deltaSpec) => deltaSpec.content),
       ]),
       updatedAt: archive.updatedAt,

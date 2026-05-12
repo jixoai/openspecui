@@ -1,0 +1,20 @@
+export { OPENSPECUI_HOOKS_VERSION } from '@openspecui/core'
+export type {
+  DocumentConsumerV1,
+  DocumentReadModeV1,
+  DocumentRefV1,
+  HookDiagnosticLevel,
+  HookDiagnosticV1,
+  HookLifecycleV1,
+  OnReadDocumentHookV1,
+  OnRunWorkflowHookV1,
+  OpenSpecUIHooksV1,
+  ReadDocumentContextV1,
+  ReadDocumentResultV1,
+  RunWorkflowContextV1,
+  RunWorkflowInputV1,
+  RunWorkflowResultV1,
+  WorkflowActionV1,
+  WorkflowInvocationModeResolutionV1,
+  WorkflowRequestedModeV1,
+} from '@openspecui/core'

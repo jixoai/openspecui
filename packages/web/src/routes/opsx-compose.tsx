@@ -1,30 +1,21 @@
 import { CodeEditor } from '@/components/code-editor'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
 import {
-  buildOpsxSlashCommand,
   resolveOpsxInvocationMode,
   type OpsxAgentInvocationMode,
 } from '@/lib/opsx-agent-invocation'
+import { buildOpsxComposeFallbackPrompt, parseOpsxComposeLocationSearch } from '@/lib/opsx-compose'
 import {
-  buildOpsxComposeDraft,
-  buildOpsxComposeFallbackPrompt,
-  parseOpsxComposeLocationSearch,
-  resolveOpsxPromptSource,
-} from '@/lib/opsx-compose'
-import { isStaticMode } from '@/lib/static-mode'
+  prepareWorkflowInvocation,
+  stringifyWorkflowInvocation,
+  workflowDiagnosticsToText,
+} from '@/lib/opsx-workflow-invocation'
 import { useTerminalContext } from '@/lib/terminal-context'
 import { terminalController } from '@/lib/terminal-controller'
-import { trpcClient } from '@/lib/trpc'
 import { useConfigSubscription } from '@/lib/use-subscription'
 import { useLocation } from '@tanstack/react-router'
 import { AlertCircle, Check, Copy, Loader2, Save, Send } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-
-interface CliCaptureResult {
-  stdout: string
-  stderr: string
-  exitCode: number | null
-}
 
 type DispatchTarget = `terminal:${string}`
 
@@ -93,78 +84,6 @@ function sanitizeTerminalPayload(input: string): { text: string; modified: boole
   }
 }
 
-function captureCliOutput(
-  command: string,
-  args: string[],
-  signal?: AbortSignal
-): Promise<CliCaptureResult> {
-  return new Promise((resolve, reject) => {
-    let stdout = ''
-    let stderr = ''
-    let settled = false
-
-    const cleanupAbortListener = () => {
-      if (!signal) return
-      signal.removeEventListener('abort', handleAbort)
-    }
-
-    const settleResolve = (result: CliCaptureResult) => {
-      if (settled) return
-      settled = true
-      cleanupAbortListener()
-      resolve(result)
-    }
-
-    const settleReject = (error: unknown) => {
-      if (settled) return
-      settled = true
-      cleanupAbortListener()
-      reject(error)
-    }
-
-    const handleAbort = () => {
-      subscription.unsubscribe()
-      settleReject(new Error('Prompt generation canceled.'))
-    }
-
-    const subscription = trpcClient.cli.runCommandStream.subscribe(
-      { command, args },
-      {
-        onData: (event) => {
-          if (event.type === 'stdout' && event.data) {
-            stdout += event.data
-            return
-          }
-          if (event.type === 'stderr' && event.data) {
-            stderr += event.data
-            return
-          }
-          if (event.type === 'exit') {
-            subscription.unsubscribe()
-            settleResolve({
-              stdout,
-              stderr,
-              exitCode: event.exitCode ?? null,
-            })
-          }
-        },
-        onError: (error) => {
-          subscription.unsubscribe()
-          settleReject(error)
-        },
-      }
-    )
-
-    if (signal) {
-      if (signal.aborted) {
-        handleAbort()
-      } else {
-        signal.addEventListener('abort', handleAbort, { once: true })
-      }
-    }
-  })
-}
-
 function parseTerminalTarget(target: DispatchTarget): string | null {
   if (!target.startsWith(TERMINAL_TARGET_PREFIX)) return null
   return target.slice(TERMINAL_TARGET_PREFIX.length)
@@ -205,10 +124,6 @@ export function OpsxComposeRoute() {
     [location.search]
   )
 
-  const promptSource = useMemo(
-    () => (composeInput ? resolveOpsxPromptSource(composeInput) : null),
-    [composeInput]
-  )
   const requestedInvocationMode: OpsxAgentInvocationMode =
     uiConfig?.opsx?.agentInvocationMode ?? 'compose'
   const invocationMode = useMemo(
@@ -216,14 +131,6 @@ export function OpsxComposeRoute() {
       composeInput ? resolveOpsxInvocationMode(composeInput.action, requestedInvocationMode) : null,
     [composeInput, requestedInvocationMode]
   )
-  const commandDraft = useMemo(() => {
-    if (!composeInput || invocationMode?.actualMode !== 'command') return null
-    return buildOpsxSlashCommand({
-      action: composeInput.action,
-      changeId: composeInput.changeId,
-      text: composeInput.changeId,
-    })
-  }, [composeInput, invocationMode?.actualMode])
 
   const liveSessions = useMemo(() => sessions.filter((session) => !session.isExited), [sessions])
 
@@ -289,8 +196,6 @@ export function OpsxComposeRoute() {
 
   useEffect(() => {
     let canceled = false
-    const abortController = new AbortController()
-
     const loadPrompt = async () => {
       if (!composeInput) {
         setDraft('')
@@ -303,46 +208,38 @@ export function OpsxComposeRoute() {
       setIsLoadingDraft(true)
       setDraftError(null)
 
-      if (invocationMode?.actualMode === 'command') {
-        if (commandDraft) {
-          setDraft(commandDraft)
-          setIsLoadingDraft(false)
-          return
-        }
-        setDraft(buildOpsxComposeFallbackPrompt(composeInput))
-        setDraftError('Slash command is not available for this action.')
-        setIsLoadingDraft(false)
-        return
-      }
-
-      if (isStaticMode()) {
-        setDraft(buildOpsxComposeFallbackPrompt(composeInput))
-        setIsLoadingDraft(false)
-        return
-      }
-
-      if (!promptSource) {
-        setDraft(buildOpsxComposeFallbackPrompt(composeInput))
-        setDraftError('Prompt source is not available for this action.')
-        setIsLoadingDraft(false)
-        return
-      }
-
       try {
-        const result = await captureCliOutput(
-          promptSource.command,
-          promptSource.args,
-          abortController.signal
-        )
+        const result = await prepareWorkflowInvocation({
+          requestedMode: requestedInvocationMode,
+          workflowInput:
+            composeInput.action === 'continue' || composeInput.action === 'ff'
+              ? {
+                  action: composeInput.action,
+                  changeId: composeInput.changeId,
+                  artifactId: composeInput.artifactId ?? '',
+                }
+              : {
+                  action: composeInput.action,
+                  changeId: composeInput.changeId,
+                },
+          staticFallback: () => ({
+            kind: 'agent-prompt',
+            text: buildOpsxComposeFallbackPrompt(composeInput),
+            format: 'markdown',
+            mode: invocationMode ?? {
+              requestedMode: requestedInvocationMode,
+              actualMode: requestedInvocationMode,
+              fallbackReason: null,
+            },
+          }),
+        })
         if (canceled) return
 
-        const sanitized = sanitizeTerminalPayload(result.stdout)
-        setDraft(buildOpsxComposeDraft(composeInput, sanitized.text))
-
-        if (result.exitCode !== 0) {
-          const errorText =
-            result.stderr.trim() || `Command exited with code ${result.exitCode ?? 'unknown'}.`
-          setDraftError(errorText)
+        const sanitized = sanitizeTerminalPayload(stringifyWorkflowInvocation(result))
+        setDraft(sanitized.text)
+        const diagnostics = workflowDiagnosticsToText(result)
+        if (diagnostics) {
+          setDraftError(diagnostics)
         } else if (sanitized.modified) {
           setDraftError('ANSI/control characters were stripped from generated prompt for safety.')
         }
@@ -361,9 +258,8 @@ export function OpsxComposeRoute() {
 
     return () => {
       canceled = true
-      abortController.abort()
     }
-  }, [commandDraft, composeInput, invocationMode?.actualMode, promptSource])
+  }, [composeInput, invocationMode, requestedInvocationMode])
 
   const actionLabel = composeInput ? ACTION_LABELS[composeInput.action] : 'Compose'
 
@@ -483,15 +379,6 @@ export function OpsxComposeRoute() {
             {invocationMode.fallbackReason && (
               <span className="text-muted-foreground"> · {invocationMode.fallbackReason}</span>
             )}
-          </div>
-        )}
-
-        {promptSource && invocationMode?.actualMode !== 'command' && (
-          <div className="bg-muted/40 border-border rounded-md border p-2 text-xs">
-            <span className="text-muted-foreground">Prompt source:</span>{' '}
-            <code className="break-all">
-              {promptSource.command} {promptSource.args.join(' ')}
-            </code>
           </div>
         )}
 

@@ -8,6 +8,11 @@ import {
   buildOpsxSlashCommand,
   type OpsxAgentInvocationMode,
 } from '@/lib/opsx-agent-invocation'
+import {
+  prepareWorkflowInvocation,
+  stringifyWorkflowInvocation,
+  workflowDiagnosticsToText,
+} from '@/lib/opsx-workflow-invocation'
 import { useTerminalContext } from '@/lib/terminal-context'
 import { terminalController } from '@/lib/terminal-controller'
 import { trpcClient } from '@/lib/trpc'
@@ -90,6 +95,29 @@ export function OpsxProposeRoute() {
     return buildOpsxProposeComposePrompt(draft)
   }, [draft, mode])
 
+  const preparePayload = async () => {
+    const result = await prepareWorkflowInvocation({
+      requestedMode: mode,
+      workflowInput: { action: 'propose', text: draft },
+      staticFallback: () =>
+        mode === 'command'
+          ? {
+              kind: 'agent-command',
+              text: buildOpsxSlashCommand({ action: 'propose', text: draft }) ?? '/opsx:propose',
+              mode: { requestedMode: mode, actualMode: mode, fallbackReason: null },
+            }
+          : {
+              kind: 'agent-prompt',
+              text: buildOpsxProposeComposePrompt(draft),
+              format: 'markdown',
+              mode: { requestedMode: mode, actualMode: mode, fallbackReason: null },
+            },
+    })
+    const warning = workflowDiagnosticsToText(result)
+    if (warning) setSendError(warning)
+    return stringifyWorkflowInvocation(result)
+  }
+
   const handleModeChange = (nextMode: OpsxAgentInvocationMode) => {
     setMode(nextMode)
     saveModeMutation.mutate(nextMode)
@@ -105,7 +133,8 @@ export function OpsxProposeRoute() {
     try {
       const sessionId = parseTerminalTarget(target)
       if (!sessionId) throw new Error('Invalid terminal target.')
-      const wrote = terminalController.writeToSession(sessionId, `${payload}\n`)
+      const preparedPayload = await preparePayload()
+      const wrote = terminalController.writeToSession(sessionId, `${preparedPayload}\n`)
       if (!wrote) {
         throw new Error('Terminal session is not ready. Wait a moment and retry.')
       }
@@ -118,13 +147,15 @@ export function OpsxProposeRoute() {
   }
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(payload)
+    setSendError(null)
+    await navigator.clipboard.writeText(await preparePayload())
     setCopySuccess(true)
     window.setTimeout(() => setCopySuccess(false), 900)
   }
 
   const handleSave = async () => {
-    await terminalController.addInputHistory(payload)
+    setSendError(null)
+    await terminalController.addInputHistory(await preparePayload())
     setSaveSuccess(true)
     window.setTimeout(() => setSaveSuccess(false), 900)
   }

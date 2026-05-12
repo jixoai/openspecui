@@ -236,6 +236,14 @@ const createMockContext = (
     query: vi.fn().mockResolvedValue({ total: 0, hits: [] }),
     queryReactive: vi.fn().mockResolvedValue({ total: 0, hits: [] }),
   }
+  const documentService = {
+    readSpec: vi.fn((id: string) => adapter.readSpec(id)),
+    readChange: vi.fn((id: string) => adapter.readChange(id)),
+    readArchivedChange: vi.fn((id: string) => adapter.readArchivedChange(id)),
+  }
+  const workflowInvocationService = {
+    runWorkflow: vi.fn(),
+  }
 
   const projectDir = options.projectDir ?? '/tmp/openspecui-router-test'
   const dashboardOverviewService = new DashboardOverviewService((reason) =>
@@ -252,8 +260,11 @@ const createMockContext = (
   return {
     adapter: adapter as unknown as Context['adapter'],
     configManager: configManager as unknown as Context['configManager'],
+    documentService: documentService as unknown as Context['documentService'],
     cliExecutor: cliExecutor as unknown as Context['cliExecutor'],
     kernel: kernel as unknown as Context['kernel'],
+    workflowInvocationService:
+      workflowInvocationService as unknown as Context['workflowInvocationService'],
     searchService: searchService as unknown as Context['searchService'],
     dashboardOverviewService,
     projectRecoveryService: options.projectRecoveryService ?? createMockProjectRecoveryService(),
@@ -883,6 +894,30 @@ describe('appRouter', () => {
       expect(state.delivery).toBe('both')
       expect(state.workflows).toEqual(['propose', 'explore', 'apply', 'archive'])
       expect(state.driftStatus).toBe('in-sync')
+    })
+  })
+
+  describe('opsx', () => {
+    it('delegates workflow invocation preparation to the workflow service', async () => {
+      const context = createMockContext()
+      const runWorkflow = vi.fn().mockResolvedValue({
+        kind: 'agent-command',
+        text: '/opsx:propose add auth',
+      })
+      const caller = appRouter.createCaller({
+        ...context,
+        workflowInvocationService: {
+          runWorkflow,
+        } as unknown as Context['workflowInvocationService'],
+      })
+
+      const result = await caller.opsx.runWorkflow({
+        requestedMode: 'command',
+        input: { action: 'propose', text: 'add auth' },
+      })
+
+      expect(result).toEqual({ kind: 'agent-command', text: '/opsx:propose add auth' })
+      expect(runWorkflow).toHaveBeenCalledWith({ action: 'propose', text: 'add auth' }, 'command')
     })
   })
 })

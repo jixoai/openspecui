@@ -46,12 +46,15 @@ const SERVER_PACKAGE_VERSION = getServerPackageVersion()
 
 import { DashboardOverviewService } from './dashboard-overview-service.js'
 import { loadDashboardOverview } from './dashboard-overview.js'
+import { DocumentService } from './document-service.js'
+import { createHookRuntime } from './hook-runtime.js'
 import { findAvailablePort } from './port-utils.js'
 import { ProjectRecoveryService } from './project-recovery-service.js'
 import { PtyManager } from './pty-manager.js'
 import { createPtyWebSocketHandler } from './pty-websocket.js'
 import { appRouter, type Context, type GitWorktreeHandoffService } from './router.js'
 import { SearchService } from './search-service.js'
+import { WorkflowInvocationService } from './workflow-invocation-service.js'
 
 function buildEmbeddedUiUrlForPort(port: number): string {
   return `http://localhost:${port}`
@@ -81,11 +84,18 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
   const configManager = new ConfigManager(config.projectDir)
   const cliExecutor = new CliExecutor(configManager, config.projectDir)
   const kernel = config.kernel
+  const hookRuntime = createHookRuntime(config.projectDir)
+  const documentService = new DocumentService(config.projectDir, adapter, hookRuntime)
+  const workflowInvocationService = new WorkflowInvocationService({
+    projectDir: config.projectDir,
+    hookRuntime,
+    executeCli: (args) => cliExecutor.execute(args),
+  })
 
   // Create file watcher if enabled
   const watcher =
     config.enableWatcher !== false ? new OpenSpecWatcher(config.projectDir) : undefined
-  const searchService = new SearchService(adapter, watcher)
+  const searchService = new SearchService(adapter, watcher, undefined, documentService)
   const dashboardOverviewService = new DashboardOverviewService(
     (reason) =>
       loadDashboardOverview(
@@ -138,8 +148,10 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
       createContext: (): Context => ({
         adapter,
         configManager,
+        documentService,
         cliExecutor,
         kernel,
+        workflowInvocationService,
         searchService,
         dashboardOverviewService,
         projectRecoveryService,
@@ -155,8 +167,10 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
   const createContext = (): Context => ({
     adapter,
     configManager,
+    documentService,
     cliExecutor,
     kernel,
+    workflowInvocationService,
     searchService,
     dashboardOverviewService,
     projectRecoveryService,
@@ -169,11 +183,14 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     app,
     adapter,
     configManager,
+    documentService,
     cliExecutor,
     kernel,
+    workflowInvocationService,
     searchService,
     dashboardOverviewService,
     projectRecoveryService,
+    hookRuntime,
     watcher,
     createContext,
     port: config.port ?? 3100,
@@ -336,6 +353,7 @@ export async function startServer(
     preferredPort,
     close: async () => {
       kernel.dispose()
+      await server.hookRuntime.dispose()
       wsServer.close()
       httpServer.close()
     },

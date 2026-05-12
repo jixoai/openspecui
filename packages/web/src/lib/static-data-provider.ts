@@ -786,7 +786,7 @@ export async function getSpecRaw(id: string): Promise<string | null> {
   if (!snapshot) return null
 
   const spec = snapshot.specs.find((s) => s.id === id)
-  return spec?.content || null
+  return spec?.sourceContent ?? spec?.content ?? null
 }
 
 /**
@@ -842,14 +842,14 @@ export async function getChangeFiles(id: string): Promise<ChangeFile[]> {
   files.push({
     path: 'proposal.md',
     type: 'file' as const,
-    content: change.proposal,
+    content: change.sourceProposal ?? change.proposal,
   })
 
   if (change.tasks) {
     files.push({
       path: 'tasks.md',
       type: 'file' as const,
-      content: change.tasks,
+      content: change.sourceTasks ?? change.tasks,
     })
   }
 
@@ -857,7 +857,7 @@ export async function getChangeFiles(id: string): Promise<ChangeFile[]> {
     files.push({
       path: 'design.md',
       type: 'file' as const,
-      content: change.design,
+      content: change.sourceDesign ?? change.design,
     })
   }
 
@@ -866,7 +866,7 @@ export async function getChangeFiles(id: string): Promise<ChangeFile[]> {
     files.push({
       path: `specs/${delta.capability}/spec.md`,
       type: 'file' as const,
-      content: delta.content,
+      content: delta.sourceContent ?? delta.content,
     })
   })
 
@@ -935,14 +935,14 @@ export async function getArchiveFiles(id: string): Promise<ChangeFile[]> {
   files.push({
     path: 'proposal.md',
     type: 'file' as const,
-    content: archive.proposal,
+    content: archive.sourceProposal ?? archive.proposal,
   })
 
   if (archive.tasks) {
     files.push({
       path: 'tasks.md',
       type: 'file' as const,
-      content: archive.tasks,
+      content: archive.sourceTasks ?? archive.tasks,
     })
   }
 
@@ -950,7 +950,7 @@ export async function getArchiveFiles(id: string): Promise<ChangeFile[]> {
     files.push({
       path: 'design.md',
       type: 'file' as const,
-      content: archive.design,
+      content: archive.sourceDesign ?? archive.design,
     })
   }
 
