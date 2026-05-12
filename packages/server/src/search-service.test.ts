@@ -113,4 +113,40 @@ describe('SearchService', () => {
     expect(provider.replaceCalls).toHaveLength(1)
     expect(provider.searchCalls).toEqual([{ query: 'auth', limit: 5 }])
   })
+
+  it('indexes processed documents when a document service is provided', async () => {
+    const adapter = createAdapterMock()
+    const provider = new FakeProvider()
+    const documentService = {
+      readSpecRaw: vi.fn().mockResolvedValue({ markdown: '# Enriched Auth spec' }),
+      readChangeRaw: vi.fn().mockResolvedValue({
+        proposal: { markdown: 'Enriched proposal' },
+        tasks: { markdown: 'Enriched tasks' },
+        design: { markdown: 'Enriched design' },
+        deltaSpecs: [{ specId: 'auth', content: 'Delta content' }],
+      }),
+      readArchivedChangeRaw: vi.fn().mockResolvedValue({
+        proposal: { markdown: 'Enriched archived proposal' },
+        tasks: { markdown: '' },
+        design: undefined,
+        deltaSpecs: [],
+      }),
+    }
+    const service = new SearchService(
+      adapter as never,
+      undefined,
+      provider,
+      documentService as never
+    )
+
+    await service.init()
+
+    expect(provider.initCalls[0]?.find((doc) => doc.id === 'spec:auth')?.content).toBe(
+      '# Enriched Auth spec'
+    )
+    expect(provider.initCalls[0]?.find((doc) => doc.id === 'change:add-auth')?.content).toContain(
+      'Enriched proposal'
+    )
+    expect(documentService.readSpecRaw).toHaveBeenCalledWith('auth', 'search', 'processed')
+  })
 })

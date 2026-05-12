@@ -35,12 +35,15 @@ import {
   type ChangeStatus,
   type DashboardOverview,
   type ProjectRecoveryStatus,
+  type RunWorkflowInputV1,
+  type RunWorkflowResultV1,
   type SchemaDetail,
   type SchemaInfo,
   type SchemaResolution,
   type TemplateContentMap,
   type TemplatesMap,
   type ToolInitDelivery,
+  type WorkflowRequestedModeV1,
 } from '@openspecui/core'
 import { SearchQuerySchema, type SearchQuery } from '@openspecui/search'
 import { initTRPC } from '@trpc/server'
@@ -57,6 +60,7 @@ import {
   touchDashboardGitRefreshStamp,
   type DashboardGitTaskStatus,
 } from './dashboard-overview.js'
+import type { DocumentService } from './document-service.js'
 import {
   buildGitWorktreeOverview,
   getCurrentWorktreeGitEntryFiles,
@@ -72,12 +76,15 @@ import {
   createReactiveSubscriptionWithInput,
 } from './reactive-subscription.js'
 import type { SearchService } from './search-service.js'
+import type { WorkflowInvocationService } from './workflow-invocation-service.js'
 
 export interface Context {
   adapter: OpenSpecAdapter
   configManager: ConfigManager
+  documentService: DocumentService
   cliExecutor: CliExecutor
   kernel: OpsxKernel
+  workflowInvocationService: WorkflowInvocationService
   searchService: SearchService
   dashboardOverviewService: DashboardOverviewService
   projectRecoveryService: ProjectRecoveryService
@@ -99,6 +106,36 @@ const OPSX_CORE_PROFILE_WORKFLOWS = ['propose', 'explore', 'apply', 'archive'] a
 const gitEntrySelectorSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('uncommitted') }),
   z.object({ type: z.literal('commit'), hash: z.string().min(1) }),
+])
+
+const workflowRequestedModeSchema = z.enum(['compose', 'command', 'direct'])
+const runWorkflowInputSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.enum(['explore', 'propose']), text: z.string() }),
+  z.object({
+    action: z.literal('new'),
+    changeId: z.string(),
+    schema: z.string().optional(),
+    description: z.string().optional(),
+    extraArgs: z.array(z.string()).default([]),
+  }),
+  z.object({
+    action: z.enum(['continue', 'ff']),
+    changeId: z.string(),
+    artifactId: z.string(),
+    schema: z.string().optional(),
+  }),
+  z.object({
+    action: z.enum(['apply', 'archive', 'verify', 'sync']),
+    changeId: z.string(),
+    schema: z.string().optional(),
+    strict: z.boolean().optional(),
+  }),
+  z.object({
+    action: z.literal('bulk-archive'),
+    changeIds: z.array(z.string()).optional(),
+    schema: z.string().optional(),
+  }),
+  z.object({ action: z.literal('onboard') }),
 ])
 
 type OpsxWorkflowProfile = 'core' | 'custom'
@@ -376,7 +413,7 @@ export const specRouter = router({
   }),
 
   get: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    return ctx.adapter.readSpec(input.id)
+    return ctx.documentService.readSpec(input.id)
   }),
 
   getRaw: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
@@ -402,7 +439,9 @@ export const specRouter = router({
   subscribeOne: publicProcedure
     .input(z.object({ id: z.string() }))
     .subscription(({ ctx, input }) => {
-      return createReactiveSubscriptionWithInput((id: string) => ctx.adapter.readSpec(id))(input.id)
+      return createReactiveSubscriptionWithInput((id: string) => ctx.documentService.readSpec(id))(
+        input.id
+      )
     }),
 
   subscribeRaw: publicProcedure
@@ -431,7 +470,7 @@ export const changeRouter = router({
   }),
 
   get: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    return ctx.adapter.readChange(input.id)
+    return ctx.documentService.readChange(input.id)
   }),
 
   getRaw: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
@@ -506,7 +545,7 @@ export const archiveRouter = router({
   }),
 
   get: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    return ctx.adapter.readArchivedChange(input.id)
+    return ctx.documentService.readArchivedChange(input.id)
   }),
 
   getRaw: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
@@ -522,7 +561,7 @@ export const archiveRouter = router({
     .input(z.object({ id: z.string() }))
     .subscription(({ ctx, input }) => {
       return createReactiveSubscriptionWithInput((id: string) =>
-        ctx.adapter.readArchivedChange(id)
+        ctx.documentService.readArchivedChange(id)
       )(input.id)
     }),
 
@@ -949,6 +988,20 @@ export const cliRouter = router({
  * OPSX router - CLI-driven workflow data
  */
 export const opsxRouter = router({
+  runWorkflow: publicProcedure
+    .input(
+      z.object({
+        requestedMode: workflowRequestedModeSchema,
+        input: runWorkflowInputSchema,
+      })
+    )
+    .mutation(async ({ ctx, input }): Promise<RunWorkflowResultV1> => {
+      return ctx.workflowInvocationService.runWorkflow(
+        input.input as RunWorkflowInputV1,
+        input.requestedMode as WorkflowRequestedModeV1
+      )
+    }),
+
   status: publicProcedure
     .input(
       z.object({

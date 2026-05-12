@@ -190,6 +190,26 @@ export {
   type GitWorktreeSummary,
 } from './git-panel-types.js'
 export {
+  OPENSPECUI_HOOKS_VERSION,
+  type DocumentConsumerV1,
+  type DocumentReadModeV1,
+  type DocumentRefV1,
+  type HookDiagnosticLevel,
+  type HookDiagnosticV1,
+  type HookLifecycleV1,
+  type OnReadDocumentHookV1,
+  type OnRunWorkflowHookV1,
+  type OpenSpecUIHooksV1,
+  type ReadDocumentContextV1,
+  type ReadDocumentResultV1,
+  type RunWorkflowContextV1,
+  type RunWorkflowInputV1,
+  type RunWorkflowResultV1,
+  type WorkflowActionV1,
+  type WorkflowInvocationModeResolutionV1,
+  type WorkflowRequestedModeV1,
+} from './hooks.js'
+export {
   HOSTED_SHELL_PROTOCOL_VERSION,
   OFFICIAL_APP_BASE_URL,
   buildEmbeddedUiLaunchUrl,

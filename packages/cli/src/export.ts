@@ -14,6 +14,7 @@ import {
   type SchemaResolution,
   type TemplatesMap,
 } from '@openspecui/core'
+import { DocumentService, createHookRuntime } from '@openspecui/server'
 import { execFile, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -366,6 +367,8 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
   const adapter = new OpenSpecAdapter(projectDir)
   const configManager = new ConfigManager(projectDir)
   const cliExecutor = new CliExecutor(configManager, projectDir)
+  const hookRuntime = createHookRuntime(projectDir)
+  const documentService = new DocumentService(projectDir, adapter, hookRuntime)
   const uiConfig = await configManager.readConfig().catch(() => DEFAULT_CONFIG)
 
   // Check if initialized
@@ -374,263 +377,270 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
     throw new Error(`OpenSpec not initialized in ${projectDir}`)
   }
 
-  // Get all specs with parsed content
-  const specsMeta = await adapter.listSpecsWithMeta()
-  const specs = await Promise.all(
-    specsMeta.map(async (meta) => {
-      const raw = await adapter.readSpecRaw(meta.id)
-      const parsed = await adapter.readSpec(meta.id)
-      return {
-        id: meta.id,
-        name: meta.name,
-        content: raw || '',
-        overview: parsed?.overview || '',
-        requirements: parsed?.requirements || [],
-        createdAt: meta.createdAt,
-        updatedAt: meta.updatedAt,
-      }
-    })
-  )
-
-  // Get all changes with parsed content
-  const changesMeta = await adapter.listChangesWithMeta()
-  const changes = await Promise.all(
-    changesMeta.map(async (meta) => {
-      const change = await adapter.readChange(meta.id)
-
-      const files = await adapter.readChangeFiles(meta.id)
-      const proposalFile = files.find((f) => f.path === 'proposal.md')
-      const tasksFile = files.find((f) => f.path === 'tasks.md')
-      const designFile = files.find((f) => f.path === 'design.md')
-
-      // Get delta spec content
-      const deltas = (change?.deltaSpecs || []).map((ds) => ({
-        capability: ds.specId,
-        content: ds.content || '',
-      }))
-
-      return {
-        id: meta.id,
-        name: meta.name,
-        proposal: proposalFile?.content || '',
-        tasks: tasksFile?.content,
-        design: designFile?.content,
-        why: change?.why || '',
-        whatChanges: change?.whatChanges || '',
-        parsedTasks: change?.tasks || [],
-        deltas,
-        progress: change?.progress ?? meta.progress,
-        createdAt: meta.createdAt,
-        updatedAt: meta.updatedAt,
-      }
-    })
-  )
-
-  // Get all archives with parsed content
-  const archivesMeta = await adapter.listArchivedChangesWithMeta()
-  const archives = await Promise.all(
-    archivesMeta.map(async (meta) => {
-      const files = await adapter.readArchivedChangeFiles(meta.id)
-      const proposalFile = files.find((f) => f.path === 'proposal.md')
-      const tasksFile = files.find((f) => f.path === 'tasks.md')
-      const designFile = files.find((f) => f.path === 'design.md')
-
-      // Parse the proposal to extract why and whatChanges
-      const change = await adapter.readArchivedChange(meta.id)
-
-      return {
-        id: meta.id,
-        name: meta.name || meta.id,
-        proposal: proposalFile?.content || '',
-        tasks: tasksFile?.content,
-        design: designFile?.content,
-        why: change?.why || '',
-        whatChanges: change?.whatChanges || '',
-        parsedTasks: change?.tasks || [],
-        createdAt: meta.createdAt,
-        updatedAt: meta.updatedAt,
-      }
-    })
-  )
-
-  // Get project.md
-  let projectMd: string | undefined
-
   try {
-    const projectMdContent = await adapter.readProjectMd()
-    projectMd = projectMdContent ?? undefined
-  } catch {
-    // project.md is optional
-  }
+    // Get all specs with parsed content
+    const specsMeta = await adapter.listSpecsWithMeta()
+    const specs = await Promise.all(
+      specsMeta.map(async (meta) => {
+        const raw = await documentService.readSpecRaw(meta.id, 'export', 'processed')
+        const parsed = await documentService.readSpec(meta.id, 'export', 'processed')
+        return {
+          id: meta.id,
+          name: meta.name,
+          content: raw?.markdown || '',
+          sourceContent: raw?.sourceMarkdown,
+          overview: parsed?.overview || '',
+          requirements: parsed?.requirements || [],
+          createdAt: meta.createdAt,
+          updatedAt: meta.updatedAt,
+        }
+      })
+    )
 
-  // OPSX config snapshot
-  let configYaml: string | undefined
-  let schemas: SchemaInfo[] = []
-  const schemaDetails: Record<string, SchemaDetail> = {}
-  const schemaYamls: Record<string, string> = {}
-  const schemaResolutions: Record<string, SchemaResolution> = {}
-  const templates: Record<string, TemplatesMap> = {}
-  const templateContents: Record<
-    string,
-    Record<
-      string,
-      {
-        content: string | null
-        path: string
-        displayPath?: string
-        source: 'project' | 'user' | 'package'
-      }
-    >
-  > = {}
-  const changeMetadata: Record<string, string | null> = {}
+    // Get all changes with parsed content
+    const changesMeta = await adapter.listChangesWithMeta()
+    const changes = await Promise.all(
+      changesMeta.map(async (meta) => {
+        const [change, raw] = await Promise.all([
+          documentService.readChange(meta.id, 'export', 'processed'),
+          documentService.readChangeRaw(meta.id, 'export', 'processed'),
+        ])
 
-  try {
-    const configPath = join(projectDir, 'openspec', 'config.yaml')
-    configYaml = await readFile(configPath, 'utf-8')
-  } catch {
-    configYaml = undefined
-  }
+        const deltas =
+          raw?.deltaSpecs.map((deltaSpec) => ({
+            capability: deltaSpec.specId,
+            content: deltaSpec.content || '',
+            sourceContent: deltaSpec.sourceContent,
+          })) ?? []
 
-  try {
-    const schemasResult = await cliExecutor.schemas()
-    if (schemasResult.success) {
-      schemas = parseCliJson(schemasResult.stdout, SchemaInfoSchema.array(), 'openspec schemas')
-    }
-  } catch {
-    schemas = []
-  }
+        return {
+          id: meta.id,
+          name: meta.name,
+          proposal: raw?.proposal.markdown || '',
+          sourceProposal: raw?.proposal.sourceMarkdown,
+          tasks: raw?.tasks.markdown,
+          sourceTasks: raw?.tasks.sourceMarkdown,
+          design: raw?.design?.markdown,
+          sourceDesign: raw?.design?.sourceMarkdown,
+          why: change?.why || '',
+          whatChanges: change?.whatChanges || '',
+          parsedTasks: change?.tasks || [],
+          deltas,
+          progress: change?.progress ?? meta.progress,
+          createdAt: meta.createdAt,
+          updatedAt: meta.updatedAt,
+        }
+      })
+    )
 
-  for (const schema of schemas) {
+    // Get all archives with parsed content
+    const archivesMeta = await adapter.listArchivedChangesWithMeta()
+    const archives = await Promise.all(
+      archivesMeta.map(async (meta) => {
+        const [change, raw] = await Promise.all([
+          documentService.readArchivedChange(meta.id, 'export', 'processed'),
+          documentService.readArchivedChangeRaw(meta.id, 'export', 'processed'),
+        ])
+
+        return {
+          id: meta.id,
+          name: meta.name || meta.id,
+          proposal: raw?.proposal.markdown || '',
+          sourceProposal: raw?.proposal.sourceMarkdown,
+          tasks: raw?.tasks.markdown,
+          sourceTasks: raw?.tasks.sourceMarkdown,
+          design: raw?.design?.markdown,
+          sourceDesign: raw?.design?.sourceMarkdown,
+          why: change?.why || '',
+          whatChanges: change?.whatChanges || '',
+          parsedTasks: change?.tasks || [],
+          createdAt: meta.createdAt,
+          updatedAt: meta.updatedAt,
+        }
+      })
+    )
+
+    // Get project.md
+    let projectMd: string | undefined
+
     try {
-      const resolutionResult = await cliExecutor.schemaWhich(schema.name)
-      if (resolutionResult.success) {
-        const resolution = parseCliJson(
-          resolutionResult.stdout,
-          SchemaResolutionSchema,
-          'openspec schema which'
-        )
-        schemaResolutions[schema.name] = {
-          ...resolution,
-          displayPath: toOpsxDisplayPath(resolution.path, {
-            source: resolution.source,
-            projectDir,
-          }),
-          shadows: resolution.shadows.map((shadow) => ({
-            ...shadow,
-            displayPath: toOpsxDisplayPath(shadow.path, {
-              source: shadow.source,
+      const projectMdContent = await documentService.readProjectMd('export', 'processed')
+      projectMd = projectMdContent?.markdown
+    } catch {
+      // project.md is optional
+    }
+
+    // OPSX config snapshot
+    let configYaml: string | undefined
+    let schemas: SchemaInfo[] = []
+    const schemaDetails: Record<string, SchemaDetail> = {}
+    const schemaYamls: Record<string, string> = {}
+    const schemaResolutions: Record<string, SchemaResolution> = {}
+    const templates: Record<string, TemplatesMap> = {}
+    const templateContents: Record<
+      string,
+      Record<
+        string,
+        {
+          content: string | null
+          path: string
+          displayPath?: string
+          source: 'project' | 'user' | 'package'
+        }
+      >
+    > = {}
+    const changeMetadata: Record<string, string | null> = {}
+
+    try {
+      const configPath = join(projectDir, 'openspec', 'config.yaml')
+      configYaml = await readFile(configPath, 'utf-8')
+    } catch {
+      configYaml = undefined
+    }
+
+    try {
+      const schemasResult = await cliExecutor.schemas()
+      if (schemasResult.success) {
+        schemas = parseCliJson(schemasResult.stdout, SchemaInfoSchema.array(), 'openspec schemas')
+      }
+    } catch {
+      schemas = []
+    }
+
+    for (const schema of schemas) {
+      try {
+        const resolutionResult = await cliExecutor.schemaWhich(schema.name)
+        if (resolutionResult.success) {
+          const resolution = parseCliJson(
+            resolutionResult.stdout,
+            SchemaResolutionSchema,
+            'openspec schema which'
+          )
+          schemaResolutions[schema.name] = {
+            ...resolution,
+            displayPath: toOpsxDisplayPath(resolution.path, {
+              source: resolution.source,
               projectDir,
             }),
-          })),
+            shadows: resolution.shadows.map((shadow) => ({
+              ...shadow,
+              displayPath: toOpsxDisplayPath(shadow.path, {
+                source: shadow.source,
+                projectDir,
+              }),
+            })),
+          }
+          try {
+            const schemaPath = join(resolution.path, 'schema.yaml')
+            const schemaContent = await readFile(schemaPath, 'utf-8')
+            schemaDetails[schema.name] = parseSchemaYaml(schemaContent)
+            schemaYamls[schema.name] = schemaContent
+          } catch {
+            // Skip invalid schema detail
+          }
         }
-        try {
-          const schemaPath = join(resolution.path, 'schema.yaml')
-          const schemaContent = await readFile(schemaPath, 'utf-8')
-          schemaDetails[schema.name] = parseSchemaYaml(schemaContent)
-          schemaYamls[schema.name] = schemaContent
-        } catch {
-          // Skip invalid schema detail
-        }
+      } catch {
+        // Skip schema resolution errors
       }
-    } catch {
-      // Skip schema resolution errors
+
+      try {
+        const templatesResult = await cliExecutor.templates(schema.name)
+        if (templatesResult.success) {
+          const parsedTemplates = parseCliJson(
+            templatesResult.stdout,
+            TemplatesSchema,
+            'openspec templates'
+          )
+          const normalizedTemplates = Object.fromEntries(
+            Object.entries(parsedTemplates).map(([artifactId, info]) => [
+              artifactId,
+              {
+                ...info,
+                path: toAbsoluteProjectPath(projectDir, info.path),
+                displayPath: toOpsxDisplayPath(info.path, {
+                  source: info.source,
+                  projectDir,
+                }),
+              },
+            ])
+          )
+          templates[schema.name] = normalizedTemplates
+          const contents = await Promise.all(
+            Object.entries(normalizedTemplates).map(async ([artifactId, info]) => {
+              let content: string | null = null
+              try {
+                content = await readFile(info.path, 'utf-8')
+              } catch {
+                content = null
+              }
+              return [
+                artifactId,
+                {
+                  content,
+                  path: info.path,
+                  displayPath: info.displayPath,
+                  source: info.source,
+                },
+              ] as const
+            })
+          )
+          templateContents[schema.name] = Object.fromEntries(contents)
+        }
+      } catch {
+        // Skip templates errors
+      }
     }
 
     try {
-      const templatesResult = await cliExecutor.templates(schema.name)
-      if (templatesResult.success) {
-        const parsedTemplates = parseCliJson(
-          templatesResult.stdout,
-          TemplatesSchema,
-          'openspec templates'
-        )
-        const normalizedTemplates = Object.fromEntries(
-          Object.entries(parsedTemplates).map(([artifactId, info]) => [
-            artifactId,
-            {
-              ...info,
-              path: toAbsoluteProjectPath(projectDir, info.path),
-              displayPath: toOpsxDisplayPath(info.path, {
-                source: info.source,
-                projectDir,
-              }),
-            },
-          ])
-        )
-        templates[schema.name] = normalizedTemplates
-        const contents = await Promise.all(
-          Object.entries(normalizedTemplates).map(async ([artifactId, info]) => {
-            let content: string | null = null
-            try {
-              content = await readFile(info.path, 'utf-8')
-            } catch {
-              content = null
-            }
-            return [
-              artifactId,
-              {
-                content,
-                path: info.path,
-                displayPath: info.displayPath,
-                source: info.source,
-              },
-            ] as const
-          })
-        )
-        templateContents[schema.name] = Object.fromEntries(contents)
+      const changeIds = await adapter.listChanges()
+      for (const changeId of changeIds) {
+        try {
+          const metaPath = join(projectDir, 'openspec', 'changes', changeId, '.openspec.yaml')
+          const metaContent = await readFile(metaPath, 'utf-8')
+          changeMetadata[changeId] = metaContent
+        } catch {
+          changeMetadata[changeId] = null
+        }
       }
     } catch {
-      // Skip templates errors
+      // ignore change metadata errors
     }
-  }
 
-  try {
-    const changeIds = await adapter.listChanges()
-    for (const changeId of changeIds) {
-      try {
-        const metaPath = join(projectDir, 'openspec', 'changes', changeId, '.openspec.yaml')
-        const metaContent = await readFile(metaPath, 'utf-8')
-        changeMetadata[changeId] = metaContent
-      } catch {
-        changeMetadata[changeId] = null
-      }
+    const git = await readSnapshotGit(projectDir)
+
+    const snapshot: ExportSnapshot = {
+      meta: {
+        timestamp: new Date().toISOString(),
+        version: pkg.version,
+        projectDir,
+      },
+      dashboard: {
+        specsCount: specs.length,
+        changesCount: changes.filter((c) => c !== null).length,
+        archivesCount: archives.length,
+      },
+      git,
+      config: uiConfig,
+      specs,
+      changes,
+      archives,
+      projectMd,
+      opsx: {
+        configYaml,
+        schemas,
+        schemaDetails,
+        schemaYamls,
+        schemaResolutions,
+        templates,
+        templateContents,
+        changeMetadata,
+      },
     }
-  } catch {
-    // ignore change metadata errors
+
+    return snapshot
+  } finally {
+    await hookRuntime.dispose()
   }
-
-  const git = await readSnapshotGit(projectDir)
-
-  const snapshot: ExportSnapshot = {
-    meta: {
-      timestamp: new Date().toISOString(),
-      version: pkg.version,
-      projectDir,
-    },
-    dashboard: {
-      specsCount: specs.length,
-      changesCount: changes.filter((c) => c !== null).length,
-      archivesCount: archives.length,
-    },
-    git,
-    config: uiConfig,
-    specs,
-    changes,
-    archives,
-    projectMd,
-    opsx: {
-      configYaml,
-      schemas,
-      schemaDetails,
-      schemaYamls,
-      schemaResolutions,
-      templates,
-      templateContents,
-      changeMetadata,
-    },
-  }
-
-  return snapshot
 }
 
 /**

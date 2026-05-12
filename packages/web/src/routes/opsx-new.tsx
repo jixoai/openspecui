@@ -1,6 +1,7 @@
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
 import { navController } from '@/lib/nav-controller'
 import { CHANGE_NAME_PATTERN, buildNewChangeArgs, quoteShellToken } from '@/lib/opsx-new-command'
+import { prepareWorkflowInvocation } from '@/lib/opsx-workflow-invocation'
 import { useTerminalContext } from '@/lib/terminal-context'
 import { useOpsxConfigBundleSubscription } from '@/lib/use-opsx'
 import { vtNavController } from '@/lib/view-transitions/navigation'
@@ -18,6 +19,8 @@ export function OpsxNewRoute() {
   const [description, setDescription] = useState('')
   const [extraArgs, setExtraArgs] = useState<string[]>([])
   const [extraArgDraft, setExtraArgDraft] = useState('')
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     setConfig({
@@ -70,19 +73,51 @@ export function OpsxNewRoute() {
         event.preventDefault()
         if (!canSubmit) return
 
-        const normalizedId = trimmedName
-        const closeCallbackUrl = {
-          0: `/changes/${encodeURIComponent(normalizedId)}`,
+        const submit = async () => {
+          setSubmitError(null)
+          setIsSubmitting(true)
+          try {
+            const result = await prepareWorkflowInvocation({
+              requestedMode: 'direct',
+              workflowInput: {
+                action: 'new',
+                changeId: trimmedName,
+                schema,
+                description,
+                extraArgs,
+              },
+              staticFallback: () => ({
+                kind: 'cli-command',
+                command: 'openspec',
+                args,
+                mode: { requestedMode: 'direct', actualMode: 'direct', fallbackReason: null },
+              }),
+            })
+            if (result.kind !== 'cli-command') {
+              throw new Error('Create change workflow must return a CLI command.')
+            }
+
+            const normalizedId = trimmedName
+            const closeCallbackUrl = {
+              0: `/changes/${encodeURIComponent(normalizedId)}`,
+            }
+
+            createDedicatedSession(result.command, result.args, {
+              closeTip: 'Press any key or close action to finish this session.',
+              closeCallbackUrl,
+            })
+
+            const terminalArea = navController.getAreaForPath('/terminal')
+            void vtNavController.push(terminalArea, '/terminal', null)
+            requestClose()
+          } catch (error) {
+            setSubmitError(error instanceof Error ? error.message : String(error))
+          } finally {
+            setIsSubmitting(false)
+          }
         }
 
-        createDedicatedSession('openspec', args, {
-          closeTip: 'Press any key or close action to finish this session.',
-          closeCallbackUrl,
-        })
-
-        const terminalArea = navController.getAreaForPath('/terminal')
-        void vtNavController.push(terminalArea, '/terminal', null)
-        requestClose()
+        void submit()
       }}
     >
       <div className="border-border flex items-center gap-2 border-b px-4 py-3">
@@ -193,6 +228,7 @@ export function OpsxNewRoute() {
           <div className="text-muted-foreground mb-1 text-xs uppercase tracking-wider">Command</div>
           <code className="break-all text-xs">{commandPreview}</code>
         </div>
+        {submitError && <p className="text-destructive text-sm">{submitError}</p>}
       </div>
 
       <div className="border-border flex items-center justify-end gap-2 border-t px-4 py-3">
@@ -205,10 +241,10 @@ export function OpsxNewRoute() {
         </button>
         <button
           type="submit"
-          disabled={!canSubmit}
+          disabled={!canSubmit || isSubmitting}
           className="bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Create
+          {isSubmitting ? 'Creating...' : 'Create'}
         </button>
       </div>
     </form>

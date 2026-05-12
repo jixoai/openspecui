@@ -9,6 +9,7 @@ coverage/
 .report
 tmp/
 .playwright-mcp/
+.chat/
 *.tgz
 
 # Example directory for E2E testing
