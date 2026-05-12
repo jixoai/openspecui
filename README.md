@@ -74,6 +74,71 @@ nix run github:jixoai/openspecui -- --help
 nix develop
 ```
 
+## Project Hooks
+
+OpenSpecUI can load project-local hooks from `openspec/openspecui.hooks.ts`.
+Hooks are intentionally kept outside `openspec/.openspecui.json` so executable project behavior
+does not pollute persisted UI configuration.
+
+Install-time types are available from the CLI package:
+
+```ts
+import type { OnReadDocumentHookV1, OnRunWorkflowHookV1 } from 'openspecui/hooks'
+```
+
+### `onReadDocument`
+
+Use `onReadDocument` when a project needs to project OpenSpec markdown differently for UI
+consumers without rewriting source files. Typical use cases include resolving requirement IDs from
+another file, translating markdown for readers, or adding derived context for search/export.
+
+```ts
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import type { OnReadDocumentHookV1 } from 'openspecui/hooks'
+
+export const onReadDocument: OnReadDocumentHookV1 = async (ctx, read) => {
+  const result = await read()
+  if (ctx.document.kind !== 'spec') return result
+
+  const glossaryPath = join(ctx.projectDir, 'openspec', 'glossary.md')
+  const glossary = await readFile(glossaryPath, 'utf-8')
+
+  return {
+    ...result,
+    markdown: `${result.markdown}\n\n---\n\n${glossary}`,
+    watchFiles: [glossaryPath],
+  }
+}
+```
+
+`onReadDocument` runs server-side in OpenSpecUI V1. It applies to processed document reads for
+live views, search, and static export. Source reads stay raw and audit-safe, so editing,
+validation, and source inspection still use the original OpenSpec files.
+
+### `onRunWorkflow`
+
+Use `onRunWorkflow` to adjust the final OPSX invocation payload before OpenSpecUI hands it to an
+agent or command runner. OpenSpec CLI remains the source of truth for workflow status,
+instructions, schemas, validation, and archive behavior.
+
+```ts
+import type { OnRunWorkflowHookV1 } from 'openspecui/hooks'
+
+export const onRunWorkflow: OnRunWorkflowHookV1 = async (ctx, run) => {
+  const result = await run()
+  if (result.kind !== 'agent-prompt') return result
+
+  return {
+    ...result,
+    text: `${result.text}\n\nProject policy: include security impact in the final summary.`,
+  }
+}
+```
+
+If a hook throws, OpenSpecUI falls back to the default result and attaches diagnostics instead of
+blocking the UI.
+
 ## Key Features
 
 - Dashboard for specs/changes/tasks status
@@ -82,3 +147,4 @@ nix develop
 - Multi-tab PTY terminal (xterm + ghostty-web)
 - Search in live mode and static mode
 - Static snapshot export for docs hosting
+- Project-local hooks for document projection and OPSX invocation customization
