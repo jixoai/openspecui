@@ -1,5 +1,11 @@
 # @openspecui/web
 
+## 3.4.1
+
+### Patch Changes
+
+- 2f20228: Collapse advanced terminal spawn command options by default, protect workflow dialogs from accidental outside dismiss, and render empty select options as accessible `none` labels.
+
 ## 3.4.0
 
 ### Minor Changes

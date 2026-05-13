@@ -1,5 +1,7 @@
 # @openspecui/core
 
+## 3.4.1
+
 ## 3.4.0
 
 ### Minor Changes
