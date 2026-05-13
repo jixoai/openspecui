@@ -119,8 +119,24 @@ describe('TerminalPanel', () => {
           id: 'builtin:claude',
           label: 'Claude',
           command: 'claude',
-          args: [],
-          fields: [],
+          args: [
+            {
+              kind: 'booleanFlag',
+              fieldId: 'dangerouslySkipPermissions',
+              flag: '--dangerously-skip-permissions',
+            },
+          ],
+          fields: [
+            {
+              id: 'dangerouslySkipPermissions',
+              label: 'Skip permissions',
+              type: 'boolean',
+              options: [],
+              defaultValue: false,
+              required: false,
+              advanced: true,
+            },
+          ],
           source: 'builtin',
         },
       ],

@@ -191,6 +191,7 @@ export function OpsxComposeRoute() {
       panelClassName: 'w-full',
       bodyClassName: 'p-0',
       maxHeight: 'min(86dvh,920px)',
+      onDismissRequest: null,
     })
   }, [setConfig])
 

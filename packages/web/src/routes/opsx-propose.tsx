@@ -118,6 +118,7 @@ export function OpsxProposeRoute() {
       panelClassName: 'w-full',
       bodyClassName: 'p-0',
       maxHeight: 'min(86dvh,900px)',
+      onDismissRequest: null,
     })
   }, [setConfig])
 

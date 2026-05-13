@@ -38,6 +38,22 @@ interface SelectProps<T extends string> {
   modal?: boolean
 }
 
+function isEmptyOptionLabel<T extends string>(option: SelectOption<T> | undefined): boolean {
+  return option?.value === '' && option.label === ''
+}
+
+function getOptionAccessibleLabel<T extends string>(option: SelectOption<T>): string | undefined {
+  if (isEmptyOptionLabel(option)) return 'none'
+  return typeof option.label === 'string' ? option.label : undefined
+}
+
+function renderOptionLabel<T extends string>(option: SelectOption<T>): ReactNode {
+  if (isEmptyOptionLabel(option)) {
+    return <i className="text-muted-foreground">none</i>
+  }
+  return option.label
+}
+
 export function Select<T extends string>({
   value,
   options = [],
@@ -110,7 +126,7 @@ export function Select<T extends string>({
         ) : (
           <>
             <BaseSelect.Value placeholder={placeholder} className="truncate">
-              {() => selectedOption?.label ?? placeholder}
+              {() => (selectedOption ? renderOptionLabel(selectedOption) : placeholder)}
             </BaseSelect.Value>
             <BaseSelect.Icon className="text-muted-foreground flex shrink-0">
               <ChevronDown className="h-4 w-4" />
@@ -151,7 +167,7 @@ export function Select<T extends string>({
                       key={option.value}
                       value={option.value}
                       disabled={option.disabled}
-                      label={typeof option.label === 'string' ? option.label : undefined}
+                      label={getOptionAccessibleLabel(option)}
                       className={(state) =>
                         cn(
                           'grid cursor-default grid-cols-[1rem_minmax(0,1fr)] items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none',
@@ -166,7 +182,7 @@ export function Select<T extends string>({
                         <Check className="h-4 w-4" />
                       </BaseSelect.ItemIndicator>
                       <BaseSelect.ItemText className="whitespace-nowrap">
-                        {option.label}
+                        {renderOptionLabel(option)}
                       </BaseSelect.ItemText>
                     </BaseSelect.Item>
                   ))}

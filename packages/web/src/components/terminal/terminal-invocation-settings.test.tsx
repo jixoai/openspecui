@@ -51,13 +51,17 @@ describe('TerminalInvocationSettings', () => {
     localStorage.clear()
   })
 
-  it('keeps settings compact and persists custom shell profiles and spawn commands from dialogs', async () => {
+  async function renderSettings() {
     const { TerminalInvocationSettings } = await import('./terminal-invocation-settings')
     render(<TerminalInvocationSettings />)
 
     await waitFor(() => {
       expect(screen.getByText(/Effective platform default:/).textContent).toContain('/bin/zsh')
     })
+  }
+
+  it('keeps settings compact and persists custom shell profiles from dialogs', async () => {
+    await renderSettings()
 
     expect(screen.queryByLabelText('Default Shell')).toBeNull()
     expect(screen.queryByPlaceholderText('Shell label')).toBeNull()
@@ -90,6 +94,10 @@ describe('TerminalInvocationSettings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit Git Bash' }))
     expect(screen.getByText('Edit Shell')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  })
+
+  it('adapts command parameter fields without rebuilding the edited field input', async () => {
+    await renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: 'Add Command' }))
     expect(screen.getByText('Parameter 1')).toBeTruthy()
@@ -128,6 +136,15 @@ describe('TerminalInvocationSettings', () => {
     const textareaOption = await screen.findByRole('option', { name: 'Textarea' })
     fireEvent.mouseMove(textareaOption)
     fireEvent.click(textareaOption)
+  })
+
+  it('persists custom spawn commands with boolean flag builder parts', async () => {
+    await renderSettings()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Command' }))
+    fireEvent.change(screen.getByPlaceholderText('Command label'), {
+      target: { value: 'Claude Safe' },
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Add Boolean Flag' }))
     expect(screen.getByLabelText('Flag Token')).toBeTruthy()
     fireEvent.change(screen.getByPlaceholderText('--flag'), {
@@ -159,10 +176,6 @@ describe('TerminalInvocationSettings', () => {
       }>
     }
 
-    expect(stored.customShellProfiles?.[0]).toMatchObject({
-      label: 'Git Bash',
-      command: '/usr/bin/bash',
-    })
     expect(stored.customSpawnCommands?.[0]).toMatchObject({
       label: 'Claude Safe',
       command: 'claude',

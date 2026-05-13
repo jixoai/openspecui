@@ -12,6 +12,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import type { DialogRequestHandler } from '../dialog'
 
 export function PopArea() {
   return <Outlet />
@@ -27,6 +28,7 @@ export interface PopAreaConfig {
   panelClassName: string
   bodyClassName: string
   maxHeight: string
+  onDismissRequest?: DialogRequestHandler
 }
 
 const DEFAULT_POP_AREA_CONFIG: PopAreaConfig = {
@@ -39,6 +41,7 @@ const DEFAULT_POP_AREA_CONFIG: PopAreaConfig = {
   panelClassName: '',
   bodyClassName: 'p-0',
   maxHeight: '90vh',
+  onDismissRequest: undefined,
 }
 
 interface PopAreaConfigContextValue {
@@ -60,7 +63,7 @@ function PopAreaConfigProvider({ children }: { children: ReactNode }) {
   const [closeRequestVersion, setCloseRequestVersion] = useState(0)
 
   const setConfig = useCallback((patch: Partial<PopAreaConfig>) => {
-    setConfigState((prev) => ({ ...prev, ...patch }))
+    setConfigState({ ...DEFAULT_POP_AREA_CONFIG, ...patch })
   }, [])
 
   const resetConfig = useCallback(() => {
@@ -196,6 +199,7 @@ function PopAreaDialog() {
         .join(' ')}
       bodyClassName={config.bodyClassName}
       maxHeight={config.maxHeight}
+      onDismissRequest={config.onDismissRequest}
     >
       <RouterProvider router={_popRouter} />
     </Dialog>

@@ -89,6 +89,7 @@ export function SearchRoute() {
       panelClassName: 'w-full',
       bodyClassName: 'p-0',
       maxHeight: 'min(88dvh,920px)',
+      onDismissRequest: undefined,
     })
   }, [setConfig])
 

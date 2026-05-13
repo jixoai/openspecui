@@ -152,6 +152,16 @@ describe('OpsxProposeRoute terminal target', () => {
     queryClient.clear()
   })
 
+  it('blocks outside dismiss for the propose form dialog', () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <OpsxProposeRoute />
+      </QueryClientProvider>
+    )
+
+    expect(setConfigMock).toHaveBeenCalledWith(expect.objectContaining({ onDismissRequest: null }))
+  })
+
   it('opens the shared spawn dialog with prepared payload when target is create', async () => {
     render(
       <QueryClientProvider client={queryClient}>

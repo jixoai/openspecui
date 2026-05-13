@@ -144,6 +144,7 @@ export function GlobalArchiveModal() {
     <Dialog
       open={open}
       onClose={handleClose}
+      onDismissRequest={null}
       title={
         <div className="flex items-center gap-2">
           {archiveStatus === 'success' ? (

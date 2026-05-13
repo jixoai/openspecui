@@ -73,8 +73,10 @@ function TextareaWidget(props: WidgetProps) {
 
 function CheckboxWidget(props: WidgetProps) {
   return (
-    <label className="border-border flex items-center justify-between gap-3 rounded-md border px-3 py-2">
-      <span className="text-sm font-medium">{props.label}</span>
+    <div className="border-border flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+      <label htmlFor={props.id} className="text-sm font-medium">
+        {props.label}
+      </label>
       <Switch
         id={props.id}
         checked={props.value === true}
@@ -84,7 +86,7 @@ function CheckboxWidget(props: WidgetProps) {
         onBlur={() => props.onBlur(props.id, props.value)}
         onFocus={() => props.onFocus(props.id, props.value)}
       />
-    </label>
+    </div>
   )
 }
 
@@ -130,17 +132,17 @@ function FieldTemplate(props: FieldTemplateProps) {
     )
   }
   return (
-    <label className="flex min-w-0 flex-col gap-1 text-xs font-medium">
-      <span>
+    <div className="flex min-w-0 flex-col gap-1 text-xs font-medium">
+      <label htmlFor={props.id}>
         {props.label}
         {props.required && <span className="text-destructive ml-1">*</span>}
-      </span>
+      </label>
       {props.children}
       {props.rawDescription && (
         <span className="text-muted-foreground text-xs">{props.rawDescription}</span>
       )}
       {props.errors}
-    </label>
+    </div>
   )
 }
 

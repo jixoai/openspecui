@@ -1,11 +1,18 @@
 import { X } from 'lucide-react'
-import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import { useHeadStyle } from './use-head-style'
+
+export type DialogRequestHandler = (() => void) | null
 
 interface DialogProps {
   open: boolean
   title: ReactNode // can include icon / status chips etc.
   onClose: () => void
+  /**
+   * Handles non-explicit dismiss attempts such as backdrop click or ESC.
+   * undefined delegates to onClose, null blocks default dismissal.
+   */
+  onDismissRequest?: DialogRequestHandler
   onClosed?: () => void
   children: ReactNode
   footer?: ReactNode
@@ -26,6 +33,7 @@ export function Dialog({
   open,
   title,
   onClose,
+  onDismissRequest,
   onClosed,
   children,
   footer,
@@ -38,6 +46,8 @@ export function Dialog({
 }: DialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const titleId = useId()
+  const requestDismiss = onDismissRequest === undefined ? onClose : onDismissRequest
 
   // Close-complete callback from native dialog lifecycle
   useEffect(() => {
@@ -81,7 +91,7 @@ export function Dialog({
 
     const handleCancel = (event: Event) => {
       event.preventDefault()
-      onClose()
+      requestDismiss?.()
     }
 
     const handleClick = (event: MouseEvent) => {
@@ -98,7 +108,7 @@ export function Dialog({
         event.clientY <= rect.bottom
 
       if (!isInDialog) {
-        onClose()
+        requestDismiss?.()
       }
     }
 
@@ -109,7 +119,7 @@ export function Dialog({
       dialog.removeEventListener('cancel', handleCancel)
       dialog.removeEventListener('click', handleClick)
     }
-  }, [onClose])
+  }, [requestDismiss])
 
   const borderClass =
     borderVariant === 'error'
@@ -163,6 +173,7 @@ export function Dialog({
   return (
     <dialog
       ref={dialogRef}
+      aria-labelledby={titleId}
       className={`openspec-dialog m-0 h-dvh w-screen max-w-none border-0 bg-transparent p-0 ${dialogClassName}`}
     >
       <div
@@ -175,7 +186,9 @@ export function Dialog({
         >
           {/* Header (non-shrinking) */}
           <div className="border-border flex flex-none shrink-0 items-center justify-between border-b px-4 py-3">
-            <div className="flex items-center gap-2">{title}</div>
+            <div id={titleId} className="flex items-center gap-2">
+              {title}
+            </div>
             <button
               onClick={onClose}
               className="hover:bg-muted rounded p-1"

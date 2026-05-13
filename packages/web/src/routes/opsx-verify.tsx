@@ -34,6 +34,7 @@ export function OpsxVerifyRoute() {
       panelClassName: 'w-full',
       bodyClassName: 'p-0',
       maxHeight: 'min(82dvh,760px)',
+      onDismissRequest: null,
     })
   }, [setConfig])
 

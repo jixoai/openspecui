@@ -124,13 +124,22 @@ describe('TerminalSpawnCommandDialog', () => {
     )
 
     expect(getByDisplayValue('draft prompt')).toBeTruthy()
-    expect(screen.getByRole('checkbox', { name: 'Show advanced options' })).toBeTruthy()
+    const advancedButton = screen.getByRole('button', { name: /Advanced options/ })
+    const advancedSectionId = advancedButton.getAttribute('aria-controls')
+    expect(advancedSectionId).toBeTruthy()
+    const advancedSection = document.getElementById(advancedSectionId!)
+    expect(advancedSection?.getAttribute('aria-hidden')).toBe('true')
+    expect(advancedSection?.hasAttribute('inert')).toBe(true)
+    expect(advancedButton.getAttribute('aria-expanded')).toBe('false')
     expect(screen.queryByRole('checkbox', { name: /Skip permissions/ })).toBeNull()
     expect(document.body.textContent).toContain("claude 'draft prompt'")
     expect(document.body.textContent).not.toContain('--dangerously-skip-permissions')
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Show advanced options' }))
+    fireEvent.click(advancedButton)
 
+    expect(advancedButton.getAttribute('aria-expanded')).toBe('true')
+    expect(advancedSection?.getAttribute('aria-hidden')).toBe('false')
+    expect(advancedSection?.hasAttribute('inert')).toBe(false)
     expect(screen.getByRole('checkbox', { name: /Skip permissions/ })).toBeTruthy()
   })
 
@@ -145,7 +154,7 @@ describe('TerminalSpawnCommandDialog', () => {
       />
     )
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Show advanced options' }))
+    fireEvent.click(screen.getByRole('button', { name: /Advanced options/ }))
     fireEvent.click(screen.getByRole('checkbox', { name: /Skip permissions/ }))
     fireEvent.click(getByText('Create'))
 
@@ -158,5 +167,14 @@ describe('TerminalSpawnCommandDialog', () => {
       })
     )
     expect(onClose).toHaveBeenCalled()
+  })
+
+  it('does not close on outside dismiss requests', () => {
+    const onClose = vi.fn()
+    render(<TerminalSpawnCommandDialog open command={command} onClose={onClose} />)
+
+    fireEvent.click(screen.getByRole('dialog', { hidden: true }), { clientX: 1, clientY: 1 })
+
+    expect(onClose).not.toHaveBeenCalled()
   })
 })

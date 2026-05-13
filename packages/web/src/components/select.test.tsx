@@ -31,6 +31,11 @@ const GROUPS: SelectOptionGroup<'shell:zsh' | 'create:claude'>[] = [
   },
 ]
 
+const EMPTY_OPTIONS: SelectOption<'' | 'model-a'>[] = [
+  { value: '', label: '' },
+  { value: 'model-a', label: 'Model A' },
+]
+
 describe('Select', () => {
   afterEach(() => {
     cleanup()
@@ -65,5 +70,19 @@ describe('Select', () => {
     expect(await screen.findByRole('group', { name: 'Shell Instances' })).toBeTruthy()
     expect(screen.getByRole('group', { name: 'Create Shell Instance' })).toBeTruthy()
     expect(screen.getByRole('option', { name: 'Create Claude' })).toBeTruthy()
+  })
+
+  it('renders empty options as accessible italic none labels', async () => {
+    render(<Select value="" options={EMPTY_OPTIONS} onValueChange={() => {}} ariaLabel="Model" />)
+
+    expect(screen.getByRole('combobox', { name: 'Model' }).textContent).toContain('none')
+    expect(screen.getByRole('combobox', { name: 'Model' }).querySelector('i')?.textContent).toBe(
+      'none'
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Model' }))
+
+    const emptyOption = await screen.findByRole('option', { name: 'none' })
+    expect(emptyOption.querySelector('i')?.textContent).toBe('none')
   })
 })
