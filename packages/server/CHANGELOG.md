@@ -1,5 +1,17 @@
 # @openspecui/server
 
+## 3.5.0
+
+### Minor Changes
+
+- ecfccd2: Add the in-memory web notifications platform with terminal bell/OSC producers, PopArea notification panel, notification settings, sound previews, and a rolling browser Notification bridge.
+
+### Patch Changes
+
+- Updated dependencies [ecfccd2]
+  - @openspecui/core@3.5.0
+  - @openspecui/search@3.5.0
+
 ## 3.4.1
 
 ### Patch Changes

@@ -1,5 +1,16 @@
 # @openspecui/web
 
+## 3.5.0
+
+### Minor Changes
+
+- ecfccd2: Add the in-memory web notifications platform with terminal bell/OSC producers, PopArea notification panel, notification settings, sound previews, and a rolling browser Notification bridge.
+
+### Patch Changes
+
+- ecfccd2: Add a shared Button activity state for fulfilled actions and apply it to Settings/Config controls that are already enabled, saved, applied, or default.
+- ecfccd2: Promote Switch to the shared on/off control with `role="switch"` semantics and migrate Cursor Blink plus affected switch tests.
+
 ## 3.4.1
 
 ### Patch Changes
