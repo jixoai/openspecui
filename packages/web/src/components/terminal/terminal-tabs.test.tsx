@@ -43,7 +43,7 @@ describe('TerminalTabs', () => {
       headerForeground: 'z-auto flex-1',
       headerFrame: 'items-end',
       strip: 'min-w-0 flex-1 items-end border-b border-terminal-foreground/20 px-4 rounded-none',
-      list: 'flex-1 items-end overflow-y-hidden pt-2',
+      list: 'flex-1 items-end overflow-y-hidden pt-2 [&::scroll-button(*)]:mt-3',
       buttonBase:
         'z-20 w-[clamp(8.5rem,18vw,13rem)] rounded-t-[8px] border border-b-0 border-transparent px-0 py-0 transition-[color,background-color,border-color] duration-180 ease-[cubic-bezier(0.22,0.61,0.36,1)]',
       buttonInner:
@@ -54,7 +54,8 @@ describe('TerminalTabs', () => {
         'bg-transparent text-terminal-foreground/72 hover:border-[color-mix(in_oklab,var(--background)_10%,transparent)] hover:text-terminal-foreground',
       inactiveButtonInner:
         'bg-terminal [filter:brightness(0.9)] [transform:translateY(0.25em)] hover:text-terminal-foreground hover:[filter:brightness(0.96)] hover:[transform:translateY(0.125em)]',
-      selectionIndicatorViewport: 'inset-x-0 top-0 bottom-[-1px] overflow-visible',
+      selectionIndicatorViewport:
+        'inset-x-0 top-0 bottom-[-1px] overflow-visible overflow-x-hidden',
       selectionIndicator:
         'border-terminal-foreground/20 border-x border-t border-b-0 bg-terminal rounded-t-[8px] shadow-[0_1px_0_var(--terminal)] duration-180 ease-[cubic-bezier(0.22,0.61,0.36,1)]',
     })

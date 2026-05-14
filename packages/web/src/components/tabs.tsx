@@ -120,7 +120,7 @@ const tabsStyleText = (id: string) => {
       border: 0;
       font-size: 1.2rem;
       background: none;
-      z-index: 2;
+      z-index: 100;
       color: currentColor;
     }
 
