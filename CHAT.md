@@ -1092,3 +1092,116 @@ Terminal的字体选择器它应该是个 `Array<string>`+`Input|TextArea`，用
 11. 浏览器对于播放音频的自动播放策略，onBell、onNotification 都是需要我们主动播放声音的，你要么就找到一个专业的音频播放库，要么就是手动监听用户的第一次全局点击交互(`onpointerdown`)默默播放一个 0.1 秒的静音音频，从而解锁当前的 AudioContext。
 12. 我们需要根据元数据进行分组，比如某一个终端同时发出了 100 条数据，我们 web-notifications 渲染出来的效果是类似于 iOS 的通知分组功能：同一个应用的通知是规划成一组，需要手动展开才能查看全部，滑动删除可以直接删除一整组。同理，我们的 web-notifications 是强类型安全的结构化，所以通知可能来自某个 Terminal、来自某个 OpenspecChange、来自某个 HooksPlugin，所以理论上是可以实现安全可靠的分组。这能有效避免 web-notifications 面板爆炸
 13. 如果我们点击的 Notification的跳转，发现对应的实例已经被销毁了，比如 Terminal 被 killed，或者 OpenspecChange 被 archive，那么在跳转之前要能预判，直接将跳转按钮进行禁用。
+
+---
+
+我觉得我们不要再为bell去专门做Notification了，问题其实挺多的，比如我在 /bin/sh ，在空行上按下删除，结果一直触发Notification。虽然你之前说的有道理：有些老旧的TUI会用bell去作为Notification来使用。但以前它们的环境，更多也只是为了发出一个bell音效而已。和现在搞这样复杂的Notification并不是同样的目的。
+
+所以我觉得，我们需要这样改进：
+
+1. 为bell专门设置一个音效的设置，和Notification Sound的设置分开来。默认就是使用bell音效
+2. 在发声bell的时候，不再触发Notification，而是在 TerminalTab 的状态指示灯上，做一个涟漪扩散的特效（primary-color）。就这样来提醒用户，这个终端发声了
+
+---
+
+我帮你把操作系统 音源拿来了，就在 packages/web/public/sounds这个目录下，请你用它来作为我们的声音配置。
+后续如果要支持用户自定义音频文件，做法是，在这个音频选择器的下拉中，存在一个group，属于 Custom Sounds，这部分资源是跨项目共享。
+所以它的后端逻辑是：
+
+1. 前端通过接口上传了音频文件。我们将它存储到 ~/.openspecui/sounds/ 文件夹下，后缀移除，名称变成文件 hex-hash，这就是资源的唯一 id；同时文件信息存储到 ~/.openspecui/sounds/metadatas.json 中：
+
+```
+{
+"[HEX_HASH]":{name:"名称",mime:"audio/mp3",...}
+}
+```
+
+2. 提接口可以修改文件名
+3. 提供接口获取可用的自定义音频列表（注意是可用，后端读取 metadatas.json 的同时，需要检查一下文件在不在）
+4. 提供接口获取音频文件的可直接播放的链接（Content-Type:audio/...）
+5. 提供接口删除音频文件和对应的元数据
+
+反过来，前端的逻辑是：
+
+1. 选择器内新增一个分组：自定义音频。
+2. 自定义音频的第一项，就是“新增”；其它项，就是通过接口获得的列表
+3. 选中“新增”后，选择器从原本的 `[Select|PlayIcon]` 这样的组合，变成 `[Select|InputFileIcon|InputText|PlayIcon]` 这样的组合，其中，InputText输入就可以修改文件
+4. 如果前端的音频文件发现找不到了（可直接播放的链接返回 404），那么自动使用 Default 音频
+5. 如果选中的是其它自定义项目，那么选择器变成`[Select|InputText|PlayIcon] [RemoveIcon]` 这样的组合，点击移除，可以删除
+
+---
+
+1. Bell Sound 的默认音效用 Thik
+2. Notification Sound 的默认音效用 Blow
+3. 为这些 Sound 分别提供额外音量的设置
+4. 不同项目之间的音效不是共享的，是独立的。共享只是音频文件，这个是全局存储的
+
+---
+
+音量调控组件，请放在 PlayIcon的旁边：`PlayIcon|↕️`，宽度只有 PlayIcon的一半
+
+1. 点击后会出现一个 Popover，可以上下拖动改变音量。
+2. 按住 ↕️ 直接上下拖动，也会立刻显示 Popover，等价于拖动中，可以改变音量
+3. 对 Popover 使用鼠标滚轮，也可以改变音量
+4. hover 到 ↕️ 上，也可以改变音量
+
+---
+
+我发现 Cursor Blink 这个设置这里，你做了一个Switch组件，请将它提升成全局的Switch组件。
+Switch（或者也叫Toggle）组件用于“开关”的含义
+checkbox 组件用于“选中与否”的含义
+
+升级完成后，检查全局的 inputCheckbox，然后进行升级
+
+---
+
+```
+- OSC 9;<message>：通知
+- OSC 9;4;<state>;<progress>：进度控制
+- OSC 777;notify;<title>;<body>：通知
+应该把 parser 从“OSC 9 全部是通知”改成“OSC 9 下有子协议”：
+1. OSC 9;4;...：识别为 terminal progress control，消费掉，不发布 notification。
+2. OSC 9;<non-progress text>：继续作为通知。
+3. OSC 777;notify;...：继续作为通知。
+4. 未识别 OSC：保留原样输出，避免吞掉未知 terminal 功能。
+```
+
+1. 继续按你这个思路修复，顺便想一想，还有什么遗漏
+2. 对于已经聚焦中的终端，应该要能自动消费掉通知，就是说，通知还是会触发，但是会定时，比如2s，自己消化掉
+3. TerminalTab这里，你目前是把有几条通知，直接写入到标题这部分了，我建议改成badge 的模式，没有宽度，不影响布局。并且只有一条通知的时候，不显示数字，只显示小红点
+4. 我发现你对TerminalTab的title没有做对，title也是OSC的控制符才对，这部分理论上底层也要解析出来。还有当前路径也是，也要解析出来。虽然目前前端没有去用到这个路径信息，但是代码解析要解析全。还有什么需要解析的，比如终端是否空闲我记得也有OSC控制符可以控制。
+
+---
+
+1. 现在左右方向键又不能独立工作了，但修饰键+方向键可以工作。这个之前已经修复过，为什么又再次出现这个问题? 测试没有覆盖到吗？
+2. 新增功能：全局的 Notification 通知小卡片。通知小卡片的内容会更紧凑，Actions部分，不用显示read按钮，只有一个 icon-only 的图标按钮
+   2.1 卡片的动画是从右下角的通知图标那边，往上冒泡出来。动画要平滑，符合物理规则
+   2.2 卡片并不是始终冒泡显示的，有些情况是不显示的：如果 Notifications 面板没有打开；如果并且当前路由目标不处于打开状态（比如 changeDetail 或者 TerminalTab）。也就是说冒泡之前必须走一下路由判断。（这可能导致代码会有一些破坏性变更，这是允许的，不用考虑向下兼容）
+3. 移动端适配：顶部AppBar的右上角是“⛓️Live”，把这里的Live文字省略，留出空间，把我们的通知按钮的入口坐在搜索按钮的右侧。
+   3.1 卡片动画要从右上角往上冒泡，改成左上角往下冒泡。
+   3.2 如果突然将布局从宽屏改成窄屏，通知小卡片也要能正常展示
+
+---
+
+讨论一个问题：
+我用 cmux 这样的带通知能力的终端启动了 openspecui，结果发现：我在网页上启动了 claude 这样的经常使用 Notification 的程序，我们的 web-notification、browser-notification 都收到通知了。结果 cmux 这里的进程居然也收到通知了。这就很奇葩，也就是说，它并不是依靠渲染了 什么内容来决定通知，好像是通过子进程的 stdout 来决定是不是有通知。技术上能做到这样？我有点不敢相信，还是我判断错了？
+
+---
+
+Notifications 的分组的标题有点问题，分组标题理论上应该使用目标的标题，而且目标的标题是会发生变更的。所以有新通知的时候，需要使用发生新通知那一刻的标题信息。
+
+---
+
+开始收尾工作，准备发布版本，还有一个样式改进的提交也要在这次版本一起被处理：
+我们项目中存在多种 ButtonGroup ，或者有些地方没有使用 ButtonGroup。
+统一一下，整理出 ButtonGroup 组件，然后列出哪些地方应该用 ButtonGroup
+
+---
+
+Primary Button 需要有一个变体：activity
+参考 Settings>Terminal>Shells 这里的 default。这里语义上还是 Button，但因为已经处于激活状态，所以不是不能点击，而是不需要点击。
+
+请封装好，并做好语义化，接着寻找其它可以用的地方。
+比如我找到 Enable System Notifications 这里的 Enabled。
+以及 Settings 页面中的各种 Save|Apply 按钮，理论可以使用这个变体。而不是用 disabled
+所以你再找找，有没有其它的地方可以利用这个变体的。
