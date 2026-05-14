@@ -535,6 +535,55 @@ html[data-vt-kind='route-detail'] .vt-detail-content {
   }
 }
 
+@keyframes notification-toast-enter-desktop {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translate3d(28px, 34px, 0) scale(0.9);
+  }
+  62% {
+    opacity: 1;
+    filter: blur(1px);
+    transform: translate3d(-3px, -5px, 0) scale(1.015);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes notification-toast-enter-mobile {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translate3d(-20px, -28px, 0) scale(0.9);
+  }
+  62% {
+    opacity: 1;
+    filter: blur(1px);
+    transform: translate3d(4px, 5px, 0) scale(1.012);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes notification-toast-exit {
+  from {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translate3d(38px, 0, 0) scale(0.985);
+  }
+}
+
 ::view-transition-group(root) {
   animation-duration: 1ms;
 }
@@ -1107,6 +1156,41 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
   min-width: 0;
 }
 
+.notification-toast-viewport {
+  left: max(0.75rem, env(safe-area-inset-left));
+  right: max(0.75rem, env(safe-area-inset-right));
+  top: calc(3.5rem + env(safe-area-inset-top));
+}
+
+.notification-toast {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.75rem;
+  width: 100%;
+  border: 1px solid color-mix(in oklab, var(--border) 86%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--popover) 95%, transparent);
+  color: var(--popover-foreground);
+  padding: 0.75rem;
+  box-shadow: var(--shadow-md);
+  transform-origin: top left;
+  backdrop-filter: blur(12px) saturate(1.04);
+  will-change: transform, opacity, filter;
+}
+
+.notification-toast[data-target-area='bottom'] {
+  border-color: color-mix(in oklab, var(--primary) 46%, var(--border));
+}
+
+.notification-toast[data-state='open'] {
+  animation: notification-toast-enter-mobile 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.notification-toast[data-state='closed'] {
+  animation: notification-toast-exit 340ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
 /* Desktop: sidebar layout (container width >= 768px) */
 @container app (min-width: 768px) {
   .app-layout {
@@ -1125,6 +1209,19 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
   }
   .bottom-area {
     display: block;
+  }
+  .notification-toast-viewport {
+    left: auto;
+    right: max(0.75rem, env(safe-area-inset-right));
+    top: auto;
+    bottom: calc(2.75rem + env(safe-area-inset-bottom));
+    width: min(24rem, calc(100vw - 1.5rem));
+  }
+  .notification-toast {
+    transform-origin: bottom right;
+  }
+  .notification-toast[data-state='open'] {
+    animation-name: notification-toast-enter-desktop;
   }
 }
 

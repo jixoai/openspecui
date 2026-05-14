@@ -90,6 +90,38 @@ export const PtyTitleResponseSchema = z.object({
   title: z.string(),
 })
 
+export const PtyProcessTitleResponseSchema = z.object({
+  type: z.literal('process-title'),
+  sessionId: z.string().min(1),
+  title: z.string(),
+})
+
+export const PtyCwdResponseSchema = z.object({
+  type: z.literal('cwd'),
+  sessionId: z.string().min(1),
+  cwd: z.string(),
+})
+
+export const PtyProgressResponseSchema = z.object({
+  type: z.literal('progress'),
+  sessionId: z.string().min(1),
+  state: z.enum(['clear', 'set', 'error', 'indeterminate', 'warning']),
+  value: z.number().int().min(0).max(100).nullable(),
+})
+
+export const PtyPromptStateResponseSchema = z.object({
+  type: z.literal('prompt-state'),
+  sessionId: z.string().min(1),
+  state: z.enum(['prompt-start', 'prompt-end', 'command-start', 'command-output', 'command-end']),
+  exitCode: z.number().int().optional(),
+})
+
+export const PtyBellResponseSchema = z.object({
+  type: z.literal('bell'),
+  sessionId: z.string().min(1),
+  createdAt: z.number().int().positive().optional(),
+})
+
 export const PtyBufferResponseSchema = z.object({
   type: z.literal('buffer'),
   sessionId: z.string().min(1),
@@ -120,6 +152,11 @@ export const PtyServerMessageSchema = z.discriminatedUnion('type', [
   PtyOutputResponseSchema,
   PtyExitResponseSchema,
   PtyTitleResponseSchema,
+  PtyProcessTitleResponseSchema,
+  PtyCwdResponseSchema,
+  PtyProgressResponseSchema,
+  PtyPromptStateResponseSchema,
+  PtyBellResponseSchema,
   PtyBufferResponseSchema,
   PtyListResponseSchema,
   PtyErrorResponseSchema,

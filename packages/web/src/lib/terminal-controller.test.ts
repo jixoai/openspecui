@@ -66,15 +66,42 @@ class MockTerminal {
     this.focusCalls += 1
   }
 
-  emitKeydown(key: string, code: string, options?: { ctrlKey?: boolean; metaKey?: boolean }): void {
+  emitKeydown(
+    key: string,
+    code: string,
+    options?: {
+      altKey?: boolean
+      ctrlKey?: boolean
+      keyCode?: number
+      metaKey?: boolean
+      shiftKey?: boolean
+    }
+  ): void {
     const event = new KeyboardEvent('keydown', {
       key,
       code,
+      altKey: options?.altKey ?? false,
       ctrlKey: options?.ctrlKey ?? false,
       metaKey: options?.metaKey ?? false,
+      shiftKey: options?.shiftKey ?? false,
       bubbles: true,
     })
-    this.customKeyEventHandler?.(event)
+    Object.defineProperty(event, 'keyCode', { value: options?.keyCode ?? 0 })
+    const allowNativeHandling = this.customKeyEventHandler?.(event) ?? true
+    if (!allowNativeHandling) return
+    const fallbackInput =
+      key === 'ArrowLeft' && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
+        ? '\x1bOD'
+        : key === 'ArrowRight' &&
+            !event.altKey &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.shiftKey
+          ? '\x1bOC'
+          : null
+    if (fallbackInput) {
+      this.emitData(fallbackInput)
+    }
   }
 
   dispose(): void {
@@ -118,15 +145,24 @@ class MockGhosttyTerminal extends MockTerminal {
   override emitKeydown(
     key: string,
     code: string,
-    options?: { ctrlKey?: boolean; metaKey?: boolean }
+    options?: {
+      altKey?: boolean
+      ctrlKey?: boolean
+      keyCode?: number
+      metaKey?: boolean
+      shiftKey?: boolean
+    }
   ): void {
     const event = new KeyboardEvent('keydown', {
       key,
       code,
+      altKey: options?.altKey ?? false,
       ctrlKey: options?.ctrlKey ?? false,
       metaKey: options?.metaKey ?? false,
+      shiftKey: options?.shiftKey ?? false,
       bubbles: true,
     })
+    Object.defineProperty(event, 'keyCode', { value: options?.keyCode ?? 0 })
     const consumed = this.customKeyEventHandler?.(event)
     if (consumed) return
     if (key.length === 1 && !event.ctrlKey && !event.metaKey) {
@@ -219,6 +255,20 @@ vi.mock('xterm-input-panel', () => ({
   InputPanelAddon: MockInputPanelAddon,
 }))
 
+const terminalBellPlayMock = vi.hoisted(() => vi.fn(async () => {}))
+
+vi.mock('./terminal-bell-sound-engine', () => ({
+  TerminalBellSoundEngine: class {
+    init(): void {
+      // noop
+    }
+
+    play(sound: string, volume: number): Promise<void> {
+      return terminalBellPlayMock(sound, volume)
+    }
+  },
+}))
+
 class MockWebSocket {
   static readonly CONNECTING = 0
   static readonly OPEN = 1
@@ -297,6 +347,7 @@ describe('terminal-controller PTY behavior', () => {
     MockGhosttyTerminal.reset()
     MockInputPanelAddon.reset()
     MockWebSocket.reset()
+    terminalBellPlayMock.mockClear()
     ghosttyInitMock.mockReset()
     ghosttyInitMock.mockResolvedValue(undefined)
     vi.stubGlobal('WebSocket', MockWebSocket as unknown as typeof WebSocket)
@@ -334,6 +385,116 @@ describe('terminal-controller PTY behavior', () => {
     const sent = parseSent(ws)
     expect(sent.some((msg) => msg.type === 'create' && msg.requestId === localId)).toBe(true)
     expect(sent.some((msg) => msg.type === 'input' && msg.sessionId === 'pty-100')).toBe(true)
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('handles PTY bell as terminal-local sound and snapshot feedback', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-bell', platform: 'common' })
+    ws.emitJson({ type: 'bell', sessionId: 'pty-bell', createdAt: 1234 })
+
+    const session = terminalController.getSnapshot().sessions.find((item) => item.id === localId)
+    expect(session?.lastBellAt).toBe(1234)
+    expect(terminalBellPlayMock).toHaveBeenCalledWith('builtin:Tink', 1)
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('keeps process title and OSC title as separate terminal metadata', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession({ label: 'fallback' })
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-meta', platform: 'common' })
+    ws.emitJson({ type: 'process-title', sessionId: 'pty-meta', title: 'zsh' })
+
+    let session = terminalController.getSnapshot().sessions.find((item) => item.id === localId)
+    expect(session?.processTitle).toBe('zsh')
+    expect(session?.oscTitle).toBeNull()
+    expect(session?.displayTitle).toBe('zsh')
+
+    ws.emitJson({ type: 'title', sessionId: 'pty-meta', title: 'Claude Code' })
+    session = terminalController.getSnapshot().sessions.find((item) => item.id === localId)
+    expect(session?.processTitle).toBe('zsh')
+    expect(session?.oscTitle).toBe('Claude Code')
+    expect(session?.displayTitle).toBe('Claude Code')
+
+    terminalController.setCustomTitle(localId, 'Pinned title')
+    session = terminalController.getSnapshot().sessions.find((item) => item.id === localId)
+    expect(session?.displayTitle).toBe('Pinned title')
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('uses backend-resolved OSC display title without letting window title override tab title', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession({ label: 'fallback' })
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-meta', platform: 'common' })
+    ws.emitJson({ type: 'process-title', sessionId: 'pty-meta', title: 'zsh' })
+    ws.emitJson({
+      type: 'title',
+      sessionId: 'pty-meta',
+      title: '了解地铁建设相关',
+    })
+
+    const session = terminalController.getSnapshot().sessions.find((item) => item.id === localId)
+    expect(session?.processTitle).toBe('zsh')
+    expect(session?.oscTitle).toBe('了解地铁建设相关')
+    expect(session?.displayTitle).toBe('了解地铁建设相关')
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('stores terminal control metadata from PTY messages', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({
+      type: 'created',
+      requestId: localId,
+      sessionId: 'pty-controls',
+      platform: 'common',
+    })
+    ws.emitJson({ type: 'cwd', sessionId: 'pty-controls', cwd: '/tmp/project' })
+    ws.emitJson({
+      type: 'progress',
+      sessionId: 'pty-controls',
+      state: 'indeterminate',
+      value: null,
+    })
+    ws.emitJson({
+      type: 'prompt-state',
+      sessionId: 'pty-controls',
+      state: 'command-start',
+    })
+
+    let session = terminalController.getSnapshot().sessions.find((item) => item.id === localId)
+    expect(session?.cwd).toBe('/tmp/project')
+    expect(session?.progress).toEqual({ state: 'indeterminate', value: null })
+    expect(session?.promptState).toBe('command-start')
+
+    ws.emitJson({ type: 'progress', sessionId: 'pty-controls', state: 'clear', value: null })
+    session = terminalController.getSnapshot().sessions.find((item) => item.id === localId)
+    expect(session?.progress).toBeNull()
 
     terminalController.closeAll()
     unsubscribe()
@@ -746,6 +907,172 @@ describe('terminal-controller PTY behavior', () => {
     unsubscribe()
   })
 
+  it('lets xterm handle plain left/right arrows while normalizing up/down fallbacks', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-716', platform: 'macos' })
+
+    const terminal = MockTerminal.instances.at(-1)
+    expect(terminal).toBeDefined()
+    terminal?.emitKeydown('ArrowUp', 'ArrowUp', { keyCode: 38 })
+    terminal?.emitKeydown('ArrowDown', 'ArrowDown', { keyCode: 40 })
+    terminal?.emitKeydown('ArrowLeft', 'ArrowLeft', { keyCode: 37 })
+    terminal?.emitKeydown('ArrowRight', 'ArrowRight', { keyCode: 39 })
+
+    const sent = parseSent(ws)
+    expect(
+      sent.some(
+        (msg) => msg.type === 'input' && msg.sessionId === 'pty-716' && msg.data === '\x1b[A'
+      )
+    ).toBe(true)
+    expect(
+      sent.some(
+        (msg) => msg.type === 'input' && msg.sessionId === 'pty-716' && msg.data === '\x1b[B'
+      )
+    ).toBe(true)
+    expect(
+      sent.some(
+        (msg) => msg.type === 'input' && msg.sessionId === 'pty-716' && msg.data === '\x1b[D'
+      )
+    ).toBe(false)
+    expect(
+      sent.some(
+        (msg) => msg.type === 'input' && msg.sessionId === 'pty-716' && msg.data === '\x1b[C'
+      )
+    ).toBe(false)
+    expect(
+      sent.some(
+        (msg) => msg.type === 'input' && msg.sessionId === 'pty-716' && msg.data === '\x1bOD'
+      )
+    ).toBe(true)
+    expect(
+      sent.some(
+        (msg) => msg.type === 'input' && msg.sessionId === 'pty-716' && msg.data === '\x1bOC'
+      )
+    ).toBe(true)
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('lets xterm handle keycode-less browser left/right arrows', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-717', platform: 'macos' })
+
+    const terminal = MockTerminal.instances.at(-1)
+    expect(terminal).toBeDefined()
+    terminal?.emitKeydown('ArrowLeft', 'ArrowLeft', { keyCode: 0 })
+    terminal?.emitKeydown('ArrowRight', 'ArrowRight', { keyCode: 0 })
+
+    const sent = parseSent(ws)
+    expect(
+      sent.some(
+        (msg) => msg.type === 'input' && msg.sessionId === 'pty-717' && msg.data === '\x1b[D'
+      )
+    ).toBe(false)
+    expect(
+      sent.some(
+        (msg) => msg.type === 'input' && msg.sessionId === 'pty-717' && msg.data === '\x1b[C'
+      )
+    ).toBe(false)
+    expect(
+      sent.some(
+        (msg) => msg.type === 'input' && msg.sessionId === 'pty-717' && msg.data === '\x1bOD'
+      )
+    ).toBe(true)
+    expect(
+      sent.some(
+        (msg) => msg.type === 'input' && msg.sessionId === 'pty-717' && msg.data === '\x1bOC'
+      )
+    ).toBe(true)
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('maps macOS Option+arrow to terminal navigation sequences', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-718', platform: 'macos' })
+
+    const terminal = MockTerminal.instances.at(-1)
+    expect(terminal).toBeDefined()
+    terminal?.emitKeydown('ArrowUp', 'ArrowUp', { altKey: true, keyCode: 38 })
+    terminal?.emitKeydown('ArrowDown', 'ArrowDown', { altKey: true, keyCode: 40 })
+    terminal?.emitKeydown('ArrowLeft', 'ArrowLeft', { altKey: true, keyCode: 37 })
+    terminal?.emitKeydown('ArrowRight', 'ArrowRight', { altKey: true, keyCode: 39 })
+
+    const sent = parseSent(ws)
+    expect(
+      sent.some(
+        (msg) => msg.type === 'input' && msg.sessionId === 'pty-718' && msg.data === '\x1b[1;3A'
+      )
+    ).toBe(true)
+    expect(
+      sent.some(
+        (msg) => msg.type === 'input' && msg.sessionId === 'pty-718' && msg.data === '\x1b[1;3B'
+      )
+    ).toBe(true)
+    expect(
+      sent.some(
+        (msg) => msg.type === 'input' && msg.sessionId === 'pty-718' && msg.data === '\x1bb'
+      )
+    ).toBe(true)
+    expect(
+      sent.some(
+        (msg) => msg.type === 'input' && msg.sessionId === 'pty-718' && msg.data === '\x1bf'
+      )
+    ).toBe(true)
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('maps macOS Command+arrow to shell line-boundary sequences', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-719', platform: 'macos' })
+
+    const terminal = MockTerminal.instances.at(-1)
+    expect(terminal).toBeDefined()
+    terminal?.emitKeydown('ArrowUp', 'ArrowUp', { metaKey: true, keyCode: 38 })
+    terminal?.emitKeydown('ArrowDown', 'ArrowDown', { metaKey: true, keyCode: 40 })
+    terminal?.emitKeydown('ArrowLeft', 'ArrowLeft', { metaKey: true, keyCode: 37 })
+    terminal?.emitKeydown('ArrowRight', 'ArrowRight', { metaKey: true, keyCode: 39 })
+
+    const sent = parseSent(ws)
+    const lineBoundaryInputs = sent.flatMap((msg) =>
+      msg.type === 'input' && msg.sessionId === 'pty-719' ? [msg.data] : []
+    )
+    expect(lineBoundaryInputs).toEqual(['\x01', '\x05', '\x01', '\x05'])
+    expect(
+      sent.some((msg) => msg.type === 'input' && msg.sessionId === 'pty-719' && msg.data === '\x01')
+    ).toBe(true)
+    expect(
+      sent.some((msg) => msg.type === 'input' && msg.sessionId === 'pty-719' && msg.data === '\x05')
+    ).toBe(true)
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
   it('migrates input panel active target when focus switches to another session', async () => {
     const terminalController = await loadTerminalController()
     const unsubscribe = terminalController.subscribe(() => {})
@@ -795,6 +1122,68 @@ describe('terminal-controller PTY behavior', () => {
     expect(MockInputPanelAddon.options).toEqual(
       expect.arrayContaining([expect.objectContaining({ showFab: false })])
     )
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('publishes activation requests for existing server sessions', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const activationListener = vi.fn()
+    const unsubscribeActivation = terminalController.subscribeActivation(activationListener)
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({
+      type: 'created',
+      requestId: localId,
+      sessionId: 'pty-900',
+      platform: 'common',
+    })
+
+    expect(terminalController.requestActivateServerSession('pty-900')).toBe(true)
+    expect(activationListener).toHaveBeenCalledWith(localId)
+
+    expect(terminalController.requestActivateServerSession('missing-pty')).toBe(false)
+    expect(activationListener).toHaveBeenCalledTimes(1)
+
+    unsubscribeActivation()
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('tracks the active terminal session for visibility queries', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const firstLocalId = terminalController.createSession()
+    const secondLocalId = terminalController.createSession()
+    ws.emitJson({
+      type: 'created',
+      requestId: firstLocalId,
+      sessionId: 'pty-active-1',
+      platform: 'common',
+    })
+    ws.emitJson({
+      type: 'created',
+      requestId: secondLocalId,
+      sessionId: 'pty-active-2',
+      platform: 'common',
+    })
+
+    terminalController.setActiveSessionId(firstLocalId)
+    expect(terminalController.isSessionActive(firstLocalId)).toBe(true)
+    expect(terminalController.isSessionActive(secondLocalId)).toBe(false)
+
+    expect(terminalController.requestActivateServerSession('pty-active-2')).toBe(true)
+    expect(terminalController.isSessionActive(secondLocalId)).toBe(true)
+
+    terminalController.closeSession(secondLocalId)
+    expect(terminalController.isSessionActive(secondLocalId)).toBe(false)
 
     terminalController.closeAll()
     unsubscribe()

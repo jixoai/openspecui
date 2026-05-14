@@ -123,6 +123,78 @@ export {
   type TerminalThemeMode,
 } from './config.js'
 
+export {
+  BUILTIN_SOUND_IDS,
+  BUILTIN_SOUND_OPTIONS,
+  BuiltinSoundIdSchema,
+  CUSTOM_SOUND_ADD_VALUE,
+  CustomSoundHashSchema,
+  CustomSoundIdSchema,
+  CustomSoundMetadataFileSchema,
+  CustomSoundMetadataSchema,
+  DEFAULT_BELL_SOUND_ID,
+  DEFAULT_NOTIFICATION_SOUND_ID,
+  LEGACY_SOUND_ID_MAP,
+  SILENT_SOUND_ID,
+  SoundConfigIdSchema,
+  SoundIdSchema,
+  customHashFromSoundId,
+  getBuiltinSoundUrl,
+  normalizeLegacySoundId,
+  soundIdFromCustomHash,
+  type BuiltinSoundId,
+  type BuiltinSoundOption,
+  type CustomSoundHash,
+  type CustomSoundId,
+  type CustomSoundMetadata,
+  type CustomSoundMetadataFile,
+  type SoundId,
+} from './sounds.js'
+
+export {
+  TERMINAL_BELL_SOUND_OPTIONS,
+  TERMINAL_BELL_SOUND_VALUES,
+  TerminalBellSoundSchema,
+  type TerminalBellSound,
+} from './terminal-audio.js'
+
+export {
+  NOTIFICATION_SOUND_OPTIONS,
+  NOTIFICATION_SOUND_VALUES,
+  NotificationActionSchema,
+  NotificationGroupKeySchema,
+  NotificationPublishInputSchema,
+  NotificationRecordSchema,
+  NotificationSettingsSchema,
+  NotificationSoundSchema,
+  NotificationSourceSchema,
+  TerminalNotificationParser,
+  getNotificationGroupKey,
+  getNotificationGroupLabel,
+  groupNotifications,
+  terminalNotificationEventToPublishInput,
+  type NotificationAction,
+  type NotificationGroup,
+  type NotificationGroupKey,
+  type NotificationPublishInput,
+  type NotificationRecord,
+  type NotificationSettings,
+  type NotificationSound,
+  type NotificationSource,
+  type TerminalNotificationEvent,
+  type TerminalNotificationParseResult,
+} from './notifications.js'
+
+export {
+  TerminalControlParser,
+  type TerminalControlEvent,
+  type TerminalControlParseResult,
+  type TerminalNotificationProtocol,
+  type TerminalProgressState,
+  type TerminalPromptState,
+  type TerminalTitleTarget,
+} from './terminal-control.js'
+
 // CLI executor for calling external openspec commands
 export { CliExecutor, type CliResult, type CliStreamEvent } from './cli-executor.js'
 
@@ -289,6 +361,7 @@ export {
 // PTY WebSocket protocol schemas and types
 export {
   PtyAttachMessageSchema,
+  PtyBellResponseSchema,
   PtyBufferResponseSchema,
   PtyClientMessageSchema,
   PtyCloseMessageSchema,
@@ -302,6 +375,7 @@ export {
   PtyListResponseSchema,
   PtyOutputResponseSchema,
   PtyPlatformSchema,
+  PtyProcessTitleResponseSchema,
   PtyResizeMessageSchema,
   PtyServerMessageSchema,
   PtyTitleResponseSchema,

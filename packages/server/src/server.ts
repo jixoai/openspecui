@@ -15,12 +15,14 @@ import { serve } from '@hono/node-server'
 import {
   CliExecutor,
   ConfigManager,
+  CustomSoundHashSchema,
   HOSTED_SHELL_PROTOCOL_VERSION,
+  initWatcherPool,
+  isWatcherPoolInitialized,
+  NotificationPublishInputSchema,
   OpenSpecAdapter,
   OpenSpecWatcher,
   OpsxKernel,
-  initWatcherPool,
-  isWatcherPoolInitialized,
 } from '@openspecui/core'
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
 import { applyWSSHandler } from '@trpc/server/adapters/ws'
@@ -44,10 +46,12 @@ function getServerPackageVersion(): string {
 
 const SERVER_PACKAGE_VERSION = getServerPackageVersion()
 
+import { CustomSoundService } from './custom-sound-service.js'
 import { DashboardOverviewService } from './dashboard-overview-service.js'
 import { loadDashboardOverview } from './dashboard-overview.js'
 import { DocumentService } from './document-service.js'
 import { createHookRuntime } from './hook-runtime.js'
+import { NotificationService } from './notification-service.js'
 import { findAvailablePort } from './port-utils.js'
 import { ProjectRecoveryService } from './project-recovery-service.js'
 import { PtyManager } from './pty-manager.js'
@@ -91,6 +95,8 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     hookRuntime,
     executeCli: (args) => cliExecutor.execute(args),
   })
+  const notificationService = new NotificationService()
+  const customSoundService = new CustomSoundService()
 
   // Create file watcher if enabled
   const watcher =
@@ -139,6 +145,54 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     })
   })
 
+  app.post('/api/notifications', async (c) => {
+    const body = await c.req.json().catch(() => null)
+    const parsed = NotificationPublishInputSchema.safeParse(body)
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: 'Invalid notification payload',
+          issues: parsed.error.issues,
+        },
+        400
+      )
+    }
+    return c.json(notificationService.publish(parsed.data))
+  })
+
+  app.post('/api/sounds/custom', async (c) => {
+    const formData = await c.req.formData().catch(() => null)
+    const file = formData?.get('file')
+    const nameValue = formData?.get('name')
+    if (!(file instanceof File)) {
+      return c.json({ error: 'Audio file is required.' }, 400)
+    }
+    const metadata = await customSoundService.upload({
+      bytes: new Uint8Array(await file.arrayBuffer()),
+      name: typeof nameValue === 'string' ? nameValue : file.name,
+      mime: file.type || 'audio/mpeg',
+    })
+    return c.json(metadata)
+  })
+
+  app.get('/api/sounds/custom/:id', async (c) => {
+    const id = c.req.param('id')
+    const parsedId = CustomSoundHashSchema.safeParse(id)
+    if (!parsedId.success) {
+      return c.json({ error: 'Sound not found.' }, 404)
+    }
+    const file = await customSoundService.getFile(`custom:${parsedId.data}`)
+    if (!file) {
+      return c.json({ error: 'Sound not found.' }, 404)
+    }
+    return new Response(new Blob([file.data], { type: file.metadata.mime }), {
+      headers: {
+        'Content-Type': file.metadata.mime,
+        'Cache-Control': 'private, max-age=31536000, immutable',
+      },
+    })
+  })
+
   // tRPC HTTP handler (for queries and mutations)
   app.use('/trpc/*', async (c) => {
     const response = await fetchRequestHandler({
@@ -155,6 +209,8 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
         searchService,
         dashboardOverviewService,
         projectRecoveryService,
+        notificationService,
+        customSoundService,
         gitWorktreeHandoff: config.gitWorktreeHandoff,
         watcher,
         projectDir: config.projectDir,
@@ -174,6 +230,8 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     searchService,
     dashboardOverviewService,
     projectRecoveryService,
+    notificationService,
+    customSoundService,
     gitWorktreeHandoff: config.gitWorktreeHandoff,
     watcher,
     projectDir: config.projectDir,
@@ -190,6 +248,8 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     searchService,
     dashboardOverviewService,
     projectRecoveryService,
+    notificationService,
+    customSoundService,
     hookRuntime,
     watcher,
     createContext,
@@ -228,7 +288,7 @@ export async function createWebSocketServer(
   // PTY WebSocket server
   const ptyManager = new PtyManager(config.projectDir)
   const ptyWss = new WebSocketServer({ noServer: true })
-  const ptyHandler = createPtyWebSocketHandler(ptyManager)
+  const ptyHandler = createPtyWebSocketHandler(ptyManager, server.notificationService)
   ptyWss.on('connection', ptyHandler)
 
   // Handle upgrade requests - route by URL path

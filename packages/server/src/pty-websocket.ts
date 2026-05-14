@@ -1,9 +1,13 @@
 import {
   PtyClientMessageSchema,
+  TerminalControlParser,
+  terminalNotificationEventToPublishInput,
   type PtyClientMessage,
   type PtyServerMessage,
+  type TerminalControlEvent,
 } from '@openspecui/core'
 import type { WebSocket } from 'ws'
+import type { NotificationService } from './notification-service.js'
 import type { PtyManager, PtySession } from './pty-manager.js'
 
 type PtyErrorCode = 'INVALID_JSON' | 'INVALID_MESSAGE' | 'SESSION_NOT_FOUND' | 'PTY_CREATE_FAILED'
@@ -20,11 +24,54 @@ type PtyCreatedMessage = {
   platform: 'windows' | 'macos' | 'common'
 }
 type PtyOutgoingMessage = PtyServerMessage | PtyErrorMessage | PtyCreatedMessage
+type TerminalNotificationEvent = Extract<TerminalControlEvent, { type: 'notification' }>
+type TerminalTitleEvent = Extract<TerminalControlEvent, { type: 'title' }>
 
-export function createPtyWebSocketHandler(ptyManager: PtyManager) {
+function resolveTerminalTargetTitle(session: PtySession, title?: string): string {
+  return title?.trim() || session.targetTitle || session.title || session.command
+}
+
+function updateTerminalTargetTitle(session: PtySession, event: TerminalTitleEvent): void {
+  session.setTargetTitle(event.title, event.target)
+}
+
+function normalizeTerminalNotificationBody(value: string): string {
+  return value.replace(/\s+/g, ' ').trim()
+}
+
+function getTerminalNotificationFanoutKey(event: TerminalNotificationEvent): string {
+  const body = normalizeTerminalNotificationBody(event.body)
+  return body || normalizeTerminalNotificationBody(event.title ?? '')
+}
+
+function coalesceTerminalNotificationFanout(
+  events: readonly TerminalNotificationEvent[]
+): TerminalNotificationEvent[] {
+  const groups = new Map<string, TerminalNotificationEvent[]>()
+  for (const event of events) {
+    const key = getTerminalNotificationFanoutKey(event)
+    const group = groups.get(key)
+    if (group) {
+      group.push(event)
+    } else {
+      groups.set(key, [event])
+    }
+  }
+  return [...groups.values()].flatMap((group) => {
+    const protocols = new Set(group.map((event) => event.protocol))
+    if (protocols.size <= 1) return group
+    return group.find((event) => event.title) ?? group[0] ?? []
+  })
+}
+
+export function createPtyWebSocketHandler(
+  ptyManager: PtyManager,
+  notificationService?: NotificationService
+) {
   return (ws: WebSocket) => {
     // Track event listener cleanups for each attached session
     const cleanups = new Map<string, () => void>()
+    const parsers = new Map<string, TerminalControlParser>()
 
     const send = (msg: PtyOutgoingMessage) => {
       if (ws.readyState === ws.OPEN) {
@@ -48,13 +95,71 @@ export function createPtyWebSocketHandler(ptyManager: PtyManager) {
 
       // Set up event listeners
       const onData = (data: string) => {
-        send({ type: 'output', sessionId, data })
+        const parser = parsers.get(sessionId) ?? new TerminalControlParser()
+        parsers.set(sessionId, parser)
+        const parsed = parser.push(data)
+        const notifications = coalesceTerminalNotificationFanout(
+          parsed.events.filter(
+            (event): event is TerminalNotificationEvent => event.type === 'notification'
+          )
+        )
+        const notificationsToPublish = new Set(notifications)
+        for (const event of parsed.events) {
+          if (event.type === 'bell') {
+            send({ type: 'bell', sessionId, createdAt: Date.now() })
+            continue
+          }
+          if (event.type === 'notification') {
+            if (!notificationsToPublish.has(event)) continue
+            notificationService?.publish(
+              terminalNotificationEventToPublishInput({
+                event,
+                sessionId,
+                terminalTitle: resolveTerminalTargetTitle(session),
+              })
+            )
+            continue
+          }
+          if (event.type === 'title') {
+            const previousTargetTitle = session.targetTitle
+            updateTerminalTargetTitle(session, event)
+            const nextTargetTitle = resolveTerminalTargetTitle(session)
+            if (nextTargetTitle !== previousTargetTitle) {
+              send({
+                type: 'title',
+                sessionId,
+                title: nextTargetTitle,
+              })
+            }
+            continue
+          }
+          if (event.type === 'cwd') {
+            send({ type: 'cwd', sessionId, cwd: event.cwd })
+            continue
+          }
+          if (event.type === 'progress') {
+            send({ type: 'progress', sessionId, state: event.state, value: event.value })
+            continue
+          }
+          if (event.type === 'prompt-state') {
+            send({
+              type: 'prompt-state',
+              sessionId,
+              state: event.state,
+              exitCode: event.exitCode,
+            })
+          }
+        }
+        if (parsed.output) {
+          send({ type: 'output', sessionId, data: parsed.output })
+        }
       }
       const onExit = (exitCode: number) => {
         send({ type: 'exit', sessionId, exitCode })
       }
       const onTitle = (title: string) => {
-        send({ type: 'title', sessionId, title })
+        send({ type: 'process-title', sessionId, title })
+        send({ type: 'title', sessionId, title: resolveTerminalTargetTitle(session) })
       }
 
       session.on('data', onData)
@@ -65,6 +170,7 @@ export function createPtyWebSocketHandler(ptyManager: PtyManager) {
         session.removeListener('data', onData)
         session.removeListener('exit', onExit)
         session.removeListener('title', onTitle)
+        parsers.delete(sessionId)
         cleanups.delete(sessionId)
       })
     }
@@ -137,7 +243,14 @@ export function createPtyWebSocketHandler(ptyManager: PtyManager) {
 
           // Send current title
           if (session.title) {
-            send({ type: 'title', sessionId: session.id, title: session.title })
+            send({ type: 'process-title', sessionId: session.id, title: session.title })
+          }
+          if (session.title || session.oscTitle) {
+            send({
+              type: 'title',
+              sessionId: session.id,
+              title: resolveTerminalTargetTitle(session),
+            })
           }
 
           // If already exited, send exit event

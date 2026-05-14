@@ -131,7 +131,7 @@ describe('TerminalSpawnCommandDialog', () => {
     expect(advancedSection?.getAttribute('aria-hidden')).toBe('true')
     expect(advancedSection?.hasAttribute('inert')).toBe(true)
     expect(advancedButton.getAttribute('aria-expanded')).toBe('false')
-    expect(screen.queryByRole('checkbox', { name: /Skip permissions/ })).toBeNull()
+    expect(screen.queryByRole('switch', { name: /Skip permissions/ })).toBeNull()
     expect(document.body.textContent).toContain("claude 'draft prompt'")
     expect(document.body.textContent).not.toContain('--dangerously-skip-permissions')
 
@@ -140,7 +140,7 @@ describe('TerminalSpawnCommandDialog', () => {
     expect(advancedButton.getAttribute('aria-expanded')).toBe('true')
     expect(advancedSection?.getAttribute('aria-hidden')).toBe('false')
     expect(advancedSection?.hasAttribute('inert')).toBe(false)
-    expect(screen.getByRole('checkbox', { name: /Skip permissions/ })).toBeTruthy()
+    expect(screen.getByRole('switch', { name: /Skip permissions/ })).toBeTruthy()
   })
 
   it('creates one shell session with rendered initial input', () => {
@@ -155,7 +155,7 @@ describe('TerminalSpawnCommandDialog', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: /Advanced options/ }))
-    fireEvent.click(screen.getByRole('checkbox', { name: /Skip permissions/ }))
+    fireEvent.click(screen.getByRole('switch', { name: /Skip permissions/ }))
     fireEvent.click(getByText('Create'))
 
     expect(createShellSessionMock).toHaveBeenCalledTimes(1)

@@ -93,6 +93,24 @@ describe('resolveViewTransitionIntent', () => {
     })
   })
 
+  it('gives notifications the same pop transition semantics as search', () => {
+    expect(describeRouteSemantic('/notifications')).toMatchObject({
+      family: 'notifications',
+      level: 'pop',
+    })
+    expect(
+      resolveViewTransitionIntent({
+        area: 'pop',
+        fromPath: '/',
+        toPath: '/notifications',
+      })
+    ).toEqual({
+      area: 'pop',
+      kind: 'route-top',
+      direction: 'forward',
+    })
+  })
+
   it('treats pop dismissal as a backward route-top transition', () => {
     expect(
       resolveViewTransitionIntent({

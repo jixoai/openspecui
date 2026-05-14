@@ -8,6 +8,7 @@ import './index.css'
 import { ArchiveModalProvider } from './lib/archive-modal-context'
 import { navController } from './lib/nav-controller'
 import { createNavHistory } from './lib/nav-history'
+import { NotificationProvider } from './lib/notifications/context'
 import { createPopRouteTree, createRouteTree } from './lib/route-tree'
 import { getBasePath, isStaticMode } from './lib/static-mode'
 import { TerminalProvider } from './lib/terminal-context'
@@ -76,9 +77,11 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <ArchiveModalProvider>
         <TerminalProvider>
-          <ViewTransitionsBootstrap />
-          <ThemeBootstrap />
-          <RouterProvider router={mainRouter} />
+          <NotificationProvider>
+            <ViewTransitionsBootstrap />
+            <ThemeBootstrap />
+            <RouterProvider router={mainRouter} />
+          </NotificationProvider>
         </TerminalProvider>
       </ArchiveModalProvider>
     </QueryClientProvider>

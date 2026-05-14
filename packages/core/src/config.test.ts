@@ -11,6 +11,7 @@ import {
 import { clearCache } from './reactive-fs/index.js'
 import { ReactiveContext } from './reactive-fs/reactive-context.js'
 import { closeAllWatchers, initWatcherPool } from './reactive-fs/watcher-pool.js'
+import { DEFAULT_BELL_SOUND_ID, DEFAULT_NOTIFICATION_SOUND_ID } from './sounds.js'
 
 describe('ConfigManager', () => {
   let tempDir: string
@@ -56,6 +57,13 @@ describe('ConfigManager', () => {
           lightTheme: 'solarized-light' as const,
           darkTheme: 'monokai' as const,
           rendererEngine: 'ghostty' as const,
+          bellSound: 'builtin:Glass' as const,
+          bellVolume: 0.4,
+        },
+        notifications: {
+          sound: 'builtin:Tink' as const,
+          volume: 0.35,
+          systemNotificationsEnabled: true,
         },
       }
       await writeFile(
@@ -76,6 +84,11 @@ describe('ConfigManager', () => {
       expect(config.terminal.lightTheme).toBe('solarized-light')
       expect(config.terminal.darkTheme).toBe('monokai')
       expect(config.terminal.rendererEngine).toBe('ghostty')
+      expect(config.terminal.bellSound).toBe('builtin:Glass')
+      expect(config.terminal.bellVolume).toBe(0.4)
+      expect(config.notifications.sound).toBe('builtin:Tink')
+      expect(config.notifications.volume).toBe(0.35)
+      expect(config.notifications.systemNotificationsEnabled).toBe(true)
     })
 
     it('should return default config for invalid JSON', async () => {
@@ -125,8 +138,13 @@ describe('ConfigManager', () => {
       expect(config.terminal.lightTheme).toBe('default-light')
       expect(config.terminal.darkTheme).toBe('default-dark')
       expect(config.terminal.rendererEngine).toBe('xterm')
+      expect(config.terminal.bellSound).toBe(DEFAULT_BELL_SOUND_ID)
+      expect(config.terminal.bellVolume).toBe(1)
       expect(config.dashboard.trendPointLimit).toBe(100)
       expect(config.git.diffEagerLineBudget).toBe(1000)
+      expect(config.notifications.sound).toBe(DEFAULT_NOTIFICATION_SOUND_ID)
+      expect(config.notifications.volume).toBe(1)
+      expect(config.notifications.systemNotificationsEnabled).toBe(false)
     })
 
     it('should treat persisted null fields as absent and keep valid sibling overrides', async () => {
@@ -206,6 +224,31 @@ describe('ConfigManager', () => {
       )
     })
 
+    it('should write terminal bell sound config', async () => {
+      await configManager.writeConfig({ terminal: { bellSound: 'silent', bellVolume: 0.25 } })
+      clearCache()
+      const config = await configManager.readConfig()
+      expect(config.terminal.bellSound).toBe('silent')
+      expect(config.terminal.bellVolume).toBe(0.25)
+      await expect(readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')).resolves.toBe(
+        '{\n  "terminal": {\n    "bellSound": "silent",\n    "bellVolume": 0.25\n  }\n}'
+      )
+    })
+
+    it('should write notification config', async () => {
+      await configManager.writeConfig({
+        notifications: { sound: 'builtin:Glass', volume: 0.6, systemNotificationsEnabled: true },
+      })
+      clearCache()
+      const config = await configManager.readConfig()
+      expect(config.notifications.sound).toBe('builtin:Glass')
+      expect(config.notifications.volume).toBe(0.6)
+      expect(config.notifications.systemNotificationsEnabled).toBe(true)
+      await expect(readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')).resolves.toBe(
+        '{\n  "notifications": {\n    "sound": "builtin:Glass",\n    "volume": 0.6,\n    "systemNotificationsEnabled": true\n  }\n}'
+      )
+    })
+
     it('should create file if not exists', async () => {
       await configManager.writeConfig({ cli: { command: 'new' } })
 
@@ -241,9 +284,16 @@ describe('ConfigManager', () => {
           lightTheme: 'default-light',
           darkTheme: 'default-dark',
           rendererEngine: 'xterm',
+          bellSound: DEFAULT_BELL_SOUND_ID,
+          bellVolume: 1,
         },
         dashboard: { trendPointLimit: 100 },
         git: { diffEagerLineBudget: 1000 },
+        notifications: {
+          sound: DEFAULT_NOTIFICATION_SOUND_ID,
+          volume: 1,
+          systemNotificationsEnabled: false,
+        },
       })
 
       await expect(
@@ -491,6 +541,7 @@ describe('OpenSpecUIConfigSchema', () => {
         lightTheme: 'default-light',
         darkTheme: 'default-dark',
         rendererEngine: 'xterm',
+        bellSound: DEFAULT_BELL_SOUND_ID,
       },
     }
 
@@ -516,6 +567,7 @@ describe('OpenSpecUIConfigSchema', () => {
       expect(result.data.terminal.lightTheme).toBe('default-light')
       expect(result.data.terminal.darkTheme).toBe('default-dark')
       expect(result.data.terminal.rendererEngine).toBe('xterm')
+      expect(result.data.terminal.bellSound).toBe(DEFAULT_BELL_SOUND_ID)
       expect(result.data.git.diffEagerLineBudget).toBe(1000)
     }
   })
@@ -608,8 +660,12 @@ describe('DEFAULT_CONFIG', () => {
     expect(DEFAULT_CONFIG.terminal.lightTheme).toBe('default-light')
     expect(DEFAULT_CONFIG.terminal.darkTheme).toBe('default-dark')
     expect(DEFAULT_CONFIG.terminal.rendererEngine).toBe('xterm')
+    expect(DEFAULT_CONFIG.terminal.bellSound).toBe(DEFAULT_BELL_SOUND_ID)
+    expect(DEFAULT_CONFIG.terminal.bellVolume).toBe(1)
     expect(DEFAULT_CONFIG.dashboard.trendPointLimit).toBe(100)
     expect(DEFAULT_CONFIG.git.diffEagerLineBudget).toBe(1000)
+    expect(DEFAULT_CONFIG.notifications.sound).toBe(DEFAULT_NOTIFICATION_SOUND_ID)
+    expect(DEFAULT_CONFIG.notifications.volume).toBe(1)
   })
 })
 

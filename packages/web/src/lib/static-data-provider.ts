@@ -30,6 +30,7 @@ import type {
 } from '@openspecui/core'
 import { selectRecentDashboardItems } from '@openspecui/core/dashboard-display'
 import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
+import { DEFAULT_BELL_SOUND_ID, DEFAULT_NOTIFICATION_SOUND_ID } from '@openspecui/core/sounds'
 import type { SearchDocument } from '@openspecui/search'
 import { parse as parseYaml } from 'yaml'
 import type { ExportSnapshot } from '../ssg/types'
@@ -978,6 +979,11 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
     git: {
       diffEagerLineBudget: 1000,
     },
+    notifications: {
+      sound: DEFAULT_NOTIFICATION_SOUND_ID,
+      volume: 1,
+      systemNotificationsEnabled: false,
+    },
     terminal: {
       fontSize: 13,
       fontFamily: '',
@@ -988,6 +994,8 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
       lightTheme: 'default-light',
       darkTheme: 'default-dark',
       rendererEngine: 'xterm',
+      bellSound: DEFAULT_BELL_SOUND_ID,
+      bellVolume: 1,
     },
   }
 
@@ -1022,6 +1030,10 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
     git: {
       ...defaultConfig.git,
       ...fromSnapshot.git,
+    },
+    notifications: {
+      ...defaultConfig.notifications,
+      ...fromSnapshot.notifications,
     },
   }
 }

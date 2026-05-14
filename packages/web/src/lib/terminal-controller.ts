@@ -4,6 +4,9 @@ import {
   type PtyPlatform,
   type PtyServerMessage,
 } from '@openspecui/core/pty-protocol'
+import { DEFAULT_BELL_SOUND_ID } from '@openspecui/core/sounds'
+import type { TerminalBellSound } from '@openspecui/core/terminal-audio'
+import type { TerminalProgressState, TerminalPromptState } from '@openspecui/core/terminal-control'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal } from '@xterm/xterm'
@@ -15,6 +18,7 @@ import {
 } from 'xterm-input-panel'
 import { getPtyWsUrl } from './api-config'
 import { navController } from './nav-controller'
+import { TerminalBellSoundEngine } from './terminal-bell-sound-engine'
 import { TerminalInputHistoryStore } from './terminal-input-history'
 import {
   resolveTerminalTheme,
@@ -43,6 +47,8 @@ export interface TerminalConfig {
   lightTheme: TerminalThemeId
   darkTheme: TerminalThemeId
   rendererEngine: TerminalRendererEngine
+  bellSound: TerminalBellSound
+  bellVolume: number
 }
 
 type TerminalLike = {
@@ -75,6 +81,8 @@ type GhosttyModule = typeof import('ghostty-web')
 type GhosttyTerminalLike = TerminalLike & {
   registerLinkProvider?: (provider: unknown) => void
 }
+type TerminalKeyEventResult = 'allow' | 'block'
+type TerminalActivationListener = (localSessionId: string) => void
 
 const DEFAULT_FONT_FAMILY = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace'
 
@@ -88,6 +96,8 @@ const DEFAULT_TERMINAL_CONFIG: TerminalConfig = {
   lightTheme: 'default-light',
   darkTheme: 'default-dark',
   rendererEngine: 'xterm',
+  bellSound: DEFAULT_BELL_SOUND_ID,
+  bellVolume: 1,
 }
 
 const OUTPUT_IDLE_THRESHOLD = 1500
@@ -100,6 +110,25 @@ const FONT_SIZE_MIN = 8
 const FONT_SIZE_MAX = 32
 const FONT_SIZE_DEFAULT = 13
 const CONFIG_PERSIST_DEBOUNCE = 800
+
+const ARROW_CURSOR_INPUT: Partial<Record<string, string>> = {
+  ArrowUp: '\x1b[A',
+  ArrowDown: '\x1b[B',
+}
+
+const OPTION_ARROW_INPUT: Partial<Record<string, string>> = {
+  ArrowLeft: '\x1bb',
+  ArrowRight: '\x1bf',
+  ArrowUp: '\x1b[1;3A',
+  ArrowDown: '\x1b[1;3B',
+}
+
+const COMMAND_ARROW_INPUT: Partial<Record<string, string>> = {
+  ArrowLeft: '\x01',
+  ArrowUp: '\x01',
+  ArrowRight: '\x05',
+  ArrowDown: '\x05',
+}
 
 export const GOOGLE_FONT_PRESETS = [
   'JetBrains Mono',
@@ -206,6 +235,10 @@ interface TerminalInstance {
   label: string
   customTitle: string | null
   processTitle: string | null
+  oscTitle: string | null
+  cwd: string | null
+  progress: { state: TerminalProgressState; value: number | null } | null
+  promptState: TerminalPromptState | null
   isDedicated: boolean
   isExited: boolean
   exitCode: number | null
@@ -223,6 +256,7 @@ interface TerminalInstance {
   pendingOutput: string[]
   pendingOutputBytes: number
   lastOutputTime: number
+  lastBellAt: number | null
   outputIdleTimer: ReturnType<typeof setTimeout> | null
   /** Whether this session was restored from a server-side list (not locally created) */
   restored: boolean
@@ -232,14 +266,20 @@ interface TerminalInstance {
 
 export interface TerminalSessionSnapshot {
   id: string
+  serverSessionId: string | null
   label: string
   customTitle: string | null
   processTitle: string | null
+  oscTitle: string | null
+  cwd: string | null
+  progress: { state: TerminalProgressState; value: number | null } | null
+  promptState: TerminalPromptState | null
   displayTitle: string
   isDedicated: boolean
   isExited: boolean
   exitCode: number | null
   outputActive: boolean
+  lastBellAt: number | null
   command?: string
   args?: string[]
   closeTip?: string
@@ -256,10 +296,12 @@ export interface TerminalSnapshot {
 class TerminalController {
   private instances = new Map<string, TerminalInstance>()
   private listeners = new Set<() => void>()
+  private activationListeners = new Set<TerminalActivationListener>()
   private idCounter = 0
   private config: TerminalConfig = { ...DEFAULT_TERMINAL_CONFIG }
   private snapshotCache: TerminalSnapshot | null = null
   private inputHistoryStore = new TerminalInputHistoryStore()
+  private bellSoundEngine = new TerminalBellSoundEngine()
   private ghosttyModule: GhosttyModule | null = null
   private ghosttyInitPromise: Promise<GhosttyModule> | null = null
   private appDarkMode = false
@@ -290,6 +332,11 @@ class TerminalController {
   private serverToLocalSessionId = new Map<string, string>()
   private hasDiscoveredSessions = false
   private inputPanelDefaultLayout: InputPanelLayout = 'floating'
+  private activeSessionId: string | null = null
+
+  constructor() {
+    this.bellSoundEngine.init()
+  }
 
   // --- Session lifecycle ---
 
@@ -390,7 +437,7 @@ class TerminalController {
     const { terminal, fitAddon, afterOpenHook, engine } = this.createRendererTerminal()
     const inputPanelAddon = this.createInputPanelAddon(id, opts.platform)
     terminal.loadAddon(inputPanelAddon)
-    this.attachTerminalShortcuts(terminal, engine)
+    this.attachTerminalShortcuts(terminal, engine, (data) => this.writeToSession(id, data))
 
     return {
       id,
@@ -402,6 +449,10 @@ class TerminalController {
       label: opts.label,
       customTitle: opts.customTitle,
       processTitle: null,
+      oscTitle: null,
+      cwd: null,
+      progress: null,
+      promptState: null,
       isDedicated: opts.isDedicated,
       isExited: false,
       exitCode: null,
@@ -416,6 +467,7 @@ class TerminalController {
       pendingOutput: [],
       pendingOutputBytes: 0,
       lastOutputTime: 0,
+      lastBellAt: null,
       outputIdleTimer: null,
       restored: opts.restored,
       platform: opts.platform,
@@ -539,13 +591,50 @@ class TerminalController {
     return 'rgb(26, 26, 26)'
   }
 
-  private attachTerminalShortcuts(terminal: TerminalLike, engine: TerminalRendererEngine): void {
+  private resolveTerminalKeyInput(event: KeyboardEvent): string | null {
+    if (event.type !== 'keydown') return null
+
+    if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+      return OPTION_ARROW_INPUT[event.key] ?? null
+    }
+
+    if (event.metaKey && !event.altKey && !event.ctrlKey && !event.shiftKey) {
+      return COMMAND_ARROW_INPUT[event.key] ?? null
+    }
+
+    if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+      return ARROW_CURSOR_INPUT[event.key] ?? null
+    }
+
+    return null
+  }
+
+  private getKeyEventResult(
+    engine: TerminalRendererEngine,
+    action: TerminalKeyEventResult
+  ): boolean {
+    if (engine === 'xterm') {
+      return action === 'allow'
+    }
+    return action === 'block'
+  }
+
+  private attachTerminalShortcuts(
+    terminal: TerminalLike,
+    engine: TerminalRendererEngine,
+    writeInput: (data: string) => boolean
+  ): void {
     terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+      const terminalInput = this.resolveTerminalKeyInput(event)
+      if (terminalInput && writeInput(terminalInput)) {
+        event.preventDefault()
+        event.stopPropagation()
+        return this.getKeyEventResult(engine, 'block')
+      }
+
       const mod = event.metaKey || event.ctrlKey
       if (event.type !== 'keydown' || !mod) {
-        // xterm: true => allow, false => block
-        // ghostty-web: true => block, false => allow
-        return engine === 'xterm'
+        return this.getKeyEventResult(engine, 'allow')
       }
 
       let handled = false
@@ -562,10 +651,7 @@ class TerminalController {
         this.resetFontSize()
         handled = true
       }
-      if (engine === 'xterm') {
-        return !handled
-      }
-      return handled
+      return this.getKeyEventResult(engine, handled ? 'block' : 'allow')
     })
   }
 
@@ -646,7 +732,7 @@ class TerminalController {
     const { terminal, fitAddon, afterOpenHook, engine } = this.createRendererTerminal()
     const inputPanelAddon = this.createInputPanelAddon(instance.id, instance.platform)
     terminal.loadAddon(inputPanelAddon)
-    this.attachTerminalShortcuts(terminal, engine)
+    this.attachTerminalShortcuts(terminal, engine, (data) => this.writeToSession(instance.id, data))
 
     instance.terminal = terminal
     instance.fitAddon = fitAddon
@@ -743,6 +829,9 @@ class TerminalController {
 
     // Cleanup
     this.instances.delete(id)
+    if (this.activeSessionId === id) {
+      this.activeSessionId = null
+    }
     this.notify()
   }
 
@@ -750,6 +839,7 @@ class TerminalController {
     for (const id of this.instances.keys()) {
       this.closeSession(id, { triggerCloseCallback: false })
     }
+    this.activeSessionId = null
   }
 
   // --- DOM mount/unmount ---
@@ -881,6 +971,11 @@ class TerminalController {
     instance.inputPanelAddon.syncFocusLifecycle()
   }
 
+  setActiveSessionId(localSessionId: string | null): void {
+    if (localSessionId && !this.instances.has(localSessionId)) return
+    this.activeSessionId = localSessionId
+  }
+
   // --- Title ---
 
   setCustomTitle(id: string, title: string | null): void {
@@ -893,7 +988,7 @@ class TerminalController {
   getDisplayTitle(id: string): string {
     const instance = this.instances.get(id)
     if (!instance) return ''
-    return instance.customTitle ?? instance.processTitle ?? instance.label
+    return instance.customTitle ?? instance.oscTitle ?? instance.processTitle ?? instance.label
   }
 
   // --- Config ---
@@ -1064,6 +1159,48 @@ class TerminalController {
     return true
   }
 
+  hasServerSession(serverSessionId: string): boolean {
+    const instance = this.getInstanceByServerSessionId(serverSessionId)
+    return !!instance && !instance.isExited
+  }
+
+  focusServerSession(serverSessionId: string): boolean {
+    const instance = this.getInstanceByServerSessionId(serverSessionId)
+    if (!instance || instance.isExited) return false
+    this.focusSession(instance.id)
+    return true
+  }
+
+  subscribeActivation(listener: TerminalActivationListener): () => void {
+    this.activationListeners.add(listener)
+    return () => {
+      this.activationListeners.delete(listener)
+    }
+  }
+
+  requestActivateSession(localSessionId: string): boolean {
+    const instance = this.instances.get(localSessionId)
+    if (!instance || instance.isExited) return false
+    this.emitActivationRequest(instance.id)
+    return true
+  }
+
+  requestActivateServerSession(serverSessionId: string): boolean {
+    const instance = this.getInstanceByServerSessionId(serverSessionId)
+    if (!instance || instance.isExited) return false
+    this.emitActivationRequest(instance.id)
+    return true
+  }
+
+  getLocalSessionIdForServerSession(serverSessionId: string): string | null {
+    const instance = this.getInstanceByServerSessionId(serverSessionId)
+    return instance?.id ?? null
+  }
+
+  isSessionActive(localSessionId: string): boolean {
+    return this.activeSessionId === localSessionId
+  }
+
   async addInputHistory(text: string): Promise<void> {
     await this.inputHistoryStore.add(text)
   }
@@ -1128,7 +1265,47 @@ class TerminalController {
   private handleTitleResponse(msg: Extract<PtyServerMessage, { type: 'title' }>): void {
     const instance = this.getInstanceByServerSessionId(msg.sessionId)
     if (!instance) return
+    instance.oscTitle = msg.title
+    this.notify()
+  }
+
+  private handleProcessTitleResponse(
+    msg: Extract<PtyServerMessage, { type: 'process-title' }>
+  ): void {
+    const instance = this.getInstanceByServerSessionId(msg.sessionId)
+    if (!instance) return
     instance.processTitle = msg.title
+    this.notify()
+  }
+
+  private handleCwdResponse(msg: Extract<PtyServerMessage, { type: 'cwd' }>): void {
+    const instance = this.getInstanceByServerSessionId(msg.sessionId)
+    if (!instance) return
+    instance.cwd = msg.cwd
+    this.notify()
+  }
+
+  private handleProgressResponse(msg: Extract<PtyServerMessage, { type: 'progress' }>): void {
+    const instance = this.getInstanceByServerSessionId(msg.sessionId)
+    if (!instance) return
+    instance.progress = msg.state === 'clear' ? null : { state: msg.state, value: msg.value }
+    this.notify()
+  }
+
+  private handlePromptStateResponse(
+    msg: Extract<PtyServerMessage, { type: 'prompt-state' }>
+  ): void {
+    const instance = this.getInstanceByServerSessionId(msg.sessionId)
+    if (!instance) return
+    instance.promptState = msg.state
+    this.notify()
+  }
+
+  private handleBellResponse(msg: Extract<PtyServerMessage, { type: 'bell' }>): void {
+    const instance = this.getInstanceByServerSessionId(msg.sessionId)
+    if (!instance || instance.isExited) return
+    instance.lastBellAt = msg.createdAt ?? Date.now()
+    void this.bellSoundEngine.play(this.config.bellSound, this.config.bellVolume).catch(() => {})
     this.notify()
   }
 
@@ -1198,15 +1375,21 @@ class TerminalController {
     for (const inst of this.instances.values()) {
       sessions.push({
         id: inst.id,
+        serverSessionId: inst.serverSessionId,
         label: inst.label,
         customTitle: inst.customTitle,
         processTitle: inst.processTitle,
-        displayTitle: inst.customTitle ?? inst.processTitle ?? inst.label,
+        oscTitle: inst.oscTitle,
+        cwd: inst.cwd,
+        progress: inst.progress,
+        promptState: inst.promptState,
+        displayTitle: inst.customTitle ?? inst.oscTitle ?? inst.processTitle ?? inst.label,
         isDedicated: inst.isDedicated,
         isExited: inst.isExited,
         exitCode: inst.exitCode,
         outputActive:
           inst.lastOutputTime > 0 && Date.now() - inst.lastOutputTime < OUTPUT_IDLE_THRESHOLD,
+        lastBellAt: inst.lastBellAt,
         command: inst.command,
         args: inst.args,
         closeTip: inst.closeTip,
@@ -1226,6 +1409,25 @@ class TerminalController {
     for (const listener of this.listeners) {
       listener()
     }
+  }
+
+  private emitActivationRequest(localSessionId: string): void {
+    this.setActiveSessionId(localSessionId)
+    for (const listener of this.activationListeners) {
+      listener(localSessionId)
+    }
+    this.scheduleSessionFocus(localSessionId)
+  }
+
+  private scheduleSessionFocus(localSessionId: string): void {
+    const schedule =
+      typeof globalThis.requestAnimationFrame === 'function'
+        ? globalThis.requestAnimationFrame.bind(globalThis)
+        : (callback: FrameRequestCallback) => globalThis.setTimeout(() => callback(Date.now()), 0)
+
+    schedule(() => {
+      this.focusSession(localSessionId)
+    })
   }
 
   private ensureWsConnected(): void {
@@ -1350,6 +1552,26 @@ class TerminalController {
       }
       case 'title': {
         this.handleTitleResponse(msg)
+        break
+      }
+      case 'process-title': {
+        this.handleProcessTitleResponse(msg)
+        break
+      }
+      case 'cwd': {
+        this.handleCwdResponse(msg)
+        break
+      }
+      case 'progress': {
+        this.handleProgressResponse(msg)
+        break
+      }
+      case 'prompt-state': {
+        this.handlePromptStateResponse(msg)
+        break
+      }
+      case 'bell': {
+        this.handleBellResponse(msg)
         break
       }
       case 'error': {

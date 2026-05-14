@@ -1,3 +1,4 @@
+import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
 import { Dialog } from '@/components/dialog'
 import { Select, type SelectOption } from '@/components/select'
 import { Switch } from '@/components/switch'
@@ -68,6 +69,11 @@ const BUILDER_PART_OPTIONS: SelectOption<EditableBuilderPart['kind']>[] = [
   { value: 'field', label: 'Field' },
   { value: 'booleanFlag', label: 'Boolean Flag' },
 ]
+
+const BUILDER_KIND_OPTIONS = [
+  { value: 'argv', label: 'argv' },
+  { value: 'shellLine', label: 'shellLine' },
+] satisfies ButtonGroupOption<TerminalCommandBuilder['kind']>[]
 
 let editableKeyCounter = 0
 
@@ -718,22 +724,11 @@ export function SpawnCommandConfigDialog({
         <section className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-sm font-medium">Builder</h3>
-            <div className="inline-flex rounded-md border">
-              <button
-                type="button"
-                onClick={() => setBuilderKind('argv')}
-                className={`px-2 py-1 text-xs ${builderKind === 'argv' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
-              >
-                argv
-              </button>
-              <button
-                type="button"
-                onClick={() => setBuilderKind('shellLine')}
-                className={`border-l px-2 py-1 text-xs ${builderKind === 'shellLine' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
-              >
-                shellLine
-              </button>
-            </div>
+            <ButtonGroup<TerminalCommandBuilder['kind']>
+              value={builderKind}
+              onChange={setBuilderKind}
+              options={BUILDER_KIND_OPTIONS}
+            />
           </div>
 
           {builderKind === 'shellLine' ? (

@@ -232,6 +232,16 @@ describe('NavController kernel lifecycle', () => {
     expect(window.location.search).toContain('_p=%2Fopsx-new')
   })
 
+  it('treats /notifications as pop-area route', () => {
+    nav = createController('/dashboard')
+
+    nav.activatePop('/notifications?highlight=notification-1')
+
+    expect(nav.getLocation('pop').pathname).toBe('/notifications')
+    expect(nav.getAreaForPath('/notifications')).toBe('pop')
+    expect(window.location.search).toContain('_p=%2Fnotifications%3Fhighlight%3Dnotification-1')
+  })
+
   it('treats /opsx-compose as pop-area route', () => {
     nav = createController('/dashboard')
 

@@ -3,6 +3,7 @@ import type {
   Change,
   ChangeFile,
   ChangeMeta,
+  NotificationRecord,
   OpenSpecUIConfig,
   Spec,
   SpecMeta,
@@ -278,6 +279,23 @@ export function useConfigSubscription(): SubscriptionState<OpenSpecUIConfig> {
     StaticProvider.getConfig,
     [],
     'config.subscribe'
+  )
+}
+
+// =====================
+// Notification subscriptions
+// =====================
+
+export function useNotificationsSubscription(): SubscriptionState<NotificationRecord[]> {
+  return useSubscription<NotificationRecord[]>(
+    (callbacks) =>
+      trpcClient.notifications.subscribe.subscribe(undefined, {
+        onData: callbacks.onData,
+        onError: callbacks.onError,
+      }),
+    async () => [],
+    [],
+    'notifications.subscribe'
   )
 }
 

@@ -1,6 +1,4 @@
 import { cn } from '@/lib/utils'
-import { Checkbox as BaseCheckbox } from '@base-ui/react/checkbox'
-import { Check } from 'lucide-react'
 import type { FocusEventHandler } from 'react'
 
 interface SwitchProps {
@@ -19,7 +17,7 @@ interface SwitchProps {
 }
 
 /**
- * Shared boolean control for settings and command options.
+ * Shared on/off control for settings and command options.
  */
 export function Switch({
   checked,
@@ -35,40 +33,56 @@ export function Switch({
   className,
   thumbClassName,
 }: SwitchProps) {
+  const toggle = () => {
+    if (disabled || readOnly) {
+      return
+    }
+
+    onCheckedChange(!checked)
+  }
+
   return (
-    <BaseCheckbox.Root
-      id={id}
-      name={name}
-      checked={checked}
-      required={required}
-      disabled={disabled}
-      readOnly={readOnly}
-      aria-label={ariaLabel}
-      onCheckedChange={onCheckedChange}
-      onBlur={onBlur}
-      onFocus={onFocus}
-      className={(state) =>
-        cn(
-          'bg-background border-border text-background inline-flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-sm border outline-none transition-colors',
+    <>
+      {name ? (
+        <input
+          type="hidden"
+          name={name}
+          value={checked ? 'on' : ''}
+          required={required}
+          disabled={disabled}
+        />
+      ) : null}
+      <button
+        id={id}
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={ariaLabel}
+        disabled={disabled}
+        aria-readonly={readOnly || undefined}
+        onClick={toggle}
+        onBlur={onBlur}
+        onFocus={onFocus}
+        className={cn(
+          'inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border border-transparent p-0.5 outline-none transition-colors',
           'focus-visible:ring-primary focus-visible:ring-1',
-          state.checked ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-muted/40',
-          state.disabled && 'cursor-not-allowed opacity-50',
+          checked
+            ? 'border-primary bg-primary'
+            : 'bg-muted-foreground/30 hover:bg-muted-foreground/40',
+          disabled && 'cursor-not-allowed opacity-50',
+          readOnly && !disabled && 'cursor-default',
           className
-        )
-      }
-    >
-      <BaseCheckbox.Indicator
-        keepMounted
-        className={(state) =>
-          cn(
-            'flex h-full w-full items-center justify-center transition-opacity',
-            state.checked ? 'opacity-100' : 'opacity-0',
-            thumbClassName
-          )
-        }
+        )}
       >
-        <Check className="h-3.5 w-3.5 stroke-[3]" />
-      </BaseCheckbox.Indicator>
-    </BaseCheckbox.Root>
+        <span
+          aria-hidden="true"
+          className={cn(
+            'pointer-events-none block h-5 w-5 rounded-full bg-white shadow-sm transition-transform',
+            checked ? 'translate-x-5' : 'translate-x-0',
+            thumbClassName
+          )}
+        />
+      </button>
+    </>
   )
 }

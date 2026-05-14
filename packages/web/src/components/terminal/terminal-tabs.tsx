@@ -45,8 +45,8 @@ export function TerminalTabs({
         headerFrame: 'items-end',
         strip: `min-w-0 flex-1 items-end border-b ${TERMINAL_CHROME_BORDER} px-4 rounded-none`,
         list: 'flex-1 items-end overflow-y-hidden pt-2',
-        buttonBase: `z-20 rounded-t-[8px] border border-b-0 border-transparent px-0 py-0 transition-[color,background-color,border-color] duration-180 ${IOS_TAB_EASE}`,
-        buttonInner: `inline-flex h-full items-center gap-2 rounded-t-[8px] px-3 py-1.5 transition-[color,background-color,transform,filter] duration-180 ${IOS_TAB_EASE} will-change-transform`,
+        buttonBase: `z-20 w-[clamp(8.5rem,18vw,13rem)] rounded-t-[8px] border border-b-0 border-transparent px-0 py-0 transition-[color,background-color,border-color] duration-180 ${IOS_TAB_EASE}`,
+        buttonInner: `grid h-full min-w-0 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-t-[8px] px-3 py-1.5 transition-[color,background-color,transform,filter] duration-180 ${IOS_TAB_EASE} will-change-transform`,
         activeButton: 'bg-transparent text-terminal-foreground',
         activeButtonInner: 'bg-transparent text-terminal-foreground [transform:translateY(0)]',
         inactiveButton:

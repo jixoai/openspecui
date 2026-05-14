@@ -1,5 +1,9 @@
 import * as pty from '@lydell/node-pty'
-import { resolveTerminalShellDefaults, type TerminalShellDefaults } from '@openspecui/core'
+import {
+  resolveTerminalShellDefaults,
+  type TerminalShellDefaults,
+  type TerminalTitleTarget,
+} from '@openspecui/core'
 import { EventEmitter } from 'events'
 
 const DEFAULT_SCROLLBACK = 1000
@@ -83,6 +87,8 @@ export class PtySession extends EventEmitter {
   private process: pty.IPty
   private titleInterval: ReturnType<typeof setInterval> | null = null
   private lastTitle = ''
+  private lastOscIconTitle = ''
+  private lastOscWindowTitle = ''
   private buffer: string[] = []
   private bufferByteLength = 0
   private maxBufferLines: number
@@ -164,6 +170,25 @@ export class PtySession extends EventEmitter {
 
   get title(): string {
     return this.lastTitle
+  }
+
+  get targetTitle(): string {
+    return this.lastOscIconTitle || this.lastOscWindowTitle || this.lastTitle || this.command
+  }
+
+  get oscTitle(): string {
+    return this.lastOscIconTitle || this.lastOscWindowTitle
+  }
+
+  setTargetTitle(title: string, target: TerminalTitleTarget): void {
+    const trimmed = title.trim()
+    if (!trimmed) return
+    if (target === 'icon' || target === 'both') {
+      this.lastOscIconTitle = trimmed
+    }
+    if (target === 'window' || target === 'both') {
+      this.lastOscWindowTitle = trimmed
+    }
   }
 
   private appendBuffer(data: string): void {

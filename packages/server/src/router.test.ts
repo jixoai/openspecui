@@ -1,3 +1,4 @@
+import { DEFAULT_BELL_SOUND_ID, DEFAULT_NOTIFICATION_SOUND_ID } from '@openspecui/core/sounds'
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -201,9 +202,11 @@ const createMockContext = (
         lightTheme: 'default-light',
         darkTheme: 'default-dark',
         rendererEngine: 'xterm',
+        bellSound: DEFAULT_BELL_SOUND_ID,
       },
       dashboard: { trendPointLimit: 100 },
       git: { diffEagerLineBudget: 1000 },
+      notifications: { sound: DEFAULT_NOTIFICATION_SOUND_ID, systemNotificationsEnabled: false },
     }),
     setCliCommand: vi.fn().mockResolvedValue(undefined),
     writeConfig: vi.fn().mockResolvedValue(undefined),
@@ -244,6 +247,21 @@ const createMockContext = (
   const workflowInvocationService = {
     runWorkflow: vi.fn(),
   }
+  const notificationService = {
+    list: vi.fn().mockReturnValue([]),
+    subscribe: vi.fn(() => () => undefined),
+    publish: vi.fn(),
+    markRead: vi.fn(),
+    markManyRead: vi.fn(),
+    clearGroup: vi.fn(),
+    clearTerminalSession: vi.fn(),
+    clearAll: vi.fn(),
+  }
+  const customSoundService = {
+    listAvailable: vi.fn().mockResolvedValue([]),
+    rename: vi.fn(),
+    remove: vi.fn(),
+  }
 
   const projectDir = options.projectDir ?? '/tmp/openspecui-router-test'
   const dashboardOverviewService = new DashboardOverviewService((reason) =>
@@ -268,6 +286,8 @@ const createMockContext = (
     searchService: searchService as unknown as Context['searchService'],
     dashboardOverviewService,
     projectRecoveryService: options.projectRecoveryService ?? createMockProjectRecoveryService(),
+    notificationService: notificationService as unknown as Context['notificationService'],
+    customSoundService: customSoundService as unknown as Context['customSoundService'],
     gitWorktreeHandoff: options.gitWorktreeHandoff,
     watcher: undefined,
     projectDir,
@@ -310,6 +330,20 @@ describe('appRouter', () => {
 
       const writeConfig = context.configManager.writeConfig as unknown as ReturnType<typeof vi.fn>
       expect(writeConfig).toHaveBeenCalledWith({ opsx: { agentInvocationMode: 'command' } })
+    })
+  })
+
+  describe('sounds', () => {
+    it('lists available custom sounds through the sound service', async () => {
+      const context = createMockContext()
+      const caller = appRouter.createCaller(context)
+
+      await expect(caller.sounds.listCustom()).resolves.toEqual([])
+
+      const listAvailable = context.customSoundService.listAvailable as unknown as ReturnType<
+        typeof vi.fn
+      >
+      expect(listAvailable).toHaveBeenCalledTimes(1)
     })
   })
 

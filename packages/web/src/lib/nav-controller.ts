@@ -102,6 +102,7 @@ const DEFAULT_MAIN_TABS: TabId[] = [
 const DEFAULT_BOTTOM_TABS: TabId[] = isStaticMode() ? [] : ['/git', '/terminal']
 const POP_ROUTES = [
   '/search',
+  '/notifications',
   '/opsx-new',
   '/opsx-propose',
   '/opsx-verify',

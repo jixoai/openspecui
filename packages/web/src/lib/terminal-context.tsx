@@ -1,3 +1,4 @@
+import type { TerminalProgressState, TerminalPromptState } from '@openspecui/core/terminal-control'
 import type { TerminalShellProfile } from '@openspecui/core/terminal-invocation'
 import {
   createContext,
@@ -17,14 +18,20 @@ import { useConfigSubscription } from './use-subscription'
 
 export interface TerminalSession {
   id: string
+  serverSessionId: string | null
   label: string
   customTitle: string | null
   processTitle: string | null
+  oscTitle: string | null
+  cwd: string | null
+  progress: { state: TerminalProgressState; value: number | null } | null
+  promptState: TerminalPromptState | null
   displayTitle: string
   isDedicated: boolean
   isExited: boolean
   exitCode: number | null
   outputActive: boolean
+  lastBellAt: number | null
   command?: string
   args?: string[]
   closeTip?: string
@@ -92,6 +99,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       if (isStatic) return ''
       const id = terminalController.createSession(opts)
       setActiveSessionId(id)
+      terminalController.setActiveSessionId(id)
       return id
     },
     [isStatic]
@@ -103,12 +111,12 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       const label = opts?.label ?? shell.label
       const id = terminalController.createSession({
         label,
-        customTitle: label,
         command: shell.command,
         args: shell.args,
         initialInput: opts?.initialInput,
       })
       setActiveSessionId(id)
+      terminalController.setActiveSessionId(id)
       return id
     },
     [isStatic]
@@ -136,6 +144,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         initialInput: opts?.initialInput,
       })
       setActiveSessionId(id)
+      terminalController.setActiveSessionId(id)
       return id
     },
     [isStatic]
@@ -148,7 +157,21 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
 
   const setActiveSession = useCallback((id: string) => {
     setActiveSessionId(id)
+    terminalController.setActiveSessionId(id)
     terminalController.focusSession(id)
+  }, [])
+
+  useEffect(() => {
+    return terminalController.subscribeActivation((id) => {
+      setActiveSessionId(id)
+      const schedule =
+        typeof requestAnimationFrame === 'function'
+          ? requestAnimationFrame
+          : (callback: FrameRequestCallback) => window.setTimeout(() => callback(Date.now()), 0)
+      schedule(() => {
+        terminalController.focusSession(id)
+      })
+    })
   }, [])
 
   const markExited = useCallback((_id: string, _exitCode: number) => {
@@ -171,6 +194,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!resolvedActiveSessionId) return
+    terminalController.setActiveSessionId(resolvedActiveSessionId)
     terminalController.focusSession(resolvedActiveSessionId)
   }, [resolvedActiveSessionId])
 

@@ -48,7 +48,7 @@ export function ButtonGroup<T extends string>({
             disabled={option.disabled}
             onClick={() => onChange(option.value)}
             aria-pressed={active}
-            className={`px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
               index > 0
                 ? tone === 'terminal'
                   ? 'border-terminal-foreground/20 border-l'

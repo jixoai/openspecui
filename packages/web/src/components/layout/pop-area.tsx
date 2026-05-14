@@ -28,6 +28,8 @@ export interface PopAreaConfig {
   panelClassName: string
   bodyClassName: string
   maxHeight: string
+  title?: ReactNode
+  headerActions?: ReactNode
   onDismissRequest?: DialogRequestHandler
 }
 
@@ -41,6 +43,8 @@ const DEFAULT_POP_AREA_CONFIG: PopAreaConfig = {
   panelClassName: '',
   bodyClassName: 'p-0',
   maxHeight: '90vh',
+  title: undefined,
+  headerActions: undefined,
   onDismissRequest: undefined,
 }
 
@@ -123,6 +127,7 @@ export function setPopRouter(router: AnyRouter | null): void {
 
 function getTitle(pathname: string): string {
   if (pathname === '/search') return 'Search'
+  if (pathname === '/notifications') return 'Notifications'
   if (pathname === '/opsx-new') return 'OPSX New'
   if (pathname === '/opsx-propose') return 'OPSX Propose'
   if (pathname === '/opsx-verify') return 'OPSX Verify'
@@ -188,10 +193,13 @@ function PopAreaDialog() {
       onClose={requestClose}
       onClosed={handleClosed}
       title={
-        <span className="font-nav tracking-[0.04em]">
-          {getTitle(navLayout.popLocation.pathname)}
-        </span>
+        config.title ?? (
+          <span className="font-nav tracking-[0.04em]">
+            {getTitle(navLayout.popLocation.pathname)}
+          </span>
+        )
       }
+      headerActions={config.headerActions}
       dialogClassName={semanticDialogClassName}
       contentClassName={semanticContentClassName}
       className={['pop-area-panel', semanticPanelClassName, config.panelClassName]

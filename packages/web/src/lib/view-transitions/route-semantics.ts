@@ -20,6 +20,7 @@ interface RouteSemanticMatcher extends RouteSemantic {
 
 const ROUTE_SEMANTICS: readonly RouteSemanticMatcher[] = [
   { family: 'search', level: 'pop', pattern: /^\/search(?:\/|$)/ },
+  { family: 'notifications', level: 'pop', pattern: /^\/notifications(?:\/|$)/ },
   { family: 'opsx-new', level: 'pop', pattern: /^\/opsx-new(?:\/|$)/ },
   { family: 'opsx-propose', level: 'pop', pattern: /^\/opsx-propose(?:\/|$)/ },
   { family: 'opsx-verify', level: 'pop', pattern: /^\/opsx-verify(?:\/|$)/ },

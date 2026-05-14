@@ -49,6 +49,27 @@ describe('Tabs double-click behavior', () => {
     expect(onTabBarDoubleClick).not.toHaveBeenCalled()
   })
 
+  it('renders trigger title and badge on the whole tab button', () => {
+    const titledTabs: Tab[] = [
+      {
+        id: 'a',
+        label: 'Alpha',
+        title: 'Full Alpha title',
+        badge: <span aria-label="Alpha badge">2</span>,
+        content: <div>A</div>,
+      },
+    ]
+
+    const { container, getByLabelText, getByTitle } = render(
+      <Tabs tabs={titledTabs} selectedTab="a" />
+    )
+
+    const trigger = getByTitle('Full Alpha title')
+    expect(trigger.tagName).toBe('BUTTON')
+    expect(getByLabelText('Alpha badge').closest('[data-tabs-badge="true"]')).toBeTruthy()
+    expect(container.querySelector('[data-tabs-badge="true"]')?.parentElement).toBe(trigger)
+  })
+
   it('supports slot-style class overrides and indicator toggles', () => {
     const { container } = render(
       <Tabs
@@ -199,6 +220,44 @@ describe('Tabs double-click behavior', () => {
 
       expect(indicator?.style.transform).toBe('translateX(108px)')
       expect(indicator?.style.width).toBe('76px')
+
+      const resizedTabs: Tab[] = [
+        { id: 'a', label: 'A', content: <div>A content</div> },
+        { id: 'b', label: 'B resized', content: <div>B content</div> },
+      ]
+
+      Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+        configurable: true,
+        value: function mockResizedGetBoundingClientRect(this: HTMLElement) {
+          if (this.classList.contains('tabs-header')) {
+            return rect(20, 40, 320, 44)
+          }
+
+          if (this.classList.contains('tabs-header-frame')) {
+            return rect(20, 40, 320, 44)
+          }
+
+          if (this.classList.contains('tabs-strip')) {
+            return rect(30, 40, 210, 44)
+          }
+
+          if (this.dataset.tabId === 'a') {
+            return rect(36, 40, 80, 36)
+          }
+
+          if (this.dataset.tabId === 'b') {
+            return rect(128, 40, 140, 36)
+          }
+
+          return originalGetBoundingClientRect.call(this)
+        },
+      })
+
+      rerender(
+        <Tabs ref={handleRef} tabs={resizedTabs} selectedTab="b" actions={<button>x</button>} />
+      )
+
+      expect(indicator?.style.width).toBe('120px')
     } finally {
       Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
         configurable: true,

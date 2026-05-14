@@ -7,6 +7,7 @@ import { Config } from '../routes/config'
 import { Dashboard } from '../routes/dashboard'
 import { GitRoute } from '../routes/git'
 import { GitCommitViewRoute, GitUncommittedViewRoute } from '../routes/git-view'
+import { NotificationsRoute } from '../routes/notifications'
 import { OpsxComposeRoute } from '../routes/opsx-compose'
 import { OpsxNewRoute } from '../routes/opsx-new'
 import { OpsxProposeRoute } from '../routes/opsx-propose'
@@ -75,6 +76,11 @@ export function createPopRouteTree(rootRoute: AnyRootRoute) {
       getParentRoute: () => rootRoute,
       path: '/search',
       component: SearchRoute,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/notifications',
+      component: NotificationsRoute,
     }),
     createRoute({
       getParentRoute: () => rootRoute,
