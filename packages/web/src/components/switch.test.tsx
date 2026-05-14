@@ -22,19 +22,25 @@ describe('Switch', () => {
   it('updates checked state after toggling', () => {
     render(<SwitchHarness />)
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Enable option' }))
+    const trigger = screen.getByRole('switch', { name: 'Enable option' })
+
+    expect(trigger).toHaveAttribute('aria-checked', 'false')
+
+    fireEvent.click(trigger)
 
     expect(screen.getByTestId('switch-state').textContent).toBe('true')
+    expect(trigger).toHaveAttribute('aria-checked', 'true')
   })
 
-  it('renders the shared checkbox style', () => {
+  it('renders the shared switch style', () => {
     render(<SwitchHarness />)
 
-    const trigger = screen.getByRole('checkbox', { name: 'Enable option' })
+    const trigger = screen.getByRole('switch', { name: 'Enable option' })
 
-    expect(trigger.className).toContain('h-5')
-    expect(trigger.className).toContain('w-5')
+    expect(trigger.className).toContain('h-6')
+    expect(trigger.className).toContain('w-11')
+    expect(trigger.className).toContain('rounded-full')
     expect(trigger.className).toContain('border')
-    expect(trigger.firstElementChild?.className).toContain('opacity-0')
+    expect(trigger.firstElementChild?.className).toContain('translate-x-0')
   })
 })

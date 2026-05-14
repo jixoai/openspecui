@@ -70,6 +70,9 @@ describe('TerminalCommandForm', () => {
     fireEvent.click(objectField!)
 
     expect(onChange).not.toHaveBeenCalled()
-    expect(screen.getByRole('checkbox', { name: 'Skip permissions' })).not.toBeChecked()
+    expect(screen.getByRole('switch', { name: 'Skip permissions' })).toHaveAttribute(
+      'aria-checked',
+      'false'
+    )
   })
 })

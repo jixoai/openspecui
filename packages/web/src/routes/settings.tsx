@@ -6,6 +6,7 @@ import { Dialog } from '@/components/dialog'
 import { NotificationSettings } from '@/components/notifications/notification-settings'
 import { Select, type SelectOption } from '@/components/select'
 import { SoundSettingControl } from '@/components/sound-setting-control'
+import { Switch } from '@/components/switch'
 import { TerminalInvocationSettings } from '@/components/terminal/terminal-invocation-settings'
 import { generateTimelineScope, Toc, TocSection, type TocItem } from '@/components/toc'
 import { getApiBaseUrl } from '@/lib/api-config'
@@ -1185,22 +1186,14 @@ export function Settings() {
                   {/* Cursor Blink */}
                   <div className="flex items-center justify-between">
                     <label className="text-sm font-medium">Cursor Blink</label>
-                    <button
-                      onClick={() => {
-                        const v = !termCursorBlink
-                        setTermCursorBlink(v)
-                        applyTerminalConfig({ cursorBlink: v })
+                    <Switch
+                      checked={termCursorBlink}
+                      onCheckedChange={(checked) => {
+                        setTermCursorBlink(checked)
+                        applyTerminalConfig({ cursorBlink: checked })
                       }}
-                      className={`relative h-6 w-11 rounded-full transition-colors ${
-                        termCursorBlink ? 'bg-primary' : 'bg-muted-foreground/30'
-                      }`}
-                    >
-                      <span
-                        className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-                          termCursorBlink ? 'translate-x-5' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
+                      ariaLabel="Cursor Blink"
+                    />
                   </div>
 
                   {/* Scrollback */}
