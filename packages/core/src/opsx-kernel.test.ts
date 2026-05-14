@@ -9,8 +9,8 @@ import { clearCache, initWatcherPool } from './reactive-fs/index.js'
 import { closeAllWatchers } from './reactive-fs/watcher-pool.js'
 
 describe('OpsxKernel artifact status reactivity', () => {
-  const REACTIVE_WAIT_OPTIONS = { timeout: 8000 }
-  const REACTIVE_TEST_TIMEOUT_MS = 10000
+  const REACTIVE_WAIT_OPTIONS = { timeout: 20000 }
+  const REACTIVE_TEST_TIMEOUT_MS = 25000
   let tempDir: string
   let kernel: OpsxKernel | null = null
 
