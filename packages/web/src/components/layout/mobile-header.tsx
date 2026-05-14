@@ -5,6 +5,7 @@ import { useServerStatus } from '@/lib/use-server-status'
 import { VTLink, vtNavController } from '@/lib/view-transitions/navigation'
 import { Menu, Search, X } from 'lucide-react'
 import { useState } from 'react'
+import { NotificationEntryButton } from '../notifications/notification-entry-button'
 import { AreaNav } from './area-nav'
 import { navItems, settingsItem } from './nav-items'
 import { StatusIndicator } from './status-bar'
@@ -34,7 +35,7 @@ export function MobileHeader() {
           </button>
           <span className="font-nav text-[12px] tracking-[0.04em]">{pageTitle}</span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => vtNavController.activatePop('/search')}
@@ -43,7 +44,8 @@ export function MobileHeader() {
           >
             <Search className="h-4 w-4" />
           </button>
-          <StatusIndicator />
+          {!isStatic && <NotificationEntryButton className="h-8 w-8" />}
+          <StatusIndicator compact />
         </div>
       </header>
 

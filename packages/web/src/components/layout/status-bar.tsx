@@ -1,4 +1,6 @@
+import { NotificationEntryButton } from '@/components/notifications/notification-entry-button'
 import { PathMarquee } from '@/components/path-marquee'
+import { Tooltip } from '@/components/tooltip'
 import { loadSnapshot } from '@/lib/static-data-provider'
 import { isStaticMode } from '@/lib/static-mode'
 import { useManualReconnect, useServerStatus } from '@/lib/use-server-status'
@@ -6,7 +8,7 @@ import { Camera, FolderOpen, Github, Link2, RefreshCw, Unlink2 } from 'lucide-re
 import { useEffect, useState } from 'react'
 
 /** Status indicator - simplified for mobile, full for desktop */
-export function StatusIndicator() {
+export function StatusIndicator({ compact = false }: { compact?: boolean }) {
   if (isStaticMode()) {
     return (
       <div
@@ -14,7 +16,7 @@ export function StatusIndicator() {
         title="Live features disabled (no file watching, task toggling, or AI integration)"
       >
         <Camera className="h-3.5 w-3.5 text-blue-500" />
-        <span className="status-text text-blue-600">Static</span>
+        {!compact && <span className="status-text text-blue-600">Static</span>}
       </div>
     )
   }
@@ -23,10 +25,15 @@ export function StatusIndicator() {
   const reconnect = useManualReconnect()
 
   if (status.connected) {
+    const watcherText = status.watcherEnabled ? 'Watching for changes' : 'File watcher disabled'
     return (
       <div className="status-indicator flex items-center gap-1.5 text-xs">
         <Link2 className="h-3.5 w-3.5 text-green-500" />
-        <span className="status-text text-green-600">Live</span>
+        {!compact && (
+          <Tooltip content={watcherText}>
+            <span className="status-text cursor-default text-green-600">Live</span>
+          </Tooltip>
+        )}
       </div>
     )
   }
@@ -35,7 +42,7 @@ export function StatusIndicator() {
   return (
     <div className="status-indicator flex items-center gap-1.5 text-xs">
       <Unlink2 className="h-3.5 w-3.5 text-red-500" />
-      <span className="status-text text-red-600">Offline</span>
+      {!compact && <span className="status-text text-red-600">Offline</span>}
       {status.reconnectCountdown !== null && (
         <button
           onClick={reconnect}
@@ -75,7 +82,7 @@ export function DesktopStatusBar() {
 
   if (staticMode) {
     return (
-      <div className="desktop-status border-border bg-muted/30 text-muted-foreground flex h-8 items-center justify-between gap-4 border-t px-4 text-xs">
+      <div className="desktop-status border-border bg-muted/30 text-muted-foreground flex h-8 items-center justify-between gap-4 border-t px-2 text-xs">
         <div className="flex min-w-0 items-center gap-4">
           <StatusIndicator />
           <span className="truncate">Generated: {generatedAt}</span>
@@ -98,7 +105,7 @@ export function DesktopStatusBar() {
   const status = useServerStatus()
 
   return (
-    <div className="desktop-status border-border bg-muted/30 text-muted-foreground flex h-8 items-center justify-between gap-4 border-t px-4 text-xs">
+    <div className="desktop-status border-border bg-muted/30 text-muted-foreground flex h-8 items-center justify-between gap-4 border-t px-2 text-xs">
       <div className="flex items-center gap-4">
         <StatusIndicator />
         {status.projectDir && (
@@ -113,15 +120,9 @@ export function DesktopStatusBar() {
           </div>
         )}
       </div>
-      {status.connected && (
-        <div className="flex items-center gap-1.5">
-          {status.watcherEnabled ? (
-            <span className="text-green-600">Watching for changes</span>
-          ) : (
-            <span className="text-yellow-600">File watcher disabled</span>
-          )}
-        </div>
-      )}
+      <div className="flex items-center gap-2">
+        <NotificationEntryButton className="h-6 w-6" iconClassName="h-3.5 w-3.5" />
+      </div>
     </div>
   )
 }

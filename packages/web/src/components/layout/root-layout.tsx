@@ -1,5 +1,6 @@
 import { CliHealthGate } from '@/components/cli-health-gate'
 import { GlobalArchiveModal } from '@/components/global-archive-modal'
+import { NotificationToastViewport } from '@/components/notifications/notification-toast'
 import { ProjectRecoveryGate } from '@/components/project-recovery-gate'
 import { ResizeHandle } from '@/components/terminal/resize-handle'
 import { isStaticMode } from '@/lib/static-mode'
@@ -53,6 +54,7 @@ export function RootLayout() {
 
       <GlobalArchiveModal />
       <PopAreaRouter />
+      {!isStatic && <NotificationToastViewport />}
     </div>
   )
 }

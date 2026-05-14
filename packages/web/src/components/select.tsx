@@ -111,7 +111,8 @@ export function Select<T extends string>({
         onFocus={onFocus}
         className={(state) =>
           cn(
-            'bg-background border-border text-foreground inline-flex h-9 min-w-0 items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm outline-none transition-colors',
+            'bg-background border-border text-foreground inline-flex min-w-0 items-center rounded-md border text-sm outline-none transition-colors',
+            renderTrigger ? 'justify-center' : 'h-9 justify-between gap-2 px-3 py-2',
             'hover:bg-muted/30 focus-visible:ring-primary focus-visible:ring-1',
             'disabled:cursor-not-allowed disabled:opacity-50',
             state.open ? 'bg-muted/40 ring-primary ring-1' : '',

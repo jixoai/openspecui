@@ -7,6 +7,7 @@ export type DialogRequestHandler = (() => void) | null
 interface DialogProps {
   open: boolean
   title: ReactNode // can include icon / status chips etc.
+  headerActions?: ReactNode
   onClose: () => void
   /**
    * Handles non-explicit dismiss attempts such as backdrop click or ESC.
@@ -32,6 +33,7 @@ interface DialogProps {
 export function Dialog({
   open,
   title,
+  headerActions,
   onClose,
   onDismissRequest,
   onClosed,
@@ -185,17 +187,20 @@ export function Dialog({
           style={{ maxHeight }}
         >
           {/* Header (non-shrinking) */}
-          <div className="border-border flex flex-none shrink-0 items-center justify-between border-b px-4 py-3">
-            <div id={titleId} className="flex items-center gap-2">
+          <div className="border-border flex flex-none shrink-0 items-center justify-between gap-3 border-b px-4 py-3">
+            <div id={titleId} className="min-w-0 flex-1">
               {title}
             </div>
-            <button
-              onClick={onClose}
-              className="hover:bg-muted rounded p-1"
-              aria-label="Close dialog"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              {headerActions}
+              <button
+                onClick={onClose}
+                className="hover:bg-muted rounded p-1"
+                aria-label="Close dialog"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           {/* Body */}
