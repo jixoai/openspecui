@@ -24,6 +24,7 @@ import {
   getToolInitStates,
   getWatcherRuntimeStatus,
   GitConfigSchema,
+  NotificationSettingsSchema,
   OpsxConfigSchema,
   resolveTerminalShellDefaults,
   sniffGlobalCli,
@@ -46,6 +47,12 @@ import {
   type ToolInitDelivery,
   type WorkflowRequestedModeV1,
 } from '@openspecui/core'
+import {
+  NotificationGroupKeySchema,
+  NotificationPublishInputSchema,
+  type NotificationRecord,
+} from '@openspecui/core/notifications'
+import { CustomSoundIdSchema } from '@openspecui/core/sounds'
 import { SearchQuerySchema, type SearchQuery } from '@openspecui/search'
 import { initTRPC } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
@@ -53,6 +60,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { createCliStreamObservable } from './cli-stream-observable.js'
+import type { CustomSoundService } from './custom-sound-service.js'
 import { removeDetachedDashboardGitWorktree } from './dashboard-git-snapshot.js'
 import type { DashboardOverviewService } from './dashboard-overview-service.js'
 import {
@@ -70,6 +78,7 @@ import {
   listCurrentWorktreeGitEntries,
 } from './git-panel-data.js'
 import { sameGitPath } from './git-shared.js'
+import type { NotificationService } from './notification-service.js'
 import type { ProjectRecoveryService } from './project-recovery-service.js'
 import { reactiveKV } from './reactive-kv.js'
 import {
@@ -89,6 +98,8 @@ export interface Context {
   searchService: SearchService
   dashboardOverviewService: DashboardOverviewService
   projectRecoveryService: ProjectRecoveryService
+  notificationService: NotificationService
+  customSoundService: CustomSoundService
   gitWorktreeHandoff?: GitWorktreeHandoffService
   watcher?: OpenSpecWatcher
   projectDir: string
@@ -102,6 +113,79 @@ const t = initTRPC.context<Context>().create()
 
 export const router = t.router
 export const publicProcedure = t.procedure
+
+export const notificationsRouter = router({
+  list: publicProcedure.query(({ ctx }) => {
+    return ctx.notificationService.list()
+  }),
+
+  subscribe: publicProcedure.subscription(({ ctx }) => {
+    return observable<NotificationRecord[]>((emit) => {
+      const unsubscribe = ctx.notificationService.subscribe((notifications) => {
+        emit.next(notifications)
+      })
+      return () => {
+        unsubscribe()
+      }
+    })
+  }),
+
+  publish: publicProcedure.input(NotificationPublishInputSchema).mutation(({ ctx, input }) => {
+    return ctx.notificationService.publish(input)
+  }),
+
+  markRead: publicProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(({ ctx, input }) => {
+      ctx.notificationService.markRead(input.id)
+      return { success: true }
+    }),
+
+  markManyRead: publicProcedure
+    .input(z.object({ ids: z.array(z.string().min(1)).default([]) }))
+    .mutation(({ ctx, input }) => {
+      ctx.notificationService.markManyRead(input.ids)
+      return { success: true }
+    }),
+
+  clearGroup: publicProcedure
+    .input(z.object({ groupKey: NotificationGroupKeySchema }))
+    .mutation(({ ctx, input }) => {
+      ctx.notificationService.clearGroup(input.groupKey)
+      return { success: true }
+    }),
+
+  clearTerminalSession: publicProcedure
+    .input(z.object({ sessionId: z.string().min(1) }))
+    .mutation(({ ctx, input }) => {
+      ctx.notificationService.clearTerminalSession(input.sessionId)
+      return { success: true }
+    }),
+
+  clearAll: publicProcedure.mutation(({ ctx }) => {
+    ctx.notificationService.clearAll()
+    return { success: true }
+  }),
+})
+
+export const soundsRouter = router({
+  listCustom: publicProcedure.query(({ ctx }) => {
+    return ctx.customSoundService.listAvailable()
+  }),
+
+  renameCustom: publicProcedure
+    .input(z.object({ id: CustomSoundIdSchema, name: z.string().min(1).max(160) }))
+    .mutation(({ ctx, input }) => {
+      return ctx.customSoundService.rename(input.id, input.name)
+    }),
+
+  deleteCustom: publicProcedure
+    .input(z.object({ id: CustomSoundIdSchema }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.customSoundService.remove(input.id)
+      return { success: true }
+    }),
+})
 
 const OPSX_CORE_PROFILE_WORKFLOWS = ['propose', 'explore', 'apply', 'archive'] as const
 const gitEntrySelectorSchema = z.discriminatedUnion('type', [
@@ -710,6 +794,7 @@ export const configRouter = router({
           .optional(),
         dashboard: DashboardConfigSchema.partial().optional(),
         git: GitConfigSchema.partial().optional(),
+        notifications: NotificationSettingsSchema.partial().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -727,7 +812,8 @@ export const configRouter = router({
           input.opsx !== undefined ||
           input.terminal !== undefined ||
           input.dashboard !== undefined ||
-          input.git !== undefined
+          input.git !== undefined ||
+          input.notifications !== undefined
         ) {
           await ctx.configManager.writeConfig({
             theme: input.theme,
@@ -737,6 +823,7 @@ export const configRouter = router({
             terminal: input.terminal,
             dashboard: input.dashboard,
             git: input.git,
+            notifications: input.notifications,
           })
         }
         return { success: true }
@@ -1636,6 +1723,8 @@ export const appRouter = router({
   init: initRouter,
   realtime: realtimeRouter,
   config: configRouter,
+  notifications: notificationsRouter,
+  sounds: soundsRouter,
   cli: cliRouter,
   opsx: opsxRouter,
   kv: kvRouter,
