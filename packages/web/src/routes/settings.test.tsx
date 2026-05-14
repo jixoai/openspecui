@@ -1,0 +1,241 @@
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import type { ReactNode } from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Settings } from './settings'
+
+const { useConfigSubscriptionMock, staticModeMock, useServerStatusMock } = vi.hoisted(() => ({
+  useConfigSubscriptionMock: vi.fn(),
+  staticModeMock: vi.fn(() => false),
+  useServerStatusMock: vi.fn(),
+}))
+
+vi.mock('@tanstack/react-query', () => ({
+  useMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+    isSuccess: false,
+  }),
+  useQuery: ({ queryKey }: { queryKey?: readonly string[] }) => {
+    const key = queryKey?.join('.') ?? ''
+    if (key === 'cli.getAllTools') {
+      return { data: [{ value: 'claude', name: 'Claude', available: true }], isLoading: false }
+    }
+    if (key === 'cli.getDetectedProjectTools') {
+      return { data: [{ value: 'claude', name: 'Claude' }], isLoading: false, refetch: vi.fn() }
+    }
+    if (key === 'cli.getProfileState') {
+      return {
+        data: {
+          available: true,
+          delivery: 'both',
+          workflows: [],
+          profile: 'core',
+          driftStatus: 'in-sync',
+          warningText: null,
+        },
+        isLoading: false,
+        refetch: vi.fn(),
+      }
+    }
+    if (key === 'cli.getToolInitStates') {
+      return {
+        data: [
+          {
+            toolId: 'claude',
+            toolName: 'Claude',
+            status: 'uninitialized',
+            hasAnyArtifacts: false,
+            expectedSkillCount: 0,
+            presentExpectedSkillCount: 0,
+            detectedSkillCount: 0,
+            expectedCommandCount: 0,
+            presentExpectedCommandCount: 0,
+            detectedCommandCount: 0,
+            missingSkillWorkflows: [],
+            missingCommandWorkflows: [],
+            unexpectedSkillWorkflows: [],
+            unexpectedCommandWorkflows: [],
+            legacyCommandWorkflows: [],
+          },
+        ],
+        refetch: vi.fn(),
+      }
+    }
+    if (key === 'cli.sniffGlobalCli') {
+      return { data: { hasGlobal: true, version: '1.3.0', hasUpdate: false }, isLoading: false }
+    }
+    if (key === 'cli.checkAvailability') {
+      return { data: { available: true, version: '1.3.0' }, isLoading: false, refetch: vi.fn() }
+    }
+    if (key === 'config.getEffectiveCliCommand') {
+      return { data: 'openspec', refetch: vi.fn() }
+    }
+    return { data: undefined, isLoading: false, refetch: vi.fn() }
+  },
+}))
+
+vi.mock('@/components/terminal/terminal-invocation-settings', () => ({
+  TerminalInvocationSettings: () => <div data-testid="terminal-invocation-settings" />,
+}))
+
+vi.mock('@/components/notifications/notification-settings', () => ({
+  NotificationSettings: () => <div data-testid="notification-settings" />,
+}))
+
+vi.mock('@/components/sound-setting-control', () => ({
+  SoundSettingControl: () => <div data-testid="sound-setting-control" />,
+}))
+
+vi.mock('@/components/cli-terminal', () => ({
+  CliTerminal: () => <div data-testid="cli-terminal" />,
+}))
+
+vi.mock('@/components/toc', () => ({
+  generateTimelineScope: () => '',
+  Toc: () => null,
+  TocSection: ({ children }: { children?: ReactNode }) => <section>{children}</section>,
+}))
+
+vi.mock('@/lib/static-mode', () => ({
+  getBasePath: () => '/',
+  isStaticMode: () => staticModeMock(),
+}))
+
+vi.mock('@/lib/use-server-status', () => ({
+  useServerStatus: () => useServerStatusMock(),
+}))
+
+vi.mock('@/lib/use-subscription', () => ({
+  useConfigSubscription: () => useConfigSubscriptionMock(),
+}))
+
+vi.mock('@/lib/use-cli-runner', () => ({
+  useCliRunner: () => ({
+    lines: [],
+    status: 'idle',
+    commands: {
+      replaceAll: vi.fn(),
+      runAll: vi.fn(),
+    },
+    cancel: vi.fn(),
+    reset: vi.fn(),
+  }),
+}))
+
+vi.mock('@/lib/terminal-bell-sound-engine', () => ({
+  TerminalBellSoundEngine: class {
+    init(): void {}
+    async play(): Promise<void> {}
+  },
+}))
+
+vi.mock('@/lib/terminal-controller', () => {
+  return {
+    GOOGLE_FONT_PRESETS: [],
+    TERMINAL_RENDERER_ENGINES: ['xterm'],
+    isTerminalRendererEngine: (value: string): value is 'xterm' => value === 'xterm',
+    terminalController: {
+      getConfig: () => ({
+        fontSize: 13,
+        fontFamily: '',
+        cursorBlink: true,
+        cursorStyle: 'block',
+        scrollback: 1000,
+        useTheme: 'app',
+        lightTheme: 'default-light',
+        darkTheme: 'default-dark',
+        rendererEngine: 'xterm',
+        bellSound: 'builtin:Blow',
+        bellVolume: 1,
+      }),
+      applyConfig: vi.fn(),
+      setRendererEngine: vi.fn(),
+    },
+  }
+})
+
+vi.mock('@/lib/api-config', () => ({
+  getApiBaseUrl: () => '',
+}))
+
+vi.mock('@/lib/theme', () => ({
+  applyTheme: vi.fn(),
+  getStoredTheme: () => 'system',
+  persistTheme: vi.fn(),
+}))
+
+vi.mock('@/lib/trpc', () => ({
+  queryClient: {
+    invalidateQueries: vi.fn(),
+  },
+  trpc: {
+    cli: {
+      sniffGlobalCli: {
+        queryOptions: () => ({ queryKey: ['cli.getAllTools'] }),
+        queryFilter: () => ({ queryKey: ['cli.sniffGlobalCli'] }),
+      },
+      checkAvailability: {
+        queryOptions: () => ({ queryKey: ['cli.checkAvailability'] }),
+        queryFilter: () => ({ queryKey: ['cli.checkAvailability'] }),
+      },
+      getAllTools: {
+        queryOptions: () => ({ queryKey: ['cli.getAllTools'] }),
+      },
+      getDetectedProjectTools: {
+        queryOptions: () => ({ queryKey: ['cli.getDetectedProjectTools'] }),
+      },
+      getProfileState: {
+        queryOptions: () => ({ queryKey: ['cli.getProfileState'] }),
+      },
+      getToolInitStates: {
+        queryOptions: () => ({ queryKey: ['cli.getToolInitStates'] }),
+      },
+    },
+    config: {
+      getEffectiveCliCommand: {
+        queryOptions: () => ({ queryKey: ['config.getEffectiveCliCommand'] }),
+        queryFilter: () => ({ queryKey: ['config.getEffectiveCliCommand'] }),
+      },
+    },
+  },
+  trpcClient: {
+    cli: {
+      execute: {
+        mutate: vi.fn(),
+      },
+    },
+    config: {
+      update: {
+        mutate: vi.fn(),
+      },
+    },
+  },
+}))
+
+describe('Settings', () => {
+  afterEach(() => {
+    cleanup()
+    vi.unstubAllGlobals()
+  })
+
+  it('renders force init as the shared Switch control', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({ data: {} })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    const forceSwitch = await screen.findByRole('switch', { name: 'Force non-interactive init' })
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+
+    expect(forceSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(forceSwitch.className).toContain('w-11')
+  })
+})

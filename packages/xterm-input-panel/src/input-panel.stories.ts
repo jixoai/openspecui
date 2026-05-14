@@ -13,6 +13,24 @@ async function getLitElement(container: HTMLElement, selector: string) {
   return el
 }
 
+function pointer(target: Element, type: string, x: number, y: number, id = 1) {
+  target.dispatchEvent(
+    new PointerEvent(type, {
+      clientX: x,
+      clientY: y,
+      pointerId: id,
+      pointerType: 'mouse',
+      bubbles: true,
+      cancelable: true,
+    })
+  )
+}
+
+function expectFloatingDialogVisible(dialog: HTMLDialogElement) {
+  expect(dialog.open || dialog.matches(':popover-open')).toBe(true)
+  expect(dialog.matches(':modal')).toBe(false)
+}
+
 const meta: Meta = {
   title: 'InputPanel',
   tags: ['autodocs'],
@@ -58,8 +76,20 @@ export const FloatingLayout: StoryObj = {
   `,
   play: async ({ canvasElement }) => {
     const panel = await getLitElement(canvasElement, 'input-panel')
-    const dialog = panel.shadowRoot?.querySelector('.panel-dialog') as HTMLElement
+    const dialog = panel.shadowRoot?.querySelector('.panel-dialog') as HTMLDialogElement
     expect(dialog).toBeTruthy()
+    expectFloatingDialogVisible(dialog)
+    const moveBar = panel.shadowRoot?.querySelector('.move-bar') as HTMLElement
+    expect(moveBar).toBeTruthy()
+
+    const dialogStyles = getComputedStyle(dialog)
+    expect(dialogStyles.backgroundColor).not.toBe('rgba(0, 0, 0, 0)')
+    expect(dialogStyles.borderTopWidth).toBe('1px')
+    expect(dialogStyles.borderRadius).toBe('8px')
+
+    const moveBarRect = moveBar.getBoundingClientRect()
+    const dialogRect = dialog.getBoundingClientRect()
+    expect(moveBarRect.top).toBeLessThan(dialogRect.top)
 
     const styles = getComputedStyle(dialog) as CSSStyleDeclaration & {
       webkitBackdropFilter?: string
@@ -214,6 +244,7 @@ export const FloatingResize: StoryObj = {
     const shadow = panel.shadowRoot!
     const dialog = shadow.querySelector('.panel-dialog') as HTMLDialogElement
     expect(dialog).toBeTruthy()
+    expectFloatingDialogVisible(dialog)
 
     const handles = shadow.querySelectorAll('.resize-handle')
     expect(handles.length).toBe(4)
@@ -223,6 +254,61 @@ export const FloatingResize: StoryObj = {
     expect(shadow.querySelector('.resize-tr')).toBeTruthy()
     expect(shadow.querySelector('.resize-bl')).toBeTruthy()
     expect(shadow.querySelector('.resize-br')).toBeTruthy()
+  },
+}
+
+/**
+ * Floating panel moves through the protruding move bar and toolbar blank space.
+ */
+export const FloatingDragHandles: StoryObj = {
+  render: () => html`
+    <input-panel layout="floating" style="height: 100%;">
+      <input-method-tab slot="input"></input-method-tab>
+      <virtual-keyboard-tab slot="keys" floating></virtual-keyboard-tab>
+      <shortcut-tab slot="shortcuts"></shortcut-tab>
+      <virtual-trackpad-tab slot="trackpad" floating></virtual-trackpad-tab>
+    </input-panel>
+  `,
+  play: async ({ canvasElement }) => {
+    const panel = await getLitElement(canvasElement, 'input-panel')
+    const shadow = panel.shadowRoot!
+    const dialog = shadow.querySelector('.panel-dialog') as HTMLDialogElement
+    const moveBar = shadow.querySelector('.move-bar') as HTMLElement
+    const toolbar = shadow.querySelector('.toolbar') as HTMLElement
+    const layoutBtn = shadow.querySelector('.action-group .icon-btn') as HTMLButtonElement
+    expectFloatingDialogVisible(dialog)
+    expect(moveBar).toBeTruthy()
+    expect(toolbar).toBeTruthy()
+
+    const before = dialog.getBoundingClientRect()
+    const handleRect = moveBar.getBoundingClientRect()
+    const startX = handleRect.left + handleRect.width / 2
+    const startY = handleRect.top + handleRect.height / 2
+
+    pointer(moveBar, 'pointerdown', startX, startY)
+    pointer(moveBar, 'pointermove', startX + 40, startY + 22)
+    pointer(moveBar, 'pointerup', startX + 40, startY + 22)
+
+    const after = dialog.getBoundingClientRect()
+    expect(after.left).toBeGreaterThan(before.left + 20)
+    expect(after.top).toBeGreaterThan(before.top + 10)
+
+    const toolbarRect = toolbar.getBoundingClientRect()
+    const toolbarStartX = toolbarRect.left + toolbarRect.width / 2
+    const toolbarStartY = toolbarRect.top + toolbarRect.height / 2
+
+    pointer(toolbar, 'pointerdown', toolbarStartX, toolbarStartY, 2)
+    pointer(toolbar, 'pointermove', toolbarStartX - 35, toolbarStartY + 16, 2)
+    pointer(toolbar, 'pointerup', toolbarStartX - 35, toolbarStartY + 16, 2)
+
+    const toolbarAfter = dialog.getBoundingClientRect()
+    expect(toolbarAfter.left).toBeLessThan(after.left - 15)
+    expect(toolbarAfter.top).toBeGreaterThan(after.top + 8)
+
+    layoutBtn.click()
+    await panel.updateComplete
+
+    expect(panel.getAttribute('layout')).toBe('fixed')
   },
 }
 

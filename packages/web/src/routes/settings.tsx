@@ -1952,21 +1952,11 @@ export function Settings() {
                         <span className="break-word text-xs font-medium leading-4">
                           Force non-interactive init
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => setInitForce((prev) => !prev)}
-                          className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-                            initForce ? 'bg-primary' : 'bg-muted-foreground/30'
-                          }`}
-                          aria-pressed={initForce}
-                          aria-label="Toggle force init"
-                        >
-                          <span
-                            className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-                              initForce ? 'translate-x-4' : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
+                        <Switch
+                          checked={initForce}
+                          onCheckedChange={setInitForce}
+                          ariaLabel="Force non-interactive init"
+                        />
                       </span>
                       <span className="text-muted-foreground text-[11px] leading-4">
                         Enabled by default so{' '}
