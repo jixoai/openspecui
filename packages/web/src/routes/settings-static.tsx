@@ -1,6 +1,37 @@
+import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
 import { applyTheme, getStoredTheme, persistTheme, type Theme } from '@/lib/theme'
 import { Monitor, Moon, Settings as SettingsIcon, Sun } from 'lucide-react'
 import { useEffect, useState } from 'react'
+
+const THEME_OPTIONS = [
+  {
+    value: 'light',
+    label: (
+      <>
+        <Sun className="h-3.5 w-3.5" />
+        Light
+      </>
+    ),
+  },
+  {
+    value: 'dark',
+    label: (
+      <>
+        <Moon className="h-3.5 w-3.5" />
+        Dark
+      </>
+    ),
+  },
+  {
+    value: 'system',
+    label: (
+      <>
+        <Monitor className="h-3.5 w-3.5" />
+        System
+      </>
+    ),
+  },
+] satisfies ButtonGroupOption<Theme>[]
 
 export function SettingsStatic() {
   const [theme, setTheme] = useState<Theme>(getStoredTheme)
@@ -30,41 +61,7 @@ export function SettingsStatic() {
         <h2 className="text-lg font-semibold">Appearance</h2>
         <div className="border-border rounded-lg border p-4">
           <label className="mb-3 block text-sm font-medium">Theme</label>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setTheme('light')}
-              className={`flex items-center gap-2 rounded-md border px-4 py-2 transition-colors ${
-                theme === 'light'
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border hover:bg-muted'
-              }`}
-            >
-              <Sun className="h-4 w-4" />
-              Light
-            </button>
-            <button
-              onClick={() => setTheme('dark')}
-              className={`flex items-center gap-2 rounded-md border px-4 py-2 transition-colors ${
-                theme === 'dark'
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border hover:bg-muted'
-              }`}
-            >
-              <Moon className="h-4 w-4" />
-              Dark
-            </button>
-            <button
-              onClick={() => setTheme('system')}
-              className={`flex items-center gap-2 rounded-md border px-4 py-2 transition-colors ${
-                theme === 'system'
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border hover:bg-muted'
-              }`}
-            >
-              <Monitor className="h-4 w-4" />
-              System
-            </button>
-          </div>
+          <ButtonGroup<Theme> value={theme} onChange={setTheme} options={THEME_OPTIONS} />
         </div>
       </section>
     </div>

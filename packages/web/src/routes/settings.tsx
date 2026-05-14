@@ -1,4 +1,4 @@
-import { ButtonGroup } from '@/components/button-group'
+import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
 import { CliTerminal } from '@/components/cli-terminal'
 import { CopyablePath } from '@/components/copyable-path'
 import { Dialog } from '@/components/dialog'
@@ -93,6 +93,44 @@ const INIT_PROFILE_OVERRIDE_OPTIONS: SelectOption<InitProfileOverride>[] = [
   { value: 'core', label: 'core' },
   { value: 'custom', label: 'custom' },
 ]
+
+const THEME_OPTIONS = [
+  {
+    value: 'light',
+    label: (
+      <>
+        <Sun className="h-3.5 w-3.5" />
+        Light
+      </>
+    ),
+  },
+  {
+    value: 'dark',
+    label: (
+      <>
+        <Moon className="h-3.5 w-3.5" />
+        Dark
+      </>
+    ),
+  },
+  {
+    value: 'system',
+    label: (
+      <>
+        <Monitor className="h-3.5 w-3.5" />
+        System
+      </>
+    ),
+  },
+] satisfies ButtonGroupOption<Theme>[]
+
+type TerminalCursorStyle = 'block' | 'underline' | 'bar'
+
+const TERMINAL_CURSOR_STYLE_OPTIONS = [
+  { value: 'block', label: 'Block' },
+  { value: 'underline', label: 'Underline' },
+  { value: 'bar', label: 'Bar' },
+] satisfies ButtonGroupOption<TerminalCursorStyle>[]
 
 function FontFamilyEditor({
   value,
@@ -572,7 +610,7 @@ export function Settings() {
   const [termFontSize, setTermFontSize] = useState(initialConfig.fontSize)
   const [termFontFamily, setTermFontFamily] = useState(initialConfig.fontFamily)
   const [termCursorBlink, setTermCursorBlink] = useState(initialConfig.cursorBlink)
-  const [termCursorStyle, setTermCursorStyle] = useState<'block' | 'underline' | 'bar'>(
+  const [termCursorStyle, setTermCursorStyle] = useState<TerminalCursorStyle>(
     initialConfig.cursorStyle
   )
   const [termScrollback, setTermScrollback] = useState(initialConfig.scrollback)
@@ -649,7 +687,7 @@ export function Settings() {
       fontSize?: number
       fontFamily?: string
       cursorBlink?: boolean
-      cursorStyle?: 'block' | 'underline' | 'bar'
+      cursorStyle?: TerminalCursorStyle
       scrollback?: number
       useTheme?: TerminalThemeMode
       lightTheme?: TerminalThemeId
@@ -694,7 +732,7 @@ export function Settings() {
       fontSize?: number
       fontFamily?: string
       cursorBlink?: boolean
-      cursorStyle?: 'block' | 'underline' | 'bar'
+      cursorStyle?: TerminalCursorStyle
       scrollback?: number
       useTheme?: TerminalThemeMode
       lightTheme?: TerminalThemeId
@@ -788,50 +826,14 @@ export function Settings() {
         <h2 className="text-lg font-semibold">Appearance</h2>
         <div className="border-border rounded-lg border p-4">
           <label className="mb-3 block text-sm font-medium">Theme</label>
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                setTheme('light')
-                saveThemeMutation.mutate('light')
-              }}
-              className={`flex items-center gap-2 rounded-md border px-4 py-2 transition-colors ${
-                theme === 'light'
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border hover:bg-muted'
-              }`}
-            >
-              <Sun className="h-4 w-4" />
-              Light
-            </button>
-            <button
-              onClick={() => {
-                setTheme('dark')
-                saveThemeMutation.mutate('dark')
-              }}
-              className={`flex items-center gap-2 rounded-md border px-4 py-2 transition-colors ${
-                theme === 'dark'
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border hover:bg-muted'
-              }`}
-            >
-              <Moon className="h-4 w-4" />
-              Dark
-            </button>
-            <button
-              onClick={() => {
-                setTheme('system')
-                saveThemeMutation.mutate('system')
-              }}
-              className={`flex items-center gap-2 rounded-md border px-4 py-2 transition-colors ${
-                theme === 'system'
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border hover:bg-muted'
-              }`}
-            >
-              <Monitor className="h-4 w-4" />
-              System
-            </button>
-          </div>
+          <ButtonGroup<Theme>
+            value={theme}
+            onChange={(nextTheme) => {
+              setTheme(nextTheme)
+              saveThemeMutation.mutate(nextTheme)
+            }}
+            options={THEME_OPTIONS}
+          />
           <div className="border-border/60 mt-4 border-t pt-4">
             <label className="mb-2 block text-sm font-medium">Code Editor Theme</label>
             <div className="flex items-center gap-2">
@@ -912,7 +914,6 @@ export function Settings() {
                               ? 'Light'
                               : 'Dark',
                     }))}
-                    tone="terminal"
                   />
                 </div>
                 <p className="text-muted-foreground mt-2 text-xs">
@@ -1017,24 +1018,14 @@ export function Settings() {
               {/* Cursor Style */}
               <div>
                 <label className="mb-2 block text-sm font-medium">Cursor Style</label>
-                <div className="flex gap-2">
-                  {(['block', 'underline', 'bar'] as const).map((style) => (
-                    <button
-                      key={style}
-                      onClick={() => {
-                        setTermCursorStyle(style)
-                        applyTerminalConfig({ cursorStyle: style })
-                      }}
-                      className={`rounded-md border px-4 py-2 text-sm capitalize transition-colors ${
-                        termCursorStyle === style
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-border hover:bg-muted'
-                      }`}
-                    >
-                      {style}
-                    </button>
-                  ))}
-                </div>
+                <ButtonGroup<TerminalCursorStyle>
+                  value={termCursorStyle}
+                  onChange={(style) => {
+                    setTermCursorStyle(style)
+                    applyTerminalConfig({ cursorStyle: style })
+                  }}
+                  options={TERMINAL_CURSOR_STYLE_OPTIONS}
+                />
               </div>
 
               {/* Cursor Blink */}
