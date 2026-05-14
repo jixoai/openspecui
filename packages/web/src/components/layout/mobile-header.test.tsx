@@ -60,10 +60,23 @@ describe('MobileHeader', () => {
   afterEach(() => cleanup())
 
   it('places notifications next to search and renders live status as icon-only', () => {
-    render(<MobileHeader />)
+    const { container } = render(<MobileHeader />)
 
-    expect(screen.getByRole('button', { name: 'Open search' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Open notifications, 2 unread' })).toBeTruthy()
+    const searchButton = screen.getByRole('button', { name: 'Open search' })
+    const notificationButton = screen.getByRole('button', {
+      name: 'Open notifications, 2 unread',
+    })
+    const headerActions = container.querySelector('.mobile-header > div:last-child')
+
+    expect(searchButton).toBeTruthy()
+    expect(notificationButton).toBeTruthy()
+    expect(headerActions?.children[0]).toBe(searchButton)
+    expect(headerActions?.children[1]).toBe(notificationButton)
+    expect(searchButton.className).toContain('border-primary')
+    expect(notificationButton.className).toContain('border-primary')
+    expect(searchButton.className).toContain('h-7.5')
+    expect(notificationButton.className).toContain('h-7.5')
+    expect(notificationButton.className).toContain('w-7.5')
     expect(screen.queryByText('Live')).toBeNull()
   })
 })
