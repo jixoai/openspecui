@@ -24,6 +24,7 @@ const MIN_WIDTH_PX = 300
 const MIN_HEIGHT_PX = 150
 const MAX_WIDTH_PCT = 95
 const MAX_HEIGHT_PCT = 85
+const MOVE_BAR_PROTRUSION_PX = 10
 
 const SETTINGS_KEY = 'xtermInputPanelSettings'
 
@@ -92,6 +93,8 @@ export class InputPanel extends LitElement {
       --muted-foreground: var(--_ip-muted-fg);
       --terminal: var(--_ip-bg);
       --terminal-foreground: var(--_ip-fg);
+      --move-bar-height: 10px;
+      --move-bar-protrusion: 10px;
       font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
       font-size: 13px;
       color: var(--foreground, #fff);
@@ -214,7 +217,7 @@ export class InputPanel extends LitElement {
       border-radius: 8px;
       background: var(--background, #1a1a1a);
       color: var(--foreground, #fff);
-      overflow: hidden;
+      overflow: visible;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
       display: flex;
       flex-direction: column;
@@ -224,6 +227,54 @@ export class InputPanel extends LitElement {
 
     .panel-dialog {
       z-index: 9999;
+    }
+
+    .panel-body {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-radius: inherit;
+    }
+
+    .move-bar {
+      position: absolute;
+      top: calc(-1 * var(--move-bar-protrusion));
+      left: 50%;
+      width: 68px;
+      height: var(--move-bar-height);
+      transform: translateX(-50%);
+      border: 1px solid var(--primary, #e04a2f);
+      border-bottom: 0;
+      border-radius: 10px 10px 0 0;
+      background: var(--background, #1a1a1a);
+      color: var(--muted-foreground, #888);
+      touch-action: none;
+      cursor: grab;
+      z-index: 12;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 -6px 12px rgba(0, 0, 0, 0.12);
+    }
+
+    .move-bar::before {
+      content: '';
+      width: 34px;
+      height: 4px;
+      border-radius: 999px;
+      background: currentColor;
+      opacity: 0.72;
+    }
+
+    .move-bar:hover,
+    :host([data-interacting]) .move-bar {
+      color: var(--primary, #e04a2f);
+    }
+
+    :host([data-interacting]) .move-bar {
+      cursor: grabbing;
     }
 
     /* --- Resize handles --- */
@@ -345,6 +396,7 @@ export class InputPanel extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback()
+    this._closeFloatingDialog()
     this.dispatchEvent(
       new CustomEvent('input-panel:disconnected', { bubbles: true, composed: true })
     )
@@ -416,8 +468,8 @@ export class InputPanel extends LitElement {
       maxOverY = hPx / 3
     return {
       left: Math.max(-maxOverX, Math.min(vw - wPx + maxOverX, leftPx)),
-      // Top edge: never go above 0 — toolbar must stay accessible for dragging
-      top: Math.max(0, Math.min(vh - hPx + maxOverY, topPx)),
+      // Keep the protruding move handle reachable even when the panel is near the top edge.
+      top: Math.max(MOVE_BAR_PROTRUSION_PX, Math.min(vh - hPx + maxOverY, topPx)),
     }
   }
 
@@ -453,6 +505,55 @@ export class InputPanel extends LitElement {
     if (dialog) this._applyGeometry(dialog)
   }
 
+  private _isPopoverOpen(dialog: HTMLDialogElement) {
+    try {
+      return dialog.matches(':popover-open')
+    } catch {
+      return false
+    }
+  }
+
+  private _isFloatingDialogOpen(dialog: HTMLDialogElement) {
+    return dialog.open || this._isPopoverOpen(dialog)
+  }
+
+  private _showFloatingDialog(dialog: HTMLDialogElement) {
+    if (this._isFloatingDialogOpen(dialog)) return
+    if (!dialog.isConnected) {
+      requestAnimationFrame(() => {
+        if (
+          this.layout === 'floating' &&
+          dialog.isConnected &&
+          !this._isFloatingDialogOpen(dialog)
+        ) {
+          this._showFloatingDialog(dialog)
+          this._applyGeometry(dialog)
+        }
+      })
+      return
+    }
+    const popoverDialog = dialog as HTMLDialogElement & {
+      showPopover?: () => void
+    }
+    if (typeof popoverDialog.showPopover === 'function') {
+      popoverDialog.showPopover()
+      return
+    }
+    dialog.show()
+  }
+
+  private _closeFloatingDialog() {
+    const dialog = this.shadowRoot?.querySelector('.panel-dialog') as
+      | (HTMLDialogElement & { hidePopover?: () => void })
+      | null
+    if (!dialog) return
+    if (this._isPopoverOpen(dialog) && typeof dialog.hidePopover === 'function') {
+      dialog.hidePopover()
+      return
+    }
+    if (dialog.open) dialog.close()
+  }
+
   // --- Tab / layout ---
 
   private _switchTab(tab: InputPanelTab) {
@@ -469,6 +570,9 @@ export class InputPanel extends LitElement {
 
   private _toggleLayout() {
     this.layout = this.layout === 'fixed' ? 'floating' : 'fixed'
+    if (this.layout === 'fixed') {
+      this._closeFloatingDialog()
+    }
     this.dispatchEvent(
       new CustomEvent('input-panel:layout-change', {
         detail: { layout: this.layout },
@@ -480,8 +584,7 @@ export class InputPanel extends LitElement {
   }
 
   private _close() {
-    const dialog = this.shadowRoot?.querySelector('.panel-dialog') as HTMLDialogElement | null
-    if (dialog?.open) dialog.close()
+    this._closeFloatingDialog()
     this.dispatchEvent(
       new CustomEvent('input-panel:close', {
         bubbles: true,
@@ -494,8 +597,8 @@ export class InputPanel extends LitElement {
     super.firstUpdated(changed)
     if (this.layout === 'floating') {
       const dialog = this.shadowRoot?.querySelector('.panel-dialog') as HTMLDialogElement | null
-      if (dialog && !dialog.open) {
-        dialog.show()
+      if (dialog && !this._isFloatingDialogOpen(dialog)) {
+        this._showFloatingDialog(dialog)
         this._applyGeometry(dialog)
       }
     }
@@ -510,10 +613,10 @@ export class InputPanel extends LitElement {
       const dialog = this.shadowRoot?.querySelector('.panel-dialog') as HTMLDialogElement | null
       if (dialog) {
         // Only re-open dialog when layout just switched to floating
-        if (changed.has('layout') && !dialog.open) {
-          dialog.show()
+        if (changed.has('layout') && !this._isFloatingDialogOpen(dialog)) {
+          this._showFloatingDialog(dialog)
         }
-        if (dialog.open) {
+        if (this._isFloatingDialogOpen(dialog)) {
           this._applyGeometry(dialog)
         }
       }
@@ -523,9 +626,12 @@ export class InputPanel extends LitElement {
   // --- Dialog drag ---
 
   private _onToolbarPointerDown(e: PointerEvent) {
-    if (this.layout !== 'floating') return
-    // Don't intercept clicks on buttons (close, tabs, layout toggle)
     if ((e.target as HTMLElement).closest('button')) return
+    this._onDragPointerDown(e)
+  }
+
+  private _onDragPointerDown(e: PointerEvent) {
+    if (this.layout !== 'floating') return
     const dialog = this.shadowRoot?.querySelector('.panel-dialog') as HTMLDialogElement | null
     if (!dialog) return
 
@@ -540,10 +646,15 @@ export class InputPanel extends LitElement {
       origTop: rect.top,
     }
     this.setAttribute('data-interacting', '')
-    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    const handle = e.currentTarget as HTMLElement
+    try {
+      handle.setPointerCapture(e.pointerId)
+    } catch {
+      // Synthetic PointerEvents used by browser tests do not always create an active pointer.
+    }
   }
 
-  private _onToolbarPointerMove(e: PointerEvent) {
+  private _onDragPointerMove(e: PointerEvent) {
     if (!this._dragState) return
     e.stopPropagation()
     e.preventDefault()
@@ -567,8 +678,10 @@ export class InputPanel extends LitElement {
     dialog.style.bottom = 'auto'
   }
 
-  private _onToolbarPointerUp() {
+  private _onDragPointerUp(e: PointerEvent) {
     if (!this._dragState) return
+    e.stopPropagation()
+    e.preventDefault()
     this._dragState = null
     this.removeAttribute('data-interacting')
 
@@ -737,8 +850,9 @@ export class InputPanel extends LitElement {
         class="toolbar"
         part="toolbar"
         @pointerdown=${(e: PointerEvent) => this._onToolbarPointerDown(e)}
-        @pointermove=${(e: PointerEvent) => this._onToolbarPointerMove(e)}
-        @pointerup=${() => this._onToolbarPointerUp()}
+        @pointermove=${(e: PointerEvent) => this._onDragPointerMove(e)}
+        @pointerup=${(e: PointerEvent) => this._onDragPointerUp(e)}
+        @pointercancel=${(e: PointerEvent) => this._onDragPointerUp(e)}
       >
         <div class="tab-group">
           ${tabs.map(
@@ -778,7 +892,16 @@ export class InputPanel extends LitElement {
     `
 
     if (this.layout === 'floating') {
-      return html` <dialog class="panel-dialog">
+      return html` <dialog class="panel-dialog" popover="manual">
+        <div
+          class="move-bar"
+          part="move-bar"
+          aria-label="Move input panel"
+          @pointerdown=${(e: PointerEvent) => this._onDragPointerDown(e)}
+          @pointermove=${(e: PointerEvent) => this._onDragPointerMove(e)}
+          @pointerup=${(e: PointerEvent) => this._onDragPointerUp(e)}
+          @pointercancel=${(e: PointerEvent) => this._onDragPointerUp(e)}
+        ></div>
         <div
           class="resize-handle resize-tl"
           @pointerdown=${(e: PointerEvent) => this._onResizeStart(e, 'tl')}
@@ -795,7 +918,7 @@ export class InputPanel extends LitElement {
           class="resize-handle resize-br"
           @pointerdown=${(e: PointerEvent) => this._onResizeStart(e, 'br')}
         ></div>
-        ${inner}
+        <div class="panel-body">${inner}</div>
       </dialog>`
     }
 

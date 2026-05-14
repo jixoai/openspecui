@@ -52,6 +52,11 @@ function setupTerminal(container: HTMLElement, opts?: { stateKey?: string }) {
   return { terminal, addon, inputHandler }
 }
 
+function expectFloatingDialogVisible(dialog: HTMLDialogElement) {
+  expect(dialog.open || dialog.matches(':popover-open')).toBe(true)
+  expect(dialog.matches(':modal')).toBe(false)
+}
+
 const meta: Meta = {
   title: 'InputPanelAddon',
   tags: ['autodocs'],
@@ -94,13 +99,13 @@ export const OpenCreatesPanel: StoryObj = {
     expect(panel!.getAttribute('layout')).toBe('floating')
     expect(panel!.parentElement).toBe(container)
 
-    // Wait for Lit to render + firstUpdated to call dialog.show()
+    // Wait for Lit to render + firstUpdated to open the floating dialog without modal inert behavior.
     await (panel as any).updateComplete
 
-    // The dialog inside shadow DOM should be open
+    // The dialog inside shadow DOM should be visible.
     const dialog = (panel as any).shadowRoot?.querySelector('.panel-dialog') as HTMLDialogElement
     expect(dialog).not.toBeNull()
-    expect(dialog.open).toBe(true)
+    expectFloatingDialogVisible(dialog)
 
     // Cleanup
     addon.close()
@@ -178,11 +183,11 @@ export const ToggleCycle: StoryObj = {
     const panel = container.querySelector('input-panel')
     expect(panel).not.toBeNull()
 
-    // Wait for Lit render and verify dialog is open
+    // Wait for Lit render and verify dialog is visible.
     await (panel as any).updateComplete
     const dialog = (panel as any).shadowRoot?.querySelector('.panel-dialog') as HTMLDialogElement
     expect(dialog).not.toBeNull()
-    expect(dialog.open).toBe(true)
+    expectFloatingDialogVisible(dialog)
 
     addon.close()
   },
@@ -303,10 +308,10 @@ export const CustomElementRegistered: StoryObj = {
     const dialog = shadow.querySelector('.panel-dialog') as HTMLDialogElement
     expect(dialog).not.toBeNull()
 
-    // firstUpdated should have called dialog.show()
-    expect(dialog.open).toBe(true)
+    // firstUpdated should have opened the floating dialog without modal inert behavior.
+    expectFloatingDialogVisible(dialog)
 
-    // Floating mode intentionally has no backdrop.
+    // Floating mode intentionally renders no custom backdrop element.
     const backdrop = shadow.querySelector('.backdrop')
     expect(backdrop).toBeNull()
 
@@ -341,7 +346,7 @@ export const FabClickSimulation: StoryObj = {
 
     const dialog = panel.shadowRoot?.querySelector('.panel-dialog') as HTMLDialogElement
     expect(dialog).not.toBeNull()
-    expect(dialog.open).toBe(true)
+    expectFloatingDialogVisible(dialog)
 
     // Verify dialog has reasonable dimensions (not 0x0)
     const rect = dialog.getBoundingClientRect()
