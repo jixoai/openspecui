@@ -62,6 +62,17 @@ describe('Select', () => {
     expect(trigger.className).toContain('h-9')
   })
 
+  it('hides the positioner when its anchor is hidden during close transitions', async () => {
+    const { container } = render(<SelectHarness />)
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Auto refresh' }))
+    await screen.findByRole('option', { name: '5min' })
+
+    const positioner = container.ownerDocument.body.querySelector('[role="presentation"]')
+
+    expect(positioner?.className).toContain('data-[anchor-hidden]:opacity-0')
+  })
+
   it('renders grouped options with accessible group labels', async () => {
     render(<Select value="shell:zsh" groups={GROUPS} onValueChange={() => {}} ariaLabel="Target" />)
 

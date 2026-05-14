@@ -7,22 +7,19 @@ import {
   type SoundId,
 } from '@openspecui/core/sounds'
 import { getApiBaseUrl } from './api-config'
+import {
+  createAudioContextAfterUserGesture,
+  prepareAudioContextAfterUserGesture,
+} from './user-gesture-audio-context'
 
-type AudioContextConstructor = typeof AudioContext
 export type AudioCueFallback = 'bell' | 'notification'
 export type AudioCueSound = SoundId
 export type AudioCueVolume = number
-
-function getAudioContextConstructor(): AudioContextConstructor | null {
-  if (typeof window === 'undefined') return null
-  return window.AudioContext ?? window.webkitAudioContext ?? null
-}
 
 export class AudioCueEngine {
   private readonly fallbackSound: SoundId
   private unlocked = false
   private unlockPromise: Promise<void> | null = null
-  private audioContext: AudioContext | null = null
   private silentAudio: HTMLAudioElement | null = null
   private readonly activeAudios = new Set<HTMLAudioElement>()
 
@@ -31,14 +28,7 @@ export class AudioCueEngine {
   }
 
   init(): void {
-    if (typeof window === 'undefined') return
-    const unlock = () => {
-      void this.unlock()
-      window.removeEventListener('pointerdown', unlock)
-      window.removeEventListener('keydown', unlock)
-    }
-    window.addEventListener('pointerdown', unlock, { once: true, passive: true })
-    window.addEventListener('keydown', unlock, { once: true })
+    prepareAudioContextAfterUserGesture()
   }
 
   async unlock(): Promise<void> {
@@ -59,14 +49,11 @@ export class AudioCueEngine {
   }
 
   private async unlockAudioContext(): Promise<void> {
-    const AudioContextCtor = getAudioContextConstructor()
-    if (!AudioContextCtor) {
+    const context = await createAudioContextAfterUserGesture()
+    if (!context) {
       this.unlocked = true
       return
     }
-
-    const context = this.audioContext ?? new AudioContextCtor()
-    this.audioContext = context
 
     this.silentAudio ??= new Audio(
       'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA='
@@ -74,9 +61,6 @@ export class AudioCueEngine {
     this.silentAudio.volume = 0
     await this.silentAudio.play().catch(() => {})
 
-    if (context.state === 'suspended') {
-      await context.resume()
-    }
     this.unlocked = true
   }
 

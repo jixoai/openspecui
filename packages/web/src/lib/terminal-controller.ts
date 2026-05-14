@@ -890,6 +890,7 @@ class TerminalController {
       }
       this.flushPendingOutput(instance)
       this.applyGhosttyBackground(instance, container)
+      instance.inputPanelAddon.attachListeners()
     }
 
     instance.mountedContainer = container

@@ -39,12 +39,14 @@ export function MobileHeader() {
           <button
             type="button"
             onClick={() => vtNavController.activatePop('/search')}
-            className="hover:bg-muted border-primary rounded-md border p-1.5"
+            className="hover:bg-muted border-primary h-7.5 w-7.5 inline-flex items-center justify-center rounded-md border"
             aria-label="Open search"
           >
             <Search className="h-4 w-4" />
           </button>
-          {!isStatic && <NotificationEntryButton className="h-8 w-8" />}
+          {!isStatic && (
+            <NotificationEntryButton className="border-primary hover:bg-muted h-7.5 w-7.5" />
+          )}
           <StatusIndicator compact />
         </div>
       </header>

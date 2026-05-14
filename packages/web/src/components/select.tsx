@@ -139,7 +139,10 @@ export function Select<T extends string>({
       <BaseSelect.Portal container={portalContainer ?? undefined}>
         <BaseSelect.Positioner
           sideOffset={sideOffset}
-          className={cn('z-50 select-none outline-none', positionerClassName)}
+          className={cn(
+            'z-50 select-none outline-none data-[anchor-hidden]:opacity-0',
+            positionerClassName
+          )}
         >
           <BaseSelect.Popup
             className={cn(
