@@ -1,3 +1,4 @@
+import { Button } from '@/components/button'
 import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
 import { CliTerminal } from '@/components/cli-terminal'
 import { CopyablePath } from '@/components/copyable-path'
@@ -104,6 +105,16 @@ const INIT_PROFILE_OVERRIDE_OPTIONS: SelectOption<InitProfileOverride>[] = [
   { value: 'core', label: 'core' },
   { value: 'custom', label: 'custom' },
 ]
+
+const DEFAULT_TERMINAL_FONT_SIZE = 13
+const DEFAULT_TERMINAL_FONT_FAMILY = ''
+const DEFAULT_TERMINAL_CURSOR_BLINK = true
+const DEFAULT_TERMINAL_CURSOR_STYLE: TerminalCursorStyle = 'block'
+const DEFAULT_TERMINAL_SCROLLBACK = 1000
+const DEFAULT_TERMINAL_RENDERER_ENGINE: TerminalRendererEngine = 'xterm'
+const DEFAULT_TERMINAL_BELL_VOLUME = 1
+const DEFAULT_DASHBOARD_TREND_POINT_LIMIT = 100
+const DEFAULT_GIT_DIFF_EAGER_LINE_BUDGET = 1000
 
 const THEME_OPTIONS = [
   {
@@ -830,9 +841,47 @@ export function Settings() {
     }
   }, [config?.git?.diffEagerLineBudget])
 
-  const savedDashboardTrendPointLimit = config?.dashboard?.trendPointLimit ?? 100
-  const savedGitDiffEagerLineBudget = config?.git?.diffEagerLineBudget ?? 1000
+  const savedDashboardTrendPointLimit =
+    config?.dashboard?.trendPointLimit ?? DEFAULT_DASHBOARD_TREND_POINT_LIMIT
+  const savedGitDiffEagerLineBudget =
+    config?.git?.diffEagerLineBudget ?? DEFAULT_GIT_DIFF_EAGER_LINE_BUDGET
   const savedAppBaseUrl = config?.appBaseUrl ?? ''
+  const savedTerminalFontFamily = config?.terminal?.fontFamily ?? DEFAULT_TERMINAL_FONT_FAMILY
+  const savedTerminalConfig = {
+    fontSize: config?.terminal?.fontSize ?? DEFAULT_TERMINAL_FONT_SIZE,
+    fontFamily: savedTerminalFontFamily,
+    cursorBlink: config?.terminal?.cursorBlink ?? DEFAULT_TERMINAL_CURSOR_BLINK,
+    cursorStyle: config?.terminal?.cursorStyle ?? DEFAULT_TERMINAL_CURSOR_STYLE,
+    scrollback: config?.terminal?.scrollback ?? DEFAULT_TERMINAL_SCROLLBACK,
+    useTheme: config?.terminal?.useTheme ?? 'app',
+    lightTheme: config?.terminal?.lightTheme ?? 'default-light',
+    darkTheme: config?.terminal?.darkTheme ?? 'default-dark',
+    rendererEngine: config?.terminal?.rendererEngine ?? DEFAULT_TERMINAL_RENDERER_ENGINE,
+    bellSound: config?.terminal?.bellSound ?? DEFAULT_BELL_SOUND_ID,
+    bellVolume: config?.terminal?.bellVolume ?? DEFAULT_TERMINAL_BELL_VOLUME,
+  }
+  const normalizedTermFontFamily = termFontFamily
+    .split(/[,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(', ')
+  const terminalConfigSaved =
+    termFontSize === savedTerminalConfig.fontSize &&
+    normalizedTermFontFamily === savedTerminalConfig.fontFamily &&
+    termCursorBlink === savedTerminalConfig.cursorBlink &&
+    termCursorStyle === savedTerminalConfig.cursorStyle &&
+    termScrollback === savedTerminalConfig.scrollback &&
+    termUseTheme === savedTerminalConfig.useTheme &&
+    termLightTheme === savedTerminalConfig.lightTheme &&
+    termDarkTheme === savedTerminalConfig.darkTheme &&
+    termRendererEngine === savedTerminalConfig.rendererEngine &&
+    termBellSound === savedTerminalConfig.bellSound &&
+    termBellVolume === savedTerminalConfig.bellVolume
+  const dashboardTrendPointLimitSaved = dashboardTrendPointLimit === savedDashboardTrendPointLimit
+  const gitDiffEagerLineBudgetSaved = gitDiffEagerLineBudget === savedGitDiffEagerLineBudget
+  const cliCommandSaved = cliCommand.trim() === savedCliCommand
+  const apiUrlApplied = apiUrl === (getApiBaseUrl() || '')
+  const appBaseUrlSaved = appBaseUrl.trim() === savedAppBaseUrl
   const savedOpsxAgentInvocationMode = config?.opsx?.agentInvocationMode ?? 'compose'
   const notificationSound = NotificationSoundSchema.parse(
     config?.notifications?.sound ?? DEFAULT_NOTIFICATION_SOUND_ID
@@ -1180,15 +1229,11 @@ export function Settings() {
 
                   {/* Save Button */}
                   <div className="flex justify-end">
-                    <button
+                    <Button
                       onClick={() => {
-                        const families = termFontFamily
-                          .split(/[,]+/)
-                          .map((s) => s.trim())
-                          .filter(Boolean)
                         saveTerminalConfigMutation.mutate({
                           fontSize: termFontSize,
-                          fontFamily: families.join(', '),
+                          fontFamily: normalizedTermFontFamily,
                           cursorBlink: termCursorBlink,
                           cursorStyle: termCursorStyle,
                           scrollback: termScrollback,
@@ -1201,15 +1246,19 @@ export function Settings() {
                         })
                       }}
                       disabled={saveTerminalConfigMutation.isPending || !isRendererEngineValid}
-                      className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition disabled:opacity-50"
+                      activity={terminalConfigSaved && isRendererEngineValid}
                     >
                       {saveTerminalConfigMutation.isPending ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : saveTerminalConfigMutation.isSuccess ? (
+                      ) : terminalConfigSaved ? (
                         <Check className="h-4 w-4" />
                       ) : null}
-                      {saveTerminalConfigMutation.isPending ? 'Saving...' : 'Save'}
-                    </button>
+                      {saveTerminalConfigMutation.isPending
+                        ? 'Saving...'
+                        : terminalConfigSaved
+                          ? 'Saved'
+                          : 'Save'}
+                    </Button>
                   </div>
                 </div>
               </TocSection>
@@ -1258,7 +1307,7 @@ export function Settings() {
                         }}
                         className="bg-background border-border text-foreground focus:ring-primary w-36 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
                       />
-                      <button
+                      <Button
                         onClick={() => {
                           const next = Math.max(
                             20,
@@ -1267,14 +1316,15 @@ export function Settings() {
                           setDashboardTrendPointLimit(next)
                           saveDashboardConfigMutation.mutate(next)
                         }}
-                        disabled={
-                          saveDashboardConfigMutation.isPending ||
-                          dashboardTrendPointLimit === savedDashboardTrendPointLimit
-                        }
-                        className="bg-primary text-primary-foreground rounded-md px-4 py-2 hover:opacity-90 disabled:opacity-50"
+                        disabled={saveDashboardConfigMutation.isPending}
+                        activity={dashboardTrendPointLimitSaved}
                       >
-                        {saveDashboardConfigMutation.isPending ? 'Saving...' : 'Save'}
-                      </button>
+                        {saveDashboardConfigMutation.isPending
+                          ? 'Saving...'
+                          : dashboardTrendPointLimitSaved
+                            ? 'Saved'
+                            : 'Save'}
+                      </Button>
                     </div>
                     <p className="text-muted-foreground mt-2 text-xs">
                       Allowed range: 20-500. Lower values reduce memory and increase visual
@@ -1317,7 +1367,7 @@ export function Settings() {
                         }}
                         className="bg-background border-border text-foreground focus:ring-primary w-40 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
                       />
-                      <button
+                      <Button
                         onClick={() => {
                           const next = Math.max(
                             0,
@@ -1326,14 +1376,15 @@ export function Settings() {
                           setGitDiffEagerLineBudget(next)
                           saveGitConfigMutation.mutate(next)
                         }}
-                        disabled={
-                          saveGitConfigMutation.isPending ||
-                          gitDiffEagerLineBudget === savedGitDiffEagerLineBudget
-                        }
-                        className="bg-primary text-primary-foreground rounded-md px-4 py-2 hover:opacity-90 disabled:opacity-50"
+                        disabled={saveGitConfigMutation.isPending}
+                        activity={gitDiffEagerLineBudgetSaved}
                       >
-                        {saveGitConfigMutation.isPending ? 'Saving...' : 'Save'}
-                      </button>
+                        {saveGitConfigMutation.isPending
+                          ? 'Saving...'
+                          : gitDiffEagerLineBudgetSaved
+                            ? 'Saved'
+                            : 'Save'}
+                      </Button>
                     </div>
                     <p className="text-muted-foreground mt-2 text-xs">
                       Set to `0` to force fully lazy patch loading. Default is `1000`.
@@ -1464,15 +1515,17 @@ export function Settings() {
                         placeholder={cliPlaceholder}
                         className="border-border bg-background text-foreground flex-1 rounded-md border px-3 py-2 font-mono text-sm"
                       />
-                      <button
+                      <Button
                         onClick={() => saveCliCommandMutation.mutate(cliCommand)}
-                        disabled={
-                          saveCliCommandMutation.isPending || cliCommand.trim() === savedCliCommand
-                        }
-                        className="bg-primary text-primary-foreground rounded-md px-4 py-2 hover:opacity-90 disabled:opacity-50"
+                        disabled={saveCliCommandMutation.isPending}
+                        activity={cliCommandSaved}
                       >
-                        {saveCliCommandMutation.isPending ? 'Saving...' : 'Save'}
-                      </button>
+                        {saveCliCommandMutation.isPending
+                          ? 'Saving...'
+                          : cliCommandSaved
+                            ? 'Saved'
+                            : 'Save'}
+                      </Button>
                     </div>
                     {config?.cli?.command && (
                       <p className="text-muted-foreground mt-2 text-xs">
@@ -1677,12 +1730,9 @@ export function Settings() {
                         placeholder={window.location.origin}
                         className="border-border bg-background text-foreground flex-1 rounded-md border px-3 py-2"
                       />
-                      <button
-                        onClick={handleApiUrlChange}
-                        className="bg-primary text-primary-foreground rounded-md px-4 py-2 hover:opacity-90"
-                      >
-                        Apply
-                      </button>
+                      <Button onClick={handleApiUrlChange} activity={apiUrlApplied}>
+                        {apiUrlApplied ? 'Applied' : 'Apply'}
+                      </Button>
                     </div>
                     {getApiBaseUrl() && (
                       <p className="text-muted-foreground mt-2 text-sm">
@@ -1716,15 +1766,17 @@ export function Settings() {
                         placeholder={OFFICIAL_APP_BASE_URL}
                         className="border-border bg-background text-foreground flex-1 rounded-md border px-3 py-2"
                       />
-                      <button
+                      <Button
                         onClick={() => saveAppBaseUrlMutation.mutate(appBaseUrl)}
-                        disabled={
-                          saveAppBaseUrlMutation.isPending || appBaseUrl.trim() === savedAppBaseUrl
-                        }
-                        className="bg-primary text-primary-foreground rounded-md px-4 py-2 hover:opacity-90 disabled:opacity-50"
+                        disabled={saveAppBaseUrlMutation.isPending}
+                        activity={appBaseUrlSaved}
                       >
-                        {saveAppBaseUrlMutation.isPending ? 'Saving...' : 'Save'}
-                      </button>
+                        {saveAppBaseUrlMutation.isPending
+                          ? 'Saving...'
+                          : appBaseUrlSaved
+                            ? 'Saved'
+                            : 'Save'}
+                      </Button>
                     </div>
                     <p className="text-muted-foreground mt-2 text-sm">
                       Effective default:{' '}

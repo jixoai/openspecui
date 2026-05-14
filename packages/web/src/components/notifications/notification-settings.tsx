@@ -1,3 +1,4 @@
+import { Button } from '@/components/button'
 import { SoundSettingControl } from '@/components/sound-setting-control'
 import { useNotifications } from '@/lib/notifications/context'
 import { trpcClient } from '@/lib/trpc'
@@ -80,16 +81,15 @@ export function NotificationSettings({
                 {permissionLabel}
               </p>
             </div>
-            <button
-              type="button"
+            <Button
               onClick={() => void requestBrowserPermission()}
               disabled={!browserSupported || browserPermission === 'denied'}
-              className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              activity={browserPermission === 'granted' && systemNotificationsEnabled}
             >
               {browserPermission === 'granted' && systemNotificationsEnabled
                 ? 'Enabled'
                 : 'Request permission'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

@@ -1,3 +1,4 @@
+import { Button } from '@/components/button'
 import { ButtonGroup } from '@/components/button-group'
 import { CliTerminal } from '@/components/cli-terminal'
 import { CodeEditor } from '@/components/code-editor'
@@ -1150,11 +1151,18 @@ export function Config() {
   )
   const profileRequiresWorkflowSelection =
     profileEditMode === 'both' || profileEditMode === 'workflows'
+  const profileDeliverySaved =
+    profileEditMode === 'workflows' ||
+    (isRecordObject(globalConfigData) && globalConfigData.delivery === profileDelivery)
+  const profileWorkflowsSaved =
+    profileEditMode === 'delivery' ||
+    (selectedWorkflowList.length === activeWorkflowSet.size &&
+      selectedWorkflowList.every((workflow) => activeWorkflowSet.has(workflow)))
+  const profileApplySaved = profileDeliverySaved && profileWorkflowsSaved
   const canApplyProfile =
     isRecordObject(globalConfigData) &&
     !saveGlobalConfigMutation.isPending &&
     (!profileRequiresWorkflowSelection || profileWorkflows.length > 0)
-  const canSaveGlobalConfigEditor = !saveGlobalConfigMutation.isPending && globalConfigDraftDirty
   const pendingCommandLines = useMemo(() => {
     if (pendingCommandKind === 'update') {
       return ['openspec update']
@@ -1608,19 +1616,19 @@ export function Config() {
                                   <X className="h-3.5 w-3.5" />
                                   Cancel
                                 </button>
-                                <button
-                                  type="button"
+                                <Button
+                                  size="sm"
                                   onClick={handleFileSave}
-                                  disabled={
-                                    !activeSchemaDirty ||
-                                    saveSchemaFileMutation.isPending ||
-                                    !schemaCanEdit
-                                  }
-                                  className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                                  disabled={saveSchemaFileMutation.isPending || !schemaCanEdit}
+                                  activity={!activeSchemaDirty && schemaCanEdit}
                                 >
                                   <Save className="h-3.5 w-3.5" />
-                                  {saveSchemaFileMutation.isPending ? 'Saving…' : 'Save'}
-                                </button>
+                                  {saveSchemaFileMutation.isPending
+                                    ? 'Saving...'
+                                    : activeSchemaDirty
+                                      ? 'Save'
+                                      : 'Saved'}
+                                </Button>
                               </div>
                             </div>
                           )}
@@ -1726,15 +1734,15 @@ export function Config() {
                     <X className="h-3.5 w-3.5" />
                     Cancel
                   </button>
-                  <button
-                    type="button"
+                  <Button
+                    size="sm"
                     onClick={() => saveConfigMutation.mutate()}
-                    disabled={!configDirty || saveConfigMutation.isPending}
-                    className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={saveConfigMutation.isPending}
+                    activity={!configDirty}
                   >
                     <Save className="h-3.5 w-3.5" />
-                    {saveConfigMutation.isPending ? 'Saving…' : 'Save'}
-                  </button>
+                    {saveConfigMutation.isPending ? 'Saving...' : configDirty ? 'Save' : 'Saved'}
+                  </Button>
                 </div>
               )}
             </div>
@@ -1937,15 +1945,15 @@ export function Config() {
               >
                 Revert
               </button>
-              <button
-                type="button"
-                disabled={!canSaveGlobalConfigEditor}
+              <Button
+                size="sm"
+                disabled={saveGlobalConfigMutation.isPending || !isRecordObject(globalConfigData)}
                 onClick={handleSaveGlobalConfigEditor}
-                className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                activity={!globalConfigDraftDirty && isRecordObject(globalConfigData)}
               >
                 <Save className="h-3.5 w-3.5" />
-                Save
-              </button>
+                {globalConfigDraftDirty ? 'Save' : 'Saved'}
+              </Button>
             </div>
           </div>
         ) : (
@@ -2075,15 +2083,15 @@ export function Config() {
               )}
 
               <div className="flex flex-wrap items-center gap-2 pt-1">
-                <button
-                  type="button"
+                <Button
+                  size="sm"
                   disabled={!canApplyProfile}
                   onClick={handleApplyProfile}
-                  className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                  activity={canApplyProfile && profileApplySaved}
                 >
                   <Check className="h-3.5 w-3.5" />
-                  Apply
-                </button>
+                  {profileApplySaved ? 'Applied' : 'Apply'}
+                </Button>
                 <button
                   type="button"
                   onClick={handleRunUpdate}

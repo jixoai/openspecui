@@ -1,3 +1,4 @@
+import { Button } from '@/components/button'
 import { terminalInvocationConfigStore } from '@/lib/terminal-invocation-config'
 import type {
   TerminalShellDefaults,
@@ -44,14 +45,10 @@ export function ShellProfileSettings({
             Effective platform default: <code>{shellDefaults.effectiveDefaultShell.command}</code>
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openAddDialog}
-          className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium hover:opacity-90"
-        >
+        <Button size="sm" onClick={openAddDialog}>
           <Plus className="h-3.5 w-3.5" />
           Add Shell
-        </button>
+        </Button>
       </div>
 
       <div className="border-border divide-border overflow-hidden rounded-md border">
@@ -75,19 +72,15 @@ export function ShellProfileSettings({
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-1">
-                {isDefault ? (
-                  <span className="bg-primary/10 text-primary rounded px-2 py-1 text-[11px] font-medium">
-                    Default
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => terminalInvocationConfigStore.setDefaultShellProfileId(shell.id)}
-                    className="border-border hover:bg-muted rounded border px-2 py-1 text-[11px] font-medium"
-                  >
-                    Default
-                  </button>
-                )}
+                <Button
+                  variant={isDefault ? 'primary' : 'secondary'}
+                  activity={isDefault}
+                  size="sm"
+                  className="px-2 py-1 text-[11px]"
+                  onClick={() => terminalInvocationConfigStore.setDefaultShellProfileId(shell.id)}
+                >
+                  Default
+                </Button>
                 <button
                   type="button"
                   onClick={() => editShell(shell)}
