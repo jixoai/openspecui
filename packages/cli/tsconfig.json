@@ -7,6 +7,7 @@
       "@openspecui/server": ["../server/src/index.ts"],
       "@openspecui/ai-provider": ["../ai-provider/src/index.ts"],
       "@openspecui/core": ["../core/src/index.ts"],
+      "@openspecui/core/notifications": ["../core/src/notifications.ts"],
       "@openspecui/core/sounds": ["../core/src/sounds.ts"],
       "@openspecui/search": ["../search/src/index.ts"],
       "@openspecui/search/node": ["../search/src/node.ts"]
