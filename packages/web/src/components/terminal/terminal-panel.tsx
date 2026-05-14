@@ -5,6 +5,7 @@ import {
 } from '@/components/context-menu'
 import type { Tab } from '@/components/tabs'
 import { navController } from '@/lib/nav-controller'
+import { useNotifications } from '@/lib/notifications/context'
 import { useTerminalContext } from '@/lib/terminal-context'
 import { terminalController } from '@/lib/terminal-controller'
 import { useNavLayout } from '@/lib/use-nav-controller'
@@ -24,6 +25,7 @@ import {
 import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -42,10 +44,12 @@ function EditableTabLabel({
 }: {
   session: {
     id: string
+    serverSessionId: string | null
     displayTitle: string
     isExited: boolean
     exitCode: number | null
     outputActive: boolean
+    lastBellAt: number | null
   }
   onRename: (id: string, title: string) => void
 }) {
@@ -72,23 +76,31 @@ function EditableTabLabel({
   }, [])
 
   const statusLight = (
-    <span
-      className={[
-        'inline-block h-2 w-2 shrink-0 rounded-full',
-        session.isExited
-          ? session.exitCode === 0
-            ? 'bg-emerald-500'
-            : 'bg-red-500'
-          : session.outputActive
-            ? 'animate-terminal-breathing'
-            : 'bg-zinc-400',
-      ].join(' ')}
-    />
+    <span className="relative inline-flex h-3 w-3 shrink-0 items-center justify-center">
+      {session.lastBellAt !== null && (
+        <span
+          key={session.lastBellAt}
+          data-testid={`terminal-bell-ripple-${session.id}`}
+          className="animate-terminal-bell-ripple bg-primary/45 absolute h-2 w-2 rounded-full"
+        />
+      )}
+      <span
+        className={[
+          'relative inline-block h-2 w-2 rounded-full',
+          session.isExited
+            ? session.exitCode === 0
+              ? 'bg-emerald-500'
+              : 'bg-red-500'
+            : session.outputActive
+              ? 'animate-terminal-breathing'
+              : 'bg-zinc-400',
+        ].join(' ')}
+      />
+    </span>
   )
-
   if (editing) {
     return (
-      <span className="flex items-center gap-1.5">
+      <span className="grid min-w-0 grid-cols-[0.75rem_minmax(0,1fr)] items-center gap-1.5">
         {statusLight}
         <input
           ref={inputRef}
@@ -102,19 +114,49 @@ function EditableTabLabel({
             e.stopPropagation()
           }}
           onClick={(e) => e.stopPropagation()}
-          className="placeholder:text-muted-foreground w-[120px] border-b border-current bg-transparent text-sm text-inherit outline-none"
+          className="placeholder:text-muted-foreground min-w-0 border-b border-current bg-transparent text-sm text-inherit outline-none"
         />
       </span>
     )
   }
 
   return (
-    <span className="flex items-center gap-1.5" onDoubleClick={startEditing}>
+    <span
+      className="grid min-w-0 grid-cols-[0.75rem_minmax(0,1fr)] items-center gap-1.5"
+      onDoubleClick={startEditing}
+    >
       {statusLight}
-      <span className="max-w-[150px] truncate">{session.displayTitle}</span>
+      <span className="min-w-0 truncate">{session.displayTitle}</span>
     </span>
   )
 }
+
+function TerminalUnreadBadge({ unreadCount }: { unreadCount: number }) {
+  if (unreadCount <= 0) return null
+
+  const label = `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}`
+  if (unreadCount === 1) {
+    return (
+      <span
+        className="bg-primary -mr-0.5 -mt-0.5 block h-1.5 w-1.5 rounded-full ring-1 ring-[var(--terminal)]"
+        title={label}
+        aria-label={label}
+      />
+    )
+  }
+
+  return (
+    <span
+      className="bg-primary text-primary-foreground inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none ring-1 ring-[var(--terminal)]"
+      title={label}
+      aria-label={label}
+    >
+      {unreadCount > 99 ? '99+' : unreadCount}
+    </span>
+  )
+}
+
+const FOCUSED_TERMINAL_NOTIFICATION_TTL = 2000
 
 export function TerminalPanel({ className }: { className?: string }) {
   const {
@@ -125,6 +167,7 @@ export function TerminalPanel({ className }: { className?: string }) {
     closeSession,
     setCustomTitle,
   } = useTerminalContext()
+  const { notifications, clearTerminalSession } = useNotifications()
   const { shellProfiles, spawnCommands, defaultShellProfile } = useTerminalInvocationConfig()
   const [menuAnchor, setMenuAnchor] = useState<ContextMenuAnchor | null>(null)
   const [selectedSpawnCommand, setSelectedSpawnCommand] = useState<TerminalSpawnCommand | null>(
@@ -132,6 +175,13 @@ export function TerminalPanel({ className }: { className?: string }) {
   )
 
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const navLayout = useNavLayout()
+  const isInBottom = navLayout.bottomTabs.includes('/terminal')
+  const isTerminalVisible =
+    navLayout.mainLocation.pathname === '/terminal' ||
+    navLayout.mainLocation.pathname.startsWith('/terminal/') ||
+    navLayout.bottomLocation.pathname === '/terminal' ||
+    navLayout.bottomLocation.pathname.startsWith('/terminal/')
   const terminalSnapshot = useSyncExternalStore(
     (cb) => terminalController.subscribe(cb),
     () => terminalController.getSnapshot(),
@@ -164,25 +214,67 @@ export function TerminalPanel({ className }: { className?: string }) {
     [setCustomTitle]
   )
 
+  const unreadByServerSessionId = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const notification of notifications) {
+      if (notification.source.type !== 'terminal') continue
+      counts.set(
+        notification.source.sessionId,
+        (counts.get(notification.source.sessionId) ?? 0) + 1
+      )
+    }
+    return counts
+  }, [notifications])
+
+  useEffect(() => {
+    if (!isTerminalVisible) return
+    const activeSession = sessions.find((item) => item.id === activeSessionId)
+    const serverSessionId = activeSession?.serverSessionId
+    if (!serverSessionId) return
+    const hasUnread = notifications.some(
+      (notification) =>
+        notification.source.type === 'terminal' && notification.source.sessionId === serverSessionId
+    )
+    if (!hasUnread) return
+    const timer = window.setTimeout(() => {
+      void clearTerminalSession(serverSessionId)
+    }, FOCUSED_TERMINAL_NOTIFICATION_TTL)
+    return () => window.clearTimeout(timer)
+  }, [activeSessionId, clearTerminalSession, isTerminalVisible, notifications, sessions])
+
+  const tabContentBySessionId = useMemo(() => {
+    const content = new Map<string, ReactNode>()
+    for (const session of sessions) {
+      content.set(
+        session.id,
+        <div className="bg-terminal h-full">
+          <XtermTerminal sessionId={session.id} />
+        </div>
+      )
+    }
+    return content
+  }, [sessions])
+
   const tabs = useMemo<Tab[]>(
     () =>
-      sessions.map((session) => ({
-        id: session.id,
-        label: <EditableTabLabel session={session} onRename={handleRename} />,
-        unmountOnHide: true,
-        closable: true,
-        closeButtonVisibility: 'always',
-        content: (
-          <div className="bg-terminal h-full">
-            <XtermTerminal sessionId={session.id} />
-          </div>
-        ),
-      })),
-    [sessions, handleRename]
-  )
+      sessions.map((session) => {
+        const unreadCount = session.serverSessionId
+          ? (unreadByServerSessionId.get(session.serverSessionId) ?? 0)
+          : 0
 
-  const navLayout = useNavLayout()
-  const isInBottom = navLayout.bottomTabs.includes('/terminal')
+        return {
+          id: session.id,
+          title: session.displayTitle,
+          label: <EditableTabLabel session={session} onRename={handleRename} />,
+          badge: unreadCount > 0 ? <TerminalUnreadBadge unreadCount={unreadCount} /> : undefined,
+          unmountOnHide: true,
+          closable: true,
+          closeButtonVisibility: 'always',
+          content: tabContentBySessionId.get(session.id),
+        }
+      }),
+    [sessions, handleRename, tabContentBySessionId, unreadByServerSessionId]
+  )
 
   useLayoutEffect(() => {
     terminalController.setInputPanelDefaultLayout(isInBottom ? 'floating' : 'fixed')
@@ -201,6 +293,17 @@ export function TerminalPanel({ className }: { className?: string }) {
   const handleOpenInputPanel = useCallback(() => {
     terminalController.openInputPanel(activeSessionId ?? undefined)
   }, [activeSessionId])
+
+  const handleTabChange = useCallback(
+    (id: string) => {
+      setActiveSession(id)
+      const session = sessions.find((item) => item.id === id)
+      if (session?.serverSessionId) {
+        void clearTerminalSession(session.serverSessionId)
+      }
+    },
+    [clearTerminalSession, sessions, setActiveSession]
+  )
 
   const handleCreateDefaultShell = useCallback(() => {
     createShellSession(defaultShellProfile)
@@ -314,21 +417,24 @@ export function TerminalPanel({ className }: { className?: string }) {
       {sessions.length === 0 ? (
         <div className="text-terminal-foreground bg-terminal flex h-full flex-wrap content-center items-center justify-center whitespace-pre p-4 text-sm">
           <span>No terminal sessions. Click</span>
-          <button
-            type="button"
-            onClick={handleCreateDefaultShell}
-            className="bg-primary text-primary-foreground mx-2 px-2 text-lg font-bold"
-            aria-label="New terminal"
-          >
-            +
-          </button>
-          {createMenuButton} <span>to create one.</span>
+          <span className="mx-2 flex gap-1">
+            <button
+              type="button"
+              onClick={handleCreateDefaultShell}
+              className="bg-primary text-primary-foreground px-2 text-lg font-bold"
+              aria-label="New terminal"
+            >
+              +
+            </button>
+            {createMenuButton}
+          </span>
+          <span>to create one.</span>
         </div>
       ) : (
         <TerminalTabs
           tabs={tabs}
           selectedTab={activeSessionId ?? undefined}
-          onTabChange={setActiveSession}
+          onTabChange={handleTabChange}
           onTabClose={closeSession}
           onTabBarDoubleClick={handleCreateDefaultShell}
           actions={areaActions}

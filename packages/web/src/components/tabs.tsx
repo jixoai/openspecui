@@ -20,7 +20,11 @@ import { useHeadStyle } from './use-head-style'
 export interface Tab {
   id: string
   label: ReactNode
+  /** Native hover title for the whole tab trigger */
+  title?: string
   icon?: ReactNode
+  /** Top-right adornment anchored to the whole tab trigger */
+  badge?: ReactNode
   content: ReactNode
   /** Unmount the tab content when hidden to avoid heavy components lingering (e.g., Monaco) */
   unmountOnHide?: boolean
@@ -299,7 +303,7 @@ function TabsImpl(
 
   useLayoutEffect(() => {
     syncSelectionIndicator()
-  }, [syncSelectionIndicator, tabLayoutSignature])
+  }, [syncSelectionIndicator, tabs])
 
   useLayoutEffect(() => {
     if (!showSelectionIndicator) {
@@ -506,7 +510,10 @@ function TabsImpl(
     classNames?.buttonBase
   )
 
-  const buttonInnerClassName = cn('inline-flex h-full items-center gap-2', classNames?.buttonInner)
+  const buttonInnerClassName = cn(
+    'inline-flex h-full items-center gap-2 relative',
+    classNames?.buttonInner
+  )
 
   const activeButtonClassName = cn('tab-selected text-foreground', classNames?.activeButton)
 
@@ -583,6 +590,7 @@ function TabsImpl(
           activeTab === tab.id ? activeButtonClassName : inactiveButtonClassName
         } ${reorderable ? 'cursor-grab active:cursor-grabbing' : ''}`}
         style={dragIndicatorStyle}
+        title={tab.title}
       >
         <span
           data-tabs-button-inner="true"
@@ -624,6 +632,11 @@ function TabsImpl(
             </span>
           )}
         </span>
+        {tab.badge && (
+          <span data-tabs-badge="true" className="pointer-events-none absolute right-0 top-0 z-30">
+            {tab.badge}
+          </span>
+        )}
       </button>
     )
   })

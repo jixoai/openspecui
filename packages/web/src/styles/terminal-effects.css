@@ -12,6 +12,21 @@
   animation: terminal-breathing 1.5s ease-in-out infinite;
 }
 
+@keyframes terminal-bell-ripple {
+  0% {
+    opacity: 0.65;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(3.8);
+  }
+}
+
+.animate-terminal-bell-ripple {
+  animation: terminal-bell-ripple 700ms ease-out both;
+}
+
 .xterm .xterm-scrollable-element,
 .xterm .xterm-scrollable-element.xterm-mac {
   background-color: var(--terminal) !important;
