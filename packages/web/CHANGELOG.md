@@ -1,5 +1,11 @@
 # @openspecui/web
 
+## 3.5.1
+
+### Patch Changes
+
+- 11a22f1: Fix mobile terminal input remounting, audio context gesture gating, terminal tab scroll control spacing, mobile notification action styling, and mobile select popover closing behavior.
+
 ## 3.5.0
 
 ### Minor Changes
