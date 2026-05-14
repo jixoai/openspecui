@@ -10,8 +10,10 @@ export default defineConfig({
       '@openspecui/core': resolve(__dirname, '../core/src'),
       '@openspecui/core/dashboard-display': resolve(__dirname, '../core/src/dashboard-display.ts'),
       '@openspecui/core/hosted-app': resolve(__dirname, '../core/src/hosted-app.ts'),
+      '@openspecui/core/notifications': resolve(__dirname, '../core/src/notifications.ts'),
       '@openspecui/core/opsx-display-path': resolve(__dirname, '../core/src/opsx-display-path.ts'),
       '@openspecui/core/pty-protocol': resolve(__dirname, '../core/src/pty-protocol.ts'),
+      '@openspecui/core/terminal-audio': resolve(__dirname, '../core/src/terminal-audio.ts'),
       '@openspecui/core/terminal-invocation': resolve(
         __dirname,
         '../core/src/terminal-invocation.ts'

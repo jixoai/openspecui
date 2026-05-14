@@ -3,8 +3,11 @@ import { mkdir, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
 import { promisify } from 'util'
 import { z } from 'zod'
+import { NotificationSettingsSchema, type NotificationSettings } from './notifications.js'
 import { reactiveReadFile, updateReactiveFileCache } from './reactive-fs/index.js'
+import { DEFAULT_BELL_SOUND_ID, SoundVolumeSchema } from './sounds.js'
 import { runBufferedCommand } from './spawn-safe.js'
+import { TerminalBellSoundSchema } from './terminal-audio.js'
 import {
   DEFAULT_TERMINAL_DARK_THEME,
   DEFAULT_TERMINAL_LIGHT_THEME,
@@ -567,6 +570,8 @@ export const TerminalConfigSchema = z.object({
   lightTheme: TerminalThemeSchema.default(DEFAULT_TERMINAL_LIGHT_THEME),
   darkTheme: TerminalThemeSchema.default(DEFAULT_TERMINAL_DARK_THEME),
   rendererEngine: z.string().default('xterm'),
+  bellSound: TerminalBellSoundSchema.default(DEFAULT_BELL_SOUND_ID),
+  bellVolume: SoundVolumeSchema,
 })
 
 export type TerminalConfig = z.infer<typeof TerminalConfigSchema>
@@ -632,6 +637,9 @@ export const OpenSpecUIConfigSchema = z.object({
 
   /** Git detail 配置 */
   git: GitConfigSchema.default(GitConfigSchema.parse({})),
+
+  /** Notification preferences */
+  notifications: NotificationSettingsSchema.default(NotificationSettingsSchema.parse({})),
 })
 
 export type OpenSpecUIConfig = z.infer<typeof OpenSpecUIConfigSchema>
@@ -647,6 +655,7 @@ export type OpenSpecUIConfigUpdate = {
   terminal?: Partial<TerminalConfig>
   dashboard?: Partial<DashboardConfig>
   git?: Partial<GitConfig>
+  notifications?: Partial<NotificationSettings>
 }
 
 export type PersistedOpenSpecUIConfig = {
@@ -661,6 +670,7 @@ export type PersistedOpenSpecUIConfig = {
   terminal?: Partial<TerminalConfig>
   dashboard?: Partial<DashboardConfig>
   git?: Partial<GitConfig>
+  notifications?: Partial<NotificationSettings>
 }
 
 /** 默认配置（静态，用于测试和类型） */
@@ -675,6 +685,7 @@ export const DEFAULT_CONFIG: OpenSpecUIConfig = {
   terminal: TerminalConfigSchema.parse({}),
   dashboard: DashboardConfigSchema.parse({}),
   git: GitConfigSchema.parse({}),
+  notifications: NotificationSettingsSchema.parse({}),
 }
 
 function areStringArraysEqual(
@@ -778,6 +789,12 @@ export function toPersistedConfig(
   if (config.terminal.rendererEngine !== DEFAULT_CONFIG.terminal.rendererEngine) {
     terminal.rendererEngine = config.terminal.rendererEngine
   }
+  if (config.terminal.bellSound !== DEFAULT_CONFIG.terminal.bellSound) {
+    terminal.bellSound = config.terminal.bellSound
+  }
+  if (config.terminal.bellVolume !== DEFAULT_CONFIG.terminal.bellVolume) {
+    terminal.bellVolume = config.terminal.bellVolume
+  }
   if (hasOwnEntries(terminal)) {
     persisted.terminal = terminal
   }
@@ -796,6 +813,23 @@ export function toPersistedConfig(
   }
   if (hasOwnEntries(git)) {
     persisted.git = git
+  }
+
+  const notifications: NonNullable<PersistedOpenSpecUIConfig['notifications']> = {}
+  if (config.notifications.sound !== DEFAULT_CONFIG.notifications.sound) {
+    notifications.sound = config.notifications.sound
+  }
+  if (config.notifications.volume !== DEFAULT_CONFIG.notifications.volume) {
+    notifications.volume = config.notifications.volume
+  }
+  if (
+    config.notifications.systemNotificationsEnabled !==
+    DEFAULT_CONFIG.notifications.systemNotificationsEnabled
+  ) {
+    notifications.systemNotificationsEnabled = config.notifications.systemNotificationsEnabled
+  }
+  if (hasOwnEntries(notifications)) {
+    persisted.notifications = notifications
   }
 
   return persisted
@@ -899,6 +933,7 @@ export class ConfigManager {
       terminal: { ...current.terminal, ...config.terminal },
       dashboard: { ...current.dashboard, ...config.dashboard },
       git: { ...current.git, ...config.git },
+      notifications: { ...current.notifications, ...config.notifications },
     }
 
     const persisted = toPersistedConfig(merged)
