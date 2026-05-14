@@ -179,6 +179,7 @@ class MockInputPanelAddon {
   static active: MockInputPanelAddon | null = null
   static options: Array<{ showFab?: boolean }> = []
 
+  attachListenerCalls = 0
   private onInput: (data: string) => void
   private isOpen = false
 
@@ -189,7 +190,7 @@ class MockInputPanelAddon {
   }
 
   attachListeners(): void {
-    // noop
+    this.attachListenerCalls += 1
   }
 
   setPlatform(_platform: 'windows' | 'macos' | 'common'): void {
@@ -1122,6 +1123,33 @@ describe('terminal-controller PTY behavior', () => {
     expect(MockInputPanelAddon.options).toEqual(
       expect.arrayContaining([expect.objectContaining({ showFab: false })])
     )
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('reattaches input panel listeners when an existing terminal is remounted', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({
+      type: 'created',
+      requestId: localId,
+      sessionId: 'pty-remount',
+      platform: 'common',
+    })
+
+    terminalController.mount(localId, document.createElement('div'))
+    const addon = MockInputPanelAddon.instances[0]
+    expect(addon?.attachListenerCalls).toBe(1)
+
+    terminalController.unmount(localId)
+    terminalController.mount(localId, document.createElement('div'))
+
+    expect(addon?.attachListenerCalls).toBe(2)
 
     terminalController.closeAll()
     unsubscribe()
