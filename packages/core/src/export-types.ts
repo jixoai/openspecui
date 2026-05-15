@@ -53,7 +53,16 @@ export interface ExportSnapshot {
       title: string
       bodyMarkdown: string
       text: string
-      scenarios: Array<{ title: string; bodyMarkdown: string; rawText: string }>
+      scenarios: Array<{
+        title: string
+        bodyMarkdown: string
+        rawText: string
+        steps?: Array<{
+          keyword: 'GIVEN' | 'WHEN' | 'THEN' | 'AND' | 'BUT'
+          contentMarkdown: string
+          rawText: string
+        }>
+      }>
     }>
     createdAt: number
     updatedAt: number

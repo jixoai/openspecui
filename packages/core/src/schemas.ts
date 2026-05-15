@@ -35,6 +35,19 @@ export type ChangeFile = z.infer<typeof ChangeFileSchema>
 // Requirement Schema
 // =====================
 
+export const ScenarioStepKeywordSchema = z.enum(['GIVEN', 'WHEN', 'THEN', 'AND', 'BUT'])
+
+export const ScenarioStepSchema = z.object({
+  /** Scenario step keyword from the list item prefix */
+  keyword: ScenarioStepKeywordSchema,
+  /** Markdown content after the keyword */
+  contentMarkdown: z.string(),
+  /** Original markdown list item line */
+  rawText: z.string(),
+})
+
+export type ScenarioStep = z.infer<typeof ScenarioStepSchema>
+
 /**
  * A requirement within a specification.
  * Requirements should use RFC 2119 keywords (SHALL, MUST, etc.)
@@ -57,6 +70,8 @@ export const RequirementSchema = z.object({
       bodyMarkdown: z.string(),
       /** Full scenario Markdown facts, including the scenario title */
       rawText: z.string(),
+      /** Parsed scenario step facts for reading enhancements */
+      steps: z.array(ScenarioStepSchema).optional(),
     })
   ),
 })

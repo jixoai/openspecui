@@ -424,16 +424,6 @@ function writeLocalStorage(layout: PersistedNavLayout, key = getLocalStorageKey(
   }
 }
 
-function collapseProjectDetailLocation(location: HistoryLocation): HistoryLocation {
-  const tabId = pathToTabId(location.pathname)
-  if (!tabId) return location
-  if (location.pathname === tabId) return location
-  if (tabId === '/changes' || tabId === '/specs' || tabId === '/archive') {
-    return parseHref(tabId, location.state)
-  }
-  return location
-}
-
 const carryActiveOnMovePlugin: KernelBehaviorPlugin = ({ prevState, nextState, event }) => {
   if (event.type !== 'MOVE_TAB') return nextState
 
@@ -1150,8 +1140,6 @@ export class NavController {
 
     this.state = normalizeState({
       ...this.state,
-      mainLocation: collapseProjectDetailLocation(this.state.mainLocation),
-      bottomLocation: collapseProjectDetailLocation(this.state.bottomLocation),
       updatedAt: 0,
     })
     this.normalizeUrl()

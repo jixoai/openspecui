@@ -36,6 +36,23 @@ The system SHALL allow users to login with email and password.
       expect(spec.requirements[0].scenarios[0].bodyMarkdown).toContain(
         '- WHEN user enters valid credentials'
       )
+      expect(spec.requirements[0].scenarios[0].steps).toEqual([
+        {
+          keyword: 'WHEN',
+          contentMarkdown: 'user enters valid credentials',
+          rawText: '- WHEN user enters valid credentials',
+        },
+        {
+          keyword: 'THEN',
+          contentMarkdown: 'user is authenticated',
+          rawText: '- THEN user is authenticated',
+        },
+        {
+          keyword: 'AND',
+          contentMarkdown: 'redirected to dashboard',
+          rawText: '- AND redirected to dashboard',
+        },
+      ])
     })
 
     it('should handle multiple requirements', () => {
@@ -56,6 +73,51 @@ The system SHALL expose POST endpoints.
       expect(spec.requirements).toHaveLength(2)
       expect(spec.requirements[0].text).toContain('GET endpoint')
       expect(spec.requirements[1].text).toContain('POST endpoint')
+    })
+
+    it('loosely parses AI-mutated spec vocabulary through the local reading plugin', () => {
+      const content = `# Login Spec
+
+## Objective
+Describe sign-in behavior.
+
+## Capabilities
+### Capability: Password login
+The system SHOULD let users sign in with a password.
+
+#### Example: Valid credentials
+- when the user submits valid credentials
+- then the system starts a session
+
+#### Notes
+- Keep authored notes visible.
+`
+
+      const spec = parser.parseSpec('login', content)
+      const requirement = spec.requirements[0]!
+
+      expect(spec.name).toBe('Login Spec')
+      expect(spec.overview).toBe('Describe sign-in behavior.')
+      expect(requirement.title).toBe('Password login')
+      expect(requirement.bodyMarkdown).toContain('The system SHOULD')
+      expect(requirement.scenarios).toHaveLength(1)
+      expect(requirement.scenarios[0]).toMatchObject({
+        title: 'Valid credentials',
+        steps: [
+          {
+            keyword: 'WHEN',
+            contentMarkdown: 'the user submits valid credentials',
+            rawText: '- when the user submits valid credentials',
+          },
+          {
+            keyword: 'THEN',
+            contentMarkdown: 'the system starts a session',
+            rawText: '- then the system starts a session',
+          },
+        ],
+      })
+      expect(requirement.scenarios[0]!.bodyMarkdown).toContain('#### Notes')
+      expect(requirement.scenarios[0]!.bodyMarkdown).toContain('Keep authored notes visible.')
     })
 
     it('preserves multiline requirement body markdown separately from the heading title', () => {
@@ -149,6 +211,78 @@ The system SHALL preserve authored subheadings.
       expect(req.scenarios).toHaveLength(1)
       expect(req.scenarios[0].title).toBe('Explicit scenario')
       expect(req.scenarios[0].rawText).not.toContain('Notes')
+    })
+
+    it('keeps authored fourth-level sections after a scenario visible in that scenario body', () => {
+      const content = `# Scenario Residual Notes
+
+## Requirements
+### Requirement: Scenario Residual
+The system SHALL keep residual authored markdown visible.
+
+#### Scenario: Main flow
+- WHEN the reader parses the scenario
+- THEN it keeps the visible steps
+
+#### Notes
+- This future or authored nested section must remain visible.
+`
+
+      const spec = parser.parseSpec('scenario-residual-notes', content)
+      const scenario = spec.requirements[0]!.scenarios[0]!
+
+      expect(spec.requirements[0]!.scenarios).toHaveLength(1)
+      expect(scenario.bodyMarkdown).toContain('#### Notes')
+      expect(scenario.bodyMarkdown).toContain(
+        '- This future or authored nested section must remain visible.'
+      )
+    })
+
+    it('parses bold scenario step keywords while preserving scenario markdown', () => {
+      const content = `# Rich Scenario Steps
+
+## Purpose
+Expose step metadata.
+
+## Requirements
+### Requirement: Step Metadata
+The system SHALL expose scenario steps.
+
+#### Scenario: Bold keyword steps
+- **GIVEN** a saved spec
+- **WHEN** the reader opens the spec page
+- **THEN** each step receives a keyword badge
+- **BUT** normal body markdown remains intact
+
+Some extra scenario paragraph stays in body markdown.
+`
+
+      const spec = parser.parseSpec('rich-scenario-steps', content)
+      const scenario = spec.requirements[0]!.scenarios[0]!
+
+      expect(scenario.bodyMarkdown).toContain('Some extra scenario paragraph')
+      expect(scenario.steps).toEqual([
+        {
+          keyword: 'GIVEN',
+          contentMarkdown: 'a saved spec',
+          rawText: '- **GIVEN** a saved spec',
+        },
+        {
+          keyword: 'WHEN',
+          contentMarkdown: 'the reader opens the spec page',
+          rawText: '- **WHEN** the reader opens the spec page',
+        },
+        {
+          keyword: 'THEN',
+          contentMarkdown: 'each step receives a keyword badge',
+          rawText: '- **THEN** each step receives a keyword badge',
+        },
+        {
+          keyword: 'BUT',
+          contentMarkdown: 'normal body markdown remains intact',
+          rawText: '- **BUT** normal body markdown remains intact',
+        },
+      ])
     })
 
     it('should handle empty spec', () => {

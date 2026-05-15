@@ -434,7 +434,7 @@ describe('NavController kernel lifecycle', () => {
     assertPartition(nav)
   })
 
-  it('rebinding to a project-specific scope collapses stale detail routes', async () => {
+  it('rebinding to a project-specific scope preserves direct detail deep links', async () => {
     nav = createController('/changes/extract-terminal-view-webcomponent')
     fetchMock.mockResolvedValue({
       ok: true,
@@ -443,8 +443,23 @@ describe('NavController kernel lifecycle', () => {
 
     await nav.init()
 
-    expect(nav.getLocation('main').pathname).toBe('/changes')
-    expect(window.location.pathname).toBe('/changes')
+    expect(nav.getLocation('main').pathname).toBe('/changes/extract-terminal-view-webcomponent')
+    expect(window.location.pathname).toBe('/changes/extract-terminal-view-webcomponent')
+  })
+
+  it('preserves direct spec detail links with bottom no-focus marker during project rebind', async () => {
+    nav = createController('/specs/cli-shell-product?_b=%2F')
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ projectDir: '/repo/current' }),
+    } as Response)
+
+    await nav.init()
+
+    expect(nav.getLocation('main').pathname).toBe('/specs/cli-shell-product')
+    expect(nav.getLocation('bottom').pathname).toBe('/')
+    expect(window.location.pathname).toBe('/specs/cli-shell-product')
+    expect(window.location.search).toContain('_b=%2F')
   })
 
   it('prefers project-scoped layout over the generic persisted layout', async () => {

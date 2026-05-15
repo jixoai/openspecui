@@ -228,7 +228,7 @@ const tocStyles = css`
   }
   .toc-wide {
     display: none;
-    max-height: min(32rem, calc(100cqh - 3rem), calc(100svh - 3rem));
+    max-height: min(calc(100cqh - 3rem), calc(100svh - 3rem));
   }
 
   /* Wide container: show sidebar mode */
@@ -249,7 +249,7 @@ const tocStyles = css`
       max-height: min(18rem, calc(100svh - 5rem));
     }
     .toc-wide {
-      max-height: min(32rem, calc(100svh - 3rem));
+      max-height: calc(100svh - 3rem);
     }
   }
 

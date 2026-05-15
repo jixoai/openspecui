@@ -10,7 +10,11 @@ import {
   type ReactNode,
 } from 'react'
 import { navigateHashAnchor } from './anchor-scroll'
-import { MarkdownContent } from './markdown-content'
+import {
+  MarkdownContent,
+  type MarkdownBlockAnnotation,
+  type MarkdownInlineTextAnnotation,
+} from './markdown-content'
 import { generateTimelineScope, Toc, type TocItem } from './toc'
 import { slugify, TocCollector, TocLevelProvider, TocProvider, useTocContext } from './toc-context'
 
@@ -29,6 +33,10 @@ export interface MarkdownHeadingTransformInput {
   level: HeadingLevel
   /** Plain text extracted from the rendered heading children. */
   text: string
+  /** Markdown source offset for this heading when the renderer exposes it. */
+  sourceStartOffset?: number
+  /** Markdown source end offset for this heading when the renderer exposes it. */
+  sourceEndOffset?: number
 }
 
 export interface MarkdownHeadingTransformResult {
@@ -50,6 +58,7 @@ interface HeadingProps {
   id?: string
   children?: ReactNode
   className?: string
+  tocLabel?: string
 }
 
 type HeadingComponent = (props: HeadingProps) => ReactNode
@@ -84,6 +93,10 @@ export interface MarkdownViewerProps {
   collectToc?: boolean
   /** Optional string-markdown heading transform for semantic attributes and ToC labels. */
   headingTransform?: MarkdownHeadingTransform
+  /** Inline semantic text spans rendered by MarkdownContent. */
+  inlineTextAnnotations?: readonly MarkdownInlineTextAnnotation[]
+  /** Block-level semantic attributes rendered by MarkdownContent. */
+  blockAnnotations?: readonly MarkdownBlockAnnotation[]
 }
 
 const SectionTimelineContext = createContext<number | null>(null)
@@ -111,6 +124,8 @@ export function MarkdownViewer({
   onReady,
   collectToc = true,
   headingTransform,
+  inlineTextAnnotations,
+  blockAnnotations,
 }: MarkdownViewerProps) {
   const parentCtx = useTocContext()
   const isNested = !!parentCtx
@@ -121,6 +136,8 @@ export function MarkdownViewer({
         markdown={markdown}
         className={className}
         headingTransform={headingTransform}
+        inlineTextAnnotations={inlineTextAnnotations}
+        blockAnnotations={blockAnnotations}
       />
     )
   }
@@ -132,6 +149,8 @@ export function MarkdownViewer({
         markdown={markdown}
         className={className}
         headingTransform={headingTransform}
+        inlineTextAnnotations={inlineTextAnnotations}
+        blockAnnotations={blockAnnotations}
       />
     )
   }
@@ -143,6 +162,8 @@ export function MarkdownViewer({
       className={className}
       onReady={onReady}
       headingTransform={headingTransform}
+      inlineTextAnnotations={inlineTextAnnotations}
+      blockAnnotations={blockAnnotations}
     />
   )
 }
@@ -155,7 +176,12 @@ function PlainMarkdownViewer({
   markdown,
   className = '',
   headingTransform,
-}: Pick<MarkdownViewerProps, 'markdown' | 'className' | 'headingTransform'>) {
+  inlineTextAnnotations,
+  blockAnnotations,
+}: Pick<
+  MarkdownViewerProps,
+  'markdown' | 'className' | 'headingTransform' | 'inlineTextAnnotations' | 'blockAnnotations'
+>) {
   if (typeof markdown === 'string') {
     return (
       <StringMarkdownContent
@@ -164,6 +190,8 @@ function PlainMarkdownViewer({
         collector={new TocCollector()}
         levelOffset={0}
         headingTransform={headingTransform}
+        inlineTextAnnotations={inlineTextAnnotations}
+        blockAnnotations={blockAnnotations}
         collectToc={false}
       />
     )
@@ -227,6 +255,8 @@ function RootMarkdownViewer({
   className,
   onReady,
   headingTransform,
+  inlineTextAnnotations,
+  blockAnnotations,
 }: MarkdownViewerProps) {
   const [tocItems, setTocItems] = useState<TocItem[]>([])
   const collectorRef = useRef<TocCollector>(null!)
@@ -262,6 +292,8 @@ function RootMarkdownViewer({
         collector={collector}
         levelOffset={0}
         headingTransform={headingTransform}
+        inlineTextAnnotations={inlineTextAnnotations}
+        blockAnnotations={blockAnnotations}
       />
     ) : (
       <BuilderMarkdownContent builder={markdown} collector={collector} levelOffset={0} />
@@ -272,12 +304,12 @@ function RootMarkdownViewer({
       <div className={`@container-[size] h-full ${className}`}>
         <style>{viewerStyles}</style>
         <MarkdownContainer
-          className="viewer-scroll viewer-layout gap-6"
+          className="viewer-scroll toc-page-layout viewer-layout gap-6"
           timelineScope={timelineScope}
           enableHashNavigation
         >
-          <Toc items={tocItems} className="viewer-toc" />
-          <div className="viewer-content min-w-0">{content}</div>
+          <Toc items={tocItems} className="toc-page-sidebar viewer-toc" />
+          <div className="toc-page-content viewer-content min-w-0">{content}</div>
         </MarkdownContainer>
       </div>
     </TocProvider>
@@ -288,7 +320,13 @@ function RootMarkdownViewer({
 // NestedMarkdownViewer - 嵌套模式
 // ============================================================================
 
-function NestedMarkdownViewer({ markdown, className, headingTransform }: MarkdownViewerProps) {
+function NestedMarkdownViewer({
+  markdown,
+  className,
+  headingTransform,
+  inlineTextAnnotations,
+  blockAnnotations,
+}: MarkdownViewerProps) {
   const ctx = useTocContext()!
   const { collector, levelOffset } = ctx
 
@@ -300,6 +338,8 @@ function NestedMarkdownViewer({ markdown, className, headingTransform }: Markdow
       collector={collector}
       levelOffset={levelOffset}
       headingTransform={headingTransform}
+      inlineTextAnnotations={inlineTextAnnotations}
+      blockAnnotations={blockAnnotations}
     />
   ) : (
     <BuilderMarkdownContent
@@ -321,6 +361,8 @@ function StringMarkdownContent({
   levelOffset,
   className,
   headingTransform,
+  inlineTextAnnotations,
+  blockAnnotations,
   collectToc = true,
 }: {
   markdown: string
@@ -328,14 +370,17 @@ function StringMarkdownContent({
   levelOffset: number
   className?: string
   headingTransform?: MarkdownHeadingTransform
+  inlineTextAnnotations?: readonly MarkdownInlineTextAnnotation[]
+  blockAnnotations?: readonly MarkdownBlockAnnotation[]
   collectToc?: boolean
 }) {
   // 为 markdown 中的标题创建自定义组件
   const components = useMemo(() => {
     const createHeading = (level: HeadingLevel) => {
-      return function Heading({ children }: { children?: ReactNode }) {
+      return function Heading({ children, node }: { children?: ReactNode; node?: unknown }) {
         const text = extractTextFromChildren(children)
         const sectionTimelineIndex = useSectionTimeline()
+        const sourceRange = getMarkdownNodeSourceRange(node)
 
         // 由共享 collector 分配全局唯一 id，避免 ToC 与 DOM id 不一致
         const adjustedLevel = Math.min(level + levelOffset, 6) as HeadingLevel
@@ -343,6 +388,8 @@ function StringMarkdownContent({
           sourceLevel: level,
           level: adjustedLevel,
           text,
+          ...(sourceRange.start !== undefined ? { sourceStartOffset: sourceRange.start } : {}),
+          ...(sourceRange.end !== undefined ? { sourceEndOffset: sourceRange.end } : {}),
         })
         const tocLabel = transform?.tocLabel ?? text
 
@@ -385,7 +432,12 @@ function StringMarkdownContent({
   }, [collector, levelOffset, headingTransform, collectToc])
 
   return (
-    <MarkdownContent className={className} components={components}>
+    <MarkdownContent
+      className={className}
+      components={components}
+      inlineTextAnnotations={inlineTextAnnotations}
+      blockAnnotations={blockAnnotations}
+    >
       {markdown}
     </MarkdownContent>
   )
@@ -409,20 +461,21 @@ function BuilderMarkdownContent({
   // 创建 Builder 组件
   const components = useMemo<BuilderComponents>(() => {
     const createHeading = (level: HeadingLevel): HeadingComponent => {
-      return function Heading({ id: fixedId, className, children }: HeadingProps) {
+      return function Heading({ id: fixedId, className, children, tocLabel }: HeadingProps) {
         // 从 context 实时获取 levelOffset，支持 Section 嵌套
         const ctx = useTocContext()
         const currentLevelOffset = ctx?.levelOffset ?? levelOffset
         const sectionTimelineIndex = useSectionTimeline()
 
         const text = extractTextFromChildren(children)
+        const label = tocLabel ?? text
 
         // 由共享 collector 分配最终 id，确保 ToC 与 DOM 一致
         const adjustedLevel = Math.min(level + currentLevelOffset, 6) as HeadingLevel
         const registration =
           sectionTimelineIndex === null
-            ? collector.add(text, adjustedLevel, fixedId)
-            : collector.bindSectionHeading(sectionTimelineIndex, text, adjustedLevel, fixedId)
+            ? collector.add(label, adjustedLevel, fixedId)
+            : collector.bindSectionHeading(sectionTimelineIndex, label, adjustedLevel, fixedId)
 
         return (
           <HeadingElement
@@ -636,6 +689,26 @@ function extractTextFromChildren(children: ReactNode): string {
   return ''
 }
 
+function getMarkdownNodeSourceRange(node: unknown): { start?: number; end?: number } {
+  if (!node || typeof node !== 'object' || !('position' in node)) return {}
+  const position = (node as { position?: unknown }).position
+  if (!position || typeof position !== 'object') return {}
+  const start = readMarkdownNodeOffset(position, 'start')
+  const end = readMarkdownNodeOffset(position, 'end')
+  return {
+    ...(start !== undefined ? { start } : {}),
+    ...(end !== undefined ? { end } : {}),
+  }
+}
+
+function readMarkdownNodeOffset(position: object, key: 'start' | 'end'): number | undefined {
+  if (!(key in position)) return undefined
+  const point = (position as Record<typeof key, unknown>)[key]
+  if (!point || typeof point !== 'object' || !('offset' in point)) return undefined
+  const offset = (point as { offset?: unknown }).offset
+  return typeof offset === 'number' ? offset : undefined
+}
+
 /** 比较两个 TocItem 数组是否相等 */
 function arraysEqual(a: TocItem[], b: TocItem[]): boolean {
   if (a.length !== b.length) return false
@@ -655,26 +728,5 @@ function arraysEqual(a: TocItem[], b: TocItem[]): boolean {
 const css = String.raw
 /** CSS for container queries layout */
 const viewerStyles = css`
-  /* Container query based layout */
-  .viewer-layout {
-    display: block;
-  }
-  .viewer-toc {
-    margin-bottom: 1rem;
-  }
-
-  /* Wide container: grid layout with ToC on right */
-  @container (min-width: 768px) {
-    .viewer-layout {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 180px;
-    }
-    .viewer-toc {
-      order: 2;
-      margin-bottom: 0;
-    }
-    .viewer-content {
-      order: 1;
-    }
-  }
+  /* MarkdownViewer keeps layout hooks local; shared ToC geometry lives in index.css. */
 `

@@ -1,12 +1,40 @@
+import { parseOpenSpecMarkdownToSpec } from './openspec-projection.js'
 import type {
   Change,
   Delta,
   DeltaOperation,
   DeltaSpec,
   Requirement,
+  ScenarioStep,
   Spec,
   Task,
 } from './schemas.js'
+
+type ParsedScenario = Requirement['scenarios'][number]
+
+const SCENARIO_STEP_KEYWORDS = ['GIVEN', 'WHEN', 'THEN', 'AND', 'BUT'] as const
+const SCENARIO_STEP_PATTERN = new RegExp(
+  `^\\s*[-*+]\\s+(?:\\*\\*)?(${SCENARIO_STEP_KEYWORDS.join('|')})\\b(?:\\*\\*)?\\s*:?\\s*(.+?)\\s*$`,
+  'i'
+)
+
+function parseScenarioSteps(bodyMarkdown: string): ScenarioStep[] {
+  const steps: ScenarioStep[] = []
+
+  for (const line of bodyMarkdown.split('\n')) {
+    const match = line.match(SCENARIO_STEP_PATTERN)
+    if (!match) continue
+
+    const keyword = match[1]!.toUpperCase() as ScenarioStep['keyword']
+    steps.push({
+      keyword,
+      contentMarkdown: match[2]!.trim(),
+      rawText: line.trim(),
+    })
+  }
+
+  return steps
+}
 
 /**
  * Markdown parser for OpenSpec documents
@@ -16,132 +44,7 @@ export class MarkdownParser {
    * Parse a spec markdown content into a Spec object
    */
   parseSpec(specId: string, content: string): Spec {
-    const lines = content.split('\n')
-    let name = specId
-    let overview = ''
-    const requirements: Requirement[] = []
-
-    let currentSection = ''
-    let currentRequirement: {
-      id: string
-      title: string
-      bodyLines: string[]
-      scenarios: Array<{ title: string; bodyLines: string[] }>
-    } | null = null
-    let reqIndex = 0
-
-    const createRequirementText = (
-      title: string,
-      bodyMarkdown: string,
-      scenarioText: string
-    ): string => [title, bodyMarkdown, scenarioText].filter((part) => part.trim()).join('\n\n')
-
-    const finalizeRequirement = () => {
-      if (!currentRequirement) return
-
-      const scenarios = currentRequirement.scenarios
-        .map((scenario) => {
-          const bodyMarkdown = scenario.bodyLines.join('\n').trim()
-          const rawText = [scenario.title, bodyMarkdown].filter((part) => part.trim()).join('\n')
-          return rawText
-            ? {
-                title: scenario.title,
-                bodyMarkdown,
-                rawText,
-              }
-            : null
-        })
-        .filter((scenario): scenario is Requirement['scenarios'][number] => scenario !== null)
-
-      const bodyMarkdown = currentRequirement.bodyLines.join('\n').trim()
-      const scenarioText = scenarios.map((scenario) => scenario.rawText).join('\n\n')
-      requirements.push({
-        id: currentRequirement.id,
-        title: currentRequirement.title,
-        bodyMarkdown,
-        text: createRequirementText(currentRequirement.title, bodyMarkdown, scenarioText),
-        scenarios,
-      })
-
-      currentRequirement = null
-    }
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]
-
-      // Parse title (# heading)
-      if (line.startsWith('# ') && name === specId) {
-        name = line.slice(2).trim()
-        continue
-      }
-
-      // Parse section headers (## heading)
-      if (line.startsWith('## ')) {
-        finalizeRequirement()
-        const sectionTitle = line.slice(3).trim().toLowerCase()
-        if (sectionTitle.includes('purpose') || sectionTitle.includes('overview')) {
-          currentSection = 'overview'
-        } else if (sectionTitle.includes('requirement')) {
-          currentSection = 'requirements'
-        } else {
-          currentSection = sectionTitle
-        }
-        continue
-      }
-
-      // Parse requirements (### Requirement: ...)
-      if (
-        line.startsWith('### Requirement:') ||
-        (line.startsWith('### ') && currentSection === 'requirements')
-      ) {
-        finalizeRequirement()
-        reqIndex++
-        const reqTitle = line.replace(/^###\s*(Requirement:\s*)?/, '').trim()
-        currentRequirement = {
-          id: `req-${reqIndex}`,
-          title: reqTitle,
-          bodyLines: [],
-          scenarios: [],
-        }
-        continue
-      }
-
-      // Parse scenarios (#### Scenario: ...)
-      if (line.startsWith('#### Scenario:') && currentRequirement) {
-        const scenarioTitle = line.replace(/^####\s*Scenario:\s*/, '').trim()
-        currentRequirement.scenarios.push({
-          title: scenarioTitle,
-          bodyLines: [],
-        })
-        continue
-      }
-
-      // Accumulate content
-      if (currentSection === 'overview' && !currentRequirement) {
-        overview += line + '\n'
-      } else if (currentRequirement) {
-        const activeScenario = currentRequirement.scenarios[currentRequirement.scenarios.length - 1]
-        if (activeScenario) {
-          activeScenario.bodyLines.push(line)
-        } else {
-          currentRequirement.bodyLines.push(line)
-        }
-      }
-    }
-
-    // Finalize last requirement
-    finalizeRequirement()
-
-    return {
-      id: specId,
-      name: name || specId,
-      overview: overview.trim(),
-      requirements,
-      metadata: {
-        version: '1.0.0',
-        format: 'openspec',
-      },
-    }
+    return parseOpenSpecMarkdownToSpec(specId, content)
   }
 
   /**
@@ -273,13 +176,19 @@ export class MarkdownParser {
 
     const finalizeRequirement = () => {
       if (!currentOperation || !currentRequirement) return
-      const scenarios = currentRequirement.scenarios
-        .map((scenario) => {
-          const bodyMarkdown = scenario.lines.join('\n').trim()
-          const rawText = [scenario.title, bodyMarkdown].filter((part) => part.trim()).join('\n')
-          return rawText ? { title: scenario.title, bodyMarkdown, rawText } : null
-        })
-        .filter((s): s is Requirement['scenarios'][number] => Boolean(s))
+      const scenarios = currentRequirement.scenarios.reduce<ParsedScenario[]>((acc, scenario) => {
+        const bodyMarkdown = scenario.lines.join('\n').trim()
+        const rawText = [scenario.title, bodyMarkdown].filter((part) => part.trim()).join('\n')
+        if (rawText) {
+          acc.push({
+            title: scenario.title,
+            bodyMarkdown,
+            rawText,
+            steps: parseScenarioSteps(bodyMarkdown),
+          })
+        }
+        return acc
+      }, [])
 
       const bodyMarkdown = currentRequirement.descriptionLines.join('\n').trim()
       const text = [currentRequirement.title, bodyMarkdown, ...scenarios.map((s) => s.rawText)]

@@ -22,6 +22,22 @@
       "import": "./dist/openspec-compat.mjs",
       "types": "./dist/openspec-compat.d.mts"
     },
+    "./markdown-facts": {
+      "import": "./dist/markdown-facts.mjs",
+      "types": "./dist/markdown-facts.d.mts"
+    },
+    "./markdown-reading": {
+      "import": "./dist/markdown-reading.mjs",
+      "types": "./dist/markdown-reading.d.mts"
+    },
+    "./openspec-annotations": {
+      "import": "./dist/openspec-annotations.mjs",
+      "types": "./dist/openspec-annotations.d.mts"
+    },
+    "./openspec-projection": {
+      "import": "./dist/openspec-projection.mjs",
+      "types": "./dist/openspec-projection.d.mts"
+    },
     "./opsx-display-path": {
       "import": "./dist/opsx-display-path.mjs",
       "types": "./dist/opsx-display-path.d.mts"
@@ -55,18 +71,24 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/hosted-app.ts src/openspec-compat.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts",
-    "dev": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/hosted-app.ts src/openspec-compat.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts --watch",
+    "build": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/hosted-app.ts src/openspec-compat.ts src/markdown-facts.ts src/markdown-reading.ts src/openspec-annotations.ts src/openspec-projection.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts",
+    "dev": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/hosted-app.ts src/openspec-compat.ts src/markdown-facts.ts src/markdown-reading.ts src/openspec-annotations.ts src/openspec-projection.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@parcel/watcher": "^2.5.1",
+    "mdast-util-from-markdown": "^2.0.2",
+    "mdast-util-gfm": "^3.1.0",
+    "mdast-util-to-string": "^4.0.0",
+    "micromark-extension-gfm": "^3.0.0",
     "yaml": "^2.8.2",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/mdast": "^4.0.4",
+    "@types/unist": "^3.0.3",
     "@vitest/coverage-v8": "^4.1.0",
     "tsdown": "^0.16.6",
     "typescript": "^5.7.2",

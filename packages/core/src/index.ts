@@ -14,6 +14,70 @@ export { OpenSpecAdapter, type ArchiveMeta, type ChangeMeta, type SpecMeta } fro
 // Markdown parser for spec and change documents
 export { MarkdownParser } from './parser.js'
 
+export {
+  parseMarkdownFacts,
+  toMarkdownFactKind,
+  type MarkdownFact,
+  type MarkdownFactKind,
+  type MarkdownFactsDocument,
+  type MarkdownSourcePoint,
+  type MarkdownSourceRange,
+} from './markdown-facts.js'
+
+export {
+  buildMarkdownParentMap,
+  createMarkdownReadingDocument,
+  createMarkdownReadingDocumentFromFacts,
+  getMarkdownAnnotation,
+  getMarkdownAnnotationsForFact,
+  getMarkdownFactSpan,
+  getMarkdownHeadingEnd,
+  getMarkdownHeadingFacts,
+  trimMarkdownSlice,
+  type MarkdownAnnotation,
+  type MarkdownAnnotationConfidence,
+  type MarkdownAnnotationContext,
+  type MarkdownAnnotationInput,
+  type MarkdownAnnotationRule,
+  type MarkdownFactSpan,
+  type MarkdownProjectionContext,
+  type MarkdownProjectionRule,
+  type MarkdownReadingDocument,
+  type MarkdownReadingLookup,
+  type MarkdownReadingPlugin,
+} from './markdown-reading.js'
+
+export {
+  annotateOpenSpecFacts,
+  annotateOpenSpecMarkdown,
+  builtinOpenSpecReadingPlugin,
+  getOpenSpecAnnotation,
+  getOpenSpecAnnotationsForFact,
+  openSpecAnnotationRules,
+  type AnnotatedOpenSpecDocument,
+  type OpenSpecAnnotation,
+  type OpenSpecAnnotationConfidence,
+  type OpenSpecScenarioStepKeyword,
+  type OpenSpecSemanticKind,
+} from './openspec-annotations.js'
+
+export {
+  OPEN_SPEC_READING_SECTIONS_PROJECTION_ID,
+  OPEN_SPEC_SPEC_PROJECTION_ID,
+  createOpenSpecReadingPlugin,
+  getOpenSpecProjectionAnnotation,
+  getOpenSpecReadingSections,
+  parseOpenSpecMarkdownToSpec,
+  projectAnnotatedOpenSpecToSpec,
+  projectOpenSpecMarkdown,
+  type OpenSpecHeadingSection,
+  type OpenSpecProjectionOptions,
+  type OpenSpecReadingSectionsProjection,
+  type OpenSpecRequirementBlock,
+  type OpenSpecScenarioBlock,
+  type ProjectedOpenSpecDocument,
+} from './openspec-projection.js'
+
 // Document validation
 export { Validator, type ValidationIssue, type ValidationResult } from './validator.js'
 
@@ -25,6 +89,8 @@ export {
   DeltaSchema,
   DeltaSpecSchema,
   RequirementSchema,
+  ScenarioStepKeywordSchema,
+  ScenarioStepSchema,
   SpecSchema,
   TaskSchema,
   type Change,
@@ -33,6 +99,7 @@ export {
   type DeltaOperation,
   type DeltaSpec,
   type Requirement,
+  type ScenarioStep,
   type Spec,
   type Task,
 } from './schemas.js'

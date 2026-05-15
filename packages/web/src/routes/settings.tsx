@@ -935,8 +935,8 @@ export function Settings() {
       className="@container-[size] scrollbar-thin scrollbar-track-transparent h-full min-h-0 overflow-y-auto scroll-smooth"
       style={{ timelineScope: generateTimelineScope(SETTINGS_TOC_ITEMS) } as CSSProperties}
     >
-      <div className="grid min-h-full gap-6 p-4 lg:grid-cols-[minmax(0,42rem)_14rem]">
-        <div className="min-w-0 space-y-8">
+      <div className="toc-page-layout min-h-full gap-6 p-4 [--toc-page-sidebar-min:14rem]">
+        <div className="toc-page-content min-w-0 space-y-8">
           <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
             <SettingsIcon className="h-6 w-6 shrink-0" />
             Settings
@@ -2075,7 +2075,7 @@ export function Settings() {
             </>
           )}
         </div>
-        <Toc items={SETTINGS_TOC_ITEMS} className="hidden lg:block" />
+        <Toc items={SETTINGS_TOC_ITEMS} className="toc-page-sidebar" />
       </div>
     </div>
   )

@@ -198,6 +198,7 @@
   --shadow-lg: var(--shadow-lg);
   --shadow-xl: var(--shadow-xl);
   --shadow-2xl: var(--shadow-2xl);
+  --text-shadow-openspec-keyword: 0 0 1px var(--tw-text-shadow-color);
 }
 
 @layer base {
@@ -223,6 +224,42 @@
   }
   button {
     cursor: pointer;
+  }
+
+  .toc-page-layout {
+    --toc-page-sidebar-min: 11.25rem;
+    --toc-page-sidebar-ideal: 20%;
+    --toc-page-sidebar-max: 22rem;
+    display: block;
+  }
+
+  .toc-page-sidebar {
+    margin-bottom: 1rem;
+  }
+
+  @container (min-width: 768px) {
+    .toc-page-layout {
+      display: grid;
+      grid-template-columns:
+        minmax(0, 1fr)
+        minmax(
+          var(--toc-page-sidebar-min),
+          min(var(--toc-page-sidebar-ideal), var(--toc-page-sidebar-max))
+        );
+    }
+
+    .toc-page-content {
+      min-width: 0;
+      order: 1;
+    }
+
+    .toc-page-sidebar {
+      margin-bottom: 0;
+      min-width: 0;
+      max-width: var(--toc-page-sidebar-max);
+      order: 2;
+      width: 100%;
+    }
   }
 }
 
@@ -1073,14 +1110,37 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
   .markdown-content strong {
     font-weight: 600;
   }
-  .spec-markdown-document .markdown-content [data-openspec-kind='requirement'] {
-    border-top: 1px solid color-mix(in oklab, var(--border) 42%, transparent);
-    margin-top: 1.4rem;
-    padding-top: 1rem;
+  .spec-markdown-document .markdown-content .openspec-inline-keyword {
+    @apply font-bold text-shadow-openspec-keyword text-shadow-primary/50;
   }
-  .spec-markdown-document .markdown-content [data-openspec-kind='scenario'] {
-    border-left: 3px solid color-mix(in oklab, var(--primary) 55%, var(--border));
-    padding-left: 0.75rem;
+  .spec-markdown-document .markdown-content {
+    --openspec-reading-label-column: 4.4rem;
+    --openspec-reading-label-gap: 0.9rem;
+    --openspec-reading-content-indent: calc(
+      var(--openspec-reading-label-column) + var(--openspec-reading-label-gap)
+    );
+    --openspec-reading-list-padding: 1.5rem;
+  }
+  .spec-markdown-document .markdown-content ul {
+    list-style-type: square;
+  }
+  .spec-markdown-document .markdown-content [data-openspec-kind='section'] {
+    scroll-margin-top: 1rem;
+  }
+  .spec-markdown-document
+    .markdown-content
+    [data-openspec-section-kind='overview'][data-openspec-kind='section'] {
+    border-inline-start: 0.24rem solid color-mix(in oklab, var(--primary) 72%, transparent);
+    color: var(--primary);
+    margin-top: 1.6rem;
+    margin-bottom: 0;
+    padding: 0.35rem 0 0.25rem 0.75rem;
+  }
+  .spec-markdown-document
+    .markdown-content
+    [data-openspec-section-kind='requirements'][data-openspec-kind='section'] {
+    margin-top: 1.8rem;
+    padding-bottom: 0.35rem;
   }
   .spec-markdown-document .markdown-content .openspec-heading-with-chip {
     align-items: center;
@@ -1088,22 +1148,134 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
     flex-wrap: wrap;
     gap: 0.5rem;
   }
-  .spec-markdown-document .markdown-content [data-openspec-kind='requirement']::before,
-  .spec-markdown-document .markdown-content [data-openspec-kind='scenario']::before {
-    color: var(--muted-foreground);
+  .spec-markdown-document .markdown-content [data-openspec-kind='requirement'] {
+    color: transparent;
     display: block;
-    font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    line-height: 1;
-    margin-bottom: 0.35rem;
-    text-transform: uppercase;
+    font-size: 0;
+    line-height: 0;
+    margin-top: 1.45rem;
+    padding-inline-start: var(--openspec-reading-content-indent);
+    padding-top: 0.2rem;
+    position: relative;
   }
   .spec-markdown-document .markdown-content [data-openspec-kind='requirement']::before {
-    content: 'Requirement';
+    border-bottom: 0.18rem solid var(--primary);
+    color: var(--muted-foreground);
+    content: attr(data-openspec-label);
+    font-size: 0.75rem;
+    font-weight: 800;
+    inline-size: var(--openspec-reading-label-column);
+    inset-block-start: 0.32rem;
+    inset-inline-start: 0;
+    letter-spacing: 0.02em;
+    line-height: 1.4;
+    padding-bottom: 0.32rem;
+    position: absolute;
+  }
+  .spec-markdown-document .markdown-content [data-openspec-kind='requirement']::after {
+    color: var(--foreground);
+    content: attr(data-openspec-title);
+    display: block;
+    font-size: 1.06rem;
+    font-weight: 700;
+    line-height: 1.35;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .spec-markdown-document .markdown-content [data-openspec-kind='scenario'] {
+    color: transparent;
+    display: block;
+    font-size: 0;
+    line-height: 0;
+    margin-top: 1.05rem;
+    padding: 0.15rem 0 0.05rem var(--openspec-reading-content-indent);
+    position: relative;
   }
   .spec-markdown-document .markdown-content [data-openspec-kind='scenario']::before {
-    content: 'Scenario';
+    color: var(--primary);
+    content: attr(data-openspec-label);
+    font-size: 0.68rem;
+    font-weight: 800;
+    inline-size: var(--openspec-reading-label-column);
+    inset-block-start: 0.3rem;
+    inset-inline-start: 0;
+    letter-spacing: 0.08em;
+    line-height: 1.45;
+    position: absolute;
+    text-transform: uppercase;
+  }
+  .spec-markdown-document .markdown-content [data-openspec-kind='scenario']::after {
+    color: var(--foreground);
+    content: attr(data-openspec-title);
+    display: block;
+    font-size: 0.98rem;
+    font-weight: 700;
+    line-height: 1.35;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .spec-markdown-document
+    .markdown-content
+    [data-openspec-zone='purpose']:not([data-openspec-block-kind='listItem']) {
+    background: color-mix(in oklab, var(--primary) 4%, transparent);
+    border-inline-start: 0.24rem solid color-mix(in oklab, var(--primary) 72%, transparent);
+    margin: 0;
+    padding: 0.25rem 0.85rem 0.8rem 0.75rem;
+  }
+  .spec-markdown-document
+    .markdown-content
+    [data-openspec-zone='requirements-intro']:not([data-openspec-block-kind='listItem']) {
+    color: var(--muted-foreground);
+  }
+  .spec-markdown-document
+    .markdown-content
+    [data-openspec-zone='requirement-body']:not([data-openspec-block-kind='listItem']) {
+    margin-inline-start: var(--openspec-reading-content-indent);
+  }
+  .spec-markdown-document
+    .markdown-content
+    [data-openspec-zone='requirement-body']:not([data-openspec-block-kind='listItem'])
+    + [data-openspec-zone='requirement-body']:not([data-openspec-block-kind='listItem']) {
+    margin-top: 0.5rem;
+  }
+  .spec-markdown-document
+    .markdown-content
+    [data-openspec-zone='scenario-body']:not([data-openspec-block-kind='listItem']) {
+    background: color-mix(in oklab, var(--muted) 40%, transparent);
+    margin: 0.35rem 0 0.75rem
+      calc(var(--openspec-reading-content-indent) - var(--openspec-reading-list-padding));
+    padding: 0.65rem 0.85rem 0.7rem var(--openspec-reading-list-padding);
+  }
+  .spec-reading-document .spec-scenario-step {
+    scroll-margin-top: 0.75rem;
+  }
+  .spec-markdown-document .markdown-content li[data-openspec-kind='scenario-step'] {
+    line-height: 1.55;
+  }
+  @container (max-width: 767px) {
+    .spec-markdown-document .markdown-content [data-openspec-kind='requirement'] {
+      padding-inline-start: 0;
+    }
+    .spec-markdown-document
+      .markdown-content
+      [data-openspec-zone='requirement-body']:not([data-openspec-block-kind='listItem']) {
+      margin-inline-start: 0;
+    }
+    .spec-markdown-document .markdown-content [data-openspec-kind='scenario'] {
+      padding-inline-start: 0;
+    }
+    .spec-markdown-document .markdown-content [data-openspec-kind='requirement']::before,
+    .spec-markdown-document .markdown-content [data-openspec-kind='scenario']::before {
+      display: block;
+      position: static;
+      margin-bottom: 0.35rem;
+      width: max-content;
+    }
+    .spec-markdown-document
+      .markdown-content
+      [data-openspec-zone='scenario-body']:not([data-openspec-block-kind='listItem']) {
+      margin-inline-start: 0;
+    }
   }
 }
 

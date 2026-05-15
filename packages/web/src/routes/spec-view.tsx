@@ -110,6 +110,7 @@ function SpecContent({
 
       <SpecMarkdownDocument
         markdown={rawMarkdown}
+        spec={spec}
         requirementCount={spec.requirements.length}
         className="vt-detail-content min-h-0 flex-1"
       />

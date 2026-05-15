@@ -114,4 +114,43 @@ describe('MarkdownViewer ToC behavior', () => {
     expect(wideScroll).toBeTruthy()
     expect(wideScroll?.className).toContain('overflow-y-auto')
   })
+
+  it('lets only the wide ToC use the available vertical space', () => {
+    render(
+      <Toc
+        defaultCollapsed={false}
+        items={[
+          { id: 'root', label: 'Root', level: 1 },
+          { id: 'child', label: 'Child', level: 2 },
+        ]}
+      />
+    )
+
+    const styles = Array.from(document.querySelectorAll('style'))
+      .map((style) => style.textContent ?? '')
+      .join('\n')
+    expect(styles).toContain('.toc-narrow')
+    expect(styles).toContain('max-height: min(20rem')
+    expect(styles).toContain('.toc-narrow-scroll')
+    expect(styles).toContain('max-height: min(18rem')
+    expect(styles).toContain('.toc-wide')
+    expect(styles).toContain('max-height: min(calc(100cqh - 3rem), calc(100svh - 3rem))')
+    expect(styles).not.toContain('.toc-wide {\n    display: none;\n    max-height: min(32rem')
+  })
+
+  it('uses the shared fluid ToC page layout contract', () => {
+    render(<MarkdownViewer markdown={'# Overview'} />)
+
+    const layout = document.querySelector('.toc-page-layout')
+    expect(layout).toBeTruthy()
+    expect(layout?.className).toContain('viewer-layout')
+
+    const content = document.querySelector('.toc-page-content')
+    expect(content).toBeTruthy()
+    expect(content?.className).toContain('viewer-content')
+
+    const sidebar = document.querySelector('.toc-page-sidebar')
+    expect(sidebar).toBeTruthy()
+    expect(sidebar?.className).toContain('viewer-toc')
+  })
 })
