@@ -52,5 +52,5 @@
 
 ## 7. Merge Readiness
 
-- [ ] 7.1 OpenSpec archive flow completed after implementation acceptance
+- [x] 7.1 OpenSpec archive flow completed after implementation acceptance
 - [ ] 7.2 PR merge approved
