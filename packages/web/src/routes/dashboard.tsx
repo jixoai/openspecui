@@ -1,3 +1,4 @@
+import { Badge } from '@/components/badge'
 import { DashboardMetricCard } from '@/components/dashboard/metric-card'
 import {
   getGitEntrySharedDescriptor,
@@ -626,9 +627,14 @@ export function Dashboard() {
                     <h3 className="text-xs font-semibold">{schema.schemaName}</h3>
                   </div>
                   {schema.readyToArchive > 0 ? (
-                    <span className="text-muted-foreground rounded border px-1 py-0.5 text-[10px]">
+                    <Badge
+                      tone="custom"
+                      size="xs"
+                      shape="box"
+                      className="text-muted-foreground border"
+                    >
                       archive-ready {schema.readyToArchive}
-                    </span>
+                    </Badge>
                   ) : null}
                 </div>
                 <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-2">
@@ -939,11 +945,14 @@ export function Dashboard() {
                   </div>
                 </div>
                 <div className="shrink-0 text-right text-sm">
-                  <span
-                    className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${phase.toneClass}`}
+                  <Badge
+                    tone="custom"
+                    size="sm"
+                    shape="box"
+                    className={`border ${phase.toneClass}`}
                   >
                     {phase.label}
-                  </span>
+                  </Badge>
                   <div className="font-medium">
                     {progress.completed}/{progress.total}
                   </div>

@@ -1,3 +1,4 @@
+import { Badge } from '@/components/badge'
 import type { DashboardGitAutoRefreshPreset } from '@/lib/dashboard-git'
 import { getDashboardGitEntryTimestamp } from '@/lib/dashboard-git'
 import { formatDateTime, formatRelativeTime } from '@/lib/format-time'
@@ -332,9 +333,14 @@ export function GitFilesBadge({ files }: { files: number }) {
   }
 
   return (
-    <span className="inline-flex items-center rounded border border-zinc-500/35 bg-zinc-500/10 px-[0.15rem] py-0 font-mono text-[10px] text-zinc-700 dark:border-zinc-300/40 dark:bg-zinc-300/15 dark:text-zinc-100">
+    <Badge
+      tone="custom"
+      size="xs"
+      shape="box"
+      className="h-auto min-w-0 border border-zinc-500/35 bg-zinc-500/10 px-[0.15rem] py-0 font-mono text-[10px] font-normal text-zinc-700 dark:border-zinc-300/40 dark:bg-zinc-300/15 dark:text-zinc-100"
+    >
       {files}f
-    </span>
+    </Badge>
   )
 }
 

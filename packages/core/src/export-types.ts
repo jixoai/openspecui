@@ -50,8 +50,10 @@ export interface ExportSnapshot {
     overview: string
     requirements: Array<{
       id: string
+      title: string
+      bodyMarkdown: string
       text: string
-      scenarios: Array<{ rawText: string }>
+      scenarios: Array<{ title: string; bodyMarkdown: string; rawText: string }>
     }>
     createdAt: number
     updatedAt: number

@@ -143,7 +143,7 @@ describe('NotificationsPanel', () => {
     ])
 
     const count = getByLabelText('3 identical notifications')
-    expect(count.querySelector('svg')).toBeTruthy()
+    expect(count.getAttribute('data-ui-badge')).toBe('true')
     expect(within(count).getByText('3')).toBeTruthy()
     expect(getAllByText('Terminal zsh has an event')).toHaveLength(1)
   })

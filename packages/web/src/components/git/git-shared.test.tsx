@@ -33,4 +33,12 @@ describe('GitFilesBadge', () => {
 
     expect(container.firstChild).toBeNull()
   })
+
+  it('uses the shared badge primitive for visible file counts', () => {
+    render(<GitFilesBadge files={3} />)
+
+    const badge = screen.getByText('3f')
+    expect(badge.getAttribute('data-ui-badge')).toBe('true')
+    expect(badge.className).toContain('font-mono')
+  })
 })

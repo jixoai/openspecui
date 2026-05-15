@@ -82,33 +82,37 @@ export function Toc({ items, defaultCollapsed = true, className = '' }: TocProps
 
   return (
     <aside
-      className={`toc-root scrollbar-none sticky top-0 z-10 max-h-[calc(100cqh-3rem)] self-start overflow-y-auto ${className}`}
+      className={`toc-root sticky top-0 z-10 h-10 w-full min-w-0 max-w-full self-start ${className}`}
     >
       <style>{tocStyles}</style>
 
       {/* Narrow: collapsible */}
-      <div className="toc-narrow border-border bg-background overflow-hidden rounded border">
+      <div className="toc-narrow border-border bg-background/60 overflow-hidden rounded border backdrop-blur-sm">
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className={`text-foreground flex w-full items-center gap-2 px-3 py-2 ${collapsed ? '' : 'border-border border-b'}`}
+          className={`text-foreground flex w-full min-w-0 items-center gap-2 px-3 py-2 ${collapsed ? '' : 'border-border border-b'}`}
           aria-label={collapsed ? 'Show table of contents' : 'Hide table of contents'}
         >
-          <List className="h-4 w-4" />
-          <span className="text-sm">Contents</span>
+          <List className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 truncate text-sm">Contents</span>
           <ChevronDown
-            className={`ml-auto h-4 w-4 transition-transform ${collapsed ? '' : 'rotate-180'}`}
+            className={`ml-auto h-4 w-4 shrink-0 transition-transform ${collapsed ? '' : 'rotate-180'}`}
           />
         </button>
-        {!collapsed && <TocTree nodes={tree} />}
+        {!collapsed && (
+          <div className="toc-scroll toc-narrow-scroll scrollbar-thin scrollbar-track-transparent min-h-0 overflow-y-auto overscroll-contain p-2">
+            <TocTree nodes={tree} />
+          </div>
+        )}
       </div>
 
       {/* Wide: always visible */}
-      <nav className="toc-wide flex flex-col">
-        <div className="text-muted-foreground flex items-center gap-2 px-3 py-2 text-xs font-medium uppercase tracking-wide">
-          <List className="h-3.5 w-3.5" />
-          <span>On this page</span>
+      <nav className="toc-wide min-w-0 max-w-full flex-col overflow-hidden">
+        <div className="text-muted-foreground flex min-w-0 items-center gap-2 px-3 py-2 text-xs font-medium uppercase tracking-wide">
+          <List className="h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 truncate">On this page</span>
         </div>
-        <div className="scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-y-auto p-2">
+        <div className="toc-scroll toc-wide-scroll scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
           <TocTree nodes={tree} />
         </div>
       </nav>
@@ -119,7 +123,7 @@ export function Toc({ items, defaultCollapsed = true, className = '' }: TocProps
  * Find the nearest scrollable ancestor element.
  */
 function findScrollableParent(element: HTMLElement): HTMLElement | null {
-  return element.closest('.toc-root') as HTMLElement
+  return (element.closest('.toc-scroll') ?? element.closest('.toc-root')) as HTMLElement | null
 }
 
 /**
@@ -213,10 +217,18 @@ const css = String.raw
 const tocStyles = css`
   /* Default: narrow mode (collapsible) */
   .toc-narrow {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    max-height: min(20rem, calc(100cqh - 2rem), calc(100svh - 2rem));
+    max-width: 100%;
+    min-width: 0;
+  }
+  .toc-narrow-scroll {
+    max-height: min(18rem, calc(100cqh - 5rem), calc(100svh - 5rem));
   }
   .toc-wide {
     display: none;
+    max-height: min(32rem, calc(100cqh - 3rem), calc(100svh - 3rem));
   }
 
   /* Wide container: show sidebar mode */
@@ -225,7 +237,19 @@ const tocStyles = css`
       display: none;
     }
     .toc-wide {
-      display: block;
+      display: flex;
+    }
+  }
+
+  @supports not (height: 100cqh) {
+    .toc-narrow {
+      max-height: min(20rem, calc(100svh - 2rem));
+    }
+    .toc-narrow-scroll {
+      max-height: min(18rem, calc(100svh - 5rem));
+    }
+    .toc-wide {
+      max-height: min(32rem, calc(100svh - 3rem));
     }
   }
 

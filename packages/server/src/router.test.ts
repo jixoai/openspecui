@@ -79,7 +79,15 @@ const createMockAdapter = () => ({
         id: 'api',
         name: 'Public API',
         overview: 'API spec',
-        requirements: [{ id: 'r-1', text: 'one', scenarios: [{ rawText: 's' }] }],
+        requirements: [
+          {
+            id: 'r-1',
+            title: 'one',
+            bodyMarkdown: 'one',
+            text: 'one',
+            scenarios: [{ title: 's', bodyMarkdown: 's', rawText: 's\ns' }],
+          },
+        ],
       }
     }
     return {
@@ -87,8 +95,20 @@ const createMockAdapter = () => ({
       name: 'Authentication',
       overview: 'Auth spec',
       requirements: [
-        { id: 'r-1', text: 'one', scenarios: [{ rawText: 's' }] },
-        { id: 'r-2', text: 'two', scenarios: [{ rawText: 's' }] },
+        {
+          id: 'r-1',
+          title: 'one',
+          bodyMarkdown: 'one',
+          text: 'one',
+          scenarios: [{ title: 's', bodyMarkdown: 's', rawText: 's\ns' }],
+        },
+        {
+          id: 'r-2',
+          title: 'two',
+          bodyMarkdown: 'two',
+          text: 'two',
+          scenarios: [{ title: 's', bodyMarkdown: 's', rawText: 's\ns' }],
+        },
       ],
     }
   }),
@@ -241,6 +261,10 @@ const createMockContext = (
   }
   const documentService = {
     readSpec: vi.fn((id: string) => adapter.readSpec(id)),
+    readSpecRaw: vi.fn(async (id: string) => {
+      const markdown = await adapter.readSpecRaw(id)
+      return markdown === null ? null : { markdown }
+    }),
     readChange: vi.fn((id: string) => adapter.readChange(id)),
     readArchivedChange: vi.fn((id: string) => adapter.readArchivedChange(id)),
   }
@@ -424,8 +448,12 @@ describe('appRouter', () => {
           overview: 'Spec overview',
           requirements: Array.from({ length: 12 - index }, (_, requirementIndex) => ({
             id: `${id}-req-${requirementIndex}`,
+            title: 'requirement',
+            bodyMarkdown: 'requirement',
             text: 'requirement',
-            scenarios: [{ rawText: 'scenario' }],
+            scenarios: [
+              { title: 'scenario', bodyMarkdown: 'scenario', rawText: 'scenario\nscenario' },
+            ],
           })),
         }
       })
@@ -762,6 +790,19 @@ describe('appRouter', () => {
       const raw = await caller.spec.getRaw({ id: 'auth' })
 
       expect(raw).toContain('# Auth')
+    })
+
+    it('gets processed raw spec markdown through the document service', async () => {
+      const adapter = createMockAdapter()
+      const context = createMockContext(adapter)
+      const readSpecRaw = context.documentService.readSpecRaw as unknown as ReturnType<typeof vi.fn>
+      readSpecRaw.mockResolvedValueOnce({ markdown: '# Processed Auth' })
+      const caller = appRouter.createCaller(context)
+
+      const raw = await caller.spec.getRaw({ id: 'auth' })
+
+      expect(raw).toBe('# Processed Auth')
+      expect(readSpecRaw).toHaveBeenCalledWith('auth', 'view', 'processed')
     })
 
     it('should save a spec', async () => {

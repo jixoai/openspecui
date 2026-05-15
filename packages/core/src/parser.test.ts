@@ -26,8 +26,16 @@ The system SHALL allow users to login with email and password.
       expect(spec.name).toBe('User Authentication')
       expect(spec.overview).toContain('user authentication requirements')
       expect(spec.requirements).toHaveLength(1)
+      expect(spec.requirements[0].title).toBe('Login functionality')
+      expect(spec.requirements[0].bodyMarkdown).toBe(
+        'The system SHALL allow users to login with email and password.'
+      )
       expect(spec.requirements[0].text).toContain('Login functionality')
       expect(spec.requirements[0].scenarios).toHaveLength(1)
+      expect(spec.requirements[0].scenarios[0].title).toBe('Successful login')
+      expect(spec.requirements[0].scenarios[0].bodyMarkdown).toContain(
+        '- WHEN user enters valid credentials'
+      )
     })
 
     it('should handle multiple requirements', () => {
@@ -48,6 +56,99 @@ The system SHALL expose POST endpoints.
       expect(spec.requirements).toHaveLength(2)
       expect(spec.requirements[0].text).toContain('GET endpoint')
       expect(spec.requirements[1].text).toContain('POST endpoint')
+    })
+
+    it('preserves multiline requirement body markdown separately from the heading title', () => {
+      const content = `# Rich Requirement Body
+
+## Purpose
+Expose Markdown fidelity bugs.
+
+## Requirements
+### Requirement: Multiline Markdown Body
+The system SHALL preserve rich Markdown in requirement bodies.
+
+**Important:** this bold marker should render as bold text.
+
+> This quote should render as a quote block.
+
+\`\`\`ts
+const ok = true
+\`\`\`
+
+#### Scenario: Body renders as Markdown
+- WHEN the spec detail page renders this requirement
+- THEN bold, quote, and code blocks render as Markdown
+`
+
+      const spec = parser.parseSpec('rich-requirement-body', content)
+      const req = spec.requirements[0]!
+
+      expect(req.title).toBe('Multiline Markdown Body')
+      expect(req.bodyMarkdown).toContain('**Important:** this bold marker')
+      expect(req.bodyMarkdown).toContain('> This quote should render')
+      expect(req.bodyMarkdown).toContain('```ts\nconst ok = true\n```')
+      expect(req.text).toContain('The system SHALL preserve rich Markdown')
+      expect(req.text).toContain('**Important:**')
+      expect(req.scenarios).toHaveLength(1)
+      expect(req.scenarios[0].title).toBe('Body renders as Markdown')
+      expect(req.scenarios[0].bodyMarkdown).toContain('- WHEN the spec detail page')
+    })
+
+    it('keeps body lists before the first scenario as requirement body content', () => {
+      const content = `# Rich Requirement Body
+
+## Purpose
+Expose Markdown fidelity bugs.
+
+## Requirements
+### Requirement: Body List Before Scenario
+The system SHALL keep lists before scenario headings in the requirement body.
+
+- **Owner**: Platform
+- **Priority**: High
+
+#### Scenario: Explicit scenario only
+- WHEN a scenario heading appears
+- THEN only the following list belongs to the scenario
+`
+
+      const spec = parser.parseSpec('rich-requirement-body', content)
+      const req = spec.requirements[0]!
+
+      expect(req.bodyMarkdown).toContain('- **Owner**: Platform')
+      expect(req.bodyMarkdown).toContain('- **Priority**: High')
+      expect(req.scenarios).toHaveLength(1)
+      expect(req.scenarios[0].rawText).not.toContain('Owner')
+      expect(req.scenarios[0].rawText).toContain('Explicit scenario only')
+      expect(req.scenarios[0].bodyMarkdown).toContain('- WHEN a scenario heading appears')
+    })
+
+    it('does not treat non-scenario fourth-level headings as scenarios', () => {
+      const content = `# Nested Requirement Notes
+
+## Purpose
+Allow authored subheadings inside requirement bodies.
+
+## Requirements
+### Requirement: Nested Notes
+The system SHALL preserve authored subheadings.
+
+#### Notes
+- This is still requirement body content.
+
+#### Scenario: Explicit scenario
+- WHEN the scenario is parsed
+- THEN it starts at the explicit scenario heading
+`
+
+      const spec = parser.parseSpec('nested-requirement-notes', content)
+      const req = spec.requirements[0]!
+
+      expect(req.bodyMarkdown).toContain('- This is still requirement body content.')
+      expect(req.scenarios).toHaveLength(1)
+      expect(req.scenarios[0].title).toBe('Explicit scenario')
+      expect(req.scenarios[0].rawText).not.toContain('Notes')
     })
 
     it('should handle empty spec', () => {
@@ -143,8 +244,16 @@ Some changes
         requirements: [
           {
             id: 'req-1',
+            title: 'Test requirement',
+            bodyMarkdown: '',
             text: 'Test requirement',
-            scenarios: [{ rawText: '- WHEN test\n- THEN pass' }],
+            scenarios: [
+              {
+                title: 'Test scenario',
+                bodyMarkdown: '- WHEN test\n- THEN pass',
+                rawText: 'Test scenario\n- WHEN test\n- THEN pass',
+              },
+            ],
           },
         ],
       }
@@ -155,6 +264,7 @@ Some changes
       expect(markdown).toContain('## Purpose')
       expect(markdown).toContain('This is a test.')
       expect(markdown).toContain('### Requirement: Test requirement')
+      expect(markdown).toContain('#### Scenario: Test scenario')
       expect(markdown).toContain('- WHEN test')
     })
   })

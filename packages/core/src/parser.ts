@@ -22,9 +22,49 @@ export class MarkdownParser {
     const requirements: Requirement[] = []
 
     let currentSection = ''
-    let currentRequirement: Partial<Requirement> | null = null
-    let currentScenarioText = ''
+    let currentRequirement: {
+      id: string
+      title: string
+      bodyLines: string[]
+      scenarios: Array<{ title: string; bodyLines: string[] }>
+    } | null = null
     let reqIndex = 0
+
+    const createRequirementText = (
+      title: string,
+      bodyMarkdown: string,
+      scenarioText: string
+    ): string => [title, bodyMarkdown, scenarioText].filter((part) => part.trim()).join('\n\n')
+
+    const finalizeRequirement = () => {
+      if (!currentRequirement) return
+
+      const scenarios = currentRequirement.scenarios
+        .map((scenario) => {
+          const bodyMarkdown = scenario.bodyLines.join('\n').trim()
+          const rawText = [scenario.title, bodyMarkdown].filter((part) => part.trim()).join('\n')
+          return rawText
+            ? {
+                title: scenario.title,
+                bodyMarkdown,
+                rawText,
+              }
+            : null
+        })
+        .filter((scenario): scenario is Requirement['scenarios'][number] => scenario !== null)
+
+      const bodyMarkdown = currentRequirement.bodyLines.join('\n').trim()
+      const scenarioText = scenarios.map((scenario) => scenario.rawText).join('\n\n')
+      requirements.push({
+        id: currentRequirement.id,
+        title: currentRequirement.title,
+        bodyMarkdown,
+        text: createRequirementText(currentRequirement.title, bodyMarkdown, scenarioText),
+        scenarios,
+      })
+
+      currentRequirement = null
+    }
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
@@ -37,6 +77,7 @@ export class MarkdownParser {
 
       // Parse section headers (## heading)
       if (line.startsWith('## ')) {
+        finalizeRequirement()
         const sectionTitle = line.slice(3).trim().toLowerCase()
         if (sectionTitle.includes('purpose') || sectionTitle.includes('overview')) {
           currentSection = 'overview'
@@ -53,66 +94,43 @@ export class MarkdownParser {
         line.startsWith('### Requirement:') ||
         (line.startsWith('### ') && currentSection === 'requirements')
       ) {
-        if (currentRequirement) {
-          if (currentScenarioText.trim()) {
-            currentRequirement.scenarios = currentRequirement.scenarios || []
-            currentRequirement.scenarios.push({ rawText: currentScenarioText.trim() })
-          }
-          requirements.push({
-            id: currentRequirement.id || `req-${reqIndex}`,
-            text: currentRequirement.text || '',
-            scenarios: currentRequirement.scenarios || [],
-          })
-        }
+        finalizeRequirement()
         reqIndex++
         const reqTitle = line.replace(/^###\s*(Requirement:\s*)?/, '').trim()
         currentRequirement = {
           id: `req-${reqIndex}`,
-          text: reqTitle,
+          title: reqTitle,
+          bodyLines: [],
           scenarios: [],
         }
-        currentScenarioText = ''
         continue
       }
 
       // Parse scenarios (#### Scenario: ...)
-      if (line.startsWith('#### Scenario:') || line.startsWith('#### ')) {
-        if (currentScenarioText.trim() && currentRequirement) {
-          currentRequirement.scenarios = currentRequirement.scenarios || []
-          currentRequirement.scenarios.push({ rawText: currentScenarioText.trim() })
-        }
-        currentScenarioText = line.replace(/^####\s*(Scenario:\s*)?/, '').trim() + '\n'
+      if (line.startsWith('#### Scenario:') && currentRequirement) {
+        const scenarioTitle = line.replace(/^####\s*Scenario:\s*/, '').trim()
+        currentRequirement.scenarios.push({
+          title: scenarioTitle,
+          bodyLines: [],
+        })
         continue
       }
 
       // Accumulate content
       if (currentSection === 'overview' && !currentRequirement) {
         overview += line + '\n'
-      } else if (currentRequirement && line.trim()) {
-        if (line.startsWith('- ') || line.startsWith('* ')) {
-          currentScenarioText += line + '\n'
-        } else if (!line.startsWith('#')) {
-          if (currentRequirement.text && !currentScenarioText) {
-            currentRequirement.text += ' ' + line.trim()
-          } else {
-            currentScenarioText += line + '\n'
-          }
+      } else if (currentRequirement) {
+        const activeScenario = currentRequirement.scenarios[currentRequirement.scenarios.length - 1]
+        if (activeScenario) {
+          activeScenario.bodyLines.push(line)
+        } else {
+          currentRequirement.bodyLines.push(line)
         }
       }
     }
 
     // Finalize last requirement
-    if (currentRequirement) {
-      if (currentScenarioText.trim()) {
-        currentRequirement.scenarios = currentRequirement.scenarios || []
-        currentRequirement.scenarios.push({ rawText: currentScenarioText.trim() })
-      }
-      requirements.push({
-        id: currentRequirement.id || `req-${reqIndex}`,
-        text: currentRequirement.text || '',
-        scenarios: currentRequirement.scenarios || [],
-      })
-    }
+    finalizeRequirement()
 
     return {
       id: specId,
@@ -257,19 +275,22 @@ export class MarkdownParser {
       if (!currentOperation || !currentRequirement) return
       const scenarios = currentRequirement.scenarios
         .map((scenario) => {
-          const rawText = [scenario.title, ...scenario.lines].join('\n').trim()
-          return rawText ? { rawText } : null
+          const bodyMarkdown = scenario.lines.join('\n').trim()
+          const rawText = [scenario.title, bodyMarkdown].filter((part) => part.trim()).join('\n')
+          return rawText ? { title: scenario.title, bodyMarkdown, rawText } : null
         })
-        .filter((s): s is { rawText: string } => Boolean(s))
+        .filter((s): s is Requirement['scenarios'][number] => Boolean(s))
 
-      const descriptionText = currentRequirement.descriptionLines
-        .map((l) => l.trim())
-        .filter(Boolean)
-        .join(' ')
+      const bodyMarkdown = currentRequirement.descriptionLines.join('\n').trim()
+      const text = [currentRequirement.title, bodyMarkdown, ...scenarios.map((s) => s.rawText)]
+        .filter((part) => part.trim())
+        .join('\n\n')
 
       const requirement: Requirement = {
         id: `${deltaSpec.specId}-${currentOperation.toLowerCase()}-${++reqIndex}`,
-        text: descriptionText || currentRequirement.title,
+        title: currentRequirement.title,
+        bodyMarkdown,
+        text,
         scenarios,
       }
 
@@ -395,9 +416,15 @@ export class MarkdownParser {
     content += `## Requirements\n`
 
     for (const req of spec.requirements) {
-      content += `\n### Requirement: ${req.text}\n`
+      content += `\n### Requirement: ${req.title}\n`
+      if (req.bodyMarkdown.trim()) {
+        content += `${req.bodyMarkdown.trim()}\n`
+      }
       for (const scenario of req.scenarios) {
-        content += `\n#### Scenario\n${scenario.rawText}\n`
+        content += `\n#### Scenario: ${scenario.title}\n`
+        if (scenario.bodyMarkdown.trim()) {
+          content += `${scenario.bodyMarkdown.trim()}\n`
+        }
       }
     }
 

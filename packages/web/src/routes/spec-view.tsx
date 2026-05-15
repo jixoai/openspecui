@@ -1,5 +1,5 @@
-import { MarkdownViewer } from '@/components/markdown-viewer'
-import { useSpecSubscription } from '@/lib/use-subscription'
+import { SpecMarkdownDocument } from '@/components/spec-markdown-document'
+import { useSpecRawSubscription, useSpecSubscription } from '@/lib/use-subscription'
 import { VTLink } from '@/lib/view-transitions/navigation'
 import {
   getSharedElementBinding,
@@ -17,13 +17,14 @@ export function SpecView() {
   const sharedDescriptor = useMemo(() => ({ family: 'specs', entityId: specId }) as const, [specId])
 
   const { data: spec, isLoading } = useSpecSubscription(specId)
+  const { data: rawMarkdown, isLoading: isRawLoading } = useSpecRawSubscription(specId)
   // TODO: validation 暂时不支持订阅，后续可以添加
   const validation = null as {
     valid: boolean
     issues: Array<{ severity: string; message: string; path?: string }>
   } | null
 
-  if (isLoading && !spec) {
+  if ((isLoading && !spec) || (isRawLoading && !rawMarkdown)) {
     if (handoff) {
       return (
         <div className="flex min-h-0 flex-1 flex-col gap-6 p-4">
@@ -62,14 +63,16 @@ export function SpecView() {
     return <div className="text-red-600">Spec not found</div>
   }
 
-  return <SpecContent spec={spec} validation={validation} />
+  return <SpecContent spec={spec} rawMarkdown={rawMarkdown ?? ''} validation={validation} />
 }
 
 function SpecContent({
   spec,
+  rawMarkdown,
   validation,
 }: {
   spec: Spec
+  rawMarkdown: string
   validation: {
     valid: boolean
     issues: Array<{ severity: string; message: string; path?: string }>
@@ -105,59 +108,10 @@ function SpecContent({
 
       {validation && <ValidationStatus validation={validation} />}
 
-      <MarkdownViewer
+      <SpecMarkdownDocument
+        markdown={rawMarkdown}
+        requirementCount={spec.requirements.length}
         className="vt-detail-content min-h-0 flex-1"
-        markdown={({ H1, H2, Section }) => (
-          <div className="space-y-6">
-            {/* Overview */}
-            <Section>
-              <H1 id="overview">Overview</H1>
-              <div className="bg-muted/30 mt-2 rounded-lg p-4">
-                {spec.overview ? (
-                  <MarkdownViewer markdown={spec.overview} />
-                ) : (
-                  <span className="text-muted-foreground">No overview</span>
-                )}
-              </div>
-            </Section>
-
-            {/* Requirements */}
-            <Section>
-              <H1 id="requirements">Requirements ({spec.requirements.length})</H1>
-              <div className="mt-3 space-y-4">
-                {spec.requirements.map((req) => (
-                  <Section key={req.id} className="border-border rounded-lg border p-4">
-                    <H2 className="text-base" id={`req-${req.id}`}>
-                      {req.text}
-                    </H2>
-                    {req.scenarios.length > 0 && (
-                      <div className="mt-3">
-                        <div className="text-muted-foreground mb-2 text-sm font-medium">
-                          Scenarios ({req.scenarios.length})
-                        </div>
-                        {req.scenarios.map((scenario, i) => {
-                          // Remove leading/trailing --- separators
-                          const content = scenario.rawText
-                            .replace(/^---\n?/, '')
-                            .replace(/\n?---$/, '')
-                            .trim()
-                          return (
-                            <div key={i} className="bg-muted/50 rounded-md p-3">
-                              <MarkdownViewer markdown={content} />
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </Section>
-                ))}
-                {spec.requirements.length === 0 && (
-                  <div className="text-muted-foreground">No requirements defined</div>
-                )}
-              </div>
-            </Section>
-          </div>
-        )}
       />
     </div>
   )

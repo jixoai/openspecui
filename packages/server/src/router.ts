@@ -502,7 +502,8 @@ export const specRouter = router({
   }),
 
   getRaw: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    return ctx.adapter.readSpecRaw(input.id)
+    const result = await ctx.documentService.readSpecRaw(input.id, 'view', 'processed')
+    return result?.markdown ?? null
   }),
 
   save: publicProcedure
@@ -532,9 +533,10 @@ export const specRouter = router({
   subscribeRaw: publicProcedure
     .input(z.object({ id: z.string() }))
     .subscription(({ ctx, input }) => {
-      return createReactiveSubscriptionWithInput((id: string) => ctx.adapter.readSpecRaw(id))(
-        input.id
-      )
+      return createReactiveSubscriptionWithInput(async (id: string) => {
+        const result = await ctx.documentService.readSpecRaw(id, 'view', 'processed')
+        return result?.markdown ?? null
+      })(input.id)
     }),
 })
 

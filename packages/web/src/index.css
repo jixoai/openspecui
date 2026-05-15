@@ -1045,10 +1045,10 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
     opacity: 0.8;
   }
   .markdown-content blockquote {
-    border-left: 3px solid var(--border);
     padding-left: 0.9rem;
     margin: 0.9rem 0;
     color: var(--muted-foreground);
+    @apply text-muted-foreground/80 border-border/80 border-l border-l-[3px];
   }
   .markdown-content hr {
     border: none;
@@ -1072,6 +1072,38 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
   }
   .markdown-content strong {
     font-weight: 600;
+  }
+  .spec-markdown-document .markdown-content [data-openspec-kind='requirement'] {
+    border-top: 1px solid color-mix(in oklab, var(--border) 42%, transparent);
+    margin-top: 1.4rem;
+    padding-top: 1rem;
+  }
+  .spec-markdown-document .markdown-content [data-openspec-kind='scenario'] {
+    border-left: 3px solid color-mix(in oklab, var(--primary) 55%, var(--border));
+    padding-left: 0.75rem;
+  }
+  .spec-markdown-document .markdown-content .openspec-heading-with-chip {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .spec-markdown-document .markdown-content [data-openspec-kind='requirement']::before,
+  .spec-markdown-document .markdown-content [data-openspec-kind='scenario']::before {
+    color: var(--muted-foreground);
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 1;
+    margin-bottom: 0.35rem;
+    text-transform: uppercase;
+  }
+  .spec-markdown-document .markdown-content [data-openspec-kind='requirement']::before {
+    content: 'Requirement';
+  }
+  .spec-markdown-document .markdown-content [data-openspec-kind='scenario']::before {
+    content: 'Scenario';
   }
 }
 

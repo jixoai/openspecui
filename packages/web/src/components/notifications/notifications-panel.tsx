@@ -1,8 +1,9 @@
+import { CountBadge } from '@/components/badge'
 import { usePopAreaConfigContext } from '@/components/layout/pop-area'
 import { Tooltip } from '@/components/tooltip'
 import { useNotifications } from '@/lib/notifications/context'
 import type { NotificationAggregate, NotificationGroup } from '@openspecui/core/notifications'
-import { Bell, Check, ChevronDown, ExternalLink, Trash2, X } from 'lucide-react'
+import { Bell, Check, ChevronDown, ExternalLink, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 function formatTime(ts: number): string {
@@ -58,13 +59,14 @@ function NotificationAggregateItem({ aggregate }: { aggregate: NotificationAggre
                 <h4 className="truncate text-sm font-medium">
                   {notification.title}
                   {aggregate.count > 1 && (
-                    <span
-                      className="text-primary border-primary/35 bg-primary/10 ml-1 inline-flex items-center gap-0.5 rounded border px-1 py-px align-baseline text-[11px] leading-none"
+                    <CountBadge
+                      count={aggregate.count}
+                      tone="subtle"
+                      size="sm"
+                      shape="box"
+                      className="ml-1 align-baseline"
                       aria-label={`${aggregate.count} identical notifications`}
-                    >
-                      <X className="h-3 w-3" aria-hidden="true" />
-                      <span>{aggregate.count}</span>
-                    </span>
+                    />
                   )}
                 </h4>
               </div>

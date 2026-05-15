@@ -20,6 +20,32 @@ import { slugify, TocCollector, TocLevelProvider, TocProvider, useTocContext } f
 
 type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6
 
+type HeadingDataAttributes = Partial<Record<`data-${string}`, string | number | boolean>>
+
+export interface MarkdownHeadingTransformInput {
+  /** Heading level from the markdown source before nested level offsets. */
+  sourceLevel: HeadingLevel
+  /** Final rendered heading level after nested offsets. */
+  level: HeadingLevel
+  /** Plain text extracted from the rendered heading children. */
+  text: string
+}
+
+export interface MarkdownHeadingTransformResult {
+  /** Stable id seed passed into the ToC collector. Duplicate ids still receive suffixes. */
+  id?: string
+  /** Optional ToC label when navigation text should differ from the visible heading. */
+  tocLabel?: string
+  /** Optional content appended to the visible heading without changing ToC collection text. */
+  suffix?: ReactNode
+  className?: string
+  dataAttributes?: HeadingDataAttributes
+}
+
+export type MarkdownHeadingTransform = (
+  input: MarkdownHeadingTransformInput
+) => MarkdownHeadingTransformResult | undefined
+
 interface HeadingProps {
   id?: string
   children?: ReactNode
@@ -56,6 +82,8 @@ export interface MarkdownViewerProps {
   onReady?: () => void
   /** 是否参与 ToC 收集（嵌套预览内容可关闭） */
   collectToc?: boolean
+  /** Optional string-markdown heading transform for semantic attributes and ToC labels. */
+  headingTransform?: MarkdownHeadingTransform
 }
 
 const SectionTimelineContext = createContext<number | null>(null)
@@ -82,21 +110,41 @@ export function MarkdownViewer({
   className = '',
   onReady,
   collectToc = true,
+  headingTransform,
 }: MarkdownViewerProps) {
   const parentCtx = useTocContext()
   const isNested = !!parentCtx
 
   if (!collectToc) {
-    return <PlainMarkdownViewer markdown={markdown} className={className} />
+    return (
+      <PlainMarkdownViewer
+        markdown={markdown}
+        className={className}
+        headingTransform={headingTransform}
+      />
+    )
   }
 
   if (isNested) {
     // 嵌套模式：只渲染内容，向父级贡献 ToC items
-    return <NestedMarkdownViewer markdown={markdown} className={className} />
+    return (
+      <NestedMarkdownViewer
+        markdown={markdown}
+        className={className}
+        headingTransform={headingTransform}
+      />
+    )
   }
 
   // 顶层模式：渲染完整布局（content + ToC sidebar）
-  return <RootMarkdownViewer markdown={markdown} className={className} onReady={onReady} />
+  return (
+    <RootMarkdownViewer
+      markdown={markdown}
+      className={className}
+      onReady={onReady}
+      headingTransform={headingTransform}
+    />
+  )
 }
 
 // ============================================================================
@@ -106,9 +154,19 @@ export function MarkdownViewer({
 function PlainMarkdownViewer({
   markdown,
   className = '',
-}: Pick<MarkdownViewerProps, 'markdown' | 'className'>) {
+  headingTransform,
+}: Pick<MarkdownViewerProps, 'markdown' | 'className' | 'headingTransform'>) {
   if (typeof markdown === 'string') {
-    return <MarkdownContent className={className}>{markdown}</MarkdownContent>
+    return (
+      <StringMarkdownContent
+        markdown={markdown}
+        className={className}
+        collector={new TocCollector()}
+        levelOffset={0}
+        headingTransform={headingTransform}
+        collectToc={false}
+      />
+    )
   }
   return <PlainBuilderMarkdownContent builder={markdown} className={className} />
 }
@@ -164,7 +222,12 @@ function PlainBuilderMarkdownContent({
 // RootMarkdownViewer - 顶层模式
 // ============================================================================
 
-function RootMarkdownViewer({ markdown, className, onReady }: MarkdownViewerProps) {
+function RootMarkdownViewer({
+  markdown,
+  className,
+  onReady,
+  headingTransform,
+}: MarkdownViewerProps) {
   const [tocItems, setTocItems] = useState<TocItem[]>([])
   const collectorRef = useRef<TocCollector>(null!)
   const readyCalledRef = useRef(false)
@@ -194,7 +257,12 @@ function RootMarkdownViewer({ markdown, className, onReady }: MarkdownViewerProp
   // 渲染内容（在 TocProvider 内部，这样嵌套的 MarkdownViewer 能获取 Context）
   const content =
     typeof markdown === 'string' ? (
-      <StringMarkdownContent markdown={markdown} collector={collector} levelOffset={0} />
+      <StringMarkdownContent
+        markdown={markdown}
+        collector={collector}
+        levelOffset={0}
+        headingTransform={headingTransform}
+      />
     ) : (
       <BuilderMarkdownContent builder={markdown} collector={collector} levelOffset={0} />
     )
@@ -220,7 +288,7 @@ function RootMarkdownViewer({ markdown, className, onReady }: MarkdownViewerProp
 // NestedMarkdownViewer - 嵌套模式
 // ============================================================================
 
-function NestedMarkdownViewer({ markdown, className }: MarkdownViewerProps) {
+function NestedMarkdownViewer({ markdown, className, headingTransform }: MarkdownViewerProps) {
   const ctx = useTocContext()!
   const { collector, levelOffset } = ctx
 
@@ -231,6 +299,7 @@ function NestedMarkdownViewer({ markdown, className }: MarkdownViewerProps) {
       className={className}
       collector={collector}
       levelOffset={levelOffset}
+      headingTransform={headingTransform}
     />
   ) : (
     <BuilderMarkdownContent
@@ -251,11 +320,15 @@ function StringMarkdownContent({
   collector,
   levelOffset,
   className,
+  headingTransform,
+  collectToc = true,
 }: {
   markdown: string
   collector: TocCollector
   levelOffset: number
   className?: string
+  headingTransform?: MarkdownHeadingTransform
+  collectToc?: boolean
 }) {
   // 为 markdown 中的标题创建自定义组件
   const components = useMemo(() => {
@@ -266,17 +339,34 @@ function StringMarkdownContent({
 
         // 由共享 collector 分配全局唯一 id，避免 ToC 与 DOM id 不一致
         const adjustedLevel = Math.min(level + levelOffset, 6) as HeadingLevel
+        const transform = headingTransform?.({
+          sourceLevel: level,
+          level: adjustedLevel,
+          text,
+        })
+        const tocLabel = transform?.tocLabel ?? text
+
         const registration =
-          sectionTimelineIndex === null
-            ? collector.add(text, adjustedLevel)
-            : collector.bindSectionHeading(sectionTimelineIndex, text, adjustedLevel)
+          collectToc === false
+            ? collector.add(tocLabel, adjustedLevel, transform?.id)
+            : sectionTimelineIndex === null
+              ? collector.add(tocLabel, adjustedLevel, transform?.id)
+              : collector.bindSectionHeading(
+                  sectionTimelineIndex,
+                  tocLabel,
+                  adjustedLevel,
+                  transform?.id
+                )
 
         return (
           <HeadingElement
             level={adjustedLevel}
             id={registration.id}
             timelineIndex={registration.timelineIndex}
-            bindTimeline={registration.binding === 'heading'}
+            bindTimeline={collectToc !== false && registration.binding === 'heading'}
+            className={transform?.className}
+            dataAttributes={transform?.dataAttributes}
+            suffix={transform?.suffix}
           >
             {children}
           </HeadingElement>
@@ -292,7 +382,7 @@ function StringMarkdownContent({
       h5: createHeading(5),
       h6: createHeading(6),
     }
-  }, [collector, levelOffset])
+  }, [collector, levelOffset, headingTransform, collectToc])
 
   return (
     <MarkdownContent className={className} components={components}>
@@ -406,14 +496,18 @@ function HeadingElement({
   timelineIndex,
   bindTimeline = false,
   children,
+  suffix,
   className,
+  dataAttributes,
 }: {
   level: HeadingLevel
   id: string
   timelineIndex?: number
   bindTimeline?: boolean
   children?: ReactNode
+  suffix?: ReactNode
   className?: string
+  dataAttributes?: HeadingDataAttributes
 }) {
   const style =
     bindTimeline && timelineIndex !== undefined
@@ -423,38 +517,50 @@ function HeadingElement({
   switch (level) {
     case 1:
       return (
-        <h1 id={id} className={className} style={style}>
+        <h1 id={id} className={className} style={style} {...dataAttributes}>
           {children}
+          {suffix ? ' ' : null}
+          {suffix}
         </h1>
       )
     case 2:
       return (
-        <h2 id={id} className={className} style={style}>
+        <h2 id={id} className={className} style={style} {...dataAttributes}>
           {children}
+          {suffix ? ' ' : null}
+          {suffix}
         </h2>
       )
     case 3:
       return (
-        <h3 id={id} className={className} style={style}>
+        <h3 id={id} className={className} style={style} {...dataAttributes}>
           {children}
+          {suffix ? ' ' : null}
+          {suffix}
         </h3>
       )
     case 4:
       return (
-        <h4 id={id} className={className} style={style}>
+        <h4 id={id} className={className} style={style} {...dataAttributes}>
           {children}
+          {suffix ? ' ' : null}
+          {suffix}
         </h4>
       )
     case 5:
       return (
-        <h5 id={id} className={className} style={style}>
+        <h5 id={id} className={className} style={style} {...dataAttributes}>
           {children}
+          {suffix ? ' ' : null}
+          {suffix}
         </h5>
       )
     case 6:
       return (
-        <h6 id={id} className={className} style={style}>
+        <h6 id={id} className={className} style={style} {...dataAttributes}>
           {children}
+          {suffix ? ' ' : null}
+          {suffix}
         </h6>
       )
   }

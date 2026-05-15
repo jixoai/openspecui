@@ -1,3 +1,4 @@
+import { Badge, CountBadge } from '@/components/badge'
 import {
   ContextMenu,
   type ContextMenuAnchor,
@@ -137,8 +138,9 @@ function TerminalUnreadBadge({ unreadCount }: { unreadCount: number }) {
   const label = `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}`
   if (unreadCount === 1) {
     return (
-      <span
-        className="bg-primary -mr-0.5 -mt-0.5 block h-1.5 w-1.5 rounded-full ring-1 ring-[var(--terminal)]"
+      <Badge
+        size="dot"
+        className="-mr-0.5 -mt-0.5 ring-1 ring-[var(--terminal)]"
         title={label}
         aria-label={label}
       />
@@ -146,13 +148,12 @@ function TerminalUnreadBadge({ unreadCount }: { unreadCount: number }) {
   }
 
   return (
-    <span
-      className="bg-primary text-primary-foreground inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none ring-1 ring-[var(--terminal)]"
+    <CountBadge
+      count={unreadCount}
+      className="ring-1 ring-[var(--terminal)]"
       title={label}
       aria-label={label}
-    >
-      {unreadCount > 99 ? '99+' : unreadCount}
-    </span>
+    />
   )
 }
 

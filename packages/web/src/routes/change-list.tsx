@@ -1,3 +1,4 @@
+import { Badge } from '@/components/badge'
 import {
   classifyChangeWorkflowPhase,
   inferTrackedArtifactStatus,
@@ -97,11 +98,14 @@ export function ChangeList() {
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex flex-col items-end gap-1 text-right text-sm">
-                    <span
-                      className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${phase.toneClass}`}
+                    <Badge
+                      tone="custom"
+                      size="sm"
+                      shape="box"
+                      className={`border ${phase.toneClass}`}
                     >
                       {phase.label}
-                    </span>
+                    </Badge>
                     <div className="font-medium">
                       {change.progress.completed}/{change.progress.total}
                     </div>

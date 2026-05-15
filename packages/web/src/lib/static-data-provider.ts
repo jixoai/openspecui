@@ -787,7 +787,7 @@ export async function getSpecRaw(id: string): Promise<string | null> {
   if (!snapshot) return null
 
   const spec = snapshot.specs.find((s) => s.id === id)
-  return spec?.sourceContent ?? spec?.content ?? null
+  return spec?.content ?? spec?.sourceContent ?? null
 }
 
 /**

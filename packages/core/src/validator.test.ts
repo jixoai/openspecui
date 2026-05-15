@@ -14,8 +14,16 @@ describe('Validator', () => {
         requirements: [
           {
             id: 'req-1',
+            title: 'Do something',
+            bodyMarkdown: 'The system SHALL do something',
             text: 'The system SHALL do something',
-            scenarios: [{ rawText: '- WHEN test\n- THEN pass' }],
+            scenarios: [
+              {
+                title: 'Test',
+                bodyMarkdown: '- WHEN test\n- THEN pass',
+                rawText: 'Test\n- WHEN test\n- THEN pass',
+              },
+            ],
           },
         ],
       }
@@ -34,8 +42,10 @@ describe('Validator', () => {
         requirements: [
           {
             id: 'req-1',
+            title: 'Work',
+            bodyMarkdown: 'The system SHALL work',
             text: 'The system SHALL work',
-            scenarios: [{ rawText: 'test' }],
+            scenarios: [{ title: 'Test', bodyMarkdown: 'test', rawText: 'Test\ntest' }],
           },
         ],
       }
@@ -68,8 +78,10 @@ describe('Validator', () => {
         requirements: [
           {
             id: 'req-1',
+            title: 'Do something',
+            bodyMarkdown: 'The system will do something',
             text: 'The system will do something',
-            scenarios: [{ rawText: 'test' }],
+            scenarios: [{ title: 'Test', bodyMarkdown: 'test', rawText: 'Test\ntest' }],
           },
         ],
       }
@@ -88,6 +100,8 @@ describe('Validator', () => {
         requirements: [
           {
             id: 'req-1',
+            title: 'Work',
+            bodyMarkdown: 'The system SHALL work',
             text: 'The system SHALL work',
             scenarios: [],
           },

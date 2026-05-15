@@ -42,11 +42,20 @@ export type ChangeFile = z.infer<typeof ChangeFileSchema>
 export const RequirementSchema = z.object({
   /** Unique identifier within the spec (e.g., "req-1") */
   id: z.string(),
-  /** Requirement text, should contain SHALL/MUST keywords */
+  /** Requirement heading text from `### Requirement:` */
+  title: z.string(),
+  /** Markdown body between the requirement heading and the first scenario/next requirement */
+  bodyMarkdown: z.string(),
+  /** Full requirement text used for validation and search facts */
   text: z.string(),
   /** Test scenarios for this requirement */
   scenarios: z.array(
     z.object({
+      /** Scenario heading text from `#### Scenario:` */
+      title: z.string(),
+      /** Markdown body between this scenario heading and the next scenario/requirement */
+      bodyMarkdown: z.string(),
+      /** Full scenario Markdown facts, including the scenario title */
       rawText: z.string(),
     })
   ),

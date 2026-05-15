@@ -1,3 +1,4 @@
+import { CountBadge } from '@/components/badge'
 import { Tooltip } from '@/components/tooltip'
 import { useNotifications } from '@/lib/notifications/context'
 import { cn } from '@/lib/utils'
@@ -32,15 +33,11 @@ export function NotificationEntryButton({
       >
         <Bell className={cn('h-4 w-4', iconClassName)} />
         {unreadCount > 0 && (
-          <span
-            className={cn(
-              'bg-primary ring-background text-primary-foreground absolute -right-1.5 -top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-4 ring-2',
-              badgeClassName
-            )}
+          <CountBadge
+            count={unreadCount}
+            className={cn('ring-background absolute -right-1.5 -top-1.5 ring-2', badgeClassName)}
             aria-hidden="true"
-          >
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </span>
+          />
         )}
       </button>
     </Tooltip>

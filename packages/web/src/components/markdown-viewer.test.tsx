@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MarkdownViewer } from './markdown-viewer'
+import { Toc } from './toc'
 
 describe('MarkdownViewer ToC behavior', () => {
   beforeEach(() => {
@@ -88,5 +89,29 @@ describe('MarkdownViewer ToC behavior', () => {
     fireEvent.click(rootLink)
     expect(window.location.hash).toBe('#root')
     expect(scrollToSpy).toHaveBeenCalled()
+  })
+
+  it('keeps ToC scrolling inside responsive panels instead of the sticky root', () => {
+    render(
+      <Toc
+        defaultCollapsed={false}
+        items={[
+          { id: 'root', label: 'Root', level: 1 },
+          { id: 'child', label: 'Child', level: 2 },
+        ]}
+      />
+    )
+
+    const root = document.querySelector('.toc-root')
+    expect(root).toBeTruthy()
+    expect(root?.className).not.toContain('overflow-y-auto')
+
+    const narrowScroll = document.querySelector('.toc-narrow-scroll')
+    expect(narrowScroll).toBeTruthy()
+    expect(narrowScroll?.className).toContain('overflow-y-auto')
+
+    const wideScroll = document.querySelector('.toc-wide-scroll')
+    expect(wideScroll).toBeTruthy()
+    expect(wideScroll?.className).toContain('overflow-y-auto')
   })
 })
