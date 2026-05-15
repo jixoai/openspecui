@@ -1151,7 +1151,7 @@ Terminal的字体选择器它应该是个 `Array<string>`+`Input|TextArea`，用
 Switch（或者也叫Toggle）组件用于“开关”的含义
 checkbox 组件用于“选中与否”的含义
 
-升级完成后，检查全局的 inputCheckbox，然后进行升级
+升级完成后，检查全局的 input-Checkbox，然后进行升级
 
 ---
 
@@ -1205,3 +1205,11 @@ Primary Button 需要有一个变体：activity
 比如我找到 Enable System Notifications 这里的 Enabled。
 以及 Settings 页面中的各种 Save|Apply 按钮，理论可以使用这个变体。而不是用 disabled
 所以你再找找，有没有其它的地方可以利用这个变体的。
+
+---
+
+在前端实现自动翻译的功能。这是一个实验新的功能，主要是用在最终输出的。
+技术基础：https://developer.chrome.com/docs/ai/translator-api 使用 Language Detector 和 Translator APIs ，这些在桌面端是支持的。
+对于移动端或者不兼容的浏览器，使用 mkljczk/translator-api-polyfill（底层使用 @mkljczk/bergamot-translator）
+
+---
