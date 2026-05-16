@@ -1,5 +1,11 @@
 # @openspecui/web
 
+## 3.6.1
+
+### Patch Changes
+
+- 026e05d: Fix TopLayer entry button sizing and PopArea view-transition shell layering.
+
 ## 3.6.0
 
 ### Minor Changes
