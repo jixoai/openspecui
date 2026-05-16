@@ -31,6 +31,28 @@ describe('Dialog', () => {
     expect(getByRole('dialog', { name: 'Dialog title', hidden: true })).toBeTruthy()
   })
 
+  it('can add a class to the content shell without moving it onto the panel', () => {
+    const { container } = render(
+      <Dialog
+        open
+        title="Dialog title"
+        onClose={() => {}}
+        contentShellClassName="pop-area-vt-shell"
+        className="pop-area-panel"
+      >
+        <div>Dialog body</div>
+      </Dialog>
+    )
+
+    const shell = container.querySelector('.pop-area-vt-shell')
+    const panel = container.querySelector('.pop-area-panel')
+
+    expect(shell).toBeTruthy()
+    expect(panel).toBeTruthy()
+    expect(shell).not.toBe(panel)
+    expect(shell?.contains(panel)).toBe(true)
+  })
+
   it('reuses a single shared head style for multiple dialogs', () => {
     render(
       <>
