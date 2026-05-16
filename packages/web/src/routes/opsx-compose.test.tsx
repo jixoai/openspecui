@@ -1,5 +1,5 @@
-import { render } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OpsxComposeRoute } from './opsx-compose'
 
 const { setConfigMock, useLocationMock } = vi.hoisted(() => ({
@@ -17,7 +17,9 @@ vi.mock('@/components/layout/pop-area', () => ({
 }))
 
 vi.mock('@/components/code-editor', () => ({
-  CodeEditor: () => <textarea aria-label="Prompt" />,
+  CodeEditor: ({ value }: { value: string }) => (
+    <textarea aria-label="Prompt" value={value} readOnly />
+  ),
 }))
 
 vi.mock('@/lib/terminal-context', () => ({
@@ -66,9 +68,16 @@ describe('OpsxComposeRoute', () => {
     })
   })
 
-  it('blocks outside dismiss for change detail compose workflow dialogs', () => {
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('blocks outside dismiss for change detail compose workflow dialogs', async () => {
     render(<OpsxComposeRoute />)
 
     expect(setConfigMock).toHaveBeenCalledWith(expect.objectContaining({ onDismissRequest: null }))
+    await waitFor(() => {
+      expect(screen.getByLabelText('Prompt')).toHaveValue('prepared prompt')
+    })
   })
 })

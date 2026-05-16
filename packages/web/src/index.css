@@ -266,7 +266,7 @@
 .main-content,
 .bottom-area,
 .vt-detail-content,
-.pop-area-panel {
+.pop-area-vt-shell {
   contain: paint;
   isolation: isolate;
   position: relative;
@@ -316,7 +316,7 @@ html[data-vt-kind='route-top'][data-vt-area='bottom'] .bottom-area {
   view-transition-name: vt-area-bottom;
 }
 
-html[data-vt-kind='route-top'][data-vt-area='pop'] dialog.openspec-dialog[open] .pop-area-panel {
+html[data-vt-kind='route-top'][data-vt-area='pop'] dialog.openspec-dialog[open] .pop-area-vt-shell {
   view-transition-name: vt-area-pop;
 }
 
@@ -1111,7 +1111,7 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
     font-weight: 600;
   }
   .spec-markdown-document .markdown-content .openspec-inline-keyword {
-    @apply font-bold text-shadow-openspec-keyword text-shadow-primary/50;
+    @apply text-shadow-openspec-keyword text-shadow-primary/50 font-bold;
   }
   .spec-markdown-document .markdown-content {
     --openspec-reading-label-column: 4.4rem;

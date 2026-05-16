@@ -9,6 +9,7 @@ import { NotificationEntryButton } from '../notifications/notification-entry-but
 import { AreaNav } from './area-nav'
 import { navItems, settingsItem } from './nav-items'
 import { StatusIndicator } from './status-bar'
+import { TopLayerEntryButton } from './top-layer-entry-button'
 
 /** Mobile header with hamburger menu — matches desktop sidebar structure */
 export function MobileHeader() {
@@ -36,17 +37,12 @@ export function MobileHeader() {
           <span className="font-nav text-[12px] tracking-[0.04em]">{pageTitle}</span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
+          <TopLayerEntryButton
+            label="Open search"
+            icon={<Search className="h-4 w-4" />}
             onClick={() => vtNavController.activatePop('/search')}
-            className="hover:bg-muted border-primary h-7.5 w-7.5 inline-flex items-center justify-center rounded-md border"
-            aria-label="Open search"
-          >
-            <Search className="h-4 w-4" />
-          </button>
-          {!isStatic && (
-            <NotificationEntryButton className="border-primary hover:bg-muted h-7.5 w-7.5" />
-          )}
+          />
+          {!isStatic && <NotificationEntryButton />}
           <StatusIndicator compact />
         </div>
       </header>

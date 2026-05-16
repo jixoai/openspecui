@@ -121,7 +121,7 @@ export function DesktopStatusBar() {
         )}
       </div>
       <div className="flex items-center gap-2">
-        <NotificationEntryButton className="h-6 w-6" iconClassName="h-3.5 w-3.5" />
+        <NotificationEntryButton />
       </div>
     </div>
   )

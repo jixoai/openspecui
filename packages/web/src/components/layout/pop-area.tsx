@@ -202,6 +202,7 @@ function PopAreaDialog() {
       headerActions={config.headerActions}
       dialogClassName={semanticDialogClassName}
       contentClassName={semanticContentClassName}
+      contentShellClassName="pop-area-vt-shell"
       className={['pop-area-panel', semanticPanelClassName, config.panelClassName]
         .filter((v) => v.length > 0)
         .join(' ')}

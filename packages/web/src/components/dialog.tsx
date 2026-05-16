@@ -19,6 +19,7 @@ interface DialogProps {
   footer?: ReactNode
   dialogClassName?: string
   contentClassName?: string
+  contentShellClassName?: string
   className?: string
   bodyClassName?: string
   maxHeight?: string
@@ -41,6 +42,7 @@ export function Dialog({
   footer,
   dialogClassName = '',
   contentClassName = '',
+  contentShellClassName = '',
   className = '',
   bodyClassName = '',
   maxHeight = '86vh',
@@ -179,7 +181,7 @@ export function Dialog({
       className={`openspec-dialog m-0 h-dvh w-screen max-w-none border-0 bg-transparent p-0 ${dialogClassName}`}
     >
       <div
-        className={`flex h-full w-full items-center justify-center px-4 py-4 ${contentClassName}`}
+        className={`flex h-full w-full items-center justify-center px-4 py-4 ${contentClassName} ${contentShellClassName}`}
       >
         <div
           ref={panelRef}

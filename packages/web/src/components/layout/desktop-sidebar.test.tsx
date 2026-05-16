@@ -87,7 +87,10 @@ describe('DesktopSidebar', () => {
     const { container } = render(<DesktopSidebar />)
 
     expect(screen.getByAltText('OpenSpec')).toBeTruthy()
+    const expandedSearchButton = screen.getByRole('button', { name: 'Search' })
     expect(screen.getByText('Search')).toBeTruthy()
+    expect(expandedSearchButton.className).toContain('justify-start')
+    expect(expandedSearchButton.className).not.toContain('justify-center')
     expect(screen.getByText('Dashboard')).toBeTruthy()
     expect(screen.getByText('Bottom')).toBeTruthy()
 

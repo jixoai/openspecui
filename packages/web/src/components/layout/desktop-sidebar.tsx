@@ -1,4 +1,3 @@
-import { Tooltip } from '@/components/tooltip'
 import { getHostedScopedStorageKey } from '@/lib/hosted-session'
 import { getBasePath, isStaticMode } from '@/lib/static-mode'
 import { useDarkMode } from '@/lib/use-dark-mode'
@@ -6,8 +5,10 @@ import { useNavLayout } from '@/lib/use-nav-controller'
 import { VTLink, vtNavController } from '@/lib/view-transitions/navigation'
 import { PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { Tooltip } from '../tooltip'
 import { AreaNav } from './area-nav'
 import { navItems, settingsItem } from './nav-items'
+import { TopLayerEntryButton } from './top-layer-entry-button'
 
 const DESKTOP_SIDEBAR_COLLAPSED_STORAGE_KEY = 'openspecui:desktop-sidebar-collapsed'
 
@@ -78,20 +79,15 @@ export function DesktopSidebar() {
         </Tooltip>
       </div>
 
-      <Tooltip content={collapsed ? 'Search' : undefined} sideOffset={12}>
-        <button
-          type="button"
-          onClick={() => vtNavController.activatePop('/search')}
-          aria-label={collapsed ? 'Search' : undefined}
-          title={collapsed ? 'Search' : undefined}
-          className={`hover:bg-muted border-primary mb-4 flex items-center rounded-md border py-2 ${
-            collapsed ? 'justify-center px-2' : 'gap-2 px-3 text-left'
-          }`}
-        >
-          <Search className="h-4 w-4 shrink-0" />
-          {!collapsed ? <span className="font-nav text-base tracking-[0.04em]">Search</span> : null}
-        </button>
-      </Tooltip>
+      <TopLayerEntryButton
+        label="Search"
+        text="Search"
+        icon={<Search className="h-4 w-4 shrink-0" />}
+        collapsed={collapsed}
+        size="desktop"
+        className="mb-4 flex"
+        onClick={() => vtNavController.activatePop('/search')}
+      />
 
       {isStatic ? (
         /* Static mode: simple nav list */
