@@ -165,12 +165,11 @@ export class OpenSpecAdapter {
     const ids = await this.listArchivedChanges()
     const results = await Promise.all(
       ids.map(async (id) => {
-        const change = await this.readArchivedChange(id)
         const archiveDir = join(this.archiveDir, id)
         const timeInfo = await this.getFileTimeInfo(archiveDir)
         return {
           id,
-          name: change?.name ?? id,
+          name: id,
           createdAt: timeInfo?.createdAt ?? 0,
           updatedAt: timeInfo?.updatedAt ?? 0,
         }
@@ -257,6 +256,7 @@ export class OpenSpecAdapter {
       id,
       files,
       schemas: options.schemas,
+      schemaDiagnostics: options.schemaDiagnostics,
     })
   }
 

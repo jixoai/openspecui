@@ -64,6 +64,10 @@ const createMockAdapter = () => ({
   listArchivedChangesWithMeta: vi
     .fn()
     .mockResolvedValue([{ id: 'old-change', name: 'Old Change', createdAt: 1, updatedAt: 1 }]),
+  readArchivedChangeFiles: vi.fn().mockResolvedValue([
+    { path: '.openspec.yaml', type: 'file', content: 'schema: custom-audit\n' },
+    { path: 'reports/summary.md', type: 'file', content: '# Summary\n' },
+  ]),
   readArchivedChange: vi.fn().mockResolvedValue({
     id: 'old-change',
     name: 'Old Change',
@@ -261,6 +265,22 @@ const createMockContext = (
       .mockReturnValue([
         { path: 'specs/auth/spec.md', type: 'file', content: '# Source delta spec' },
       ]),
+    ensureSchemaDetail: vi.fn().mockResolvedValue(undefined),
+    ensureSchemaYaml: vi.fn().mockResolvedValue(undefined),
+    getSchemaDetail: vi.fn().mockReturnValue({
+      name: 'custom-audit',
+      artifacts: [{ id: 'summary', outputPath: 'reports/summary.md', requires: [] }],
+      applyRequires: [],
+    }),
+    getSchemaYaml: vi.fn().mockReturnValue(`
+name: custom-audit
+artifacts:
+  - id: summary
+    generates: reports/summary.md
+  - id: broken
+    futureOutput:
+      path: reports/broken.md
+`),
   }
 
   const searchService = {
@@ -275,6 +295,16 @@ const createMockContext = (
     }),
     readChange: vi.fn((id: string) => adapter.readChange(id)),
     readArchivedChange: vi.fn((id: string) => adapter.readArchivedChange(id)),
+    readEntityDetail: vi.fn().mockResolvedValue({
+      stage: 'archive',
+      id: 'old-change',
+      exists: true,
+      schemaName: 'custom-audit',
+      files: [{ path: 'reports/summary.md', type: 'file', content: '# Summary\n' }],
+      artifacts: [],
+      ungroupedFiles: [{ path: 'reports/summary.md', type: 'file', content: '# Summary\n' }],
+      diagnostics: [],
+    }),
     readChangeArtifactOutput: vi.fn().mockResolvedValue('# Processed artifact'),
     readChangeGlobArtifactFiles: vi
       .fn()
@@ -867,6 +897,55 @@ describe('appRouter', () => {
 
       expect(result).toBe(true)
       expect(adapter.archiveChange).toHaveBeenCalledWith('add-caching')
+    })
+  })
+
+  describe('archive', () => {
+    it('reads archive detail with schema diagnostics from the shared entity read options', async () => {
+      const context = createMockContext()
+      const readEntityDetail = context.documentService.readEntityDetail as unknown as ReturnType<
+        typeof vi.fn
+      >
+      const caller = appRouter.createCaller(context)
+
+      await caller.archive.get({ id: 'old-change' })
+
+      expect(readEntityDetail).toHaveBeenCalledWith(
+        'archive',
+        'old-change',
+        'view',
+        'processed',
+        expect.objectContaining({
+          schemas: expect.objectContaining({
+            'custom-audit': expect.objectContaining({ name: 'custom-audit' }),
+          }),
+          schemaDiagnostics: expect.objectContaining({
+            'custom-audit': expect.arrayContaining([
+              expect.objectContaining({
+                message: expect.stringContaining('missing a usable id or output path'),
+              }),
+            ]),
+          }),
+        })
+      )
+    })
+
+    it('exposes raw archive data as schema-neutral entity source detail', async () => {
+      const context = createMockContext()
+      const readEntityDetail = context.documentService.readEntityDetail as unknown as ReturnType<
+        typeof vi.fn
+      >
+      const caller = appRouter.createCaller(context)
+
+      await caller.archive.getRaw({ id: 'old-change' })
+
+      expect(readEntityDetail).toHaveBeenCalledWith(
+        'archive',
+        'old-change',
+        'view',
+        'source',
+        expect.any(Object)
+      )
     })
   })
 

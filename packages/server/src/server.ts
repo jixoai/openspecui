@@ -50,6 +50,7 @@ import { CustomSoundService } from './custom-sound-service.js'
 import { DashboardOverviewService } from './dashboard-overview-service.js'
 import { loadDashboardOverview } from './dashboard-overview.js'
 import { DocumentService } from './document-service.js'
+import { buildEntityReadOptions } from './entity-read-options.js'
 import { createHookRuntime } from './hook-runtime.js'
 import { NotificationService } from './notification-service.js'
 import { findAvailablePort } from './port-utils.js'
@@ -101,7 +102,14 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
   // Create file watcher if enabled
   const watcher =
     config.enableWatcher !== false ? new OpenSpecWatcher(config.projectDir) : undefined
-  const searchService = new SearchService(adapter, watcher, undefined, documentService)
+  const entityReadOptionsContext = { adapter, kernel }
+  const searchService = new SearchService(
+    adapter,
+    watcher,
+    undefined,
+    documentService,
+    (stage, id) => buildEntityReadOptions(entityReadOptionsContext, stage, id)
+  )
   const dashboardOverviewService = new DashboardOverviewService(
     (reason) =>
       loadDashboardOverview(

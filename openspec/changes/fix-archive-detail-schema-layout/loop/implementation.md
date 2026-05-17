@@ -52,3 +52,11 @@ Notes:
 
 - `pnpm --filter @openspecui/web build:ssg` passed with existing non-blocking CSS warning for `scroll-button` and existing dynamic import warning for `src/lib/trpc.ts`.
 - Root `git diff --check` is still blocked by unrelated `CHAT.md` trailing whitespace from the parallel translation work; this change did not edit or stage that file.
+
+## Self-Review Hardening
+
+Follow-up work from self-review:
+
+- Live entity detail must preserve schema parsing diagnostics, not only missing-schema diagnostics.
+- Search indexing must use the same schema-aware entity read options as archive detail so artifact document refs include schema artifact identity when the schema is known.
+- The public archive router must not keep a legacy raw endpoint whose existence contract still depends on root `proposal.md`.

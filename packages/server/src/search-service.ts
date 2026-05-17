@@ -7,7 +7,7 @@ import {
 } from '@openspecui/search'
 import { NodeWorkerSearchProvider } from '@openspecui/search/node'
 import type { DocumentService } from './document-service.js'
-import { collectSearchDocuments } from './search-documents.js'
+import { collectSearchDocuments, type EntityReadOptionsResolver } from './search-documents.js'
 
 const REBUILD_DEBOUNCE_MS = 250
 
@@ -22,7 +22,8 @@ export class SearchService {
     private adapter: OpenSpecAdapter,
     watcher?: OpenSpecWatcher,
     provider: SearchProvider = new NodeWorkerSearchProvider(),
-    private documentService?: DocumentService
+    private documentService?: DocumentService,
+    private resolveEntityReadOptions?: EntityReadOptionsResolver
   ) {
     this.provider = provider
 
@@ -82,7 +83,11 @@ export class SearchService {
     if (this.rebuildPromise) return this.rebuildPromise
 
     this.rebuildPromise = (async () => {
-      const docs = await collectSearchDocuments(this.adapter, this.documentService)
+      const docs = await collectSearchDocuments(
+        this.adapter,
+        this.documentService,
+        this.resolveEntityReadOptions
+      )
       if (this.initialized) {
         await this.provider.replaceAll(docs)
       } else {

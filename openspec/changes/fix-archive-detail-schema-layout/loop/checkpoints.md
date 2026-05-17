@@ -31,8 +31,11 @@
 - [x] 4.4 Affected package typechecks pass
 - [x] 4.5 Static export build passes if snapshot shape changes
 - [x] 4.6 `openspec validate --all --strict --no-interactive` passes
+- [x] 4.7 Live entity detail preserves schema diagnostics
+- [x] 4.8 Search indexing uses the same schema-aware entity read options as archive detail
 
 ## 5. Delivery
 
 - [x] 5.1 Commit OpenSpec breaking-change artifacts separately
 - [x] 5.2 Commit implementation/tests separately
+- [x] 5.3 Remove legacy archive raw surface from the public router contract

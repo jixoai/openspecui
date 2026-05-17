@@ -27,8 +27,6 @@ import {
   GitConfigSchema,
   NotificationSettingsSchema,
   OpsxConfigSchema,
-  parseOpsxSchemaDetail,
-  parseOpsxEntityMetadata,
   resolveTerminalShellDefaults,
   sniffGlobalCli,
   subscribeWatcherRuntimeStatus,
@@ -73,6 +71,7 @@ import {
   type DashboardGitTaskStatus,
 } from './dashboard-overview.js'
 import type { DocumentService } from './document-service.js'
+import { buildEntityReadOptions } from './entity-read-options.js'
 import {
   buildGitWorktreeOverview,
   getCurrentWorktreeGitEntryFiles,
@@ -488,40 +487,6 @@ function buildSystemStatus(ctx: Context): SystemStatusPayload {
   }
 }
 
-function parseEntitySchemaName(metadata: string | null): string | undefined {
-  return parseOpsxEntityMetadata(metadata).schemaName
-}
-
-async function readEntityMetadata(ctx: Context, stage: 'change' | 'archive', id: string) {
-  const files =
-    stage === 'change'
-      ? await ctx.adapter.readChangeFiles(id)
-      : await ctx.adapter.readArchivedChangeFiles(id)
-  return (
-    files.find((file) => file.type === 'file' && file.path === '.openspec.yaml')?.content ?? null
-  )
-}
-
-async function buildEntityReadOptions(ctx: Context, stage: 'change' | 'archive', id: string) {
-  const schemaName = parseEntitySchemaName(await readEntityMetadata(ctx, stage, id))
-  if (!schemaName) return {}
-  try {
-    await ctx.kernel.waitForWarmup()
-    await ctx.kernel.ensureSchemaDetail(schemaName)
-    await ctx.kernel.ensureSchemaYaml(schemaName)
-    const schemaYaml = ctx.kernel.getSchemaYaml(schemaName)
-    const diagnostics = schemaYaml
-      ? parseOpsxSchemaDetail(schemaYaml, schemaName, { path: `schema:${schemaName}` }).diagnostics
-      : []
-    return {
-      schemas: { [schemaName]: ctx.kernel.getSchemaDetail(schemaName) },
-      schemaDiagnostics: diagnostics.length > 0 ? { [schemaName]: diagnostics } : undefined,
-    }
-  } catch {
-    return { schemas: {} }
-  }
-}
-
 /**
  * Spec router - spec CRUD operations
  */
@@ -679,7 +644,13 @@ export const archiveRouter = router({
   }),
 
   getRaw: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    return ctx.adapter.readArchivedChangeRaw(input.id)
+    return ctx.documentService.readEntityDetail(
+      'archive',
+      input.id,
+      'view',
+      'source',
+      await buildEntityReadOptions(ctx, 'archive', input.id)
+    )
   }),
 
   // Reactive subscriptions
@@ -704,9 +675,16 @@ export const archiveRouter = router({
   subscribeFiles: publicProcedure
     .input(z.object({ id: z.string() }))
     .subscription(({ ctx, input }) => {
-      return createReactiveSubscriptionWithInput((id: string) =>
-        ctx.adapter.readArchivedChangeFiles(id)
-      )(input.id)
+      return createReactiveSubscriptionWithInput(async (id: string) => {
+        const entity = await ctx.documentService.readEntityDetail(
+          'archive',
+          id,
+          'view',
+          'processed',
+          await buildEntityReadOptions(ctx, 'archive', id)
+        )
+        return entity?.files ?? []
+      })(input.id)
     }),
 })
 

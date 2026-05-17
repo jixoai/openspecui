@@ -1,6 +1,11 @@
-import type { OpenSpecAdapter } from '@openspecui/core'
+import type { OpenSpecAdapter, OpsxEntityReadOptions, OpsxEntityStage } from '@openspecui/core'
 import type { SearchDocument } from '@openspecui/search'
 import type { DocumentService } from './document-service.js'
+
+export type EntityReadOptionsResolver = (
+  stage: OpsxEntityStage,
+  id: string
+) => Promise<OpsxEntityReadOptions>
 
 function joinParts(parts: Array<string | undefined>): string {
   return parts
@@ -11,7 +16,8 @@ function joinParts(parts: Array<string | undefined>): string {
 
 export async function collectSearchDocuments(
   adapter: OpenSpecAdapter,
-  documentService?: DocumentService
+  documentService?: DocumentService,
+  resolveEntityReadOptions?: EntityReadOptionsResolver
 ): Promise<SearchDocument[]> {
   const docs: SearchDocument[] = []
 
@@ -58,8 +64,17 @@ export async function collectSearchDocuments(
 
   const archives = await adapter.listArchivedChangesWithMeta()
   for (const archive of archives) {
+    const entityOptions = resolveEntityReadOptions
+      ? await resolveEntityReadOptions('archive', archive.id)
+      : undefined
     const entity = documentService
-      ? await documentService.readEntityDetail('archive', archive.id, 'search', 'processed')
+      ? await documentService.readEntityDetail(
+          'archive',
+          archive.id,
+          'search',
+          'processed',
+          entityOptions
+        )
       : await adapter.readEntityDetail('archive', archive.id)
     if (!entity) continue
 
@@ -70,9 +85,7 @@ export async function collectSearchDocuments(
       href: `/archive/${encodeURIComponent(archive.id)}`,
       path: `openspec/changes/archive/${archive.id}`,
       content: joinParts(
-        entity.files
-          .filter((file) => file.type === 'file')
-          .map((file) => file.content)
+        entity.files.filter((file) => file.type === 'file').map((file) => file.content)
       ),
       updatedAt: archive.updatedAt,
     })

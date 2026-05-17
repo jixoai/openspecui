@@ -64,7 +64,11 @@ describe('OPSX entity detail', () => {
     const archiveRoot = join(tempDir, 'openspec', 'changes', 'archive', archiveId)
     await mkdir(join(archiveRoot, 'notes'), { recursive: true })
     await writeFile(join(archiveRoot, '.openspec.yaml'), 'schema: retired-schema\n', 'utf-8')
-    await writeFile(join(archiveRoot, 'notes', 'decision.md'), '# Decision\n\nKeep visible.\n', 'utf-8')
+    await writeFile(
+      join(archiveRoot, 'notes', 'decision.md'),
+      '# Decision\n\nKeep visible.\n',
+      'utf-8'
+    )
 
     const detail = await adapter.readEntityDetail('archive', archiveId, { schemas: {} })
 
@@ -78,6 +82,41 @@ describe('OPSX entity detail', () => {
     expect(detail?.artifacts).toEqual([])
     expect(detail?.diagnostics.some((item) => item.level === 'warning')).toBe(true)
     expect(detail?.diagnostics.map((item) => item.message).join('\n')).toContain('retired-schema')
+  })
+
+  it('preserves schema diagnostics from the entity read options', async () => {
+    const archiveId = '2026-05-17-upgraded-schema'
+    const archiveRoot = join(tempDir, 'openspec', 'changes', 'archive', archiveId)
+    await mkdir(join(archiveRoot, 'reports'), { recursive: true })
+    await writeFile(join(archiveRoot, '.openspec.yaml'), 'schema: upgraded-schema\n', 'utf-8')
+    await writeFile(join(archiveRoot, 'reports', 'summary.md'), '# Summary\n', 'utf-8')
+
+    const detail = await adapter.readEntityDetail('archive', archiveId, {
+      schemas: {
+        'upgraded-schema': {
+          name: 'upgraded-schema',
+          artifacts: [{ id: 'summary', outputPath: 'reports/summary.md', requires: [] }],
+          applyRequires: [],
+        },
+      },
+      schemaDiagnostics: {
+        'upgraded-schema': [
+          {
+            level: 'warning',
+            path: 'schema:upgraded-schema',
+            message: 'Schema artifact is missing a usable id or output path and was skipped.',
+          },
+        ],
+      },
+    })
+
+    expect(detail?.artifacts[0]?.files.map((file) => file.path)).toEqual(['reports/summary.md'])
+    expect(detail?.diagnostics).toContainEqual(
+      expect.objectContaining({
+        level: 'warning',
+        message: expect.stringContaining('missing a usable id or output path'),
+      })
+    )
   })
 
   it('parses usable schema artifacts while reporting incompatible artifact entries', () => {

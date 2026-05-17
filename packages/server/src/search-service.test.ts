@@ -163,7 +163,69 @@ describe('SearchService', () => {
       'archive',
       'old-auth',
       'search',
-      'processed'
+      'processed',
+      undefined
+    )
+  })
+
+  it('passes resolved schema-aware entity read options to archive search indexing', async () => {
+    const adapter = createAdapterMock()
+    const provider = new FakeProvider()
+    const entityReadOptions = {
+      schemas: {
+        'custom-audit': {
+          name: 'custom-audit',
+          artifacts: [{ id: 'summary', outputPath: 'summary.md', requires: [] }],
+          applyRequires: [],
+        },
+      },
+    }
+    const resolveEntityReadOptions = vi.fn().mockResolvedValue(entityReadOptions)
+    const documentService = {
+      readSpecRaw: vi.fn().mockResolvedValue({ markdown: '# Enriched Auth spec' }),
+      readChangeRaw: vi.fn().mockResolvedValue({
+        proposal: { markdown: 'Enriched proposal' },
+        tasks: { markdown: 'Enriched tasks' },
+        design: undefined,
+        deltaSpecs: [],
+      }),
+      readEntityDetail: vi.fn().mockResolvedValue({
+        stage: 'archive',
+        id: 'old-auth',
+        exists: true,
+        schemaName: 'custom-audit',
+        files: [{ path: 'summary.md', type: 'file', content: 'Schema-aware archive' }],
+        artifacts: [
+          {
+            id: 'summary',
+            outputPath: 'summary.md',
+            files: [{ path: 'summary.md', type: 'file', content: 'Schema-aware archive' }],
+          },
+        ],
+        ungroupedFiles: [],
+        diagnostics: [],
+      }),
+    }
+    const service = new SearchService(
+      adapter as never,
+      undefined,
+      provider,
+      documentService as never,
+      resolveEntityReadOptions
+    )
+
+    await service.init()
+
+    expect(resolveEntityReadOptions).toHaveBeenCalledWith('archive', 'old-auth')
+    expect(documentService.readEntityDetail).toHaveBeenCalledWith(
+      'archive',
+      'old-auth',
+      'search',
+      'processed',
+      entityReadOptions
+    )
+    expect(provider.initCalls[0]?.find((doc) => doc.id === 'archive:old-auth')?.content).toContain(
+      'Schema-aware archive'
     )
   })
 })
