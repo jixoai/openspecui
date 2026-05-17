@@ -1,5 +1,19 @@
 # @openspecui/server
 
+## 3.7.0
+
+### Minor Changes
+
+- b491529: Add the document translation platform, including translation settings, Markdown reading pipeline ordering, Chrome Translator integration, ToC translation actions, and direct/bilingual document projection modes.
+
+### Patch Changes
+
+- b491529: Render archived OPSX entities from schema-neutral file detail instead of the legacy spec-driven change projection.
+- Updated dependencies [b491529]
+- Updated dependencies [b491529]
+  - @openspecui/core@3.7.0
+  - @openspecui/search@3.7.0
+
 ## 3.6.1
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # openspecui
 
+## 3.7.0
+
+### Patch Changes
+
+- b491529: Render archived OPSX entities from schema-neutral file detail instead of the legacy spec-driven change projection.
+
 ## 3.6.1
 
 ### Patch Changes
