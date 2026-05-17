@@ -11,7 +11,7 @@ import { useRoutedCarouselTabs } from '@/lib/view-transitions/tabs'
 import type { OpsxEntityArtifact, OpsxEntityDetail, OpsxEntityFile } from '@openspecui/core'
 import { getRouteApi, useLocation } from '@tanstack/react-router'
 import { AlertTriangle, Archive, ArrowLeft, FileText, FolderTree } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef } from 'react'
 
 const route = getRouteApi('/archive/$changeId')
 
@@ -24,15 +24,21 @@ function fileCountLabel(files: readonly OpsxEntityFile[]): string {
   return `${count} ${count === 1 ? 'file' : 'files'}`
 }
 
-function ArtifactMarkdown({ artifact }: { artifact: OpsxEntityArtifact }) {
-  const markdownFiles = artifact.files.filter(
+function MarkdownFilesViewer({
+  files,
+  emptyMessage,
+}: {
+  files: readonly OpsxEntityFile[]
+  emptyMessage: string
+}) {
+  const markdownFiles = files.filter(
     (file) => file.type === 'file' && file.content !== undefined && file.path.endsWith('.md')
   )
 
   if (markdownFiles.length === 0) {
     return (
       <div className="text-muted-foreground flex h-full items-center justify-center rounded-md border border-dashed p-6 text-sm">
-        No Markdown files matched this artifact.
+        {emptyMessage}
       </div>
     )
   }
@@ -56,6 +62,24 @@ function ArtifactMarkdown({ artifact }: { artifact: OpsxEntityArtifact }) {
           ))}
         </div>
       )}
+    />
+  )
+}
+
+function ArtifactMarkdown({ artifact }: { artifact: OpsxEntityArtifact }) {
+  return (
+    <MarkdownFilesViewer
+      files={artifact.files}
+      emptyMessage="No Markdown files matched this artifact."
+    />
+  )
+}
+
+function EntityMarkdown({ files }: { files: readonly OpsxEntityFile[] }) {
+  return (
+    <MarkdownFilesViewer
+      files={files}
+      emptyMessage="No Markdown files found. Open the folder view to inspect archived files."
     />
   )
 }
@@ -85,19 +109,13 @@ export function ArchiveView() {
   const { changeId } = route.useParams()
   const location = useLocation()
 
-  const { data: entity } = useArchiveSubscription(changeId)
-  const [loading, setLoading] = useState(true)
+  const { data: entity, isLoading } = useArchiveSubscription(changeId)
   const headerRef = useRef<HTMLDivElement | null>(null)
   const sharedDescriptor = useMemo(
     () => ({ family: 'archive', entityId: changeId }) as const,
     [changeId]
   )
   const handoff = readSharedElementHandoffState(location.state)
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setLoading(false))
-    return () => cancelAnimationFrame(id)
-  }, [])
-
   const tabs = useMemo<Tab[]>(() => {
     if (!entity) return []
 
@@ -117,7 +135,9 @@ export function ArchiveView() {
                   {artifact.outputPath}
                 </span>
               </div>
-              <span className="text-muted-foreground text-xs">{fileCountLabel(artifact.files)}</span>
+              <span className="text-muted-foreground text-xs">
+                {fileCountLabel(artifact.files)}
+              </span>
             </div>
             <div className="min-h-0 flex-1">
               <ArtifactMarkdown artifact={artifact} />
@@ -131,10 +151,14 @@ export function ArchiveView() {
         ? artifactTabs
         : [
             {
-              id: 'files',
-              label: 'Files',
+              id: 'content',
+              label: 'Content',
               icon: <FileText className="h-4 w-4" />,
-              content: <FolderEditorViewer changeId={changeId} archived files={entity.files} />,
+              content: (
+                <div className="min-h-0 flex-1 py-4">
+                  <EntityMarkdown files={entity.files} />
+                </div>
+              ),
             },
           ]
 
@@ -154,7 +178,7 @@ export function ArchiveView() {
     initialTab: tabs[0]?.id,
   })
 
-  if (loading && !entity) {
+  if (isLoading || entity === undefined) {
     if (handoff) {
       return (
         <div className="flex min-h-0 flex-1 flex-col gap-6 p-4">
