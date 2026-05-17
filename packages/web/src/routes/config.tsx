@@ -248,7 +248,6 @@ export function Config() {
     error: schemasError,
   } = useOpsxConfigBundleSubscription()
   const schemas = configBundle?.schemas
-  const [selectedSchema, setSelectedSchema] = useState<string | undefined>(undefined)
   const configTabIds = useMemo<ConfigTab[]>(
     () => [
       'project-config',
@@ -268,6 +267,14 @@ export function Config() {
     initialTab: 'project-config',
     allowUnknownSelection: true,
   })
+  const activeSchemaName = activeTab.startsWith('schema:')
+    ? activeTab.slice('schema:'.length)
+    : undefined
+  const selectedSchema = useMemo(() => {
+    if (!activeSchemaName) return undefined
+    if (!schemas) return activeSchemaName
+    return schemas.some((schema) => schema.name === activeSchemaName) ? activeSchemaName : undefined
+  }, [activeSchemaName, schemas])
 
   const schemaDetail = selectedSchema ? (configBundle?.schemaDetails[selectedSchema] ?? null) : null
   const schemaResolution = selectedSchema
@@ -338,24 +345,6 @@ export function Config() {
   const canManageEntries = schemaCanEdit && !isStatic
 
   useEffect(() => {
-    if (!schemas || schemas.length === 0) {
-      setSelectedSchema(undefined)
-      return
-    }
-    if (!selectedSchema || !schemas.some((schema) => schema.name === selectedSchema)) {
-      setSelectedSchema(schemas[0].name)
-    }
-  }, [schemas, selectedSchema])
-
-  useEffect(() => {
-    if (!activeTab.startsWith('schema:')) return
-    const name = activeTab.slice('schema:'.length)
-    if (name && name !== selectedSchema) {
-      setSelectedSchema(name)
-    }
-  }, [activeTab, selectedSchema])
-
-  useEffect(() => {
     if (!schemas || schemas.length === 0) return
     if (!activeTab.startsWith('schema:')) return
     const name = activeTab.slice('schema:'.length)
@@ -363,13 +352,6 @@ export function Config() {
     const fallback = schemas[0]?.name
     setActiveTab(fallback ? `schema:${fallback}` : 'project-config')
   }, [activeTab, schemas])
-
-  useEffect(() => {
-    if (!selectedSchema) return
-    if (activeTab.startsWith('schema:') && activeTab !== `schema:${selectedSchema}`) {
-      setActiveTab(`schema:${selectedSchema}`)
-    }
-  }, [activeTab, selectedSchema])
 
   useEffect(() => {
     if (isConfigEditing) return
@@ -893,7 +875,6 @@ export function Config() {
     createSchemaMutation.mutate(args, {
       onSuccess: () => {
         setIsAddSchemaOpen(false)
-        setSelectedSchema(normalizedName)
         setActiveTab(`schema:${normalizedName}`)
       },
     })
@@ -2478,12 +2459,7 @@ export function Config() {
         ref={tabsRef}
         tabs={tabs}
         selectedTab={activeTab}
-        onTabChange={(id) => {
-          onConfigTabChange(id)
-          if (typeof id === 'string' && id.startsWith('schema:')) {
-            setSelectedSchema(id.slice('schema:'.length))
-          }
-        }}
+        onTabChange={onConfigTabChange}
         className="min-h-0 flex-1 gap-4"
       />
     </div>
