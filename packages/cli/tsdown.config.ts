@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'tsdown'
+import { CLI_NATIVE_RUNTIME_DEPENDENCIES } from './src/native-runtime-dependencies.ts'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -20,7 +21,7 @@ export default defineConfig([
     noExternal: [/.*/],
     // Keep Node.js built-in modules and native dependencies external.
     // Native bindings must be resolved from installed runtime dependencies.
-    external: [/^node:/, '@parcel/watcher', '@lydell/node-pty', /^tsx/],
+    external: [/^node:/, ...CLI_NATIVE_RUNTIME_DEPENDENCIES, /^tsx/],
     // No minification for better debugging
     minify: false,
     // Clean output directory before build

@@ -131,6 +131,9 @@ importers:
       '@parcel/watcher':
         specifier: ^2.5.1
         version: 2.5.1
+      better-sqlite3:
+        specifier: ^12.5.0
+        version: 12.10.0
       semver:
         specifier: ^7.7.3
         version: 7.7.3

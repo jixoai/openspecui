@@ -417,6 +417,30 @@ describe('appRouter', () => {
       const writeConfig = context.configManager.writeConfig as unknown as ReturnType<typeof vi.fn>
       expect(writeConfig).toHaveBeenCalledWith({ opsx: { agentInvocationMode: 'command' } })
     })
+
+    it('accepts document translation config updates', async () => {
+      const context = createMockContext()
+      const caller = appRouter.createCaller(context)
+
+      await caller.config.update({ translation: { enabled: true, cacheEnabled: true } })
+
+      const writeConfig = context.configManager.writeConfig as unknown as ReturnType<typeof vi.fn>
+      expect(writeConfig).toHaveBeenCalledWith({
+        translation: { enabled: true, cacheEnabled: true },
+      })
+    })
+
+    it('accepts user-level translation cache settings updates', async () => {
+      const context = createMockContext()
+      const caller = appRouter.createCaller(context)
+
+      await caller.globalSettings.update({ translationCache: { entryLimit: 12300 } })
+
+      const writeSettings = context.globalSettingsManager.writeSettings as unknown as ReturnType<
+        typeof vi.fn
+      >
+      expect(writeSettings).toHaveBeenCalledWith({ translationCache: { entryLimit: 12300 } })
+    })
   })
 
   describe('sounds', () => {
