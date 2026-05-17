@@ -38,6 +38,13 @@ OpenSpecUI SHALL centralize OPSX entity detail construction in shared utility fu
 - **THEN** they SHALL use the same shared artifact matching semantics
 - **AND** they SHALL NOT maintain separate hardcoded fallback mappings for proposal, tasks, design, or delta specs
 
+#### Scenario: Archive surfaces consume entity file truth
+
+- **GIVEN** an archive is surfaced in detail, search, dashboard, static export, or static runtime
+- **WHEN** OpenSpecUI needs objective archive content or archive existence
+- **THEN** it SHALL use the schema-neutral entity file model
+- **AND** it SHALL NOT depend on parsing a legacy spec-driven `Change` projection
+
 #### Scenario: Direct and glob artifact outputs
 
 - **GIVEN** a schema artifact output path is either a direct path or a glob pattern
