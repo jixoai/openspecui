@@ -37,9 +37,9 @@
 
 - [x] 4.1 Changeset included for release-impacting package changes
 - [x] 4.2 CI-equivalent local checks passed
-- [ ] 4.3 PR checks passed
+- [x] 4.3 PR checks passed
 
 ## 5. Merge Readiness
 
-- [ ] 5.1 OpenSpec archive flow completed
+- [x] 5.1 OpenSpec archive flow completed
 - [ ] 5.2 PR merge approved
