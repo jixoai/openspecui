@@ -31,6 +31,8 @@
       "@openspecui/core/openspec-annotations": ["packages/core/src/openspec-annotations.ts"],
       "@openspecui/core/openspec-projection": ["packages/core/src/openspec-projection.ts"],
       "@openspecui/core/opsx-display-path": ["packages/core/src/opsx-display-path.ts"],
+      "@openspecui/core/opsx-entity": ["packages/core/src/opsx-entity.ts"],
+      "@openspecui/core/opsx-schema-detail": ["packages/core/src/opsx-schema-detail.ts"],
       "@openspecui/core/pty-protocol": ["packages/core/src/pty-protocol.ts"],
       "@openspecui/core/sounds": ["packages/core/src/sounds.ts"],
       "@openspecui/core/terminal-audio": ["packages/core/src/terminal-audio.ts"],

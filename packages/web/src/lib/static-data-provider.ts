@@ -20,7 +20,7 @@ import type {
   DashboardTrendPoint,
   DashboardTriColorTrendPoint,
   OpenSpecUIConfig,
-  SchemaArtifact,
+  OpsxEntityDetail,
   SchemaDetail,
   SchemaInfo,
   SchemaResolution,
@@ -29,6 +29,7 @@ import type {
   TemplatesMap,
 } from '@openspecui/core'
 import { selectRecentDashboardItems } from '@openspecui/core/dashboard-display'
+import { isOpsxGlobPattern, opsxPathMatchesPattern } from '@openspecui/core/opsx-entity'
 import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
 import { DEFAULT_BELL_SOUND_ID, DEFAULT_NOTIFICATION_SOUND_ID } from '@openspecui/core/sounds'
 import type { SearchDocument } from '@openspecui/search'
@@ -236,7 +237,7 @@ function buildStaticObjectiveTrends(
       const ts =
         parseDatedIdTimestamp(archive.id) ??
         resolveTrendTimestamp(archive.updatedAt, archive.createdAt)
-      return ts === null ? [] : [{ ts, value: archive.parsedTasks.length }]
+      return ts === null ? [] : [{ ts, value: 1 }]
     }),
     pointLimit,
     'sum',
@@ -250,10 +251,6 @@ interface GlobArtifactFile {
   path: string
   type: 'file'
   content: string
-}
-
-function isGlobPattern(path: string): boolean {
-  return path.includes('*') || path.includes('?') || path.includes('[')
 }
 
 function normalizePath(path: string): string {
@@ -297,57 +294,6 @@ function getPathBasename(path: string): string {
   const normalized = normalizePath(path)
   const parts = normalized.split('/')
   return parts[parts.length - 1] ?? normalized
-}
-
-function escapeRegexChar(char: string): string {
-  return /[\\^$.*+?()[\]{}|]/.test(char) ? `\\${char}` : char
-}
-
-function globToRegex(pattern: string): RegExp {
-  const normalized = normalizePath(pattern)
-  let source = '^'
-
-  for (let i = 0; i < normalized.length; i += 1) {
-    const char = normalized[i]
-
-    if (char === '*') {
-      if (normalized[i + 1] === '*') {
-        i += 1
-        if (normalized[i + 1] === '/') {
-          i += 1
-          source += '(?:.*/)?'
-        } else {
-          source += '.*'
-        }
-      } else {
-        source += '[^/]*'
-      }
-      continue
-    }
-
-    if (char === '?') {
-      source += '[^/]'
-      continue
-    }
-
-    if (char === '[') {
-      const closeIndex = normalized.indexOf(']', i + 1)
-      if (closeIndex > i + 1) {
-        source += normalized.slice(i, closeIndex + 1)
-        i = closeIndex
-        continue
-      }
-    }
-
-    source += escapeRegexChar(char)
-  }
-
-  source += '$'
-  return new RegExp(source)
-}
-
-function matchesGlob(path: string, pattern: string): boolean {
-  return globToRegex(pattern).test(normalizePath(path))
 }
 
 function hasContent(content: string | undefined | null): boolean {
@@ -405,16 +351,7 @@ function resolveSchemaName(
   const firstDetail = Object.keys(detailMap)[0]
   if (firstDetail) return firstDetail
 
-  return preferredSchema ?? 'spec-driven'
-}
-
-function fallbackSchemaArtifacts(): SchemaArtifact[] {
-  return [
-    { id: 'proposal', outputPath: 'proposal.md', requires: [] },
-    { id: 'tasks', outputPath: 'tasks.md', requires: [] },
-    { id: 'design', outputPath: 'design.md', requires: [] },
-    { id: 'specs', outputPath: 'specs/**/*.md', requires: [] },
-  ]
+  return preferredSchema ?? 'unknown'
 }
 
 function resolveSchemaDetail(snapshot: ExportSnapshot, schemaName: string): SchemaDetail {
@@ -423,7 +360,7 @@ function resolveSchemaDetail(snapshot: ExportSnapshot, schemaName: string): Sche
 
   return {
     name: schemaName,
-    artifacts: fallbackSchemaArtifacts(),
+    artifacts: [],
     applyRequires: [],
   }
 }
@@ -455,10 +392,9 @@ function resolveGlobArtifactFiles(
   outputPath: string
 ): GlobArtifactFile[] {
   const files = getSnapshotChangeFiles(change)
-  const pattern = normalizePath(outputPath)
 
   return Object.entries(files)
-    .filter(([path]) => matchesGlob(path, pattern))
+    .filter(([path]) => opsxPathMatchesPattern(path, outputPath))
     .map(([path, content]) => ({ path, type: 'file', content }))
 }
 
@@ -472,7 +408,7 @@ function buildChangeStatus(
 
   const doneById = new Map<string, boolean>()
   for (const artifact of schemaDetail.artifacts) {
-    const done = isGlobPattern(artifact.outputPath)
+    const done = isOpsxGlobPattern(artifact.outputPath)
       ? resolveGlobArtifactFiles(change, artifact.outputPath).length > 0
       : hasContent(resolveArtifactOutput(change, artifact.outputPath, artifact.id))
     doneById.set(artifact.id, done)
@@ -502,7 +438,7 @@ function buildChangeStatus(
   return {
     changeName: change.id,
     schemaName,
-    isComplete: artifacts.every((artifact) => artifact.status === 'done'),
+    isComplete: artifacts.length > 0 && artifacts.every((artifact) => artifact.status === 'done'),
     applyRequires: schemaDetail.applyRequires ?? [],
     artifacts,
   }
@@ -719,10 +655,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     (sum, change) => sum + change.progress.completed,
     0
   )
-  const archivedTasksCompleted = snapshot.archives.reduce(
-    (sum, archive) => sum + archive.parsedTasks.length,
-    0
-  )
+  const archivedTasksCompleted = 0
   const taskCompletionPercent =
     tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : null
   const inProgressChanges = allActiveChanges.filter(
@@ -892,24 +825,14 @@ export async function getArchives(): Promise<ArchiveMeta[]> {
 /**
  * Get a single archive by ID
  */
-export async function getArchive(id: string): Promise<Change | null> {
+export async function getArchive(id: string): Promise<OpsxEntityDetail | null> {
   const snapshot = await loadSnapshot()
   if (!snapshot) return null
 
   const snapArchive = snapshot.archives.find((a) => a.id === id)
   if (!snapArchive) return null
 
-  // Convert archive to Change with parsed content
-  return {
-    id: snapArchive.id,
-    name: snapArchive.name,
-    why: snapArchive.why,
-    whatChanges: snapArchive.whatChanges,
-    design: snapArchive.design,
-    deltas: [],
-    tasks: snapArchive.parsedTasks,
-    progress: { total: 0, completed: 0 },
-  } as Change
+  return snapArchive.entity
 }
 
 /**
@@ -921,41 +844,7 @@ export async function getArchiveFiles(id: string): Promise<ChangeFile[]> {
 
   const archive = snapshot.archives.find((a) => a.id === id)
   if (!archive) return []
-
-  const files: ChangeFile[] = []
-  const metadata = snapshot.opsx?.changeMetadata?.[id]
-
-  if (typeof metadata === 'string') {
-    files.push({
-      path: '.openspec.yaml',
-      type: 'file' as const,
-      content: metadata,
-    })
-  }
-
-  files.push({
-    path: 'proposal.md',
-    type: 'file' as const,
-    content: archive.sourceProposal ?? archive.proposal,
-  })
-
-  if (archive.tasks) {
-    files.push({
-      path: 'tasks.md',
-      type: 'file' as const,
-      content: archive.sourceTasks ?? archive.tasks,
-    })
-  }
-
-  if (archive.design) {
-    files.push({
-      path: 'design.md',
-      type: 'file' as const,
-      content: archive.sourceDesign ?? archive.design,
-    })
-  }
-
-  return files
+  return archive.entity.files
 }
 
 /**
@@ -1305,7 +1194,7 @@ export async function getOpsxArtifactOutput(
   outputPath?: string
 ): Promise<string | null> {
   if (!changeId || !outputPath) return null
-  if (isGlobPattern(outputPath)) return null
+  if (isOpsxGlobPattern(outputPath)) return null
 
   const snapshot = await loadSnapshot()
   if (!snapshot) return null
@@ -1320,7 +1209,7 @@ export async function getOpsxGlobArtifactFiles(
   outputPath?: string
 ): Promise<GlobArtifactFile[]> {
   if (!changeId || !outputPath) return []
-  if (!isGlobPattern(outputPath)) return []
+  if (!isOpsxGlobPattern(outputPath)) return []
 
   const snapshot = await loadSnapshot()
   if (!snapshot) return []
@@ -1375,7 +1264,9 @@ export async function getSearchDocuments(): Promise<SearchDocument[]> {
       title: archive.name,
       href: `/archive/${encodeURIComponent(archive.id)}`,
       path: `openspec/changes/archive/${archive.id}`,
-      content: [archive.proposal, archive.tasks, archive.design]
+      content: archive.entity.files
+        .filter((file) => file.type === 'file')
+        .map((file) => file.content)
         .map((part) => part?.trim() ?? '')
         .filter((part) => part.length > 0)
         .join('\n\n'),

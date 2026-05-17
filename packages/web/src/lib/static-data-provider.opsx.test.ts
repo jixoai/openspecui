@@ -130,6 +130,30 @@ describe('static-data-provider opsx adapters', () => {
     expect(status?.artifacts[0]?.relativePath).toBe('openspec/changes/add-2fa/proposal.md')
   })
 
+  it('does not invent spec-driven artifacts when static schema metadata is unavailable', async () => {
+    staticState.snapshot = {
+      ...createSnapshot(),
+      opsx: {
+        configYaml: '',
+        schemas: [],
+        schemaDetails: {},
+        schemaResolutions: {},
+        templates: {},
+        changeMetadata: {},
+      },
+    }
+
+    const provider = await import('./static-data-provider')
+    const status = await provider.getOpsxStatus('add-2fa')
+
+    expect(status).toMatchObject({
+      changeName: 'add-2fa',
+      schemaName: 'unknown',
+      isComplete: false,
+      artifacts: [],
+    })
+  })
+
   it('reads artifact output and glob files from snapshot', async () => {
     const provider = await import('./static-data-provider')
 
@@ -155,6 +179,55 @@ describe('static-data-provider opsx adapters', () => {
     expect(files.find((entry) => entry.path === '.openspec.yaml')?.content).toBe(
       'schema: spec-driven'
     )
+  })
+
+  it('returns schema-neutral archive entity detail from static snapshot', async () => {
+    staticState.snapshot = {
+      ...createSnapshot(),
+      dashboard: {
+        ...createSnapshot().dashboard,
+        archivesCount: 1,
+      },
+      archives: [
+        {
+          id: '2026-05-17-custom-audit',
+          name: '2026-05-17-custom-audit',
+          entity: {
+            stage: 'archive',
+            id: '2026-05-17-custom-audit',
+            exists: true,
+            schemaName: 'custom-audit',
+            files: [
+              { path: '.openspec.yaml', type: 'file', content: 'schema: custom-audit\n' },
+              { path: 'reports/summary.md', type: 'file', content: '# Source summary' },
+            ],
+            artifacts: [
+              {
+                id: 'summary',
+                outputPath: 'reports/summary.md',
+                files: [
+                  { path: 'reports/summary.md', type: 'file', content: '# Processed summary' },
+                ],
+              },
+            ],
+            ungroupedFiles: [
+              { path: '.openspec.yaml', type: 'file', content: 'schema: custom-audit\n' },
+            ],
+            diagnostics: [],
+          },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+    }
+
+    const provider = await import('./static-data-provider')
+    const archive = await provider.getArchive('2026-05-17-custom-audit')
+    const files = await provider.getArchiveFiles('2026-05-17-custom-audit')
+
+    expect(archive?.schemaName).toBe('custom-audit')
+    expect(archive?.artifacts[0]?.files[0]?.content).toBe('# Processed summary')
+    expect(files.map((file) => file.path)).toEqual(['.openspec.yaml', 'reports/summary.md'])
   })
 
   it('normalizes schema paths to relative display paths', async () => {

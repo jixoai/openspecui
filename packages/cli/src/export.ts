@@ -3,17 +3,18 @@ import {
   ConfigManager,
   DEFAULT_CONFIG,
   OpenSpecAdapter,
-  SchemaDetailSchema,
   SchemaInfoSchema,
   SchemaResolutionSchema,
   TemplatesSchema,
   toOpsxDisplayPath,
   type ExportSnapshot,
+  type OpsxEntityDiagnostic,
   type SchemaDetail,
   type SchemaInfo,
   type SchemaResolution,
   type TemplatesMap,
 } from '@openspecui/core'
+import { parseOpsxSchemaDetail } from '@openspecui/core/opsx-schema-detail'
 import { DocumentService, createHookRuntime } from '@openspecui/server'
 import { execFile, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -21,7 +22,6 @@ import { readFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { parse as parseYaml } from 'yaml'
 import pkg from '../package.json' with { type: 'json' }
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -76,69 +76,6 @@ function parseCliJson<T>(
     throw new Error(`${label} returned unexpected JSON: ${result.error.message}`)
   }
   return result.data
-}
-
-function parseSchemaYaml(content: string): SchemaDetail {
-  const raw = parseYaml(content) as unknown
-  if (!raw || typeof raw !== 'object') {
-    throw new Error('Invalid schema.yaml: expected YAML object')
-  }
-
-  const schemaObj = raw as Record<string, unknown>
-  const artifactsRaw = Array.isArray(schemaObj.artifacts) ? schemaObj.artifacts : []
-  const artifacts = artifactsRaw.map((artifact) => {
-    if (!artifact || typeof artifact !== 'object') {
-      throw new Error('Invalid schema.yaml: artifacts must be objects')
-    }
-    const artifactObj = artifact as Record<string, unknown>
-    const id = typeof artifactObj.id === 'string' ? artifactObj.id : ''
-    const generates = typeof artifactObj.generates === 'string' ? artifactObj.generates : ''
-    const description =
-      typeof artifactObj.description === 'string' ? artifactObj.description : undefined
-    const template = typeof artifactObj.template === 'string' ? artifactObj.template : undefined
-    const instruction =
-      typeof artifactObj.instruction === 'string' ? artifactObj.instruction : undefined
-    const requires = Array.isArray(artifactObj.requires)
-      ? artifactObj.requires.filter((value): value is string => typeof value === 'string')
-      : []
-
-    return {
-      id,
-      outputPath: generates,
-      description,
-      template,
-      instruction,
-      requires,
-    }
-  })
-
-  const apply = schemaObj.apply
-  const applyObj = apply && typeof apply === 'object' ? (apply as Record<string, unknown>) : {}
-  const applyRequires = Array.isArray(applyObj.requires)
-    ? applyObj.requires.filter((value): value is string => typeof value === 'string')
-    : []
-  const applyTracks = typeof applyObj.tracks === 'string' ? applyObj.tracks : undefined
-  const applyInstruction =
-    typeof applyObj.instruction === 'string' ? applyObj.instruction : undefined
-
-  const detail = {
-    name: typeof schemaObj.name === 'string' ? schemaObj.name : '',
-    description: typeof schemaObj.description === 'string' ? schemaObj.description : undefined,
-    version:
-      typeof schemaObj.version === 'string' || typeof schemaObj.version === 'number'
-        ? schemaObj.version
-        : undefined,
-    artifacts,
-    applyRequires,
-    applyTracks,
-    applyInstruction,
-  }
-
-  const validated = SchemaDetailSchema.safeParse(detail)
-  if (!validated.success) {
-    throw new Error(`Invalid schema.yaml detail: ${validated.error.message}`)
-  }
-  return validated.data
 }
 
 function isAbsoluteFsPath(path: string): boolean {
@@ -433,32 +370,7 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
       })
     )
 
-    // Get all archives with parsed content
-    const archivesMeta = await adapter.listArchivedChangesWithMeta()
-    const archives = await Promise.all(
-      archivesMeta.map(async (meta) => {
-        const [change, raw] = await Promise.all([
-          documentService.readArchivedChange(meta.id, 'export', 'processed'),
-          documentService.readArchivedChangeRaw(meta.id, 'export', 'processed'),
-        ])
-
-        return {
-          id: meta.id,
-          name: meta.name || meta.id,
-          proposal: raw?.proposal.markdown || '',
-          sourceProposal: raw?.proposal.sourceMarkdown,
-          tasks: raw?.tasks.markdown,
-          sourceTasks: raw?.tasks.sourceMarkdown,
-          design: raw?.design?.markdown,
-          sourceDesign: raw?.design?.sourceMarkdown,
-          why: change?.why || '',
-          whatChanges: change?.whatChanges || '',
-          parsedTasks: change?.tasks || [],
-          createdAt: meta.createdAt,
-          updatedAt: meta.updatedAt,
-        }
-      })
-    )
+    let archives: ExportSnapshot['archives'] = []
 
     // Get project.md
     let projectMd: string | undefined
@@ -474,6 +386,7 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
     let configYaml: string | undefined
     let schemas: SchemaInfo[] = []
     const schemaDetails: Record<string, SchemaDetail> = {}
+    const schemaDiagnostics: Record<string, OpsxEntityDiagnostic[]> = {}
     const schemaYamls: Record<string, string> = {}
     const schemaResolutions: Record<string, SchemaResolution> = {}
     const templates: Record<string, TemplatesMap> = {}
@@ -533,7 +446,13 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
           try {
             const schemaPath = join(resolution.path, 'schema.yaml')
             const schemaContent = await readFile(schemaPath, 'utf-8')
-            schemaDetails[schema.name] = parseSchemaYaml(schemaContent)
+            const parsed = parseOpsxSchemaDetail(schemaContent, schema.name, {
+              path: `openspec/schemas/${schema.name}/schema.yaml`,
+            })
+            schemaDetails[schema.name] = parsed.detail
+            if (parsed.diagnostics.length > 0) {
+              schemaDiagnostics[schema.name] = parsed.diagnostics
+            }
             schemaYamls[schema.name] = schemaContent
           } catch {
             // Skip invalid schema detail
@@ -605,6 +524,59 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
     } catch {
       // ignore change metadata errors
     }
+
+    try {
+      const archiveIds = await adapter.listArchivedChanges()
+      for (const archiveId of archiveIds) {
+        try {
+          const metaPath = join(
+            projectDir,
+            'openspec',
+            'changes',
+            'archive',
+            archiveId,
+            '.openspec.yaml'
+          )
+          const metaContent = await readFile(metaPath, 'utf-8')
+          changeMetadata[archiveId] = metaContent
+        } catch {
+          if (!(archiveId in changeMetadata)) {
+            changeMetadata[archiveId] = null
+          }
+        }
+      }
+    } catch {
+      // ignore archive metadata errors
+    }
+
+    // Get all archives from schema-neutral entity detail.
+    const archivesMeta = await adapter.listArchivedChangesWithMeta()
+    archives = await Promise.all(
+      archivesMeta.map(async (meta) => {
+        const entity = await documentService.readEntityDetail(
+          'archive',
+          meta.id,
+          'export',
+          'processed',
+          {
+            schemas: schemaDetails,
+            schemaDiagnostics,
+          }
+        )
+
+        if (!entity) {
+          throw new Error(`Archived entity '${meta.id}' disappeared during static export.`)
+        }
+
+        return {
+          id: meta.id,
+          name: meta.name || meta.id,
+          entity,
+          createdAt: meta.createdAt,
+          updatedAt: meta.updatedAt,
+        }
+      })
+    )
 
     const git = await readSnapshotGit(projectDir)
 

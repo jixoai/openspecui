@@ -393,7 +393,7 @@ describe('appRouter', () => {
 
       expect(overview.summary.specifications).toBe(2)
       expect(overview.summary.requirements).toBe(3)
-      expect(overview.summary.archivedTasksCompleted).toBe(1)
+      expect(overview.summary.archivedTasksCompleted).toBe(0)
       expect(overview.summary.taskCompletionPercent).toBeNull()
       expect(overview.trends.requirements.length).toBeGreaterThan(0)
       expect(overview.trends.activeChanges).toEqual([])

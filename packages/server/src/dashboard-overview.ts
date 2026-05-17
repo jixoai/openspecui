@@ -181,20 +181,11 @@ export async function loadDashboardOverview(
   }))
   const activeChanges = selectRecentDashboardItems(allActiveChanges)
 
-  const archivedChanges = (
-    await Promise.all(
-      archiveMetas.map(async (meta) => {
-        const change = await ctx.adapter.readArchivedChange(meta.id)
-        if (!change) return null
-        return {
-          id: meta.id,
-          createdAt: meta.createdAt,
-          updatedAt: meta.updatedAt,
-          tasksCompleted: change.tasks.filter((task) => task.completed).length,
-        }
-      })
-    )
-  ).filter((item): item is NonNullable<typeof item> => item !== null)
+  const archivedChanges = archiveMetas.map((meta) => ({
+    id: meta.id,
+    createdAt: meta.createdAt,
+    updatedAt: meta.updatedAt,
+  }))
 
   const allSpecifications = (
     await Promise.all(
@@ -218,10 +209,7 @@ export async function loadDashboardOverview(
     (sum, change) => sum + change.progress.completed,
     0
   )
-  const archivedTasksCompleted = archivedChanges.reduce(
-    (sum, change) => sum + change.tasksCompleted,
-    0
-  )
+  const archivedTasksCompleted = 0
   const taskCompletionPercent =
     tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : null
   const inProgressChanges = allActiveChanges.filter(
@@ -236,7 +224,7 @@ export async function loadDashboardOverview(
     const ts =
       parseDatedIdTimestamp(archive.id) ??
       resolveTrendTimestamp(archive.updatedAt, archive.createdAt)
-    return ts === null ? [] : [{ ts, value: archive.tasksCompleted }]
+    return ts === null ? [] : [{ ts, value: 1 }]
   })
   const specMetaById = new Map(specMetas.map((meta) => [meta.id, meta] as const))
   const requirementTrendEvents = allSpecifications.flatMap((spec) => {

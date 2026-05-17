@@ -13,10 +13,12 @@ import {
   type ApplyInstructions,
   type ArtifactInstructions,
   type ChangeStatus,
+  type SchemaDetail,
   type SchemaInfo,
   type SchemaResolution,
   type TemplatesMap,
 } from './opsx-types.js'
+import { parseOpsxSchemaDetail } from './opsx-schema-detail.js'
 import { ReactiveContext } from './reactive-fs/reactive-context.js'
 import {
   reactiveExists,
@@ -980,7 +982,7 @@ export class OpsxKernel {
     if (!content) {
       throw new Error(`schema.yaml not found at ${schemaPath}`)
     }
-    return parseSchemaYamlInline(content)
+    return parseSchemaYamlInline(content, name, schemaPath)
   }
 
   private async fetchSchemaFiles(name: string): Promise<ChangeFile[]> {
@@ -1268,65 +1270,6 @@ export class OpsxKernel {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Inline schema.yaml parser (same logic as opsx-schema.ts)
-// ---------------------------------------------------------------------------
-
-import { parse as parseYaml } from 'yaml'
-import { SchemaDetailSchema, type SchemaDetail } from './opsx-types.js'
-
-const SchemaYamlArtifactSchema = z.object({
-  id: z.string(),
-  generates: z.string(),
-  description: z.string().optional(),
-  template: z.string().optional(),
-  instruction: z.string().optional(),
-  requires: z.array(z.string()).optional(),
-})
-
-const SchemaYamlSchema = z.object({
-  name: z.string(),
-  version: z.union([z.string(), z.number()]).optional(),
-  description: z.string().optional(),
-  artifacts: z.array(SchemaYamlArtifactSchema),
-  apply: z
-    .object({
-      requires: z.array(z.string()).optional(),
-      tracks: z.string().optional(),
-      instruction: z.string().optional(),
-    })
-    .optional(),
-})
-
-function parseSchemaYamlInline(content: string): SchemaDetail {
-  const raw = parseYaml(content) as unknown
-  const parsed = SchemaYamlSchema.safeParse(raw)
-  if (!parsed.success) {
-    throw new Error(`Invalid schema.yaml: ${parsed.error.message}`)
-  }
-
-  const { artifacts, apply, name, description, version } = parsed.data
-  const detail: SchemaDetail = {
-    name,
-    description,
-    version,
-    artifacts: artifacts.map((artifact) => ({
-      id: artifact.id,
-      outputPath: artifact.generates,
-      description: artifact.description,
-      template: artifact.template,
-      instruction: artifact.instruction,
-      requires: artifact.requires ?? [],
-    })),
-    applyRequires: apply?.requires ?? [],
-    applyTracks: apply?.tracks,
-    applyInstruction: apply?.instruction,
-  }
-
-  const validated = SchemaDetailSchema.safeParse(detail)
-  if (!validated.success) {
-    throw new Error(`Invalid schema detail: ${validated.error.message}`)
-  }
-
-  return validated.data
+function parseSchemaYamlInline(content: string, fallbackName: string, path: string): SchemaDetail {
+  return parseOpsxSchemaDetail(content, fallbackName, { path }).detail
 }

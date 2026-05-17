@@ -29,11 +29,14 @@ export type DocumentReadModeV1 = 'source' | 'processed'
 /** Stable identity for the OpenSpec document currently being read. */
 export interface DocumentRefV1 {
   stage: 'project' | 'main' | 'change' | 'archive'
-  kind: 'project' | 'spec' | 'proposal' | 'design' | 'tasks' | 'delta-spec'
+  kind: 'project' | 'spec' | 'proposal' | 'design' | 'tasks' | 'delta-spec' | 'artifact'
   relativePath: string
   absolutePath: string
   specId?: string
   changeId?: string
+  schemaName?: string
+  artifactId?: string
+  artifactOutputPath?: string
 }
 
 /** Context passed to `onReadDocument`. */

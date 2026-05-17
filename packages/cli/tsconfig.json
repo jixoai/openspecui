@@ -12,6 +12,7 @@
       "@openspecui/core/notifications": ["../core/src/notifications.ts"],
       "@openspecui/core/openspec-annotations": ["../core/src/openspec-annotations.ts"],
       "@openspecui/core/openspec-projection": ["../core/src/openspec-projection.ts"],
+      "@openspecui/core/opsx-schema-detail": ["../core/src/opsx-schema-detail.ts"],
       "@openspecui/core/sounds": ["../core/src/sounds.ts"],
       "@openspecui/search": ["../search/src/index.ts"],
       "@openspecui/search/node": ["../search/src/node.ts"]

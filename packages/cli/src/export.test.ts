@@ -298,7 +298,36 @@ Historical change.
 
       expect(snapshot.archives).toHaveLength(1)
       expect(snapshot.archives[0].id).toBe('2025-01-01-test-archive')
-      expect(snapshot.archives[0].proposal).toContain('Archived Change')
+      expect(snapshot.archives[0].entity.files).toContainEqual(
+        expect.objectContaining({
+          path: 'proposal.md',
+          type: 'file',
+          content: expect.stringContaining('Archived Change'),
+        })
+      )
+    })
+
+    it('should snapshot custom schema archive entity files without proposal.md', async () => {
+      const archiveDir = join(
+        testProjectDir,
+        'openspec',
+        'changes',
+        'archive',
+        '2026-05-17-custom-audit'
+      )
+      await mkdir(join(archiveDir, 'reports'), { recursive: true })
+      await writeFile(join(archiveDir, '.openspec.yaml'), 'schema: custom-audit\n', 'utf-8')
+      await writeFile(join(archiveDir, 'reports', 'summary.md'), '# Audit Summary\n', 'utf-8')
+
+      const snapshot = await generateSnapshot(testProjectDir)
+      const archive = snapshot.archives.find((item) => item.id === '2026-05-17-custom-audit')
+
+      expect(archive).toBeDefined()
+      expect(archive?.entity.schemaName).toBe('custom-audit')
+      expect(archive?.entity.files.map((file) => file.path)).toContain('reports/summary.md')
+      expect(archive?.entity.diagnostics.map((item) => item.message).join('\n')).toContain(
+        'custom-audit'
+      )
     })
 
     it('should handle spec with multiple requirements', async () => {

@@ -1,15 +1,18 @@
 import { FileExplorer, FileExplorerCodeEditor } from '@/components/file-explorer'
 import { useViewportConstrainedHeight } from '@/components/scroll-spy'
 import { useArchiveFilesSubscription, useChangeFilesSubscription } from '@/lib/use-subscription'
+import type { ChangeFile } from '@openspecui/core'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 export function FolderEditorViewer({
   changeId,
   archived = false,
+  files: providedFiles,
 }: {
   changeId: string
   archived?: boolean
+  files?: ChangeFile[]
 }) {
   const {
     data: files,
@@ -24,9 +27,10 @@ export function FolderEditorViewer({
   })
 
   const sortedEntries = useMemo(() => {
+    if (providedFiles) return [...providedFiles]
     if (!files) return []
     return [...files]
-  }, [files])
+  }, [files, providedFiles])
 
   useEffect(() => {
     if (!sortedEntries.length) {
@@ -42,7 +46,7 @@ export function FolderEditorViewer({
     }
   }, [sortedEntries, selectedPath])
 
-  if (isLoading) {
+  if (!providedFiles && isLoading) {
     return (
       <div className="border-border bg-muted/20 flex h-[400px] items-center justify-center rounded-md border">
         <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />

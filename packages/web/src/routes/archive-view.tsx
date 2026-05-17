@@ -1,7 +1,6 @@
-import { ChangeOverview } from '@/components/change-overview'
 import { FolderEditorViewer } from '@/components/folder-editor-viewer'
+import { MarkdownViewer } from '@/components/markdown-viewer'
 import { Tabs, type Tab } from '@/components/tabs'
-import { TasksView } from '@/components/tasks-view'
 import { useArchiveSubscription } from '@/lib/use-subscription'
 import { VTLink } from '@/lib/view-transitions/navigation'
 import {
@@ -9,17 +8,84 @@ import {
   readSharedElementHandoffState,
 } from '@/lib/view-transitions/shared-elements'
 import { useRoutedCarouselTabs } from '@/lib/view-transitions/tabs'
+import type { OpsxEntityArtifact, OpsxEntityDetail, OpsxEntityFile } from '@openspecui/core'
 import { getRouteApi, useLocation } from '@tanstack/react-router'
-import { Archive, ArrowLeft, CheckCircle, FileText, FolderTree, ListChecks } from 'lucide-react'
+import { AlertTriangle, Archive, ArrowLeft, FileText, FolderTree } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 const route = getRouteApi('/archive/$changeId')
+
+function getArchiveTitle(entity: OpsxEntityDetail | null | undefined, fallbackId: string): string {
+  return entity?.id ?? fallbackId
+}
+
+function fileCountLabel(files: readonly OpsxEntityFile[]): string {
+  const count = files.filter((file) => file.type === 'file').length
+  return `${count} ${count === 1 ? 'file' : 'files'}`
+}
+
+function ArtifactMarkdown({ artifact }: { artifact: OpsxEntityArtifact }) {
+  const markdownFiles = artifact.files.filter(
+    (file) => file.type === 'file' && file.content !== undefined && file.path.endsWith('.md')
+  )
+
+  if (markdownFiles.length === 0) {
+    return (
+      <div className="text-muted-foreground flex h-full items-center justify-center rounded-md border border-dashed p-6 text-sm">
+        No Markdown files matched this artifact.
+      </div>
+    )
+  }
+
+  if (markdownFiles.length === 1) {
+    const file = markdownFiles[0]!
+    return <MarkdownViewer markdown={file.content ?? ''} path={file.path} />
+  }
+
+  return (
+    <MarkdownViewer
+      markdown={({ H1, Section }) => (
+        <div className="space-y-6">
+          {markdownFiles.map((file) => (
+            <Section key={file.path}>
+              <H1>{file.path}</H1>
+              <div className="border-border bg-muted/30 mt-2 rounded-md border p-4 [zoom:0.86]">
+                <MarkdownViewer markdown={file.content ?? ''} path={file.path} />
+              </div>
+            </Section>
+          ))}
+        </div>
+      )}
+    />
+  )
+}
+
+function DiagnosticsPanel({ entity }: { entity: OpsxEntityDetail }) {
+  if (entity.diagnostics.length === 0) return null
+
+  return (
+    <div className="border-border bg-muted/20 flex flex-col gap-2 rounded-md border p-3 text-sm">
+      {entity.diagnostics.map((diagnostic, index) => (
+        <div key={`${diagnostic.message}-${index}`} className="flex items-start gap-2">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+          <div>
+            <div className="font-medium capitalize">{diagnostic.level}</div>
+            <div className="text-muted-foreground">
+              {diagnostic.path ? `${diagnostic.path}: ` : ''}
+              {diagnostic.message}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export function ArchiveView() {
   const { changeId } = route.useParams()
   const location = useLocation()
 
-  const { data: change } = useArchiveSubscription(changeId)
+  const { data: entity } = useArchiveSubscription(changeId)
   const [loading, setLoading] = useState(true)
   const headerRef = useRef<HTMLDivElement | null>(null)
   const sharedDescriptor = useMemo(
@@ -33,39 +99,54 @@ export function ArchiveView() {
   }, [])
 
   const tabs = useMemo<Tab[]>(() => {
-    if (!change) return []
+    if (!entity) return []
 
-    const result: Tab[] = [
-      {
-        id: 'overview',
-        label: 'Overview',
+    const artifactTabs = entity.artifacts
+      .filter((artifact) => artifact.files.length > 0)
+      .map<Tab>((artifact) => ({
+        id: `artifact:${artifact.id}`,
+        label: artifact.id,
         icon: <FileText className="h-4 w-4" />,
-        content: <ChangeOverview change={change} />,
-      },
-    ]
-
-    if (change.tasks.length > 0) {
-      result.push({
-        id: 'tasks',
-        label: `Tasks (${change.progress.completed}/${change.progress.total})`,
-        icon: <ListChecks className="h-4 w-4" />,
         content: (
-          <div className="border-border scrollbar-thin scrollbar-track-transparent h-full overflow-auto rounded-lg border p-4">
-            <TasksView tasks={change.tasks} progress={change.progress} readonly />
+          <div className="flex min-h-0 flex-1 flex-col gap-3 py-4">
+            <div className="border-border bg-card flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <FileText className="text-muted-foreground h-4 w-4 shrink-0" />
+                <span className="font-medium">{artifact.id}</span>
+                <span className="text-muted-foreground truncate text-xs">
+                  {artifact.outputPath}
+                </span>
+              </div>
+              <span className="text-muted-foreground text-xs">{fileCountLabel(artifact.files)}</span>
+            </div>
+            <div className="min-h-0 flex-1">
+              <ArtifactMarkdown artifact={artifact} />
+            </div>
           </div>
         ),
-      })
-    }
+      }))
+
+    const result: Tab[] =
+      artifactTabs.length > 0
+        ? artifactTabs
+        : [
+            {
+              id: 'files',
+              label: 'Files',
+              icon: <FileText className="h-4 w-4" />,
+              content: <FolderEditorViewer changeId={changeId} archived files={entity.files} />,
+            },
+          ]
 
     result.push({
       id: 'folder',
       label: 'Folder',
       icon: <FolderTree className="h-4 w-4" />,
-      content: <FolderEditorViewer changeId={changeId} archived />,
+      content: <FolderEditorViewer changeId={changeId} archived files={entity.files} />,
     })
 
     return result
-  }, [change, changeId])
+  }, [entity, changeId])
 
   const { tabsRef, selectedTab, onTabChange } = useRoutedCarouselTabs({
     queryKey: 'archiveTab',
@@ -73,7 +154,7 @@ export function ArchiveView() {
     initialTab: tabs[0]?.id,
   })
 
-  if (loading && !change) {
+  if (loading && !entity) {
     if (handoff) {
       return (
         <div className="flex min-h-0 flex-1 flex-col gap-6 p-4">
@@ -100,16 +181,16 @@ export function ArchiveView() {
             </div>
           </div>
           <div className="vt-detail-content route-loading animate-pulse rounded-lg border p-4">
-            Loading archived change...
+            Loading archived entity...
           </div>
         </div>
       )
     }
 
-    return <div className="route-loading animate-pulse">Loading archived change...</div>
+    return <div className="route-loading animate-pulse">Loading archived entity...</div>
   }
 
-  if (!change) {
+  if (!entity) {
     return (
       <div className="py-12 text-center">
         <p className="text-muted-foreground">Archived change not found: {changeId}</p>
@@ -122,7 +203,6 @@ export function ArchiveView() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 p-4">
-      {/* Header */}
       <div className="flex items-center gap-4">
         <VTLink
           to="/archive"
@@ -138,21 +218,19 @@ export function ArchiveView() {
               {...getSharedElementBinding(sharedDescriptor, 'icon')}
               className="h-6 w-6 shrink-0"
             />
-            <span {...getSharedElementBinding(sharedDescriptor, 'title')}>{change.name}</span>
+            <span {...getSharedElementBinding(sharedDescriptor, 'title')}>
+              {getArchiveTitle(entity, changeId)}
+            </span>
           </h1>
-          <p className="text-muted-foreground text-sm">{changeId}</p>
+          <p className="text-muted-foreground text-sm">
+            {entity.schemaName ? `Schema: ${entity.schemaName}` : 'Schema: unknown'} ·{' '}
+            {fileCountLabel(entity.files)}
+          </p>
         </div>
       </div>
 
-      {/* Progress */}
-      <div className="flex items-center gap-2 text-sm">
-        <CheckCircle className="h-4 w-4 text-green-500" />
-        <span className="text-green-600">
-          Completed: {change.progress.completed}/{change.progress.total} tasks
-        </span>
-      </div>
+      <DiagnosticsPanel entity={entity} />
 
-      {/* Tabs with Activity for state preservation */}
       <div className="vt-detail-content flex min-h-0 flex-1 flex-col">
         <Tabs
           ref={tabsRef}

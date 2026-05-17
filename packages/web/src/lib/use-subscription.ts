@@ -1,10 +1,10 @@
 import type {
   ArchiveMeta,
-  Change,
   ChangeFile,
   ChangeMeta,
   NotificationRecord,
   OpenSpecUIConfig,
+  OpsxEntityDetail,
   Spec,
   SpecMeta,
 } from '@openspecui/core'
@@ -230,8 +230,7 @@ export function useArchivesSubscription(): SubscriptionState<ArchiveMeta[]> {
   )
 }
 
-/** Archived change 数据类型 (与 Change 相同结构) */
-export type ArchivedChange = Change
+export type ArchivedChange = OpsxEntityDetail
 
 export function useArchiveSubscription(id: string): SubscriptionState<ArchivedChange | null> {
   return useSubscription<ArchivedChange | null>(

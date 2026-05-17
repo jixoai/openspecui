@@ -27,6 +27,8 @@ import {
   GitConfigSchema,
   NotificationSettingsSchema,
   OpsxConfigSchema,
+  parseOpsxSchemaDetail,
+  parseOpsxEntityMetadata,
   resolveTerminalShellDefaults,
   sniffGlobalCli,
   subscribeWatcherRuntimeStatus,
@@ -486,6 +488,40 @@ function buildSystemStatus(ctx: Context): SystemStatusPayload {
   }
 }
 
+function parseEntitySchemaName(metadata: string | null): string | undefined {
+  return parseOpsxEntityMetadata(metadata).schemaName
+}
+
+async function readEntityMetadata(ctx: Context, stage: 'change' | 'archive', id: string) {
+  const files =
+    stage === 'change'
+      ? await ctx.adapter.readChangeFiles(id)
+      : await ctx.adapter.readArchivedChangeFiles(id)
+  return (
+    files.find((file) => file.type === 'file' && file.path === '.openspec.yaml')?.content ?? null
+  )
+}
+
+async function buildEntityReadOptions(ctx: Context, stage: 'change' | 'archive', id: string) {
+  const schemaName = parseEntitySchemaName(await readEntityMetadata(ctx, stage, id))
+  if (!schemaName) return {}
+  try {
+    await ctx.kernel.waitForWarmup()
+    await ctx.kernel.ensureSchemaDetail(schemaName)
+    await ctx.kernel.ensureSchemaYaml(schemaName)
+    const schemaYaml = ctx.kernel.getSchemaYaml(schemaName)
+    const diagnostics = schemaYaml
+      ? parseOpsxSchemaDetail(schemaYaml, schemaName, { path: `schema:${schemaName}` }).diagnostics
+      : []
+    return {
+      schemas: { [schemaName]: ctx.kernel.getSchemaDetail(schemaName) },
+      schemaDiagnostics: diagnostics.length > 0 ? { [schemaName]: diagnostics } : undefined,
+    }
+  } catch {
+    return { schemas: {} }
+  }
+}
+
 /**
  * Spec router - spec CRUD operations
  */
@@ -633,7 +669,13 @@ export const archiveRouter = router({
   }),
 
   get: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    return ctx.documentService.readArchivedChange(input.id)
+    return ctx.documentService.readEntityDetail(
+      'archive',
+      input.id,
+      'view',
+      'processed',
+      await buildEntityReadOptions(ctx, 'archive', input.id)
+    )
   }),
 
   getRaw: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
@@ -648,8 +690,14 @@ export const archiveRouter = router({
   subscribeOne: publicProcedure
     .input(z.object({ id: z.string() }))
     .subscription(({ ctx, input }) => {
-      return createReactiveSubscriptionWithInput((id: string) =>
-        ctx.documentService.readArchivedChange(id)
+      return createReactiveSubscriptionWithInput(async (id: string) =>
+        ctx.documentService.readEntityDetail(
+          'archive',
+          id,
+          'view',
+          'processed',
+          await buildEntityReadOptions(ctx, 'archive', id)
+        )
       )(input.id)
     }),
 

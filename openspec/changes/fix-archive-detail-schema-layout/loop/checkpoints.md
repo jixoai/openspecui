@@ -7,32 +7,32 @@
 
 ## 2. BDD Coverage
 
-- [ ] 2.1 Add failing core utility/adapter test for custom schema archive detail
-- [ ] 2.2 Add failing core utility/adapter test for missing schema fallback detail
-- [ ] 2.3 Add failing server test for `onReadDocument` generic artifact refs
-- [ ] 2.4 Add failing web route test for archive entity rendering without not-found
-- [ ] 2.5 Add/update static snapshot test for archive entity files/artifacts
+- [x] 2.1 Add failing core utility/adapter test for custom schema archive detail
+- [x] 2.2 Add failing core utility/adapter test for missing schema fallback detail
+- [x] 2.3 Add failing server test for `onReadDocument` generic artifact refs
+- [x] 2.4 Add failing web route test for archive entity rendering without not-found
+- [x] 2.5 Add/update static snapshot test for archive entity files/artifacts
 
 ## 3. Platform Implementation
 
-- [ ] 3.1 Add shared core OPSX entity utility module
-- [ ] 3.2 Refactor adapter to expose active/archive entity file detail reactively
-- [ ] 3.3 Refactor DocumentService to process entity artifact Markdown generically
-- [ ] 3.4 Refactor router/subscriptions to expose archive entity detail
-- [ ] 3.5 Refactor ArchiveView to render entity artifacts/files instead of legacy Change overview
-- [ ] 3.6 Refactor static export/runtime to preserve and consume entity detail
-- [ ] 3.7 Remove rejected schema-specific projection code
+- [x] 3.1 Add shared core OPSX entity utility module
+- [x] 3.2 Refactor adapter to expose active/archive entity file detail reactively
+- [x] 3.3 Refactor DocumentService to process entity artifact Markdown generically
+- [x] 3.4 Refactor router/subscriptions to expose archive entity detail
+- [x] 3.5 Refactor ArchiveView to render entity artifacts/files instead of legacy Change overview
+- [x] 3.6 Refactor static export/runtime to preserve and consume entity detail
+- [x] 3.7 Remove rejected schema-specific projection code
 
 ## 4. Verification
 
-- [ ] 4.1 Focused core tests pass
-- [ ] 4.2 Focused server tests pass
-- [ ] 4.3 Focused web route/static tests pass
-- [ ] 4.4 Affected package typechecks pass
-- [ ] 4.5 Static export build passes if snapshot shape changes
-- [ ] 4.6 `openspec validate --all --strict --no-interactive` passes
+- [x] 4.1 Focused core tests pass
+- [x] 4.2 Focused server tests pass
+- [x] 4.3 Focused web route/static tests pass
+- [x] 4.4 Affected package typechecks pass
+- [x] 4.5 Static export build passes if snapshot shape changes
+- [x] 4.6 `openspec validate --all --strict --no-interactive` passes
 
 ## 5. Delivery
 
-- [ ] 5.1 Commit OpenSpec breaking-change artifacts separately
-- [ ] 5.2 Commit implementation/tests separately
+- [x] 5.1 Commit OpenSpec breaking-change artifacts separately
+- [x] 5.2 Commit implementation/tests separately

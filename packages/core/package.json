@@ -46,6 +46,14 @@
       "import": "./dist/opsx-display-path.mjs",
       "types": "./dist/opsx-display-path.d.mts"
     },
+    "./opsx-entity": {
+      "import": "./dist/opsx-entity.mjs",
+      "types": "./dist/opsx-entity.d.mts"
+    },
+    "./opsx-schema-detail": {
+      "import": "./dist/opsx-schema-detail.mjs",
+      "types": "./dist/opsx-schema-detail.d.mts"
+    },
     "./notifications": {
       "import": "./dist/notifications.mjs",
       "types": "./dist/notifications.d.mts"
@@ -75,8 +83,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/hosted-app.ts src/openspec-compat.ts src/markdown-facts.ts src/markdown-reading.ts src/document-translation.ts src/openspec-annotations.ts src/openspec-projection.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts",
-    "dev": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/hosted-app.ts src/openspec-compat.ts src/markdown-facts.ts src/markdown-reading.ts src/document-translation.ts src/openspec-annotations.ts src/openspec-projection.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts --watch",
+    "build": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/opsx-entity.ts src/opsx-schema-detail.ts src/hosted-app.ts src/openspec-compat.ts src/markdown-facts.ts src/markdown-reading.ts src/document-translation.ts src/openspec-annotations.ts src/openspec-projection.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts",
+    "dev": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/opsx-entity.ts src/opsx-schema-detail.ts src/hosted-app.ts src/openspec-compat.ts src/markdown-facts.ts src/markdown-reading.ts src/document-translation.ts src/openspec-annotations.ts src/openspec-projection.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

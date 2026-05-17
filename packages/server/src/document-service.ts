@@ -8,6 +8,12 @@ import {
   type DocumentReadModeV1,
   type DocumentRefV1,
   type OpenSpecAdapter,
+  type OpsxEntityArtifact,
+  type OpsxEntityArtifactFile,
+  type OpsxEntityDetail,
+  type OpsxEntityFile,
+  type OpsxEntityReadOptions,
+  type OpsxEntityStage,
   type ReadDocumentResultV1,
   type Spec,
 } from '@openspecui/core'
@@ -233,6 +239,74 @@ export class DocumentService {
     }
   }
 
+  async readEntityDetail(
+    stage: OpsxEntityStage,
+    changeId: string,
+    consumer: DocumentConsumerV1 = 'view',
+    mode: DocumentReadModeV1 = 'processed',
+    options: OpsxEntityReadOptions = {}
+  ): Promise<OpsxEntityDetail | null> {
+    const detail = await this.adapter.readEntityDetail(stage, changeId, options)
+    if (!detail) return null
+
+    const root =
+      stage === 'change' ? `openspec/changes/${changeId}` : `openspec/changes/archive/${changeId}`
+    const processedByPath = new Map<string, OpsxEntityFile>()
+
+    const processArtifactFile = async (
+      artifact: OpsxEntityArtifact,
+      file: OpsxEntityArtifactFile
+    ): Promise<OpsxEntityArtifactFile> => {
+      const processed = await this.processEntityFile({
+        stage,
+        changeId,
+        root,
+        file,
+        consumer,
+        mode,
+        schemaName: detail.schemaName,
+        artifactId: artifact.id,
+        artifactOutputPath: artifact.outputPath,
+      })
+      const artifactFile = { ...processed, type: 'file' as const }
+      processedByPath.set(file.path, artifactFile)
+      return artifactFile
+    }
+
+    const artifacts = await Promise.all(
+      detail.artifacts.map(async (artifact) => ({
+        ...artifact,
+        files: await Promise.all(artifact.files.map((file) => processArtifactFile(artifact, file))),
+      }))
+    )
+
+    const files = await Promise.all(
+      detail.files.map(async (file) => {
+        const processed = processedByPath.get(file.path)
+        if (processed) return processed
+        return this.processEntityFile({
+          stage,
+          changeId,
+          root,
+          file,
+          consumer,
+          mode,
+          schemaName: detail.schemaName,
+        })
+      })
+    )
+
+    const filesByPath = new Map(files.map((file) => [file.path, file]))
+    const ungroupedFiles = detail.ungroupedFiles.map((file) => filesByPath.get(file.path) ?? file)
+
+    return {
+      ...detail,
+      files,
+      artifacts,
+      ungroupedFiles,
+    }
+  }
+
   async readChangeFiles(
     changeId: string,
     consumer: DocumentConsumerV1 = 'view',
@@ -341,6 +415,44 @@ export class DocumentService {
       source: file.content,
     })
     return { ...file, content: result.markdown }
+  }
+
+  private async processEntityFile(input: {
+    stage: OpsxEntityStage
+    changeId: string
+    root: string
+    file: OpsxEntityFile
+    consumer: DocumentConsumerV1
+    mode: DocumentReadModeV1
+    schemaName?: string
+    artifactId?: string
+    artifactOutputPath?: string
+  }): Promise<OpsxEntityFile> {
+    if (
+      input.file.type !== 'file' ||
+      input.file.content === undefined ||
+      !input.file.path.endsWith('.md')
+    ) {
+      return input.file
+    }
+
+    const result = await this.processDocument({
+      consumer: input.consumer,
+      mode: input.mode,
+      document: {
+        stage: input.stage,
+        kind: 'artifact',
+        changeId: input.changeId,
+        schemaName: input.schemaName,
+        artifactId: input.artifactId,
+        artifactOutputPath: input.artifactOutputPath,
+        relativePath: `${input.root}/${input.file.path}`,
+        absolutePath: join(this.projectDir, input.root, input.file.path),
+      },
+      source: input.file.content,
+    })
+
+    return { ...input.file, content: result.markdown }
   }
 
   private inferChangeFileKind(path: string): DocumentRefV1['kind'] | null {

@@ -1,6 +1,6 @@
 ## Implementation State
 
-Spec rewrite in progress for a breaking schema-neutral entity detail model.
+Implementation is complete pending final broad verification and commit.
 
 ## Architecture Boundary
 
@@ -18,6 +18,7 @@ Atom responsibilities:
 - Server document atom: `onReadDocument` projection over generic artifact/file document refs.
 - Web archive atom: render entity artifacts/files through shared MarkdownViewer and folder viewer.
 - Static export/runtime atoms: preserve and consume entity detail without rebuilding a legacy `Change` projection.
+- Search/dashboard atoms: consume archive entity files and directory identity instead of parsing archived `Change` projections.
 
 ## BDD Targets
 
@@ -28,4 +29,26 @@ Atom responsibilities:
 
 ## Verification Evidence
 
-- Pending.
+- RED observed:
+  - `pnpm --filter @openspecui/core exec vitest run src/opsx-entity.test.ts` failed because `adapter.readEntityDetail` did not exist.
+  - `pnpm --filter @openspecui/server exec vitest run src/document-service.test.ts` failed because `service.readEntityDetail` did not exist.
+  - `pnpm --filter @openspecui/web exec vitest run --project unit src/lib/static-data-provider.opsx.test.ts` failed because static archive detail still returned legacy `Change`.
+- GREEN observed:
+  - `pnpm --filter @openspecui/core exec vitest run src/opsx-entity.test.ts`
+  - `pnpm --filter @openspecui/server exec vitest run src/document-service.test.ts`
+  - `pnpm --filter @openspecui/web exec vitest run --project unit src/routes/archive-view.test.tsx src/lib/static-data-provider.opsx.test.ts`
+  - `pnpm --filter openspecui exec vitest run src/export.test.ts`
+  - `pnpm --filter @openspecui/server exec vitest run src/router.test.ts src/search-service.test.ts src/dashboard-overview-service.test.ts`
+  - `pnpm --filter @openspecui/web exec vitest run --project unit src/lib/view-transitions/detail-prepare.test.ts src/lib/static-data-provider.dashboard.test.ts`
+  - `pnpm --filter @openspecui/web exec vitest run --project unit src/lib/static-data-provider.dashboard.test.ts src/lib/static-data-provider.opsx.test.ts src/routes/archive-view.test.tsx src/lib/view-transitions/detail-prepare.test.ts`
+  - `pnpm --filter @openspecui/core typecheck`
+  - `pnpm --filter @openspecui/server typecheck`
+  - `pnpm --filter @openspecui/web typecheck`
+  - `pnpm --filter openspecui typecheck`
+  - `pnpm --filter @openspecui/web build:ssg`
+  - `pnpm exec openspec validate --all --strict --no-interactive`
+
+Notes:
+
+- `pnpm --filter @openspecui/web build:ssg` passed with existing non-blocking CSS warning for `scroll-button` and existing dynamic import warning for `src/lib/trpc.ts`.
+- Root `git diff --check` is still blocked by unrelated `CHAT.md` trailing whitespace from the parallel translation work; this change did not edit or stage that file.

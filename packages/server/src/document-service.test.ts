@@ -14,7 +14,7 @@ function createRuntime(onReadDocument?: OnReadDocumentHookV1): HookRuntime {
 
 function createAdapter(): Pick<
   OpenSpecAdapter,
-  'readSpecRaw' | 'readChangeFiles' | 'readArchivedChangeRaw'
+  'readSpecRaw' | 'readChangeFiles' | 'readArchivedChangeRaw' | 'readEntityDetail'
 > {
   return {
     readSpecRaw: vi.fn().mockResolvedValue(`# CLI Spec
@@ -58,6 +58,45 @@ The system SHALL show CLI_0003.
             '# Archived Delta\n\n## ADDED Requirements\n\n### Requirement: Source Archive\n\nThe system SHALL work.\n\n#### Scenario: Source archive scenario\n\n- **WHEN** rendered\n- **THEN** source appears',
         },
       ],
+    }),
+    readEntityDetail: vi.fn().mockResolvedValue({
+      stage: 'archive',
+      id: '2026-01-01-custom-audit',
+      exists: true,
+      schemaName: 'custom-audit',
+      files: [
+        {
+          path: '.openspec.yaml',
+          type: 'file',
+          content: 'schema: custom-audit\n',
+        },
+        {
+          path: 'reports/summary.md',
+          type: 'file',
+          content: '# Audit Summary\n\nSource summary',
+        },
+      ],
+      artifacts: [
+        {
+          id: 'summary',
+          outputPath: 'reports/summary.md',
+          files: [
+            {
+              path: 'reports/summary.md',
+              type: 'file',
+              content: '# Audit Summary\n\nSource summary',
+            },
+          ],
+        },
+      ],
+      ungroupedFiles: [
+        {
+          path: '.openspec.yaml',
+          type: 'file',
+          content: 'schema: custom-audit\n',
+        },
+      ],
+      diagnostics: [],
     }),
   }
 }
@@ -209,6 +248,36 @@ describe('DocumentService', () => {
           stage: 'archive',
           kind: 'delta-spec',
           changeId: '2026-01-01-add-auth',
+        }),
+      }),
+      expect.any(Function)
+    )
+  })
+
+  it('applies onReadDocument to archived custom schema artifact markdown', async () => {
+    const adapter = createAdapter()
+    const hook = vi.fn<OnReadDocumentHookV1>(async (ctx, read) => {
+      const result = await read()
+      return {
+        ...result,
+        markdown: `${result.markdown}\n\nprocessed:${ctx.document.kind}:${ctx.document.artifactId}`,
+      }
+    })
+    const service = new DocumentService('/project', adapter as OpenSpecAdapter, createRuntime(hook))
+
+    const result = await service.readEntityDetail('archive', '2026-01-01-custom-audit')
+
+    expect(result?.artifacts[0]?.files[0]?.content).toContain('processed:artifact:summary')
+    expect(hook).toHaveBeenCalledWith(
+      expect.objectContaining({
+        document: expect.objectContaining({
+          stage: 'archive',
+          kind: 'artifact',
+          changeId: '2026-01-01-custom-audit',
+          schemaName: 'custom-audit',
+          artifactId: 'summary',
+          artifactOutputPath: 'reports/summary.md',
+          relativePath: 'openspec/changes/archive/2026-01-01-custom-audit/reports/summary.md',
         }),
       }),
       expect.any(Function)

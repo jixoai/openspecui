@@ -27,11 +27,14 @@ function createAdapterMock() {
     listArchivedChangesWithMeta: vi
       .fn()
       .mockResolvedValue([{ id: 'old-auth', name: 'Old Auth', createdAt: 1, updatedAt: 5 }]),
-    readArchivedChangeRaw: vi.fn().mockResolvedValue({
-      proposal: 'Archived proposal',
-      tasks: '',
-      design: undefined,
-      deltaSpecs: [],
+    readEntityDetail: vi.fn().mockResolvedValue({
+      stage: 'archive',
+      id: 'old-auth',
+      exists: true,
+      files: [{ path: 'summary.md', type: 'file', content: 'Archived summary' }],
+      artifacts: [],
+      ungroupedFiles: [{ path: 'summary.md', type: 'file', content: 'Archived summary' }],
+      diagnostics: [],
     }),
   }
 }
@@ -125,11 +128,16 @@ describe('SearchService', () => {
         design: { markdown: 'Enriched design' },
         deltaSpecs: [{ specId: 'auth', content: 'Delta content' }],
       }),
-      readArchivedChangeRaw: vi.fn().mockResolvedValue({
-        proposal: { markdown: 'Enriched archived proposal' },
-        tasks: { markdown: '' },
-        design: undefined,
-        deltaSpecs: [],
+      readEntityDetail: vi.fn().mockResolvedValue({
+        stage: 'archive',
+        id: 'old-auth',
+        exists: true,
+        files: [{ path: 'summary.md', type: 'file', content: 'Enriched archived summary' }],
+        artifacts: [],
+        ungroupedFiles: [
+          { path: 'summary.md', type: 'file', content: 'Enriched archived summary' },
+        ],
+        diagnostics: [],
       }),
     }
     const service = new SearchService(
@@ -147,6 +155,15 @@ describe('SearchService', () => {
     expect(provider.initCalls[0]?.find((doc) => doc.id === 'change:add-auth')?.content).toContain(
       'Enriched proposal'
     )
+    expect(provider.initCalls[0]?.find((doc) => doc.id === 'archive:old-auth')?.content).toContain(
+      'Enriched archived summary'
+    )
     expect(documentService.readSpecRaw).toHaveBeenCalledWith('auth', 'search', 'processed')
+    expect(documentService.readEntityDetail).toHaveBeenCalledWith(
+      'archive',
+      'old-auth',
+      'search',
+      'processed'
+    )
   })
 })

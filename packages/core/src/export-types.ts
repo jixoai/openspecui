@@ -2,6 +2,7 @@
  * Types for static export / SSG
  */
 import type { OpenSpecUIConfig } from './config.js'
+import type { OpsxEntityDetail } from './opsx-entity.js'
 import type { SchemaDetail, SchemaInfo, SchemaResolution, TemplatesMap } from './opsx-types.js'
 
 /**
@@ -102,22 +103,8 @@ export interface ExportSnapshot {
   archives: Array<{
     id: string
     name: string
-    /** Processed proposal markdown shown by default in static OpenSpecUI. */
-    proposal: string
-    /** Original source proposal markdown. */
-    sourceProposal?: string
-    tasks?: string
-    sourceTasks?: string
-    design?: string
-    sourceDesign?: string
-    why: string
-    whatChanges: string
-    parsedTasks: Array<{
-      id: string
-      text: string
-      completed: boolean
-      section?: string
-    }>
+    /** Schema-neutral archived entity detail used by archive views, search, and dashboard facts. */
+    entity: OpsxEntityDetail
     createdAt: number
     updatedAt: number
   }>

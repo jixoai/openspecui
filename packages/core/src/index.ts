@@ -434,6 +434,27 @@ export {
   type SchemaResolution,
   type TemplatesMap,
 } from './opsx-types.js'
+export {
+  buildOpsxEntityDetail,
+  getOpsxEntityMetadataPath,
+  getOpsxEntityRootRelativePath,
+  isOpsxGlobPattern,
+  normalizeOpsxEntityPath,
+  opsxGlobToRegex,
+  opsxPathMatchesPattern,
+  parseOpsxEntityMetadata,
+  type OpsxEntityArtifact,
+  type OpsxEntityArtifactFile,
+  type OpsxEntityDetail,
+  type OpsxEntityDiagnostic,
+  type OpsxEntityFile,
+  type OpsxEntityReadOptions,
+  type OpsxEntityStage,
+} from './opsx-entity.js'
+export {
+  parseOpsxSchemaDetail,
+  type ParsedOpsxSchemaDetail,
+} from './opsx-schema-detail.js'
 
 // PTY WebSocket protocol schemas and types
 export {
