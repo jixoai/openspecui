@@ -172,7 +172,12 @@ WHEN
       <MarkdownViewer
         path={richSpecPath}
         markdown={richSpecMarkdown}
-        translationConfig={{ enabled: false, targetLanguage: 'zh', displayMode: 'direct' }}
+        translationConfig={{
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        }}
       />
     )
 

@@ -16,6 +16,7 @@ import {
   CliExecutor,
   ConfigManager,
   CustomSoundHashSchema,
+  GlobalSettingsManager,
   HOSTED_SHELL_PROTOCOL_VERSION,
   initWatcherPool,
   isWatcherPoolInitialized,
@@ -59,6 +60,9 @@ import { PtyManager } from './pty-manager.js'
 import { createPtyWebSocketHandler } from './pty-websocket.js'
 import { appRouter, type Context, type GitWorktreeHandoffService } from './router.js'
 import { SearchService } from './search-service.js'
+import { createRuntimeSqliteTranslationCacheAdapter } from './translation-cache-adapter.js'
+import { getDefaultTranslationCacheDatabasePath } from './translation-cache-path.js'
+import { TranslationCacheService } from './translation-cache-service.js'
 import { WorkflowInvocationService } from './workflow-invocation-service.js'
 
 function buildEmbeddedUiUrlForPort(port: number): string {
@@ -87,6 +91,7 @@ export interface ServerConfig {
 export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
   const adapter = new OpenSpecAdapter(config.projectDir)
   const configManager = new ConfigManager(config.projectDir)
+  const globalSettingsManager = new GlobalSettingsManager()
   const cliExecutor = new CliExecutor(configManager, config.projectDir)
   const kernel = config.kernel
   const hookRuntime = createHookRuntime(config.projectDir)
@@ -98,6 +103,36 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
   })
   const notificationService = new NotificationService()
   const customSoundService = new CustomSoundService()
+  let translationCacheAdapterPromise: ReturnType<
+    typeof createRuntimeSqliteTranslationCacheAdapter
+  > | null = null
+  const getTranslationCacheAdapter = () => {
+    translationCacheAdapterPromise ??= createRuntimeSqliteTranslationCacheAdapter(
+      getDefaultTranslationCacheDatabasePath()
+    )
+    return translationCacheAdapterPromise
+  }
+  const translationCacheService = new TranslationCacheService({
+    configManager,
+    globalSettingsManager,
+    adapter: {
+      databasePath: getDefaultTranslationCacheDatabasePath(),
+      init: async () => (await getTranslationCacheAdapter()).init(),
+      read: async (keyHash, now) => (await getTranslationCacheAdapter()).read(keyHash, now),
+      write: async (input, now) => (await getTranslationCacheAdapter()).write(input, now),
+      count: async () => (await getTranslationCacheAdapter()).count(),
+      deleteLeastRecentlyUsed: async (targetEntryCount) =>
+        (await getTranslationCacheAdapter()).deleteLeastRecentlyUsed(targetEntryCount),
+      clean: async (entryLimit) => (await getTranslationCacheAdapter()).clean(entryLimit),
+      clear: async () => (await getTranslationCacheAdapter()).clear(),
+      close: () => {
+        translationCacheAdapterPromise?.then((cacheAdapter) => cacheAdapter.close()).catch(() => {})
+      },
+    },
+    onWriteError(error) {
+      console.warn('Translation cache write failed:', error)
+    },
+  })
 
   // Create file watcher if enabled
   const watcher =
@@ -219,6 +254,8 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
         projectRecoveryService,
         notificationService,
         customSoundService,
+        globalSettingsManager,
+        translationCacheService,
         gitWorktreeHandoff: config.gitWorktreeHandoff,
         watcher,
         projectDir: config.projectDir,
@@ -240,6 +277,8 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     projectRecoveryService,
     notificationService,
     customSoundService,
+    globalSettingsManager,
+    translationCacheService,
     gitWorktreeHandoff: config.gitWorktreeHandoff,
     watcher,
     projectDir: config.projectDir,
@@ -258,6 +297,8 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     projectRecoveryService,
     notificationService,
     customSoundService,
+    globalSettingsManager,
+    translationCacheService,
     hookRuntime,
     watcher,
     createContext,
@@ -340,6 +381,7 @@ export async function createWebSocketServer(
       server.searchService.dispose().catch(() => {})
       server.dashboardOverviewService.dispose()
       server.projectRecoveryService.dispose()
+      server.translationCacheService.close()
     },
   }
 }
@@ -422,6 +464,7 @@ export async function startServer(
     close: async () => {
       kernel.dispose()
       await server.hookRuntime.dispose()
+      server.translationCacheService.close()
       wsServer.close()
       httpServer.close()
     },

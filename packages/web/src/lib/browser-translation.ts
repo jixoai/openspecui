@@ -1,10 +1,20 @@
-import type { DocumentTranslationDisplayMode } from '@openspecui/core/document-translation'
+import {
+  TRANSLATION_CACHE_POLICY_VERSION,
+  type DocumentTranslationDisplayMode,
+  type TranslationCacheEntry,
+  type TranslationCacheWriteInput,
+} from '@openspecui/core/document-translation'
 import {
   parseMarkdownFacts,
   type MarkdownFact,
   type MarkdownFactKind,
 } from '@openspecui/core/markdown-facts'
 import { getMarkdownFactSpan } from '@openspecui/core/markdown-reading'
+import type { Element, ElementContent, Nodes, Properties, Root, RootContent, Text } from 'hast'
+import remarkGfm from 'remark-gfm'
+import remarkParse from 'remark-parse'
+import remarkRehype from 'remark-rehype'
+import { unified } from 'unified'
 
 export type BrowserTranslationAvailability =
   | 'available'
@@ -29,11 +39,37 @@ export interface TranslationSegment {
   sourcePrefix?: string
   translatorInput: string
   target?: string
+  targetNodes?: RootContent[]
   sourceLanguage?: string
   targetLanguage?: string
   status?: 'pending' | 'translated' | 'error'
   error?: string
   kind: 'heading' | 'listItem' | 'paragraph' | 'blockquote' | 'text'
+  placeholderTopologyHash?: string
+  attributeTopologyHash?: string
+  displayPolicyVersion?: number
+  placeholderProtocol?: TranslationPlaceholderProtocol
+}
+
+export interface TranslationPlaceholderProtocol {
+  translatorInput: string
+  sourceNodes: RootContent[]
+  placeholders: readonly TranslationElementPlaceholder[]
+}
+
+export interface TranslationElementPlaceholder {
+  id: string
+  tagName: string
+  properties: Properties
+  sourceChildren: ElementContent[]
+  displayPolicy: 'normal' | 'codeLike'
+  translatableAttributes: readonly TranslationAttributePlaceholder[]
+}
+
+export interface TranslationAttributePlaceholder {
+  id: string
+  propertyName: 'title' | 'alt' | 'aria-label'
+  sourceValue: string
 }
 
 export interface DocumentTranslationResult {
@@ -46,6 +82,11 @@ export interface DocumentTranslationResult {
 export interface DocumentTranslationProgressPatch {
   segmentIndex: number
   segment: TranslationSegment
+}
+
+export interface BrowserTranslationCache {
+  read(keyHash: string): Promise<TranslationCacheEntry | null>
+  write(input: TranslationCacheWriteInput): Promise<{ accepted: boolean } | void>
 }
 
 interface BrowserTranslator {
@@ -80,6 +121,7 @@ interface WindowWithChromeAi extends Window {
 const DEFAULT_SOURCE_LANGUAGE = 'en'
 const DOCUMENT_LANGUAGE_CONFIDENCE_THRESHOLD = 0.45
 const SEGMENT_LANGUAGE_CONFIDENCE_THRESHOLD = 0.62
+const TRANSLATION_DISPLAY_POLICY_VERSION = 1
 
 export function isBrowserTranslationSupported(): boolean {
   return typeof window !== 'undefined' && !!(window as WindowWithChromeAi).Translator
@@ -164,6 +206,7 @@ export async function translateMarkdownDocument(args: {
   targetLanguage: string
   displayMode: DocumentTranslationDisplayMode
   signal: AbortSignal
+  cache?: BrowserTranslationCache
 }): Promise<DocumentTranslationResult> {
   const translatedSegments: TranslationSegment[] = []
   return translateMarkdownDocumentProgressively(args, ({ segmentIndex, segment }) => {
@@ -180,6 +223,7 @@ export async function translateMarkdownDocumentProgressively(
     targetLanguage: string
     displayMode: DocumentTranslationDisplayMode
     signal: AbortSignal
+    cache?: BrowserTranslationCache
   },
   onPatch: (patch: DocumentTranslationProgressPatch) => void
 ): Promise<DocumentTranslationResult> {
@@ -219,20 +263,41 @@ export async function translateMarkdownDocumentProgressively(
           continue
         }
 
+        const cacheKey = createSegmentCacheKey(segment, sourceLanguage, args.targetLanguage)
+        const cachedSegment = cacheKey
+          ? await readCachedTranslationSegment(args.cache, cacheKey, segment, {
+              sourceLanguage,
+              targetLanguage: args.targetLanguage,
+            })
+          : null
+        if (cachedSegment) {
+          translatedSegments.push(cachedSegment)
+          onPatch({ segmentIndex, segment: cachedSegment })
+          continue
+        }
+
         const translator = await getPooledTranslator(
           translatorBySourceLanguage,
           sourceLanguage,
           args.targetLanguage,
           args.signal
         )
-        const protectedInput = protectTranslatorInput(segment.translatorInput)
+        const protectedInput = segment.placeholderProtocol
+          ? { text: segment.translatorInput, restore: (output: string) => output }
+          : protectTranslatorInput(segment.translatorInput)
         const target = await raceAbort(translator.translate(protectedInput.text), args.signal)
+        const restoredTarget = segment.placeholderProtocol
+          ? restoreTranslatedPlaceholderFragment(target, segment.placeholderProtocol)
+          : { target: protectedInput.restore(target).trim() }
         const translatedSegment = {
           ...segment,
-          target: protectedInput.restore(target).trim(),
+          ...restoredTarget,
           sourceLanguage,
           targetLanguage: args.targetLanguage,
           status: 'translated' as const,
+        }
+        if (cacheKey) {
+          void writeCachedTranslationSegment(args.cache, cacheKey, translatedSegment)
         }
         translatedSegments.push(translatedSegment)
         onPatch({ segmentIndex, segment: translatedSegment })
@@ -422,7 +487,500 @@ function normalizeLanguageTag(language: string): string {
   return language.trim().toLowerCase()
 }
 
+interface SegmentCacheKey {
+  key: string
+  keyHash: string
+  placeholderTopologyHash: string
+  attributeTopologyHash: string
+  displayPolicyVersion: number
+}
+
+function createSegmentCacheKey(
+  segment: TranslationSegment,
+  sourceLanguage: string,
+  targetLanguage: string
+): SegmentCacheKey | null {
+  const placeholderTopologyHash = segment.placeholderTopologyHash
+  const attributeTopologyHash = segment.attributeTopologyHash
+  const displayPolicyVersion = segment.displayPolicyVersion ?? TRANSLATION_CACHE_POLICY_VERSION
+  if (!placeholderTopologyHash || !attributeTopologyHash) return null
+
+  const key = stableJsonStringify({
+    sourceText: segment.source,
+    translatorInput: segment.translatorInput,
+    sourceLanguage,
+    targetLanguage,
+    placeholderTopologyHash,
+    attributeTopologyHash,
+    displayPolicyVersion,
+  })
+
+  return {
+    key,
+    keyHash: hashString(key),
+    placeholderTopologyHash,
+    attributeTopologyHash,
+    displayPolicyVersion,
+  }
+}
+
+async function readCachedTranslationSegment(
+  cache: BrowserTranslationCache | undefined,
+  cacheKey: SegmentCacheKey,
+  segment: TranslationSegment,
+  languages: { sourceLanguage: string; targetLanguage: string }
+): Promise<TranslationSegment | null> {
+  if (!cache) return null
+
+  try {
+    const entry = await cache.read(cacheKey.keyHash)
+    if (!entry || !isCacheEntryForSegment(entry, cacheKey, segment, languages)) return null
+    return {
+      ...segment,
+      target: entry.translatedText,
+      ...(entry.targetNodesJson
+        ? { targetNodes: parseCachedTargetNodes(entry.targetNodesJson) }
+        : {}),
+      sourceLanguage: languages.sourceLanguage,
+      targetLanguage: languages.targetLanguage,
+      status: 'translated',
+    }
+  } catch {
+    return null
+  }
+}
+
+async function writeCachedTranslationSegment(
+  cache: BrowserTranslationCache | undefined,
+  cacheKey: SegmentCacheKey,
+  segment: TranslationSegment
+): Promise<void> {
+  if (!cache || !segment.target || !segment.sourceLanguage || !segment.targetLanguage) return
+
+  try {
+    await cache.write({
+      key: cacheKey.key,
+      keyHash: cacheKey.keyHash,
+      sourceText: segment.source,
+      translatedText: segment.target,
+      ...(segment.targetNodes ? { targetNodesJson: JSON.stringify(segment.targetNodes) } : {}),
+      sourceLanguage: segment.sourceLanguage,
+      targetLanguage: segment.targetLanguage,
+      placeholderTopologyHash: cacheKey.placeholderTopologyHash,
+      attributeTopologyHash: cacheKey.attributeTopologyHash,
+      displayPolicyVersion: cacheKey.displayPolicyVersion,
+    })
+  } catch {
+    // Cache writes are non-critical projection acceleration.
+  }
+}
+
+function isCacheEntryForSegment(
+  entry: TranslationCacheEntry,
+  cacheKey: SegmentCacheKey,
+  segment: TranslationSegment,
+  languages: { sourceLanguage: string; targetLanguage: string }
+): boolean {
+  return (
+    entry.key === cacheKey.key &&
+    entry.keyHash === cacheKey.keyHash &&
+    entry.sourceText === segment.source &&
+    entry.sourceLanguage === languages.sourceLanguage &&
+    entry.targetLanguage === languages.targetLanguage &&
+    entry.placeholderTopologyHash === cacheKey.placeholderTopologyHash &&
+    entry.attributeTopologyHash === cacheKey.attributeTopologyHash &&
+    entry.displayPolicyVersion === cacheKey.displayPolicyVersion
+  )
+}
+
+function parseCachedTargetNodes(value: string): RootContent[] | undefined {
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed.filter(isRootContent) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function isRootContent(value: unknown): value is RootContent {
+  if (!value || typeof value !== 'object') return false
+  const type = (value as { type?: unknown }).type
+  return type === 'text' || type === 'element' || type === 'comment'
+}
+
+export function extractHastTranslatableSegments(markdown: string): TranslationSegment[] {
+  try {
+    const tree = parseMarkdownToHast(markdown)
+    const segments: TranslationSegment[] = []
+    collectHastTranslatableSegments(tree.children, segments)
+    return segments
+  } catch {
+    return []
+  }
+}
+
+function parseMarkdownToHast(markdown: string): Root {
+  const processor = unified().use(remarkParse).use(remarkGfm).use(remarkRehype)
+  return processor.runSync(processor.parse(markdown)) as Root
+}
+
+function collectHastTranslatableSegments(
+  nodes: readonly RootContent[],
+  segments: TranslationSegment[]
+): void {
+  for (const node of nodes) {
+    if (!isElement(node)) continue
+
+    if (isTranslatableBlockOwner(node)) {
+      const sourceNodes = getTranslatableBlockChildren(node)
+      const protocol = createTranslationPlaceholderProtocol(sourceNodes)
+      const source = getTranslationSourceText(sourceNodes)
+      if (source) {
+        const sourceStartOffset = getNodeStartOffset(node) ?? segments.length
+        const sourceEndOffset = getNodeEndOffset(node) ?? sourceStartOffset + source.length
+        segments.push({
+          id: `hast-${sourceStartOffset}-${segments.length}`,
+          sourceStartOffset,
+          sourceEndOffset,
+          sourceKind: toMarkdownFactKindFromHast(node.tagName),
+          source,
+          translatorInput: protocol.translatorInput,
+          kind: toTranslationSegmentKindFromHast(node.tagName),
+          placeholderProtocol: protocol,
+          placeholderTopologyHash: hashStableJson(
+            protocol.placeholders.map((placeholder) => ({
+              id: placeholder.id,
+              tagName: placeholder.tagName,
+              displayPolicy: placeholder.displayPolicy,
+              children: placeholder.sourceChildren.length,
+            }))
+          ),
+          attributeTopologyHash: hashStableJson(
+            protocol.placeholders.flatMap((placeholder) =>
+              placeholder.translatableAttributes.map((attribute) => ({
+                placeholderId: placeholder.id,
+                id: attribute.id,
+                propertyName: attribute.propertyName,
+              }))
+            )
+          ),
+          displayPolicyVersion: TRANSLATION_DISPLAY_POLICY_VERSION,
+        })
+      }
+    }
+
+    collectHastTranslatableSegments(node.children, segments)
+  }
+}
+
+function isTranslatableBlockOwner(node: Element): boolean {
+  return (
+    /^h[1-6]$/.test(node.tagName) ||
+    node.tagName === 'p' ||
+    node.tagName === 'li' ||
+    node.tagName === 'blockquote' ||
+    node.tagName === 'td' ||
+    node.tagName === 'th'
+  )
+}
+
+function toMarkdownFactKindFromHast(tagName: string): MarkdownFactKind {
+  if (/^h[1-6]$/.test(tagName)) return 'heading'
+  if (tagName === 'li') return 'listItem'
+  if (tagName === 'blockquote') return 'blockquote'
+  return 'paragraph'
+}
+
+function toTranslationSegmentKindFromHast(tagName: string): TranslationSegment['kind'] {
+  if (/^h[1-6]$/.test(tagName)) return 'heading'
+  if (tagName === 'li') return 'listItem'
+  if (tagName === 'blockquote') return 'blockquote'
+  return 'paragraph'
+}
+
+function createTranslationPlaceholderProtocol(
+  sourceNodes: readonly ElementContent[]
+): TranslationPlaceholderProtocol {
+  const placeholders: TranslationElementPlaceholder[] = []
+  let nextElementId = 1
+  let nextAttributeId = 1
+
+  const serializeNodes = (nodes: readonly ElementContent[]): string =>
+    nodes.map((node) => serializeNode(node)).join('')
+
+  const serializeNode = (node: ElementContent): string => {
+    if (isText(node)) return node.value
+    if (!isElement(node)) return ''
+
+    const id = `x${nextElementId++}`
+    const translatableAttributes = collectTranslatableAttributes(
+      node,
+      () => `a${nextAttributeId++}`
+    )
+    placeholders.push({
+      id,
+      tagName: node.tagName,
+      properties: { ...node.properties },
+      sourceChildren: cloneElementChildren(node.children),
+      displayPolicy: isCodeLikeElement(node.tagName) ? 'codeLike' : 'normal',
+      translatableAttributes,
+    })
+    const attrs = translatableAttributes
+      .map((attribute) => ` ${attribute.id}="${escapeAttributeValue(attribute.sourceValue)}"`)
+      .join('')
+    return `<${id}${attrs}>${serializeNodes(node.children)}</${id}>`
+  }
+
+  return {
+    translatorInput: serializeNodes(sourceNodes),
+    sourceNodes: cloneElementChildren(sourceNodes),
+    placeholders,
+  }
+}
+
+function getTranslatableBlockChildren(node: Element): ElementContent[] {
+  return node.children.filter((child): child is ElementContent => {
+    if (!isElementContent(child)) return false
+    return !(isElement(child) && isBlockElement(child.tagName))
+  })
+}
+
+function isBlockElement(tagName: string): boolean {
+  return (
+    /^h[1-6]$/.test(tagName) ||
+    tagName === 'p' ||
+    tagName === 'ul' ||
+    tagName === 'ol' ||
+    tagName === 'li' ||
+    tagName === 'blockquote' ||
+    tagName === 'table' ||
+    tagName === 'thead' ||
+    tagName === 'tbody' ||
+    tagName === 'tr' ||
+    tagName === 'td' ||
+    tagName === 'th' ||
+    tagName === 'pre'
+  )
+}
+
+function getTranslationSourceText(nodes: readonly ElementContent[]): string {
+  const parts: string[] = []
+  const collect = (node: ElementContent) => {
+    if (isText(node)) {
+      if (node.value.trim()) parts.push(node.value)
+      return
+    }
+    if (!isElement(node)) return
+    for (const attribute of collectTranslatableAttributes(node, () => '')) {
+      parts.push(attribute.sourceValue)
+    }
+    node.children.forEach(collect)
+  }
+  nodes.forEach(collect)
+  return parts.join(' ').replace(/\s+/g, ' ').trim()
+}
+
+function collectTranslatableAttributes(
+  node: Element,
+  nextAttributeId: () => string
+): TranslationAttributePlaceholder[] {
+  const attributes: TranslationAttributePlaceholder[] = []
+  for (const propertyName of ['title', 'alt', 'aria-label'] as const) {
+    const value = node.properties?.[propertyName]
+    if (typeof value === 'string' && value.trim()) {
+      attributes.push({ id: nextAttributeId(), propertyName, sourceValue: value })
+    }
+  }
+  return attributes
+}
+
+function restoreTranslatedPlaceholderFragment(
+  translatedFragment: string,
+  protocol: TranslationPlaceholderProtocol
+): { target: string; targetNodes: RootContent[] } {
+  const fallback = createSourceOnlyPlaceholderFallback(protocol)
+  const parsed = new DOMParser().parseFromString(`<body>${translatedFragment}</body>`, 'text/html')
+  const body = parsed.body
+  const placeholderById = new Map(
+    protocol.placeholders.map((placeholder) => [placeholder.id, placeholder])
+  )
+  const seenPlaceholderIds = new Set<string>()
+  const restored = restoreDomChildren(body.childNodes, placeholderById, seenPlaceholderIds)
+  if (!restored) {
+    return fallback
+  }
+  const hasAllPlaceholders = protocol.placeholders.every((placeholder) =>
+    seenPlaceholderIds.has(placeholder.id)
+  )
+  if (!hasAllPlaceholders) {
+    return fallback
+  }
+  return {
+    target: getHastTextContent({ type: 'root', children: restored }).trim(),
+    targetNodes: restored,
+  }
+}
+
+function restoreDomChildren(
+  nodes: NodeListOf<ChildNode>,
+  placeholderById: ReadonlyMap<string, TranslationElementPlaceholder>,
+  seenPlaceholderIds: Set<string>
+): RootContent[] | null {
+  const restored: RootContent[] = []
+  for (const node of nodes) {
+    const child = restoreDomNode(node, placeholderById, seenPlaceholderIds)
+    if (!child) return null
+    restored.push(...child)
+  }
+  return restored
+}
+
+function restoreDomNode(
+  node: ChildNode,
+  placeholderById: ReadonlyMap<string, TranslationElementPlaceholder>,
+  seenPlaceholderIds: Set<string>
+): RootContent[] | null {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return [{ type: 'text', value: node.textContent ?? '' }]
+  }
+  if (!(node instanceof HTMLElement)) {
+    return []
+  }
+
+  const id = node.tagName.toLowerCase()
+  const placeholder = placeholderById.get(id)
+  if (!placeholder) return null
+  if (seenPlaceholderIds.has(id)) return null
+  if (!hasOnlyExpectedSyntheticAttributes(node, placeholder)) return null
+  seenPlaceholderIds.add(id)
+  const children = restoreDomChildren(node.childNodes, placeholderById, seenPlaceholderIds)
+  if (!children) return null
+
+  return [
+    {
+      type: 'element',
+      tagName: placeholder.tagName,
+      properties: restorePlaceholderProperties(node, placeholder),
+      children: children.filter(isElementContent),
+    },
+  ]
+}
+
+function hasOnlyExpectedSyntheticAttributes(
+  element: HTMLElement,
+  placeholder: TranslationElementPlaceholder
+): boolean {
+  const expected = new Set(placeholder.translatableAttributes.map((attribute) => attribute.id))
+  for (const attribute of element.getAttributeNames()) {
+    if (!expected.has(attribute)) return false
+  }
+  return true
+}
+
+function createSourceOnlyPlaceholderFallback(protocol: TranslationPlaceholderProtocol): {
+  target: string
+  targetNodes: RootContent[]
+} {
+  return {
+    target: getHastTextContent({ type: 'root', children: protocol.sourceNodes }),
+    targetNodes: protocol.sourceNodes,
+  }
+}
+
+function restorePlaceholderProperties(
+  element: HTMLElement,
+  placeholder: TranslationElementPlaceholder
+): Properties {
+  const properties = { ...placeholder.properties }
+  for (const attribute of placeholder.translatableAttributes) {
+    const translatedValue = element.getAttribute(attribute.id)
+    if (translatedValue === null) continue
+    properties[attribute.propertyName] = translatedValue.trim()
+  }
+  return properties
+}
+
+function isElementContent(node: RootContent): node is ElementContent {
+  return node.type === 'text' || node.type === 'element' || node.type === 'comment'
+}
+
+function isCodeLikeElement(tagName: string): boolean {
+  return tagName === 'code' || tagName === 'kbd' || tagName === 'samp'
+}
+
+function isElement(node: Nodes | RootContent | ElementContent): node is Element {
+  return node.type === 'element'
+}
+
+function isText(node: Nodes | RootContent | ElementContent): node is Text {
+  return node.type === 'text'
+}
+
+function cloneElementChildren(nodes: readonly ElementContent[]): ElementContent[]
+function cloneElementChildren(nodes: readonly RootContent[]): RootContent[]
+function cloneElementChildren(nodes: readonly RootContent[]): RootContent[] {
+  return nodes.map(cloneHastNode)
+}
+
+function cloneHastNode<T extends RootContent>(node: T): T {
+  if (isText(node)) return { ...node } as T
+  if (isElement(node)) {
+    return {
+      ...node,
+      properties: { ...node.properties },
+      children: cloneElementChildren(node.children),
+    } as T
+  }
+  return { ...node } as T
+}
+
+function getHastTextContent(node: Root | RootContent | ElementContent): string {
+  if (isText(node)) return node.value
+  if ('children' in node) return node.children.map(getHastTextContent).join('')
+  return ''
+}
+
+function getNodeStartOffset(node: Element): number | undefined {
+  return node.position?.start.offset
+}
+
+function getNodeEndOffset(node: Element): number | undefined {
+  return node.position?.end.offset
+}
+
+function escapeAttributeValue(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+}
+
+function hashStableJson(value: unknown): string {
+  return hashString(JSON.stringify(value))
+}
+
+function stableJsonStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJsonStringify).join(',')}]`
+  }
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entryValue]) => `${JSON.stringify(key)}:${stableJsonStringify(entryValue)}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
+function hashString(value: string): string {
+  let hash = 0
+  for (let index = 0; index < value.length; index++) {
+    hash = (hash * 31 + value.charCodeAt(index)) | 0
+  }
+  return hash.toString(36)
+}
+
 export function extractTranslatableSegments(markdown: string): TranslationSegment[] {
+  const hastSegments = extractHastTranslatableSegments(markdown)
+  if (hastSegments.length > 0) return hastSegments
+
   try {
     const document = parseMarkdownFacts(markdown)
     const factById = new Map(document.facts.map((fact) => [fact.id, fact]))

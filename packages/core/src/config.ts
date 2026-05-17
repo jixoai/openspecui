@@ -852,6 +852,9 @@ export function toPersistedConfig(
   if (config.translation.displayMode !== DEFAULT_CONFIG.translation.displayMode) {
     translation.displayMode = config.translation.displayMode
   }
+  if (config.translation.cacheEnabled !== DEFAULT_CONFIG.translation.cacheEnabled) {
+    translation.cacheEnabled = config.translation.cacheEnabled
+  }
   if (hasOwnEntries(translation)) {
     persisted.translation = translation
   }

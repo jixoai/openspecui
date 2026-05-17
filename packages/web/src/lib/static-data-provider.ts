@@ -29,8 +29,8 @@ import type {
   TemplatesMap,
 } from '@openspecui/core'
 import { selectRecentDashboardItems } from '@openspecui/core/dashboard-display'
-import { isOpsxGlobPattern, opsxPathMatchesPattern } from '@openspecui/core/opsx-entity'
 import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
+import { isOpsxGlobPattern, opsxPathMatchesPattern } from '@openspecui/core/opsx-entity'
 import { DEFAULT_BELL_SOUND_ID, DEFAULT_NOTIFICATION_SOUND_ID } from '@openspecui/core/sounds'
 import type { SearchDocument } from '@openspecui/search'
 import { parse as parseYaml } from 'yaml'
@@ -877,6 +877,7 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
       enabled: false,
       targetLanguage: 'zh',
       displayMode: 'direct',
+      cacheEnabled: false,
     },
     terminal: {
       fontSize: 13,

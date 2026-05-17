@@ -2,9 +2,11 @@ import { Button } from '@/components/button'
 import { useDocumentTranslation } from '@/lib/use-document-translation'
 import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
 import { useNavigate } from '@tanstack/react-router'
+import type { Element, Properties, RootContent, Text } from 'hast'
 import { Languages, Loader2 } from 'lucide-react'
-import { useMemo, type ReactNode } from 'react'
-import { MarkdownInlineContent, type MarkdownBlockAnnotation } from './markdown-content'
+import { Fragment, useMemo, type ReactNode } from 'react'
+import { visit } from 'unist-util-visit'
+import { CodeBlock, MarkdownInlineContent, type MarkdownBlockAnnotation } from './markdown-content'
 import {
   type MarkdownHeadingTransformInput,
   type MarkdownHeadingTransformResult,
@@ -120,6 +122,17 @@ function createTranslationProjection(result: ReturnType<typeof useDocumentTransl
     headingProcessor: {
       name: 'document-translation',
       order: Number.MAX_SAFE_INTEGER,
+      processHast(tree) {
+        if (result.displayMode !== 'direct') return
+        visit(tree, 'element', (node) => {
+          if (!isTranslationBlockOwner(node)) return
+          const sourceStartOffset = node.position?.start.offset
+          if (sourceStartOffset === undefined) return
+          const segment = segmentByOffset.get(sourceStartOffset)
+          if (!segment?.targetNodes || segment.kind === 'heading') return
+          node.children = mergeTranslatedInlineChildren(node, segment.targetNodes)
+        })
+      },
       transformHeading(input) {
         const segment =
           input.sourceStartOffset === undefined
@@ -153,11 +166,13 @@ function createTranslationProjection(result: ReturnType<typeof useDocumentTransl
               : {}),
           },
           renderChildren: (children) =>
-            renderTranslationSegmentChildren({
-              sourceChildren: children,
-              segment,
-              displayMode: result.displayMode,
-            }),
+            segment.targetNodes && result.displayMode === 'direct'
+              ? children
+              : renderTranslationSegmentChildren({
+                  sourceChildren: children,
+                  segment,
+                  displayMode: result.displayMode,
+                }),
         })
       ),
   }
@@ -183,6 +198,7 @@ function createTranslatedHeadingTransform(
   }
 
   const sourceChildren = input.current?.children ?? input.text
+  const targetChildren = segment.targetNodes ? renderHastNodes(segment.targetNodes) : undefined
 
   if (displayMode === 'direct') {
     return {
@@ -191,6 +207,7 @@ function createTranslatedHeadingTransform(
         sourceChildren,
         segment,
         displayMode,
+        targetChildren,
         className: 'document-translation-heading-segment',
       }),
       dataAttributes: createTranslationDataAttributes(segment, projectedTarget, displayMode),
@@ -203,6 +220,7 @@ function createTranslatedHeadingTransform(
       sourceChildren,
       segment,
       displayMode,
+      targetChildren,
       className: 'document-translation-heading-segment',
     }),
     dataAttributes: createTranslationDataAttributes(segment, projectedTarget, displayMode),
@@ -278,6 +296,7 @@ function createTranslatedOpenSpecHeadingChildren(
             sourceChildren: String(sourceTitle || ''),
             segment: titleSegment,
             displayMode,
+            targetChildren: segment.targetNodes ? renderHastNodes(segment.targetNodes) : undefined,
             className: 'document-translation-heading-segment',
           })}
         </span>
@@ -299,11 +318,13 @@ function renderTranslationSegmentChildren({
   sourceChildren,
   segment,
   displayMode,
+  targetChildren,
   className,
 }: {
   sourceChildren: ReactNode
   segment: TranslationSegmentResult
   displayMode: DocumentTranslationConfig['displayMode']
+  targetChildren?: ReactNode
   className?: string
 }) {
   const target = segment.target ?? ''
@@ -324,10 +345,178 @@ function renderTranslationSegmentChildren({
         lang={segment.targetLanguage}
         data-translation-target=""
       >
-        <MarkdownInlineContent markdown={target} />
+        {targetChildren ??
+          (segment.targetNodes ? (
+            renderHastNodes(segment.targetNodes)
+          ) : (
+            <MarkdownInlineContent markdown={target} />
+          ))}
       </span>
     </span>
   )
+}
+
+function isTranslationBlockOwner(node: Element): boolean {
+  return (
+    node.tagName === 'p' ||
+    node.tagName === 'li' ||
+    node.tagName === 'blockquote' ||
+    node.tagName === 'td' ||
+    node.tagName === 'th'
+  )
+}
+
+function mergeTranslatedInlineChildren(
+  node: Element,
+  targetNodes: readonly RootContent[]
+): Element['children'] {
+  const translatedChildren = sanitizeTranslatedElementChildren(targetNodes.filter(isElementContent))
+  const preservedBlockChildren = node.children.filter(
+    (child) => isElementContent(child) && isBlockElement(child)
+  )
+  return [...translatedChildren, ...preservedBlockChildren]
+}
+
+function isElementContent(node: RootContent): node is Element['children'][number] {
+  return node.type === 'text' || node.type === 'element' || node.type === 'comment'
+}
+
+function isBlockElement(node: Element['children'][number]): boolean {
+  if (node.type !== 'element') return false
+  return (
+    /^h[1-6]$/.test(node.tagName) ||
+    node.tagName === 'p' ||
+    node.tagName === 'ul' ||
+    node.tagName === 'ol' ||
+    node.tagName === 'li' ||
+    node.tagName === 'blockquote' ||
+    node.tagName === 'table' ||
+    node.tagName === 'thead' ||
+    node.tagName === 'tbody' ||
+    node.tagName === 'tr' ||
+    node.tagName === 'td' ||
+    node.tagName === 'th' ||
+    node.tagName === 'pre'
+  )
+}
+
+function sanitizeTranslatedElementChildren(
+  nodes: readonly Element['children'][number][]
+): Element['children'] {
+  return nodes.map(sanitizeTranslatedElementChild)
+}
+
+function sanitizeTranslatedElementChild(
+  node: Element['children'][number]
+): Element['children'][number] {
+  if (node.type !== 'element') return node
+  return {
+    ...node,
+    properties: sanitizeTranslatedProperties(node.properties),
+    children: sanitizeTranslatedElementChildren(node.children),
+  }
+}
+
+function sanitizeTranslatedProperties(properties: Properties): Properties {
+  const nextProperties: Properties = { ...properties }
+  for (const key of ['href', 'src'] as const) {
+    const value = nextProperties[key]
+    if (typeof value !== 'string' || !transformSafeMarkdownUrl(value)) {
+      delete nextProperties[key]
+    }
+  }
+  return nextProperties
+}
+
+function renderHastNodes(nodes: readonly RootContent[]): ReactNode {
+  return nodes.map((node, index) => (
+    <Fragment key={`translated-hast-${index}`}>{renderHastNode(node)}</Fragment>
+  ))
+}
+
+function renderHastNode(node: RootContent): ReactNode {
+  if (node.type === 'text') return (node as Text).value
+  if (node.type !== 'element') return null
+
+  const element = node as Element
+  const children = element.children.map((child, index) => (
+    <Fragment key={`translated-hast-child-${index}`}>{renderHastNode(child)}</Fragment>
+  ))
+  const props = toReactElementProps(element.properties)
+
+  switch (element.tagName) {
+    case 'strong':
+      return <strong {...props}>{children}</strong>
+    case 'em':
+      return <em {...props}>{children}</em>
+    case 'del':
+      return <del {...props}>{children}</del>
+    case 'sub':
+      return <sub {...props}>{children}</sub>
+    case 'sup':
+      return <sup {...props}>{children}</sup>
+    case 'mark':
+      return <mark {...props}>{children}</mark>
+    case 'code':
+      return (
+        <CodeBlock className={typeof props.className === 'string' ? props.className : undefined}>
+          {children}
+        </CodeBlock>
+      )
+    case 'kbd':
+      return <kbd {...props}>{children}</kbd>
+    case 'samp':
+      return <samp {...props}>{children}</samp>
+    case 'var':
+      return <var {...props}>{children}</var>
+    case 'a':
+      return <a {...props}>{children}</a>
+    case 'span':
+      return <span {...props}>{children}</span>
+    case 'img':
+      return <img {...props} />
+    default:
+      return <span>{children}</span>
+  }
+}
+
+function toReactElementProps(properties: Properties): Record<string, unknown> {
+  const props: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(properties)) {
+    if (value === null || value === undefined) continue
+    if (key === 'className' || key === 'class') {
+      props.className = Array.isArray(value) ? value.join(' ') : String(value)
+      continue
+    }
+    if ((key === 'href' || key === 'src') && typeof value === 'string') {
+      const safeUrl = transformSafeMarkdownUrl(value)
+      if (safeUrl) props[key] = safeUrl
+      continue
+    }
+    props[key === 'aria-label' ? 'aria-label' : key] = value
+  }
+  return props
+}
+
+const SAFE_URL_PROTOCOL_PATTERN = /^(https?|ircs?|mailto|xmpp)$/i
+
+function transformSafeMarkdownUrl(value: string): string {
+  const colon = value.indexOf(':')
+  const questionMark = value.indexOf('?')
+  const numberSign = value.indexOf('#')
+  const slash = value.indexOf('/')
+
+  if (
+    colon === -1 ||
+    (slash !== -1 && colon > slash) ||
+    (questionMark !== -1 && colon > questionMark) ||
+    (numberSign !== -1 && colon > numberSign) ||
+    SAFE_URL_PROTOCOL_PATTERN.test(value.slice(0, colon))
+  ) {
+    return value
+  }
+
+  return ''
 }
 
 function mergeClassName(...classNames: Array<string | undefined>): string | undefined {

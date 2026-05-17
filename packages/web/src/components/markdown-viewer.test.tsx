@@ -199,7 +199,12 @@ describe('MarkdownViewer ToC behavior', () => {
             <MarkdownViewer
               markdown={'# Delta\n\n### Requirement: Sign in'}
               path="specs/auth/spec.md"
-              translationConfig={{ enabled: false, targetLanguage: 'zh', displayMode: 'direct' }}
+              translationConfig={{
+                enabled: false,
+                targetLanguage: 'zh',
+                displayMode: 'direct',
+                cacheEnabled: false,
+              }}
             />
           </Section>
         )}

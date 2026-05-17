@@ -76,6 +76,7 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "@parcel/watcher",
+      "better-sqlite3",
       "@lydell/node-pty"
     ],
     "patchedDependencies": {}

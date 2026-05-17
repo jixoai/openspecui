@@ -48,6 +48,7 @@ import { useCliRunner } from '@/lib/use-cli-runner'
 import { useServerStatus } from '@/lib/use-server-status'
 import { useConfigSubscription } from '@/lib/use-subscription'
 import {
+  DEFAULT_TRANSLATION_CACHE_ENTRY_LIMIT,
   type DocumentTranslationConfig,
   type DocumentTranslationDisplayMode,
 } from '@openspecui/core/document-translation'
@@ -77,6 +78,7 @@ import {
   Moon,
   Plus,
   RefreshCw,
+  RotateCcw,
   Settings as SettingsIcon,
   Sparkles,
   Sun,
@@ -151,6 +153,7 @@ const DEFAULT_DASHBOARD_TREND_POINT_LIMIT = 100
 const DEFAULT_GIT_DIFF_EAGER_LINE_BUDGET = 1000
 const DEFAULT_TRANSLATION_TARGET_LANGUAGE = 'zh'
 const DEFAULT_TRANSLATION_DISPLAY_MODE: DocumentTranslationDisplayMode = 'direct'
+const DEFAULT_TRANSLATION_CACHE_ENABLED = false
 
 const THEME_OPTIONS = [
   {
@@ -397,6 +400,14 @@ export function Settings() {
   const { data: effectiveCliCommand, refetch: refetchEffectiveCliCommand } = useQuery({
     ...trpc.config.getEffectiveCliCommand.queryOptions(),
     enabled: !inStaticMode,
+  })
+  const { data: globalSettings, refetch: refetchGlobalSettings } = useQuery({
+    ...trpc.globalSettings.get.queryOptions(),
+    enabled: !inStaticMode,
+  })
+  const { data: translationCacheStats, refetch: refetchTranslationCacheStats } = useQuery({
+    ...trpc.translationCache.stats.queryOptions(),
+    enabled: !inStaticMode && (config?.translation?.cacheEnabled ?? false),
   })
 
   // 获取所有工具列表
@@ -723,6 +734,12 @@ export function Settings() {
   )
   const [translationDisplayMode, setTranslationDisplayMode] =
     useState<DocumentTranslationDisplayMode>(DEFAULT_TRANSLATION_DISPLAY_MODE)
+  const [translationCacheEnabled, setTranslationCacheEnabled] = useState(
+    DEFAULT_TRANSLATION_CACHE_ENABLED
+  )
+  const [translationCacheEntryLimit, setTranslationCacheEntryLimit] = useState(
+    DEFAULT_TRANSLATION_CACHE_ENTRY_LIMIT
+  )
   const [translationCapability, setTranslationCapability] =
     useState<BrowserTranslationStatus | null>(null)
   const [translationCapabilityLoading, setTranslationCapabilityLoading] = useState(false)
@@ -892,6 +909,16 @@ export function Settings() {
     mutationFn: (translation: Partial<DocumentTranslationConfig>) =>
       trpcClient.config.update.mutate({ translation }),
   })
+  const saveGlobalTranslationCacheMutation = useMutation({
+    mutationFn: (entryLimit: number) =>
+      trpcClient.globalSettings.update.mutate({ translationCache: { entryLimit } }),
+  })
+  const cleanTranslationCacheMutation = useMutation({
+    mutationFn: () => trpcClient.translationCache.clean.mutate(),
+  })
+  const clearTranslationCacheMutation = useMutation({
+    mutationFn: () => trpcClient.translationCache.clear.mutate(),
+  })
 
   useEffect(() => {
     const nextLimit = config?.dashboard?.trendPointLimit
@@ -911,11 +938,20 @@ export function Settings() {
       config?.translation?.targetLanguage ?? DEFAULT_TRANSLATION_TARGET_LANGUAGE
     )
     setTranslationDisplayMode(config?.translation?.displayMode ?? DEFAULT_TRANSLATION_DISPLAY_MODE)
+    setTranslationCacheEnabled(
+      config?.translation?.cacheEnabled ?? DEFAULT_TRANSLATION_CACHE_ENABLED
+    )
   }, [
+    config?.translation?.cacheEnabled,
     config?.translation?.displayMode,
     config?.translation?.enabled,
     config?.translation?.targetLanguage,
   ])
+  useEffect(() => {
+    setTranslationCacheEntryLimit(
+      globalSettings?.translationCache?.entryLimit ?? DEFAULT_TRANSLATION_CACHE_ENTRY_LIMIT
+    )
+  }, [globalSettings?.translationCache?.entryLimit])
 
   const savedDashboardTrendPointLimit =
     config?.dashboard?.trendPointLimit ?? DEFAULT_DASHBOARD_TREND_POINT_LIMIT
@@ -968,7 +1004,10 @@ export function Settings() {
     enabled: config?.translation?.enabled ?? false,
     targetLanguage: config?.translation?.targetLanguage ?? DEFAULT_TRANSLATION_TARGET_LANGUAGE,
     displayMode: config?.translation?.displayMode ?? DEFAULT_TRANSLATION_DISPLAY_MODE,
+    cacheEnabled: config?.translation?.cacheEnabled ?? DEFAULT_TRANSLATION_CACHE_ENABLED,
   }
+  const savedTranslationCacheEntryLimit =
+    globalSettings?.translationCache?.entryLimit ?? DEFAULT_TRANSLATION_CACHE_ENTRY_LIMIT
   const opsxAgentInvocationModeOptions = useMemo(
     () =>
       OPSX_AGENT_INVOCATION_MODE_OPTIONS.map((option) => ({
@@ -1470,9 +1509,96 @@ export function Settings() {
                     </Button>
                   </div>
 
+                  <div className="border-border/60 space-y-3 border-t pt-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <label className="block text-sm font-medium">Translation cache</label>
+                        <p className="text-muted-foreground mt-1 text-sm">
+                          Stores validated browser translation projections in the shared user cache.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={translationCacheEnabled}
+                        onCheckedChange={(checked) => {
+                          setTranslationCacheEnabled(checked)
+                          saveTranslationConfigMutation.mutate({ cacheEnabled: checked })
+                          if (checked) void refetchTranslationCacheStats()
+                        }}
+                        ariaLabel="Enable translation cache"
+                        disabled={saveTranslationConfigMutation.isPending}
+                      />
+                    </div>
+
+                    {translationCacheEnabled ? (
+                      <div className="grid gap-3 md:grid-cols-[minmax(12rem,1fr)_auto]">
+                        <label className="block text-sm font-medium">
+                          Entry limit
+                          <input
+                            type="number"
+                            min={100}
+                            max={200000}
+                            step={100}
+                            value={translationCacheEntryLimit}
+                            onChange={(event) =>
+                              setTranslationCacheEntryLimit(Number(event.currentTarget.value))
+                            }
+                            onBlur={() => {
+                              const nextLimit = Math.round(translationCacheEntryLimit)
+                              setTranslationCacheEntryLimit(nextLimit)
+                              saveGlobalTranslationCacheMutation.mutate(nextLimit, {
+                                onSuccess: () => {
+                                  void Promise.allSettled([
+                                    refetchGlobalSettings(),
+                                    refetchTranslationCacheStats(),
+                                  ])
+                                },
+                              })
+                            }}
+                            className="border-input bg-background mt-2 h-9 w-full rounded-md border px-3 text-sm"
+                          />
+                        </label>
+                        <div className="flex flex-wrap items-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() =>
+                              cleanTranslationCacheMutation.mutate(undefined, {
+                                onSuccess: () => void refetchTranslationCacheStats(),
+                              })
+                            }
+                            disabled={cleanTranslationCacheMutation.isPending}
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Clean
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() =>
+                              clearTranslationCacheMutation.mutate(undefined, {
+                                onSuccess: () => void refetchTranslationCacheStats(),
+                              })
+                            }
+                            disabled={clearTranslationCacheMutation.isPending}
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                            Clear
+                          </Button>
+                        </div>
+                        <p className="text-muted-foreground text-xs md:col-span-2">
+                          {translationCacheStats
+                            ? `${translationCacheStats.entries} / ${translationCacheStats.entryLimit} entries`
+                            : 'Cache stats unavailable.'}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+
                   {savedTranslationConfig.enabled !== translationEnabled ||
                   savedTranslationConfig.targetLanguage !== translationTargetLanguage ||
-                  savedTranslationConfig.displayMode !== translationDisplayMode ? (
+                  savedTranslationConfig.displayMode !== translationDisplayMode ||
+                  savedTranslationConfig.cacheEnabled !== translationCacheEnabled ||
+                  savedTranslationCacheEntryLimit !== translationCacheEntryLimit ? (
                     <p className="text-muted-foreground text-xs">Saving translation settings...</p>
                   ) : null}
                 </div>

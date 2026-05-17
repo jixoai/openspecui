@@ -29,7 +29,12 @@ describe('MarkdownViewer translation plugin', () => {
     render(
       <MarkdownViewer
         markdown={'# Hello'}
-        translationConfig={{ enabled: false, targetLanguage: 'zh', displayMode: 'direct' }}
+        translationConfig={{
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        }}
       />
     )
 
@@ -68,7 +73,12 @@ describe('MarkdownViewer translation plugin', () => {
     render(
       <MarkdownViewer
         markdown={'# Hello\n\nI love you.'}
-        translationConfig={{ enabled: true, targetLanguage: 'zh', displayMode: 'direct' }}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        }}
       />
     )
 
@@ -100,7 +110,12 @@ describe('MarkdownViewer translation plugin', () => {
     render(
       <MarkdownViewer
         markdown={'# Notes\n\n**Important:** keep `Config`.'}
-        translationConfig={{ enabled: true, targetLanguage: 'zh', displayMode: 'direct' }}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        }}
       />
     )
 
@@ -139,7 +154,12 @@ describe('MarkdownViewer translation plugin', () => {
     render(
       <MarkdownViewer
         markdown={'# Hello\n\n- item'}
-        translationConfig={{ enabled: true, targetLanguage: 'zh', displayMode: 'bilingual' }}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'bilingual',
+          cacheEnabled: false,
+        }}
       />
     )
 
@@ -193,7 +213,12 @@ describe('MarkdownViewer translation plugin', () => {
     render(
       <MarkdownViewer
         markdown={'# Report\n\n- Reported surfaces:\n  - specs: ok\n  - changes/spec: not rendered'}
-        translationConfig={{ enabled: true, targetLanguage: 'zh', displayMode: 'bilingual' }}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'bilingual',
+          cacheEnabled: false,
+        }}
       />
     )
 
@@ -204,6 +229,97 @@ describe('MarkdownViewer translation plugin', () => {
     expect(within(items[0]!).getByText('报告的表面：')).toBeTruthy()
     expect(within(items[1]!).getByText('规格：确定')).toBeTruthy()
     expect(within(items[2]!).getByText('更改/规格：未渲染')).toBeTruthy()
+  })
+
+  it('preserves nested list structure when the parent row uses translated HAST nodes', async () => {
+    mockProgressiveResult('direct', [
+      {
+        id: 'md-parent',
+        sourceStartOffset: 10,
+        sourceEndOffset: 28,
+        sourceKind: 'listItem',
+        source: 'Reported surfaces:',
+        translatorInput: 'Reported surfaces:',
+        target: '报告的表面：',
+        targetNodes: [{ type: 'text', value: '报告的表面：' }],
+        kind: 'listItem',
+      },
+      {
+        id: 'md-child',
+        sourceStartOffset: 33,
+        sourceEndOffset: 42,
+        sourceKind: 'listItem',
+        source: 'specs: ok',
+        translatorInput: 'specs: ok',
+        target: '规格：确定',
+        targetNodes: [{ type: 'text', value: '规格：确定' }],
+        kind: 'listItem',
+      },
+    ])
+
+    render(
+      <MarkdownViewer
+        markdown={'# Report\n\n- Reported surfaces:\n  - specs: ok'}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        }}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+
+    await waitFor(() => expect(screen.getByText('报告的表面：')).toBeTruthy())
+    const items = screen.getAllByRole('listitem')
+    expect(items).toHaveLength(2)
+    expect(within(items[0]!).getByText('报告的表面：')).toBeTruthy()
+    expect(within(items[1]!).getByText('规格：确定')).toBeTruthy()
+  })
+
+  it('filters unsafe restored link URLs before rendering translated HAST nodes', async () => {
+    mockProgressiveResult('direct', [
+      {
+        id: 'md-link',
+        sourceStartOffset: 9,
+        sourceEndOffset: 47,
+        sourceKind: 'paragraph',
+        source: 'docs',
+        translatorInput: '<x1>docs</x1>',
+        target: '文档',
+        targetNodes: [
+          {
+            type: 'element',
+            tagName: 'a',
+            properties: { href: 'javascript:alert(1)', title: 'Read more' },
+            children: [{ type: 'text', value: '文档' }],
+          },
+        ],
+        kind: 'paragraph',
+      },
+    ])
+
+    render(
+      <MarkdownViewer
+        markdown={'# Links\n\n[docs](javascript:alert(1) "Read more")'}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        }}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+
+    await screen.findByText('文档')
+    const link = document.querySelector('a[title="Read more"]')
+    expect(link).toBeTruthy()
+    if (!link) throw new Error('Expected translated anchor to render.')
+    expect(link.getAttribute('href')).toBeNull()
+    expect(link.getAttribute('title')).toBe('Read more')
   })
 
   it('renders progressive segment patches before the full translation finishes', async () => {
@@ -237,7 +353,12 @@ describe('MarkdownViewer translation plugin', () => {
     render(
       <MarkdownViewer
         markdown={'# Hello\n\nI love you.'}
-        translationConfig={{ enabled: true, targetLanguage: 'zh', displayMode: 'direct' }}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        }}
       />
     )
 

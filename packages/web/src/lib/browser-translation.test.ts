@@ -4,6 +4,7 @@ import {
   prepareBrowserTranslation,
   translateMarkdownDocument,
   translateMarkdownDocumentProgressively,
+  type BrowserTranslationCache,
 } from './browser-translation'
 
 interface MockTranslator {
@@ -73,13 +74,30 @@ const value = 'keep source'
 
     expect(segments.map((segment) => [segment.kind, segment.source])).toEqual([
       ['heading', 'Requirement: Terminal projection'],
-      ['paragraph', 'Paragraph with `code` and src/app.ts.'],
+      ['paragraph', 'Paragraph with code and src/app.ts.'],
       ['listItem', 'list item'],
     ])
     expect(segments[0]).toMatchObject({
       sourceKind: 'heading',
       translatorInput: 'Requirement: Terminal projection',
     })
+  })
+
+  it('extracts HAST placeholder input for inline structure and translatable attributes', () => {
+    const segments = extractTranslatableSegments(
+      '### **1. Research** and `Planning` [docs](https://example.com "Read more")\n\n![Diagram](diagram.png "System map")'
+    )
+
+    expect(segments[0]).toMatchObject({
+      kind: 'heading',
+      source: '1. Research and Planning Read more docs',
+      translatorInput: '<x1>1. Research</x1> and <x2>Planning</x2> <x3 a1="Read more">docs</x3>',
+      placeholderTopologyHash: expect.any(String),
+      attributeTopologyHash: expect.any(String),
+      displayPolicyVersion: 1,
+    })
+    const imageSegment = segments.find((segment) => segment.translatorInput.includes('Diagram'))
+    expect(imageSegment?.translatorInput).toContain('<x1 a1="System map" a2="Diagram"></x1>')
   })
 
   it('extracts nested list items as independent inline segments', () => {
@@ -127,15 +145,191 @@ Open https://example.com/docs before editing \`Config\`.
 
     expect(detect).toHaveBeenCalledTimes(3)
     expect(availability).toHaveBeenCalledWith({ sourceLanguage: 'en', targetLanguage: 'zh' })
-    expect(translate.mock.calls[0]?.[0]).toContain('OSUI0TOKEN')
-    expect(translate.mock.calls[1]?.[0]).toContain('OSUI0TOKEN')
+    expect(translate.mock.calls[1]?.[0]).toContain('<x2>Config</x2>')
     expect(result.segments[0]?.target).toBe('zh:Requirement: Keep src/app.ts')
     expect(result.segments[0]?.sourceLanguage).toBe('en')
     expect(result.segments[0]?.targetLanguage).toBe('zh')
     expect(result.segments[0]?.status).toBe('translated')
     expect(result.segments[1]?.target).toContain('https://example.com/docs')
-    expect(result.segments[1]?.target).toContain('`Config`')
+    expect(result.segments[1]?.target).toContain('Config')
+    const codeNode = result.segments[1]?.targetNodes?.find(
+      (node) => node.type === 'element' && node.tagName === 'code'
+    )
+    expect(codeNode).toMatchObject({
+      type: 'element',
+      tagName: 'code',
+      children: [{ type: 'text', value: 'Config' }],
+    })
     expect(destroy).toHaveBeenCalled()
+  })
+
+  it('restores translated HAST placeholders without reparsing markdown block syntax', async () => {
+    const translate = vi.fn(async () => '1. 研究与规划')
+    setTranslator({
+      async availability() {
+        return 'available'
+      },
+      async create() {
+        return { translate }
+      },
+    })
+    setLanguageDetector(undefined)
+
+    const result = await translateMarkdownDocument({
+      markdown: '### 1. Research and Planning',
+      targetLanguage: 'zh',
+      displayMode: 'direct',
+      signal: new AbortController().signal,
+    })
+
+    expect(translate).toHaveBeenCalledWith('1. Research and Planning')
+    expect(result.segments[0]?.target).toBe('1. 研究与规划')
+    expect(result.segments[0]?.targetNodes).toEqual([{ type: 'text', value: '1. 研究与规划' }])
+  })
+
+  it('uses cache hits before creating a Translator session', async () => {
+    const availability = vi.fn(async () => 'available')
+    const create = vi.fn(async () => ({ translate: async (input: string) => `zh:${input}` }))
+    const segment = getExpectedSegment('### 1. Research and Planning')
+    const cache: BrowserTranslationCache = {
+      read: vi.fn(async (keyHash) => ({
+        key: createExpectedCacheKey({
+          markdown: '### 1. Research and Planning',
+          sourceLanguage: 'en',
+          targetLanguage: 'zh',
+        }),
+        keyHash,
+        sourceText: '1. Research and Planning',
+        translatedText: '1. 研究与规划',
+        targetNodesJson: JSON.stringify([{ type: 'text', value: '1. 研究与规划' }]),
+        sourceLanguage: 'en',
+        targetLanguage: 'zh',
+        placeholderTopologyHash: segment.placeholderTopologyHash ?? '',
+        attributeTopologyHash: segment.attributeTopologyHash ?? '',
+        displayPolicyVersion: segment.displayPolicyVersion ?? 1,
+        createdAt: 1,
+        lastAccessedAt: 1,
+      })),
+      write: vi.fn(),
+    }
+    setTranslator({
+      availability,
+      create,
+    })
+    setLanguageDetector(undefined)
+
+    const result = await translateMarkdownDocument({
+      markdown: '### 1. Research and Planning',
+      targetLanguage: 'zh',
+      displayMode: 'direct',
+      signal: new AbortController().signal,
+      cache,
+    })
+
+    expect(cache.read).toHaveBeenCalledTimes(1)
+    expect(create).not.toHaveBeenCalled()
+    expect(cache.write).not.toHaveBeenCalled()
+    expect(result.segments[0]?.target).toBe('1. 研究与规划')
+    expect(result.segments[0]?.targetNodes).toEqual([{ type: 'text', value: '1. 研究与规划' }])
+  })
+
+  it('writes validated translated HAST projections to cache after misses', async () => {
+    const translate = vi.fn(async () => '1. 研究与规划')
+    const segment = getExpectedSegment('### 1. Research and Planning')
+    const cache: BrowserTranslationCache = {
+      read: vi.fn(async () => null),
+      write: vi.fn(async () => ({ accepted: true })),
+    }
+    setTranslator({
+      async availability() {
+        return 'available'
+      },
+      async create() {
+        return { translate }
+      },
+    })
+    setLanguageDetector(undefined)
+
+    await translateMarkdownDocument({
+      markdown: '### 1. Research and Planning',
+      targetLanguage: 'zh',
+      displayMode: 'direct',
+      signal: new AbortController().signal,
+      cache,
+    })
+
+    expect(cache.write).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceText: '1. Research and Planning',
+        translatedText: '1. 研究与规划',
+        sourceLanguage: 'en',
+        targetLanguage: 'zh',
+        placeholderTopologyHash: segment.placeholderTopologyHash,
+        attributeTopologyHash: segment.attributeTopologyHash,
+        displayPolicyVersion: segment.displayPolicyVersion,
+        targetNodesJson: JSON.stringify([{ type: 'text', value: '1. 研究与规划' }]),
+      })
+    )
+  })
+
+  it('restores link text and translated semantic attributes from the placeholder side table', async () => {
+    const translate = vi.fn(async (input: string) =>
+      input.replace('<x1 a1="Read more">docs</x1>', '<x1 a1="阅读更多">文档</x1>')
+    )
+    setTranslator({
+      async availability() {
+        return 'available'
+      },
+      async create() {
+        return { translate }
+      },
+    })
+    setLanguageDetector(undefined)
+
+    const result = await translateMarkdownDocument({
+      markdown: '[docs](https://example.com "Read more")',
+      targetLanguage: 'zh',
+      displayMode: 'direct',
+      signal: new AbortController().signal,
+    })
+    const linkNode = result.segments[0]?.targetNodes?.[0]
+
+    expect(linkNode).toMatchObject({
+      type: 'element',
+      tagName: 'a',
+      properties: {
+        href: 'https://example.com',
+        title: '阅读更多',
+      },
+      children: [{ type: 'text', value: '文档' }],
+    })
+  })
+
+  it('falls back to source-only HAST when translated placeholders are malformed', async () => {
+    const translate = vi.fn(async () => '<x9>未知</x9>')
+    setTranslator({
+      async availability() {
+        return 'available'
+      },
+      async create() {
+        return { translate }
+      },
+    })
+    setLanguageDetector(undefined)
+
+    const result = await translateMarkdownDocument({
+      markdown: '**Important:** keep `Config`.',
+      targetLanguage: 'zh',
+      displayMode: 'direct',
+      signal: new AbortController().signal,
+    })
+
+    expect(result.segments[0]?.target).toBe('Important: keep Config.')
+    expect(result.segments[0]?.targetNodes?.[0]).toMatchObject({
+      type: 'element',
+      tagName: 'strong',
+      children: [{ type: 'text', value: 'Important:' }],
+    })
   })
 
   it('uses segment-level language detection to skip already-target-language segments', async () => {
@@ -253,13 +447,13 @@ Open https://example.com/docs before editing \`Config\`.
 
     expect(translate).toHaveBeenCalledTimes(1)
     const translatorInput = translate.mock.calls[0]?.[0] ?? ''
-    expect(translatorInput.match(/OSUI0TOKEN/g)).toHaveLength(2)
+    expect(translatorInput.match(/<x1/g)).toHaveLength(1)
     expect(translatorInput).not.toContain('__')
     expect(translatorInput).not.toContain('<span')
     expect(translatorInput).not.toContain('translate="no"')
     expect(translatorInput).not.toContain('&lt;b')
-    expect(result.segments[0]?.target).toContain('<b color="red">love</b>')
-    expect(result.segments[0]?.target).toContain('`src/app.ts`')
+    expect(result.segments[0]?.target).toContain('love')
+    expect(result.segments[0]?.target).toContain('src/app.ts')
   })
 
   it('emits progressive patches as each segment completes', async () => {
@@ -344,3 +538,39 @@ Open https://example.com/docs before editing \`Config\`.
     })
   })
 })
+
+function createExpectedCacheKey(options: {
+  markdown: string
+  sourceLanguage: string
+  targetLanguage: string
+}): string {
+  const segment = getExpectedSegment(options.markdown)
+  return stableJsonStringify({
+    sourceText: segment.source,
+    translatorInput: segment.translatorInput,
+    sourceLanguage: options.sourceLanguage,
+    targetLanguage: options.targetLanguage,
+    placeholderTopologyHash: segment.placeholderTopologyHash,
+    attributeTopologyHash: segment.attributeTopologyHash,
+    displayPolicyVersion: segment.displayPolicyVersion,
+  })
+}
+
+function getExpectedSegment(markdown: string) {
+  const segment = extractTranslatableSegments(markdown)[0]
+  if (!segment) throw new Error('Expected test markdown to produce a translation segment.')
+  return segment
+}
+
+function stableJsonStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJsonStringify).join(',')}]`
+  }
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entryValue]) => `${JSON.stringify(key)}:${stableJsonStringify(entryValue)}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value)
+}

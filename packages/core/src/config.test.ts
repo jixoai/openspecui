@@ -149,6 +149,7 @@ describe('ConfigManager', () => {
         enabled: false,
         targetLanguage: 'zh',
         displayMode: 'direct',
+        cacheEnabled: false,
       })
     })
 
@@ -256,7 +257,12 @@ describe('ConfigManager', () => {
 
     it('should write and prune translation config', async () => {
       await configManager.writeConfig({
-        translation: { enabled: true, targetLanguage: 'zh', displayMode: 'bilingual' },
+        translation: {
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'bilingual',
+          cacheEnabled: true,
+        },
       })
       clearCache()
 
@@ -265,13 +271,14 @@ describe('ConfigManager', () => {
         enabled: true,
         targetLanguage: 'zh',
         displayMode: 'bilingual',
+        cacheEnabled: true,
       })
       await expect(readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')).resolves.toBe(
-        '{\n  "translation": {\n    "enabled": true,\n    "displayMode": "bilingual"\n  }\n}'
+        '{\n  "translation": {\n    "enabled": true,\n    "displayMode": "bilingual",\n    "cacheEnabled": true\n  }\n}'
       )
 
       await configManager.writeConfig({
-        translation: { enabled: false, displayMode: 'direct' },
+        translation: { enabled: false, displayMode: 'direct', cacheEnabled: false },
       })
       clearCache()
 
@@ -705,6 +712,7 @@ describe('DEFAULT_CONFIG', () => {
     expect(DEFAULT_CONFIG.translation.enabled).toBe(false)
     expect(DEFAULT_CONFIG.translation.targetLanguage).toBe('zh')
     expect(DEFAULT_CONFIG.translation.displayMode).toBe('direct')
+    expect(DEFAULT_CONFIG.translation.cacheEnabled).toBe(false)
   })
 })
 

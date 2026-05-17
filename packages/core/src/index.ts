@@ -193,6 +193,17 @@ export {
 } from './config.js'
 
 export {
+  DEFAULT_GLOBAL_SETTINGS,
+  GlobalSettingsManager,
+  OpenSpecUIGlobalSettingsSchema,
+  getDefaultGlobalSettingsPath,
+  toPersistedGlobalSettings,
+  type OpenSpecUIGlobalSettings,
+  type OpenSpecUIGlobalSettingsUpdate,
+  type PersistedOpenSpecUIGlobalSettings,
+} from './global-settings.js'
+
+export {
   BUILTIN_SOUND_IDS,
   BUILTIN_SOUND_OPTIONS,
   BuiltinSoundIdSchema,
@@ -228,11 +239,25 @@ export {
 } from './terminal-audio.js'
 
 export {
+  DEFAULT_TRANSLATION_CACHE_ENTRY_LIMIT,
   DOCUMENT_TRANSLATION_DISPLAY_MODES,
   DocumentTranslationConfigSchema,
   DocumentTranslationDisplayModeSchema,
+  MAX_TRANSLATION_CACHE_ENTRY_LIMIT,
+  MIN_TRANSLATION_CACHE_ENTRY_LIMIT,
+  TRANSLATION_CACHE_POLICY_VERSION,
+  TranslationCacheEntrySchema,
+  TranslationCacheReadInputSchema,
+  TranslationCacheSettingsSchema,
+  TranslationCacheStatsSchema,
+  TranslationCacheWriteInputSchema,
   type DocumentTranslationConfig,
   type DocumentTranslationDisplayMode,
+  type TranslationCacheEntry,
+  type TranslationCacheReadInput,
+  type TranslationCacheSettings,
+  type TranslationCacheStats,
+  type TranslationCacheWriteInput,
 } from './document-translation.js'
 
 export {
@@ -409,6 +434,24 @@ export { OpsxKernel, type TemplateContentMap } from './opsx-kernel.js'
 
 // OPSX CLI output schemas and types
 export {
+  buildOpsxEntityDetail,
+  getOpsxEntityMetadataPath,
+  getOpsxEntityRootRelativePath,
+  isOpsxGlobPattern,
+  normalizeOpsxEntityPath,
+  opsxGlobToRegex,
+  opsxPathMatchesPattern,
+  parseOpsxEntityMetadata,
+  type OpsxEntityArtifact,
+  type OpsxEntityArtifactFile,
+  type OpsxEntityDetail,
+  type OpsxEntityDiagnostic,
+  type OpsxEntityFile,
+  type OpsxEntityReadOptions,
+  type OpsxEntityStage,
+} from './opsx-entity.js'
+export { parseOpsxSchemaDetail, type ParsedOpsxSchemaDetail } from './opsx-schema-detail.js'
+export {
   ApplyInstructionsContextFilesSchema,
   ApplyInstructionsSchema,
   ApplyTaskSchema,
@@ -434,27 +477,6 @@ export {
   type SchemaResolution,
   type TemplatesMap,
 } from './opsx-types.js'
-export {
-  buildOpsxEntityDetail,
-  getOpsxEntityMetadataPath,
-  getOpsxEntityRootRelativePath,
-  isOpsxGlobPattern,
-  normalizeOpsxEntityPath,
-  opsxGlobToRegex,
-  opsxPathMatchesPattern,
-  parseOpsxEntityMetadata,
-  type OpsxEntityArtifact,
-  type OpsxEntityArtifactFile,
-  type OpsxEntityDetail,
-  type OpsxEntityDiagnostic,
-  type OpsxEntityFile,
-  type OpsxEntityReadOptions,
-  type OpsxEntityStage,
-} from './opsx-entity.js'
-export {
-  parseOpsxSchemaDetail,
-  type ParsedOpsxSchemaDetail,
-} from './opsx-schema-detail.js'
 
 // PTY WebSocket protocol schemas and types
 export {

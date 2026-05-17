@@ -10,6 +10,62 @@ export const DocumentTranslationConfigSchema = z.object({
   enabled: z.boolean().default(false),
   targetLanguage: z.string().min(1).default('zh'),
   displayMode: DocumentTranslationDisplayModeSchema.default('direct'),
+  cacheEnabled: z.boolean().default(false),
 })
 
 export type DocumentTranslationConfig = z.infer<typeof DocumentTranslationConfigSchema>
+
+export const DEFAULT_TRANSLATION_CACHE_ENTRY_LIMIT = 10000
+export const MIN_TRANSLATION_CACHE_ENTRY_LIMIT = 100
+export const MAX_TRANSLATION_CACHE_ENTRY_LIMIT = 200000
+export const TRANSLATION_CACHE_POLICY_VERSION = 1
+
+export const TranslationCacheSettingsSchema = z.object({
+  entryLimit: z
+    .number()
+    .int()
+    .min(MIN_TRANSLATION_CACHE_ENTRY_LIMIT)
+    .max(MAX_TRANSLATION_CACHE_ENTRY_LIMIT)
+    .default(DEFAULT_TRANSLATION_CACHE_ENTRY_LIMIT),
+})
+
+export type TranslationCacheSettings = z.infer<typeof TranslationCacheSettingsSchema>
+
+export const TranslationCacheEntrySchema = z.object({
+  key: z.string().min(1),
+  keyHash: z.string().min(1),
+  sourceText: z.string(),
+  translatedText: z.string(),
+  targetNodesJson: z.string().optional(),
+  sourceLanguage: z.string().min(1),
+  targetLanguage: z.string().min(1),
+  placeholderTopologyHash: z.string().min(1),
+  attributeTopologyHash: z.string().min(1),
+  displayPolicyVersion: z.number().int().positive(),
+  createdAt: z.number().int().nonnegative(),
+  lastAccessedAt: z.number().int().nonnegative(),
+})
+
+export type TranslationCacheEntry = z.infer<typeof TranslationCacheEntrySchema>
+
+export const TranslationCacheWriteInputSchema = TranslationCacheEntrySchema.omit({
+  createdAt: true,
+  lastAccessedAt: true,
+})
+
+export type TranslationCacheWriteInput = z.infer<typeof TranslationCacheWriteInputSchema>
+
+export const TranslationCacheReadInputSchema = z.object({
+  keyHash: z.string().min(1),
+})
+
+export type TranslationCacheReadInput = z.infer<typeof TranslationCacheReadInputSchema>
+
+export const TranslationCacheStatsSchema = z.object({
+  enabled: z.boolean(),
+  entryLimit: z.number().int().positive(),
+  entries: z.number().int().nonnegative(),
+  databasePath: z.string().optional(),
+})
+
+export type TranslationCacheStats = z.infer<typeof TranslationCacheStatsSchema>

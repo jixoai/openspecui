@@ -24,6 +24,8 @@
     "@openspecui/core": "workspace:*",
     "@openspecui/search": "workspace:*",
     "@trpc/server": "^11.0.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.5.0",
     "hono": "^4.7.3",
     "tsx": "^4.19.2",
     "ws": "^8.18.0",

@@ -77,6 +77,12 @@ vi.mock('@tanstack/react-query', () => ({
     if (key === 'config.getEffectiveCliCommand') {
       return { data: 'openspec', refetch: vi.fn() }
     }
+    if (key === 'globalSettings.get') {
+      return { data: { translationCache: { entryLimit: 10000 } }, refetch: vi.fn() }
+    }
+    if (key === 'translationCache.stats') {
+      return { data: { enabled: false, entryLimit: 10000, entries: 0 }, refetch: vi.fn() }
+    }
     return { data: undefined, isLoading: false, refetch: vi.fn() }
   },
 }))
@@ -209,6 +215,16 @@ vi.mock('@/lib/trpc', () => ({
         queryFilter: () => ({ queryKey: ['config.getEffectiveCliCommand'] }),
       },
     },
+    globalSettings: {
+      get: {
+        queryOptions: () => ({ queryKey: ['globalSettings.get'] }),
+      },
+    },
+    translationCache: {
+      stats: {
+        queryOptions: () => ({ queryKey: ['translationCache.stats'] }),
+      },
+    },
   },
   trpcClient: {
     cli: {
@@ -219,6 +235,19 @@ vi.mock('@/lib/trpc', () => ({
     config: {
       update: {
         mutate: updateConfigMock,
+      },
+    },
+    globalSettings: {
+      update: {
+        mutate: vi.fn(),
+      },
+    },
+    translationCache: {
+      clean: {
+        mutate: vi.fn(),
+      },
+      clear: {
+        mutate: vi.fn(),
       },
     },
   },
@@ -268,6 +297,7 @@ describe('Settings', () => {
           enabled: false,
           targetLanguage: 'zh',
           displayMode: 'direct',
+          cacheEnabled: false,
         },
       },
     })
@@ -280,6 +310,7 @@ describe('Settings', () => {
     expect(screen.getByRole('combobox', { name: 'Translation target language' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Direct' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Bilingual' })).toBeTruthy()
+    expect(screen.getByRole('switch', { name: 'Enable translation cache' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('switch', { name: 'Enable document translation' }))
 

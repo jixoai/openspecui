@@ -1,3 +1,4 @@
+import type { Root } from 'hast'
 import {
   Fragment,
   useEffect,
@@ -10,6 +11,7 @@ import {
 import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { codeToHtml } from 'shiki'
+import type { Plugin } from 'unified'
 
 type InlineAnnotationDataAttributes = Partial<Record<`data-${string}`, string | number | boolean>>
 type BlockAnnotationDataAttributes = Partial<Record<`data-${string}`, string | number | boolean>>
@@ -33,6 +35,8 @@ interface MarkdownContentProps {
   className?: string
   /** Additional component overrides for react-markdown */
   components?: Components
+  /** HAST-stage processors applied after Markdown is converted to HTML AST. */
+  hastProcessors?: readonly MarkdownHastProcessor[]
   /** Inline text spans discovered by the reading model and projected into CSS. */
   inlineTextAnnotations?: readonly MarkdownInlineTextAnnotation[]
   /** Block-level semantic attributes discovered from source Markdown facts. */
@@ -44,6 +48,8 @@ interface MarkdownInlineContentProps {
   inlineTextAnnotations?: readonly MarkdownInlineTextAnnotation[]
 }
 
+export type MarkdownHastProcessor = (tree: Root) => void
+
 /**
  * Simple markdown renderer with GFM support and shiki code highlighting.
  * For full markdown viewing with ToC, use MarkdownViewer instead.
@@ -52,6 +58,7 @@ export function MarkdownContent({
   children,
   className = '',
   components,
+  hastProcessors = [],
   inlineTextAnnotations = [],
   blockAnnotations = [],
 }: MarkdownContentProps) {
@@ -66,11 +73,16 @@ export function MarkdownContent({
     () => createAnnotationComponents(inlineTextAnnotations, blockAnnotationByOffset),
     [inlineTextAnnotations, blockAnnotationByOffset]
   )
+  const rehypePlugins = useMemo(
+    () => (hastProcessors.length === 0 ? [] : [createMarkdownHastProcessorPlugin(hastProcessors)]),
+    [hastProcessors]
+  )
 
   return (
     <div className={`markdown-content ${className}`}>
       <Markdown
         remarkPlugins={[remarkGfm]}
+        rehypePlugins={rehypePlugins}
         components={{
           ...annotationComponents,
           code: CodeBlock,
@@ -82,6 +94,16 @@ export function MarkdownContent({
       </Markdown>
     </div>
   )
+}
+
+function createMarkdownHastProcessorPlugin(
+  processors: readonly MarkdownHastProcessor[]
+): Plugin<[], Root> {
+  return () => (tree) => {
+    for (const processor of processors) {
+      processor(tree)
+    }
+  }
 }
 
 export function MarkdownInlineContent({

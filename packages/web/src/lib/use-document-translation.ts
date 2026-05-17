@@ -7,6 +7,8 @@ import {
   type DocumentTranslationProgressPatch,
   type DocumentTranslationResult,
 } from './browser-translation'
+import { isStaticMode } from './static-mode'
+import { trpcClient } from './trpc'
 
 export type DocumentTranslationSessionStatus =
   | 'source'
@@ -93,6 +95,13 @@ export function useDocumentTranslation(
           targetLanguage: config.targetLanguage,
           displayMode: config.displayMode,
           signal: controller.signal,
+          cache:
+            config.cacheEnabled && !isStaticMode()
+              ? {
+                  read: (keyHash) => trpcClient.translationCache.read.query({ keyHash }),
+                  write: (input) => trpcClient.translationCache.write.mutate(input),
+                }
+              : undefined,
         },
         (patch) => {
           if (controller.signal.aborted || abortRef.current !== controller) return

@@ -29,6 +29,8 @@ describe('search router', () => {
       configManager: {} as never,
       cliExecutor: {} as never,
       kernel: {} as never,
+      documentService: {} as never,
+      workflowInvocationService: {} as never,
       searchService: searchService as never,
       dashboardOverviewService: {} as never,
       projectRecoveryService: {
@@ -36,6 +38,10 @@ describe('search router', () => {
         subscribe: () => () => {},
         dispose: () => {},
       } as never,
+      notificationService: {} as never,
+      customSoundService: {} as never,
+      globalSettingsManager: {} as never,
+      translationCacheService: {} as never,
       projectDir: '/tmp/project',
     })
 

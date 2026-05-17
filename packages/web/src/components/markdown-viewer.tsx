@@ -17,6 +17,7 @@ import { useDocumentTranslationRenderPlugin } from './document-translation-actio
 import {
   MarkdownContent,
   type MarkdownBlockAnnotation,
+  type MarkdownHastProcessor,
   type MarkdownInlineTextAnnotation,
 } from './markdown-content'
 import { useOpenSpecMarkdownRenderPlugin } from './markdown-viewer-open-spec-plugin'
@@ -69,6 +70,7 @@ export interface MarkdownRenderProcessor {
   name: string
   order: number
   transformHeading?: MarkdownHeadingTransform
+  processHast?: MarkdownHastProcessor
 }
 
 export interface MarkdownRenderPluginContext {
@@ -104,6 +106,12 @@ export function resolveMarkdownRenderProcessors(
     const orderDiff = left.order - right.order
     return orderDiff === 0 ? left.name.localeCompare(right.name) : orderDiff
   })
+}
+
+function getMarkdownHastProcessors(
+  processors: readonly MarkdownRenderProcessor[]
+): MarkdownHastProcessor[] {
+  return processors.flatMap((processor) => (processor.processHast ? [processor.processHast] : []))
 }
 
 function applyHeadingProcessors(
@@ -656,11 +664,13 @@ function StringMarkdownContent({
       h6: createHeading(6),
     }
   }, [collector, levelOffset, processors, collectToc])
+  const hastProcessors = useMemo(() => getMarkdownHastProcessors(processors), [processors])
 
   return (
     <MarkdownContent
       className={className}
       components={components}
+      hastProcessors={hastProcessors}
       inlineTextAnnotations={inlineTextAnnotations}
       blockAnnotations={blockAnnotations}
     >

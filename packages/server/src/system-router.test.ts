@@ -22,6 +22,8 @@ function createCaller(partial: Partial<Context> = {}) {
     kernel: {} as Context['kernel'],
     searchService: {} as Context['searchService'],
     dashboardOverviewService: {} as Context['dashboardOverviewService'],
+    documentService: {} as Context['documentService'],
+    workflowInvocationService: {} as Context['workflowInvocationService'],
     projectRecoveryService:
       partial.projectRecoveryService ??
       ({
@@ -29,6 +31,10 @@ function createCaller(partial: Partial<Context> = {}) {
         subscribe: () => () => {},
         dispose: () => {},
       } as Context['projectRecoveryService']),
+    notificationService: {} as Context['notificationService'],
+    customSoundService: {} as Context['customSoundService'],
+    globalSettingsManager: {} as Context['globalSettingsManager'],
+    translationCacheService: {} as Context['translationCacheService'],
     watcher: partial.watcher,
     projectDir: partial.projectDir ?? '/tmp/opsx-project',
   })

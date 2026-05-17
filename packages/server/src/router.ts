@@ -9,6 +9,7 @@ import type {
   GitEntrySelector,
   GitWorktreeHandoff,
   GitWorktreeOverview,
+  GlobalSettingsManager,
   OpenSpecAdapter,
   OpenSpecWatcher,
   OpsxKernel,
@@ -26,12 +27,16 @@ import {
   getWatcherRuntimeStatus,
   GitConfigSchema,
   NotificationSettingsSchema,
+  OpenSpecUIGlobalSettingsSchema,
   OpsxConfigSchema,
   resolveTerminalShellDefaults,
   sniffGlobalCli,
   subscribeWatcherRuntimeStatus,
   TerminalConfigSchema,
   TerminalRendererEngineSchema,
+  TranslationCacheReadInputSchema,
+  TranslationCacheSettingsSchema,
+  TranslationCacheWriteInputSchema,
   type AIToolOption,
   type ApplyInstructions,
   type ArtifactInstructions,
@@ -88,6 +93,7 @@ import {
   createReactiveSubscriptionWithInput,
 } from './reactive-subscription.js'
 import type { SearchService } from './search-service.js'
+import type { TranslationCacheService } from './translation-cache-service.js'
 import type { WorkflowInvocationService } from './workflow-invocation-service.js'
 
 export interface Context {
@@ -102,6 +108,8 @@ export interface Context {
   projectRecoveryService: ProjectRecoveryService
   notificationService: NotificationService
   customSoundService: CustomSoundService
+  globalSettingsManager: GlobalSettingsManager
+  translationCacheService: TranslationCacheService
   gitWorktreeHandoff?: GitWorktreeHandoffService
   watcher?: OpenSpecWatcher
   projectDir: string
@@ -187,6 +195,49 @@ export const soundsRouter = router({
       await ctx.customSoundService.remove(input.id)
       return { success: true }
     }),
+})
+
+export const globalSettingsRouter = router({
+  get: publicProcedure.query(({ ctx }) => {
+    return ctx.globalSettingsManager.readSettings()
+  }),
+
+  update: publicProcedure
+    .input(
+      OpenSpecUIGlobalSettingsSchema.partial().extend({
+        translationCache: TranslationCacheSettingsSchema.partial().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.globalSettingsManager.writeSettings(input)
+      return { success: true }
+    }),
+
+  subscribe: publicProcedure.subscription(({ ctx }) => {
+    return createReactiveSubscription(() => ctx.globalSettingsManager.readSettings())
+  }),
+})
+
+export const translationCacheRouter = router({
+  stats: publicProcedure.query(({ ctx }) => {
+    return ctx.translationCacheService.getStats()
+  }),
+
+  read: publicProcedure.input(TranslationCacheReadInputSchema).query(({ ctx, input }) => {
+    return ctx.translationCacheService.read(input.keyHash)
+  }),
+
+  write: publicProcedure.input(TranslationCacheWriteInputSchema).mutation(({ ctx, input }) => {
+    return ctx.translationCacheService.write(input)
+  }),
+
+  clean: publicProcedure.mutation(({ ctx }) => {
+    return ctx.translationCacheService.clean()
+  }),
+
+  clear: publicProcedure.mutation(({ ctx }) => {
+    return ctx.translationCacheService.clear()
+  }),
 })
 
 const OPSX_CORE_PROFILE_WORKFLOWS = ['propose', 'explore', 'apply', 'archive'] as const
@@ -1775,6 +1826,8 @@ export const appRouter = router({
   init: initRouter,
   realtime: realtimeRouter,
   config: configRouter,
+  globalSettings: globalSettingsRouter,
+  translationCache: translationCacheRouter,
   notifications: notificationsRouter,
   sounds: soundsRouter,
   cli: cliRouter,
