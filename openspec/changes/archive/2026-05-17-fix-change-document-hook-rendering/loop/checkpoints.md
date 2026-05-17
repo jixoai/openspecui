@@ -41,11 +41,11 @@
 
 ## 6. PR and Release Gates
 
-- [ ] 6.1 Changeset included if package behavior changes
-- [ ] 6.2 CI-equivalent local checks pass or scoped subset is justified
+- [x] 6.1 Changeset included if package behavior changes
+- [x] 6.2 CI-equivalent local checks pass or scoped subset is justified
 - [ ] 6.3 PR checks pass before merge
 
 ## 7. Merge Readiness
 
-- [ ] 7.1 OpenSpec archive flow completed after implementation acceptance
+- [x] 7.1 OpenSpec archive flow completed after implementation acceptance
 - [ ] 7.2 PR merge approved
