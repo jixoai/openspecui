@@ -1,5 +1,16 @@
 # @openspecui/web
 
+## 3.7.0
+
+### Minor Changes
+
+- b491529: Add the document translation platform, including translation settings, Markdown reading pipeline ordering, Chrome Translator integration, ToC translation actions, and direct/bilingual document projection modes.
+
+### Patch Changes
+
+- b491529: Fix Config schema tab routing so schema selection is derived from the routed tab state and no longer oscillates between project and package schemas.
+- b491529: Render archived OPSX entities from schema-neutral file detail instead of the legacy spec-driven change projection.
+
 ## 3.6.1
 
 ### Patch Changes

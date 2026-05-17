@@ -1,5 +1,7 @@
 # @openspecui/website
 
+## 3.7.0
+
 ## 3.6.1
 
 ## 3.6.0
