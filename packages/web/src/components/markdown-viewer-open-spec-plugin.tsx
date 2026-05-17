@@ -47,22 +47,18 @@ export function getOpenSpecSpecIdFromMarkdownPath(path: string | undefined): str
 export function useOpenSpecMarkdownRenderPlugin({
   markdown,
   path,
-  spec,
-  requirementCount,
 }: MarkdownRenderPluginContext): MarkdownRenderPluginResult {
   const sourceMarkdown = typeof markdown === 'string' ? markdown : undefined
   const pathSpecId = useMemo(() => getOpenSpecSpecIdFromMarkdownPath(path), [path])
   const document = useMemo(
     () =>
       sourceMarkdown && pathSpecId
-        ? projectOpenSpecMarkdown(sourceMarkdown, { specId: spec?.id ?? pathSpecId })
+        ? projectOpenSpecMarkdown(sourceMarkdown, { specId: pathSpecId })
         : undefined,
-    [pathSpecId, sourceMarkdown, spec?.id]
+    [pathSpecId, sourceMarkdown]
   )
 
   const resolvedRequirementCount =
-    requirementCount ??
-    spec?.requirements.length ??
     document?.projections[OPEN_SPEC_READING_SECTIONS_PROJECTION_ID]?.requirements.length
 
   const headingTransform = useMemo(

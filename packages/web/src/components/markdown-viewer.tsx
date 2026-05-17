@@ -1,4 +1,3 @@
-import type { Spec } from '@openspecui/core'
 import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
 import {
   createContext,
@@ -75,8 +74,6 @@ export interface MarkdownRenderProcessor {
 export interface MarkdownRenderPluginContext {
   markdown: string | MarkdownBuilderFn
   path?: string
-  spec?: Spec
-  requirementCount?: number
 }
 
 export interface MarkdownRenderPluginResult {
@@ -200,10 +197,6 @@ export interface MarkdownViewerProps {
   markdown: string | MarkdownBuilderFn
   /** Optional path used by render plugins to select document-specific projections. */
   path?: string
-  /** Parsed spec metadata, used only by spec document render plugins. */
-  spec?: Spec
-  /** Requirement count override for spec document heading chips. */
-  requirementCount?: number
   className?: string
   /** 渲染和 ToC 建立完成后回调（用于外层占位控制） */
   onReady?: () => void
@@ -247,8 +240,6 @@ function useSectionTimeline(): number | null {
 export function MarkdownViewer({
   markdown,
   path,
-  spec,
-  requirementCount,
   className = '',
   onReady,
   collectToc = true,
@@ -267,8 +258,6 @@ export function MarkdownViewer({
   const openSpecPlugin = useOpenSpecMarkdownRenderPlugin({
     markdown,
     path,
-    spec,
-    requirementCount,
   })
   const translationPlugin = useDocumentTranslationRenderPlugin({
     markdown: typeof markdown === 'string' ? markdown : undefined,

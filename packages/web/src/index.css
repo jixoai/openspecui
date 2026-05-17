@@ -1122,10 +1122,10 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
   .markdown-content strong {
     font-weight: 600;
   }
-  .openspec-markdown-document .markdown-content .openspec-inline-keyword {
+  .openspec-markdown-document .openspec-inline-keyword {
     @apply text-shadow-openspec-keyword text-shadow-primary/50 font-bold;
   }
-  .openspec-markdown-document .markdown-content {
+  .openspec-markdown-document {
     --openspec-reading-label-column: 4.4rem;
     --openspec-reading-label-gap: 0.9rem;
     --openspec-reading-content-indent: calc(
@@ -1133,14 +1133,13 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
     );
     --openspec-reading-list-padding: 1.5rem;
   }
-  .openspec-markdown-document .markdown-content ul {
+  .openspec-markdown-document ul {
     list-style-type: square;
   }
-  .openspec-markdown-document .markdown-content [data-openspec-kind='section'] {
+  .openspec-markdown-document [data-openspec-kind='section'] {
     scroll-margin-top: 1rem;
   }
   .openspec-markdown-document
-    .markdown-content
     [data-openspec-section-kind='overview'][data-openspec-kind='section'] {
     border-inline-start: 0.24rem solid color-mix(in oklab, var(--primary) 72%, transparent);
     color: var(--primary);
@@ -1149,18 +1148,17 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
     padding: 0.35rem 0 0.25rem 0.75rem;
   }
   .openspec-markdown-document
-    .markdown-content
     [data-openspec-section-kind='requirements'][data-openspec-kind='section'] {
     margin-top: 1.8rem;
     padding-bottom: 0.35rem;
   }
-  .openspec-markdown-document .markdown-content .openspec-heading-with-chip {
+  .openspec-markdown-document .openspec-heading-with-chip {
     align-items: center;
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
   }
-  .openspec-markdown-document .markdown-content [data-openspec-kind='requirement'] {
+  .openspec-markdown-document [data-openspec-kind='requirement'] {
     align-items: baseline;
     display: flex;
     flex-wrap: wrap;
@@ -1170,10 +1168,7 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
     padding-top: 0.2rem;
     position: relative;
   }
-  .openspec-markdown-document
-    .markdown-content
-    [data-openspec-kind='requirement']
-    .openspec-heading-label {
+  .openspec-markdown-document [data-openspec-kind='requirement'] .openspec-heading-label {
     border-bottom: 0.18rem solid var(--primary);
     color: var(--muted-foreground);
     font-size: 0.75rem;
@@ -1186,16 +1181,10 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
     inset-block-start: 0.32rem;
     inset-inline-start: 0;
   }
-  .openspec-markdown-document
-    .markdown-content
-    [data-openspec-kind='requirement']
-    .openspec-heading-label::before {
+  .openspec-markdown-document [data-openspec-kind='requirement'] .openspec-heading-label::before {
     content: attr(data-openspec-visual-label);
   }
-  .openspec-markdown-document
-    .markdown-content
-    [data-openspec-kind='requirement']
-    .openspec-heading-title {
+  .openspec-markdown-document [data-openspec-kind='requirement'] .openspec-heading-title {
     color: var(--foreground);
     display: block;
     font-size: 1.06rem;
@@ -1204,7 +1193,7 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
     min-width: 0;
     overflow-wrap: anywhere;
   }
-  .openspec-markdown-document .markdown-content [data-openspec-kind='scenario'] {
+  .openspec-markdown-document [data-openspec-kind='scenario'] {
     align-items: baseline;
     display: flex;
     flex-wrap: wrap;
@@ -1213,10 +1202,7 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
     padding: 0.15rem 0 0.05rem var(--openspec-reading-content-indent);
     position: relative;
   }
-  .openspec-markdown-document
-    .markdown-content
-    [data-openspec-kind='scenario']
-    .openspec-heading-label {
+  .openspec-markdown-document [data-openspec-kind='scenario'] .openspec-heading-label {
     color: var(--primary);
     font-size: 0.68rem;
     font-weight: 800;
@@ -1228,16 +1214,10 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
     inset-inline-start: 0;
     text-transform: uppercase;
   }
-  .openspec-markdown-document
-    .markdown-content
-    [data-openspec-kind='scenario']
-    .openspec-heading-label::before {
+  .openspec-markdown-document [data-openspec-kind='scenario'] .openspec-heading-label::before {
     content: attr(data-openspec-visual-label);
   }
-  .openspec-markdown-document
-    .markdown-content
-    [data-openspec-kind='scenario']
-    .openspec-heading-title {
+  .openspec-markdown-document [data-openspec-kind='scenario'] .openspec-heading-title {
     color: var(--foreground);
     display: block;
     font-size: 0.98rem;
@@ -1294,7 +1274,6 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
     z-index: 30;
   }
   .openspec-markdown-document
-    .markdown-content
     [data-openspec-zone='purpose']:not([data-openspec-block-kind='listItem']) {
     background: color-mix(in oklab, var(--primary) 4%, transparent);
     border-inline-start: 0.24rem solid color-mix(in oklab, var(--primary) 72%, transparent);
@@ -1302,23 +1281,19 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
     padding: 0.25rem 0.85rem 0.8rem 0.75rem;
   }
   .openspec-markdown-document
-    .markdown-content
     [data-openspec-zone='requirements-intro']:not([data-openspec-block-kind='listItem']) {
     color: var(--muted-foreground);
   }
   .openspec-markdown-document
-    .markdown-content
     [data-openspec-zone='requirement-body']:not([data-openspec-block-kind='listItem']) {
     margin-inline-start: var(--openspec-reading-content-indent);
   }
   .openspec-markdown-document
-    .markdown-content
     [data-openspec-zone='requirement-body']:not([data-openspec-block-kind='listItem'])
     + [data-openspec-zone='requirement-body']:not([data-openspec-block-kind='listItem']) {
     margin-top: 0.5rem;
   }
   .openspec-markdown-document
-    .markdown-content
     [data-openspec-zone='scenario-body']:not([data-openspec-block-kind='listItem']) {
     background: color-mix(in oklab, var(--muted) 40%, transparent);
     margin: 0.35rem 0 0.75rem
@@ -1328,36 +1303,28 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
   .spec-reading-document .spec-scenario-step {
     scroll-margin-top: 0.75rem;
   }
-  .openspec-markdown-document .markdown-content li[data-openspec-kind='scenario-step'] {
+  .openspec-markdown-document li[data-openspec-kind='scenario-step'] {
     line-height: 1.55;
   }
   @container (max-width: 767px) {
-    .openspec-markdown-document .markdown-content [data-openspec-kind='requirement'] {
+    .openspec-markdown-document [data-openspec-kind='requirement'] {
       padding-inline-start: 0;
     }
     .openspec-markdown-document
-      .markdown-content
       [data-openspec-zone='requirement-body']:not([data-openspec-block-kind='listItem']) {
       margin-inline-start: 0;
     }
-    .openspec-markdown-document .markdown-content [data-openspec-kind='scenario'] {
+    .openspec-markdown-document [data-openspec-kind='scenario'] {
       padding-inline-start: 0;
     }
-    .openspec-markdown-document
-      .markdown-content
-      [data-openspec-kind='requirement']
-      .openspec-heading-label,
-    .openspec-markdown-document
-      .markdown-content
-      [data-openspec-kind='scenario']
-      .openspec-heading-label {
+    .openspec-markdown-document [data-openspec-kind='requirement'] .openspec-heading-label,
+    .openspec-markdown-document [data-openspec-kind='scenario'] .openspec-heading-label {
       display: block;
       position: static;
       margin-bottom: 0.35rem;
       width: max-content;
     }
     .openspec-markdown-document
-      .markdown-content
       [data-openspec-zone='scenario-body']:not([data-openspec-block-kind='listItem']) {
       margin-inline-start: 0;
     }

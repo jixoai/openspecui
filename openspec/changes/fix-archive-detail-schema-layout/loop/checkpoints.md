@@ -39,3 +39,11 @@
 - [x] 5.1 Commit OpenSpec breaking-change artifacts separately
 - [x] 5.2 Commit implementation/tests separately
 - [x] 5.3 Remove legacy archive raw surface from the public router contract
+
+## 6. Markdown Render Plugin Follow-Up
+
+- [x] 6.1 Specify path-driven Markdown render plugin behavior for nested spec documents
+- [x] 6.2 Remove OpenSpec-specific `spec` and `requirementCount` props from `MarkdownViewer`
+- [x] 6.3 Make nested spec Markdown viewers receive the same OpenSpec visual styling as root spec detail
+- [x] 6.4 Focused MarkdownViewer/change/archive tests pass
+- [x] 6.5 Affected package typecheck and OpenSpec strict validation pass

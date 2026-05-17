@@ -57,6 +57,25 @@ The UI SHALL render schema artifact Markdown through the shared Markdown renderi
 - **THEN** the hook context SHALL identify the document as `kind: "artifact"`
 - **AND** the context SHALL include the entity stage, change id, schema name when known, artifact id when known, and concrete relative path
 
+### Requirement: Path-Driven Markdown Render Plugins
+
+The UI SHALL keep `MarkdownViewer` as a schema-neutral rendering entrypoint whose document-specific behavior is selected by file path and Markdown content, not by page-owned schema props.
+
+#### Scenario: Apply spec rendering from path in nested viewers
+
+- **GIVEN** Markdown content is rendered inside another `MarkdownViewer`
+- **AND** the nested viewer receives a path matching `specs/<spec-id>/spec.md`
+- **WHEN** the Markdown contains OpenSpec requirements and scenarios
+- **THEN** the nested viewer SHALL apply the same OpenSpec semantic render plugin used by the spec detail page
+- **AND** requirement labels, scenario labels, ToC labels, and OpenSpec reading styles SHALL remain consistent with the spec detail page
+
+#### Scenario: Avoid page-owned OpenSpec props
+
+- **GIVEN** a page renders a spec Markdown document through `MarkdownViewer`
+- **WHEN** it wants OpenSpec-specific rendering effects
+- **THEN** it SHALL pass the Markdown content and concrete path only
+- **AND** it SHALL NOT pass parsed `Spec` data, requirement counts, or other OpenSpec-specific props into the generic viewer
+
 ### Requirement: Static Archive Entity Parity
 
 Static export mode SHALL preserve archive entity files and artifact grouping with the same schema-neutral semantics as live mode.

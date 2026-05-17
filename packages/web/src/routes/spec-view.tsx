@@ -126,8 +126,6 @@ function SpecContent({
       <MarkdownViewer
         markdown={rawMarkdown}
         path={`specs/${spec.id}/spec.md`}
-        spec={spec}
-        requirementCount={spec.requirements.length}
         className="vt-detail-content min-h-0 flex-1"
         translationConfig={translationConfig}
       />
