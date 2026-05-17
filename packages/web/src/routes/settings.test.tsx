@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Settings } from './settings'
@@ -9,9 +9,16 @@ const { useConfigSubscriptionMock, staticModeMock, useServerStatusMock } = vi.ho
   useServerStatusMock: vi.fn(),
 }))
 
+const { prepareBrowserTranslationMock, updateConfigMock } = vi.hoisted(() => ({
+  prepareBrowserTranslationMock: vi.fn(),
+  updateConfigMock: vi.fn(),
+}))
+
 vi.mock('@tanstack/react-query', () => ({
-  useMutation: () => ({
-    mutate: vi.fn(),
+  useMutation: ({ mutationFn }: { mutationFn?: (variables: unknown) => unknown }) => ({
+    mutate: vi.fn((variables: unknown) => {
+      mutationFn?.(variables)
+    }),
     isPending: false,
     isSuccess: false,
   }),
@@ -94,6 +101,11 @@ vi.mock('@/components/toc', () => ({
   generateTimelineScope: () => '',
   Toc: () => null,
   TocSection: ({ children }: { children?: ReactNode }) => <section>{children}</section>,
+}))
+
+vi.mock('@/lib/browser-translation', () => ({
+  prepareBrowserTranslation: prepareBrowserTranslationMock,
+  probeBrowserTranslation: vi.fn(async () => ({ availability: 'available' })),
 }))
 
 vi.mock('@/lib/static-mode', () => ({
@@ -206,7 +218,7 @@ vi.mock('@/lib/trpc', () => ({
     },
     config: {
       update: {
-        mutate: vi.fn(),
+        mutate: updateConfigMock,
       },
     },
   },
@@ -216,6 +228,7 @@ describe('Settings', () => {
   afterEach(() => {
     cleanup()
     vi.unstubAllGlobals()
+    vi.clearAllMocks()
   })
 
   it('renders force init as the shared Switch control', async () => {
@@ -237,5 +250,44 @@ describe('Settings', () => {
 
     expect(forceSwitch).toHaveAttribute('aria-checked', 'true')
     expect(forceSwitch.className).toContain('w-11')
+  })
+
+  it('renders translation settings and initializes browser support when enabled', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    prepareBrowserTranslationMock.mockResolvedValue({ availability: 'available' })
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    expect(screen.getByRole('heading', { name: 'Translation' })).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: 'Translation target language' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Direct' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Bilingual' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Enable document translation' }))
+
+    await waitFor(() =>
+      expect(updateConfigMock).toHaveBeenCalledWith({ translation: { enabled: true } })
+    )
+    await waitFor(() =>
+      expect(prepareBrowserTranslationMock).toHaveBeenCalledWith('zh', expect.any(AbortSignal))
+    )
   })
 })

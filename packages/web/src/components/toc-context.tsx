@@ -137,6 +137,8 @@ interface TocContextValue {
   levelOffset: number
   /** 是否是顶层（决定是否渲染 ToC sidebar） */
   isRoot: boolean
+  /** Register nested document actions in the root ToC header. */
+  registerHeaderAction?: (id: string, key: string, action: ReactNode) => () => void
 }
 
 const TocContext = createContext<TocContextValue | null>(null)
@@ -167,6 +169,8 @@ interface TocProviderProps {
   levelOffset?: number
   /** 是否是顶层 */
   isRoot?: boolean
+  /** Root action registry used by nested Markdown viewers. */
+  registerHeaderAction?: (id: string, key: string, action: ReactNode) => () => void
 }
 
 export function TocProvider({
@@ -174,10 +178,11 @@ export function TocProvider({
   collector,
   levelOffset = 0,
   isRoot = true,
+  registerHeaderAction,
 }: TocProviderProps) {
   const value = useMemo<TocContextValue>(
-    () => ({ collector, levelOffset, isRoot }),
-    [collector, levelOffset, isRoot]
+    () => ({ collector, levelOffset, isRoot, registerHeaderAction }),
+    [collector, levelOffset, isRoot, registerHeaderAction]
   )
 
   return <TocContext.Provider value={value}>{children}</TocContext.Provider>
@@ -202,6 +207,7 @@ export function TocLevelProvider({
       collector: parentCtx.collector,
       levelOffset: parentCtx.levelOffset + additionalOffset,
       isRoot: false,
+      registerHeaderAction: parentCtx.registerHeaderAction,
     }),
     [parentCtx, additionalOffset]
   )

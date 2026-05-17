@@ -11,6 +11,11 @@ import { TerminalInvocationSettings } from '@/components/terminal/terminal-invoc
 import { generateTimelineScope, Toc, TocSection, type TocItem } from '@/components/toc'
 import { getApiBaseUrl } from '@/lib/api-config'
 import {
+  prepareBrowserTranslation,
+  probeBrowserTranslation,
+  type BrowserTranslationStatus,
+} from '@/lib/browser-translation'
+import {
   CODE_EDITOR_THEME_OPTIONS,
   DEFAULT_CODE_EDITOR_THEME,
   isCodeEditorTheme,
@@ -42,6 +47,10 @@ import { queryClient, trpc, trpcClient } from '@/lib/trpc'
 import { useCliRunner } from '@/lib/use-cli-runner'
 import { useServerStatus } from '@/lib/use-server-status'
 import { useConfigSubscription } from '@/lib/use-subscription'
+import {
+  type DocumentTranslationConfig,
+  type DocumentTranslationDisplayMode,
+} from '@openspecui/core/document-translation'
 import { OFFICIAL_APP_BASE_URL } from '@openspecui/core/hosted-app'
 import { NotificationSoundSchema } from '@openspecui/core/notifications'
 import {
@@ -60,6 +69,7 @@ import {
   FolderOpen,
   FolderPlus,
   GitCommitHorizontal,
+  Languages,
   LayoutDashboard,
   Link2,
   Loader2,
@@ -95,6 +105,29 @@ function formatExecutePath(command: string, args: readonly string[] = []): strin
   return [command, ...args].map(quote).join(' ')
 }
 
+function formatTranslationCapability(
+  capability: BrowserTranslationStatus | null,
+  loading: boolean
+): string {
+  if (loading) return 'Checking browser translation capability...'
+  if (!capability) return 'Capability not checked yet.'
+
+  switch (capability.availability) {
+    case 'available':
+      return 'Translator is ready.'
+    case 'downloadable':
+      return 'Language support can be downloaded by Chrome.'
+    case 'downloading':
+      return 'Chrome is preparing translation support.'
+    case 'missing':
+      return capability.message ?? 'Chrome Translator API is not exposed.'
+    case 'unavailable':
+      return 'Translation is unavailable for this browser or language pair.'
+    case 'error':
+      return capability.message ?? 'Unable to check translation capability.'
+  }
+}
+
 const INIT_TOOLS_MODE_OPTIONS: SelectOption<InitToolsMode>[] = [
   { value: 'auto', label: 'Auto-detect tools (recommended)' },
   { value: 'selected', label: 'Use selected tools' },
@@ -116,6 +149,8 @@ const DEFAULT_TERMINAL_RENDERER_ENGINE: TerminalRendererEngine = 'xterm'
 const DEFAULT_TERMINAL_BELL_VOLUME = 1
 const DEFAULT_DASHBOARD_TREND_POINT_LIMIT = 100
 const DEFAULT_GIT_DIFF_EAGER_LINE_BUDGET = 1000
+const DEFAULT_TRANSLATION_TARGET_LANGUAGE = 'zh'
+const DEFAULT_TRANSLATION_DISPLAY_MODE: DocumentTranslationDisplayMode = 'direct'
 
 const THEME_OPTIONS = [
   {
@@ -155,11 +190,27 @@ const TERMINAL_CURSOR_STYLE_OPTIONS = [
   { value: 'bar', label: 'Bar' },
 ] satisfies ButtonGroupOption<TerminalCursorStyle>[]
 
+const TRANSLATION_DISPLAY_MODE_OPTIONS = [
+  { value: 'direct', label: 'Direct' },
+  { value: 'bilingual', label: 'Bilingual' },
+] satisfies ButtonGroupOption<DocumentTranslationDisplayMode>[]
+
+const TRANSLATION_TARGET_LANGUAGE_OPTIONS = [
+  { value: 'zh', label: 'Chinese' },
+  { value: 'en', label: 'English' },
+  { value: 'ja', label: 'Japanese' },
+  { value: 'ko', label: 'Korean' },
+  { value: 'fr', label: 'French' },
+  { value: 'de', label: 'German' },
+  { value: 'es', label: 'Spanish' },
+] satisfies SelectOption<string>[]
+
 const SETTINGS_TOC_ITEMS: TocItem[] = [
   { id: 'settings-appearance', label: 'Appearance' },
   { id: 'settings-opsx-invocation', label: 'OPSX Invocation' },
   { id: 'settings-terminal', label: 'Terminal' },
   { id: 'settings-notifications', label: 'Notifications' },
+  { id: 'settings-translation', label: 'Translation' },
   { id: 'settings-dashboard', label: 'Dashboard' },
   { id: 'settings-git-detail', label: 'Git Detail' },
   { id: 'settings-project-directory', label: 'Project Directory' },
@@ -666,6 +717,15 @@ export function Settings() {
   const [termBellVolume, setTermBellVolume] = useState(initialConfig.bellVolume)
   const [dashboardTrendPointLimit, setDashboardTrendPointLimit] = useState(100)
   const [gitDiffEagerLineBudget, setGitDiffEagerLineBudget] = useState(1000)
+  const [translationEnabled, setTranslationEnabled] = useState(false)
+  const [translationTargetLanguage, setTranslationTargetLanguage] = useState(
+    DEFAULT_TRANSLATION_TARGET_LANGUAGE
+  )
+  const [translationDisplayMode, setTranslationDisplayMode] =
+    useState<DocumentTranslationDisplayMode>(DEFAULT_TRANSLATION_DISPLAY_MODE)
+  const [translationCapability, setTranslationCapability] =
+    useState<BrowserTranslationStatus | null>(null)
+  const [translationCapabilityLoading, setTranslationCapabilityLoading] = useState(false)
   const [termRendererError, setTermRendererError] = useState<string | null>(null)
   const codeEditorThemeOptions = CODE_EDITOR_THEME_OPTIONS satisfies SelectOption<CodeEditorTheme>[]
   const terminalThemeOptions = TERMINAL_THEME_OPTIONS satisfies SelectOption<TerminalThemeId>[]
@@ -828,6 +888,10 @@ export function Settings() {
       await queryClient.invalidateQueries({ queryKey: ['git'] })
     },
   })
+  const saveTranslationConfigMutation = useMutation({
+    mutationFn: (translation: Partial<DocumentTranslationConfig>) =>
+      trpcClient.config.update.mutate({ translation }),
+  })
 
   useEffect(() => {
     const nextLimit = config?.dashboard?.trendPointLimit
@@ -841,6 +905,17 @@ export function Settings() {
       setGitDiffEagerLineBudget(nextBudget)
     }
   }, [config?.git?.diffEagerLineBudget])
+  useEffect(() => {
+    setTranslationEnabled(config?.translation?.enabled ?? false)
+    setTranslationTargetLanguage(
+      config?.translation?.targetLanguage ?? DEFAULT_TRANSLATION_TARGET_LANGUAGE
+    )
+    setTranslationDisplayMode(config?.translation?.displayMode ?? DEFAULT_TRANSLATION_DISPLAY_MODE)
+  }, [
+    config?.translation?.displayMode,
+    config?.translation?.enabled,
+    config?.translation?.targetLanguage,
+  ])
 
   const savedDashboardTrendPointLimit =
     config?.dashboard?.trendPointLimit ?? DEFAULT_DASHBOARD_TREND_POINT_LIMIT
@@ -889,6 +964,11 @@ export function Settings() {
   )
   const notificationVolume = config?.notifications?.volume ?? 1
   const systemNotificationsEnabled = config?.notifications?.systemNotificationsEnabled ?? false
+  const savedTranslationConfig = {
+    enabled: config?.translation?.enabled ?? false,
+    targetLanguage: config?.translation?.targetLanguage ?? DEFAULT_TRANSLATION_TARGET_LANGUAGE,
+    displayMode: config?.translation?.displayMode ?? DEFAULT_TRANSLATION_DISPLAY_MODE,
+  }
   const opsxAgentInvocationModeOptions = useMemo(
     () =>
       OPSX_AGENT_INVOCATION_MODE_OPTIONS.map((option) => ({
@@ -897,6 +977,27 @@ export function Settings() {
       })),
     [saveOpsxConfigMutation.isPending]
   )
+  const refreshTranslationCapability = useCallback(
+    async (targetLanguage: string, options: { initialize?: boolean } = {}) => {
+      setTranslationCapabilityLoading(true)
+      const controller = new AbortController()
+      try {
+        const status = options.initialize
+          ? await prepareBrowserTranslation(targetLanguage, controller.signal)
+          : await probeBrowserTranslation(targetLanguage)
+        setTranslationCapability(status)
+      } finally {
+        controller.abort()
+        setTranslationCapabilityLoading(false)
+      }
+    },
+    []
+  )
+
+  useEffect(() => {
+    if (!translationEnabled) return
+    void refreshTranslationCapability(translationTargetLanguage, { initialize: true })
+  }, [refreshTranslationCapability, translationEnabled, translationTargetLanguage])
 
   useEffect(() => {
     applyTheme(theme)
@@ -1266,6 +1367,115 @@ export function Settings() {
                   volume={notificationVolume}
                   systemNotificationsEnabled={systemNotificationsEnabled}
                 />
+              </TocSection>
+
+              <TocSection
+                id="settings-translation"
+                index={tocIndex('settings-translation')}
+                className="space-y-4"
+              >
+                <h2 className="flex items-center gap-2 text-lg font-semibold">
+                  <Languages className="h-5 w-5" />
+                  Translation
+                </h2>
+                <div className="border-border space-y-4 rounded-lg border p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <label className="block text-sm font-medium">
+                        Enable document translation
+                      </label>
+                      <p className="text-muted-foreground mt-1 text-sm">
+                        Uses the browser Translator API for Markdown document views.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={translationEnabled}
+                      onCheckedChange={(checked) => {
+                        setTranslationEnabled(checked)
+                        saveTranslationConfigMutation.mutate({ enabled: checked })
+                        if (checked) {
+                          void refreshTranslationCapability(translationTargetLanguage, {
+                            initialize: true,
+                          })
+                        }
+                      }}
+                      ariaLabel="Enable document translation"
+                      disabled={saveTranslationConfigMutation.isPending}
+                    />
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium">Target Language</label>
+                      <Select
+                        value={translationTargetLanguage}
+                        options={TRANSLATION_TARGET_LANGUAGE_OPTIONS}
+                        onValueChange={(targetLanguage) => {
+                          setTranslationTargetLanguage(targetLanguage)
+                          saveTranslationConfigMutation.mutate({ targetLanguage })
+                          if (translationEnabled) {
+                            void refreshTranslationCapability(targetLanguage, {
+                              initialize: true,
+                            })
+                          }
+                        }}
+                        ariaLabel="Translation target language"
+                        disabled={saveTranslationConfigMutation.isPending}
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-medium">Display Mode</label>
+                      <ButtonGroup<DocumentTranslationDisplayMode>
+                        value={translationDisplayMode}
+                        onChange={(displayMode) => {
+                          setTranslationDisplayMode(displayMode)
+                          saveTranslationConfigMutation.mutate({ displayMode })
+                        }}
+                        options={TRANSLATION_DISPLAY_MODE_OPTIONS}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="border-border/60 flex flex-wrap items-center gap-2 border-t pt-3 text-sm">
+                    {translationCapabilityLoading ? (
+                      <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
+                    ) : translationCapability?.availability === 'available' ? (
+                      <CheckCircle className="h-4 w-4 text-emerald-500" />
+                    ) : translationCapability?.availability === 'downloadable' ||
+                      translationCapability?.availability === 'downloading' ? (
+                      <Download className="h-4 w-4 text-sky-500" />
+                    ) : (
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    )}
+                    <span className="text-muted-foreground">
+                      {formatTranslationCapability(
+                        translationCapability,
+                        translationCapabilityLoading
+                      )}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() =>
+                        void refreshTranslationCapability(translationTargetLanguage, {
+                          initialize: translationEnabled,
+                        })
+                      }
+                      disabled={translationCapabilityLoading}
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Check
+                    </Button>
+                  </div>
+
+                  {savedTranslationConfig.enabled !== translationEnabled ||
+                  savedTranslationConfig.targetLanguage !== translationTargetLanguage ||
+                  savedTranslationConfig.displayMode !== translationDisplayMode ? (
+                    <p className="text-muted-foreground text-xs">Saving translation settings...</p>
+                  ) : null}
+                </div>
               </TocSection>
 
               {/* Dashboard Settings */}

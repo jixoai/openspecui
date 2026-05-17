@@ -1,5 +1,5 @@
 import { ChevronDown, List } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { navigateHashAnchor } from './anchor-scroll'
 
 export interface TocItem {
@@ -57,6 +57,7 @@ interface TocProps {
   /** Default collapsed state on mobile */
   defaultCollapsed?: boolean
   className?: string
+  headerAction?: ReactNode
 }
 
 /**
@@ -71,7 +72,7 @@ interface TocProps {
  * 2. Use TocSection for each section to bind viewTimelineName
  * 3. The ToC links will automatically highlight based on scroll position
  */
-export function Toc({ items, defaultCollapsed = true, className = '' }: TocProps) {
+export function Toc({ items, defaultCollapsed = true, className = '', headerAction }: TocProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
   const tree = useMemo(() => buildTocTree(items), [items])
 
@@ -88,17 +89,22 @@ export function Toc({ items, defaultCollapsed = true, className = '' }: TocProps
 
       {/* Narrow: collapsible */}
       <div className="toc-narrow border-border bg-background/60 overflow-hidden rounded border backdrop-blur-sm">
-        <button
-          onClick={() => setCollapsed(!collapsed)}
+        <div
           className={`text-foreground flex w-full min-w-0 items-center gap-2 px-3 py-2 ${collapsed ? '' : 'border-border border-b'}`}
-          aria-label={collapsed ? 'Show table of contents' : 'Hide table of contents'}
         >
-          <List className="h-4 w-4 shrink-0" />
-          <span className="min-w-0 truncate text-sm">Contents</span>
-          <ChevronDown
-            className={`ml-auto h-4 w-4 shrink-0 transition-transform ${collapsed ? '' : 'rotate-180'}`}
-          />
-        </button>
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+            aria-label={collapsed ? 'Show table of contents' : 'Hide table of contents'}
+          >
+            <List className="h-4 w-4 shrink-0" />
+            <span className="min-w-0 truncate text-sm">Contents</span>
+            <ChevronDown
+              className={`h-4 w-4 shrink-0 transition-transform ${collapsed ? '' : 'rotate-180'}`}
+            />
+          </button>
+          {headerAction ? <span className="ml-auto shrink-0">{headerAction}</span> : null}
+        </div>
         {!collapsed && (
           <div className="toc-scroll toc-narrow-scroll scrollbar-thin scrollbar-track-transparent min-h-0 overflow-y-auto overscroll-contain p-2">
             <TocTree nodes={tree} />
@@ -111,6 +117,7 @@ export function Toc({ items, defaultCollapsed = true, className = '' }: TocProps
         <div className="text-muted-foreground flex min-w-0 items-center gap-2 px-3 py-2 text-xs font-medium uppercase tracking-wide">
           <List className="h-3.5 w-3.5 shrink-0" />
           <span className="min-w-0 truncate">On this page</span>
+          {headerAction ? <span className="ml-auto shrink-0">{headerAction}</span> : null}
         </div>
         <div className="toc-scroll toc-wide-scroll scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
           <TocTree nodes={tree} />

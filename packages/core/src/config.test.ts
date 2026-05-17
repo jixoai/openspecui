@@ -145,6 +145,11 @@ describe('ConfigManager', () => {
       expect(config.notifications.sound).toBe(DEFAULT_NOTIFICATION_SOUND_ID)
       expect(config.notifications.volume).toBe(1)
       expect(config.notifications.systemNotificationsEnabled).toBe(false)
+      expect(config.translation).toEqual({
+        enabled: false,
+        targetLanguage: 'zh',
+        displayMode: 'direct',
+      })
     })
 
     it('should treat persisted null fields as absent and keep valid sibling overrides', async () => {
@@ -246,6 +251,34 @@ describe('ConfigManager', () => {
       expect(config.notifications.systemNotificationsEnabled).toBe(true)
       await expect(readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')).resolves.toBe(
         '{\n  "notifications": {\n    "sound": "builtin:Glass",\n    "volume": 0.6,\n    "systemNotificationsEnabled": true\n  }\n}'
+      )
+    })
+
+    it('should write and prune translation config', async () => {
+      await configManager.writeConfig({
+        translation: { enabled: true, targetLanguage: 'zh', displayMode: 'bilingual' },
+      })
+      clearCache()
+
+      let config = await configManager.readConfig()
+      expect(config.translation).toEqual({
+        enabled: true,
+        targetLanguage: 'zh',
+        displayMode: 'bilingual',
+      })
+      await expect(readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')).resolves.toBe(
+        '{\n  "translation": {\n    "enabled": true,\n    "displayMode": "bilingual"\n  }\n}'
+      )
+
+      await configManager.writeConfig({
+        translation: { enabled: false, displayMode: 'direct' },
+      })
+      clearCache()
+
+      config = await configManager.readConfig()
+      expect(config.translation).toEqual(DEFAULT_CONFIG.translation)
+      await expect(readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')).resolves.toBe(
+        '{}'
       )
     })
 
@@ -569,6 +602,9 @@ describe('OpenSpecUIConfigSchema', () => {
       expect(result.data.terminal.rendererEngine).toBe('xterm')
       expect(result.data.terminal.bellSound).toBe(DEFAULT_BELL_SOUND_ID)
       expect(result.data.git.diffEagerLineBudget).toBe(1000)
+      expect(result.data.translation.enabled).toBe(false)
+      expect(result.data.translation.targetLanguage).toBe('zh')
+      expect(result.data.translation.displayMode).toBe('direct')
     }
   })
 
@@ -666,6 +702,9 @@ describe('DEFAULT_CONFIG', () => {
     expect(DEFAULT_CONFIG.git.diffEagerLineBudget).toBe(1000)
     expect(DEFAULT_CONFIG.notifications.sound).toBe(DEFAULT_NOTIFICATION_SOUND_ID)
     expect(DEFAULT_CONFIG.notifications.volume).toBe(1)
+    expect(DEFAULT_CONFIG.translation.enabled).toBe(false)
+    expect(DEFAULT_CONFIG.translation.targetLanguage).toBe('zh')
+    expect(DEFAULT_CONFIG.translation.displayMode).toBe('direct')
   })
 })
 

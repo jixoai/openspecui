@@ -1,4 +1,3 @@
-import type { Spec } from '@openspecui/core'
 import type { MarkdownFact } from '@openspecui/core/markdown-facts'
 import { getMarkdownFactSpan } from '@openspecui/core/markdown-reading'
 import {
@@ -11,24 +10,19 @@ import { useMemo } from 'react'
 import { CountBadge } from './badge'
 import type { MarkdownBlockAnnotation, MarkdownInlineTextAnnotation } from './markdown-content'
 import {
-  MarkdownViewer,
   type MarkdownHeadingTransform,
   type MarkdownHeadingTransformResult,
+  type MarkdownRenderPluginContext,
+  type MarkdownRenderPluginResult,
 } from './markdown-viewer'
 import { slugify } from './toc-context'
-
-interface SpecMarkdownDocumentProps {
-  markdown: string
-  spec?: Spec
-  requirementCount?: number
-  className?: string
-}
 
 interface OpenSpecHeading {
   kind: 'spec' | 'section' | 'requirement' | 'scenario'
   id: string
   title: string
   tocLabel: string
+  visiblePrefix?: string
   label?: string
   sectionKind?: string
 }
@@ -41,8 +35,72 @@ const OPENSPEC_PREFIXES = {
 const OPENSPEC_INLINE_KEYWORD_CLASS = 'openspec-inline-keyword'
 const OPENSPEC_SCENARIO_STEP_CLASS = 'spec-scenario-step'
 const OPENSPEC_BLOCK_FACT_KINDS = new Set(['paragraph', 'list', 'listItem', 'blockquote', 'table'])
+const OPENSPEC_SPEC_PATH_PATTERN = /(?:^|\/)specs\/([^/]+)\/spec\.md$/
 
 type OpenSpecKeywordRole = 'scenario-step' | 'requirement-modal'
+
+export function getOpenSpecSpecIdFromMarkdownPath(path: string | undefined): string | undefined {
+  if (!path) return undefined
+  return normalizeMarkdownPath(path).match(OPENSPEC_SPEC_PATH_PATTERN)?.[1]
+}
+
+export function useOpenSpecMarkdownRenderPlugin({
+  markdown,
+  path,
+  spec,
+  requirementCount,
+}: MarkdownRenderPluginContext): MarkdownRenderPluginResult {
+  const sourceMarkdown = typeof markdown === 'string' ? markdown : undefined
+  const pathSpecId = useMemo(() => getOpenSpecSpecIdFromMarkdownPath(path), [path])
+  const document = useMemo(
+    () =>
+      sourceMarkdown && pathSpecId
+        ? projectOpenSpecMarkdown(sourceMarkdown, { specId: spec?.id ?? pathSpecId })
+        : undefined,
+    [pathSpecId, sourceMarkdown, spec?.id]
+  )
+
+  const resolvedRequirementCount =
+    requirementCount ??
+    spec?.requirements.length ??
+    document?.projections[OPEN_SPEC_READING_SECTIONS_PROJECTION_ID]?.requirements.length
+
+  const headingTransform = useMemo(
+    () =>
+      document ? createAnnotatedHeadingTransform(document, resolvedRequirementCount) : undefined,
+    [document, resolvedRequirementCount]
+  )
+  const inlineTextAnnotations = useMemo(
+    () => (document ? createOpenSpecInlineTextAnnotations(document) : []),
+    [document]
+  )
+  const blockAnnotations = useMemo(
+    () => (document ? createOpenSpecBlockAnnotations(document) : []),
+    [document]
+  )
+
+  if (!pathSpecId || !document || !headingTransform) return {}
+
+  return {
+    className: 'openspec-markdown-document spec-reading-document',
+    processors: [
+      {
+        name: 'openspec-spec-document',
+        order: 100,
+        transformHeading: headingTransform,
+      },
+    ],
+    inlineTextAnnotations,
+    blockAnnotations,
+  }
+}
+
+function normalizeMarkdownPath(path: string): string {
+  return path
+    .replace(/\\/g, '/')
+    .replace(/^\.?\//, '')
+    .replace(/^openspec\//, '')
+}
 
 function stripPrefix(text: string, prefix: RegExp): string {
   return text.replace(prefix, '').trim()
@@ -71,22 +129,26 @@ export function describeOpenSpecHeading(
   }
 
   if (sourceLevel === 3 && OPENSPEC_PREFIXES.requirement.test(text)) {
+    const visiblePrefix = text.match(OPENSPEC_PREFIXES.requirement)?.[0].trim()
     const title = stripPrefix(text, OPENSPEC_PREFIXES.requirement)
     return {
       kind: 'requirement',
       id: `requirement-${slugify(title) || 'item'}`,
       title,
       tocLabel: title,
+      ...(visiblePrefix ? { visiblePrefix } : {}),
     }
   }
 
   if (sourceLevel === 4 && OPENSPEC_PREFIXES.scenario.test(text)) {
+    const visiblePrefix = text.match(OPENSPEC_PREFIXES.scenario)?.[0].trim()
     const title = stripPrefix(text, OPENSPEC_PREFIXES.scenario)
     return {
       kind: 'scenario',
       id: `scenario-${slugify(title) || 'item'}`,
       title,
       tocLabel: title,
+      ...(visiblePrefix ? { visiblePrefix } : {}),
     }
   }
 
@@ -127,6 +189,7 @@ function describeAnnotatedOpenSpecHeading(
       id: `requirement-${slugify(title) || 'item'}`,
       title,
       tocLabel: title,
+      visiblePrefix: text.match(OPENSPEC_PREFIXES.requirement)?.[0].trim() ?? 'Requirement:',
       label: requirementIndex >= 0 ? formatRequirementLabel(requirementIndex + 1) : 'Requirement',
     }
   }
@@ -139,6 +202,7 @@ function describeAnnotatedOpenSpecHeading(
       id: `scenario-${slugify(title) || 'item'}`,
       title,
       tocLabel: title,
+      visiblePrefix: text.match(OPENSPEC_PREFIXES.scenario)?.[0].trim() ?? 'Scenario:',
       label: 'Scenario',
     }
   }
@@ -168,16 +232,42 @@ function createAnnotatedHeadingTransform(
     return {
       id: heading.id,
       tocLabel: heading.tocLabel,
+      children: createHeadingChildren(heading, text),
       className: createHeadingClassName(heading, requirementCount),
       suffix: createHeadingSuffix(heading, requirementCount),
       dataAttributes: {
         'data-openspec-kind': heading.kind,
         'data-openspec-title': heading.title,
         ...(heading.label ? { 'data-openspec-label': heading.label } : {}),
+        ...(heading.label ? { 'data-openspec-visual-label': heading.label } : {}),
         ...(heading.sectionKind ? { 'data-openspec-section-kind': heading.sectionKind } : {}),
       },
     }
   }
+}
+
+function createHeadingChildren(heading: OpenSpecHeading, fallbackText: string) {
+  if (heading.kind !== 'requirement' && heading.kind !== 'scenario') return undefined
+
+  const label =
+    heading.visiblePrefix ?? (heading.kind === 'requirement' ? 'Requirement:' : 'Scenario:')
+  const title = heading.title || stripPrefix(fallbackText, OPENSPEC_PREFIXES[heading.kind])
+
+  return (
+    <>
+      <span
+        className="openspec-heading-label"
+        data-openspec-heading-label=""
+        {...(heading.label ? { 'data-openspec-visual-label': heading.label } : {})}
+        data-translation-segment="heading-kind"
+      >
+        <span className="sr-only">{label} </span>
+      </span>
+      <span className="openspec-heading-title" data-openspec-heading-title="">
+        {title}
+      </span>
+    </>
+  )
 }
 
 function createHeadingClassName(heading: OpenSpecHeading, requirementCount?: number) {
@@ -199,42 +289,6 @@ function createHeadingSuffix(heading: OpenSpecHeading, requirementCount?: number
       className="openspec-heading-chip"
       aria-label={String(requirementCount)}
       title={`${requirementCount} requirements`}
-    />
-  )
-}
-
-/**
- * Renders the processed spec Markdown as the visual source while attaching
- * OpenSpec structure metadata for styling, anchors, and ToC alignment.
- */
-export function SpecMarkdownDocument({
-  markdown,
-  spec,
-  requirementCount,
-  className = '',
-}: SpecMarkdownDocumentProps) {
-  const resolvedRequirementCount = requirementCount ?? spec?.requirements.length
-  const document = useMemo(
-    () => projectOpenSpecMarkdown(markdown, { specId: spec?.id ?? 'inline' }),
-    [markdown, spec?.id]
-  )
-  const headingTransform = useMemo(
-    () => createAnnotatedHeadingTransform(document, resolvedRequirementCount),
-    [document, resolvedRequirementCount]
-  )
-  const inlineTextAnnotations = useMemo(
-    () => createOpenSpecInlineTextAnnotations(document),
-    [document]
-  )
-  const blockAnnotations = useMemo(() => createOpenSpecBlockAnnotations(document), [document])
-
-  return (
-    <MarkdownViewer
-      className={`spec-markdown-document spec-reading-document ${className}`}
-      markdown={markdown}
-      headingTransform={headingTransform}
-      inlineTextAnnotations={inlineTextAnnotations}
-      blockAnnotations={blockAnnotations}
     />
   )
 }

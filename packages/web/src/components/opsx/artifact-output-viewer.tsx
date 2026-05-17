@@ -3,7 +3,9 @@ import {
   useOpsxArtifactOutputSubscription,
   useOpsxGlobArtifactFilesSubscription,
 } from '@/lib/use-opsx'
+import { useConfigSubscription } from '@/lib/use-subscription'
 import type { ArtifactStatus } from '@openspecui/core'
+import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
 import { AlertTriangle, CheckCircle2, Circle, FileText, Loader2 } from 'lucide-react'
 
 function isGlobPattern(pattern: string): boolean {
@@ -57,7 +59,11 @@ function ArtifactHeader({ artifact }: { artifact: ArtifactStatus }) {
   )
 }
 
-function SingleFileContent({ changeId, artifact }: Props) {
+function SingleFileContent({
+  changeId,
+  artifact,
+  translationConfig,
+}: Props & { translationConfig?: DocumentTranslationConfig }) {
   const { data: content, isLoading } = useOpsxArtifactOutputSubscription(
     changeId,
     artifact.outputPath
@@ -72,7 +78,13 @@ function SingleFileContent({ changeId, artifact }: Props) {
   }
 
   if (content) {
-    return <MarkdownViewer markdown={content} />
+    return (
+      <MarkdownViewer
+        markdown={content}
+        path={artifact.outputPath}
+        translationConfig={translationConfig}
+      />
+    )
   }
 
   return (
@@ -83,7 +95,11 @@ function SingleFileContent({ changeId, artifact }: Props) {
   )
 }
 
-function GlobContent({ changeId, artifact }: Props) {
+function GlobContent({
+  changeId,
+  artifact,
+  translationConfig,
+}: Props & { translationConfig?: DocumentTranslationConfig }) {
   const { data: files, isLoading } = useOpsxGlobArtifactFilesSubscription(
     changeId,
     artifact.outputPath
@@ -114,7 +130,11 @@ function GlobContent({ changeId, artifact }: Props) {
             <Section key={file.path}>
               <H1>{file.path}</H1>
               <div className="border-border bg-muted/30 mt-2 rounded-lg border p-4 [zoom:0.86]">
-                <MarkdownViewer markdown={file.content} />
+                <MarkdownViewer
+                  markdown={file.content}
+                  path={file.path}
+                  translationConfig={translationConfig}
+                />
               </div>
             </Section>
           ))}
@@ -126,15 +146,24 @@ function GlobContent({ changeId, artifact }: Props) {
 
 export function ArtifactOutputViewer({ changeId, artifact }: Props) {
   const isGlob = isGlobPattern(artifact.outputPath)
+  const { data: config } = useConfigSubscription()
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 py-4">
       <ArtifactHeader artifact={artifact} />
       <div className="min-h-0 flex-1">
         {isGlob ? (
-          <GlobContent changeId={changeId} artifact={artifact} />
+          <GlobContent
+            changeId={changeId}
+            artifact={artifact}
+            translationConfig={config?.translation}
+          />
         ) : (
-          <SingleFileContent changeId={changeId} artifact={artifact} />
+          <SingleFileContent
+            changeId={changeId}
+            artifact={artifact}
+            translationConfig={config?.translation}
+          />
         )}
       </div>
     </div>

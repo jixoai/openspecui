@@ -984,6 +984,11 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
       volume: 1,
       systemNotificationsEnabled: false,
     },
+    translation: {
+      enabled: false,
+      targetLanguage: 'zh',
+      displayMode: 'direct',
+    },
     terminal: {
       fontSize: 13,
       fontFamily: '',

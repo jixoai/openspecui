@@ -11,7 +11,7 @@ import {
   type ReadDocumentResultV1,
   type Spec,
 } from '@openspecui/core'
-import { join } from 'node:path'
+import { join, matchesGlob } from 'node:path'
 import type { HookRuntime } from './hook-runtime.js'
 
 type RawChangeDocuments = {
@@ -23,6 +23,8 @@ type RawChangeDocuments = {
 
 export type ReadSpecDocumentResult = ReadDocumentResultV1 & { sourceMarkdown: string }
 
+type StageChangeFile = ChangeFile & { type: 'file'; content: string }
+
 function toErrorDiagnostic(error: unknown) {
   return {
     level: 'error' as const,
@@ -32,6 +34,10 @@ function toErrorDiagnostic(error: unknown) {
 
 function isNotNull<T>(value: T | null): value is T {
   return value !== null
+}
+
+function normalizeChangeFilePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/^\/+/, '')
 }
 
 export class DocumentService {
@@ -236,6 +242,27 @@ export class DocumentService {
     return this.processChangeFiles('change', changeId, files, consumer, mode)
   }
 
+  async readChangeArtifactOutput(
+    changeId: string,
+    outputPath: string,
+    consumer: DocumentConsumerV1 = 'view',
+    mode: DocumentReadModeV1 = 'processed'
+  ): Promise<string | null> {
+    const normalizedPath = normalizeChangeFilePath(outputPath)
+    const files = await this.readChangeArtifactFiles(changeId, normalizedPath, consumer, mode)
+    return files.find((file) => file.path === normalizedPath)?.content ?? null
+  }
+
+  async readChangeGlobArtifactFiles(
+    changeId: string,
+    outputPath: string,
+    consumer: DocumentConsumerV1 = 'view',
+    mode: DocumentReadModeV1 = 'processed'
+  ): Promise<StageChangeFile[]> {
+    const normalizedPattern = normalizeChangeFilePath(outputPath)
+    return this.readChangeArtifactFiles(changeId, normalizedPattern, consumer, mode)
+  }
+
   async readArchivedChangeFiles(
     changeId: string,
     consumer: DocumentConsumerV1 = 'view',
@@ -256,31 +283,64 @@ export class DocumentService {
       stage === 'change' ? `openspec/changes/${changeId}` : `openspec/changes/archive/${changeId}`
 
     const processed = await Promise.all(
-      files.map(async (file): Promise<ChangeFile | null> => {
-        if (file.type !== 'file' || file.content === undefined || !file.path.endsWith('.md')) {
-          return file
-        }
-
-        const kind = this.inferChangeFileKind(file.path)
-        if (!kind) return file
-
-        const result = await this.processDocument({
-          consumer,
-          mode,
-          document: {
-            stage,
-            kind,
-            changeId,
-            relativePath: `${root}/${file.path}`,
-            absolutePath: join(this.projectDir, root, file.path),
-          },
-          source: file.content,
-        })
-        return { ...file, content: result.markdown }
-      })
+      files.map((file) => this.processChangeFile(stage, changeId, root, file, consumer, mode))
     )
 
     return processed.filter(isNotNull)
+  }
+
+  private async readChangeArtifactFiles(
+    changeId: string,
+    outputPath: string,
+    consumer: DocumentConsumerV1,
+    mode: DocumentReadModeV1
+  ): Promise<StageChangeFile[]> {
+    const files = await this.adapter.readChangeFiles(changeId)
+    const matchingFiles = files.filter((file): file is StageChangeFile => {
+      if (file.type !== 'file' || file.content === undefined) return false
+      return matchesGlob(file.path, outputPath) || file.path === outputPath
+    })
+    const root = `openspec/changes/${changeId}`
+
+    const processed = await Promise.all(
+      matchingFiles.map((file) =>
+        this.processChangeFile('change', changeId, root, file, consumer, mode)
+      )
+    )
+
+    return processed
+      .filter(isNotNull)
+      .filter((file): file is StageChangeFile => file.type === 'file' && file.content !== undefined)
+  }
+
+  private async processChangeFile(
+    stage: 'change' | 'archive',
+    changeId: string,
+    root: string,
+    file: ChangeFile,
+    consumer: DocumentConsumerV1,
+    mode: DocumentReadModeV1
+  ): Promise<ChangeFile | null> {
+    if (file.type !== 'file' || file.content === undefined || !file.path.endsWith('.md')) {
+      return file
+    }
+
+    const kind = this.inferChangeFileKind(file.path)
+    if (!kind) return file
+
+    const result = await this.processDocument({
+      consumer,
+      mode,
+      document: {
+        stage,
+        kind,
+        changeId,
+        relativePath: `${root}/${file.path}`,
+        absolutePath: join(this.projectDir, root, file.path),
+      },
+      source: file.content,
+    })
+    return { ...file, content: result.markdown }
   }
 
   private inferChangeFileKind(path: string): DocumentRefV1['kind'] | null {

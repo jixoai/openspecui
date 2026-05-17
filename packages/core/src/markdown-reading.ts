@@ -65,6 +65,7 @@ export interface MarkdownProjectionRule<Output = unknown> {
 
 export interface MarkdownReadingPlugin {
   id: string
+  order?: number
   annotationRules?: readonly MarkdownAnnotationRule[]
   projectionRules?: readonly MarkdownProjectionRule[]
 }
@@ -79,6 +80,33 @@ export interface MarkdownFactSpan {
   end: number
 }
 
+export class MarkdownReadingPluginRegistry {
+  private plugins = new Map<string, MarkdownReadingPlugin>()
+
+  constructor(plugins: readonly MarkdownReadingPlugin[] = []) {
+    for (const plugin of plugins) {
+      this.register(plugin)
+    }
+  }
+
+  register(plugin: MarkdownReadingPlugin): void {
+    this.plugins.set(plugin.id, plugin)
+  }
+
+  resolve(): MarkdownReadingPlugin[] {
+    return sortMarkdownReadingPlugins(Array.from(this.plugins.values()))
+  }
+}
+
+export function sortMarkdownReadingPlugins(
+  plugins: readonly MarkdownReadingPlugin[]
+): MarkdownReadingPlugin[] {
+  return [...plugins].sort((left, right) => {
+    const orderDiff = (left.order ?? 0) - (right.order ?? 0)
+    return orderDiff === 0 ? left.id.localeCompare(right.id) : orderDiff
+  })
+}
+
 export function createMarkdownReadingDocument(
   sourceMarkdown: string,
   plugins: readonly MarkdownReadingPlugin[] = []
@@ -90,10 +118,11 @@ export function createMarkdownReadingDocumentFromFacts(
   factsDocument: MarkdownFactsDocument,
   plugins: readonly MarkdownReadingPlugin[] = []
 ): MarkdownReadingDocument {
+  const orderedPlugins = sortMarkdownReadingPlugins(plugins)
   const lookup = createLookup(factsDocument)
   const annotations: MarkdownAnnotation[] = []
 
-  for (const rule of plugins.flatMap((plugin) => plugin.annotationRules ?? [])) {
+  for (const rule of orderedPlugins.flatMap((plugin) => plugin.annotationRules ?? [])) {
     const context = createAnnotationContext(lookup, annotations)
     for (const input of rule.annotate(context)) {
       annotations.push({
@@ -110,7 +139,7 @@ export function createMarkdownReadingDocumentFromFacts(
   }
 
   const projections: Record<string, unknown> = {}
-  for (const rule of plugins.flatMap((plugin) => plugin.projectionRules ?? [])) {
+  for (const rule of orderedPlugins.flatMap((plugin) => plugin.projectionRules ?? [])) {
     const context = createProjectionContext(lookup, annotations, projections)
     const output = rule.project(context)
     if (output !== undefined) {

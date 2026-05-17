@@ -25,6 +25,7 @@ export {
 } from './markdown-facts.js'
 
 export {
+  MarkdownReadingPluginRegistry,
   buildMarkdownParentMap,
   createMarkdownReadingDocument,
   createMarkdownReadingDocumentFromFacts,
@@ -33,6 +34,7 @@ export {
   getMarkdownFactSpan,
   getMarkdownHeadingEnd,
   getMarkdownHeadingFacts,
+  sortMarkdownReadingPlugins,
   trimMarkdownSlice,
   type MarkdownAnnotation,
   type MarkdownAnnotationConfidence,
@@ -224,6 +226,14 @@ export {
   TerminalBellSoundSchema,
   type TerminalBellSound,
 } from './terminal-audio.js'
+
+export {
+  DOCUMENT_TRANSLATION_DISPLAY_MODES,
+  DocumentTranslationConfigSchema,
+  DocumentTranslationDisplayModeSchema,
+  type DocumentTranslationConfig,
+  type DocumentTranslationDisplayMode,
+} from './document-translation.js'
 
 export {
   NOTIFICATION_SOUND_OPTIONS,

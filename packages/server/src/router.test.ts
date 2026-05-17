@@ -253,6 +253,14 @@ const createMockContext = (
     getApplyInstructions: vi.fn().mockReturnValue({
       progress: { total: 0, complete: 0, remaining: 0 },
     }),
+    ensureArtifactOutput: vi.fn().mockResolvedValue(undefined),
+    getArtifactOutput: vi.fn().mockReturnValue('# Source artifact'),
+    ensureGlobArtifactFiles: vi.fn().mockResolvedValue(undefined),
+    getGlobArtifactFiles: vi
+      .fn()
+      .mockReturnValue([
+        { path: 'specs/auth/spec.md', type: 'file', content: '# Source delta spec' },
+      ]),
   }
 
   const searchService = {
@@ -267,6 +275,12 @@ const createMockContext = (
     }),
     readChange: vi.fn((id: string) => adapter.readChange(id)),
     readArchivedChange: vi.fn((id: string) => adapter.readArchivedChange(id)),
+    readChangeArtifactOutput: vi.fn().mockResolvedValue('# Processed artifact'),
+    readChangeGlobArtifactFiles: vi
+      .fn()
+      .mockResolvedValue([
+        { path: 'specs/auth/spec.md', type: 'file', content: '# Processed delta spec' },
+      ]),
   }
   const workflowInvocationService = {
     runWorkflow: vi.fn(),
@@ -993,6 +1007,51 @@ describe('appRouter', () => {
 
       expect(result).toEqual({ kind: 'agent-command', text: '/opsx:propose add auth' })
       expect(runWorkflow).toHaveBeenCalledWith({ action: 'propose', text: 'add auth' }, 'command')
+    })
+
+    it('reads artifact preview output through the processed document service path', async () => {
+      const context = createMockContext()
+      const caller = appRouter.createCaller(context)
+
+      const result = await caller.opsx.readArtifactOutput({
+        changeId: 'add-caching',
+        outputPath: 'tasks.md',
+      })
+
+      expect(result).toBe('# Processed artifact')
+      expect(context.kernel.ensureArtifactOutput).toHaveBeenCalledWith('add-caching', 'tasks.md')
+      expect(context.documentService.readChangeArtifactOutput).toHaveBeenCalledWith(
+        'add-caching',
+        'tasks.md',
+        'view',
+        'processed'
+      )
+      expect(context.kernel.getArtifactOutput).not.toHaveBeenCalled()
+    })
+
+    it('reads glob artifact preview files through the processed document service path', async () => {
+      const context = createMockContext()
+      const caller = appRouter.createCaller(context)
+
+      const result = await caller.opsx.readGlobArtifactFiles({
+        changeId: 'add-caching',
+        outputPath: 'specs/**/*.md',
+      })
+
+      expect(result).toEqual([
+        { path: 'specs/auth/spec.md', type: 'file', content: '# Processed delta spec' },
+      ])
+      expect(context.kernel.ensureGlobArtifactFiles).toHaveBeenCalledWith(
+        'add-caching',
+        'specs/**/*.md'
+      )
+      expect(context.documentService.readChangeGlobArtifactFiles).toHaveBeenCalledWith(
+        'add-caching',
+        'specs/**/*.md',
+        'view',
+        'processed'
+      )
+      expect(context.kernel.getGlobArtifactFiles).not.toHaveBeenCalled()
     })
   })
 })

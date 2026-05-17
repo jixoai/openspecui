@@ -1,11 +1,16 @@
-import { SpecMarkdownDocument } from '@/components/spec-markdown-document'
-import { useSpecRawSubscription, useSpecSubscription } from '@/lib/use-subscription'
+import { MarkdownViewer } from '@/components/markdown-viewer'
+import {
+  useConfigSubscription,
+  useSpecRawSubscription,
+  useSpecSubscription,
+} from '@/lib/use-subscription'
 import { VTLink } from '@/lib/view-transitions/navigation'
 import {
   getSharedElementBinding,
   readSharedElementHandoffState,
 } from '@/lib/view-transitions/shared-elements'
 import type { Spec } from '@openspecui/core'
+import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
 import { useLocation, useParams } from '@tanstack/react-router'
 import { AlertCircle, AlertTriangle, ArrowLeft, CheckCircle, FileText, Info } from 'lucide-react'
 import { useMemo, useRef } from 'react'
@@ -18,6 +23,7 @@ export function SpecView() {
 
   const { data: spec, isLoading } = useSpecSubscription(specId)
   const { data: rawMarkdown, isLoading: isRawLoading } = useSpecRawSubscription(specId)
+  const { data: config } = useConfigSubscription()
   // TODO: validation 暂时不支持订阅，后续可以添加
   const validation = null as {
     valid: boolean
@@ -63,16 +69,25 @@ export function SpecView() {
     return <div className="text-red-600">Spec not found</div>
   }
 
-  return <SpecContent spec={spec} rawMarkdown={rawMarkdown ?? ''} validation={validation} />
+  return (
+    <SpecContent
+      spec={spec}
+      rawMarkdown={rawMarkdown ?? ''}
+      validation={validation}
+      translationConfig={config?.translation}
+    />
+  )
 }
 
 function SpecContent({
   spec,
   rawMarkdown,
   validation,
+  translationConfig,
 }: {
   spec: Spec
   rawMarkdown: string
+  translationConfig?: DocumentTranslationConfig
   validation: {
     valid: boolean
     issues: Array<{ severity: string; message: string; path?: string }>
@@ -108,11 +123,13 @@ function SpecContent({
 
       {validation && <ValidationStatus validation={validation} />}
 
-      <SpecMarkdownDocument
+      <MarkdownViewer
         markdown={rawMarkdown}
+        path={`specs/${spec.id}/spec.md`}
         spec={spec}
         requirementCount={spec.requirements.length}
         className="vt-detail-content min-h-0 flex-1"
+        translationConfig={translationConfig}
       />
     </div>
   )

@@ -16,6 +16,7 @@ import type {
 import {
   CodeEditorThemeSchema,
   DashboardConfigSchema,
+  DocumentTranslationConfigSchema,
   getAllTools,
   getAvailableTools,
   getConfiguredTools,
@@ -797,6 +798,7 @@ export const configRouter = router({
         dashboard: DashboardConfigSchema.partial().optional(),
         git: GitConfigSchema.partial().optional(),
         notifications: NotificationSettingsSchema.partial().optional(),
+        translation: DocumentTranslationConfigSchema.partial().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -815,7 +817,8 @@ export const configRouter = router({
           input.terminal !== undefined ||
           input.dashboard !== undefined ||
           input.git !== undefined ||
-          input.notifications !== undefined
+          input.notifications !== undefined ||
+          input.translation !== undefined
         ) {
           await ctx.configManager.writeConfig({
             theme: input.theme,
@@ -826,6 +829,7 @@ export const configRouter = router({
             dashboard: input.dashboard,
             git: input.git,
             notifications: input.notifications,
+            translation: input.translation,
           })
         }
         return { success: true }
@@ -1406,7 +1410,12 @@ export const opsxRouter = router({
     .query(async ({ ctx, input }) => {
       await ctx.kernel.waitForWarmup()
       await ctx.kernel.ensureArtifactOutput(input.changeId, input.outputPath)
-      return ctx.kernel.getArtifactOutput(input.changeId, input.outputPath)
+      return ctx.documentService.readChangeArtifactOutput(
+        input.changeId,
+        input.outputPath,
+        'view',
+        'processed'
+      )
     }),
 
   subscribeArtifactOutput: publicProcedure
@@ -1415,7 +1424,12 @@ export const opsxRouter = router({
       return createReactiveSubscription(async () => {
         await ctx.kernel.waitForWarmup()
         await ctx.kernel.ensureArtifactOutput(input.changeId, input.outputPath)
-        return ctx.kernel.getArtifactOutput(input.changeId, input.outputPath)
+        return ctx.documentService.readChangeArtifactOutput(
+          input.changeId,
+          input.outputPath,
+          'view',
+          'processed'
+        )
       })
     }),
 
@@ -1424,7 +1438,12 @@ export const opsxRouter = router({
     .query(async ({ ctx, input }) => {
       await ctx.kernel.waitForWarmup()
       await ctx.kernel.ensureGlobArtifactFiles(input.changeId, input.outputPath)
-      return ctx.kernel.getGlobArtifactFiles(input.changeId, input.outputPath)
+      return ctx.documentService.readChangeGlobArtifactFiles(
+        input.changeId,
+        input.outputPath,
+        'view',
+        'processed'
+      )
     }),
 
   subscribeGlobArtifactFiles: publicProcedure
@@ -1433,7 +1452,12 @@ export const opsxRouter = router({
       return createReactiveSubscription(async () => {
         await ctx.kernel.waitForWarmup()
         await ctx.kernel.ensureGlobArtifactFiles(input.changeId, input.outputPath)
-        return ctx.kernel.getGlobArtifactFiles(input.changeId, input.outputPath)
+        return ctx.documentService.readChangeGlobArtifactFiles(
+          input.changeId,
+          input.outputPath,
+          'view',
+          'processed'
+        )
       })
     }),
 

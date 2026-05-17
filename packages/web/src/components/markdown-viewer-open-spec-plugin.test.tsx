@@ -1,7 +1,14 @@
 import type { Spec } from '@openspecui/core'
 import { cleanup, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
-import { SpecMarkdownDocument, describeOpenSpecHeading } from './spec-markdown-document'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { MarkdownViewer } from './markdown-viewer'
+import { describeOpenSpecHeading } from './markdown-viewer-open-spec-plugin'
+
+const navigateMock = vi.hoisted(() => vi.fn())
+
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => navigateMock,
+}))
 
 const richSpecMarkdown = `# Rich Requirement Body
 
@@ -33,13 +40,16 @@ The system SHALL keep lists before scenario headings in the requirement body.
 Normal markdown headings should remain visible and navigable.
 `
 
-describe('SpecMarkdownDocument', () => {
+const richSpecPath = 'specs/rich-requirement-body/spec.md'
+
+describe('MarkdownViewer OpenSpec path plugin', () => {
   afterEach(() => {
     cleanup()
+    navigateMock.mockClear()
   })
 
   it('renders processed spec markdown as markdown while marking OpenSpec structures', () => {
-    const { container } = render(<SpecMarkdownDocument markdown={richSpecMarkdown} />)
+    const { container } = render(<MarkdownViewer markdown={richSpecMarkdown} path={richSpecPath} />)
 
     expect(screen.getByRole('heading', { name: 'Rich Requirement Body' })).toBeTruthy()
 
@@ -59,20 +69,45 @@ describe('SpecMarkdownDocument', () => {
     expect(requirement.getAttribute('data-openspec-kind')).toBe('requirement')
     expect(requirement.getAttribute('data-openspec-title')).toBe('Body List Before Scenario')
     expect(requirement.getAttribute('data-openspec-label')).toBe('REQ-02')
+    expect(requirement.getAttribute('data-openspec-visual-label')).toBe('REQ-02')
     expect(requirement.id).toBe('requirement-body-list-before-scenario')
+    const requirementLabel = requirement.querySelector('[data-openspec-heading-label]')
+    expect(requirementLabel?.getAttribute('data-openspec-visual-label')).toBe('REQ-02')
+    expect(requirementLabel?.textContent).toContain('Requirement:')
+    expect(within(requirement).getByText('Body List Before Scenario')).toHaveAttribute(
+      'data-openspec-heading-title'
+    )
 
     const scenario = screen.getByRole('heading', { name: 'Scenario: Explicit scenario only' })
     expect(scenario.getAttribute('data-openspec-kind')).toBe('scenario')
     expect(scenario.getAttribute('data-openspec-title')).toBe('Explicit scenario only')
     expect(scenario.getAttribute('data-openspec-label')).toBe('Scenario')
+    expect(scenario.getAttribute('data-openspec-visual-label')).toBe('Scenario')
     expect(scenario.id).toBe('scenario-explicit-scenario-only')
+    const scenarioLabel = scenario.querySelector('[data-openspec-heading-label]')
+    expect(scenarioLabel?.getAttribute('data-openspec-visual-label')).toBe('Scenario')
+    expect(scenarioLabel?.textContent).toContain('Scenario:')
+    expect(within(scenario).getByText('Explicit scenario only')).toHaveAttribute(
+      'data-openspec-heading-title'
+    )
 
     expect(screen.queryByText(/Scenarios \(2\)/)).toBeNull()
   })
 
+  it('does not apply OpenSpec semantic projection for non-spec paths', () => {
+    render(<MarkdownViewer markdown={richSpecMarkdown} path="changes/add-auth/tasks.md" />)
+
+    const requirement = screen.getByRole('heading', {
+      name: 'Requirement: Body List Before Scenario',
+    })
+    expect(requirement.getAttribute('data-openspec-kind')).toBeNull()
+    expect(requirement.id).toBe('requirement-body-list-before-scenario')
+  })
+
   it('renders OpenSpec keyword annotations as inline visual markers', () => {
     const { container } = render(
-      <SpecMarkdownDocument
+      <MarkdownViewer
+        path={richSpecPath}
         markdown={`${richSpecMarkdown}
 
 \`SHALL\`
@@ -100,7 +135,7 @@ WHEN
   })
 
   it('keeps ToC labels and heading ids aligned for OpenSpec structures and normal headings', () => {
-    render(<SpecMarkdownDocument markdown={richSpecMarkdown} requirementCount={2} />)
+    render(<MarkdownViewer markdown={richSpecMarkdown} path={richSpecPath} requirementCount={2} />)
 
     const toc = document.querySelector('nav.toc-wide')
     expect(toc).toBeTruthy()
@@ -131,6 +166,30 @@ WHEN
     expect(requirementsHeading.className).toContain('openspec-heading-with-chip')
     expect(within(requirementsHeading).getByLabelText('2')).toBeTruthy()
     expect(tocScope.queryByRole('link', { name: 'Requirements 2', hidden: true })).toBeNull()
+  })
+
+  it('renders the translation action in the document ToC header', () => {
+    render(
+      <MarkdownViewer
+        path={richSpecPath}
+        markdown={richSpecMarkdown}
+        translationConfig={{ enabled: false, targetLanguage: 'zh', displayMode: 'direct' }}
+      />
+    )
+
+    const toc = document.querySelector('aside.toc-root')
+    expect(toc).toBeTruthy()
+    expect(
+      within(toc as HTMLElement).getAllByRole('button', {
+        name: 'Configure translation',
+        hidden: true,
+      })
+    ).toHaveLength(2)
+    expect(
+      within(toc as HTMLElement).getByRole('button', {
+        name: 'Configure translation',
+      })
+    ).toBeTruthy()
   })
 
   it('classifies only OpenSpec requirement and scenario headings as semantic structures', () => {
@@ -176,7 +235,7 @@ The system SHOULD allow sign in.
 - Plain authored content.
 `
 
-    render(<SpecMarkdownDocument markdown={markdown} requirementCount={1} />)
+    render(<MarkdownViewer markdown={markdown} path={richSpecPath} requirementCount={1} />)
 
     const requirement = screen.getByRole('heading', { name: 'Capability: Sign in' })
     const scenario = screen.getByRole('heading', { name: 'Example: Valid password' })
@@ -229,7 +288,12 @@ The system SHOULD allow sign in.
     }
 
     const { container } = render(
-      <SpecMarkdownDocument markdown={richSpecMarkdown} spec={spec} requirementCount={1} />
+      <MarkdownViewer
+        markdown={richSpecMarkdown}
+        path={richSpecPath}
+        spec={spec}
+        requirementCount={1}
+      />
     )
 
     expect(container.querySelector('.spec-purpose-zone')).toBeNull()
@@ -326,7 +390,12 @@ The system SHOULD allow sign in.
     }
 
     const { container } = render(
-      <SpecMarkdownDocument markdown={richSpecMarkdown} spec={staleSpec} requirementCount={1} />
+      <MarkdownViewer
+        markdown={richSpecMarkdown}
+        path={richSpecPath}
+        spec={staleSpec}
+        requirementCount={1}
+      />
     )
 
     expect(container.querySelector('.spec-scenario-card')).toBeNull()
@@ -362,7 +431,12 @@ The system SHOULD allow sign in.
     }
 
     const { container } = render(
-      <SpecMarkdownDocument markdown={richSpecMarkdown} spec={spec} requirementCount={1} />
+      <MarkdownViewer
+        markdown={richSpecMarkdown}
+        path={richSpecPath}
+        spec={spec}
+        requirementCount={1}
+      />
     )
 
     const documentScope = within(container)

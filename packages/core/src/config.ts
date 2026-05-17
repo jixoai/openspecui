@@ -3,6 +3,10 @@ import { mkdir, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
 import { promisify } from 'util'
 import { z } from 'zod'
+import {
+  DocumentTranslationConfigSchema,
+  type DocumentTranslationConfig,
+} from './document-translation.js'
 import { NotificationSettingsSchema, type NotificationSettings } from './notifications.js'
 import { reactiveReadFile, updateReactiveFileCache } from './reactive-fs/index.js'
 import { DEFAULT_BELL_SOUND_ID, SoundVolumeSchema } from './sounds.js'
@@ -640,6 +644,9 @@ export const OpenSpecUIConfigSchema = z.object({
 
   /** Notification preferences */
   notifications: NotificationSettingsSchema.default(NotificationSettingsSchema.parse({})),
+
+  /** Browser-side document translation preferences */
+  translation: DocumentTranslationConfigSchema.default(DocumentTranslationConfigSchema.parse({})),
 })
 
 export type OpenSpecUIConfig = z.infer<typeof OpenSpecUIConfigSchema>
@@ -656,6 +663,7 @@ export type OpenSpecUIConfigUpdate = {
   dashboard?: Partial<DashboardConfig>
   git?: Partial<GitConfig>
   notifications?: Partial<NotificationSettings>
+  translation?: Partial<DocumentTranslationConfig>
 }
 
 export type PersistedOpenSpecUIConfig = {
@@ -671,6 +679,7 @@ export type PersistedOpenSpecUIConfig = {
   dashboard?: Partial<DashboardConfig>
   git?: Partial<GitConfig>
   notifications?: Partial<NotificationSettings>
+  translation?: Partial<DocumentTranslationConfig>
 }
 
 /** 默认配置（静态，用于测试和类型） */
@@ -686,6 +695,7 @@ export const DEFAULT_CONFIG: OpenSpecUIConfig = {
   dashboard: DashboardConfigSchema.parse({}),
   git: GitConfigSchema.parse({}),
   notifications: NotificationSettingsSchema.parse({}),
+  translation: DocumentTranslationConfigSchema.parse({}),
 }
 
 function areStringArraysEqual(
@@ -832,6 +842,20 @@ export function toPersistedConfig(
     persisted.notifications = notifications
   }
 
+  const translation: NonNullable<PersistedOpenSpecUIConfig['translation']> = {}
+  if (config.translation.enabled !== DEFAULT_CONFIG.translation.enabled) {
+    translation.enabled = config.translation.enabled
+  }
+  if (config.translation.targetLanguage !== DEFAULT_CONFIG.translation.targetLanguage) {
+    translation.targetLanguage = config.translation.targetLanguage
+  }
+  if (config.translation.displayMode !== DEFAULT_CONFIG.translation.displayMode) {
+    translation.displayMode = config.translation.displayMode
+  }
+  if (hasOwnEntries(translation)) {
+    persisted.translation = translation
+  }
+
   return persisted
 }
 
@@ -934,6 +958,7 @@ export class ConfigManager {
       dashboard: { ...current.dashboard, ...config.dashboard },
       git: { ...current.git, ...config.git },
       notifications: { ...current.notifications, ...config.notifications },
+      translation: { ...current.translation, ...config.translation },
     }
 
     const persisted = toPersistedConfig(merged)

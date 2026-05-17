@@ -25,6 +25,7 @@ export interface MarkdownBlockAnnotation {
   sourceKind?: string
   className?: string
   dataAttributes?: BlockAnnotationDataAttributes
+  renderChildren?: (children: ReactNode) => ReactNode
 }
 
 interface MarkdownContentProps {
@@ -36,6 +37,11 @@ interface MarkdownContentProps {
   inlineTextAnnotations?: readonly MarkdownInlineTextAnnotation[]
   /** Block-level semantic attributes discovered from source Markdown facts. */
   blockAnnotations?: readonly MarkdownBlockAnnotation[]
+}
+
+interface MarkdownInlineContentProps {
+  markdown: string
+  inlineTextAnnotations?: readonly MarkdownInlineTextAnnotation[]
 }
 
 /**
@@ -76,6 +82,35 @@ export function MarkdownContent({
       </Markdown>
     </div>
   )
+}
+
+export function MarkdownInlineContent({
+  markdown,
+  inlineTextAnnotations = [],
+}: MarkdownInlineContentProps) {
+  const normalizedMarkdown = useMemo(() => normalizeInlineMarkdown(markdown), [markdown])
+  const annotationComponents = useMemo(
+    () => createAnnotationComponents(inlineTextAnnotations, new Map()),
+    [inlineTextAnnotations]
+  )
+
+  return (
+    <Markdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        ...annotationComponents,
+        p: InlineParagraph,
+        code: CodeBlock,
+        pre: ({ children }) => <>{children}</>,
+      }}
+    >
+      {normalizedMarkdown}
+    </Markdown>
+  )
+}
+
+function normalizeInlineMarkdown(markdown: string): string {
+  return markdown.replace(/(\*\*[^*\n]+[:：]\*\*)(?=\S)/g, '$1 ')
 }
 
 export function renderInlineAnnotatedChildren(
@@ -158,6 +193,11 @@ function escapeRegExp(value: string): string {
 type MarkdownComponentProps<Tag extends keyof JSX.IntrinsicElements> =
   ComponentPropsWithoutRef<Tag> & { node?: unknown }
 
+function InlineParagraph({ children, node }: MarkdownComponentProps<'p'>) {
+  void node
+  return <>{children}</>
+}
+
 function getMarkdownNodeSourceStartOffset(node: unknown): number | undefined {
   if (!node || typeof node !== 'object' || !('position' in node)) return undefined
   const position = (node as { position?: unknown }).position
@@ -201,6 +241,15 @@ function createAnnotationComponents(
   if (inlineAnnotations.length === 0 && blockAnnotationByOffset.size === 0) return {}
 
   const render = (children: ReactNode) => renderInlineAnnotatedChildren(children, inlineAnnotations)
+  const renderBlockChildren = (
+    children: ReactNode,
+    annotation: MarkdownBlockAnnotation | undefined
+  ) => {
+    const renderedChildren = render(children)
+    return annotation?.renderChildren
+      ? annotation.renderChildren(renderedChildren)
+      : renderedChildren
+  }
 
   return {
     p: ({ children, node, ...props }: MarkdownComponentProps<'p'>) => {
@@ -211,7 +260,7 @@ function createAnnotationComponents(
           {...annotation?.dataAttributes}
           className={mergeClassName(props.className, annotation?.className)}
         >
-          {render(children)}
+          {renderBlockChildren(children, annotation)}
         </p>
       )
     },
@@ -247,7 +296,7 @@ function createAnnotationComponents(
           {...annotation?.dataAttributes}
           className={mergeClassName(className, annotation?.className)}
         >
-          {render(children)}
+          {renderBlockChildren(children, annotation)}
         </li>
       )
     },
@@ -271,7 +320,7 @@ function createAnnotationComponents(
           {...annotation?.dataAttributes}
           className={mergeClassName(props.className, annotation?.className)}
         >
-          {children}
+          {renderBlockChildren(children, annotation)}
         </blockquote>
       )
     },

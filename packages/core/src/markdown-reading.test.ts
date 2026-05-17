@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   createMarkdownReadingDocument,
+  MarkdownReadingPluginRegistry,
+  sortMarkdownReadingPlugins,
   type MarkdownAnnotationRule,
   type MarkdownProjectionRule,
   type MarkdownReadingPlugin,
@@ -111,5 +113,32 @@ Unknown extension content
     expect(
       document.facts.some((fact) => fact.kind === 'html' && fact.text.includes('future'))
     ).toBe(true)
+  })
+})
+
+describe('MarkdownReadingPluginRegistry', () => {
+  it('replaces plugins by name and resolves them by order then id', () => {
+    const registry = new MarkdownReadingPluginRegistry([
+      { id: 'zeta', order: 20 },
+      { id: 'alpha', order: 10 },
+      { id: 'zeta', order: 5 },
+      { id: 'beta', order: 10 },
+    ])
+
+    expect(registry.resolve().map((plugin) => `${plugin.id}:${plugin.order}`)).toEqual([
+      'zeta:5',
+      'alpha:10',
+      'beta:10',
+    ])
+  })
+
+  it('sorts a plain plugin list deterministically', () => {
+    expect(
+      sortMarkdownReadingPlugins([
+        { id: 'b', order: 0 },
+        { id: 'a', order: 0 },
+        { id: 'c', order: -1 },
+      ]).map((plugin) => plugin.id)
+    ).toEqual(['c', 'a', 'b'])
   })
 })

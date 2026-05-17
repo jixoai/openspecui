@@ -1,7 +1,11 @@
+import type { Spec } from '@openspecui/core'
+import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -10,11 +14,13 @@ import {
   type ReactNode,
 } from 'react'
 import { navigateHashAnchor } from './anchor-scroll'
+import { useDocumentTranslationRenderPlugin } from './document-translation-action'
 import {
   MarkdownContent,
   type MarkdownBlockAnnotation,
   type MarkdownInlineTextAnnotation,
 } from './markdown-content'
+import { useOpenSpecMarkdownRenderPlugin } from './markdown-viewer-open-spec-plugin'
 import { generateTimelineScope, Toc, type TocItem } from './toc'
 import { slugify, TocCollector, TocLevelProvider, TocProvider, useTocContext } from './toc-context'
 
@@ -37,6 +43,8 @@ export interface MarkdownHeadingTransformInput {
   sourceStartOffset?: number
   /** Markdown source end offset for this heading when the renderer exposes it. */
   sourceEndOffset?: number
+  /** Projection accumulated from earlier processors in the same render pass. */
+  current?: MarkdownHeadingTransformResult
 }
 
 export interface MarkdownHeadingTransformResult {
@@ -44,6 +52,10 @@ export interface MarkdownHeadingTransformResult {
   id?: string
   /** Optional ToC label when navigation text should differ from the visible heading. */
   tocLabel?: string
+  /** DOM-projected ToC label; navigation readers prefer this over visible text. */
+  tocDataLabel?: string
+  /** Optional replacement content for the visible heading. */
+  children?: ReactNode
   /** Optional content appended to the visible heading without changing ToC collection text. */
   suffix?: ReactNode
   className?: string
@@ -53,6 +65,106 @@ export interface MarkdownHeadingTransformResult {
 export type MarkdownHeadingTransform = (
   input: MarkdownHeadingTransformInput
 ) => MarkdownHeadingTransformResult | undefined
+
+export interface MarkdownRenderProcessor {
+  name: string
+  order: number
+  transformHeading?: MarkdownHeadingTransform
+}
+
+export interface MarkdownRenderPluginContext {
+  markdown: string | MarkdownBuilderFn
+  path?: string
+  spec?: Spec
+  requirementCount?: number
+}
+
+export interface MarkdownRenderPluginResult {
+  className?: string
+  processors?: readonly MarkdownRenderProcessor[]
+  tocHeaderActionKey?: string
+  tocHeaderAction?: ReactNode
+  inlineTextAnnotations?: readonly MarkdownInlineTextAnnotation[]
+  blockAnnotations?: readonly MarkdownBlockAnnotation[]
+}
+
+export function resolveMarkdownRenderProcessors(
+  headingTransform: MarkdownHeadingTransform | undefined,
+  processors: readonly MarkdownRenderProcessor[]
+): MarkdownRenderProcessor[] {
+  const byName = new Map<string, MarkdownRenderProcessor>()
+  if (headingTransform) {
+    byName.set('legacy-heading-transform', {
+      name: 'legacy-heading-transform',
+      order: 0,
+      transformHeading: headingTransform,
+    })
+  }
+  for (const processor of processors) {
+    byName.set(processor.name, processor)
+  }
+  return [...byName.values()].sort((left, right) => {
+    const orderDiff = left.order - right.order
+    return orderDiff === 0 ? left.name.localeCompare(right.name) : orderDiff
+  })
+}
+
+function applyHeadingProcessors(
+  processors: readonly MarkdownRenderProcessor[],
+  input: MarkdownHeadingTransformInput
+): MarkdownHeadingTransformResult | undefined {
+  let result: MarkdownHeadingTransformResult | undefined
+  for (const processor of processors) {
+    const next = processor.transformHeading?.({
+      ...input,
+      current: result,
+    })
+    if (!next) continue
+    result = {
+      ...result,
+      ...next,
+      suffix:
+        next.suffix === undefined
+          ? result?.suffix
+          : mergeHeadingSuffix(result?.suffix, next.suffix),
+      dataAttributes: {
+        ...result?.dataAttributes,
+        ...next.dataAttributes,
+      },
+    }
+  }
+  return result
+}
+
+function mergeHeadingSuffix(left: ReactNode | undefined, right: ReactNode | undefined): ReactNode {
+  if (left === undefined) return right
+  if (right === undefined) return left
+  return (
+    <>
+      {left} {right}
+    </>
+  )
+}
+
+function mergeReactNodes(...nodes: Array<ReactNode | undefined>): ReactNode | undefined {
+  const presentNodes = nodes.filter((node) => node !== undefined)
+  if (presentNodes.length === 0) return undefined
+  if (presentNodes.length === 1) return presentNodes[0]
+  return (
+    <>
+      {presentNodes.map((node, index) => (
+        <span key={index} className="contents">
+          {node}
+        </span>
+      ))}
+    </>
+  )
+}
+
+function mergeClassName(...classNames: Array<string | undefined>): string | undefined {
+  const merged = classNames.filter(Boolean).join(' ')
+  return merged || undefined
+}
 
 interface HeadingProps {
   id?: string
@@ -86,6 +198,12 @@ export type MarkdownBuilderFn = (components: BuilderComponents) => ReactNode
 export interface MarkdownViewerProps {
   /** Markdown 内容：字符串或 Builder 函数 */
   markdown: string | MarkdownBuilderFn
+  /** Optional path used by render plugins to select document-specific projections. */
+  path?: string
+  /** Parsed spec metadata, used only by spec document render plugins. */
+  spec?: Spec
+  /** Requirement count override for spec document heading chips. */
+  requirementCount?: number
   className?: string
   /** 渲染和 ToC 建立完成后回调（用于外层占位控制） */
   onReady?: () => void
@@ -93,6 +211,14 @@ export interface MarkdownViewerProps {
   collectToc?: boolean
   /** Optional string-markdown heading transform for semantic attributes and ToC labels. */
   headingTransform?: MarkdownHeadingTransform
+  /** Ordered render processors. Processors with the same name replace earlier ones. */
+  processors?: readonly MarkdownRenderProcessor[]
+  /** Optional action rendered at the ToC header inline-end position. */
+  tocHeaderAction?: ReactNode
+  /** Semantic key for the explicit ToC header action. Change it when the action state changes. */
+  tocHeaderActionKey?: string
+  /** Browser-side translation preferences for supported markdown documents. */
+  translationConfig?: DocumentTranslationConfig
   /** Inline semantic text spans rendered by MarkdownContent. */
   inlineTextAnnotations?: readonly MarkdownInlineTextAnnotation[]
   /** Block-level semantic attributes rendered by MarkdownContent. */
@@ -120,24 +246,96 @@ function useSectionTimeline(): number | null {
  */
 export function MarkdownViewer({
   markdown,
+  path,
+  spec,
+  requirementCount,
   className = '',
   onReady,
   collectToc = true,
   headingTransform,
+  processors = [],
+  tocHeaderAction,
+  tocHeaderActionKey,
+  translationConfig,
   inlineTextAnnotations,
   blockAnnotations,
 }: MarkdownViewerProps) {
   const parentCtx = useTocContext()
   const isNested = !!parentCtx
+  const registerHeaderAction = parentCtx?.registerHeaderAction
+  const viewerId = useId()
+  const openSpecPlugin = useOpenSpecMarkdownRenderPlugin({
+    markdown,
+    path,
+    spec,
+    requirementCount,
+  })
+  const translationPlugin = useDocumentTranslationRenderPlugin({
+    markdown: typeof markdown === 'string' ? markdown : undefined,
+    translationConfig,
+  })
+  const resolvedClassName = mergeClassName(openSpecPlugin.className, className) ?? ''
+  const resolvedInlineTextAnnotations = useMemo(
+    () => [
+      ...(inlineTextAnnotations ?? []),
+      ...(openSpecPlugin.inlineTextAnnotations ?? []),
+      ...(translationPlugin.inlineTextAnnotations ?? []),
+    ],
+    [
+      inlineTextAnnotations,
+      openSpecPlugin.inlineTextAnnotations,
+      translationPlugin.inlineTextAnnotations,
+    ]
+  )
+  const resolvedBlockAnnotations = useMemo(
+    () => [
+      ...(blockAnnotations ?? []),
+      ...(openSpecPlugin.blockAnnotations ?? []),
+      ...(translationPlugin.blockAnnotations ?? []),
+    ],
+    [blockAnnotations, openSpecPlugin.blockAnnotations, translationPlugin.blockAnnotations]
+  )
+  const resolvedProcessors = useMemo(
+    () =>
+      resolveMarkdownRenderProcessors(headingTransform, [
+        ...(processors ?? []),
+        ...(openSpecPlugin.processors ?? []),
+        ...(translationPlugin.processors ?? []),
+      ]),
+    [headingTransform, openSpecPlugin.processors, processors, translationPlugin.processors]
+  )
+  const resolvedTocHeaderAction = useMemo(
+    () =>
+      mergeReactNodes(
+        tocHeaderAction,
+        openSpecPlugin.tocHeaderAction,
+        translationPlugin.tocHeaderAction
+      ),
+    [openSpecPlugin.tocHeaderAction, tocHeaderAction, translationPlugin.tocHeaderAction]
+  )
+  const resolvedTocHeaderActionKey = [
+    tocHeaderAction ? `prop:${tocHeaderActionKey ?? 'default'}` : '',
+    openSpecPlugin.tocHeaderActionKey,
+    translationPlugin.tocHeaderActionKey,
+  ]
+    .filter(Boolean)
+    .join('|')
+
+  useEffect(() => {
+    if (!isNested || !resolvedTocHeaderAction || !registerHeaderAction) return undefined
+    return registerHeaderAction(viewerId, resolvedTocHeaderActionKey, resolvedTocHeaderAction)
+    // Header actions are keyed by semantic state. A new React node with the same key is not a new action.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNested, registerHeaderAction, resolvedTocHeaderActionKey, viewerId])
 
   if (!collectToc) {
     return (
       <PlainMarkdownViewer
         markdown={markdown}
-        className={className}
-        headingTransform={headingTransform}
-        inlineTextAnnotations={inlineTextAnnotations}
-        blockAnnotations={blockAnnotations}
+        className={resolvedClassName}
+        processors={resolvedProcessors}
+        inlineTextAnnotations={resolvedInlineTextAnnotations}
+        blockAnnotations={resolvedBlockAnnotations}
       />
     )
   }
@@ -147,10 +345,10 @@ export function MarkdownViewer({
     return (
       <NestedMarkdownViewer
         markdown={markdown}
-        className={className}
-        headingTransform={headingTransform}
-        inlineTextAnnotations={inlineTextAnnotations}
-        blockAnnotations={blockAnnotations}
+        className={resolvedClassName}
+        processors={resolvedProcessors}
+        inlineTextAnnotations={resolvedInlineTextAnnotations}
+        blockAnnotations={resolvedBlockAnnotations}
       />
     )
   }
@@ -159,11 +357,12 @@ export function MarkdownViewer({
   return (
     <RootMarkdownViewer
       markdown={markdown}
-      className={className}
+      className={resolvedClassName}
       onReady={onReady}
-      headingTransform={headingTransform}
-      inlineTextAnnotations={inlineTextAnnotations}
-      blockAnnotations={blockAnnotations}
+      processors={resolvedProcessors}
+      tocHeaderAction={resolvedTocHeaderAction}
+      inlineTextAnnotations={resolvedInlineTextAnnotations}
+      blockAnnotations={resolvedBlockAnnotations}
     />
   )
 }
@@ -175,12 +374,12 @@ export function MarkdownViewer({
 function PlainMarkdownViewer({
   markdown,
   className = '',
-  headingTransform,
+  processors = [],
   inlineTextAnnotations,
   blockAnnotations,
 }: Pick<
   MarkdownViewerProps,
-  'markdown' | 'className' | 'headingTransform' | 'inlineTextAnnotations' | 'blockAnnotations'
+  'markdown' | 'className' | 'processors' | 'inlineTextAnnotations' | 'blockAnnotations'
 >) {
   if (typeof markdown === 'string') {
     return (
@@ -189,7 +388,7 @@ function PlainMarkdownViewer({
         className={className}
         collector={new TocCollector()}
         levelOffset={0}
-        headingTransform={headingTransform}
+        processors={processors}
         inlineTextAnnotations={inlineTextAnnotations}
         blockAnnotations={blockAnnotations}
         collectToc={false}
@@ -254,21 +453,45 @@ function RootMarkdownViewer({
   markdown,
   className,
   onReady,
-  headingTransform,
+  processors = [],
+  tocHeaderAction,
   inlineTextAnnotations,
   blockAnnotations,
 }: MarkdownViewerProps) {
   const [tocItems, setTocItems] = useState<TocItem[]>([])
-  const collectorRef = useRef<TocCollector>(null!)
+  const [nestedHeaderActions, setNestedHeaderActions] = useState<
+    Array<{ id: string; key: string; action: ReactNode }>
+  >([])
+  const nestedHeaderActionByIdRef = useRef(new Map<string, { key: string; action: ReactNode }>())
+  const collectorRef = useRef<TocCollector | null>(null)
   const readyCalledRef = useRef(false)
+  const registerHeaderAction = useCallback((id: string, key: string, action: ReactNode) => {
+    const previous = nestedHeaderActionByIdRef.current.get(id)
+    if (previous?.key === key) return () => {}
+    nestedHeaderActionByIdRef.current.set(id, { key, action })
+    setNestedHeaderActions((current) => {
+      const next = current.filter((item) => item.id !== id)
+      next.push({ id, key, action })
+      return next
+    })
+    return () => {
+      const current = nestedHeaderActionByIdRef.current.get(id)
+      if (current?.key !== key) return
+      nestedHeaderActionByIdRef.current.delete(id)
+      setNestedHeaderActions((current) => current.filter((item) => item.id !== id))
+    }
+  }, [])
 
-  // 每次渲染前重置 collector
-  collectorRef.current = new TocCollector()
+  if (collectorRef.current === null) {
+    collectorRef.current = new TocCollector()
+  } else {
+    collectorRef.current.reset()
+  }
   const collector = collectorRef.current
 
   // 渲染后（首帧前）同步更新 tocItems，避免移动端 ToC 迟到导致的布局抖动
   useLayoutEffect(() => {
-    const newItems = collectorRef.current.getItems()
+    const newItems = collectorRef.current?.getItems() ?? []
     setTocItems((prev) => {
       if (arraysEqual(prev, newItems)) return prev
       return newItems
@@ -283,6 +506,10 @@ function RootMarkdownViewer({
   }, [onReady, tocItems])
 
   const timelineScope = useMemo(() => generateTimelineScope(tocItems), [tocItems])
+  const resolvedTocHeaderAction = useMemo(
+    () => mergeReactNodes(tocHeaderAction, ...nestedHeaderActions.map((item) => item.action)),
+    [nestedHeaderActions, tocHeaderAction]
+  )
 
   // 渲染内容（在 TocProvider 内部，这样嵌套的 MarkdownViewer 能获取 Context）
   const content =
@@ -291,7 +518,7 @@ function RootMarkdownViewer({
         markdown={markdown}
         collector={collector}
         levelOffset={0}
-        headingTransform={headingTransform}
+        processors={processors}
         inlineTextAnnotations={inlineTextAnnotations}
         blockAnnotations={blockAnnotations}
       />
@@ -300,7 +527,12 @@ function RootMarkdownViewer({
     )
 
   return (
-    <TocProvider collector={collector} levelOffset={0} isRoot>
+    <TocProvider
+      collector={collector}
+      levelOffset={0}
+      isRoot
+      registerHeaderAction={registerHeaderAction}
+    >
       <div className={`@container-[size] h-full ${className}`}>
         <style>{viewerStyles}</style>
         <MarkdownContainer
@@ -308,7 +540,11 @@ function RootMarkdownViewer({
           timelineScope={timelineScope}
           enableHashNavigation
         >
-          <Toc items={tocItems} className="toc-page-sidebar viewer-toc" />
+          <Toc
+            items={tocItems}
+            className="toc-page-sidebar viewer-toc"
+            headerAction={resolvedTocHeaderAction}
+          />
           <div className="toc-page-content viewer-content min-w-0">{content}</div>
         </MarkdownContainer>
       </div>
@@ -323,7 +559,7 @@ function RootMarkdownViewer({
 function NestedMarkdownViewer({
   markdown,
   className,
-  headingTransform,
+  processors = [],
   inlineTextAnnotations,
   blockAnnotations,
 }: MarkdownViewerProps) {
@@ -337,7 +573,7 @@ function NestedMarkdownViewer({
       className={className}
       collector={collector}
       levelOffset={levelOffset}
-      headingTransform={headingTransform}
+      processors={processors}
       inlineTextAnnotations={inlineTextAnnotations}
       blockAnnotations={blockAnnotations}
     />
@@ -360,7 +596,7 @@ function StringMarkdownContent({
   collector,
   levelOffset,
   className,
-  headingTransform,
+  processors,
   inlineTextAnnotations,
   blockAnnotations,
   collectToc = true,
@@ -369,7 +605,7 @@ function StringMarkdownContent({
   collector: TocCollector
   levelOffset: number
   className?: string
-  headingTransform?: MarkdownHeadingTransform
+  processors: readonly MarkdownRenderProcessor[]
   inlineTextAnnotations?: readonly MarkdownInlineTextAnnotation[]
   blockAnnotations?: readonly MarkdownBlockAnnotation[]
   collectToc?: boolean
@@ -384,14 +620,14 @@ function StringMarkdownContent({
 
         // 由共享 collector 分配全局唯一 id，避免 ToC 与 DOM id 不一致
         const adjustedLevel = Math.min(level + levelOffset, 6) as HeadingLevel
-        const transform = headingTransform?.({
+        const transform = applyHeadingProcessors(processors, {
           sourceLevel: level,
           level: adjustedLevel,
           text,
           ...(sourceRange.start !== undefined ? { sourceStartOffset: sourceRange.start } : {}),
           ...(sourceRange.end !== undefined ? { sourceEndOffset: sourceRange.end } : {}),
         })
-        const tocLabel = transform?.tocLabel ?? text
+        const tocLabel = transform?.tocDataLabel ?? transform?.tocLabel ?? text
 
         const registration =
           collectToc === false
@@ -414,8 +650,9 @@ function StringMarkdownContent({
             className={transform?.className}
             dataAttributes={transform?.dataAttributes}
             suffix={transform?.suffix}
+            tocDataLabel={tocLabel}
           >
-            {children}
+            {transform?.children ?? children}
           </HeadingElement>
         )
       }
@@ -429,7 +666,7 @@ function StringMarkdownContent({
       h5: createHeading(5),
       h6: createHeading(6),
     }
-  }, [collector, levelOffset, headingTransform, collectToc])
+  }, [collector, levelOffset, processors, collectToc])
 
   return (
     <MarkdownContent
@@ -484,6 +721,7 @@ function BuilderMarkdownContent({
             timelineIndex={registration.timelineIndex}
             bindTimeline={registration.binding === 'heading'}
             className={className}
+            tocDataLabel={label}
           >
             {children}
           </HeadingElement>
@@ -552,6 +790,7 @@ function HeadingElement({
   suffix,
   className,
   dataAttributes,
+  tocDataLabel,
 }: {
   level: HeadingLevel
   id: string
@@ -561,6 +800,7 @@ function HeadingElement({
   suffix?: ReactNode
   className?: string
   dataAttributes?: HeadingDataAttributes
+  tocDataLabel?: string
 }) {
   const style =
     bindTimeline && timelineIndex !== undefined
@@ -570,7 +810,13 @@ function HeadingElement({
   switch (level) {
     case 1:
       return (
-        <h1 id={id} className={className} style={style} {...dataAttributes}>
+        <h1
+          id={id}
+          className={className}
+          style={style}
+          data-toc-label={tocDataLabel}
+          {...dataAttributes}
+        >
           {children}
           {suffix ? ' ' : null}
           {suffix}
@@ -578,7 +824,13 @@ function HeadingElement({
       )
     case 2:
       return (
-        <h2 id={id} className={className} style={style} {...dataAttributes}>
+        <h2
+          id={id}
+          className={className}
+          style={style}
+          data-toc-label={tocDataLabel}
+          {...dataAttributes}
+        >
           {children}
           {suffix ? ' ' : null}
           {suffix}
@@ -586,7 +838,13 @@ function HeadingElement({
       )
     case 3:
       return (
-        <h3 id={id} className={className} style={style} {...dataAttributes}>
+        <h3
+          id={id}
+          className={className}
+          style={style}
+          data-toc-label={tocDataLabel}
+          {...dataAttributes}
+        >
           {children}
           {suffix ? ' ' : null}
           {suffix}
@@ -594,7 +852,13 @@ function HeadingElement({
       )
     case 4:
       return (
-        <h4 id={id} className={className} style={style} {...dataAttributes}>
+        <h4
+          id={id}
+          className={className}
+          style={style}
+          data-toc-label={tocDataLabel}
+          {...dataAttributes}
+        >
           {children}
           {suffix ? ' ' : null}
           {suffix}
@@ -602,7 +866,13 @@ function HeadingElement({
       )
     case 5:
       return (
-        <h5 id={id} className={className} style={style} {...dataAttributes}>
+        <h5
+          id={id}
+          className={className}
+          style={style}
+          data-toc-label={tocDataLabel}
+          {...dataAttributes}
+        >
           {children}
           {suffix ? ' ' : null}
           {suffix}
@@ -610,7 +880,13 @@ function HeadingElement({
       )
     case 6:
       return (
-        <h6 id={id} className={className} style={style} {...dataAttributes}>
+        <h6
+          id={id}
+          className={className}
+          style={style}
+          data-toc-label={tocDataLabel}
+          {...dataAttributes}
+        >
           {children}
           {suffix ? ' ' : null}
           {suffix}

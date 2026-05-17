@@ -109,7 +109,7 @@ function DeltaSpecTabs({ deltaSpecs }: { deltaSpecs: DeltaSpec[] }) {
     const spec = deltaSpecs[0]
     return (
       <div className="bg-muted/20 rounded-lg p-4">
-        <MarkdownViewer markdown={spec.content} />
+        <MarkdownViewer markdown={spec.content} path={`specs/${spec.specId}/spec.md`} />
       </div>
     )
   }
@@ -120,7 +120,7 @@ function DeltaSpecTabs({ deltaSpecs }: { deltaSpecs: DeltaSpec[] }) {
     icon: <FileText className="h-4 w-4" />,
     content: (
       <div className="bg-muted/20 h-full rounded-lg p-4">
-        <MarkdownViewer markdown={spec.content} />
+        <MarkdownViewer markdown={spec.content} path={`specs/${spec.specId}/spec.md`} />
       </div>
     ),
     unmountOnHide: true,
