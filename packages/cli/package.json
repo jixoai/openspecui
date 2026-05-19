@@ -9,10 +9,14 @@
   },
   "exports": {
     ".": {
-      "import": "./dist/index.mjs"
+      "development": "./src/index.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
     },
     "./hooks": {
+      "development": "./src/hooks.ts",
       "import": "./dist/hooks.mjs",
+      "default": "./dist/hooks.mjs",
       "types": "./dist/hooks.d.mts"
     }
   },
@@ -25,7 +29,7 @@
     "build:web": "pnpm --filter @openspecui/web build",
     "build:copy-web": "rm -rf ./web && cp -r ../web/dist ./web",
     "typecheck": "tsc --noEmit",
-    "dev": "tsx src/cli.ts",
+    "dev": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--conditions=development\" tsx src/cli.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

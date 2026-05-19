@@ -7,11 +7,15 @@
   "types": "./dist/index.d.mts",
   "exports": {
     ".": {
+      "development": "./src/index.ts",
       "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs",
       "types": "./dist/index.d.mts"
     },
     "./node": {
+      "development": "./src/node.ts",
       "import": "./dist/node.mjs",
+      "default": "./dist/node.mjs",
       "types": "./dist/node.d.mts"
     }
   },

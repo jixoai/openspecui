@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { HOSTED_SHELL_PROTOCOL_VERSION } from '@openspecui/core/hosted-app'
+import { buildBackendHealthPayload } from '@openspecui/core/hosted-app'
 import { act, screen } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -90,15 +90,15 @@ describe('HostedShell updates', () => {
 
       if (url.endsWith('/api/health')) {
         return new Response(
-          JSON.stringify({
-            status: 'ok',
-            projectDir: '/tmp/demo',
-            projectName: 'demo',
-            watcherEnabled: true,
-            openspecuiVersion: '3.0.1',
-            hostedShellProtocolVersion: HOSTED_SHELL_PROTOCOL_VERSION,
-            embeddedUiUrl: 'http://localhost:3000/dashboard',
-          }),
+          JSON.stringify(
+            buildBackendHealthPayload({
+              projectDir: '/tmp/demo',
+              projectName: 'demo',
+              watcherEnabled: true,
+              openspecuiVersion: '3.0.1',
+              embeddedUiUrl: 'http://localhost:3000/dashboard',
+            })
+          ),
           {
             status: 200,
             headers: { 'content-type': 'application/json' },

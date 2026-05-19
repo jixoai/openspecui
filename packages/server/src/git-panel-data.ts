@@ -760,6 +760,30 @@ export async function buildGitWorktreeOverview(
   })
 }
 
+export async function resolveGitWorktreeSwitchTarget(options: {
+  projectDir: string
+  targetPath: string
+  runGit?: GitRunner
+}): Promise<{ path: string; pathAvailable: boolean } | null> {
+  const resolvedProjectDir = resolve(options.projectDir)
+  const resolvedInputPath = resolve(options.targetPath)
+  const runGit = options.runGit ?? defaultRunGit
+  const worktrees = await listGitWorktrees(resolvedProjectDir, runGit)
+
+  for (const worktree of worktrees) {
+    const worktreePath = resolve(worktree.path)
+    if (!(await sameGitPath(worktreePath, resolvedInputPath))) {
+      continue
+    }
+    return {
+      path: worktreePath,
+      pathAvailable: await pathExists(worktreePath),
+    }
+  }
+
+  return null
+}
+
 export async function listCurrentWorktreeGitEntries(
   options: GitPanelDataOptions & { cursor?: string; limit?: number }
 ): Promise<GitEntriesPage> {

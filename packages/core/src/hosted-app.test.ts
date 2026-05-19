@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   HOSTED_SHELL_PROTOCOL_VERSION,
+  OPENSPECUI_RUNTIME_CAPABILITIES,
+  buildBackendHealthPayload,
   buildEmbeddedUiLaunchUrl,
   buildHostedLaunchUrl,
   isHostedBackendHealthResponse,
@@ -63,7 +65,46 @@ describe('hosted-app helpers', () => {
         openspecuiVersion: '2.0.2',
         hostedShellProtocolVersion: HOSTED_SHELL_PROTOCOL_VERSION,
         embeddedUiUrl: 'http://localhost:3100',
+        runtimeCapabilities: OPENSPECUI_RUNTIME_CAPABILITIES,
       })
     ).toBe(true)
+  })
+
+  it('rejects health payloads that omit required runtime capabilities', () => {
+    expect(
+      isHostedBackendHealthResponse({
+        status: 'ok',
+        projectDir: '/tmp/demo',
+        projectName: 'demo',
+        watcherEnabled: true,
+        openspecuiVersion: '2.0.2',
+        hostedShellProtocolVersion: HOSTED_SHELL_PROTOCOL_VERSION,
+        embeddedUiUrl: 'http://localhost:3100',
+        runtimeCapabilities: OPENSPECUI_RUNTIME_CAPABILITIES.filter(
+          (capability) => capability !== 'notifications.subscribe'
+        ),
+      })
+    ).toBe(false)
+  })
+
+  it('builds backend health payloads from the shared runtime contract', () => {
+    expect(
+      buildBackendHealthPayload({
+        projectDir: '/tmp/demo',
+        projectName: 'demo',
+        watcherEnabled: true,
+        openspecuiVersion: '3.7.0',
+        embeddedUiUrl: 'http://localhost:3100',
+      })
+    ).toEqual({
+      status: 'ok',
+      projectDir: '/tmp/demo',
+      projectName: 'demo',
+      watcherEnabled: true,
+      openspecuiVersion: '3.7.0',
+      hostedShellProtocolVersion: HOSTED_SHELL_PROTOCOL_VERSION,
+      embeddedUiUrl: 'http://localhost:3100',
+      runtimeCapabilities: OPENSPECUI_RUNTIME_CAPABILITIES,
+    })
   })
 })

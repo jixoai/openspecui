@@ -6,7 +6,7 @@ export {
   type HookRuntime,
 } from './hook-runtime.js'
 export { findAvailablePort, isPortAvailable } from './port-utils.js'
-export { type AppRouter, type Context } from './router.js'
+export { type AppRouter, type Context, type GitWorktreeHandoffService } from './router.js'
 export {
   createServer,
   createWebSocketServer,

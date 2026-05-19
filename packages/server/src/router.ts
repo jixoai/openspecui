@@ -83,8 +83,8 @@ import {
   getCurrentWorktreeGitEntryMeta,
   getCurrentWorktreeGitEntryPatch,
   listCurrentWorktreeGitEntries,
+  resolveGitWorktreeSwitchTarget,
 } from './git-panel-data.js'
-import { sameGitPath } from './git-shared.js'
 import type { NotificationService } from './notification-service.js'
 import type { ProjectRecoveryService } from './project-recovery-service.js'
 import { reactiveKV } from './reactive-kv.js'
@@ -1783,23 +1783,10 @@ export const gitRouter = router({
         throw new Error('Worktree handoff is unavailable in this runtime.')
       }
 
-      const overview = await buildGitWorktreeOverview({ projectDir: ctx.projectDir })
-      const resolvedInputPath = resolve(input.path)
-      let target = null
-
-      if (
-        overview.currentWorktree &&
-        (await sameGitPath(overview.currentWorktree.path, resolvedInputPath))
-      ) {
-        target = overview.currentWorktree
-      } else {
-        for (const worktree of overview.otherWorktrees) {
-          if (await sameGitPath(worktree.path, resolvedInputPath)) {
-            target = worktree
-            break
-          }
-        }
-      }
+      const target = await resolveGitWorktreeSwitchTarget({
+        projectDir: ctx.projectDir,
+        targetPath: input.path,
+      })
 
       if (!target) {
         throw new Error('Worktree not found.')

@@ -1,4 +1,4 @@
-import { HOSTED_SHELL_PROTOCOL_VERSION } from '@openspecui/core/hosted-app'
+import { buildBackendHealthPayload } from '@openspecui/core/hosted-app'
 import { describe, expect, it, vi } from 'vitest'
 import { probeHostedBackend } from './reachability'
 
@@ -7,15 +7,15 @@ describe('hosted reachability helpers', () => {
     const fetchImpl = vi.fn(
       async () =>
         new Response(
-          JSON.stringify({
-            status: 'ok',
-            projectDir: '/tmp/demo',
-            projectName: 'demo',
-            watcherEnabled: true,
-            openspecuiVersion: '2.0.2',
-            hostedShellProtocolVersion: HOSTED_SHELL_PROTOCOL_VERSION,
-            embeddedUiUrl: 'http://localhost:4100',
-          }),
+          JSON.stringify(
+            buildBackendHealthPayload({
+              projectDir: '/tmp/demo',
+              projectName: 'demo',
+              watcherEnabled: true,
+              openspecuiVersion: '2.0.2',
+              embeddedUiUrl: 'http://localhost:4100',
+            })
+          ),
           {
             status: 200,
             headers: { 'content-type': 'application/json' },
@@ -36,15 +36,15 @@ describe('hosted reachability helpers', () => {
     const fetchImpl = vi.fn(
       async () =>
         new Response(
-          JSON.stringify({
-            status: 'ok',
-            projectDir: '/tmp/demo',
-            projectName: 'demo',
-            watcherEnabled: true,
-            openspecuiVersion: '2.0.2',
-            hostedShellProtocolVersion: HOSTED_SHELL_PROTOCOL_VERSION,
-            embeddedUiUrl: 'http://intranet.example.com',
-          }),
+          JSON.stringify(
+            buildBackendHealthPayload({
+              projectDir: '/tmp/demo',
+              projectName: 'demo',
+              watcherEnabled: true,
+              openspecuiVersion: '2.0.2',
+              embeddedUiUrl: 'http://intranet.example.com',
+            })
+          ),
           {
             status: 200,
             headers: { 'content-type': 'application/json' },

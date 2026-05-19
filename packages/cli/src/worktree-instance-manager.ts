@@ -2,13 +2,27 @@ import { findAvailablePort } from '@openspecui/server'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { Worker } from 'node:worker_threads'
 
-import type { GitWorktreeHandoff } from '@openspecui/core'
+import {
+  OPENSPECUI_RUNTIME_CAPABILITIES,
+  isHostedBackendHealthResponse,
+  type GitWorktreeHandoff,
+} from '@openspecui/core'
 import type { SpawnCommandConfig } from './local-hosted-app-dev'
+import type {
+  WorktreeServerWorkerData,
+  WorktreeServerWorkerFactory,
+} from './worktree-server-worker'
+import {
+  isWorktreeHandoffRequestMessage,
+  postWorktreeHandoffError,
+} from './worktree-server-worker-handoff'
 
 const DEFAULT_CHILD_TIMEOUT_MS = 15_000
 const DEFAULT_PORT_START = 3100
 const DEFAULT_PORT_ATTEMPTS = 200
+const DEVELOPMENT_EXPORT_CONDITION = '--conditions=development'
 
 export interface LocalCliWorkspace {
   repoRoot: string
@@ -24,6 +38,7 @@ interface WorktreeInstanceManagerOptions {
   currentProjectDir: string
   currentServerUrl: string
   runtimeDir: string
+  createWorker?: WorktreeServerWorkerFactory
   readinessTimeoutMs?: number
   preferredPortStart?: number
 }
@@ -31,8 +46,109 @@ interface WorktreeInstanceManagerOptions {
 interface ManagedInstance {
   projectDir: string
   serverUrl: string
-  child: ChildProcess
+  runtime: WorktreeServerRuntime
   lastUsedAt: number
+}
+
+interface WorktreeServerRuntime {
+  once(event: 'exit', listener: () => void): void
+  once(event: 'error', listener: (error: Error) => void): void
+  onError(listener: (error: Error) => void): void
+  onHandoffRequest?(handler: (input: { targetPath: string }) => Promise<GitWorktreeHandoff>): void
+  onReady(listener: (serverUrl: string) => void): void
+  stop(): Promise<void>
+}
+
+interface WorktreeServerWorkerErrorMessage {
+  type: 'error'
+  message: string
+  stack?: string
+}
+
+interface WorktreeServerWorkerReadyMessage {
+  type: 'ready'
+  serverUrl: string
+}
+
+export interface WorktreeServerWorkerLaunchPlan {
+  kind: 'worker'
+  createWorker: WorktreeServerWorkerFactory
+  execArgv: string[]
+  workerData: WorktreeServerWorkerData
+}
+
+export interface WorktreeServerProcessLaunchPlan extends SpawnCommandConfig {
+  kind: 'process'
+}
+
+export type WorktreeServerLaunchPlan =
+  | WorktreeServerWorkerLaunchPlan
+  | WorktreeServerProcessLaunchPlan
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function getMissingRuntimeCapabilities(value: unknown): string[] {
+  if (!isRecord(value) || !Array.isArray(value.runtimeCapabilities)) {
+    return [...OPENSPECUI_RUNTIME_CAPABILITIES]
+  }
+
+  const capabilities = new Set(value.runtimeCapabilities.filter((item) => typeof item === 'string'))
+  return OPENSPECUI_RUNTIME_CAPABILITIES.filter((capability) => !capabilities.has(capability))
+}
+
+function describeIncompatibleHealth(value: unknown, projectDir: string): string {
+  if (!isRecord(value)) {
+    return 'health payload is not an object'
+  }
+
+  const reasons: string[] = []
+  if (value.status !== 'ok') reasons.push('status is not ok')
+  if (value.projectDir !== projectDir) reasons.push('projectDir does not match target worktree')
+  if (typeof value.openspecuiVersion !== 'string') reasons.push('openspecuiVersion is missing')
+  if (typeof value.hostedShellProtocolVersion !== 'number') {
+    reasons.push('hostedShellProtocolVersion is missing')
+  }
+  if (typeof value.embeddedUiUrl !== 'string') reasons.push('embeddedUiUrl is missing')
+
+  const missingCapabilities = getMissingRuntimeCapabilities(value)
+  if (missingCapabilities.length > 0) {
+    reasons.push(`missing runtime capabilities: ${missingCapabilities.join(', ')}`)
+  }
+
+  return reasons.join('; ') || 'health payload does not satisfy the runtime contract'
+}
+
+export async function assertWorktreeServerCompatible(options: {
+  serverUrl: string
+  projectDir: string
+}): Promise<void> {
+  const response = await fetch(`${options.serverUrl}/api/health`, {
+    headers: { accept: 'application/json' },
+    cache: 'no-store',
+  })
+  if (!response.ok) {
+    throw new Error(`Worktree server health check failed with HTTP ${response.status}`)
+  }
+
+  const payload = (await response.json()) as unknown
+  if (!isHostedBackendHealthResponse(payload)) {
+    throw new Error(
+      `Worktree server runtime is incompatible: ${describeIncompatibleHealth(
+        payload,
+        options.projectDir
+      )}`
+    )
+  }
+  if (payload.projectDir !== options.projectDir) {
+    throw new Error(
+      `Worktree server runtime is incompatible: ${describeIncompatibleHealth(
+        payload,
+        options.projectDir
+      )}`
+    )
+  }
 }
 
 export function resolveLocalCliWorkspace(runtimeDir: string): LocalCliWorkspace | null {
@@ -51,17 +167,21 @@ export function resolveLocalCliWorkspace(runtimeDir: string): LocalCliWorkspace 
   }
 }
 
-function resolvePnpmCommand(): string {
-  return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+function withDevelopmentExecArgv(execArgv: string[]): string[] {
+  if (execArgv.includes(DEVELOPMENT_EXPORT_CONDITION)) {
+    return [...execArgv]
+  }
+  return [...execArgv, DEVELOPMENT_EXPORT_CONDITION]
 }
 
-function createNodeCliCommand(options: {
+function createNodeCliCommandPlan(options: {
   cliEntry: string
   projectDir: string
   port: number
   cwd: string
-}): SpawnCommandConfig {
+}): WorktreeServerProcessLaunchPlan {
   return {
+    kind: 'process',
     command: process.execPath,
     args: [
       options.cliEntry,
@@ -76,43 +196,36 @@ function createNodeCliCommand(options: {
   }
 }
 
-export function createWorktreeServerCommand(options: {
+export function createWorktreeServerLaunchPlan(options: {
   runtimeDir: string
   projectDir: string
   port: number
-}): SpawnCommandConfig {
+  createWorker?: WorktreeServerWorkerFactory
+}): WorktreeServerLaunchPlan {
+  const workerData = {
+    projectDir: options.projectDir,
+    port: options.port,
+  }
   const workspace = resolveLocalCliWorkspace(options.runtimeDir)
-  if (workspace) {
-    const cliDistEntry = join(workspace.cliPackageDir, 'dist', 'cli.mjs')
-    if (existsSync(cliDistEntry)) {
-      // Prefer the built CLI entry so recovery handoff does not depend on nested pnpm script resolution.
-      return createNodeCliCommand({
-        cliEntry: cliDistEntry,
-        projectDir: options.projectDir,
-        port: options.port,
-        cwd: workspace.repoRoot,
-      })
+
+  if (options.createWorker) {
+    let execArgv = [...process.execArgv]
+    if (workspace) {
+      const cliSourceDir = join(workspace.cliPackageDir, 'src')
+      if (resolve(options.runtimeDir) === resolve(cliSourceDir)) {
+        execArgv = withDevelopmentExecArgv(execArgv)
+      }
     }
 
     return {
-      command: resolvePnpmCommand(),
-      args: [
-        '--filter',
-        'openspecui',
-        'run',
-        'dev',
-        '--dir',
-        options.projectDir,
-        '--port',
-        String(options.port),
-        '--no-open',
-      ],
-      cwd: workspace.repoRoot,
-      env: { ...process.env },
+      kind: 'worker',
+      createWorker: options.createWorker,
+      execArgv,
+      workerData,
     }
   }
 
-  return createNodeCliCommand({
+  return createNodeCliCommandPlan({
     cliEntry: join(options.runtimeDir, 'cli.mjs'),
     projectDir: options.projectDir,
     port: options.port,
@@ -123,17 +236,21 @@ export function createWorktreeServerCommand(options: {
 async function waitForServerReady(options: {
   serverUrl: string
   projectDir: string
-  child: ChildProcess
+  runtime: WorktreeServerRuntime
   timeoutMs: number
 }): Promise<void> {
   let exitMessage: string | null = null
   let startupError: Error | null = null
+  let readyServerUrl: string | null = null
 
-  options.child.once('error', (error) => {
+  options.runtime.once('exit', () => {
+    exitMessage = 'runtime exited'
+  })
+  options.runtime.onError((error) => {
     startupError = error
   })
-  options.child.once('exit', (code, signal) => {
-    exitMessage = signal ? `signal ${signal}` : `exit ${code ?? 'unknown'}`
+  options.runtime.onReady((serverUrl) => {
+    readyServerUrl = serverUrl
   })
 
   const deadline = Date.now() + options.timeoutMs
@@ -145,18 +262,24 @@ async function waitForServerReady(options: {
       throw new Error(`Worktree server exited before becoming ready (${exitMessage})`)
     }
 
-    try {
-      const response = await fetch(`${options.serverUrl}/api/health`, {
-        headers: { accept: 'application/json' },
-        cache: 'no-store',
+    if (readyServerUrl) {
+      await assertWorktreeServerCompatible({
+        serverUrl: readyServerUrl,
+        projectDir: options.projectDir,
       })
-      if (response.ok) {
-        const payload = (await response.json()) as { projectDir?: unknown }
-        if (payload.projectDir === options.projectDir) {
-          return
-        }
+      return
+    }
+
+    try {
+      await assertWorktreeServerCompatible({
+        serverUrl: options.serverUrl,
+        projectDir: options.projectDir,
+      })
+      return
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('runtime is incompatible')) {
+        throw error
       }
-    } catch {
       // Server is still starting.
     }
 
@@ -166,15 +289,157 @@ async function waitForServerReady(options: {
   throw new Error(`Timed out waiting for worktree server at ${options.serverUrl}`)
 }
 
+class ProcessWorktreeServerRuntime implements WorktreeServerRuntime {
+  readonly child: ChildProcess
+
+  constructor(plan: WorktreeServerProcessLaunchPlan) {
+    this.child = spawn(plan.command, plan.args, {
+      cwd: plan.cwd,
+      env: plan.env,
+      stdio: 'inherit',
+      detached: process.platform !== 'win32',
+    })
+  }
+
+  once(event: 'exit', listener: () => void): void
+  once(event: 'error', listener: (error: Error) => void): void
+  once(event: 'exit' | 'error', listener: (() => void) | ((error: Error) => void)): void {
+    if (event === 'error') {
+      this.child.once(event, listener as (error: Error) => void)
+      return
+    }
+    this.child.once(event, listener as () => void)
+  }
+
+  onError(listener: (error: Error) => void): void {
+    this.child.on('error', listener)
+  }
+
+  onReady(): void {
+    // Process runtimes use HTTP health polling for readiness.
+  }
+
+  async stop(): Promise<void> {
+    await stopChildProcess(this.child)
+  }
+}
+
+class WorkerThreadWorktreeServerRuntime implements WorktreeServerRuntime {
+  readonly worker: Worker
+  private readonly structuredErrorListeners = new Set<(error: Error) => void>()
+  private readonly readyListeners = new Set<(serverUrl: string) => void>()
+  private readyServerUrl: string | null = null
+  private startupError: Error | null = null
+
+  constructor(plan: WorktreeServerWorkerLaunchPlan) {
+    this.worker = plan.createWorker({
+      execArgv: plan.execArgv,
+      workerData: plan.workerData,
+    })
+    this.worker.on('message', (message: unknown) => {
+      if (isWorkerErrorMessage(message)) {
+        const error = new Error(message.message)
+        error.stack = message.stack
+        this.startupError = error
+        for (const listener of this.structuredErrorListeners) {
+          listener(error)
+        }
+        return
+      }
+
+      if (isWorkerReadyMessage(message)) {
+        this.readyServerUrl = message.serverUrl
+        for (const listener of this.readyListeners) {
+          listener(message.serverUrl)
+        }
+      }
+    })
+  }
+
+  once(event: 'exit', listener: () => void): void
+  once(event: 'error', listener: (error: Error) => void): void
+  once(event: 'exit' | 'error', listener: (() => void) | ((error: Error) => void)): void {
+    if (event === 'error') {
+      this.worker.once(event, listener as (error: Error) => void)
+      return
+    }
+    this.worker.once(event, listener as () => void)
+  }
+
+  onError(listener: (error: Error) => void): void {
+    this.structuredErrorListeners.add(listener)
+    this.worker.on('error', listener)
+    if (this.startupError) {
+      listener(this.startupError)
+    }
+  }
+
+  onReady(listener: (serverUrl: string) => void): void {
+    this.readyListeners.add(listener)
+    if (this.readyServerUrl) {
+      listener(this.readyServerUrl)
+    }
+  }
+
+  onHandoffRequest(handler: (input: { targetPath: string }) => Promise<GitWorktreeHandoff>): void {
+    this.worker.on('message', (message: unknown) => {
+      if (!isWorktreeHandoffRequestMessage(message)) {
+        return
+      }
+
+      void handler({ targetPath: message.targetPath })
+        .then((handoff) => {
+          this.worker.postMessage({
+            type: 'worktree-handoff:result',
+            requestId: message.requestId,
+            handoff,
+          })
+        })
+        .catch((error) => {
+          postWorktreeHandoffError(this.worker, message.requestId, error)
+        })
+    })
+  }
+
+  async stop(): Promise<void> {
+    if (this.worker.threadId === -1) return
+    this.worker.postMessage('close')
+    const exited = await waitForWorkerExit(this.worker, 5_000)
+    if (exited) return
+    await this.worker.terminate()
+  }
+}
+
+function isWorkerReadyMessage(value: unknown): value is WorktreeServerWorkerReadyMessage {
+  if (typeof value !== 'object' || value === null) return false
+  const message = value as Record<string, unknown>
+  return message.type === 'ready' && typeof message.serverUrl === 'string'
+}
+
+function isWorkerErrorMessage(value: unknown): value is WorktreeServerWorkerErrorMessage {
+  if (typeof value !== 'object' || value === null) return false
+  const message = value as Record<string, unknown>
+  return (
+    message.type === 'error' &&
+    typeof message.message === 'string' &&
+    (message.stack === undefined || typeof message.stack === 'string')
+  )
+}
+
+function startWorktreeServerRuntime(plan: WorktreeServerLaunchPlan): WorktreeServerRuntime {
+  if (plan.kind === 'worker') {
+    return new WorkerThreadWorktreeServerRuntime(plan)
+  }
+  return new ProcessWorktreeServerRuntime(plan)
+}
+
 async function isHealthyInstance(instance: ManagedInstance): Promise<boolean> {
   try {
-    const response = await fetch(`${instance.serverUrl}/api/health`, {
-      headers: { accept: 'application/json' },
-      cache: 'no-store',
+    await assertWorktreeServerCompatible({
+      serverUrl: instance.serverUrl,
+      projectDir: instance.projectDir,
     })
-    if (!response.ok) return false
-    const payload = (await response.json()) as { projectDir?: unknown }
-    return payload.projectDir === instance.projectDir
+    return true
   } catch {
     return false
   }
@@ -229,6 +494,27 @@ async function stopChildProcess(child: ChildProcess): Promise<void> {
   await waitForChildExit(child, 1_000)
 }
 
+function waitForWorkerExit(worker: Worker, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolvePromise) => {
+    const timer = setTimeout(() => {
+      cleanup()
+      resolvePromise(false)
+    }, timeoutMs)
+
+    const onExit = () => {
+      cleanup()
+      resolvePromise(true)
+    }
+
+    const cleanup = () => {
+      clearTimeout(timer)
+      worker.off('exit', onExit)
+    }
+
+    worker.once('exit', onExit)
+  })
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolvePromise) => {
     setTimeout(resolvePromise, ms)
@@ -264,7 +550,7 @@ export function createWorktreeInstanceManager(
 
     if (existing) {
       instances.delete(targetPath)
-      await stopChildProcess(existing.child)
+      await existing.runtime.stop()
     }
 
     const pendingInstance = pending.get(targetPath)
@@ -277,41 +563,38 @@ export function createWorktreeInstanceManager(
         options.preferredPortStart ?? DEFAULT_PORT_START,
         DEFAULT_PORT_ATTEMPTS
       )
-      const command = createWorktreeServerCommand({
+      const plan = createWorktreeServerLaunchPlan({
         runtimeDir: options.runtimeDir,
         projectDir: targetPath,
         port,
+        createWorker: options.createWorker,
       })
-      const child = spawn(command.command, command.args, {
-        cwd: command.cwd,
-        env: command.env,
-        stdio: 'inherit',
-        detached: process.platform !== 'win32',
-      })
+      const runtime = startWorktreeServerRuntime(plan)
       const serverUrl = `http://localhost:${port}`
 
       try {
         await waitForServerReady({
           serverUrl,
           projectDir: targetPath,
-          child,
+          runtime,
           timeoutMs: options.readinessTimeoutMs ?? DEFAULT_CHILD_TIMEOUT_MS,
         })
       } catch (error) {
-        await stopChildProcess(child)
+        await runtime.stop()
         throw error
       }
 
       const instance: ManagedInstance = {
         projectDir: targetPath,
         serverUrl,
-        child,
+        runtime,
         lastUsedAt: Date.now(),
       }
       instances.set(targetPath, instance)
-      child.once('exit', () => {
+      runtime.onHandoffRequest?.(ensureWorktreeServer)
+      runtime.once('exit', () => {
         const current = instances.get(targetPath)
-        if (current?.child === child) {
+        if (current?.runtime === runtime) {
           instances.delete(targetPath)
         }
       })
@@ -334,7 +617,7 @@ export function createWorktreeInstanceManager(
     await Promise.all(
       [...instances.values()].map(async (instance) => {
         instances.delete(instance.projectDir)
-        await stopChildProcess(instance.child)
+        await instance.runtime.stop()
       })
     )
   }

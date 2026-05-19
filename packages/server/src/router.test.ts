@@ -7,6 +7,7 @@ import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DashboardOverviewService } from '../src/dashboard-overview-service.js'
 import { loadDashboardOverview } from '../src/dashboard-overview.js'
+import { resolveGitWorktreeSwitchTarget } from '../src/git-panel-data.js'
 import { sameGitPath } from '../src/git-shared.js'
 import type { Context } from '../src/router.js'
 import { appRouter } from '../src/router.js'
@@ -853,6 +854,42 @@ describe('appRouter', () => {
         serverUrl: 'http://127.0.0.1:3300',
       })
     }, 20_000)
+
+    it('resolves switch targets without building full worktree overview stats', async () => {
+      const projectDir = await createTempProjectDir('openspecui-router-git-switch-light-')
+      const targetDir = await createTempProjectDir('openspecui-router-git-switch-light-target-')
+      const gitCalls: string[][] = []
+
+      const target = await resolveGitWorktreeSwitchTarget({
+        projectDir,
+        targetPath: targetDir,
+        runGit: async (_cwd, args) => {
+          gitCalls.push(args)
+          if (args.join(' ') === 'worktree list --porcelain') {
+            return {
+              ok: true,
+              stdout: [
+                `worktree ${projectDir}`,
+                'HEAD 0000000000000000000000000000000000000000',
+                'branch refs/heads/main',
+                '',
+                `worktree ${targetDir}`,
+                'HEAD 1111111111111111111111111111111111111111',
+                'branch refs/heads/feature-switch-target',
+                '',
+              ].join('\n'),
+            }
+          }
+          return { ok: false, stdout: '' }
+        },
+      })
+
+      expect(target).toEqual({
+        path: resolvePath(targetDir),
+        pathAvailable: true,
+      })
+      expect(gitCalls).toEqual([['worktree', 'list', '--porcelain']])
+    })
   })
 
   describe('spec', () => {

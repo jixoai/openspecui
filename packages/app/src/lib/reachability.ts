@@ -1,5 +1,5 @@
 import {
-  HOSTED_SHELL_PROTOCOL_VERSION,
+  isBackendHealthRuntimeMetadata,
   isSupportedEmbeddedUiUrl,
   type HostedBackendHealthResponse,
 } from '@openspecui/core/hosted-app'
@@ -10,23 +10,6 @@ export interface HostedBackendProbeResult {
   reachability: HostedTabReachability
   health: HostedBackendHealthResponse | null
   errorMessage: string | null
-}
-
-function isHostedBackendHealthPayloadShape(value: unknown): value is HostedBackendHealthResponse {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-
-  const record = value as Record<string, unknown>
-  return (
-    record.status === 'ok' &&
-    typeof record.projectDir === 'string' &&
-    typeof record.projectName === 'string' &&
-    typeof record.watcherEnabled === 'boolean' &&
-    typeof record.openspecuiVersion === 'string' &&
-    record.hostedShellProtocolVersion === HOSTED_SHELL_PROTOCOL_VERSION &&
-    typeof record.embeddedUiUrl === 'string'
-  )
 }
 
 export async function probeHostedBackend(
@@ -57,11 +40,11 @@ export async function probeHostedBackend(
     }
 
     const payload = await response.json()
-    if (!isHostedBackendHealthPayloadShape(payload)) {
+    if (!isBackendHealthRuntimeMetadata(payload)) {
       return {
         reachability: 'online',
         health: null,
-        errorMessage: 'Backend health payload is missing embedded UI metadata.',
+        errorMessage: 'Backend health payload is missing compatible runtime metadata.',
       }
     }
 

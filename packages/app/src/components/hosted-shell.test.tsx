@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { HOSTED_SHELL_PROTOCOL_VERSION } from '@openspecui/core/hosted-app'
+import { buildBackendHealthPayload } from '@openspecui/core/hosted-app'
 import { act, fireEvent, screen } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -37,15 +37,15 @@ function setSuccessfulFetch(options?: HostedFetchOptions) {
       }
 
       return new Response(
-        JSON.stringify({
-          status: 'ok',
-          projectDir: `/tmp/${health?.projectName ?? 'opsx-project'}`,
-          projectName: health?.projectName ?? 'opsx-project',
-          watcherEnabled: true,
-          openspecuiVersion: health?.openspecuiVersion ?? '2.0.2',
-          hostedShellProtocolVersion: HOSTED_SHELL_PROTOCOL_VERSION,
-          embeddedUiUrl: `${apiBaseUrl}/dashboard`,
-        }),
+        JSON.stringify(
+          buildBackendHealthPayload({
+            projectDir: `/tmp/${health?.projectName ?? 'opsx-project'}`,
+            projectName: health?.projectName ?? 'opsx-project',
+            watcherEnabled: true,
+            openspecuiVersion: health?.openspecuiVersion ?? '2.0.2',
+            embeddedUiUrl: `${apiBaseUrl}/dashboard`,
+          })
+        ),
         {
           status: 200,
           headers: { 'content-type': 'application/json' },

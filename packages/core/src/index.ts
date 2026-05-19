@@ -386,14 +386,18 @@ export {
 export {
   HOSTED_SHELL_PROTOCOL_VERSION,
   OFFICIAL_APP_BASE_URL,
+  OPENSPECUI_RUNTIME_CAPABILITIES,
+  buildBackendHealthPayload,
   buildEmbeddedUiLaunchUrl,
   buildHostedLaunchUrl,
+  isBackendHealthRuntimeMetadata,
   isHostedBackendHealthResponse,
   isSupportedEmbeddedUiUrl,
   normalizeEmbeddedUiUrl,
   normalizeHostedAppBaseUrl,
   resolveHostedAppBaseUrl,
   type HostedBackendHealthResponse,
+  type OpenSpecUIRuntimeCapability,
 } from './hosted-app.js'
 export { VIRTUAL_PROJECT_DIRNAME, toOpsxDisplayPath } from './opsx-display-path.js'
 export { type ProjectRecoveryStatus } from './runtime-types.js'

@@ -7,75 +7,111 @@
   "types": "./dist/index.d.mts",
   "exports": {
     ".": {
+      "development": "./src/index.ts",
       "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs",
       "types": "./dist/index.d.mts"
     },
     "./dashboard-display": {
+      "development": "./src/dashboard-display.ts",
       "import": "./dist/dashboard-display.mjs",
+      "default": "./dist/dashboard-display.mjs",
       "types": "./dist/dashboard-display.d.mts"
     },
     "./hosted-app": {
+      "development": "./src/hosted-app.ts",
       "import": "./dist/hosted-app.mjs",
+      "default": "./dist/hosted-app.mjs",
       "types": "./dist/hosted-app.d.mts"
     },
     "./openspec-compat": {
+      "development": "./src/openspec-compat.ts",
       "import": "./dist/openspec-compat.mjs",
+      "default": "./dist/openspec-compat.mjs",
       "types": "./dist/openspec-compat.d.mts"
     },
     "./markdown-facts": {
+      "development": "./src/markdown-facts.ts",
       "import": "./dist/markdown-facts.mjs",
+      "default": "./dist/markdown-facts.mjs",
       "types": "./dist/markdown-facts.d.mts"
     },
     "./markdown-reading": {
+      "development": "./src/markdown-reading.ts",
       "import": "./dist/markdown-reading.mjs",
+      "default": "./dist/markdown-reading.mjs",
       "types": "./dist/markdown-reading.d.mts"
     },
     "./document-translation": {
+      "development": "./src/document-translation.ts",
       "import": "./dist/document-translation.mjs",
+      "default": "./dist/document-translation.mjs",
       "types": "./dist/document-translation.d.mts"
     },
     "./openspec-annotations": {
+      "development": "./src/openspec-annotations.ts",
       "import": "./dist/openspec-annotations.mjs",
+      "default": "./dist/openspec-annotations.mjs",
       "types": "./dist/openspec-annotations.d.mts"
     },
     "./openspec-projection": {
+      "development": "./src/openspec-projection.ts",
       "import": "./dist/openspec-projection.mjs",
+      "default": "./dist/openspec-projection.mjs",
       "types": "./dist/openspec-projection.d.mts"
     },
     "./opsx-display-path": {
+      "development": "./src/opsx-display-path.ts",
       "import": "./dist/opsx-display-path.mjs",
+      "default": "./dist/opsx-display-path.mjs",
       "types": "./dist/opsx-display-path.d.mts"
     },
     "./opsx-entity": {
+      "development": "./src/opsx-entity.ts",
       "import": "./dist/opsx-entity.mjs",
+      "default": "./dist/opsx-entity.mjs",
       "types": "./dist/opsx-entity.d.mts"
     },
     "./opsx-schema-detail": {
+      "development": "./src/opsx-schema-detail.ts",
       "import": "./dist/opsx-schema-detail.mjs",
+      "default": "./dist/opsx-schema-detail.mjs",
       "types": "./dist/opsx-schema-detail.d.mts"
     },
     "./notifications": {
+      "development": "./src/notifications.ts",
       "import": "./dist/notifications.mjs",
+      "default": "./dist/notifications.mjs",
       "types": "./dist/notifications.d.mts"
     },
     "./sounds": {
+      "development": "./src/sounds.ts",
       "import": "./dist/sounds.mjs",
+      "default": "./dist/sounds.mjs",
       "types": "./dist/sounds.d.mts"
     },
     "./terminal-theme": {
+      "development": "./src/terminal-theme.ts",
       "import": "./dist/terminal-theme.mjs",
+      "default": "./dist/terminal-theme.mjs",
       "types": "./dist/terminal-theme.d.mts"
     },
     "./terminal-invocation": {
+      "development": "./src/terminal-invocation.ts",
       "import": "./dist/terminal-invocation.mjs",
+      "default": "./dist/terminal-invocation.mjs",
       "types": "./dist/terminal-invocation.d.mts"
     },
     "./terminal-audio": {
+      "development": "./src/terminal-audio.ts",
       "import": "./dist/terminal-audio.mjs",
+      "default": "./dist/terminal-audio.mjs",
       "types": "./dist/terminal-audio.d.mts"
     },
     "./terminal-control": {
+      "development": "./src/terminal-control.ts",
       "import": "./dist/terminal-control.mjs",
+      "default": "./dist/terminal-control.mjs",
       "types": "./dist/terminal-control.d.mts"
     }
   },

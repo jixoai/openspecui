@@ -5,7 +5,9 @@
   "main": "dist/index.mjs",
   "exports": {
     ".": {
-      "import": "./dist/index.mjs"
+      "development": "./src/index.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
     }
   },
   "files": [
@@ -14,7 +16,7 @@
   "scripts": {
     "build": "tsdown src/index.ts --format esm --no-dts",
     "typecheck": "tsc -p tsconfig.check.json --noEmit",
-    "dev": "tsx watch --include '../core/dist/**' --include '../search/dist/**' src/standalone.ts",
+    "dev": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--conditions=development\" tsx watch --include '../core/dist/**' --include '../search/dist/**' src/standalone.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

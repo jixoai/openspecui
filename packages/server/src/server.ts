@@ -13,11 +13,11 @@
 
 import { serve } from '@hono/node-server'
 import {
+  buildBackendHealthPayload,
   CliExecutor,
   ConfigManager,
   CustomSoundHashSchema,
   GlobalSettingsManager,
-  HOSTED_SHELL_PROTOCOL_VERSION,
   initWatcherPool,
   isWatcherPoolInitialized,
   NotificationPublishInputSchema,
@@ -67,6 +67,16 @@ import { WorkflowInvocationService } from './workflow-invocation-service.js'
 
 function buildEmbeddedUiUrlForPort(port: number): string {
   return `http://localhost:${port}`
+}
+
+function initializeWatcherPoolInBackground(projectDir: string): void {
+  void initWatcherPool(projectDir).catch((err) => {
+    console.error('Watcher pool initialization failed:', err)
+  })
+}
+
+function deferBackgroundTask(task: () => void): void {
+  setTimeout(task, 0)
 }
 
 /**
@@ -177,15 +187,15 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
 
   // Health check
   app.get('/api/health', (c) => {
-    return c.json({
-      status: 'ok',
-      projectDir: config.projectDir,
-      projectName: basename(config.projectDir) || config.projectDir,
-      watcherEnabled: !!watcher,
-      openspecuiVersion: SERVER_PACKAGE_VERSION,
-      hostedShellProtocolVersion: HOSTED_SHELL_PROTOCOL_VERSION,
-      embeddedUiUrl: buildEmbeddedUiUrlForPort(config.port ?? 3100),
-    })
+    return c.json(
+      buildBackendHealthPayload({
+        projectDir: config.projectDir,
+        projectName: basename(config.projectDir) || config.projectDir,
+        watcherEnabled: !!watcher,
+        openspecuiVersion: SERVER_PACKAGE_VERSION,
+        embeddedUiUrl: buildEmbeddedUiUrlForPort(config.port ?? 3100),
+      })
+    )
   })
 
   app.post('/api/notifications', async (c) => {
@@ -314,10 +324,8 @@ export async function createWebSocketServer(
   httpServer: { on: (event: string, handler: (...args: unknown[]) => void) => void },
   config: { projectDir: string }
 ) {
-  // Initialize reactive file system watcher for the project directory
-  // This enables real-time updates when files are created/modified/deleted
   if (!isWatcherPoolInitialized()) {
-    await initWatcherPool(config.projectDir)
+    deferBackgroundTask(() => initializeWatcherPoolInBackground(config.projectDir))
   }
 
   // tRPC WebSocket server
@@ -422,8 +430,7 @@ export async function startServer(
   const cliExecutor = new CliExecutor(configManager, config.projectDir)
   const kernel = new OpsxKernel(config.projectDir, cliExecutor)
 
-  // Initialize reactive file system watcher (needed for subscriptions)
-  await initWatcherPool(config.projectDir)
+  deferBackgroundTask(() => initializeWatcherPoolInBackground(config.projectDir))
 
   // Create the server (HTTP app ready to accept requests)
   const server = createServer({ ...config, port, kernel })
@@ -439,7 +446,7 @@ export async function startServer(
     port,
   })
 
-  // Create WebSocket server (watcher pool already initialized above)
+  // Create WebSocket server.
   const wsServer = await createWebSocketServer(server, httpServer, {
     projectDir: config.projectDir,
   })
@@ -447,14 +454,16 @@ export async function startServer(
   const url = `http://localhost:${port}`
 
   // Warmup kernel in background — subscriptions will push data as it arrives
-  kernel.warmup().catch((err) => {
-    console.error('Kernel warmup failed:', err)
-  })
-  server.searchService.init().catch((err) => {
-    console.error('Search service warmup failed:', err)
-  })
-  server.dashboardOverviewService.init().catch((err) => {
-    console.error('Dashboard overview warmup failed:', err)
+  deferBackgroundTask(() => {
+    kernel.warmup().catch((err) => {
+      console.error('Kernel warmup failed:', err)
+    })
+    server.searchService.init().catch((err) => {
+      console.error('Search service warmup failed:', err)
+    })
+    server.dashboardOverviewService.init().catch((err) => {
+      console.error('Dashboard overview warmup failed:', err)
+    })
   })
 
   return {

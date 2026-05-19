@@ -25,7 +25,9 @@ const {
 }))
 
 let currentNotifications: NotificationRecord[] = []
-let currentConfig: OpenSpecUIConfig = DEFAULT_CONFIG
+type ConfigSubscriptionPayload = OpenSpecUIConfig | Omit<OpenSpecUIConfig, 'notifications'>
+
+let currentConfig: ConfigSubscriptionPayload = DEFAULT_CONFIG
 let terminalArea: 'main' | 'bottom' | 'pop' = 'main'
 
 vi.mock('@/lib/nav-controller', () => ({
@@ -118,6 +120,11 @@ function ActionHarness() {
   )
 }
 
+function NotificationCountHarness() {
+  const { unreadCount } = useNotifications()
+  return <div data-testid="notification-count">{unreadCount}</div>
+}
+
 describe('NotificationProvider action resolution', () => {
   afterEach(() => {
     cleanup()
@@ -133,6 +140,23 @@ describe('NotificationProvider action resolution', () => {
     currentNotifications = []
     currentConfig = DEFAULT_CONFIG
     vi.unstubAllGlobals()
+  })
+
+  it('uses notification defaults when runtime config omits the notifications section', () => {
+    const { notifications: _notifications, ...configWithoutNotifications } = DEFAULT_CONFIG
+    currentConfig = configWithoutNotifications
+    useNavLayoutMock.mockReturnValue({
+      popActive: false,
+      popLocation: { pathname: '/', search: '' },
+    })
+
+    render(
+      <NotificationProvider>
+        <NotificationCountHarness />
+      </NotificationProvider>
+    )
+
+    expect(screen.getByTestId('notification-count')).toHaveTextContent('0')
   })
 
   it('closes notifications, reveals the main terminal panel, and requests terminal activation', async () => {

@@ -149,9 +149,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const previousLatestIdRef = useRef<string | null>(null)
   const browserNotificationRef = useRef<Notification | null>(null)
   const panelOpen = navLayout.popActive && navLayout.popLocation.pathname === '/notifications'
-  const systemNotificationsEnabled = config?.notifications.systemNotificationsEnabled ?? false
-  const sound = config?.notifications.sound ?? DEFAULT_NOTIFICATION_SOUND_ID
-  const volume = config?.notifications.volume ?? 1
+  const systemNotificationsEnabled = config?.notifications?.systemNotificationsEnabled ?? false
+  const sound = config?.notifications?.sound ?? DEFAULT_NOTIFICATION_SOUND_ID
+  const volume = config?.notifications?.volume ?? 1
 
   useEffect(() => {
     const engine = new NotificationSoundEngine()

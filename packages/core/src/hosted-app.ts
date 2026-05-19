@@ -1,6 +1,13 @@
 export const OFFICIAL_APP_BASE_URL = 'https://app.openspecui.com'
 export const HOSTED_SHELL_PROTOCOL_VERSION = 1
 
+export const OPENSPECUI_RUNTIME_CAPABILITIES = [
+  'notifications.subscribe',
+  'config.notifications',
+] as const
+
+export type OpenSpecUIRuntimeCapability = (typeof OPENSPECUI_RUNTIME_CAPABILITIES)[number]
+
 export interface HostedBackendHealthResponse {
   status: 'ok'
   projectDir: string
@@ -8,6 +15,15 @@ export interface HostedBackendHealthResponse {
   watcherEnabled: boolean
   openspecuiVersion: string
   hostedShellProtocolVersion: typeof HOSTED_SHELL_PROTOCOL_VERSION
+  embeddedUiUrl: string
+  runtimeCapabilities: readonly OpenSpecUIRuntimeCapability[]
+}
+
+export interface BackendHealthPayloadInput {
+  projectDir: string
+  projectName: string
+  watcherEnabled: boolean
+  openspecuiVersion: string
   embeddedUiUrl: string
 }
 
@@ -115,7 +131,28 @@ export function buildEmbeddedUiLaunchUrl(options: {
   return url.toString()
 }
 
-export function isHostedBackendHealthResponse(
+export function buildBackendHealthPayload(
+  input: BackendHealthPayloadInput
+): HostedBackendHealthResponse {
+  return {
+    status: 'ok',
+    projectDir: input.projectDir,
+    projectName: input.projectName,
+    watcherEnabled: input.watcherEnabled,
+    openspecuiVersion: input.openspecuiVersion,
+    hostedShellProtocolVersion: HOSTED_SHELL_PROTOCOL_VERSION,
+    embeddedUiUrl: input.embeddedUiUrl,
+    runtimeCapabilities: OPENSPECUI_RUNTIME_CAPABILITIES,
+  }
+}
+
+function hasRequiredRuntimeCapabilities(value: unknown): value is OpenSpecUIRuntimeCapability[] {
+  if (!Array.isArray(value)) return false
+  const capabilities = new Set(value)
+  return OPENSPECUI_RUNTIME_CAPABILITIES.every((capability) => capabilities.has(capability))
+}
+
+export function isBackendHealthRuntimeMetadata(
   value: unknown
 ): value is HostedBackendHealthResponse {
   if (!isRecord(value)) return false
@@ -127,6 +164,12 @@ export function isHostedBackendHealthResponse(
     typeof value.openspecuiVersion === 'string' &&
     value.hostedShellProtocolVersion === HOSTED_SHELL_PROTOCOL_VERSION &&
     typeof value.embeddedUiUrl === 'string' &&
-    isSupportedEmbeddedUiUrl(value.embeddedUiUrl)
+    hasRequiredRuntimeCapabilities(value.runtimeCapabilities)
   )
+}
+
+export function isHostedBackendHealthResponse(
+  value: unknown
+): value is HostedBackendHealthResponse {
+  return isBackendHealthRuntimeMetadata(value) && isSupportedEmbeddedUiUrl(value.embeddedUiUrl)
 }
