@@ -1,5 +1,12 @@
 # @openspecui/search
 
+## 3.7.1
+
+### Patch Changes
+
+- 9745b8f: Refine document translation controls with ToC action dedupe, session-shared activation, and searchable bilingual language settings.
+- 9745b8f: Add development conditional exports so source-mode worktree runtimes resolve workspace TypeScript sources while published/default runtimes keep using dist artifacts.
+
 ## 3.7.0
 
 ## 3.6.1

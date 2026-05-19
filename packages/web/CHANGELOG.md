@@ -1,5 +1,15 @@
 # @openspecui/web
 
+## 3.7.1
+
+### Patch Changes
+
+- 9745b8f: Refine document translation controls with ToC action dedupe, session-shared activation, and searchable bilingual language settings.
+- 9745b8f: Fix document translation projection for OpenSpec headings, code-like spans, and nested list items.
+- 106534f: Upgrade document translation to a HAST-stage projection pipeline with shared SQLite cache controls.
+- 9745b8f: Unify OPSX prompt terminal dispatch actions and improve change detail mobile layout.
+- 9745b8f: Reject incompatible worktree handoff targets with a shared runtime capability contract and harden notification config defaults.
+
 ## 3.7.0
 
 ### Minor Changes

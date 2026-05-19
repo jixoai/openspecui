@@ -1,5 +1,13 @@
 # openspecui
 
+## 3.7.1
+
+### Patch Changes
+
+- 9745b8f: Add development conditional exports so source-mode worktree runtimes resolve workspace TypeScript sources while published/default runtimes keep using dist artifacts.
+- c2a5e29: Fix document translation cache in the packaged CLI by resolving the native SQLite binding from runtime dependencies.
+- 9745b8f: Reject incompatible worktree handoff targets with a shared runtime capability contract and harden notification config defaults.
+
 ## 3.7.0
 
 ### Patch Changes

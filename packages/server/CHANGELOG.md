@@ -1,5 +1,20 @@
 # @openspecui/server
 
+## 3.7.1
+
+### Patch Changes
+
+- 9745b8f: Add development conditional exports so source-mode worktree runtimes resolve workspace TypeScript sources while published/default runtimes keep using dist artifacts.
+- 106534f: Upgrade document translation to a HAST-stage projection pipeline with shared SQLite cache controls.
+- 9745b8f: Reject incompatible worktree handoff targets with a shared runtime capability contract and harden notification config defaults.
+- Updated dependencies [9745b8f]
+- Updated dependencies [9745b8f]
+- Updated dependencies [9745b8f]
+- Updated dependencies [106534f]
+- Updated dependencies [9745b8f]
+  - @openspecui/search@3.7.1
+  - @openspecui/core@3.7.1
+
 ## 3.7.0
 
 ### Minor Changes
