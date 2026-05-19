@@ -58,6 +58,14 @@
 - [ ] 7.5 PR checks pass before merge
 - [ ] 7.6 OpenSpec archive flow completed after acceptance
 
+## 8. Narrow ToC Regression Follow-up
+
+- [ ] 8.1 Shared ToC root reserves actual narrow panel height in document flow
+- [ ] 8.2 Shared ToC code comment documents the narrow layout best practice
+- [ ] 8.3 Focused unit test catches fixed-height narrow root regressions
+- [ ] 8.4 Rendered narrow QA covers SpecDetail and other ToC entry surfaces
+- [ ] 8.5 Implementation progress synchronized after the regression fix
+
 ## Verification Notes
 
 - `pnpm --filter @openspecui/web exec vitest run --project unit src/routes/settings.test.tsx`: 6 tests passed after the Settings language selector and ToC follow-up refinement.

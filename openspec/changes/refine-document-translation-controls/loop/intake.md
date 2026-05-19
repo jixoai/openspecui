@@ -85,3 +85,24 @@ zh-Hant	Chinese (Traditional)
 - If the selector is cleared or left without a committed value and then dismissed, the visible field restores the previous valid committed language.
 - The language selector uses the native HTML popover lifecycle so outside click, Escape, and browser light-dismiss behavior close the list.
 - Settings renders the shared `Toc` in the same narrow-compatible structural order as other ToC pages, so narrow screens get the collapsible contents control above page content.
+
+## Follow-up Input: 2026-05-19 Narrow ToC Regression
+
+用户反馈：调整后的 ToC 对 Settings 页面适配，但其它使用 ToC 的页面在窄屏模式出问题。
+
+用户给出的例子：SpecDetail 页面里，ToC 与顶部的标题/文档标题视觉上粘连；截图显示窄屏 ToC 的 Contents 条与 Markdown 文档标题 `shell-assistant-avatar Specification` 发生重叠。
+
+用户要求：
+
+1. 遍历所有使用 ToC 页面的窄屏模式。
+2. 提供一种统一的最佳实践。
+3. 修复问题并收尾代码。
+4. 将最佳实践写到代码注释中。
+
+## Narrow ToC Regression Acceptance Boundary
+
+- Shared `Toc` narrow mode reserves its actual collapsed or expanded height in normal document flow.
+- Spec detail, change/artifact, archive, and Settings surfaces do not require page-specific spacing hacks to avoid ToC/title overlap.
+- The shared ToC implementation documents the layout best practice in code comments.
+- Focused unit tests cover the narrow-flow contract so fixed-height root regressions are caught.
+- Rendered narrow QA covers SpecDetail plus the other ToC entry surfaces available in the local app.

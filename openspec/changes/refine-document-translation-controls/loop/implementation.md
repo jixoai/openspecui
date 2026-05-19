@@ -38,6 +38,7 @@ Completed construction:
 - Narrow shared ToC now owns its dismissal behavior: outside pointer interactions, focus leaving the ToC, and Escape collapse the narrow panel across every page that uses `Toc`.
 - ToC anchor targets now share `toc-anchor-target` and `scroll-margin-top`; custom `viewer-scroll` hash navigation reads that computed margin instead of using a fixed offset.
 - ToC link navigation collapses the narrow panel after a successful anchor jump, so the expanded menu does not cover the target section.
+- Narrow shared ToC must reserve its actual panel height in document flow. The root cannot carry a fixed `h-10` height, because any taller collapsed trigger or expanded panel would paint over the following Markdown heading on SpecDetail, Change/Artifact, and Archive surfaces.
 
 ## Divergence Notes
 
@@ -52,3 +53,4 @@ Completed construction:
 - If language search cannot reuse `@openspecui/search` without unsafe type casts or broad package breakage, return to research-plan before adding a new search library.
 - If the language combobox requires rewriting the global `Select` atom to be correct, return to research-plan before widening the shared component contract.
 - If native popover support needs a browser fallback, add it as a shared top-layer compatibility atom rather than reintroducing page-local outside-click logic.
+- If a future ToC variant needs overlay behavior, add that as an explicit opt-in layout mode; the default document ToC contract remains flow-reserved so anchor targets and headings stay readable on narrow screens.
