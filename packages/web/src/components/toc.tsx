@@ -133,7 +133,7 @@ export function Toc({ items, defaultCollapsed = true, className = '', headerActi
       ref={rootRef}
       onBlur={handleBlur}
       onKeyDown={handleKeyDown}
-      className={`toc-root sticky z-10 h-10 w-full min-w-0 max-w-full self-start ${className}`}
+      className={`toc-root sticky z-10 min-h-10 w-full min-w-0 max-w-full self-start ${className}`}
     >
       <style>{tocStyles}</style>
 
@@ -289,8 +289,17 @@ const tocStyles = css`
   .toc-root {
     top: var(--toc-sticky-top, 1rem);
   }
+  /*
+   * Best practice: route headers live before toc-page-layout; narrow ToC is
+   * then first in flow, followed by toc-page-content. The root keeps auto
+   * height so expanded panels reserve space, while content padding provides the
+   * shared visual gap that sticky margins cannot guarantee in scroll containers.
+   */
   .toc-page-layout {
     --toc-anchor-scroll-margin-top: calc(var(--toc-sticky-top, 1rem) + 3rem);
+  }
+  .toc-page-layout > .toc-page-content {
+    padding-top: var(--toc-narrow-gap, 1rem);
   }
   .toc-anchor-target {
     scroll-margin-top: var(--toc-anchor-scroll-margin-top);
@@ -322,6 +331,9 @@ const tocStyles = css`
     }
     .toc-wide {
       display: flex;
+    }
+    .toc-page-layout > .toc-page-content {
+      padding-top: 0;
     }
   }
 

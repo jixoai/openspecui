@@ -60,11 +60,11 @@
 
 ## 8. Narrow ToC Regression Follow-up
 
-- [ ] 8.1 Shared ToC root reserves actual narrow panel height in document flow
-- [ ] 8.2 Shared ToC code comment documents the narrow layout best practice
-- [ ] 8.3 Focused unit test catches fixed-height narrow root regressions
-- [ ] 8.4 Rendered narrow QA covers SpecDetail and other ToC entry surfaces
-- [ ] 8.5 Implementation progress synchronized after the regression fix
+- [x] 8.1 Shared ToC root reserves actual narrow panel height in document flow
+- [x] 8.2 Shared ToC code comment documents the narrow layout best practice
+- [x] 8.3 Focused unit test catches fixed-height narrow root regressions
+- [x] 8.4 Rendered narrow QA covers SpecDetail and other ToC entry surfaces
+- [x] 8.5 Implementation progress synchronized after the regression fix
 
 ## Verification Notes
 
@@ -80,3 +80,5 @@
 - Rendered QA on `http://127.0.0.1:13003/settings` confirmed shared ToC `top: 16px`, narrow outside-click dismissal, narrow link-collapse, and `#settings-translation` target `scroll-margin-top: 64px`.
 - `pnpm format:check` is blocked by unrelated dirty files: `openspec/changes/evaluate-vite-node-runtime-build/loop/intake.md` and `packages/cli/src/dev-conditional-exports.test.ts`. Task-owned files pass `prettier --check` and `git diff --check`.
 - `pnpm --filter @openspecui/web test -- src/entry-client-static.test.tsx src/lib/static-data-provider.opsx.test.ts` does not forward file filters through this package script and ran the full web unit suite; unrelated terminal invocation tests failed there. The targeted static tests were re-run with direct `vitest` and passed.
+- `pnpm --filter @openspecui/web exec vitest run --project unit src/components/markdown-viewer.test.tsx`: 16 tests passed after the shared narrow ToC flow-spacing fix.
+- Rendered narrow QA on `http://127.0.0.1:13104` with backend `http://localhost:13103` and agenter data confirmed SpecDetail, Settings, ChangeDetail, and ArchiveDetail all render one shared ToC with `min-h-10`, no framework overlay, and at least 16px between ToC and the first content heading.

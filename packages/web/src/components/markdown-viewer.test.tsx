@@ -119,6 +119,8 @@ describe('MarkdownViewer ToC behavior', () => {
     expect(root).toBeTruthy()
     expect(root?.className).not.toContain('overflow-y-auto')
     expect(root?.className).not.toContain('top-0')
+    expect(root?.classList.contains('h-10')).toBe(false)
+    expect(root?.classList.contains('min-h-10')).toBe(true)
 
     const narrowScroll = document.querySelector('.toc-narrow-scroll')
     expect(narrowScroll).toBeTruthy()
@@ -143,6 +145,8 @@ describe('MarkdownViewer ToC behavior', () => {
     const styles = Array.from(document.querySelectorAll('style'))
       .map((style) => style.textContent ?? '')
       .join('\n')
+    expect(styles).toContain('.toc-page-layout > .toc-page-content')
+    expect(styles).toContain('padding-top: var(--toc-narrow-gap, 1rem)')
     expect(styles).toContain('top: var(--toc-sticky-top, 1rem)')
     expect(styles).toContain(
       '--toc-anchor-scroll-margin-top: calc(var(--toc-sticky-top, 1rem) + 3rem)'
@@ -154,6 +158,7 @@ describe('MarkdownViewer ToC behavior', () => {
     expect(styles).toContain('max-height: min(18rem')
     expect(styles).toContain('.toc-wide')
     expect(styles).toContain('max-height: min(calc(100cqh - 3rem), calc(100svh - 3rem))')
+    expect(styles).toContain('padding-top: 0;')
     expect(styles).not.toContain('.toc-wide {\n    display: none;\n    max-height: min(32rem')
   })
 
