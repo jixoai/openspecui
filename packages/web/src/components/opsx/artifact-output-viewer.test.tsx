@@ -43,6 +43,10 @@ describe('ArtifactOutputViewer', () => {
 
     expect(screen.getByRole('heading', { name: 'Processed Tasks' })).toBeTruthy()
     expect(screen.getByText('hook applied')).toBeTruthy()
+    const content = document.querySelector('.toc-page-content')
+    expect(content).toBeTruthy()
+    expect(within(content as HTMLElement).getByText('tasks')).toBeTruthy()
+    expect(within(content as HTMLElement).getByText('tasks.md')).toBeTruthy()
     expect(artifactOutputMock).toHaveBeenCalledWith('add-auth', 'tasks.md')
   })
 
@@ -79,6 +83,8 @@ The system SHALL let users sign in.
 
     const content = document.querySelector('.toc-page-content')
     expect(content).toBeTruthy()
+    expect(within(content as HTMLElement).getByText('specs')).toBeTruthy()
+    expect(within(content as HTMLElement).getByText('specs/**/*.md')).toBeTruthy()
     expect(within(content as HTMLElement).getByText('specs/auth/spec.md')).toBeTruthy()
 
     const requirement = within(content as HTMLElement).getByRole('heading', {

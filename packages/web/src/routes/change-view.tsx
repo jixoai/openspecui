@@ -20,7 +20,7 @@ import {
   FolderTree,
   GitBranch,
 } from 'lucide-react'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 
 function StatusBadge({ status }: { status: 'done' | 'ready' | 'blocked' }) {
   if (status === 'done') return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
@@ -31,7 +31,6 @@ function StatusBadge({ status }: { status: 'done' | 'ready' | 'blocked' }) {
 export function ChangeView() {
   const { changeId } = useParams({ from: '/changes/$changeId' })
   const location = useLocation()
-  const [refreshKey, setRefreshKey] = useState(0)
   const headerRef = useRef<HTMLDivElement | null>(null)
   const sharedDescriptor = useMemo(
     () => ({ family: 'changes', entityId: changeId }) as const,
@@ -39,11 +38,7 @@ export function ChangeView() {
   )
   const handoff = readSharedElementHandoffState(location.state)
 
-  const {
-    data: status,
-    isLoading,
-    error,
-  } = useOpsxStatusSubscription({ change: changeId, refreshKey })
+  const { data: status, isLoading, error } = useOpsxStatusSubscription({ change: changeId })
 
   const handleComposeAction = useCallback(
     (actionId: OpsxComposeActionId, artifactId?: string) => {
@@ -60,10 +55,6 @@ export function ChangeView() {
   const handleVerify = useCallback(() => {
     vtNavController.activatePop(`/opsx-verify?change=${encodeURIComponent(changeId)}`)
   }, [changeId])
-
-  const handleRefresh = useCallback(() => {
-    setRefreshKey((key) => key + 1)
-  }, [])
 
   const tabs: Tab[] = useMemo(() => {
     if (!status) return []
@@ -211,7 +202,6 @@ export function ChangeView() {
           selectedArtifactId={selectedArtifactId}
           onComposeAction={handleComposeAction}
           onVerify={handleVerify}
-          onRefresh={handleRefresh}
         />
       </div>
 

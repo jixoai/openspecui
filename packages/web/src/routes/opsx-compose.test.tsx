@@ -29,6 +29,39 @@ vi.mock('@/lib/terminal-context', () => ({
   }),
 }))
 
+vi.mock('@/lib/use-terminal-invocation-config', () => ({
+  useTerminalInvocationConfig: () => ({
+    shellProfiles: [
+      {
+        id: 'builtin:zsh',
+        label: 'zsh',
+        command: 'zsh',
+        args: [],
+        source: 'builtin',
+        quoteStyle: 'posix',
+      },
+    ],
+    defaultShellProfile: {
+      id: 'builtin:zsh',
+      label: 'zsh',
+      command: 'zsh',
+      args: [],
+      source: 'builtin',
+      quoteStyle: 'posix',
+    },
+    spawnCommands: [
+      {
+        id: 'builtin:claude',
+        label: 'Claude',
+        command: 'claude',
+        args: [],
+        fields: [],
+        source: 'builtin',
+      },
+    ],
+  }),
+}))
+
 vi.mock('@/lib/terminal-controller', () => ({
   terminalController: {
     writeToSession: vi.fn(),
@@ -78,6 +111,16 @@ describe('OpsxComposeRoute', () => {
     expect(setConfigMock).toHaveBeenCalledWith(expect.objectContaining({ onDismissRequest: null }))
     await waitFor(() => {
       expect(screen.getByLabelText('Prompt')).toHaveValue('prepared prompt')
+    })
+  })
+
+  it('uses shared terminal dispatch actions with create targets', async () => {
+    render(<OpsxComposeRoute />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('terminal-dispatch-target-select').textContent).toContain(
+        'Create Claude'
+      )
     })
   })
 })

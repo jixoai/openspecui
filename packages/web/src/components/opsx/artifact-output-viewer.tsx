@@ -6,7 +6,8 @@ import {
 import { useConfigSubscription } from '@/lib/use-subscription'
 import type { ArtifactStatus } from '@openspecui/core'
 import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
-import { AlertTriangle, CheckCircle2, Circle, FileText, Loader2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Circle, Loader2 } from 'lucide-react'
+import type { ReactNode } from 'react'
 
 function isGlobPattern(pattern: string): boolean {
   return pattern.includes('*') || pattern.includes('?') || pattern.includes('[')
@@ -26,28 +27,28 @@ const statusConfig: Record<
   blocked: { label: 'Blocked', className: 'text-amber-500', icon: AlertTriangle },
 }
 
-function ArtifactHeader({ artifact }: { artifact: ArtifactStatus }) {
+function ArtifactDocumentHeader({ artifact }: { artifact: ArtifactStatus }) {
   const status = statusConfig[artifact.status]
   const StatusIcon = status.icon
 
   return (
-    <>
-      <div className="border-border bg-card flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3">
-        <div className="flex items-center gap-2">
-          <FileText className="text-muted-foreground h-4 w-4" />
-          <span className="font-medium">{artifact.id}</span>
-          <span className="text-muted-foreground text-xs">
+    <section className="border-border bg-muted/25 mb-5 rounded-md border px-4 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <div className="font-medium">{artifact.id}</div>
+          <div className="text-muted-foreground break-all text-xs">
             {artifact.relativePath ?? artifact.outputPath}
-          </span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <StatusIcon className={`h-4 w-4 ${status.className}`} />
-          <span className={`text-xs font-medium ${status.className}`}>{status.label}</span>
-        </div>
+        <span
+          className={`inline-flex shrink-0 items-center gap-1.5 text-xs font-medium ${status.className}`}
+        >
+          <StatusIcon className="h-4 w-4" />
+          {status.label}
+        </span>
       </div>
-
       {artifact.status === 'blocked' && artifact.missingDeps?.length ? (
-        <div className="border-border flex items-start gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+        <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <div>
             <div className="font-medium">Blocked by missing dependencies</div>
@@ -55,6 +56,21 @@ function ArtifactHeader({ artifact }: { artifact: ArtifactStatus }) {
           </div>
         </div>
       ) : null}
+    </section>
+  )
+}
+
+function ArtifactDocumentShell({
+  artifact,
+  children,
+}: {
+  artifact: ArtifactStatus
+  children: ReactNode
+}) {
+  return (
+    <>
+      <ArtifactDocumentHeader artifact={artifact} />
+      {children}
     </>
   )
 }
@@ -80,7 +96,15 @@ function SingleFileContent({
   if (content) {
     return (
       <MarkdownViewer
-        markdown={content}
+        markdown={() => (
+          <ArtifactDocumentShell artifact={artifact}>
+            <MarkdownViewer
+              markdown={content}
+              path={artifact.outputPath}
+              translationConfig={translationConfig}
+            />
+          </ArtifactDocumentShell>
+        )}
         path={artifact.outputPath}
         translationConfig={translationConfig}
       />
@@ -125,20 +149,22 @@ function GlobContent({
   return (
     <MarkdownViewer
       markdown={({ H1, Section }) => (
-        <div className="space-y-6">
-          {files.map((file) => (
-            <Section key={file.path}>
-              <H1>{file.path}</H1>
-              <div className="border-border bg-muted/30 mt-2 rounded-lg border p-4 [zoom:0.86]">
-                <MarkdownViewer
-                  markdown={file.content}
-                  path={file.path}
-                  translationConfig={translationConfig}
-                />
-              </div>
-            </Section>
-          ))}
-        </div>
+        <ArtifactDocumentShell artifact={artifact}>
+          <div className="space-y-6">
+            {files.map((file) => (
+              <Section key={file.path}>
+                <H1>{file.path}</H1>
+                <div className="border-border bg-muted/30 mt-2 rounded-lg border p-4 [zoom:0.86]">
+                  <MarkdownViewer
+                    markdown={file.content}
+                    path={file.path}
+                    translationConfig={translationConfig}
+                  />
+                </div>
+              </Section>
+            ))}
+          </div>
+        </ArtifactDocumentShell>
       )}
     />
   )
@@ -149,8 +175,7 @@ export function ArtifactOutputViewer({ changeId, artifact }: Props) {
   const { data: config } = useConfigSubscription()
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 py-4">
-      <ArtifactHeader artifact={artifact} />
+    <div className="flex min-h-0 flex-1 flex-col py-4">
       <div className="min-h-0 flex-1">
         {isGlob ? (
           <GlobContent
