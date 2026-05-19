@@ -1208,8 +1208,114 @@ Primary Button 需要有一个变体：activity
 
 ---
 
+我想在网页上实现自动翻译，技术基础：https://developer.chrome.com/docs/ai/translator-api 使用 Language Detector 和 Translator APIs
+我想你调研测试一下这个技术, 使用 $chrome:Chrome 连接到网站上，然后测试 en->zh 的翻译效果。
+测试网页： http://localhost:3101/changes ，这个是指向 ~/Dev/GitHub/jixoai-labs/agenter 目录
+
+要实现翻译，有两种方案：
+
+1. 需要针对 Markdown 的开发翻译插件。目前已知：
+   1. Translator APIs 擅长一行行翻译（多行会被压缩成一行）
+   2. Translator APIs 基本可以保留 Markdown 的符号（但我只是简单测试，还需要全面测试）
+2. 使用通用技术，对 HTML 开发翻译插件，要注意：
+   1. 需要提取到伪类，并对伪类中的内容也进行翻译
+   2. 可以充分利用可以保留特殊的符号的行为，实现更加连贯的翻译，比如把 `i <b>love</b> you`改装成`i *love* you`
+      > 但是实际测试发现 `await translator.translate('i <b color="red">love</b> you'); // '我<b color="red">爱</b>你'`，所以 Translator APIs 的技术也许比我们想象中的更好，还需要全面的测试验证
+
+本次任务的定位是 research，目标是产出认知。验证 Translator APIs 可用性，以及翻译的准确程度。
+我需要你产出一份完整的技术报告在 .chat/translator-apis/ 这个目录下。
+在开始之前，你有什么问题或者建议吗？
+
+---
+
 在前端实现自动翻译的功能。这是一个实验新的功能，主要是用在最终输出的。
 技术基础：https://developer.chrome.com/docs/ai/translator-api 使用 Language Detector 和 Translator APIs ，这些在桌面端是支持的。
 对于移动端或者不兼容的浏览器，使用 mkljczk/translator-api-polyfill（底层使用 @mkljczk/bergamot-translator）
 
 ---
+
+BUG: 如果我们内容是 `### 1. Research and Planning`，结果在翻译`1. Research and Planning`，然后把它作为 Markdown翻译成html的时候，会被翻译成`ol>li>Research and Planning`
+
+---
+
+1. 一个ToC理论上只需要有一个翻译按钮，我发现在change页面，这类会将多个文件融合在一个文件中，结果就会出现多个翻译按钮
+2. 翻译按钮一旦在会话中启用或者关闭（sessionStorage），那么应该所有页面共享这个开关。也就是说我在A 页面点击了翻译，切换到B页面的时候，就不用手动点击翻译了。这个行为直接和翻译按钮绑定在一起就行。因为它是在模拟用户的行为，减少操作的次数
+3. 在设置页面中，翻译的语言列表，你显示的语言选择都是英文，建议双语：英文+目标语言，底层用语言代码存储（并用于排序）。比如 zh = `Chinese 中文`; zh-Hans = `Traditional Chinese 繁体中文`。这个选择器最好是支持“AutoComplete”，支持 语言代码、英文、目标语言 的混合模糊搜索（和我们的搜索引擎用同一个库即可）。并且请你补全完整的语言列表，目前的支持是：
+
+```
+Code	Language
+ar	Arabic
+bg	Bulgarian
+bn	Bengali
+cs	Czech
+da	Danish
+de	German
+el	Greek
+en	English
+es	Spanish
+fi	Finnish
+fr	French
+hi	Hindi
+hr	Croatian
+hu	Hungarian
+id	Indonesian
+it	Italian
+iw	Hebrew
+ja	Japanese
+kn	Kannada
+ko	Korean
+lt	Lithuanian
+mr	Marathi
+nl	Dutch
+no	Norwegian
+pl	Polish
+pt	Portuguese
+ro	Romanian
+ru	Russian
+sk	Slovak
+sl	Slovenian
+sv	Swedish
+ta	Tamil
+te	Telugu
+th	Thai
+tr	Turkish
+uk	Ukrainian
+vi	Vietnamese
+zh	Chinese
+zh-Hant	Chinese (Traditional)
+```
+
+使用openspec推进以上任务
+
+---
+
+我们需要在 codemirror 中实现更多 filePreview 的能力
+和目前 Markdown 支持 livePreview 不一样，livePreview 的好处是改善预览的可读性
+而我说的 filePreview，是指转化成特定的 MIME=text/html 内容来进行渲染。
+
+1. 比如说 Markdown 内容的 filePreview，直接使用我们的 MarkdownViewer 组件
+2. 比如说 html 文件，直接使用 http static html server。这里为了最好的效果，需要后端配合，直接路由到一个静态服务，将目标文件的目录通过静态服务暴露出来，专门用来做预览效果。这样的设计是因为我们是支持自定义后端的，所以如果使用临时端口暴露出来的服务，可能跟这个自定义后端绝缘，因此我们不得不做一些取舍，统一使用这个自定义后端来提供服务，最终的，链接路径类似于 `$BACKEND_API_ENDPOINT/$PATH_HASH/index.html`。这里的 PATH_HASH 是一个安全值，这个值和特定的目录和预览类型绑定，使用的时候需要先请求 `prepareStaticServer`，传入要预览的文件路径，基于文件路径解析出绝对路径和 mime，确保目标路径最终 resolve 出来是在进程的子目录下；确保 mime 是可预览的，然后就计算出 PATH_HASH。最终返回的是一个可访问的相对路径，比如`$PATH_HASH/index.html`
+3. 还有其它不同 MIME 的文件，类似 video/audio/pdf/image 等，都可以在 html 预览技术类的技术的基础上，实现其它类型的预览服务。虽然 video/audio/image 都可以直接预览，但是我仍然觉得最好渲染成 html 再用 iframe 来嵌入。这样可以最大程度保持核心的干净，我们预览的效果也可以做得更丰富，因为是其它入口，不用担心和核心打架。所以 video/audio请引入专业的播放器来提供播放，还有 pdf，请使用 pdf.js 来提供预览能力。图片的预览，也引入专业的 PhotoViewer 的库，最好别自己做，用别人专业的库，注意这些技术选型，都要对移动端友好。每一种 mime 的预览，编译的时候都应该有独立的 entry 的配置。
+   > 比如说我要预览 openspec/yyy/xxx.mp4 这个文件，所以我传入 file=openspec/yyy/xxx.mp4,后端确认出目录路径安全，同时确认出 mime=video/mp4，是合法可预览文件。于是后端最终返回是 `$PATH_HASH/mp4.html?xxx.mp4`，这里的工作原理是`$PATH_HASH/resource/*`会返回`./openspec/yyy/*`的文件内容（当然也是做了路径安全的检测），然后`$PATH_HASH/**`的其它路径，返回的是我们 mp4.html 这个入口编译出来的其它文件。
+   > PATH_HASH 是基于 sha256(dir+mime) 计算的，所以是稳定的值`
+4. 预览能力不在静态导出的模式下提供，避免安全问题，而且这需要服务端的支持。
+5. 我记得 changeDetail 这个页面之前是支持编辑的，参考config页面的自定义 Schema 的工具栏。如果有这个工具栏，就可以放预览按钮和编辑按钮了。你先检查一下，后端应该还有通用文件编辑接口？
+
+---
+
+1. 继续之前的翻译功能工作，并确认应用是否真的启动、页面是否真的有效果。
+2. 修复翻译渲染中 code 代码块显示成 [object Object] 的问题。
+3. 修复列表项翻译跑到 ol 末尾、结构位置错误的问题。
+4. 重新审视 OpenSpec 标题翻译，避免 ZH:Purpose / ZH:Requirements 这类坏输出。
+5. 把相关工作合并到 main 这边继续做，并确认不是在错误 worktree 里改。
+6. 实现译文模式下 <code> 等标签保留原文、hover 显示译文。
+7. 整理翻译相关代码后继续修复后续问题。
+8. 使用 OpenSpec 推进翻译控制改造：ToC 单按钮、sessionStorage 共享开关、完整双语语言列表和搜索。
+9. 改进 Settings 语言选择器：不默认清空、提供快速清空、关闭 Popover 后恢复上次有效值。
+10. 让 Settings 语言选择器使用原生 Popover 生命周期，并修复点击输入框导致开关抖动的问题。
+11. 让 Popover 内语言列表实时跟随搜索值过滤。
+12. 将语言选择器改成外部只放按钮，搜索输入和清空动作放到屏兼容。
+    14 调整 ToC离开关闭。C 锚点标题被. 收尾整理代码，并把相关工作
+    :codex resume 019e3759-fcb8-7eb2-9ddb-a96ce205b018 --yolo
+
+git switch: codex resume 019e39c6-c7f0-7ad3-8f86-6fb182e30d0f --yolo

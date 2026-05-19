@@ -25,3 +25,5 @@ test-output/
 openspec/.openspecui.json
 
 .wrangler/
+
+*HANDOFF.md
