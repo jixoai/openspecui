@@ -8,9 +8,10 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
 const INPUT_DEBOUNCE_MS = 150
 
-function kindIcon(kind: 'spec' | 'change' | 'archive') {
+function kindIcon(kind: string) {
   if (kind === 'spec') return FileText
   if (kind === 'change') return GitBranch
+  if (kind === 'archive') return Archive
   return Archive
 }
 

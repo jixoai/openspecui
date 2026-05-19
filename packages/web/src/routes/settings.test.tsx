@@ -9,10 +9,23 @@ const { useConfigSubscriptionMock, staticModeMock, useServerStatusMock } = vi.ho
   useServerStatusMock: vi.fn(),
 }))
 
+const tocRenderMock = vi.hoisted(() => vi.fn())
+
 const { prepareBrowserTranslationMock, updateConfigMock } = vi.hoisted(() => ({
   prepareBrowserTranslationMock: vi.fn(),
   updateConfigMock: vi.fn(),
 }))
+
+function dispatchPopoverToggle(element: Element, newState: 'open' | 'closed') {
+  const event = new Event('toggle')
+  Object.defineProperty(event, 'newState', {
+    value: newState,
+  })
+  Object.defineProperty(event, 'oldState', {
+    value: newState === 'open' ? 'closed' : 'open',
+  })
+  fireEvent(element, event)
+}
 
 vi.mock('@tanstack/react-query', () => ({
   useMutation: ({ mutationFn }: { mutationFn?: (variables: unknown) => unknown }) => ({
@@ -105,7 +118,10 @@ vi.mock('@/components/cli-terminal', () => ({
 
 vi.mock('@/components/toc', () => ({
   generateTimelineScope: () => '',
-  Toc: () => null,
+  Toc: ({ className, items }: { className?: string; items: { id: string; label: string }[] }) => {
+    tocRenderMock({ className, itemIds: items.map((item) => item.id) })
+    return <aside data-testid="settings-toc" className={className} />
+  },
   TocSection: ({ children }: { children?: ReactNode }) => <section>{children}</section>,
 }))
 
@@ -307,7 +323,9 @@ describe('Settings', () => {
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     expect(screen.getByRole('heading', { name: 'Translation' })).toBeTruthy()
-    expect(screen.getByRole('combobox', { name: 'Translation target language' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Translation target language' })).toHaveTextContent(
+      'Chinese 中文'
+    )
     expect(screen.getByRole('button', { name: 'Direct' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Bilingual' })).toBeTruthy()
     expect(screen.getByRole('switch', { name: 'Enable translation cache' })).toBeTruthy()
@@ -320,5 +338,191 @@ describe('Settings', () => {
     await waitFor(() =>
       expect(prepareBrowserTranslationMock).toHaveBeenCalledWith('zh', expect.any(AbortSignal))
     )
+  })
+
+  it('searches translation languages by native label and stores the selected code', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Translation target language' }))
+    dispatchPopoverToggle(
+      screen.getByRole('dialog', { name: 'Select translation target language' }),
+      'open'
+    )
+    const searchInput = screen.getByRole('textbox', { name: 'Search translation languages' })
+    fireEvent.change(searchInput, { target: { value: '繁體' } })
+    fireEvent.click(await screen.findByRole('option', { name: /Chinese \(Traditional\) 繁體中文/ }))
+
+    await waitFor(() =>
+      expect(updateConfigMock).toHaveBeenCalledWith({ translation: { targetLanguage: 'zh-Hant' } })
+    )
+  })
+
+  it('keeps the selected language on open and exposes an explicit clear action', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Translation target language' }))
+    dispatchPopoverToggle(
+      screen.getByRole('dialog', { name: 'Select translation target language' }),
+      'open'
+    )
+    const searchInput = screen.getByRole('textbox', { name: 'Search translation languages' })
+
+    expect(screen.getByRole('button', { name: 'Translation target language' })).toHaveTextContent(
+      'Chinese 中文'
+    )
+    expect(searchInput).toHaveValue('')
+    expect(screen.getByRole('button', { name: 'Clear search' })).toBeTruthy()
+  })
+
+  it('keeps the popover open when the inner search input is clicked', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Translation target language' }))
+    const popover = screen.getByRole('dialog', { name: 'Select translation target language' })
+    dispatchPopoverToggle(popover, 'open')
+
+    const searchInput = screen.getByRole('textbox', { name: 'Search translation languages' })
+    fireEvent.click(searchInput)
+
+    expect(screen.getByRole('button', { name: 'Translation target language' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    )
+    expect(searchInput).toHaveValue('')
+  })
+
+  it('restores the previous valid language when the popover closes without a selection', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Translation target language' }))
+    const popover = screen.getByRole('dialog', { name: 'Select translation target language' })
+    dispatchPopoverToggle(popover, 'open')
+    const searchInput = screen.getByRole('textbox', { name: 'Search translation languages' })
+    fireEvent.change(searchInput, { target: { value: 'japanese' } })
+
+    expect(searchInput).toHaveValue('japanese')
+
+    dispatchPopoverToggle(popover, 'closed')
+
+    expect(screen.getByRole('button', { name: 'Translation target language' })).toHaveTextContent(
+      'Chinese 中文'
+    )
+    expect(screen.getByRole('button', { name: 'Clear search' })).toBeTruthy()
+    expect(updateConfigMock).not.toHaveBeenCalledWith({ translation: { targetLanguage: '' } })
+  })
+
+  it('renders the shared ToC before settings content so narrow mode can collapse above content', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({ data: {} })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    expect(tocRenderMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        className: expect.stringContaining('toc-page-sidebar'),
+        itemIds: expect.arrayContaining(['settings-translation']),
+      })
+    )
+
+    const toc = screen.getByTestId('settings-toc')
+    const content = document.querySelector('.toc-page-content')
+    expect(content).toBeInstanceOf(HTMLElement)
+    if (!(content instanceof HTMLElement)) {
+      throw new Error('Settings content element missing')
+    }
+    expect(toc.compareDocumentPosition(content)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
   })
 })

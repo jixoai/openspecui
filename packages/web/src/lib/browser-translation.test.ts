@@ -1,3 +1,5 @@
+import { TRANSLATION_CACHE_POLICY_VERSION } from '@openspecui/core/document-translation'
+import type { Element, RootContent } from 'hast'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   extractTranslatableSegments,
@@ -94,7 +96,7 @@ const value = 'keep source'
       translatorInput: '<x1>1. Research</x1> and <x2>Planning</x2> <x3 a1="Read more">docs</x3>',
       placeholderTopologyHash: expect.any(String),
       attributeTopologyHash: expect.any(String),
-      displayPolicyVersion: 1,
+      displayPolicyVersion: TRANSLATION_CACHE_POLICY_VERSION,
     })
     const imageSegment = segments.find((segment) => segment.translatorInput.includes('Diagram'))
     expect(imageSegment?.translatorInput).toContain('<x1 a1="System map" a2="Diagram"></x1>')
@@ -206,7 +208,7 @@ Open https://example.com/docs before editing \`Config\`.
         targetLanguage: 'zh',
         placeholderTopologyHash: segment.placeholderTopologyHash ?? '',
         attributeTopologyHash: segment.attributeTopologyHash ?? '',
-        displayPolicyVersion: segment.displayPolicyVersion ?? 1,
+        displayPolicyVersion: segment.displayPolicyVersion ?? TRANSLATION_CACHE_POLICY_VERSION,
         createdAt: 1,
         lastAccessedAt: 1,
       })),
@@ -303,6 +305,34 @@ Open https://example.com/docs before editing \`Config\`.
       },
       children: [{ type: 'text', value: '文档' }],
     })
+  })
+
+  it('keeps code-like placeholder text as source and stores translated text as hover metadata', async () => {
+    const translate = vi.fn(async (input: string) =>
+      input.replace('<x1>Config</x1>', '<x1>配置</x1>')
+    )
+    setTranslator({
+      async availability() {
+        return 'available'
+      },
+      async create() {
+        return { translate }
+      },
+    })
+    setLanguageDetector(undefined)
+
+    const result = await translateMarkdownDocument({
+      markdown: 'Keep `Config` enabled.',
+      targetLanguage: 'zh',
+      displayMode: 'direct',
+      signal: new AbortController().signal,
+    })
+
+    expect(findTargetElement(result.segments[0]?.targetNodes, 'code')).toMatchObject({
+      properties: { title: '配置' },
+      children: [{ type: 'text', value: 'Config' }],
+    })
+    expect(result.segments[0]?.target).toBe('Keep Config enabled.')
   })
 
   it('falls back to source-only HAST when translated placeholders are malformed', async () => {
@@ -560,6 +590,16 @@ function getExpectedSegment(markdown: string) {
   const segment = extractTranslatableSegments(markdown)[0]
   if (!segment) throw new Error('Expected test markdown to produce a translation segment.')
   return segment
+}
+
+function findTargetElement(
+  nodes: readonly RootContent[] | undefined,
+  tagName: string
+): Element | undefined {
+  for (const node of nodes ?? []) {
+    if (node.type === 'element' && node.tagName === tagName) return node
+  }
+  return undefined
 }
 
 function stableJsonStringify(value: unknown): string {

@@ -138,7 +138,16 @@ interface TocContextValue {
   /** 是否是顶层（决定是否渲染 ToC sidebar） */
   isRoot: boolean
   /** Register nested document actions in the root ToC header. */
-  registerHeaderAction?: (id: string, key: string, action: ReactNode) => () => void
+  registerHeaderAction?: (action: TocHeaderActionRegistration) => () => void
+}
+
+export interface TocHeaderActionRegistration {
+  id: string
+  /** Semantic owner slot. Actions sharing a slot collapse to one visible control. */
+  slot?: string
+  /** State key for React node refreshes within the same owner. */
+  key: string
+  action: ReactNode
 }
 
 const TocContext = createContext<TocContextValue | null>(null)
@@ -170,7 +179,7 @@ interface TocProviderProps {
   /** 是否是顶层 */
   isRoot?: boolean
   /** Root action registry used by nested Markdown viewers. */
-  registerHeaderAction?: (id: string, key: string, action: ReactNode) => () => void
+  registerHeaderAction?: (action: TocHeaderActionRegistration) => () => void
 }
 
 export function TocProvider({

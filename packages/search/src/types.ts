@@ -1,4 +1,4 @@
-export type SearchDocumentKind = 'spec' | 'change' | 'archive'
+export type SearchDocumentKind = string
 
 export interface SearchDocument {
   id: string

@@ -1,22 +1,28 @@
 import { Button } from '@/components/button'
+import { useDocumentTranslationActivation } from '@/lib/document-translation-session-state'
 import { useDocumentTranslation } from '@/lib/use-document-translation'
 import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
 import { useNavigate } from '@tanstack/react-router'
-import type { Element, Properties, RootContent, Text } from 'hast'
+import type { Element, Properties, RootContent } from 'hast'
 import { Languages, Loader2 } from 'lucide-react'
-import { Fragment, useMemo, type ReactNode } from 'react'
+import { useMemo } from 'react'
 import { visit } from 'unist-util-visit'
-import { CodeBlock, MarkdownInlineContent, type MarkdownBlockAnnotation } from './markdown-content'
+import {
+  renderTranslatedHastNodes,
+  transformSafeMarkdownUrl,
+} from './document-translation-hast-render'
+import { createTranslatedOpenSpecHeadingProjection } from './document-translation-openspec-projection'
+import {
+  renderTranslationSegmentChildren,
+  type DocumentTranslationSegmentResult,
+} from './document-translation-segment-render'
+import { type MarkdownBlockAnnotation } from './markdown-content'
 import {
   type MarkdownHeadingTransformInput,
   type MarkdownHeadingTransformResult,
   type MarkdownRenderPluginResult,
   type MarkdownRenderProcessor,
 } from './markdown-viewer'
-
-type TranslationSegmentResult = NonNullable<
-  ReturnType<typeof useDocumentTranslation>['result']
->['segments'][number]
 
 export function useDocumentTranslationRenderPlugin({
   markdown,
@@ -49,6 +55,7 @@ export function useDocumentTranslationRenderPlugin({
       ? [translationProjection.headingProcessor]
       : [],
     blockAnnotations: translationProjection.blockAnnotations,
+    tocHeaderActionSlot: canTranslate ? 'document-translation' : undefined,
     tocHeaderActionKey: canTranslate
       ? [
           'document-translation',
@@ -71,6 +78,7 @@ function DocumentTranslationAction({
   session: ReturnType<typeof useDocumentTranslation>
 }) {
   const navigate = useNavigate()
+  const { setActivation } = useDocumentTranslationActivation()
 
   return (
     <DocumentTranslationButton
@@ -85,13 +93,16 @@ function DocumentTranslationAction({
           return
         }
         if (session.status === 'translating' || session.status === 'initializing') {
+          setActivation('source')
           session.cancel()
           return
         }
         if (session.status === 'translated') {
+          setActivation('source')
           session.reset()
           return
         }
+        setActivation('translated')
         void session.start()
       }}
     />
@@ -180,11 +191,11 @@ function createTranslationProjection(result: ReturnType<typeof useDocumentTransl
 
 function createTranslatedHeadingTransform(
   input: MarkdownHeadingTransformInput,
-  segment: TranslationSegmentResult,
+  segment: DocumentTranslationSegmentResult,
   displayMode: DocumentTranslationConfig['displayMode']
 ): MarkdownHeadingTransformResult {
   const projectedTarget = segment.target ?? ''
-  const openSpecHeading = createTranslatedOpenSpecHeadingChildren(input, segment, displayMode)
+  const openSpecHeading = createTranslatedOpenSpecHeadingProjection(input, segment, displayMode)
 
   if (openSpecHeading) {
     return {
@@ -193,12 +204,14 @@ function createTranslatedHeadingTransform(
           ? openSpecHeading.tocDataLabel
           : (input.current?.tocLabel ?? input.text),
       children: openSpecHeading.children,
-      dataAttributes: createTranslationDataAttributes(segment, projectedTarget, displayMode),
+      dataAttributes: createTranslationDataAttributes(segment, openSpecHeading.target, displayMode),
     }
   }
 
   const sourceChildren = input.current?.children ?? input.text
-  const targetChildren = segment.targetNodes ? renderHastNodes(segment.targetNodes) : undefined
+  const targetChildren = segment.targetNodes
+    ? renderTranslatedHastNodes(segment.targetNodes)
+    : undefined
 
   if (displayMode === 'direct') {
     return {
@@ -228,7 +241,7 @@ function createTranslatedHeadingTransform(
 }
 
 function createTranslationDataAttributes(
-  segment: TranslationSegmentResult,
+  segment: DocumentTranslationSegmentResult,
   target: string,
   displayMode: DocumentTranslationConfig['displayMode']
 ) {
@@ -241,119 +254,6 @@ function createTranslationDataAttributes(
     ...(segment.sourceLanguage ? { 'data-translation-source-lang': segment.sourceLanguage } : {}),
     ...(segment.targetLanguage ? { 'data-translation-target-lang': segment.targetLanguage } : {}),
   }
-}
-
-function createTranslatedOpenSpecHeadingChildren(
-  input: MarkdownHeadingTransformInput,
-  segment: TranslationSegmentResult,
-  displayMode: DocumentTranslationConfig['displayMode']
-): { children: ReactNode; tocDataLabel: string } | undefined {
-  const kind = input.current?.dataAttributes?.['data-openspec-kind']
-  if (kind !== 'requirement' && kind !== 'scenario') return undefined
-
-  const sourceParts = splitOpenSpecHeadingText(segment.source)
-  const targetParts = splitOpenSpecHeadingText(segment.target ?? '')
-  const visualLabel =
-    input.current?.dataAttributes?.['data-openspec-visual-label'] ??
-    input.current?.dataAttributes?.['data-openspec-label']
-  const sourceKind = sourceParts.kind || (kind === 'requirement' ? 'Requirement:' : 'Scenario:')
-  const targetKind = targetParts.kind || sourceKind
-  const sourceTitle = sourceParts.title || input.current?.dataAttributes?.['data-openspec-title']
-  const targetTitle = targetParts.title || segment.target || ''
-  const titleSegment = {
-    ...segment,
-    source: String(sourceTitle || segment.source),
-    target: targetTitle,
-  }
-
-  return {
-    tocDataLabel: targetTitle,
-    children: (
-      <>
-        <span
-          className="openspec-heading-label"
-          data-openspec-heading-label=""
-          {...(visualLabel ? { 'data-openspec-visual-label': visualLabel } : {})}
-          data-translation-segment="heading-kind"
-        >
-          {displayMode === 'bilingual' ? (
-            <>
-              <span className="sr-only" lang={segment.sourceLanguage} data-translation-source="">
-                {sourceKind}{' '}
-              </span>
-              <span className="sr-only" lang={segment.targetLanguage} data-translation-target="">
-                {targetKind}{' '}
-              </span>
-            </>
-          ) : (
-            <span className="sr-only" lang={segment.targetLanguage} data-translation-target="">
-              {targetKind}{' '}
-            </span>
-          )}
-        </span>
-        <span className="openspec-heading-title" data-openspec-heading-title="">
-          {renderTranslationSegmentChildren({
-            sourceChildren: String(sourceTitle || ''),
-            segment: titleSegment,
-            displayMode,
-            targetChildren: segment.targetNodes ? renderHastNodes(segment.targetNodes) : undefined,
-            className: 'document-translation-heading-segment',
-          })}
-        </span>
-      </>
-    ),
-  }
-}
-
-function splitOpenSpecHeadingText(text: string): { kind?: string; title: string } {
-  const match = /^([^:：]{1,32}[:：])\s*(.*)$/.exec(text.trim())
-  if (!match) return { title: text.trim() }
-  return {
-    kind: match[1],
-    title: match[2]?.trim() ?? '',
-  }
-}
-
-function renderTranslationSegmentChildren({
-  sourceChildren,
-  segment,
-  displayMode,
-  targetChildren,
-  className,
-}: {
-  sourceChildren: ReactNode
-  segment: TranslationSegmentResult
-  displayMode: DocumentTranslationConfig['displayMode']
-  targetChildren?: ReactNode
-  className?: string
-}) {
-  const target = segment.target ?? ''
-  return (
-    <span className={mergeClassName('document-translation-segment', className)}>
-      {displayMode === 'bilingual' ? (
-        <span
-          className="document-translation-source"
-          lang={segment.sourceLanguage}
-          data-translation-source=""
-        >
-          {sourceChildren}
-        </span>
-      ) : null}
-      <span
-        className="document-translation-target"
-        title={displayMode === 'direct' ? segment.source : undefined}
-        lang={segment.targetLanguage}
-        data-translation-target=""
-      >
-        {targetChildren ??
-          (segment.targetNodes ? (
-            renderHastNodes(segment.targetNodes)
-          ) : (
-            <MarkdownInlineContent markdown={target} />
-          ))}
-      </span>
-    </span>
-  )
 }
 
 function isTranslationBlockOwner(node: Element): boolean {
@@ -426,102 +326,6 @@ function sanitizeTranslatedProperties(properties: Properties): Properties {
     }
   }
   return nextProperties
-}
-
-function renderHastNodes(nodes: readonly RootContent[]): ReactNode {
-  return nodes.map((node, index) => (
-    <Fragment key={`translated-hast-${index}`}>{renderHastNode(node)}</Fragment>
-  ))
-}
-
-function renderHastNode(node: RootContent): ReactNode {
-  if (node.type === 'text') return (node as Text).value
-  if (node.type !== 'element') return null
-
-  const element = node as Element
-  const children = element.children.map((child, index) => (
-    <Fragment key={`translated-hast-child-${index}`}>{renderHastNode(child)}</Fragment>
-  ))
-  const props = toReactElementProps(element.properties)
-
-  switch (element.tagName) {
-    case 'strong':
-      return <strong {...props}>{children}</strong>
-    case 'em':
-      return <em {...props}>{children}</em>
-    case 'del':
-      return <del {...props}>{children}</del>
-    case 'sub':
-      return <sub {...props}>{children}</sub>
-    case 'sup':
-      return <sup {...props}>{children}</sup>
-    case 'mark':
-      return <mark {...props}>{children}</mark>
-    case 'code':
-      return (
-        <CodeBlock className={typeof props.className === 'string' ? props.className : undefined}>
-          {children}
-        </CodeBlock>
-      )
-    case 'kbd':
-      return <kbd {...props}>{children}</kbd>
-    case 'samp':
-      return <samp {...props}>{children}</samp>
-    case 'var':
-      return <var {...props}>{children}</var>
-    case 'a':
-      return <a {...props}>{children}</a>
-    case 'span':
-      return <span {...props}>{children}</span>
-    case 'img':
-      return <img {...props} />
-    default:
-      return <span>{children}</span>
-  }
-}
-
-function toReactElementProps(properties: Properties): Record<string, unknown> {
-  const props: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(properties)) {
-    if (value === null || value === undefined) continue
-    if (key === 'className' || key === 'class') {
-      props.className = Array.isArray(value) ? value.join(' ') : String(value)
-      continue
-    }
-    if ((key === 'href' || key === 'src') && typeof value === 'string') {
-      const safeUrl = transformSafeMarkdownUrl(value)
-      if (safeUrl) props[key] = safeUrl
-      continue
-    }
-    props[key === 'aria-label' ? 'aria-label' : key] = value
-  }
-  return props
-}
-
-const SAFE_URL_PROTOCOL_PATTERN = /^(https?|ircs?|mailto|xmpp)$/i
-
-function transformSafeMarkdownUrl(value: string): string {
-  const colon = value.indexOf(':')
-  const questionMark = value.indexOf('?')
-  const numberSign = value.indexOf('#')
-  const slash = value.indexOf('/')
-
-  if (
-    colon === -1 ||
-    (slash !== -1 && colon > slash) ||
-    (questionMark !== -1 && colon > questionMark) ||
-    (numberSign !== -1 && colon > numberSign) ||
-    SAFE_URL_PROTOCOL_PATTERN.test(value.slice(0, colon))
-  ) {
-    return value
-  }
-
-  return ''
-}
-
-function mergeClassName(...classNames: Array<string | undefined>): string | undefined {
-  const merged = classNames.filter(Boolean).join(' ')
-  return merged || undefined
 }
 
 function DocumentTranslationButton({

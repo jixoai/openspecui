@@ -1,6 +1,7 @@
 import type { Root } from 'hast'
 import {
   Fragment,
+  isValidElement,
   useEffect,
   useMemo,
   useState,
@@ -312,13 +313,23 @@ function createAnnotationComponents(
     },
     li: ({ children, node, className, ...props }: MarkdownComponentProps<'li'>) => {
       const annotation = getBlockAnnotation(node, blockAnnotationByOffset, 'listItem')
+      const { content, nestedLists } = splitListItemChildren(children)
+      const renderedContent = render(content)
+      const renderedNestedLists = render(nestedLists)
       return (
         <li
           {...props}
           {...annotation?.dataAttributes}
           className={mergeClassName(className, annotation?.className)}
         >
-          {renderBlockChildren(children, annotation)}
+          {annotation?.renderChildren ? (
+            <>
+              {annotation.renderChildren(renderedContent)}
+              {renderedNestedLists}
+            </>
+          ) : (
+            renderBlockChildren(children, annotation)
+          )}
         </li>
       )
     },
@@ -369,14 +380,54 @@ function createAnnotationComponents(
   }
 }
 
+function splitListItemChildren(children: ReactNode): {
+  content: ReactNode
+  nestedLists: ReactNode
+} {
+  const content: ReactNode[] = []
+  const nestedLists: ReactNode[] = []
+
+  flattenReactChildren(children).forEach((child, index) => {
+    if (isNestedListElement(child)) {
+      nestedLists.push(<Fragment key={`nested-list-${index}`}>{child}</Fragment>)
+    } else {
+      content.push(<Fragment key={`list-content-${index}`}>{child}</Fragment>)
+    }
+  })
+
+  return {
+    content: content.length === 1 ? content[0] : content,
+    nestedLists: nestedLists.length === 1 ? nestedLists[0] : nestedLists,
+  }
+}
+
+function flattenReactChildren(children: ReactNode): ReactNode[] {
+  if (children === null || children === undefined || typeof children === 'boolean') return []
+  if (Array.isArray(children)) return children.flatMap(flattenReactChildren)
+  if (isValidElement(children) && children.type === Fragment) {
+    return flattenReactChildren((children.props as { children?: ReactNode }).children)
+  }
+  return [children]
+}
+
+function isNestedListElement(child: ReactNode): boolean {
+  if (!isValidElement(child)) return false
+  if (child.type === 'ul' || child.type === 'ol') return true
+  const node = (child.props as { node?: unknown }).node
+  if (!node || typeof node !== 'object' || !('tagName' in node)) return false
+  const tagName = (node as { tagName?: unknown }).tagName
+  return tagName === 'ul' || tagName === 'ol'
+}
+
 interface CodeBlockProps {
   children?: React.ReactNode
   className?: string
   node?: unknown
+  title?: string
 }
 
 /** Shared code block component with shiki syntax highlighting */
-export function CodeBlock({ children, className }: CodeBlockProps) {
+export function CodeBlock({ children, className, title }: CodeBlockProps) {
   const [html, setHtml] = useState<string | null>(null)
   const code = String(children).replace(/\n$/, '')
   const match = /language-(\w+)/.exec(className || '')
@@ -419,7 +470,10 @@ export function CodeBlock({ children, className }: CodeBlockProps) {
 
   if (isInline) {
     return (
-      <code className="bg-muted text-foreground rounded px-1.5 py-0.5 font-mono text-sm">
+      <code
+        className="bg-muted text-foreground rounded px-1.5 py-0.5 font-mono text-sm"
+        title={title}
+      >
         {code}
       </code>
     )
@@ -428,7 +482,9 @@ export function CodeBlock({ children, className }: CodeBlockProps) {
   if (!html) {
     return (
       <pre className="readonly-code-surface overflow-x-auto rounded-md p-4">
-        <code className="text-foreground font-mono text-sm">{code}</code>
+        <code className="text-foreground font-mono text-sm" title={title}>
+          {code}
+        </code>
       </pre>
     )
   }
@@ -436,6 +492,7 @@ export function CodeBlock({ children, className }: CodeBlockProps) {
   return (
     <div
       className="shiki-wrapper overflow-x-auto rounded-md text-sm [&_pre]:m-0 [&_pre]:bg-transparent [&_pre]:p-4"
+      title={title}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   )

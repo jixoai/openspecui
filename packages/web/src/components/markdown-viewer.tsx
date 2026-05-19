@@ -22,7 +22,14 @@ import {
 } from './markdown-content'
 import { useOpenSpecMarkdownRenderPlugin } from './markdown-viewer-open-spec-plugin'
 import { generateTimelineScope, Toc, type TocItem } from './toc'
-import { slugify, TocCollector, TocLevelProvider, TocProvider, useTocContext } from './toc-context'
+import {
+  slugify,
+  TocCollector,
+  TocLevelProvider,
+  TocProvider,
+  useTocContext,
+  type TocHeaderActionRegistration,
+} from './toc-context'
 
 // ============================================================================
 // Types
@@ -81,6 +88,7 @@ export interface MarkdownRenderPluginContext {
 export interface MarkdownRenderPluginResult {
   className?: string
   processors?: readonly MarkdownRenderProcessor[]
+  tocHeaderActionSlot?: string
   tocHeaderActionKey?: string
   tocHeaderAction?: ReactNode
   inlineTextAnnotations?: readonly MarkdownInlineTextAnnotation[]
@@ -151,6 +159,12 @@ function mergeHeadingSuffix(left: ReactNode | undefined, right: ReactNode | unde
   )
 }
 
+interface MarkdownTocHeaderActionInput {
+  slot?: string
+  key: string
+  action: ReactNode
+}
+
 function mergeReactNodes(...nodes: Array<ReactNode | undefined>): ReactNode | undefined {
   const presentNodes = nodes.filter((node) => node !== undefined)
   if (presentNodes.length === 0) return undefined
@@ -164,6 +178,39 @@ function mergeReactNodes(...nodes: Array<ReactNode | undefined>): ReactNode | un
       ))}
     </>
   )
+}
+
+function resolveTocHeaderActions(
+  actions: readonly MarkdownTocHeaderActionInput[]
+): TocHeaderActionRegistration[] {
+  return actions.map((action, index) => ({
+    id: `local:${index}`,
+    ...action,
+  }))
+}
+
+function renderTocHeaderActions(
+  actions: readonly TocHeaderActionRegistration[]
+): ReactNode | undefined {
+  return mergeReactNodes(...dedupeTocHeaderActions(actions).map((action) => action.action))
+}
+
+function dedupeTocHeaderActions(
+  actions: readonly TocHeaderActionRegistration[]
+): TocHeaderActionRegistration[] {
+  const actionBySlot = new Map<string, TocHeaderActionRegistration>()
+  const unslottedActions: TocHeaderActionRegistration[] = []
+
+  for (const action of actions) {
+    if (!action.slot) {
+      unslottedActions.push(action)
+      continue
+    }
+    if (actionBySlot.has(action.slot)) continue
+    actionBySlot.set(action.slot, action)
+  }
+
+  return [...unslottedActions, ...actionBySlot.values()]
 }
 
 function mergeClassName(...classNames: Array<string | undefined>): string | undefined {
@@ -301,26 +348,56 @@ export function MarkdownViewer({
       ]),
     [headingTransform, openSpecPlugin.processors, processors, translationPlugin.processors]
   )
-  const resolvedTocHeaderAction = useMemo(
-    () =>
-      mergeReactNodes(
-        tocHeaderAction,
-        openSpecPlugin.tocHeaderAction,
-        translationPlugin.tocHeaderAction
-      ),
-    [openSpecPlugin.tocHeaderAction, tocHeaderAction, translationPlugin.tocHeaderAction]
-  )
-  const resolvedTocHeaderActionKey = [
-    tocHeaderAction ? `prop:${tocHeaderActionKey ?? 'default'}` : '',
+  const resolvedTocHeaderActions = useMemo(() => {
+    const actions: MarkdownTocHeaderActionInput[] = []
+    if (tocHeaderAction) {
+      actions.push({
+        key: `prop:${tocHeaderActionKey ?? 'default'}`,
+        action: tocHeaderAction,
+      })
+    }
+    if (openSpecPlugin.tocHeaderAction) {
+      actions.push({
+        slot: openSpecPlugin.tocHeaderActionSlot,
+        key: openSpecPlugin.tocHeaderActionKey ?? 'openspec:default',
+        action: openSpecPlugin.tocHeaderAction,
+      })
+    }
+    if (translationPlugin.tocHeaderAction) {
+      actions.push({
+        slot: translationPlugin.tocHeaderActionSlot,
+        key: translationPlugin.tocHeaderActionKey ?? 'translation:default',
+        action: translationPlugin.tocHeaderAction,
+      })
+    }
+    return resolveTocHeaderActions(actions)
+  }, [
+    openSpecPlugin.tocHeaderAction,
     openSpecPlugin.tocHeaderActionKey,
+    openSpecPlugin.tocHeaderActionSlot,
+    tocHeaderAction,
+    tocHeaderActionKey,
+    translationPlugin.tocHeaderAction,
     translationPlugin.tocHeaderActionKey,
-  ]
-    .filter(Boolean)
+    translationPlugin.tocHeaderActionSlot,
+  ])
+  const resolvedTocHeaderActionKey = resolvedTocHeaderActions
+    .map((action) => `${action.id}:${action.slot ?? ''}:${action.key}`)
     .join('|')
 
   useEffect(() => {
-    if (!isNested || !resolvedTocHeaderAction || !registerHeaderAction) return undefined
-    return registerHeaderAction(viewerId, resolvedTocHeaderActionKey, resolvedTocHeaderAction)
+    if (!isNested || resolvedTocHeaderActions.length === 0 || !registerHeaderAction) {
+      return undefined
+    }
+    const cleanupCallbacks = resolvedTocHeaderActions.map((action) =>
+      registerHeaderAction({
+        ...action,
+        id: `${viewerId}:${action.id}`,
+      })
+    )
+    return () => {
+      cleanupCallbacks.forEach((cleanup) => cleanup())
+    }
     // Header actions are keyed by semantic state. A new React node with the same key is not a new action.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNested, registerHeaderAction, resolvedTocHeaderActionKey, viewerId])
@@ -357,7 +434,7 @@ export function MarkdownViewer({
       className={resolvedClassName}
       onReady={onReady}
       processors={resolvedProcessors}
-      tocHeaderAction={resolvedTocHeaderAction}
+      tocHeaderActions={resolvedTocHeaderActions}
       inlineTextAnnotations={resolvedInlineTextAnnotations}
       blockAnnotations={resolvedBlockAnnotations}
     />
@@ -423,7 +500,7 @@ function PlainBuilderMarkdownContent({
     }
 
     const Section: SectionComponent = ({ children, className }) => (
-      <section className={className ? `markdown-section ${className}` : 'markdown-section'}>
+      <section className={mergeClassName('markdown-section', 'toc-anchor-target', className)}>
         {children}
       </section>
     )
@@ -446,36 +523,54 @@ function PlainBuilderMarkdownContent({
 // RootMarkdownViewer - 顶层模式
 // ============================================================================
 
+interface RootMarkdownViewerProps
+  extends Pick<
+    MarkdownViewerProps,
+    | 'markdown'
+    | 'className'
+    | 'onReady'
+    | 'processors'
+    | 'inlineTextAnnotations'
+    | 'blockAnnotations'
+  > {
+  tocHeaderActions?: readonly TocHeaderActionRegistration[]
+}
+
 function RootMarkdownViewer({
   markdown,
   className,
   onReady,
   processors = [],
-  tocHeaderAction,
+  tocHeaderActions = [],
   inlineTextAnnotations,
   blockAnnotations,
-}: MarkdownViewerProps) {
+}: RootMarkdownViewerProps) {
   const [tocItems, setTocItems] = useState<TocItem[]>([])
-  const [nestedHeaderActions, setNestedHeaderActions] = useState<
-    Array<{ id: string; key: string; action: ReactNode }>
-  >([])
-  const nestedHeaderActionByIdRef = useRef(new Map<string, { key: string; action: ReactNode }>())
+  const [nestedHeaderActions, setNestedHeaderActions] = useState<TocHeaderActionRegistration[]>([])
+  const nestedHeaderActionByIdRef = useRef(
+    new Map<string, Omit<TocHeaderActionRegistration, 'id'>>()
+  )
   const collectorRef = useRef<TocCollector | null>(null)
   const readyCalledRef = useRef(false)
-  const registerHeaderAction = useCallback((id: string, key: string, action: ReactNode) => {
-    const previous = nestedHeaderActionByIdRef.current.get(id)
-    if (previous?.key === key) return () => {}
-    nestedHeaderActionByIdRef.current.set(id, { key, action })
+  const registerHeaderAction = useCallback((registration: TocHeaderActionRegistration) => {
+    const previous = nestedHeaderActionByIdRef.current.get(registration.id)
+    if (previous?.key === registration.key) return () => {}
+    const nextRegistration = {
+      slot: registration.slot,
+      key: registration.key,
+      action: registration.action,
+    }
+    nestedHeaderActionByIdRef.current.set(registration.id, nextRegistration)
     setNestedHeaderActions((current) => {
-      const next = current.filter((item) => item.id !== id)
-      next.push({ id, key, action })
+      const next = current.filter((item) => item.id !== registration.id)
+      next.push(registration)
       return next
     })
     return () => {
-      const current = nestedHeaderActionByIdRef.current.get(id)
-      if (current?.key !== key) return
-      nestedHeaderActionByIdRef.current.delete(id)
-      setNestedHeaderActions((current) => current.filter((item) => item.id !== id))
+      const current = nestedHeaderActionByIdRef.current.get(registration.id)
+      if (current?.key !== registration.key) return
+      nestedHeaderActionByIdRef.current.delete(registration.id)
+      setNestedHeaderActions((current) => current.filter((item) => item.id !== registration.id))
     }
   }, [])
 
@@ -504,8 +599,8 @@ function RootMarkdownViewer({
 
   const timelineScope = useMemo(() => generateTimelineScope(tocItems), [tocItems])
   const resolvedTocHeaderAction = useMemo(
-    () => mergeReactNodes(tocHeaderAction, ...nestedHeaderActions.map((item) => item.action)),
-    [nestedHeaderActions, tocHeaderAction]
+    () => renderTocHeaderActions([...tocHeaderActions, ...nestedHeaderActions]),
+    [nestedHeaderActions, tocHeaderActions]
   )
 
   // 渲染内容（在 TocProvider 内部，这样嵌套的 MarkdownViewer 能获取 Context）
@@ -772,7 +867,7 @@ function SectionElement({
 }) {
   return (
     <section
-      className={className ? `markdown-section ${className}` : 'markdown-section'}
+      className={mergeClassName('markdown-section', 'toc-anchor-target', className)}
       style={{ viewTimelineName: `--toc-${timelineIndex}` } as React.CSSProperties}
     >
       {children}
@@ -811,7 +906,7 @@ function HeadingElement({
       return (
         <h1
           id={id}
-          className={className}
+          className={mergeClassName('toc-anchor-target', className)}
           style={style}
           data-toc-label={tocDataLabel}
           {...dataAttributes}
@@ -825,7 +920,7 @@ function HeadingElement({
       return (
         <h2
           id={id}
-          className={className}
+          className={mergeClassName('toc-anchor-target', className)}
           style={style}
           data-toc-label={tocDataLabel}
           {...dataAttributes}
@@ -839,7 +934,7 @@ function HeadingElement({
       return (
         <h3
           id={id}
-          className={className}
+          className={mergeClassName('toc-anchor-target', className)}
           style={style}
           data-toc-label={tocDataLabel}
           {...dataAttributes}
@@ -853,7 +948,7 @@ function HeadingElement({
       return (
         <h4
           id={id}
-          className={className}
+          className={mergeClassName('toc-anchor-target', className)}
           style={style}
           data-toc-label={tocDataLabel}
           {...dataAttributes}
@@ -867,7 +962,7 @@ function HeadingElement({
       return (
         <h5
           id={id}
-          className={className}
+          className={mergeClassName('toc-anchor-target', className)}
           style={style}
           data-toc-label={tocDataLabel}
           {...dataAttributes}
@@ -881,7 +976,7 @@ function HeadingElement({
       return (
         <h6
           id={id}
-          className={className}
+          className={mergeClassName('toc-anchor-target', className)}
           style={style}
           data-toc-label={tocDataLabel}
           {...dataAttributes}

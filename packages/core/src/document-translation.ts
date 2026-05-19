@@ -18,7 +18,7 @@ export type DocumentTranslationConfig = z.infer<typeof DocumentTranslationConfig
 export const DEFAULT_TRANSLATION_CACHE_ENTRY_LIMIT = 10000
 export const MIN_TRANSLATION_CACHE_ENTRY_LIMIT = 100
 export const MAX_TRANSLATION_CACHE_ENTRY_LIMIT = 200000
-export const TRANSLATION_CACHE_POLICY_VERSION = 1
+export const TRANSLATION_CACHE_POLICY_VERSION = 2
 
 export const TranslationCacheSettingsSchema = z.object({
   entryLimit: z

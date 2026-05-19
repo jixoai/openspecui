@@ -7,6 +7,7 @@ import {
   type DocumentTranslationProgressPatch,
   type DocumentTranslationResult,
 } from './browser-translation'
+import { useDocumentTranslationActivation } from './document-translation-session-state'
 import { isStaticMode } from './static-mode'
 import { trpcClient } from './trpc'
 
@@ -37,6 +38,8 @@ export function useDocumentTranslation(
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<DocumentTranslationResult | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const latestStartRef = useRef<(() => Promise<void>) | null>(null)
+  const { activation } = useDocumentTranslationActivation()
 
   const cancel = useCallback(() => {
     abortRef.current?.abort()
@@ -126,6 +129,16 @@ export function useDocumentTranslation(
       }
     }
   }, [config?.displayMode, config?.enabled, config?.targetLanguage, markdown])
+
+  useEffect(() => {
+    latestStartRef.current = start
+  }, [start])
+
+  useEffect(() => {
+    if (activation !== 'translated' || !config?.enabled || markdown.length === 0) return
+    if (status !== 'source') return
+    void latestStartRef.current?.()
+  }, [activation, config?.enabled, markdown.length, status])
 
   return {
     status,

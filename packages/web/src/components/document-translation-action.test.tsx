@@ -1,3 +1,4 @@
+import { DOCUMENT_TRANSLATION_SESSION_STORAGE_KEY } from '@/lib/document-translation-session-state'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MarkdownViewer } from './markdown-viewer'
@@ -22,6 +23,7 @@ describe('MarkdownViewer translation plugin', () => {
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
+    sessionStorage.clear()
     window.history.replaceState(null, '', '/')
   })
 
@@ -127,6 +129,52 @@ describe('MarkdownViewer translation plugin', () => {
     expect(screen.getByText('Config').tagName).toBe('CODE')
   })
 
+  it('keeps code-like target nodes as source text with translated hover text', async () => {
+    mockProgressiveResult('direct', [
+      {
+        id: 'md-code',
+        sourceStartOffset: 9,
+        sourceEndOffset: 31,
+        sourceKind: 'paragraph',
+        source: 'Keep Config enabled.',
+        translatorInput: 'Keep <x1>Config</x1> enabled.',
+        target: '保持 Config 启用。',
+        targetNodes: [
+          { type: 'text', value: '保持 ' },
+          {
+            type: 'element',
+            tagName: 'code',
+            properties: { title: '配置', 'aria-label': '配置' },
+            children: [{ type: 'text', value: 'Config' }],
+          },
+          { type: 'text', value: ' 启用。' },
+        ],
+        kind: 'paragraph',
+      },
+    ])
+
+    render(
+      <MarkdownViewer
+        markdown={'# Notes\n\nKeep `Config` enabled.'}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        }}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+
+    await waitFor(() => expect(screen.getByText('Config')).toBeTruthy())
+    const code = screen.getByText('Config')
+    expect(code.tagName).toBe('CODE')
+    expect(code.getAttribute('title')).toBe('配置')
+    expect(code.getAttribute('aria-label')).toBeNull()
+    expect(document.body.textContent).not.toContain('配置启用')
+  })
+
   it('keeps source ToC labels and inline heading/list translations in bilingual mode', async () => {
     mockProgressiveResult('bilingual', [
       {
@@ -174,6 +222,112 @@ describe('MarkdownViewer translation plugin', () => {
     expect(within(item).getByText('item')).toBeTruthy()
     expect(within(item).getByText('项目')).toBeTruthy()
     expect(item.textContent).not.toContain('/')
+  })
+
+  it('keeps OpenSpec structure labels out of translated heading content', async () => {
+    const markdown = `# Static Rendering
+
+## Purpose
+Static rendering mode detects hosted data.
+
+## Requirements
+
+### Requirement: Static Rendering Mode Detection
+The system SHALL detect static rendering mode.
+`
+
+    mockProgressiveResult('bilingual', [
+      {
+        id: 'purpose-heading',
+        sourceStartOffset: markdown.indexOf('## Purpose'),
+        sourceEndOffset: markdown.indexOf('## Purpose') + '## Purpose'.length,
+        sourceKind: 'heading',
+        source: 'Purpose',
+        translatorInput: 'Purpose',
+        target: 'ZH:Purpose',
+        targetNodes: [{ type: 'text', value: 'ZH:Purpose' }],
+        kind: 'heading',
+      },
+      {
+        id: 'requirements-heading',
+        sourceStartOffset: markdown.indexOf('## Requirements'),
+        sourceEndOffset: markdown.indexOf('## Requirements') + '## Requirements'.length,
+        sourceKind: 'heading',
+        source: 'Requirements',
+        translatorInput: 'Requirements',
+        target: 'ZH:Requirements',
+        targetNodes: [{ type: 'text', value: 'ZH:Requirements' }],
+        kind: 'heading',
+      },
+      {
+        id: 'requirement-heading',
+        sourceStartOffset: markdown.indexOf('### Requirement: Static Rendering Mode Detection'),
+        sourceEndOffset:
+          markdown.indexOf('### Requirement: Static Rendering Mode Detection') +
+          '### Requirement: Static Rendering Mode Detection'.length,
+        sourceKind: 'heading',
+        source: 'Requirement: Static Rendering Mode Detection',
+        translatorInput: 'Requirement: Static Rendering Mode Detection',
+        target: '要求：静态渲染模式检测',
+        targetNodes: [{ type: 'text', value: '要求：静态渲染模式检测' }],
+        kind: 'heading',
+      },
+    ])
+
+    render(
+      <MarkdownViewer
+        markdown={markdown}
+        path="specs/static-rendering/spec.md"
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'bilingual',
+          cacheEnabled: false,
+        }}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+
+    await waitFor(() => expect(screen.getByText('目的')).toBeTruthy())
+
+    const purposeHeading = document.querySelector(
+      '[data-openspec-section-kind="overview"][data-openspec-kind="section"]'
+    )
+    const requirementsHeading = document.querySelector(
+      '[data-openspec-section-kind="requirements"][data-openspec-kind="section"]'
+    )
+    const requirementHeading = document.querySelector('[data-openspec-kind="requirement"]')
+    expect(purposeHeading).toBeInstanceOf(HTMLElement)
+    expect(requirementsHeading).toBeInstanceOf(HTMLElement)
+    expect(requirementHeading).toBeInstanceOf(HTMLElement)
+    if (
+      !(purposeHeading instanceof HTMLElement) ||
+      !(requirementsHeading instanceof HTMLElement) ||
+      !(requirementHeading instanceof HTMLElement)
+    ) {
+      throw new Error('Expected OpenSpec headings to render.')
+    }
+
+    expect(purposeHeading.querySelector('.document-translation-target')?.textContent).toBe('目的')
+    expect(requirementsHeading.querySelector('.document-translation-target')?.textContent).toBe(
+      '需求'
+    )
+    const requirementTarget = requirementHeading.querySelector(
+      '.openspec-heading-title .document-translation-target'
+    )
+    expect(requirementTarget?.textContent).toBe('静态渲染模式检测')
+    expect(requirementTarget?.textContent).not.toContain('要求')
+    expect(document.body.textContent).not.toContain('ZH:Purpose')
+    expect(document.body.textContent).not.toContain('ZH:Requirements')
+
+    const toc = document.querySelector('nav.toc-wide')
+    expect(toc).toBeTruthy()
+    const tocScope = within(toc as HTMLElement)
+    expect(tocScope.getByRole('link', { name: 'Purpose', hidden: true })).toBeTruthy()
+    expect(tocScope.getByRole('link', { name: 'Requirements', hidden: true })).toBeTruthy()
+    expect(tocScope.queryByRole('link', { name: 'ZH:Purpose', hidden: true })).toBeNull()
+    expect(tocScope.queryByRole('link', { name: 'ZH:Requirements', hidden: true })).toBeNull()
   })
 
   it('keeps nested list item translations attached to each list row', async () => {
@@ -229,6 +383,84 @@ describe('MarkdownViewer translation plugin', () => {
     expect(within(items[0]!).getByText('报告的表面：')).toBeTruthy()
     expect(within(items[1]!).getByText('规格：确定')).toBeTruthy()
     expect(within(items[2]!).getByText('更改/规格：未渲染')).toBeTruthy()
+  })
+
+  it('keeps a parent list translation before its nested list and renders translated code text', async () => {
+    mockProgressiveResult('bilingual', [
+      {
+        id: 'md-parent',
+        sourceStartOffset: 10,
+        sourceEndOffset: 56,
+        sourceKind: 'listItem',
+        source: 'Upgraded direct Vite consumers to vite@8.0.0:',
+        translatorInput: 'Upgraded direct Vite consumers to <x1>vite@8.0.0</x1>:',
+        target: '将 Vite 消费者升级为 vite@8.0.0：',
+        targetNodes: [
+          { type: 'text', value: '将 Vite 消费者升级为 ' },
+          {
+            type: 'element',
+            tagName: 'code',
+            properties: {},
+            children: [{ type: 'text', value: 'vite@8.0.0' }],
+          },
+          { type: 'text', value: '：' },
+        ],
+        kind: 'listItem',
+      },
+      {
+        id: 'md-child',
+        sourceStartOffset: 61,
+        sourceEndOffset: 73,
+        sourceKind: 'listItem',
+        source: 'packages/app',
+        translatorInput: 'packages/app',
+        target: 'packages/app',
+        kind: 'listItem',
+      },
+    ])
+
+    render(
+      <MarkdownViewer
+        markdown={'# Report\n\n- Upgraded direct Vite consumers to `vite@8.0.0`:\n  - packages/app'}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'bilingual',
+          cacheEnabled: false,
+        }}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+
+    await waitFor(() => {
+      const target = document.querySelector('[data-translation-segment-id="md-parent"]')
+      expect(target?.textContent).toContain('将 Vite 消费者升级为')
+    })
+
+    const item = document.querySelector('[data-translation-segment-id="md-parent"]')
+    expect(item).toBeInstanceOf(HTMLLIElement)
+    if (!(item instanceof HTMLLIElement)) throw new Error('Expected translated parent list item.')
+
+    const target = item.querySelector('.document-translation-target')
+    const nestedList = item.querySelector('ul, ol')
+    expect(target).toBeInstanceOf(HTMLElement)
+    expect(nestedList).toBeInstanceOf(HTMLElement)
+    if (!(target instanceof HTMLElement) || !(nestedList instanceof HTMLElement)) {
+      throw new Error('Expected translated target and nested list to render.')
+    }
+    expect(target.compareDocumentPosition(nestedList) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
+
+    const source = item.querySelector('.document-translation-source')
+    expect(source?.querySelector('ul, ol')).toBeNull()
+    const parentText = item.textContent ?? ''
+    const translatedCode = within(item)
+      .getAllByText('vite@8.0.0')
+      .find((node) => node.closest('.document-translation-target'))
+    expect(translatedCode?.tagName).toBe('CODE')
+    expect(parentText).not.toContain('[object Object]')
   })
 
   it('preserves nested list structure when the parent row uses translated HAST nodes', async () => {
@@ -366,9 +598,58 @@ describe('MarkdownViewer translation plugin', () => {
 
     await waitFor(() => expect(screen.getByRole('heading', { name: '你好' })).toBeTruthy())
     expect(screen.getByRole('button', { name: 'Cancel translation' })).toBeTruthy()
+    expect(sessionStorage.getItem(DOCUMENT_TRANSLATION_SESSION_STORAGE_KEY)).toBe('translated')
 
     releaseFinalResult?.()
     await waitFor(() => expect(screen.getByRole('button', { name: 'Show source' })).toBeTruthy())
+  })
+
+  it('turns off session activation when cancelling an in-flight translation', async () => {
+    translateMarkdownDocumentProgressivelyMock.mockImplementationOnce(async (args, onPatch) => {
+      onPatch({
+        segmentIndex: 0,
+        segment: {
+          id: 'md-2',
+          sourceStartOffset: 0,
+          sourceEndOffset: 7,
+          sourceKind: 'heading',
+          source: 'Hello',
+          translatorInput: 'Hello',
+          target: '你好',
+          kind: 'heading',
+          sourceLanguage: 'en',
+          targetLanguage: args.targetLanguage,
+          status: 'translated',
+        },
+      })
+      await new Promise<void>(() => {})
+      throw new Error('unreachable')
+    })
+
+    render(
+      <MarkdownViewer
+        markdown={'# Hello'}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        }}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Cancel translation' })).toBeTruthy()
+    )
+    expect(sessionStorage.getItem(DOCUMENT_TRANSLATION_SESSION_STORAGE_KEY)).toBe('translated')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel translation' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Translate' })).toBeTruthy())
+    expect(sessionStorage.getItem(DOCUMENT_TRANSLATION_SESSION_STORAGE_KEY)).toBe('source')
+    expect(translateMarkdownDocumentProgressivelyMock).toHaveBeenCalledTimes(1)
   })
 })
 

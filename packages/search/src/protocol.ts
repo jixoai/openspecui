@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const SearchDocumentKindSchema = z.enum(['spec', 'change', 'archive'])
+export const SearchDocumentKindSchema = z.string().min(1)
 
 export const SearchDocumentSchema = z.object({
   id: z.string(),

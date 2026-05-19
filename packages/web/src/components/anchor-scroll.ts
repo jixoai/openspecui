@@ -53,9 +53,17 @@ export function scrollResolvedHashTarget(
 
   const containerRect = contentContainer.getBoundingClientRect()
   const targetRect = target.getBoundingClientRect()
-  const top = contentContainer.scrollTop + (targetRect.top - containerRect.top) - 8
+  const top =
+    contentContainer.scrollTop +
+    (targetRect.top - containerRect.top) -
+    getAnchorScrollMarginTop(target)
 
   contentContainer.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' })
+}
+
+function getAnchorScrollMarginTop(target: HTMLElement): number {
+  const parsed = Number.parseFloat(window.getComputedStyle(target).scrollMarginTop)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 8
 }
 
 export function navigateHashAnchor(anchorElement: HTMLAnchorElement, hash: string): boolean {

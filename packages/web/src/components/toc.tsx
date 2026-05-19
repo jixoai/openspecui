@@ -1,5 +1,14 @@
 import { ChevronDown, List } from 'lucide-react'
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
 import { navigateHashAnchor } from './anchor-scroll'
 
 export interface TocItem {
@@ -74,7 +83,45 @@ interface TocProps {
  */
 export function Toc({ items, defaultCollapsed = true, className = '', headerAction }: TocProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
+  const rootRef = useRef<HTMLElement>(null)
   const tree = useMemo(() => buildTocTree(items), [items])
+
+  const closeNarrowToc = useCallback(() => {
+    setCollapsed(true)
+  }, [])
+
+  useEffect(() => {
+    if (collapsed) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const root = rootRef.current
+      const target = event.target
+      if (!root || !(target instanceof Node) || root.contains(target)) return
+      closeNarrowToc()
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown, true)
+    return () => document.removeEventListener('pointerdown', handlePointerDown, true)
+  }, [closeNarrowToc, collapsed])
+
+  const handleBlur = useCallback(
+    (event: FocusEvent<HTMLElement>) => {
+      if (collapsed) return
+      const nextTarget = event.relatedTarget
+      if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return
+      closeNarrowToc()
+    },
+    [closeNarrowToc, collapsed]
+  )
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLElement>) => {
+      if (event.key !== 'Escape' || collapsed) return
+      event.stopPropagation()
+      closeNarrowToc()
+    },
+    [closeNarrowToc, collapsed]
+  )
 
   // Return hidden placeholder when empty to keep React children stable
   if (items.length === 0) {
@@ -83,7 +130,10 @@ export function Toc({ items, defaultCollapsed = true, className = '', headerActi
 
   return (
     <aside
-      className={`toc-root sticky top-0 z-10 h-10 w-full min-w-0 max-w-full self-start ${className}`}
+      ref={rootRef}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      className={`toc-root sticky z-10 h-10 w-full min-w-0 max-w-full self-start ${className}`}
     >
       <style>{tocStyles}</style>
 
@@ -107,7 +157,7 @@ export function Toc({ items, defaultCollapsed = true, className = '', headerActi
         </div>
         {!collapsed && (
           <div className="toc-scroll toc-narrow-scroll scrollbar-thin scrollbar-track-transparent min-h-0 overflow-y-auto overscroll-contain p-2">
-            <TocTree nodes={tree} />
+            <TocTree nodes={tree} onNavigate={closeNarrowToc} />
           </div>
         )}
       </div>
@@ -120,7 +170,7 @@ export function Toc({ items, defaultCollapsed = true, className = '', headerActi
           {headerAction ? <span className="ml-auto shrink-0">{headerAction}</span> : null}
         </div>
         <div className="toc-scroll toc-wide-scroll scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
-          <TocTree nodes={tree} />
+          <TocTree nodes={tree} onNavigate={closeNarrowToc} />
         </div>
       </nav>
     </aside>
@@ -166,22 +216,34 @@ function scrollIntoViewWithinContainer(element: HTMLElement) {
 }
 
 /** 递归渲染树形 ToC 结构 */
-function TocTree({ nodes, depth = 0 }: { nodes: TocNode[]; depth?: number }) {
+function TocTree({
+  nodes,
+  depth = 0,
+  onNavigate,
+}: {
+  nodes: TocNode[]
+  depth?: number
+  onNavigate?: () => void
+}) {
   const handleAnimationStart = useCallback((e: React.AnimationEvent<HTMLAnchorElement>) => {
     if (e.animationName === 'toc-activate') {
       scrollIntoViewWithinContainer(e.currentTarget)
     }
   }, [])
 
-  const handleTocClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
-    const href = e.currentTarget.getAttribute('href')
-    if (!href || !href.startsWith('#')) return
+  const handleTocClick = useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>) => {
+      const href = e.currentTarget.getAttribute('href')
+      if (!href || !href.startsWith('#')) return
 
-    const didNavigate = navigateHashAnchor(e.currentTarget, href)
-    if (!didNavigate) return
+      const didNavigate = navigateHashAnchor(e.currentTarget, href)
+      if (!didNavigate) return
 
-    e.preventDefault()
-  }, [])
+      e.preventDefault()
+      onNavigate?.()
+    },
+    [onNavigate]
+  )
 
   if (nodes.length === 0) return null
 
@@ -212,7 +274,9 @@ function TocTree({ nodes, depth = 0 }: { nodes: TocNode[]; depth?: number }) {
           >
             {node.item.label}
           </a>
-          {node.children.length > 0 && <TocTree nodes={node.children} depth={depth + 1} />}
+          {node.children.length > 0 && (
+            <TocTree nodes={node.children} depth={depth + 1} onNavigate={onNavigate} />
+          )}
         </li>
       ))}
     </ul>
@@ -222,6 +286,16 @@ function TocTree({ nodes, depth = 0 }: { nodes: TocNode[]; depth?: number }) {
 const css = String.raw
 /** CSS for container queries and scroll-driven ToC highlighting */
 const tocStyles = css`
+  .toc-root {
+    top: var(--toc-sticky-top, 1rem);
+  }
+  .toc-page-layout {
+    --toc-anchor-scroll-margin-top: calc(var(--toc-sticky-top, 1rem) + 3rem);
+  }
+  .toc-anchor-target {
+    scroll-margin-top: var(--toc-anchor-scroll-margin-top);
+  }
+
   /* Default: narrow mode (collapsible) */
   .toc-narrow {
     display: flex;
@@ -240,6 +314,9 @@ const tocStyles = css`
 
   /* Wide container: show sidebar mode */
   @container (min-width: 768px) {
+    .toc-page-layout {
+      --toc-anchor-scroll-margin-top: var(--toc-sticky-top, 1rem);
+    }
     .toc-narrow {
       display: none;
     }
@@ -330,7 +407,7 @@ export function TocSection({
   return (
     <Tag
       id={id}
-      className={className}
+      className={`toc-anchor-target ${className}`.trim()}
       style={{ viewTimelineName: `--toc-${index}` } as React.CSSProperties}
     >
       {children}

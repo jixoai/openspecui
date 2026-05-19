@@ -43,6 +43,7 @@ import {
   type TerminalThemeMode,
 } from '@/lib/terminal-theme'
 import { applyTheme, getStoredTheme, persistTheme, type Theme } from '@/lib/theme'
+import { findTranslationLanguage, searchTranslationLanguages } from '@/lib/translation-languages'
 import { queryClient, trpc, trpcClient } from '@/lib/trpc'
 import { useCliRunner } from '@/lib/use-cli-runner'
 import { useServerStatus } from '@/lib/use-server-status'
@@ -66,6 +67,7 @@ import {
   ArrowUp,
   Check,
   CheckCircle,
+  ChevronDown,
   Download,
   FolderOpen,
   FolderPlus,
@@ -79,14 +81,26 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  Search,
   Settings as SettingsIcon,
   Sparkles,
   Sun,
   Terminal,
   Unlink2,
+  X,
   XCircle,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ToggleEvent as ReactToggleEvent,
+} from 'react'
 import {
   buildSettingsInitArgs,
   canAutoInit,
@@ -197,16 +211,6 @@ const TRANSLATION_DISPLAY_MODE_OPTIONS = [
   { value: 'direct', label: 'Direct' },
   { value: 'bilingual', label: 'Bilingual' },
 ] satisfies ButtonGroupOption<DocumentTranslationDisplayMode>[]
-
-const TRANSLATION_TARGET_LANGUAGE_OPTIONS = [
-  { value: 'zh', label: 'Chinese' },
-  { value: 'en', label: 'English' },
-  { value: 'ja', label: 'Japanese' },
-  { value: 'ko', label: 'Korean' },
-  { value: 'fr', label: 'French' },
-  { value: 'de', label: 'German' },
-  { value: 'es', label: 'Spanish' },
-] satisfies SelectOption<string>[]
 
 const SETTINGS_TOC_ITEMS: TocItem[] = [
   { id: 'settings-appearance', label: 'Appearance' },
@@ -1076,6 +1080,7 @@ export function Settings() {
       style={{ timelineScope: generateTimelineScope(SETTINGS_TOC_ITEMS) } as CSSProperties}
     >
       <div className="toc-page-layout min-h-full gap-6 p-4 [--toc-page-sidebar-min:14rem]">
+        <Toc items={SETTINGS_TOC_ITEMS} className="toc-page-sidebar" />
         <div className="toc-page-content min-w-0 space-y-8">
           <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
             <SettingsIcon className="h-6 w-6 shrink-0" />
@@ -1446,10 +1451,9 @@ export function Settings() {
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
                       <label className="mb-2 block text-sm font-medium">Target Language</label>
-                      <Select
+                      <TranslationLanguageCombobox
                         value={translationTargetLanguage}
-                        options={TRANSLATION_TARGET_LANGUAGE_OPTIONS}
-                        onValueChange={(targetLanguage) => {
+                        onChange={(targetLanguage) => {
                           setTranslationTargetLanguage(targetLanguage)
                           saveTranslationConfigMutation.mutate({ targetLanguage })
                           if (translationEnabled) {
@@ -1458,9 +1462,7 @@ export function Settings() {
                             })
                           }
                         }}
-                        ariaLabel="Translation target language"
                         disabled={saveTranslationConfigMutation.isPending}
-                        className="w-full"
                       />
                     </div>
 
@@ -2411,7 +2413,223 @@ export function Settings() {
             </>
           )}
         </div>
-        <Toc items={SETTINGS_TOC_ITEMS} className="toc-page-sidebar" />
+      </div>
+    </div>
+  )
+}
+
+function TranslationLanguageCombobox({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string
+  onChange: (value: string) => void
+  disabled?: boolean
+}) {
+  const id = useId().replace(/[^a-zA-Z0-9_-]/g, '')
+  const popoverId = `translation-target-language-popover-${id}`
+  const listboxId = `translation-target-language-options-${id}`
+  const selectedLanguage = findTranslationLanguage(value)
+  const selectedLabel = selectedLanguage?.label ?? value
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [popoverPosition, setPopoverPosition] = useState<{
+    left: number
+    top: number
+    width: number
+  } | null>(null)
+  const filteredOptions = useMemo(() => searchTranslationLanguages(query), [query])
+
+  const updatePopoverPosition = useCallback(() => {
+    const trigger = triggerRef.current
+    if (!trigger) return
+    const rect = trigger.getBoundingClientRect()
+    const margin = 8
+    const width = Math.min(Math.max(rect.width, 320), window.innerWidth - margin * 2)
+    const left = Math.min(window.innerWidth - width - margin, Math.max(margin, rect.left))
+    const top = Math.min(window.innerHeight - margin, Math.max(margin, rect.bottom + 4))
+    setPopoverPosition({ left, top, width })
+  }, [])
+
+  const hidePopover = useCallback(() => {
+    const popover = popoverRef.current
+    if (!popover) {
+      setOpen(false)
+      return
+    }
+    if (typeof popover.hidePopover === 'function') {
+      try {
+        popover.hidePopover()
+        return
+      } catch {
+        // Native popover can throw if the element is already closed.
+      }
+    }
+    setOpen(false)
+  }, [])
+
+  useLayoutEffect(() => {
+    if (open) {
+      updatePopoverPosition()
+    }
+  }, [open, updatePopoverPosition])
+
+  useEffect(() => {
+    if (!open) return
+    searchInputRef.current?.focus()
+    searchInputRef.current?.select()
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    window.addEventListener('resize', updatePopoverPosition)
+    window.addEventListener('scroll', updatePopoverPosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePopoverPosition)
+      window.removeEventListener('scroll', updatePopoverPosition, true)
+    }
+  }, [open, updatePopoverPosition])
+
+  useEffect(() => {
+    if (disabled) {
+      hidePopover()
+      setQuery('')
+    }
+  }, [disabled, hidePopover])
+
+  const commitLanguage = useCallback(
+    (languageCode: string) => {
+      setQuery('')
+      onChange(languageCode)
+      hidePopover()
+    },
+    [hidePopover, onChange]
+  )
+
+  const clearQuery = useCallback(() => {
+    setQuery('')
+    searchInputRef.current?.focus()
+  }, [])
+
+  const handleToggle = useCallback(
+    (event: ReactToggleEvent<HTMLDivElement>) => {
+      const nextOpen = event.newState === 'open'
+      setOpen(nextOpen)
+      if (nextOpen) {
+        updatePopoverPosition()
+      } else {
+        setQuery('')
+      }
+    },
+    [updatePopoverPosition]
+  )
+
+  return (
+    <div>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label="Translation target language"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={popoverId}
+        popoverTarget={popoverId}
+        popoverTargetAction="toggle"
+        disabled={disabled}
+        onClick={updatePopoverPosition}
+        className="border-border bg-background text-foreground hover:bg-muted/30 focus:ring-primary inline-flex h-9 w-full min-w-0 items-center gap-2 rounded-md border px-3 py-2 text-left text-sm outline-none focus:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <Languages className="text-muted-foreground h-4 w-4 shrink-0" />
+        {selectedLanguage ? (
+          <span className="text-muted-foreground shrink-0 font-mono text-xs">
+            {selectedLanguage.code}
+          </span>
+        ) : null}
+        <span className="min-w-0 flex-1 truncate">{selectedLabel || 'Select language'}</span>
+        <ChevronDown className="text-muted-foreground h-4 w-4 shrink-0" />
+      </button>
+
+      <div
+        id={popoverId}
+        ref={popoverRef}
+        role="dialog"
+        aria-label="Select translation target language"
+        popover="auto"
+        onToggle={handleToggle}
+        className="bg-card border-border m-0 rounded-md border p-2 shadow-lg backdrop:bg-transparent"
+        style={
+          popoverPosition
+            ? {
+                position: 'fixed',
+                inset: 'auto',
+                left: popoverPosition.left,
+                top: popoverPosition.top,
+                width: popoverPosition.width,
+              }
+            : undefined
+        }
+      >
+        <div className="border-border bg-background sticky top-0 z-10 mb-2 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border px-2 py-1.5">
+          <Search className="text-muted-foreground h-4 w-4" aria-hidden="true" />
+          <input
+            ref={searchInputRef}
+            role="textbox"
+            aria-label="Search translation languages"
+            aria-autocomplete="list"
+            aria-controls={listboxId}
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                hidePopover()
+              }
+            }}
+            className="text-foreground placeholder:text-muted-foreground min-w-0 bg-transparent text-sm outline-none"
+            placeholder="Search code, English, or native name"
+          />
+          <button
+            type="button"
+            aria-label="Clear search"
+            title="Clear"
+            onClick={clearQuery}
+            disabled={disabled || query.length === 0}
+            className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-6 w-6 items-center justify-center rounded transition-colors disabled:pointer-events-none disabled:opacity-40"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div
+          id={listboxId}
+          role="listbox"
+          aria-label="Translation target language options"
+          className="scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[color-mix(in_srgb,currentColor,transparent_78%)] max-h-60 overflow-y-auto"
+        >
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((language) => (
+              <button
+                key={language.code}
+                type="button"
+                role="option"
+                aria-selected={language.code === value}
+                className="hover:bg-muted grid w-full grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => commitLanguage(language.code)}
+              >
+                <span className="text-muted-foreground font-mono text-xs">{language.code}</span>
+                <span className="min-w-0 truncate">{language.label}</span>
+              </button>
+            ))
+          ) : (
+            <div className="text-muted-foreground px-2 py-2 text-sm">No matching languages</div>
+          )}
+        </div>
       </div>
     </div>
   )

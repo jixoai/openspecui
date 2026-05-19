@@ -18,6 +18,7 @@ describe('MarkdownViewer ToC behavior', () => {
 
   afterEach(() => {
     cleanup()
+    sessionStorage.clear()
   })
 
   it('keeps ToC href and heading id aligned for duplicate nested headings', () => {
@@ -117,6 +118,7 @@ describe('MarkdownViewer ToC behavior', () => {
     const root = document.querySelector('.toc-root')
     expect(root).toBeTruthy()
     expect(root?.className).not.toContain('overflow-y-auto')
+    expect(root?.className).not.toContain('top-0')
 
     const narrowScroll = document.querySelector('.toc-narrow-scroll')
     expect(narrowScroll).toBeTruthy()
@@ -141,6 +143,11 @@ describe('MarkdownViewer ToC behavior', () => {
     const styles = Array.from(document.querySelectorAll('style'))
       .map((style) => style.textContent ?? '')
       .join('\n')
+    expect(styles).toContain('top: var(--toc-sticky-top, 1rem)')
+    expect(styles).toContain(
+      '--toc-anchor-scroll-margin-top: calc(var(--toc-sticky-top, 1rem) + 3rem)'
+    )
+    expect(styles).toContain('scroll-margin-top: var(--toc-anchor-scroll-margin-top)')
     expect(styles).toContain('.toc-narrow')
     expect(styles).toContain('max-height: min(20rem')
     expect(styles).toContain('.toc-narrow-scroll')
@@ -148,6 +155,97 @@ describe('MarkdownViewer ToC behavior', () => {
     expect(styles).toContain('.toc-wide')
     expect(styles).toContain('max-height: min(calc(100cqh - 3rem), calc(100svh - 3rem))')
     expect(styles).not.toContain('.toc-wide {\n    display: none;\n    max-height: min(32rem')
+  })
+
+  it('marks ToC anchor targets with shared scroll-margin hooks', () => {
+    render(<MarkdownViewer markdown={'# Overview\n\n## Details'} />)
+
+    expect(screen.getByRole('heading', { name: 'Overview' }).className).toContain(
+      'toc-anchor-target'
+    )
+    expect(screen.getByRole('heading', { name: 'Details' }).className).toContain(
+      'toc-anchor-target'
+    )
+  })
+
+  it('collapses the narrow ToC when interaction leaves the component', () => {
+    render(
+      <div>
+        <button type="button">Outside</button>
+        <Toc
+          defaultCollapsed={false}
+          items={[
+            { id: 'root', label: 'Root', level: 1 },
+            { id: 'child', label: 'Child', level: 2 },
+          ]}
+        />
+      </div>
+    )
+
+    expect(screen.getByRole('button', { name: 'Hide table of contents' })).toBeTruthy()
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Outside' }))
+
+    expect(screen.getByRole('button', { name: 'Show table of contents' })).toBeTruthy()
+  })
+
+  it('collapses the narrow ToC on focus leave and Escape', () => {
+    render(
+      <div>
+        <button type="button">Outside</button>
+        <Toc
+          items={[
+            { id: 'root', label: 'Root', level: 1 },
+            { id: 'child', label: 'Child', level: 2 },
+          ]}
+        />
+      </div>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show table of contents' }))
+    expect(screen.getByRole('button', { name: 'Hide table of contents' })).toBeTruthy()
+
+    const toc = document.querySelector('aside.toc-root')
+    const outside = screen.getByRole('button', { name: 'Outside' })
+    expect(toc).toBeInstanceOf(HTMLElement)
+    if (!(toc instanceof HTMLElement)) throw new Error('ToC root missing')
+
+    fireEvent.blur(toc, { relatedTarget: outside })
+    expect(screen.getByRole('button', { name: 'Show table of contents' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show table of contents' }))
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Hide table of contents' }), {
+      key: 'Escape',
+    })
+    expect(screen.getByRole('button', { name: 'Show table of contents' })).toBeTruthy()
+  })
+
+  it('collapses the narrow ToC after a link navigation', () => {
+    const scrollIntoViewSpy = vi.fn()
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoViewSpy,
+    })
+
+    render(
+      <div>
+        <h2 id="root">Root target</h2>
+        <Toc
+          defaultCollapsed={false}
+          items={[
+            { id: 'root', label: 'Root', level: 1 },
+            { id: 'child', label: 'Child', level: 2 },
+          ]}
+        />
+      </div>
+    )
+
+    expect(screen.getByRole('button', { name: 'Hide table of contents' })).toBeTruthy()
+
+    fireEvent.click(screen.getAllByRole('link', { name: 'Root', hidden: true })[0])
+
+    expect(scrollIntoViewSpy).toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Show table of contents' })).toBeTruthy()
   })
 
   it('uses the shared fluid ToC page layout contract', () => {
@@ -219,6 +317,78 @@ describe('MarkdownViewer ToC behavior', () => {
       within(toc as HTMLElement).getByRole('button', { name: 'Configure translation' })
     ).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Sign in', hidden: true })).toBeTruthy()
+  })
+
+  it('dedupes nested MarkdownViewer header actions by semantic slot', () => {
+    render(
+      <MarkdownViewer
+        markdown={({ H1, Section }) => (
+          <div>
+            <H1>Combined Artifact</H1>
+            <Section>
+              <MarkdownViewer
+                markdown={'# First file'}
+                path="specs/auth/spec.md"
+                translationConfig={{
+                  enabled: false,
+                  targetLanguage: 'zh',
+                  displayMode: 'direct',
+                  cacheEnabled: false,
+                }}
+              />
+            </Section>
+            <Section>
+              <MarkdownViewer
+                markdown={'# Second file'}
+                path="specs/billing/spec.md"
+                translationConfig={{
+                  enabled: false,
+                  targetLanguage: 'zh',
+                  displayMode: 'direct',
+                  cacheEnabled: false,
+                }}
+              />
+            </Section>
+          </div>
+        )}
+      />
+    )
+
+    const toc = document.querySelector('aside.toc-root')
+    expect(toc).toBeTruthy()
+    expect(
+      within(toc as HTMLElement).getAllByRole('button', { name: 'Configure translation' })
+    ).toHaveLength(1)
+  })
+
+  it('keeps distinct nested MarkdownViewer header actions when they have no shared slot', () => {
+    render(
+      <MarkdownViewer
+        markdown={({ Section }) => (
+          <Section>
+            <MarkdownViewer
+              markdown={'# First'}
+              tocHeaderAction={<button type="button">First action</button>}
+              tocHeaderActionKey="first"
+            />
+            <MarkdownViewer
+              markdown={'# Second'}
+              tocHeaderAction={<button type="button">Second action</button>}
+              tocHeaderActionKey="second"
+            />
+          </Section>
+        )}
+      />
+    )
+
+    const toc = document.querySelector('aside.toc-root')
+    expect(toc).toBeTruthy()
+    expect(
+      within(toc as HTMLElement).getAllByRole('button', { name: 'First action', hidden: true })
+    ).toHaveLength(2)
+    expect(
+      within(toc as HTMLElement).getAllByRole('button', { name: 'Second action', hidden: true })
+    ).toHaveLength(2)
   })
 
   it('refreshes nested MarkdownViewer header actions when the action node changes', () => {
