@@ -1,5 +1,7 @@
 # @openspecui/core
 
+## 3.7.2
+
 ## 3.7.1
 
 ### Patch Changes

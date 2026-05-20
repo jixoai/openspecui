@@ -1,5 +1,13 @@
 # openspecui
 
+## 3.7.2
+
+### Patch Changes
+
+- f679575: Unify the shared change and archive document detail UI, keep detail heading anchors aligned,
+  normalize pnpm CLI argv separators, and tighten translation UX with unavailable-state buttons
+  plus dark-mode-safe target language popovers.
+
 ## 3.7.1
 
 ### Patch Changes
