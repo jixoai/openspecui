@@ -85,6 +85,16 @@ export { Validator, type ValidationIssue, type ValidationResult } from './valida
 
 // Zod schemas and TypeScript types
 export {
+  FILE_PREVIEW_KINDS,
+  inferFileMime,
+  inferFilePreviewKind,
+  isPreviewableFile,
+  isTextLikeFile,
+  isTextLikeMime,
+  type FilePreviewKind,
+} from './file-preview.js'
+
+export {
   ChangeFileSchema,
   ChangeSchema,
   DeltaOperationType,

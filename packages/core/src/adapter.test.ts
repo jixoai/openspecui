@@ -35,6 +35,21 @@ describe('OpenSpecAdapter change files', () => {
 
     expect(metadata).toBeDefined()
     expect(metadata?.content).toContain('schema:')
+    expect(metadata?.mime).toBe('application/yaml')
+    expect(metadata?.previewKind).toBe('text')
+  })
+
+  it('does not force binary files into utf-8 content', async () => {
+    const binary = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a])
+    await writeFile(join(tempDir, 'openspec', 'changes', 'demo', 'preview.png'), binary)
+
+    const files = await adapter.readChangeFiles('demo')
+    const image = files.find((file) => file.path === 'preview.png' && file.type === 'file')
+
+    expect(image).toBeDefined()
+    expect(image?.content).toBeUndefined()
+    expect(image?.mime).toBe('image/png')
+    expect(image?.previewKind).toBe('image')
   })
 
   it('initializes project.md without creating openspec/AGENTS.md', async () => {

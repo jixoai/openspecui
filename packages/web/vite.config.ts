@@ -25,10 +25,7 @@ export default defineConfig(({ isSsrBuild }) => {
     '@openspecui/core/openspec-compat': resolve(__dirname, '../core/src/openspec-compat.ts'),
     '@openspecui/core/opsx-display-path': resolve(__dirname, '../core/src/opsx-display-path.ts'),
     '@openspecui/core/opsx-entity': resolve(__dirname, '../core/src/opsx-entity.ts'),
-    '@openspecui/core/opsx-schema-detail': resolve(
-      __dirname,
-      '../core/src/opsx-schema-detail.ts'
-    ),
+    '@openspecui/core/opsx-schema-detail': resolve(__dirname, '../core/src/opsx-schema-detail.ts'),
     '@openspecui/core/pty-protocol': resolve(__dirname, '../core/src/pty-protocol.ts'),
     '@openspecui/core/sounds': resolve(__dirname, '../core/src/sounds.ts'),
     '@openspecui/core/terminal-invocation': resolve(
@@ -47,6 +44,17 @@ export default defineConfig(({ isSsrBuild }) => {
     plugins: [react(), tailwindcss(), createCliWebSyncPlugin(__dirname)],
     resolve: {
       alias,
+    },
+    build: {
+      rollupOptions: {
+        input: {
+          main: resolve(__dirname, 'index.html'),
+          'image-preview': resolve(__dirname, 'image-preview.html'),
+          'audio-preview': resolve(__dirname, 'audio-preview.html'),
+          'video-preview': resolve(__dirname, 'video-preview.html'),
+          'pdf-preview': resolve(__dirname, 'pdf-preview.html'),
+        },
+      },
     },
     server: {
       port: 13003,

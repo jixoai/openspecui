@@ -52,6 +52,7 @@ import { DashboardOverviewService } from './dashboard-overview-service.js'
 import { loadDashboardOverview } from './dashboard-overview.js'
 import { DocumentService } from './document-service.js'
 import { buildEntityReadOptions } from './entity-read-options.js'
+import { FilePreviewService } from './file-preview-service.js'
 import { createHookRuntime } from './hook-runtime.js'
 import { NotificationService } from './notification-service.js'
 import { findAvailablePort } from './port-utils.js'
@@ -91,6 +92,8 @@ export interface ServerConfig {
   enableWatcher?: boolean
   /** CORS origins (defaults to localhost dev servers) */
   corsOrigins?: string[]
+  /** Directory containing built preview entry assets */
+  previewAssetsDir?: string
   /** Optional worktree handoff provider for runtimes that can spawn sibling instances */
   gitWorktreeHandoff?: GitWorktreeHandoffService
 }
@@ -106,6 +109,10 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
   const kernel = config.kernel
   const hookRuntime = createHookRuntime(config.projectDir)
   const documentService = new DocumentService(config.projectDir, adapter, hookRuntime)
+  const filePreviewService = new FilePreviewService(
+    config.projectDir,
+    config.previewAssetsDir ?? join(__dirname, '..', '..', 'web', 'dist')
+  )
   const workflowInvocationService = new WorkflowInvocationService({
     projectDir: config.projectDir,
     hookRuntime,
@@ -246,6 +253,28 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     })
   })
 
+  app.get('/api/file-preview/:hash/*', async (c) => {
+    const hash = c.req.param('hash')
+    const prefix = `/api/file-preview/${hash}/`
+    const requestPath = c.req.path.startsWith(prefix) ? c.req.path.slice(prefix.length) : ''
+    const asset = filePreviewService.readPreviewRequest(hash, requestPath)
+    if (!asset) {
+      return c.notFound()
+    }
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(asset.content))
+        controller.close()
+      },
+    })
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        'Content-Type': asset.contentType,
+      },
+    })
+  })
+
   // tRPC HTTP handler (for queries and mutations)
   app.use('/trpc/*', async (c) => {
     const response = await fetchRequestHandler({
@@ -266,6 +295,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
         customSoundService,
         globalSettingsManager,
         translationCacheService,
+        filePreviewService,
         gitWorktreeHandoff: config.gitWorktreeHandoff,
         watcher,
         projectDir: config.projectDir,
@@ -289,6 +319,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     customSoundService,
     globalSettingsManager,
     translationCacheService,
+    filePreviewService,
     gitWorktreeHandoff: config.gitWorktreeHandoff,
     watcher,
     projectDir: config.projectDir,
@@ -309,6 +340,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     customSoundService,
     globalSettingsManager,
     translationCacheService,
+    filePreviewService,
     hookRuntime,
     watcher,
     createContext,

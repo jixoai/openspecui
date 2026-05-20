@@ -11,6 +11,7 @@ import { resolveGitWorktreeSwitchTarget } from '../src/git-panel-data.js'
 import { sameGitPath } from '../src/git-shared.js'
 import type { Context } from '../src/router.js'
 import { appRouter } from '../src/router.js'
+import { FilePreviewService } from './file-preview-service.js'
 
 const dashboardGitSnapshotState = vi.hoisted(() => ({
   removeDetachedWorktree: vi.fn().mockResolvedValue(undefined),
@@ -339,6 +340,7 @@ artifacts:
   }
 
   const projectDir = options.projectDir ?? '/tmp/openspecui-router-test'
+  const filePreviewService = new FilePreviewService(projectDir, join(projectDir, '.preview-assets'))
   const dashboardOverviewService = new DashboardOverviewService((reason) =>
     loadDashboardOverview(
       {
@@ -375,6 +377,7 @@ artifacts:
       clear: vi.fn().mockResolvedValue({ deleted: 0 }),
       close: vi.fn(),
     } as unknown as Context['translationCacheService'],
+    filePreviewService,
     gitWorktreeHandoff: options.gitWorktreeHandoff,
     watcher: undefined,
     projectDir,
@@ -405,6 +408,98 @@ describe('appRouter', () => {
       expect(typeof status.watcherGeneration).toBe('number')
       expect(typeof status.watcherReinitializeCount).toBe('number')
       expect(status.projectRecovery).toEqual({ state: 'idle' })
+    })
+  })
+
+  describe('entity file preview platform', () => {
+    it('writes change entity files through a guarded relative path', async () => {
+      const projectDir = await createTempProjectDir('openspecui-router-change-file-')
+      await mkdir(join(projectDir, 'openspec', 'changes', 'preview-demo'), { recursive: true })
+      const caller = createCaller(createMockAdapter(), { projectDir })
+
+      await caller.change.writeFile({
+        id: 'preview-demo',
+        path: 'notes/demo.md',
+        content: '# Demo\n',
+      })
+
+      await expect(
+        readFile(
+          join(projectDir, 'openspec', 'changes', 'preview-demo', 'notes', 'demo.md'),
+          'utf8'
+        )
+      ).resolves.toBe('# Demo\n')
+    })
+
+    it('rejects entity file writes that try to escape the change root', async () => {
+      const projectDir = await createTempProjectDir('openspecui-router-change-escape-')
+      await mkdir(join(projectDir, 'openspec', 'changes', 'preview-demo'), { recursive: true })
+      const caller = createCaller(createMockAdapter(), { projectDir })
+
+      await expect(
+        caller.change.writeFile({
+          id: 'preview-demo',
+          path: '../escape.md',
+          content: 'nope',
+        })
+      ).rejects.toThrow(/escaped entity root|path/i)
+    })
+
+    it('prepares preview URLs for supported change files', async () => {
+      const projectDir = await createTempProjectDir('openspecui-router-change-preview-')
+      const changeDir = join(projectDir, 'openspec', 'changes', 'preview-demo')
+      await mkdir(join(changeDir, 'site'), { recursive: true })
+      await writeFile(join(changeDir, 'site', 'index.html'), '<!doctype html><h1>demo</h1>', 'utf8')
+
+      const caller = createCaller(createMockAdapter(), { projectDir })
+      const preview = await caller.change.prepareFilePreview({
+        id: 'preview-demo',
+        path: 'site/index.html',
+      })
+
+      expect(preview.previewKind).toBe('html')
+      expect(preview.mime).toBe('text/html')
+      expect(preview.resourcePathname).toBeNull()
+      expect(preview.entryPathname).toContain('/index.html')
+      expect(preview.urlPath).toContain('/index.html')
+    })
+
+    it('subscribes archive folder files from source content', async () => {
+      const context = createMockContext()
+      const documentService = context.documentService as unknown as {
+        readArchivedChangeFiles: ReturnType<typeof vi.fn>
+      }
+      documentService.readArchivedChangeFiles = vi
+        .fn()
+        .mockResolvedValue([
+          { path: 'reports/summary.md', type: 'file', content: '# Source summary\n' },
+        ])
+
+      const subscription = appRouter.createCaller(context).archive.subscribeFiles
+      const observable = await subscription({ id: 'old-change' })
+
+      const onData = vi.fn()
+      const onError = vi.fn()
+      const onComplete = vi.fn()
+
+      const teardown = observable.subscribe({
+        next: onData,
+        error: onError,
+        complete: onComplete,
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(documentService.readArchivedChangeFiles).toHaveBeenCalledWith(
+        'old-change',
+        'view',
+        'source'
+      )
+      expect(onData).toHaveBeenCalledWith([
+        { path: 'reports/summary.md', type: 'file', content: '# Source summary\n' },
+      ])
+      expect(onError).not.toHaveBeenCalled()
+      teardown.unsubscribe()
     })
   })
 

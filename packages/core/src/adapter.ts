@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from 'fs/promises'
 import { join } from 'path'
+import { inferFileMime, inferFilePreviewKind, isTextLikeFile } from './file-preview.js'
 import {
   buildOpsxEntityDetail,
   type OpsxEntityDetail,
@@ -287,8 +288,16 @@ export class OpenSpecAdapter {
         files.push({ path: relativePath, type: 'directory' })
         files.push(...(await this.collectChangeFiles(root, fullPath)))
       } else {
-        const content = await reactiveReadFile(fullPath)
+        const mime = inferFileMime(relativePath) ?? undefined
+        const previewKind = inferFilePreviewKind(relativePath, mime)
+        const content = isTextLikeFile(relativePath, mime) ? await reactiveReadFile(fullPath) : null
         files.push({ path: relativePath, type: 'file', content: content ?? undefined })
+        files[files.length - 1] = {
+          ...files[files.length - 1]!,
+          mime,
+          previewKind,
+          size: undefined,
+        }
       }
     }
 

@@ -524,6 +524,7 @@ export function FileExplorerCodeEditor({
   value,
   readOnly = true,
   onChange,
+  onSaveShortcut,
   lineWrapping,
   editorMinHeight,
 }: {
@@ -531,6 +532,7 @@ export function FileExplorerCodeEditor({
   value: string
   readOnly?: boolean
   onChange?: (value: string) => void
+  onSaveShortcut?: () => void
   lineWrapping?: boolean
   editorMinHeight?: string
 }) {
@@ -544,6 +546,7 @@ export function FileExplorerCodeEditor({
       className="min-h-0 flex-1"
       editorMinHeight={editorMinHeight}
       onChange={onChange}
+      onSaveShortcut={onSaveShortcut}
     />
   )
 }

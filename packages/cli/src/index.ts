@@ -112,6 +112,10 @@ function getWebAssetsDir(): string {
   throw new Error('Web assets not found. Make sure to build the web package first.')
 }
 
+function getPreviewAssetsDir(): string {
+  return getWebAssetsDir()
+}
+
 function setupStaticFiles(app: Hono): void {
   const webDir = getWebAssetsDir()
 
@@ -176,6 +180,7 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
       port,
       enableWatcher,
       corsOrigins,
+      previewAssetsDir: getPreviewAssetsDir(),
       gitWorktreeHandoff,
     },
     setupStaticFiles

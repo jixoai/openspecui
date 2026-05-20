@@ -95,6 +95,10 @@
     "@rjsf/core": "^6.5.2",
     "@rjsf/utils": "^6.5.2",
     "@rjsf/validator-ajv8": "^6.5.2",
-    "view-transitions-toolkit": "1.0.0"
+    "media-icons": "^0.10.0",
+    "pdfjs-dist": "^5.7.284",
+    "vidstack": "^0.6.15",
+    "view-transitions-toolkit": "1.0.0",
+    "yet-another-react-lightbox": "^3.32.0"
   }
 }

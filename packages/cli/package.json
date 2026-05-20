@@ -35,6 +35,8 @@
   },
   "dependencies": {
     "@lydell/node-pty": "^1.1.0",
+    "@openspecui/core": "workspace:*",
+    "@openspecui/server": "workspace:*",
     "@parcel/watcher": "^2.5.1",
     "better-sqlite3": "^12.5.0",
     "semver": "^7.7.3",
@@ -43,7 +45,6 @@
   },
   "devDependencies": {
     "@hono/node-server": "^1.14.1",
-    "@openspecui/server": "workspace:*",
     "@openspecui/web": "workspace:*",
     "@types/node": "^22.10.2",
     "@types/ws": "^8.5.13",

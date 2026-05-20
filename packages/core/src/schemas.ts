@@ -10,6 +10,7 @@
  */
 
 import { z } from 'zod'
+import { FILE_PREVIEW_KINDS } from './file-preview.js'
 
 // =====================
 // Change File Schema
@@ -27,6 +28,10 @@ export const ChangeFileSchema = z.object({
   content: z.string().optional(),
   /** Optional byte size for files */
   size: z.number().optional(),
+  /** Optional mime inferred from file path */
+  mime: z.string().optional(),
+  /** Optional preview kind inferred from file path and mime */
+  previewKind: z.enum(FILE_PREVIEW_KINDS).optional(),
 })
 
 export type ChangeFile = z.infer<typeof ChangeFileSchema>
