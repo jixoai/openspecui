@@ -4,74 +4,124 @@ import {
   useOpsxGlobArtifactFilesSubscription,
 } from '@/lib/use-opsx'
 import { useConfigSubscription } from '@/lib/use-subscription'
-import type { ArtifactStatus } from '@openspecui/core'
+import type { ArtifactStatus, OpsxEntityArtifactFile, OpsxEntityFile } from '@openspecui/core'
 import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
-import { AlertTriangle, CheckCircle2, Circle, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { OpsxArtifactDocumentShell } from './artifact-document-shell'
+import { MarkdownFilesContent, fileCountLabel } from './opsx-markdown-files-viewer'
 
 function isGlobPattern(pattern: string): boolean {
   return pattern.includes('*') || pattern.includes('?') || pattern.includes('[')
 }
 
+export interface ArtifactOutputDescriptor {
+  id: string
+  outputPath: string
+  status?: ArtifactStatus['status']
+  missingDeps?: readonly string[]
+  relativePath?: string
+  files?: readonly OpsxEntityArtifactFile[]
+}
+
+export interface DocumentContentFallbackDescriptor {
+  id?: string
+  label?: string
+  outputPath?: string
+  relativePath?: string
+  files: readonly OpsxEntityFile[]
+  emptyMessage: string
+}
+
 interface Props {
   changeId: string
-  artifact: ArtifactStatus
+  artifact: ArtifactOutputDescriptor
 }
 
-const statusConfig: Record<
-  ArtifactStatus['status'],
-  { label: string; className: string; icon: typeof Circle }
-> = {
-  done: { label: 'Done', className: 'text-emerald-500', icon: CheckCircle2 },
-  ready: { label: 'Ready', className: 'text-sky-500', icon: Circle },
-  blocked: { label: 'Blocked', className: 'text-amber-500', icon: AlertTriangle },
-}
-
-function ArtifactDocumentHeader({ artifact }: { artifact: ArtifactStatus }) {
-  const status = statusConfig[artifact.status]
-  const StatusIcon = status.icon
-
-  return (
-    <section className="border-border bg-muted/25 mb-5 rounded-md border px-4 py-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <div className="font-medium">{artifact.id}</div>
-          <div className="text-muted-foreground break-all text-xs">
-            {artifact.relativePath ?? artifact.outputPath}
-          </div>
-        </div>
-        <span
-          className={`inline-flex shrink-0 items-center gap-1.5 text-xs font-medium ${status.className}`}
-        >
-          <StatusIcon className="h-4 w-4" />
-          {status.label}
-        </span>
-      </div>
-      {artifact.status === 'blocked' && artifact.missingDeps?.length ? (
-        <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          <div>
-            <div className="font-medium">Blocked by missing dependencies</div>
-            <div className="mt-1">{artifact.missingDeps.join(', ')}</div>
-          </div>
-        </div>
-      ) : null}
-    </section>
-  )
-}
-
-function ArtifactDocumentShell({
+function ArtifactOutputDocumentShell({
   artifact,
   children,
 }: {
-  artifact: ArtifactStatus
+  artifact: ArtifactOutputDescriptor
   children: ReactNode
 }) {
   return (
-    <>
-      <ArtifactDocumentHeader artifact={artifact} />
+    <OpsxArtifactDocumentShell
+      id={artifact.id}
+      path={artifact.relativePath ?? artifact.outputPath}
+      status={artifact.status}
+      missingDeps={artifact.missingDeps}
+    >
       {children}
-    </>
+    </OpsxArtifactDocumentShell>
+  )
+}
+
+function ArtifactFilesDocumentShell({
+  artifact,
+  files,
+  translationConfig,
+}: {
+  artifact: Props['artifact']
+  files: readonly OpsxEntityArtifactFile[]
+  translationConfig?: DocumentTranslationConfig
+}) {
+  return (
+    <MarkdownViewer
+      markdown={(components) => (
+        <OpsxArtifactDocumentShell
+          id={artifact.id}
+          path={artifact.relativePath ?? artifact.outputPath}
+          meta={
+            <span className="text-muted-foreground inline-flex shrink-0 items-center gap-1.5 text-xs font-medium">
+              {fileCountLabel(files)}
+            </span>
+          }
+        >
+          <MarkdownFilesContent
+            components={components}
+            files={files}
+            emptyMessage="No Markdown files matched this artifact."
+            translationConfig={translationConfig}
+          />
+        </OpsxArtifactDocumentShell>
+      )}
+      path={artifact.relativePath ?? artifact.outputPath}
+      translationConfig={translationConfig}
+    />
+  )
+}
+
+function FallbackDocumentShell({
+  fallback,
+  translationConfig,
+}: {
+  fallback: DocumentContentFallbackDescriptor
+  translationConfig?: DocumentTranslationConfig
+}) {
+  return (
+    <MarkdownViewer
+      markdown={(components) => (
+        <OpsxArtifactDocumentShell
+          id={fallback.id ?? fallback.label ?? 'Content'}
+          path={fallback.relativePath ?? fallback.outputPath}
+          meta={
+            <span className="text-muted-foreground inline-flex shrink-0 items-center gap-1.5 text-xs font-medium">
+              {fileCountLabel(fallback.files)}
+            </span>
+          }
+        >
+          <MarkdownFilesContent
+            components={components}
+            files={fallback.files}
+            emptyMessage={fallback.emptyMessage}
+            translationConfig={translationConfig}
+          />
+        </OpsxArtifactDocumentShell>
+      )}
+      path={fallback.relativePath ?? fallback.outputPath}
+      translationConfig={translationConfig}
+    />
   )
 }
 
@@ -97,13 +147,13 @@ function SingleFileContent({
     return (
       <MarkdownViewer
         markdown={() => (
-          <ArtifactDocumentShell artifact={artifact}>
+          <ArtifactOutputDocumentShell artifact={artifact}>
             <MarkdownViewer
               markdown={content}
               path={artifact.outputPath}
               translationConfig={translationConfig}
             />
-          </ArtifactDocumentShell>
+          </ArtifactOutputDocumentShell>
         )}
         path={artifact.outputPath}
         translationConfig={translationConfig}
@@ -149,7 +199,7 @@ function GlobContent({
   return (
     <MarkdownViewer
       markdown={({ H1, Section }) => (
-        <ArtifactDocumentShell artifact={artifact}>
+        <ArtifactOutputDocumentShell artifact={artifact}>
           <div className="space-y-6">
             {files.map((file) => (
               <Section key={file.path}>
@@ -164,30 +214,75 @@ function GlobContent({
               </Section>
             ))}
           </div>
-        </ArtifactDocumentShell>
+        </ArtifactOutputDocumentShell>
       )}
     />
   )
 }
 
 export function ArtifactOutputViewer({ changeId, artifact }: Props) {
-  const isGlob = isGlobPattern(artifact.outputPath)
+  const { data: config } = useConfigSubscription()
+
+  if (artifact.files) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1">
+          <ArtifactFilesDocumentShell
+            artifact={artifact}
+            files={artifact.files}
+            translationConfig={config?.translation}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <LiveArtifactOutputViewer
+      changeId={changeId}
+      artifact={artifact}
+      translationConfig={config?.translation}
+    />
+  )
+}
+
+export function ContentFallbackViewer({
+  fallback,
+}: {
+  fallback: DocumentContentFallbackDescriptor
+}) {
   const { data: config } = useConfigSubscription()
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col py-4">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1">
+        <FallbackDocumentShell fallback={fallback} translationConfig={config?.translation} />
+      </div>
+    </div>
+  )
+}
+
+function LiveArtifactOutputViewer({
+  changeId,
+  artifact,
+  translationConfig,
+}: Props & { translationConfig?: DocumentTranslationConfig }) {
+  const isGlob = isGlobPattern(artifact.outputPath)
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1">
         {isGlob ? (
           <GlobContent
             changeId={changeId}
             artifact={artifact}
-            translationConfig={config?.translation}
+            translationConfig={translationConfig}
           />
         ) : (
           <SingleFileContent
             changeId={changeId}
             artifact={artifact}
-            translationConfig={config?.translation}
+            translationConfig={translationConfig}
           />
         )}
       </div>

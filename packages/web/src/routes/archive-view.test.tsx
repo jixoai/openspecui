@@ -1,10 +1,12 @@
 import type { OpsxEntityDetail } from '@openspecui/core'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ArchiveView } from './archive-view'
 
 const archiveSubscriptionMock = vi.hoisted(() => vi.fn())
+const artifactOutputSubscriptionMock = vi.hoisted(() => vi.fn())
+const globArtifactFilesSubscriptionMock = vi.hoisted(() => vi.fn())
 
 interface MockMarkdownBuilderComponents {
   H1: (props: { children?: ReactNode }) => ReactNode
@@ -18,8 +20,18 @@ vi.mock('@/lib/use-subscription', async (importOriginal) => {
   return {
     ...actual,
     useArchiveSubscription: archiveSubscriptionMock,
+    useConfigSubscription: () => ({
+      data: { translation: { enabled: false } },
+      isLoading: false,
+      error: null,
+    }),
   }
 })
+
+vi.mock('@/lib/use-opsx', () => ({
+  useOpsxArtifactOutputSubscription: artifactOutputSubscriptionMock,
+  useOpsxGlobArtifactFilesSubscription: globArtifactFilesSubscriptionMock,
+}))
 
 vi.mock('@tanstack/react-router', () => ({
   getRouteApi: () => ({
@@ -137,6 +149,8 @@ describe('ArchiveView', () => {
 
   beforeEach(() => {
     archiveSubscriptionMock.mockReset()
+    artifactOutputSubscriptionMock.mockReset()
+    globArtifactFilesSubscriptionMock.mockReset()
     archiveSubscriptionMock.mockReturnValue({
       data: archivedChange,
       isLoading: false,
@@ -156,6 +170,11 @@ describe('ArchiveView', () => {
     expect(screen.getAllByText('summary').length).toBeGreaterThan(0)
     expect(screen.getByText('# Processed summary')).toBeTruthy()
     expect(screen.getByText(/Schema: custom-audit/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'summary' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Folder' })).toBeTruthy()
+    expect(screen.getByText('1 file')).toBeTruthy()
+    expect(artifactOutputSubscriptionMock).not.toHaveBeenCalled()
+    expect(globArtifactFilesSubscriptionMock).not.toHaveBeenCalled()
   })
 
   it('keeps the loading state while the archive subscription has not resolved', () => {
@@ -195,8 +214,46 @@ describe('ArchiveView', () => {
 
     expect(screen.getByText('Content')).toBeTruthy()
     expect(screen.getByText('Folder')).toBeTruthy()
-    expect(screen.getByText('notes/decision.md')).toBeTruthy()
-    expect(screen.getByText(/Keep visible/)).toBeTruthy()
+    const content = document.querySelector('.vt-detail-content')
+    expect(content).toBeTruthy()
+    expect(
+      within(content as HTMLElement).getAllByText(
+        'archive/2026-05-17-fix-change-document-hook-rendering'
+      ).length
+    ).toBeGreaterThan(0)
+    expect(within(content as HTMLElement).getByText('notes/decision.md')).toBeTruthy()
+    expect(within(content as HTMLElement).getByText(/Keep visible/)).toBeTruthy()
     expect(screen.queryByText(/^folder:/)).not.toBeInTheDocument()
+  })
+
+  it('shows a friendly fallback for missing archived changes', () => {
+    archiveSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error(
+        "Archived change '2026-05-17-fix-change-document-hook-rendering' not found. Available archives: 2026-05-16-sample"
+      ),
+    })
+
+    render(<ArchiveView />)
+
+    expect(screen.getByText('Archived change not found in the current project.')).toBeTruthy()
+    expect(screen.queryByText(/Error loading archive:/)).toBeNull()
+    expect(screen.getByRole('link', { name: 'Back to Archive' }).getAttribute('href')).toBe(
+      '/archive'
+    )
+  })
+
+  it('surfaces non-not-found archive subscription errors through the shared detail view', () => {
+    archiveSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error('archive daemon unavailable'),
+    })
+
+    render(<ArchiveView />)
+
+    expect(screen.getByText('Error loading archive: archive daemon unavailable')).toBeTruthy()
+    expect(screen.queryByText('Archived change not found in the current project.')).toBeNull()
   })
 })
