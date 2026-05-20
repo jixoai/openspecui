@@ -1,3 +1,4 @@
+import type { BrowserTranslationStatus } from '@/lib/browser-translation'
 import { DOCUMENT_TRANSLATION_SESSION_STORAGE_KEY } from '@/lib/document-translation-session-state'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -5,12 +6,15 @@ import { MarkdownViewer } from './markdown-viewer'
 
 const translateMarkdownDocumentProgressivelyMock = vi.hoisted(() => vi.fn())
 const navigateMock = vi.hoisted(() => vi.fn())
+const probeBrowserTranslationMock = vi.hoisted(() =>
+  vi.fn(async (): Promise<BrowserTranslationStatus> => ({ availability: 'available' }))
+)
 
 vi.mock('@/lib/browser-translation', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/browser-translation')>()
   return {
     ...original,
-    probeBrowserTranslation: vi.fn(async () => ({ availability: 'available' })),
+    probeBrowserTranslation: probeBrowserTranslationMock,
     translateMarkdownDocumentProgressively: translateMarkdownDocumentProgressivelyMock,
   }
 })
@@ -40,12 +44,46 @@ describe('MarkdownViewer translation plugin', () => {
       />
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Configure translation' }))
+    const button = screen.getByRole('button', { name: 'Configure translation' })
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    expect(button).not.toBeDisabled()
+
+    fireEvent.click(button)
 
     expect(navigateMock).toHaveBeenCalledWith({
       to: '/settings',
       hash: 'settings-translation',
     })
+  })
+
+  it('renders a disabled translation action when browser translation is unavailable', async () => {
+    probeBrowserTranslationMock.mockResolvedValueOnce({
+      availability: 'missing',
+      message: 'Chrome Translator API is not exposed.',
+    })
+
+    render(
+      <MarkdownViewer
+        markdown={'# Hello'}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        }}
+      />
+    )
+
+    const button = await screen.findByRole('button', { name: 'Translation unavailable' })
+    await waitFor(() => expect(button).toBeDisabled())
+
+    expect(button.getAttribute('title')).toContain('Chrome Translator API is not exposed.')
+    expect(translateMarkdownDocumentProgressivelyMock).not.toHaveBeenCalled()
+
+    fireEvent.click(button)
+
+    expect(translateMarkdownDocumentProgressivelyMock).not.toHaveBeenCalled()
+    expect(navigateMock).not.toHaveBeenCalled()
   })
 
   it('projects direct translation as the final render stage and uses translated ToC labels', async () => {

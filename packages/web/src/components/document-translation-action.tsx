@@ -4,7 +4,7 @@ import { useDocumentTranslation } from '@/lib/use-document-translation'
 import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
 import { useNavigate } from '@tanstack/react-router'
 import type { Element, Properties, RootContent } from 'hast'
-import { Languages, Loader2 } from 'lucide-react'
+import { AlertTriangle, Languages, Loader2 } from 'lucide-react'
 import { useMemo } from 'react'
 import { visit } from 'unist-util-visit'
 import {
@@ -62,6 +62,8 @@ export function useDocumentTranslationRenderPlugin({
           translationConfig?.enabled ? 'enabled' : 'disabled',
           translationConfig?.targetLanguage,
           translationConfig?.displayMode,
+          session.capability?.availability ?? 'unknown',
+          session.capability?.message ?? 'no-message',
           session.status,
           hashString(markdown),
         ].join(':')
@@ -79,9 +81,14 @@ function DocumentTranslationAction({
 }) {
   const navigate = useNavigate()
   const { setActivation } = useDocumentTranslationActivation()
+  const capabilityUnavailable =
+    session.capability?.availability === 'missing' ||
+    session.capability?.availability === 'unavailable' ||
+    session.capability?.availability === 'error'
 
   return (
     <DocumentTranslationButton
+      capability={session.capability}
       enabled={enabled}
       status={session.status}
       onActivate={() => {
@@ -90,6 +97,9 @@ function DocumentTranslationAction({
             to: '/settings',
             hash: 'settings-translation',
           })
+          return
+        }
+        if (capabilityUnavailable || session.status === 'unavailable') {
           return
         }
         if (session.status === 'translating' || session.status === 'initializing') {
@@ -329,41 +339,79 @@ function sanitizeTranslatedProperties(properties: Properties): Properties {
 }
 
 function DocumentTranslationButton({
+  capability,
   enabled,
   status,
   onActivate,
 }: {
+  capability: ReturnType<typeof useDocumentTranslation>['capability']
   enabled: boolean
   status: ReturnType<typeof useDocumentTranslation>['status']
   onActivate: () => void
 }) {
+  const isCapabilityUnavailable =
+    capability?.availability === 'missing' ||
+    capability?.availability === 'unavailable' ||
+    capability?.availability === 'error' ||
+    status === 'unavailable'
+  const isSettingsDisabled = !enabled
   const isTranslated = status === 'translated'
   const isBusy = status === 'initializing' || status === 'translating'
-  const title = !enabled
-    ? 'Configure translation'
-    : isBusy
-      ? 'Cancel translation'
-      : isTranslated
-        ? 'Show source'
-        : 'Translate'
+  const ariaLabel = isCapabilityUnavailable
+    ? 'Translation unavailable'
+    : isSettingsDisabled
+      ? 'Configure translation'
+      : isBusy
+        ? 'Cancel translation'
+        : isTranslated
+          ? 'Show source'
+          : 'Translate'
+  const title = isCapabilityUnavailable
+    ? (capability?.message ?? 'Translation is unavailable in this browser.')
+    : isSettingsDisabled
+      ? 'Translation is disabled in settings.'
+      : ariaLabel
 
   return (
     <Button
       size="icon-sm"
       variant="secondary"
+      disabled={isCapabilityUnavailable}
+      aria-disabled={isSettingsDisabled ? true : undefined}
       onClick={(event) => {
         event.stopPropagation()
         onActivate()
       }}
       title={title}
-      aria-label={title}
+      aria-label={ariaLabel}
+      data-translation-action-state={
+        isCapabilityUnavailable
+          ? 'unavailable'
+          : isSettingsDisabled
+            ? 'settings-disabled'
+            : isBusy
+              ? 'busy'
+              : isTranslated
+                ? 'translated'
+                : 'ready'
+      }
       className={
-        isTranslated
-          ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90'
-          : 'border-primary text-primary hover:bg-primary/10'
+        isCapabilityUnavailable
+          ? 'border-border bg-muted text-muted-foreground disabled:border-border disabled:bg-muted disabled:text-muted-foreground'
+          : isSettingsDisabled
+            ? 'border-border bg-muted/40 text-muted-foreground opacity-70'
+            : isTranslated
+              ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90'
+              : 'border-primary text-primary hover:bg-primary/10'
       }
     >
-      {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Languages className="h-4 w-4" />}
+      {isBusy ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : isCapabilityUnavailable ? (
+        <AlertTriangle className="h-4 w-4" />
+      ) : (
+        <Languages className="h-4 w-4" />
+      )}
     </Button>
   )
 }

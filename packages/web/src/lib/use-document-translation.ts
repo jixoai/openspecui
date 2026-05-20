@@ -29,6 +29,14 @@ export interface DocumentTranslationSession {
   reset: () => void
 }
 
+function isUnavailableCapability(capability: BrowserTranslationStatus | null): boolean {
+  return (
+    capability?.availability === 'missing' ||
+    capability?.availability === 'unavailable' ||
+    capability?.availability === 'error'
+  )
+}
+
 export function useDocumentTranslation(
   markdown: string,
   config: DocumentTranslationConfig | undefined
@@ -60,10 +68,42 @@ export function useDocumentTranslation(
   useEffect(() => reset, [reset])
 
   useEffect(() => {
+    setCapability(null)
     setResult(null)
     setStatus('source')
     setError(null)
-  }, [markdown, config?.targetLanguage, config?.displayMode])
+  }, [markdown, config?.displayMode, config?.enabled, config?.targetLanguage])
+
+  useEffect(() => {
+    let disposed = false
+
+    if (!config?.enabled || markdown.length === 0) {
+      setCapability(null)
+      return () => {
+        disposed = true
+      }
+    }
+
+    void probeBrowserTranslation(config.targetLanguage)
+      .then((nextCapability) => {
+        if (disposed) return
+        setCapability(nextCapability)
+      })
+      .catch((probeError) => {
+        if (disposed) return
+        setCapability({
+          availability: 'error',
+          message:
+            probeError instanceof Error
+              ? probeError.message
+              : 'Unable to check translation support.',
+        })
+      })
+
+    return () => {
+      disposed = true
+    }
+  }, [config?.enabled, config?.targetLanguage, markdown.length])
 
   const start = useCallback(async () => {
     if (!config?.enabled) return
@@ -75,13 +115,12 @@ export function useDocumentTranslation(
     setStatus('initializing')
 
     try {
-      const nextCapability = await probeBrowserTranslation(config.targetLanguage)
-      setCapability(nextCapability)
-      if (
-        nextCapability.availability === 'missing' ||
-        nextCapability.availability === 'unavailable' ||
-        nextCapability.availability === 'error'
-      ) {
+      const nextCapability = capability ?? (await probeBrowserTranslation(config.targetLanguage))
+      if (!capability) {
+        setCapability(nextCapability)
+      }
+      if (isUnavailableCapability(nextCapability)) {
+        setError(nextCapability.message ?? 'Translation is unavailable.')
         setStatus('unavailable')
         return
       }
@@ -128,7 +167,7 @@ export function useDocumentTranslation(
         abortRef.current = null
       }
     }
-  }, [config?.displayMode, config?.enabled, config?.targetLanguage, markdown])
+  }, [capability, config?.displayMode, config?.enabled, config?.targetLanguage, markdown])
 
   useEffect(() => {
     latestStartRef.current = start
@@ -137,8 +176,10 @@ export function useDocumentTranslation(
   useEffect(() => {
     if (activation !== 'translated' || !config?.enabled || markdown.length === 0) return
     if (status !== 'source') return
+    if (capability === null) return
+    if (isUnavailableCapability(capability)) return
     void latestStartRef.current?.()
-  }, [activation, config?.enabled, markdown.length, status])
+  }, [activation, capability, config?.enabled, markdown.length, status])
 
   return {
     status,

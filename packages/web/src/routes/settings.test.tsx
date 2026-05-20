@@ -416,6 +416,41 @@ describe('Settings', () => {
     expect(screen.getByRole('button', { name: 'Clear search' })).toBeTruthy()
   })
 
+  it('uses popover theme tokens for the translation language dialog in dark mode-safe surfaces', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Translation target language' }))
+    const popover = screen.getByRole('dialog', { name: 'Select translation target language' })
+    dispatchPopoverToggle(popover, 'open')
+
+    expect(popover.className).toContain('bg-popover')
+    expect(popover.className).toContain('text-popover-foreground')
+    expect(screen.getByRole('option', { name: /Chinese 中文/ }).className).toContain(
+      'bg-primary/10'
+    )
+  })
+
   it('keeps the popover open when the inner search input is clicked', async () => {
     vi.stubGlobal(
       'matchMedia',

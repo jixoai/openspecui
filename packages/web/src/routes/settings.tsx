@@ -2560,7 +2560,7 @@ function TranslationLanguageCombobox({
         aria-label="Select translation target language"
         popover="auto"
         onToggle={handleToggle}
-        className="bg-card border-border m-0 rounded-md border p-2 shadow-lg backdrop:bg-transparent"
+        className="bg-popover text-popover-foreground border-border m-0 rounded-md border p-2 shadow-lg backdrop:bg-black/20"
         style={
           popoverPosition
             ? {
@@ -2573,7 +2573,7 @@ function TranslationLanguageCombobox({
             : undefined
         }
       >
-        <div className="border-border bg-background sticky top-0 z-10 mb-2 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border px-2 py-1.5">
+        <div className="border-border bg-popover sticky top-0 z-10 mb-2 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border px-2 py-1.5">
           <Search className="text-muted-foreground h-4 w-4" aria-hidden="true" />
           <input
             ref={searchInputRef}
@@ -2618,7 +2618,11 @@ function TranslationLanguageCombobox({
                 type="button"
                 role="option"
                 aria-selected={language.code === value}
-                className="hover:bg-muted grid w-full grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm"
+                className={`grid w-full grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm ${
+                  language.code === value
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-popover-foreground hover:bg-muted/70'
+                }`}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => commitLanguage(language.code)}
               >
