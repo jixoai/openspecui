@@ -147,9 +147,9 @@ describe('MarkdownViewer ToC behavior', () => {
       .join('\n')
     expect(styles).toContain('.toc-page-layout > .toc-page-content')
     expect(styles).toContain('padding-top: var(--toc-narrow-gap, 1rem)')
-    expect(styles).toContain('top: var(--toc-sticky-top, 1rem)')
+    expect(styles).toContain('top: var(--toc-sticky-top, 0)')
     expect(styles).toContain(
-      '--toc-anchor-scroll-margin-top: calc(var(--toc-sticky-top, 1rem) + 3rem)'
+      '--toc-anchor-scroll-margin-top: calc(var(--toc-sticky-top, 0) + 3rem)'
     )
     expect(styles).toContain('scroll-margin-top: var(--toc-anchor-scroll-margin-top)')
     expect(styles).toContain('.toc-narrow')

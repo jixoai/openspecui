@@ -287,7 +287,7 @@ const css = String.raw
 /** CSS for container queries and scroll-driven ToC highlighting */
 const tocStyles = css`
   .toc-root {
-    top: var(--toc-sticky-top, 1rem);
+    top: var(--toc-sticky-top, 0);
   }
   /*
    * Best practice: route headers live before toc-page-layout; narrow ToC is
@@ -296,7 +296,7 @@ const tocStyles = css`
    * shared visual gap that sticky margins cannot guarantee in scroll containers.
    */
   .toc-page-layout {
-    --toc-anchor-scroll-margin-top: calc(var(--toc-sticky-top, 1rem) + 3rem);
+    --toc-anchor-scroll-margin-top: calc(var(--toc-sticky-top, 0) + 3rem);
   }
   .toc-page-layout > .toc-page-content {
     padding-top: var(--toc-narrow-gap, 1rem);
@@ -324,7 +324,7 @@ const tocStyles = css`
   /* Wide container: show sidebar mode */
   @container (min-width: 768px) {
     .toc-page-layout {
-      --toc-anchor-scroll-margin-top: var(--toc-sticky-top, 1rem);
+      --toc-anchor-scroll-margin-top: var(--toc-sticky-top, 0);
     }
     .toc-narrow {
       display: none;
