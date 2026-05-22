@@ -1,6 +1,10 @@
 import {
   createBrowserTranslatorFactory,
+  prepareBrowserTranslator,
   probeBrowserTranslator,
+  scanBrowserTranslationSupportTable,
+  type BrowserTranslationAvailabilityRow,
+  type BrowserTranslationSupportTable,
   type BrowserTranslationAvailability,
   type BrowserTranslationStatus,
 } from '@openspecui/browser-translator'
@@ -35,11 +39,28 @@ import {
   restoreTranslatedPlaceholderFragment,
   type TranslationPlaceholderProtocol,
 } from './browser-translation-placeholders'
+import { SUPPORTED_TRANSLATION_LANGUAGES } from './translation-languages'
 
 export type {
   BrowserTranslationAvailability,
+  BrowserTranslationAvailabilityRow,
   BrowserTranslationStatus,
+  BrowserTranslationSupportTable,
 } from '@openspecui/browser-translator'
+
+export interface BrowserTranslationSupportTableState {
+  state: 'idle' | 'checking' | 'ready' | 'unavailable' | 'missing' | 'error'
+  table: BrowserTranslationSupportTable | null
+  message?: string
+}
+
+const browserSupportTableCache = new Map<string, BrowserTranslationSupportTableState>()
+
+export interface BrowserTranslationPrepareInput {
+  sourceLanguage?: string
+  signal: AbortSignal
+  onStatus?: (status: BrowserTranslationStatus) => void
+}
 
 export interface TranslationSegment {
   id: string
@@ -124,6 +145,14 @@ const DEFAULT_SOURCE_LANGUAGE = 'en'
 const DOCUMENT_LANGUAGE_CONFIDENCE_THRESHOLD = 0.45
 const SEGMENT_LANGUAGE_CONFIDENCE_THRESHOLD = 0.62
 const TRANSLATION_DISPLAY_POLICY_VERSION = TRANSLATION_CACHE_POLICY_VERSION
+const BROWSER_ROW_SORT_ORDER: Record<BrowserTranslationAvailability, number> = {
+  available: 0,
+  downloading: 1,
+  downloadable: 2,
+  error: 3,
+  missing: 4,
+  unavailable: 5,
+}
 
 export function isBrowserTranslationSupported(): boolean {
   return (
@@ -133,54 +162,328 @@ export function isBrowserTranslationSupported(): boolean {
 }
 
 export async function probeBrowserTranslation(
-  targetLanguage: string
+  targetLanguage: string,
+  sourceLanguage = DEFAULT_SOURCE_LANGUAGE
 ): Promise<BrowserTranslationStatus> {
   if (typeof window === 'undefined') {
     return { availability: 'missing', message: 'Browser translation is not available.' }
   }
 
-  return probeBrowserTranslator(targetLanguage, DEFAULT_SOURCE_LANGUAGE)
+  return probeBrowserTranslator(targetLanguage, sourceLanguage)
 }
 
 export async function prepareBrowserTranslation(
   targetLanguage: string,
-  signal: AbortSignal
+  input: BrowserTranslationPrepareInput
 ): Promise<BrowserTranslationStatus> {
   if (typeof window === 'undefined') {
     return { availability: 'missing', message: 'Browser translation is not available.' }
   }
+  return prepareBrowserTranslator(targetLanguage, {
+    sourceLanguage: input.sourceLanguage ?? DEFAULT_SOURCE_LANGUAGE,
+    signal: input.signal,
+    onStatus: input.onStatus,
+    win: window,
+  })
+}
+
+export function getBrowserSupportTableState(
+  targetLanguage: string
+): BrowserTranslationSupportTableState | null {
+  return browserSupportTableCache.get(normalizeBrowserSupportTargetKey(targetLanguage)) ?? null
+}
+
+export function setBrowserSupportTableState(
+  targetLanguage: string,
+  state: BrowserTranslationSupportTableState
+): void {
+  browserSupportTableCache.set(normalizeBrowserSupportTargetKey(targetLanguage), state)
+}
+
+export function patchBrowserSupportTableRow(
+  targetLanguage: string,
+  row: BrowserTranslationAvailabilityRow,
+  options: {
+    state?: BrowserTranslationSupportTableState['state']
+    message?: string
+  } = {}
+): BrowserTranslationSupportTableState {
+  const targetKey = normalizeBrowserSupportTargetKey(targetLanguage)
+  const current = browserSupportTableCache.get(targetKey)
+  const table = current?.table ?? {
+    targetLanguage: targetKey,
+    checked: 0,
+    total: 0,
+    updatedAt: Date.now(),
+    rows: [],
+  }
+  const nextTable: BrowserTranslationSupportTable = {
+    ...table,
+    targetLanguage: targetKey,
+    updatedAt: Date.now(),
+    rows: mergeBrowserSupportRows(table.rows, row),
+  }
+  const resolved = buildBrowserSupportResolvedState(nextTable)
+  const nextState: BrowserTranslationSupportTableState = {
+    ...resolved,
+    state: options.state ?? resolved.state,
+    message: options.message ?? resolved.message,
+  }
+  browserSupportTableCache.set(targetKey, nextState)
+  return nextState
+}
+
+export async function scanBrowserTranslationPairs(
+  targetLanguage: string,
+  options: {
+    signal: AbortSignal
+    onProgress?: (state: BrowserTranslationSupportTableState) => void
+  }
+): Promise<BrowserTranslationSupportTableState> {
+  if (typeof window === 'undefined') {
+    const nextState: BrowserTranslationSupportTableState = {
+      state: 'missing',
+      table: null,
+      message: 'Browser translation is not available.',
+    }
+    setBrowserSupportTableState(targetLanguage, nextState)
+    return nextState
+  }
+  if (!isBrowserTranslationSupported()) {
+    const nextState: BrowserTranslationSupportTableState = {
+      state: 'missing',
+      table: null,
+      message: 'Browser Translator API is not exposed.',
+    }
+    setBrowserSupportTableState(targetLanguage, nextState)
+    return nextState
+  }
+
+  const sourceLanguages = SUPPORTED_TRANSLATION_LANGUAGES.map((language) => language.code)
+  const targetKey = normalizeBrowserSupportTargetKey(targetLanguage)
+  const currentTable = browserSupportTableCache.get(targetKey)?.table
+
+  const checkingState: BrowserTranslationSupportTableState = {
+    state: 'checking',
+    table: currentTable
+      ? {
+          ...currentTable,
+          targetLanguage: targetKey,
+          checked: 0,
+          total: sourceLanguages.length,
+          updatedAt: Date.now(),
+        }
+      : {
+          targetLanguage: targetKey,
+          checked: 0,
+          total: sourceLanguages.length,
+          updatedAt: Date.now(),
+          rows: [],
+        },
+    message: buildBrowserSupportCheckingMessage(0, sourceLanguages.length),
+  }
+  browserSupportTableCache.set(targetKey, checkingState)
+  options.onProgress?.(checkingState)
 
   try {
-    const status = await probeBrowserTranslator(targetLanguage, DEFAULT_SOURCE_LANGUAGE)
-    const availability = status.availability
-
-    if (availability === 'missing' || availability === 'unavailable' || availability === 'error') {
-      return status
-    }
-
-    if (availability === 'available') {
-      return { availability: 'available' }
-    }
-
-    const factory = createBrowserTranslatorFactory()
-    throwIfAborted(signal)
-    const prepared = await raceAbort(
-      factory.create({
-        sourceLanguage: DEFAULT_SOURCE_LANGUAGE,
-        targetLanguage,
-        signal,
-      }),
-      signal,
-      (preparedTranslator) => preparedTranslator.destroy?.()
-    )
-    prepared.destroy?.()
-    return { availability: 'available' }
+    const table = await scanBrowserTranslationSupportTable({
+      sourceLanguages,
+      targetLanguage: targetKey,
+      signal: options.signal,
+      win: window,
+      onRow: (row) => {
+        const current = browserSupportTableCache.get(targetKey)?.table
+        const nextState: BrowserTranslationSupportTableState = {
+          state: 'checking',
+          table: current
+            ? {
+                ...current,
+                updatedAt: Date.now(),
+                rows: mergeBrowserSupportRows(current.rows, row),
+              }
+            : {
+                targetLanguage: targetKey,
+                checked: 0,
+                total: sourceLanguages.length,
+                updatedAt: Date.now(),
+                rows: mergeBrowserSupportRows([], row),
+              },
+          message: buildBrowserSupportCheckingMessage(
+            current?.checked ?? 0,
+            current?.total ?? sourceLanguages.length
+          ),
+        }
+        browserSupportTableCache.set(targetKey, nextState)
+        options.onProgress?.(nextState)
+      },
+      onProgress: ({ checked, total }) => {
+        const current = browserSupportTableCache.get(targetKey)?.table
+        const nextState: BrowserTranslationSupportTableState = {
+          state: 'checking',
+          table: current
+            ? {
+                ...current,
+                checked,
+                total,
+              }
+            : {
+                targetLanguage: targetKey,
+                checked,
+                total,
+                updatedAt: Date.now(),
+                rows: [],
+              },
+          message: buildBrowserSupportCheckingMessage(checked, total),
+        }
+        browserSupportTableCache.set(targetKey, nextState)
+        options.onProgress?.(nextState)
+      },
+    })
+    const nextState = buildBrowserSupportResolvedState({
+      ...table,
+      targetLanguage: targetKey,
+      rows: sortBrowserSupportRows(table.rows),
+    })
+    browserSupportTableCache.set(targetKey, nextState)
+    return nextState
   } catch (error) {
-    if (signal.aborted) {
-      return { availability: 'downloading', message: 'Translation initialization was cancelled.' }
+    if (options.signal.aborted) {
+      const cached = browserSupportTableCache.get(targetKey)
+      return (
+        cached ?? {
+          state: 'idle',
+          table: null,
+        }
+      )
     }
-    return { availability: 'error', message: getErrorMessage(error) }
+    const nextState: BrowserTranslationSupportTableState = {
+      state: 'error',
+      table: null,
+      message: error instanceof Error ? error.message : 'Unable to check browser translation pairs.',
+    }
+    browserSupportTableCache.set(targetKey, nextState)
+    return nextState
   }
+}
+
+function normalizeBrowserSupportTargetKey(targetLanguage: string): string {
+  return targetLanguage.trim()
+}
+
+function buildBrowserSupportCheckingMessage(checked: number, total: number): string {
+  return total > 0
+    ? `Checking browser translation pairs… ${checked}/${total}`
+    : 'Checking browser translation pairs…'
+}
+
+function buildBrowserSupportResolvedState(
+  table: BrowserTranslationSupportTable
+): BrowserTranslationSupportTableState {
+  const actionableRows = sortBrowserSupportRows(
+    table.rows.filter(
+      (row) =>
+        row.availability === 'available' ||
+        row.availability === 'downloading' ||
+        row.availability === 'downloadable'
+    )
+  )
+  if (actionableRows.length === 0) {
+    const hasErrors = table.rows.some((row) => row.availability === 'error')
+    if (hasErrors) {
+      return {
+        state: 'error',
+        table: {
+          ...table,
+          rows: [],
+        },
+        message: 'Unable to resolve browser translation pairs.',
+      }
+    }
+    return {
+      state: 'unavailable',
+      table: {
+        ...table,
+        rows: [],
+      },
+      message: 'No browser translation pairs are available for this target language.',
+    }
+  }
+  const nextTable = {
+    ...table,
+    rows: actionableRows,
+  }
+  return {
+    state: 'ready',
+    table: nextTable,
+    message: buildBrowserSupportReadyMessage(nextTable),
+  }
+}
+
+function buildBrowserSupportReadyMessage(table: BrowserTranslationSupportTable): string {
+  const counts = {
+    available: 0,
+    downloading: 0,
+    downloadable: 0,
+    error: 0,
+  }
+  for (const row of table.rows) {
+    switch (row.availability) {
+      case 'available':
+        counts.available += 1
+        break
+      case 'downloading':
+        counts.downloading += 1
+        break
+      case 'downloadable':
+        counts.downloadable += 1
+        break
+      case 'error':
+        counts.error += 1
+        break
+    }
+  }
+  const parts = [
+    counts.available > 0 ? `${counts.available} ready` : null,
+    counts.downloading > 0 ? `${counts.downloading} downloading` : null,
+    counts.downloadable > 0 ? `${counts.downloadable} downloadable` : null,
+    counts.error > 0 ? `${counts.error} error` : null,
+  ].filter((part): part is string => part !== null)
+  return parts.length > 0
+    ? `Browser translation pairs: ${parts.join(' · ')}.`
+    : 'Browser translation pairs are ready.'
+}
+
+function mergeBrowserSupportRows(
+  rows: readonly BrowserTranslationAvailabilityRow[],
+  row: BrowserTranslationAvailabilityRow
+): BrowserTranslationAvailabilityRow[] {
+  const normalizedRow: BrowserTranslationAvailabilityRow = {
+    ...row,
+    progress: row.availability === 'downloading' ? row.progress : undefined,
+  }
+  const nextRows = rows.filter(
+    (candidate) =>
+      candidate.sourceLanguage !== normalizedRow.sourceLanguage ||
+      candidate.targetLanguage !== normalizedRow.targetLanguage
+  )
+  if (
+    normalizedRow.availability !== 'unavailable' &&
+    normalizedRow.availability !== 'missing'
+  ) {
+    nextRows.push(normalizedRow)
+  }
+  return sortBrowserSupportRows(nextRows)
+}
+
+function sortBrowserSupportRows(
+  rows: readonly BrowserTranslationAvailabilityRow[]
+): BrowserTranslationAvailabilityRow[] {
+  return [...rows].sort((left, right) => {
+    const availabilityDelta =
+      BROWSER_ROW_SORT_ORDER[left.availability] - BROWSER_ROW_SORT_ORDER[right.availability]
+    if (availabilityDelta !== 0) return availabilityDelta
+    return left.sourceLanguage.localeCompare(right.sourceLanguage)
+  })
 }
 
 export async function translateMarkdownDocument(args: {

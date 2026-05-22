@@ -6,9 +6,13 @@ import { Switch } from '@/components/switch'
 import { TocSection } from '@/components/toc'
 import { Tooltip } from '@/components/tooltip'
 import {
+  getBrowserSupportTableState,
+  patchBrowserSupportTableRow,
   prepareBrowserTranslation,
-  probeBrowserTranslation,
-  type BrowserTranslationStatus,
+  scanBrowserTranslationPairs,
+  type BrowserTranslationAvailability,
+  type BrowserTranslationAvailabilityRow,
+  type BrowserTranslationSupportTableState,
 } from '@/lib/browser-translation'
 import { isStaticMode } from '@/lib/static-mode'
 import { runSingleTranslation } from '@/lib/translate-service'
@@ -81,27 +85,66 @@ const TRANSLATION_DISPLAY_MODE_OPTIONS = [
   { value: 'bilingual', label: 'Bilingual' },
 ] satisfies ButtonGroupOption<DocumentTranslationDisplayMode>[]
 
-function formatTranslationCapability(
-  capability: BrowserTranslationStatus | null,
-  loading: boolean
-): string {
-  if (loading) return 'Checking browser translation capability...'
-  if (!capability) return 'Capability not checked yet.'
+const BROWSER_ACTIONABLE_AVAILABILITIES = new Set<BrowserTranslationAvailability>([
+  'available',
+  'downloading',
+  'downloadable',
+])
 
-  switch (capability.availability) {
-    case 'available':
-      return 'Browser translator is ready.'
-    case 'downloadable':
-      return 'Language support can be downloaded by Chrome.'
-    case 'downloading':
-      return 'Chrome is preparing translation support.'
-    case 'missing':
-      return capability.message ?? 'Browser Translator API is not exposed.'
-    case 'unavailable':
-      return 'Translation is unavailable for this browser or language pair.'
-    case 'error':
-      return capability.message ?? 'Unable to check translation capability.'
+function getBrowserSupportRows(
+  state: BrowserTranslationSupportTableState | null
+): BrowserTranslationAvailabilityRow[] {
+  return state?.table?.rows ?? []
+}
+
+function getBrowserPairKey(row: Pick<BrowserTranslationAvailabilityRow, 'sourceLanguage' | 'targetLanguage'>): string {
+  return `${row.sourceLanguage}->${row.targetLanguage}`
+}
+
+function getBrowserPairLabel(row: BrowserTranslationAvailabilityRow): string {
+  const source = findTranslationLanguage(row.sourceLanguage)
+  const target = findTranslationLanguage(row.targetLanguage)
+  return `${source?.code ?? row.sourceLanguage} -> ${target?.code ?? row.targetLanguage}`
+}
+
+function getBrowserPairDescription(row: BrowserTranslationAvailabilityRow): string {
+  const source = findTranslationLanguage(row.sourceLanguage)
+  const target = findTranslationLanguage(row.targetLanguage)
+  return `${source?.label ?? row.sourceLanguage} to ${target?.label ?? row.targetLanguage}`
+}
+
+function getBrowserSupportMessage(state: BrowserTranslationSupportTableState | null): string {
+  if (!state) return 'Browser translation support has not been checked yet.'
+  return state.message ?? 'Browser translation support is unavailable.'
+}
+
+function getBrowserRowActionKind(input: {
+  row: BrowserTranslationAvailabilityRow | null
+  activeSourceLanguage: string | null
+}): 'download' | 'cancel' | 'downloaded' | 'progress' {
+  if (!input.row) return 'progress'
+  if (input.row.availability === 'available') return 'downloaded'
+  if (
+    input.row.availability === 'downloading' &&
+    input.activeSourceLanguage === input.row.sourceLanguage
+  ) {
+    return 'cancel'
   }
+  if (input.row.availability === 'downloadable') return 'download'
+  return 'progress'
+}
+
+function getBrowserStatusIconState(
+  state: BrowserTranslationSupportTableState | null
+): 'checking' | 'available' | 'downloadable' | 'unavailable' {
+  if (!state || state.state === 'idle' || state.state === 'checking') return 'checking'
+  if (state.state !== 'ready') return 'unavailable'
+  const rows = getBrowserSupportRows(state)
+  if (rows.some((row) => row.availability === 'available')) return 'available'
+  if (rows.some((row) => BROWSER_ACTIONABLE_AVAILABILITIES.has(row.availability))) {
+    return 'downloadable'
+  }
+  return 'unavailable'
 }
 
 function getTranslationSmokePreset(): {
@@ -150,9 +193,12 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const [translationCacheEntryLimit, setTranslationCacheEntryLimit] = useState(
     DEFAULT_TRANSLATION_CACHE_ENTRY_LIMIT
   )
-  const [translationCapability, setTranslationCapability] =
-    useState<BrowserTranslationStatus | null>(null)
-  const [translationCapabilityLoading, setTranslationCapabilityLoading] = useState(false)
+  const [browserSupportTable, setBrowserSupportTable] =
+    useState<BrowserTranslationSupportTableState | null>(null)
+  const [browserSelectedPairKey, setBrowserSelectedPairKey] = useState<string | null>(null)
+  const [browserPreparingSourceLanguage, setBrowserPreparingSourceLanguage] = useState<string | null>(
+    null
+  )
   const [aiBaseUrl, setAiBaseUrl] = useState('')
   const [aiToken, setAiToken] = useState('')
   const [aiModel, setAiModel] = useState('gpt-4.1-mini')
@@ -177,6 +223,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const [smokeResult, setSmokeResult] = useState('')
   const [smokeError, setSmokeError] = useState<string | null>(null)
   const [smokeRunning, setSmokeRunning] = useState(false)
+  const browserPrepareControllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     if (!config) return
@@ -448,35 +495,62 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     : null
   const persistedTranslationEngineId = config ? (config.translation?.engineId ?? 'browser') : null
 
-  const refreshTranslationCapability = useCallback(
-    async (targetLanguage: string, options: { initialize?: boolean } = {}) => {
-      setTranslationCapabilityLoading(true)
+  const refreshBrowserSupportTable = useCallback(
+    async (targetLanguage: string) => {
+      if (inStaticMode) return
       const controller = new AbortController()
       try {
-        const status = options.initialize
-          ? await prepareBrowserTranslation(targetLanguage, controller.signal)
-          : await probeBrowserTranslation(targetLanguage)
-        setTranslationCapability(status)
+        const state = await scanBrowserTranslationPairs(targetLanguage, {
+          signal: controller.signal,
+          onProgress: (nextState) => {
+            setBrowserSupportTable(nextState)
+          },
+        })
+        setBrowserSupportTable(state)
+        const selectedRows = getBrowserSupportRows(state)
+        setBrowserSelectedPairKey((current) => {
+          if (current && selectedRows.some((row) => getBrowserPairKey(row) === current)) {
+            return current
+          }
+          return selectedRows[0] ? getBrowserPairKey(selectedRows[0]) : null
+        })
       } finally {
         controller.abort()
-        setTranslationCapabilityLoading(false)
       }
     },
-    []
+    [inStaticMode]
   )
 
   useEffect(() => {
     if (inStaticMode || persistedTranslationEngineId !== 'browser') return
     if (effectiveTranslationEngineId !== 'browser') return
-    void refreshTranslationCapability(translationTargetLanguage, { initialize: translationEnabled })
+    const cached = getBrowserSupportTableState(translationTargetLanguage)
+    if (cached) {
+      setBrowserSupportTable(cached)
+      const cachedRows = getBrowserSupportRows(cached)
+      setBrowserSelectedPairKey((current) => {
+        if (current && cachedRows.some((row) => getBrowserPairKey(row) === current)) {
+          return current
+        }
+        return cachedRows[0] ? getBrowserPairKey(cachedRows[0]) : null
+      })
+      return
+    }
+    void refreshBrowserSupportTable(translationTargetLanguage)
   }, [
     inStaticMode,
     persistedTranslationEngineId,
-    refreshTranslationCapability,
-    translationEnabled,
     effectiveTranslationEngineId,
+    refreshBrowserSupportTable,
     translationTargetLanguage,
   ])
+
+  useEffect(() => {
+    if (effectiveTranslationEngineId === 'browser') return
+    browserPrepareControllerRef.current?.abort()
+    browserPrepareControllerRef.current = null
+    setBrowserPreparingSourceLanguage(null)
+  }, [effectiveTranslationEngineId])
 
   const engineOptions = useMemo<SelectOption<TranslationEngineId>[]>(
     () =>
@@ -495,10 +569,31 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const selectedEngineManifest = effectiveTranslationEngineId
     ? getTranslationEngineManifest(effectiveTranslationEngineId)
     : null
+  const browserRows = useMemo(
+    () => getBrowserSupportRows(browserSupportTable),
+    [browserSupportTable]
+  )
+  const selectedBrowserRow = useMemo(
+    () =>
+      browserRows.find((row) => getBrowserPairKey(row) === browserSelectedPairKey) ??
+      browserRows[0] ??
+      null,
+    [browserRows, browserSelectedPairKey]
+  )
+  const browserStatusIconState = getBrowserStatusIconState(browserSupportTable)
   const engineStatusMessage =
     effectiveTranslationEngineId === 'browser'
-      ? formatTranslationCapability(translationCapability, translationCapabilityLoading)
+      ? getBrowserSupportMessage(browserSupportTable)
       : (selectedEngine?.message ?? selectedEngine?.description ?? selectedEngineManifest?.description)
+  const browserRowActionKind = getBrowserRowActionKind({
+    row: selectedBrowserRow,
+    activeSourceLanguage: browserPreparingSourceLanguage,
+  })
+  const browserProgressPercent =
+    selectedBrowserRow?.availability === 'available'
+      ? 100
+      : Math.round((selectedBrowserRow?.progress ?? 0) * 100)
+  const browserCheckLoading = browserSupportTable?.state === 'checking'
   const nmtCatalogOptions = useMemo(() => {
     const merged = new Map<string, LocalModelCatalogItem>()
     for (const item of nmtLocalOptions) merged.set(item.id, item)
@@ -564,6 +659,79 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     },
     [effectiveLocalSelectedGroupId, localDownloadPlan, nmtModel]
   )
+  const startBrowserPairPreparation = useCallback(
+    async (row: BrowserTranslationAvailabilityRow) => {
+      browserPrepareControllerRef.current?.abort()
+      const controller = new AbortController()
+      browserPrepareControllerRef.current = controller
+      setBrowserPreparingSourceLanguage(row.sourceLanguage)
+      setBrowserSupportTable(
+        patchBrowserSupportTableRow(
+          row.targetLanguage,
+          {
+            ...row,
+            availability: 'downloading',
+            progress: row.progress ?? 0,
+            message: 'Downloading browser translation support.',
+          },
+          {
+            state: 'ready',
+          }
+        )
+      )
+      try {
+        const status = await prepareBrowserTranslation(row.targetLanguage, {
+          sourceLanguage: row.sourceLanguage,
+          signal: controller.signal,
+          onStatus: (nextStatus) => {
+            setBrowserSupportTable(
+              patchBrowserSupportTableRow(
+                row.targetLanguage,
+                {
+                  sourceLanguage: row.sourceLanguage,
+                  targetLanguage: row.targetLanguage,
+                  availability: nextStatus.availability,
+                  progress: nextStatus.progress,
+                  message: nextStatus.message,
+                },
+                {
+                  state: nextStatus.availability === 'error' ? 'error' : 'ready',
+                }
+              )
+            )
+          },
+        })
+        setBrowserSupportTable(
+          patchBrowserSupportTableRow(
+            row.targetLanguage,
+            {
+              sourceLanguage: row.sourceLanguage,
+              targetLanguage: row.targetLanguage,
+              availability: status.availability,
+              progress: status.progress,
+              message: status.message,
+            },
+            {
+              state: status.availability === 'error' ? 'error' : 'ready',
+            }
+          )
+        )
+      } finally {
+        if (browserPrepareControllerRef.current === controller) {
+          browserPrepareControllerRef.current = null
+        }
+        setBrowserPreparingSourceLanguage((current) =>
+          current === row.sourceLanguage ? null : current
+        )
+      }
+    },
+    []
+  )
+  const cancelBrowserPairPreparation = useCallback(() => {
+    browserPrepareControllerRef.current?.abort()
+    browserPrepareControllerRef.current = null
+    setBrowserPreparingSourceLanguage(null)
+  }, [])
   const runSmokeTest = useCallback(async () => {
     if (!effectiveTranslationEngineId) return
     const sourceText = smokeSourceText.trim() || getTranslationTestPlaceholder(smokeSourceLanguage)
@@ -637,7 +805,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
               setTranslationEnabled(checked)
               saveTranslationConfigMutation.mutate({ enabled: checked })
               if (checked && effectiveTranslationEngineId === 'browser') {
-                void refreshTranslationCapability(translationTargetLanguage, { initialize: true })
+                void refreshBrowserSupportTable(translationTargetLanguage)
               }
             }}
             ariaLabel="Enable document translation"
@@ -653,8 +821,10 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
               onChange={(targetLanguage) => {
                 setTranslationTargetLanguage(targetLanguage)
                 saveTranslationConfigMutation.mutate({ targetLanguage })
-                if (translationEnabled && effectiveTranslationEngineId === 'browser') {
-                  void refreshTranslationCapability(targetLanguage, { initialize: true })
+                if (effectiveTranslationEngineId === 'browser') {
+                  setBrowserSupportTable(null)
+                  setBrowserSelectedPairKey(null)
+                  void refreshBrowserSupportTable(targetLanguage)
                 }
               }}
               disabled={saveTranslationConfigMutation.isPending || inStaticMode}
@@ -686,9 +856,16 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                         setTranslationEngineId(engineId)
                         saveTranslationConfigMutation.mutate({ engineId })
                         if (engineId === 'browser' && !inStaticMode) {
-                          void refreshTranslationCapability(translationTargetLanguage, {
-                            initialize: translationEnabled,
-                          })
+                          const cached = getBrowserSupportTableState(translationTargetLanguage)
+                          if (cached) {
+                            setBrowserSupportTable(cached)
+                            const cachedRows = getBrowserSupportRows(cached)
+                            setBrowserSelectedPairKey(
+                              cachedRows[0] ? getBrowserPairKey(cachedRows[0]) : null
+                            )
+                          } else {
+                            void refreshBrowserSupportTable(translationTargetLanguage)
+                          }
                         }
                       }}
                       options={engineOptions}
@@ -726,9 +903,9 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                   ) : null}
                   <div className="text-muted-foreground flex min-w-0 items-center gap-2 leading-5">
                     {effectiveTranslationEngineId === 'browser' ? (
-                      translationCapabilityLoading ? (
+                      browserStatusIconState === 'checking' ? (
                         <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-                      ) : translationCapability?.availability === 'available' ? (
+                      ) : browserStatusIconState === 'available' ? (
                         <Tooltip content="Installed" delay={0}>
                           <button
                             type="button"
@@ -738,8 +915,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                             <CheckCircle className="h-4 w-4" />
                           </button>
                         </Tooltip>
-                      ) : translationCapability?.availability === 'downloadable' ||
-                        translationCapability?.availability === 'downloading' ? (
+                      ) : browserStatusIconState === 'downloadable' ? (
                         <Download className="h-4 w-4 shrink-0 text-sky-500" />
                       ) : (
                         <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
@@ -766,12 +942,8 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                   <Button
                     size="sm"
                     variant="secondary"
-                    onClick={() =>
-                      void refreshTranslationCapability(translationTargetLanguage, {
-                        initialize: translationEnabled,
-                      })
-                    }
-                    disabled={translationCapabilityLoading}
+                    onClick={() => void refreshBrowserSupportTable(translationTargetLanguage)}
+                    disabled={browserCheckLoading}
                   >
                     <RefreshCw className="h-3.5 w-3.5" />
                     Check
@@ -828,6 +1000,141 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                 className="border-input bg-background mt-2 h-9 w-full rounded-md border px-3 text-sm"
               />
             </label>
+          </div>
+        ) : null}
+        {effectiveTranslationEngineId === 'browser' ? (
+          <div className="border-border/60 border-t pt-3">
+            <div className="space-y-3 text-xs">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="block text-sm font-medium">Browser language pairs</label>
+                </div>
+                {browserSupportTable?.state === 'checking' && browserRows.length === 0 ? (
+                  <div className="text-muted-foreground flex items-center gap-2 text-[11px] leading-5">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    {engineStatusMessage}
+                  </div>
+                ) : null}
+                {browserRows.length > 0 ? (
+                  <div
+                    className="flex flex-wrap gap-1.5 pt-1"
+                    aria-label="Browser translation language pairs"
+                  >
+                    {browserRows.map((row) => {
+                      const selected = getBrowserPairKey(row) === getBrowserPairKey(selectedBrowserRow ?? row)
+                      const locallyAvailable = row.availability === 'available'
+                      return (
+                        <button
+                          key={getBrowserPairKey(row)}
+                          type="button"
+                          onClick={() => setBrowserSelectedPairKey(getBrowserPairKey(row))}
+                          className={`border-border inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-[11px] leading-none transition-colors ${
+                            locallyAvailable ? 'border-solid' : 'border-dashed'
+                          } ${
+                            selected
+                              ? 'bg-primary/10 text-primary'
+                              : 'text-muted-foreground hover:bg-muted/60'
+                          }`}
+                          title={getBrowserPairDescription(row)}
+                        >
+                          <span className="font-medium">{getBrowserPairLabel(row)}</span>
+                          {row.availability === 'downloading' ? (
+                            <span>{Math.round((row.progress ?? 0) * 100)}%</span>
+                          ) : row.availability === 'available' ? (
+                            <span>Ready</span>
+                          ) : (
+                            <span>Download</span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : browserSupportTable?.state === 'error' || browserSupportTable?.state === 'unavailable' || browserSupportTable?.state === 'missing' ? (
+                  <div className="text-muted-foreground leading-5">{engineStatusMessage}</div>
+                ) : null}
+              </div>
+              {selectedBrowserRow ? (
+                <div className="border-border rounded-md border bg-muted/30 px-3 py-2 text-xs">
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                    <div className="text-foreground flex min-w-0 items-center gap-2 font-medium">
+                      <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">
+                        {getBrowserPairDescription(selectedBrowserRow)}
+                      </span>
+                    </div>
+                    <div className="relative inline-flex h-10 w-10 items-center justify-center">
+                      <svg viewBox="0 0 40 40" className="h-10 w-10 -rotate-90">
+                        <circle
+                          cx="20"
+                          cy="20"
+                          r="16"
+                          className="stroke-border fill-none"
+                          strokeWidth="3"
+                        />
+                        <circle
+                          cx="20"
+                          cy="20"
+                          r="16"
+                          className={`fill-none transition-all ${
+                            browserRowActionKind === 'downloaded' ? 'stroke-emerald-500' : 'stroke-primary'
+                          }`}
+                          strokeWidth="3"
+                          strokeDasharray={100.531}
+                          strokeDashoffset={100.531 * (1 - browserProgressPercent / 100)}
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      {browserRowActionKind === 'download' ? (
+                        <Tooltip content="Download language pair" delay={0}>
+                          <button
+                            type="button"
+                            aria-label="Download browser language pair"
+                            onClick={() => void startBrowserPairPreparation(selectedBrowserRow)}
+                            className="text-foreground focus-visible:ring-primary absolute inline-flex h-8 w-8 items-center justify-center rounded-full bg-transparent outline-none transition-[background-color,transform] hover:scale-105 focus-visible:ring-1"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </button>
+                        </Tooltip>
+                      ) : browserRowActionKind === 'cancel' ? (
+                        <Tooltip content="Cancel download" delay={0}>
+                          <button
+                            type="button"
+                            aria-label="Cancel browser language pair download"
+                            onClick={cancelBrowserPairPreparation}
+                            className="text-foreground focus-visible:ring-primary group absolute inline-flex h-8 w-8 items-center justify-center rounded-full bg-transparent outline-none transition-[background-color,transform] hover:scale-105 focus-visible:ring-1"
+                          >
+                            <span className="text-[10px] font-medium group-hover:hidden">
+                              {`${browserProgressPercent}%`}
+                            </span>
+                            <X className="hidden h-3.5 w-3.5 group-hover:block" />
+                          </button>
+                        </Tooltip>
+                      ) : browserRowActionKind === 'downloaded' ? (
+                        <Tooltip content="Downloaded" delay={0}>
+                          <span
+                            aria-label="Downloaded"
+                            className="absolute inline-flex h-8 w-8 items-center justify-center rounded-full bg-transparent text-emerald-500"
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                          </span>
+                        </Tooltip>
+                      ) : (
+                        <span className="text-foreground absolute text-[10px] font-medium">
+                          {browserCheckLoading ? '...' : `${browserProgressPercent}%`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-muted-foreground mt-2 leading-5">
+                    {selectedBrowserRow.message ??
+                      (selectedBrowserRow.availability === 'available'
+                        ? 'This language pair is ready in the browser.'
+                        : selectedBrowserRow.availability === 'downloading'
+                          ? 'Chrome is downloading this language pair.'
+                          : 'This language pair can be downloaded by Chrome.')}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         ) : null}
         {effectiveTranslationEngineId === 'local' ? (

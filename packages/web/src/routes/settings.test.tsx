@@ -31,7 +31,24 @@ const { prepareBrowserTranslationMock, updateConfigMock, updateGlobalSettingsMoc
 )
 
 const browserTranslationMock = vi.hoisted(() => ({
-  probe: vi.fn(async () => ({ availability: 'available' })),
+  getState: vi.fn(() => null),
+  scan: vi.fn(async (targetLanguage: string) => ({
+    state: 'ready',
+    message: 'Browser translation pairs: 1 downloadable.',
+    table: {
+      targetLanguage,
+      checked: 1,
+      total: 1,
+      updatedAt: 1,
+      rows: [
+        {
+          sourceLanguage: 'en',
+          targetLanguage,
+          availability: 'downloadable',
+        },
+      ],
+    },
+  })),
   createExecution: vi.fn(() => ({
     factory: {
       create: vi.fn(async () => ({
@@ -697,8 +714,14 @@ vi.mock('@/components/toc', () => ({
 
 vi.mock('@/lib/browser-translation', () => ({
   createBrowserTranslationExecution: browserTranslationMock.createExecution,
+  getBrowserSupportTableState: browserTranslationMock.getState,
+  patchBrowserSupportTableRow: vi.fn((_targetLanguage, _row, _options) => ({
+    state: 'ready',
+    message: 'Browser translation pairs updated.',
+    table: null,
+  })),
   prepareBrowserTranslation: prepareBrowserTranslationMock,
-  probeBrowserTranslation: browserTranslationMock.probe,
+  scanBrowserTranslationPairs: browserTranslationMock.scan,
 }))
 
 vi.mock('@/lib/static-mode', () => ({
@@ -991,11 +1014,11 @@ describe('Settings', () => {
       expect(updateConfigMock).toHaveBeenCalledWith({ translation: { enabled: true } })
     )
     await waitFor(() =>
-      expect(prepareBrowserTranslationMock).toHaveBeenCalledWith('zh', expect.any(AbortSignal))
+      expect(browserTranslationMock.scan).toHaveBeenCalledWith('zh', expect.any(Object))
     )
   })
 
-  it('checks browser translation capability automatically after selecting the browser engine', async () => {
+  it('checks browser translation support automatically after selecting the browser engine', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -1004,7 +1027,6 @@ describe('Settings', () => {
         removeEventListener: vi.fn(),
       }))
     )
-    browserTranslationMock.probe.mockResolvedValue({ availability: 'available' })
     useConfigSubscriptionMock.mockReturnValue({
       data: {
         translation: {
@@ -1021,7 +1043,7 @@ describe('Settings', () => {
     render(<Settings />)
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
-    expect(browserTranslationMock.probe).not.toHaveBeenCalled()
+    expect(browserTranslationMock.scan).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole('combobox', { name: 'Engine' }))
     const browserOption = await screen.findByRole('option', { name: 'Browser' })
@@ -1031,7 +1053,7 @@ describe('Settings', () => {
     await waitFor(() =>
       expect(updateConfigMock).toHaveBeenCalledWith({ translation: { engineId: 'browser' } })
     )
-    await waitFor(() => expect(browserTranslationMock.probe).toHaveBeenCalledWith('zh'))
+    await waitFor(() => expect(browserTranslationMock.scan).toHaveBeenCalledWith('zh', expect.any(Object)))
     expect(prepareBrowserTranslationMock).not.toHaveBeenCalled()
   })
 
@@ -1061,7 +1083,59 @@ describe('Settings', () => {
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     expect(screen.getByRole('combobox', { name: 'Engine' })).toHaveTextContent('Local-Transformers')
-    expect(browserTranslationMock.probe).not.toHaveBeenCalled()
+    expect(browserTranslationMock.scan).not.toHaveBeenCalled()
+  })
+
+  it('renders browser language-pair chips from the support table', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    browserTranslationMock.scan.mockResolvedValueOnce({
+      state: 'ready',
+      message: 'Browser translation pairs: 1 ready · 1 downloadable.',
+      table: {
+        targetLanguage: 'zh',
+        checked: 2,
+        total: 2,
+        updatedAt: 1,
+        rows: [
+          {
+            sourceLanguage: 'en',
+            targetLanguage: 'zh',
+            availability: 'available',
+          },
+          {
+            sourceLanguage: 'ja',
+            targetLanguage: 'zh',
+            availability: 'downloadable',
+          },
+        ],
+      },
+    })
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+          engineId: 'browser',
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    expect(screen.getByLabelText('Browser translation language pairs')).toBeTruthy()
+    expect(screen.getByText('en -> zh')).toBeTruthy()
+    expect(screen.getByText('ja -> zh')).toBeTruthy()
   })
 
   it('uses project Local model settings before global settings resolve', async () => {

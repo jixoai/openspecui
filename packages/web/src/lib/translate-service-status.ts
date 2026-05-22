@@ -3,7 +3,10 @@ import type {
   LocalModelAssetState,
   TranslationEngineId,
 } from '@openspecui/core/translator'
-import type { BrowserTranslationStatus } from './browser-translation'
+import type {
+  BrowserTranslationStatus,
+  BrowserTranslationSupportTableState,
+} from './browser-translation'
 
 export type TranslateServiceStatus =
   | {
@@ -32,6 +35,7 @@ export interface TranslateServiceProjectionInput {
   engineId: TranslationEngineId
   browserCapability?: BrowserTranslationStatus | null
   browserCapabilityLoading?: boolean
+  browserSupportTable?: BrowserTranslationSupportTableState | null
   localModel?: string
   localSelectedGroupId?: string
   localAsset?: LocalModelAssetState | null
@@ -55,6 +59,32 @@ export function projectTranslateServiceStatus(
   }
 
   if (input.engineId === 'browser') {
+    if (input.browserSupportTable) {
+      switch (input.browserSupportTable.state) {
+        case 'idle':
+        case 'checking':
+          return {
+            state: 'checking',
+            engineId: 'browser',
+            message: input.browserSupportTable.message ?? 'Checking browser translation capability.',
+          }
+        case 'ready':
+          return {
+            state: 'ready',
+            engineId: 'browser',
+            message:
+              input.browserSupportTable.message ?? 'Browser translation pairs are available.',
+          }
+        case 'unavailable':
+        case 'missing':
+        case 'error':
+          return {
+            state: 'unavailable',
+            engineId: 'browser',
+            message: input.browserSupportTable.message ?? 'Translation is unavailable.',
+          }
+      }
+    }
     if (!input.browserCapability) {
       return {
         state: 'ready',

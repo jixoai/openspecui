@@ -1,4 +1,4 @@
-import type { BrowserTranslationStatus } from '@/lib/browser-translation'
+import type { BrowserTranslationSupportTableState } from '@/lib/browser-translation'
 import { DOCUMENT_TRANSLATION_SESSION_STORAGE_KEY } from '@/lib/document-translation-session-state'
 import type { LocalModelAssetState } from '@openspecui/core/translator'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -7,8 +7,43 @@ import { MarkdownViewer } from './markdown-viewer'
 
 const translateMarkdownDocumentProgressivelyMock = vi.hoisted(() => vi.fn())
 const navigateMock = vi.hoisted(() => vi.fn())
-const probeBrowserTranslationMock = vi.hoisted(() =>
-  vi.fn(async (): Promise<BrowserTranslationStatus> => ({ availability: 'available' }))
+const getBrowserSupportTableStateMock = vi.hoisted(() =>
+  vi.fn<(targetLanguage: string) => BrowserTranslationSupportTableState | null>((targetLanguage) => ({
+    state: 'ready',
+    message: 'Browser translation pairs: 1 ready.',
+    table: {
+      targetLanguage,
+      checked: 1,
+      total: 1,
+      updatedAt: 1,
+      rows: [
+        {
+          sourceLanguage: 'en',
+          targetLanguage,
+          availability: 'available',
+        },
+      ],
+    },
+  }))
+)
+const scanBrowserTranslationPairsMock = vi.hoisted(() =>
+  vi.fn(async (targetLanguage: string): Promise<BrowserTranslationSupportTableState> => ({
+    state: 'ready',
+    message: 'Browser translation pairs: 1 ready.',
+    table: {
+      targetLanguage,
+      checked: 1,
+      total: 1,
+      updatedAt: 1,
+      rows: [
+        {
+          sourceLanguage: 'en',
+          targetLanguage,
+          availability: 'available',
+        },
+      ],
+    },
+  }))
 )
 const nmtModelStateMock = vi.hoisted(() => vi.fn())
 
@@ -16,7 +51,8 @@ vi.mock('@/lib/browser-translation', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/browser-translation')>()
   return {
     ...original,
-    probeBrowserTranslation: probeBrowserTranslationMock,
+    getBrowserSupportTableState: getBrowserSupportTableStateMock,
+    scanBrowserTranslationPairs: scanBrowserTranslationPairsMock,
     translateMarkdownDocumentProgressively: translateMarkdownDocumentProgressivelyMock,
   }
 })
@@ -83,9 +119,11 @@ describe('MarkdownViewer translation plugin', () => {
   })
 
   it('renders a disabled translation action when browser translation is unavailable', async () => {
-    probeBrowserTranslationMock.mockResolvedValueOnce({
-      availability: 'missing',
+    getBrowserSupportTableStateMock.mockReturnValueOnce(null)
+    scanBrowserTranslationPairsMock.mockResolvedValueOnce({
+      state: 'missing',
       message: 'Chrome Translator API is not exposed.',
+      table: null,
     })
 
     render(
@@ -149,7 +187,7 @@ describe('MarkdownViewer translation plugin', () => {
         selectedGroupId: 'q8',
       })
     )
-    expect(probeBrowserTranslationMock).not.toHaveBeenCalled()
+    expect(scanBrowserTranslationPairsMock).not.toHaveBeenCalled()
     const button = await screen.findByRole('button', { name: 'Translate' })
     expect(button).not.toBeDisabled()
     expect(button).toHaveAttribute('data-translation-action-state', 'ready')
@@ -187,7 +225,7 @@ describe('MarkdownViewer translation plugin', () => {
     const button = await screen.findByRole('button', { name: 'Translation unavailable' })
     expect(button).toBeDisabled()
     expect(button.getAttribute('title')).toContain('not installed locally')
-    expect(probeBrowserTranslationMock).not.toHaveBeenCalled()
+    expect(scanBrowserTranslationPairsMock).not.toHaveBeenCalled()
   })
 
   it('projects direct translation as the final render stage and uses translated ToC labels', async () => {

@@ -1,9 +1,12 @@
 import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  probeBrowserTranslation,
+  getBrowserSupportTableState,
+  patchBrowserSupportTableRow,
+  scanBrowserTranslationPairs,
   translateMarkdownDocumentProgressively,
   type BrowserTranslationStatus,
+  type BrowserTranslationSupportTableState,
   type DocumentTranslationProgressPatch,
   type DocumentTranslationResult,
 } from './browser-translation'
@@ -35,20 +38,14 @@ export interface DocumentTranslationSession {
   reset: () => void
 }
 
-function isUnavailableCapability(capability: BrowserTranslationStatus | null): boolean {
-  return (
-    capability?.availability === 'missing' ||
-    capability?.availability === 'unavailable' ||
-    capability?.availability === 'error'
-  )
-}
-
 export function useDocumentTranslation(
   markdown: string,
   config: DocumentTranslationConfig | undefined
 ): DocumentTranslationSession {
   const [status, setStatus] = useState<DocumentTranslationSessionStatus>('source')
   const [capability, setCapability] = useState<BrowserTranslationStatus | null>(null)
+  const [browserSupportTable, setBrowserSupportTable] =
+    useState<BrowserTranslationSupportTableState | null>(null)
   const [serviceStatus, setServiceStatus] = useState<TranslateServiceStatus>({
     state: 'disabled',
     message: 'Translation is disabled in settings.',
@@ -79,6 +76,7 @@ export function useDocumentTranslation(
 
   useEffect(() => {
     setCapability(null)
+    setBrowserSupportTable(null)
     setResult(null)
     setStatus('source')
     setError(null)
@@ -89,6 +87,7 @@ export function useDocumentTranslation(
 
     if (!config?.enabled || markdown.length === 0) {
       setCapability(null)
+      setBrowserSupportTable(null)
       setServiceStatus(
         projectTranslateServiceStatus({
           enabled: config?.enabled ?? false,
@@ -103,6 +102,7 @@ export function useDocumentTranslation(
 
     if (config.engineId === 'local') {
       setCapability(null)
+      setBrowserSupportTable(null)
       setServiceStatus(
         projectTranslateServiceStatus({
           enabled: config.enabled,
@@ -164,6 +164,7 @@ export function useDocumentTranslation(
 
     if (config.engineId === 'openai') {
       setCapability(null)
+      setBrowserSupportTable(null)
       setServiceStatus(
         projectTranslateServiceStatus({
           enabled: config.enabled,
@@ -176,24 +177,59 @@ export function useDocumentTranslation(
       }
     }
 
+    const cachedTable = getBrowserSupportTableState(config.targetLanguage)
+    if (cachedTable) {
+      setBrowserSupportTable(cachedTable)
+      setServiceStatus(
+        projectTranslateServiceStatus({
+          enabled: config.enabled,
+          hasSource: markdown.length > 0,
+          engineId: 'browser',
+          browserSupportTable: cachedTable,
+        })
+      )
+      return () => {
+        disposed = true
+      }
+    }
+
     setServiceStatus(
       projectTranslateServiceStatus({
         enabled: config.enabled,
         hasSource: markdown.length > 0,
         engineId: 'browser',
-        browserCapabilityLoading: true,
+        browserSupportTable: {
+          state: 'checking',
+          table: null,
+          message: 'Checking browser translation pairs…',
+        },
       })
     )
-    void probeBrowserTranslation(config.targetLanguage)
-      .then((nextCapability) => {
+    const controller = new AbortController()
+    void scanBrowserTranslationPairs(config.targetLanguage, {
+      signal: controller.signal,
+      onProgress: (nextState) => {
         if (disposed) return
-        setCapability(nextCapability)
+        setBrowserSupportTable(nextState)
         setServiceStatus(
           projectTranslateServiceStatus({
             enabled: config.enabled,
             hasSource: markdown.length > 0,
             engineId: 'browser',
-            browserCapability: nextCapability,
+            browserSupportTable: nextState,
+          })
+        )
+      },
+    })
+      .then((nextState) => {
+        if (disposed) return
+        setBrowserSupportTable(nextState)
+        setServiceStatus(
+          projectTranslateServiceStatus({
+            enabled: config.enabled,
+            hasSource: markdown.length > 0,
+            engineId: 'browser',
+            browserSupportTable: nextState,
           })
         )
       })
@@ -219,6 +255,7 @@ export function useDocumentTranslation(
 
     return () => {
       disposed = true
+      controller.abort()
     }
   }, [
     config?.enabled,
@@ -245,15 +282,37 @@ export function useDocumentTranslation(
         return
       }
       if (config.engineId === 'browser') {
-        const nextCapability = capability ?? (await probeBrowserTranslation(config.targetLanguage))
-        if (!capability) {
-          setCapability(nextCapability)
-        }
-        if (isUnavailableCapability(nextCapability)) {
-          setError(nextCapability.message ?? 'Translation is unavailable.')
+        const preferredRow =
+          browserSupportTable?.table?.rows.find((row) => row.availability === 'available') ??
+          browserSupportTable?.table?.rows.find((row) => row.availability === 'downloading') ??
+          browserSupportTable?.table?.rows.find((row) => row.availability === 'downloadable') ??
+          null
+        if (!preferredRow) {
+          setError(serviceStatus.message)
           setStatus('unavailable')
           return
         }
+        const nextCapability: BrowserTranslationStatus = {
+          availability: preferredRow.availability,
+          progress: preferredRow.progress,
+          message: preferredRow.message,
+        }
+        setCapability(nextCapability)
+        const nextTable = patchBrowserSupportTableRow(
+          config.targetLanguage,
+          preferredRow,
+          { message: undefined }
+        )
+        setBrowserSupportTable(nextTable)
+        setServiceStatus(
+          projectTranslateServiceStatus({
+            enabled: config.enabled,
+            hasSource: markdown.length > 0,
+            engineId: 'browser',
+            browserSupportTable: nextTable,
+            browserCapability: nextCapability,
+          })
+        )
       }
 
       setStatus('translating')
@@ -300,6 +359,7 @@ export function useDocumentTranslation(
       }
     }
   }, [
+    browserSupportTable,
     capability,
     config?.displayMode,
     config?.enabled,
