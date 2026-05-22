@@ -150,6 +150,8 @@ describe('ConfigManager', () => {
         targetLanguage: 'zh',
         displayMode: 'direct',
         cacheEnabled: false,
+        engineId: 'browser',
+        engines: { nmt: {}, ai: {} },
       })
     })
 
@@ -272,6 +274,8 @@ describe('ConfigManager', () => {
         targetLanguage: 'zh',
         displayMode: 'bilingual',
         cacheEnabled: true,
+        engineId: 'browser',
+        engines: { nmt: {}, ai: {} },
       })
       await expect(readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')).resolves.toBe(
         '{\n  "translation": {\n    "enabled": true,\n    "displayMode": "bilingual",\n    "cacheEnabled": true\n  }\n}'
@@ -286,6 +290,27 @@ describe('ConfigManager', () => {
       expect(config.translation).toEqual(DEFAULT_CONFIG.translation)
       await expect(readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')).resolves.toBe(
         '{}'
+      )
+    })
+
+    it('should merge per-engine translation model patches without overwriting siblings', async () => {
+      await configManager.writeConfig({
+        translation: { engines: { ai: { model: 'gpt-4.1-mini' } } },
+      })
+      clearCache()
+
+      await configManager.writeConfig({
+        translation: { engines: { nmt: { model: 'Xenova/custom-nmt' } } },
+      })
+      clearCache()
+
+      const config = await configManager.readConfig()
+      expect(config.translation.engines).toEqual({
+        ai: { model: 'gpt-4.1-mini' },
+        nmt: { model: 'Xenova/custom-nmt' },
+      })
+      await expect(readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')).resolves.toBe(
+        '{\n  "translation": {\n    "engines": {\n      "nmt": {\n        "model": "Xenova/custom-nmt"\n      },\n      "ai": {\n        "model": "gpt-4.1-mini"\n      }\n    }\n  }\n}'
       )
     })
 
@@ -612,6 +637,8 @@ describe('OpenSpecUIConfigSchema', () => {
       expect(result.data.translation.enabled).toBe(false)
       expect(result.data.translation.targetLanguage).toBe('zh')
       expect(result.data.translation.displayMode).toBe('direct')
+      expect(result.data.translation.engineId).toBe('browser')
+      expect(result.data.translation.engines).toEqual({ nmt: {}, ai: {} })
     }
   })
 
@@ -713,6 +740,8 @@ describe('DEFAULT_CONFIG', () => {
     expect(DEFAULT_CONFIG.translation.targetLanguage).toBe('zh')
     expect(DEFAULT_CONFIG.translation.displayMode).toBe('direct')
     expect(DEFAULT_CONFIG.translation.cacheEnabled).toBe(false)
+    expect(DEFAULT_CONFIG.translation.engineId).toBe('browser')
+    expect(DEFAULT_CONFIG.translation.engines).toEqual({ nmt: {}, ai: {} })
   })
 })
 

@@ -1,4 +1,10 @@
 import {
+  createBrowserTranslatorFactory,
+  probeBrowserTranslator,
+  type BrowserTranslationAvailability,
+  type BrowserTranslationStatus,
+} from '@openspecui/browser-translator'
+import {
   TRANSLATION_CACHE_POLICY_VERSION,
   type DocumentTranslationDisplayMode,
   type TranslationCacheEntry,
@@ -10,6 +16,13 @@ import {
   type MarkdownFactKind,
 } from '@openspecui/core/markdown-facts'
 import { getMarkdownFactSpan } from '@openspecui/core/markdown-reading'
+import {
+  DEFAULT_TRANSLATION_ENGINE_ID,
+  TRANSLATOR_CONTRACT_VERSION,
+  type TranslationEngineId,
+  type Translator,
+  type TranslatorFactory,
+} from '@openspecui/core/translator'
 import type { Element, Root, RootContent } from 'hast'
 import remarkGfm from 'remark-gfm'
 import remarkParse from 'remark-parse'
@@ -23,19 +36,10 @@ import {
   type TranslationPlaceholderProtocol,
 } from './browser-translation-placeholders'
 
-export type BrowserTranslationAvailability =
-  | 'available'
-  | 'downloadable'
-  | 'downloading'
-  | 'unavailable'
-  | 'missing'
-  | 'error'
-
-export interface BrowserTranslationStatus {
-  availability: BrowserTranslationAvailability
-  progress?: number
-  message?: string
-}
+export type {
+  BrowserTranslationAvailability,
+  BrowserTranslationStatus,
+} from '@openspecui/browser-translator'
 
 export interface TranslationSegment {
   id: string
@@ -75,18 +79,27 @@ export interface BrowserTranslationCache {
   write(input: TranslationCacheWriteInput): Promise<{ accepted: boolean } | void>
 }
 
-interface BrowserTranslator {
-  translate(input: string): Promise<string>
-  destroy?: () => void
+interface TranslationEngineCacheIdentity {
+  engineId: TranslationEngineId
+  engineVersion?: string
+  model?: string
+  selectedGroupId?: string
+  translatorContractVersion: number
 }
 
-interface BrowserTranslatorFactory {
-  availability(options: { sourceLanguage: string; targetLanguage: string }): Promise<string>
-  create(options: {
-    sourceLanguage: string
-    targetLanguage: string
-    monitor?: (monitor: EventTarget) => void
-  }): Promise<BrowserTranslator>
+export interface TranslationEngineExecution {
+  factory: TranslatorFactory
+  cacheIdentity: TranslationEngineCacheIdentity
+}
+
+export function createBrowserTranslationExecution(): TranslationEngineExecution {
+  return {
+    factory: createBrowserTranslatorFactory(),
+    cacheIdentity: {
+      engineId: DEFAULT_TRANSLATION_ENGINE_ID,
+      translatorContractVersion: TRANSLATOR_CONTRACT_VERSION,
+    },
+  }
 }
 
 interface BrowserLanguageDetector {
@@ -100,8 +113,11 @@ interface BrowserLanguageDetectorFactory {
 }
 
 interface WindowWithChromeAi extends Window {
-  Translator?: BrowserTranslatorFactory
   LanguageDetector?: BrowserLanguageDetectorFactory
+}
+
+interface WindowWithTranslator extends Window {
+  Translator?: unknown
 }
 
 const DEFAULT_SOURCE_LANGUAGE = 'en'
@@ -110,7 +126,10 @@ const SEGMENT_LANGUAGE_CONFIDENCE_THRESHOLD = 0.62
 const TRANSLATION_DISPLAY_POLICY_VERSION = TRANSLATION_CACHE_POLICY_VERSION
 
 export function isBrowserTranslationSupported(): boolean {
-  return typeof window !== 'undefined' && !!(window as WindowWithChromeAi).Translator
+  return (
+    typeof window !== 'undefined' &&
+    !!(window as WindowWithChromeAi & WindowWithTranslator).Translator
+  )
 }
 
 export async function probeBrowserTranslation(
@@ -120,20 +139,7 @@ export async function probeBrowserTranslation(
     return { availability: 'missing', message: 'Browser translation is not available.' }
   }
 
-  const translator = (window as WindowWithChromeAi).Translator
-  if (!translator) {
-    return { availability: 'missing', message: 'Chrome Translator API is not exposed.' }
-  }
-
-  try {
-    const availability = await translator.availability({
-      sourceLanguage: DEFAULT_SOURCE_LANGUAGE,
-      targetLanguage,
-    })
-    return { availability: normalizeAvailability(availability) }
-  } catch (error) {
-    return { availability: 'error', message: getErrorMessage(error) }
-  }
+  return probeBrowserTranslator(targetLanguage, DEFAULT_SOURCE_LANGUAGE)
 }
 
 export async function prepareBrowserTranslation(
@@ -144,35 +150,25 @@ export async function prepareBrowserTranslation(
     return { availability: 'missing', message: 'Browser translation is not available.' }
   }
 
-  const translator = (window as WindowWithChromeAi).Translator
-  if (!translator) {
-    return { availability: 'missing', message: 'Chrome Translator API is not exposed.' }
-  }
-
   try {
-    const availability = normalizeAvailability(
-      await translator.availability({
-        sourceLanguage: DEFAULT_SOURCE_LANGUAGE,
-        targetLanguage,
-      })
-    )
+    const status = await probeBrowserTranslator(targetLanguage, DEFAULT_SOURCE_LANGUAGE)
+    const availability = status.availability
 
     if (availability === 'missing' || availability === 'unavailable' || availability === 'error') {
-      return { availability }
+      return status
     }
 
     if (availability === 'available') {
       return { availability: 'available' }
     }
 
+    const factory = createBrowserTranslatorFactory()
     throwIfAborted(signal)
     const prepared = await raceAbort(
-      translator.create({
+      factory.create({
         sourceLanguage: DEFAULT_SOURCE_LANGUAGE,
         targetLanguage,
-        monitor(monitor) {
-          monitorTranslationDownload(monitor, signal)
-        },
+        signal,
       }),
       signal,
       (preparedTranslator) => preparedTranslator.destroy?.()
@@ -193,6 +189,7 @@ export async function translateMarkdownDocument(args: {
   displayMode: DocumentTranslationDisplayMode
   signal: AbortSignal
   cache?: BrowserTranslationCache
+  engine?: TranslationEngineExecution
 }): Promise<DocumentTranslationResult> {
   const translatedSegments: TranslationSegment[] = []
   return translateMarkdownDocumentProgressively(args, ({ segmentIndex, segment }) => {
@@ -210,6 +207,7 @@ export async function translateMarkdownDocumentProgressively(
     displayMode: DocumentTranslationDisplayMode
     signal: AbortSignal
     cache?: BrowserTranslationCache
+    engine?: TranslationEngineExecution
   },
   onPatch: (patch: DocumentTranslationProgressPatch) => void
 ): Promise<DocumentTranslationResult> {
@@ -222,8 +220,9 @@ export async function translateMarkdownDocumentProgressively(
     }
   }
 
+  const engine = args.engine ?? createBrowserTranslationExecution()
   const languageDetection = await createSourceLanguageDetectionSession(args.markdown, args.signal)
-  const translatorBySourceLanguage = new Map<string, BrowserTranslator>()
+  const translatorBySourceLanguage = new Map<string, Translator>()
 
   try {
     const translatedSegments: TranslationSegment[] = []
@@ -249,7 +248,12 @@ export async function translateMarkdownDocumentProgressively(
           continue
         }
 
-        const cacheKey = createSegmentCacheKey(segment, sourceLanguage, args.targetLanguage)
+        const cacheKey = createSegmentCacheKey(
+          segment,
+          sourceLanguage,
+          args.targetLanguage,
+          engine.cacheIdentity
+        )
         const cachedSegment = cacheKey
           ? await readCachedTranslationSegment(args.cache, cacheKey, segment, {
               sourceLanguage,
@@ -263,6 +267,7 @@ export async function translateMarkdownDocumentProgressively(
         }
 
         const translator = await getPooledTranslator(
+          engine,
           translatorBySourceLanguage,
           sourceLanguage,
           args.targetLanguage,
@@ -271,7 +276,10 @@ export async function translateMarkdownDocumentProgressively(
         const protectedInput = segment.placeholderProtocol
           ? { text: segment.translatorInput, restore: (output: string) => output }
           : protectTranslatorInput(segment.translatorInput)
-        const target = await raceAbort(translator.translate(protectedInput.text), args.signal)
+        const target = await raceAbort(
+          translator.translate(protectedInput.text, { signal: args.signal }),
+          args.signal
+        )
         const restoredTarget = segment.placeholderProtocol
           ? restoreTranslatedPlaceholderFragment(target, segment.placeholderProtocol)
           : { target: protectedInput.restore(target).trim() }
@@ -314,49 +322,18 @@ export async function translateMarkdownDocumentProgressively(
 }
 
 async function getPooledTranslator(
-  translatorBySourceLanguage: Map<string, BrowserTranslator>,
+  engine: TranslationEngineExecution,
+  translatorBySourceLanguage: Map<string, Translator>,
   sourceLanguage: string,
   targetLanguage: string,
   signal: AbortSignal
-): Promise<BrowserTranslator> {
+): Promise<Translator> {
   const existing = translatorBySourceLanguage.get(sourceLanguage)
   if (existing) return existing
 
-  const translator = await createTranslator(sourceLanguage, targetLanguage, signal)
+  const translator = await engine.factory.create({ sourceLanguage, targetLanguage, signal })
   translatorBySourceLanguage.set(sourceLanguage, translator)
   return translator
-}
-
-async function createTranslator(
-  sourceLanguage: string,
-  targetLanguage: string,
-  signal: AbortSignal
-): Promise<BrowserTranslator> {
-  const translator = (window as WindowWithChromeAi).Translator
-  if (!translator) {
-    throw new Error('Chrome Translator API is not exposed.')
-  }
-
-  throwIfAborted(signal)
-  const availability = normalizeAvailability(
-    await translator.availability({ sourceLanguage, targetLanguage })
-  )
-  if (availability === 'missing' || availability === 'unavailable' || availability === 'error') {
-    throw new Error(`Translation is ${availability}.`)
-  }
-
-  throwIfAborted(signal)
-  return raceAbort(
-    translator.create({
-      sourceLanguage,
-      targetLanguage,
-      monitor(monitor) {
-        monitorTranslationDownload(monitor, signal)
-      },
-    }),
-    signal,
-    (createdTranslator) => createdTranslator.destroy?.()
-  )
 }
 
 interface SourceLanguageDetectionSession {
@@ -479,12 +456,18 @@ interface SegmentCacheKey {
   placeholderTopologyHash: string
   attributeTopologyHash: string
   displayPolicyVersion: number
+  engineId: TranslationEngineId
+  engineVersion?: string
+  model?: string
+  selectedGroupId?: string
+  translatorContractVersion: number
 }
 
 function createSegmentCacheKey(
   segment: TranslationSegment,
   sourceLanguage: string,
-  targetLanguage: string
+  targetLanguage: string,
+  engine: TranslationEngineCacheIdentity
 ): SegmentCacheKey | null {
   const placeholderTopologyHash = segment.placeholderTopologyHash
   const attributeTopologyHash = segment.attributeTopologyHash
@@ -499,6 +482,11 @@ function createSegmentCacheKey(
     placeholderTopologyHash,
     attributeTopologyHash,
     displayPolicyVersion,
+    engineId: engine.engineId,
+    engineVersion: engine.engineVersion,
+    model: engine.model,
+    selectedGroupId: engine.selectedGroupId,
+    translatorContractVersion: engine.translatorContractVersion,
   })
 
   return {
@@ -507,6 +495,11 @@ function createSegmentCacheKey(
     placeholderTopologyHash,
     attributeTopologyHash,
     displayPolicyVersion,
+    engineId: engine.engineId,
+    engineVersion: engine.engineVersion,
+    model: engine.model,
+    selectedGroupId: engine.selectedGroupId,
+    translatorContractVersion: engine.translatorContractVersion,
   }
 }
 
@@ -555,6 +548,10 @@ async function writeCachedTranslationSegment(
       placeholderTopologyHash: cacheKey.placeholderTopologyHash,
       attributeTopologyHash: cacheKey.attributeTopologyHash,
       displayPolicyVersion: cacheKey.displayPolicyVersion,
+      engineId: cacheKey.engineId,
+      engineVersion: cacheKey.engineVersion,
+      model: cacheKey.model,
+      translatorContractVersion: cacheKey.translatorContractVersion,
     })
   } catch {
     // Cache writes are non-critical projection acceleration.
@@ -575,7 +572,11 @@ function isCacheEntryForSegment(
     entry.targetLanguage === languages.targetLanguage &&
     entry.placeholderTopologyHash === cacheKey.placeholderTopologyHash &&
     entry.attributeTopologyHash === cacheKey.attributeTopologyHash &&
-    entry.displayPolicyVersion === cacheKey.displayPolicyVersion
+    entry.displayPolicyVersion === cacheKey.displayPolicyVersion &&
+    entry.engineId === cacheKey.engineId &&
+    entry.engineVersion === cacheKey.engineVersion &&
+    entry.model === cacheKey.model &&
+    entry.translatorContractVersion === cacheKey.translatorContractVersion
   )
 }
 
@@ -1026,14 +1027,6 @@ function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) {
     throw new DOMException('Translation cancelled.', 'AbortError')
   }
-}
-
-function monitorTranslationDownload(monitor: EventTarget, signal: AbortSignal): void {
-  monitor.addEventListener('downloadprogress', () => {
-    // Abort is handled by raceAbort. Throwing from this browser event listener
-    // escapes as a global page error instead of rejecting the create() promise.
-    if (signal.aborted) return
-  })
 }
 
 function raceAbort<T>(

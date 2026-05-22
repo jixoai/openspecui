@@ -41,6 +41,7 @@
     "@lezer/highlight": "^1.2.3",
     "@openspecui/search": "workspace:*",
     "@openspecui/server": "workspace:*",
+    "@openspecui/browser-translator": "workspace:*",
     "@storybook/addon-vitest": "^10.2.19",
     "@storybook/web-components": "^10.2.19",
     "@storybook/web-components-vite": "^10.2.19",

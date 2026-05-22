@@ -1,7 +1,12 @@
 import { Button } from '@/components/button'
 import { useDocumentTranslationActivation } from '@/lib/document-translation-session-state'
 import { useDocumentTranslation } from '@/lib/use-document-translation'
-import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
+import type { TranslateServiceStatus } from '@/lib/translate-service'
+import {
+  DocumentTranslationConfigSchema,
+  type DocumentTranslationConfig,
+  type DocumentTranslationConfigInput,
+} from '@openspecui/core/document-translation'
 import { useNavigate } from '@tanstack/react-router'
 import type { Element, Properties, RootContent } from 'hast'
 import { AlertTriangle, Languages, Loader2 } from 'lucide-react'
@@ -29,11 +34,18 @@ export function useDocumentTranslationRenderPlugin({
   translationConfig,
 }: {
   markdown: string | undefined
-  translationConfig?: DocumentTranslationConfig
+  translationConfig?: DocumentTranslationConfigInput
 }): MarkdownRenderPluginResult {
-  const session = useDocumentTranslation(markdown ?? '', translationConfig)
+  const resolvedTranslationConfig = useMemo(
+    () =>
+      translationConfig === undefined
+        ? undefined
+        : DocumentTranslationConfigSchema.parse(translationConfig),
+    [translationConfig]
+  )
+  const session = useDocumentTranslation(markdown ?? '', resolvedTranslationConfig)
   const canTranslate =
-    translationConfig !== undefined && typeof markdown === 'string' && markdown.length > 0
+    resolvedTranslationConfig !== undefined && typeof markdown === 'string' && markdown.length > 0
 
   const translationProjection = useMemo(
     () => createTranslationProjection(session.result),
@@ -43,11 +55,11 @@ export function useDocumentTranslationRenderPlugin({
     () =>
       canTranslate ? (
         <DocumentTranslationAction
-          enabled={translationConfig?.enabled ?? false}
+          enabled={resolvedTranslationConfig?.enabled ?? false}
           session={session}
         />
       ) : undefined,
-    [canTranslate, session, translationConfig?.enabled]
+    [canTranslate, session, resolvedTranslationConfig?.enabled]
   )
 
   return {
@@ -59,11 +71,16 @@ export function useDocumentTranslationRenderPlugin({
     tocHeaderActionKey: canTranslate
       ? [
           'document-translation',
-          translationConfig?.enabled ? 'enabled' : 'disabled',
-          translationConfig?.targetLanguage,
-          translationConfig?.displayMode,
+          resolvedTranslationConfig?.enabled ? 'enabled' : 'disabled',
+          resolvedTranslationConfig?.targetLanguage,
+          resolvedTranslationConfig?.displayMode,
+          resolvedTranslationConfig?.engineId,
+          resolvedTranslationConfig?.engines.nmt.model ?? 'no-nmt-model',
+          resolvedTranslationConfig?.engines.nmt.selectedGroupId ?? 'no-nmt-group',
           session.capability?.availability ?? 'unknown',
           session.capability?.message ?? 'no-message',
+          session.serviceStatus.state,
+          session.serviceStatus.message,
           session.status,
           hashString(markdown),
         ].join(':')
@@ -81,15 +98,12 @@ function DocumentTranslationAction({
 }) {
   const navigate = useNavigate()
   const { setActivation } = useDocumentTranslationActivation()
-  const capabilityUnavailable =
-    session.capability?.availability === 'missing' ||
-    session.capability?.availability === 'unavailable' ||
-    session.capability?.availability === 'error'
 
   return (
     <DocumentTranslationButton
       capability={session.capability}
       enabled={enabled}
+      serviceStatus={session.serviceStatus}
       status={session.status}
       onActivate={() => {
         if (!enabled) {
@@ -99,7 +113,7 @@ function DocumentTranslationAction({
           })
           return
         }
-        if (capabilityUnavailable || session.status === 'unavailable') {
+        if (session.serviceStatus.state !== 'ready' || session.status === 'unavailable') {
           return
         }
         if (session.status === 'translating' || session.status === 'initializing') {
@@ -341,33 +355,34 @@ function sanitizeTranslatedProperties(properties: Properties): Properties {
 function DocumentTranslationButton({
   capability,
   enabled,
+  serviceStatus,
   status,
   onActivate,
 }: {
   capability: ReturnType<typeof useDocumentTranslation>['capability']
   enabled: boolean
+  serviceStatus: TranslateServiceStatus
   status: ReturnType<typeof useDocumentTranslation>['status']
   onActivate: () => void
 }) {
-  const isCapabilityUnavailable =
-    capability?.availability === 'missing' ||
-    capability?.availability === 'unavailable' ||
-    capability?.availability === 'error' ||
-    status === 'unavailable'
+  const isServiceChecking = serviceStatus.state === 'checking'
+  const isServiceUnavailable = serviceStatus.state === 'unavailable' || status === 'unavailable'
   const isSettingsDisabled = !enabled
   const isTranslated = status === 'translated'
   const isBusy = status === 'initializing' || status === 'translating'
-  const ariaLabel = isCapabilityUnavailable
+  const ariaLabel = isServiceUnavailable
     ? 'Translation unavailable'
-    : isSettingsDisabled
-      ? 'Configure translation'
-      : isBusy
-        ? 'Cancel translation'
-        : isTranslated
-          ? 'Show source'
-          : 'Translate'
-  const title = isCapabilityUnavailable
-    ? (capability?.message ?? 'Translation is unavailable in this browser.')
+      : isSettingsDisabled
+        ? 'Configure translation'
+        : isServiceChecking
+          ? 'Checking translation'
+          : isBusy
+            ? 'Cancel translation'
+            : isTranslated
+              ? 'Show source'
+              : 'Translate'
+  const title = isServiceUnavailable
+    ? (serviceStatus.message ?? capability?.message ?? 'Translation is unavailable.')
     : isSettingsDisabled
       ? 'Translation is disabled in settings.'
       : ariaLabel
@@ -376,7 +391,7 @@ function DocumentTranslationButton({
     <Button
       size="icon-sm"
       variant="secondary"
-      disabled={isCapabilityUnavailable}
+      disabled={isServiceUnavailable || isServiceChecking}
       aria-disabled={isSettingsDisabled ? true : undefined}
       onClick={(event) => {
         event.stopPropagation()
@@ -385,18 +400,20 @@ function DocumentTranslationButton({
       title={title}
       aria-label={ariaLabel}
       data-translation-action-state={
-        isCapabilityUnavailable
+        isServiceUnavailable
           ? 'unavailable'
-          : isSettingsDisabled
-            ? 'settings-disabled'
-            : isBusy
-              ? 'busy'
-              : isTranslated
-                ? 'translated'
-                : 'ready'
+          : isServiceChecking
+            ? 'checking'
+            : isSettingsDisabled
+              ? 'settings-disabled'
+              : isBusy
+                ? 'busy'
+                : isTranslated
+                  ? 'translated'
+                  : 'ready'
       }
       className={
-        isCapabilityUnavailable
+        isServiceUnavailable || isServiceChecking
           ? 'border-border bg-muted text-muted-foreground disabled:border-border disabled:bg-muted disabled:text-muted-foreground'
           : isSettingsDisabled
             ? 'border-border bg-muted/40 text-muted-foreground opacity-70'
@@ -405,9 +422,9 @@ function DocumentTranslationButton({
               : 'border-primary text-primary hover:bg-primary/10'
       }
     >
-      {isBusy ? (
+      {isBusy || isServiceChecking ? (
         <Loader2 className="h-4 w-4 animate-spin" />
-      ) : isCapabilityUnavailable ? (
+      ) : isServiceUnavailable ? (
         <AlertTriangle className="h-4 w-4" />
       ) : (
         <Languages className="h-4 w-4" />

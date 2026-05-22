@@ -1,0 +1,40 @@
+{
+  "name": "@openspecui/nmt-translator",
+  "version": "3.7.2",
+  "description": "Server-side NMT translator engine for OpenSpecUI",
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm --dts",
+    "dev": "tsdown src/index.ts --format esm --dts --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@huggingface/hub": "^2.12.0",
+    "@huggingface/transformers": "^4.2.0",
+    "@openspecui/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsdown": "^0.16.6",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

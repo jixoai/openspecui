@@ -10,7 +10,7 @@ import {
   readSharedElementHandoffState,
 } from '@/lib/view-transitions/shared-elements'
 import type { Spec } from '@openspecui/core'
-import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
+import type { DocumentTranslationConfigInput } from '@openspecui/core/document-translation'
 import { useLocation, useParams } from '@tanstack/react-router'
 import { AlertCircle, AlertTriangle, ArrowLeft, CheckCircle, FileText, Info } from 'lucide-react'
 import { useMemo, useRef } from 'react'
@@ -87,7 +87,7 @@ function SpecContent({
 }: {
   spec: Spec
   rawMarkdown: string
-  translationConfig?: DocumentTranslationConfig
+  translationConfig?: DocumentTranslationConfigInput
   validation: {
     valid: boolean
     issues: Array<{ severity: string; message: string; path?: string }>

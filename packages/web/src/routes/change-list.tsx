@@ -142,7 +142,7 @@ export function ChangeList() {
             <button
               type="button"
               onClick={() => vtNavController.activatePop('/opsx-propose')}
-              className="text-primary mt-2 inline-flex items-center gap-1 hover:underline"
+              className="text-primary m-2 inline-flex items-center gap-1 hover:underline"
               title="Open Quick Propose"
             >
               <Sparkles className="h-3.5 w-3.5" />
@@ -151,7 +151,7 @@ export function ChangeList() {
             <button
               type="button"
               onClick={() => vtNavController.activatePop('/opsx-new')}
-              className="text-primary mt-2 inline-flex items-center gap-1 hover:underline"
+              className="text-primary m-2 inline-flex items-center gap-1 hover:underline"
               title="Open the advanced /opsx:new form"
             >
               <Sparkles className="h-3.5 w-3.5" />

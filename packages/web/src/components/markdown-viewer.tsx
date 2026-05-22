@@ -1,4 +1,4 @@
-import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
+import type { DocumentTranslationConfigInput } from '@openspecui/core/document-translation'
 import {
   createContext,
   useCallback,
@@ -266,7 +266,7 @@ export interface MarkdownViewerProps {
   /** Semantic key for the explicit ToC header action. Change it when the action state changes. */
   tocHeaderActionKey?: string
   /** Browser-side translation preferences for supported markdown documents. */
-  translationConfig?: DocumentTranslationConfig
+  translationConfig?: DocumentTranslationConfigInput
   /** Inline semantic text spans rendered by MarkdownContent. */
   inlineTextAnnotations?: readonly MarkdownInlineTextAnnotation[]
   /** Block-level semantic attributes rendered by MarkdownContent. */

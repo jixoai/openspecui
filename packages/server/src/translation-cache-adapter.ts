@@ -1,4 +1,8 @@
-import type { TranslationCacheEntry, TranslationCacheWriteInput } from '@openspecui/core'
+import {
+  TranslationCacheWriteInputSchema,
+  type TranslationCacheEntry,
+  type TranslationCacheWriteInput,
+} from '@openspecui/core'
 import { createHash } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
@@ -53,6 +57,10 @@ export class SqliteTranslationCacheAdapter implements TranslationCacheAdapter {
         placeholder_topology_hash TEXT NOT NULL,
         attribute_topology_hash TEXT NOT NULL,
         display_policy_version INTEGER NOT NULL,
+        engine_id TEXT NOT NULL DEFAULT 'browser',
+        engine_version TEXT,
+        model TEXT,
+        translator_contract_version INTEGER NOT NULL DEFAULT 1,
         created_at INTEGER NOT NULL,
         last_accessed_at INTEGER NOT NULL
       );
@@ -60,6 +68,10 @@ export class SqliteTranslationCacheAdapter implements TranslationCacheAdapter {
         ON translation_cache_entries(last_accessed_at ASC);
     `)
     ensureTargetNodesJsonColumn(database)
+    ensureColumn(database, 'engine_id', "TEXT NOT NULL DEFAULT 'browser'")
+    ensureColumn(database, 'engine_version', 'TEXT')
+    ensureColumn(database, 'model', 'TEXT')
+    ensureColumn(database, 'translator_contract_version', 'INTEGER NOT NULL DEFAULT 1')
     this.database = database
   }
 
@@ -69,7 +81,8 @@ export class SqliteTranslationCacheAdapter implements TranslationCacheAdapter {
       .prepare(
         `SELECT key_hash, cache_key, source_text, translated_text, target_nodes_json, source_language,
           target_language, placeholder_topology_hash, attribute_topology_hash,
-          display_policy_version, created_at, last_accessed_at
+          display_policy_version, engine_id, engine_version, model, translator_contract_version,
+          created_at, last_accessed_at
         FROM translation_cache_entries
         WHERE key_hash = ?`
       )
@@ -91,6 +104,10 @@ export class SqliteTranslationCacheAdapter implements TranslationCacheAdapter {
       placeholderTopologyHash: row.placeholder_topology_hash,
       attributeTopologyHash: row.attribute_topology_hash,
       displayPolicyVersion: row.display_policy_version,
+      engineId: row.engine_id,
+      ...(row.engine_version ? { engineVersion: row.engine_version } : {}),
+      ...(row.model ? { model: row.model } : {}),
+      translatorContractVersion: row.translator_contract_version,
       createdAt: row.created_at,
       lastAccessedAt: now,
     }
@@ -98,13 +115,15 @@ export class SqliteTranslationCacheAdapter implements TranslationCacheAdapter {
 
   async write(input: TranslationCacheWriteInput, now: number): Promise<void> {
     const database = await this.requireDatabase()
+    const entry = TranslationCacheWriteInputSchema.parse(input)
     database
       .prepare(
         `INSERT INTO translation_cache_entries (
           key_hash, cache_key, source_text, translated_text, target_nodes_json, source_language,
           target_language, placeholder_topology_hash, attribute_topology_hash,
-          display_policy_version, created_at, last_accessed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          display_policy_version, engine_id, engine_version, model, translator_contract_version,
+          created_at, last_accessed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(key_hash) DO UPDATE SET
           cache_key = excluded.cache_key,
           source_text = excluded.source_text,
@@ -115,19 +134,27 @@ export class SqliteTranslationCacheAdapter implements TranslationCacheAdapter {
           placeholder_topology_hash = excluded.placeholder_topology_hash,
           attribute_topology_hash = excluded.attribute_topology_hash,
           display_policy_version = excluded.display_policy_version,
+          engine_id = excluded.engine_id,
+          engine_version = excluded.engine_version,
+          model = excluded.model,
+          translator_contract_version = excluded.translator_contract_version,
           last_accessed_at = excluded.last_accessed_at`
       )
       .run(
-        input.keyHash,
-        input.key,
-        input.sourceText,
-        input.translatedText,
-        input.targetNodesJson ?? null,
-        input.sourceLanguage,
-        input.targetLanguage,
-        input.placeholderTopologyHash,
-        input.attributeTopologyHash,
-        input.displayPolicyVersion,
+        entry.keyHash,
+        entry.key,
+        entry.sourceText,
+        entry.translatedText,
+        entry.targetNodesJson ?? null,
+        entry.sourceLanguage,
+        entry.targetLanguage,
+        entry.placeholderTopologyHash,
+        entry.attributeTopologyHash,
+        entry.displayPolicyVersion,
+        entry.engineId,
+        entry.engineVersion ?? null,
+        entry.model ?? null,
+        entry.translatorContractVersion,
         now,
         now
       )
@@ -219,13 +246,17 @@ function isBunRuntime(): boolean {
 }
 
 function ensureTargetNodesJsonColumn(database: SqliteDatabase): void {
+  ensureColumn(database, 'target_nodes_json', 'TEXT')
+}
+
+function ensureColumn(database: SqliteDatabase, columnName: string, definition: string): void {
   const rows = database.prepare('PRAGMA table_info(translation_cache_entries)').all()
   const hasColumn = rows.some((row) => {
     if (!row || typeof row !== 'object') return false
-    return (row as { name?: unknown }).name === 'target_nodes_json'
+    return (row as { name?: unknown }).name === columnName
   })
   if (!hasColumn) {
-    database.exec('ALTER TABLE translation_cache_entries ADD COLUMN target_nodes_json TEXT')
+    database.exec(`ALTER TABLE translation_cache_entries ADD COLUMN ${columnName} ${definition}`)
   }
 }
 
@@ -240,6 +271,10 @@ interface SqliteTranslationCacheRow {
   placeholder_topology_hash: string
   attribute_topology_hash: string
   display_policy_version: number
+  engine_id: 'browser' | 'nmt' | 'ai'
+  engine_version: string | null
+  model: string | null
+  translator_contract_version: number
   created_at: number
   last_accessed_at: number
 }
@@ -258,6 +293,10 @@ function isSqliteTranslationCacheRow(value: unknown): value is SqliteTranslation
     typeof row.placeholder_topology_hash === 'string' &&
     typeof row.attribute_topology_hash === 'string' &&
     typeof row.display_policy_version === 'number' &&
+    (row.engine_id === 'browser' || row.engine_id === 'nmt' || row.engine_id === 'ai') &&
+    (typeof row.engine_version === 'string' || row.engine_version === null) &&
+    (typeof row.model === 'string' || row.model === null) &&
+    typeof row.translator_contract_version === 'number' &&
     typeof row.created_at === 'number' &&
     typeof row.last_accessed_at === 'number'
   )

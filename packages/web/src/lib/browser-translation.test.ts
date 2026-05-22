@@ -146,7 +146,6 @@ Open https://example.com/docs before editing \`Config\`.
     })
 
     expect(detect).toHaveBeenCalledTimes(3)
-    expect(availability).toHaveBeenCalledWith({ sourceLanguage: 'en', targetLanguage: 'zh' })
     expect(translate.mock.calls[1]?.[0]).toContain('<x2>Config</x2>')
     expect(result.segments[0]?.target).toBe('zh:Requirement: Keep src/app.ts')
     expect(result.segments[0]?.sourceLanguage).toBe('en')
@@ -184,14 +183,18 @@ Open https://example.com/docs before editing \`Config\`.
       signal: new AbortController().signal,
     })
 
-    expect(translate).toHaveBeenCalledWith('1. Research and Planning')
+    expect(translate).toHaveBeenCalledWith(
+      '1. Research and Planning',
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(result.segments[0]?.target).toBe('1. 研究与规划')
     expect(result.segments[0]?.targetNodes).toEqual([{ type: 'text', value: '1. 研究与规划' }])
   })
 
-  it('uses cache hits before creating a Translator session', async () => {
+  it('uses cache hits before translating segments', async () => {
     const availability = vi.fn(async () => 'available')
-    const create = vi.fn(async () => ({ translate: async (input: string) => `zh:${input}` }))
+    const translate = vi.fn(async (input: string) => `zh:${input}`)
+    const create = vi.fn(async () => ({ translate }))
     const segment = getExpectedSegment('### 1. Research and Planning')
     const cache: BrowserTranslationCache = {
       read: vi.fn(async (keyHash) => ({
@@ -209,6 +212,8 @@ Open https://example.com/docs before editing \`Config\`.
         placeholderTopologyHash: segment.placeholderTopologyHash ?? '',
         attributeTopologyHash: segment.attributeTopologyHash ?? '',
         displayPolicyVersion: segment.displayPolicyVersion ?? TRANSLATION_CACHE_POLICY_VERSION,
+        engineId: 'browser',
+        translatorContractVersion: 1,
         createdAt: 1,
         lastAccessedAt: 1,
       })),
@@ -230,6 +235,7 @@ Open https://example.com/docs before editing \`Config\`.
 
     expect(cache.read).toHaveBeenCalledTimes(1)
     expect(create).not.toHaveBeenCalled()
+    expect(translate).not.toHaveBeenCalled()
     expect(cache.write).not.toHaveBeenCalled()
     expect(result.segments[0]?.target).toBe('1. 研究与规划')
     expect(result.segments[0]?.targetNodes).toEqual([{ type: 'text', value: '1. 研究与规划' }])
@@ -405,7 +411,10 @@ Open https://example.com/docs before editing \`Config\`.
       })
     )
     expect(translate).toHaveBeenCalledTimes(1)
-    expect(translate).toHaveBeenCalledWith('Hello world.')
+    expect(translate).toHaveBeenCalledWith(
+      'Hello world.',
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(result.segments.map((segment) => segment.target)).toEqual([
       'zh:Hello world.',
       '这是中文段落。',
@@ -583,6 +592,10 @@ function createExpectedCacheKey(options: {
     placeholderTopologyHash: segment.placeholderTopologyHash,
     attributeTopologyHash: segment.attributeTopologyHash,
     displayPolicyVersion: segment.displayPolicyVersion,
+    engineId: 'browser',
+    engineVersion: undefined,
+    model: undefined,
+    translatorContractVersion: 1,
   })
 }
 

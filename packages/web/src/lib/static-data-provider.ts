@@ -29,6 +29,7 @@ import type {
   TemplatesMap,
 } from '@openspecui/core'
 import { selectRecentDashboardItems } from '@openspecui/core/dashboard-display'
+import { DocumentTranslationConfigSchema } from '@openspecui/core/document-translation'
 import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
 import { isOpsxGlobPattern, opsxPathMatchesPattern } from '@openspecui/core/opsx-entity'
 import { DEFAULT_BELL_SOUND_ID, DEFAULT_NOTIFICATION_SOUND_ID } from '@openspecui/core/sounds'
@@ -873,12 +874,12 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
       volume: 1,
       systemNotificationsEnabled: false,
     },
-    translation: {
+    translation: DocumentTranslationConfigSchema.parse({
       enabled: false,
       targetLanguage: 'zh',
       displayMode: 'direct',
       cacheEnabled: false,
-    },
+    }),
     terminal: {
       fontSize: 13,
       fontFamily: '',

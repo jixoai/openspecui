@@ -5,7 +5,7 @@ import {
 } from '@/lib/use-opsx'
 import { useConfigSubscription } from '@/lib/use-subscription'
 import type { ArtifactStatus, OpsxEntityArtifactFile, OpsxEntityFile } from '@openspecui/core'
-import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
+import type { DocumentTranslationConfigInput } from '@openspecui/core/document-translation'
 import { Loader2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { OpsxArtifactDocumentShell } from './artifact-document-shell'
@@ -64,7 +64,7 @@ function ArtifactFilesDocumentShell({
 }: {
   artifact: Props['artifact']
   files: readonly OpsxEntityArtifactFile[]
-  translationConfig?: DocumentTranslationConfig
+  translationConfig?: DocumentTranslationConfigInput
 }) {
   return (
     <MarkdownViewer
@@ -97,7 +97,7 @@ function FallbackDocumentShell({
   translationConfig,
 }: {
   fallback: DocumentContentFallbackDescriptor
-  translationConfig?: DocumentTranslationConfig
+  translationConfig?: DocumentTranslationConfigInput
 }) {
   return (
     <MarkdownViewer
@@ -129,7 +129,7 @@ function SingleFileContent({
   changeId,
   artifact,
   translationConfig,
-}: Props & { translationConfig?: DocumentTranslationConfig }) {
+}: Props & { translationConfig?: DocumentTranslationConfigInput }) {
   const { data: content, isLoading } = useOpsxArtifactOutputSubscription(
     changeId,
     artifact.outputPath
@@ -173,7 +173,7 @@ function GlobContent({
   changeId,
   artifact,
   translationConfig,
-}: Props & { translationConfig?: DocumentTranslationConfig }) {
+}: Props & { translationConfig?: DocumentTranslationConfigInput }) {
   const { data: files, isLoading } = useOpsxGlobArtifactFilesSubscription(
     changeId,
     artifact.outputPath
@@ -266,7 +266,7 @@ function LiveArtifactOutputViewer({
   changeId,
   artifact,
   translationConfig,
-}: Props & { translationConfig?: DocumentTranslationConfig }) {
+}: Props & { translationConfig?: DocumentTranslationConfigInput }) {
   const isGlob = isGlobPattern(artifact.outputPath)
 
   return (

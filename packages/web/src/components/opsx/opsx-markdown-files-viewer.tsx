@@ -1,6 +1,6 @@
 import { MarkdownViewer } from '@/components/markdown-viewer'
 import type { OpsxEntityFile } from '@openspecui/core'
-import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
+import type { DocumentTranslationConfigInput } from '@openspecui/core/document-translation'
 import type { ReactNode } from 'react'
 
 interface MarkdownBuilderComponents {
@@ -28,7 +28,7 @@ export function MarkdownFilesContent({
   components: MarkdownBuilderComponents
   files: readonly OpsxEntityFile[]
   emptyMessage: string
-  translationConfig?: DocumentTranslationConfig
+  translationConfig?: DocumentTranslationConfigInput
 }) {
   const markdownFiles = getMarkdownFiles(files)
 
@@ -78,7 +78,7 @@ export function MarkdownFilesViewer({
 }: {
   files: readonly OpsxEntityFile[]
   emptyMessage: string
-  translationConfig?: DocumentTranslationConfig
+  translationConfig?: DocumentTranslationConfigInput
 }) {
   return (
     <MarkdownViewer

@@ -53,6 +53,8 @@ import { loadDashboardOverview } from './dashboard-overview.js'
 import { DocumentService } from './document-service.js'
 import { buildEntityReadOptions } from './entity-read-options.js'
 import { createHookRuntime } from './hook-runtime.js'
+import { NmtModelAssetService } from './nmt-model-asset-service.js'
+import { getDefaultNmtModelCacheDir, getDefaultNmtModelIndexPath } from './nmt-model-cache-path.js'
 import { NotificationService } from './notification-service.js'
 import { findAvailablePort } from './port-utils.js'
 import { ProjectRecoveryService } from './project-recovery-service.js'
@@ -63,6 +65,7 @@ import { SearchService } from './search-service.js'
 import { createRuntimeSqliteTranslationCacheAdapter } from './translation-cache-adapter.js'
 import { getDefaultTranslationCacheDatabasePath } from './translation-cache-path.js'
 import { TranslationCacheService } from './translation-cache-service.js'
+import { TranslationEngineService } from './translation-engine-service.js'
 import { WorkflowInvocationService } from './workflow-invocation-service.js'
 
 function buildEmbeddedUiUrlForPort(port: number): string {
@@ -142,6 +145,22 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     onWriteError(error) {
       console.warn('Translation cache write failed:', error)
     },
+  })
+  const nmtModelCacheDir = getDefaultNmtModelCacheDir()
+  const nmtModelIndexPath = getDefaultNmtModelIndexPath()
+  const translationEngineService = new TranslationEngineService({
+    projectDir: config.projectDir,
+    configManager,
+    globalSettingsManager,
+    nmtCacheDir: nmtModelCacheDir,
+    nmtAssetIndexPath: nmtModelIndexPath,
+  })
+  const nmtModelAssetService = new NmtModelAssetService({
+    projectDir: config.projectDir,
+    configManager,
+    globalSettingsManager,
+    cacheDir: nmtModelCacheDir,
+    indexPath: nmtModelIndexPath,
   })
 
   // Create file watcher if enabled
@@ -266,6 +285,8 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
         customSoundService,
         globalSettingsManager,
         translationCacheService,
+        translationEngineService,
+        nmtModelAssetService,
         gitWorktreeHandoff: config.gitWorktreeHandoff,
         watcher,
         projectDir: config.projectDir,
@@ -289,6 +310,8 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     customSoundService,
     globalSettingsManager,
     translationCacheService,
+    translationEngineService,
+    nmtModelAssetService,
     gitWorktreeHandoff: config.gitWorktreeHandoff,
     watcher,
     projectDir: config.projectDir,
@@ -309,6 +332,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     customSoundService,
     globalSettingsManager,
     translationCacheService,
+    translationEngineService,
     hookRuntime,
     watcher,
     createContext,

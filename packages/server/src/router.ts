@@ -30,13 +30,19 @@ import {
   OpenSpecUIGlobalSettingsSchema,
   OpsxConfigSchema,
   resolveTerminalShellDefaults,
+  ServiceTranslationEngineIdSchema,
   sniffGlobalCli,
   subscribeWatcherRuntimeStatus,
   TerminalConfigSchema,
   TerminalRendererEngineSchema,
+  TranslationAiSettingsSchema,
   TranslationCacheReadInputSchema,
   TranslationCacheSettingsSchema,
   TranslationCacheWriteInputSchema,
+  TranslationEngineIdSchema,
+  TranslationEngineInstallStateSchema,
+  TranslationExtensionSettingsSchema,
+  TranslationNmtSettingsSchema,
   type AIToolOption,
   type ApplyInstructions,
   type ArtifactInstructions,
@@ -85,6 +91,7 @@ import {
   listCurrentWorktreeGitEntries,
   resolveGitWorktreeSwitchTarget,
 } from './git-panel-data.js'
+import type { NmtModelAssetService } from './nmt-model-asset-service.js'
 import type { NotificationService } from './notification-service.js'
 import type { ProjectRecoveryService } from './project-recovery-service.js'
 import { reactiveKV } from './reactive-kv.js'
@@ -94,6 +101,7 @@ import {
 } from './reactive-subscription.js'
 import type { SearchService } from './search-service.js'
 import type { TranslationCacheService } from './translation-cache-service.js'
+import type { TranslationEngineService } from './translation-engine-service.js'
 import type { WorkflowInvocationService } from './workflow-invocation-service.js'
 
 export interface Context {
@@ -110,6 +118,8 @@ export interface Context {
   customSoundService: CustomSoundService
   globalSettingsManager: GlobalSettingsManager
   translationCacheService: TranslationCacheService
+  translationEngineService: TranslationEngineService
+  nmtModelAssetService: NmtModelAssetService
   gitWorktreeHandoff?: GitWorktreeHandoffService
   watcher?: OpenSpecWatcher
   projectDir: string
@@ -206,6 +216,22 @@ export const globalSettingsRouter = router({
     .input(
       OpenSpecUIGlobalSettingsSchema.partial().extend({
         translationCache: TranslationCacheSettingsSchema.partial().optional(),
+        translationEngines: z
+          .object({
+            extensions: TranslationExtensionSettingsSchema.partial()
+              .extend({
+                engines: z
+                  .object({
+                    nmt: TranslationEngineInstallStateSchema.partial().optional(),
+                    ai: TranslationEngineInstallStateSchema.partial().optional(),
+                  })
+                  .optional(),
+              })
+              .optional(),
+            ai: TranslationAiSettingsSchema.partial().optional(),
+            nmt: TranslationNmtSettingsSchema.partial().optional(),
+          })
+          .optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -238,6 +264,195 @@ export const translationCacheRouter = router({
   clear: publicProcedure.mutation(({ ctx }) => {
     return ctx.translationCacheService.clear()
   }),
+})
+
+export const translationEnginesRouter = router({
+  list: publicProcedure.query(({ ctx }) => {
+    return ctx.translationEngineService.listEngines()
+  }),
+
+  searchModels: publicProcedure
+    .input(
+      z.object({
+        engineId: ServiceTranslationEngineIdSchema,
+        query: z.string().optional(),
+        sourceLanguage: z.string().optional(),
+        targetLanguage: z.string().optional(),
+        limit: z.number().int().positive().max(20).optional(),
+        cursor: z.string().optional(),
+      })
+    )
+    .query(({ ctx, input }) => {
+      return ctx.translationEngineService.searchModels(input)
+    }),
+
+  getModelDownloadPlan: publicProcedure
+    .input(
+      z.object({
+        engineId: ServiceTranslationEngineIdSchema,
+        model: z.string().min(1),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .query(({ ctx, input }) => {
+      return ctx.translationEngineService.getModelDownloadPlan(input)
+    }),
+
+  subscribeLogs: publicProcedure.subscription(({ ctx }) => {
+    return ctx.translationEngineService.subscribeLogs()
+  }),
+
+  select: publicProcedure
+    .input(z.object({ engineId: TranslationEngineIdSchema }))
+    .mutation(({ ctx, input }) => {
+      return ctx.translationEngineService.selectEngine(input.engineId)
+    }),
+
+  install: publicProcedure
+    .input(z.object({ engineId: ServiceTranslationEngineIdSchema }))
+    .mutation(({ ctx, input }) => {
+      return ctx.translationEngineService.installEngine(input.engineId)
+    }),
+
+  cancelInstall: publicProcedure
+    .input(z.object({ engineId: ServiceTranslationEngineIdSchema }))
+    .mutation(({ ctx, input }) => {
+      return ctx.translationEngineService.cancelInstall(input.engineId)
+    }),
+
+  translate: publicProcedure
+    .input(
+      z.object({
+        engineId: TranslationEngineIdSchema,
+        sourceLanguage: z.string().min(1),
+        targetLanguage: z.string().min(1),
+        model: z.string().optional(),
+        selectedGroupId: z.string().min(1).optional(),
+        text: z.string().optional(),
+        rich: z
+          .object({
+            instructions: z.string(),
+            context: z.string(),
+            source: z.string(),
+          })
+          .optional(),
+      })
+    )
+    .mutation(({ ctx, input }) => {
+      return ctx.translationEngineService.translate(input)
+    }),
+})
+
+export const nmtModelsRouter = router({
+  listLocal: publicProcedure.query(({ ctx }) => {
+    return ctx.nmtModelAssetService.listLocalCatalog()
+  }),
+
+  searchRemote: publicProcedure
+    .input(
+      z.object({
+        requestId: z.string().min(1).optional(),
+        query: z.string().optional(),
+        sourceLanguage: z.string().optional(),
+        targetLanguage: z.string().optional(),
+        limit: z.number().int().positive().max(20).optional(),
+        cursor: z.string().optional(),
+      })
+    )
+    .query(({ ctx, input }) => {
+      return ctx.nmtModelAssetService.searchRemoteCatalog({
+        engineId: 'nmt',
+        ...input,
+      })
+    }),
+
+  searchRemoteStream: publicProcedure
+    .input(
+      z.object({
+        requestId: z.string().min(1),
+        query: z.string().optional(),
+        sourceLanguage: z.string().optional(),
+        targetLanguage: z.string().optional(),
+        limit: z.number().int().positive().max(20).optional(),
+        cursor: z.string().optional(),
+      })
+    )
+    .subscription(({ ctx, input }) => {
+      return ctx.nmtModelAssetService.subscribeRemoteCatalog({
+        engineId: 'nmt',
+        ...input,
+      })
+    }),
+
+  state: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .query(({ ctx, input }) => {
+      return ctx.nmtModelAssetService.readSelectedModelState(input.modelId, input.selectedGroupId)
+    }),
+
+  subscribeLogs: publicProcedure.subscription(({ ctx }) => {
+    return ctx.nmtModelAssetService.subscribeLogs()
+  }),
+
+  markSelected: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.nmtModelAssetService.markSelectedModel(input.modelId)
+      return { success: true }
+    }),
+
+  download: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.translationEngineService.ensureInstalled('nmt')
+      return ctx.nmtModelAssetService.startDownload(input.modelId, input.selectedGroupId)
+    }),
+
+  pause: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+      })
+    )
+    .mutation(({ ctx, input }) => {
+      return ctx.nmtModelAssetService.pauseDownload(input.modelId)
+    }),
+
+  resume: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.translationEngineService.ensureInstalled('nmt')
+      return ctx.nmtModelAssetService.resumeDownload(input.modelId, input.selectedGroupId)
+    }),
+
+  delete: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+      })
+    )
+    .mutation(({ ctx, input }) => {
+      return ctx.nmtModelAssetService.deleteModel(input.modelId)
+    }),
 })
 
 const OPSX_CORE_PROFILE_WORKFLOWS = ['propose', 'explore', 'apply', 'archive'] as const
@@ -875,7 +1090,21 @@ export const configRouter = router({
         dashboard: DashboardConfigSchema.partial().optional(),
         git: GitConfigSchema.partial().optional(),
         notifications: NotificationSettingsSchema.partial().optional(),
-        translation: DocumentTranslationConfigSchema.partial().optional(),
+        translation: DocumentTranslationConfigSchema.partial()
+          .extend({
+            engines: z
+              .object({
+                nmt: z
+                  .object({
+                    model: z.string().min(1).optional(),
+                    selectedGroupId: z.string().min(1).optional(),
+                  })
+                  .optional(),
+                ai: z.object({ model: z.string().min(1).optional() }).optional(),
+              })
+              .optional(),
+          })
+          .optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -1815,6 +2044,8 @@ export const appRouter = router({
   config: configRouter,
   globalSettings: globalSettingsRouter,
   translationCache: translationCacheRouter,
+  translationEngines: translationEnginesRouter,
+  nmtModels: nmtModelsRouter,
   notifications: notificationsRouter,
   sounds: soundsRouter,
   cli: cliRouter,

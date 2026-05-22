@@ -5,7 +5,7 @@ import { promisify } from 'util'
 import { z } from 'zod'
 import {
   DocumentTranslationConfigSchema,
-  type DocumentTranslationConfig,
+  type DocumentTranslationConfigUpdate,
 } from './document-translation.js'
 import { NotificationSettingsSchema, type NotificationSettings } from './notifications.js'
 import { reactiveReadFile, updateReactiveFileCache } from './reactive-fs/index.js'
@@ -663,7 +663,7 @@ export type OpenSpecUIConfigUpdate = {
   dashboard?: Partial<DashboardConfig>
   git?: Partial<GitConfig>
   notifications?: Partial<NotificationSettings>
-  translation?: Partial<DocumentTranslationConfig>
+  translation?: DocumentTranslationConfigUpdate
 }
 
 export type PersistedOpenSpecUIConfig = {
@@ -679,7 +679,7 @@ export type PersistedOpenSpecUIConfig = {
   dashboard?: Partial<DashboardConfig>
   git?: Partial<GitConfig>
   notifications?: Partial<NotificationSettings>
-  translation?: Partial<DocumentTranslationConfig>
+  translation?: DocumentTranslationConfigUpdate
 }
 
 /** 默认配置（静态，用于测试和类型） */
@@ -855,6 +855,33 @@ export function toPersistedConfig(
   if (config.translation.cacheEnabled !== DEFAULT_CONFIG.translation.cacheEnabled) {
     translation.cacheEnabled = config.translation.cacheEnabled
   }
+  if (config.translation.engineId !== DEFAULT_CONFIG.translation.engineId) {
+    translation.engineId = config.translation.engineId
+  }
+  const translationEngines: NonNullable<
+    NonNullable<PersistedOpenSpecUIConfig['translation']>['engines']
+  > = {}
+  const nmtEngine: NonNullable<
+    NonNullable<PersistedOpenSpecUIConfig['translation']>['engines']
+  >['nmt'] = {}
+  if (config.translation.engines.nmt.model !== DEFAULT_CONFIG.translation.engines.nmt.model) {
+    nmtEngine.model = config.translation.engines.nmt.model
+  }
+  if (
+    config.translation.engines.nmt.selectedGroupId !==
+    DEFAULT_CONFIG.translation.engines.nmt.selectedGroupId
+  ) {
+    nmtEngine.selectedGroupId = config.translation.engines.nmt.selectedGroupId
+  }
+  if (nmtEngine && hasOwnEntries(nmtEngine)) {
+    translationEngines.nmt = nmtEngine
+  }
+  if (config.translation.engines.ai.model !== DEFAULT_CONFIG.translation.engines.ai.model) {
+    translationEngines.ai = { model: config.translation.engines.ai.model }
+  }
+  if (hasOwnEntries(translationEngines)) {
+    translation.engines = translationEngines
+  }
   if (hasOwnEntries(translation)) {
     persisted.translation = translation
   }
@@ -961,7 +988,20 @@ export class ConfigManager {
       dashboard: { ...current.dashboard, ...config.dashboard },
       git: { ...current.git, ...config.git },
       notifications: { ...current.notifications, ...config.notifications },
-      translation: { ...current.translation, ...config.translation },
+      translation: {
+        ...current.translation,
+        ...config.translation,
+        engines: {
+          nmt: {
+            ...current.translation.engines.nmt,
+            ...config.translation?.engines?.nmt,
+          },
+          ai: {
+            ...current.translation.engines.ai,
+            ...config.translation?.engines?.ai,
+          },
+        },
+      },
     }
 
     const persisted = toPersistedConfig(merged)

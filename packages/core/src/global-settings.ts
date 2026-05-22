@@ -7,10 +7,21 @@ import {
   type TranslationCacheSettings,
 } from './document-translation.js'
 import { reactiveReadFile, updateReactiveFileCache } from './reactive-fs/index.js'
+import {
+  TranslationEngineGlobalSettingsSchema,
+  type ServiceTranslationEngineId,
+  type TranslationAiSettings,
+  type TranslationEngineGlobalSettingsUpdate,
+  type TranslationEngineInstallState,
+  type TranslationNmtSettings,
+} from './translator.js'
 
 export const OpenSpecUIGlobalSettingsSchema = z.object({
   translationCache: TranslationCacheSettingsSchema.default(
     TranslationCacheSettingsSchema.parse({})
+  ),
+  translationEngines: TranslationEngineGlobalSettingsSchema.default(
+    TranslationEngineGlobalSettingsSchema.parse({})
   ),
 })
 
@@ -18,10 +29,19 @@ export type OpenSpecUIGlobalSettings = z.infer<typeof OpenSpecUIGlobalSettingsSc
 
 export type OpenSpecUIGlobalSettingsUpdate = {
   translationCache?: Partial<TranslationCacheSettings>
+  translationEngines?: TranslationEngineGlobalSettingsUpdate
 }
 
 export type PersistedOpenSpecUIGlobalSettings = {
   translationCache?: Partial<TranslationCacheSettings>
+  translationEngines?: {
+    extensions?: {
+      installRoot?: string
+      engines?: Partial<Record<ServiceTranslationEngineId, TranslationEngineInstallState>>
+    }
+    ai?: Partial<TranslationAiSettings>
+    nmt?: Partial<TranslationNmtSettings>
+  }
 }
 
 export const DEFAULT_GLOBAL_SETTINGS: OpenSpecUIGlobalSettings =
@@ -65,6 +85,71 @@ export function toPersistedGlobalSettings(
 
   if (hasOwnEntries(translationCache)) {
     persisted.translationCache = translationCache
+  }
+
+  const translationEngines: NonNullable<PersistedOpenSpecUIGlobalSettings['translationEngines']> =
+    {}
+  const defaultTranslationEngines = DEFAULT_GLOBAL_SETTINGS.translationEngines
+  const extensions: NonNullable<
+    NonNullable<PersistedOpenSpecUIGlobalSettings['translationEngines']>['extensions']
+  > = {}
+  if (settings.translationEngines.extensions.installRoot) {
+    extensions.installRoot = settings.translationEngines.extensions.installRoot
+  }
+  const extensionEngines: Record<'nmt' | 'ai', TranslationEngineInstallState> = {
+    nmt: settings.translationEngines.extensions.engines.nmt,
+    ai: settings.translationEngines.extensions.engines.ai,
+  }
+  const persistedExtensionEngines: Partial<Record<'nmt' | 'ai', TranslationEngineInstallState>> = {}
+  if (
+    JSON.stringify(extensionEngines.nmt) !==
+    JSON.stringify(defaultTranslationEngines.extensions.engines.nmt)
+  ) {
+    persistedExtensionEngines.nmt = extensionEngines.nmt
+  }
+  if (
+    JSON.stringify(extensionEngines.ai) !==
+    JSON.stringify(defaultTranslationEngines.extensions.engines.ai)
+  ) {
+    persistedExtensionEngines.ai = extensionEngines.ai
+  }
+  if (hasOwnEntries(persistedExtensionEngines)) {
+    extensions.engines = persistedExtensionEngines
+  }
+  if (hasOwnEntries(extensions)) {
+    translationEngines.extensions = extensions
+  }
+  const ai: Partial<TranslationAiSettings> = {}
+  if (settings.translationEngines.ai.baseUrl !== defaultTranslationEngines.ai.baseUrl) {
+    ai.baseUrl = settings.translationEngines.ai.baseUrl
+  }
+  if (settings.translationEngines.ai.token !== defaultTranslationEngines.ai.token) {
+    ai.token = settings.translationEngines.ai.token
+  }
+  if (settings.translationEngines.ai.model !== defaultTranslationEngines.ai.model) {
+    ai.model = settings.translationEngines.ai.model
+  }
+  if (hasOwnEntries(ai)) {
+    translationEngines.ai = ai
+  }
+  const nmt: Partial<TranslationNmtSettings> = {}
+  if (settings.translationEngines.nmt.model !== defaultTranslationEngines.nmt.model) {
+    nmt.model = settings.translationEngines.nmt.model
+  }
+  if (
+    settings.translationEngines.nmt.selectedGroupId !==
+    defaultTranslationEngines.nmt.selectedGroupId
+  ) {
+    nmt.selectedGroupId = settings.translationEngines.nmt.selectedGroupId
+  }
+  if (settings.translationEngines.nmt.hfEndpoint !== defaultTranslationEngines.nmt.hfEndpoint) {
+    nmt.hfEndpoint = settings.translationEngines.nmt.hfEndpoint
+  }
+  if (hasOwnEntries(nmt)) {
+    translationEngines.nmt = nmt
+  }
+  if (hasOwnEntries(translationEngines)) {
+    persisted.translationEngines = translationEngines
   }
 
   return persisted
@@ -122,6 +207,31 @@ export class GlobalSettingsManager {
       translationCache: {
         ...current.translationCache,
         ...update.translationCache,
+      },
+      translationEngines: {
+        ...current.translationEngines,
+        extensions: {
+          ...current.translationEngines.extensions,
+          ...update.translationEngines?.extensions,
+          engines: {
+            nmt: {
+              ...current.translationEngines.extensions.engines.nmt,
+              ...update.translationEngines?.extensions?.engines?.nmt,
+            },
+            ai: {
+              ...current.translationEngines.extensions.engines.ai,
+              ...update.translationEngines?.extensions?.engines?.ai,
+            },
+          },
+        },
+        ai: {
+          ...current.translationEngines.ai,
+          ...update.translationEngines?.ai,
+        },
+        nmt: {
+          ...current.translationEngines.nmt,
+          ...update.translationEngines?.nmt,
+        },
       },
     })
     const persisted = toPersistedGlobalSettings(merged)

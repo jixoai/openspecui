@@ -111,8 +111,10 @@ export function Select<T extends string>({
         onFocus={onFocus}
         className={(state) =>
           cn(
-            'bg-background border-border text-foreground inline-flex min-w-0 items-center rounded-md border text-sm outline-none transition-colors',
-            renderTrigger ? 'justify-center' : 'h-9 justify-between gap-2 px-3 py-2',
+            'bg-background border-border text-foreground inline-flex items-center rounded-md border text-sm outline-none transition-colors',
+            renderTrigger
+              ? 'min-w-0 justify-center'
+              : 'h-9 min-w-32 justify-between gap-2 px-3 py-2',
             'hover:bg-muted/30 focus-visible:ring-primary focus-visible:ring-1',
             'disabled:cursor-not-allowed disabled:opacity-50',
             state.open ? 'bg-muted/40 ring-primary ring-1' : '',
@@ -140,22 +142,22 @@ export function Select<T extends string>({
         <BaseSelect.Positioner
           sideOffset={sideOffset}
           className={cn(
-            'z-50 select-none outline-none data-[anchor-hidden]:opacity-0',
+            'z-50 select-none outline-none data-[ending-style]:hidden data-[anchor-hidden]:opacity-0 data-[ending-style]:opacity-0',
             positionerClassName
           )}
         >
           <BaseSelect.Popup
             className={cn(
-              'bg-card text-foreground border-border min-w-(--anchor-width) max-w-[min(24rem,calc(100vw-2rem))] rounded-md border p-1 shadow-lg',
+              'bg-card text-foreground border-border min-w-(--anchor-width) w-max max-w-[min(28rem,var(--available-width,calc(100vw-2rem)))] rounded-md border p-1 shadow-lg',
               'origin-(--transform-origin) transition-[transform,opacity] duration-150',
-              'data-[ending-style]:translate-y-0.5 data-[ending-style]:opacity-0',
+              'data-[ending-style]:hidden data-[ending-style]:opacity-0',
               'data-[starting-style]:translate-y-0.5 data-[starting-style]:opacity-0',
               popupClassName
             )}
           >
             <BaseSelect.List
               className={cn(
-                'scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[color-mix(in_srgb,currentColor,transparent_78%)] max-h-[min(18rem,var(--available-height))] overflow-x-auto overflow-y-auto py-0.5',
+                'scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[color-mix(in_srgb,currentColor,transparent_78%)] max-h-[min(18rem,var(--available-height))] overflow-y-auto overflow-x-hidden py-0.5',
                 listClassName
               )}
             >
@@ -182,10 +184,10 @@ export function Select<T extends string>({
                         )
                       }
                     >
-                      <BaseSelect.ItemIndicator className="text-primary flex h-4 w-4 items-center justify-center">
+                      <BaseSelect.ItemIndicator className="text-primary col-start-1 flex h-4 w-4 items-center justify-center">
                         <Check className="h-4 w-4" />
                       </BaseSelect.ItemIndicator>
-                      <BaseSelect.ItemText className="whitespace-nowrap">
+                      <BaseSelect.ItemText className="col-start-2 min-w-0 whitespace-normal [overflow-wrap:anywhere]">
                         {renderOptionLabel(option)}
                       </BaseSelect.ItemText>
                     </BaseSelect.Item>
