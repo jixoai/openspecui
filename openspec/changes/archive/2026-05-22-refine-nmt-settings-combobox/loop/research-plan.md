@@ -22,16 +22,16 @@
    - first push a lightweight candidate list so the UI can render quickly
    - then push follow-up updates that add chips, chip sizes, and finer metadata
 3. Keep the client responsible for merging local-first plus remote results and for exposing a remote-loading affordance in the popover.
-3. Refactor the top Settings engine area so `Engine` and `NMT Model` read as a paired control family when `NMT` is selected, instead of two disconnected sections.
-4. Replace the explicit visible `Installed` row with a tooltip-backed status icon when the engine is already installed.
-5. Replace the large download progress bar with a stable `Download plan` card header that contains:
+4. Refactor the top Settings engine area so `Engine` and `NMT Model` read as a paired control family when `NMT` is selected, instead of two disconnected sections.
+5. Replace the explicit visible `Installed` row with a tooltip-backed status icon when the engine is already installed.
+6. Replace the large download progress bar with a stable `Download plan` card header that contains:
    - inline-end circular progress
    - centered percentage text
    - per-file textual progress rows
-6. Extend the NMT asset state/log contract with enough file-level progress information for the UI to render per-file lines without reconstructing them heuristically from raw strings.
-7. Add a chip-group layer to NMT download planning so a model can be represented as multiple selectable file groups rather than one flat repository download.
-8. Treat quantized variants such as int4, int2, and float8 as separate selection targets instead of one forced full-repository download unit.
-9. Store raw Hugging Face fetch metadata in a local fetch-cache layer and derive catalog rows, chips, and download plans from that source whenever possible.
+7. Extend the NMT asset state/log contract with enough file-level progress information for the UI to render per-file lines without reconstructing them heuristically from raw strings.
+8. Add a chip-group layer to NMT download planning so a model can be represented as multiple selectable file groups rather than one flat repository download.
+9. Treat quantized variants such as int4, int2, and float8 as separate selection targets instead of one forced full-repository download unit.
+10. Store raw Hugging Face fetch metadata in a local fetch-cache layer and derive catalog rows, chips, and download plans from that source whenever possible.
 
 ## Capability Impact
 
