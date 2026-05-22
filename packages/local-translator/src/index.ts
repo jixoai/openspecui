@@ -1,12 +1,10 @@
-import { buildNmtDownloadPlanFromRepositoryFiles } from '@openspecui/core/nmt-download-profiles'
+import { buildLocalDownloadPlanFromRepositoryFiles } from '@openspecui/core/local-download-profiles'
 import type {
-  RichTranslationInput,
   TranslationModelDownloadPlan,
   Translator,
   TranslatorFactory,
   TranslatorFactoryCreateOptions,
   TranslatorFactoryPrepareOptions,
-  TranslatorOptions,
 } from '@openspecui/core/translator'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -32,7 +30,7 @@ interface TransformersModule {
   ): Promise<TranslationPipeline>
 }
 
-export interface NmtTranslatorFactoryOptions {
+export interface LocalTranslatorFactoryOptions {
   defaultModel?: string
   cacheDir?: string
   dtype?: string
@@ -41,8 +39,8 @@ export interface NmtTranslatorFactoryOptions {
 
 const DEFAULT_MODEL = 'Xenova/nllb-200-distilled-600M'
 
-export class NmtTranslatorFactory implements TranslatorFactory {
-  constructor(private readonly options: NmtTranslatorFactoryOptions = {}) {}
+export class LocalTranslatorFactory implements TranslatorFactory {
+  constructor(private readonly options: LocalTranslatorFactoryOptions = {}) {}
 
   async prepare(options: TranslatorFactoryPrepareOptions): Promise<void> {
     const model = options.model || this.options.defaultModel || DEFAULT_MODEL
@@ -68,19 +66,19 @@ export class NmtTranslatorFactory implements TranslatorFactory {
       options.runtimeConfig
     )
 
-    return new NmtTranslator(pipeline, {
+    return new LocalTranslator(pipeline, {
       sourceLanguage: options.sourceLanguage,
       targetLanguage: options.targetLanguage,
     })
   }
 }
 
-export function resolveNmtModelDownloadPlan(input: {
+export function resolveLocalModelDownloadPlan(input: {
   modelId: string
   siblings: ReadonlyArray<{ rfilename: string; size?: number }>
   isEncoderDecoder?: boolean
 }): TranslationModelDownloadPlan | null {
-  return buildNmtDownloadPlanFromRepositoryFiles({
+  return buildLocalDownloadPlanFromRepositoryFiles({
     modelId: input.modelId,
     isEncoderDecoder: input.isEncoderDecoder,
     files: input.siblings.map((entry) => ({
@@ -90,30 +88,31 @@ export function resolveNmtModelDownloadPlan(input: {
   })
 }
 
-export function createNmtTranslatorFactory(
-  options: NmtTranslatorFactoryOptions = {}
-): NmtTranslatorFactory {
-  return new NmtTranslatorFactory(options)
+export function createLocalTranslatorFactory(
+  options: LocalTranslatorFactoryOptions = {}
+): LocalTranslatorFactory {
+  return new LocalTranslatorFactory(options)
 }
 
-class NmtTranslator implements Translator {
+class LocalTranslator implements Translator {
   constructor(
     private readonly pipeline: TranslationPipeline & { dispose?: () => Promise<void> },
     private readonly languages: { sourceLanguage: string; targetLanguage: string }
   ) {}
 
-  async translate(
-    input: string | RichTranslationInput,
-    options?: TranslatorOptions
-  ): Promise<string> {
-    throwIfAborted(options?.signal)
-    const source = typeof input === 'string' ? input : input.source
-    const result = await this.pipeline(source, {
-      src_lang: this.languages.sourceLanguage,
-      tgt_lang: this.languages.targetLanguage,
-    })
-    throwIfAborted(options?.signal)
-    return readTranslatedText(result)
+  async *batchTranslate(
+    inputs: string[],
+    options?: { signal?: AbortSignal }
+  ): AsyncGenerator<{ index: number; output: string }> {
+    for (const [index, input] of inputs.entries()) {
+      throwIfAborted(options?.signal)
+      const result = await this.pipeline(input, {
+        src_lang: this.languages.sourceLanguage,
+        tgt_lang: this.languages.targetLanguage,
+      })
+      throwIfAborted(options?.signal)
+      yield { index, output: readTranslatedText(result) }
+    }
   }
 
   destroy(): void {
@@ -129,7 +128,7 @@ async function loadTranslationPipeline(
   localOnly = false,
   runtimeConfig?: Record<string, unknown>
 ): Promise<TranslationPipeline & { dispose?: () => Promise<void> }> {
-  monitor?.setStatus({ message: `Loading NMT model ${model}.` })
+  monitor?.setStatus({ message: `Loading local model ${model}.` })
   const transformers = (await import('@huggingface/transformers')) as TransformersModule
   if (cacheDir && transformers.env) {
     transformers.env.cacheDir = cacheDir
@@ -146,8 +145,8 @@ async function loadTranslationPipeline(
         monitor.setStatus({
           message:
             progress === undefined
-              ? `Downloading NMT model ${model}.`
-              : `Downloading NMT model ${model} ${Math.round(progress * 100)}%.`,
+              ? `Downloading local model ${model}.`
+              : `Downloading local model ${model} ${Math.round(progress * 100)}%.`,
           ...(progress === undefined ? {} : { progress }),
         })
       }
@@ -158,7 +157,7 @@ async function loadTranslationPipeline(
     ...(localOnly ? { local_files_only: true } : {}),
     ...(progressCallback ? { progress_callback: progressCallback } : {}),
   })) as TranslationPipeline & { dispose?: () => Promise<void> }
-  monitor?.setStatus({ message: `NMT model ${model} is ready.`, progress: 1 })
+  monitor?.setStatus({ message: `Local model ${model} is ready.`, progress: 1 })
   return pipeline
 }
 

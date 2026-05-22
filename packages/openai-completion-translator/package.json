@@ -1,7 +1,7 @@
 {
-  "name": "@openspecui/nmt-translator",
+  "name": "@openspecui/openai-completion-translator",
   "version": "3.7.2",
-  "description": "Server-side NMT translator engine for OpenSpecUI",
+  "description": "OpenAI completion translator engine for OpenSpecUI",
   "type": "module",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -24,9 +24,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@huggingface/hub": "^2.12.0",
-    "@huggingface/transformers": "^4.2.0",
-    "@openspecui/core": "workspace:*"
+    "@openspecui/core": "workspace:*",
+    "@tanstack/ai": "^0.20.0",
+    "@tanstack/ai-openai": "^0.9.4"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

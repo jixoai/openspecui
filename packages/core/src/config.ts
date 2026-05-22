@@ -861,23 +861,25 @@ export function toPersistedConfig(
   const translationEngines: NonNullable<
     NonNullable<PersistedOpenSpecUIConfig['translation']>['engines']
   > = {}
-  const nmtEngine: NonNullable<
+  const localEngine: NonNullable<
     NonNullable<PersistedOpenSpecUIConfig['translation']>['engines']
-  >['nmt'] = {}
-  if (config.translation.engines.nmt.model !== DEFAULT_CONFIG.translation.engines.nmt.model) {
-    nmtEngine.model = config.translation.engines.nmt.model
+  >['local'] = {}
+  if (
+    config.translation.engines.local.model !== DEFAULT_CONFIG.translation.engines.local.model
+  ) {
+    localEngine.model = config.translation.engines.local.model
   }
   if (
-    config.translation.engines.nmt.selectedGroupId !==
-    DEFAULT_CONFIG.translation.engines.nmt.selectedGroupId
+    config.translation.engines.local.selectedGroupId !==
+    DEFAULT_CONFIG.translation.engines.local.selectedGroupId
   ) {
-    nmtEngine.selectedGroupId = config.translation.engines.nmt.selectedGroupId
+    localEngine.selectedGroupId = config.translation.engines.local.selectedGroupId
   }
-  if (nmtEngine && hasOwnEntries(nmtEngine)) {
-    translationEngines.nmt = nmtEngine
+  if (localEngine && hasOwnEntries(localEngine)) {
+    translationEngines.local = localEngine
   }
-  if (config.translation.engines.ai.model !== DEFAULT_CONFIG.translation.engines.ai.model) {
-    translationEngines.ai = { model: config.translation.engines.ai.model }
+  if (config.translation.engines.openai.model !== DEFAULT_CONFIG.translation.engines.openai.model) {
+    translationEngines.openai = { model: config.translation.engines.openai.model }
   }
   if (hasOwnEntries(translationEngines)) {
     translation.engines = translationEngines
@@ -992,13 +994,13 @@ export class ConfigManager {
         ...current.translation,
         ...config.translation,
         engines: {
-          nmt: {
-            ...current.translation.engines.nmt,
-            ...config.translation?.engines?.nmt,
+          local: {
+            ...current.translation.engines.local,
+            ...config.translation?.engines?.local,
           },
-          ai: {
-            ...current.translation.engines.ai,
-            ...config.translation?.engines?.ai,
+          openai: {
+            ...current.translation.engines.openai,
+            ...config.translation?.engines?.openai,
           },
         },
       },

@@ -14,7 +14,7 @@ export {
   type RunningServer,
   type ServerConfig,
 } from './server.js'
-export { NmtModelAssetService } from './nmt-model-asset-service.js'
+export { LocalModelAssetService } from './local-model-asset-service.js'
 export { TranslationEngineService } from './translation-engine-service.js'
 export {
   WorkflowInvocationService,

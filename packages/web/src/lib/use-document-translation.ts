@@ -1,26 +1,19 @@
 import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
-import {
-  TRANSLATOR_CONTRACT_VERSION,
-  type RichTranslationInput,
-  type TranslationEngineId,
-  type Translator,
-  type TranslatorFactory,
-  type TranslatorFactoryCreateOptions,
-  type TranslatorOptions,
-} from '@openspecui/core/translator'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  createBrowserTranslationExecution,
   probeBrowserTranslation,
   translateMarkdownDocumentProgressively,
   type BrowserTranslationStatus,
   type DocumentTranslationProgressPatch,
   type DocumentTranslationResult,
-  type TranslationEngineExecution,
 } from './browser-translation'
 import { useDocumentTranslationActivation } from './document-translation-session-state'
 import { isStaticMode } from './static-mode'
-import { projectTranslateServiceStatus, type TranslateServiceStatus } from './translate-service'
+import { createTranslationEngineExecution } from './translate-service'
+import {
+  projectTranslateServiceStatus,
+  type TranslateServiceStatus,
+} from './translate-service-status'
 import { trpcClient } from './trpc'
 
 export type DocumentTranslationSessionStatus =
@@ -108,48 +101,48 @@ export function useDocumentTranslation(
       }
     }
 
-    if (config.engineId === 'nmt') {
+    if (config.engineId === 'local') {
       setCapability(null)
       setServiceStatus(
         projectTranslateServiceStatus({
           enabled: config.enabled,
           hasSource: markdown.length > 0,
-          engineId: 'nmt',
-          nmtModel: config.engines.nmt.model,
-          nmtSelectedGroupId: config.engines.nmt.selectedGroupId,
-          nmtAssetLoading: true,
+          engineId: 'local',
+          localModel: config.engines.local.model,
+          localSelectedGroupId: config.engines.local.selectedGroupId,
+          localAssetLoading: true,
         })
       )
-      const model = config.engines.nmt.model?.trim()
+      const model = config.engines.local.model?.trim()
       if (!model) {
         setServiceStatus(
           projectTranslateServiceStatus({
             enabled: config.enabled,
             hasSource: markdown.length > 0,
-            engineId: 'nmt',
-            nmtModel: model,
-            nmtSelectedGroupId: config.engines.nmt.selectedGroupId,
+            engineId: 'local',
+            localModel: model,
+            localSelectedGroupId: config.engines.local.selectedGroupId,
           })
         )
         return () => {
           disposed = true
         }
       }
-      void trpcClient.nmtModels.state
+      void trpcClient.localModels.state
         .query({
           modelId: model,
-          selectedGroupId: config.engines.nmt.selectedGroupId,
+          selectedGroupId: config.engines.local.selectedGroupId,
         })
-        .then((nmtAsset) => {
+        .then((localAsset) => {
           if (disposed) return
           setServiceStatus(
             projectTranslateServiceStatus({
               enabled: config.enabled,
               hasSource: markdown.length > 0,
-              engineId: 'nmt',
-              nmtModel: model,
-              nmtSelectedGroupId: config.engines.nmt.selectedGroupId,
-              nmtAsset,
+              engineId: 'local',
+              localModel: model,
+              localSelectedGroupId: config.engines.local.selectedGroupId,
+              localAsset,
             })
           )
         })
@@ -157,11 +150,11 @@ export function useDocumentTranslation(
           if (disposed) return
           setServiceStatus({
             state: 'unavailable',
-            engineId: 'nmt',
+            engineId: 'local',
             message:
               assetError instanceof Error
                 ? assetError.message
-                : 'Unable to check local NMT model files.',
+                : 'Unable to check local model files.',
           })
         })
       return () => {
@@ -169,13 +162,13 @@ export function useDocumentTranslation(
       }
     }
 
-    if (config.engineId === 'ai') {
+    if (config.engineId === 'openai') {
       setCapability(null)
       setServiceStatus(
         projectTranslateServiceStatus({
           enabled: config.enabled,
           hasSource: markdown.length > 0,
-          engineId: 'ai',
+          engineId: 'openai',
         })
       )
       return () => {
@@ -230,8 +223,8 @@ export function useDocumentTranslation(
   }, [
     config?.enabled,
     config?.engineId,
-    config?.engines.nmt.model,
-    config?.engines.nmt.selectedGroupId,
+    config?.engines.local.model,
+    config?.engines.local.selectedGroupId,
     config?.targetLanguage,
     markdown.length,
   ])
@@ -312,9 +305,9 @@ export function useDocumentTranslation(
     config?.enabled,
     config?.targetLanguage,
     config?.engineId,
-    config?.engines.ai.model,
-    config?.engines.nmt.model,
-    config?.engines.nmt.selectedGroupId,
+    config?.engines.openai.model,
+    config?.engines.local.model,
+    config?.engines.local.selectedGroupId,
     markdown,
     serviceStatus,
   ])
@@ -339,79 +332,6 @@ export function useDocumentTranslation(
     start,
     cancel,
     reset,
-  }
-}
-
-function createTranslationEngineExecution(
-  config: DocumentTranslationConfig
-): TranslationEngineExecution {
-  if (config.engineId === 'browser' || isStaticMode()) {
-    return createBrowserTranslationExecution()
-  }
-  const model = config.engineId === 'ai' ? config.engines.ai.model : config.engines.nmt.model
-  return {
-    factory: new TrpcTranslatorFactory(
-      config.engineId,
-      model,
-      config.engineId === 'nmt' ? config.engines.nmt.selectedGroupId : undefined
-    ),
-    cacheIdentity: {
-      engineId: config.engineId,
-      model,
-      selectedGroupId: config.engineId === 'nmt' ? config.engines.nmt.selectedGroupId : undefined,
-      translatorContractVersion: TRANSLATOR_CONTRACT_VERSION,
-    },
-  }
-}
-
-class TrpcTranslatorFactory implements TranslatorFactory {
-  constructor(
-    private readonly engineId: Exclude<TranslationEngineId, 'browser'>,
-    private readonly model: string | undefined,
-    private readonly selectedGroupId: string | undefined
-  ) {}
-
-  async create(options: TranslatorFactoryCreateOptions): Promise<Translator> {
-    return new TrpcTranslator({
-      engineId: this.engineId,
-      sourceLanguage: options.sourceLanguage,
-      targetLanguage: options.targetLanguage,
-      model: options.model ?? this.model,
-      selectedGroupId: this.engineId === 'nmt' ? this.selectedGroupId : undefined,
-    })
-  }
-}
-
-class TrpcTranslator implements Translator {
-  constructor(
-    private readonly options: {
-      engineId: Exclude<TranslationEngineId, 'browser'>
-      sourceLanguage: string
-      targetLanguage: string
-      model?: string
-      selectedGroupId?: string
-    }
-  ) {}
-
-  async translate(
-    input: string | RichTranslationInput,
-    options?: TranslatorOptions
-  ): Promise<string> {
-    if (options?.signal?.aborted) {
-      throw new DOMException('Translation cancelled.', 'AbortError')
-    }
-    const result = await trpcClient.translationEngines.translate.mutate({
-      engineId: this.options.engineId,
-      sourceLanguage: this.options.sourceLanguage,
-      targetLanguage: this.options.targetLanguage,
-      model: this.options.model,
-      selectedGroupId: this.options.selectedGroupId,
-      ...(typeof input === 'string' ? { text: input } : { rich: input }),
-    })
-    if (options?.signal?.aborted) {
-      throw new DOMException('Translation cancelled.', 'AbortError')
-    }
-    return result.text
   }
 }
 

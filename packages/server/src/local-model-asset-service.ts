@@ -1,64 +1,56 @@
 import { downloadFileToCacheDir, fileDownloadInfo } from '@huggingface/hub'
 import type {
   ConfigManager,
-  NmtLocalModelCatalogResult,
-  NmtModelAssetLog,
-  NmtModelAssetState,
-  NmtModelCatalogItem,
-  NmtModelCatalogResult,
-  NmtModelCatalogSearchEvent,
+  LocalModelAssetLog,
+  LocalModelAssetState,
+  LocalModelCatalogLocalResult,
+  LocalModelCatalogItem,
+  LocalModelCatalogResult,
+  LocalModelCatalogSearchEvent,
   TranslationModelCandidate,
   TranslationModelSearchInput,
   TranslationModelSearchResult,
 } from '@openspecui/core'
 import {
-  getDefaultGlobalSettingsPath,
-  getTranslationEngineManifest,
-  NmtModelAssetStateSchema,
-  selectNmtDownloadGroup,
-  type TranslationEngineManifest,
+  LocalModelAssetStateSchema,
+  selectLocalDownloadGroup,
 } from '@openspecui/core'
 import { observable } from '@trpc/server/observable'
 import { existsSync } from 'node:fs'
 import { copyFile, lstat, mkdir, readlink, rm } from 'node:fs/promises'
-import { createRequire } from 'node:module'
-import { basename, dirname, join, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { dirname, join, resolve } from 'node:path'
 import {
   buildTransformersRemoteHost,
   normalizeHuggingFaceEndpoint,
 } from './huggingface-endpoint.js'
 import { ensureProxyAwareFetchDispatcher } from './network-dispatcher.js'
-import { NmtModelAssetStore } from './nmt-model-asset-store.js'
+import { LocalModelAssetStore } from './local-model-asset-store.js'
 import {
-  getDefaultNmtModelCacheDir,
-  getDefaultNmtModelFetchCachePath,
-  getDefaultNmtModelIndexPath,
-} from './nmt-model-cache-path.js'
-import { NmtModelFetchCacheStore } from './nmt-model-fetch-cache-store.js'
+  getDefaultLocalModelCacheDir,
+  getDefaultLocalModelFetchCachePath,
+  getDefaultLocalModelIndexPath,
+} from './local-model-cache-path.js'
+import { LocalModelFetchCacheStore } from './local-model-fetch-cache-store.js'
 import {
   getTransformersFileCacheModelPath,
   getTransformersLocalModelPath,
-  readLocalNmtModelFileStatus,
-} from './nmt-model-local-cache.js'
+  readLocalModelFileStatus,
+} from './local-model-local-cache.js'
 import {
   configureTransformersRuntime,
-  resolveNmtModelRuntimePlan,
+  resolveLocalModelRuntimePlan,
   type TransformersRuntimeModule,
-} from './nmt-model-runtime.js'
+} from './local-model-runtime.js'
 import {
-  searchNmtModels,
-  searchNmtModelsProgressively,
-  type ResolvedNmtModelPlan,
+  searchLocalModels,
+  searchLocalModelsProgressively,
+  type ResolvedLocalModelPlan,
 } from './translation-model-catalog.js'
 
 interface GlobalSettingsManagerLike {
   readSettings(): Promise<{
     translationEngines: {
-      extensions: {
-        installRoot?: string
-      }
-      nmt: {
+      local: {
         model: string
         selectedGroupId?: string
         hfEndpoint: string
@@ -74,7 +66,7 @@ interface DownloadSession {
   selectedGroupId?: string
 }
 
-type LogListener = (log: NmtModelAssetLog) => void
+type LogListener = (log: LocalModelAssetLog) => void
 
 interface TransformersModelRegistry {
   get_pipeline_files(
@@ -102,7 +94,7 @@ interface TransformersModule extends TransformersRuntimeModule {
   ModelRegistry: TransformersModelRegistry
 }
 
-export interface NmtModelAssetServiceOptions {
+export interface LocalModelAssetServiceOptions {
   projectDir: string
   configManager: ConfigManager
   globalSettingsManager: GlobalSettingsManagerLike
@@ -112,36 +104,35 @@ export interface NmtModelAssetServiceOptions {
   fetchCachePath?: string
 }
 
-export class NmtModelAssetService {
+export class LocalModelAssetService {
   private readonly now: () => number
-  private readonly store: NmtModelAssetStore
+  private readonly store: LocalModelAssetStore
   private readonly cacheDir: string
-  private readonly fetchCacheStore: NmtModelFetchCacheStore
+  private readonly fetchCacheStore: LocalModelFetchCacheStore
   private readonly listeners = new Set<LogListener>()
   private readonly sessions = new Map<string, DownloadSession>()
-  private readonly logs = new Map<string, NmtModelAssetLog>()
+  private readonly logs = new Map<string, LocalModelAssetLog>()
   private transformersModulePromise: Promise<TransformersModule> | null = null
-  private readonly moduleDir = dirname(fileURLToPath(import.meta.url))
 
-  constructor(private readonly options: NmtModelAssetServiceOptions) {
+  constructor(private readonly options: LocalModelAssetServiceOptions) {
     ensureProxyAwareFetchDispatcher()
     this.now = options.now ?? Date.now
-    this.cacheDir = options.cacheDir ?? getDefaultNmtModelCacheDir()
-    this.store = new NmtModelAssetStore({
-      indexPath: options.indexPath ?? getDefaultNmtModelIndexPath(),
+    this.cacheDir = options.cacheDir ?? getDefaultLocalModelCacheDir()
+    this.store = new LocalModelAssetStore({
+      indexPath: options.indexPath ?? getDefaultLocalModelIndexPath(),
     })
-    this.fetchCacheStore = new NmtModelFetchCacheStore({
-      cachePath: options.fetchCachePath ?? getDefaultNmtModelFetchCachePath(),
+    this.fetchCacheStore = new LocalModelFetchCacheStore({
+      cachePath: options.fetchCachePath ?? getDefaultLocalModelFetchCachePath(),
       now: this.now,
     })
   }
 
   subscribeLogs() {
-    return observable<NmtModelAssetLog>((emit) => {
+    return observable<LocalModelAssetLog>((emit) => {
       for (const log of this.logs.values()) {
         emit.next(log)
       }
-      const listener = (log: NmtModelAssetLog) => emit.next(log)
+      const listener = (log: LocalModelAssetLog) => emit.next(log)
       this.listeners.add(listener)
       return () => {
         this.listeners.delete(listener)
@@ -149,7 +140,7 @@ export class NmtModelAssetService {
     })
   }
 
-  async listLocalCatalog(): Promise<NmtLocalModelCatalogResult> {
+  async listLocalCatalog(): Promise<LocalModelCatalogLocalResult> {
     const localMap = await this.store.readMap()
     const items = await Promise.all(
       [...localMap.values()].map(async (state) => {
@@ -187,7 +178,7 @@ export class NmtModelAssetService {
     return { items }
   }
 
-  async searchRemoteCatalog(input: TranslationModelSearchInput): Promise<NmtModelCatalogResult> {
+  async searchRemoteCatalog(input: TranslationModelSearchInput): Promise<LocalModelCatalogResult> {
     const [remote, localMap, selectedModel] = await Promise.all([
       this.searchRemote(input),
       this.store.readMap(),
@@ -202,11 +193,11 @@ export class NmtModelAssetService {
   }
 
   subscribeRemoteCatalog(input: TranslationModelSearchInput & { requestId: string }) {
-    return observable<NmtModelCatalogSearchEvent>((emit) => {
+    return observable<LocalModelCatalogSearchEvent>((emit) => {
       let active = true
       void (async () => {
         try {
-          const events = await searchNmtModelsProgressively(input, {
+          const events = await searchLocalModelsProgressively(input, {
             fetchCacheStore: this.fetchCacheStore,
             hfEndpoint: await this.readHuggingFaceEndpoint(),
           })
@@ -232,7 +223,8 @@ export class NmtModelAssetService {
           emit.next({
             requestId: input.requestId,
             phase: 'error',
-            message: error instanceof Error ? error.message : 'Unable to search remote NMT models.',
+            message:
+              error instanceof Error ? error.message : 'Unable to search remote local models.',
           })
         }
       })()
@@ -242,27 +234,27 @@ export class NmtModelAssetService {
     })
   }
 
-  async listCatalog(input: TranslationModelSearchInput): Promise<NmtModelCatalogResult> {
+  async listCatalog(input: TranslationModelSearchInput): Promise<LocalModelCatalogResult> {
     return this.searchRemoteCatalog(input)
   }
 
   async readSelectedModelState(
     modelId: string,
     selectedGroupId?: string
-  ): Promise<NmtModelAssetState> {
+  ): Promise<LocalModelAssetState> {
     const state = (await this.store.readMap()).get(modelId)
     if (state) return this.refreshCachedState(state, selectedGroupId)
     const session = this.sessions.get(modelId)
     if (session) {
       const selected = modelId === (await this.readSelectedModel())
       const plan = await this.readPlanForState(modelId, selectedGroupId ?? session.selectedGroupId)
-      const selectedGroup = selectNmtDownloadGroup(plan, selectedGroupId ?? session.selectedGroupId)
+      const selectedGroup = selectLocalDownloadGroup(plan, selectedGroupId ?? session.selectedGroupId)
       const files = (selectedGroup?.files ?? plan?.files ?? []).map((file) => ({
         path: file.path,
         sizeBytes: file.sizeBytes,
         downloadedBytes: 0,
       }))
-      return NmtModelAssetStateSchema.parse({
+      return LocalModelAssetStateSchema.parse({
         modelId,
         plan: plan ?? undefined,
         status: 'downloading',
@@ -274,7 +266,7 @@ export class NmtModelAssetService {
         updatedAt: this.now(),
       })
     }
-    return NmtModelAssetStateSchema.parse({
+    return LocalModelAssetStateSchema.parse({
       modelId,
       status: 'not-downloaded',
       selected: modelId === (await this.readSelectedModel()),
@@ -283,11 +275,16 @@ export class NmtModelAssetService {
   }
 
   async startDownload(modelId: string, selectedGroupId?: string): Promise<{ sessionId: string }> {
-    return this.runDownload(modelId, 'downloading', 'Downloading NMT model', selectedGroupId)
+    return this.runDownload(modelId, 'downloading', 'Downloading local model', selectedGroupId)
   }
 
   async resumeDownload(modelId: string, selectedGroupId?: string): Promise<{ sessionId: string }> {
-    return this.runDownload(modelId, 'downloading', 'Resuming NMT model download', selectedGroupId)
+    return this.runDownload(
+      modelId,
+      'downloading',
+      'Resuming local model download',
+      selectedGroupId
+    )
   }
 
   async pauseDownload(modelId: string): Promise<{ success: true }> {
@@ -297,7 +294,7 @@ export class NmtModelAssetService {
       this.sessions.delete(modelId)
     }
     const current = await this.readSelectedModelState(modelId)
-    const nextState = NmtModelAssetStateSchema.parse({
+    const nextState = LocalModelAssetStateSchema.parse({
       ...current,
       status: 'paused',
       resumable: true,
@@ -305,11 +302,11 @@ export class NmtModelAssetService {
     })
     await this.store.upsert(nextState)
     this.emitLog({
-      engineId: 'nmt',
+      engineId: 'local',
       modelId,
       selectedGroupId: current.plan?.selectedGroupId,
       status: 'paused',
-      message: 'NMT model download paused.',
+      message: 'Local model download paused.',
       progress: nextState.progress,
       bytesDownloaded: nextState.bytesDownloaded,
       totalBytes: nextState.totalBytes,
@@ -326,18 +323,18 @@ export class NmtModelAssetService {
     this.sessions.delete(modelId)
     const current = await this.readSelectedModelState(modelId)
     await this.store.upsert(
-      NmtModelAssetStateSchema.parse({
+      LocalModelAssetStateSchema.parse({
         ...current,
         status: 'deleting',
         updatedAt: this.now(),
       })
     )
     this.emitLog({
-      engineId: 'nmt',
+      engineId: 'local',
       modelId,
       selectedGroupId: current.plan?.selectedGroupId,
       status: 'deleting',
-      message: 'Deleting local NMT model files.',
+      message: 'Deleting local model files.',
       files: current.files,
       updatedAt: this.now(),
     })
@@ -353,11 +350,11 @@ export class NmtModelAssetService {
     await rm(getHubCacheRepoPath(this.cacheDir, modelId), { recursive: true, force: true })
     await this.store.remove(modelId)
     this.emitLog({
-      engineId: 'nmt',
+      engineId: 'local',
       modelId,
       selectedGroupId: current.plan?.selectedGroupId,
       status: 'not-downloaded',
-      message: 'Local NMT model files were removed.',
+      message: 'Local model files were removed.',
       progress: 0,
       bytesDownloaded: 0,
       totalBytes: 0,
@@ -370,7 +367,7 @@ export class NmtModelAssetService {
   async markSelectedModel(modelId: string): Promise<void> {
     const states = await this.store.readAll()
     const nextStates = states.map((state) =>
-      NmtModelAssetStateSchema.parse({
+      LocalModelAssetStateSchema.parse({
         ...state,
         selected: state.modelId === modelId,
       })
@@ -378,7 +375,7 @@ export class NmtModelAssetService {
     const existing = nextStates.some((state) => state.modelId === modelId)
     if (!existing) {
       nextStates.push(
-        NmtModelAssetStateSchema.parse({
+        LocalModelAssetStateSchema.parse({
           modelId,
           status: 'not-downloaded',
           selected: true,
@@ -392,7 +389,7 @@ export class NmtModelAssetService {
   private async searchRemote(
     input: TranslationModelSearchInput
   ): Promise<TranslationModelSearchResult> {
-    return searchNmtModels(
+    return searchLocalModels(
       {
         query: input.query,
         sourceLanguage: input.sourceLanguage,
@@ -409,10 +406,10 @@ export class NmtModelAssetService {
 
   private async decorateCatalogItems(
     candidates: ReadonlyArray<TranslationModelCandidate>,
-    localMap: Map<string, NmtModelAssetState>,
+    localMap: Map<string, LocalModelAssetState>,
     selectedModel: string,
     options: { includeLocalOnly?: boolean } = {}
-  ): Promise<NmtModelCatalogItem[]> {
+  ): Promise<LocalModelCatalogItem[]> {
     const seen = new Set<string>()
     const remoteItems = await Promise.all(
       candidates.map(async (candidate) => {
@@ -420,7 +417,7 @@ export class NmtModelAssetService {
         const localState = localMap.get(candidate.id)
         const asset = localState
           ? await this.refreshCachedState(localState)
-          : NmtModelAssetStateSchema.parse({
+          : LocalModelAssetStateSchema.parse({
               modelId: candidate.id,
               status: 'not-downloaded',
               selected: candidate.id === selectedModel,
@@ -472,14 +469,14 @@ export class NmtModelAssetService {
   }
 
   private async refreshCachedState(
-    state: NmtModelAssetState,
+    state: LocalModelAssetState,
     selectedGroupId?: string
-  ): Promise<NmtModelAssetState> {
+  ): Promise<LocalModelAssetState> {
     const requestedGroupId = selectedGroupId
     const session = this.sessions.get(state.modelId)
     const selected = state.selected || state.modelId === (await this.readSelectedModel())
     if (state.status === 'deleting') {
-      return NmtModelAssetStateSchema.parse({
+      return LocalModelAssetStateSchema.parse({
         ...state,
         selected,
         updatedAt: this.now(),
@@ -490,7 +487,7 @@ export class NmtModelAssetService {
       state.plan &&
       (requestedGroupId === undefined || requestedGroupId === state.plan.selectedGroupId)
     ) {
-      const selectedGroup = selectNmtDownloadGroup(
+      const selectedGroup = selectLocalDownloadGroup(
         state.plan,
         requestedGroupId ?? state.plan.selectedGroupId
       )
@@ -499,7 +496,7 @@ export class NmtModelAssetService {
         sizeBytes: file.sizeBytes,
         downloadedBytes: file.sizeBytes,
       }))
-      return NmtModelAssetStateSchema.parse({
+      return LocalModelAssetStateSchema.parse({
         ...state,
         selected,
         progress: 1,
@@ -517,7 +514,7 @@ export class NmtModelAssetService {
       this.readSelectedGroupId(),
     ])
     if (!plan && state.status !== 'downloaded') {
-      return NmtModelAssetStateSchema.parse({
+      return LocalModelAssetStateSchema.parse({
         ...state,
         selected,
         plan: undefined,
@@ -534,12 +531,12 @@ export class NmtModelAssetService {
       selectedGroupId: state.plan?.selectedGroupId,
       groups: state.plan?.groups,
     }
-    const selectedGroup = selectNmtDownloadGroup(
+    const selectedGroup = selectLocalDownloadGroup(
       effectivePlan,
       requestedGroupId ?? state.plan?.selectedGroupId ?? persistedSelectedGroupId
     )
     if (requestedGroupId && requestedGroupId !== effectivePlan.selectedGroupId && !selectedGroup) {
-      return NmtModelAssetStateSchema.parse({
+      return LocalModelAssetStateSchema.parse({
         ...state,
         selected,
         status: 'not-downloaded',
@@ -552,10 +549,10 @@ export class NmtModelAssetService {
       })
     }
     const planFiles = selectedGroup?.files ?? effectivePlan.files
-    const cacheStatus = await readLocalNmtModelFileStatus({
+    const cacheStatus = await readLocalModelFileStatus({
       cacheDir: this.cacheDir,
       modelId: state.modelId,
-      files: planFiles.map((file) => file.path),
+      files: planFiles.map((file: { path: string }) => file.path),
     })
     const cachedCount = cacheStatus.files.filter((file) => file.cached).length
     const totalCount = Math.max(cacheStatus.files.length, 1)
@@ -575,7 +572,7 @@ export class NmtModelAssetService {
         downloadedBytes: cached ? file.sizeBytes : session ? existingFile?.downloadedBytes : 0,
       }
     })
-    return NmtModelAssetStateSchema.parse({
+    return LocalModelAssetStateSchema.parse({
       ...state,
       selected,
       plan: effectivePlan,
@@ -617,7 +614,7 @@ export class NmtModelAssetService {
   ): Promise<{ sessionId: string }> {
     const existing = this.sessions.get(modelId)
     if (existing) return { sessionId: existing.sessionId }
-    const sessionId = `nmt-model-${sanitizeId(modelId)}-${this.now()}`
+    const sessionId = `local-model-${sanitizeId(modelId)}-${this.now()}`
     const abortController = new AbortController()
     this.sessions.set(modelId, { modelId, sessionId, abortController, selectedGroupId })
     const current = await this.readSelectedModelState(modelId)
@@ -629,10 +626,10 @@ export class NmtModelAssetService {
     )
     if (!plan || plan.files.length === 0 || plan.estimatedTotalBytes === undefined) {
       this.sessions.delete(modelId)
-      throw new Error('No concrete NMT download plan is available.')
+      throw new Error('No concrete local model download plan is available.')
     }
     const totalBytes = plan.estimatedTotalBytes
-    const nextState = NmtModelAssetStateSchema.parse({
+    const nextState = LocalModelAssetStateSchema.parse({
       ...current,
       modelId,
       plan,
@@ -650,7 +647,7 @@ export class NmtModelAssetService {
     })
     await this.store.upsert(nextState)
     this.emitLog({
-      engineId: 'nmt',
+      engineId: 'local',
       modelId,
       selectedGroupId: nextState.plan?.selectedGroupId,
       status: targetStatus,
@@ -679,16 +676,16 @@ export class NmtModelAssetService {
     modelId: string,
     sessionId: string,
     signal: AbortSignal,
-    state: NmtModelAssetState
+    state: LocalModelAssetState
   ): Promise<void> {
     const transformers = await this.getTransformersModule()
     await configureTransformersRuntime(transformers, this.cacheDir)
     transformers.env.remoteHost = buildTransformersRemoteHost(await this.readHuggingFaceEndpoint())
-    const selectedGroup = selectNmtDownloadGroup(state.plan ?? null, state.plan?.selectedGroupId)
+    const selectedGroup = selectLocalDownloadGroup(state.plan ?? null, state.plan?.selectedGroupId)
     const files = selectedGroup?.files ?? state.plan?.files ?? []
     const totalBytes = selectedGroup?.estimatedTotalBytes ?? state.plan?.estimatedTotalBytes
     const hfEndpoint = normalizeHuggingFaceEndpoint(await this.readHuggingFaceEndpoint())
-    const downloadedFiles: NmtModelAssetState['files'] = files.map((file) => ({
+    const downloadedFiles: LocalModelAssetState['files'] = files.map((file) => ({
       path: file.path,
       sizeBytes: file.sizeBytes,
       downloadedBytes: 0,
@@ -696,7 +693,7 @@ export class NmtModelAssetService {
     let bytesDownloaded = 0
 
     if (files.length === 0) {
-      throw new Error('No concrete NMT download files were selected.')
+      throw new Error('No concrete local model download files were selected.')
     }
 
     for (const [fileIndex, file] of files.entries()) {
@@ -770,24 +767,24 @@ export class NmtModelAssetService {
       })
     }
 
-    await this.finishDownload(modelId, sessionId, true, `NMT model ${modelId} is ready.`)
+    await this.finishDownload(modelId, sessionId, true, `Local model ${modelId} is ready.`)
   }
 
   private async emitDownloadProgress(input: {
     modelId: string
     sessionId: string
-    state: NmtModelAssetState
+    state: LocalModelAssetState
     message: string
     totalBytes?: number
     bytesDownloaded: number
-    files: NmtModelAssetState['files']
+    files: LocalModelAssetState['files']
   }): Promise<void> {
     if (!this.isActiveSession(input.modelId, input.sessionId)) return
     const progress =
       input.totalBytes && input.totalBytes > 0
         ? Math.max(0, Math.min(1, input.bytesDownloaded / input.totalBytes))
         : undefined
-    const nextState = NmtModelAssetStateSchema.parse({
+    const nextState = LocalModelAssetStateSchema.parse({
       ...input.state,
       status: 'downloading',
       progress,
@@ -799,7 +796,7 @@ export class NmtModelAssetService {
     })
     await this.store.upsert(nextState)
     this.emitLog({
-      engineId: 'nmt',
+      engineId: 'local',
       modelId: input.modelId,
       selectedGroupId: input.state.plan?.selectedGroupId,
       status: 'downloading',
@@ -822,7 +819,7 @@ export class NmtModelAssetService {
   ): Promise<void> {
     if (!this.isActiveSession(modelId, sessionId)) return
     const current = await this.readSelectedModelState(modelId)
-    const nextState = NmtModelAssetStateSchema.parse({
+    const nextState = LocalModelAssetStateSchema.parse({
       ...current,
       status: success ? 'downloaded' : 'error',
       progress: success ? 1 : current.progress,
@@ -838,7 +835,7 @@ export class NmtModelAssetService {
     await this.store.upsert(nextState)
     this.sessions.delete(modelId)
     this.emitLog({
-      engineId: 'nmt',
+      engineId: 'local',
       modelId,
       selectedGroupId: nextState.plan?.selectedGroupId,
       status: nextState.status,
@@ -857,8 +854,8 @@ export class NmtModelAssetService {
     modelId: string,
     transformers: TransformersModule,
     selectedGroupId?: string
-  ): Promise<ResolvedNmtModelPlan | null> {
-    return resolveNmtModelRuntimePlan({
+  ): Promise<ResolvedLocalModelPlan | null> {
+    return resolveLocalModelRuntimePlan({
       modelId,
       transformers,
       cacheDir: this.cacheDir,
@@ -871,7 +868,7 @@ export class NmtModelAssetService {
   private async readPlanForState(
     modelId: string,
     selectedGroupId?: string
-  ): Promise<ResolvedNmtModelPlan | null> {
+  ): Promise<ResolvedLocalModelPlan | null> {
     const transformers = await this.getTransformersModule()
     transformers.env.remoteHost = buildTransformersRemoteHost(await this.readHuggingFaceEndpoint())
     return this.readPlan(modelId, transformers, selectedGroupId)
@@ -879,24 +876,24 @@ export class NmtModelAssetService {
 
   private async readSelectedModel(): Promise<string> {
     const settings = await this.options.globalSettingsManager.readSettings()
-    return settings.translationEngines.nmt.model
+    return settings.translationEngines.local.model
   }
 
   private async readSelectedGroupId(): Promise<string | undefined> {
     const settings = await this.options.globalSettingsManager.readSettings()
-    return settings.translationEngines.nmt.selectedGroupId
+    return settings.translationEngines.local.selectedGroupId
   }
 
   private async readHuggingFaceEndpoint(): Promise<string> {
     const settings = await this.options.globalSettingsManager.readSettings()
-    return settings.translationEngines.nmt.hfEndpoint
+    return settings.translationEngines.local.hfEndpoint
   }
 
   private isActiveSession(modelId: string, sessionId: string): boolean {
     return this.sessions.get(modelId)?.sessionId === sessionId
   }
 
-  private emitLog(log: NmtModelAssetLog): void {
+  private emitLog(log: LocalModelAssetLog): void {
     this.logs.set(log.modelId, log)
     for (const listener of this.listeners) {
       listener(log)
@@ -911,56 +908,7 @@ export class NmtModelAssetService {
   }
 
   private async loadTransformersModule(): Promise<TransformersModule> {
-    const manifest = getTranslationEngineManifest('nmt')
-    const localPackage = await this.resolveLocalPackage(manifest)
-    if (localPackage) {
-      const requireFromLocalPackage = createRequire(localPackage)
-      return import(
-        pathToFileURL(requireFromLocalPackage.resolve('@huggingface/transformers')).href
-      ) as Promise<TransformersModule>
-    }
-    const installedEntry = await this.resolveInstalledExtensionEntry(manifest)
-    const requireFromInstalledExtension = createRequire(installedEntry)
-    return import(
-      pathToFileURL(requireFromInstalledExtension.resolve('@huggingface/transformers')).href
-    ) as Promise<TransformersModule>
-  }
-
-  private async resolveInstalledExtensionEntry(
-    manifest: TranslationEngineManifest
-  ): Promise<string> {
-    const packageName = manifest.aliasName ?? manifest.packageName
-    if (!packageName) {
-      throw new Error(`Translation engine ${manifest.id} has no runtime package name.`)
-    }
-    const installRoot = await this.resolveInstallRoot()
-    const requireFromInstallRoot = createRequire(join(installRoot, 'package.json'))
-    return requireFromInstallRoot.resolve(packageName)
-  }
-
-  private async resolveInstallRoot(): Promise<string> {
-    const settings = await this.options.globalSettingsManager.readSettings()
-    return (
-      settings.translationEngines.extensions.installRoot ??
-      join(dirname(getDefaultGlobalSettingsPath()), 'extensions')
-    )
-  }
-
-  private async resolveLocalPackage(manifest: TranslationEngineManifest): Promise<string | null> {
-    if (!manifest.packageName) return null
-    const packageDir = resolve(
-      this.moduleDir,
-      '..',
-      '..',
-      manifest.packageName.replace('@openspecui/', '')
-    )
-    const source = join(packageDir, 'src', 'index.ts')
-    const dist = join(packageDir, 'dist', 'index.mjs')
-    const candidates = basename(this.moduleDir) === 'src' ? [source, dist] : [dist, source]
-    for (const candidate of candidates) {
-      if (existsSync(candidate)) return candidate
-    }
-    return null
+    return import('@huggingface/transformers') as Promise<TransformersModule>
   }
 }
 
@@ -985,7 +933,7 @@ function mergeAbortSignals(left: AbortSignal | null | undefined, right: AbortSig
 
 function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) {
-    throw new Error('NMT model download aborted.')
+    throw new Error('Local model download aborted.')
   }
 }
 
@@ -1122,8 +1070,8 @@ function getHubCacheRepoPath(cacheDir: string, modelId: string): string {
 
 function toCatalogItem(
   candidate: TranslationModelCandidate,
-  asset: NmtModelAssetState
-): NmtModelCatalogItem {
+  asset: LocalModelAssetState
+): LocalModelCatalogItem {
   const hasSelectableGroup = candidate.downloadGroups?.some((group) => group.selectable) ?? false
   return {
     ...candidate,
@@ -1137,7 +1085,7 @@ function toCatalogItem(
   }
 }
 
-function compareCatalogItems(left: NmtModelCatalogItem, right: NmtModelCatalogItem): number {
+function compareCatalogItems(left: LocalModelCatalogItem, right: LocalModelCatalogItem): number {
   if (left.local !== right.local) return left.local ? -1 : 1
   if (left.asset.selected !== right.asset.selected) return left.asset.selected ? -1 : 1
   const rightProgress = right.asset.progress ?? 0

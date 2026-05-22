@@ -1,6 +1,6 @@
 import type {
-  NmtModelAssetState,
-  NmtModelCatalogItem,
+  LocalModelAssetState,
+  LocalModelCatalogItem,
   TranslationModelDownloadPlan,
 } from '@openspecui/core/translator'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -35,19 +35,21 @@ const browserTranslationMock = vi.hoisted(() => ({
   createExecution: vi.fn(() => ({
     factory: {
       create: vi.fn(async () => ({
-        translate: vi.fn(async (input: string) => `browser:${input}`),
+        batchTranslate: async function* (inputs: string[]) {
+          yield { index: 0, output: `browser:${inputs[0] ?? ''}` }
+        },
         destroy: vi.fn(),
       })),
     },
     cacheIdentity: {
       engineId: 'browser',
-      translatorContractVersion: 1,
+      translatorContractVersion: 2,
     },
   })),
 }))
 
-const { translationEnginesMock, nmtModelsMock, restoreTranslationMocks } = vi.hoisted(() => {
-  const createDefaultNmtDownloadPlan = (modelId: string): TranslationModelDownloadPlan => ({
+const { translationEnginesMock, localModelsMock, restoreTranslationMocks } = vi.hoisted(() => {
+  const createDefaultLocalDownloadPlan = (modelId: string): TranslationModelDownloadPlan => ({
     modelId,
     estimatedTotalBytes: 246415360,
     selectedGroupId: 'q8',
@@ -102,8 +104,8 @@ const { translationEnginesMock, nmtModelsMock, restoreTranslationMocks } = vi.ho
       },
     ],
   })
-  const createDefaultNmtAssetState = (modelId: string): NmtModelAssetState => {
-    const plan = createDefaultNmtDownloadPlan(modelId)
+  const createDefaultLocalAssetState = (modelId: string): LocalModelAssetState => {
+    const plan = createDefaultLocalDownloadPlan(modelId)
     return {
       modelId,
       status: 'not-downloaded',
@@ -119,8 +121,8 @@ const { translationEnginesMock, nmtModelsMock, restoreTranslationMocks } = vi.ho
       updatedAt: 100,
     }
   }
-  const createDefaultLocalModel = (): NmtModelCatalogItem => {
-    const asset = createDefaultNmtAssetState('onnx-community/opus-mt-en-zh')
+  const createDefaultLocalModel = (): LocalModelCatalogItem => {
+    const asset = createDefaultLocalAssetState('onnx-community/opus-mt-en-zh')
     return {
       id: 'onnx-community/opus-mt-en-zh',
       label: 'onnx-community/opus-mt-en-zh',
@@ -148,7 +150,7 @@ const { translationEnginesMock, nmtModelsMock, restoreTranslationMocks } = vi.ho
       local: true,
     }
   }
-  const createDefaultRemoteItems = (): NmtModelCatalogItem[] => [
+  const createDefaultRemoteItems = (): LocalModelCatalogItem[] => [
     {
       id: 'onnx-community/opus-mt-en-zh',
       label: 'onnx-community/opus-mt-en-zh',
@@ -279,13 +281,10 @@ const { translationEnginesMock, nmtModelsMock, restoreTranslationMocks } = vi.ho
     },
   ]
   const translationEnginesMock = {
-    install: vi.fn(),
-    cancelInstall: vi.fn(),
-    subscribeLogs: vi.fn(() => ({ unsubscribe: vi.fn() })),
     getModelDownloadPlan: vi.fn(),
-    translate: vi.fn(),
+    batchTranslate: vi.fn(),
   }
-  const nmtModelsMock = {
+  const localModelsMock = {
     listLocal: vi.fn(),
     searchRemote: vi.fn(),
     searchRemoteStream: vi.fn(
@@ -295,7 +294,7 @@ const { translationEnginesMock, nmtModelsMock, restoreTranslationMocks } = vi.ho
           onData: (event: {
             requestId: string
             phase: 'candidates' | 'enriched' | 'complete' | 'error'
-            items?: NmtModelCatalogItem[]
+            items?: LocalModelCatalogItem[]
           }) => void
           onError?: (error: unknown) => void
         }
@@ -303,7 +302,7 @@ const { translationEnginesMock, nmtModelsMock, restoreTranslationMocks } = vi.ho
         const unsubscribe = vi.fn()
         queueMicrotask(async () => {
           if (unsubscribe.mock.calls.length > 0) return
-          const remote = (await nmtModelsMock.searchRemote()) as { items: NmtModelCatalogItem[] }
+          const remote = (await localModelsMock.searchRemote()) as { items: LocalModelCatalogItem[] }
           handlers.onData({
             requestId: input.requestId,
             phase: 'candidates',
@@ -336,28 +335,47 @@ const { translationEnginesMock, nmtModelsMock, restoreTranslationMocks } = vi.ho
   const restoreTranslationMocks = () => {
     translationEnginesMock.getModelDownloadPlan.mockImplementation(
       async ({ model }: { model: string }): Promise<TranslationModelDownloadPlan | null> =>
-        createDefaultNmtDownloadPlan(model)
+        createDefaultLocalDownloadPlan(model)
     )
-    translationEnginesMock.translate.mockImplementation(async ({ text }: { text?: string }) => ({
-      text: `server:${text ?? ''}`,
-    }))
-    nmtModelsMock.listLocal.mockImplementation(
-      async (): Promise<{ items: NmtModelCatalogItem[] }> => ({
+    translationEnginesMock.batchTranslate.mockImplementation(
+      (
+        input: { inputs?: string[] },
+        handlers: {
+          onData: (event: { index: number; output: string }) => void
+          onComplete?: () => void
+          onError?: (error: unknown) => void
+        }
+      ) => {
+        const unsubscribe = vi.fn()
+        queueMicrotask(() => {
+          if (unsubscribe.mock.calls.length > 0) return
+          handlers.onData({
+            index: 0,
+            output: `server:${input.inputs?.[0] ?? ''}`,
+          })
+          if (unsubscribe.mock.calls.length > 0) return
+          handlers.onComplete?.()
+        })
+        return { unsubscribe }
+      }
+    )
+    localModelsMock.listLocal.mockImplementation(
+      async (): Promise<{ items: LocalModelCatalogItem[] }> => ({
         items: [createDefaultLocalModel()],
       })
     )
-    nmtModelsMock.searchRemote.mockImplementation(
-      async (): Promise<{ items: NmtModelCatalogItem[] }> => ({
+    localModelsMock.searchRemote.mockImplementation(
+      async (): Promise<{ items: LocalModelCatalogItem[] }> => ({
         items: createDefaultRemoteItems(),
       })
     )
-    nmtModelsMock.state.mockImplementation(
-      async ({ modelId }: { modelId: string }): Promise<NmtModelAssetState> =>
-        createDefaultNmtAssetState(modelId)
+    localModelsMock.state.mockImplementation(
+      async ({ modelId }: { modelId: string }): Promise<LocalModelAssetState> =>
+        createDefaultLocalAssetState(modelId)
     )
   }
   restoreTranslationMocks()
-  return { translationEnginesMock, nmtModelsMock, restoreTranslationMocks }
+  return { translationEnginesMock, localModelsMock, restoreTranslationMocks }
 })
 
 function dispatchPopoverToggle(element: Element, newState: 'open' | 'closed') {
@@ -415,7 +433,7 @@ function createFp16PlanFilesForTest(): TranslationModelDownloadPlan['files'] {
   ]
 }
 
-function createGroupedNmtPlanForTest(modelId: string): TranslationModelDownloadPlan {
+function createGroupedLocalPlanForTest(modelId: string): TranslationModelDownloadPlan {
   const q8Files = createQ8PlanFilesForTest()
   const fp16Files = createFp16PlanFilesForTest()
   return {
@@ -452,7 +470,7 @@ function createGroupedNmtPlanForTest(modelId: string): TranslationModelDownloadP
 
 function createQ8AssetFilesForTest(
   downloadedBytesByPath: Partial<Record<string, number>>
-): NmtModelAssetState['files'] {
+): LocalModelAssetState['files'] {
   return createQ8PlanFilesForTest().map((file) => ({
     path: file.path,
     sizeBytes: file.sizeBytes,
@@ -460,7 +478,7 @@ function createQ8AssetFilesForTest(
   }))
 }
 
-function createDownloadedQ8AssetFilesForTest(): NmtModelAssetState['files'] {
+function createDownloadedQ8AssetFilesForTest(): LocalModelAssetState['files'] {
   return createQ8PlanFilesForTest().map((file) => ({
     path: file.path,
     sizeBytes: file.sizeBytes,
@@ -468,8 +486,8 @@ function createDownloadedQ8AssetFilesForTest(): NmtModelAssetState['files'] {
   }))
 }
 
-function createDownloadedLocalNmtModelForTest(modelId: string): NmtModelCatalogItem {
-  const plan = createGroupedNmtPlanForTest(modelId)
+function createDownloadedLocalModelForTest(modelId: string): LocalModelCatalogItem {
+  const plan = createGroupedLocalPlanForTest(modelId)
   return {
     id: modelId,
     label: modelId,
@@ -588,14 +606,8 @@ vi.mock('@tanstack/react-query', () => ({
         data: {
           translationCache: { entryLimit: 10000 },
           translationEngines: {
-            extensions: {
-              engines: {
-                nmt: { status: 'not-installed' },
-                ai: { status: 'not-installed' },
-              },
-            },
-            ai: { baseUrl: '', token: '', model: 'gpt-4.1-mini' },
-            nmt: { model: 'Xenova/opus-mt-no-de', selectedGroupId: 'q8', hfEndpoint: '' },
+            openai: { baseUrl: '', token: '', model: 'gpt-4.1-mini' },
+            local: { model: 'Xenova/opus-mt-no-de', selectedGroupId: 'q8', hfEndpoint: '' },
           },
         },
         refetch: vi.fn(),
@@ -617,28 +629,25 @@ vi.mock('@tanstack/react-query', () => ({
             status: 'available',
           },
           {
-            id: 'nmt',
-            label: 'NMT',
-            description: 'Runs a local server-side neural machine translation model.',
+            id: 'local',
+            label: 'Local-Transformers',
+            description:
+              'Runs a bundled local Transformers.js translation runtime with managed model files.',
             technicalSummary:
-              'Server-side Transformers.js NMT adapter. Package payload is about 5 KB; the selected model is downloaded separately and can be hundreds of MB.',
+              'Server-side Transformers.js local adapter. Package payload is about 5 KB; selected model groups are downloaded separately and can range from tens to hundreds of MB.',
             runtime: 'server',
-            builtin: false,
-            installable: true,
             selected: false,
-            status: 'not-installed',
+            status: 'available',
             model: 'Xenova/opus-mt-no-de',
           },
           {
-            id: 'ai',
-            label: 'AI',
+            id: 'openai',
+            label: 'OpenAI-Completion',
             description:
-              'Uses an OpenAI-compatible TanStack AI provider for context-aware translation.',
+              'Uses an OpenAI-compatible TanStack OpenAI-Completion completion provider for context-aware translation.',
             technicalSummary:
-              'Server-side TanStack AI adapter for OpenAI-compatible APIs. Package payload is about 5 KB; model size stays with the remote provider.',
+              'Server-side TanStack OpenAI-Completion adapter for OpenAI-compatible APIs. Package payload is about 5 KB; model size stays with the remote provider.',
             runtime: 'server',
-            builtin: false,
-            installable: true,
             selected: false,
             status: 'available',
             model: 'gpt-4.1-mini',
@@ -648,10 +657,10 @@ vi.mock('@tanstack/react-query', () => ({
         refetch: vi.fn(),
       }
     }
-    if (key === 'nmtModels.listLocal') {
+    if (key === 'localModels.listLocal') {
       return { data: undefined, isLoading: false, refetch: vi.fn() }
     }
-    if (key === 'nmtModels.searchRemote') {
+    if (key === 'localModels.searchRemote') {
       return { data: undefined, isLoading: false, refetch: vi.fn() }
     }
     if (key === 'translationCache.stats') {
@@ -812,15 +821,15 @@ vi.mock('@/lib/trpc', () => ({
         queryOptions: () => ({ queryKey: ['translationEngines.list'] }),
       },
     },
-    nmtModels: {
+    localModels: {
       listLocal: {
-        queryOptions: () => ({ queryKey: ['nmtModels.listLocal'] }),
+        queryOptions: () => ({ queryKey: ['localModels.listLocal'] }),
       },
       searchRemote: {
-        queryOptions: () => ({ queryKey: ['nmtModels.searchRemote'] }),
+        queryOptions: () => ({ queryKey: ['localModels.searchRemote'] }),
       },
       state: {
-        queryOptions: () => ({ queryKey: ['nmtModels.state'] }),
+        queryOptions: () => ({ queryKey: ['localModels.state'] }),
       },
     },
   },
@@ -849,52 +858,43 @@ vi.mock('@/lib/trpc', () => ({
       },
     },
     translationEngines: {
-      subscribeLogs: {
-        subscribe: translationEnginesMock.subscribeLogs,
-      },
       getModelDownloadPlan: {
         query: translationEnginesMock.getModelDownloadPlan,
       },
-      install: {
-        mutate: translationEnginesMock.install,
-      },
-      cancelInstall: {
-        mutate: translationEnginesMock.cancelInstall,
-      },
-      translate: {
-        mutate: translationEnginesMock.translate,
+      batchTranslate: {
+        subscribe: translationEnginesMock.batchTranslate,
       },
     },
-    nmtModels: {
+    localModels: {
       listLocal: {
-        query: nmtModelsMock.listLocal,
+        query: localModelsMock.listLocal,
       },
       searchRemote: {
-        query: nmtModelsMock.searchRemote,
+        query: localModelsMock.searchRemote,
       },
       searchRemoteStream: {
-        subscribe: nmtModelsMock.searchRemoteStream,
+        subscribe: localModelsMock.searchRemoteStream,
       },
       state: {
-        query: nmtModelsMock.state,
+        query: localModelsMock.state,
       },
       subscribeLogs: {
-        subscribe: nmtModelsMock.subscribeLogs,
+        subscribe: localModelsMock.subscribeLogs,
       },
       markSelected: {
-        mutate: nmtModelsMock.markSelected,
+        mutate: localModelsMock.markSelected,
       },
       download: {
-        mutate: nmtModelsMock.download,
+        mutate: localModelsMock.download,
       },
       pause: {
-        mutate: nmtModelsMock.pause,
+        mutate: localModelsMock.pause,
       },
       resume: {
-        mutate: nmtModelsMock.resume,
+        mutate: localModelsMock.resume,
       },
       delete: {
-        mutate: nmtModelsMock.delete,
+        mutate: localModelsMock.delete,
       },
     },
   },
@@ -915,12 +915,12 @@ describe('Settings', () => {
         translationEngines: {
           extensions: {
             engines: {
-              nmt: { status: 'not-installed' },
-              ai: { status: 'not-installed' },
+              local: { status: 'not-installed' },
+              openai: { status: 'not-installed' },
             },
           },
-          ai: { baseUrl: '', token: '', model: 'gpt-4.1-mini' },
-          nmt: { model: 'Xenova/opus-mt-no-de', selectedGroupId: 'q8', hfEndpoint: '' },
+          openai: { baseUrl: '', token: '', model: 'gpt-4.1-mini' },
+          local: { model: 'Xenova/opus-mt-no-de', selectedGroupId: 'q8', hfEndpoint: '' },
         },
       },
       isLoading: false,
@@ -1012,7 +1012,7 @@ describe('Settings', () => {
           targetLanguage: 'zh',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
         },
       },
     })
@@ -1035,7 +1035,7 @@ describe('Settings', () => {
     expect(prepareBrowserTranslationMock).not.toHaveBeenCalled()
   })
 
-  it('restores the persisted NMT engine before probing browser capability', async () => {
+  it('restores the persisted Local engine before probing browser capability', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -1051,7 +1051,7 @@ describe('Settings', () => {
           targetLanguage: 'zh',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
         },
       },
     })
@@ -1060,11 +1060,11 @@ describe('Settings', () => {
     render(<Settings />)
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
-    expect(screen.getByRole('combobox', { name: 'Engine' })).toHaveTextContent('NMT')
+    expect(screen.getByRole('combobox', { name: 'Engine' })).toHaveTextContent('Local-Transformers')
     expect(browserTranslationMock.probe).not.toHaveBeenCalled()
   })
 
-  it('uses project NMT model settings before global settings resolve', async () => {
+  it('uses project Local model settings before global settings resolve', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -1085,10 +1085,10 @@ describe('Settings', () => {
           targetLanguage: 'zh',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
           engines: {
-            nmt: { model: 'Xenova/opus-mt-en-zh', selectedGroupId: 'fp16' },
-            ai: {},
+            local: { model: 'Xenova/opus-mt-en-zh', selectedGroupId: 'fp16' },
+            openai: {},
           },
         },
       },
@@ -1098,8 +1098,8 @@ describe('Settings', () => {
     render(<Settings />)
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
-    expect(screen.getByRole('combobox', { name: 'Engine' })).toHaveTextContent('NMT')
-    expect(screen.getByRole('button', { name: 'NMT model' })).toHaveTextContent(
+    expect(screen.getByRole('combobox', { name: 'Engine' })).toHaveTextContent('Local-Transformers')
+    expect(screen.getByRole('button', { name: 'Local model' })).toHaveTextContent(
       'Xenova/opus-mt-en-zh'
     )
     await waitFor(() =>
@@ -1113,7 +1113,7 @@ describe('Settings', () => {
     )
   })
 
-  it('uses global install state while the engine list is still resolving', async () => {
+  it('shows bundled engine status without install controls while the engine list is still resolving', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -1126,19 +1126,8 @@ describe('Settings', () => {
       data: {
         translationCache: { entryLimit: 10000 },
         translationEngines: {
-          extensions: {
-            engines: {
-              nmt: {
-                status: 'installed',
-                version: '^3.7.2',
-                message: 'Using local workspace package.',
-                updatedAt: 100,
-              },
-              ai: { status: 'not-installed' },
-            },
-          },
-          ai: { baseUrl: '', token: '', model: 'gpt-4.1-mini' },
-          nmt: { model: 'Xenova/opus-mt-en-zh', selectedGroupId: 'q8', hfEndpoint: '' },
+          openai: { baseUrl: '', token: '', model: 'gpt-4.1-mini' },
+          local: { model: 'Xenova/opus-mt-en-zh', selectedGroupId: 'q8', hfEndpoint: '' },
         },
       },
       isLoading: false,
@@ -1151,7 +1140,7 @@ describe('Settings', () => {
           targetLanguage: 'zh',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
         },
       },
     })
@@ -1160,8 +1149,10 @@ describe('Settings', () => {
     render(<Settings />)
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
-    expect(screen.getByRole('combobox', { name: 'Engine' })).toHaveTextContent('NMT')
-    expect(screen.getByText('Using local workspace package.')).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: 'Engine' })).toHaveTextContent('Local-Transformers')
+    expect(
+      screen.getByText(/selected model groups are downloaded separately/i)
+    ).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Install' })).toBeNull()
   })
 
@@ -1181,7 +1172,7 @@ describe('Settings', () => {
           targetLanguage: 'zh',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'ai',
+          engineId: 'openai',
         },
       },
     })
@@ -1195,7 +1186,7 @@ describe('Settings', () => {
     expect(screen.queryByRole('progressbar')).toBeNull()
   })
 
-  it('searches NMT models through the autocomplete popover and shows the download plan', async () => {
+  it('searches Local-Transformers models through the autocomplete popover and shows the download plan', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -1211,7 +1202,7 @@ describe('Settings', () => {
           targetLanguage: 'de',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
         },
       },
     })
@@ -1220,13 +1211,13 @@ describe('Settings', () => {
     render(<Settings />)
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
-    fireEvent.click(screen.getByRole('button', { name: 'NMT model' }))
-    dispatchPopoverToggle(screen.getByRole('dialog', { name: 'Select NMT model' }), 'open')
-    const input = screen.getByRole('textbox', { name: 'Search NMT models' })
+    fireEvent.click(screen.getByRole('button', { name: 'Local model' }))
+    dispatchPopoverToggle(screen.getByRole('dialog', { name: 'Select local model' }), 'open')
+    const input = screen.getByRole('textbox', { name: 'Search local models' })
     fireEvent.change(input, { target: { value: 'opus' } })
 
     await waitFor(() =>
-      expect(nmtModelsMock.searchRemoteStream).toHaveBeenCalledWith(
+      expect(localModelsMock.searchRemoteStream).toHaveBeenCalledWith(
         expect.objectContaining({ query: 'opus', targetLanguage: 'de' }),
         expect.any(Object)
       )
@@ -1240,14 +1231,14 @@ describe('Settings', () => {
       expect(screen.getByText(/Download files/i)).toBeTruthy()
       expect(screen.getAllByText('235 MB').length).toBeGreaterThan(0)
     })
-    expect(nmtModelsMock.listLocal).toHaveBeenCalled()
-    await waitFor(() => expect(nmtModelsMock.searchRemoteStream).toHaveBeenCalled())
+    expect(localModelsMock.listLocal).toHaveBeenCalled()
+    await waitFor(() => expect(localModelsMock.searchRemoteStream).toHaveBeenCalled())
     expect(translationEnginesMock.getModelDownloadPlan).toHaveBeenCalled()
     expect(screen.getAllByText(/q8/).length).toBeGreaterThan(0)
-    expect(screen.getByText('NMT Model')).toBeTruthy()
+    expect(screen.getByText('Local Model')).toBeTruthy()
   })
 
-  it('saves the NMT Hugging Face endpoint from the advanced provider popover', async () => {
+  it('saves the Local-Transformers Hugging Face endpoint from the advanced provider popover', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -1263,7 +1254,7 @@ describe('Settings', () => {
           targetLanguage: 'de',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
         },
       },
     })
@@ -1272,20 +1263,20 @@ describe('Settings', () => {
     render(<Settings />)
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
-    fireEvent.click(screen.getByRole('button', { name: 'NMT provider settings' }))
-    dispatchPopoverToggle(screen.getByRole('dialog', { name: 'NMT provider settings' }), 'open')
+    fireEvent.click(screen.getByRole('button', { name: 'Local provider settings' }))
+    dispatchPopoverToggle(screen.getByRole('dialog', { name: 'Local provider settings' }), 'open')
     const endpointInput = screen.getByLabelText('HF Endpoint')
     fireEvent.change(endpointInput, { target: { value: 'https://hf-mirror.com' } })
     fireEvent.keyDown(endpointInput, { key: 'Enter' })
 
     await waitFor(() =>
       expect(updateGlobalSettingsMock).toHaveBeenCalledWith({
-        translationEngines: { nmt: { hfEndpoint: 'https://hf-mirror.com' } },
+        translationEngines: { local: { hfEndpoint: 'https://hf-mirror.com' } },
       })
     )
   })
 
-  it('shows plan loading and a single-line NMT status message', async () => {
+  it('shows plan loading and a single-line Local-Transformers status message', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -1351,7 +1342,7 @@ describe('Settings', () => {
           targetLanguage: 'de',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
         },
       },
     })
@@ -1367,7 +1358,7 @@ describe('Settings', () => {
     expect(screen.getAllByText(/Not downloaded/).length).toBeLessThanOrEqual(1)
   })
 
-  it('shows a circular download control for an uninstalled NMT model and keeps unknown-size models disabled', async () => {
+  it('shows a circular download control for an uninstalled Local model and keeps unknown-size models disabled', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -1383,7 +1374,7 @@ describe('Settings', () => {
           targetLanguage: 'de',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
         },
       },
     })
@@ -1393,17 +1384,17 @@ describe('Settings', () => {
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     const downloadButton = await screen.findByRole('button', { name: 'Download model' })
-    expect(downloadButton).toHaveAttribute('data-nmt-plan-action', 'download')
+    expect(downloadButton).toHaveAttribute('data-local-plan-action', 'download')
     expect(downloadButton.className).not.toContain('group')
     expect(screen.queryByRole('button', { name: 'Pause download' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'NMT model' }))
-    dispatchPopoverToggle(screen.getByRole('dialog', { name: 'Select NMT model' }), 'open')
+    fireEvent.click(screen.getByRole('button', { name: 'Local model' }))
+    dispatchPopoverToggle(screen.getByRole('dialog', { name: 'Select local model' }), 'open')
     const disabledOption = await screen.findByRole('option', { name: /Xenova\/unknown-model/ })
     expect(disabledOption).toHaveAttribute('disabled')
   })
 
-  it('only exposes the hover pause affordance while an NMT model is downloading', async () => {
+  it('only exposes the hover pause affordance while an Local model is downloading', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -1412,7 +1403,7 @@ describe('Settings', () => {
         removeEventListener: vi.fn(),
       }))
     )
-    nmtModelsMock.state.mockImplementation(async () => ({
+    localModelsMock.state.mockImplementation(async () => ({
       modelId: 'Xenova/opus-mt-no-de',
       status: 'downloading',
       selected: true,
@@ -1438,7 +1429,7 @@ describe('Settings', () => {
           targetLanguage: 'de',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
         },
       },
     })
@@ -1448,18 +1439,18 @@ describe('Settings', () => {
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     const pauseButton = await screen.findByRole('button', { name: 'Pause download' })
-    expect(pauseButton).toHaveAttribute('data-nmt-plan-action', 'pause')
+    expect(pauseButton).toHaveAttribute('data-local-plan-action', 'pause')
     expect(pauseButton.className).toContain('group')
     expect(within(pauseButton).getByText('43%').className).toContain('group-hover:hidden')
     expect(
-      within(screen.getByLabelText('NMT download profiles')).getByRole('button', { name: /q8/i })
+      within(screen.getByLabelText('Local download profiles')).getByRole('button', { name: /q8/i })
         .className
     ).toContain('border-dashed')
     expect(screen.queryByRole('button', { name: 'Download model' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Resume download' })).toBeNull()
   })
 
-  it('uses only the outer progress ring for downloaded NMT action styling', async () => {
+  it('uses only the outer progress ring for downloaded Local-Transformers action styling', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -1468,7 +1459,7 @@ describe('Settings', () => {
         removeEventListener: vi.fn(),
       }))
     )
-    nmtModelsMock.state.mockImplementation(async () => ({
+    localModelsMock.state.mockImplementation(async () => ({
       modelId: 'Xenova/opus-mt-no-de',
       status: 'downloaded',
       selected: true,
@@ -1480,8 +1471,8 @@ describe('Settings', () => {
       files: createDownloadedQ8AssetFilesForTest(),
       updatedAt: 100,
     }))
-    nmtModelsMock.listLocal.mockResolvedValueOnce({
-      items: [createDownloadedLocalNmtModelForTest('Xenova/opus-mt-no-de')],
+    localModelsMock.listLocal.mockResolvedValueOnce({
+      items: [createDownloadedLocalModelForTest('Xenova/opus-mt-no-de')],
     })
     useConfigSubscriptionMock.mockReturnValue({
       data: {
@@ -1490,7 +1481,7 @@ describe('Settings', () => {
           targetLanguage: 'de',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
         },
       },
     })
@@ -1500,9 +1491,9 @@ describe('Settings', () => {
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     const downloadedAction = await screen.findByLabelText('Downloaded', {
-      selector: '[data-nmt-plan-action="downloaded"]',
+      selector: '[data-local-plan-action="downloaded"]',
     })
-    expect(downloadedAction).toHaveAttribute('data-nmt-plan-action', 'downloaded')
+    expect(downloadedAction).toHaveAttribute('data-local-plan-action', 'downloaded')
     expect(downloadedAction.className).not.toContain('shadow')
     expect(downloadedAction.className).not.toContain('border')
     const deleteButton = screen.getByRole('button', { name: 'Delete model' })
@@ -1510,7 +1501,7 @@ describe('Settings', () => {
     expect(deleteButton.className).not.toContain('shadow')
   })
 
-  it('switches the displayed download file list when a different NMT profile chip is selected', async () => {
+  it('switches the displayed download file list when a different Local profile chip is selected', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -1526,7 +1517,7 @@ describe('Settings', () => {
           targetLanguage: 'de',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
         },
       },
     })
@@ -1549,7 +1540,7 @@ describe('Settings', () => {
     expect(screen.queryByText('onnx/encoder_model_quantized.onnx')).toBeNull()
   })
 
-  it('renders NMT profile chips under the model selector instead of inside Download files', async () => {
+  it('renders Local profile chips under the model selector instead of inside Download files', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -1565,7 +1556,7 @@ describe('Settings', () => {
           targetLanguage: 'de',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
         },
       },
     })
@@ -1574,9 +1565,9 @@ describe('Settings', () => {
     render(<Settings />)
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
-    const modelButton = await screen.findByRole('button', { name: 'NMT model' })
+    const modelButton = await screen.findByRole('button', { name: 'Local model' })
     const downloadFiles = screen.getByText('Download files')
-    const profileList = await screen.findByLabelText('NMT download profiles')
+    const profileList = await screen.findByLabelText('Local download profiles')
     const q8Chip = within(profileList).getByRole('button', { name: /q8/i })
     const fp16Chip = within(profileList).getByRole('button', { name: /fp16/i })
 
@@ -1593,7 +1584,7 @@ describe('Settings', () => {
     expect(fp16Chip).toHaveTextContent('700 MB')
   })
 
-  it('does not treat an uninstalled NMT profile as downloaded when another profile is cached', async () => {
+  it('does not treat an uninstalled Local profile as downloaded when another profile is cached', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -1602,7 +1593,7 @@ describe('Settings', () => {
         removeEventListener: vi.fn(),
       }))
     )
-    nmtModelsMock.state.mockImplementation(async () => ({
+    localModelsMock.state.mockImplementation(async () => ({
       modelId: 'Xenova/opus-mt-no-de',
       status: 'downloaded',
       selected: true,
@@ -1614,8 +1605,8 @@ describe('Settings', () => {
       files: createDownloadedQ8AssetFilesForTest(),
       updatedAt: 100,
     }))
-    nmtModelsMock.listLocal.mockResolvedValueOnce({
-      items: [createDownloadedLocalNmtModelForTest('Xenova/opus-mt-no-de')],
+    localModelsMock.listLocal.mockResolvedValueOnce({
+      items: [createDownloadedLocalModelForTest('Xenova/opus-mt-no-de')],
     })
     useConfigSubscriptionMock.mockReturnValue({
       data: {
@@ -1624,7 +1615,7 @@ describe('Settings', () => {
           targetLanguage: 'de',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
         },
       },
     })
@@ -1635,7 +1626,7 @@ describe('Settings', () => {
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     expect(
       await screen.findByLabelText('Downloaded', {
-        selector: '[data-nmt-plan-action="downloaded"]',
+        selector: '[data-local-plan-action="downloaded"]',
       })
     ).toBeTruthy()
 
@@ -1643,20 +1634,20 @@ describe('Settings', () => {
 
     expect(await screen.findByText('onnx/encoder_model_fp16.onnx')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Download model' })).toHaveAttribute(
-      'data-nmt-plan-action',
+      'data-local-plan-action',
       'download'
     )
     expect(
-      within(screen.getByLabelText('NMT download profiles')).getByRole('button', { name: /fp16/i })
+      within(screen.getByLabelText('Local download profiles')).getByRole('button', { name: /fp16/i })
     ).toHaveTextContent('700 MB')
-    const profileList = screen.getByLabelText('NMT download profiles')
+    const profileList = screen.getByLabelText('Local download profiles')
     expect(within(profileList).getByRole('button', { name: /q8/i }).className).toContain(
       'border-solid'
     )
     expect(within(profileList).getByRole('button', { name: /fp16/i }).className).toContain(
       'border-dashed'
     )
-    expect(screen.queryByLabelText('Downloaded', { selector: '[data-nmt-plan-action]' })).toBeNull()
+    expect(screen.queryByLabelText('Downloaded', { selector: '[data-local-plan-action]' })).toBeNull()
   })
 
   it('locks deleting state and hides resume/delete actions while removal is in progress', async () => {
@@ -1668,7 +1659,7 @@ describe('Settings', () => {
         removeEventListener: vi.fn(),
       }))
     )
-    nmtModelsMock.state.mockImplementation(async () => ({
+    localModelsMock.state.mockImplementation(async () => ({
       modelId: 'Xenova/opus-mt-no-de',
       status: 'deleting',
       selected: true,
@@ -1688,7 +1679,7 @@ describe('Settings', () => {
           targetLanguage: 'de',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
         },
       },
     })
@@ -1703,7 +1694,7 @@ describe('Settings', () => {
     expect(screen.queryByRole('button', { name: 'Download model' })).toBeNull()
   })
 
-  it('renders downloaded NMT plan as a ready card when runtime plan is unavailable', async () => {
+  it('renders downloaded Local-Transformers plan as a ready card when runtime plan is unavailable', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -1713,7 +1704,7 @@ describe('Settings', () => {
       }))
     )
     translationEnginesMock.getModelDownloadPlan.mockResolvedValueOnce(null)
-    nmtModelsMock.state.mockImplementationOnce(async () => ({
+    localModelsMock.state.mockImplementationOnce(async () => ({
       modelId: 'Xenova/opus-mt-no-de',
       status: 'downloaded',
       selected: true,
@@ -1724,8 +1715,8 @@ describe('Settings', () => {
       files: createDownloadedQ8AssetFilesForTest(),
       updatedAt: 100,
     }))
-    nmtModelsMock.listLocal.mockResolvedValueOnce({
-      items: [createDownloadedLocalNmtModelForTest('Xenova/opus-mt-no-de')],
+    localModelsMock.listLocal.mockResolvedValueOnce({
+      items: [createDownloadedLocalModelForTest('Xenova/opus-mt-no-de')],
     })
     useConfigSubscriptionMock.mockReturnValue({
       data: {
@@ -1734,7 +1725,7 @@ describe('Settings', () => {
           targetLanguage: 'de',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
         },
       },
     })
@@ -1745,15 +1736,15 @@ describe('Settings', () => {
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     expect(await screen.findByText('config.json')).toBeTruthy()
     expect(await screen.findByText('onnx/encoder_model_quantized.onnx')).toBeTruthy()
-    expect(screen.queryByText('Local NMT model files are ready.')).toBeNull()
+    expect(screen.queryByText('Selected local model files are ready.')).toBeNull()
     expect(screen.queryByText('No runtime download plan available.')).toBeNull()
     expect(
-      screen.getByLabelText('Downloaded', { selector: '[data-nmt-plan-action="downloaded"]' })
+      screen.getByLabelText('Downloaded', { selector: '[data-local-plan-action="downloaded"]' })
     ).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Delete model' })).toBeTruthy()
   })
 
-  it('loads downloaded NMT chips from local state before runtime plan resolution', async () => {
+  it('loads downloaded Local-Transformers chips from local state before runtime plan resolution', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -1766,7 +1757,7 @@ describe('Settings', () => {
       throw new Error('network should not block local truth')
     })
     const localPlan = createQ8PlanForTest('Xenova/opus-mt-no-de')
-    const localAsset: NmtModelAssetState = {
+    const localAsset: LocalModelAssetState = {
       modelId: 'Xenova/opus-mt-no-de',
       status: 'downloaded',
       selected: true,
@@ -1778,7 +1769,7 @@ describe('Settings', () => {
       files: createDownloadedQ8AssetFilesForTest(),
       updatedAt: 100,
     }
-    nmtModelsMock.listLocal.mockResolvedValueOnce({
+    localModelsMock.listLocal.mockResolvedValueOnce({
       items: [
         {
           id: 'Xenova/opus-mt-no-de',
@@ -1808,7 +1799,7 @@ describe('Settings', () => {
         },
       ],
     })
-    nmtModelsMock.state.mockResolvedValue(localAsset)
+    localModelsMock.state.mockResolvedValue(localAsset)
     useConfigSubscriptionMock.mockReturnValue({
       data: {
         translation: {
@@ -1816,7 +1807,7 @@ describe('Settings', () => {
           targetLanguage: 'de',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
         },
       },
     })
@@ -1827,12 +1818,12 @@ describe('Settings', () => {
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     await waitFor(() =>
       expect(
-        screen.getByLabelText('Downloaded', { selector: '[data-nmt-plan-action="downloaded"]' })
+        screen.getByLabelText('Downloaded', { selector: '[data-local-plan-action="downloaded"]' })
       ).toBeTruthy()
     )
     expect(screen.getByText('config.json')).toBeTruthy()
     expect(screen.queryByText('Loading model files…')).toBeNull()
-    expect(nmtModelsMock.state).not.toHaveBeenCalled()
+    expect(localModelsMock.state).not.toHaveBeenCalled()
     expect(translationEnginesMock.getModelDownloadPlan).not.toHaveBeenCalled()
   })
 
@@ -1872,7 +1863,7 @@ describe('Settings', () => {
     expect(
       await within(dialog).findByText('browser:My name is Sarah and I live in London.')
     ).toBeTruthy()
-    expect(translationEnginesMock.translate).not.toHaveBeenCalled()
+    expect(translationEnginesMock.batchTranslate).not.toHaveBeenCalled()
   })
 
   it('runs a server translation smoke test for the selected service engine from the dialog', async () => {
@@ -1891,7 +1882,7 @@ describe('Settings', () => {
           targetLanguage: 'de',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
         },
       },
     })
@@ -1911,15 +1902,16 @@ describe('Settings', () => {
     expect(
       await within(dialog).findByText('server:My name is Sarah and I live in London.')
     ).toBeTruthy()
-    expect(translationEnginesMock.translate).toHaveBeenCalledWith(
+    expect(translationEnginesMock.batchTranslate).toHaveBeenCalledWith(
       expect.objectContaining({
-        engineId: 'nmt',
+        engineId: 'local',
         sourceLanguage: 'en',
         targetLanguage: 'de',
         model: 'Xenova/opus-mt-no-de',
         selectedGroupId: 'q8',
-        text: 'My name is Sarah and I live in London.',
-      })
+        inputs: ['My name is Sarah and I live in London.'],
+      }),
+      expect.any(Object)
     )
   })
 

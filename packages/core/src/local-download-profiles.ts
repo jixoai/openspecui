@@ -4,7 +4,7 @@ import type {
   TranslationModelDownloadPlan,
 } from './translator.js'
 
-export const NMT_MODEL_PROFILE_DEFINITIONS = [
+export const LOCAL_MODEL_PROFILE_DEFINITIONS = [
   { id: 'q1', label: 'q1', dtype: 'q1', suffix: '_q1', description: '1-bit quantized ONNX profile.' },
   {
     id: 'q1f16',
@@ -37,17 +37,17 @@ export const NMT_MODEL_PROFILE_DEFINITIONS = [
   { id: 'fp32', label: 'fp32', dtype: 'fp32', suffix: '', description: 'fp32 ONNX profile.' },
 ] as const
 
-export type NmtModelProfileId = (typeof NMT_MODEL_PROFILE_DEFINITIONS)[number]['id']
+export type LocalModelProfileId = (typeof LOCAL_MODEL_PROFILE_DEFINITIONS)[number]['id']
 
-export interface NmtRepositoryFile {
+export interface LocalRepositoryFile {
   path: string
   sizeBytes?: number
 }
 
-export interface NmtRuntimeProfileFiles {
-  profile: NmtModelProfileId
+export interface LocalRuntimeProfileFiles {
+  profile: LocalModelProfileId
   dtype: string
-  files: ReadonlyArray<NmtRepositoryFile>
+  files: ReadonlyArray<LocalRepositoryFile>
 }
 
 const AUXILIARY_FILE_NAMES = new Set([
@@ -67,9 +67,9 @@ const AUXILIARY_FILE_NAMES = new Set([
   'vocab.json',
 ])
 
-export function buildNmtDownloadPlanFromRepositoryFiles(input: {
+export function buildLocalDownloadPlanFromRepositoryFiles(input: {
   modelId: string
-  files: ReadonlyArray<NmtRepositoryFile>
+  files: ReadonlyArray<LocalRepositoryFile>
   isEncoderDecoder?: boolean
   selectedGroupId?: string
 }): TranslationModelDownloadPlan | null {
@@ -82,7 +82,7 @@ export function buildNmtDownloadPlanFromRepositoryFiles(input: {
   if (requiredBaseNames.length === 0) return null
 
   const auxiliaryFiles = collectAuxiliaryFiles(fileMap)
-  const groups = NMT_MODEL_PROFILE_DEFINITIONS.flatMap((profile) => {
+  const groups = LOCAL_MODEL_PROFILE_DEFINITIONS.flatMap((profile) => {
     const onnxFiles = collectProfileOnnxFiles({
       fileMap,
       requiredBaseNames,
@@ -108,13 +108,13 @@ export function buildNmtDownloadPlanFromRepositoryFiles(input: {
   })
 }
 
-export function buildNmtDownloadPlanFromRuntimeProfileFiles(input: {
+export function buildLocalDownloadPlanFromRuntimeProfileFiles(input: {
   modelId: string
-  groups: ReadonlyArray<NmtRuntimeProfileFiles>
+  groups: ReadonlyArray<LocalRuntimeProfileFiles>
   selectedGroupId?: string
 }): TranslationModelDownloadPlan | null {
   const groups = input.groups.flatMap((entry) => {
-    const profile = NMT_MODEL_PROFILE_DEFINITIONS.find((item) => item.id === entry.profile)
+    const profile = LOCAL_MODEL_PROFILE_DEFINITIONS.find((item) => item.id === entry.profile)
     if (!profile || entry.files.length === 0) return []
     return [
       createDownloadGroup({
@@ -135,7 +135,7 @@ export function buildNmtDownloadPlanFromRuntimeProfileFiles(input: {
   })
 }
 
-export function selectNmtDownloadGroup(
+export function selectLocalDownloadGroup(
   plan: TranslationModelDownloadPlan | null,
   selectedGroupId: string | undefined
 ): TranslationDownloadGroupPlan | null {
@@ -194,7 +194,7 @@ function createDownloadGroup(input: {
   description?: string
   profile: string
   dtype: string
-  files: ReadonlyArray<NmtRepositoryFile>
+  files: ReadonlyArray<LocalRepositoryFile>
 }): TranslationDownloadGroupPlan {
   const files = dedupeFiles(input.files).map((file) => ({
     path: file.path,
@@ -268,9 +268,9 @@ function collectAuxiliaryFiles(
   return files.sort((left, right) => left.path.localeCompare(right.path))
 }
 
-function dedupeFiles(files: ReadonlyArray<NmtRepositoryFile>): NmtRepositoryFile[] {
+function dedupeFiles(files: ReadonlyArray<LocalRepositoryFile>): LocalRepositoryFile[] {
   const seen = new Set<string>()
-  const result: NmtRepositoryFile[] = []
+  const result: LocalRepositoryFile[] = []
   for (const file of files) {
     if (!file.path || seen.has(file.path)) continue
     seen.add(file.path)

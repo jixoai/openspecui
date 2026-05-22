@@ -1,40 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import {
   TRANSLATOR_CONTRACT_VERSION,
-  createTranslationPackageAliasSpec,
   getTranslationEngineManifest,
-  isRichTranslationInput,
   type TranslationModelCandidate,
 } from './translator.js'
 
 describe('translator platform contract', () => {
-  it('exposes stable manifests and npm alias specs for installable engines', () => {
-    const ai = getTranslationEngineManifest('ai')
-    const nmt = getTranslationEngineManifest('nmt')
+  it('exposes stable manifests for bundled engines', () => {
+    const browser = getTranslationEngineManifest('browser')
+    const local = getTranslationEngineManifest('local')
+    const openai = getTranslationEngineManifest('openai')
 
-    expect(ai.runtime).toBe('server')
-    expect(ai.installable).toBe(true)
-    expect(ai.aliasName).toBe('@openspecui-runtime/ai-translator')
-    expect(nmt.aliasName).toBe('@openspecui-runtime/nmt-translator')
-    expect(
-      createTranslationPackageAliasSpec({
-        aliasName: ai.aliasName!,
-        packageName: ai.packageName!,
-        versionRange: ai.versionRange!,
-      })
-    ).toBe('@openspecui-runtime/ai-translator@npm:@openspecui/ai-translator@^3.7.2')
+    expect(browser.runtime).toBe('browser')
+    expect(local.moduleName).toBe('@openspecui/local-translator')
+    expect(local.factoryExport).toBe('createLocalTranslatorFactory')
+    expect(openai.moduleName).toBe('@openspecui/openai-completion-translator')
+    expect(openai.factoryExport).toBe('createOpenAICompletionTranslatorFactory')
   })
 
-  it('keeps rich translation input as a first-class contract shape', () => {
-    expect(TRANSLATOR_CONTRACT_VERSION).toBe(1)
-    expect(isRichTranslationInput('hello')).toBe(false)
-    expect(
-      isRichTranslationInput({
-        instructions: 'Keep tags.',
-        context: '# Proposal',
-        source: '<x1>Hello</x1>',
-      })
-    ).toBe(true)
+  it('locks the translator contract version to batch translate semantics', () => {
+    expect(TRANSLATOR_CONTRACT_VERSION).toBe(2)
   })
 
   it('defines model candidates with ranking and size metadata for catalog UIs', () => {

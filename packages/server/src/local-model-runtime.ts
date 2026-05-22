@@ -1,18 +1,13 @@
 import { listFiles } from '@huggingface/hub'
 import {
-  buildNmtDownloadPlanFromRepositoryFiles,
-  getDefaultGlobalSettingsPath,
-  getTranslationEngineManifest,
+  buildLocalDownloadPlanFromRepositoryFiles,
   type TranslationModelDownloadPlan,
 } from '@openspecui/core'
-import { existsSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
-import { createRequire } from 'node:module'
-import { dirname, join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { join } from 'node:path'
 import { normalizeHuggingFaceEndpoint } from './huggingface-endpoint.js'
-import { getDefaultNmtModelCacheDir } from './nmt-model-cache-path.js'
-import type { NmtModelFetchCacheStore } from './nmt-model-fetch-cache-store.js'
+import { getDefaultLocalModelCacheDir } from './local-model-cache-path.js'
+import type { LocalModelFetchCacheStore } from './local-model-fetch-cache-store.js'
 
 export interface TransformersModelRegistry {
   get_pipeline_files(
@@ -52,13 +47,13 @@ export async function configureTransformersRuntime(
   transformers.env.localModelPath = join(cacheDir, 'models')
 }
 
-export async function resolveNmtModelRuntimePlan(input: {
+export async function resolveLocalModelRuntimePlan(input: {
   modelId: string
   transformers: TransformersRuntimeModule
   cacheDir: string
   selectedGroupId?: string
   hfEndpoint?: string
-  fetchCacheStore?: NmtModelFetchCacheStore
+  fetchCacheStore?: LocalModelFetchCacheStore
 }): Promise<TranslationModelDownloadPlan | null> {
   await configureTransformersRuntime(input.transformers, input.cacheDir)
   const hubUrl = normalizeHuggingFaceEndpoint(input.hfEndpoint)
@@ -68,7 +63,7 @@ export async function resolveNmtModelRuntimePlan(input: {
     hubUrl,
     fetchCacheStore: input.fetchCacheStore,
   })
-  const repositoryPlan = buildNmtDownloadPlanFromRepositoryFiles({
+  const repositoryPlan = buildLocalDownloadPlanFromRepositoryFiles({
     modelId: input.modelId,
     selectedGroupId: input.selectedGroupId,
     files: repositoryFiles,
@@ -76,44 +71,41 @@ export async function resolveNmtModelRuntimePlan(input: {
   return repositoryPlan
 }
 
-export interface NmtRuntimeSettingsReader {
+export interface LocalRuntimeSettingsReader {
   readSettings(): Promise<{
     translationEngines: {
-      extensions: {
-        installRoot?: string
-      }
-      nmt?: {
+      local?: {
         hfEndpoint?: string
       }
     }
   }>
 }
 
-export async function resolveNmtModelRuntimePlanFromProject(input: {
+export async function resolveLocalModelRuntimePlanFromProject(input: {
   projectDir: string
-  globalSettingsManager: NmtRuntimeSettingsReader
+  globalSettingsManager: LocalRuntimeSettingsReader
   modelId: string
   cacheDir?: string
   selectedGroupId?: string
-  fetchCacheStore?: NmtModelFetchCacheStore
-  loadTransformersModule?: typeof loadNmtTransformersModule
+  fetchCacheStore?: LocalModelFetchCacheStore
+  loadTransformersModule?: typeof loadLocalTransformersModule
 }): Promise<TranslationModelDownloadPlan | null> {
-  const transformers = await (input.loadTransformersModule ?? loadNmtTransformersModule)(
+  const transformers = await (input.loadTransformersModule ?? loadLocalTransformersModule)(
     input.projectDir,
     input.globalSettingsManager
   )
   const settings = await input.globalSettingsManager.readSettings()
-  return resolveNmtModelRuntimePlan({
+  return resolveLocalModelRuntimePlan({
     modelId: input.modelId,
     transformers,
-    cacheDir: input.cacheDir ?? getDefaultNmtModelCacheDir(),
+    cacheDir: input.cacheDir ?? getDefaultLocalModelCacheDir(),
     selectedGroupId: input.selectedGroupId,
-    hfEndpoint: settings.translationEngines.nmt?.hfEndpoint,
+    hfEndpoint: settings.translationEngines.local?.hfEndpoint,
     fetchCacheStore: input.fetchCacheStore,
   })
 }
 
-export async function readNmtModelRuntimeCacheStatus(input: {
+export async function readLocalModelRuntimeCacheStatus(input: {
   modelId: string
   transformers: TransformersRuntimeModule
   cacheDir: string
@@ -130,7 +122,7 @@ async function readHuggingFaceRepositoryFiles(input: {
   modelId: string
   selectedGroupId?: string
   hubUrl: string
-  fetchCacheStore?: NmtModelFetchCacheStore
+  fetchCacheStore?: LocalModelFetchCacheStore
 }): Promise<Array<{ path: string; sizeBytes?: number }>> {
   const files: Array<{ path: string; sizeBytes?: number }> = []
   for await (const entry of listFiles({
@@ -149,7 +141,7 @@ async function readHuggingFaceRepositoryFiles(input: {
   return files
 }
 
-function createProviderFetchCache(fetchCacheStore: NmtModelFetchCacheStore): typeof fetch {
+function createProviderFetchCache(fetchCacheStore: LocalModelFetchCacheStore): typeof fetch {
   return async (input, init) => {
     const response = await fetch(input, init)
     const url = normalizeRequestUrl(input)
@@ -175,56 +167,10 @@ function headersToRecord(headers: Headers): Record<string, string> {
   return Object.fromEntries(headers.entries())
 }
 
-async function loadNmtTransformersModule(
-  projectDir: string,
-  globalSettingsManager: NmtRuntimeSettingsReader
+async function loadLocalTransformersModule(
+  _projectDir: string,
+  _globalSettingsManager: LocalRuntimeSettingsReader
 ): Promise<TransformersRuntimeModule> {
-  const manifest = getTranslationEngineManifest('nmt')
-  const localPackage = await resolveLocalPackage(projectDir, manifest)
-  if (localPackage) {
-    const requireFromLocalPackage = createRequire(localPackage)
-    return import(
-      pathToFileURL(requireFromLocalPackage.resolve('@huggingface/transformers')).href
-    ) as Promise<TransformersRuntimeModule>
-  }
-  const installedEntry = await resolveInstalledExtensionEntry(globalSettingsManager, manifest)
-  const requireFromInstalledExtension = createRequire(installedEntry)
-  return import(
-    pathToFileURL(requireFromInstalledExtension.resolve('@huggingface/transformers')).href
-  ) as Promise<TransformersRuntimeModule>
-}
-
-async function resolveInstalledExtensionEntry(
-  globalSettingsManager: NmtRuntimeSettingsReader,
-  manifest: ReturnType<typeof getTranslationEngineManifest>
-): Promise<string> {
-  const packageName = manifest.aliasName ?? manifest.packageName
-  if (!packageName) {
-    throw new Error(`Translation engine ${manifest.id} has no runtime package name.`)
-  }
-  const settings = await globalSettingsManager.readSettings()
-  const installRoot =
-    settings.translationEngines.extensions.installRoot ??
-    join(dirname(getDefaultGlobalSettingsPath()), 'extensions')
-  const requireFromInstallRoot = createRequire(join(installRoot, 'package.json'))
-  return requireFromInstallRoot.resolve(packageName)
-}
-
-async function resolveLocalPackage(
-  projectDir: string,
-  manifest: ReturnType<typeof getTranslationEngineManifest>
-): Promise<string | null> {
-  if (!manifest.packageName) return null
-  const packageDir = resolve(
-    projectDir,
-    'packages',
-    manifest.packageName.replace('@openspecui/', '')
-  )
-  const source = join(packageDir, 'src', 'index.ts')
-  const dist = join(packageDir, 'dist', 'index.mjs')
-  const candidates = [source, dist]
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate
-  }
-  return null
+  const mod = await import('@huggingface/transformers')
+  return mod as unknown as TransformersRuntimeModule
 }

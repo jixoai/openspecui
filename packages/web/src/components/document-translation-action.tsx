@@ -1,7 +1,7 @@
 import { Button } from '@/components/button'
 import { useDocumentTranslationActivation } from '@/lib/document-translation-session-state'
+import type { TranslateServiceStatus } from '@/lib/translate-service-status'
 import { useDocumentTranslation } from '@/lib/use-document-translation'
-import type { TranslateServiceStatus } from '@/lib/translate-service'
 import {
   DocumentTranslationConfigSchema,
   type DocumentTranslationConfig,
@@ -75,8 +75,8 @@ export function useDocumentTranslationRenderPlugin({
           resolvedTranslationConfig?.targetLanguage,
           resolvedTranslationConfig?.displayMode,
           resolvedTranslationConfig?.engineId,
-          resolvedTranslationConfig?.engines.nmt.model ?? 'no-nmt-model',
-          resolvedTranslationConfig?.engines.nmt.selectedGroupId ?? 'no-nmt-group',
+          resolvedTranslationConfig?.engines.local.model ?? 'no-local-model',
+          resolvedTranslationConfig?.engines.local.selectedGroupId ?? 'no-local-group',
           session.capability?.availability ?? 'unknown',
           session.capability?.message ?? 'no-message',
           session.serviceStatus.state,

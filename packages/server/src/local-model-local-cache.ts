@@ -9,7 +9,7 @@ export function getTransformersFileCacheModelPath(cacheDir: string, modelId: str
   return join(cacheDir, modelId)
 }
 
-export async function readLocalNmtModelFileStatus(input: {
+export async function readLocalModelFileStatus(input: {
   cacheDir: string
   modelId: string
   files: ReadonlyArray<string>

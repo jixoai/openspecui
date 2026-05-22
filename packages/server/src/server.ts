@@ -53,8 +53,8 @@ import { loadDashboardOverview } from './dashboard-overview.js'
 import { DocumentService } from './document-service.js'
 import { buildEntityReadOptions } from './entity-read-options.js'
 import { createHookRuntime } from './hook-runtime.js'
-import { NmtModelAssetService } from './nmt-model-asset-service.js'
-import { getDefaultNmtModelCacheDir, getDefaultNmtModelIndexPath } from './nmt-model-cache-path.js'
+import { LocalModelAssetService } from './local-model-asset-service.js'
+import { getDefaultLocalModelCacheDir, getDefaultLocalModelIndexPath } from './local-model-cache-path.js'
 import { NotificationService } from './notification-service.js'
 import { findAvailablePort } from './port-utils.js'
 import { ProjectRecoveryService } from './project-recovery-service.js'
@@ -146,16 +146,16 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
       console.warn('Translation cache write failed:', error)
     },
   })
-  const nmtModelCacheDir = getDefaultNmtModelCacheDir()
-  const nmtModelIndexPath = getDefaultNmtModelIndexPath()
+  const nmtModelCacheDir = getDefaultLocalModelCacheDir()
+  const nmtModelIndexPath = getDefaultLocalModelIndexPath()
   const translationEngineService = new TranslationEngineService({
     projectDir: config.projectDir,
     configManager,
     globalSettingsManager,
-    nmtCacheDir: nmtModelCacheDir,
-    nmtAssetIndexPath: nmtModelIndexPath,
+    localCacheDir: nmtModelCacheDir,
+    localAssetIndexPath: nmtModelIndexPath,
   })
-  const nmtModelAssetService = new NmtModelAssetService({
+  const localModelAssetService = new LocalModelAssetService({
     projectDir: config.projectDir,
     configManager,
     globalSettingsManager,
@@ -286,7 +286,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
         globalSettingsManager,
         translationCacheService,
         translationEngineService,
-        nmtModelAssetService,
+        localModelAssetService,
         gitWorktreeHandoff: config.gitWorktreeHandoff,
         watcher,
         projectDir: config.projectDir,
@@ -311,7 +311,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     globalSettingsManager,
     translationCacheService,
     translationEngineService,
-    nmtModelAssetService,
+    localModelAssetService,
     gitWorktreeHandoff: config.gitWorktreeHandoff,
     watcher,
     projectDir: config.projectDir,

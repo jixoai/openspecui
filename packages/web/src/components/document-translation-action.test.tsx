@@ -1,6 +1,6 @@
 import type { BrowserTranslationStatus } from '@/lib/browser-translation'
 import { DOCUMENT_TRANSLATION_SESSION_STORAGE_KEY } from '@/lib/document-translation-session-state'
-import type { NmtModelAssetState } from '@openspecui/core/translator'
+import type { LocalModelAssetState } from '@openspecui/core/translator'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MarkdownViewer } from './markdown-viewer'
@@ -27,7 +27,7 @@ vi.mock('@tanstack/react-router', () => ({
 
 vi.mock('@/lib/trpc', () => ({
   trpcClient: {
-    nmtModels: {
+    localModels: {
       state: {
         query: nmtModelStateMock,
       },
@@ -52,7 +52,7 @@ describe('MarkdownViewer translation plugin', () => {
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
-    nmtModelStateMock.mockResolvedValue(createDownloadedNmtAssetState())
+    nmtModelStateMock.mockResolvedValue(createDownloadedLocalAssetState())
     sessionStorage.clear()
     window.history.replaceState(null, '', '/')
   })
@@ -134,10 +134,10 @@ describe('MarkdownViewer translation plugin', () => {
           targetLanguage: 'zh',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
           engines: {
-            nmt: { model: 'Xenova/opus-mt-en-zh', selectedGroupId: 'q8' },
-            ai: {},
+            local: { model: 'Xenova/opus-mt-en-zh', selectedGroupId: 'q8' },
+            openai: {},
           },
         }}
       />
@@ -162,7 +162,7 @@ describe('MarkdownViewer translation plugin', () => {
 
   it('disables document translation when the selected NMT profile is not local', async () => {
     nmtModelStateMock.mockResolvedValueOnce({
-      ...createDownloadedNmtAssetState(),
+      ...createDownloadedLocalAssetState(),
       status: 'not-downloaded',
       files: [],
     })
@@ -175,10 +175,10 @@ describe('MarkdownViewer translation plugin', () => {
           targetLanguage: 'zh',
           displayMode: 'direct',
           cacheEnabled: false,
-          engineId: 'nmt',
+          engineId: 'local',
           engines: {
-            nmt: { model: 'Xenova/opus-mt-en-zh', selectedGroupId: 'q8' },
-            ai: {},
+            local: { model: 'Xenova/opus-mt-en-zh', selectedGroupId: 'q8' },
+            openai: {},
           },
         }}
       />
@@ -818,7 +818,7 @@ function mockProgressiveResult(
   })
 }
 
-function createDownloadedNmtAssetState(): NmtModelAssetState {
+function createDownloadedLocalAssetState(): LocalModelAssetState {
   return {
     modelId: 'Xenova/opus-mt-en-zh',
     status: 'downloaded',

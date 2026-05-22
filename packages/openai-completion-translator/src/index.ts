@@ -1,5 +1,4 @@
 import type {
-  RichTranslationInput,
   Translator,
   TranslatorFactory,
   TranslatorFactoryCreateOptions,
@@ -12,21 +11,21 @@ import {
   type OpenAIChatModel,
 } from '@tanstack/ai-openai'
 
-export interface AiTranslatorFactoryOptions {
+export interface OpenAICompletionTranslatorFactoryOptions {
   baseUrl: string
   token: string
   model: string
 }
 
-export class AiTranslatorFactory implements TranslatorFactory {
-  constructor(private readonly options: AiTranslatorFactoryOptions) {}
+export class OpenAICompletionTranslatorFactory implements TranslatorFactory {
+  constructor(private readonly options: OpenAICompletionTranslatorFactoryOptions) {}
 
   async create(options: TranslatorFactoryCreateOptions): Promise<Translator> {
     if (!this.options.token.trim()) {
-      throw new Error('AI translator token is required.')
+      throw new Error('OpenAI completion translator token is required.')
     }
-    options.monitor?.setStatus({ message: 'Preparing AI translator.', progress: 1 })
-    return new AiTranslator({
+    options.monitor?.setStatus({ message: 'Preparing OpenAI completion translator.', progress: 1 })
+    return new OpenAICompletionTranslator({
       ...this.options,
       sourceLanguage: options.sourceLanguage,
       targetLanguage: options.targetLanguage,
@@ -35,66 +34,61 @@ export class AiTranslatorFactory implements TranslatorFactory {
   }
 }
 
-export function createAiTranslatorFactory(
-  options: AiTranslatorFactoryOptions
-): AiTranslatorFactory {
-  return new AiTranslatorFactory(options)
+export function createOpenAICompletionTranslatorFactory(
+  options: OpenAICompletionTranslatorFactoryOptions
+): OpenAICompletionTranslatorFactory {
+  return new OpenAICompletionTranslatorFactory(options)
 }
 
-class AiTranslator implements Translator {
+class OpenAICompletionTranslator implements Translator {
   constructor(
-    private readonly options: AiTranslatorFactoryOptions & {
+    private readonly options: OpenAICompletionTranslatorFactoryOptions & {
       sourceLanguage: string
       targetLanguage: string
     }
   ) {}
 
-  async translate(
-    input: string | RichTranslationInput,
+  async *batchTranslate(
+    inputs: string[],
     options?: TranslatorOptions
-  ): Promise<string> {
+  ): AsyncGenerator<{ index: number; output: string }> {
     const abortController = createAbortController(options?.signal)
-    const richInput =
-      typeof input === 'string'
-        ? {
-            instructions: 'Translate the source accurately. Return only the translated text.',
-            context: '',
-            source: input,
-          }
-        : input
     const adapter = createConfiguredOpenAiAdapter({
       model: this.options.model,
       token: this.options.token,
       baseUrl: this.options.baseUrl,
     })
-    const text = await chat({
-      adapter,
-      stream: false,
-      temperature: 0,
-      abortController,
-      systemPrompts: [
-        [
-          'You are a translation engine.',
-          `Translate from ${this.options.sourceLanguage} to ${this.options.targetLanguage}.`,
-          richInput.instructions,
-          'Return only the translated source without commentary.',
-        ]
-          .filter(Boolean)
-          .join('\n'),
-      ],
-      messages: [
-        {
-          role: 'user',
-          content: [
-            richInput.context ? `<context>\n${richInput.context}\n</context>` : '',
-            `<source>\n${richInput.source}\n</source>`,
+
+    for (const [index, source] of inputs.entries()) {
+      const text = await chat({
+        adapter,
+        stream: false,
+        temperature: 0,
+        abortController,
+        systemPrompts: [
+          [
+            'You are a translation engine.',
+            `Translate from ${this.options.sourceLanguage} to ${this.options.targetLanguage}.`,
+            options?.instructions ?? 'Translate the source accurately.',
+            'Return only the translated source without commentary.',
           ]
             .filter(Boolean)
-            .join('\n\n'),
-        },
-      ],
-    })
-    return text.trim()
+            .join('\n'),
+        ],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              options?.context ? `<context>\n${options.context}\n</context>` : '',
+              `<source>\n${source}\n</source>`,
+            ]
+              .filter(Boolean)
+              .join('\n\n'),
+          },
+        ],
+      })
+      yield { index, output: text.trim() }
+    }
   }
 }
 
@@ -122,7 +116,7 @@ type RuntimeOpenAiConfig = Omit<OpenAIChatCompletionsConfig, 'apiKey'> & {
 function createConfiguredOpenAiAdapter(input: ConfiguredOpenAiAdapterInput) {
   const createRuntimeAdapter = (model: OpenAIChatModel, config?: RuntimeOpenAiConfig) => {
     if (!config) {
-      throw new Error('AI translator OpenAI runtime config is required.')
+      throw new Error('OpenAI completion runtime config is required.')
     }
     return createOpenaiChatCompletions(model, config.apiKey, config)
   }

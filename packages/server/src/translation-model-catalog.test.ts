@@ -2,11 +2,11 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { NmtModelFetchCacheStore } from './nmt-model-fetch-cache-store'
+import { LocalModelFetchCacheStore } from './local-model-fetch-cache-store'
 import {
-  getNmtModelDownloadPlan,
-  searchNmtModels,
-  searchNmtModelsProgressively,
+  getLocalModelDownloadPlan,
+  searchLocalModels,
+  searchLocalModelsProgressively,
 } from './translation-model-catalog'
 
 const originalFetch = globalThis.fetch
@@ -57,7 +57,7 @@ describe('translation-model-catalog', () => {
       )
     globalThis.fetch = fetchMock
 
-    const result = await searchNmtModels({ targetLanguage: 'de', limit: 1 })
+    const result = await searchLocalModels({ targetLanguage: 'de', limit: 1 })
 
     expect(result.items[0]?.id).toBe('Xenova/opus-mt-no-de')
     expect(fetchMock).toHaveBeenCalledTimes(3)
@@ -83,7 +83,7 @@ describe('translation-model-catalog', () => {
     )
     globalThis.fetch = fetchMock
 
-    const plan = await getNmtModelDownloadPlan('Xenova/opus-mt-no-de')
+    const plan = await getLocalModelDownloadPlan('Xenova/opus-mt-no-de')
 
     expect(plan).toMatchObject({
       modelId: 'Xenova/opus-mt-no-de',
@@ -95,7 +95,7 @@ describe('translation-model-catalog', () => {
   it('stores Hugging Face responses as raw request-level fetch-cache truth', async () => {
     const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-nmt-fetch-cache-'))
     try {
-      const fetchCacheStore = new NmtModelFetchCacheStore({
+      const fetchCacheStore = new LocalModelFetchCacheStore({
         cachePath: join(tempDir, 'fetch-cache.json'),
         now: () => 123,
       })
@@ -146,7 +146,7 @@ describe('translation-model-catalog', () => {
         )
       globalThis.fetch = fetchMock
 
-      await searchNmtModels({ targetLanguage: 'de', query: 'opus', limit: 1 }, { fetchCacheStore })
+      await searchLocalModels({ targetLanguage: 'de', query: 'opus', limit: 1 }, { fetchCacheStore })
 
       const fetches = await fetchCacheStore.readFetches()
       expect(fetches).toHaveLength(2)
@@ -215,7 +215,7 @@ describe('translation-model-catalog', () => {
       )
     globalThis.fetch = fetchMock
 
-    await searchNmtModels(
+    await searchLocalModels(
       { targetLanguage: 'de', limit: 1 },
       { hfEndpoint: 'https://hf-mirror.com/' }
     )
@@ -256,7 +256,7 @@ describe('translation-model-catalog', () => {
     )
     globalThis.fetch = fetchMock
 
-    const plan = await getNmtModelDownloadPlan('Xenova/opus-mt-en-de')
+    const plan = await getLocalModelDownloadPlan('Xenova/opus-mt-en-de')
 
     expect(plan?.selectedGroupId).toBe('q4')
     expect(plan?.estimatedTotalBytes).toBe(46_000_000)
@@ -289,7 +289,7 @@ describe('translation-model-catalog', () => {
     )
     globalThis.fetch = fetchMock
 
-    const plan = await getNmtModelDownloadPlan('Xenova/opus-mt-en-de')
+    const plan = await getLocalModelDownloadPlan('Xenova/opus-mt-en-de')
 
     expect(plan?.estimatedTotalBytes).toBeUndefined()
     expect(plan?.files).toEqual([])
@@ -338,7 +338,7 @@ describe('translation-model-catalog', () => {
       )
     globalThis.fetch = fetchMock
 
-    const events = await searchNmtModelsProgressively({
+    const events = await searchLocalModelsProgressively({
       requestId: 'request-1',
       targetLanguage: 'de',
       limit: 1,

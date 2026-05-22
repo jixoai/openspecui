@@ -271,7 +271,7 @@ interface SqliteTranslationCacheRow {
   placeholder_topology_hash: string
   attribute_topology_hash: string
   display_policy_version: number
-  engine_id: 'browser' | 'nmt' | 'ai'
+  engine_id: 'browser' | 'local' | 'openai'
   engine_version: string | null
   model: string | null
   translator_contract_version: number
@@ -293,7 +293,7 @@ function isSqliteTranslationCacheRow(value: unknown): value is SqliteTranslation
     typeof row.placeholder_topology_hash === 'string' &&
     typeof row.attribute_topology_hash === 'string' &&
     typeof row.display_policy_version === 'number' &&
-    (row.engine_id === 'browser' || row.engine_id === 'nmt' || row.engine_id === 'ai') &&
+    (row.engine_id === 'browser' || row.engine_id === 'local' || row.engine_id === 'openai') &&
     (typeof row.engine_version === 'string' || row.engine_version === null) &&
     (typeof row.model === 'string' || row.model === null) &&
     typeof row.translator_contract_version === 'number' &&

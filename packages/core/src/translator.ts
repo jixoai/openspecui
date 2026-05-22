@@ -1,8 +1,8 @@
 import { z } from 'zod'
 
-export const TRANSLATOR_CONTRACT_VERSION = 1
+export const TRANSLATOR_CONTRACT_VERSION = 2
 
-export const TRANSLATION_ENGINE_IDS = ['browser', 'nmt', 'ai'] as const
+export const TRANSLATION_ENGINE_IDS = ['browser', 'local', 'openai'] as const
 
 export const TranslationEngineIdSchema = z.enum(TRANSLATION_ENGINE_IDS)
 
@@ -10,29 +10,28 @@ export type TranslationEngineId = z.infer<typeof TranslationEngineIdSchema>
 
 export const DEFAULT_TRANSLATION_ENGINE_ID: TranslationEngineId = 'browser'
 
-export const SERVICE_TRANSLATION_ENGINE_IDS = ['nmt', 'ai'] as const
+export const SERVICE_TRANSLATION_ENGINE_IDS = ['local', 'openai'] as const
 
 export const ServiceTranslationEngineIdSchema = z.enum(SERVICE_TRANSLATION_ENGINE_IDS)
 
 export type ServiceTranslationEngineId = z.infer<typeof ServiceTranslationEngineIdSchema>
 
-export const TRANSLATION_ENGINE_ALIAS_PREFIX = '@openspecui-runtime'
-
-export interface RichTranslationInput {
-  instructions: string
-  context: string
-  source: string
-}
-
-export type TranslatorInput = string | RichTranslationInput
-
 export interface TranslatorOptions {
+  instructions?: string
+  context?: string
   signal?: AbortSignal
 }
 
+export interface BatchTranslationResult {
+  index: number
+  output: string
+}
+
 export interface Translator {
-  translate(input: string, options?: TranslatorOptions): Promise<string>
-  translate(input: RichTranslationInput, options?: TranslatorOptions): Promise<string>
+  batchTranslate(
+    inputs: string[],
+    options?: TranslatorOptions
+  ): AsyncGenerator<BatchTranslationResult>
   destroy?(): void
 }
 
@@ -122,7 +121,7 @@ export interface TranslationModelSearchEvent {
   message?: string
 }
 
-export const NmtModelDownloadStatusSchema = z.enum([
+export const LocalModelDownloadStatusSchema = z.enum([
   'not-downloaded',
   'queued',
   'downloading',
@@ -132,7 +131,7 @@ export const NmtModelDownloadStatusSchema = z.enum([
   'deleting',
 ])
 
-export type NmtModelDownloadStatus = z.infer<typeof NmtModelDownloadStatusSchema>
+export type LocalModelDownloadStatus = z.infer<typeof LocalModelDownloadStatusSchema>
 
 export const TranslationDownloadFilePlanSchema = z.object({
   path: z.string().min(1),
@@ -152,11 +151,11 @@ export const TranslationDownloadGroupPlanSchema = z.object({
   files: z.array(TranslationDownloadFilePlanSchema),
 })
 
-export const NmtModelAssetLogSchema = z.object({
-  engineId: z.literal('nmt'),
+export const LocalModelAssetLogSchema = z.object({
+  engineId: z.literal('local'),
   modelId: z.string().min(1),
   selectedGroupId: z.string().min(1).optional(),
-  status: NmtModelDownloadStatusSchema,
+  status: LocalModelDownloadStatusSchema,
   message: z.string(),
   progress: z.number().min(0).max(1).optional(),
   bytesDownloaded: z.number().int().nonnegative().optional(),
@@ -175,9 +174,9 @@ export const NmtModelAssetLogSchema = z.object({
   updatedAt: z.number().int().nonnegative(),
 })
 
-export type NmtModelAssetLog = z.infer<typeof NmtModelAssetLogSchema>
+export type LocalModelAssetLog = z.infer<typeof LocalModelAssetLogSchema>
 
-export const NmtModelAssetPlanSnapshotSchema = z.object({
+export const LocalModelAssetPlanSnapshotSchema = z.object({
   modelId: z.string().min(1),
   estimatedTotalBytes: z.number().int().nonnegative().optional(),
   files: z.array(TranslationDownloadFilePlanSchema),
@@ -186,11 +185,11 @@ export const NmtModelAssetPlanSnapshotSchema = z.object({
   groups: z.array(TranslationDownloadGroupPlanSchema).optional(),
 })
 
-export type NmtModelAssetPlanSnapshot = z.infer<typeof NmtModelAssetPlanSnapshotSchema>
+export type LocalModelAssetPlanSnapshot = z.infer<typeof LocalModelAssetPlanSnapshotSchema>
 
-export const NmtModelAssetStateSchema = z.object({
+export const LocalModelAssetStateSchema = z.object({
   modelId: z.string().min(1),
-  status: NmtModelDownloadStatusSchema.default('not-downloaded'),
+  status: LocalModelDownloadStatusSchema.default('not-downloaded'),
   selected: z.boolean().default(false),
   installedAt: z.number().int().nonnegative().optional(),
   updatedAt: z.number().int().nonnegative().optional(),
@@ -199,7 +198,7 @@ export const NmtModelAssetStateSchema = z.object({
   progress: z.number().min(0).max(1).optional(),
   resumable: z.boolean().default(false),
   error: z.string().optional(),
-  plan: NmtModelAssetPlanSnapshotSchema.optional(),
+  plan: LocalModelAssetPlanSnapshotSchema.optional(),
   files: z
     .array(
       z.object({
@@ -211,29 +210,29 @@ export const NmtModelAssetStateSchema = z.object({
     .default([]),
 })
 
-export type NmtModelAssetState = z.infer<typeof NmtModelAssetStateSchema>
+export type LocalModelAssetState = z.infer<typeof LocalModelAssetStateSchema>
 
-export interface NmtModelCatalogItem extends TranslationModelCandidate {
-  asset: NmtModelAssetState
+export interface LocalModelCatalogItem extends TranslationModelCandidate {
+  asset: LocalModelAssetState
   selectable: boolean
   local: boolean
 }
 
-export interface NmtModelCatalogResult {
-  items: NmtModelCatalogItem[]
+export interface LocalModelCatalogResult {
+  items: LocalModelCatalogItem[]
   nextCursor?: string
 }
 
-export interface NmtModelCatalogSearchEvent {
+export interface LocalModelCatalogSearchEvent {
   requestId: string
   phase: TranslationModelSearchPhase
-  items?: NmtModelCatalogItem[]
+  items?: LocalModelCatalogItem[]
   nextCursor?: string
   message?: string
 }
 
-export interface NmtLocalModelCatalogResult {
-  items: NmtModelCatalogItem[]
+export interface LocalModelCatalogLocalResult {
+  items: LocalModelCatalogItem[]
 }
 
 export interface TranslatorFactoryPrepareOptions extends TranslatorFactoryCreateOptions {
@@ -263,11 +262,8 @@ export interface TranslationEngineManifest {
   description: string
   technicalSummary: string
   runtime: TranslationEngineRuntime
-  builtin: boolean
-  installable: boolean
-  packageName?: string
-  aliasName?: string
-  versionRange?: string
+  moduleName?: string
+  factoryExport?: string
 }
 
 export const TRANSLATION_ENGINE_MANIFESTS = [
@@ -278,34 +274,28 @@ export const TRANSLATION_ENGINE_MANIFESTS = [
     technicalSummary:
       'Browser-native Web Translator adapter. Package payload is about 5 KB; browser language packs are managed by the browser.',
     runtime: 'browser',
-    builtin: true,
-    installable: false,
+    moduleName: '@openspecui/browser-translator',
+    factoryExport: 'createBrowserTranslatorFactory',
   },
   {
-    id: 'nmt',
-    label: 'NMT',
-    description: 'Runs a local server-side neural machine translation model.',
+    id: 'local',
+    label: 'Local-Transformers',
+    description: 'Runs a bundled local Transformers.js translation runtime with managed model files.',
     technicalSummary:
-      'Server-side Transformers.js NMT adapter. Package payload is about 5 KB; the selected model is downloaded separately and can be hundreds of MB.',
+      'Server-side Transformers.js local adapter. Package payload is about 5 KB; selected model groups are downloaded separately and can range from tens to hundreds of MB.',
     runtime: 'server',
-    builtin: false,
-    installable: true,
-    packageName: '@openspecui/nmt-translator',
-    aliasName: `${TRANSLATION_ENGINE_ALIAS_PREFIX}/nmt-translator`,
-    versionRange: '^3.7.2',
+    moduleName: '@openspecui/local-translator',
+    factoryExport: 'createLocalTranslatorFactory',
   },
   {
-    id: 'ai',
-    label: 'AI',
-    description: 'Uses an OpenAI-compatible TanStack AI provider for context-aware translation.',
+    id: 'openai',
+    label: 'OpenAI-Completion',
+    description: 'Uses an OpenAI-compatible TanStack AI completion provider for context-aware translation.',
     technicalSummary:
       'Server-side TanStack AI adapter for OpenAI-compatible APIs. Package payload is about 5 KB; model size stays with the remote provider.',
     runtime: 'server',
-    builtin: false,
-    installable: true,
-    packageName: '@openspecui/ai-translator',
-    aliasName: `${TRANSLATION_ENGINE_ALIAS_PREFIX}/ai-translator`,
-    versionRange: '^3.7.2',
+    moduleName: '@openspecui/openai-completion-translator',
+    factoryExport: 'createOpenAICompletionTranslatorFactory',
   },
 ] as const satisfies readonly TranslationEngineManifest[]
 
@@ -319,98 +309,50 @@ export function getTranslationEngineManifest(
   return manifest
 }
 
-export const TranslationInstallStatusSchema = z.enum([
-  'not-installed',
-  'installed',
-  'installing',
-  'error',
-])
-
-export type TranslationInstallStatus = z.infer<typeof TranslationInstallStatusSchema>
-
-export const TranslationInstallLogSchema = z.object({
-  engineId: ServiceTranslationEngineIdSchema,
-  status: TranslationInstallStatusSchema,
-  message: z.string(),
-  progress: z.number().min(0).max(1).optional(),
-  sessionId: z.string().optional(),
-  updatedAt: z.number().int().nonnegative(),
-})
-
-export type TranslationInstallLog = z.infer<typeof TranslationInstallLogSchema>
-
-export const TranslationEngineInstallStateSchema = z.object({
-  status: TranslationInstallStatusSchema.default('not-installed'),
-  version: z.string().optional(),
-  message: z.string().optional(),
-  installedAt: z.number().int().nonnegative().optional(),
-  updatedAt: z.number().int().nonnegative().optional(),
-})
-
-export type TranslationEngineInstallState = z.infer<typeof TranslationEngineInstallStateSchema>
-
-export const TranslationExtensionSettingsSchema = z.object({
-  installRoot: z.string().optional(),
-  engines: z
-    .object({
-      nmt: TranslationEngineInstallStateSchema.default(
-        TranslationEngineInstallStateSchema.parse({})
-      ),
-      ai: TranslationEngineInstallStateSchema.default(
-        TranslationEngineInstallStateSchema.parse({})
-      ),
-    })
-    .default({
-      nmt: TranslationEngineInstallStateSchema.parse({}),
-      ai: TranslationEngineInstallStateSchema.parse({}),
-    }),
-})
-
-export type TranslationExtensionSettings = z.infer<typeof TranslationExtensionSettingsSchema>
-
-export const TranslationAiSettingsSchema = z.object({
+export const TranslationOpenAISettingsSchema = z.object({
   baseUrl: z.string().default(''),
   token: z.string().default(''),
   model: z.string().default('gpt-4.1-mini'),
 })
 
-export type TranslationAiSettings = z.infer<typeof TranslationAiSettingsSchema>
+export type TranslationOpenAISettings = z.infer<typeof TranslationOpenAISettingsSchema>
 
-export const TranslationNmtSettingsSchema = z.object({
+export const TranslationLocalSettingsSchema = z.object({
   model: z.string().default('Xenova/nllb-200-distilled-600M'),
   selectedGroupId: z.string().optional(),
   hfEndpoint: z.string().default(''),
 })
 
-export type TranslationNmtSettings = z.infer<typeof TranslationNmtSettingsSchema>
+export type TranslationLocalSettings = z.infer<typeof TranslationLocalSettingsSchema>
 
 export const TranslationEngineGlobalSettingsSchema = z.object({
-  extensions: TranslationExtensionSettingsSchema.default(
-    TranslationExtensionSettingsSchema.parse({})
-  ),
-  ai: TranslationAiSettingsSchema.default(TranslationAiSettingsSchema.parse({})),
-  nmt: TranslationNmtSettingsSchema.default(TranslationNmtSettingsSchema.parse({})),
+  openai: TranslationOpenAISettingsSchema.default(TranslationOpenAISettingsSchema.parse({})),
+  local: TranslationLocalSettingsSchema.default(TranslationLocalSettingsSchema.parse({})),
 })
 
 export type TranslationEngineGlobalSettings = z.infer<typeof TranslationEngineGlobalSettingsSchema>
 
 export type TranslationEngineGlobalSettingsUpdate = {
-  extensions?: {
-    installRoot?: string
-    engines?: Partial<Record<ServiceTranslationEngineId, Partial<TranslationEngineInstallState>>>
-  }
-  ai?: Partial<TranslationAiSettings>
-  nmt?: Partial<TranslationNmtSettings>
+  openai?: Partial<TranslationOpenAISettings>
+  local?: Partial<TranslationLocalSettings>
 }
 
-export function createTranslationPackageAliasSpec(input: {
-  aliasName: string
-  packageName: string
-  versionRange: string
-}): string {
-  return `${input.aliasName}@npm:${input.packageName}@${input.versionRange}`
-}
+export const BatchTranslateInputSchema = z.object({
+  engineId: TranslationEngineIdSchema,
+  sourceLanguage: z.string().min(1),
+  targetLanguage: z.string().min(1),
+  model: z.string().min(1).optional(),
+  selectedGroupId: z.string().min(1).optional(),
+  inputs: z.array(z.string()).min(1),
+  instructions: z.string().optional(),
+  context: z.string().optional(),
+})
 
-export function isRichTranslationInput(input: TranslatorInput): input is RichTranslationInput {
-  return typeof input !== 'string'
-}
+export type BatchTranslateInput = z.infer<typeof BatchTranslateInputSchema>
+
+export const BatchTranslateEventSchema = z.object({
+  index: z.number().int().nonnegative(),
+  output: z.string(),
+})
+
+export type BatchTranslateEvent = z.infer<typeof BatchTranslateEventSchema>

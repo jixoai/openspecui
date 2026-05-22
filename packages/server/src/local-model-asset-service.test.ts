@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { Mock } from 'vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { NmtModelAssetService } from './nmt-model-asset-service.js'
-import { NmtModelAssetStore } from './nmt-model-asset-store.js'
+import { LocalModelAssetService } from './local-model-asset-service.js'
+import { LocalModelAssetStore } from './local-model-asset-store.js'
 
 const hubMock = vi.hoisted(() => ({
   downloadFileToCacheDir: vi.fn(),
@@ -26,7 +26,7 @@ const hubMock = vi.hoisted(() => ({
 
 vi.mock('@huggingface/hub', () => hubMock)
 
-type TestableNmtModelAssetService = NmtModelAssetService & {
+type TestableLocalModelAssetService = LocalModelAssetService & {
   getTransformersModule(): Promise<{
     env: {
       cacheDir: string | null
@@ -43,7 +43,7 @@ type TestableNmtModelAssetService = NmtModelAssetService & {
   }>
 }
 
-describe('NmtModelAssetService', () => {
+describe('LocalModelAssetService', () => {
   let tempDir: string
   let indexPath: string
   let cacheDir: string
@@ -85,14 +85,13 @@ describe('NmtModelAssetService', () => {
         writeMockHubCacheFile(input, [new Uint8Array(10)])
     )
 
-    const service = new NmtModelAssetService({
+    const service = new LocalModelAssetService({
       projectDir: tempDir,
       configManager: {} as ConfigManager,
       globalSettingsManager: {
         readSettings: async () => ({
           translationEngines: {
-            extensions: {},
-            nmt: {
+            local: {
               model: 'onnx-community/opus-mt-en-zh',
               selectedGroupId: 'q4',
               hfEndpoint: 'https://hf-mirror.com/',
@@ -104,7 +103,7 @@ describe('NmtModelAssetService', () => {
       indexPath,
       cacheDir,
       fetchCachePath,
-    }) as TestableNmtModelAssetService
+    }) as TestableLocalModelAssetService
     vi.spyOn(service, 'getTransformersModule').mockResolvedValue({
       env: {
         cacheDir: null,
@@ -157,7 +156,7 @@ describe('NmtModelAssetService', () => {
         path: 'onnx/decoder_model_merged_q4.onnx',
       })
     )
-    const state = (await new NmtModelAssetStore({ indexPath }).readAll())[0]
+    const state = (await new LocalModelAssetStore({ indexPath }).readAll())[0]
     expect(state).toMatchObject({
       status: 'downloaded',
       progress: 1,
@@ -186,14 +185,13 @@ describe('NmtModelAssetService', () => {
         )
     )
 
-    const service = new NmtModelAssetService({
+    const service = new LocalModelAssetService({
       projectDir: tempDir,
       configManager: {} as ConfigManager,
       globalSettingsManager: {
         readSettings: async () => ({
           translationEngines: {
-            extensions: {},
-            nmt: {
+            local: {
               model: 'onnx-community/opus-mt-en-zh',
               selectedGroupId: 'q4',
               hfEndpoint: 'https://hf-mirror.com/',
@@ -205,7 +203,7 @@ describe('NmtModelAssetService', () => {
       indexPath,
       cacheDir,
       fetchCachePath,
-    }) as TestableNmtModelAssetService
+    }) as TestableLocalModelAssetService
     vi.spyOn(service, 'getTransformersModule').mockResolvedValue({
       env: {
         cacheDir: null,

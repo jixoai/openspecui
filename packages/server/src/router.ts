@@ -17,6 +17,7 @@ import type {
 import {
   CodeEditorThemeSchema,
   DashboardConfigSchema,
+  BatchTranslateInputSchema,
   DocumentTranslationConfigSchema,
   getAllTools,
   getAvailableTools,
@@ -35,14 +36,12 @@ import {
   subscribeWatcherRuntimeStatus,
   TerminalConfigSchema,
   TerminalRendererEngineSchema,
-  TranslationAiSettingsSchema,
   TranslationCacheReadInputSchema,
   TranslationCacheSettingsSchema,
   TranslationCacheWriteInputSchema,
   TranslationEngineIdSchema,
-  TranslationEngineInstallStateSchema,
-  TranslationExtensionSettingsSchema,
-  TranslationNmtSettingsSchema,
+  TranslationLocalSettingsSchema,
+  TranslationOpenAISettingsSchema,
   type AIToolOption,
   type ApplyInstructions,
   type ArtifactInstructions,
@@ -91,7 +90,7 @@ import {
   listCurrentWorktreeGitEntries,
   resolveGitWorktreeSwitchTarget,
 } from './git-panel-data.js'
-import type { NmtModelAssetService } from './nmt-model-asset-service.js'
+import type { LocalModelAssetService } from './local-model-asset-service.js'
 import type { NotificationService } from './notification-service.js'
 import type { ProjectRecoveryService } from './project-recovery-service.js'
 import { reactiveKV } from './reactive-kv.js'
@@ -119,7 +118,7 @@ export interface Context {
   globalSettingsManager: GlobalSettingsManager
   translationCacheService: TranslationCacheService
   translationEngineService: TranslationEngineService
-  nmtModelAssetService: NmtModelAssetService
+  localModelAssetService: LocalModelAssetService
   gitWorktreeHandoff?: GitWorktreeHandoffService
   watcher?: OpenSpecWatcher
   projectDir: string
@@ -218,18 +217,8 @@ export const globalSettingsRouter = router({
         translationCache: TranslationCacheSettingsSchema.partial().optional(),
         translationEngines: z
           .object({
-            extensions: TranslationExtensionSettingsSchema.partial()
-              .extend({
-                engines: z
-                  .object({
-                    nmt: TranslationEngineInstallStateSchema.partial().optional(),
-                    ai: TranslationEngineInstallStateSchema.partial().optional(),
-                  })
-                  .optional(),
-              })
-              .optional(),
-            ai: TranslationAiSettingsSchema.partial().optional(),
-            nmt: TranslationNmtSettingsSchema.partial().optional(),
+            openai: TranslationOpenAISettingsSchema.partial().optional(),
+            local: TranslationLocalSettingsSchema.partial().optional(),
           })
           .optional(),
       })
@@ -298,54 +287,22 @@ export const translationEnginesRouter = router({
       return ctx.translationEngineService.getModelDownloadPlan(input)
     }),
 
-  subscribeLogs: publicProcedure.subscription(({ ctx }) => {
-    return ctx.translationEngineService.subscribeLogs()
-  }),
-
   select: publicProcedure
     .input(z.object({ engineId: TranslationEngineIdSchema }))
     .mutation(({ ctx, input }) => {
       return ctx.translationEngineService.selectEngine(input.engineId)
     }),
 
-  install: publicProcedure
-    .input(z.object({ engineId: ServiceTranslationEngineIdSchema }))
-    .mutation(({ ctx, input }) => {
-      return ctx.translationEngineService.installEngine(input.engineId)
-    }),
-
-  cancelInstall: publicProcedure
-    .input(z.object({ engineId: ServiceTranslationEngineIdSchema }))
-    .mutation(({ ctx, input }) => {
-      return ctx.translationEngineService.cancelInstall(input.engineId)
-    }),
-
-  translate: publicProcedure
-    .input(
-      z.object({
-        engineId: TranslationEngineIdSchema,
-        sourceLanguage: z.string().min(1),
-        targetLanguage: z.string().min(1),
-        model: z.string().optional(),
-        selectedGroupId: z.string().min(1).optional(),
-        text: z.string().optional(),
-        rich: z
-          .object({
-            instructions: z.string(),
-            context: z.string(),
-            source: z.string(),
-          })
-          .optional(),
-      })
-    )
-    .mutation(({ ctx, input }) => {
-      return ctx.translationEngineService.translate(input)
+  batchTranslate: publicProcedure
+    .input(BatchTranslateInputSchema)
+    .subscription(({ ctx, input }) => {
+      return ctx.translationEngineService.batchTranslate(input)
     }),
 })
 
-export const nmtModelsRouter = router({
+export const localModelsRouter = router({
   listLocal: publicProcedure.query(({ ctx }) => {
-    return ctx.nmtModelAssetService.listLocalCatalog()
+    return ctx.localModelAssetService.listLocalCatalog()
   }),
 
   searchRemote: publicProcedure
@@ -360,8 +317,8 @@ export const nmtModelsRouter = router({
       })
     )
     .query(({ ctx, input }) => {
-      return ctx.nmtModelAssetService.searchRemoteCatalog({
-        engineId: 'nmt',
+      return ctx.localModelAssetService.searchRemoteCatalog({
+        engineId: 'local',
         ...input,
       })
     }),
@@ -378,8 +335,8 @@ export const nmtModelsRouter = router({
       })
     )
     .subscription(({ ctx, input }) => {
-      return ctx.nmtModelAssetService.subscribeRemoteCatalog({
-        engineId: 'nmt',
+      return ctx.localModelAssetService.subscribeRemoteCatalog({
+        engineId: 'local',
         ...input,
       })
     }),
@@ -392,11 +349,11 @@ export const nmtModelsRouter = router({
       })
     )
     .query(({ ctx, input }) => {
-      return ctx.nmtModelAssetService.readSelectedModelState(input.modelId, input.selectedGroupId)
+      return ctx.localModelAssetService.readSelectedModelState(input.modelId, input.selectedGroupId)
     }),
 
   subscribeLogs: publicProcedure.subscription(({ ctx }) => {
-    return ctx.nmtModelAssetService.subscribeLogs()
+    return ctx.localModelAssetService.subscribeLogs()
   }),
 
   markSelected: publicProcedure
@@ -406,7 +363,7 @@ export const nmtModelsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await ctx.nmtModelAssetService.markSelectedModel(input.modelId)
+      await ctx.localModelAssetService.markSelectedModel(input.modelId)
       return { success: true }
     }),
 
@@ -418,8 +375,7 @@ export const nmtModelsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await ctx.translationEngineService.ensureInstalled('nmt')
-      return ctx.nmtModelAssetService.startDownload(input.modelId, input.selectedGroupId)
+      return ctx.localModelAssetService.startDownload(input.modelId, input.selectedGroupId)
     }),
 
   pause: publicProcedure
@@ -429,7 +385,7 @@ export const nmtModelsRouter = router({
       })
     )
     .mutation(({ ctx, input }) => {
-      return ctx.nmtModelAssetService.pauseDownload(input.modelId)
+      return ctx.localModelAssetService.pauseDownload(input.modelId)
     }),
 
   resume: publicProcedure
@@ -440,8 +396,7 @@ export const nmtModelsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await ctx.translationEngineService.ensureInstalled('nmt')
-      return ctx.nmtModelAssetService.resumeDownload(input.modelId, input.selectedGroupId)
+      return ctx.localModelAssetService.resumeDownload(input.modelId, input.selectedGroupId)
     }),
 
   delete: publicProcedure
@@ -451,7 +406,7 @@ export const nmtModelsRouter = router({
       })
     )
     .mutation(({ ctx, input }) => {
-      return ctx.nmtModelAssetService.deleteModel(input.modelId)
+      return ctx.localModelAssetService.deleteModel(input.modelId)
     }),
 })
 
@@ -1094,13 +1049,13 @@ export const configRouter = router({
           .extend({
             engines: z
               .object({
-                nmt: z
+                local: z
                   .object({
                     model: z.string().min(1).optional(),
                     selectedGroupId: z.string().min(1).optional(),
                   })
                   .optional(),
-                ai: z.object({ model: z.string().min(1).optional() }).optional(),
+                openai: z.object({ model: z.string().min(1).optional() }).optional(),
               })
               .optional(),
           })
@@ -2045,7 +2000,7 @@ export const appRouter = router({
   globalSettings: globalSettingsRouter,
   translationCache: translationCacheRouter,
   translationEngines: translationEnginesRouter,
-  nmtModels: nmtModelsRouter,
+  localModels: localModelsRouter,
   notifications: notificationsRouter,
   sounds: soundsRouter,
   cli: cliRouter,

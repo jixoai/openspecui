@@ -277,7 +277,9 @@ export async function translateMarkdownDocumentProgressively(
           ? { text: segment.translatorInput, restore: (output: string) => output }
           : protectTranslatorInput(segment.translatorInput)
         const target = await raceAbort(
-          translator.translate(protectedInput.text, { signal: args.signal }),
+          readSingleBatchOutput(
+            translator.batchTranslate([protectedInput.text], { signal: args.signal })
+          ),
           args.signal
         )
         const restoredTarget = segment.placeholderProtocol
@@ -334,6 +336,15 @@ async function getPooledTranslator(
   const translator = await engine.factory.create({ sourceLanguage, targetLanguage, signal })
   translatorBySourceLanguage.set(sourceLanguage, translator)
   return translator
+}
+
+async function readSingleBatchOutput(
+  stream: AsyncGenerator<{ index: number; output: string }>
+): Promise<string> {
+  for await (const item of stream) {
+    return item.output
+  }
+  throw new Error('Translator returned no batch output.')
 }
 
 interface SourceLanguageDetectionSession {

@@ -1,8 +1,9 @@
 import {
   ConfigManager,
   GlobalSettingsManager,
-  NmtModelAssetStateSchema,
-  type TranslationEngineManifest,
+  LocalModelAssetStateSchema,
+  type BatchTranslateEvent,
+  type TranslationModelDownloadPlan,
   type TranslatorFactory,
 } from '@openspecui/core'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -16,48 +17,19 @@ vi.mock('@huggingface/hub', async (importOriginal) => {
   return {
     ...original,
     listFiles: vi.fn(async function* () {
-      yield {
-        path: 'config.json',
-        type: 'file',
-        size: 10,
-      }
-      yield {
-        path: 'onnx/encoder_model_q4.onnx',
-        type: 'file',
-        size: 12_000_000,
-      }
-      yield {
-        path: 'onnx/decoder_model_merged_q4.onnx',
-        type: 'file',
-        size: 18_000_000,
-      }
+      yield { path: 'config.json', type: 'file', size: 10 }
+      yield { path: 'onnx/encoder_model_q4.onnx', type: 'file', size: 12_000_000 }
+      yield { path: 'onnx/decoder_model_merged_q4.onnx', type: 'file', size: 18_000_000 }
     }),
   }
 })
 
 type TestableTranslationEngineService = TranslationEngineService & {
-  resolveLocalPackage(manifest: TranslationEngineManifest): Promise<string | null>
-  loadFactory(engineId: 'nmt' | 'ai', model: string | undefined): Promise<TranslatorFactory>
-  getModelDownloadPlan(input: {
-    engineId: 'nmt'
-    model: string
-    selectedGroupId?: string
-  }): Promise<{
-    modelId: string
-    estimatedTotalBytes?: number
-    files: Array<{ path: string; sizeBytes?: number; required: boolean }>
-    selectedGroupId?: string
-    groups?: Array<{
-      id: string
-      label: string
-      dtype?: string
-      estimatedTotalBytes?: number
-      selectable: boolean
-      selected: boolean
-      files: Array<{ path: string; sizeBytes?: number; required: boolean }>
-    }>
-  } | null>
-  loadNmtTransformersModuleForPlan(
+  loadFactory(
+    engineId: 'local' | 'openai',
+    model: string | undefined
+  ): Promise<TranslatorFactory>
+  loadLocalTransformersModuleForPlan(
     projectDir: string,
     globalSettingsManager: GlobalSettingsManager
   ): Promise<{
@@ -65,17 +37,18 @@ type TestableTranslationEngineService = TranslationEngineService & {
       cacheDir: string | null
       allowLocalModels: boolean
       localModelPath: string
+      remoteHost?: string
     }
     ModelRegistry: {
       get_pipeline_files(
         task: string,
         modelId: string,
-        options?: { cache_dir?: string }
+        options?: { cache_dir?: string; dtype?: string }
       ): Promise<string[]>
       is_pipeline_cached_files(
         task: string,
         modelId: string,
-        options?: { cache_dir?: string }
+        options?: { cache_dir?: string; dtype?: string }
       ): Promise<{ allCached: boolean; files: Array<{ file: string; cached: boolean }> }>
       get_file_metadata(
         modelId: string,
@@ -90,38 +63,39 @@ describe('TranslationEngineService', () => {
   let tempDir: string
   let projectDir: string
   let settingsPath: string
-  let nmtCacheDir: string
-  let nmtAssetIndexPath: string
-  let nmtFetchCachePath: string
+  let localCacheDir: string
+  let localAssetIndexPath: string
+  let localFetchCachePath: string
   let service: TranslationEngineService
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'openspecui-translation-engine-'))
     projectDir = tempDir
     settingsPath = join(tempDir, '.openspecui', 'settings.json')
-    nmtCacheDir = join(tempDir, 'nmt-cache')
-    nmtAssetIndexPath = join(tempDir, 'nmt-models.json')
-    nmtFetchCachePath = join(tempDir, 'nmt-fetch-cache.json')
+    localCacheDir = join(tempDir, 'local-cache')
+    localAssetIndexPath = join(tempDir, 'local-models.json')
+    localFetchCachePath = join(tempDir, 'local-fetch-cache.json')
     service = new TranslationEngineService({
       projectDir,
       configManager: new ConfigManager(projectDir),
       globalSettingsManager: new GlobalSettingsManager(settingsPath),
       now: () => 100,
-      nmtCacheDir,
-      nmtAssetIndexPath,
-      nmtFetchCachePath,
+      localCacheDir: localCacheDir,
+      localAssetIndexPath: localAssetIndexPath,
+      localFetchCachePath: localFetchCachePath,
     })
   })
 
   afterEach(async () => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
     await rm(tempDir, { recursive: true, force: true })
   })
 
-  it('returns ranked NMT model candidates from the server-side catalog', async () => {
+  it('returns ranked local model candidates from the server-side catalog', async () => {
     await new GlobalSettingsManager(settingsPath).writeSettings({
       translationEngines: {
-        nmt: {
+        local: {
           hfEndpoint: 'https://hf-mirror.com',
         },
       },
@@ -193,7 +167,7 @@ describe('TranslationEngineService', () => {
     )
 
     const models = await service.searchModels({
-      engineId: 'nmt',
+      engineId: 'local',
       targetLanguage: 'de',
       query: 'opus',
       limit: 3,
@@ -210,9 +184,9 @@ describe('TranslationEngineService', () => {
     expect(models.nextCursor).toBe('NEXT')
   })
 
-  it('uses strict repository profile files for NMT download plans', async () => {
+  it('uses strict repository profile files for local download plans', async () => {
     const testableService = service as TestableTranslationEngineService
-    vi.spyOn(testableService, 'loadNmtTransformersModuleForPlan').mockResolvedValue({
+    vi.spyOn(testableService, 'loadLocalTransformersModuleForPlan').mockResolvedValue({
       env: {
         cacheDir: null,
         allowLocalModels: false,
@@ -231,16 +205,16 @@ describe('TranslationEngineService', () => {
             { file: 'onnx/decoder_model_merged_q4.onnx', cached: false },
           ],
         })),
-        get_file_metadata: vi.fn(async (modelId, filename) => ({
+        get_file_metadata: vi.fn(async (_modelId, filename) => ({
           exists: true,
-          size: filename.endsWith('runtime-a.onnx') ? 12_000_000 : 18_000_000,
+          size: filename.endsWith('encoder_model_q4.onnx') ? 12_000_000 : 18_000_000,
           fromCache: false,
         })),
       },
     })
 
     const plan = await service.getModelDownloadPlan({
-      engineId: 'nmt',
+      engineId: 'local',
       model: 'Xenova/opus-mt-en-de',
     })
 
@@ -252,13 +226,13 @@ describe('TranslationEngineService', () => {
     expect(plan?.estimatedTotalBytes).toBe(30_000_010)
   })
 
-  it('keeps selected NMT profile sizes from the local asset snapshot when provider sizes are missing', async () => {
+  it('keeps selected local profile sizes from the asset snapshot when provider sizes are missing', async () => {
     const testableService = service as TestableTranslationEngineService
     await writeFile(
-      nmtAssetIndexPath,
+      localAssetIndexPath,
       JSON.stringify(
         [
-          NmtModelAssetStateSchema.parse({
+          LocalModelAssetStateSchema.parse({
             modelId: 'Xenova/opus-mt-en-de',
             status: 'paused',
             selected: true,
@@ -283,6 +257,29 @@ describe('TranslationEngineService', () => {
                   required: true,
                 },
               ],
+              groups: [
+                {
+                  id: 'q4f16',
+                  label: 'q4f16',
+                  dtype: 'q4f16',
+                  estimatedTotalBytes: 159_000_000,
+                  selectable: true,
+                  selected: true,
+                  files: [
+                    { path: 'config.json', sizeBytes: 1_500, required: true },
+                    {
+                      path: 'onnx/encoder_model_q4f16.onnx',
+                      sizeBytes: 74_300_000,
+                      required: true,
+                    },
+                    {
+                      path: 'onnx/decoder_model_merged_q4f16.onnx',
+                      sizeBytes: 84_698_500,
+                      required: true,
+                    },
+                  ],
+                },
+              ],
             },
             files: [
               { path: 'config.json', sizeBytes: 1_500, downloadedBytes: 1_500 },
@@ -304,7 +301,7 @@ describe('TranslationEngineService', () => {
       ),
       'utf8'
     )
-    vi.spyOn(testableService, 'loadNmtTransformersModuleForPlan').mockResolvedValue({
+    vi.spyOn(testableService, 'loadLocalTransformersModuleForPlan').mockResolvedValue({
       env: {
         cacheDir: null,
         allowLocalModels: false,
@@ -326,65 +323,48 @@ describe('TranslationEngineService', () => {
     )
 
     const plan = await service.getModelDownloadPlan({
-      engineId: 'nmt',
+      engineId: 'local',
       model: 'Xenova/opus-mt-en-de',
       selectedGroupId: 'q4f16',
     })
 
     const group = plan?.groups?.find((item) => item.id === 'q4f16')
-    expect(group?.selectable).toBe(true)
+    expect(group).toBeTruthy()
     expect(group?.estimatedTotalBytes).toBe(159_000_000)
     expect(plan?.estimatedTotalBytes).toBe(159_000_000)
     expect(group?.files.map((file) => file.sizeBytes)).toEqual([1_500, 74_300_000, 84_698_500])
   })
 
-  it('passes the selected NMT download group dtype into translation runtime', async () => {
+  it('passes the selected local download group dtype into batch translation runtime', async () => {
     const testableService = service as TestableTranslationEngineService
     const create = vi.fn(async () => ({
-      translate: vi.fn(async () => 'Hallo'),
+      batchTranslate: async function* (): AsyncGenerator<BatchTranslateEvent> {
+        yield { index: 0, output: 'Hallo' }
+      },
       destroy: vi.fn(),
     }))
     vi.spyOn(testableService, 'loadFactory').mockResolvedValue({ create })
-    vi.spyOn(testableService, 'getModelDownloadPlan').mockResolvedValue({
-      modelId: 'Xenova/opus-mt-en-de',
-      estimatedTotalBytes: 30,
-      selectedGroupId: 'q4',
-      files: [
-        { path: 'config.json', sizeBytes: 1, required: true },
-        { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 12, required: true },
-        { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 18, required: true },
-      ],
-      groups: [
-        {
-          id: 'q4',
-          label: 'q4 (4-bit)',
-          dtype: 'q4',
-          estimatedTotalBytes: 31,
-          selectable: true,
-          selected: true,
-          files: [
-            { path: 'config.json', sizeBytes: 1, required: true },
-            { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 12, required: true },
-            { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 18, required: true },
-          ],
-        },
-      ],
-    })
-    await writeNmtCachedFiles(nmtCacheDir, 'Xenova/opus-mt-en-de', [
+    vi.spyOn(testableService, 'getModelDownloadPlan').mockResolvedValue(
+      createLocalDownloadPlan('Xenova/opus-mt-en-de', 'q4')
+    )
+    await writeLocalCachedFiles(localCacheDir, 'Xenova/opus-mt-en-de', [
       'config.json',
       'onnx/encoder_model_q4.onnx',
       'onnx/decoder_model_merged_q4.onnx',
     ])
 
-    await service.translate({
-      engineId: 'nmt',
-      sourceLanguage: 'en',
-      targetLanguage: 'de',
-      model: 'Xenova/opus-mt-en-de',
-      selectedGroupId: 'q4',
-      text: 'Hello',
-    })
+    const events = await collectBatchEvents(
+      service.batchTranslate({
+        engineId: 'local',
+        sourceLanguage: 'en',
+        targetLanguage: 'de',
+        model: 'Xenova/opus-mt-en-de',
+        selectedGroupId: 'q4',
+        inputs: ['Hello'],
+      })
+    )
 
+    expect(events).toEqual([{ index: 0, output: 'Hallo' }])
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
         model: 'Xenova/opus-mt-en-de',
@@ -394,106 +374,73 @@ describe('TranslationEngineService', () => {
     )
   })
 
-  it('fails NMT translation before Transformers can probe remote metadata when files are missing', async () => {
+  it('fails local batch translation before probing remote metadata when files are missing', async () => {
     const testableService = service as TestableTranslationEngineService
     const create = vi.fn(async () => ({
-      translate: vi.fn(async () => 'Hallo'),
+      batchTranslate: async function* (): AsyncGenerator<BatchTranslateEvent> {
+        yield { index: 0, output: 'Hallo' }
+      },
       destroy: vi.fn(),
     }))
     vi.spyOn(testableService, 'loadFactory').mockResolvedValue({ create })
-    vi.spyOn(testableService, 'getModelDownloadPlan').mockResolvedValue({
-      modelId: 'Xenova/opus-mt-en-de',
-      estimatedTotalBytes: 30,
-      selectedGroupId: 'q4',
-      files: [
-        { path: 'config.json', sizeBytes: 1, required: true },
-        { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 12, required: true },
-        { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 18, required: true },
-      ],
-      groups: [
-        {
-          id: 'q4',
-          label: 'q4 (4-bit)',
-          dtype: 'q4',
-          estimatedTotalBytes: 31,
-          selectable: true,
-          selected: true,
-          files: [
-            { path: 'config.json', sizeBytes: 1, required: true },
-            { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 12, required: true },
-            { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 18, required: true },
-          ],
-        },
-      ],
-    })
-    await writeNmtCachedFiles(nmtCacheDir, 'Xenova/opus-mt-en-de', [
+    vi.spyOn(testableService, 'getModelDownloadPlan').mockResolvedValue(
+      createLocalDownloadPlan('Xenova/opus-mt-en-de', 'q4')
+    )
+    await writeLocalCachedFiles(localCacheDir, 'Xenova/opus-mt-en-de', [
       'config.json',
       'onnx/encoder_model_q4.onnx',
     ])
 
     await expect(
-      service.translate({
-        engineId: 'nmt',
-        sourceLanguage: 'en',
-        targetLanguage: 'de',
-        model: 'Xenova/opus-mt-en-de',
-        selectedGroupId: 'q4',
-        text: 'Hello',
-      })
+      collectBatchEvents(
+        service.batchTranslate({
+          engineId: 'local',
+          sourceLanguage: 'en',
+          targetLanguage: 'de',
+          model: 'Xenova/opus-mt-en-de',
+          selectedGroupId: 'q4',
+          inputs: ['Hello'],
+        })
+      )
     ).rejects.toThrow(
-      'Selected NMT model files are not installed locally: onnx/decoder_model_merged_q4.onnx.'
+      'Selected local model files are not installed locally: onnx/decoder_model_merged_q4.onnx.'
     )
     expect(create).not.toHaveBeenCalled()
   })
-
-  it('marks a local NMT package installed immediately in local workspace mode', async () => {
-    const testableService = service as TestableTranslationEngineService
-
-    vi.spyOn(testableService, 'resolveLocalPackage').mockResolvedValue(
-      join(projectDir, 'packages', 'nmt-translator', 'src', 'index.ts')
-    )
-    vi.spyOn(testableService, 'loadFactory').mockResolvedValue({
-      create: vi.fn(),
-    })
-
-    const result = await service.installEngine('nmt')
-
-    const settings = await new GlobalSettingsManager(settingsPath).readSettings()
-    expect(result.sessionId).toBeTruthy()
-    expect(settings.translationEngines.extensions.engines.nmt.status).toBe('installed')
-    expect(settings.translationEngines.extensions.engines.nmt.message).toContain(
-      'NMT translator package is ready.'
-    )
-  })
-
-  it('marks the NMT package installed without forcing a model prepare step', async () => {
-    const logs: string[] = []
-    const testableService = service as TestableTranslationEngineService
-
-    vi.spyOn(testableService, 'resolveLocalPackage').mockResolvedValue(
-      join(projectDir, 'packages', 'nmt-translator', 'src', 'index.ts')
-    )
-    vi.spyOn(testableService, 'loadFactory').mockResolvedValue({
-      create: vi.fn(),
-    })
-
-    const subscription = service.subscribeLogs().subscribe({
-      next(log) {
-        logs.push(`${log.message}|${log.progress ?? 'none'}`)
-      },
-    })
-
-    try {
-      await service.installEngine('nmt')
-    } finally {
-      subscription.unsubscribe()
-    }
-
-    expect(logs.at(-1)).toContain('NMT translator package is ready.')
-  })
 })
 
-async function writeNmtCachedFiles(
+function createLocalDownloadPlan(
+  modelId: string,
+  dtype: string
+): TranslationModelDownloadPlan {
+  return {
+    modelId,
+    estimatedTotalBytes: 31,
+    selectedGroupId: dtype,
+    files: [
+      { path: 'config.json', sizeBytes: 1, required: true },
+      { path: `onnx/encoder_model_${dtype}.onnx`, sizeBytes: 12, required: true },
+      { path: `onnx/decoder_model_merged_${dtype}.onnx`, sizeBytes: 18, required: true },
+    ],
+    groups: [
+      {
+        id: dtype,
+        label: dtype,
+        dtype,
+        estimatedTotalBytes: 31,
+        selectable: true,
+        selected: true,
+        files: [
+          { path: 'config.json', sizeBytes: 1, required: true },
+          { path: `onnx/encoder_model_${dtype}.onnx`, sizeBytes: 12, required: true },
+          { path: `onnx/decoder_model_merged_${dtype}.onnx`, sizeBytes: 18, required: true },
+        ],
+      },
+    ],
+  }
+}
+
+async function writeLocalCachedFiles(
   cacheDir: string,
   modelId: string,
   files: ReadonlyArray<string>
@@ -505,4 +452,24 @@ async function writeNmtCachedFiles(
       await writeFile(path, file === 'config.json' ? '{"model_type":"marian"}' : 'cached')
     })
   )
+}
+
+async function collectBatchEvents(
+  stream: ReturnType<TranslationEngineService['batchTranslate']>
+): Promise<BatchTranslateEvent[]> {
+  return new Promise((resolve, reject) => {
+    const events: BatchTranslateEvent[] = []
+    const subscription = stream.subscribe({
+      next(event) {
+        events.push(event)
+      },
+      error(error) {
+        reject(error)
+      },
+      complete() {
+        resolve(events)
+      },
+    })
+    void subscription
+  })
 }

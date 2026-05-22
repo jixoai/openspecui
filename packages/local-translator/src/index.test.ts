@@ -15,7 +15,7 @@ vi.mock('@huggingface/transformers', () => ({
   pipeline: transformersMock.pipeline,
 }))
 
-describe('NMT translator package', () => {
+describe('local translator package', () => {
   beforeEach(() => {
     transformersMock.pipeline.mockReset()
     transformersMock.env.cacheDir = null
@@ -34,8 +34,8 @@ describe('NMT translator package', () => {
     )
     const status = vi.fn()
 
-    const { createNmtTranslatorFactory } = await import('./index.js')
-    await createNmtTranslatorFactory({
+    const { createLocalTranslatorFactory } = await import('./index.js')
+    await createLocalTranslatorFactory({
       defaultModel: 'Xenova/default-model',
     }).prepare({
       sourceLanguage: 'en',
@@ -47,13 +47,13 @@ describe('NMT translator package', () => {
     expect(dispose).toHaveBeenCalledTimes(1)
     expect(status).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Downloading NMT model Xenova/custom-model 10%.',
+        message: 'Downloading local model Xenova/custom-model 10%.',
         progress: 0.1,
       })
     )
   })
 
-  it('loads the configured translation model and translates rich source text', async () => {
+  it('loads the configured translation model and translates batched source text', async () => {
     const pipeline = vi.fn(async () => [{ translation_text: '你好' }])
     const status = vi.fn()
     transformersMock.pipeline.mockImplementationOnce(
@@ -63,8 +63,8 @@ describe('NMT translator package', () => {
       }
     )
 
-    const { createNmtTranslatorFactory } = await import('./index.js')
-    const translator = await createNmtTranslatorFactory({
+    const { createLocalTranslatorFactory } = await import('./index.js')
+    const translator = await createLocalTranslatorFactory({
       defaultModel: 'Xenova/default-model',
     }).create({
       sourceLanguage: 'en',
@@ -73,13 +73,11 @@ describe('NMT translator package', () => {
       monitor: { setStatus: status },
     })
 
-    await expect(
-      translator.translate({
-        instructions: 'Use document context.',
-        context: '# Proposal',
-        source: 'Hello',
-      })
-    ).resolves.toBe('你好')
+    const results: Array<{ index: number; output: string }> = []
+    for await (const item of translator.batchTranslate(['Hello'])) {
+      results.push(item)
+    }
+    expect(results).toEqual([{ index: 0, output: '你好' }])
     expect(transformersMock.pipeline).toHaveBeenCalledWith(
       'translation',
       'Xenova/custom-model',
@@ -91,7 +89,7 @@ describe('NMT translator package', () => {
     })
     expect(status).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Downloading NMT model Xenova/custom-model 50%.',
+        message: 'Downloading local model Xenova/custom-model 50%.',
         progress: 0.5,
       })
     )
@@ -101,8 +99,8 @@ describe('NMT translator package', () => {
     const pipeline = vi.fn(async () => [{ translation_text: 'Hallo' }])
     transformersMock.pipeline.mockImplementationOnce(async () => pipeline)
 
-    const { createNmtTranslatorFactory } = await import('./index.js')
-    await createNmtTranslatorFactory({
+    const { createLocalTranslatorFactory } = await import('./index.js')
+    await createLocalTranslatorFactory({
       defaultModel: 'Xenova/default-model',
       dtype: 'q4',
     }).prepare({
@@ -123,8 +121,8 @@ describe('NMT translator package', () => {
       vi.fn(async () => [{ translation_text: 'Hallo' }])
     )
 
-    const { createNmtTranslatorFactory } = await import('./index.js')
-    await createNmtTranslatorFactory({
+    const { createLocalTranslatorFactory } = await import('./index.js')
+    await createLocalTranslatorFactory({
       defaultModel: 'Xenova/default-model',
       cacheDir: '/tmp/openspecui-nmt-cache',
     }).create({
@@ -151,8 +149,8 @@ describe('NMT translator package', () => {
       vi.fn(async () => [{ translation_text: 'Hallo' }])
     )
 
-    const { createNmtTranslatorFactory } = await import('./index.js')
-    await createNmtTranslatorFactory({
+    const { createLocalTranslatorFactory } = await import('./index.js')
+    await createLocalTranslatorFactory({
       defaultModel: 'Xenova/default-model',
       cacheDir: '/tmp/openspecui-nmt-cache',
       localOnly: true,
@@ -181,8 +179,8 @@ describe('NMT translator package', () => {
       vi.fn(async () => [{ translation_text: 'Hallo' }])
     )
 
-    const { createNmtTranslatorFactory } = await import('./index.js')
-    await createNmtTranslatorFactory({
+    const { createLocalTranslatorFactory } = await import('./index.js')
+    await createLocalTranslatorFactory({
       defaultModel: 'Xenova/default-model',
       cacheDir: '/tmp/openspecui-nmt-cache',
       localOnly: true,
@@ -206,8 +204,8 @@ describe('NMT translator package', () => {
   })
 
   it('resolves a download plan from Hugging Face ONNX siblings', async () => {
-    const { resolveNmtModelDownloadPlan } = await import('./index.js')
-    const plan = resolveNmtModelDownloadPlan({
+    const { resolveLocalModelDownloadPlan } = await import('./index.js')
+    const plan = resolveLocalModelDownloadPlan({
       modelId: 'Xenova/opus-mt-en-de',
       isEncoderDecoder: true,
       siblings: [

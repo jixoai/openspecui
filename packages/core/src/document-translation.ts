@@ -9,13 +9,13 @@ export type DocumentTranslationDisplayMode = z.infer<typeof DocumentTranslationD
 
 export const TranslationEngineProjectSettingsSchema = z
   .object({
-    nmt: z
+    local: z
       .object({
         model: z.string().min(1).optional(),
         selectedGroupId: z.string().min(1).optional(),
       })
       .default({}),
-    ai: z
+    openai: z
       .object({
         model: z.string().min(1).optional(),
       })
@@ -41,8 +41,8 @@ export type DocumentTranslationConfigUpdate = Partial<
   Omit<DocumentTranslationConfig, 'engines'>
 > & {
   engines?: {
-    nmt?: Partial<TranslationEngineProjectSettings['nmt']>
-    ai?: Partial<TranslationEngineProjectSettings['ai']>
+    local?: Partial<TranslationEngineProjectSettings['local']>
+    openai?: Partial<TranslationEngineProjectSettings['openai']>
   }
 }
 

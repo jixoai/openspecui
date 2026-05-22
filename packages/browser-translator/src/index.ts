@@ -1,10 +1,8 @@
 import type {
-  RichTranslationInput,
   Translator,
   TranslatorCreateMonitor,
   TranslatorFactory,
   TranslatorFactoryCreateOptions,
-  TranslatorOptions,
 } from '@openspecui/core/translator'
 
 export type BrowserTranslationAvailability =
@@ -22,7 +20,7 @@ export interface BrowserTranslationStatus {
 }
 
 interface NativeTranslator {
-  translate(input: string, options?: TranslatorOptions): Promise<string>
+  translate(input: string, options?: { signal?: AbortSignal }): Promise<string>
   destroy?: () => void
 }
 
@@ -84,9 +82,14 @@ export class BrowserTranslatorFactory implements TranslatorFactory {
     )
 
     return {
-      translate(input: string | RichTranslationInput, translateOptions?: TranslatorOptions) {
-        const source = typeof input === 'string' ? input : input.source
-        return native.translate(source, translateOptions)
+      async *batchTranslate(
+        inputs: string[],
+        batchOptions?: { signal?: AbortSignal }
+      ): AsyncGenerator<{ index: number; output: string }> {
+        for (const [index, input] of inputs.entries()) {
+          const output = await native.translate(input, batchOptions)
+          yield { index, output }
+        }
       },
       destroy() {
         native.destroy?.()

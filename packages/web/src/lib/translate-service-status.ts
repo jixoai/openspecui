@@ -1,0 +1,160 @@
+import { selectLocalDownloadGroup } from '@openspecui/core/local-download-profiles'
+import type {
+  LocalModelAssetState,
+  TranslationEngineId,
+} from '@openspecui/core/translator'
+import type { BrowserTranslationStatus } from './browser-translation'
+
+export type TranslateServiceStatus =
+  | {
+      state: 'disabled'
+      message: string
+    }
+  | {
+      state: 'checking'
+      engineId: TranslationEngineId
+      message: string
+    }
+  | {
+      state: 'ready'
+      engineId: TranslationEngineId
+      message: string
+    }
+  | {
+      state: 'unavailable'
+      engineId: TranslationEngineId
+      message: string
+    }
+
+export interface TranslateServiceProjectionInput {
+  enabled: boolean
+  hasSource: boolean
+  engineId: TranslationEngineId
+  browserCapability?: BrowserTranslationStatus | null
+  browserCapabilityLoading?: boolean
+  localModel?: string
+  localSelectedGroupId?: string
+  localAsset?: LocalModelAssetState | null
+  localAssetLoading?: boolean
+}
+
+export function projectTranslateServiceStatus(
+  input: TranslateServiceProjectionInput
+): TranslateServiceStatus {
+  if (!input.enabled) {
+    return {
+      state: 'disabled',
+      message: 'Translation is disabled in settings.',
+    }
+  }
+  if (!input.hasSource) {
+    return {
+      state: 'disabled',
+      message: 'No document content is available to translate.',
+    }
+  }
+
+  if (input.engineId === 'browser') {
+    if (!input.browserCapability) {
+      return {
+        state: 'ready',
+        engineId: 'browser',
+        message: input.browserCapabilityLoading
+          ? 'Browser translation capability is being checked.'
+          : 'Browser translator will be checked before translation starts.',
+      }
+    }
+    switch (input.browserCapability.availability) {
+      case 'available':
+      case 'downloadable':
+      case 'downloading':
+        return {
+          state: 'ready',
+          engineId: 'browser',
+          message: 'Browser translator is ready.',
+        }
+      case 'missing':
+      case 'unavailable':
+      case 'error':
+        return {
+          state: 'unavailable',
+          engineId: 'browser',
+          message: input.browserCapability.message ?? 'Translation is unavailable.',
+        }
+    }
+  }
+
+  if (input.engineId === 'local') {
+    const model = input.localModel?.trim()
+    if (!model) {
+      return {
+        state: 'unavailable',
+        engineId: 'local',
+        message: 'Select a local model before translating.',
+      }
+    }
+    if (input.localAssetLoading || !input.localAsset) {
+      return {
+        state: 'checking',
+        engineId: 'local',
+        message: 'Checking local model files.',
+      }
+    }
+    if (isLocalAssetReady(input.localAsset, input.localSelectedGroupId)) {
+      return {
+        state: 'ready',
+        engineId: 'local',
+        message: 'Selected local model files are ready.',
+      }
+    }
+    return {
+      state: 'unavailable',
+      engineId: 'local',
+      message: 'Selected local model files are not installed locally.',
+    }
+  }
+
+  return {
+    state: 'ready',
+    engineId: 'openai',
+    message: 'OpenAI completion configuration will be checked by the provider.',
+  }
+}
+
+export function isLocalAssetReady(
+  asset: LocalModelAssetState,
+  selectedGroupId?: string
+): boolean {
+  const selectedGroup = selectLocalDownloadGroup(
+    asset.plan ?? null,
+    selectedGroupId ?? asset.plan?.selectedGroupId
+  )
+  const requiredFiles = selectedGroup?.files ?? asset.plan?.files ?? []
+  const localFileByPath = new Map(asset.files.map((file) => [file.path, file]))
+  const allRequiredFilesReady =
+    requiredFiles.length > 0 &&
+    requiredFiles.every((file) => {
+      const localFile = localFileByPath.get(file.path)
+      return (
+        file.sizeBytes !== undefined &&
+        localFile?.downloadedBytes !== undefined &&
+        localFile.downloadedBytes >= file.sizeBytes
+      )
+    })
+
+  if (asset.status !== 'downloaded') return allRequiredFilesReady
+
+  if (requiredFiles.length === 0) {
+    return (
+      asset.files.length > 0 &&
+      asset.files.every(
+        (file) =>
+          file.sizeBytes !== undefined &&
+          file.downloadedBytes !== undefined &&
+          file.downloadedBytes >= file.sizeBytes
+      )
+    )
+  }
+
+  return allRequiredFilesReady
+}

@@ -54,11 +54,11 @@
       "default": "./dist/translator.mjs",
       "types": "./dist/translator.d.mts"
     },
-    "./nmt-download-profiles": {
-      "development": "./src/nmt-download-profiles.ts",
-      "import": "./dist/nmt-download-profiles.mjs",
-      "default": "./dist/nmt-download-profiles.mjs",
-      "types": "./dist/nmt-download-profiles.d.mts"
+    "./local-download-profiles": {
+      "development": "./src/local-download-profiles.ts",
+      "import": "./dist/local-download-profiles.mjs",
+      "default": "./dist/local-download-profiles.mjs",
+      "types": "./dist/local-download-profiles.d.mts"
     },
     "./openspec-annotations": {
       "development": "./src/openspec-annotations.ts",
@@ -131,8 +131,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/opsx-entity.ts src/opsx-schema-detail.ts src/hosted-app.ts src/openspec-compat.ts src/markdown-facts.ts src/markdown-reading.ts src/document-translation.ts src/translator.ts src/nmt-download-profiles.ts src/openspec-annotations.ts src/openspec-projection.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts",
-    "dev": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/opsx-entity.ts src/opsx-schema-detail.ts src/hosted-app.ts src/openspec-compat.ts src/markdown-facts.ts src/markdown-reading.ts src/document-translation.ts src/translator.ts src/nmt-download-profiles.ts src/openspec-annotations.ts src/openspec-projection.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts --watch",
+    "build": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/opsx-entity.ts src/opsx-schema-detail.ts src/hosted-app.ts src/openspec-compat.ts src/markdown-facts.ts src/markdown-reading.ts src/document-translation.ts src/translator.ts src/local-download-profiles.ts src/openspec-annotations.ts src/openspec-projection.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts",
+    "dev": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/opsx-entity.ts src/opsx-schema-detail.ts src/hosted-app.ts src/openspec-compat.ts src/markdown-facts.ts src/markdown-reading.ts src/document-translation.ts src/translator.ts src/local-download-profiles.ts src/openspec-annotations.ts src/openspec-projection.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

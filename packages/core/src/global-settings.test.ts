@@ -90,7 +90,7 @@ describe('GlobalSettingsManager', () => {
   it('merges translator engine settings and prunes default siblings', async () => {
     await settingsManager.writeSettings({
       translationEngines: {
-        ai: {
+        openai: {
           baseUrl: 'https://api.example.com/v1',
           token: 'secret-token',
           model: 'gpt-4.1-mini',
@@ -99,43 +99,21 @@ describe('GlobalSettingsManager', () => {
     })
     clearCache()
 
-    await settingsManager.writeSettings({
-      translationEngines: {
-        extensions: {
-          engines: {
-            ai: {
-              status: 'installed',
-              version: '^3.7.2',
-              message: 'Installed',
-              installedAt: 10,
-              updatedAt: 11,
-            },
-          },
-        },
-      },
-    })
-    clearCache()
-
     const settings = await settingsManager.readSettings()
-    expect(settings.translationEngines.ai).toMatchObject({
+    expect(settings.translationEngines.openai).toMatchObject({
       baseUrl: 'https://api.example.com/v1',
       token: 'secret-token',
       model: 'gpt-4.1-mini',
     })
-    expect(settings.translationEngines.extensions.engines.ai).toMatchObject({
-      status: 'installed',
-      version: '^3.7.2',
-    })
-    expect(settings.translationEngines.extensions.engines.nmt.status).toBe('not-installed')
     await expect(readFile(settingsPath, 'utf-8')).resolves.toBe(
-      '{\n  "translationEngines": {\n    "extensions": {\n      "engines": {\n        "ai": {\n          "status": "installed",\n          "version": "^3.7.2",\n          "message": "Installed",\n          "installedAt": 10,\n          "updatedAt": 11\n        }\n      }\n    },\n    "ai": {\n      "baseUrl": "https://api.example.com/v1",\n      "token": "secret-token"\n    }\n  }\n}'
+      '{\n  "translationEngines": {\n    "openai": {\n      "baseUrl": "https://api.example.com/v1",\n      "token": "secret-token"\n    }\n  }\n}'
     )
   })
 
-  it('persists non-default NMT Hugging Face endpoint settings', async () => {
+  it('persists non-default local Hugging Face endpoint settings', async () => {
     await settingsManager.writeSettings({
       translationEngines: {
-        nmt: {
+        local: {
           hfEndpoint: 'https://hf-mirror.com',
         },
       },
@@ -143,14 +121,14 @@ describe('GlobalSettingsManager', () => {
     clearCache()
 
     const settings = await settingsManager.readSettings()
-    expect(settings.translationEngines.nmt.hfEndpoint).toBe('https://hf-mirror.com')
+    expect(settings.translationEngines.local.hfEndpoint).toBe('https://hf-mirror.com')
     await expect(readFile(settingsPath, 'utf-8')).resolves.toBe(
-      '{\n  "translationEngines": {\n    "nmt": {\n      "hfEndpoint": "https://hf-mirror.com"\n    }\n  }\n}'
+      '{\n  "translationEngines": {\n    "local": {\n      "hfEndpoint": "https://hf-mirror.com"\n    }\n  }\n}'
     )
 
     await settingsManager.writeSettings({
       translationEngines: {
-        nmt: {
+        local: {
           hfEndpoint: '',
         },
       },

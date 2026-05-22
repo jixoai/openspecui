@@ -1,160 +1,164 @@
-import { selectNmtDownloadGroup } from '@openspecui/core/nmt-download-profiles'
-import type {
-  NmtModelAssetState,
-  TranslationEngineId,
+import {
+  createBrowserTranslationExecution,
+  type TranslationEngineExecution,
+} from '@/lib/browser-translation'
+import { trpcClient } from '@/lib/trpc'
+import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
+import {
+  TRANSLATOR_CONTRACT_VERSION,
+  type TranslationEngineId,
+  type Translator,
+  type TranslatorFactory,
+  type TranslatorFactoryCreateOptions,
 } from '@openspecui/core/translator'
-import type { BrowserTranslationStatus } from './browser-translation'
+import { isStaticMode } from './static-mode'
 
-export type TranslateServiceStatus =
-  | {
-      state: 'disabled'
-      message: string
-    }
-  | {
-      state: 'checking'
-      engineId: TranslationEngineId
-      message: string
-    }
-  | {
-      state: 'ready'
-      engineId: TranslationEngineId
-      message: string
-    }
-  | {
-      state: 'unavailable'
-      engineId: TranslationEngineId
-      message: string
-    }
-
-export interface TranslateServiceProjectionInput {
-  enabled: boolean
-  hasSource: boolean
-  engineId: TranslationEngineId
-  browserCapability?: BrowserTranslationStatus | null
-  browserCapabilityLoading?: boolean
-  nmtModel?: string
-  nmtSelectedGroupId?: string
-  nmtAsset?: NmtModelAssetState | null
-  nmtAssetLoading?: boolean
-}
-
-export function projectTranslateServiceStatus(
-  input: TranslateServiceProjectionInput
-): TranslateServiceStatus {
-  if (!input.enabled) {
-    return {
-      state: 'disabled',
-      message: 'Translation is disabled in settings.',
-    }
-  }
-  if (!input.hasSource) {
-    return {
-      state: 'disabled',
-      message: 'No document content is available to translate.',
-    }
+export function createTranslationEngineExecution(
+  config: DocumentTranslationConfig
+): TranslationEngineExecution {
+  if (config.engineId === 'browser' || isStaticMode()) {
+    return createBrowserTranslationExecution()
   }
 
-  if (input.engineId === 'browser') {
-    if (!input.browserCapability) {
-      return {
-        state: 'ready',
-        engineId: 'browser',
-        message: input.browserCapabilityLoading
-          ? 'Browser translation capability is being checked.'
-          : 'Browser translator will be checked before translation starts.',
-      }
-    }
-    switch (input.browserCapability.availability) {
-      case 'available':
-      case 'downloadable':
-      case 'downloading':
-        return {
-          state: 'ready',
-          engineId: 'browser',
-          message: 'Browser translator is ready.',
-        }
-      case 'missing':
-      case 'unavailable':
-      case 'error':
-        return {
-          state: 'unavailable',
-          engineId: 'browser',
-          message: input.browserCapability.message ?? 'Translation is unavailable.',
-        }
-    }
-  }
-
-  if (input.engineId === 'nmt') {
-    const model = input.nmtModel?.trim()
-    if (!model) {
-      return {
-        state: 'unavailable',
-        engineId: 'nmt',
-        message: 'Select a local NMT model before translating.',
-      }
-    }
-    if (input.nmtAssetLoading || !input.nmtAsset) {
-      return {
-        state: 'checking',
-        engineId: 'nmt',
-        message: 'Checking local NMT model files.',
-      }
-    }
-    if (isNmtAssetReady(input.nmtAsset, input.nmtSelectedGroupId)) {
-      return {
-        state: 'ready',
-        engineId: 'nmt',
-        message: 'Selected NMT model files are ready.',
-      }
-    }
-    return {
-      state: 'unavailable',
-      engineId: 'nmt',
-      message: 'Selected NMT model files are not installed locally.',
-    }
-  }
+  const model =
+    config.engineId === 'openai' ? config.engines.openai.model : config.engines.local.model
 
   return {
-    state: 'ready',
-    engineId: 'ai',
-    message: 'AI translator configuration will be checked by the provider.',
+    factory: new TrpcTranslatorFactory(
+      config.engineId,
+      model,
+      config.engineId === 'local' ? config.engines.local.selectedGroupId : undefined
+    ),
+    cacheIdentity: {
+      engineId: config.engineId,
+      model,
+      selectedGroupId:
+        config.engineId === 'local' ? config.engines.local.selectedGroupId : undefined,
+      translatorContractVersion: TRANSLATOR_CONTRACT_VERSION,
+    },
   }
 }
 
-export function isNmtAssetReady(
-  asset: NmtModelAssetState,
+export async function runSingleTranslation(input: {
+  engineId: TranslationEngineId
+  sourceLanguage: string
+  targetLanguage: string
+  text: string
+  model?: string
   selectedGroupId?: string
-): boolean {
-  const selectedGroup = selectNmtDownloadGroup(
-    asset.plan ?? null,
-    selectedGroupId ?? asset.plan?.selectedGroupId
-  )
-  const requiredFiles = selectedGroup?.files ?? asset.plan?.files ?? []
-  const localFileByPath = new Map(asset.files.map((file) => [file.path, file]))
-  const allRequiredFilesReady =
-    requiredFiles.length > 0 &&
-    requiredFiles.every((file) => {
-      const localFile = localFileByPath.get(file.path)
-      return (
-        file.sizeBytes !== undefined &&
-        localFile?.downloadedBytes !== undefined &&
-        localFile.downloadedBytes >= file.sizeBytes
-      )
+}): Promise<string> {
+  if (input.engineId === 'browser') {
+    const translator = await createBrowserTranslationExecution().factory.create({
+      sourceLanguage: input.sourceLanguage,
+      targetLanguage: input.targetLanguage,
     })
-
-  if (asset.status !== 'downloaded') return allRequiredFilesReady
-
-  if (requiredFiles.length === 0) {
-    return (
-      asset.files.length > 0 &&
-      asset.files.every(
-        (file) =>
-          file.sizeBytes !== undefined &&
-          file.downloadedBytes !== undefined &&
-          file.downloadedBytes >= file.sizeBytes
-      )
-    )
+    try {
+      return await readSingleBatchOutput(translator.batchTranslate([input.text]))
+    } finally {
+      translator.destroy?.()
+    }
   }
 
-  return allRequiredFilesReady
+  const translator = new TrpcTranslator({
+    engineId: input.engineId,
+    sourceLanguage: input.sourceLanguage,
+    targetLanguage: input.targetLanguage,
+    model: input.model,
+    selectedGroupId: input.engineId === 'local' ? input.selectedGroupId : undefined,
+  })
+  return readSingleBatchOutput(translator.batchTranslate([input.text]))
+}
+
+export class TrpcTranslatorFactory implements TranslatorFactory {
+  constructor(
+    private readonly engineId: Exclude<TranslationEngineId, 'browser'>,
+    private readonly model: string | undefined,
+    private readonly selectedGroupId: string | undefined
+  ) {}
+
+  async create(options: TranslatorFactoryCreateOptions): Promise<Translator> {
+    return new TrpcTranslator({
+      engineId: this.engineId,
+      sourceLanguage: options.sourceLanguage,
+      targetLanguage: options.targetLanguage,
+      model: options.model ?? this.model,
+      selectedGroupId: this.engineId === 'local' ? this.selectedGroupId : undefined,
+    })
+  }
+}
+
+export class TrpcTranslator implements Translator {
+  constructor(
+    private readonly options: {
+      engineId: Exclude<TranslationEngineId, 'browser'>
+      sourceLanguage: string
+      targetLanguage: string
+      model?: string
+      selectedGroupId?: string
+    }
+  ) {}
+
+  async *batchTranslate(
+    inputs: string[],
+    options?: { instructions?: string; context?: string; signal?: AbortSignal }
+  ): AsyncGenerator<{ index: number; output: string }> {
+    if (options?.signal?.aborted) {
+      throw new DOMException('Translation cancelled.', 'AbortError')
+    }
+
+    const queue: Array<{ index: number; output: string }> = []
+    let completed = false
+    let thrown: Error | null = null
+
+    const subscription = trpcClient.translationEngines.batchTranslate.subscribe(
+      {
+        engineId: this.options.engineId,
+        sourceLanguage: this.options.sourceLanguage,
+        targetLanguage: this.options.targetLanguage,
+        model: this.options.model,
+        selectedGroupId: this.options.selectedGroupId,
+        inputs,
+        instructions: options?.instructions,
+        context: options?.context,
+      },
+      {
+        onData(event) {
+          queue.push(event)
+        },
+        onError(error) {
+          thrown = error instanceof Error ? error : new Error(String(error))
+          completed = true
+        },
+        onComplete() {
+          completed = true
+        },
+      }
+    )
+
+    try {
+      while (!completed || queue.length > 0) {
+        if (options?.signal?.aborted) {
+          throw new DOMException('Translation cancelled.', 'AbortError')
+        }
+        const item = queue.shift()
+        if (item) {
+          yield item
+          continue
+        }
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+      if (thrown) throw thrown
+    } finally {
+      subscription.unsubscribe()
+    }
+  }
+}
+
+export async function readSingleBatchOutput(
+  stream: AsyncGenerator<{ index: number; output: string }>
+): Promise<string> {
+  for await (const item of stream) {
+    return item.output
+  }
+  throw new Error('Translator returned no batch output.')
 }

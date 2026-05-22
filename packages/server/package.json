@@ -23,8 +23,11 @@
   "dependencies": {
     "@hono/node-server": "^1.14.1",
     "@huggingface/hub": "^2.12.0",
+    "@huggingface/transformers": "^4.2.0",
     "@lydell/node-pty": "^1.1.0",
     "@openspecui/core": "workspace:*",
+    "@openspecui/local-translator": "workspace:*",
+    "@openspecui/openai-completion-translator": "workspace:*",
     "@openspecui/search": "workspace:*",
     "@trpc/server": "^11.0.0",
     "@types/better-sqlite3": "^7.6.13",

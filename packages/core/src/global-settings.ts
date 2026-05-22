@@ -9,11 +9,9 @@ import {
 import { reactiveReadFile, updateReactiveFileCache } from './reactive-fs/index.js'
 import {
   TranslationEngineGlobalSettingsSchema,
-  type ServiceTranslationEngineId,
-  type TranslationAiSettings,
   type TranslationEngineGlobalSettingsUpdate,
-  type TranslationEngineInstallState,
-  type TranslationNmtSettings,
+  type TranslationLocalSettings,
+  type TranslationOpenAISettings,
 } from './translator.js'
 
 export const OpenSpecUIGlobalSettingsSchema = z.object({
@@ -35,12 +33,8 @@ export type OpenSpecUIGlobalSettingsUpdate = {
 export type PersistedOpenSpecUIGlobalSettings = {
   translationCache?: Partial<TranslationCacheSettings>
   translationEngines?: {
-    extensions?: {
-      installRoot?: string
-      engines?: Partial<Record<ServiceTranslationEngineId, TranslationEngineInstallState>>
-    }
-    ai?: Partial<TranslationAiSettings>
-    nmt?: Partial<TranslationNmtSettings>
+    openai?: Partial<TranslationOpenAISettings>
+    local?: Partial<TranslationLocalSettings>
   }
 }
 
@@ -90,64 +84,38 @@ export function toPersistedGlobalSettings(
   const translationEngines: NonNullable<PersistedOpenSpecUIGlobalSettings['translationEngines']> =
     {}
   const defaultTranslationEngines = DEFAULT_GLOBAL_SETTINGS.translationEngines
-  const extensions: NonNullable<
-    NonNullable<PersistedOpenSpecUIGlobalSettings['translationEngines']>['extensions']
-  > = {}
-  if (settings.translationEngines.extensions.installRoot) {
-    extensions.installRoot = settings.translationEngines.extensions.installRoot
+
+  const openai: Partial<TranslationOpenAISettings> = {}
+  if (settings.translationEngines.openai.baseUrl !== defaultTranslationEngines.openai.baseUrl) {
+    openai.baseUrl = settings.translationEngines.openai.baseUrl
   }
-  const extensionEngines: Record<'nmt' | 'ai', TranslationEngineInstallState> = {
-    nmt: settings.translationEngines.extensions.engines.nmt,
-    ai: settings.translationEngines.extensions.engines.ai,
+  if (settings.translationEngines.openai.token !== defaultTranslationEngines.openai.token) {
+    openai.token = settings.translationEngines.openai.token
   }
-  const persistedExtensionEngines: Partial<Record<'nmt' | 'ai', TranslationEngineInstallState>> = {}
-  if (
-    JSON.stringify(extensionEngines.nmt) !==
-    JSON.stringify(defaultTranslationEngines.extensions.engines.nmt)
-  ) {
-    persistedExtensionEngines.nmt = extensionEngines.nmt
+  if (settings.translationEngines.openai.model !== defaultTranslationEngines.openai.model) {
+    openai.model = settings.translationEngines.openai.model
   }
-  if (
-    JSON.stringify(extensionEngines.ai) !==
-    JSON.stringify(defaultTranslationEngines.extensions.engines.ai)
-  ) {
-    persistedExtensionEngines.ai = extensionEngines.ai
+  if (hasOwnEntries(openai)) {
+    translationEngines.openai = openai
   }
-  if (hasOwnEntries(persistedExtensionEngines)) {
-    extensions.engines = persistedExtensionEngines
-  }
-  if (hasOwnEntries(extensions)) {
-    translationEngines.extensions = extensions
-  }
-  const ai: Partial<TranslationAiSettings> = {}
-  if (settings.translationEngines.ai.baseUrl !== defaultTranslationEngines.ai.baseUrl) {
-    ai.baseUrl = settings.translationEngines.ai.baseUrl
-  }
-  if (settings.translationEngines.ai.token !== defaultTranslationEngines.ai.token) {
-    ai.token = settings.translationEngines.ai.token
-  }
-  if (settings.translationEngines.ai.model !== defaultTranslationEngines.ai.model) {
-    ai.model = settings.translationEngines.ai.model
-  }
-  if (hasOwnEntries(ai)) {
-    translationEngines.ai = ai
-  }
-  const nmt: Partial<TranslationNmtSettings> = {}
-  if (settings.translationEngines.nmt.model !== defaultTranslationEngines.nmt.model) {
-    nmt.model = settings.translationEngines.nmt.model
+
+  const local: Partial<TranslationLocalSettings> = {}
+  if (settings.translationEngines.local.model !== defaultTranslationEngines.local.model) {
+    local.model = settings.translationEngines.local.model
   }
   if (
-    settings.translationEngines.nmt.selectedGroupId !==
-    defaultTranslationEngines.nmt.selectedGroupId
+    settings.translationEngines.local.selectedGroupId !==
+    defaultTranslationEngines.local.selectedGroupId
   ) {
-    nmt.selectedGroupId = settings.translationEngines.nmt.selectedGroupId
+    local.selectedGroupId = settings.translationEngines.local.selectedGroupId
   }
-  if (settings.translationEngines.nmt.hfEndpoint !== defaultTranslationEngines.nmt.hfEndpoint) {
-    nmt.hfEndpoint = settings.translationEngines.nmt.hfEndpoint
+  if (settings.translationEngines.local.hfEndpoint !== defaultTranslationEngines.local.hfEndpoint) {
+    local.hfEndpoint = settings.translationEngines.local.hfEndpoint
   }
-  if (hasOwnEntries(nmt)) {
-    translationEngines.nmt = nmt
+  if (hasOwnEntries(local)) {
+    translationEngines.local = local
   }
+
   if (hasOwnEntries(translationEngines)) {
     persisted.translationEngines = translationEngines
   }
@@ -210,27 +178,13 @@ export class GlobalSettingsManager {
       },
       translationEngines: {
         ...current.translationEngines,
-        extensions: {
-          ...current.translationEngines.extensions,
-          ...update.translationEngines?.extensions,
-          engines: {
-            nmt: {
-              ...current.translationEngines.extensions.engines.nmt,
-              ...update.translationEngines?.extensions?.engines?.nmt,
-            },
-            ai: {
-              ...current.translationEngines.extensions.engines.ai,
-              ...update.translationEngines?.extensions?.engines?.ai,
-            },
-          },
+        openai: {
+          ...current.translationEngines.openai,
+          ...update.translationEngines?.openai,
         },
-        ai: {
-          ...current.translationEngines.ai,
-          ...update.translationEngines?.ai,
-        },
-        nmt: {
-          ...current.translationEngines.nmt,
-          ...update.translationEngines?.nmt,
+        local: {
+          ...current.translationEngines.local,
+          ...update.translationEngines?.local,
         },
       },
     })

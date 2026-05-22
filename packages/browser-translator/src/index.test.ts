@@ -31,7 +31,7 @@ describe('browser translator package', () => {
     })
   })
 
-  it('adapts rich input to the browser source text and reports download progress', async () => {
+  it('adapts batched input to the browser source text and reports download progress', async () => {
     const monitor = new EventTarget()
     const translate = vi.fn(async (input: string) => `zh:${input}`)
     const status = vi.fn()
@@ -56,13 +56,11 @@ describe('browser translator package', () => {
       monitor: { setStatus: status },
     })
 
-    await expect(
-      translator.translate({
-        instructions: 'Keep tags.',
-        context: '# Proposal',
-        source: '<x1>Hello</x1>',
-      })
-    ).resolves.toBe('zh:<x1>Hello</x1>')
+    const outputs: Array<{ index: number; output: string }> = []
+    for await (const item of translator.batchTranslate(['<x1>Hello</x1>'])) {
+      outputs.push(item)
+    }
+    expect(outputs).toEqual([{ index: 0, output: 'zh:<x1>Hello</x1>' }])
     expect(translate).toHaveBeenCalledWith('<x1>Hello</x1>', undefined)
     expect(status).toHaveBeenCalledWith(
       expect.objectContaining({

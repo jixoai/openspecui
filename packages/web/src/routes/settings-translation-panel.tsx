@@ -6,12 +6,12 @@ import { Switch } from '@/components/switch'
 import { TocSection } from '@/components/toc'
 import { Tooltip } from '@/components/tooltip'
 import {
-  createBrowserTranslationExecution,
   prepareBrowserTranslation,
   probeBrowserTranslation,
   type BrowserTranslationStatus,
 } from '@/lib/browser-translation'
 import { isStaticMode } from '@/lib/static-mode'
+import { runSingleTranslation } from '@/lib/translate-service'
 import { findTranslationLanguage, searchTranslationLanguages } from '@/lib/translation-languages'
 import { trpc, trpcClient } from '@/lib/trpc'
 import { useConfigSubscription, useGlobalSettingsSubscription } from '@/lib/use-subscription'
@@ -20,16 +20,14 @@ import {
   type DocumentTranslationConfigUpdate,
   type DocumentTranslationDisplayMode,
 } from '@openspecui/core/document-translation'
-import { selectNmtDownloadGroup } from '@openspecui/core/nmt-download-profiles'
+import { selectLocalDownloadGroup } from '@openspecui/core/local-download-profiles'
 import {
   TRANSLATION_ENGINE_IDS,
   getTranslationEngineManifest,
-  type NmtModelAssetState,
-  type NmtModelCatalogItem,
-  type ServiceTranslationEngineId,
+  type LocalModelAssetState,
+  type LocalModelCatalogItem,
   type TranslationDownloadGroupPlan,
   type TranslationEngineId,
-  type TranslationInstallLog,
   type TranslationModelDownloadPlan,
 } from '@openspecui/core/translator'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -55,7 +53,6 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -65,7 +62,7 @@ import {
 const DEFAULT_TRANSLATION_TARGET_LANGUAGE = 'zh'
 const DEFAULT_TRANSLATION_DISPLAY_MODE: DocumentTranslationDisplayMode = 'direct'
 const DEFAULT_TRANSLATION_CACHE_ENABLED = false
-const DEFAULT_NMT_MODEL_ID = 'Xenova/opus-mt-no-de'
+const DEFAULT_LOCAL_MODEL_ID = 'Xenova/opus-mt-no-de'
 const DEFAULT_TRANSLATION_SMOKE_SOURCE = 'My name is Sarah and I live in London.'
 const DEFAULT_TRANSLATION_SMOKE_SOURCE_LANGUAGE = 'en'
 const TRANSLATION_TEST_PLACEHOLDERS: Record<string, string> = {
@@ -83,10 +80,6 @@ const TRANSLATION_DISPLAY_MODE_OPTIONS = [
   { value: 'direct', label: 'Direct' },
   { value: 'bilingual', label: 'Bilingual' },
 ] satisfies ButtonGroupOption<DocumentTranslationDisplayMode>[]
-
-function isServiceEngineId(engineId: TranslationEngineId): engineId is ServiceTranslationEngineId {
-  return engineId === 'nmt' || engineId === 'ai'
-}
 
 function formatTranslationCapability(
   capability: BrowserTranslationStatus | null,
@@ -160,23 +153,22 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const [translationCapability, setTranslationCapability] =
     useState<BrowserTranslationStatus | null>(null)
   const [translationCapabilityLoading, setTranslationCapabilityLoading] = useState(false)
-  const [installLog, setInstallLog] = useState<TranslationInstallLog | null>(null)
   const [aiBaseUrl, setAiBaseUrl] = useState('')
   const [aiToken, setAiToken] = useState('')
   const [aiModel, setAiModel] = useState('gpt-4.1-mini')
-  const [nmtModel, setNmtModel] = useState(DEFAULT_NMT_MODEL_ID)
-  const [nmtModelQuery, setNmtModelQuery] = useState(DEFAULT_NMT_MODEL_ID)
-  const [nmtDebouncedQuery, setNmtDebouncedQuery] = useState(DEFAULT_NMT_MODEL_ID)
+  const [nmtModel, setNmtModel] = useState(DEFAULT_LOCAL_MODEL_ID)
+  const [nmtModelQuery, setNmtModelQuery] = useState(DEFAULT_LOCAL_MODEL_ID)
+  const [nmtDebouncedQuery, setNmtDebouncedQuery] = useState(DEFAULT_LOCAL_MODEL_ID)
   const [nmtHfEndpoint, setNmtHfEndpoint] = useState('')
   const [nmtSelectedGroupId, setNmtSelectedGroupId] = useState<string | undefined>(undefined)
   const [nmtLocalLoaded, setNmtLocalLoaded] = useState(false)
-  const [nmtLocalOptions, setNmtLocalOptions] = useState<NmtModelCatalogItem[]>([])
-  const [nmtRemoteOptions, setNmtRemoteOptions] = useState<NmtModelCatalogItem[]>([])
+  const [nmtLocalOptions, setNmtLocalOptions] = useState<LocalModelCatalogItem[]>([])
+  const [nmtRemoteOptions, setNmtRemoteOptions] = useState<LocalModelCatalogItem[]>([])
   const [nmtRemoteLoading, setNmtRemoteLoading] = useState(false)
-  const [nmtSelectedState, setNmtSelectedState] = useState<NmtModelAssetState | null>(null)
-  const [nmtDownloadPlan, setNmtDownloadPlan] = useState<TranslationModelDownloadPlan | null>(null)
-  const [nmtPlanLoading, setNmtPlanLoading] = useState(false)
-  const [nmtPlanError, setNmtPlanError] = useState<string | null>(null)
+  const [localSelectedState, setLocalSelectedState] = useState<LocalModelAssetState | null>(null)
+  const [localDownloadPlan, setLocalDownloadPlan] = useState<TranslationModelDownloadPlan | null>(null)
+  const [localPlanLoading, setLocalPlanLoading] = useState(false)
+  const [localPlanError, setLocalPlanError] = useState<string | null>(null)
   const [translationTestOpen, setTranslationTestOpen] = useState(false)
   const [smokeSourceLanguage, setSmokeSourceLanguage] = useState(
     DEFAULT_TRANSLATION_SMOKE_SOURCE_LANGUAGE
@@ -209,98 +201,98 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     setTranslationCacheEntryLimit(
       globalSettings?.translationCache?.entryLimit ?? DEFAULT_TRANSLATION_CACHE_ENTRY_LIMIT
     )
-    setAiBaseUrl(globalSettings?.translationEngines?.ai?.baseUrl ?? '')
-    setAiToken(globalSettings?.translationEngines?.ai?.token ?? '')
-    setAiModel(globalSettings?.translationEngines?.ai?.model ?? 'gpt-4.1-mini')
+    setAiBaseUrl(globalSettings?.translationEngines?.openai?.baseUrl ?? '')
+    setAiToken(globalSettings?.translationEngines?.openai?.token ?? '')
+    setAiModel(globalSettings?.translationEngines?.openai?.model ?? 'gpt-4.1-mini')
     const nextNmtModel =
-      globalSettings?.translationEngines?.nmt?.model ??
-      config?.translation?.engines?.nmt?.model ??
-      DEFAULT_NMT_MODEL_ID
+      globalSettings?.translationEngines?.local?.model ??
+      config?.translation?.engines?.local?.model ??
+      DEFAULT_LOCAL_MODEL_ID
     setNmtModel(nextNmtModel)
     setNmtModelQuery(nextNmtModel)
     setNmtDebouncedQuery(nextNmtModel)
-    setNmtHfEndpoint(globalSettings?.translationEngines?.nmt?.hfEndpoint ?? '')
+    setNmtHfEndpoint(globalSettings?.translationEngines?.local?.hfEndpoint ?? '')
     setNmtSelectedGroupId(
-      globalSettings?.translationEngines?.nmt?.selectedGroupId ??
-        config?.translation?.engines?.nmt?.selectedGroupId
+      globalSettings?.translationEngines?.local?.selectedGroupId ??
+        config?.translation?.engines?.local?.selectedGroupId
     )
   }, [
-    config?.translation?.engines?.nmt?.model,
-    config?.translation?.engines?.nmt?.selectedGroupId,
+    config?.translation?.engines?.local?.model,
+    config?.translation?.engines?.local?.selectedGroupId,
     globalSettings?.translationCache?.entryLimit,
-    globalSettings?.translationEngines?.ai?.baseUrl,
-    globalSettings?.translationEngines?.ai?.model,
-    globalSettings?.translationEngines?.ai?.token,
-    globalSettings?.translationEngines?.nmt?.hfEndpoint,
-    globalSettings?.translationEngines?.nmt?.model,
-    globalSettings?.translationEngines?.nmt?.selectedGroupId,
+    globalSettings?.translationEngines?.openai?.baseUrl,
+    globalSettings?.translationEngines?.openai?.model,
+    globalSettings?.translationEngines?.openai?.token,
+    globalSettings?.translationEngines?.local?.hfEndpoint,
+    globalSettings?.translationEngines?.local?.model,
+    globalSettings?.translationEngines?.local?.selectedGroupId,
   ])
 
   useEffect(() => {
-    if (translationEngineId !== 'nmt') return
+    if (translationEngineId !== 'local') return
     const trimmedModel = nmtModel.trim()
     if (!trimmedModel) {
-      setNmtDownloadPlan(null)
-      setNmtSelectedState(null)
-      setNmtPlanLoading(false)
-      setNmtPlanError(null)
+      setLocalDownloadPlan(null)
+      setLocalSelectedState(null)
+      setLocalPlanLoading(false)
+      setLocalPlanError(null)
       return
     }
     let cancelled = false
-    setNmtPlanError(null)
-    const localAsset = findLocalNmtAssetSnapshot(nmtLocalOptions, trimmedModel)
+    setLocalPlanError(null)
+    const localAsset = findLocalModelAssetSnapshot(nmtLocalOptions, trimmedModel)
     const localPlan = localAsset
-      ? createNmtPlanFromAssetState(localAsset, nmtSelectedGroupId)
+      ? createLocalPlanFromAssetState(localAsset, nmtSelectedGroupId)
       : null
     if (localAsset) {
-      setNmtSelectedState(localAsset)
-      setNmtDownloadPlan(localPlan)
-      setNmtPlanLoading(false)
+      setLocalSelectedState(localAsset)
+      setLocalDownloadPlan(localPlan)
+      setLocalPlanLoading(false)
       return
     }
 
     if (!nmtLocalLoaded) {
-      setNmtPlanLoading(true)
-      setNmtSelectedState(null)
-      setNmtDownloadPlan(null)
+      setLocalPlanLoading(true)
+      setLocalSelectedState(null)
+      setLocalDownloadPlan(null)
       return
     }
 
-    setNmtPlanLoading(true)
-    void trpcClient.nmtModels.state
+    setLocalPlanLoading(true)
+    void trpcClient.localModels.state
       .query({
         modelId: trimmedModel,
         selectedGroupId: nmtSelectedGroupId,
       })
       .then(async (state) => {
         if (cancelled) return
-        const statePlan = createNmtPlanFromAssetState(state, nmtSelectedGroupId)
-        if (statePlan && hasLocalNmtAssetTruth(state)) {
-          setNmtPlanLoading(false)
-          setNmtDownloadPlan((current) => mergeNmtPlanSnapshots(current, statePlan))
-          setNmtSelectedState(state)
+        const statePlan = createLocalPlanFromAssetState(state, nmtSelectedGroupId)
+        if (statePlan && hasLocalModelAssetTruth(state)) {
+          setLocalPlanLoading(false)
+          setLocalDownloadPlan((current) => mergeLocalPlanSnapshots(current, statePlan))
+          setLocalSelectedState(state)
           return
         }
-        setNmtSelectedState(state)
-        setNmtPlanLoading(true)
+        setLocalSelectedState(state)
+        setLocalPlanLoading(true)
         const plan = await trpcClient.translationEngines.getModelDownloadPlan.query({
-          engineId: 'nmt',
+          engineId: 'local',
           model: trimmedModel,
           selectedGroupId: nmtSelectedGroupId,
         })
         if (cancelled) return
-        setNmtDownloadPlan(plan)
-        setNmtSelectedState(state)
+        setLocalDownloadPlan(plan)
+        setLocalSelectedState(state)
       })
       .catch((error) => {
         if (cancelled) return
-        setNmtDownloadPlan(null)
-        setNmtSelectedState(null)
-        setNmtPlanError(error instanceof Error ? error.message : 'Unable to resolve model plan.')
+        setLocalDownloadPlan(null)
+        setLocalSelectedState(null)
+        setLocalPlanError(error instanceof Error ? error.message : 'Unable to resolve model plan.')
       })
       .finally(() => {
         if (cancelled) return
-        setNmtPlanLoading(false)
+        setLocalPlanLoading(false)
       })
     return () => {
       cancelled = true
@@ -315,7 +307,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   ])
 
   useEffect(() => {
-    if (translationEngineId !== 'nmt') return
+    if (translationEngineId !== 'local') return
     const timer = window.setTimeout(() => {
       setNmtDebouncedQuery(nmtModelQuery.trim())
     }, 300)
@@ -323,10 +315,10 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   }, [nmtModelQuery, translationEngineId])
 
   useEffect(() => {
-    if (translationEngineId !== 'nmt') return
+    if (translationEngineId !== 'local') return
     let cancelled = false
     setNmtLocalLoaded(false)
-    void trpcClient.nmtModels.listLocal
+    void trpcClient.localModels.listLocal
       .query()
       .then((local) => {
         if (cancelled) return
@@ -344,10 +336,10 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   }, [translationEngineId])
 
   useEffect(() => {
-    if (translationEngineId !== 'nmt') return
-    const requestId = `nmt-search-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    if (translationEngineId !== 'local') return
+    const requestId = `local-search-${Date.now()}-${Math.random().toString(36).slice(2)}`
     setNmtRemoteLoading(true)
-    const subscription = trpcClient.nmtModels.searchRemoteStream.subscribe(
+    const subscription = trpcClient.localModels.searchRemoteStream.subscribe(
       {
         requestId,
         targetLanguage: translationTargetLanguage,
@@ -375,37 +367,29 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
 
   useEffect(() => {
     if (inStaticMode) return
-    const subscription = trpcClient.translationEngines.subscribeLogs.subscribe(undefined, {
-      onData: (log) => {
-        setInstallLog(log)
-        void refetchEngines()
-      },
-      onError: () => undefined,
-    })
-    const nmtSubscription = trpcClient.nmtModels.subscribeLogs.subscribe(undefined, {
+    const nmtSubscription = trpcClient.localModels.subscribeLogs.subscribe(undefined, {
       onData: (log) => {
         if (log.modelId === nmtModel.trim()) {
-          void trpcClient.nmtModels.state
+          void trpcClient.localModels.state
             .query({ modelId: log.modelId, selectedGroupId: nmtSelectedGroupId })
-            .then((state) => setNmtSelectedState(state))
+            .then((state) => setLocalSelectedState(state))
             .catch(() => undefined)
         }
       },
       onError: () => undefined,
     })
     return () => {
-      subscription.unsubscribe()
       nmtSubscription.unsubscribe()
     }
-  }, [inStaticMode, nmtModel, nmtSelectedGroupId, refetchEngines])
+  }, [inStaticMode, nmtModel, nmtSelectedGroupId])
 
   useEffect(() => {
-    if (translationEngineId !== 'nmt') {
+    if (translationEngineId !== 'local') {
       setNmtLocalOptions([])
       setNmtLocalLoaded(false)
       setNmtRemoteOptions([])
       setNmtRemoteLoading(false)
-      setNmtPlanLoading(false)
+      setLocalPlanLoading(false)
     }
   }, [translationEngineId])
 
@@ -423,46 +407,32 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
       await refetchEngines()
     },
   })
-  const installEngineMutation = useMutation({
-    mutationFn: (engineId: ServiceTranslationEngineId) =>
-      trpcClient.translationEngines.install.mutate({ engineId }),
-    onSuccess: async () => {
-      await refetchEngines()
-    },
-  })
-  const cancelInstallMutation = useMutation({
-    mutationFn: (engineId: ServiceTranslationEngineId) =>
-      trpcClient.translationEngines.cancelInstall.mutate({ engineId }),
-    onSuccess: async () => {
-      await refetchEngines()
-    },
-  })
-  const downloadNmtModelMutation = useMutation({
+  const downloadLocalModelMutation = useMutation({
     mutationFn: (input: { modelId: string; selectedGroupId?: string }) =>
-      trpcClient.nmtModels.download.mutate(input),
+      trpcClient.localModels.download.mutate(input),
   })
-  const pauseNmtModelMutation = useMutation({
-    mutationFn: (modelId: string) => trpcClient.nmtModels.pause.mutate({ modelId }),
+  const pauseLocalModelMutation = useMutation({
+    mutationFn: (modelId: string) => trpcClient.localModels.pause.mutate({ modelId }),
   })
-  const resumeNmtModelMutation = useMutation({
+  const resumeLocalModelMutation = useMutation({
     mutationFn: (input: { modelId: string; selectedGroupId?: string }) =>
-      trpcClient.nmtModels.resume.mutate(input),
+      trpcClient.localModels.resume.mutate(input),
   })
-  const deleteNmtModelMutation = useMutation({
-    mutationFn: (modelId: string) => trpcClient.nmtModels.delete.mutate({ modelId }),
+  const deleteLocalModelMutation = useMutation({
+    mutationFn: (modelId: string) => trpcClient.localModels.delete.mutate({ modelId }),
     onSuccess: async () => {
       const modelId = nmtModel.trim()
       if (!modelId) return
       const [state, plan] = await Promise.all([
-        trpcClient.nmtModels.state.query({ modelId, selectedGroupId: nmtSelectedGroupId }),
+        trpcClient.localModels.state.query({ modelId, selectedGroupId: nmtSelectedGroupId }),
         trpcClient.translationEngines.getModelDownloadPlan.query({
-          engineId: 'nmt',
+          engineId: 'local',
           model: modelId,
           selectedGroupId: nmtSelectedGroupId,
         }),
       ])
-      setNmtSelectedState(state)
-      setNmtDownloadPlan(plan)
+      setLocalSelectedState(state)
+      setLocalDownloadPlan(plan)
     },
   })
   const cleanTranslationCacheMutation = useMutation({
@@ -525,45 +495,12 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const selectedEngineManifest = effectiveTranslationEngineId
     ? getTranslationEngineManifest(effectiveTranslationEngineId)
     : null
-  const selectedServiceEngineId =
-    effectiveTranslationEngineId && isServiceEngineId(effectiveTranslationEngineId)
-      ? effectiveTranslationEngineId
-      : null
-  const selectedGlobalInstallState = selectedServiceEngineId
-    ? globalSettings?.translationEngines?.extensions?.engines?.[selectedServiceEngineId]
-    : undefined
-  const selectedEngineAvailable =
-    effectiveTranslationEngineId === 'browser' ||
-    selectedEngine?.status === 'available' ||
-    selectedGlobalInstallState?.status === 'installed'
-  const selectedEngineErrored =
-    selectedEngine?.status === 'error' || selectedGlobalInstallState?.status === 'error'
-  const selectedEngineNeedsInstall =
-    selectedServiceEngineId !== null && !selectedEngineAvailable && !selectedEngineErrored
-  const selectedEngineInstalling =
-    selectedEngine?.status === 'installing' || selectedGlobalInstallState?.status === 'installing'
-  const currentLog =
-    installLog && installLog.engineId === selectedServiceEngineId ? installLog : null
   const engineStatusMessage =
     effectiveTranslationEngineId === 'browser'
       ? formatTranslationCapability(translationCapability, translationCapabilityLoading)
-      : (currentLog?.message ??
-        selectedEngine?.message ??
-        selectedGlobalInstallState?.message ??
-        selectedEngine?.description ??
-        selectedEngineManifest?.description)
-  const engineProgress =
-    effectiveTranslationEngineId === 'browser'
-      ? translationCapability?.progress
-      : currentLog?.progress
-  const engineProgressPercent =
-    engineProgress === undefined ? undefined : Math.round(engineProgress * 100)
-  const showEngineProgress =
-    effectiveTranslationEngineId === 'browser'
-      ? translationCapability?.availability === 'downloading'
-      : selectedEngineInstalling && engineProgress !== undefined
+      : (selectedEngine?.message ?? selectedEngine?.description ?? selectedEngineManifest?.description)
   const nmtCatalogOptions = useMemo(() => {
-    const merged = new Map<string, NmtModelCatalogItem>()
+    const merged = new Map<string, LocalModelCatalogItem>()
     for (const item of nmtLocalOptions) merged.set(item.id, item)
     for (const item of nmtRemoteOptions) {
       if (!merged.has(item.id)) merged.set(item.id, item)
@@ -571,61 +508,61 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     return [...merged.values()]
   }, [nmtLocalOptions, nmtRemoteOptions])
   const nmtModelId = nmtModel.trim()
-  const selectedNmtAsset = nmtSelectedState
-  const activeNmtCandidate =
+  const selectedLocalAsset = localSelectedState
+  const activeLocalCandidate =
     nmtCatalogOptions.find((candidate) => candidate.id === nmtModelId) ?? null
-  const persistedNmtSelectedGroupId =
-    globalSettings?.translationEngines?.nmt?.selectedGroupId ??
-    config?.translation?.engines?.nmt?.selectedGroupId
-  const preferredNmtSelectedGroupId = nmtSelectedGroupId ?? persistedNmtSelectedGroupId
+  const persistedLocalSelectedGroupId =
+    globalSettings?.translationEngines?.local?.selectedGroupId ??
+    config?.translation?.engines?.local?.selectedGroupId
+  const preferredLocalSelectedGroupId = nmtSelectedGroupId ?? persistedLocalSelectedGroupId
   const nmtDownloadGroups =
-    nmtDownloadPlan?.groups ??
-    selectedNmtAsset?.plan?.groups ??
-    activeNmtCandidate?.downloadGroups ??
+    localDownloadPlan?.groups ??
+    selectedLocalAsset?.plan?.groups ??
+    activeLocalCandidate?.downloadGroups ??
     []
-  const selectedNmtGroup =
-    nmtDownloadGroups.find((group) => group.id === preferredNmtSelectedGroupId) ??
+  const selectedLocalGroup =
+    nmtDownloadGroups.find((group) => group.id === preferredLocalSelectedGroupId) ??
     nmtDownloadGroups.find((group) => group.selected) ??
     null
-  const effectiveNmtSelectedGroupId =
-    selectedNmtGroup?.id ??
-    nmtDownloadPlan?.selectedGroupId ??
-    selectedNmtAsset?.plan?.selectedGroupId ??
-    preferredNmtSelectedGroupId
+  const effectiveLocalSelectedGroupId =
+    selectedLocalGroup?.id ??
+    localDownloadPlan?.selectedGroupId ??
+    selectedLocalAsset?.plan?.selectedGroupId ??
+    preferredLocalSelectedGroupId
   const nmtKnownSize =
-    (selectedNmtGroup?.estimatedTotalBytes ?? nmtDownloadPlan?.estimatedTotalBytes ?? 0) > 0
-  const displayedNmtAsset = deriveNmtGroupAssetState({
-    state: selectedNmtAsset,
-    plan: nmtDownloadPlan,
-    selectedGroupId: effectiveNmtSelectedGroupId,
+    (selectedLocalGroup?.estimatedTotalBytes ?? localDownloadPlan?.estimatedTotalBytes ?? 0) > 0
+  const displayedLocalAsset = deriveLocalGroupAssetState({
+    state: selectedLocalAsset,
+    plan: localDownloadPlan,
+    selectedGroupId: effectiveLocalSelectedGroupId,
   })
   const nmtProgressPercent =
-    displayedNmtAsset?.progress === undefined
+    displayedLocalAsset?.progress === undefined
       ? undefined
-      : Math.round(displayedNmtAsset.progress * 100)
-  const nmtGroupSelectionDisabled = displayedNmtAsset?.status === 'deleting'
+      : Math.round(displayedLocalAsset.progress * 100)
+  const nmtGroupSelectionDisabled = displayedLocalAsset?.status === 'deleting'
   const nmtResolvedHfEndpoint = nmtHfEndpoint.trim() || 'https://huggingface.co'
-  const updateSelectedNmtLifecycle = useCallback(
+  const updateSelectedLocalLifecycle = useCallback(
     (
-      status: NmtModelAssetState['status'],
+      status: LocalModelAssetState['status'],
       patch: Partial<
-        Pick<NmtModelAssetState, 'progress' | 'bytesDownloaded' | 'totalBytes' | 'resumable'>
+        Pick<LocalModelAssetState, 'progress' | 'bytesDownloaded' | 'totalBytes' | 'resumable'>
       > = {}
     ) => {
       const modelId = nmtModel.trim()
       if (!modelId) return
-      setNmtSelectedState((current) =>
-        buildOptimisticNmtModelState({
+      setLocalSelectedState((current) =>
+        buildOptimisticLocalModelState({
           current,
           modelId,
           status,
-          plan: nmtDownloadPlan,
-          selectedGroupId: effectiveNmtSelectedGroupId,
+          plan: localDownloadPlan,
+          selectedGroupId: effectiveLocalSelectedGroupId,
           patch,
         })
       )
     },
-    [effectiveNmtSelectedGroupId, nmtDownloadPlan, nmtModel]
+    [effectiveLocalSelectedGroupId, localDownloadPlan, nmtModel]
   )
   const runSmokeTest = useCallback(async () => {
     if (!effectiveTranslationEngineId) return
@@ -638,31 +575,17 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     setSmokeError(null)
     setSmokeResult('')
     try {
-      if (effectiveTranslationEngineId === 'browser') {
-        const translator = await createBrowserTranslationExecution().factory.create({
-          sourceLanguage,
-          targetLanguage,
-        })
-        try {
-          const text = await translator.translate(sourceText)
-          setSmokeResult(text)
-        } finally {
-          translator.destroy?.()
-        }
-        return
-      }
-
-      const result = await trpcClient.translationEngines.translate.mutate({
+      const result = await runSingleTranslation({
         engineId: effectiveTranslationEngineId,
         sourceLanguage,
         targetLanguage,
         model:
-          effectiveTranslationEngineId === 'nmt' ? nmtModel.trim() : aiModel.trim() || undefined,
+          effectiveTranslationEngineId === 'local' ? nmtModel.trim() : aiModel.trim() || undefined,
         selectedGroupId:
-          effectiveTranslationEngineId === 'nmt' ? effectiveNmtSelectedGroupId : undefined,
+          effectiveTranslationEngineId === 'local' ? effectiveLocalSelectedGroupId : undefined,
         text: sourceText,
       })
-      setSmokeResult(result.text)
+      setSmokeResult(result)
     } catch (error) {
       setSmokeError(error instanceof Error ? error.message : 'Translation test failed.')
     } finally {
@@ -670,7 +593,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     }
   }, [
     aiModel,
-    effectiveNmtSelectedGroupId,
+    effectiveLocalSelectedGroupId,
     nmtModel,
     smokeSourceLanguage,
     smokeSourceText,
@@ -821,9 +744,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                       ) : (
                         <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
                       )
-                    ) : selectedEngineInstalling ? (
-                      <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-                    ) : selectedEngineAvailable ? (
+                    ) : selectedEngine?.status === 'available' ? (
                       <Tooltip content="Installed" delay={0}>
                         <button
                           type="button"
@@ -833,10 +754,6 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                           <CheckCircle className="h-4 w-4" />
                         </button>
                       </Tooltip>
-                    ) : selectedEngineNeedsInstall ? (
-                      <Download className="h-4 w-4 shrink-0 text-sky-500" />
-                    ) : selectedEngineErrored ? (
-                      <XCircle className="text-destructive h-4 w-4 shrink-0" />
                     ) : (
                       <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
                     )}
@@ -859,45 +776,13 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                     <RefreshCw className="h-3.5 w-3.5" />
                     Check
                   </Button>
-                ) : selectedServiceEngineId && selectedEngineInstalling ? (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => cancelInstallMutation.mutate(selectedServiceEngineId)}
-                    disabled={cancelInstallMutation.isPending}
-                  >
-                    <XCircle className="h-3.5 w-3.5" />
-                    Cancel
-                  </Button>
-                ) : selectedServiceEngineId && selectedEngineNeedsInstall ? (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => installEngineMutation.mutate(selectedServiceEngineId)}
-                    disabled={installEngineMutation.isPending || inStaticMode}
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    Install
-                  </Button>
                 ) : null}
               </div>
             </div>
-            {showEngineProgress && engineProgress !== undefined ? (
-              <div
-                role="progressbar"
-                aria-label="Engine installation progress"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={engineProgressPercent}
-                className="bg-muted h-1.5 overflow-hidden rounded-full"
-              >
-                <div className="bg-primary h-full" style={{ width: `${engineProgressPercent}%` }} />
-              </div>
-            ) : null}
           </div>
         </div>
 
-        {effectiveTranslationEngineId === 'ai' ? (
+        {effectiveTranslationEngineId === 'openai' ? (
           <div className="border-border/60 @[56rem]:grid-cols-3 grid gap-3 border-t pt-3">
             <label className="block text-sm font-medium">
               API Base URL
@@ -906,7 +791,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                 onChange={(event) => setAiBaseUrl(event.currentTarget.value)}
                 onBlur={() =>
                   saveGlobalSettingsMutation.mutate({
-                    translationEngines: { ai: { baseUrl: aiBaseUrl.trim() } },
+                    translationEngines: { openai: { baseUrl: aiBaseUrl.trim() } },
                   })
                 }
                 className="border-input bg-background mt-2 h-9 w-full rounded-md border px-3 text-sm"
@@ -921,7 +806,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                 onChange={(event) => setAiToken(event.currentTarget.value)}
                 onBlur={() =>
                   saveGlobalSettingsMutation.mutate({
-                    translationEngines: { ai: { token: aiToken } },
+                    translationEngines: { openai: { token: aiToken } },
                   })
                 }
                 className="border-input bg-background mt-2 h-9 w-full rounded-md border px-3 text-sm"
@@ -936,35 +821,35 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                 onBlur={() => {
                   const model = aiModel.trim()
                   saveGlobalSettingsMutation.mutate({
-                    translationEngines: { ai: { model } },
+                    translationEngines: { openai: { model } },
                   })
-                  saveTranslationConfigMutation.mutate({ engines: { ai: { model } } })
+                  saveTranslationConfigMutation.mutate({ engines: { openai: { model } } })
                 }}
                 className="border-input bg-background mt-2 h-9 w-full rounded-md border px-3 text-sm"
               />
             </label>
           </div>
         ) : null}
-        {effectiveTranslationEngineId === 'nmt' ? (
+        {effectiveTranslationEngineId === 'local' ? (
           <div className="border-border/60 border-t pt-3">
             <div className="space-y-3 text-xs">
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <label className="block text-sm font-medium">NMT Model</label>
-                  <NmtProviderSettingsPopover
+                  <label className="block text-sm font-medium">Local Model</label>
+                  <LocalProviderSettingsPopover
                     value={nmtHfEndpoint}
                     resolvedEndpoint={nmtResolvedHfEndpoint}
                     onValueChange={setNmtHfEndpoint}
                     onCommit={(endpoint) => {
                       saveGlobalSettingsMutation.mutate({
-                        translationEngines: { nmt: { hfEndpoint: endpoint } },
+                        translationEngines: { local: { hfEndpoint: endpoint } },
                       })
                       setNmtRemoteOptions([])
                     }}
                   />
                 </div>
                 <div className="@[42rem]:grid-cols-[minmax(0,1fr)_auto] grid gap-2">
-                  <NmtModelCombobox
+                  <LocalModelCombobox
                     value={nmtModel}
                     query={nmtModelQuery}
                     localOptions={nmtLocalOptions}
@@ -976,12 +861,12 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                       setNmtModelQuery(nextModel)
                     }}
                     onCommit={async (model) => {
-                      await trpcClient.nmtModels.markSelected.mutate({ modelId: model })
+                      await trpcClient.localModels.markSelected.mutate({ modelId: model })
                       saveGlobalSettingsMutation.mutate({
-                        translationEngines: { nmt: { model, selectedGroupId: undefined } },
+                        translationEngines: { local: { model, selectedGroupId: undefined } },
                       })
                       saveTranslationConfigMutation.mutate({
-                        engines: { nmt: { model, selectedGroupId: undefined } },
+                        engines: { local: { model, selectedGroupId: undefined } },
                       })
                       setNmtSelectedGroupId(undefined)
                     }}
@@ -990,56 +875,56 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                     HF: {nmtResolvedHfEndpoint}
                   </div>
                 </div>
-                <NmtDownloadGroupSelector
+                <LocalDownloadGroupSelector
                   groups={nmtDownloadGroups}
-                  selectedGroupId={effectiveNmtSelectedGroupId}
-                  asset={selectedNmtAsset}
-                  loading={nmtPlanLoading}
+                  selectedGroupId={effectiveLocalSelectedGroupId}
+                  asset={selectedLocalAsset}
+                  loading={localPlanLoading}
                   disabled={nmtGroupSelectionDisabled}
                   onSelectGroup={(groupId) => {
                     setNmtSelectedGroupId(groupId)
                     saveGlobalSettingsMutation.mutate({
-                      translationEngines: { nmt: { selectedGroupId: groupId } },
+                      translationEngines: { local: { selectedGroupId: groupId } },
                     })
                     saveTranslationConfigMutation.mutate({
-                      engines: { nmt: { selectedGroupId: groupId } },
+                      engines: { local: { selectedGroupId: groupId } },
                     })
                   }}
                 />
               </div>
-              <NmtDownloadFilesCard
-                plan={nmtDownloadPlan}
-                state={displayedNmtAsset}
-                selectedGroupId={effectiveNmtSelectedGroupId}
+              <LocalDownloadFilesCard
+                plan={localDownloadPlan}
+                state={displayedLocalAsset}
+                selectedGroupId={effectiveLocalSelectedGroupId}
                 progressPercent={nmtProgressPercent}
-                loading={nmtPlanLoading}
-                error={nmtPlanError}
+                loading={localPlanLoading}
+                error={localPlanError}
                 onDownload={() => {
-                  updateSelectedNmtLifecycle('downloading', {
-                    progress: selectedNmtAsset?.progress ?? 0,
+                  updateSelectedLocalLifecycle('downloading', {
+                    progress: selectedLocalAsset?.progress ?? 0,
                   })
-                  downloadNmtModelMutation.mutate({
+                  downloadLocalModelMutation.mutate({
                     modelId: nmtModelId,
-                    selectedGroupId: effectiveNmtSelectedGroupId,
+                    selectedGroupId: effectiveLocalSelectedGroupId,
                   })
                 }}
                 onPause={() => {
-                  updateSelectedNmtLifecycle('paused', { resumable: true })
-                  pauseNmtModelMutation.mutate(nmtModelId)
+                  updateSelectedLocalLifecycle('paused', { resumable: true })
+                  pauseLocalModelMutation.mutate(nmtModelId)
                 }}
                 onResume={() => {
-                  updateSelectedNmtLifecycle('downloading', {
-                    progress: selectedNmtAsset?.progress ?? 0,
+                  updateSelectedLocalLifecycle('downloading', {
+                    progress: selectedLocalAsset?.progress ?? 0,
                     resumable: true,
                   })
-                  resumeNmtModelMutation.mutate({
+                  resumeLocalModelMutation.mutate({
                     modelId: nmtModelId,
-                    selectedGroupId: effectiveNmtSelectedGroupId,
+                    selectedGroupId: effectiveLocalSelectedGroupId,
                   })
                 }}
                 onDelete={() => {
-                  updateSelectedNmtLifecycle('deleting')
-                  deleteNmtModelMutation.mutate(nmtModelId)
+                  updateSelectedLocalLifecycle('deleting')
+                  deleteLocalModelMutation.mutate(nmtModelId)
                 }}
                 knownSize={nmtKnownSize}
                 modelId={nmtModelId}
@@ -1166,7 +1051,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   )
 }
 
-function NmtModelCombobox({
+function LocalModelCombobox({
   value,
   query,
   localOptions,
@@ -1178,16 +1063,16 @@ function NmtModelCombobox({
 }: {
   value: string
   query: string
-  localOptions: NmtModelCatalogItem[]
-  remoteOptions: NmtModelCatalogItem[]
+  localOptions: LocalModelCatalogItem[]
+  remoteOptions: LocalModelCatalogItem[]
   remoteLoading: boolean
   onQueryChange: (value: string) => void
   onChange: (value: string) => void
   onCommit: (value: string) => Promise<void> | void
 }) {
   const id = useId().replace(/[^a-zA-Z0-9_-]/g, '')
-  const popoverId = `translation-nmt-model-popover-${id}`
-  const listboxId = `translation-nmt-model-options-${id}`
+  const popoverId = `translation-local-model-popover-${id}`
+  const listboxId = `translation-local-model-options-${id}`
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -1225,7 +1110,7 @@ function NmtModelCombobox({
   }, [open, updatePosition])
 
   const options = useMemo(() => {
-    const merged = new Map<string, NmtModelCatalogItem>()
+    const merged = new Map<string, LocalModelCatalogItem>()
     for (const item of localOptions) merged.set(item.id, item)
     for (const item of remoteOptions) {
       if (!merged.has(item.id)) merged.set(item.id, item)
@@ -1259,7 +1144,7 @@ function NmtModelCombobox({
       <button
         ref={triggerRef}
         type="button"
-        aria-label="NMT model"
+        aria-label="Local model"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={popoverId}
@@ -1276,7 +1161,7 @@ function NmtModelCombobox({
         id={popoverId}
         ref={popoverRef}
         role="dialog"
-        aria-label="Select NMT model"
+        aria-label="Select local model"
         popover="auto"
         onToggle={handleToggle}
         className="settings-floating-popover bg-popover text-popover-foreground border-border m-0 rounded-md border p-2 shadow-lg backdrop:bg-black/20"
@@ -1297,7 +1182,7 @@ function NmtModelCombobox({
           <input
             ref={searchInputRef}
             role="textbox"
-            aria-label="Search NMT models"
+            aria-label="Search local models"
             aria-autocomplete="list"
             aria-controls={listboxId}
             value={query}
@@ -1331,7 +1216,7 @@ function NmtModelCombobox({
         <div
           id={listboxId}
           role="listbox"
-          aria-label="NMT model options"
+          aria-label="Local model options"
           className="scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[color-mix(in_srgb,currentColor,transparent_78%)] max-h-72 overflow-y-auto"
         >
           {options.length > 0 ? (
@@ -1359,7 +1244,7 @@ function NmtModelCombobox({
                   <span className="min-w-0 truncate">{candidate.id}</span>
                   {candidate.local ? (
                     <span className="text-emerald-600">
-                      {formatNmtModelStatus(candidate.asset.status)}
+                      {formatLocalModelStatus(candidate.asset.status)}
                     </span>
                   ) : null}
                 </span>
@@ -1377,7 +1262,7 @@ function NmtModelCombobox({
                   ) : null}
                   {!candidate.selectable ? <span>· Size required</span> : null}
                 </span>
-                <NmtModelGroupChips
+                <LocalModelGroupChips
                   groups={candidate.downloadGroups ?? candidate.asset.plan?.groups ?? []}
                 />
               </button>
@@ -1485,10 +1370,10 @@ function TranslationTestDialog({
             Run Test
           </Button>
           <p className="text-muted-foreground text-xs">
-            {engineId === 'nmt'
-              ? 'Uses the configured NMT model and server API.'
-              : engineId === 'ai'
-                ? 'Uses the configured AI provider and model.'
+            {engineId === 'local'
+              ? 'Uses the configured local model and server runtime.'
+              : engineId === 'openai'
+                ? 'Uses the configured OpenAI-compatible provider and model.'
                 : 'Uses the current browser Translator API capability.'}
           </p>
         </div>
@@ -1509,7 +1394,7 @@ function TranslationTestDialog({
   )
 }
 
-function NmtProviderSettingsPopover({
+function LocalProviderSettingsPopover({
   value,
   resolvedEndpoint,
   onValueChange,
@@ -1521,7 +1406,7 @@ function NmtProviderSettingsPopover({
   onCommit: (endpoint: string) => void
 }) {
   const id = useId().replace(/[^a-zA-Z0-9_-]/g, '')
-  const popoverId = `translation-nmt-provider-popover-${id}`
+  const popoverId = `translation-local-provider-popover-${id}`
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -1595,7 +1480,7 @@ function NmtProviderSettingsPopover({
         <button
           ref={triggerRef}
           type="button"
-          aria-label="NMT provider settings"
+          aria-label="Local provider settings"
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-controls={popoverId}
@@ -1611,7 +1496,7 @@ function NmtProviderSettingsPopover({
         id={popoverId}
         ref={popoverRef}
         role="dialog"
-        aria-label="NMT provider settings"
+        aria-label="Local provider settings"
         popover="auto"
         onToggle={handleToggle}
         className="settings-floating-popover bg-popover text-popover-foreground border-border m-0 space-y-3 rounded-md border p-3 shadow-lg backdrop:bg-black/20"
@@ -1653,7 +1538,7 @@ function NmtProviderSettingsPopover({
   )
 }
 
-function NmtModelGroupChips({ groups }: { groups: TranslationDownloadGroupPlan[] }) {
+function LocalModelGroupChips({ groups }: { groups: TranslationDownloadGroupPlan[] }) {
   if (groups.length === 0) return null
   return (
     <span className="flex flex-wrap gap-1 pt-1">
@@ -1672,7 +1557,7 @@ function NmtModelGroupChips({ groups }: { groups: TranslationDownloadGroupPlan[]
   )
 }
 
-function NmtDownloadGroupSelector({
+function LocalDownloadGroupSelector({
   groups,
   selectedGroupId,
   asset,
@@ -1682,7 +1567,7 @@ function NmtDownloadGroupSelector({
 }: {
   groups: TranslationDownloadGroupPlan[]
   selectedGroupId?: string
-  asset: NmtModelAssetState | null
+  asset: LocalModelAssetState | null
   loading: boolean
   disabled: boolean
   onSelectGroup: (groupId: string) => void
@@ -1701,10 +1586,10 @@ function NmtDownloadGroupSelector({
   return (
     <>
       {loadingIndicator}
-      <div className="flex flex-wrap gap-1.5 pt-1" aria-label="NMT download profiles">
+      <div className="flex flex-wrap gap-1.5 pt-1" aria-label="Local download profiles">
         {groups.map((group) => {
           const selected = group.id === selectedGroupId
-          const locallyAvailable = isNmtDownloadGroupLocallyAvailable(group, asset)
+          const locallyAvailable = isLocalDownloadGroupLocallyAvailable(group, asset)
           return (
             <button
               key={group.id}
@@ -1727,9 +1612,9 @@ function NmtDownloadGroupSelector({
   )
 }
 
-function isNmtDownloadGroupLocallyAvailable(
+function isLocalDownloadGroupLocallyAvailable(
   group: TranslationDownloadGroupPlan,
-  asset: NmtModelAssetState | null
+  asset: LocalModelAssetState | null
 ): boolean {
   if (!asset || group.files.length === 0) return false
   const localFileByPath = new Map(asset.files.map((file) => [file.path, file]))
@@ -1743,17 +1628,17 @@ function isNmtDownloadGroupLocallyAvailable(
   })
 }
 
-function findLocalNmtAssetSnapshot(
-  localOptions: NmtModelCatalogItem[],
+function findLocalModelAssetSnapshot(
+  localOptions: LocalModelCatalogItem[],
   modelId: string
-): NmtModelAssetState | null {
+): LocalModelAssetState | null {
   const item = localOptions.find((option) => option.id === modelId)
   if (!item) return null
-  if (hasLocalNmtAssetTruth(item.asset)) return item.asset
+  if (hasLocalModelAssetTruth(item.asset)) return item.asset
   return null
 }
 
-function hasLocalNmtAssetTruth(state: NmtModelAssetState): boolean {
+function hasLocalModelAssetTruth(state: LocalModelAssetState): boolean {
   if (state.status === 'downloaded') return state.files.length > 0 || Boolean(state.plan)
   if (state.status === 'downloading' || state.status === 'paused' || state.status === 'deleting') {
     return state.files.length > 0 || Boolean(state.plan)
@@ -1761,8 +1646,8 @@ function hasLocalNmtAssetTruth(state: NmtModelAssetState): boolean {
   return false
 }
 
-function createNmtPlanFromAssetState(
-  state: NmtModelAssetState,
+function createLocalPlanFromAssetState(
+  state: LocalModelAssetState,
   selectedGroupId?: string
 ): TranslationModelDownloadPlan | null {
   if (state.plan) {
@@ -1791,7 +1676,7 @@ function createNmtPlanFromAssetState(
   }
 }
 
-function mergeNmtPlanSnapshots(
+function mergeLocalPlanSnapshots(
   current: TranslationModelDownloadPlan | null,
   next: TranslationModelDownloadPlan | null
 ): TranslationModelDownloadPlan | null {
@@ -1811,13 +1696,13 @@ function mergeNmtPlanSnapshots(
   }
 }
 
-type NmtPlanAction = 'download' | 'pause' | 'resume' | 'downloaded' | 'deleting' | 'progress'
+type LocalPlanAction = 'download' | 'pause' | 'resume' | 'downloaded' | 'deleting' | 'progress'
 
-function getNmtPlanAction(input: {
-  state: NmtModelAssetState | null
+function getLocalPlanAction(input: {
+  state: LocalModelAssetState | null
   loading: boolean
   knownSize: boolean
-}): NmtPlanAction {
+}): LocalPlanAction {
   if (input.loading) return 'progress'
   switch (input.state?.status) {
     case 'deleting':
@@ -1837,16 +1722,16 @@ function getNmtPlanAction(input: {
   }
 }
 
-function buildOptimisticNmtModelState(input: {
-  current: NmtModelAssetState | null
+function buildOptimisticLocalModelState(input: {
+  current: LocalModelAssetState | null
   modelId: string
-  status: NmtModelAssetState['status']
+  status: LocalModelAssetState['status']
   plan: TranslationModelDownloadPlan | null
   selectedGroupId?: string
   patch: Partial<
-    Pick<NmtModelAssetState, 'progress' | 'bytesDownloaded' | 'totalBytes' | 'resumable'>
+    Pick<LocalModelAssetState, 'progress' | 'bytesDownloaded' | 'totalBytes' | 'resumable'>
   >
-}): NmtModelAssetState {
+}): LocalModelAssetState {
   const selectedGroup =
     input.plan?.groups?.find((group) => group.id === input.selectedGroupId) ??
     input.plan?.groups?.find((group) => group.selected) ??
@@ -1881,15 +1766,15 @@ function buildOptimisticNmtModelState(input: {
   }
 }
 
-function deriveNmtGroupAssetState(input: {
-  state: NmtModelAssetState | null
+function deriveLocalGroupAssetState(input: {
+  state: LocalModelAssetState | null
   plan: TranslationModelDownloadPlan | null
   selectedGroupId?: string
-}): NmtModelAssetState | null {
+}): LocalModelAssetState | null {
   if (!input.state) return null
   if (!input.selectedGroupId || input.state.status === 'deleting') return input.state
 
-  const selectedGroup = selectNmtDownloadGroup(
+  const selectedGroup = selectLocalDownloadGroup(
     input.plan ?? input.state.plan ?? null,
     input.selectedGroupId
   )
@@ -1950,7 +1835,7 @@ function deriveNmtGroupAssetState(input: {
   }
 }
 
-function NmtDownloadFilesCard({
+function LocalDownloadFilesCard({
   plan,
   state,
   selectedGroupId,
@@ -1965,7 +1850,7 @@ function NmtDownloadFilesCard({
   modelId,
 }: {
   plan: TranslationModelDownloadPlan | null
-  state: NmtModelAssetState | null
+  state: LocalModelAssetState | null
   selectedGroupId?: string
   progressPercent: number | undefined
   loading: boolean
@@ -1981,7 +1866,7 @@ function NmtDownloadFilesCard({
   const isPaused = state?.status === 'paused'
   const isDownloaded = state?.status === 'downloaded'
   const isError = state?.status === 'error'
-  const action = getNmtPlanAction({ state, loading, knownSize })
+  const action = getLocalPlanAction({ state, loading, knownSize })
   const canDelete = !loading && !isDeleting && (isDownloaded || isPaused || isError)
   const actionProgress = progressPercent ?? 0
   const groups = plan?.groups ?? state?.plan?.groups ?? []
@@ -2069,7 +1954,7 @@ function NmtDownloadFilesCard({
                   <button
                     type="button"
                     aria-label="Download model"
-                    data-nmt-plan-action="download"
+                    data-local-plan-action="download"
                     onClick={onDownload}
                     disabled={!modelId}
                     className="text-foreground focus-visible:ring-primary absolute inline-flex h-8 w-8 items-center justify-center rounded-full bg-transparent outline-none transition-[background-color,transform] hover:scale-105 focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
@@ -2082,7 +1967,7 @@ function NmtDownloadFilesCard({
                   <button
                     type="button"
                     aria-label="Pause download"
-                    data-nmt-plan-action="pause"
+                    data-local-plan-action="pause"
                     onClick={onPause}
                     disabled={!modelId}
                     className="text-foreground focus-visible:ring-primary group absolute inline-flex h-8 w-8 items-center justify-center rounded-full bg-transparent outline-none transition-[background-color,transform] hover:scale-105 focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
@@ -2098,7 +1983,7 @@ function NmtDownloadFilesCard({
                   <button
                     type="button"
                     aria-label="Resume download"
-                    data-nmt-plan-action="resume"
+                    data-local-plan-action="resume"
                     onClick={onResume}
                     disabled={!modelId}
                     className="text-foreground focus-visible:ring-primary absolute inline-flex h-8 w-8 items-center justify-center rounded-full bg-transparent outline-none transition-[background-color,transform] hover:scale-105 focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
@@ -2110,7 +1995,7 @@ function NmtDownloadFilesCard({
                 <Tooltip content="Downloaded" delay={0}>
                   <span
                     aria-label="Downloaded"
-                    data-nmt-plan-action="downloaded"
+                    data-local-plan-action="downloaded"
                     className="absolute inline-flex h-8 w-8 items-center justify-center rounded-full bg-transparent text-emerald-500"
                   >
                     <CheckCircle className="h-4 w-4" />
@@ -2118,14 +2003,14 @@ function NmtDownloadFilesCard({
                 </Tooltip>
               ) : action === 'deleting' ? (
                 <span
-                  data-nmt-plan-action="deleting"
+                  data-local-plan-action="deleting"
                   className="text-foreground absolute inline-flex h-8 w-8 items-center justify-center rounded-full bg-transparent"
                 >
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 </span>
               ) : (
                 <span
-                  data-nmt-plan-action="progress"
+                  data-local-plan-action="progress"
                   className="text-foreground absolute text-[10px] font-medium"
                 >
                   {loading ? '...' : `${actionProgress}%`}
@@ -2142,7 +2027,7 @@ function NmtDownloadFilesCard({
         ) : isDeleting ? (
           <div className="text-muted-foreground mt-2 flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Removing local NMT model files…
+            Removing local model files…
           </div>
         ) : error ? (
           <div className="text-destructive mt-2 flex items-center gap-2 leading-5">
@@ -2206,7 +2091,7 @@ function formatCompactNumber(value: number): string {
   )
 }
 
-function formatNmtModelStatus(status: NmtModelAssetState['status']): string {
+function formatLocalModelStatus(status: LocalModelAssetState['status']): string {
   switch (status) {
     case 'not-downloaded':
       return 'Not downloaded'
@@ -2291,7 +2176,7 @@ function TranslationLanguageCombobox({
     setOpen(false)
   }, [])
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (open) updatePopoverPosition()
   }, [open, updatePopoverPosition])
 

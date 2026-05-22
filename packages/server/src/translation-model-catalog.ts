@@ -5,11 +5,11 @@ import type {
   TranslationModelSearchInput,
   TranslationModelSearchResult,
 } from '@openspecui/core'
-import { buildNmtDownloadPlanFromRepositoryFiles } from '@openspecui/core'
+import { buildLocalDownloadPlanFromRepositoryFiles } from '@openspecui/core'
 import { type Dispatcher } from 'undici'
 import { createProxyAwareDispatcher } from './network-dispatcher.js'
-import { NmtModelFetchCacheStore } from './nmt-model-fetch-cache-store.js'
-import { getDefaultNmtModelFetchCachePath } from './nmt-model-cache-path.js'
+import { LocalModelFetchCacheStore } from './local-model-fetch-cache-store.js'
+import { getDefaultLocalModelFetchCachePath } from './local-model-cache-path.js'
 import { buildHuggingFaceApiBaseUrl } from './huggingface-endpoint.js'
 
 const DEFAULT_SEARCH_LIMIT = 6
@@ -20,8 +20,8 @@ const HUGGING_FACE_FETCH_RETRY_DELAY_MS = 750
 
 const HUGGING_FACE_FETCH_DISPATCHER: Dispatcher = createProxyAwareDispatcher()
 
-export interface NmtModelSearchCatalogOptions {
-  fetchCacheStore?: NmtModelFetchCacheStore
+export interface LocalModelSearchCatalogOptions {
+  fetchCacheStore?: LocalModelFetchCacheStore
   hfEndpoint?: string
 }
 
@@ -46,11 +46,11 @@ interface HfModelDetail extends HfModelListItem {
   }>
 }
 
-export interface ResolvedNmtModelPlan extends TranslationModelDownloadPlan {}
+export interface ResolvedLocalModelPlan extends TranslationModelDownloadPlan {}
 
-export async function searchNmtModels(
+export async function searchLocalModels(
   input: Omit<TranslationModelSearchInput, 'engineId'>,
-  options: NmtModelSearchCatalogOptions = {}
+  options: LocalModelSearchCatalogOptions = {}
 ): Promise<TranslationModelSearchResult> {
   const list = await fetchHuggingFaceModelList(input, options)
   const detailItems = await Promise.all(
@@ -66,9 +66,9 @@ export async function searchNmtModels(
   }
 }
 
-export async function searchNmtModelsProgressively(
+export async function searchLocalModelsProgressively(
   input: Omit<TranslationModelSearchInput, 'engineId'> & { requestId: string },
-  options: NmtModelSearchCatalogOptions = {}
+  options: LocalModelSearchCatalogOptions = {}
 ): Promise<TranslationModelSearchEvent[]> {
   const list = await fetchHuggingFaceModelList(input, options)
   const candidateShells = rankCandidates(
@@ -104,17 +104,17 @@ export async function searchNmtModelsProgressively(
   return events
 }
 
-export async function getNmtModelDownloadPlan(
+export async function getLocalModelDownloadPlan(
   modelId: string,
-  options: NmtModelSearchCatalogOptions = {}
-): Promise<ResolvedNmtModelPlan | null> {
+  options: LocalModelSearchCatalogOptions = {}
+): Promise<ResolvedLocalModelPlan | null> {
   const detail = await getHuggingFaceModelDetail(modelId, undefined, options)
-  return resolveNmtModelPlan(detail)
+  return resolveLocalModelPlan(detail)
 }
 
 async function fetchHuggingFaceModelList(
   input: Omit<TranslationModelSearchInput, 'engineId'>,
-  options: NmtModelSearchCatalogOptions
+  options: LocalModelSearchCatalogOptions
 ): Promise<{ items: HfModelListItem[]; nextCursor?: string }> {
   const limit = normalizeSearchLimit(input.limit)
   const fetchLimit = Math.min(Math.max(limit * 2, limit), MAX_SEARCH_FETCH_LIMIT)
@@ -169,7 +169,7 @@ async function fetchHuggingFaceModelList(
 async function getHuggingFaceModelDetail(
   modelId: string,
   input: Omit<TranslationModelSearchInput, 'engineId'> | undefined,
-  options: NmtModelSearchCatalogOptions
+  options: LocalModelSearchCatalogOptions
 ): Promise<HfModelDetail> {
   const [namespace, repo] = modelId.split('/', 2)
   const modelPath =
@@ -311,7 +311,7 @@ function toTranslationModelCandidate(
   detail: HfModelListItem | HfModelDetail,
   input: Omit<TranslationModelSearchInput, 'engineId'>
 ): TranslationModelCandidate {
-  const plan = isHfModelDetail(detail) ? resolveNmtModelPlan(detail) : null
+  const plan = isHfModelDetail(detail) ? resolveLocalModelPlan(detail) : null
   const languageMatch = buildLanguageMatch(detail, input.sourceLanguage, input.targetLanguage)
   const compatibility = {
     transformersJs: detail.tags.includes('transformers.js'),
@@ -339,8 +339,8 @@ function toTranslationModelCandidate(
   }
 }
 
-function resolveNmtModelPlan(detail: HfModelDetail): ResolvedNmtModelPlan | null {
-  return buildNmtDownloadPlanFromRepositoryFiles({
+function resolveLocalModelPlan(detail: HfModelDetail): ResolvedLocalModelPlan | null {
+  return buildLocalDownloadPlanFromRepositoryFiles({
     modelId: detail.id,
     isEncoderDecoder: detail.config?.is_encoder_decoder,
     files: detail.siblings.map((entry) => ({
@@ -450,10 +450,10 @@ function buildQueryContext(
   }
 }
 
-function getFetchCacheStore(options: NmtModelSearchCatalogOptions): NmtModelFetchCacheStore {
+function getFetchCacheStore(options: LocalModelSearchCatalogOptions): LocalModelFetchCacheStore {
   return (
     options.fetchCacheStore ??
-    new NmtModelFetchCacheStore({ cachePath: getDefaultNmtModelFetchCachePath() })
+    new LocalModelFetchCacheStore({ cachePath: getDefaultLocalModelFetchCachePath() })
   )
 }
 

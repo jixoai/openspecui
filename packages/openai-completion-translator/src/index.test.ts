@@ -29,22 +29,26 @@ vi.mock('@tanstack/ai-openai', () => ({
   createOpenaiChatCompletions: createOpenaiChatCompletionsMock,
 }))
 
-describe('AI translator package', () => {
+describe('openai completion translator package', () => {
   it('requires a token before creating a translator', async () => {
-    const { createAiTranslatorFactory } = await import('./index.js')
+    const { createOpenAICompletionTranslatorFactory } = await import('./index.js')
 
     await expect(
-      createAiTranslatorFactory({ baseUrl: '', token: '', model: 'custom-model' }).create({
+      createOpenAICompletionTranslatorFactory({
+        baseUrl: '',
+        token: '',
+        model: 'custom-model',
+      }).create({
         sourceLanguage: 'en',
         targetLanguage: 'zh',
       })
-    ).rejects.toThrow('AI translator token is required.')
+    ).rejects.toThrow('OpenAI completion translator token is required.')
   })
 
-  it('uses TanStack AI chat with rich translation input and custom model support', async () => {
+  it('uses TanStack AI chat with batch translation and custom model support', async () => {
     chatMock.mockResolvedValueOnce('你好')
-    const { createAiTranslatorFactory } = await import('./index.js')
-    const translator = await createAiTranslatorFactory({
+    const { createOpenAICompletionTranslatorFactory } = await import('./index.js')
+    const translator = await createOpenAICompletionTranslatorFactory({
       baseUrl: 'https://api.example.com/v1/',
       token: 'secret-token',
       model: 'vendor/custom-model',
@@ -53,13 +57,14 @@ describe('AI translator package', () => {
       targetLanguage: 'zh',
     })
 
-    await expect(
-      translator.translate({
-        instructions: 'Keep xN tags.',
-        context: '# Proposal',
-        source: '<x1>Hello</x1>',
-      })
-    ).resolves.toBe('你好')
+    const outputs: Array<{ index: number; output: string }> = []
+    for await (const item of translator.batchTranslate(['<x1>Hello</x1>'], {
+      instructions: 'Keep xN tags.',
+      context: '# Proposal',
+    })) {
+      outputs.push(item)
+    }
+    expect(outputs).toEqual([{ index: 0, output: '你好' }])
 
     expect(createModelMock).toHaveBeenCalledWith('vendor/custom-model', ['text'])
     expect(createOpenaiChatCompletionsMock).toHaveBeenCalledWith(
