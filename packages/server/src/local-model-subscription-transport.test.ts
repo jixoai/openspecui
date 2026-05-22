@@ -86,12 +86,12 @@ beforeEach(() => {
 afterEach(async () => {
   await Promise.all(wsClients.splice(0).map((client) => client.close()))
   await Promise.all(runningServers.splice(0).map((server) => server.close()))
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
   if (originalHome === undefined) {
     delete process.env.HOME
   } else {
     process.env.HOME = originalHome
   }
+  await Promise.all(tempDirs.splice(0).map((dir) => removeDirWithRetry(dir)))
   vi.unstubAllGlobals()
   vi.clearAllMocks()
 })
@@ -118,6 +118,26 @@ function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs = 5_000): 
       }
     )
   })
+}
+
+async function removeDirWithRetry(dir: string, attempts = 5): Promise<void> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      await rm(dir, { recursive: true, force: true })
+      return
+    } catch (error) {
+      if (!isRetryableDirCleanupError(error) || attempt === attempts - 1) {
+        throw error
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)))
+    }
+  }
+}
+
+function isRetryableDirCleanupError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const code = 'code' in error ? error.code : undefined
+  return code === 'EBUSY' || code === 'ENOTEMPTY' || code === 'EPERM'
 }
 
 describe('localModels.subscribeLogs transport', () => {
