@@ -63,6 +63,49 @@ describe('translation-model-catalog', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
+  it('retries Hugging Face search once after a retryable 503 response', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response('temporary outage', { status: 503 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            {
+              id: 'Xenova/opus-mt-no-de',
+              pipeline_tag: 'translation',
+              tags: ['transformers.js', 'onnx', 'translation', 'no', 'de'],
+              downloads: 502,
+              likes: 12,
+              trendingScore: 4,
+            },
+          ])
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 'Xenova/opus-mt-no-de',
+            pipeline_tag: 'translation',
+            tags: ['transformers.js', 'onnx', 'translation', 'no', 'de'],
+            downloads: 502,
+            likes: 12,
+            trendingScore: 4,
+            config: { is_encoder_decoder: true },
+            siblings: [
+              { rfilename: 'onnx/encoder_model_quantized.onnx', size: 24600000 },
+              { rfilename: 'onnx/decoder_model_merged_quantized.onnx', size: 28906014 },
+            ],
+          })
+        )
+      )
+    globalThis.fetch = fetchMock
+
+    const result = await searchLocalModels({ targetLanguage: 'de', limit: 1 })
+
+    expect(result.items[0]?.id).toBe('Xenova/opus-mt-no-de')
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
   it('resolves the smallest verified model download plan', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(
@@ -146,7 +189,10 @@ describe('translation-model-catalog', () => {
         )
       globalThis.fetch = fetchMock
 
-      await searchLocalModels({ targetLanguage: 'de', query: 'opus', limit: 1 }, { fetchCacheStore })
+      await searchLocalModels(
+        { targetLanguage: 'de', query: 'opus', limit: 1 },
+        { fetchCacheStore }
+      )
 
       const fetches = await fetchCacheStore.readFetches()
       expect(fetches).toHaveLength(2)

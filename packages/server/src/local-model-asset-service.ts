@@ -49,6 +49,7 @@ import {
   type TransformersRuntimeModule,
 } from './local-model-runtime.js'
 import { ensureProxyAwareFetchDispatcher } from './network-dispatcher.js'
+import { isRetryableNetworkError } from './network-retry.js'
 import {
   searchLocalModels,
   searchLocalModelsProgressively,
@@ -141,8 +142,7 @@ export class LocalModelAssetService {
     this.networkRetryPolicy = {
       limit: options.networkRetryPolicy?.limit ?? DEFAULT_NETWORK_RETRY_LIMIT,
       delayMs: options.networkRetryPolicy?.delayMs ?? DEFAULT_NETWORK_RETRY_DELAY_MS,
-      maxDelayMs:
-        options.networkRetryPolicy?.maxDelayMs ?? DEFAULT_NETWORK_RETRY_DELAY_MAX_MS,
+      maxDelayMs: options.networkRetryPolicy?.maxDelayMs ?? DEFAULT_NETWORK_RETRY_DELAY_MAX_MS,
     }
     this.store = new LocalModelAssetStore({
       indexPath: options.indexPath ?? getDefaultLocalModelIndexPath(),
@@ -636,17 +636,14 @@ export class LocalModelAssetService {
                 : 'not-downloaded',
       progress: progress === undefined ? undefined : Math.max(0, Math.min(1, progress)),
       totalBytes: effectivePlan.estimatedTotalBytes ?? state.totalBytes,
-      bytesDownloaded: session
-        ? state.bytesDownloaded
-        : detectedBytesDownloaded,
+      bytesDownloaded: session ? state.bytesDownloaded : detectedBytesDownloaded,
       error: runtimeAllCached ? undefined : state.error,
-      resumable:
-        runtimeAllCached
-          ? false
-          : ((sameRequestedGroup && state.status === 'paused') ||
-              (sameRequestedGroup && state.status === 'error') ||
-              hasPartialCache ||
-              (progress !== undefined && progress > 0 && progress < 1)),
+      resumable: runtimeAllCached
+        ? false
+        : (sameRequestedGroup && state.status === 'paused') ||
+          (sameRequestedGroup && state.status === 'error') ||
+          hasPartialCache ||
+          (progress !== undefined && progress > 0 && progress < 1),
       files,
       updatedAt: this.now(),
       installedAt: runtimeAllCached ? (state.installedAt ?? this.now()) : state.installedAt,
@@ -794,8 +791,7 @@ export class LocalModelAssetService {
           })
         },
         onRetry: async ({ retryDelayMs, phase }) => {
-          const retryTarget =
-            phase === 'metadata' ? `metadata for ${file.path}` : `${file.path}`
+          const retryTarget = phase === 'metadata' ? `metadata for ${file.path}` : `${file.path}`
           await this.emitDownloadProgress({
             modelId,
             sessionId,
@@ -1162,7 +1158,9 @@ async function readHuggingFaceFileDownloadInfoWithRetry(input: {
       await delay(retryDelayMs, input.signal)
     }
   }
-  throw lastError instanceof Error ? lastError : new Error(`Cannot get path info for ${input.path}.`)
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Cannot get path info for ${input.path}.`)
 }
 
 async function appendBlobToIncompleteFile(input: {
@@ -1236,33 +1234,7 @@ async function readPathSize(path: string): Promise<number | null> {
 }
 
 function isRetryableDownloadError(error: unknown): boolean {
-  if (error === undefined || error === null) return true
-  if (typeof error === 'string') {
-    const message = error.toLowerCase()
-    return (
-      message.includes('fetch failed') ||
-      message.includes('timeout') ||
-      message.includes('socket hang up') ||
-      message.includes('econnreset') ||
-      message.includes('terminated')
-    )
-  }
-  if (!(error instanceof Error)) return true
-  if (error.name === 'AbortError') return false
-  const cause = 'cause' in error ? error.cause : undefined
-  if (cause instanceof Error) {
-    if (cause.name === 'AbortError') return false
-    const causeMessage = cause.message.toLowerCase()
-    return cause.name.endsWith('TimeoutError') || causeMessage.includes('timeout')
-  }
-  const message = error.message.toLowerCase()
-  return (
-    message.includes('fetch failed') ||
-    message.includes('timeout') ||
-    message.includes('socket hang up') ||
-    message.includes('econnreset') ||
-    message.includes('terminated')
-  )
+  return isRetryableNetworkError(error, { treatUnknownAsRetryable: true })
 }
 
 function delay(ms: number, signal?: AbortSignal): Promise<void> {

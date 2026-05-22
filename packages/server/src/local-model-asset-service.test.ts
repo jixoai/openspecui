@@ -84,11 +84,10 @@ describe('LocalModelAssetService', () => {
   })
 
   it('downloads only selected NMT group files through the official Hugging Face hub primitives', async () => {
-    hubMock.downloadFile.mockImplementation(
-      async (input: { path: string }) =>
-        createMockDownloadBlob(
-          input.path === 'config.json' ? [new Uint8Array(10)] : [new Uint8Array(10)]
-        )
+    hubMock.downloadFile.mockImplementation(async (input: { path: string }) =>
+      createMockDownloadBlob(
+        input.path === 'config.json' ? [new Uint8Array(10)] : [new Uint8Array(10)]
+      )
     )
 
     const service = new LocalModelAssetService({
@@ -184,13 +183,12 @@ describe('LocalModelAssetService', () => {
   })
 
   it('persists byte-level progress while streaming a selected NMT file', async () => {
-    hubMock.downloadFile.mockImplementation(
-      async (input: { path: string }) =>
-        createMockDownloadBlob(
-          input.path === 'onnx/encoder_model_q4.onnx'
-            ? [new Uint8Array([1, 2, 3, 4]), new Uint8Array([5, 6, 7, 8, 9, 10])]
-            : [new Uint8Array(10)]
-        )
+    hubMock.downloadFile.mockImplementation(async (input: { path: string }) =>
+      createMockDownloadBlob(
+        input.path === 'onnx/encoder_model_q4.onnx'
+          ? [new Uint8Array([1, 2, 3, 4]), new Uint8Array([5, 6, 7, 8, 9, 10])]
+          : [new Uint8Array(10)]
+      )
     )
 
     const service = new LocalModelAssetService({
@@ -248,13 +246,12 @@ describe('LocalModelAssetService', () => {
   })
 
   it('persists byte-level progress while streaming an Xet-backed file download', async () => {
-    hubMock.downloadFile.mockImplementation(
-      async (input: { path: string }) =>
-        createMockDownloadBlob(
-          input.path === 'onnx/encoder_model_q4.onnx'
-            ? [new Uint8Array([1, 2, 3, 4]), new Uint8Array([5, 6, 7, 8, 9, 10])]
-            : [new Uint8Array(10)]
-        )
+    hubMock.downloadFile.mockImplementation(async (input: { path: string }) =>
+      createMockDownloadBlob(
+        input.path === 'onnx/encoder_model_q4.onnx'
+          ? [new Uint8Array([1, 2, 3, 4]), new Uint8Array([5, 6, 7, 8, 9, 10])]
+          : [new Uint8Array(10)]
+      )
     )
 
     const service = new LocalModelAssetService({
@@ -448,7 +445,86 @@ describe('LocalModelAssetService', () => {
         url: `https://huggingface.co/test/resolve/main/${input.path}`,
       }
     })
-    hubMock.downloadFile.mockImplementation(async () => createMockDownloadBlob([new Uint8Array(10)]))
+    hubMock.downloadFile.mockImplementation(async () =>
+      createMockDownloadBlob([new Uint8Array(10)])
+    )
+
+    const service = new LocalModelAssetService({
+      projectDir: tempDir,
+      configManager: {} as ConfigManager,
+      globalSettingsManager: {
+        readSettings: async () => ({
+          translationEngines: {
+            local: {
+              model: 'onnx-community/opus-mt-en-zh',
+              selectedGroupId: 'q4',
+              hfEndpoint: 'https://hf-mirror.com/',
+            },
+          },
+        }),
+      },
+      now: () => 100,
+      indexPath,
+      cacheDir,
+      fetchCachePath,
+    }) as TestableLocalModelAssetService
+    vi.spyOn(service, 'getTransformersModule').mockResolvedValue({
+      env: {
+        cacheDir: null,
+        allowLocalModels: false,
+        localModelPath: '',
+      },
+      ModelRegistry: {
+        get_pipeline_files: vi.fn(async () => [
+          'onnx/encoder_model_q4.onnx',
+          'onnx/decoder_model_merged_q4.onnx',
+        ]),
+        is_pipeline_cached_files: vi.fn(async () => ({
+          allCached: false,
+          files: [
+            { file: 'onnx/encoder_model_q4.onnx', cached: false },
+            { file: 'onnx/decoder_model_merged_q4.onnx', cached: false },
+          ],
+        })),
+        get_file_metadata: vi.fn(),
+        clear_cache: vi.fn(),
+      },
+    })
+
+    await service.startDownload('onnx-community/opus-mt-en-zh', 'q4')
+    await waitForDownloadedState(indexPath)
+
+    expect(metadataAttempts).toBe(2)
+    const state = (await new LocalModelAssetStore({ indexPath }).readAll())[0]
+    expect(state).toMatchObject({
+      status: 'downloaded',
+      progress: 1,
+      bytesDownloaded: 30,
+      totalBytes: 30,
+    })
+    expect(state?.error).toBeUndefined()
+  })
+
+  it('retries retryable Hugging Face file metadata status failures before starting the streamed download', async () => {
+    let metadataAttempts = 0
+    hubMock.fileDownloadInfo.mockImplementation(async (input: { path: string }) => {
+      if (input.path === 'onnx/encoder_model_q4.onnx') {
+        metadataAttempts += 1
+        if (metadataAttempts === 1) {
+          throw Object.assign(new Error('Api error with status 503.'), {
+            statusCode: 503,
+          })
+        }
+      }
+      return {
+        size: input.path.includes('_q4') || input.path === 'config.json' ? 10 : 100,
+        etag: `${input.path.replace(/[^a-zA-Z0-9]+/g, '-')}-etag`,
+        url: `https://huggingface.co/test/resolve/main/${input.path}`,
+      }
+    })
+    hubMock.downloadFile.mockImplementation(async () =>
+      createMockDownloadBlob([new Uint8Array(10)])
+    )
 
     const service = new LocalModelAssetService({
       projectDir: tempDir,
@@ -586,7 +662,9 @@ describe('LocalModelAssetService', () => {
   })
 
   it('resumes from cached files instead of resetting completed files back to zero', async () => {
-    hubMock.downloadFile.mockImplementation(async () => createMockDownloadBlob([new Uint8Array(10)]))
+    hubMock.downloadFile.mockImplementation(async () =>
+      createMockDownloadBlob([new Uint8Array(10)])
+    )
 
     const service = new LocalModelAssetService({
       projectDir: tempDir,
@@ -917,11 +995,7 @@ class MockDownloadBlob extends Blob {
   }
 }
 
-function sliceChunks(
-  chunks: ReadonlyArray<Uint8Array>,
-  start: number,
-  end: number
-): Uint8Array[] {
+function sliceChunks(chunks: ReadonlyArray<Uint8Array>, start: number, end: number): Uint8Array[] {
   const next: Uint8Array[] = []
   let offset = 0
   for (const chunk of chunks) {

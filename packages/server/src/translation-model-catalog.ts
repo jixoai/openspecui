@@ -7,10 +7,11 @@ import type {
 } from '@openspecui/core'
 import { buildLocalDownloadPlanFromRepositoryFiles } from '@openspecui/core'
 import { type Dispatcher } from 'undici'
-import { createProxyAwareDispatcher } from './network-dispatcher.js'
-import { LocalModelFetchCacheStore } from './local-model-fetch-cache-store.js'
-import { getDefaultLocalModelFetchCachePath } from './local-model-cache-path.js'
 import { buildHuggingFaceApiBaseUrl } from './huggingface-endpoint.js'
+import { getDefaultLocalModelFetchCachePath } from './local-model-cache-path.js'
+import { LocalModelFetchCacheStore } from './local-model-fetch-cache-store.js'
+import { createProxyAwareDispatcher } from './network-dispatcher.js'
+import { isRetryableNetworkError, isRetryableNetworkStatusCode } from './network-retry.js'
 
 const DEFAULT_SEARCH_LIMIT = 6
 const MAX_SEARCH_FETCH_LIMIT = 12
@@ -56,7 +57,9 @@ export async function searchLocalModels(
   const detailItems = await Promise.all(
     list.items.map(async (item) => {
       const detail = await getHuggingFaceModelDetail(item.id, input, options).catch(() => null)
-      return detail ? toTranslationModelCandidate(detail, input) : toTranslationModelCandidate(item, input)
+      return detail
+        ? toTranslationModelCandidate(detail, input)
+        : toTranslationModelCandidate(item, input)
     })
   )
   const rankedCandidates = rankCandidates(detailItems, input)
@@ -216,14 +219,22 @@ async function fetchHuggingFace(input: string): Promise<Response> {
   let lastError: unknown
   for (let attempt = 0; attempt <= HUGGING_FACE_FETCH_RETRY_COUNT; attempt += 1) {
     try {
-      return await fetchWithDispatcher(input)
+      const response = await fetchWithDispatcher(input)
+      if (response.ok || !isRetryableNetworkStatusCode(response.status)) {
+        return response
+      }
+      lastError = new Error(`Hugging Face request failed with status ${response.status}.`)
+      if (attempt === HUGGING_FACE_FETCH_RETRY_COUNT) {
+        return response
+      }
+      await response.body?.cancel().catch(() => undefined)
     } catch (error) {
       lastError = error
       if (!isRetryableFetchError(error) || attempt === HUGGING_FACE_FETCH_RETRY_COUNT) {
         throw error
       }
-      await delay(HUGGING_FACE_FETCH_RETRY_DELAY_MS * (attempt + 1))
     }
+    await delay(HUGGING_FACE_FETCH_RETRY_DELAY_MS * (attempt + 1))
   }
   throw lastError instanceof Error ? lastError : new Error('Hugging Face request failed.')
 }
@@ -235,14 +246,7 @@ async function fetchWithDispatcher(input: string): Promise<Response> {
 }
 
 function isRetryableFetchError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false
-  if (error.name === 'AbortError') return false
-  const cause = 'cause' in error ? error.cause : undefined
-  if (cause instanceof Error) {
-    return cause.name.endsWith('TimeoutError') || cause.message.toLowerCase().includes('timeout')
-  }
-  const message = error.message.toLowerCase()
-  return message.includes('fetch failed') || message.includes('timeout')
+  return isRetryableNetworkError(error)
 }
 
 function delay(ms: number): Promise<void> {
@@ -286,7 +290,8 @@ function normalizeHfModelDetail(value: unknown, fallbackId: string): HfModelDeta
             typeof configRecord.is_encoder_decoder === 'boolean'
               ? configRecord.is_encoder_decoder
               : undefined,
-          model_type: typeof configRecord.model_type === 'string' ? configRecord.model_type : undefined,
+          model_type:
+            typeof configRecord.model_type === 'string' ? configRecord.model_type : undefined,
         }
       : undefined,
     siblings: Array.isArray(record.siblings)
@@ -430,7 +435,9 @@ function rankCandidates(
   candidates: ReadonlyArray<TranslationModelCandidate>,
   input: Omit<TranslationModelSearchInput, 'engineId'>
 ): TranslationModelCandidate[] {
-  const verifiedCandidates = candidates.filter((candidate) => candidate.compatibility.localRuntimeVerified)
+  const verifiedCandidates = candidates.filter(
+    (candidate) => candidate.compatibility.localRuntimeVerified
+  )
   return [...(input.query?.trim() ? candidates : verifiedCandidates)].sort(
     (left, right) => rankCandidate(right) - rankCandidate(left)
   )
@@ -440,9 +447,11 @@ function normalizeSearchLimit(limit: number | undefined): number {
   return Math.min(Math.max(limit ?? DEFAULT_SEARCH_LIMIT, 1), 20)
 }
 
-function buildQueryContext(
-  input: Omit<TranslationModelSearchInput, 'engineId'>
-): { query?: string; sourceLanguage?: string; targetLanguage?: string } {
+function buildQueryContext(input: Omit<TranslationModelSearchInput, 'engineId'>): {
+  query?: string
+  sourceLanguage?: string
+  targetLanguage?: string
+} {
   return {
     ...(input.query?.trim() ? { query: input.query.trim() } : {}),
     ...(input.sourceLanguage?.trim() ? { sourceLanguage: input.sourceLanguage.trim() } : {}),
