@@ -333,7 +333,7 @@ async function waitForState(
 async function consumeProgressFetch(
   customFetch: typeof fetch | undefined,
   path: string,
-  chunks: Uint8Array[]
+  _chunks: Uint8Array[]
 ): Promise<void> {
   if (!customFetch) return
   const response = await customFetch(`https://huggingface.co/test/resolve/main/${path}`, {
