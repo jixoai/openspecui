@@ -3,18 +3,15 @@ import type {
   ConfigManager,
   LocalModelAssetLog,
   LocalModelAssetState,
-  LocalModelCatalogLocalResult,
   LocalModelCatalogItem,
+  LocalModelCatalogLocalResult,
   LocalModelCatalogResult,
   LocalModelCatalogSearchEvent,
   TranslationModelCandidate,
   TranslationModelSearchInput,
   TranslationModelSearchResult,
 } from '@openspecui/core'
-import {
-  LocalModelAssetStateSchema,
-  selectLocalDownloadGroup,
-} from '@openspecui/core'
+import { LocalModelAssetStateSchema, selectLocalDownloadGroup } from '@openspecui/core'
 import { observable } from '@trpc/server/observable'
 import { existsSync } from 'node:fs'
 import { copyFile, lstat, mkdir, readlink, rm } from 'node:fs/promises'
@@ -23,7 +20,6 @@ import {
   buildTransformersRemoteHost,
   normalizeHuggingFaceEndpoint,
 } from './huggingface-endpoint.js'
-import { ensureProxyAwareFetchDispatcher } from './network-dispatcher.js'
 import { LocalModelAssetStore } from './local-model-asset-store.js'
 import {
   getDefaultLocalModelCacheDir,
@@ -41,6 +37,7 @@ import {
   resolveLocalModelRuntimePlan,
   type TransformersRuntimeModule,
 } from './local-model-runtime.js'
+import { ensureProxyAwareFetchDispatcher } from './network-dispatcher.js'
 import {
   searchLocalModels,
   searchLocalModelsProgressively,
@@ -93,6 +90,9 @@ interface TransformersModelRegistry {
 interface TransformersModule extends TransformersRuntimeModule {
   ModelRegistry: TransformersModelRegistry
 }
+
+const HUGGING_FACE_DOWNLOAD_RETRY_COUNT = 2
+const HUGGING_FACE_DOWNLOAD_RETRY_DELAY_MS = 500
 
 export interface LocalModelAssetServiceOptions {
   projectDir: string
@@ -248,7 +248,10 @@ export class LocalModelAssetService {
     if (session) {
       const selected = modelId === (await this.readSelectedModel())
       const plan = await this.readPlanForState(modelId, selectedGroupId ?? session.selectedGroupId)
-      const selectedGroup = selectLocalDownloadGroup(plan, selectedGroupId ?? session.selectedGroupId)
+      const selectedGroup = selectLocalDownloadGroup(
+        plan,
+        selectedGroupId ?? session.selectedGroupId
+      )
       const files = (selectedGroup?.files ?? plan?.files ?? []).map((file) => ({
         path: file.path,
         sizeBytes: file.sizeBytes,
@@ -947,29 +950,43 @@ async function downloadHuggingFaceFileToCacheDirWithProgress(input: {
   onProgress: (downloadedBytes: number) => Promise<void>
 }): Promise<string> {
   const revision = 'main'
-  const totalBytes =
-    input.expectedSizeBytes ??
-    (
-      await fileDownloadInfo({
+  let lastError: unknown
+
+  for (let attempt = 0; attempt <= HUGGING_FACE_DOWNLOAD_RETRY_COUNT; attempt += 1) {
+    try {
+      const totalBytes =
+        input.expectedSizeBytes ??
+        (
+          await fileDownloadInfo({
+            repo: input.repo,
+            path: input.path,
+            revision,
+            hubUrl: input.hubUrl,
+            fetch: input.fetch,
+          })
+        )?.size
+      if (totalBytes === undefined) throw new Error(`Cannot get path info for ${input.path}.`)
+
+      const cachedPath = await downloadFileToCacheDir({
         repo: input.repo,
         path: input.path,
         revision,
         hubUrl: input.hubUrl,
-        fetch: input.fetch,
+        cacheDir: input.cacheDir,
+        fetch: createProgressFetch(input.fetch, input.onProgress, totalBytes),
       })
-    )?.size
-  if (totalBytes === undefined) throw new Error(`Cannot get path info for ${input.path}.`)
+      await input.onProgress(totalBytes)
+      return cachedPath
+    } catch (error) {
+      lastError = error
+      if (!isRetryableDownloadError(error) || attempt === HUGGING_FACE_DOWNLOAD_RETRY_COUNT) {
+        throw error
+      }
+      await delay(HUGGING_FACE_DOWNLOAD_RETRY_DELAY_MS * (attempt + 1))
+    }
+  }
 
-  const cachedPath = await downloadFileToCacheDir({
-    repo: input.repo,
-    path: input.path,
-    revision,
-    hubUrl: input.hubUrl,
-    cacheDir: input.cacheDir,
-    fetch: createProgressFetch(input.fetch, input.onProgress, totalBytes),
-  })
-  await input.onProgress(totalBytes)
-  return cachedPath
+  throw lastError instanceof Error ? lastError : new Error(`Cannot download ${input.path}.`)
 }
 
 function createProgressFetch(
@@ -1029,6 +1046,29 @@ function createProgressReadableStream(
       return reader.cancel(reason)
     },
   })
+}
+
+function isRetryableDownloadError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  if (error.name === 'AbortError') return false
+  const cause = 'cause' in error ? error.cause : undefined
+  if (cause instanceof Error) {
+    if (cause.name === 'AbortError') return false
+    const causeMessage = cause.message.toLowerCase()
+    return cause.name.endsWith('TimeoutError') || causeMessage.includes('timeout')
+  }
+  const message = error.message.toLowerCase()
+  return (
+    message.includes('fetch failed') ||
+    message.includes('timeout') ||
+    message.includes('socket hang up') ||
+    message.includes('econnreset') ||
+    message.includes('terminated')
+  )
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 async function mirrorHubCacheFileForTransformers(input: {

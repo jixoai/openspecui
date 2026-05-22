@@ -35,6 +35,8 @@
       "@openspecui/search": ["../search/src/index.ts"],
       "@openspecui/search/node": ["../search/src/node.ts"],
       "@openspecui/browser-translator": ["../browser-translator/src/index.ts"],
+      "@openspecui/local-translator": ["../local-translator/src/index.ts"],
+      "@openspecui/openai-completion-translator": ["../openai-completion-translator/src/index.ts"],
       "@openspecui/ai-provider": ["../ai-provider/src/index.ts"],
       "xterm-input-panel": ["../xterm-input-panel/src/index.ts"]
     }

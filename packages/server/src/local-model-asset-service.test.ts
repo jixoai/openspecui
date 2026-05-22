@@ -238,6 +238,70 @@ describe('LocalModelAssetService', () => {
     )
     await waitForDownloadedState(indexPath)
   })
+
+  it('retries retryable Hugging Face download failures before marking the model as failed', async () => {
+    let encoderAttempts = 0
+    hubMock.downloadFileToCacheDir.mockImplementation(
+      async (input: { path: string; fetch?: typeof fetch; cacheDir?: string }) => {
+        if (input.path === 'onnx/encoder_model_q4.onnx') {
+          encoderAttempts += 1
+          if (encoderAttempts === 1) {
+            throw new TypeError('fetch failed')
+          }
+        }
+        return writeMockHubCacheFile(input, [new Uint8Array(10)])
+      }
+    )
+
+    const service = new LocalModelAssetService({
+      projectDir: tempDir,
+      configManager: {} as ConfigManager,
+      globalSettingsManager: {
+        readSettings: async () => ({
+          translationEngines: {
+            local: {
+              model: 'onnx-community/opus-mt-en-zh',
+              selectedGroupId: 'q4',
+              hfEndpoint: 'https://hf-mirror.com/',
+            },
+          },
+        }),
+      },
+      now: () => 100,
+      indexPath,
+      cacheDir,
+      fetchCachePath,
+    }) as TestableLocalModelAssetService
+    vi.spyOn(service, 'getTransformersModule').mockResolvedValue({
+      env: {
+        cacheDir: null,
+        allowLocalModels: false,
+        localModelPath: '',
+      },
+      ModelRegistry: {
+        get_pipeline_files: vi.fn(async () => [
+          'onnx/encoder_model_q4.onnx',
+          'onnx/decoder_model_merged_q4.onnx',
+        ]),
+        is_pipeline_cached_files: vi.fn(async () => ({
+          allCached: false,
+          files: [
+            { file: 'onnx/encoder_model_q4.onnx', cached: false },
+            { file: 'onnx/decoder_model_merged_q4.onnx', cached: false },
+          ],
+        })),
+        get_file_metadata: vi.fn(),
+        clear_cache: vi.fn(),
+      },
+    })
+
+    await service.startDownload('onnx-community/opus-mt-en-zh', 'q4')
+    await waitForDownloadedState(indexPath)
+
+    expect(encoderAttempts).toBe(2)
+    const state = (await new LocalModelAssetStore({ indexPath }).readAll())[0]
+    expect(state?.status).toBe('downloaded')
+  })
 })
 
 async function waitForDownloadedState(indexPath: string): Promise<void> {

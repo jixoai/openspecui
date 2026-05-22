@@ -28,6 +28,7 @@ import { selectLocalDownloadGroup } from '@openspecui/core/local-download-profil
 import {
   TRANSLATION_ENGINE_IDS,
   getTranslationEngineManifest,
+  type LocalModelAssetLog,
   type LocalModelAssetState,
   type LocalModelCatalogItem,
   type TranslationDownloadGroupPlan,
@@ -97,7 +98,9 @@ function getBrowserSupportRows(
   return state?.table?.rows ?? []
 }
 
-function getBrowserPairKey(row: Pick<BrowserTranslationAvailabilityRow, 'sourceLanguage' | 'targetLanguage'>): string {
+function getBrowserPairKey(
+  row: Pick<BrowserTranslationAvailabilityRow, 'sourceLanguage' | 'targetLanguage'>
+): string {
   return `${row.sourceLanguage}->${row.targetLanguage}`
 }
 
@@ -115,6 +118,13 @@ function getBrowserPairDescription(row: BrowserTranslationAvailabilityRow): stri
 
 function getBrowserSupportMessage(state: BrowserTranslationSupportTableState | null): string {
   if (!state) return 'Browser translation support has not been checked yet.'
+  return state.message ?? 'Browser translation support is unavailable.'
+}
+
+function getBrowserCapabilityMessage(state: BrowserTranslationSupportTableState | null): string {
+  if (!state) return 'Browser translation support has not been checked yet.'
+  if (state.state === 'checking') return 'Checking browser translation support.'
+  if (state.state === 'ready') return 'Browser translation support is available.'
   return state.message ?? 'Browser translation support is unavailable.'
 }
 
@@ -196,9 +206,9 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const [browserSupportTable, setBrowserSupportTable] =
     useState<BrowserTranslationSupportTableState | null>(null)
   const [browserSelectedPairKey, setBrowserSelectedPairKey] = useState<string | null>(null)
-  const [browserPreparingSourceLanguage, setBrowserPreparingSourceLanguage] = useState<string | null>(
-    null
-  )
+  const [browserPreparingSourceLanguage, setBrowserPreparingSourceLanguage] = useState<
+    string | null
+  >(null)
   const [aiBaseUrl, setAiBaseUrl] = useState('')
   const [aiToken, setAiToken] = useState('')
   const [aiModel, setAiModel] = useState('gpt-4.1-mini')
@@ -212,7 +222,10 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const [nmtRemoteOptions, setNmtRemoteOptions] = useState<LocalModelCatalogItem[]>([])
   const [nmtRemoteLoading, setNmtRemoteLoading] = useState(false)
   const [localSelectedState, setLocalSelectedState] = useState<LocalModelAssetState | null>(null)
-  const [localDownloadPlan, setLocalDownloadPlan] = useState<TranslationModelDownloadPlan | null>(null)
+  const [localDownloadPlan, setLocalDownloadPlan] = useState<TranslationModelDownloadPlan | null>(
+    null
+  )
+  const [localDownloadLog, setLocalDownloadLog] = useState<LocalModelAssetLog | null>(null)
   const [localPlanLoading, setLocalPlanLoading] = useState(false)
   const [localPlanError, setLocalPlanError] = useState<string | null>(null)
   const [translationTestOpen, setTranslationTestOpen] = useState(false)
@@ -280,6 +293,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     const trimmedModel = nmtModel.trim()
     if (!trimmedModel) {
       setLocalDownloadPlan(null)
+      setLocalDownloadLog(null)
       setLocalSelectedState(null)
       setLocalPlanLoading(false)
       setLocalPlanError(null)
@@ -416,19 +430,35 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     if (inStaticMode) return
     const nmtSubscription = trpcClient.localModels.subscribeLogs.subscribe(undefined, {
       onData: (log) => {
-        if (log.modelId === nmtModel.trim()) {
-          void trpcClient.localModels.state
-            .query({ modelId: log.modelId, selectedGroupId: nmtSelectedGroupId })
-            .then((state) => setLocalSelectedState(state))
-            .catch(() => undefined)
+        const trimmedModel = nmtModel.trim()
+        if (log.modelId !== trimmedModel) return
+        if (
+          nmtSelectedGroupId &&
+          log.selectedGroupId &&
+          log.selectedGroupId !== nmtSelectedGroupId
+        ) {
+          return
         }
+        setLocalPlanLoading(false)
+        setLocalPlanError(log.status === 'error' ? log.message : null)
+        setLocalDownloadLog(log)
+        setLocalDownloadPlan((current) =>
+          mergeLocalPlanSnapshots(current, createLocalPlanFromAssetLog(log))
+        )
+        setLocalSelectedState((current) =>
+          buildLocalModelStateFromLog({
+            current,
+            log,
+            plan: localDownloadPlan,
+          })
+        )
       },
       onError: () => undefined,
     })
     return () => {
       nmtSubscription.unsubscribe()
     }
-  }, [inStaticMode, nmtModel, nmtSelectedGroupId])
+  }, [inStaticMode, localDownloadPlan, nmtModel, nmtSelectedGroupId])
 
   useEffect(() => {
     if (translationEngineId !== 'local') {
@@ -436,6 +466,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
       setNmtLocalLoaded(false)
       setNmtRemoteOptions([])
       setNmtRemoteLoading(false)
+      setLocalDownloadLog(null)
       setLocalPlanLoading(false)
     }
   }, [translationEngineId])
@@ -581,10 +612,13 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     [browserRows, browserSelectedPairKey]
   )
   const browserStatusIconState = getBrowserStatusIconState(browserSupportTable)
+  const browserSupportMessage = getBrowserSupportMessage(browserSupportTable)
   const engineStatusMessage =
     effectiveTranslationEngineId === 'browser'
-      ? getBrowserSupportMessage(browserSupportTable)
-      : (selectedEngine?.message ?? selectedEngine?.description ?? selectedEngineManifest?.description)
+      ? getBrowserCapabilityMessage(browserSupportTable)
+      : (selectedEngine?.message ??
+        selectedEngine?.description ??
+        selectedEngineManifest?.description)
   const browserRowActionKind = getBrowserRowActionKind({
     row: selectedBrowserRow,
     activeSourceLanguage: browserPreparingSourceLanguage,
@@ -631,6 +665,14 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     plan: localDownloadPlan,
     selectedGroupId: effectiveLocalSelectedGroupId,
   })
+  const selectedLocalDownloadLog =
+    localDownloadLog?.modelId === nmtModelId &&
+    (!effectiveLocalSelectedGroupId ||
+      !localDownloadLog.selectedGroupId ||
+      localDownloadLog.selectedGroupId === effectiveLocalSelectedGroupId)
+      ? localDownloadLog
+      : null
+  const localDownloadStatusMessage = getLocalDownloadStatusMessage(selectedLocalDownloadLog)
   const nmtProgressPercent =
     displayedLocalAsset?.progress === undefined
       ? undefined
@@ -938,17 +980,6 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                     </span>
                   </div>
                 </div>
-                {effectiveTranslationEngineId === 'browser' ? (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => void refreshBrowserSupportTable(translationTargetLanguage)}
-                    disabled={browserCheckLoading}
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    Check
-                  </Button>
-                ) : null}
               </div>
             </div>
           </div>
@@ -1007,22 +1038,48 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
             <div className="space-y-3 text-xs">
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <label className="block text-sm font-medium">Browser language pairs</label>
-                </div>
-                {browserSupportTable?.state === 'checking' && browserRows.length === 0 ? (
-                  <div className="text-muted-foreground flex items-center gap-2 text-[11px] leading-5">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    {engineStatusMessage}
+                  <div className="min-w-0 space-y-1">
+                    <label className="block text-sm font-medium">Browser language pairs</label>
+                    <div className="text-muted-foreground flex min-w-0 items-center gap-2 text-[11px] leading-5">
+                      {browserSupportTable?.state === 'checking' ? (
+                        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                      ) : null}
+                      <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">
+                        {browserSupportMessage}
+                      </span>
+                    </div>
                   </div>
-                ) : null}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => void refreshBrowserSupportTable(translationTargetLanguage)}
+                    disabled={browserCheckLoading}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Check
+                  </Button>
+                </div>
                 {browserRows.length > 0 ? (
                   <div
                     className="flex flex-wrap gap-1.5 pt-1"
                     aria-label="Browser translation language pairs"
                   >
                     {browserRows.map((row) => {
-                      const selected = getBrowserPairKey(row) === getBrowserPairKey(selectedBrowserRow ?? row)
+                      const selected =
+                        getBrowserPairKey(row) === getBrowserPairKey(selectedBrowserRow ?? row)
                       const locallyAvailable = row.availability === 'available'
+                      const downloading = row.availability === 'downloading'
+                      const chipToneClass = locallyAvailable
+                        ? selected
+                          ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                          : 'border-emerald-500/70 text-emerald-700 hover:bg-emerald-500/8 dark:text-emerald-400'
+                        : downloading
+                          ? selected
+                            ? 'border-sky-500 bg-sky-500/10 text-sky-700 dark:text-sky-400'
+                            : 'border-sky-500/70 text-sky-700 hover:bg-sky-500/8 dark:text-sky-400'
+                          : selected
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-muted-foreground hover:bg-muted/60'
                       return (
                         <button
                           key={getBrowserPairKey(row)}
@@ -1030,11 +1087,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                           onClick={() => setBrowserSelectedPairKey(getBrowserPairKey(row))}
                           className={`border-border inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-[11px] leading-none transition-colors ${
                             locallyAvailable ? 'border-solid' : 'border-dashed'
-                          } ${
-                            selected
-                              ? 'bg-primary/10 text-primary'
-                              : 'text-muted-foreground hover:bg-muted/60'
-                          }`}
+                          } ${chipToneClass}`}
                           title={getBrowserPairDescription(row)}
                         >
                           <span className="font-medium">{getBrowserPairLabel(row)}</span>
@@ -1042,12 +1095,10 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                       )
                     })}
                   </div>
-                ) : browserSupportTable?.state === 'error' || browserSupportTable?.state === 'unavailable' || browserSupportTable?.state === 'missing' ? (
-                  <div className="text-muted-foreground leading-5">{engineStatusMessage}</div>
                 ) : null}
               </div>
               {selectedBrowserRow ? (
-                <div className="border-border rounded-md border bg-muted/30 px-3 py-2 text-xs">
+                <div className="border-border bg-muted/30 rounded-md border px-3 py-2 text-xs">
                   <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
                     <div className="text-foreground flex min-w-0 items-center gap-2 font-medium">
                       <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">
@@ -1068,7 +1119,9 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                           cy="20"
                           r="16"
                           className={`fill-none transition-all ${
-                            browserRowActionKind === 'downloaded' ? 'stroke-emerald-500' : 'stroke-primary'
+                            browserRowActionKind === 'downloaded'
+                              ? 'stroke-emerald-500'
+                              : 'stroke-primary'
                           }`}
                           strokeWidth="3"
                           strokeDasharray={100.531}
@@ -1195,6 +1248,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
               <LocalDownloadFilesCard
                 plan={localDownloadPlan}
                 state={displayedLocalAsset}
+                statusMessage={localDownloadStatusMessage}
                 selectedGroupId={effectiveLocalSelectedGroupId}
                 progressPercent={nmtProgressPercent}
                 loading={localPlanLoading}
@@ -1976,6 +2030,20 @@ function createLocalPlanFromAssetState(
   }
 }
 
+function createLocalPlanFromAssetLog(log: LocalModelAssetLog): TranslationModelDownloadPlan | null {
+  if (!log.files || log.files.length === 0) return null
+  return {
+    modelId: log.modelId,
+    estimatedTotalBytes: log.totalBytes,
+    selectedGroupId: log.selectedGroupId,
+    files: log.files.map((file) => ({
+      path: file.path,
+      sizeBytes: file.sizeBytes,
+      required: true,
+    })),
+  }
+}
+
 function mergeLocalPlanSnapshots(
   current: TranslationModelDownloadPlan | null,
   next: TranslationModelDownloadPlan | null
@@ -1993,6 +2061,46 @@ function mergeLocalPlanSnapshots(
       nextGroups.length > 0
         ? [...nextGroups, ...currentGroups.filter((group) => !nextGroupIds.has(group.id))]
         : current.groups,
+  }
+}
+
+function buildLocalModelStateFromLog(input: {
+  current: LocalModelAssetState | null
+  log: LocalModelAssetLog
+  plan: TranslationModelDownloadPlan | null
+}): LocalModelAssetState {
+  const fallbackPlan = createLocalPlanFromAssetLog(input.log)
+  return {
+    modelId: input.log.modelId,
+    status: input.log.status,
+    selected: input.current?.selected ?? true,
+    installedAt:
+      input.log.status === 'downloaded'
+        ? (input.current?.installedAt ?? input.log.updatedAt)
+        : input.current?.installedAt,
+    updatedAt: input.log.updatedAt,
+    bytesDownloaded: input.log.bytesDownloaded,
+    totalBytes: input.log.totalBytes,
+    progress: input.log.progress,
+    resumable: input.log.resumable ?? input.current?.resumable ?? false,
+    error: input.log.status === 'error' ? input.log.message : undefined,
+    plan: input.current?.plan ?? input.plan ?? fallbackPlan ?? undefined,
+    files: input.log.files ?? input.current?.files ?? [],
+  }
+}
+
+function getLocalDownloadStatusMessage(log: LocalModelAssetLog | null): string | null {
+  if (!log) return null
+  switch (log.status) {
+    case 'queued':
+    case 'downloading':
+    case 'paused':
+    case 'deleting':
+    case 'error':
+      return log.message
+    case 'downloaded':
+    case 'not-downloaded':
+      return null
   }
 }
 
@@ -2138,6 +2246,7 @@ function deriveLocalGroupAssetState(input: {
 function LocalDownloadFilesCard({
   plan,
   state,
+  statusMessage,
   selectedGroupId,
   progressPercent,
   loading,
@@ -2151,6 +2260,7 @@ function LocalDownloadFilesCard({
 }: {
   plan: TranslationModelDownloadPlan | null
   state: LocalModelAssetState | null
+  statusMessage: string | null
   selectedGroupId?: string
   progressPercent: number | undefined
   loading: boolean
@@ -2334,37 +2444,42 @@ function LocalDownloadFilesCard({
             <XCircle className="h-3.5 w-3.5 shrink-0" />
             <span>{error}</span>
           </div>
-        ) : displayFiles.length > 0 ? (
-          <>
-            <ul className="scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[color-mix(in_srgb,currentColor,transparent_78%)] text-muted-foreground mt-2 max-h-48 space-y-1 overflow-y-auto pr-1">
-              {displayFiles.map((file) => {
-                const sizeBytes = file.sizeBytes
-                const downloadedBytes =
-                  'downloadedBytes' in file
-                    ? (file.downloadedBytes ??
-                      (isDownloaded && sizeBytes !== undefined
-                        ? sizeBytes
-                        : sizeBytes !== undefined
-                          ? 0
-                          : undefined))
-                    : undefined
-                return (
-                  <li key={file.path} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
-                    <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">
-                      {file.path}
-                    </span>
-                    <span className="shrink-0">
-                      {downloadedBytes !== undefined || sizeBytes !== undefined
-                        ? `${formatByteSize(downloadedBytes)} / ${formatByteSize(sizeBytes)}`
-                        : 'Pending'}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-          </>
         ) : (
-          <div className="text-muted-foreground mt-2">No runtime download plan available.</div>
+          <>
+            {statusMessage ? (
+              <div className="text-muted-foreground mt-2 leading-5">{statusMessage}</div>
+            ) : null}
+            {displayFiles.length > 0 ? (
+              <ul className="scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[color-mix(in_srgb,currentColor,transparent_78%)] text-muted-foreground mt-2 max-h-48 space-y-1 overflow-y-auto pr-1">
+                {displayFiles.map((file) => {
+                  const sizeBytes = file.sizeBytes
+                  const downloadedBytes =
+                    'downloadedBytes' in file
+                      ? (file.downloadedBytes ??
+                        (isDownloaded && sizeBytes !== undefined
+                          ? sizeBytes
+                          : sizeBytes !== undefined
+                            ? 0
+                            : undefined))
+                      : undefined
+                  return (
+                    <li key={file.path} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
+                      <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">
+                        {file.path}
+                      </span>
+                      <span className="shrink-0">
+                        {downloadedBytes !== undefined || sizeBytes !== undefined
+                          ? `${formatByteSize(downloadedBytes)} / ${formatByteSize(sizeBytes)}`
+                          : 'Pending'}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : (
+              <div className="text-muted-foreground mt-2">No runtime download plan available.</div>
+            )}
+          </>
         )}
       </div>
     </div>

@@ -3,10 +3,10 @@ import {
   prepareBrowserTranslator,
   probeBrowserTranslator,
   scanBrowserTranslationSupportTable,
-  type BrowserTranslationAvailabilityRow,
-  type BrowserTranslationSupportTable,
   type BrowserTranslationAvailability,
+  type BrowserTranslationAvailabilityRow,
   type BrowserTranslationStatus,
+  type BrowserTranslationSupportTable,
 } from '@openspecui/browser-translator'
 import {
   TRANSLATION_CACHE_POLICY_VERSION,
@@ -145,14 +145,9 @@ const DEFAULT_SOURCE_LANGUAGE = 'en'
 const DOCUMENT_LANGUAGE_CONFIDENCE_THRESHOLD = 0.45
 const SEGMENT_LANGUAGE_CONFIDENCE_THRESHOLD = 0.62
 const TRANSLATION_DISPLAY_POLICY_VERSION = TRANSLATION_CACHE_POLICY_VERSION
-const BROWSER_ROW_SORT_ORDER: Record<BrowserTranslationAvailability, number> = {
-  available: 0,
-  downloading: 1,
-  downloadable: 2,
-  error: 3,
-  missing: 4,
-  unavailable: 5,
-}
+const BROWSER_SOURCE_LANGUAGE_ORDER = new Map(
+  SUPPORTED_TRANSLATION_LANGUAGES.map((language, index) => [language.code, index] as const)
+)
 
 export function isBrowserTranslationSupported(): boolean {
   return (
@@ -359,7 +354,8 @@ export async function scanBrowserTranslationPairs(
     const nextState: BrowserTranslationSupportTableState = {
       state: 'error',
       table: null,
-      message: error instanceof Error ? error.message : 'Unable to check browser translation pairs.',
+      message:
+        error instanceof Error ? error.message : 'Unable to check browser translation pairs.',
     }
     browserSupportTableCache.set(targetKey, nextState)
     return nextState
@@ -466,10 +462,7 @@ function mergeBrowserSupportRows(
       candidate.sourceLanguage !== normalizedRow.sourceLanguage ||
       candidate.targetLanguage !== normalizedRow.targetLanguage
   )
-  if (
-    normalizedRow.availability !== 'unavailable' &&
-    normalizedRow.availability !== 'missing'
-  ) {
+  if (normalizedRow.availability !== 'unavailable' && normalizedRow.availability !== 'missing') {
     nextRows.push(normalizedRow)
   }
   return sortBrowserSupportRows(nextRows)
@@ -479,9 +472,13 @@ function sortBrowserSupportRows(
   rows: readonly BrowserTranslationAvailabilityRow[]
 ): BrowserTranslationAvailabilityRow[] {
   return [...rows].sort((left, right) => {
-    const availabilityDelta =
-      BROWSER_ROW_SORT_ORDER[left.availability] - BROWSER_ROW_SORT_ORDER[right.availability]
-    if (availabilityDelta !== 0) return availabilityDelta
+    const leftOrder =
+      BROWSER_SOURCE_LANGUAGE_ORDER.get(left.sourceLanguage) ?? Number.MAX_SAFE_INTEGER
+    const rightOrder =
+      BROWSER_SOURCE_LANGUAGE_ORDER.get(right.sourceLanguage) ?? Number.MAX_SAFE_INTEGER
+    if (leftOrder !== rightOrder) return leftOrder - rightOrder
+    const targetDelta = left.targetLanguage.localeCompare(right.targetLanguage)
+    if (targetDelta !== 0) return targetDelta
     return left.sourceLanguage.localeCompare(right.sourceLanguage)
   })
 }

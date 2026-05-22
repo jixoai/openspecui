@@ -1,4 +1,5 @@
 import { TRANSLATION_CACHE_POLICY_VERSION } from '@openspecui/core/document-translation'
+import { TRANSLATOR_CONTRACT_VERSION } from '@openspecui/core/translator'
 import type { Element, RootContent } from 'hast'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -213,7 +214,7 @@ Open https://example.com/docs before editing \`Config\`.
         attributeTopologyHash: segment.attributeTopologyHash ?? '',
         displayPolicyVersion: segment.displayPolicyVersion ?? TRANSLATION_CACHE_POLICY_VERSION,
         engineId: 'browser',
-        translatorContractVersion: 1,
+        translatorContractVersion: TRANSLATOR_CONTRACT_VERSION,
         createdAt: 1,
         lastAccessedAt: 1,
       })),
@@ -538,7 +539,7 @@ Open https://example.com/docs before editing \`Config\`.
     })
 
     await expect(
-      prepareBrowserTranslation('zh', new AbortController().signal)
+      prepareBrowserTranslation('zh', { signal: new AbortController().signal })
     ).resolves.toMatchObject({ availability: 'available' })
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -565,15 +566,15 @@ Open https://example.com/docs before editing \`Config\`.
     })
 
     const controller = new AbortController()
-    const pending = prepareBrowserTranslation('zh', controller.signal)
+    const pending = prepareBrowserTranslation('zh', { signal: controller.signal })
     controller.abort()
 
     expect(() => monitor.dispatchEvent(new Event('downloadprogress'))).not.toThrow()
 
     resolveCreate?.({ translate: async (input: string) => input, destroy: vi.fn() })
     await expect(pending).resolves.toMatchObject({
-      availability: 'downloading',
-      message: 'Translation initialization was cancelled.',
+      availability: 'downloadable',
+      message: 'Browser translation download was cancelled.',
     })
   })
 })
@@ -595,7 +596,8 @@ function createExpectedCacheKey(options: {
     engineId: 'browser',
     engineVersion: undefined,
     model: undefined,
-    translatorContractVersion: 1,
+    selectedGroupId: undefined,
+    translatorContractVersion: TRANSLATOR_CONTRACT_VERSION,
   })
 }
 

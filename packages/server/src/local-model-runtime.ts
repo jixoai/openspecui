@@ -124,21 +124,33 @@ async function readHuggingFaceRepositoryFiles(input: {
   hubUrl: string
   fetchCacheStore?: LocalModelFetchCacheStore
 }): Promise<Array<{ path: string; sizeBytes?: number }>> {
-  const files: Array<{ path: string; sizeBytes?: number }> = []
-  for await (const entry of listFiles({
-    repo: { type: 'model', name: input.modelId },
-    recursive: true,
-    expand: true,
-    hubUrl: input.hubUrl,
-    fetch: input.fetchCacheStore ? createProviderFetchCache(input.fetchCacheStore) : undefined,
-  })) {
-    if (entry.type !== 'file') continue
-    files.push({
-      path: entry.path,
-      sizeBytes: entry.lfs?.size ?? entry.size,
-    })
+  let lastError: unknown
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const files: Array<{ path: string; sizeBytes?: number }> = []
+      for await (const entry of listFiles({
+        repo: { type: 'model', name: input.modelId },
+        recursive: true,
+        expand: true,
+        hubUrl: input.hubUrl,
+        fetch: input.fetchCacheStore ? createProviderFetchCache(input.fetchCacheStore) : undefined,
+      })) {
+        if (entry.type !== 'file') continue
+        files.push({
+          path: entry.path,
+          sizeBytes: entry.lfs?.size ?? entry.size,
+        })
+      }
+      if (files.length > 0) return files
+      lastError = new Error(`No repository files were returned for ${input.modelId}.`)
+    } catch (error) {
+      lastError = error
+    }
+    if (attempt < 2) await delay(300 * (attempt + 1))
   }
-  return files
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Unable to read repository files for ${input.modelId}.`)
 }
 
 function createProviderFetchCache(fetchCacheStore: LocalModelFetchCacheStore): typeof fetch {
@@ -165,6 +177,10 @@ function normalizeRequestUrl(input: RequestInfo | URL): string {
 
 function headersToRecord(headers: Headers): Record<string, string> {
   return Object.fromEntries(headers.entries())
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 async function loadLocalTransformersModule(
