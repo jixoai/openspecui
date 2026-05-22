@@ -179,6 +179,57 @@ describe('translation-model-catalog', () => {
     }
   })
 
+  it('falls back to cached Hugging Face detail raw data when repository file listing fails', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-nmt-fetch-cache-fallback-'))
+    try {
+      const fetchCacheStore = new LocalModelFetchCacheStore({
+        cachePath: join(tempDir, 'fetch-cache.json'),
+        now: () => 123,
+      })
+      await fetchCacheStore.upsertDetail({
+        modelId: 'Xenova/opus-mt-en-de',
+        raw: {
+          id: 'Xenova/opus-mt-en-de',
+          siblings: [
+            { rfilename: 'config.json', size: 1_500 },
+            { rfilename: 'onnx/encoder_model_q4.onnx', size: 35_000_000 },
+            { rfilename: 'onnx/decoder_model_merged_q4.onnx', size: 56_000_000 },
+          ],
+        },
+      })
+      globalThis.fetch = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('fetch failed'))
+
+      const { resolveLocalModelRuntimePlan } = await import('./local-model-runtime.js')
+      const plan = await resolveLocalModelRuntimePlan({
+        modelId: 'Xenova/opus-mt-en-de',
+        transformers: {
+          env: { cacheDir: null, allowLocalModels: false, localModelPath: '' },
+          ModelRegistry: {
+            get_pipeline_files: vi.fn(),
+            is_pipeline_cached_files: vi.fn(),
+            get_file_metadata: vi.fn(),
+          },
+        },
+        cacheDir: join(tempDir, 'cache'),
+        selectedGroupId: 'q4',
+        fetchCacheStore,
+      })
+
+      expect(plan).toMatchObject({
+        modelId: 'Xenova/opus-mt-en-de',
+        selectedGroupId: 'q4',
+        estimatedTotalBytes: 91_001_500,
+      })
+      expect(plan?.files.map((file) => file.path)).toEqual([
+        'config.json',
+        'onnx/encoder_model_q4.onnx',
+        'onnx/decoder_model_merged_q4.onnx',
+      ])
+    } finally {
+      await rm(tempDir, { recursive: true, force: true })
+    }
+  })
+
   it('uses configured Hugging Face-compatible endpoint for catalog fetches', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()

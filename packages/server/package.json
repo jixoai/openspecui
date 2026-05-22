@@ -41,6 +41,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@trpc/client": "^11.7.2",
     "@types/node": "^22.10.2",
     "@types/ws": "^8.5.13",
     "@types/yargs": "^17.0.35",

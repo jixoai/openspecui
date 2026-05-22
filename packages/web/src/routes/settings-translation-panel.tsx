@@ -237,6 +237,9 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const [smokeError, setSmokeError] = useState<string | null>(null)
   const [smokeRunning, setSmokeRunning] = useState(false)
   const browserPrepareControllerRef = useRef<AbortController | null>(null)
+  const localDownloadPlanRef = useRef<TranslationModelDownloadPlan | null>(null)
+  const nmtModelRef = useRef(nmtModel)
+  const nmtSelectedGroupIdRef = useRef<string | undefined>(nmtSelectedGroupId)
 
   useEffect(() => {
     if (!config) return
@@ -289,6 +292,18 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   ])
 
   useEffect(() => {
+    nmtModelRef.current = nmtModel
+  }, [nmtModel])
+
+  useEffect(() => {
+    nmtSelectedGroupIdRef.current = nmtSelectedGroupId
+  }, [nmtSelectedGroupId])
+
+  useEffect(() => {
+    localDownloadPlanRef.current = localDownloadPlan
+  }, [localDownloadPlan])
+
+  useEffect(() => {
     if (translationEngineId !== 'local') return
     const trimmedModel = nmtModel.trim()
     if (!trimmedModel) {
@@ -305,17 +320,24 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     const localPlan = localAsset
       ? createLocalPlanFromAssetState(localAsset, nmtSelectedGroupId)
       : null
+    const localAssetMatchesSelectedGroup = localAsset
+      ? matchesSelectedLocalGroupTruth(localAsset, nmtSelectedGroupId)
+      : false
     if (localAsset) {
       setLocalSelectedState(localAsset)
       setLocalDownloadPlan(localPlan)
-      setLocalPlanLoading(false)
-      return
+      if (localAssetMatchesSelectedGroup) {
+        setLocalPlanLoading(false)
+        return
+      }
     }
 
     if (!nmtLocalLoaded) {
       setLocalPlanLoading(true)
-      setLocalSelectedState(null)
-      setLocalDownloadPlan(null)
+      if (!localAsset) {
+        setLocalSelectedState(null)
+        setLocalDownloadPlan(null)
+      }
       return
     }
 
@@ -430,26 +452,30 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     if (inStaticMode) return
     const nmtSubscription = trpcClient.localModels.subscribeLogs.subscribe(undefined, {
       onData: (log) => {
-        const trimmedModel = nmtModel.trim()
+        const trimmedModel = nmtModelRef.current.trim()
         if (log.modelId !== trimmedModel) return
+        const activeSelectedGroupId = nmtSelectedGroupIdRef.current
         if (
-          nmtSelectedGroupId &&
+          activeSelectedGroupId &&
           log.selectedGroupId &&
-          log.selectedGroupId !== nmtSelectedGroupId
+          log.selectedGroupId !== activeSelectedGroupId
         ) {
           return
         }
+        const mergedPlan = mergeLocalPlanSnapshots(
+          localDownloadPlanRef.current,
+          createLocalPlanFromAssetLog(log)
+        )
+        localDownloadPlanRef.current = mergedPlan
         setLocalPlanLoading(false)
         setLocalPlanError(log.status === 'error' ? log.message : null)
         setLocalDownloadLog(log)
-        setLocalDownloadPlan((current) =>
-          mergeLocalPlanSnapshots(current, createLocalPlanFromAssetLog(log))
-        )
+        setLocalDownloadPlan(mergedPlan)
         setLocalSelectedState((current) =>
           buildLocalModelStateFromLog({
             current,
             log,
-            plan: localDownloadPlan,
+            plan: mergedPlan,
           })
         )
       },
@@ -458,7 +484,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     return () => {
       nmtSubscription.unsubscribe()
     }
-  }, [inStaticMode, localDownloadPlan, nmtModel, nmtSelectedGroupId])
+  }, [inStaticMode])
 
   useEffect(() => {
     if (translationEngineId !== 'local') {
@@ -1937,13 +1963,36 @@ function LocalDownloadGroupSelector({
     return loadingIndicator
   }
 
+  const fileUsageCount = new Map<string, number>()
+  for (const group of groups) {
+    for (const file of group.files) {
+      fileUsageCount.set(file.path, (fileUsageCount.get(file.path) ?? 0) + 1)
+    }
+  }
+
   return (
     <>
       {loadingIndicator}
       <div className="flex flex-wrap gap-1.5 pt-1" aria-label="Local download profiles">
         {groups.map((group) => {
           const selected = group.id === selectedGroupId
-          const locallyAvailable = isLocalDownloadGroupLocallyAvailable(group, asset)
+          const chipState = getLocalDownloadGroupChipState(group, asset, {
+            activeSelectedGroupId: selectedGroupId,
+            fileUsageCount,
+          })
+          const locallyAvailable = chipState === 'downloaded'
+          const partiallyDownloaded = chipState === 'partial'
+          const chipToneClass = locallyAvailable
+            ? selected
+              ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+              : 'border-emerald-500/70 text-emerald-700 hover:bg-emerald-500/8 dark:text-emerald-400'
+            : partiallyDownloaded
+              ? selected
+                ? 'border-sky-500 bg-sky-500/10 text-sky-700 dark:text-sky-400'
+                : 'border-sky-500/70 text-sky-700 hover:bg-sky-500/8 dark:text-sky-400'
+              : selected
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:bg-muted/60'
           return (
             <button
               key={group.id}
@@ -1952,9 +2001,7 @@ function LocalDownloadGroupSelector({
               onClick={() => onSelectGroup(group.id)}
               className={`border-border inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-[11px] leading-none transition-colors ${
                 locallyAvailable ? 'border-solid' : 'border-dashed'
-              } ${
-                selected ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted/60'
-              } disabled:cursor-not-allowed disabled:opacity-50`}
+              } ${chipToneClass} disabled:cursor-not-allowed disabled:opacity-50`}
             >
               <span className="font-medium">{group.label}</span>
               <span>{formatByteSize(group.estimatedTotalBytes)}</span>
@@ -1966,13 +2013,19 @@ function LocalDownloadGroupSelector({
   )
 }
 
-function isLocalDownloadGroupLocallyAvailable(
+type LocalDownloadGroupChipState = 'downloaded' | 'partial' | 'not-started'
+
+function getLocalDownloadGroupChipState(
   group: TranslationDownloadGroupPlan,
-  asset: LocalModelAssetState | null
-): boolean {
-  if (!asset || group.files.length === 0) return false
+  asset: LocalModelAssetState | null,
+  options: {
+    activeSelectedGroupId?: string
+    fileUsageCount: ReadonlyMap<string, number>
+  }
+): LocalDownloadGroupChipState {
+  if (!asset || group.files.length === 0) return 'not-started'
   const localFileByPath = new Map(asset.files.map((file) => [file.path, file]))
-  return group.files.every((file) => {
+  const allCached = group.files.every((file) => {
     const localFile = localFileByPath.get(file.path)
     return (
       file.sizeBytes !== undefined &&
@@ -1980,6 +2033,23 @@ function isLocalDownloadGroupLocallyAvailable(
       localFile.downloadedBytes >= file.sizeBytes
     )
   })
+  if (allCached) return 'downloaded'
+
+  const hasPartialBytes = group.files.some((file) => {
+    const downloadedBytes = localFileByPath.get(file.path)?.downloadedBytes ?? 0
+    return downloadedBytes > 0 && (options.fileUsageCount.get(file.path) ?? 0) <= 1
+  })
+  const activeGroupId = asset.plan?.selectedGroupId ?? options.activeSelectedGroupId
+  const matchesActiveGroup =
+    group.id === activeGroupId &&
+    (asset.status === 'queued' ||
+      asset.status === 'downloading' ||
+      asset.status === 'paused' ||
+      asset.status === 'error' ||
+      asset.status === 'deleting')
+  if (hasPartialBytes || matchesActiveGroup) return 'partial'
+
+  return 'not-started'
 }
 
 function findLocalModelAssetSnapshot(
@@ -1998,6 +2068,18 @@ function hasLocalModelAssetTruth(state: LocalModelAssetState): boolean {
     return state.files.length > 0 || Boolean(state.plan)
   }
   return false
+}
+
+function matchesSelectedLocalGroupTruth(
+  state: LocalModelAssetState,
+  selectedGroupId?: string
+): boolean {
+  if (!selectedGroupId) return true
+  const plan = state.plan
+  if (!plan?.groups?.length) {
+    return plan?.selectedGroupId === selectedGroupId
+  }
+  return plan.selectedGroupId === selectedGroupId
 }
 
 function createLocalPlanFromAssetState(

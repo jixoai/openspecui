@@ -148,9 +148,41 @@ async function readHuggingFaceRepositoryFiles(input: {
     }
     if (attempt < 2) await delay(300 * (attempt + 1))
   }
+  const cachedFiles = await readCachedHuggingFaceRepositoryFiles(input)
+  if (cachedFiles.length > 0) {
+    return cachedFiles
+  }
   throw lastError instanceof Error
     ? lastError
     : new Error(`Unable to read repository files for ${input.modelId}.`)
+}
+
+async function readCachedHuggingFaceRepositoryFiles(input: {
+  modelId: string
+  fetchCacheStore?: LocalModelFetchCacheStore
+}): Promise<Array<{ path: string; sizeBytes?: number }>> {
+  if (!input.fetchCacheStore) return []
+  const record = await input.fetchCacheStore.read(input.modelId)
+  if (!record?.detailRaw) return []
+  return extractRepositoryFilesFromCachedDetail(record.detailRaw)
+}
+
+function extractRepositoryFilesFromCachedDetail(
+  raw: Record<string, unknown>
+): Array<{ path: string; sizeBytes?: number }> {
+  const siblings = Array.isArray(raw.siblings) ? raw.siblings : []
+  const files: Array<{ path: string; sizeBytes?: number }> = []
+  for (const sibling of siblings) {
+    if (!sibling || typeof sibling !== 'object') continue
+    const record = sibling as Record<string, unknown>
+    const path = typeof record.rfilename === 'string' ? record.rfilename : null
+    if (!path) continue
+    files.push({
+      path,
+      sizeBytes: typeof record.size === 'number' && Number.isFinite(record.size) ? record.size : undefined,
+    })
+  }
+  return files
 }
 
 function createProviderFetchCache(fetchCacheStore: LocalModelFetchCacheStore): typeof fetch {

@@ -109,6 +109,7 @@ export class TranslationEngineService {
     selectedGroupId?: string
   }): Promise<TranslationModelDownloadPlan | null> {
     if (input.engineId !== 'local') return null
+    const state = (await this.localAssetStore.readMap()).get(input.model)
     const plan = await resolveLocalModelRuntimePlanFromProject({
       projectDir: this.projectDir,
       globalSettingsManager: this.globalSettingsManager,
@@ -118,9 +119,10 @@ export class TranslationEngineService {
       fetchCacheStore: this.localFetchCacheStore,
       loadTransformersModule: this.loadLocalTransformersModuleForPlan.bind(this),
     }).catch(() => null)
-    if (!plan) return null
-    const state = (await this.localAssetStore.readMap()).get(input.model)
-    return enrichDownloadPlanWithAssetSnapshot(plan, state, input.selectedGroupId)
+    const fallbackPlan = selectPersistedLocalPlan(state, input.selectedGroupId)
+    const effectivePlan = plan ?? fallbackPlan
+    if (!effectivePlan) return null
+    return enrichDownloadPlanWithAssetSnapshot(effectivePlan, state, input.selectedGroupId)
   }
 
   async selectEngine(engineId: TranslationEngineId): Promise<{ success: true }> {
@@ -342,5 +344,36 @@ function enrichDownloadPlanWithAssetSnapshot(
     estimatedTotalBytes:
       plan.estimatedTotalBytes ?? assetGroup?.estimatedTotalBytes ?? state.plan.estimatedTotalBytes,
     groups: mergedGroups,
+  }
+}
+
+function selectPersistedLocalPlan(
+  state: LocalModelAssetState | undefined,
+  selectedGroupId?: string
+): TranslationModelDownloadPlan | null {
+  const plan = state?.plan
+  if (!plan) return null
+  if (!selectedGroupId || !plan.groups?.length) {
+    return {
+      ...plan,
+      files: [...plan.files],
+      groups: plan.groups?.map((group) => ({
+        ...group,
+        files: [...group.files],
+      })),
+    }
+  }
+  const selectedGroup = plan.groups.find((group) => group.id === selectedGroupId)
+  if (!selectedGroup) return null
+  return {
+    modelId: plan.modelId,
+    estimatedTotalBytes: selectedGroup.estimatedTotalBytes,
+    files: [...selectedGroup.files],
+    selectedGroupId: selectedGroup.id,
+    groups: plan.groups.map((group) => ({
+      ...group,
+      selected: group.id === selectedGroup.id,
+      files: [...group.files],
+    })),
   }
 }

@@ -335,6 +335,91 @@ describe('TranslationEngineService', () => {
     expect(group?.files.map((file) => file.sizeBytes)).toEqual([1_500, 74_300_000, 84_698_500])
   })
 
+  it('falls back to the persisted local asset plan when runtime plan refresh fails', async () => {
+    const testableService = service as TestableTranslationEngineService
+    await writeFile(
+      localAssetIndexPath,
+      JSON.stringify(
+        [
+          LocalModelAssetStateSchema.parse({
+            modelId: 'Xenova/opus-mt-en-de',
+            status: 'downloaded',
+            selected: true,
+            progress: 1,
+            totalBytes: 91_000_001,
+            bytesDownloaded: 91_000_001,
+            resumable: false,
+            plan: {
+              modelId: 'Xenova/opus-mt-en-de',
+              selectedGroupId: 'q4',
+              estimatedTotalBytes: 91_000_001,
+              files: [
+                { path: 'config.json', sizeBytes: 1, required: true },
+                { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 35_000_000, required: true },
+                {
+                  path: 'onnx/decoder_model_merged_q4.onnx',
+                  sizeBytes: 56_000_000,
+                  required: true,
+                },
+              ],
+              groups: [
+                {
+                  id: 'q4',
+                  label: 'q4',
+                  dtype: 'q4',
+                  estimatedTotalBytes: 91_000_001,
+                  selectable: true,
+                  selected: true,
+                  files: [
+                    { path: 'config.json', sizeBytes: 1, required: true },
+                    { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 35_000_000, required: true },
+                    {
+                      path: 'onnx/decoder_model_merged_q4.onnx',
+                      sizeBytes: 56_000_000,
+                      required: true,
+                    },
+                  ],
+                },
+              ],
+            },
+            files: [
+              { path: 'config.json', sizeBytes: 1, downloadedBytes: 1 },
+              { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 35_000_000, downloadedBytes: 35_000_000 },
+              {
+                path: 'onnx/decoder_model_merged_q4.onnx',
+                sizeBytes: 56_000_000,
+                downloadedBytes: 56_000_000,
+              },
+            ],
+          }),
+        ],
+        null,
+        2
+      ),
+      'utf8'
+    )
+    vi.spyOn(testableService, 'loadLocalTransformersModuleForPlan').mockRejectedValue(
+      new TypeError('fetch failed')
+    )
+
+    const plan = await service.getModelDownloadPlan({
+      engineId: 'local',
+      model: 'Xenova/opus-mt-en-de',
+      selectedGroupId: 'q4',
+    })
+
+    expect(plan).toMatchObject({
+      modelId: 'Xenova/opus-mt-en-de',
+      selectedGroupId: 'q4',
+      estimatedTotalBytes: 91_000_001,
+    })
+    expect(plan?.files.map((file) => file.path)).toEqual([
+      'config.json',
+      'onnx/encoder_model_q4.onnx',
+      'onnx/decoder_model_merged_q4.onnx',
+    ])
+  })
+
   it('passes the selected local download group dtype into batch translation runtime', async () => {
     const testableService = service as TestableTranslationEngineService
     const create = vi.fn(async () => ({

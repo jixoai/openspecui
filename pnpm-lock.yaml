@@ -367,6 +367,9 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
+      '@trpc/client':
+        specifier: ^11.7.2
+        version: 11.7.2(@trpc/server@11.7.2(typescript@5.9.3))(typescript@5.9.3)
       '@types/node':
         specifier: ^22.10.2
         version: 22.19.1
