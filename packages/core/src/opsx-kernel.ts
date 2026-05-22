@@ -2,6 +2,7 @@ import { join, matchesGlob, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import type { CliExecutor } from './cli-executor.js'
 import { toOpsxDisplayPath } from './opsx-display-path.js'
+import { parseOpsxSchemaDetail } from './opsx-schema-detail.js'
 import {
   ApplyInstructionsSchema,
   ArtifactInstructionsSchema,
@@ -18,7 +19,6 @@ import {
   type SchemaResolution,
   type TemplatesMap,
 } from './opsx-types.js'
-import { parseOpsxSchemaDetail } from './opsx-schema-detail.js'
 import { ReactiveContext } from './reactive-fs/reactive-context.js'
 import {
   reactiveExists,
@@ -176,6 +176,10 @@ async function touchOpsxChangeDeps(projectDir: string, changeId: string): Promis
   const changeDir = join(projectDir, 'openspec', 'changes', changeId)
   await reactiveReadDir(changeDir, { includeHidden: true })
   await reactiveReadFile(join(changeDir, '.openspec.yaml'))
+  // Status resolution can depend on any nested artifact path under the change tree,
+  // so the reactive dependency graph must cover existing descendants instead of
+  // only the top-level directory listing.
+  await touchDirectoryTree(changeDir)
 }
 
 async function touchDirectoryPathDeps(rootDir: string, relativePath: string): Promise<void> {
