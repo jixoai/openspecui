@@ -1,6 +1,6 @@
 {
   "name": "@openspecui/browser-translator",
-  "version": "4.0.0",
+  "version": "3.7.2",
   "description": "Browser-side translator engine for OpenSpecUI",
   "type": "module",
   "main": "./dist/index.mjs",
