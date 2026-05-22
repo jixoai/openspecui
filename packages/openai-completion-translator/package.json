@@ -1,6 +1,6 @@
 {
   "name": "@openspecui/openai-completion-translator",
-  "version": "3.7.2",
+  "version": "4.0.0",
   "description": "OpenAI completion translator engine for OpenSpecUI",
   "type": "module",
   "main": "./dist/index.mjs",
