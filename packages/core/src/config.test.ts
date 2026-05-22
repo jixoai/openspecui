@@ -115,6 +115,102 @@ describe('ConfigManager', () => {
       expect(config).toEqual(DEFAULT_CONFIG)
     })
 
+    it('should repair invalid enum fields to defaults without dropping valid siblings', async () => {
+      const persistedConfig = {
+        cli: { command: 'bunx', args: ['openspec'] },
+        theme: 'nope',
+        codeEditor: { theme: 'broken' },
+        opsx: { agentInvocationMode: 'auto' },
+        terminal: {
+          cursorStyle: 'beam',
+          useTheme: 'twilight',
+          lightTheme: 'dracula',
+          darkTheme: 'ayu',
+          rendererEngine: 'yx',
+          bellSound: 'builtin:Missing',
+          scrollback: 2048,
+        },
+        notifications: {
+          sound: 'builtin:Missing',
+          volume: 0.35,
+          systemNotificationsEnabled: true,
+        },
+        translation: {
+          enabled: true,
+          displayMode: 'triple',
+          engineId: 'nmt',
+          targetLanguage: 'fr',
+          cacheEnabled: true,
+          engines: {
+            local: { model: 'onnx-community/opus-mt-en-fr', selectedGroupId: 'int8' },
+            openai: { model: 'gpt-4.1-mini' },
+          },
+        },
+      }
+      await writeFile(
+        join(tempDir, 'openspec', '.openspecui.json'),
+        JSON.stringify(persistedConfig),
+        'utf-8'
+      )
+
+      const config = await configManager.readConfig()
+
+      expect(config.cli.command).toBe('bunx')
+      expect(config.cli.args).toEqual(['openspec'])
+      expect(config.theme).toBe(DEFAULT_CONFIG.theme)
+      expect(config.codeEditor.theme).toBe(DEFAULT_CONFIG.codeEditor.theme)
+      expect(config.opsx.agentInvocationMode).toBe(DEFAULT_CONFIG.opsx.agentInvocationMode)
+      expect(config.terminal.cursorStyle).toBe(DEFAULT_CONFIG.terminal.cursorStyle)
+      expect(config.terminal.useTheme).toBe(DEFAULT_CONFIG.terminal.useTheme)
+      expect(config.terminal.lightTheme).toBe(DEFAULT_CONFIG.terminal.lightTheme)
+      expect(config.terminal.darkTheme).toBe(DEFAULT_CONFIG.terminal.darkTheme)
+      expect(config.terminal.rendererEngine).toBe(DEFAULT_CONFIG.terminal.rendererEngine)
+      expect(config.terminal.bellSound).toBe(DEFAULT_CONFIG.terminal.bellSound)
+      expect(config.terminal.scrollback).toBe(2048)
+      expect(config.notifications.sound).toBe(DEFAULT_CONFIG.notifications.sound)
+      expect(config.notifications.volume).toBe(0.35)
+      expect(config.notifications.systemNotificationsEnabled).toBe(true)
+      expect(config.translation.enabled).toBe(true)
+      expect(config.translation.targetLanguage).toBe('fr')
+      expect(config.translation.cacheEnabled).toBe(true)
+      expect(config.translation.displayMode).toBe(DEFAULT_CONFIG.translation.displayMode)
+      expect(config.translation.engineId).toBe(DEFAULT_CONFIG.translation.engineId)
+      expect(config.translation.engines.local).toEqual({
+        model: 'onnx-community/opus-mt-en-fr',
+        selectedGroupId: 'int8',
+      })
+      expect(config.translation.engines.openai).toEqual({ model: 'gpt-4.1-mini' })
+    })
+
+    it('should repair invalid nested persisted object nodes before schema parsing', async () => {
+      const persistedConfig = {
+        theme: 'dark',
+        codeEditor: 'github',
+        opsx: 'compose',
+        terminal: 'xterm',
+        notifications: [],
+        translation: {
+          enabled: true,
+          engines: 'broken',
+        },
+      }
+      await writeFile(
+        join(tempDir, 'openspec', '.openspecui.json'),
+        JSON.stringify(persistedConfig),
+        'utf-8'
+      )
+
+      const config = await configManager.readConfig()
+
+      expect(config.theme).toBe('dark')
+      expect(config.codeEditor).toEqual(DEFAULT_CONFIG.codeEditor)
+      expect(config.opsx).toEqual(DEFAULT_CONFIG.opsx)
+      expect(config.terminal).toEqual(DEFAULT_CONFIG.terminal)
+      expect(config.notifications).toEqual(DEFAULT_CONFIG.notifications)
+      expect(config.translation.enabled).toBe(true)
+      expect(config.translation.engines).toEqual(DEFAULT_CONFIG.translation.engines)
+    })
+
     it('should merge partial config with defaults', async () => {
       const partialConfig = {
         cli: { command: 'custom' },
@@ -664,7 +760,7 @@ describe('OpenSpecUIConfigSchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('should preserve invalid rendererEngine value from config file', () => {
+  it('should reject invalid rendererEngine', () => {
     const config = {
       terminal: {
         rendererEngine: 'yx',
@@ -673,10 +769,7 @@ describe('OpenSpecUIConfigSchema', () => {
 
     const result = OpenSpecUIConfigSchema.safeParse(config)
 
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.terminal.rendererEngine).toBe('yx')
-    }
+    expect(result.success).toBe(false)
   })
 
   it('should accept all valid themes', () => {

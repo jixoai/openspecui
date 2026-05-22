@@ -77,6 +77,38 @@ describe('GlobalSettingsManager', () => {
     await expect(settingsManager.readSettings()).resolves.toEqual(DEFAULT_GLOBAL_SETTINGS)
   })
 
+  it('repairs invalid persisted global settings nodes without dropping valid siblings', async () => {
+    await mkdir(join(tempDir, '.openspecui'), { recursive: true })
+    await writeFile(
+      settingsPath,
+      JSON.stringify({
+        translationCache: { entryLimit: 2000 },
+        translationEngines: {
+          openai: 'broken',
+          local: {
+            model: 'onnx-community/opus-mt-en-zh',
+            hfEndpoint: 'https://hf-mirror.com',
+          },
+        },
+      }),
+      'utf-8'
+    )
+    clearCache()
+
+    await expect(settingsManager.readSettings()).resolves.toEqual({
+      ...DEFAULT_GLOBAL_SETTINGS,
+      translationCache: { entryLimit: 2000 },
+      translationEngines: {
+        openai: DEFAULT_GLOBAL_SETTINGS.translationEngines.openai,
+        local: {
+          ...DEFAULT_GLOBAL_SETTINGS.translationEngines.local,
+          model: 'onnx-community/opus-mt-en-zh',
+          hfEndpoint: 'https://hf-mirror.com',
+        },
+      },
+    })
+  })
+
   it('serializes only non-default global values', () => {
     expect(toPersistedGlobalSettings(DEFAULT_GLOBAL_SETTINGS)).toEqual({})
     expect(

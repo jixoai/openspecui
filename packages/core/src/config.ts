@@ -8,6 +8,7 @@ import {
   type DocumentTranslationConfigUpdate,
 } from './document-translation.js'
 import { NotificationSettingsSchema, type NotificationSettings } from './notifications.js'
+import { sanitizePersistedSettings, type PersistedSanitizeRule } from './persisted-settings-sanitize.js'
 import { reactiveReadFile, updateReactiveFileCache } from './reactive-fs/index.js'
 import { DEFAULT_BELL_SOUND_ID, SoundVolumeSchema } from './sounds.js'
 import { runBufferedCommand } from './spawn-safe.js'
@@ -573,7 +574,7 @@ export const TerminalConfigSchema = z.object({
   useTheme: TerminalThemeModeSchema.default(DEFAULT_TERMINAL_THEME_MODE),
   lightTheme: TerminalThemeSchema.default(DEFAULT_TERMINAL_LIGHT_THEME),
   darkTheme: TerminalThemeSchema.default(DEFAULT_TERMINAL_DARK_THEME),
-  rendererEngine: z.string().default('xterm'),
+  rendererEngine: TerminalRendererEngineSchema.default('xterm'),
   bellSound: TerminalBellSoundSchema.default(DEFAULT_BELL_SOUND_ID),
   bellVolume: SoundVolumeSchema,
 })
@@ -697,6 +698,117 @@ export const DEFAULT_CONFIG: OpenSpecUIConfig = {
   notifications: NotificationSettingsSchema.parse({}),
   translation: DocumentTranslationConfigSchema.parse({}),
 }
+
+const PERSISTED_CONFIG_SANITIZE_RULES = [
+  { kind: 'object', path: ['cli'], fallback: {} },
+  { kind: 'field', path: ['theme'], schema: z.enum(THEME_VALUES), fallback: DEFAULT_CONFIG.theme },
+  {
+    kind: 'object',
+    path: ['codeEditor'],
+    fallback: {},
+  },
+  {
+    kind: 'field',
+    path: ['codeEditor', 'theme'],
+    schema: CodeEditorThemeSchema,
+    fallback: DEFAULT_CONFIG.codeEditor.theme,
+  },
+  {
+    kind: 'object',
+    path: ['opsx'],
+    fallback: {},
+  },
+  {
+    kind: 'field',
+    path: ['opsx', 'agentInvocationMode'],
+    schema: OpsxAgentInvocationModeSchema,
+    fallback: DEFAULT_CONFIG.opsx.agentInvocationMode,
+  },
+  {
+    kind: 'object',
+    path: ['terminal'],
+    fallback: {},
+  },
+  {
+    kind: 'field',
+    path: ['terminal', 'cursorStyle'],
+    schema: z.enum(CURSOR_STYLE_VALUES),
+    fallback: DEFAULT_CONFIG.terminal.cursorStyle,
+  },
+  {
+    kind: 'field',
+    path: ['terminal', 'useTheme'],
+    schema: TerminalThemeModeSchema,
+    fallback: DEFAULT_CONFIG.terminal.useTheme,
+  },
+  {
+    kind: 'field',
+    path: ['terminal', 'lightTheme'],
+    schema: TerminalThemeSchema,
+    fallback: DEFAULT_CONFIG.terminal.lightTheme,
+  },
+  {
+    kind: 'field',
+    path: ['terminal', 'darkTheme'],
+    schema: TerminalThemeSchema,
+    fallback: DEFAULT_CONFIG.terminal.darkTheme,
+  },
+  {
+    kind: 'field',
+    path: ['terminal', 'rendererEngine'],
+    schema: TerminalRendererEngineSchema,
+    fallback: DEFAULT_CONFIG.terminal.rendererEngine,
+  },
+  {
+    kind: 'field',
+    path: ['terminal', 'bellSound'],
+    schema: TerminalBellSoundSchema,
+    fallback: DEFAULT_CONFIG.terminal.bellSound,
+  },
+  {
+    kind: 'object',
+    path: ['notifications'],
+    fallback: {},
+  },
+  {
+    kind: 'field',
+    path: ['notifications', 'sound'],
+    schema: NotificationSettingsSchema.shape.sound,
+    fallback: DEFAULT_CONFIG.notifications.sound,
+  },
+  {
+    kind: 'object',
+    path: ['translation'],
+    fallback: {},
+  },
+  {
+    kind: 'object',
+    path: ['translation', 'engines'],
+    fallback: {},
+  },
+  {
+    kind: 'object',
+    path: ['translation', 'engines', 'local'],
+    fallback: {},
+  },
+  {
+    kind: 'object',
+    path: ['translation', 'engines', 'openai'],
+    fallback: {},
+  },
+  {
+    kind: 'field',
+    path: ['translation', 'displayMode'],
+    schema: DocumentTranslationConfigSchema.shape.displayMode,
+    fallback: DEFAULT_CONFIG.translation.displayMode,
+  },
+  {
+    kind: 'field',
+    path: ['translation', 'engineId'],
+    schema: DocumentTranslationConfigSchema.shape.engineId,
+    fallback: DEFAULT_CONFIG.translation.engineId,
+  },
+] as const satisfies readonly PersistedSanitizeRule[]
 
 function areStringArraysEqual(
   left: readonly string[] | undefined,
@@ -923,7 +1035,8 @@ export class ConfigManager {
     try {
       const parsed = JSON.parse(content)
       const normalized = pruneNullish(parsed) ?? {}
-      const result = OpenSpecUIConfigSchema.safeParse(normalized)
+      const sanitized = sanitizePersistedSettings(normalized, PERSISTED_CONFIG_SANITIZE_RULES)
+      const result = OpenSpecUIConfigSchema.safeParse(sanitized)
 
       if (result.success) {
         return result.data

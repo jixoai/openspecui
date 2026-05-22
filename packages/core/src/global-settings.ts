@@ -13,6 +13,7 @@ import {
   type TranslationLocalSettings,
   type TranslationOpenAISettings,
 } from './translator.js'
+import { sanitizePersistedSettings, type PersistedSanitizeRule } from './persisted-settings-sanitize.js'
 
 export const OpenSpecUIGlobalSettingsSchema = z.object({
   translationCache: TranslationCacheSettingsSchema.default(
@@ -40,6 +41,13 @@ export type PersistedOpenSpecUIGlobalSettings = {
 
 export const DEFAULT_GLOBAL_SETTINGS: OpenSpecUIGlobalSettings =
   OpenSpecUIGlobalSettingsSchema.parse({})
+
+const PERSISTED_GLOBAL_SETTINGS_SANITIZE_RULES = [
+  { kind: 'object', path: ['translationCache'], fallback: {} },
+  { kind: 'object', path: ['translationEngines'], fallback: {} },
+  { kind: 'object', path: ['translationEngines', 'openai'], fallback: {} },
+  { kind: 'object', path: ['translationEngines', 'local'], fallback: {} },
+] as const satisfies readonly PersistedSanitizeRule[]
 
 export function getDefaultGlobalSettingsPath(): string {
   return join(homedir(), '.openspecui', 'settings.json')
@@ -150,7 +158,11 @@ export class GlobalSettingsManager {
     try {
       const parsed = JSON.parse(content)
       const normalized = pruneNullish(parsed) ?? {}
-      const result = OpenSpecUIGlobalSettingsSchema.safeParse(normalized)
+      const sanitized = sanitizePersistedSettings(
+        normalized,
+        PERSISTED_GLOBAL_SETTINGS_SANITIZE_RULES
+      )
+      const result = OpenSpecUIGlobalSettingsSchema.safeParse(sanitized)
       if (result.success) return result.data
 
       console.warn('Invalid global settings format, using defaults:', result.error.message)
