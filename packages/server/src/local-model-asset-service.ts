@@ -132,6 +132,7 @@ export class LocalModelAssetService {
   private readonly networkRetryPolicy: Required<LocalModelNetworkRetryPolicy>
   private readonly listeners = new Set<LogListener>()
   private readonly sessions = new Map<string, DownloadSession>()
+  private readonly sessionTasks = new Map<string, Promise<void>>()
   private readonly logs = new Map<string, LocalModelAssetLog>()
   private transformersModulePromise: Promise<TransformersModule> | null = null
 
@@ -413,6 +414,18 @@ export class LocalModelAssetService {
       )
     }
     await this.store.writeAll(nextStates)
+  }
+
+  async waitForModelTask(modelId: string): Promise<void> {
+    await this.sessionTasks.get(modelId)
+  }
+
+  async close(): Promise<void> {
+    const sessions = [...this.sessions.values()]
+    for (const session of sessions) {
+      session.abortController.abort()
+    }
+    await Promise.allSettled(this.sessionTasks.values())
   }
 
   private async searchRemote(
@@ -706,15 +719,21 @@ export class LocalModelAssetService {
       files: nextState.files,
       updatedAt: this.now(),
     })
-    void this.performDownload(modelId, sessionId, abortController.signal, nextState).catch(
-      (error) =>
-        void this.finishDownload(
+    const task = this.performDownload(modelId, sessionId, abortController.signal, nextState)
+      .catch((error) =>
+        this.finishDownload(
           modelId,
           sessionId,
           false,
           error instanceof Error ? error.message : String(error)
         )
-    )
+      )
+      .finally(() => {
+        if (this.sessionTasks.get(modelId) === task) {
+          this.sessionTasks.delete(modelId)
+        }
+      })
+    this.sessionTasks.set(modelId, task)
     return { sessionId }
   }
 
@@ -1082,28 +1101,40 @@ async function downloadHuggingFaceFileToCacheDirWithProgress(input: {
       if (resumeBytes !== null && resumeBytes > 0) {
         await input.onProgress(Math.min(resumeBytes, totalBytes))
       }
-      const blob = await downloadFile({
-        repo: input.repo,
-        path: input.path,
-        revision,
-        hubUrl: input.hubUrl,
-        fetch: input.fetch,
-        downloadInfo: info,
-        xet: false,
-      })
-      if (!blob) {
-        throw new Error(`Invalid response for file ${input.path}.`)
-      }
-
-      const downloadBlob =
-        resumeBytes && resumeBytes > 0 ? blob.slice(resumeBytes, totalBytes) : blob
-      await appendBlobToIncompleteFile({
-        blob: downloadBlob,
+      const downloadedViaFetch = await streamDownloadToIncompleteFile({
+        url: info.url,
         incompletePath: cachePaths.incompletePath,
         startBytes: resumeBytes ?? 0,
         totalBytes,
+        accessToken: undefined,
+        fetch: input.fetch,
+        signal: input.signal,
         onProgress: input.onProgress,
       })
+      if (!downloadedViaFetch) {
+        const blob = await downloadFile({
+          repo: input.repo,
+          path: input.path,
+          revision,
+          hubUrl: input.hubUrl,
+          fetch: input.fetch,
+          downloadInfo: info,
+          xet: false,
+        })
+        if (!blob) {
+          throw new Error(`Invalid response for file ${input.path}.`)
+        }
+
+        const downloadBlob =
+          resumeBytes && resumeBytes > 0 ? blob.slice(resumeBytes, totalBytes) : blob
+        await appendBlobToIncompleteFile({
+          blob: downloadBlob,
+          incompletePath: cachePaths.incompletePath,
+          startBytes: resumeBytes ?? 0,
+          totalBytes,
+          onProgress: input.onProgress,
+        })
+      }
       await finalizeHubCacheFile(cachePaths)
       await input.onProgress(totalBytes)
       return cachePaths.pointerPath
@@ -1186,6 +1217,54 @@ async function appendBlobToIncompleteFile(input: {
     await reader.cancel().catch(() => undefined)
     await fileHandle.close()
   }
+}
+
+async function streamDownloadToIncompleteFile(input: {
+  url: string
+  incompletePath: string
+  startBytes: number
+  totalBytes: number
+  accessToken?: string
+  fetch: typeof fetch
+  signal: AbortSignal
+  onProgress: (downloadedBytes: number) => Promise<void>
+}): Promise<boolean> {
+  const headers = new Headers()
+  if (input.accessToken) {
+    headers.set('Authorization', `Bearer ${input.accessToken}`)
+  }
+  if (input.startBytes > 0) {
+    headers.set('Range', `bytes=${input.startBytes}-`)
+  }
+  const response = await input.fetch(input.url, {
+    method: 'GET',
+    headers,
+    signal: input.signal,
+  })
+  if (!response.ok && response.status !== 206) {
+    throw new Error(`Invalid response for file download: status ${response.status}.`)
+  }
+  if (!response.body) {
+    return false
+  }
+
+  await mkdir(dirname(input.incompletePath), { recursive: true })
+  const fileHandle = await open(input.incompletePath, input.startBytes > 0 ? 'a' : 'w')
+  const reader = response.body.getReader()
+  let downloadedBytes = input.startBytes
+  try {
+    while (true) {
+      const result = await reader.read()
+      if (result.done) break
+      await fileHandle.write(result.value)
+      downloadedBytes += result.value.byteLength
+      await input.onProgress(Math.min(downloadedBytes, input.totalBytes))
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined)
+    await fileHandle.close()
+  }
+  return true
 }
 
 async function finalizeHubCacheFile(input: {

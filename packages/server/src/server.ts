@@ -134,8 +134,9 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     typeof createRuntimeSqliteTranslationCacheAdapter
   > | null = null
   const getTranslationCacheAdapter = () => {
-    translationCacheAdapterPromise ??=
-      createRuntimeSqliteTranslationCacheAdapter(translationCacheDatabasePath)
+    translationCacheAdapterPromise ??= createRuntimeSqliteTranslationCacheAdapter(
+      translationCacheDatabasePath
+    )
     return translationCacheAdapterPromise
   }
   const translationCacheService = new TranslationCacheService({
@@ -159,8 +160,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
       console.warn('Translation cache write failed:', error)
     },
   })
-  const nmtModelCacheDir =
-    config.runtimePaths?.localModelCacheDir ?? getDefaultLocalModelCacheDir()
+  const nmtModelCacheDir = config.runtimePaths?.localModelCacheDir ?? getDefaultLocalModelCacheDir()
   const nmtModelIndexPath =
     config.runtimePaths?.localModelAssetIndexPath ?? getDefaultLocalModelIndexPath()
   const nmtModelFetchCachePath =
@@ -516,6 +516,7 @@ export async function startServer(
     close: async () => {
       kernel.dispose()
       await server.hookRuntime.dispose()
+      await server.createContext().localModelAssetService.close()
       server.translationCacheService.close()
       wsServer.close()
       httpServer.close()

@@ -13,19 +13,8 @@ import {
 
 const hubMock = vi.hoisted(() => ({
   downloadFile: vi.fn(),
-  fileDownloadInfo: vi.fn(async (input: { path: string }) => ({
-    size: input.path.includes('_q4') || input.path === 'config.json' ? 10 : 100,
-    etag: `${input.path.replace(/[^a-zA-Z0-9]+/g, '-')}-etag`,
-    url: `https://huggingface.co/test/resolve/main/${input.path}`,
-  })),
-  listFiles: vi.fn(async function* (input?: { fetch?: typeof fetch; hubUrl?: string }) {
-    await input?.fetch?.(
-      `${input.hubUrl ?? 'https://huggingface.co'}/api/models/onnx-community/opus-mt-en-zh/tree/main?recursive=true&expand=true`
-    )
-    yield { path: 'config.json', type: 'file', size: 10 }
-    yield { path: 'onnx/encoder_model_q4.onnx', type: 'file', size: 10 }
-    yield { path: 'onnx/decoder_model_merged_q4.onnx', type: 'file', size: 10 }
-  }),
+  fileDownloadInfo: vi.fn(),
+  listFiles: vi.fn(),
 }))
 
 vi.mock('@huggingface/hub', () => hubMock)
@@ -74,8 +63,24 @@ describe('LocalModelAssetService', () => {
       })
     )
     hubMock.downloadFile.mockReset()
-    hubMock.fileDownloadInfo.mockClear()
-    hubMock.listFiles.mockClear()
+    hubMock.fileDownloadInfo.mockReset()
+    hubMock.listFiles.mockReset()
+    hubMock.fileDownloadInfo.mockImplementation(async (input: { path: string }) => ({
+      size: input.path.includes('_q4') || input.path === 'config.json' ? 10 : 100,
+      etag: `${input.path.replace(/[^a-zA-Z0-9]+/g, '-')}-etag`,
+      url: `https://huggingface.co/test/resolve/main/${input.path}`,
+    }))
+    hubMock.listFiles.mockImplementation(async function* (input?: {
+      fetch?: typeof fetch
+      hubUrl?: string
+    }) {
+      await input?.fetch?.(
+        `${input.hubUrl ?? 'https://huggingface.co'}/api/models/onnx-community/opus-mt-en-zh/tree/main?recursive=true&expand=true`
+      )
+      yield { path: 'config.json', type: 'file', size: 10 }
+      yield { path: 'onnx/encoder_model_q4.onnx', type: 'file', size: 10 }
+      yield { path: 'onnx/decoder_model_merged_q4.onnx', type: 'file', size: 10 }
+    })
   })
 
   afterEach(async () => {
@@ -108,6 +113,11 @@ describe('LocalModelAssetService', () => {
       indexPath,
       cacheDir,
       fetchCachePath,
+      networkRetryPolicy: {
+        limit: 2,
+        delayMs: 10,
+        maxDelayMs: 20,
+      },
     }) as TestableLocalModelAssetService
     vi.spyOn(service, 'getTransformersModule').mockResolvedValue({
       env: {
@@ -138,6 +148,7 @@ describe('LocalModelAssetService', () => {
     })
 
     await service.startDownload('onnx-community/opus-mt-en-zh', 'q4')
+    await service.waitForModelTask('onnx-community/opus-mt-en-zh')
     await waitForDownloadedState(indexPath)
 
     expect(hubMock.downloadFile).toHaveBeenCalledTimes(3)
@@ -183,12 +194,46 @@ describe('LocalModelAssetService', () => {
   })
 
   it('persists byte-level progress while streaming a selected NMT file', async () => {
-    hubMock.downloadFile.mockImplementation(async (input: { path: string }) =>
-      createMockDownloadBlob(
-        input.path === 'onnx/encoder_model_q4.onnx'
-          ? [new Uint8Array([1, 2, 3, 4]), new Uint8Array([5, 6, 7, 8, 9, 10])]
-          : [new Uint8Array(10)]
-      )
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+        if (url.includes('/api/models/') && url.includes('/tree/')) {
+          return Response.json([
+            { path: 'config.json', type: 'file', size: 10 },
+            { path: 'onnx/encoder_model_q4.onnx', type: 'file', size: 10 },
+            { path: 'onnx/decoder_model_merged_q4.onnx', type: 'file', size: 10 },
+          ])
+        }
+        if (url.includes('/resolve/main/onnx/encoder_model_q4.onnx')) {
+          return new Response(
+            new ReadableStream<Uint8Array>({
+              async start(controller) {
+                controller.enqueue(new Uint8Array([1, 2, 3, 4]))
+                await new Promise((resolve) => setTimeout(resolve, 20))
+                controller.enqueue(new Uint8Array([5, 6, 7, 8, 9, 10]))
+                controller.close()
+              },
+            }),
+            {
+              status: 200,
+              headers: {
+                'Content-Length': '10',
+              },
+            }
+          )
+        }
+        if (url.includes('/resolve/main/')) {
+          return new Response(new Uint8Array(10), {
+            status: 200,
+            headers: {
+              'Content-Length': '10',
+            },
+          })
+        }
+        return new Response(null, { status: 200 })
+      })
     )
 
     const service = new LocalModelAssetService({
@@ -209,6 +254,11 @@ describe('LocalModelAssetService', () => {
       indexPath,
       cacheDir,
       fetchCachePath,
+      networkRetryPolicy: {
+        limit: 2,
+        delayMs: 10,
+        maxDelayMs: 20,
+      },
     }) as TestableLocalModelAssetService
     vi.spyOn(service, 'getTransformersModule').mockResolvedValue({
       env: {
@@ -246,6 +296,7 @@ describe('LocalModelAssetService', () => {
         )
       )
     )
+    await service.waitForModelTask('onnx-community/opus-mt-en-zh')
     await waitForDownloadedState(indexPath)
   })
 
@@ -276,6 +327,11 @@ describe('LocalModelAssetService', () => {
       indexPath,
       cacheDir,
       fetchCachePath,
+      networkRetryPolicy: {
+        limit: 2,
+        delayMs: 10,
+        maxDelayMs: 20,
+      },
     }) as TestableLocalModelAssetService
     vi.spyOn(service, 'getTransformersModule').mockResolvedValue({
       env: {
@@ -313,6 +369,7 @@ describe('LocalModelAssetService', () => {
         )
       )
     )
+    await service.waitForModelTask('onnx-community/opus-mt-en-zh')
     await waitForDownloadedState(indexPath)
   })
 
@@ -346,6 +403,11 @@ describe('LocalModelAssetService', () => {
       indexPath,
       cacheDir,
       fetchCachePath,
+      networkRetryPolicy: {
+        limit: 2,
+        delayMs: 10,
+        maxDelayMs: 20,
+      },
     }) as TestableLocalModelAssetService
     vi.spyOn(service, 'getTransformersModule').mockResolvedValue({
       env: {
@@ -371,6 +433,7 @@ describe('LocalModelAssetService', () => {
     })
 
     await service.startDownload('onnx-community/opus-mt-en-zh', 'q4')
+    await service.waitForModelTask('onnx-community/opus-mt-en-zh')
     await waitForDownloadedState(indexPath)
 
     expect(encoderAttempts).toBe(2)
@@ -430,6 +493,7 @@ describe('LocalModelAssetService', () => {
     })
 
     await service.startDownload('onnx-community/opus-mt-en-zh', 'q4')
+    await service.waitForModelTask('onnx-community/opus-mt-en-zh')
     await waitForState(indexPath, (states) => states.some((entry) => entry.status === 'error'))
 
     const state = (await new LocalModelAssetStore({ indexPath }).readAll())[0]
@@ -500,6 +564,7 @@ describe('LocalModelAssetService', () => {
     })
 
     await service.startDownload('onnx-community/opus-mt-en-zh', 'q4')
+    await service.waitForModelTask('onnx-community/opus-mt-en-zh')
     await waitForDownloadedState(indexPath)
 
     expect(metadataAttempts).toBe(2)
@@ -577,6 +642,7 @@ describe('LocalModelAssetService', () => {
     })
 
     await service.startDownload('onnx-community/opus-mt-en-zh', 'q4')
+    await service.waitForModelTask('onnx-community/opus-mt-en-zh')
     await waitForDownloadedState(indexPath)
 
     expect(metadataAttempts).toBe(2)
@@ -656,6 +722,7 @@ describe('LocalModelAssetService', () => {
         )
       )
     )
+    await service.waitForModelTask('onnx-community/opus-mt-en-zh')
     await waitForDownloadedState(indexPath)
 
     expect(encoderAttempts).toBe(2)
@@ -751,6 +818,7 @@ describe('LocalModelAssetService', () => {
     ])
 
     await service.resumeDownload('onnx-community/opus-mt-en-zh', 'q4')
+    await service.waitForModelTask('onnx-community/opus-mt-en-zh')
     await waitForDownloadedState(indexPath)
 
     expect(hubMock.downloadFile).toHaveBeenCalledTimes(2)
