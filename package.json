@@ -30,6 +30,7 @@
     "changeset": "changeset",
     "changeversion": "bun ./scripts/changeversion-auto.ts",
     "release": "bun ./scripts/release-tui.tsx",
+    "release:github": "bun ./scripts/create-github-release.ts",
     "openspec:check-reference": "node scripts/check-openspec-reference.mjs",
     "nix:build": "nix build --extra-experimental-features nix-command --extra-experimental-features flakes",
     "nix:run": "nix run --extra-experimental-features nix-command --extra-experimental-features flakes",
