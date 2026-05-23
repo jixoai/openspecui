@@ -1,16 +1,58 @@
+import type { BrowserTranslationSupportTableState } from '@/lib/browser-translation'
 import { DOCUMENT_TRANSLATION_SESSION_STORAGE_KEY } from '@/lib/document-translation-session-state'
+import type { LocalModelAssetState } from '@openspecui/core/translator'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MarkdownViewer } from './markdown-viewer'
 
 const translateMarkdownDocumentProgressivelyMock = vi.hoisted(() => vi.fn())
 const navigateMock = vi.hoisted(() => vi.fn())
+const getBrowserSupportTableStateMock = vi.hoisted(() =>
+  vi.fn<(targetLanguage: string) => BrowserTranslationSupportTableState | null>((targetLanguage) => ({
+    state: 'ready',
+    message: 'Browser translation pairs: 1 ready.',
+    table: {
+      targetLanguage,
+      checked: 1,
+      total: 1,
+      updatedAt: 1,
+      rows: [
+        {
+          sourceLanguage: 'en',
+          targetLanguage,
+          availability: 'available',
+        },
+      ],
+    },
+  }))
+)
+const scanBrowserTranslationPairsMock = vi.hoisted(() =>
+  vi.fn(async (targetLanguage: string): Promise<BrowserTranslationSupportTableState> => ({
+    state: 'ready',
+    message: 'Browser translation pairs: 1 ready.',
+    table: {
+      targetLanguage,
+      checked: 1,
+      total: 1,
+      updatedAt: 1,
+      rows: [
+        {
+          sourceLanguage: 'en',
+          targetLanguage,
+          availability: 'available',
+        },
+      ],
+    },
+  }))
+)
+const nmtModelStateMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/browser-translation', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/browser-translation')>()
   return {
     ...original,
-    probeBrowserTranslation: vi.fn(async () => ({ availability: 'available' })),
+    getBrowserSupportTableState: getBrowserSupportTableStateMock,
+    scanBrowserTranslationPairs: scanBrowserTranslationPairsMock,
     translateMarkdownDocumentProgressively: translateMarkdownDocumentProgressivelyMock,
   }
 })
@@ -19,10 +61,34 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigateMock,
 }))
 
+vi.mock('@/lib/trpc', () => ({
+  trpcClient: {
+    localModels: {
+      state: {
+        query: nmtModelStateMock,
+      },
+    },
+    translationCache: {
+      read: {
+        query: vi.fn(),
+      },
+      write: {
+        mutate: vi.fn(),
+      },
+    },
+    translationEngines: {
+      translate: {
+        mutate: vi.fn(async ({ text }: { text?: string }) => ({ text: `server:${text ?? ''}` })),
+      },
+    },
+  },
+}))
+
 describe('MarkdownViewer translation plugin', () => {
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
+    nmtModelStateMock.mockResolvedValue(createDownloadedLocalAssetState())
     sessionStorage.clear()
     window.history.replaceState(null, '', '/')
   })
@@ -40,12 +106,126 @@ describe('MarkdownViewer translation plugin', () => {
       />
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Configure translation' }))
+    const button = screen.getByRole('button', { name: 'Configure translation' })
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    expect(button).not.toBeDisabled()
+
+    fireEvent.click(button)
 
     expect(navigateMock).toHaveBeenCalledWith({
       to: '/settings',
       hash: 'settings-translation',
     })
+  })
+
+  it('renders a disabled translation action when browser translation is unavailable', async () => {
+    getBrowserSupportTableStateMock.mockReturnValueOnce(null)
+    scanBrowserTranslationPairsMock.mockResolvedValueOnce({
+      state: 'missing',
+      message: 'Chrome Translator API is not exposed.',
+      table: null,
+    })
+
+    render(
+      <MarkdownViewer
+        markdown={'# Hello'}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        }}
+      />
+    )
+
+    const button = await screen.findByRole('button', { name: 'Translation unavailable' })
+    await waitFor(() => expect(button).toBeDisabled())
+
+    expect(button.getAttribute('title')).toContain('Chrome Translator API is not exposed.')
+    expect(translateMarkdownDocumentProgressivelyMock).not.toHaveBeenCalled()
+
+    fireEvent.click(button)
+
+    expect(translateMarkdownDocumentProgressivelyMock).not.toHaveBeenCalled()
+    expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('enables document translation from local NMT asset truth without probing browser capability', async () => {
+    mockProgressiveResult('direct', [
+      {
+        id: 'md-2',
+        sourceStartOffset: 0,
+        sourceEndOffset: 7,
+        sourceKind: 'heading',
+        source: 'Hello',
+        translatorInput: 'Hello',
+        target: '你好',
+        kind: 'heading',
+      },
+    ])
+
+    render(
+      <MarkdownViewer
+        markdown={'# Hello'}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+          engineId: 'local',
+          engines: {
+            local: { model: 'Xenova/opus-mt-en-zh', selectedGroupId: 'q8' },
+            openai: {},
+          },
+        }}
+      />
+    )
+
+    await waitFor(() =>
+      expect(nmtModelStateMock).toHaveBeenCalledWith({
+        modelId: 'Xenova/opus-mt-en-zh',
+        selectedGroupId: 'q8',
+      })
+    )
+    expect(scanBrowserTranslationPairsMock).not.toHaveBeenCalled()
+    const button = await screen.findByRole('button', { name: 'Translate' })
+    expect(button).not.toBeDisabled()
+    expect(button).toHaveAttribute('data-translation-action-state', 'ready')
+
+    fireEvent.click(button)
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: '你好' })).toBeTruthy())
+    expect(translateMarkdownDocumentProgressivelyMock).toHaveBeenCalled()
+  })
+
+  it('disables document translation when the selected NMT profile is not local', async () => {
+    nmtModelStateMock.mockResolvedValueOnce({
+      ...createDownloadedLocalAssetState(),
+      status: 'not-downloaded',
+      files: [],
+    })
+
+    render(
+      <MarkdownViewer
+        markdown={'# Hello'}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+          engineId: 'local',
+          engines: {
+            local: { model: 'Xenova/opus-mt-en-zh', selectedGroupId: 'q8' },
+            openai: {},
+          },
+        }}
+      />
+    )
+
+    const button = await screen.findByRole('button', { name: 'Translation unavailable' })
+    expect(button).toBeDisabled()
+    expect(button.getAttribute('title')).toContain('not installed locally')
+    expect(scanBrowserTranslationPairsMock).not.toHaveBeenCalled()
   })
 
   it('projects direct translation as the final render stage and uses translated ToC labels', async () => {
@@ -674,4 +854,49 @@ function mockProgressiveResult(
       segments: translatedSegments,
     }
   })
+}
+
+function createDownloadedLocalAssetState(): LocalModelAssetState {
+  return {
+    modelId: 'Xenova/opus-mt-en-zh',
+    status: 'downloaded',
+    selected: true,
+    progress: 1,
+    bytesDownloaded: 246415360,
+    totalBytes: 246415360,
+    resumable: false,
+    plan: {
+      modelId: 'Xenova/opus-mt-en-zh',
+      estimatedTotalBytes: 246415360,
+      selectedGroupId: 'q8',
+      files: [
+        { path: 'config.json', sizeBytes: 1503, required: true },
+        { path: 'onnx/encoder_model_quantized.onnx', sizeBytes: 52848230, required: true },
+      ],
+      groups: [
+        {
+          id: 'q8',
+          label: 'q8 (8-bit)',
+          profile: 'q8',
+          dtype: 'q8',
+          estimatedTotalBytes: 246415360,
+          selectable: true,
+          selected: true,
+          files: [
+            { path: 'config.json', sizeBytes: 1503, required: true },
+            { path: 'onnx/encoder_model_quantized.onnx', sizeBytes: 52848230, required: true },
+          ],
+        },
+      ],
+    },
+    files: [
+      { path: 'config.json', sizeBytes: 1503, downloadedBytes: 1503 },
+      {
+        path: 'onnx/encoder_model_quantized.onnx',
+        sizeBytes: 52848230,
+        downloadedBytes: 52848230,
+      },
+    ],
+    updatedAt: 100,
+  }
 }

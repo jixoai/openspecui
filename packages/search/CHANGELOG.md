@@ -1,5 +1,13 @@
 # @openspecui/search
 
+## 3.10.0
+
+## 3.9.0
+
+## 3.8.0
+
+## 3.7.2
+
 ## 3.7.1
 
 ### Patch Changes

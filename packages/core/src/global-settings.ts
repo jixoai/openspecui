@@ -7,10 +7,20 @@ import {
   type TranslationCacheSettings,
 } from './document-translation.js'
 import { reactiveReadFile, updateReactiveFileCache } from './reactive-fs/index.js'
+import {
+  TranslationEngineGlobalSettingsSchema,
+  type TranslationEngineGlobalSettingsUpdate,
+  type TranslationLocalSettings,
+  type TranslationOpenAISettings,
+} from './translator.js'
+import { sanitizePersistedSettings, type PersistedSanitizeRule } from './persisted-settings-sanitize.js'
 
 export const OpenSpecUIGlobalSettingsSchema = z.object({
   translationCache: TranslationCacheSettingsSchema.default(
     TranslationCacheSettingsSchema.parse({})
+  ),
+  translationEngines: TranslationEngineGlobalSettingsSchema.default(
+    TranslationEngineGlobalSettingsSchema.parse({})
   ),
 })
 
@@ -18,14 +28,26 @@ export type OpenSpecUIGlobalSettings = z.infer<typeof OpenSpecUIGlobalSettingsSc
 
 export type OpenSpecUIGlobalSettingsUpdate = {
   translationCache?: Partial<TranslationCacheSettings>
+  translationEngines?: TranslationEngineGlobalSettingsUpdate
 }
 
 export type PersistedOpenSpecUIGlobalSettings = {
   translationCache?: Partial<TranslationCacheSettings>
+  translationEngines?: {
+    openai?: Partial<TranslationOpenAISettings>
+    local?: Partial<TranslationLocalSettings>
+  }
 }
 
 export const DEFAULT_GLOBAL_SETTINGS: OpenSpecUIGlobalSettings =
   OpenSpecUIGlobalSettingsSchema.parse({})
+
+const PERSISTED_GLOBAL_SETTINGS_SANITIZE_RULES = [
+  { kind: 'object', path: ['translationCache'], fallback: {} },
+  { kind: 'object', path: ['translationEngines'], fallback: {} },
+  { kind: 'object', path: ['translationEngines', 'openai'], fallback: {} },
+  { kind: 'object', path: ['translationEngines', 'local'], fallback: {} },
+] as const satisfies readonly PersistedSanitizeRule[]
 
 export function getDefaultGlobalSettingsPath(): string {
   return join(homedir(), '.openspecui', 'settings.json')
@@ -67,6 +89,45 @@ export function toPersistedGlobalSettings(
     persisted.translationCache = translationCache
   }
 
+  const translationEngines: NonNullable<PersistedOpenSpecUIGlobalSettings['translationEngines']> =
+    {}
+  const defaultTranslationEngines = DEFAULT_GLOBAL_SETTINGS.translationEngines
+
+  const openai: Partial<TranslationOpenAISettings> = {}
+  if (settings.translationEngines.openai.baseUrl !== defaultTranslationEngines.openai.baseUrl) {
+    openai.baseUrl = settings.translationEngines.openai.baseUrl
+  }
+  if (settings.translationEngines.openai.token !== defaultTranslationEngines.openai.token) {
+    openai.token = settings.translationEngines.openai.token
+  }
+  if (settings.translationEngines.openai.model !== defaultTranslationEngines.openai.model) {
+    openai.model = settings.translationEngines.openai.model
+  }
+  if (hasOwnEntries(openai)) {
+    translationEngines.openai = openai
+  }
+
+  const local: Partial<TranslationLocalSettings> = {}
+  if (settings.translationEngines.local.model !== defaultTranslationEngines.local.model) {
+    local.model = settings.translationEngines.local.model
+  }
+  if (
+    settings.translationEngines.local.selectedGroupId !==
+    defaultTranslationEngines.local.selectedGroupId
+  ) {
+    local.selectedGroupId = settings.translationEngines.local.selectedGroupId
+  }
+  if (settings.translationEngines.local.hfEndpoint !== defaultTranslationEngines.local.hfEndpoint) {
+    local.hfEndpoint = settings.translationEngines.local.hfEndpoint
+  }
+  if (hasOwnEntries(local)) {
+    translationEngines.local = local
+  }
+
+  if (hasOwnEntries(translationEngines)) {
+    persisted.translationEngines = translationEngines
+  }
+
   return persisted
 }
 
@@ -97,7 +158,11 @@ export class GlobalSettingsManager {
     try {
       const parsed = JSON.parse(content)
       const normalized = pruneNullish(parsed) ?? {}
-      const result = OpenSpecUIGlobalSettingsSchema.safeParse(normalized)
+      const sanitized = sanitizePersistedSettings(
+        normalized,
+        PERSISTED_GLOBAL_SETTINGS_SANITIZE_RULES
+      )
+      const result = OpenSpecUIGlobalSettingsSchema.safeParse(sanitized)
       if (result.success) return result.data
 
       console.warn('Invalid global settings format, using defaults:', result.error.message)
@@ -122,6 +187,17 @@ export class GlobalSettingsManager {
       translationCache: {
         ...current.translationCache,
         ...update.translationCache,
+      },
+      translationEngines: {
+        ...current.translationEngines,
+        openai: {
+          ...current.translationEngines.openai,
+          ...update.translationEngines?.openai,
+        },
+        local: {
+          ...current.translationEngines.local,
+          ...update.translationEngines?.local,
+        },
       },
     })
     const persisted = toPersistedGlobalSettings(merged)

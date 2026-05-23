@@ -3,6 +3,7 @@ import type {
   ChangeFile,
   ChangeMeta,
   NotificationRecord,
+  OpenSpecUIGlobalSettings,
   OpenSpecUIConfig,
   OpsxEntityDetail,
   Spec,
@@ -278,6 +279,19 @@ export function useConfigSubscription(): SubscriptionState<OpenSpecUIConfig> {
     StaticProvider.getConfig,
     [],
     'config.subscribe'
+  )
+}
+
+export function useGlobalSettingsSubscription(): SubscriptionState<OpenSpecUIGlobalSettings> {
+  return useSubscription<OpenSpecUIGlobalSettings>(
+    (callbacks) =>
+      trpcClient.globalSettings.subscribe.subscribe(undefined, {
+        onData: callbacks.onData,
+        onError: callbacks.onError,
+      }),
+    undefined,
+    [],
+    'globalSettings.subscribe'
   )
 }
 

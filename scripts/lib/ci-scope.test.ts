@@ -1,5 +1,5 @@
-import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
@@ -22,19 +22,36 @@ describe('computeCiScope', () => {
   })
 
   it('fans web changes out to cli, app, and website', () => {
-    const scope = computeCiScope({ changedFiles: ['packages/web/src/routes/dashboard.tsx'], rootDir })
+    const scope = computeCiScope({
+      changedFiles: ['packages/web/src/routes/dashboard.tsx'],
+      rootDir,
+    })
     expect(scope.fast.mode).toBe('scoped')
     expect(scope.affectedPackages).toEqual(
-      expect.arrayContaining(['@openspecui/web', 'openspecui', '@openspecui/app', '@openspecui/website'])
+      expect.arrayContaining([
+        '@openspecui/web',
+        'openspecui',
+        '@openspecui/app',
+        '@openspecui/website',
+      ])
     )
     expect(scope.browser.runWeb).toBe(true)
     expect(scope.browser.runXterm).toBe(false)
   })
 
   it('fans xterm changes out to web dependents and both browser shards', () => {
-    const scope = computeCiScope({ changedFiles: ['packages/xterm-input-panel/src/index.ts'], rootDir })
+    const scope = computeCiScope({
+      changedFiles: ['packages/xterm-input-panel/src/index.ts'],
+      rootDir,
+    })
     expect(scope.affectedPackages).toEqual(
-      expect.arrayContaining(['xterm-input-panel', '@openspecui/web', 'openspecui', '@openspecui/app', '@openspecui/website'])
+      expect.arrayContaining([
+        'xterm-input-panel',
+        '@openspecui/web',
+        'openspecui',
+        '@openspecui/app',
+        '@openspecui/website',
+      ])
     )
     expect(scope.browser.runWeb).toBe(true)
     expect(scope.browser.runXterm).toBe(true)
@@ -47,10 +64,34 @@ describe('computeCiScope', () => {
     expect(scope.browser.runXterm).toBe(true)
   })
 
-  it('treats generic scripts changes as full fast coverage without forced browser shards', () => {
+  it('routes generic scripts changes through script-scoped fast coverage', () => {
     const scope = computeCiScope({ changedFiles: ['scripts/release-tui.tsx'], rootDir })
-    expect(scope.fast.mode).toBe('full')
+    expect(scope.fast.mode).toBe('scoped')
+    expect(scope.fast.runRootTests).toBe(true)
+    expect(scope.fast.lintTargets).toEqual(['scripts'])
+    expect(scope.fast.typecheckPackages).toEqual([])
+    expect(scope.fast.testPackages).toEqual([])
     expect(scope.browser.runWeb).toBe(false)
     expect(scope.browser.runXterm).toBe(false)
+  })
+
+  it('keeps private package manifest changes scoped to affected package dependents', () => {
+    const scope = computeCiScope({
+      changedFiles: [
+        'packages/browser-translator/package.json',
+        'packages/local-translator/package.json',
+        'packages/openai-completion-translator/package.json',
+      ],
+      rootDir,
+    })
+    expect(scope.fast.mode).toBe('scoped')
+    expect(scope.fast.runRootTests).toBe(false)
+    expect(scope.browser.runWeb).toBe(true)
+    expect(scope.browser.runXterm).toBe(false)
+    expect(scope.directPackages).toEqual([
+      '@openspecui/browser-translator',
+      '@openspecui/local-translator',
+      '@openspecui/openai-completion-translator',
+    ])
   })
 })

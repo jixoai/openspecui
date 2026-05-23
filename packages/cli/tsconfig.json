@@ -10,12 +10,16 @@
       "@openspecui/core/markdown-facts": ["../core/src/markdown-facts.ts"],
       "@openspecui/core/markdown-reading": ["../core/src/markdown-reading.ts"],
       "@openspecui/core/notifications": ["../core/src/notifications.ts"],
+      "@openspecui/core/translator": ["../core/src/translator.ts"],
+      "@openspecui/core/local-download-profiles": ["../core/src/local-download-profiles.ts"],
       "@openspecui/core/openspec-annotations": ["../core/src/openspec-annotations.ts"],
       "@openspecui/core/openspec-projection": ["../core/src/openspec-projection.ts"],
       "@openspecui/core/opsx-schema-detail": ["../core/src/opsx-schema-detail.ts"],
       "@openspecui/core/sounds": ["../core/src/sounds.ts"],
       "@openspecui/search": ["../search/src/index.ts"],
-      "@openspecui/search/node": ["../search/src/node.ts"]
+      "@openspecui/search/node": ["../search/src/node.ts"],
+      "@openspecui/local-translator": ["../local-translator/src/index.ts"],
+      "@openspecui/openai-completion-translator": ["../openai-completion-translator/src/index.ts"]
     }
   },
   "include": [
@@ -24,7 +28,9 @@
     "../server/src/**/*.ts",
     "../ai-provider/src/**/*.ts",
     "../core/src/**/*.ts",
-    "../search/src/**/*.ts"
+    "../search/src/**/*.ts",
+    "../local-translator/src/**/*.ts",
+    "../openai-completion-translator/src/**/*.ts"
   ],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "../*/src/**/*.test.ts"]
 }

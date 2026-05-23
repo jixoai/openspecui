@@ -17,6 +17,7 @@ import type {
 import {
   CodeEditorThemeSchema,
   DashboardConfigSchema,
+  BatchTranslateInputSchema,
   DocumentTranslationConfigSchema,
   getAllTools,
   getAvailableTools,
@@ -30,6 +31,7 @@ import {
   OpenSpecUIGlobalSettingsSchema,
   OpsxConfigSchema,
   resolveTerminalShellDefaults,
+  ServiceTranslationEngineIdSchema,
   sniffGlobalCli,
   subscribeWatcherRuntimeStatus,
   TerminalConfigSchema,
@@ -37,6 +39,9 @@ import {
   TranslationCacheReadInputSchema,
   TranslationCacheSettingsSchema,
   TranslationCacheWriteInputSchema,
+  TranslationEngineIdSchema,
+  TranslationLocalSettingsSchema,
+  TranslationOpenAISettingsSchema,
   type AIToolOption,
   type ApplyInstructions,
   type ArtifactInstructions,
@@ -87,6 +92,7 @@ import {
   listCurrentWorktreeGitEntries,
   resolveGitWorktreeSwitchTarget,
 } from './git-panel-data.js'
+import type { LocalModelAssetService } from './local-model-asset-service.js'
 import type { NotificationService } from './notification-service.js'
 import type { ProjectRecoveryService } from './project-recovery-service.js'
 import { reactiveKV } from './reactive-kv.js'
@@ -96,6 +102,7 @@ import {
 } from './reactive-subscription.js'
 import type { SearchService } from './search-service.js'
 import type { TranslationCacheService } from './translation-cache-service.js'
+import type { TranslationEngineService } from './translation-engine-service.js'
 import type { WorkflowInvocationService } from './workflow-invocation-service.js'
 
 export interface Context {
@@ -113,6 +120,8 @@ export interface Context {
   globalSettingsManager: GlobalSettingsManager
   translationCacheService: TranslationCacheService
   filePreviewService: FilePreviewService
+  translationEngineService: TranslationEngineService
+  localModelAssetService: LocalModelAssetService
   gitWorktreeHandoff?: GitWorktreeHandoffService
   watcher?: OpenSpecWatcher
   projectDir: string
@@ -209,6 +218,12 @@ export const globalSettingsRouter = router({
     .input(
       OpenSpecUIGlobalSettingsSchema.partial().extend({
         translationCache: TranslationCacheSettingsSchema.partial().optional(),
+        translationEngines: z
+          .object({
+            openai: TranslationOpenAISettingsSchema.partial().optional(),
+            local: TranslationLocalSettingsSchema.partial().optional(),
+          })
+          .optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -241,6 +256,161 @@ export const translationCacheRouter = router({
   clear: publicProcedure.mutation(({ ctx }) => {
     return ctx.translationCacheService.clear()
   }),
+})
+
+export const translationEnginesRouter = router({
+  list: publicProcedure.query(({ ctx }) => {
+    return ctx.translationEngineService.listEngines()
+  }),
+
+  searchModels: publicProcedure
+    .input(
+      z.object({
+        engineId: ServiceTranslationEngineIdSchema,
+        query: z.string().optional(),
+        sourceLanguage: z.string().optional(),
+        targetLanguage: z.string().optional(),
+        limit: z.number().int().positive().max(20).optional(),
+        cursor: z.string().optional(),
+      })
+    )
+    .query(({ ctx, input }) => {
+      return ctx.translationEngineService.searchModels(input)
+    }),
+
+  getModelDownloadPlan: publicProcedure
+    .input(
+      z.object({
+        engineId: ServiceTranslationEngineIdSchema,
+        model: z.string().min(1),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .query(({ ctx, input }) => {
+      return ctx.translationEngineService.getModelDownloadPlan(input)
+    }),
+
+  select: publicProcedure
+    .input(z.object({ engineId: TranslationEngineIdSchema }))
+    .mutation(({ ctx, input }) => {
+      return ctx.translationEngineService.selectEngine(input.engineId)
+    }),
+
+  batchTranslate: publicProcedure
+    .input(BatchTranslateInputSchema)
+    .subscription(({ ctx, input }) => {
+      return ctx.translationEngineService.batchTranslate(input)
+    }),
+})
+
+export const localModelsRouter = router({
+  listLocal: publicProcedure.query(({ ctx }) => {
+    return ctx.localModelAssetService.listLocalCatalog()
+  }),
+
+  searchRemote: publicProcedure
+    .input(
+      z.object({
+        requestId: z.string().min(1).optional(),
+        query: z.string().optional(),
+        sourceLanguage: z.string().optional(),
+        targetLanguage: z.string().optional(),
+        limit: z.number().int().positive().max(20).optional(),
+        cursor: z.string().optional(),
+      })
+    )
+    .query(({ ctx, input }) => {
+      return ctx.localModelAssetService.searchRemoteCatalog({
+        engineId: 'local',
+        ...input,
+      })
+    }),
+
+  searchRemoteStream: publicProcedure
+    .input(
+      z.object({
+        requestId: z.string().min(1),
+        query: z.string().optional(),
+        sourceLanguage: z.string().optional(),
+        targetLanguage: z.string().optional(),
+        limit: z.number().int().positive().max(20).optional(),
+        cursor: z.string().optional(),
+      })
+    )
+    .subscription(({ ctx, input }) => {
+      return ctx.localModelAssetService.subscribeRemoteCatalog({
+        engineId: 'local',
+        ...input,
+      })
+    }),
+
+  state: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .query(({ ctx, input }) => {
+      return ctx.localModelAssetService.readSelectedModelState(input.modelId, input.selectedGroupId)
+    }),
+
+  subscribeLogs: publicProcedure.subscription(({ ctx }) => {
+    return ctx.localModelAssetService.subscribeLogs()
+  }),
+
+  markSelected: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.localModelAssetService.markSelectedModel(input.modelId)
+      return { success: true }
+    }),
+
+  download: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.localModelAssetService.startDownload(input.modelId, input.selectedGroupId)
+    }),
+
+  pause: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+      })
+    )
+    .mutation(({ ctx, input }) => {
+      return ctx.localModelAssetService.pauseDownload(input.modelId)
+    }),
+
+  resume: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.localModelAssetService.resumeDownload(input.modelId, input.selectedGroupId)
+    }),
+
+  delete: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+      })
+    )
+    .mutation(({ ctx, input }) => {
+      return ctx.localModelAssetService.deleteModel(input.modelId)
+    }),
 })
 
 const OPSX_CORE_PROFILE_WORKFLOWS = ['propose', 'explore', 'apply', 'archive'] as const
@@ -941,7 +1111,21 @@ export const configRouter = router({
         dashboard: DashboardConfigSchema.partial().optional(),
         git: GitConfigSchema.partial().optional(),
         notifications: NotificationSettingsSchema.partial().optional(),
-        translation: DocumentTranslationConfigSchema.partial().optional(),
+        translation: DocumentTranslationConfigSchema.partial()
+          .extend({
+            engines: z
+              .object({
+                local: z
+                  .object({
+                    model: z.string().min(1).optional(),
+                    selectedGroupId: z.string().min(1).optional(),
+                  })
+                  .optional(),
+                openai: z.object({ model: z.string().min(1).optional() }).optional(),
+              })
+              .optional(),
+          })
+          .optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -1881,6 +2065,8 @@ export const appRouter = router({
   config: configRouter,
   globalSettings: globalSettingsRouter,
   translationCache: translationCacheRouter,
+  translationEngines: translationEnginesRouter,
+  localModels: localModelsRouter,
   notifications: notificationsRouter,
   sounds: soundsRouter,
   cli: cliRouter,

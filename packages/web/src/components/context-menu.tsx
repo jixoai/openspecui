@@ -1,3 +1,4 @@
+import clsx from 'clsx'
 import {
   forwardRef,
   useEffect,
@@ -283,9 +284,13 @@ export function ContextMenu({
 
 export const ContextMenuWrapper = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   function ContextMenuWrapper({ children, className, ...props }, ref) {
-    const mergedClassName = className ? `relative ${className}` : 'relative'
     return (
-      <div ref={ref} data-context-menu-wrapper="" className={mergedClassName} {...props}>
+      <div
+        ref={ref}
+        data-context-menu-wrapper=""
+        className={clsx('relative', className)}
+        {...props}
+      >
         {children}
       </div>
     )

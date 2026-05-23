@@ -70,6 +70,7 @@ export function ArchiveView() {
       folder={{
         changeId,
         archived: true,
+        files: entity?.files,
       }}
       tabsQueryKey="archiveTab"
     />

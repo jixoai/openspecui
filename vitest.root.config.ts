@@ -1,6 +1,6 @@
 export default {
   test: {
     environment: 'node',
-    include: ['scripts/**/*.test.ts'],
+    include: ['scripts/**/*.test.ts', 'scripts/**/*.test.mjs'],
   },
 }

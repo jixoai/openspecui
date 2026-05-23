@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -70,5 +70,71 @@ describe('preparePublishDirectory', () => {
     expect(prepared.dir).toBe(sourceDir)
     prepared.cleanup()
     rmSync(sourceDir, { force: true, recursive: true })
+  })
+
+  it('replaces publishable workspace ranges and removes private workspace dependencies', () => {
+    const workspaceRoot = mkdtempSync(join(tmpdir(), 'openspecui-publish-root-'))
+    const packagesDir = join(workspaceRoot, 'packages')
+    const coreDir = join(packagesDir, 'core')
+    const privateDir = join(packagesDir, 'local-translator')
+    const serverDir = join(packagesDir, 'server')
+    for (const dir of [packagesDir, coreDir, privateDir, serverDir]) {
+      mkdirSync(dir, { recursive: true })
+    }
+
+    writeFileSync(
+      join(coreDir, 'package.json'),
+      JSON.stringify({ name: '@openspecui/core', version: '3.9.1' }, null, 2)
+    )
+    writeFileSync(
+      join(privateDir, 'package.json'),
+      JSON.stringify(
+        { name: '@openspecui/local-translator', version: '3.9.1', private: true },
+        null,
+        2
+      )
+    )
+    writeFileSync(
+      join(serverDir, 'package.json'),
+      JSON.stringify(
+        {
+          name: '@openspecui/server',
+          version: '3.9.1',
+          dependencies: {
+            '@openspecui/core': 'workspace:*',
+            '@openspecui/local-translator': 'workspace:*',
+            hono: '^4.7.3',
+          },
+          devDependencies: {
+            '@openspecui/core': 'workspace:*',
+            vitest: '^4.1.0',
+          },
+        },
+        null,
+        2
+      )
+    )
+
+    const prepared = preparePublishDirectory(
+      serverDir,
+      'https://github.com/jixoai/openspecui',
+      workspaceRoot
+    )
+    const stagedManifest = JSON.parse(readFileSync(join(prepared.dir, 'package.json'), 'utf8')) as {
+      dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
+
+    expect(stagedManifest.dependencies).toEqual({
+      '@openspecui/core': '3.9.1',
+      hono: '^4.7.3',
+    })
+    expect(stagedManifest.devDependencies).toEqual({
+      '@openspecui/core': '3.9.1',
+      vitest: '^4.1.0',
+    })
+
+    prepared.cleanup()
+    rmSync(workspaceRoot, { force: true, recursive: true })
   })
 })

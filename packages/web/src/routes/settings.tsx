@@ -11,11 +11,6 @@ import { TerminalInvocationSettings } from '@/components/terminal/terminal-invoc
 import { generateTimelineScope, Toc, TocSection, type TocItem } from '@/components/toc'
 import { getApiBaseUrl } from '@/lib/api-config'
 import {
-  prepareBrowserTranslation,
-  probeBrowserTranslation,
-  type BrowserTranslationStatus,
-} from '@/lib/browser-translation'
-import {
   CODE_EDITOR_THEME_OPTIONS,
   DEFAULT_CODE_EDITOR_THEME,
   isCodeEditorTheme,
@@ -43,16 +38,10 @@ import {
   type TerminalThemeMode,
 } from '@/lib/terminal-theme'
 import { applyTheme, getStoredTheme, persistTheme, type Theme } from '@/lib/theme'
-import { findTranslationLanguage, searchTranslationLanguages } from '@/lib/translation-languages'
 import { queryClient, trpc, trpcClient } from '@/lib/trpc'
 import { useCliRunner } from '@/lib/use-cli-runner'
 import { useServerStatus } from '@/lib/use-server-status'
 import { useConfigSubscription } from '@/lib/use-subscription'
-import {
-  DEFAULT_TRANSLATION_CACHE_ENTRY_LIMIT,
-  type DocumentTranslationConfig,
-  type DocumentTranslationDisplayMode,
-} from '@openspecui/core/document-translation'
 import { OFFICIAL_APP_BASE_URL } from '@openspecui/core/hosted-app'
 import { NotificationSoundSchema } from '@openspecui/core/notifications'
 import {
@@ -67,12 +56,10 @@ import {
   ArrowUp,
   Check,
   CheckCircle,
-  ChevronDown,
   Download,
   FolderOpen,
   FolderPlus,
   GitCommitHorizontal,
-  Languages,
   LayoutDashboard,
   Link2,
   Loader2,
@@ -80,27 +67,14 @@ import {
   Moon,
   Plus,
   RefreshCw,
-  RotateCcw,
-  Search,
   Settings as SettingsIcon,
   Sparkles,
   Sun,
   Terminal,
   Unlink2,
-  X,
   XCircle,
 } from 'lucide-react'
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ToggleEvent as ReactToggleEvent,
-} from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   buildSettingsInitArgs,
   canAutoInit,
@@ -111,6 +85,7 @@ import {
   type InitProfileOverride,
   type InitToolsMode,
 } from './settings-init'
+import { SettingsTranslationPanel } from './settings-translation-panel'
 
 function formatExecutePath(command: string, args: readonly string[] = []): string {
   const quote = (token: string): string => {
@@ -119,29 +94,6 @@ function formatExecutePath(command: string, args: readonly string[] = []): strin
     return JSON.stringify(token)
   }
   return [command, ...args].map(quote).join(' ')
-}
-
-function formatTranslationCapability(
-  capability: BrowserTranslationStatus | null,
-  loading: boolean
-): string {
-  if (loading) return 'Checking browser translation capability...'
-  if (!capability) return 'Capability not checked yet.'
-
-  switch (capability.availability) {
-    case 'available':
-      return 'Translator is ready.'
-    case 'downloadable':
-      return 'Language support can be downloaded by Chrome.'
-    case 'downloading':
-      return 'Chrome is preparing translation support.'
-    case 'missing':
-      return capability.message ?? 'Chrome Translator API is not exposed.'
-    case 'unavailable':
-      return 'Translation is unavailable for this browser or language pair.'
-    case 'error':
-      return capability.message ?? 'Unable to check translation capability.'
-  }
 }
 
 const INIT_TOOLS_MODE_OPTIONS: SelectOption<InitToolsMode>[] = [
@@ -165,10 +117,6 @@ const DEFAULT_TERMINAL_RENDERER_ENGINE: TerminalRendererEngine = 'xterm'
 const DEFAULT_TERMINAL_BELL_VOLUME = 1
 const DEFAULT_DASHBOARD_TREND_POINT_LIMIT = 100
 const DEFAULT_GIT_DIFF_EAGER_LINE_BUDGET = 1000
-const DEFAULT_TRANSLATION_TARGET_LANGUAGE = 'zh'
-const DEFAULT_TRANSLATION_DISPLAY_MODE: DocumentTranslationDisplayMode = 'direct'
-const DEFAULT_TRANSLATION_CACHE_ENABLED = false
-
 const THEME_OPTIONS = [
   {
     value: 'light',
@@ -206,11 +154,6 @@ const TERMINAL_CURSOR_STYLE_OPTIONS = [
   { value: 'underline', label: 'Underline' },
   { value: 'bar', label: 'Bar' },
 ] satisfies ButtonGroupOption<TerminalCursorStyle>[]
-
-const TRANSLATION_DISPLAY_MODE_OPTIONS = [
-  { value: 'direct', label: 'Direct' },
-  { value: 'bilingual', label: 'Bilingual' },
-] satisfies ButtonGroupOption<DocumentTranslationDisplayMode>[]
 
 const SETTINGS_TOC_ITEMS: TocItem[] = [
   { id: 'settings-appearance', label: 'Appearance' },
@@ -405,15 +348,6 @@ export function Settings() {
     ...trpc.config.getEffectiveCliCommand.queryOptions(),
     enabled: !inStaticMode,
   })
-  const { data: globalSettings, refetch: refetchGlobalSettings } = useQuery({
-    ...trpc.globalSettings.get.queryOptions(),
-    enabled: !inStaticMode,
-  })
-  const { data: translationCacheStats, refetch: refetchTranslationCacheStats } = useQuery({
-    ...trpc.translationCache.stats.queryOptions(),
-    enabled: !inStaticMode && (config?.translation?.cacheEnabled ?? false),
-  })
-
   // 获取所有工具列表
   // Skip in static mode
   const { data: allTools } = useQuery({
@@ -732,21 +666,6 @@ export function Settings() {
   const [termBellVolume, setTermBellVolume] = useState(initialConfig.bellVolume)
   const [dashboardTrendPointLimit, setDashboardTrendPointLimit] = useState(100)
   const [gitDiffEagerLineBudget, setGitDiffEagerLineBudget] = useState(1000)
-  const [translationEnabled, setTranslationEnabled] = useState(false)
-  const [translationTargetLanguage, setTranslationTargetLanguage] = useState(
-    DEFAULT_TRANSLATION_TARGET_LANGUAGE
-  )
-  const [translationDisplayMode, setTranslationDisplayMode] =
-    useState<DocumentTranslationDisplayMode>(DEFAULT_TRANSLATION_DISPLAY_MODE)
-  const [translationCacheEnabled, setTranslationCacheEnabled] = useState(
-    DEFAULT_TRANSLATION_CACHE_ENABLED
-  )
-  const [translationCacheEntryLimit, setTranslationCacheEntryLimit] = useState(
-    DEFAULT_TRANSLATION_CACHE_ENTRY_LIMIT
-  )
-  const [translationCapability, setTranslationCapability] =
-    useState<BrowserTranslationStatus | null>(null)
-  const [translationCapabilityLoading, setTranslationCapabilityLoading] = useState(false)
   const [termRendererError, setTermRendererError] = useState<string | null>(null)
   const codeEditorThemeOptions = CODE_EDITOR_THEME_OPTIONS satisfies SelectOption<CodeEditorTheme>[]
   const terminalThemeOptions = TERMINAL_THEME_OPTIONS satisfies SelectOption<TerminalThemeId>[]
@@ -909,21 +828,6 @@ export function Settings() {
       await queryClient.invalidateQueries({ queryKey: ['git'] })
     },
   })
-  const saveTranslationConfigMutation = useMutation({
-    mutationFn: (translation: Partial<DocumentTranslationConfig>) =>
-      trpcClient.config.update.mutate({ translation }),
-  })
-  const saveGlobalTranslationCacheMutation = useMutation({
-    mutationFn: (entryLimit: number) =>
-      trpcClient.globalSettings.update.mutate({ translationCache: { entryLimit } }),
-  })
-  const cleanTranslationCacheMutation = useMutation({
-    mutationFn: () => trpcClient.translationCache.clean.mutate(),
-  })
-  const clearTranslationCacheMutation = useMutation({
-    mutationFn: () => trpcClient.translationCache.clear.mutate(),
-  })
-
   useEffect(() => {
     const nextLimit = config?.dashboard?.trendPointLimit
     if (typeof nextLimit === 'number' && Number.isFinite(nextLimit)) {
@@ -936,27 +840,6 @@ export function Settings() {
       setGitDiffEagerLineBudget(nextBudget)
     }
   }, [config?.git?.diffEagerLineBudget])
-  useEffect(() => {
-    setTranslationEnabled(config?.translation?.enabled ?? false)
-    setTranslationTargetLanguage(
-      config?.translation?.targetLanguage ?? DEFAULT_TRANSLATION_TARGET_LANGUAGE
-    )
-    setTranslationDisplayMode(config?.translation?.displayMode ?? DEFAULT_TRANSLATION_DISPLAY_MODE)
-    setTranslationCacheEnabled(
-      config?.translation?.cacheEnabled ?? DEFAULT_TRANSLATION_CACHE_ENABLED
-    )
-  }, [
-    config?.translation?.cacheEnabled,
-    config?.translation?.displayMode,
-    config?.translation?.enabled,
-    config?.translation?.targetLanguage,
-  ])
-  useEffect(() => {
-    setTranslationCacheEntryLimit(
-      globalSettings?.translationCache?.entryLimit ?? DEFAULT_TRANSLATION_CACHE_ENTRY_LIMIT
-    )
-  }, [globalSettings?.translationCache?.entryLimit])
-
   const savedDashboardTrendPointLimit =
     config?.dashboard?.trendPointLimit ?? DEFAULT_DASHBOARD_TREND_POINT_LIMIT
   const savedGitDiffEagerLineBudget =
@@ -1004,14 +887,6 @@ export function Settings() {
   )
   const notificationVolume = config?.notifications?.volume ?? 1
   const systemNotificationsEnabled = config?.notifications?.systemNotificationsEnabled ?? false
-  const savedTranslationConfig = {
-    enabled: config?.translation?.enabled ?? false,
-    targetLanguage: config?.translation?.targetLanguage ?? DEFAULT_TRANSLATION_TARGET_LANGUAGE,
-    displayMode: config?.translation?.displayMode ?? DEFAULT_TRANSLATION_DISPLAY_MODE,
-    cacheEnabled: config?.translation?.cacheEnabled ?? DEFAULT_TRANSLATION_CACHE_ENABLED,
-  }
-  const savedTranslationCacheEntryLimit =
-    globalSettings?.translationCache?.entryLimit ?? DEFAULT_TRANSLATION_CACHE_ENTRY_LIMIT
   const opsxAgentInvocationModeOptions = useMemo(
     () =>
       OPSX_AGENT_INVOCATION_MODE_OPTIONS.map((option) => ({
@@ -1020,28 +895,6 @@ export function Settings() {
       })),
     [saveOpsxConfigMutation.isPending]
   )
-  const refreshTranslationCapability = useCallback(
-    async (targetLanguage: string, options: { initialize?: boolean } = {}) => {
-      setTranslationCapabilityLoading(true)
-      const controller = new AbortController()
-      try {
-        const status = options.initialize
-          ? await prepareBrowserTranslation(targetLanguage, controller.signal)
-          : await probeBrowserTranslation(targetLanguage)
-        setTranslationCapability(status)
-      } finally {
-        controller.abort()
-        setTranslationCapabilityLoading(false)
-      }
-    },
-    []
-  )
-
-  useEffect(() => {
-    if (!translationEnabled) return
-    void refreshTranslationCapability(translationTargetLanguage, { initialize: true })
-  }, [refreshTranslationCapability, translationEnabled, translationTargetLanguage])
-
   useEffect(() => {
     applyTheme(theme)
     persistTheme(theme)
@@ -1080,7 +933,7 @@ export function Settings() {
       style={{ timelineScope: generateTimelineScope(SETTINGS_TOC_ITEMS) } as CSSProperties}
     >
       <div className="toc-page-layout min-h-full gap-6 p-4 [--toc-page-sidebar-min:14rem]">
-        <Toc items={SETTINGS_TOC_ITEMS} className="toc-page-sidebar" />
+        <Toc items={SETTINGS_TOC_ITEMS} className="toc-page-sidebar [--toc-sticky-top:16px]" />
         <div className="toc-page-content min-w-0 space-y-8">
           <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
             <SettingsIcon className="h-6 w-6 shrink-0" />
@@ -1413,198 +1266,7 @@ export function Settings() {
                 />
               </TocSection>
 
-              <TocSection
-                id="settings-translation"
-                index={tocIndex('settings-translation')}
-                className="space-y-4"
-              >
-                <h2 className="flex items-center gap-2 text-lg font-semibold">
-                  <Languages className="h-5 w-5" />
-                  Translation
-                </h2>
-                <div className="border-border space-y-4 rounded-lg border p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <label className="block text-sm font-medium">
-                        Enable document translation
-                      </label>
-                      <p className="text-muted-foreground mt-1 text-sm">
-                        Uses the browser Translator API for Markdown document views.
-                      </p>
-                    </div>
-                    <Switch
-                      checked={translationEnabled}
-                      onCheckedChange={(checked) => {
-                        setTranslationEnabled(checked)
-                        saveTranslationConfigMutation.mutate({ enabled: checked })
-                        if (checked) {
-                          void refreshTranslationCapability(translationTargetLanguage, {
-                            initialize: true,
-                          })
-                        }
-                      }}
-                      ariaLabel="Enable document translation"
-                      disabled={saveTranslationConfigMutation.isPending}
-                    />
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                      <label className="mb-2 block text-sm font-medium">Target Language</label>
-                      <TranslationLanguageCombobox
-                        value={translationTargetLanguage}
-                        onChange={(targetLanguage) => {
-                          setTranslationTargetLanguage(targetLanguage)
-                          saveTranslationConfigMutation.mutate({ targetLanguage })
-                          if (translationEnabled) {
-                            void refreshTranslationCapability(targetLanguage, {
-                              initialize: true,
-                            })
-                          }
-                        }}
-                        disabled={saveTranslationConfigMutation.isPending}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-medium">Display Mode</label>
-                      <ButtonGroup<DocumentTranslationDisplayMode>
-                        value={translationDisplayMode}
-                        onChange={(displayMode) => {
-                          setTranslationDisplayMode(displayMode)
-                          saveTranslationConfigMutation.mutate({ displayMode })
-                        }}
-                        options={TRANSLATION_DISPLAY_MODE_OPTIONS}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="border-border/60 flex flex-wrap items-center gap-2 border-t pt-3 text-sm">
-                    {translationCapabilityLoading ? (
-                      <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
-                    ) : translationCapability?.availability === 'available' ? (
-                      <CheckCircle className="h-4 w-4 text-emerald-500" />
-                    ) : translationCapability?.availability === 'downloadable' ||
-                      translationCapability?.availability === 'downloading' ? (
-                      <Download className="h-4 w-4 text-sky-500" />
-                    ) : (
-                      <AlertTriangle className="h-4 w-4 text-amber-500" />
-                    )}
-                    <span className="text-muted-foreground">
-                      {formatTranslationCapability(
-                        translationCapability,
-                        translationCapabilityLoading
-                      )}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() =>
-                        void refreshTranslationCapability(translationTargetLanguage, {
-                          initialize: translationEnabled,
-                        })
-                      }
-                      disabled={translationCapabilityLoading}
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                      Check
-                    </Button>
-                  </div>
-
-                  <div className="border-border/60 space-y-3 border-t pt-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <label className="block text-sm font-medium">Translation cache</label>
-                        <p className="text-muted-foreground mt-1 text-sm">
-                          Stores validated browser translation projections in the shared user cache.
-                        </p>
-                      </div>
-                      <Switch
-                        checked={translationCacheEnabled}
-                        onCheckedChange={(checked) => {
-                          setTranslationCacheEnabled(checked)
-                          saveTranslationConfigMutation.mutate({ cacheEnabled: checked })
-                          if (checked) void refetchTranslationCacheStats()
-                        }}
-                        ariaLabel="Enable translation cache"
-                        disabled={saveTranslationConfigMutation.isPending}
-                      />
-                    </div>
-
-                    {translationCacheEnabled ? (
-                      <div className="grid gap-3 md:grid-cols-[minmax(12rem,1fr)_auto]">
-                        <label className="block text-sm font-medium">
-                          Entry limit
-                          <input
-                            type="number"
-                            min={100}
-                            max={200000}
-                            step={100}
-                            value={translationCacheEntryLimit}
-                            onChange={(event) =>
-                              setTranslationCacheEntryLimit(Number(event.currentTarget.value))
-                            }
-                            onBlur={() => {
-                              const nextLimit = Math.round(translationCacheEntryLimit)
-                              setTranslationCacheEntryLimit(nextLimit)
-                              saveGlobalTranslationCacheMutation.mutate(nextLimit, {
-                                onSuccess: () => {
-                                  void Promise.allSettled([
-                                    refetchGlobalSettings(),
-                                    refetchTranslationCacheStats(),
-                                  ])
-                                },
-                              })
-                            }}
-                            className="border-input bg-background mt-2 h-9 w-full rounded-md border px-3 text-sm"
-                          />
-                        </label>
-                        <div className="flex flex-wrap items-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() =>
-                              cleanTranslationCacheMutation.mutate(undefined, {
-                                onSuccess: () => void refetchTranslationCacheStats(),
-                              })
-                            }
-                            disabled={cleanTranslationCacheMutation.isPending}
-                          >
-                            <RotateCcw className="h-3.5 w-3.5" />
-                            Clean
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() =>
-                              clearTranslationCacheMutation.mutate(undefined, {
-                                onSuccess: () => void refetchTranslationCacheStats(),
-                              })
-                            }
-                            disabled={clearTranslationCacheMutation.isPending}
-                          >
-                            <XCircle className="h-3.5 w-3.5" />
-                            Clear
-                          </Button>
-                        </div>
-                        <p className="text-muted-foreground text-xs md:col-span-2">
-                          {translationCacheStats
-                            ? `${translationCacheStats.entries} / ${translationCacheStats.entryLimit} entries`
-                            : 'Cache stats unavailable.'}
-                        </p>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {savedTranslationConfig.enabled !== translationEnabled ||
-                  savedTranslationConfig.targetLanguage !== translationTargetLanguage ||
-                  savedTranslationConfig.displayMode !== translationDisplayMode ||
-                  savedTranslationConfig.cacheEnabled !== translationCacheEnabled ||
-                  savedTranslationCacheEntryLimit !== translationCacheEntryLimit ? (
-                    <p className="text-muted-foreground text-xs">Saving translation settings...</p>
-                  ) : null}
-                </div>
-              </TocSection>
+              <SettingsTranslationPanel index={tocIndex('settings-translation')} />
 
               {/* Dashboard Settings */}
               <TocSection
@@ -2411,223 +2073,6 @@ export function Settings() {
                 )}
               </Dialog>
             </>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function TranslationLanguageCombobox({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: string
-  onChange: (value: string) => void
-  disabled?: boolean
-}) {
-  const id = useId().replace(/[^a-zA-Z0-9_-]/g, '')
-  const popoverId = `translation-target-language-popover-${id}`
-  const listboxId = `translation-target-language-options-${id}`
-  const selectedLanguage = findTranslationLanguage(value)
-  const selectedLabel = selectedLanguage?.label ?? value
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const popoverRef = useRef<HTMLDivElement>(null)
-  const searchInputRef = useRef<HTMLInputElement>(null)
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const [popoverPosition, setPopoverPosition] = useState<{
-    left: number
-    top: number
-    width: number
-  } | null>(null)
-  const filteredOptions = useMemo(() => searchTranslationLanguages(query), [query])
-
-  const updatePopoverPosition = useCallback(() => {
-    const trigger = triggerRef.current
-    if (!trigger) return
-    const rect = trigger.getBoundingClientRect()
-    const margin = 8
-    const width = Math.min(Math.max(rect.width, 320), window.innerWidth - margin * 2)
-    const left = Math.min(window.innerWidth - width - margin, Math.max(margin, rect.left))
-    const top = Math.min(window.innerHeight - margin, Math.max(margin, rect.bottom + 4))
-    setPopoverPosition({ left, top, width })
-  }, [])
-
-  const hidePopover = useCallback(() => {
-    const popover = popoverRef.current
-    if (!popover) {
-      setOpen(false)
-      return
-    }
-    if (typeof popover.hidePopover === 'function') {
-      try {
-        popover.hidePopover()
-        return
-      } catch {
-        // Native popover can throw if the element is already closed.
-      }
-    }
-    setOpen(false)
-  }, [])
-
-  useLayoutEffect(() => {
-    if (open) {
-      updatePopoverPosition()
-    }
-  }, [open, updatePopoverPosition])
-
-  useEffect(() => {
-    if (!open) return
-    searchInputRef.current?.focus()
-    searchInputRef.current?.select()
-  }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    window.addEventListener('resize', updatePopoverPosition)
-    window.addEventListener('scroll', updatePopoverPosition, true)
-    return () => {
-      window.removeEventListener('resize', updatePopoverPosition)
-      window.removeEventListener('scroll', updatePopoverPosition, true)
-    }
-  }, [open, updatePopoverPosition])
-
-  useEffect(() => {
-    if (disabled) {
-      hidePopover()
-      setQuery('')
-    }
-  }, [disabled, hidePopover])
-
-  const commitLanguage = useCallback(
-    (languageCode: string) => {
-      setQuery('')
-      onChange(languageCode)
-      hidePopover()
-    },
-    [hidePopover, onChange]
-  )
-
-  const clearQuery = useCallback(() => {
-    setQuery('')
-    searchInputRef.current?.focus()
-  }, [])
-
-  const handleToggle = useCallback(
-    (event: ReactToggleEvent<HTMLDivElement>) => {
-      const nextOpen = event.newState === 'open'
-      setOpen(nextOpen)
-      if (nextOpen) {
-        updatePopoverPosition()
-      } else {
-        setQuery('')
-      }
-    },
-    [updatePopoverPosition]
-  )
-
-  return (
-    <div>
-      <button
-        ref={triggerRef}
-        type="button"
-        aria-label="Translation target language"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-controls={popoverId}
-        popoverTarget={popoverId}
-        popoverTargetAction="toggle"
-        disabled={disabled}
-        onClick={updatePopoverPosition}
-        className="border-border bg-background text-foreground hover:bg-muted/30 focus:ring-primary inline-flex h-9 w-full min-w-0 items-center gap-2 rounded-md border px-3 py-2 text-left text-sm outline-none focus:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <Languages className="text-muted-foreground h-4 w-4 shrink-0" />
-        {selectedLanguage ? (
-          <span className="text-muted-foreground shrink-0 font-mono text-xs">
-            {selectedLanguage.code}
-          </span>
-        ) : null}
-        <span className="min-w-0 flex-1 truncate">{selectedLabel || 'Select language'}</span>
-        <ChevronDown className="text-muted-foreground h-4 w-4 shrink-0" />
-      </button>
-
-      <div
-        id={popoverId}
-        ref={popoverRef}
-        role="dialog"
-        aria-label="Select translation target language"
-        popover="auto"
-        onToggle={handleToggle}
-        className="bg-card border-border m-0 rounded-md border p-2 shadow-lg backdrop:bg-transparent"
-        style={
-          popoverPosition
-            ? {
-                position: 'fixed',
-                inset: 'auto',
-                left: popoverPosition.left,
-                top: popoverPosition.top,
-                width: popoverPosition.width,
-              }
-            : undefined
-        }
-      >
-        <div className="border-border bg-background sticky top-0 z-10 mb-2 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border px-2 py-1.5">
-          <Search className="text-muted-foreground h-4 w-4" aria-hidden="true" />
-          <input
-            ref={searchInputRef}
-            role="textbox"
-            aria-label="Search translation languages"
-            aria-autocomplete="list"
-            aria-controls={listboxId}
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value)
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') {
-                hidePopover()
-              }
-            }}
-            className="text-foreground placeholder:text-muted-foreground min-w-0 bg-transparent text-sm outline-none"
-            placeholder="Search code, English, or native name"
-          />
-          <button
-            type="button"
-            aria-label="Clear search"
-            title="Clear"
-            onClick={clearQuery}
-            disabled={disabled || query.length === 0}
-            className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-6 w-6 items-center justify-center rounded transition-colors disabled:pointer-events-none disabled:opacity-40"
-          >
-            <X className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
-        </div>
-
-        <div
-          id={listboxId}
-          role="listbox"
-          aria-label="Translation target language options"
-          className="scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[color-mix(in_srgb,currentColor,transparent_78%)] max-h-60 overflow-y-auto"
-        >
-          {filteredOptions.length > 0 ? (
-            filteredOptions.map((language) => (
-              <button
-                key={language.code}
-                type="button"
-                role="option"
-                aria-selected={language.code === value}
-                className="hover:bg-muted grid w-full grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => commitLanguage(language.code)}
-              >
-                <span className="text-muted-foreground font-mono text-xs">{language.code}</span>
-                <span className="min-w-0 truncate">{language.label}</span>
-              </button>
-            ))
-          ) : (
-            <div className="text-muted-foreground px-2 py-2 text-sm">No matching languages</div>
           )}
         </div>
       </div>

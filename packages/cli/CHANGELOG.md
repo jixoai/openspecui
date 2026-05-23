@@ -1,5 +1,30 @@
 # openspecui
 
+## 3.10.0
+
+## 3.9.0
+
+## 3.8.0
+
+### Minor Changes
+
+- 4f43845: Switch translation engines to bundled dynamic imports and batch translation.
+
+  Notable translation engine changes:
+  - rename engine ids to `browser | local | openai`
+  - rename translator packages to `@openspecui/local-translator` and `@openspecui/openai-completion-translator`
+  - replace single `translate(...)` with `batchTranslate(...)`
+  - remove engine install/cancel install flows and old `nmt/ai` config keys
+  - add resumable Local-Transformers model downloads with byte-level progress recovery
+
+## 3.7.2
+
+### Patch Changes
+
+- f679575: Unify the shared change and archive document detail UI, keep detail heading anchors aligned,
+  normalize pnpm CLI argv separators, and tighten translation UX with unavailable-state buttons
+  plus dark-mode-safe target language popovers.
+
 ## 3.7.1
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@openspecui/server",
-  "version": "3.7.1",
+  "version": "3.10.0",
   "type": "module",
   "main": "dist/index.mjs",
   "exports": {
@@ -14,7 +14,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts --format esm --no-dts",
+    "build": "tsdown",
     "typecheck": "tsc -p tsconfig.check.json --noEmit",
     "dev": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--conditions=development\" tsx watch --include '../core/dist/**' --include '../search/dist/**' src/standalone.ts",
     "test": "vitest run",
@@ -22,20 +22,26 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.14.1",
+    "@huggingface/hub": "^2.12.0",
+    "@huggingface/transformers": "^4.2.0",
     "@lydell/node-pty": "^1.1.0",
     "@openspecui/core": "workspace:*",
+    "@openspecui/local-translator": "workspace:*",
+    "@openspecui/openai-completion-translator": "workspace:*",
     "@openspecui/search": "workspace:*",
     "@trpc/server": "^11.0.0",
     "@types/better-sqlite3": "^7.6.13",
     "better-sqlite3": "^12.5.0",
     "hono": "^4.7.3",
     "tsx": "^4.19.2",
+    "undici": "^7.18.2",
     "ws": "^8.18.0",
     "yaml": "^2.8.0",
     "yargs": "^18.0.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@trpc/client": "^11.7.2",
     "@types/node": "^22.10.2",
     "@types/ws": "^8.5.13",
     "@types/yargs": "^17.0.35",

@@ -5,9 +5,10 @@ import { promisify } from 'util'
 import { z } from 'zod'
 import {
   DocumentTranslationConfigSchema,
-  type DocumentTranslationConfig,
+  type DocumentTranslationConfigUpdate,
 } from './document-translation.js'
 import { NotificationSettingsSchema, type NotificationSettings } from './notifications.js'
+import { sanitizePersistedSettings, type PersistedSanitizeRule } from './persisted-settings-sanitize.js'
 import { reactiveReadFile, updateReactiveFileCache } from './reactive-fs/index.js'
 import { DEFAULT_BELL_SOUND_ID, SoundVolumeSchema } from './sounds.js'
 import { runBufferedCommand } from './spawn-safe.js'
@@ -573,7 +574,7 @@ export const TerminalConfigSchema = z.object({
   useTheme: TerminalThemeModeSchema.default(DEFAULT_TERMINAL_THEME_MODE),
   lightTheme: TerminalThemeSchema.default(DEFAULT_TERMINAL_LIGHT_THEME),
   darkTheme: TerminalThemeSchema.default(DEFAULT_TERMINAL_DARK_THEME),
-  rendererEngine: z.string().default('xterm'),
+  rendererEngine: TerminalRendererEngineSchema.default('xterm'),
   bellSound: TerminalBellSoundSchema.default(DEFAULT_BELL_SOUND_ID),
   bellVolume: SoundVolumeSchema,
 })
@@ -663,7 +664,7 @@ export type OpenSpecUIConfigUpdate = {
   dashboard?: Partial<DashboardConfig>
   git?: Partial<GitConfig>
   notifications?: Partial<NotificationSettings>
-  translation?: Partial<DocumentTranslationConfig>
+  translation?: DocumentTranslationConfigUpdate
 }
 
 export type PersistedOpenSpecUIConfig = {
@@ -679,7 +680,7 @@ export type PersistedOpenSpecUIConfig = {
   dashboard?: Partial<DashboardConfig>
   git?: Partial<GitConfig>
   notifications?: Partial<NotificationSettings>
-  translation?: Partial<DocumentTranslationConfig>
+  translation?: DocumentTranslationConfigUpdate
 }
 
 /** 默认配置（静态，用于测试和类型） */
@@ -697,6 +698,117 @@ export const DEFAULT_CONFIG: OpenSpecUIConfig = {
   notifications: NotificationSettingsSchema.parse({}),
   translation: DocumentTranslationConfigSchema.parse({}),
 }
+
+const PERSISTED_CONFIG_SANITIZE_RULES = [
+  { kind: 'object', path: ['cli'], fallback: {} },
+  { kind: 'field', path: ['theme'], schema: z.enum(THEME_VALUES), fallback: DEFAULT_CONFIG.theme },
+  {
+    kind: 'object',
+    path: ['codeEditor'],
+    fallback: {},
+  },
+  {
+    kind: 'field',
+    path: ['codeEditor', 'theme'],
+    schema: CodeEditorThemeSchema,
+    fallback: DEFAULT_CONFIG.codeEditor.theme,
+  },
+  {
+    kind: 'object',
+    path: ['opsx'],
+    fallback: {},
+  },
+  {
+    kind: 'field',
+    path: ['opsx', 'agentInvocationMode'],
+    schema: OpsxAgentInvocationModeSchema,
+    fallback: DEFAULT_CONFIG.opsx.agentInvocationMode,
+  },
+  {
+    kind: 'object',
+    path: ['terminal'],
+    fallback: {},
+  },
+  {
+    kind: 'field',
+    path: ['terminal', 'cursorStyle'],
+    schema: z.enum(CURSOR_STYLE_VALUES),
+    fallback: DEFAULT_CONFIG.terminal.cursorStyle,
+  },
+  {
+    kind: 'field',
+    path: ['terminal', 'useTheme'],
+    schema: TerminalThemeModeSchema,
+    fallback: DEFAULT_CONFIG.terminal.useTheme,
+  },
+  {
+    kind: 'field',
+    path: ['terminal', 'lightTheme'],
+    schema: TerminalThemeSchema,
+    fallback: DEFAULT_CONFIG.terminal.lightTheme,
+  },
+  {
+    kind: 'field',
+    path: ['terminal', 'darkTheme'],
+    schema: TerminalThemeSchema,
+    fallback: DEFAULT_CONFIG.terminal.darkTheme,
+  },
+  {
+    kind: 'field',
+    path: ['terminal', 'rendererEngine'],
+    schema: TerminalRendererEngineSchema,
+    fallback: DEFAULT_CONFIG.terminal.rendererEngine,
+  },
+  {
+    kind: 'field',
+    path: ['terminal', 'bellSound'],
+    schema: TerminalBellSoundSchema,
+    fallback: DEFAULT_CONFIG.terminal.bellSound,
+  },
+  {
+    kind: 'object',
+    path: ['notifications'],
+    fallback: {},
+  },
+  {
+    kind: 'field',
+    path: ['notifications', 'sound'],
+    schema: NotificationSettingsSchema.shape.sound,
+    fallback: DEFAULT_CONFIG.notifications.sound,
+  },
+  {
+    kind: 'object',
+    path: ['translation'],
+    fallback: {},
+  },
+  {
+    kind: 'object',
+    path: ['translation', 'engines'],
+    fallback: {},
+  },
+  {
+    kind: 'object',
+    path: ['translation', 'engines', 'local'],
+    fallback: {},
+  },
+  {
+    kind: 'object',
+    path: ['translation', 'engines', 'openai'],
+    fallback: {},
+  },
+  {
+    kind: 'field',
+    path: ['translation', 'displayMode'],
+    schema: DocumentTranslationConfigSchema.shape.displayMode,
+    fallback: DEFAULT_CONFIG.translation.displayMode,
+  },
+  {
+    kind: 'field',
+    path: ['translation', 'engineId'],
+    schema: DocumentTranslationConfigSchema.shape.engineId,
+    fallback: DEFAULT_CONFIG.translation.engineId,
+  },
+] as const satisfies readonly PersistedSanitizeRule[]
 
 function areStringArraysEqual(
   left: readonly string[] | undefined,
@@ -855,6 +967,35 @@ export function toPersistedConfig(
   if (config.translation.cacheEnabled !== DEFAULT_CONFIG.translation.cacheEnabled) {
     translation.cacheEnabled = config.translation.cacheEnabled
   }
+  if (config.translation.engineId !== DEFAULT_CONFIG.translation.engineId) {
+    translation.engineId = config.translation.engineId
+  }
+  const translationEngines: NonNullable<
+    NonNullable<PersistedOpenSpecUIConfig['translation']>['engines']
+  > = {}
+  const localEngine: NonNullable<
+    NonNullable<PersistedOpenSpecUIConfig['translation']>['engines']
+  >['local'] = {}
+  if (
+    config.translation.engines.local.model !== DEFAULT_CONFIG.translation.engines.local.model
+  ) {
+    localEngine.model = config.translation.engines.local.model
+  }
+  if (
+    config.translation.engines.local.selectedGroupId !==
+    DEFAULT_CONFIG.translation.engines.local.selectedGroupId
+  ) {
+    localEngine.selectedGroupId = config.translation.engines.local.selectedGroupId
+  }
+  if (localEngine && hasOwnEntries(localEngine)) {
+    translationEngines.local = localEngine
+  }
+  if (config.translation.engines.openai.model !== DEFAULT_CONFIG.translation.engines.openai.model) {
+    translationEngines.openai = { model: config.translation.engines.openai.model }
+  }
+  if (hasOwnEntries(translationEngines)) {
+    translation.engines = translationEngines
+  }
   if (hasOwnEntries(translation)) {
     persisted.translation = translation
   }
@@ -894,7 +1035,8 @@ export class ConfigManager {
     try {
       const parsed = JSON.parse(content)
       const normalized = pruneNullish(parsed) ?? {}
-      const result = OpenSpecUIConfigSchema.safeParse(normalized)
+      const sanitized = sanitizePersistedSettings(normalized, PERSISTED_CONFIG_SANITIZE_RULES)
+      const result = OpenSpecUIConfigSchema.safeParse(sanitized)
 
       if (result.success) {
         return result.data
@@ -961,7 +1103,20 @@ export class ConfigManager {
       dashboard: { ...current.dashboard, ...config.dashboard },
       git: { ...current.git, ...config.git },
       notifications: { ...current.notifications, ...config.notifications },
-      translation: { ...current.translation, ...config.translation },
+      translation: {
+        ...current.translation,
+        ...config.translation,
+        engines: {
+          local: {
+            ...current.translation.engines.local,
+            ...config.translation?.engines?.local,
+          },
+          openai: {
+            ...current.translation.engines.openai,
+            ...config.translation?.engines?.openai,
+          },
+        },
+      },
     }
 
     const persisted = toPersistedConfig(merged)

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 function gitOutput(args) {
   const result = spawnSync('git', args, { encoding: 'utf8' })
@@ -28,9 +30,33 @@ function hasChangesetFile(files) {
   })
 }
 
+const privatePackageCache = new Map()
+
+function isPrivatePackageFile(file) {
+  if (!file.startsWith('packages/')) return false
+  const [scope, packageDir] = file.split('/')
+  if (scope !== 'packages' || !packageDir) return false
+
+  if (privatePackageCache.has(packageDir)) {
+    return privatePackageCache.get(packageDir)
+  }
+
+  const manifestPath = join(process.cwd(), 'packages', packageDir, 'package.json')
+  if (!existsSync(manifestPath)) {
+    privatePackageCache.set(packageDir, false)
+    return false
+  }
+
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  const isPrivate = manifest.private === true
+  privatePackageCache.set(packageDir, isPrivate)
+  return isPrivate
+}
+
 function isReleaseAffectingPackageFile(file) {
   if (!file.startsWith('packages/')) return false
   if (file.startsWith('packages/ai-provider/')) return false
+  if (isPrivatePackageFile(file)) return false
 
   if (file.endsWith('/README.md') || file.endsWith('/CHANGELOG.md')) return false
   if (file.includes('/__tests__/')) return false

@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { cleanupTempDir, createTempDir, waitFor } from './__tests__/test-utils.js'
+import { cleanupTempDir, createTempDir, waitFor, waitForDebounce } from './__tests__/test-utils.js'
 import { CliExecutor } from './cli-executor.js'
 import { ConfigManager } from './config.js'
 import { OpsxKernel } from './opsx-kernel.js'
@@ -155,6 +155,7 @@ process.exit(1)
       expect(kernel.getStatus('demo-change').artifacts[0]?.status).toBe('blocked')
 
       await mkdir(join(changeDir, 'loop', 'nested'), { recursive: true })
+      await waitForDebounce(250)
       await writeFile(join(changeDir, 'loop', 'nested', 'result.md'), 'done\n', 'utf-8')
 
       await waitFor(
@@ -175,6 +176,7 @@ process.exit(1)
       expect(kernel.getStatus('demo-change').artifacts[0]?.status).toBe('blocked')
 
       await mkdir(join(changeDir, 'loop', 'docs'), { recursive: true })
+      await waitForDebounce(250)
       await writeFile(join(changeDir, 'loop', 'docs', 'guide.md'), 'done\n', 'utf-8')
 
       await waitFor(

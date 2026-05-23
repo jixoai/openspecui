@@ -1532,3 +1532,25 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
   top: 0;
   white-space: nowrap;
 }
+
+.settings-floating-popover {
+  opacity: 0;
+  transform: translateY(-0.25rem) scale(0.98);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease,
+    overlay 120ms ease allow-discrete,
+    display 120ms ease allow-discrete;
+}
+
+.settings-floating-popover:popover-open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+@starting-style {
+  .settings-floating-popover:popover-open {
+    opacity: 0;
+    transform: translateY(-0.25rem) scale(0.98);
+  }
+}

@@ -27,6 +27,8 @@
       "@openspecui/core/markdown-facts": ["packages/core/src/markdown-facts.ts"],
       "@openspecui/core/markdown-reading": ["packages/core/src/markdown-reading.ts"],
       "@openspecui/core/document-translation": ["packages/core/src/document-translation.ts"],
+      "@openspecui/core/translator": ["packages/core/src/translator.ts"],
+      "@openspecui/core/local-download-profiles": ["packages/core/src/local-download-profiles.ts"],
       "@openspecui/core/notifications": ["packages/core/src/notifications.ts"],
       "@openspecui/core/openspec-annotations": ["packages/core/src/openspec-annotations.ts"],
       "@openspecui/core/openspec-projection": ["packages/core/src/openspec-projection.ts"],
@@ -41,6 +43,11 @@
       "@openspecui/core/terminal-theme": ["packages/core/src/terminal-theme.ts"],
       "@openspecui/search": ["packages/search/src/index.ts"],
       "@openspecui/search/node": ["packages/search/src/node.ts"],
+      "@openspecui/browser-translator": ["packages/browser-translator/src/index.ts"],
+      "@openspecui/local-translator": ["packages/local-translator/src/index.ts"],
+      "@openspecui/openai-completion-translator": [
+        "packages/openai-completion-translator/src/index.ts"
+      ],
       "@openspecui/ai-provider": ["packages/ai-provider/src/index.ts"]
     },
     "types": ["node"]

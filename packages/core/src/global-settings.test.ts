@@ -43,6 +43,7 @@ describe('GlobalSettingsManager', () => {
     clearCache()
 
     await expect(settingsManager.readSettings()).resolves.toEqual({
+      ...DEFAULT_GLOBAL_SETTINGS,
       translationCache: { entryLimit: 2000 },
     })
   })
@@ -52,6 +53,7 @@ describe('GlobalSettingsManager', () => {
     clearCache()
 
     await expect(settingsManager.readSettings()).resolves.toEqual({
+      ...DEFAULT_GLOBAL_SETTINGS,
       translationCache: { entryLimit: 2500 },
     })
     await expect(readFile(settingsPath, 'utf-8')).resolves.toBe(
@@ -75,12 +77,96 @@ describe('GlobalSettingsManager', () => {
     await expect(settingsManager.readSettings()).resolves.toEqual(DEFAULT_GLOBAL_SETTINGS)
   })
 
+  it('repairs invalid persisted global settings nodes without dropping valid siblings', async () => {
+    await mkdir(join(tempDir, '.openspecui'), { recursive: true })
+    await writeFile(
+      settingsPath,
+      JSON.stringify({
+        translationCache: { entryLimit: 2000 },
+        translationEngines: {
+          openai: 'broken',
+          local: {
+            model: 'onnx-community/opus-mt-en-zh',
+            hfEndpoint: 'https://hf-mirror.com',
+          },
+        },
+      }),
+      'utf-8'
+    )
+    clearCache()
+
+    await expect(settingsManager.readSettings()).resolves.toEqual({
+      ...DEFAULT_GLOBAL_SETTINGS,
+      translationCache: { entryLimit: 2000 },
+      translationEngines: {
+        openai: DEFAULT_GLOBAL_SETTINGS.translationEngines.openai,
+        local: {
+          ...DEFAULT_GLOBAL_SETTINGS.translationEngines.local,
+          model: 'onnx-community/opus-mt-en-zh',
+          hfEndpoint: 'https://hf-mirror.com',
+        },
+      },
+    })
+  })
+
   it('serializes only non-default global values', () => {
     expect(toPersistedGlobalSettings(DEFAULT_GLOBAL_SETTINGS)).toEqual({})
     expect(
       toPersistedGlobalSettings({
+        ...DEFAULT_GLOBAL_SETTINGS,
         translationCache: { entryLimit: 12000 },
       })
     ).toEqual({ translationCache: { entryLimit: 12000 } })
+  })
+
+  it('merges translator engine settings and prunes default siblings', async () => {
+    await settingsManager.writeSettings({
+      translationEngines: {
+        openai: {
+          baseUrl: 'https://api.example.com/v1',
+          token: 'secret-token',
+          model: 'gpt-4.1-mini',
+        },
+      },
+    })
+    clearCache()
+
+    const settings = await settingsManager.readSettings()
+    expect(settings.translationEngines.openai).toMatchObject({
+      baseUrl: 'https://api.example.com/v1',
+      token: 'secret-token',
+      model: 'gpt-4.1-mini',
+    })
+    await expect(readFile(settingsPath, 'utf-8')).resolves.toBe(
+      '{\n  "translationEngines": {\n    "openai": {\n      "baseUrl": "https://api.example.com/v1",\n      "token": "secret-token"\n    }\n  }\n}'
+    )
+  })
+
+  it('persists non-default local Hugging Face endpoint settings', async () => {
+    await settingsManager.writeSettings({
+      translationEngines: {
+        local: {
+          hfEndpoint: 'https://hf-mirror.com',
+        },
+      },
+    })
+    clearCache()
+
+    const settings = await settingsManager.readSettings()
+    expect(settings.translationEngines.local.hfEndpoint).toBe('https://hf-mirror.com')
+    await expect(readFile(settingsPath, 'utf-8')).resolves.toBe(
+      '{\n  "translationEngines": {\n    "local": {\n      "hfEndpoint": "https://hf-mirror.com"\n    }\n  }\n}'
+    )
+
+    await settingsManager.writeSettings({
+      translationEngines: {
+        local: {
+          hfEndpoint: '',
+        },
+      },
+    })
+    clearCache()
+
+    await expect(settingsManager.readSettings()).resolves.toEqual(DEFAULT_GLOBAL_SETTINGS)
   })
 })
