@@ -127,6 +127,12 @@ process.exit(1)
     return { changeDir, kernel }
   }
 
+  async function waitForReactiveStatusSetup(): Promise<void> {
+    // Native watcher backends can take a brief moment to begin delivering
+    // nested file events after the initial reactive status stream is created.
+    await waitForDebounce(500)
+  }
+
   it(
     'refreshes status when a file appears inside an existing subdirectory',
     async () => {
@@ -135,6 +141,7 @@ process.exit(1)
 
       await kernel.ensureStatus('demo-change')
       expect(kernel.getStatus('demo-change').artifacts[0]?.status).toBe('blocked')
+      await waitForReactiveStatusSetup()
 
       await writeFile(join(changeDir, 'loop', 'result.md'), 'done\n', 'utf-8')
 
@@ -153,6 +160,7 @@ process.exit(1)
 
       await kernel.ensureStatus('demo-change')
       expect(kernel.getStatus('demo-change').artifacts[0]?.status).toBe('blocked')
+      await waitForReactiveStatusSetup()
 
       await mkdir(join(changeDir, 'loop', 'nested'), { recursive: true })
       await waitForDebounce(250)
@@ -174,6 +182,7 @@ process.exit(1)
 
       await kernel.ensureStatus('demo-change')
       expect(kernel.getStatus('demo-change').artifacts[0]?.status).toBe('blocked')
+      await waitForReactiveStatusSetup()
 
       await mkdir(join(changeDir, 'loop', 'docs'), { recursive: true })
       await waitForDebounce(250)
@@ -195,6 +204,7 @@ process.exit(1)
 
       await kernel.ensureStatus('demo-change')
       expect(kernel.getStatus('demo-change').artifacts[0]?.status).toBe('blocked')
+      await waitForReactiveStatusSetup()
 
       await writeFile(join(changeDir, 'loop', 'file1.md'), 'done\n', 'utf-8')
 

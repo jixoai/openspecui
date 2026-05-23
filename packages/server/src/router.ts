@@ -81,7 +81,9 @@ import {
   type DashboardGitTaskStatus,
 } from './dashboard-overview.js'
 import type { DocumentService } from './document-service.js'
+import { resolveEntityEntryPath } from './entity-file-paths.js'
 import { buildEntityReadOptions } from './entity-read-options.js'
+import type { FilePreviewService } from './file-preview-service.js'
 import {
   buildGitWorktreeOverview,
   getCurrentWorktreeGitEntryFiles,
@@ -117,6 +119,7 @@ export interface Context {
   customSoundService: CustomSoundService
   globalSettingsManager: GlobalSettingsManager
   translationCacheService: TranslationCacheService
+  filePreviewService: FilePreviewService
   translationEngineService: TranslationEngineService
   localModelAssetService: LocalModelAssetService
   gitWorktreeHandoff?: GitWorktreeHandoffService
@@ -830,6 +833,41 @@ export const changeRouter = router({
         input.id
       )
     }),
+
+  writeFile: publicProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        path: z.string(),
+        content: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const info = resolveEntityEntryPath({
+        projectDir: ctx.projectDir,
+        stage: 'change',
+        changeId: input.id,
+        path: input.path,
+      })
+      await mkdir(dirname(info.absolutePath), { recursive: true })
+      await writeFile(info.absolutePath, input.content, 'utf-8')
+      return { success: true }
+    }),
+
+  prepareFilePreview: publicProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        path: z.string(),
+      })
+    )
+    .query(({ ctx, input }) => {
+      return ctx.filePreviewService.prepareEntityFilePreview({
+        stage: 'change',
+        changeId: input.id,
+        path: input.path,
+      })
+    }),
 })
 
 /**
@@ -896,16 +934,44 @@ export const archiveRouter = router({
   subscribeFiles: publicProcedure
     .input(z.object({ id: z.string() }))
     .subscription(({ ctx, input }) => {
-      return createReactiveSubscriptionWithInput(async (id: string) => {
-        const entity = await ctx.documentService.readEntityDetail(
-          'archive',
-          id,
-          'view',
-          'processed',
-          await buildEntityReadOptions(ctx, 'archive', id)
-        )
-        return entity?.files ?? []
-      })(input.id)
+      return createReactiveSubscriptionWithInput((id: string) =>
+        ctx.documentService.readArchivedChangeFiles(id, 'view', 'source')
+      )(input.id)
+    }),
+
+  writeFile: publicProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        path: z.string(),
+        content: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const info = resolveEntityEntryPath({
+        projectDir: ctx.projectDir,
+        stage: 'archive',
+        changeId: input.id,
+        path: input.path,
+      })
+      await mkdir(dirname(info.absolutePath), { recursive: true })
+      await writeFile(info.absolutePath, input.content, 'utf-8')
+      return { success: true }
+    }),
+
+  prepareFilePreview: publicProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        path: z.string(),
+      })
+    )
+    .query(({ ctx, input }) => {
+      return ctx.filePreviewService.prepareEntityFilePreview({
+        stage: 'archive',
+        changeId: input.id,
+        path: input.path,
+      })
     }),
 })
 

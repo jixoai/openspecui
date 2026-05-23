@@ -1,0 +1,27 @@
+## 1. Research and Planning
+
+- [x] 1.1 Intake captured objectively
+- [x] 1.2 Research facts recorded
+- [x] 1.3 Plan reviewed and approved
+
+## 2. Implementation
+
+- [x] 2.1 Implementation started from approved plan
+- [x] 2.2 Progress synchronized with implementation artifact
+- [x] 2.3 Unexpected issues assessed; no intake/research-plan loopback required
+- [x] 2.4 Core file preview primitive and metadata upgrade implemented
+- [x] 2.5 Server entity write path and preview session route implemented
+- [x] 2.6 Web Folder read/edit/preview shell implemented
+- [x] 2.7 Dedicated preview build entries implemented
+- [x] 2.8 Static-mode restrictions verified
+
+## 3. PR and Release Gates
+
+- [x] 3.1 Changeset included for release-impacting package changes
+- [x] 3.2 CI-equivalent local checks passed
+- [ ] 3.3 PR checks passed
+
+## 4. Merge Readiness
+
+- [ ] 4.1 OpenSpec archive flow completed
+- [ ] 4.2 PR merge approved

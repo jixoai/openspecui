@@ -1,4 +1,5 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { CliExecutor, ConfigManager, OpsxKernel } from '@openspecui/core'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -16,8 +17,9 @@ vi.mock('@openspecui/core', async () => {
   }
 })
 
+import { FilePreviewService } from './file-preview-service.js'
 import { findAvailablePort } from './port-utils.js'
-import { startServer, type RunningServer } from './server.js'
+import { createServer, startServer, type RunningServer } from './server.js'
 
 const tempDirs: string[] = []
 const runningServers: RunningServer[] = []
@@ -66,5 +68,87 @@ describe('server startup runtime contract', () => {
       ok: true,
     })
     expect(coreMockState.initWatcherPool).toHaveBeenCalledWith(projectDir)
+  })
+
+  it('serves prepared preview entry assets and guarded resources through the API route', async () => {
+    coreMockState.initWatcherPool.mockResolvedValue(undefined)
+    const projectDir = await createProjectDir()
+    const previewAssetsDir = join(projectDir, '.preview-assets')
+    await mkdir(join(projectDir, 'openspec', 'changes', 'preview-demo', 'site'), {
+      recursive: true,
+    })
+    await mkdir(join(projectDir, 'openspec', 'changes', 'preview-demo', 'docs'), {
+      recursive: true,
+    })
+    await mkdir(previewAssetsDir, { recursive: true })
+    await mkdir(join(previewAssetsDir, 'assets'), { recursive: true })
+    await writeFile(
+      join(projectDir, 'openspec', 'changes', 'preview-demo', 'site', 'index.html'),
+      '<!doctype html><h1>demo</h1>',
+      'utf8'
+    )
+    await writeFile(
+      join(projectDir, 'openspec', 'changes', 'preview-demo', 'docs', 'guide.pdf'),
+      '%PDF-1.4\n%',
+      'utf8'
+    )
+    await writeFile(
+      join(previewAssetsDir, 'assets', 'pdf-preview.js'),
+      'globalThis.worker = "/assets/pdf.worker.min-demo.mjs"',
+      'utf8'
+    )
+
+    const configManager = new ConfigManager(projectDir)
+    const cliExecutor = new CliExecutor(configManager, projectDir)
+    const kernel = new OpsxKernel(projectDir, cliExecutor)
+    const server = createServer({
+      projectDir,
+      enableWatcher: false,
+      previewAssetsDir,
+      kernel,
+    })
+    const previewService = new FilePreviewService(projectDir, previewAssetsDir)
+    const preparedHtml = previewService.prepareEntityFilePreview({
+      stage: 'change',
+      changeId: 'preview-demo',
+      path: 'site/index.html',
+    })
+    const preparedPdf = previewService.prepareEntityFilePreview({
+      stage: 'change',
+      changeId: 'preview-demo',
+      path: 'docs/guide.pdf',
+    })
+    const appPreviewService = server.createContext().filePreviewService
+    appPreviewService.prepareEntityFilePreview({
+      stage: 'change',
+      changeId: 'preview-demo',
+      path: 'site/index.html',
+    })
+    appPreviewService.prepareEntityFilePreview({
+      stage: 'change',
+      changeId: 'preview-demo',
+      path: 'docs/guide.pdf',
+    })
+
+    const removedEntryResponse = await server.app.request(
+      new Request(`http://openspecui.test/api/file-preview/${preparedHtml.hash}/html-preview.html`)
+    )
+    expect(removedEntryResponse.status).toBe(404)
+
+    const htmlEntryResponse = await server.app.request(
+      new Request(`http://openspecui.test/api/file-preview/${preparedHtml.hash}/index.html`)
+    )
+    expect(htmlEntryResponse.ok).toBe(true)
+    await expect(htmlEntryResponse.text()).resolves.toContain('<h1>demo</h1>')
+
+    const assetResponse = await server.app.request(
+      new Request(`http://openspecui.test/api/file-preview/${preparedPdf.hash}/assets/pdf-preview.js`)
+    )
+    expect(assetResponse.ok).toBe(true)
+    await expect(assetResponse.text()).resolves.toContain(
+      `/api/file-preview/${preparedPdf.hash}/assets/pdf.worker.min-demo.mjs`
+    )
+
+    kernel.dispose()
   })
 })

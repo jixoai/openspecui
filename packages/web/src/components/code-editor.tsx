@@ -16,6 +16,7 @@ import { javascript } from '@codemirror/lang-javascript'
 import { json } from '@codemirror/lang-json'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { yaml } from '@codemirror/lang-yaml'
+import { LanguageDescription } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
 import type { Extension } from '@codemirror/state'
 import { EditorState } from '@codemirror/state'
@@ -35,7 +36,7 @@ import {
   vsCodeLight,
 } from '@fsegurai/codemirror-theme-bundle'
 import CodeMirror from '@uiw/react-codemirror'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 export type LanguageType = 'markdown' | 'typescript' | 'javascript' | 'json' | 'yaml' | 'plain'
 
@@ -44,6 +45,8 @@ export interface CodeEditorProps {
   value: string
   /** 内容变化回调（编辑模式下使用） */
   onChange?: (value: string) => void
+  /** 保存快捷键回调（编辑模式下使用） */
+  onSaveShortcut?: () => void
   /** 是否只读 */
   readOnly?: boolean
   /** 语言类型，不传则根据 filename 自动检测 */
@@ -67,11 +70,22 @@ export interface CodeEditorProps {
   /** 额外的内联样式（可覆盖） */
 }
 
-/** 根据文件名推断语言类型 */
-function detectLanguage(filename?: string): LanguageType {
+function isMarkdownFilename(filename?: string): boolean {
+  if (!filename) return false
+  const lower = filename.toLowerCase()
+  return (
+    lower.endsWith('.md') ||
+    lower.endsWith('.markdown') ||
+    lower.endsWith('.mdown') ||
+    lower.endsWith('.mkd')
+  )
+}
+
+/** 根据文件名推断常见语言类型 */
+function detectBuiltinLanguage(filename?: string): LanguageType {
   if (!filename) return 'plain'
   const lower = filename.toLowerCase()
-  if (lower.endsWith('.md')) return 'markdown'
+  if (isMarkdownFilename(lower)) return 'markdown'
   if (lower.endsWith('.ts') || lower.endsWith('.tsx')) return 'typescript'
   if (lower.endsWith('.js') || lower.endsWith('.jsx')) return 'javascript'
   if (lower.endsWith('.json')) return 'json'
@@ -80,7 +94,7 @@ function detectLanguage(filename?: string): LanguageType {
 }
 
 /** 根据语言类型返回 CodeMirror 扩展 */
-function getLanguageExtensions(language: LanguageType, filename?: string): Extension[] {
+function getBuiltinLanguageExtensions(language: LanguageType, filename?: string): Extension[] {
   switch (language) {
     case 'markdown':
       // Markdown 默认启用实时预览（隐藏语法标记，显示富文本效果）
@@ -96,6 +110,11 @@ function getLanguageExtensions(language: LanguageType, filename?: string): Exten
     default:
       return []
   }
+}
+
+function matchFilenameLanguage(filename?: string): LanguageDescription | null {
+  if (!filename) return null
+  return LanguageDescription.matchFilename(languages, filename)
 }
 
 function resolveBundleTheme(theme: CodeEditorTheme, isDarkMode: boolean): Extension {
@@ -133,6 +152,7 @@ function resolveBundleTheme(theme: CodeEditorTheme, isDarkMode: boolean): Extens
 export function CodeEditor({
   value,
   onChange,
+  onSaveShortcut,
   readOnly = false,
   language,
   filename,
@@ -144,15 +164,64 @@ export function CodeEditor({
   placeholder,
   editorMinHeight = '240px',
 }: CodeEditorProps) {
-  const resolvedLanguage = language ?? detectLanguage(filename)
   const isDarkMode = useDarkMode()
   const { data: config } = useConfigSubscription()
   const codeEditorTheme = config?.codeEditor?.theme ?? DEFAULT_CODE_EDITOR_THEME
+  const [filenameLanguageExtensions, setFilenameLanguageExtensions] = useState<Extension[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (language) {
+      setFilenameLanguageExtensions([])
+      return
+    }
+
+    const builtinLanguage = detectBuiltinLanguage(filename)
+    if (builtinLanguage !== 'plain') {
+      setFilenameLanguageExtensions(getBuiltinLanguageExtensions(builtinLanguage, filename))
+      return
+    }
+
+    const matchedLanguage = matchFilenameLanguage(filename)
+    if (!matchedLanguage) {
+      setFilenameLanguageExtensions([])
+      return
+    }
+
+    if (matchedLanguage.support) {
+      setFilenameLanguageExtensions([matchedLanguage.support.extension])
+      return
+    }
+
+    setFilenameLanguageExtensions([])
+    void matchedLanguage
+      .load()
+      .then((support) => {
+        if (cancelled) return
+        setFilenameLanguageExtensions([support.extension])
+      })
+      .catch(() => {
+        if (cancelled) return
+        setFilenameLanguageExtensions([])
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [language, filename])
+
+  const languageExtensions = useMemo(() => {
+    if (!language) {
+      return filenameLanguageExtensions
+    }
+    return getBuiltinLanguageExtensions(language, filename)
+  }, [language, filename, filenameLanguageExtensions])
 
   const extensions = useMemo(() => {
     const exts: Extension[] = [
       EditorState.readOnly.of(readOnly),
-      ...getLanguageExtensions(resolvedLanguage, filename),
+      ...languageExtensions,
     ]
 
     exts.push(resolveBundleTheme(codeEditorTheme, isDarkMode))
@@ -191,6 +260,15 @@ export function CodeEditor({
           key: 'Mod-a',
           run: selectAll,
         },
+        {
+          key: 'Mod-s',
+          preventDefault: true,
+          run: () => {
+            if (readOnly || !onSaveShortcut) return false
+            onSaveShortcut()
+            return true
+          },
+        },
       ])
     )
 
@@ -200,7 +278,7 @@ export function CodeEditor({
       exts.push(EditorView.lineWrapping)
     }
     return exts
-  }, [resolvedLanguage, filename, readOnly, lineWrapping, codeEditorTheme, isDarkMode])
+  }, [languageExtensions, readOnly, lineWrapping, codeEditorTheme, isDarkMode, onSaveShortcut])
 
   return (
     <CodeMirror

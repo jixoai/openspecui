@@ -1,6 +1,7 @@
 import { join, matchesGlob, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import type { CliExecutor } from './cli-executor.js'
+import { inferFileMime, inferFilePreviewKind, isTextLikeFile } from './file-preview.js'
 import { toOpsxDisplayPath } from './opsx-display-path.js'
 import { parseOpsxSchemaDetail } from './opsx-schema-detail.js'
 import {
@@ -95,13 +96,17 @@ async function readEntriesUnderRoot(root: string): Promise<ChangeFile[]> {
         entries.push({ path: relativePath, type: 'directory' })
         entries.push(...(await collectEntries(fullPath)))
       } else {
-        const content = await reactiveReadFile(fullPath)
+        const mime = inferFileMime(relativePath) ?? undefined
+        const previewKind = inferFilePreviewKind(relativePath, mime)
+        const content = isTextLikeFile(relativePath, mime) ? await reactiveReadFile(fullPath) : null
         const size = content ? Buffer.byteLength(content, 'utf-8') : undefined
         entries.push({
           path: relativePath,
           type: 'file',
           content: content ?? undefined,
           size,
+          mime,
+          previewKind,
         })
       }
     }

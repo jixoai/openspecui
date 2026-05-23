@@ -23,6 +23,8 @@ interface PackageJson {
   name: string
   exports?: Record<string, ConditionalExport>
   scripts?: Record<string, string>
+  dependencies?: Record<string, string>
+  devDependencies?: Record<string, string>
 }
 
 function readPackageJson(relativePath: string): PackageJson {
@@ -139,6 +141,16 @@ describe('development conditional exports', () => {
 
     expect(cliPackage.scripts?.dev).toContain('--conditions=development')
     expect(cliPackage.scripts?.dev).toContain('tsx src/cli.ts')
+  })
+
+  it('declares source-runtime workspace dependencies for the CLI package', () => {
+    const cliPackage = readPackageJson('packages/cli/package.json')
+
+    expect(cliPackage.dependencies).toMatchObject({
+      '@openspecui/core': 'workspace:*',
+      '@openspecui/server': 'workspace:*',
+    })
+    expect(cliPackage.devDependencies).not.toHaveProperty('@openspecui/server')
   })
 
   it('uses an expandable NODE_OPTIONS assignment for source dev scripts', () => {
