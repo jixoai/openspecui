@@ -1,5 +1,6 @@
 {
   "name": "@openspecui/browser-translator",
+  "private": true,
   "version": "3.9.0",
   "description": "Browser-side translator engine for OpenSpecUI",
   "type": "module",
