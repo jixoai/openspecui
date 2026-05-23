@@ -1,5 +1,11 @@
 # @openspecui/core
 
+## 3.11.0
+
+### Minor Changes
+
+- eba707d: Add backend-backed folder file preview, edit, and dedicated HTML preview entries for changes and archives.
+
 ## 3.10.0
 
 ## 3.9.0
