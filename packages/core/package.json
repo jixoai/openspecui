@@ -1,6 +1,6 @@
 {
   "name": "@openspecui/core",
-  "version": "3.9.0",
+  "version": "3.10.0",
   "description": "Core OpenSpec adapter and parser",
   "type": "module",
   "main": "./dist/index.mjs",

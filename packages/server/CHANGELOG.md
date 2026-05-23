@@ -1,5 +1,18 @@
 # @openspecui/server
 
+## 3.10.0
+
+### Minor Changes
+
+- 824f27a: Fix published package staging so public workspace dependencies are rewritten to concrete versions and private translator packages are removed from npm manifests. The server package now bundles its private translator runtime modules so `@openspecui/server` can be installed from npm without unresolved private workspace dependencies.
+
+### Patch Changes
+
+- @openspecui/core@3.10.0
+- @openspecui/local-translator@3.10.0
+- @openspecui/openai-completion-translator@3.10.0
+- @openspecui/search@3.10.0
+
 ## 3.9.0
 
 ### Minor Changes
