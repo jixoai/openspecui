@@ -14,7 +14,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts --format esm --no-dts",
+    "build": "tsdown",
     "typecheck": "tsc -p tsconfig.check.json --noEmit",
     "dev": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--conditions=development\" tsx watch --include '../core/dist/**' --include '../search/dist/**' src/standalone.ts",
     "test": "vitest run",
