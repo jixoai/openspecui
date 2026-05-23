@@ -2,9 +2,11 @@ import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const tempDirs = []
+const scriptSource = resolve(dirname(fileURLToPath(import.meta.url)), 'changeset-check.mjs')
 
 function createRepoFixture() {
   const rootDir = mkdtempSync(join(tmpdir(), 'openspecui-changeset-check-'))
@@ -34,7 +36,6 @@ function createRepoFixture() {
       2
     )
   )
-  const scriptSource = resolve('scripts/changeset-check.mjs')
   const scriptTarget = join(rootDir, 'scripts', 'changeset-check.mjs')
   mkdirSync(dirname(scriptTarget), { recursive: true })
   writeFileSync(scriptTarget, readFileSync(scriptSource, 'utf8'))

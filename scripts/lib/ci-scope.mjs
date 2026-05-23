@@ -18,7 +18,6 @@ const FULL_FAST_PATTERNS = [
   /^pnpm-lock\.yaml$/,
   /^pnpm-workspace\.yaml$/,
   /^tsconfig.*\.json$/,
-  /^scripts\//,
 ]
 const FULL_BROWSER_PATTERNS = [
   /^\.github\/workflows\/pr-quality\.yml$/,
@@ -27,6 +26,7 @@ const FULL_BROWSER_PATTERNS = [
   /^pnpm-workspace\.yaml$/,
   /^\.storybook\//,
 ]
+const SCRIPT_FAST_PATTERNS = [/^scripts\//, /^vitest\.root\.config\.ts$/]
 
 const IMPLICIT_PACKAGE_DEPENDENCIES = {
   '@openspecui/app': ['@openspecui/web'],
@@ -182,6 +182,7 @@ export function computeCiScope({ changedFiles, rootDir, includeAllWhenUnknown = 
   let fullFast = false
   let fullBrowser = false
   let referenceChanged = false
+  let rootScriptTestsRequired = false
   let onlyDocsOrReference = true
 
   for (const file of changedFiles) {
@@ -199,6 +200,13 @@ export function computeCiScope({ changedFiles, rootDir, includeAllWhenUnknown = 
         onlyDocsOrReference = false
         continue
       }
+    }
+
+    if (matchesAny(file, SCRIPT_FAST_PATTERNS)) {
+      rootScriptTestsRequired = true
+      lintTargets.add(file.startsWith('scripts/') ? 'scripts' : file)
+      onlyDocsOrReference = false
+      continue
     }
 
     if (matchesAny(file, FULL_FAST_PATTERNS)) {
@@ -261,6 +269,27 @@ export function computeCiScope({ changedFiles, rootDir, includeAllWhenUnknown = 
       }
     }
 
+    if (rootScriptTestsRequired) {
+      return {
+        affectedPackages: [],
+        browser: { required: false, runWeb: false, runXterm: false },
+        changedFiles,
+        directPackages: [],
+        fast: {
+          lintTargets: [...lintTargets].sort(),
+          mode: 'scoped',
+          required: true,
+          runFormatCheck: true,
+          runReferenceCheck: false,
+          runRootTests: true,
+          testPackages: [],
+          typecheckPackages: [],
+        },
+        reason:
+          'Script/tooling changes detected; run script lint and root tests without package/browser expansion.',
+      }
+    }
+
     return {
       affectedPackages: [],
       browser: { required: false, runWeb: false, runXterm: false },
@@ -298,7 +327,7 @@ export function computeCiScope({ changedFiles, rootDir, includeAllWhenUnknown = 
       required: true,
       runFormatCheck: true,
       runReferenceCheck: referenceChanged,
-      runRootTests: false,
+      runRootTests: rootScriptTestsRequired,
       testPackages,
       typecheckPackages,
     },
