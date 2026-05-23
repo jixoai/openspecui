@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -18,7 +18,14 @@ export type PreparedPublishDirectory = {
 }
 
 type PackageManifest = {
+  dependencies?: Record<string, string>
+  devDependencies?: Record<string, string>
+  optionalDependencies?: Record<string, string>
+  peerDependencies?: Record<string, string>
+  private?: boolean
+  name?: string
   repository?: RepositoryValue
+  version?: string
 }
 
 function readManifest(packageDir: string): PackageManifest {
@@ -27,6 +34,79 @@ function readManifest(packageDir: string): PackageManifest {
 
 function writeManifest(packageDir: string, manifest: PackageManifest): void {
   writeFileSync(join(packageDir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+}
+
+function serializeManifest(manifest: PackageManifest): string {
+  return JSON.stringify(manifest, null, 2)
+}
+
+type WorkspacePackageInfo = {
+  name: string
+  private: boolean
+  version: string
+}
+
+function readWorkspacePackages(rootDir: string): Map<string, WorkspacePackageInfo> {
+  const packagesDir = join(rootDir, 'packages')
+  let entries: ReturnType<typeof readdirSync>
+  try {
+    entries = readdirSync(packagesDir, { withFileTypes: true })
+  } catch {
+    return new Map()
+  }
+
+  const packages = new Map<string, WorkspacePackageInfo>()
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const manifestPath = join(packagesDir, entry.name, 'package.json')
+    let manifest: PackageManifest
+    try {
+      manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as PackageManifest
+    } catch {
+      continue
+    }
+    if (!manifest.name || !manifest.version) continue
+    packages.set(manifest.name, {
+      name: manifest.name,
+      private: manifest.private === true,
+      version: manifest.version,
+    })
+  }
+  return packages
+}
+
+function normalizeDependencyGroup(
+  dependencies: Record<string, string> | undefined,
+  workspacePackages: ReadonlyMap<string, WorkspacePackageInfo>
+): Record<string, string> | undefined {
+  if (!dependencies) return undefined
+  const normalizedEntries = Object.entries(dependencies).flatMap(([name, range]) => {
+    const workspacePackage = workspacePackages.get(name)
+    if (!workspacePackage) return [[name, range] as const]
+    if (workspacePackage.private) return []
+    if (range.startsWith('workspace:')) {
+      return [[name, workspacePackage.version] as const]
+    }
+    return [[name, range] as const]
+  })
+  if (normalizedEntries.length === 0) return undefined
+  return Object.fromEntries(normalizedEntries)
+}
+
+function normalizeManifestDependencies(
+  manifest: PackageManifest,
+  workspacePackages: ReadonlyMap<string, WorkspacePackageInfo>
+): PackageManifest {
+  return {
+    ...manifest,
+    dependencies: normalizeDependencyGroup(manifest.dependencies, workspacePackages),
+    devDependencies: normalizeDependencyGroup(manifest.devDependencies, workspacePackages),
+    optionalDependencies: normalizeDependencyGroup(
+      manifest.optionalDependencies,
+      workspacePackages
+    ),
+    peerDependencies: normalizeDependencyGroup(manifest.peerDependencies, workspacePackages),
+  }
 }
 
 function currentRepositoryUrl(repository: RepositoryValue): string | null {
@@ -86,17 +166,19 @@ export function resolveRepositoryUrl(
 
 export function preparePublishDirectory(
   sourceDir: string,
-  repositoryUrl: string | null
+  repositoryUrl: string | null,
+  workspaceRoot: string = process.cwd()
 ): PreparedPublishDirectory {
-  if (!repositoryUrl) {
-    return {
-      cleanup: () => {},
-      dir: sourceDir,
-    }
-  }
+  const workspacePackages = readWorkspacePackages(workspaceRoot)
+  const sourceManifest = readManifest(sourceDir)
+  const normalizedManifest = normalizeManifestDependencies(sourceManifest, workspacePackages)
+  const shouldInjectRepository =
+    !!repositoryUrl && !currentRepositoryUrl(normalizedManifest.repository)
+  const manifestChanged =
+    serializeManifest(sourceManifest) !== serializeManifest(normalizedManifest) ||
+    shouldInjectRepository
 
-  const manifest = readManifest(sourceDir)
-  if (currentRepositoryUrl(manifest.repository)) {
+  if (!manifestChanged) {
     return {
       cleanup: () => {},
       dir: sourceDir,
@@ -106,16 +188,18 @@ export function preparePublishDirectory(
   const stagedDir = mkdtempSync(join(tmpdir(), 'openspecui-publish-'))
   cpSync(sourceDir, stagedDir, { recursive: true })
 
-  const stagedManifest = readManifest(stagedDir)
-  const repository =
-    stagedManifest.repository && typeof stagedManifest.repository === 'object'
-      ? stagedManifest.repository
-      : {}
-  stagedManifest.repository = {
-    ...repository,
-    type:
-      typeof repository.type === 'string' && repository.type.length > 0 ? repository.type : 'git',
-    url: repositoryUrl,
+  const stagedManifest = normalizeManifestDependencies(readManifest(stagedDir), workspacePackages)
+  if (shouldInjectRepository && repositoryUrl) {
+    const repository =
+      stagedManifest.repository && typeof stagedManifest.repository === 'object'
+        ? stagedManifest.repository
+        : {}
+    stagedManifest.repository = {
+      ...repository,
+      type:
+        typeof repository.type === 'string' && repository.type.length > 0 ? repository.type : 'git',
+      url: repositoryUrl,
+    }
   }
   writeManifest(stagedDir, stagedManifest)
 
