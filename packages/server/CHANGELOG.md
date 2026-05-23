@@ -1,5 +1,18 @@
 # @openspecui/server
 
+## 3.9.0
+
+### Minor Changes
+
+- a76200c: Stream Local-Transformers model downloads from the Hugging Face fetch body so Settings can receive real progress updates and automatic resume events instead of a single completion jump.
+
+### Patch Changes
+
+- @openspecui/core@3.9.0
+- @openspecui/local-translator@3.9.0
+- @openspecui/openai-completion-translator@3.9.0
+- @openspecui/search@3.9.0
+
 ## 3.8.0
 
 ### Minor Changes

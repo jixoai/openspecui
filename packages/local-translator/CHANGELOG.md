@@ -1,5 +1,11 @@
 # @openspecui/local-translator
 
+## 3.9.0
+
+### Patch Changes
+
+- @openspecui/core@3.9.0
+
 ## 3.8.0
 
 ### Minor Changes
