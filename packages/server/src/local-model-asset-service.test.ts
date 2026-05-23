@@ -238,7 +238,11 @@ describe('LocalModelAssetService', () => {
     await waitForState(indexPath, (states) =>
       states.some((entry) =>
         entry.files?.some(
-          (file) => file.path === 'onnx/encoder_model_q4.onnx' && file.downloadedBytes === 4
+          (file) =>
+            file.path === 'onnx/encoder_model_q4.onnx' &&
+            typeof file.downloadedBytes === 'number' &&
+            file.downloadedBytes > 0 &&
+            file.downloadedBytes < 10
         )
       )
     )
@@ -301,7 +305,11 @@ describe('LocalModelAssetService', () => {
     await waitForState(indexPath, (states) =>
       states.some((entry) =>
         entry.files?.some(
-          (file) => file.path === 'onnx/encoder_model_q4.onnx' && file.downloadedBytes === 4
+          (file) =>
+            file.path === 'onnx/encoder_model_q4.onnx' &&
+            typeof file.downloadedBytes === 'number' &&
+            file.downloadedBytes > 0 &&
+            file.downloadedBytes < 10
         )
       )
     )

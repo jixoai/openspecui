@@ -1,5 +1,5 @@
 import { createTRPCClient, createWSClient, httpBatchLink, wsLink } from '@trpc/client'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -56,7 +56,6 @@ import { startServer, type AppRouter, type RunningServer } from './server.js'
 const runningServers: RunningServer[] = []
 const tempDirs: string[] = []
 const wsClients: Array<ReturnType<typeof createWSClient>> = []
-const originalHome = process.env.HOME
 const originalFetch = globalThis.fetch
 
 beforeEach(() => {
@@ -86,22 +85,44 @@ beforeEach(() => {
 afterEach(async () => {
   await Promise.all(wsClients.splice(0).map((client) => client.close()))
   await Promise.all(runningServers.splice(0).map((server) => server.close()))
-  if (originalHome === undefined) {
-    delete process.env.HOME
-  } else {
-    process.env.HOME = originalHome
-  }
-  await Promise.all(tempDirs.splice(0).map((dir) => removeDirWithRetry(dir)))
+  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
   vi.unstubAllGlobals()
   vi.clearAllMocks()
 })
 
-async function createIsolatedProjectDir(): Promise<string> {
-  const homeDir = await mkdtemp(join(tmpdir(), 'openspecui-subscription-home-'))
+async function createIsolatedProjectDir(): Promise<{
+  projectDir: string
+  runtimePaths: NonNullable<Parameters<typeof startServer>[0]['runtimePaths']>
+}> {
+  const runtimeDir = await mkdtemp(join(tmpdir(), 'openspecui-subscription-runtime-'))
   const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-subscription-project-'))
-  tempDirs.push(homeDir, projectDir)
-  process.env.HOME = homeDir
-  return projectDir
+  tempDirs.push(runtimeDir, projectDir)
+  const runtimePaths = {
+    globalSettingsPath: join(runtimeDir, 'settings.json'),
+    translationCacheDatabasePath: join(runtimeDir, 'translation-cache.sqlite'),
+    localModelCacheDir: join(runtimeDir, 'translation-engines', 'local', 'hf-cache'),
+    localModelAssetIndexPath: join(runtimeDir, 'translation-engines', 'local', 'models.json'),
+    localModelFetchCachePath: join(
+      runtimeDir,
+      'translation-engines',
+      'local',
+      'fetch-cache.json'
+    ),
+  }
+  await writeFile(
+    runtimePaths.globalSettingsPath,
+    JSON.stringify({
+      translationEngines: {
+        local: {
+          model: 'onnx-community/opus-mt-en-zh',
+          selectedGroupId: 'q4',
+          hfEndpoint: 'https://hf-mirror.com/',
+        },
+      },
+    }),
+    'utf8'
+  )
+  return { projectDir, runtimePaths }
 }
 
 function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs = 5_000): Promise<T> {
@@ -120,32 +141,12 @@ function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs = 5_000): 
   })
 }
 
-async function removeDirWithRetry(dir: string, attempts = 5): Promise<void> {
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    try {
-      await rm(dir, { recursive: true, force: true })
-      return
-    } catch (error) {
-      if (!isRetryableDirCleanupError(error) || attempt === attempts - 1) {
-        throw error
-      }
-      await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)))
-    }
-  }
-}
-
-function isRetryableDirCleanupError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false
-  const code = 'code' in error ? error.code : undefined
-  return code === 'EBUSY' || code === 'ENOTEMPTY' || code === 'EPERM'
-}
-
 describe('localModels.subscribeLogs transport', () => {
   it('streams sequential delete lifecycle events to a real tRPC WebSocket client', async () => {
     coreMockState.initWatcherPool.mockResolvedValue(undefined)
-    const projectDir = await createIsolatedProjectDir()
+    const { projectDir, runtimePaths } = await createIsolatedProjectDir()
     const port = await findAvailablePort(34_600, 100)
-    const server = await startServer({ projectDir, port, enableWatcher: false })
+    const server = await startServer({ projectDir, port, enableWatcher: false, runtimePaths })
     runningServers.push(server)
 
     const wsClient = createWSClient({
@@ -224,9 +225,9 @@ describe('localModels.subscribeLogs transport', () => {
       )
     )
 
-    const projectDir = await createIsolatedProjectDir()
+    const { projectDir, runtimePaths } = await createIsolatedProjectDir()
     const port = await findAvailablePort(34_700, 100)
-    const server = await startServer({ projectDir, port, enableWatcher: false })
+    const server = await startServer({ projectDir, port, enableWatcher: false, runtimePaths })
     runningServers.push(server)
 
     const wsClient = createWSClient({
@@ -372,9 +373,9 @@ describe('localModels.subscribeLogs transport', () => {
       )
     })
 
-    const projectDir = await createIsolatedProjectDir()
+    const { projectDir, runtimePaths } = await createIsolatedProjectDir()
     const port = await findAvailablePort(34_710, 100)
-    const server = await startServer({ projectDir, port, enableWatcher: false })
+    const server = await startServer({ projectDir, port, enableWatcher: false, runtimePaths })
     runningServers.push(server)
 
     const wsClient = createWSClient({

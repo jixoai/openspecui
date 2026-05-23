@@ -54,7 +54,11 @@ import { DocumentService } from './document-service.js'
 import { buildEntityReadOptions } from './entity-read-options.js'
 import { createHookRuntime } from './hook-runtime.js'
 import { LocalModelAssetService } from './local-model-asset-service.js'
-import { getDefaultLocalModelCacheDir, getDefaultLocalModelIndexPath } from './local-model-cache-path.js'
+import {
+  getDefaultLocalModelCacheDir,
+  getDefaultLocalModelFetchCachePath,
+  getDefaultLocalModelIndexPath,
+} from './local-model-cache-path.js'
 import { NotificationService } from './notification-service.js'
 import { findAvailablePort } from './port-utils.js'
 import { ProjectRecoveryService } from './project-recovery-service.js'
@@ -96,6 +100,14 @@ export interface ServerConfig {
   corsOrigins?: string[]
   /** Optional worktree handoff provider for runtimes that can spawn sibling instances */
   gitWorktreeHandoff?: GitWorktreeHandoffService
+  /** Optional path overrides for isolated runtimes and tests */
+  runtimePaths?: {
+    globalSettingsPath?: string
+    translationCacheDatabasePath?: string
+    localModelCacheDir?: string
+    localModelAssetIndexPath?: string
+    localModelFetchCachePath?: string
+  }
 }
 
 /**
@@ -104,7 +116,7 @@ export interface ServerConfig {
 export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
   const adapter = new OpenSpecAdapter(config.projectDir)
   const configManager = new ConfigManager(config.projectDir)
-  const globalSettingsManager = new GlobalSettingsManager()
+  const globalSettingsManager = new GlobalSettingsManager(config.runtimePaths?.globalSettingsPath)
   const cliExecutor = new CliExecutor(configManager, config.projectDir)
   const kernel = config.kernel
   const hookRuntime = createHookRuntime(config.projectDir)
@@ -116,20 +128,21 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
   })
   const notificationService = new NotificationService()
   const customSoundService = new CustomSoundService()
+  const translationCacheDatabasePath =
+    config.runtimePaths?.translationCacheDatabasePath ?? getDefaultTranslationCacheDatabasePath()
   let translationCacheAdapterPromise: ReturnType<
     typeof createRuntimeSqliteTranslationCacheAdapter
   > | null = null
   const getTranslationCacheAdapter = () => {
-    translationCacheAdapterPromise ??= createRuntimeSqliteTranslationCacheAdapter(
-      getDefaultTranslationCacheDatabasePath()
-    )
+    translationCacheAdapterPromise ??=
+      createRuntimeSqliteTranslationCacheAdapter(translationCacheDatabasePath)
     return translationCacheAdapterPromise
   }
   const translationCacheService = new TranslationCacheService({
     configManager,
     globalSettingsManager,
     adapter: {
-      databasePath: getDefaultTranslationCacheDatabasePath(),
+      databasePath: translationCacheDatabasePath,
       init: async () => (await getTranslationCacheAdapter()).init(),
       read: async (keyHash, now) => (await getTranslationCacheAdapter()).read(keyHash, now),
       write: async (input, now) => (await getTranslationCacheAdapter()).write(input, now),
@@ -146,14 +159,19 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
       console.warn('Translation cache write failed:', error)
     },
   })
-  const nmtModelCacheDir = getDefaultLocalModelCacheDir()
-  const nmtModelIndexPath = getDefaultLocalModelIndexPath()
+  const nmtModelCacheDir =
+    config.runtimePaths?.localModelCacheDir ?? getDefaultLocalModelCacheDir()
+  const nmtModelIndexPath =
+    config.runtimePaths?.localModelAssetIndexPath ?? getDefaultLocalModelIndexPath()
+  const nmtModelFetchCachePath =
+    config.runtimePaths?.localModelFetchCachePath ?? getDefaultLocalModelFetchCachePath()
   const translationEngineService = new TranslationEngineService({
     projectDir: config.projectDir,
     configManager,
     globalSettingsManager,
     localCacheDir: nmtModelCacheDir,
     localAssetIndexPath: nmtModelIndexPath,
+    localFetchCachePath: nmtModelFetchCachePath,
   })
   const localModelAssetService = new LocalModelAssetService({
     projectDir: config.projectDir,
@@ -161,6 +179,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     globalSettingsManager,
     cacheDir: nmtModelCacheDir,
     indexPath: nmtModelIndexPath,
+    fetchCachePath: nmtModelFetchCachePath,
   })
 
   // Create file watcher if enabled
