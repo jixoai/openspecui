@@ -21,7 +21,7 @@ export default defineConfig([
     noExternal: [/.*/],
     // Keep Node.js built-in modules and native dependencies external.
     // Native bindings must be resolved from installed runtime dependencies.
-    external: [/^node:/, ...CLI_NATIVE_RUNTIME_DEPENDENCIES],
+    external: [/^node:/, '@huggingface/transformers', ...CLI_NATIVE_RUNTIME_DEPENDENCIES],
     // No minification for better debugging
     minify: false,
     // Clean output directory before build

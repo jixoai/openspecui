@@ -191,7 +191,9 @@ async function touchDirectoryPathDeps(rootDir: string, relativePath: string): Pr
   let currentPath = rootDir
   for (const segment of splitRelativePathSegments(relativePath)) {
     currentPath = join(currentPath, segment)
-    await reactiveExists(currentPath)
+    // Track directory stat so both creation and descendant mutations refresh
+    // the status stream, including empty directory creation.
+    await reactiveStat(currentPath)
   }
 }
 

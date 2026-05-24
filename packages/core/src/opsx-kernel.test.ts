@@ -24,8 +24,9 @@ describe('OpsxKernel artifact status reactivity', () => {
   afterEach(async () => {
     kernel?.dispose()
     kernel = null
-    clearCache()
     await closeAllWatchers()
+    await waitForDebounce(200)
+    clearCache()
     await cleanupTempDir(tempDir)
   })
 
@@ -130,7 +131,7 @@ process.exit(1)
   async function waitForReactiveStatusSetup(): Promise<void> {
     // Native watcher backends can take a brief moment to begin delivering
     // nested file events after the initial reactive status stream is created.
-    await waitForDebounce(500)
+    await waitForDebounce(1000)
   }
 
   it(
@@ -161,9 +162,13 @@ process.exit(1)
       await kernel.ensureStatus('demo-change')
       expect(kernel.getStatus('demo-change').artifacts[0]?.status).toBe('blocked')
       await waitForReactiveStatusSetup()
+      const initialStatus = kernel.getStatus('demo-change')
 
       await mkdir(join(changeDir, 'loop', 'nested'), { recursive: true })
-      await waitForDebounce(250)
+      await waitFor(
+        () => kernel.getStatus('demo-change') !== initialStatus,
+        REACTIVE_WAIT_OPTIONS
+      )
       await writeFile(join(changeDir, 'loop', 'nested', 'result.md'), 'done\n', 'utf-8')
 
       await waitFor(

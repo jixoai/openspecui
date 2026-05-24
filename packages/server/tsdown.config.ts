@@ -10,4 +10,5 @@ export default defineConfig({
   format: 'esm',
   dts: false,
   noExternal: [...bundledPrivateTranslatorPackages, 'tsx'],
+  external: ['@huggingface/transformers'],
 })
