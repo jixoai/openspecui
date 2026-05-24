@@ -7,7 +7,7 @@ import {
   type FileExplorerEntry,
 } from '@/components/file-explorer'
 import { MarkdownViewer } from '@/components/markdown-viewer'
-import { useViewportConstrainedHeight } from '@/components/scroll-spy'
+import { Tooltip } from '@/components/tooltip'
 import {
   prepareEntityFilePreview,
   writeEntityFile,
@@ -21,10 +21,13 @@ import {
   Check,
   Download,
   Expand,
+  Eye,
+  FilePenLine,
   Loader2,
   Minimize,
   RefreshCw,
   Save,
+  ScrollText,
   Share2,
   Undo2,
 } from 'lucide-react'
@@ -77,15 +80,13 @@ function resolveDefaultMode(
   inStaticMode: boolean
 ): FolderMode {
   if (!file) return 'read'
+  if (!inStaticMode && isFileEntry(file) && file.previewKind === 'html') {
+    return 'preview'
+  }
   if (!inStaticMode && isPreviewOnlyFile(file)) {
     return 'preview'
   }
   return 'read'
-}
-
-function clampPreviewHeight(viewportHeight: number | null): number {
-  if (viewportHeight == null) return 480
-  return Math.max(320, Math.min(viewportHeight - 112, 920))
 }
 
 function resolveRemotePreviewFrameStyle(frameHeight?: number) {
@@ -112,7 +113,9 @@ function appendPreviewTheme(url: string, isDarkMode: boolean): string {
 }
 
 function resolvePreviewFrameUrl(preview: PreparedFilePreview, isDarkMode: boolean): string {
-  return preview.previewKind === 'html' ? preview.urlPath : appendPreviewTheme(preview.urlPath, isDarkMode)
+  return preview.previewKind === 'html'
+    ? preview.urlPath
+    : appendPreviewTheme(preview.urlPath, isDarkMode)
 }
 
 function triggerDownload(url: string, fileName: string): void {
@@ -155,7 +158,7 @@ function PreviewPane({
 }) {
   if (file.previewKind === 'markdown') {
     return (
-      <div className={`min-h-0 h-full flex-1 overflow-hidden ${className}`}>
+      <div className={`h-full min-h-0 flex-1 overflow-hidden ${className}`}>
         <MarkdownViewer markdown={file.content ?? ''} path={file.path} className="h-full" />
       </div>
     )
@@ -188,7 +191,7 @@ function PreviewPane({
 
   return (
     <div
-      className={`bg-background min-h-0 h-full overflow-hidden ${className}`}
+      className={`bg-background h-full min-h-0 overflow-hidden ${className}`}
       style={resolveRemotePreviewFrameStyle(frameHeight)}
     >
       <iframe
@@ -218,7 +221,6 @@ export function FolderEditorViewer({
     error,
   } = archived ? useArchiveFilesSubscription(changeId) : useChangeFilesSubscription(changeId)
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
-  const [viewportNode, setViewportNode] = useState<HTMLDivElement | null>(null)
   const [mode, setMode] = useState<FolderMode>('read')
   const [draftContent, setDraftContent] = useState<Record<string, string>>({})
   const [savingPath, setSavingPath] = useState<string | null>(null)
@@ -227,10 +229,6 @@ export function FolderEditorViewer({
   const [previewErrorByPath, setPreviewErrorByPath] = useState<Record<string, string | null>>({})
   const [previewMaximized, setPreviewMaximized] = useState(false)
   const [shareFeedback, setShareFeedback] = useState<'shared' | 'copied' | null>(null)
-  const viewportHeight = useViewportConstrainedHeight({
-    target: viewportNode,
-    enabled: viewportNode !== null,
-  })
 
   const sortedEntries = useMemo(() => {
     if (providedFiles) return [...providedFiles]
@@ -250,7 +248,6 @@ export function FolderEditorViewer({
   const previewEnabled = !inStaticMode && canPreviewFile(activeFile)
   const hasDirtyDraft =
     !!activeFile && isTextLikeFile(activeFile) && activeDraft !== (activeFile.content ?? '')
-  const remotePreviewHeight = clampPreviewHeight(viewportHeight)
 
   useEffect(() => {
     if (!sortedEntries.length) {
@@ -285,6 +282,9 @@ export function FolderEditorViewer({
     const nextDefaultMode = resolveDefaultMode(activeFile, inStaticMode)
     setMode((currentMode) => {
       if (currentMode === nextDefaultMode) return currentMode
+      if (currentMode === 'read' && nextDefaultMode === 'preview') {
+        return nextDefaultMode
+      }
       if (currentMode === 'edit' && editEnabled) return currentMode
       if (currentMode === 'preview' && previewEnabled) return currentMode
       if (currentMode === 'read' && readEnabled) return currentMode
@@ -363,7 +363,7 @@ export function FolderEditorViewer({
   }
 
   const preview = activeFile ? (previewByPath[activeFile.path] ?? null) : null
-  const previewError = activeFile ? previewErrorByPath[activeFile.path] ?? null : null
+  const previewError = activeFile ? (previewErrorByPath[activeFile.path] ?? null) : null
   const previewDownloadUrl =
     activeFile && preview
       ? activeFile.previewKind === 'html'
@@ -389,16 +389,9 @@ export function FolderEditorViewer({
   }
 
   return (
-    <section
-      data-tab-scroll-root="true"
-      className="scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-auto"
-    >
-      <div className="pr-1">
-        <div
-          ref={setViewportNode}
-          className="flex min-h-0 flex-col"
-          style={viewportHeight != null ? { height: `${viewportHeight}px` } : undefined}
-        >
+    <section data-tab-scroll-root="true" className="min-h-0 flex-1 overflow-hidden">
+      <div className="h-full min-h-0 pr-1">
+        <div data-folder-viewport="" className="flex h-full min-h-0 flex-col overflow-hidden">
           <FileExplorer
             entries={sortedEntries}
             selectedPath={selectedPath}
@@ -415,115 +408,185 @@ export function FolderEditorViewer({
 
               return (
                 <div className="flex min-h-0 flex-1 flex-col">
-                  <div className="border-border/60 bg-muted/20 flex flex-wrap items-center justify-between gap-3 border-b px-3 py-2">
+                  <div
+                    data-folder-toolbar=""
+                    className="border-border/60 bg-muted/20 flex flex-wrap items-center gap-3 border-b px-3 py-2"
+                  >
                     <ButtonGroup<FolderMode>
                       value={mode}
                       onChange={setMode}
+                      presentation="icon-only"
+                      className="min-w-0"
                       options={[
-                        { value: 'read', label: 'Read', disabled: !readEnabled },
-                        { value: 'edit', label: 'Edit', disabled: !editEnabled },
-                        { value: 'preview', label: 'Preview', disabled: !previewEnabled },
+                        {
+                          value: 'read',
+                          label: 'Read',
+                          icon: <ScrollText className="h-3.5 w-3.5" />,
+                          ariaLabel: 'Read',
+                          tooltip: 'Read',
+                          disabled: !readEnabled,
+                        },
+                        {
+                          value: 'edit',
+                          label: 'Edit',
+                          icon: <FilePenLine className="h-3.5 w-3.5" />,
+                          ariaLabel: 'Edit',
+                          tooltip: 'Edit',
+                          disabled: !editEnabled,
+                        },
+                        {
+                          value: 'preview',
+                          label: 'Preview',
+                          icon: <Eye className="h-3.5 w-3.5" />,
+                          ariaLabel: 'Preview',
+                          tooltip: 'Preview',
+                          disabled: !previewEnabled,
+                        },
                       ]}
                     />
-                    <div className="flex items-center gap-2">
+                    <div
+                      data-folder-toolbar-actions=""
+                      className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2"
+                    >
                       {mode === 'edit' ? (
                         <>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={!hasDirtyDraft}
-                            onClick={() => {
-                              if (!isTextLikeFile(activeFile)) return
-                              setDraftContent((current) => ({
-                                ...current,
-                                [activeFile.path]: activeFile.content ?? '',
-                              }))
-                            }}
-                          >
-                            <Undo2 className="h-3.5 w-3.5" />
-                            Revert
-                          </Button>
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            disabled={!hasDirtyDraft || savingPath === currentFile.path}
-                            onClick={saveActiveDraft}
-                          >
-                            {savingPath === currentFile.path ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Save className="h-3.5 w-3.5" />
-                            )}
-                            Save
-                          </Button>
+                          <Tooltip content="Revert" delay={0}>
+                            <Button
+                              variant="secondary"
+                              size="icon-sm"
+                              aria-label="Revert"
+                              title="Revert"
+                              disabled={!hasDirtyDraft}
+                              onClick={() => {
+                                if (!isTextLikeFile(activeFile)) return
+                                setDraftContent((current) => ({
+                                  ...current,
+                                  [activeFile.path]: activeFile.content ?? '',
+                                }))
+                              }}
+                            >
+                              <Undo2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </Tooltip>
+                          <Tooltip content="Save" delay={0}>
+                            <Button
+                              variant="primary"
+                              size="icon-sm"
+                              aria-label="Save"
+                              title="Save"
+                              disabled={!hasDirtyDraft || savingPath === currentFile.path}
+                              onClick={saveActiveDraft}
+                            >
+                              {savingPath === currentFile.path ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Save className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          </Tooltip>
                         </>
                       ) : mode === 'preview' && canPreviewRemote(activeFile) ? (
                         <>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => {
-                              setPreviewByPath((current) => {
-                                const next = { ...current }
-                                delete next[currentFile.path]
-                                return next
-                              })
-                            }}
+                          <Tooltip content="Refresh" delay={0}>
+                            <Button
+                              variant="secondary"
+                              size="icon-sm"
+                              aria-label="Refresh"
+                              title="Refresh"
+                              onClick={() => {
+                                setPreviewByPath((current) => {
+                                  const next = { ...current }
+                                  delete next[currentFile.path]
+                                  return next
+                                })
+                              }}
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" />
+                            </Button>
+                          </Tooltip>
+                          <Tooltip
+                            content={previewMaximized ? 'Exit maximize' : 'Maximize'}
+                            delay={0}
                           >
-                            <RefreshCw className="h-3.5 w-3.5" />
-                            Refresh
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => {
-                              setPreviewMaximized((current) => !current)
-                            }}
+                            <Button
+                              variant="secondary"
+                              size="icon-sm"
+                              aria-label={previewMaximized ? 'Exit maximize' : 'Maximize'}
+                              title={previewMaximized ? 'Exit maximize' : 'Maximize'}
+                              onClick={() => {
+                                setPreviewMaximized((current) => !current)
+                              }}
+                            >
+                              {previewMaximized ? (
+                                <Minimize className="h-3.5 w-3.5" />
+                              ) : (
+                                <Expand className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          </Tooltip>
+                          <Tooltip content="Download" delay={0}>
+                            <Button
+                              variant="secondary"
+                              size="icon-sm"
+                              aria-label="Download"
+                              title="Download"
+                              disabled={!previewDownloadUrl}
+                              onClick={() => {
+                                if (!previewDownloadUrl) return
+                                triggerDownload(
+                                  previewDownloadUrl,
+                                  currentFile.path.split('/').pop() ?? 'preview'
+                                )
+                              }}
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </Button>
+                          </Tooltip>
+                          <Tooltip
+                            content={
+                              shareFeedback === 'shared'
+                                ? 'Shared'
+                                : shareFeedback === 'copied'
+                                  ? 'Copied'
+                                  : 'Share'
+                            }
+                            delay={0}
                           >
-                            {previewMaximized ? (
-                              <Minimize className="h-3.5 w-3.5" />
-                            ) : (
-                              <Expand className="h-3.5 w-3.5" />
-                            )}
-                            {previewMaximized ? 'Exit Maximize' : 'Maximize'}
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={!previewDownloadUrl}
-                            onClick={() => {
-                              if (!previewDownloadUrl) return
-                              triggerDownload(previewDownloadUrl, currentFile.path.split('/').pop() ?? 'preview')
-                            }}
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                            Download
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={!previewShareUrl}
-                            onClick={() => {
-                              if (!previewShareUrl) return
-                              void sharePreview({
-                                url: previewShareUrl,
-                                title: currentFile.path,
-                              }).then((shared) => {
-                                setShareFeedback(shared ? 'shared' : 'copied')
-                              })
-                            }}
-                          >
-                            {shareFeedback === 'shared' || shareFeedback === 'copied' ? (
-                              <Check className="h-3.5 w-3.5" />
-                            ) : (
-                              <Share2 className="h-3.5 w-3.5" />
-                            )}
-                            {shareFeedback === 'shared'
-                              ? 'Shared'
-                              : shareFeedback === 'copied'
-                                ? 'Copied'
-                                : 'Share'}
-                          </Button>
+                            <Button
+                              variant="secondary"
+                              size="icon-sm"
+                              aria-label={
+                                shareFeedback === 'shared'
+                                  ? 'Shared'
+                                  : shareFeedback === 'copied'
+                                    ? 'Copied'
+                                    : 'Share'
+                              }
+                              title={
+                                shareFeedback === 'shared'
+                                  ? 'Shared'
+                                  : shareFeedback === 'copied'
+                                    ? 'Copied'
+                                    : 'Share'
+                              }
+                              disabled={!previewShareUrl}
+                              onClick={() => {
+                                if (!previewShareUrl) return
+                                void sharePreview({
+                                  url: previewShareUrl,
+                                  title: currentFile.path,
+                                }).then((shared) => {
+                                  setShareFeedback(shared ? 'shared' : 'copied')
+                                })
+                              }}
+                            >
+                              {shareFeedback === 'shared' || shareFeedback === 'copied' ? (
+                                <Check className="h-3.5 w-3.5" />
+                              ) : (
+                                <Share2 className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          </Tooltip>
                         </>
                       ) : null}
                     </div>
@@ -540,7 +603,6 @@ export function FolderEditorViewer({
                         preview={preview}
                         loading={previewLoadingPath === currentFile.path}
                         error={previewError}
-                        frameHeight={canPreviewRemote(currentFile) ? remotePreviewHeight : undefined}
                         isDarkMode={isDarkMode}
                       />
                     </div>
@@ -579,7 +641,7 @@ export function FolderEditorViewer({
           contentClassName="px-3 py-3"
           maxHeight="96vh"
         >
-          <div className="flex h-[80vh] min-h-[420px] max-h-[88vh] min-w-0 flex-col overflow-hidden">
+          <div className="flex h-[80vh] max-h-[88vh] min-h-[420px] min-w-0 flex-col overflow-hidden">
             <PreviewPane
               file={activeFile}
               preview={preview}

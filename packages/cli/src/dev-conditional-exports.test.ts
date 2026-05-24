@@ -146,11 +146,11 @@ describe('development conditional exports', () => {
   it('declares source-runtime workspace dependencies for the CLI package', () => {
     const cliPackage = readPackageJson('packages/cli/package.json')
 
-    expect(cliPackage.dependencies).toMatchObject({
+    expect(cliPackage.devDependencies).toMatchObject({
       '@openspecui/core': 'workspace:*',
       '@openspecui/server': 'workspace:*',
     })
-    expect(cliPackage.devDependencies).not.toHaveProperty('@openspecui/server')
+    expect(cliPackage.dependencies).not.toHaveProperty('@openspecui/server')
   })
 
   it('uses an expandable NODE_OPTIONS assignment for source dev scripts', () => {

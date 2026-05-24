@@ -1,9 +1,13 @@
+import { Tooltip } from '@/components/tooltip'
 import type { ReactNode } from 'react'
 
 export interface ButtonGroupOption<T extends string = string> {
   value: T
   label: ReactNode
+  icon?: ReactNode
   disabled?: boolean
+  ariaLabel?: string
+  tooltip?: ReactNode
 }
 
 interface ButtonGroupProps<T extends string = string> {
@@ -12,6 +16,7 @@ interface ButtonGroupProps<T extends string = string> {
   onChange: (value: T) => void
   className?: string
   tone?: 'default' | 'terminal'
+  presentation?: 'label' | 'icon-only' | 'icon-label'
 }
 
 /**
@@ -23,6 +28,7 @@ export function ButtonGroup<T extends string>({
   onChange,
   className = '',
   tone = 'default',
+  presentation = 'label',
 }: ButtonGroupProps<T>) {
   const containerClassName =
     tone === 'terminal'
@@ -40,15 +46,37 @@ export function ButtonGroup<T extends string>({
           : tone === 'terminal'
             ? 'text-terminal-foreground/72 hover:bg-terminal-foreground/10 hover:text-terminal-foreground'
             : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+        const accessibleLabel =
+          option.ariaLabel ?? (typeof option.label === 'string' ? option.label : undefined)
+        const tooltipContent = option.tooltip ?? accessibleLabel
+        const content =
+          presentation === 'icon-only' ? (
+            (option.icon ?? option.label)
+          ) : presentation === 'icon-label' && option.icon ? (
+            <>
+              {option.icon}
+              <span>{option.label}</span>
+            </>
+          ) : (
+            option.label
+          )
 
-        return (
+        const button = (
           <button
             key={option.value}
             type="button"
             disabled={option.disabled}
             onClick={() => onChange(option.value)}
             aria-pressed={active}
-            className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            aria-label={presentation === 'icon-only' ? accessibleLabel : undefined}
+            title={
+              presentation === 'icon-only' && typeof accessibleLabel === 'string'
+                ? accessibleLabel
+                : undefined
+            }
+            className={`inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+              presentation === 'icon-only' ? 'h-8 w-8 p-0' : 'px-3 py-1.5'
+            } ${
               index > 0
                 ? tone === 'terminal'
                   ? 'border-terminal-foreground/20 border-l'
@@ -56,8 +84,16 @@ export function ButtonGroup<T extends string>({
                 : ''
             } ${stateClassName}`}
           >
-            {option.label}
+            {content}
           </button>
+        )
+
+        return tooltipContent ? (
+          <Tooltip key={option.value} content={tooltipContent}>
+            {button}
+          </Tooltip>
+        ) : (
+          button
         )
       })}
     </div>

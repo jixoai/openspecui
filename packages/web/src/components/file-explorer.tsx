@@ -42,6 +42,7 @@ const layoutStyles = css`
     display: flex;
     flex-direction: column;
     height: 100%;
+    min-height: 0;
     gap: 0.75rem;
   }
   .fev-sidebar-tabs {
@@ -49,6 +50,7 @@ const layoutStyles = css`
   }
   .fev-sidebar-tree {
     display: none;
+    min-height: 0;
   }
   .fev-editor-wrapper {
     display: flex;
@@ -62,8 +64,10 @@ const layoutStyles = css`
     .fev-layout {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(240px, clamp(240px, 30%, 420px));
+      grid-template-rows: minmax(0, 1fr);
       gap: 1rem;
       min-height: 0;
+      overflow: hidden;
     }
     .fev-sidebar-tabs {
       display: none;
@@ -71,9 +75,13 @@ const layoutStyles = css`
     .fev-sidebar-tree {
       display: block;
       order: 2;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
     }
     .fev-editor-wrapper {
       order: 1;
+      min-height: 0;
     }
   }
   .CodeMirror {
@@ -348,13 +356,17 @@ function FileTree({
   return (
     <ContextMenuWrapper
       ref={wrapperRef}
-      className="border-border bg-muted/30 flex h-full flex-col rounded-md border"
+      className="border-border bg-muted/30 flex h-full min-h-0 flex-col rounded-md border"
+      data-file-explorer-tree=""
     >
       <div className="border-border/50 text-muted-foreground flex items-center justify-between border-b px-3 py-2 text-xs font-medium">
         <span className="min-w-0 truncate">{headerLabel}</span>
         {headerActions}
       </div>
-      <div className="scrollbar-thin scrollbar-track-transparent flex-1 overflow-y-auto">
+      <div
+        data-file-explorer-tree-scroll=""
+        className="scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-y-auto"
+      >
         {entries.length === 0 ? (
           <div className="text-muted-foreground px-3 py-2 text-xs">No files yet.</div>
         ) : (
@@ -472,7 +484,7 @@ export function FileExplorer({
   }, [sortedEntries, selectedPath])
 
   return (
-    <div className="@container-[size] h-full">
+    <div className="@container-[size] h-full min-h-0 overflow-hidden">
       <style>{layoutStyles}</style>
       <div className="fev-layout">
         <div className="fev-sidebar-tabs">
