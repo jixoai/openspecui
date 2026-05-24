@@ -9,7 +9,10 @@ import type {
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-type TranslationPipeline = (input: string, options?: Record<string, unknown>) => Promise<unknown>
+type TranslationPipeline = (
+  input: string | string[],
+  options?: Record<string, unknown>
+) => Promise<unknown>
 
 interface TransformersModule {
   env?: {
@@ -104,14 +107,16 @@ class LocalTranslator implements Translator {
     inputs: string[],
     options?: { signal?: AbortSignal }
   ): AsyncGenerator<{ index: number; output: string }> {
-    for (const [index, input] of inputs.entries()) {
-      throwIfAborted(options?.signal)
-      const result = await this.pipeline(input, {
-        src_lang: this.languages.sourceLanguage,
-        tgt_lang: this.languages.targetLanguage,
-      })
-      throwIfAborted(options?.signal)
-      yield { index, output: readTranslatedText(result) }
+    throwIfAborted(options?.signal)
+    const result = await this.pipeline(inputs, {
+      src_lang: this.languages.sourceLanguage,
+      tgt_lang: this.languages.targetLanguage,
+      signal: options?.signal,
+    })
+    throwIfAborted(options?.signal)
+    const outputs = readTranslatedOutputs(result, inputs.length)
+    for (const [index, output] of outputs.entries()) {
+      yield { index, output }
     }
   }
 
@@ -195,6 +200,19 @@ function readTranslatedText(value: unknown): string {
     if (typeof generated === 'string') return generated
   }
   return String(value)
+}
+
+function readTranslatedOutputs(value: unknown, expectedCount: number): string[] {
+  const entries = Array.isArray(value) ? value : [value]
+  const outputs = entries.map((entry) => readTranslatedText(entry))
+
+  if (outputs.length === expectedCount) return outputs
+  if (expectedCount === 1 && outputs.length > 0) return [outputs[0]]
+  if (outputs.length === 1 && expectedCount > 1) {
+    return Array.from({ length: expectedCount }, () => outputs[0])
+  }
+
+  throw new Error(`Translator returned ${outputs.length} outputs for ${expectedCount} inputs.`)
 }
 
 function readProgress(event: unknown): number | undefined {

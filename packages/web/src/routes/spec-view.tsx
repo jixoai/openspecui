@@ -1,6 +1,8 @@
 import { MarkdownViewer } from '@/components/markdown-viewer'
+import { resolveDocumentTranslationConfig } from '@/lib/resolve-document-translation-config'
 import {
   useConfigSubscription,
+  useGlobalSettingsSubscription,
   useSpecRawSubscription,
   useSpecSubscription,
 } from '@/lib/use-subscription'
@@ -24,6 +26,11 @@ export function SpecView() {
   const { data: spec, isLoading } = useSpecSubscription(specId)
   const { data: rawMarkdown, isLoading: isRawLoading } = useSpecRawSubscription(specId)
   const { data: config } = useConfigSubscription()
+  const { data: globalSettings } = useGlobalSettingsSubscription()
+  const translationConfig = useMemo(
+    () => resolveDocumentTranslationConfig(config?.translation, globalSettings),
+    [config?.translation, globalSettings]
+  )
   // TODO: validation 暂时不支持订阅，后续可以添加
   const validation = null as {
     valid: boolean
@@ -74,7 +81,7 @@ export function SpecView() {
       spec={spec}
       rawMarkdown={rawMarkdown ?? ''}
       validation={validation}
-      translationConfig={config?.translation}
+      translationConfig={translationConfig}
     />
   )
 }

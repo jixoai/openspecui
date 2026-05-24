@@ -300,6 +300,277 @@ describe('LocalModelAssetService', () => {
     await waitForDownloadedState(indexPath)
   })
 
+  it('returns per-group cached status so downloaded profiles stay independently visible', async () => {
+    const service = new LocalModelAssetService({
+      projectDir: tempDir,
+      configManager: {} as ConfigManager,
+      globalSettingsManager: {
+        readSettings: async () => ({
+          translationEngines: {
+            local: {
+              model: 'onnx-community/opus-mt-en-zh',
+              selectedGroupId: 'q8',
+              hfEndpoint: 'https://huggingface.co',
+            },
+          },
+        }),
+      },
+      now: () => 100,
+      indexPath,
+      cacheDir,
+      fetchCachePath,
+    }) as TestableLocalModelAssetService
+
+    vi.spyOn(service, 'getTransformersModule').mockResolvedValue({
+      env: {
+        cacheDir: null,
+        allowLocalModels: false,
+        localModelPath: '',
+      },
+      ModelRegistry: {
+        get_pipeline_files: vi.fn(async (_task, _modelId, options?: { dtype?: string }) =>
+          options?.dtype === 'q4'
+            ? ['onnx/encoder_model_q4.onnx', 'onnx/decoder_model_merged_q4.onnx']
+            : options?.dtype === 'fp16'
+              ? ['onnx/encoder_model_fp16.onnx', 'onnx/decoder_model_merged_fp16.onnx']
+              : ['onnx/encoder_model_quantized.onnx', 'onnx/decoder_model_merged_quantized.onnx']
+        ),
+        is_pipeline_cached_files: vi.fn(),
+        get_file_metadata: vi.fn(),
+        clear_cache: vi.fn(),
+      },
+    })
+
+    const store = new LocalModelAssetStore({ indexPath })
+    await store.upsert({
+      modelId: 'onnx-community/opus-mt-en-zh',
+      status: 'downloaded',
+      selected: true,
+      progress: 1,
+      bytesDownloaded: 246415360,
+      totalBytes: 246415360,
+      resumable: false,
+      plan: {
+        modelId: 'onnx-community/opus-mt-en-zh',
+        estimatedTotalBytes: 246415360,
+        selectedGroupId: 'q8',
+        files: [
+          { path: 'config.json', sizeBytes: 10, required: true },
+          { path: 'onnx/encoder_model_quantized.onnx', sizeBytes: 10, required: true },
+          { path: 'onnx/decoder_model_merged_quantized.onnx', sizeBytes: 10, required: true },
+        ],
+        groups: [
+          {
+            id: 'q4',
+            label: 'q4',
+            dtype: 'q4',
+            estimatedTotalBytes: 30,
+            selectable: true,
+            selected: false,
+            files: [
+              { path: 'config.json', sizeBytes: 10, required: true },
+              { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10, required: true },
+              { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10, required: true },
+            ],
+          },
+          {
+            id: 'q8',
+            label: 'q8',
+            dtype: 'q8',
+            estimatedTotalBytes: 30,
+            selectable: true,
+            selected: true,
+            files: [
+              { path: 'config.json', sizeBytes: 10, required: true },
+              { path: 'onnx/encoder_model_quantized.onnx', sizeBytes: 10, required: true },
+              { path: 'onnx/decoder_model_merged_quantized.onnx', sizeBytes: 10, required: true },
+            ],
+          },
+          {
+            id: 'fp16',
+            label: 'fp16',
+            dtype: 'fp16',
+            estimatedTotalBytes: 30,
+            selectable: true,
+            selected: false,
+            files: [
+              { path: 'config.json', sizeBytes: 10, required: true },
+              { path: 'onnx/encoder_model_fp16.onnx', sizeBytes: 10, required: true },
+              { path: 'onnx/decoder_model_merged_fp16.onnx', sizeBytes: 10, required: true },
+            ],
+          },
+        ],
+      },
+      files: [
+        { path: 'config.json', sizeBytes: 10, downloadedBytes: 10 },
+        { path: 'onnx/encoder_model_quantized.onnx', sizeBytes: 10, downloadedBytes: 10 },
+        { path: 'onnx/decoder_model_merged_quantized.onnx', sizeBytes: 10, downloadedBytes: 10 },
+      ],
+      updatedAt: 100,
+    })
+
+    await writeLocalModelCacheFile({
+      cacheDir,
+      modelId: 'onnx-community/opus-mt-en-zh',
+      path: 'config.json',
+      content: 'config',
+    })
+    await writeLocalModelCacheFile({
+      cacheDir,
+      modelId: 'onnx-community/opus-mt-en-zh',
+      path: 'onnx/encoder_model_quantized.onnx',
+      content: 'q8-encoder',
+    })
+    await writeLocalModelCacheFile({
+      cacheDir,
+      modelId: 'onnx-community/opus-mt-en-zh',
+      path: 'onnx/decoder_model_merged_quantized.onnx',
+      content: 'q8-decoder',
+    })
+    await writeLocalModelCacheFile({
+      cacheDir,
+      modelId: 'onnx-community/opus-mt-en-zh',
+      path: 'onnx/encoder_model_q4.onnx',
+      content: 'q4-encoder',
+    })
+    await writeLocalModelCacheFile({
+      cacheDir,
+      modelId: 'onnx-community/opus-mt-en-zh',
+      path: 'onnx/decoder_model_merged_q4.onnx',
+      content: 'q4-decoder',
+    })
+
+    const result = await service.listLocalCatalog()
+    const groups = result.items[0]?.asset.plan?.groups ?? []
+
+    expect(groups.find((group) => group.id === 'q4')?.status).toBe('downloaded')
+    expect(groups.find((group) => group.id === 'q8')?.status).toBe('downloaded')
+    expect(groups.find((group) => group.id === 'fp16')?.status).toBe('not-downloaded')
+  })
+
+  it('keeps active profile download status scoped to its own group', async () => {
+    const resumeDownload = createDeferred<void>()
+    hubMock.listFiles.mockImplementation(async function* (input?: {
+      fetch?: typeof fetch
+      hubUrl?: string
+    }) {
+      await input?.fetch?.(
+        `${input.hubUrl ?? 'https://huggingface.co'}/api/models/onnx-community/opus-mt-en-zh/tree/main?recursive=true&expand=true`
+      )
+      yield { path: 'config.json', type: 'file', size: 10 }
+      yield { path: 'onnx/encoder_model_q4.onnx', type: 'file', size: 10 }
+      yield { path: 'onnx/decoder_model_merged_q4.onnx', type: 'file', size: 10 }
+      yield { path: 'onnx/encoder_model_q4f16.onnx', type: 'file', size: 10 }
+      yield { path: 'onnx/decoder_model_merged_q4f16.onnx', type: 'file', size: 10 }
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+        if (url.includes('/api/models/') && url.includes('/tree/')) {
+          return Response.json([
+            { path: 'config.json', type: 'file', size: 10 },
+            { path: 'onnx/encoder_model_q4.onnx', type: 'file', size: 10 },
+            { path: 'onnx/decoder_model_merged_q4.onnx', type: 'file', size: 10 },
+            { path: 'onnx/encoder_model_q4f16.onnx', type: 'file', size: 10 },
+            { path: 'onnx/decoder_model_merged_q4f16.onnx', type: 'file', size: 10 },
+          ])
+        }
+        if (url.includes('/resolve/main/onnx/encoder_model_q4.onnx')) {
+          return new Response(
+            new ReadableStream<Uint8Array>({
+              async start(controller) {
+                controller.enqueue(new Uint8Array([1, 2, 3, 4]))
+                await resumeDownload.promise
+                controller.enqueue(new Uint8Array([5, 6, 7, 8, 9, 10]))
+                controller.close()
+              },
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Length': '10' },
+            }
+          )
+        }
+        if (url.includes('/resolve/main/')) {
+          return new Response(new Uint8Array(10), {
+            status: 200,
+            headers: { 'Content-Length': '10' },
+          })
+        }
+        return new Response(null, { status: 200 })
+      })
+    )
+
+    const service = new LocalModelAssetService({
+      projectDir: tempDir,
+      configManager: {} as ConfigManager,
+      globalSettingsManager: {
+        readSettings: async () => ({
+          translationEngines: {
+            local: {
+              model: 'onnx-community/opus-mt-en-zh',
+              selectedGroupId: 'q4',
+              hfEndpoint: 'https://huggingface.co',
+            },
+          },
+        }),
+      },
+      now: () => 100,
+      indexPath,
+      cacheDir,
+      fetchCachePath,
+    }) as TestableLocalModelAssetService
+    vi.spyOn(service, 'getTransformersModule').mockResolvedValue({
+      env: {
+        cacheDir: null,
+        allowLocalModels: false,
+        localModelPath: '',
+      },
+      ModelRegistry: {
+        get_pipeline_files: vi.fn(async (_task, _modelId, options?: { dtype?: string }) =>
+          options?.dtype === 'q4f16'
+            ? ['onnx/encoder_model_q4f16.onnx', 'onnx/decoder_model_merged_q4f16.onnx']
+            : ['onnx/encoder_model_q4.onnx', 'onnx/decoder_model_merged_q4.onnx']
+        ),
+        is_pipeline_cached_files: vi.fn(),
+        get_file_metadata: vi.fn(),
+        clear_cache: vi.fn(),
+      },
+    })
+
+    try {
+      await service.startDownload('onnx-community/opus-mt-en-zh', 'q4')
+      await waitForState(indexPath, (states) =>
+        states.some((entry) =>
+          entry.files?.some(
+            (file) => file.path === 'onnx/encoder_model_q4.onnx' && file.downloadedBytes === 4
+          )
+        )
+      )
+
+      const crossGroupState = await service.readSelectedModelState(
+        'onnx-community/opus-mt-en-zh',
+        'q4f16'
+      )
+
+      expect(crossGroupState.status).toBe('not-downloaded')
+      expect(crossGroupState.plan?.groups?.map((group) => [group.id, group.status])).toEqual([
+        ['q4', 'downloading'],
+        ['q4f16', 'not-downloaded'],
+      ])
+      expect(crossGroupState.files).toEqual([
+        { path: 'config.json', sizeBytes: 10, downloadedBytes: 10 },
+        { path: 'onnx/encoder_model_q4f16.onnx', sizeBytes: 10, downloadedBytes: 0 },
+        { path: 'onnx/decoder_model_merged_q4f16.onnx', sizeBytes: 10, downloadedBytes: 0 },
+      ])
+    } finally {
+      resumeDownload.resolve()
+      await service.waitForModelTask('onnx-community/opus-mt-en-zh').catch(() => undefined)
+    }
+  })
+
   it('persists byte-level progress while streaming an Xet-backed file download', async () => {
     hubMock.downloadFile.mockImplementation(async (input: { path: string }) =>
       createMockDownloadBlob(
@@ -845,7 +1116,7 @@ describe('LocalModelAssetService', () => {
     ])
   })
 
-  it('derives cross-group cached progress from file bytes instead of cached file count', async () => {
+  it('keeps cross-group shared-file progress out of profile download status', async () => {
     const modelId = 'onnx-community/opus-mt-en-zh'
     const auxiliaryFiles = [
       ['config.json', 1520],
@@ -966,10 +1237,11 @@ describe('LocalModelAssetService', () => {
 
     const crossGroupState = await service.readSelectedModelState(modelId, 'q4f16')
 
-    expect(crossGroupState.status).toBe('paused')
+    expect(crossGroupState.status).toBe('not-downloaded')
     expect(crossGroupState.totalBytes).toBe(q4f16TotalBytes)
     expect(crossGroupState.bytesDownloaded).toBe(auxiliaryBytes)
     expect(crossGroupState.progress).toBeCloseTo(auxiliaryBytes / q4f16TotalBytes, 8)
+    expect(crossGroupState.resumable).toBe(false)
     expect(crossGroupState.files).toEqual(
       q4f16Files.map(([path, sizeBytes]) => ({
         path,
@@ -977,6 +1249,10 @@ describe('LocalModelAssetService', () => {
         downloadedBytes: auxiliaryFiles.some(([auxPath]) => auxPath === path) ? sizeBytes : 0,
       }))
     )
+    expect(crossGroupState.plan?.groups?.map((group) => [group.id, group.status])).toEqual([
+      ['q4', 'downloaded'],
+      ['q4f16', 'not-downloaded'],
+    ])
   })
 })
 
@@ -1009,6 +1285,20 @@ async function waitForState(
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
   throw new Error(`Timed out waiting for NMT state. Last state: ${JSON.stringify(lastParsed)}`)
+}
+
+function createDeferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T | PromiseLike<T>) => void
+  reject: (error: unknown) => void
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
 }
 
 function createMockDownloadBlob(chunks: Uint8Array[]): Blob {

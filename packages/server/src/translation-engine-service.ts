@@ -1,7 +1,7 @@
 import {
   TRANSLATION_ENGINE_MANIFESTS,
-  type BatchTranslateInput,
   type BatchTranslateEvent,
+  type BatchTranslateInput,
   type ConfigManager,
   type GlobalSettingsManager,
   type LocalModelAssetState,
@@ -16,7 +16,6 @@ import {
 import { observable } from '@trpc/server/observable'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { ensureProxyAwareFetchDispatcher } from './network-dispatcher.js'
 import { LocalModelAssetStore } from './local-model-asset-store.js'
 import {
   getDefaultLocalModelCacheDir,
@@ -30,6 +29,7 @@ import {
   type LocalRuntimeSettingsReader,
   type TransformersRuntimeModule,
 } from './local-model-runtime.js'
+import { ensureProxyAwareFetchDispatcher } from './network-dispatcher.js'
 import { searchLocalModels } from './translation-model-catalog.js'
 
 export interface TranslationEngineListItem extends TranslationEngineManifest {
@@ -85,7 +85,8 @@ export class TranslationEngineService {
       status: 'available',
       model:
         manifest.id === 'local'
-          ? (config.translation.engines.local.model ?? globalSettings.translationEngines.local.model)
+          ? (config.translation.engines.local.model ??
+            globalSettings.translationEngines.local.model)
           : manifest.id === 'openai'
             ? (config.translation.engines.openai.model ??
               globalSettings.translationEngines.openai.model)
@@ -264,7 +265,9 @@ export class TranslationEngineService {
     )
   }
 
-  private async readLocalRuntimeConfig(model: string): Promise<Record<string, unknown> | undefined> {
+  private async readLocalRuntimeConfig(
+    model: string
+  ): Promise<Record<string, unknown> | undefined> {
     try {
       return JSON.parse(
         await readFile(join(this.localCacheDir, 'models', model, 'config.json'), 'utf8')
@@ -330,6 +333,7 @@ function enrichDownloadPlanWithAssetSnapshot(
     if (!matchingAssetGroup) return group
     return {
       ...group,
+      status: matchingAssetGroup.status ?? group.status,
       estimatedTotalBytes: group.estimatedTotalBytes ?? matchingAssetGroup.estimatedTotalBytes,
       files: group.files.map((file) => {
         const matchingAssetFile = matchingAssetGroup.files.find((asset) => asset.path === file.path)

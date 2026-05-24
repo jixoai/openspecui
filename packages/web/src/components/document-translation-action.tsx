@@ -1,7 +1,10 @@
 import { Button } from '@/components/button'
+import { Tooltip } from '@/components/tooltip'
 import { useDocumentTranslationActivation } from '@/lib/document-translation-session-state'
+import { resolveDocumentTranslationConfig } from '@/lib/resolve-document-translation-config'
 import type { TranslateServiceStatus } from '@/lib/translate-service-status'
 import { useDocumentTranslation } from '@/lib/use-document-translation'
+import { useGlobalSettingsSubscription } from '@/lib/use-subscription'
 import {
   DocumentTranslationConfigSchema,
   type DocumentTranslationConfig,
@@ -36,12 +39,15 @@ export function useDocumentTranslationRenderPlugin({
   markdown: string | undefined
   translationConfig?: DocumentTranslationConfigInput
 }): MarkdownRenderPluginResult {
+  const { data: globalSettings } = useGlobalSettingsSubscription()
   const resolvedTranslationConfig = useMemo(
     () =>
       translationConfig === undefined
         ? undefined
-        : DocumentTranslationConfigSchema.parse(translationConfig),
-    [translationConfig]
+        : DocumentTranslationConfigSchema.parse(
+            resolveDocumentTranslationConfig(translationConfig, globalSettings)
+          ),
+    [globalSettings, translationConfig]
   )
   const session = useDocumentTranslation(markdown ?? '', resolvedTranslationConfig)
   const canTranslate =
@@ -372,15 +378,15 @@ function DocumentTranslationButton({
   const isBusy = status === 'initializing' || status === 'translating'
   const ariaLabel = isServiceUnavailable
     ? 'Translation unavailable'
-      : isSettingsDisabled
-        ? 'Configure translation'
-        : isServiceChecking
-          ? 'Checking translation'
-          : isBusy
-            ? 'Cancel translation'
-            : isTranslated
-              ? 'Show source'
-              : 'Translate'
+    : isSettingsDisabled
+      ? 'Configure translation'
+      : isServiceChecking
+        ? 'Checking translation'
+        : isBusy
+          ? 'Cancel translation'
+          : isTranslated
+            ? 'Show source'
+            : 'Translate'
   const title = isServiceUnavailable
     ? (serviceStatus.message ?? capability?.message ?? 'Translation is unavailable.')
     : isSettingsDisabled
@@ -388,47 +394,49 @@ function DocumentTranslationButton({
       : ariaLabel
 
   return (
-    <Button
-      size="icon-sm"
-      variant="secondary"
-      disabled={isServiceUnavailable || isServiceChecking}
-      aria-disabled={isSettingsDisabled ? true : undefined}
-      onClick={(event) => {
-        event.stopPropagation()
-        onActivate()
-      }}
-      title={title}
-      aria-label={ariaLabel}
-      data-translation-action-state={
-        isServiceUnavailable
-          ? 'unavailable'
-          : isServiceChecking
-            ? 'checking'
+    <Tooltip content={title} delay={0}>
+      <Button
+        size="icon-sm"
+        variant="secondary"
+        disabled={isServiceUnavailable || isServiceChecking}
+        aria-disabled={isSettingsDisabled ? true : undefined}
+        onClick={(event) => {
+          event.stopPropagation()
+          onActivate()
+        }}
+        title={title}
+        aria-label={ariaLabel}
+        data-translation-action-state={
+          isServiceUnavailable
+            ? 'unavailable'
+            : isServiceChecking
+              ? 'checking'
+              : isSettingsDisabled
+                ? 'settings-disabled'
+                : isBusy
+                  ? 'busy'
+                  : isTranslated
+                    ? 'translated'
+                    : 'ready'
+        }
+        className={
+          isServiceUnavailable || isServiceChecking
+            ? 'border-border bg-muted text-muted-foreground disabled:border-border disabled:bg-muted disabled:text-muted-foreground'
             : isSettingsDisabled
-              ? 'settings-disabled'
-              : isBusy
-                ? 'busy'
-                : isTranslated
-                  ? 'translated'
-                  : 'ready'
-      }
-      className={
-        isServiceUnavailable || isServiceChecking
-          ? 'border-border bg-muted text-muted-foreground disabled:border-border disabled:bg-muted disabled:text-muted-foreground'
-          : isSettingsDisabled
-            ? 'border-border bg-muted/40 text-muted-foreground opacity-70'
-            : isTranslated
-              ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90'
-              : 'border-primary text-primary hover:bg-primary/10'
-      }
-    >
-      {isBusy || isServiceChecking ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : isServiceUnavailable ? (
-        <AlertTriangle className="h-4 w-4" />
-      ) : (
-        <Languages className="h-4 w-4" />
-      )}
-    </Button>
+              ? 'border-border bg-muted/40 text-muted-foreground opacity-70'
+              : isTranslated
+                ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90'
+                : 'border-primary text-primary hover:bg-primary/10'
+        }
+      >
+        {isBusy || isServiceChecking ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : isServiceUnavailable ? (
+          <AlertTriangle className="h-4 w-4" />
+        ) : (
+          <Languages className="h-4 w-4" />
+        )}
+      </Button>
+    </Tooltip>
   )
 }

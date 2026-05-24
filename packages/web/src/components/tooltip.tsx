@@ -18,10 +18,16 @@ export function Tooltip({
   className,
 }: TooltipProps) {
   if (!content) return children
+  const disabled =
+    typeof children.props === 'object' &&
+    children.props !== null &&
+    'disabled' in children.props &&
+    Boolean(children.props.disabled)
+  const trigger = disabled ? <span className="inline-flex max-w-full">{children}</span> : children
 
   return (
     <BaseTooltip.Root>
-      <BaseTooltip.Trigger render={children} delay={delay} />
+      <BaseTooltip.Trigger render={trigger} delay={delay} />
       <BaseTooltip.Portal>
         <BaseTooltip.Positioner sideOffset={sideOffset} className="z-50 outline-none">
           <BaseTooltip.Popup

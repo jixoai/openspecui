@@ -80,7 +80,16 @@ export function useDocumentTranslation(
     setResult(null)
     setStatus('source')
     setError(null)
-  }, [markdown, config?.displayMode, config?.enabled, config?.targetLanguage])
+  }, [
+    markdown,
+    config?.displayMode,
+    config?.enabled,
+    config?.engineId,
+    config?.engines.local.model,
+    config?.engines.local.selectedGroupId,
+    config?.engines.openai.model,
+    config?.targetLanguage,
+  ])
 
   useEffect(() => {
     let disposed = false
@@ -128,21 +137,22 @@ export function useDocumentTranslation(
           disposed = true
         }
       }
-      void trpcClient.localModels.state
+      void trpcClient.localModels.panelState
         .query({
           modelId: model,
           selectedGroupId: config.engines.local.selectedGroupId,
         })
-        .then((localAsset) => {
+        .then((panelState) => {
           if (disposed) return
+          const selectedGroupId = panelState.selectedGroupId ?? config.engines.local.selectedGroupId
           setServiceStatus(
             projectTranslateServiceStatus({
               enabled: config.enabled,
               hasSource: markdown.length > 0,
               engineId: 'local',
               localModel: model,
-              localSelectedGroupId: config.engines.local.selectedGroupId,
-              localAsset,
+              localSelectedGroupId: selectedGroupId,
+              localAsset: panelState.asset,
             })
           )
         })
@@ -298,11 +308,9 @@ export function useDocumentTranslation(
           message: preferredRow.message,
         }
         setCapability(nextCapability)
-        const nextTable = patchBrowserSupportTableRow(
-          config.targetLanguage,
-          preferredRow,
-          { message: undefined }
-        )
+        const nextTable = patchBrowserSupportTableRow(config.targetLanguage, preferredRow, {
+          message: undefined,
+        })
         setBrowserSupportTable(nextTable)
         setServiceStatus(
           projectTranslateServiceStatus({

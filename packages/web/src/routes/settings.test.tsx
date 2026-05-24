@@ -5,7 +5,7 @@ import type {
   TranslationModelDownloadPlan,
 } from '@openspecui/core/translator'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import type { ReactNode } from 'react'
+import { useSyncExternalStore, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Settings } from './settings'
 
@@ -66,28 +66,143 @@ const browserTranslationMock = vi.hoisted(() => ({
   })),
 }))
 
-const { translationEnginesMock, localModelsMock, restoreTranslationMocks, emitLocalModelLog } =
-  vi.hoisted(() => {
-    let localModelsSubscribeLogHandlers:
-      | {
-          onData: (log: LocalModelAssetLog) => void
-          onError?: (error: unknown) => void
-        }
-      | undefined
+const {
+  translationEnginesMock,
+  localModelsMock,
+  restoreTranslationMocks,
+  emitLocalModelLog,
+  createDefaultLocalAssetState,
+  createDefaultLocalDownloadPlan,
+} = vi.hoisted(() => {
+  let localModelsSubscribeLogHandlers:
+    | {
+        onData: (log: LocalModelAssetLog) => void
+        onError?: (error: unknown) => void
+      }
+    | undefined
 
-    const createDefaultLocalDownloadPlan = (modelId: string): TranslationModelDownloadPlan => ({
+  const createDefaultLocalDownloadPlan = (
+    modelId: string,
+    selectedGroupId = 'q8'
+  ): TranslationModelDownloadPlan => {
+    const q8Files = [
+      { path: 'config.json', sizeBytes: 1503, required: true },
+      { path: 'generation_config.json', sizeBytes: 293, required: true },
+      { path: 'source.spm', sizeBytes: 806435, required: true },
+      { path: 'target.spm', sizeBytes: 804600, required: true },
+      { path: 'onnx/encoder_model_quantized.onnx', sizeBytes: 52848230, required: true },
+      { path: 'onnx/decoder_model_merged_quantized.onnx', sizeBytes: 193567130, required: true },
+    ]
+    const fp16Files = [
+      { path: 'config.json', sizeBytes: 1503, required: true },
+      { path: 'generation_config.json', sizeBytes: 293, required: true },
+      { path: 'source.spm', sizeBytes: 806435, required: true },
+      { path: 'target.spm', sizeBytes: 804600, required: true },
+      { path: 'onnx/encoder_model_fp16.onnx', sizeBytes: 209715200, required: true },
+      { path: 'onnx/decoder_model_merged_fp16.onnx', sizeBytes: 524288000, required: true },
+    ]
+    const groups: NonNullable<TranslationModelDownloadPlan['groups']> = [
+      {
+        id: 'q8',
+        label: 'q8 (8-bit)',
+        description: '8-bit quantized ONNX profile.',
+        profile: 'q8',
+        dtype: 'q8',
+        estimatedTotalBytes: 246415360,
+        selectable: true,
+        selected: selectedGroupId === 'q8',
+        files: q8Files,
+      },
+      {
+        id: 'fp16',
+        label: 'fp16',
+        description: 'fp16 ONNX profile.',
+        profile: 'fp16',
+        dtype: 'fp16',
+        estimatedTotalBytes: 734003200,
+        selectable: true,
+        selected: selectedGroupId === 'fp16',
+        files: fp16Files,
+      },
+    ]
+    const selectedGroup = groups.find((group) => group.selected) ?? groups[0]
+    return {
       modelId,
-      estimatedTotalBytes: 246415360,
-      selectedGroupId: 'q8',
-      files: [
-        { path: 'config.json', sizeBytes: 1503, required: true },
-        { path: 'generation_config.json', sizeBytes: 293, required: true },
-        { path: 'source.spm', sizeBytes: 806435, required: true },
-        { path: 'target.spm', sizeBytes: 804600, required: true },
-        { path: 'onnx/encoder_model_quantized.onnx', sizeBytes: 52848230, required: true },
-        { path: 'onnx/decoder_model_merged_quantized.onnx', sizeBytes: 193567130, required: true },
-      ],
-      groups: [
+      estimatedTotalBytes: selectedGroup.estimatedTotalBytes,
+      selectedGroupId: selectedGroup.id,
+      files: selectedGroup.files,
+      groups,
+    }
+  }
+  const createDefaultLocalAssetState = (
+    modelId: string,
+    selectedGroupId = 'q8'
+  ): LocalModelAssetState => {
+    const plan = createDefaultLocalDownloadPlan(modelId, selectedGroupId)
+    return {
+      modelId,
+      status: 'not-downloaded',
+      selected: true,
+      progress: 0,
+      resumable: false,
+      plan,
+      files: plan.files.map((file) => ({
+        path: file.path,
+        sizeBytes: file.sizeBytes,
+        downloadedBytes: 0,
+      })),
+      updatedAt: 100,
+    }
+  }
+  const createDefaultLocalModel = (): LocalModelCatalogItem => {
+    const asset = createDefaultLocalAssetState('onnx-community/opus-mt-en-zh')
+    return {
+      id: 'onnx-community/opus-mt-en-zh',
+      label: 'onnx-community/opus-mt-en-zh',
+      summary: 'Previously selected local model. Estimated download 235 MB.',
+      downloads: 0,
+      likes: 0,
+      tags: ['local'],
+      compatibility: {
+        transformersJs: true,
+        onnx: true,
+        localRuntimeVerified: true,
+      },
+      size: {
+        estimatedTotalBytes: 246415360,
+        primaryBytes: 246415360,
+      },
+      downloadGroups: asset.plan?.groups,
+      languageMatch: {
+        sourceMatched: false,
+        targetMatched: true,
+        directionalScore: 0,
+      },
+      asset,
+      selectable: true,
+      local: true,
+    }
+  }
+  const createDefaultRemoteItems = (): LocalModelCatalogItem[] => [
+    {
+      id: 'onnx-community/opus-mt-en-zh',
+      label: 'onnx-community/opus-mt-en-zh',
+      summary:
+        'Verified Transformers.js + ONNX model. Estimated download 235 MB. Tagged for translation.',
+      downloads: 63,
+      likes: 0,
+      trendingScore: 4,
+      tags: ['transformers.js', 'onnx', 'translation', 'en', 'zh'],
+      compatibility: {
+        transformersJs: true,
+        onnx: true,
+        localRuntimeVerified: true,
+      },
+      size: {
+        estimatedTotalBytes: 246415360,
+        primaryBytes: 246415360,
+      },
+      downloadGroups: [
         {
           id: 'q8',
           label: 'q8 (8-bit)',
@@ -125,304 +240,232 @@ const { translationEnginesMock, localModelsMock, restoreTranslationMocks, emitLo
             { path: 'source.spm', sizeBytes: 806435, required: true },
             { path: 'target.spm', sizeBytes: 804600, required: true },
             { path: 'onnx/encoder_model_fp16.onnx', sizeBytes: 209715200, required: true },
-            { path: 'onnx/decoder_model_merged_fp16.onnx', sizeBytes: 524288000, required: true },
+            {
+              path: 'onnx/decoder_model_merged_fp16.onnx',
+              sizeBytes: 524288000,
+              required: true,
+            },
           ],
         },
       ],
-    })
-    const createDefaultLocalAssetState = (modelId: string): LocalModelAssetState => {
-      const plan = createDefaultLocalDownloadPlan(modelId)
-      return {
-        modelId,
+      languageMatch: {
+        sourceMatched: false,
+        targetMatched: true,
+        directionalScore: 1,
+      },
+      asset: {
+        modelId: 'onnx-community/opus-mt-en-zh',
         status: 'not-downloaded',
         selected: true,
         progress: 0,
         resumable: false,
-        plan,
-        files: plan.files.map((file) => ({
-          path: file.path,
-          sizeBytes: file.sizeBytes,
-          downloadedBytes: 0,
-        })),
         updatedAt: 100,
-      }
-    }
-    const createDefaultLocalModel = (): LocalModelCatalogItem => {
-      const asset = createDefaultLocalAssetState('onnx-community/opus-mt-en-zh')
-      return {
-        id: 'onnx-community/opus-mt-en-zh',
-        label: 'onnx-community/opus-mt-en-zh',
-        summary: 'Previously selected local model. Estimated download 235 MB.',
-        downloads: 0,
-        likes: 0,
-        tags: ['local'],
-        compatibility: {
-          transformersJs: true,
-          onnx: true,
-          localRuntimeVerified: true,
-        },
-        size: {
-          estimatedTotalBytes: 246415360,
-          primaryBytes: 246415360,
-        },
-        downloadGroups: asset.plan?.groups,
-        languageMatch: {
-          sourceMatched: false,
-          targetMatched: true,
-          directionalScore: 0,
-        },
-        asset,
-        selectable: true,
-        local: true,
-      }
-    }
-    const createDefaultRemoteItems = (): LocalModelCatalogItem[] => [
-      {
-        id: 'onnx-community/opus-mt-en-zh',
-        label: 'onnx-community/opus-mt-en-zh',
-        summary:
-          'Verified Transformers.js + ONNX model. Estimated download 235 MB. Tagged for translation.',
-        downloads: 63,
-        likes: 0,
-        trendingScore: 4,
-        tags: ['transformers.js', 'onnx', 'translation', 'en', 'zh'],
-        compatibility: {
-          transformersJs: true,
-          onnx: true,
-          localRuntimeVerified: true,
-        },
-        size: {
-          estimatedTotalBytes: 246415360,
-          primaryBytes: 246415360,
-        },
-        downloadGroups: [
-          {
-            id: 'q8',
-            label: 'q8 (8-bit)',
-            description: '8-bit quantized ONNX profile.',
-            profile: 'q8',
-            dtype: 'q8',
-            estimatedTotalBytes: 246415360,
-            selectable: true,
-            selected: true,
-            files: [
-              { path: 'config.json', sizeBytes: 1503, required: true },
-              { path: 'generation_config.json', sizeBytes: 293, required: true },
-              { path: 'source.spm', sizeBytes: 806435, required: true },
-              { path: 'target.spm', sizeBytes: 804600, required: true },
-              { path: 'onnx/encoder_model_quantized.onnx', sizeBytes: 52848230, required: true },
-              {
-                path: 'onnx/decoder_model_merged_quantized.onnx',
-                sizeBytes: 193567130,
-                required: true,
-              },
-            ],
-          },
-          {
-            id: 'fp16',
-            label: 'fp16',
-            description: 'fp16 ONNX profile.',
-            profile: 'fp16',
-            dtype: 'fp16',
-            estimatedTotalBytes: 734003200,
-            selectable: true,
-            selected: false,
-            files: [
-              { path: 'config.json', sizeBytes: 1503, required: true },
-              { path: 'generation_config.json', sizeBytes: 293, required: true },
-              { path: 'source.spm', sizeBytes: 806435, required: true },
-              { path: 'target.spm', sizeBytes: 804600, required: true },
-              { path: 'onnx/encoder_model_fp16.onnx', sizeBytes: 209715200, required: true },
-              {
-                path: 'onnx/decoder_model_merged_fp16.onnx',
-                sizeBytes: 524288000,
-                required: true,
-              },
-            ],
-          },
-        ],
-        languageMatch: {
-          sourceMatched: false,
-          targetMatched: true,
-          directionalScore: 1,
-        },
-        asset: {
-          modelId: 'onnx-community/opus-mt-en-zh',
-          status: 'not-downloaded',
-          selected: true,
-          progress: 0,
-          resumable: false,
-          updatedAt: 100,
-          files: [],
-        },
-        selectable: true,
-        local: false,
+        files: [],
       },
-      {
-        id: 'Xenova/unknown-model',
-        label: 'Xenova/unknown-model',
-        summary: 'Missing known file size.',
-        downloads: 10,
-        likes: 1,
-        tags: ['transformers.js', 'onnx', 'translation'],
-        compatibility: {
-          transformersJs: true,
-          onnx: true,
-          localRuntimeVerified: true,
-        },
-        size: {
-          estimatedTotalBytes: undefined,
-          primaryBytes: undefined,
-        },
-        downloadGroups: [
-          {
-            id: 'q8',
-            label: 'q8 (8-bit)',
-            description: '8-bit quantized ONNX profile.',
-            profile: 'q8',
-            dtype: 'q8',
-            selectable: false,
-            selected: false,
-            files: [
-              { path: 'onnx/encoder_model_quantized.onnx', required: true },
-              { path: 'onnx/decoder_model_merged_quantized.onnx', required: true },
-            ],
-          },
-        ],
-        languageMatch: {
-          sourceMatched: false,
-          targetMatched: true,
-          directionalScore: 1,
-        },
-        asset: {
-          modelId: 'Xenova/unknown-model',
-          status: 'not-downloaded',
+      selectable: true,
+      local: false,
+    },
+    {
+      id: 'Xenova/unknown-model',
+      label: 'Xenova/unknown-model',
+      summary: 'Missing known file size.',
+      downloads: 10,
+      likes: 1,
+      tags: ['transformers.js', 'onnx', 'translation'],
+      compatibility: {
+        transformersJs: true,
+        onnx: true,
+        localRuntimeVerified: true,
+      },
+      size: {
+        estimatedTotalBytes: undefined,
+        primaryBytes: undefined,
+      },
+      downloadGroups: [
+        {
+          id: 'q8',
+          label: 'q8 (8-bit)',
+          description: '8-bit quantized ONNX profile.',
+          profile: 'q8',
+          dtype: 'q8',
+          selectable: false,
           selected: false,
-          updatedAt: 100,
-          resumable: false,
-          files: [],
+          files: [
+            { path: 'onnx/encoder_model_quantized.onnx', required: true },
+            { path: 'onnx/decoder_model_merged_quantized.onnx', required: true },
+          ],
         },
-        selectable: false,
-        local: false,
+      ],
+      languageMatch: {
+        sourceMatched: false,
+        targetMatched: true,
+        directionalScore: 1,
       },
-    ]
-    const translationEnginesMock = {
-      getModelDownloadPlan: vi.fn(),
-      batchTranslate: vi.fn(),
-    }
-    const localModelsMock = {
-      listLocal: vi.fn(),
-      searchRemote: vi.fn(),
-      searchRemoteStream: vi.fn(
-        (
-          input: { requestId: string; query?: string; targetLanguage?: string; limit?: number },
-          handlers: {
-            onData: (event: {
-              requestId: string
-              phase: 'candidates' | 'enriched' | 'complete' | 'error'
-              items?: LocalModelCatalogItem[]
-            }) => void
-            onError?: (error: unknown) => void
-          }
-        ) => {
-          const unsubscribe = vi.fn()
-          queueMicrotask(async () => {
-            if (unsubscribe.mock.calls.length > 0) return
-            const remote = (await localModelsMock.searchRemote()) as {
-              items: LocalModelCatalogItem[]
-            }
-            handlers.onData({
-              requestId: input.requestId,
-              phase: 'candidates',
-              items: remote.items.map((item) => ({ ...item, downloadGroups: undefined })),
-            })
-            if (unsubscribe.mock.calls.length > 0) return
-            handlers.onData({
-              requestId: input.requestId,
-              phase: 'enriched',
-              items: remote.items,
-            })
-            if (unsubscribe.mock.calls.length > 0) return
-            handlers.onData({
-              requestId: input.requestId,
-              phase: 'complete',
-              items: remote.items,
-            })
-          })
-          return { unsubscribe }
-        }
-      ),
-      state: vi.fn(),
-      subscribeLogs: vi.fn(
-        (
-          _input: undefined,
-          handlers: {
-            onData: (log: LocalModelAssetLog) => void
-            onError?: (error: unknown) => void
-          }
-        ) => {
-          localModelsSubscribeLogHandlers = handlers
-          return { unsubscribe: vi.fn() }
-        }
-      ),
-      markSelected: vi.fn(async () => ({ success: true })),
-      download: vi.fn(async () => ({ sessionId: 'session-1' })),
-      pause: vi.fn(async () => ({ success: true })),
-      resume: vi.fn(async () => ({ sessionId: 'session-2' })),
-      delete: vi.fn(async () => ({ success: true })),
-    }
-    const restoreTranslationMocks = () => {
-      translationEnginesMock.getModelDownloadPlan.mockImplementation(
-        async ({ model }: { model: string }): Promise<TranslationModelDownloadPlan | null> =>
-          createDefaultLocalDownloadPlan(model)
-      )
-      translationEnginesMock.batchTranslate.mockImplementation(
-        (
-          input: { inputs?: string[] },
-          handlers: {
-            onData: (event: { index: number; output: string }) => void
-            onComplete?: () => void
-            onError?: (error: unknown) => void
-          }
-        ) => {
-          const unsubscribe = vi.fn()
-          queueMicrotask(() => {
-            if (unsubscribe.mock.calls.length > 0) return
-            handlers.onData({
-              index: 0,
-              output: `server:${input.inputs?.[0] ?? ''}`,
-            })
-            if (unsubscribe.mock.calls.length > 0) return
-            handlers.onComplete?.()
-          })
-          return { unsubscribe }
-        }
-      )
-      localModelsMock.listLocal.mockImplementation(
-        async (): Promise<{ items: LocalModelCatalogItem[] }> => ({
-          items: [createDefaultLocalModel()],
-        })
-      )
-      localModelsMock.searchRemote.mockImplementation(
-        async (): Promise<{ items: LocalModelCatalogItem[] }> => ({
-          items: createDefaultRemoteItems(),
-        })
-      )
-      localModelsMock.state.mockImplementation(
-        async ({ modelId }: { modelId: string }): Promise<LocalModelAssetState> =>
-          createDefaultLocalAssetState(modelId)
-      )
-    }
-    restoreTranslationMocks()
-    return {
-      translationEnginesMock,
-      localModelsMock,
-      restoreTranslationMocks,
-      emitLocalModelLog(log: LocalModelAssetLog) {
-        localModelsSubscribeLogHandlers?.onData(log)
+      asset: {
+        modelId: 'Xenova/unknown-model',
+        status: 'not-downloaded',
+        selected: false,
+        updatedAt: 100,
+        resumable: false,
+        files: [],
       },
-    }
-  })
+      selectable: false,
+      local: false,
+    },
+  ]
+  const translationEnginesMock = {
+    getModelDownloadPlan: vi.fn(),
+    batchTranslate: vi.fn(),
+  }
+  const localModelsMock = {
+    listLocal: vi.fn(),
+    searchRemote: vi.fn(),
+    searchRemoteStream: vi.fn(
+      (
+        input: { requestId: string; query?: string; targetLanguage?: string; limit?: number },
+        handlers: {
+          onData: (event: {
+            requestId: string
+            phase: 'candidates' | 'enriched' | 'complete' | 'error'
+            items?: LocalModelCatalogItem[]
+          }) => void
+          onError?: (error: unknown) => void
+        }
+      ) => {
+        const unsubscribe = vi.fn()
+        queueMicrotask(async () => {
+          if (unsubscribe.mock.calls.length > 0) return
+          const remote = (await localModelsMock.searchRemote()) as {
+            items: LocalModelCatalogItem[]
+          }
+          handlers.onData({
+            requestId: input.requestId,
+            phase: 'candidates',
+            items: remote.items.map((item) => ({ ...item, downloadGroups: undefined })),
+          })
+          if (unsubscribe.mock.calls.length > 0) return
+          handlers.onData({
+            requestId: input.requestId,
+            phase: 'enriched',
+            items: remote.items,
+          })
+          if (unsubscribe.mock.calls.length > 0) return
+          handlers.onData({
+            requestId: input.requestId,
+            phase: 'complete',
+            items: remote.items,
+          })
+        })
+        return { unsubscribe }
+      }
+    ),
+    state: vi.fn(),
+    panelState: vi.fn(
+      async ({
+        modelId,
+        selectedGroupId,
+      }: {
+        modelId: string
+        selectedGroupId?: string
+      }): Promise<{
+        modelId: string
+        selectedGroupId?: string
+        asset: LocalModelAssetState
+        downloadPlan: TranslationModelDownloadPlan | null
+      }> => {
+        const asset = await localModelsMock.state({ modelId, selectedGroupId })
+        return {
+          modelId,
+          selectedGroupId,
+          asset,
+          downloadPlan: asset.plan ?? createDefaultLocalDownloadPlan(modelId),
+        }
+      }
+    ),
+    subscribeLogs: vi.fn(
+      (
+        _input: undefined,
+        handlers: {
+          onData: (log: LocalModelAssetLog) => void
+          onError?: (error: unknown) => void
+        }
+      ) => {
+        localModelsSubscribeLogHandlers = handlers
+        return { unsubscribe: vi.fn() }
+      }
+    ),
+    markSelected: vi.fn(async () => ({ success: true })),
+    download: vi.fn(async () => ({ sessionId: 'session-1' })),
+    pause: vi.fn(async () => ({ success: true })),
+    resume: vi.fn(async () => ({ sessionId: 'session-2' })),
+    delete: vi.fn(async () => ({ success: true })),
+  }
+  const restoreTranslationMocks = () => {
+    translationEnginesMock.batchTranslate.mockImplementation(
+      (
+        input: { inputs?: string[] },
+        handlers: {
+          onData: (event: { index: number; output: string }) => void
+          onComplete?: () => void
+          onError?: (error: unknown) => void
+        }
+      ) => {
+        const unsubscribe = vi.fn()
+        queueMicrotask(() => {
+          if (unsubscribe.mock.calls.length > 0) return
+          handlers.onData({
+            index: 0,
+            output: `server:${input.inputs?.[0] ?? ''}`,
+          })
+          if (unsubscribe.mock.calls.length > 0) return
+          handlers.onComplete?.()
+        })
+        return { unsubscribe }
+      }
+    )
+    localModelsMock.listLocal.mockImplementation(
+      async (): Promise<{ items: LocalModelCatalogItem[] }> => ({
+        items: [createDefaultLocalModel()],
+      })
+    )
+    localModelsMock.searchRemote.mockImplementation(
+      async (): Promise<{ items: LocalModelCatalogItem[] }> => ({
+        items: createDefaultRemoteItems(),
+      })
+    )
+    localModelsMock.state.mockImplementation(
+      async ({
+        modelId,
+        selectedGroupId,
+      }: {
+        modelId: string
+        selectedGroupId?: string
+      }): Promise<LocalModelAssetState> => createDefaultLocalAssetState(modelId, selectedGroupId)
+    )
+    localModelsMock.panelState.mockImplementation(
+      async ({ modelId, selectedGroupId }: { modelId: string; selectedGroupId?: string }) => {
+        const asset = await localModelsMock.state({ modelId, selectedGroupId })
+        return {
+          modelId,
+          selectedGroupId,
+          asset,
+          downloadPlan: asset.plan ?? createDefaultLocalDownloadPlan(modelId),
+        }
+      }
+    )
+  }
+  restoreTranslationMocks()
+  return {
+    translationEnginesMock,
+    localModelsMock,
+    restoreTranslationMocks,
+    createDefaultLocalAssetState,
+    createDefaultLocalDownloadPlan,
+    emitLocalModelLog(log: LocalModelAssetLog) {
+      localModelsSubscribeLogHandlers?.onData(log)
+    },
+  }
+})
 
 function dispatchPopoverToggle(element: Element, newState: 'open' | 'closed') {
   const event = new Event('toggle')
@@ -459,6 +502,7 @@ function createQ8PlanForTest(modelId: string): TranslationModelDownloadPlan {
         description: '8-bit quantized ONNX profile.',
         profile: 'q8',
         dtype: 'q8',
+        status: 'downloaded',
         estimatedTotalBytes: 246415360,
         selectable: true,
         selected: true,
@@ -520,6 +564,7 @@ function createGroupedLocalPlanForTest(modelId: string): TranslationModelDownloa
         description: '8-bit quantized ONNX profile.',
         profile: 'q8',
         dtype: 'q8',
+        status: 'downloaded',
         estimatedTotalBytes: 246415360,
         selectable: true,
         selected: true,
@@ -531,6 +576,7 @@ function createGroupedLocalPlanForTest(modelId: string): TranslationModelDownloa
         description: 'fp16 ONNX profile.',
         profile: 'fp16',
         dtype: 'fp16',
+        status: 'not-downloaded',
         estimatedTotalBytes: 734003200,
         selectable: true,
         selected: false,
@@ -556,6 +602,7 @@ function createTriStateGroupedLocalPlanForTest(modelId: string): TranslationMode
         description: '8-bit quantized ONNX profile.',
         profile: 'q8',
         dtype: 'q8',
+        status: 'downloaded',
         estimatedTotalBytes: 246415360,
         selectable: true,
         selected: false,
@@ -567,6 +614,7 @@ function createTriStateGroupedLocalPlanForTest(modelId: string): TranslationMode
         description: '4-bit quantized ONNX profile.',
         profile: 'q4',
         dtype: 'q4',
+        status: 'paused',
         estimatedTotalBytes: 126040951,
         selectable: true,
         selected: true,
@@ -578,6 +626,7 @@ function createTriStateGroupedLocalPlanForTest(modelId: string): TranslationMode
         description: 'fp16 ONNX profile.',
         profile: 'fp16',
         dtype: 'fp16',
+        status: 'not-downloaded',
         estimatedTotalBytes: 734003200,
         selectable: true,
         selected: false,
@@ -625,6 +674,7 @@ function createQ4AndQ4f16GroupedLocalPlanForTest(modelId: string): TranslationMo
         description: '4-bit quantized ONNX profile.',
         profile: 'q4',
         dtype: 'q4',
+        status: 'downloaded',
         estimatedTotalBytes: 307038702,
         selectable: true,
         selected: true,
@@ -636,6 +686,7 @@ function createQ4AndQ4f16GroupedLocalPlanForTest(modelId: string): TranslationMo
         description: '4-bit block quantized fp16 ONNX profile.',
         profile: 'q4f16',
         dtype: 'q4f16',
+        status: 'paused',
         estimatedTotalBytes: 249527579,
         selectable: true,
         selected: false,
@@ -719,9 +770,126 @@ function createDownloadedLocalModelForTest(modelId: string): LocalModelCatalogIt
   }
 }
 
+function createFullyDownloadedGroupedLocalModelForTest(modelId: string): LocalModelCatalogItem {
+  const plan = createTriStateGroupedLocalPlanForTest(modelId)
+  return {
+    id: modelId,
+    label: modelId,
+    summary: 'Downloaded local model.',
+    downloads: 0,
+    likes: 0,
+    tags: ['local'],
+    compatibility: {
+      transformersJs: true,
+      onnx: true,
+      localRuntimeVerified: true,
+    },
+    size: {
+      estimatedTotalBytes: 246415360,
+      primaryBytes: 246415360,
+    },
+    downloadGroups: plan.groups?.map((group) => ({
+      ...group,
+      status: 'downloaded' as const,
+    })),
+    languageMatch: {
+      sourceMatched: false,
+      targetMatched: true,
+      directionalScore: 0,
+    },
+    asset: {
+      modelId,
+      status: 'downloaded',
+      selected: true,
+      progress: 1,
+      bytesDownloaded: 246415360,
+      totalBytes: 246415360,
+      resumable: false,
+      plan: {
+        ...plan,
+        groups: plan.groups?.map((group) => ({
+          ...group,
+          status: 'downloaded' as const,
+        })),
+      },
+      files: createPlanAssetFilesForTest(plan.groups?.flatMap((group) => group.files) ?? [], {
+        'config.json': 1503,
+        'generation_config.json': 293,
+        'source.spm': 806435,
+        'target.spm': 804600,
+        'onnx/encoder_model_quantized.onnx': 52848230,
+        'onnx/decoder_model_merged_quantized.onnx': 193567130,
+        'onnx/encoder_model_q4.onnx': 10485760,
+        'onnx/decoder_model_merged_q4.onnx': 10485760,
+        'onnx/encoder_model_fp16.onnx': 209715200,
+        'onnx/decoder_model_merged_fp16.onnx': 524288000,
+      }),
+      updatedAt: 100,
+    },
+    selectable: true,
+    local: true,
+  }
+}
+
 function getTranslationTargetLanguageDialog() {
   return screen.getByRole('dialog', { name: 'Select translation target language' })
 }
+
+const reactQueryMockStore = vi.hoisted(() => {
+  const cache = new Map<string, unknown>()
+  const listeners = new Set<() => void>()
+  let version = 0
+
+  const serialize = (queryKey?: readonly unknown[]) => JSON.stringify(queryKey ?? [])
+  const notify = () => {
+    version += 1
+    for (const listener of listeners) listener()
+  }
+
+  return {
+    serialize,
+    getSnapshot: () => version,
+    subscribe(listener: () => void) {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+    getQueryData<T>(queryKey?: readonly unknown[]) {
+      return cache.get(serialize(queryKey)) as T | undefined
+    },
+    setQueryData<T>(
+      queryKey: readonly unknown[] | undefined,
+      updater: T | ((current: T | undefined) => T | undefined)
+    ) {
+      if (!queryKey) return undefined
+      const key = serialize(queryKey)
+      const current = cache.get(key) as T | undefined
+      const next =
+        typeof updater === 'function'
+          ? (updater as (current: T | undefined) => T | undefined)(current)
+          : updater
+      if (next === undefined) {
+        cache.delete(key)
+      } else {
+        cache.set(key, next)
+      }
+      notify()
+      return next
+    },
+    seedQueryData<T>(queryKey: readonly unknown[] | undefined, value: T) {
+      if (!queryKey) return
+      cache.set(serialize(queryKey), value)
+    },
+    has(queryKey?: readonly unknown[]) {
+      return cache.has(serialize(queryKey))
+    },
+    reset() {
+      cache.clear()
+      notify()
+    },
+  }
+})
 
 vi.mock('@tanstack/react-query', () => ({
   useMutation: ({ mutationFn }: { mutationFn?: (variables: unknown) => unknown }) => ({
@@ -732,135 +900,196 @@ vi.mock('@tanstack/react-query', () => ({
     isSuccess: false,
   }),
   useQuery: ({ queryKey }: { queryKey?: readonly string[] }) => {
+    useSyncExternalStore(
+      reactQueryMockStore.subscribe,
+      reactQueryMockStore.getSnapshot,
+      reactQueryMockStore.getSnapshot
+    )
     const key = queryKey?.join('.') ?? ''
-    if (key === 'cli.getAllTools') {
-      return { data: [{ value: 'claude', name: 'Claude', available: true }], isLoading: false }
+    if (!reactQueryMockStore.has(queryKey)) {
+      reactQueryMockStore.seedQueryData(queryKey, resolveQueryResultForKey(key))
+      if (key.startsWith('localModels.state') && queryKey?.[1]) {
+        void localModelsMock
+          .state({
+            modelId: queryKey[1],
+            selectedGroupId: queryKey[2] || undefined,
+          })
+          .then((data: LocalModelAssetState) => {
+            reactQueryMockStore.setQueryData(queryKey, {
+              data,
+              isLoading: false,
+              refetch: vi.fn(),
+            })
+          })
+      }
+      if (key.startsWith('localModels.panelState') && queryKey?.[1]) {
+        void localModelsMock
+          .panelState({
+            modelId: queryKey[1],
+            selectedGroupId: queryKey[2] || undefined,
+          })
+          .then(
+            (data: {
+              modelId: string
+              selectedGroupId?: string
+              asset: LocalModelAssetState
+              downloadPlan: TranslationModelDownloadPlan | null
+            }) => {
+              reactQueryMockStore.setQueryData(queryKey, {
+                data,
+                isLoading: false,
+                refetch: vi.fn(),
+              })
+            }
+          )
+      }
     }
-    if (key === 'cli.getDetectedProjectTools') {
-      return { data: [{ value: 'claude', name: 'Claude' }], isLoading: false, refetch: vi.fn() }
-    }
-    if (key === 'cli.getProfileState') {
-      return {
-        data: {
-          available: true,
-          delivery: 'both',
-          workflows: [],
-          profile: 'core',
-          driftStatus: 'in-sync',
-          warningText: null,
-        },
+    return (
+      reactQueryMockStore.getQueryData(queryKey) ?? {
+        data: undefined,
         isLoading: false,
         refetch: vi.fn(),
       }
-    }
-    if (key === 'cli.getToolInitStates') {
-      return {
-        data: [
-          {
-            toolId: 'claude',
-            toolName: 'Claude',
-            status: 'uninitialized',
-            hasAnyArtifacts: false,
-            expectedSkillCount: 0,
-            presentExpectedSkillCount: 0,
-            detectedSkillCount: 0,
-            expectedCommandCount: 0,
-            presentExpectedCommandCount: 0,
-            detectedCommandCount: 0,
-            missingSkillWorkflows: [],
-            missingCommandWorkflows: [],
-            unexpectedSkillWorkflows: [],
-            unexpectedCommandWorkflows: [],
-            legacyCommandWorkflows: [],
-          },
-        ],
-        refetch: vi.fn(),
-      }
-    }
-    if (key === 'cli.sniffGlobalCli') {
-      return { data: { hasGlobal: true, version: '1.3.0', hasUpdate: false }, isLoading: false }
-    }
-    if (key === 'cli.checkAvailability') {
-      return { data: { available: true, version: '1.3.0' }, isLoading: false, refetch: vi.fn() }
-    }
-    if (key === 'config.getEffectiveCliCommand') {
-      return { data: 'openspec', refetch: vi.fn() }
-    }
-    if (key === 'config.get') {
-      return {
-        data: useConfigSubscriptionMock().data,
-        isLoading: false,
-        refetch: vi.fn(),
-      }
-    }
-    if (key === 'globalSettings.get') {
-      return {
-        data: {
-          translationCache: { entryLimit: 10000 },
-          translationEngines: {
-            openai: { baseUrl: '', token: '', model: 'gpt-4.1-mini' },
-            local: { model: 'Xenova/opus-mt-no-de', selectedGroupId: 'q8', hfEndpoint: '' },
-          },
-        },
-        refetch: vi.fn(),
-      }
-    }
-    if (key === 'translationEngines.list') {
-      return {
-        data: [
-          {
-            id: 'browser',
-            label: 'Browser',
-            description: 'Uses the browser Translator API and future browser-side providers.',
-            technicalSummary:
-              'Browser-native Web Translator adapter. Package payload is about 5 KB; browser language packs are managed by the browser.',
-            runtime: 'browser',
-            builtin: true,
-            installable: false,
-            selected: true,
-            status: 'available',
-          },
-          {
-            id: 'local',
-            label: 'Local-Transformers',
-            description:
-              'Runs a bundled local Transformers.js translation runtime with managed model files.',
-            technicalSummary:
-              'Server-side Transformers.js local adapter. Package payload is about 5 KB; selected model groups are downloaded separately and can range from tens to hundreds of MB.',
-            runtime: 'server',
-            selected: false,
-            status: 'available',
-            model: 'Xenova/opus-mt-no-de',
-          },
-          {
-            id: 'openai',
-            label: 'OpenAI-Completion',
-            description:
-              'Uses an OpenAI-compatible TanStack OpenAI-Completion completion provider for context-aware translation.',
-            technicalSummary:
-              'Server-side TanStack OpenAI-Completion adapter for OpenAI-compatible APIs. Package payload is about 5 KB; model size stays with the remote provider.',
-            runtime: 'server',
-            selected: false,
-            status: 'available',
-            model: 'gpt-4.1-mini',
-          },
-        ],
-        isLoading: false,
-        refetch: vi.fn(),
-      }
-    }
-    if (key === 'localModels.listLocal') {
-      return { data: undefined, isLoading: false, refetch: vi.fn() }
-    }
-    if (key === 'localModels.searchRemote') {
-      return { data: undefined, isLoading: false, refetch: vi.fn() }
-    }
-    if (key === 'translationCache.stats') {
-      return { data: { enabled: false, entryLimit: 10000, entries: 0 }, refetch: vi.fn() }
-    }
-    return { data: undefined, isLoading: false, refetch: vi.fn() }
+    )
   },
+  useQueryClient: () => ({
+    setQueryData: reactQueryMockStore.setQueryData,
+    getQueryData: reactQueryMockStore.getQueryData,
+    invalidateQueries: vi.fn(),
+  }),
 }))
+
+function resolveQueryResultForKey(key: string) {
+  if (key === 'cli.getAllTools') {
+    return { data: [{ value: 'claude', name: 'Claude', available: true }], isLoading: false }
+  }
+  if (key === 'cli.getDetectedProjectTools') {
+    return { data: [{ value: 'claude', name: 'Claude' }], isLoading: false, refetch: vi.fn() }
+  }
+  if (key === 'cli.getProfileState') {
+    return {
+      data: {
+        available: true,
+        delivery: 'both',
+        workflows: [],
+        profile: 'core',
+        driftStatus: 'in-sync',
+        warningText: null,
+      },
+      isLoading: false,
+      refetch: vi.fn(),
+    }
+  }
+  if (key === 'cli.getToolInitStates') {
+    return {
+      data: [
+        {
+          toolId: 'claude',
+          toolName: 'Claude',
+          status: 'uninitialized',
+          hasAnyArtifacts: false,
+          expectedSkillCount: 0,
+          presentExpectedSkillCount: 0,
+          detectedSkillCount: 0,
+          expectedCommandCount: 0,
+          presentExpectedCommandCount: 0,
+          detectedCommandCount: 0,
+          missingSkillWorkflows: [],
+          missingCommandWorkflows: [],
+          unexpectedSkillWorkflows: [],
+          unexpectedCommandWorkflows: [],
+          legacyCommandWorkflows: [],
+        },
+      ],
+      refetch: vi.fn(),
+    }
+  }
+  if (key === 'cli.sniffGlobalCli') {
+    return { data: { hasGlobal: true, version: '1.3.0', hasUpdate: false }, isLoading: false }
+  }
+  if (key === 'cli.checkAvailability') {
+    return { data: { available: true, version: '1.3.0' }, isLoading: false, refetch: vi.fn() }
+  }
+  if (key === 'config.getEffectiveCliCommand') {
+    return { data: 'openspec', refetch: vi.fn() }
+  }
+  if (key === 'config.get') {
+    return {
+      data: useConfigSubscriptionMock().data,
+      isLoading: false,
+      refetch: vi.fn(),
+    }
+  }
+  if (key === 'globalSettings.get') {
+    return {
+      data: {
+        translationCache: { entryLimit: 10000 },
+        translationEngines: {
+          openai: { baseUrl: '', token: '', model: 'gpt-4.1-mini' },
+          local: { model: 'Xenova/opus-mt-no-de', selectedGroupId: 'q8', hfEndpoint: '' },
+        },
+      },
+      refetch: vi.fn(),
+    }
+  }
+  if (key === 'translationEngines.list') {
+    return {
+      data: [
+        {
+          id: 'browser',
+          label: 'Browser',
+          description: 'Uses the browser Translator API and future browser-side providers.',
+          technicalSummary:
+            'Browser-native Web Translator adapter. Package payload is about 5 KB; browser language packs are managed by the browser.',
+          runtime: 'browser',
+          builtin: true,
+          installable: false,
+          selected: true,
+          status: 'available',
+        },
+        {
+          id: 'local',
+          label: 'Local-Transformers',
+          description:
+            'Runs a bundled local Transformers.js translation runtime with managed model files.',
+          technicalSummary:
+            'Server-side Transformers.js local adapter. Package payload is about 5 KB; selected model groups are downloaded separately and can range from tens to hundreds of MB.',
+          runtime: 'server',
+          selected: false,
+          status: 'available',
+          model: 'Xenova/opus-mt-no-de',
+        },
+        {
+          id: 'openai',
+          label: 'OpenAI-Completion',
+          description:
+            'Uses an OpenAI-compatible TanStack OpenAI-Completion completion provider for context-aware translation.',
+          technicalSummary:
+            'Server-side TanStack OpenAI-Completion adapter for OpenAI-compatible APIs. Package payload is about 5 KB; model size stays with the remote provider.',
+          runtime: 'server',
+          selected: false,
+          status: 'available',
+          model: 'gpt-4.1-mini',
+        },
+      ],
+      isLoading: false,
+      refetch: vi.fn(),
+    }
+  }
+  if (key === 'localModels.listLocal') {
+    return { data: undefined, isLoading: false, refetch: vi.fn() }
+  }
+  if (key === 'localModels.searchRemote') {
+    return { data: undefined, isLoading: false, refetch: vi.fn() }
+  }
+  if (key.startsWith('localModels.state') || key.startsWith('localModels.panelState')) {
+    return { data: undefined, isLoading: true, refetch: vi.fn() }
+  }
+  if (key === 'translationCache.stats') {
+    return { data: { enabled: false, entryLimit: 10000, entries: 0 }, refetch: vi.fn() }
+  }
+  return { data: undefined, isLoading: false, refetch: vi.fn() }
+}
 
 vi.mock('@/components/terminal/terminal-invocation-settings', () => ({
   TerminalInvocationSettings: () => <div data-testid="terminal-invocation-settings" />,
@@ -1027,7 +1256,14 @@ vi.mock('@/lib/trpc', () => ({
         queryOptions: () => ({ queryKey: ['localModels.searchRemote'] }),
       },
       state: {
-        queryOptions: () => ({ queryKey: ['localModels.state'] }),
+        queryOptions: (input?: { modelId: string; selectedGroupId?: string }) => ({
+          queryKey: ['localModels.state', input?.modelId ?? '', input?.selectedGroupId ?? ''],
+        }),
+      },
+      panelState: {
+        queryOptions: (input?: { modelId: string; selectedGroupId?: string }) => ({
+          queryKey: ['localModels.panelState', input?.modelId ?? '', input?.selectedGroupId ?? ''],
+        }),
       },
     },
   },
@@ -1076,6 +1312,9 @@ vi.mock('@/lib/trpc', () => ({
       state: {
         query: localModelsMock.state,
       },
+      panelState: {
+        query: localModelsMock.panelState,
+      },
       subscribeLogs: {
         subscribe: localModelsMock.subscribeLogs,
       },
@@ -1103,6 +1342,7 @@ describe('Settings', () => {
     cleanup()
     vi.unstubAllGlobals()
     restoreTranslationMocks()
+    reactQueryMockStore.reset()
     vi.clearAllMocks()
     vi.useRealTimers()
   })
@@ -1405,16 +1645,19 @@ describe('Settings', () => {
     render(<Settings />)
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    const profileList = await screen.findByLabelText('Local download profiles')
     expect(screen.getByRole('combobox', { name: 'Engine' })).toHaveTextContent('Local-Transformers')
     expect(screen.getByRole('button', { name: 'Local model' })).toHaveTextContent(
       'Xenova/opus-mt-en-zh'
     )
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /fp16/i })).toHaveTextContent('700 MB')
+      expect(within(profileList).getByRole('button', { name: /^fp16/i })).toHaveTextContent(
+        '700 MB'
+      )
     )
-    expect(translationEnginesMock.getModelDownloadPlan).toHaveBeenCalledWith(
+    expect(localModelsMock.panelState).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'Xenova/opus-mt-en-zh',
+        modelId: 'Xenova/opus-mt-en-zh',
         selectedGroupId: 'fp16',
       })
     )
@@ -1538,7 +1781,7 @@ describe('Settings', () => {
     })
     expect(localModelsMock.listLocal).toHaveBeenCalled()
     await waitFor(() => expect(localModelsMock.searchRemoteStream).toHaveBeenCalled())
-    expect(translationEnginesMock.getModelDownloadPlan).toHaveBeenCalled()
+    expect(localModelsMock.panelState).toHaveBeenCalled()
     expect(screen.getAllByText(/q8/).length).toBeGreaterThan(0)
     expect(screen.getByText('Local Model')).toBeTruthy()
   })
@@ -1590,51 +1833,16 @@ describe('Settings', () => {
         removeEventListener: vi.fn(),
       }))
     )
-    translationEnginesMock.getModelDownloadPlan.mockImplementation(
-      async () =>
+    localModelsMock.panelState.mockImplementation(
+      async ({ modelId, selectedGroupId }: { modelId: string; selectedGroupId?: string }) =>
         new Promise((resolve) =>
           setTimeout(
             () =>
               resolve({
-                modelId: 'onnx-community/opus-mt-en-zh',
-                estimatedTotalBytes: 246415360,
-                selectedGroupId: 'q8',
-                files: [
-                  {
-                    path: 'onnx/encoder_model_quantized.onnx',
-                    sizeBytes: 52848230,
-                    required: true,
-                  },
-                  {
-                    path: 'onnx/decoder_model_merged_quantized.onnx',
-                    sizeBytes: 193567130,
-                    required: true,
-                  },
-                ],
-                groups: [
-                  {
-                    id: 'q8',
-                    label: 'q8 (8-bit)',
-                    description: '8-bit quantized ONNX profile.',
-                    profile: 'q8',
-                    dtype: 'q8',
-                    estimatedTotalBytes: 246415360,
-                    selectable: true,
-                    selected: true,
-                    files: [
-                      {
-                        path: 'onnx/encoder_model_quantized.onnx',
-                        sizeBytes: 52848230,
-                        required: true,
-                      },
-                      {
-                        path: 'onnx/decoder_model_merged_quantized.onnx',
-                        sizeBytes: 193567130,
-                        required: true,
-                      },
-                    ],
-                  },
-                ],
+                modelId,
+                selectedGroupId,
+                asset: createDefaultLocalAssetState(modelId),
+                downloadPlan: createDefaultLocalDownloadPlan(modelId),
               }),
             20
           )
@@ -1658,8 +1866,8 @@ describe('Settings', () => {
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
 
     expect(screen.getByText('Download files')).toBeTruthy()
-    expect(screen.getByText('Resolving download profiles…')).toBeTruthy()
-    expect(screen.getByText('Resolving…')).toBeTruthy()
+    expect(screen.queryByText('Resolving download profiles…')).toBeNull()
+    expect(screen.queryByText('Resolving…')).toBeNull()
     expect(screen.getAllByText(/Not downloaded/).length).toBeLessThanOrEqual(1)
   })
 
@@ -1746,16 +1954,16 @@ describe('Settings', () => {
     const pauseButton = await screen.findByRole('button', { name: 'Pause download' })
     expect(pauseButton).toHaveAttribute('data-local-plan-action', 'pause')
     expect(pauseButton.className).toContain('group')
-    expect(within(pauseButton).getByText('43%').className).toContain('group-hover:hidden')
+    expect(within(pauseButton).getByText('42%').className).toContain('group-hover:hidden')
     expect(
       within(screen.getByLabelText('Local download profiles')).getByRole('button', { name: /q8/i })
         .className
-    ).toContain('border-dashed')
+    ).toContain('border-solid')
     expect(screen.queryByRole('button', { name: 'Download model' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Resume download' })).toBeNull()
   })
 
-  it('updates Local download progress directly from subscription logs without waiting for a refetched state', async () => {
+  it('updates Local download progress from the server panel snapshot after subscription logs arrive', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -1764,7 +1972,7 @@ describe('Settings', () => {
         removeEventListener: vi.fn(),
       }))
     )
-    localModelsMock.state.mockImplementation(async () => ({
+    let serverAsset: LocalModelAssetState = {
       modelId: 'Xenova/opus-mt-no-de',
       status: 'not-downloaded',
       selected: true,
@@ -1782,7 +1990,8 @@ describe('Settings', () => {
         'onnx/decoder_model_merged_quantized.onnx': 0,
       }),
       updatedAt: 100,
-    }))
+    }
+    localModelsMock.state.mockImplementation(async () => serverAsset)
     useConfigSubscriptionMock.mockReturnValue({
       data: {
         translation: {
@@ -1801,7 +2010,24 @@ describe('Settings', () => {
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     await screen.findByRole('button', { name: 'Download model' })
 
-    localModelsMock.state.mockClear()
+    localModelsMock.panelState.mockClear()
+    serverAsset = {
+      ...serverAsset,
+      status: 'downloading',
+      progress: 0.42,
+      bytesDownloaded: 103494451,
+      totalBytes: 246415360,
+      resumable: true,
+      files: createQ8AssetFilesForTest({
+        'config.json': 1503,
+        'generation_config.json': 293,
+        'source.spm': 806435,
+        'target.spm': 804600,
+        'onnx/encoder_model_quantized.onnx': 50646221,
+        'onnx/decoder_model_merged_quantized.onnx': 0,
+      }),
+      updatedAt: 200,
+    }
     emitLocalModelLog({
       engineId: 'local',
       modelId: 'Xenova/opus-mt-no-de',
@@ -1824,10 +2050,15 @@ describe('Settings', () => {
       updatedAt: 200,
     })
 
+    await waitFor(() =>
+      expect(localModelsMock.panelState).toHaveBeenCalledWith({
+        modelId: 'Xenova/opus-mt-no-de',
+        selectedGroupId: 'q8',
+      })
+    )
     expect(await screen.findByRole('button', { name: 'Pause download' })).toBeTruthy()
     expect(screen.getByText('Downloading onnx/encoder_model_quantized.onnx.')).toBeTruthy()
     expect(screen.getByText('48.3 MB / 50.4 MB')).toBeTruthy()
-    expect(localModelsMock.state).not.toHaveBeenCalled()
   })
 
   it('keeps a stable Local log subscription while progress events stream in', async () => {
@@ -1839,7 +2070,7 @@ describe('Settings', () => {
         removeEventListener: vi.fn(),
       }))
     )
-    localModelsMock.state.mockImplementation(async () => ({
+    let serverAsset: LocalModelAssetState = {
       modelId: 'Xenova/opus-mt-no-de',
       status: 'not-downloaded',
       selected: true,
@@ -1857,7 +2088,8 @@ describe('Settings', () => {
         'onnx/decoder_model_merged_quantized.onnx': 0,
       }),
       updatedAt: 100,
-    }))
+    }
+    localModelsMock.state.mockImplementation(async () => serverAsset)
     useConfigSubscriptionMock.mockReturnValue({
       data: {
         translation: {
@@ -1877,6 +2109,22 @@ describe('Settings', () => {
     await screen.findByRole('button', { name: 'Download model' })
     expect(localModelsMock.subscribeLogs).toHaveBeenCalledTimes(1)
 
+    serverAsset = {
+      ...serverAsset,
+      status: 'downloading',
+      progress: 0.2,
+      bytesDownloaded: 49283072,
+      resumable: true,
+      files: createQ8AssetFilesForTest({
+        'config.json': 1503,
+        'generation_config.json': 293,
+        'source.spm': 806435,
+        'target.spm': 804600,
+        'onnx/encoder_model_quantized.onnx': 47685693,
+        'onnx/decoder_model_merged_quantized.onnx': 0,
+      }),
+      updatedAt: 200,
+    }
     emitLocalModelLog({
       engineId: 'local',
       modelId: 'Xenova/opus-mt-no-de',
@@ -1901,6 +2149,22 @@ describe('Settings', () => {
 
     expect(await screen.findByText('45.5 MB / 50.4 MB')).toBeTruthy()
 
+    serverAsset = {
+      ...serverAsset,
+      status: 'downloading',
+      progress: 0.62,
+      bytesDownloaded: 152777523,
+      resumable: true,
+      files: createQ8AssetFilesForTest({
+        'config.json': 1503,
+        'generation_config.json': 293,
+        'source.spm': 806435,
+        'target.spm': 804600,
+        'onnx/encoder_model_quantized.onnx': 52848230,
+        'onnx/decoder_model_merged_quantized.onnx': 98316362,
+      }),
+      updatedAt: 300,
+    }
     emitLocalModelLog({
       engineId: 'local',
       modelId: 'Xenova/opus-mt-no-de',
@@ -1936,18 +2200,56 @@ describe('Settings', () => {
         removeEventListener: vi.fn(),
       }))
     )
-    localModelsMock.state.mockImplementation(async () => ({
-      modelId: 'Xenova/opus-mt-no-de',
-      status: 'downloaded',
-      selected: true,
-      progress: 1,
-      bytesDownloaded: 246415360,
-      totalBytes: 246415360,
-      resumable: false,
-      plan: createQ8PlanForTest('Xenova/opus-mt-no-de'),
-      files: createDownloadedQ8AssetFilesForTest(),
-      updatedAt: 100,
-    }))
+    const groupedPlan = createGroupedLocalPlanForTest('Xenova/opus-mt-no-de')
+    localModelsMock.state.mockImplementation(
+      async ({
+        selectedGroupId,
+      }: {
+        modelId: string
+        selectedGroupId?: string
+      }): Promise<LocalModelAssetState> => {
+        const selectedGroup = groupedPlan.groups?.find((group) => group.id === selectedGroupId)
+        if (selectedGroup?.id === 'fp16') {
+          const fp16Plan: TranslationModelDownloadPlan = {
+            ...groupedPlan,
+            selectedGroupId: 'fp16',
+            files: selectedGroup.files,
+            groups: groupedPlan.groups?.map((group) => ({
+              ...group,
+              selected: group.id === 'fp16',
+            })),
+          }
+          return {
+            modelId: 'Xenova/opus-mt-no-de',
+            status: 'not-downloaded',
+            selected: true,
+            progress: 0,
+            bytesDownloaded: 0,
+            totalBytes: undefined,
+            resumable: false,
+            plan: fp16Plan,
+            files: selectedGroup.files.map((file) => ({
+              path: file.path,
+              sizeBytes: file.sizeBytes,
+              downloadedBytes: 0,
+            })),
+            updatedAt: 101,
+          }
+        }
+        return {
+          modelId: 'Xenova/opus-mt-no-de',
+          status: 'downloaded',
+          selected: true,
+          progress: 1,
+          bytesDownloaded: 246415360,
+          totalBytes: 246415360,
+          resumable: false,
+          plan: groupedPlan,
+          files: createDownloadedQ8AssetFilesForTest(),
+          updatedAt: 100,
+        }
+      }
+    )
     localModelsMock.listLocal.mockResolvedValueOnce({
       items: [createDownloadedLocalModelForTest('Xenova/opus-mt-no-de')],
     })
@@ -2007,7 +2309,8 @@ describe('Settings', () => {
     expect(await screen.findByText('onnx/encoder_model_quantized.onnx')).toBeTruthy()
     expect(screen.queryByText('onnx/encoder_model_fp16.onnx')).toBeNull()
 
-    const fp16Chip = screen.getByRole('button', { name: /fp16/i })
+    const profileList = await screen.findByLabelText('Local download profiles')
+    const fp16Chip = within(profileList).getByRole('button', { name: /^fp16/i })
     expect(fp16Chip).toHaveTextContent('700 MB')
     fireEvent.click(fp16Chip)
 
@@ -2070,18 +2373,56 @@ describe('Settings', () => {
         removeEventListener: vi.fn(),
       }))
     )
-    localModelsMock.state.mockImplementation(async () => ({
-      modelId: 'Xenova/opus-mt-no-de',
-      status: 'downloaded',
-      selected: true,
-      progress: 1,
-      bytesDownloaded: 246415360,
-      totalBytes: 246415360,
-      resumable: false,
-      plan: createQ8PlanForTest('Xenova/opus-mt-no-de'),
-      files: createDownloadedQ8AssetFilesForTest(),
-      updatedAt: 100,
-    }))
+    const groupedPlan = createGroupedLocalPlanForTest('Xenova/opus-mt-no-de')
+    localModelsMock.state.mockImplementation(
+      async ({
+        selectedGroupId,
+      }: {
+        modelId: string
+        selectedGroupId?: string
+      }): Promise<LocalModelAssetState> => {
+        const selectedGroup = groupedPlan.groups?.find((group) => group.id === selectedGroupId)
+        if (selectedGroup?.id === 'fp16') {
+          const fp16Plan: TranslationModelDownloadPlan = {
+            ...groupedPlan,
+            selectedGroupId: 'fp16',
+            files: selectedGroup.files,
+            groups: groupedPlan.groups?.map((group) => ({
+              ...group,
+              selected: group.id === 'fp16',
+            })),
+          }
+          return {
+            modelId: 'Xenova/opus-mt-no-de',
+            status: 'not-downloaded',
+            selected: true,
+            progress: 0,
+            bytesDownloaded: 0,
+            totalBytes: undefined,
+            resumable: false,
+            plan: fp16Plan,
+            files: selectedGroup.files.map((file) => ({
+              path: file.path,
+              sizeBytes: file.sizeBytes,
+              downloadedBytes: 0,
+            })),
+            updatedAt: 101,
+          }
+        }
+        return {
+          modelId: 'Xenova/opus-mt-no-de',
+          status: 'downloaded',
+          selected: true,
+          progress: 1,
+          bytesDownloaded: 246415360,
+          totalBytes: 246415360,
+          resumable: false,
+          plan: groupedPlan,
+          files: createDownloadedQ8AssetFilesForTest(),
+          updatedAt: 100,
+        }
+      }
+    )
     localModelsMock.listLocal.mockResolvedValueOnce({
       items: [createDownloadedLocalModelForTest('Xenova/opus-mt-no-de')],
     })
@@ -2107,7 +2448,11 @@ describe('Settings', () => {
       })
     ).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: /fp16/i }))
+    fireEvent.click(
+      within(screen.getByLabelText('Local download profiles')).getByRole('button', {
+        name: /^fp16/i,
+      })
+    )
 
     expect(await screen.findByText('onnx/encoder_model_fp16.onnx')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Download model' })).toHaveAttribute(
@@ -2121,10 +2466,20 @@ describe('Settings', () => {
     ).toHaveTextContent('700 MB')
     const profileList = screen.getByLabelText('Local download profiles')
     expect(within(profileList).getByRole('button', { name: /q8/i }).className).toContain(
+      'border-dashed'
+    )
+    expect(within(profileList).getByRole('button', { name: /q8/i }).className).toContain(
+      'text-emerald-700'
+    )
+    expect(within(profileList).getByRole('button', { name: /q8/i }).className).not.toContain('bg-')
+    expect(within(profileList).getByRole('button', { name: /fp16/i }).className).toContain(
       'border-solid'
     )
     expect(within(profileList).getByRole('button', { name: /fp16/i }).className).toContain(
-      'border-dashed'
+      'text-foreground'
+    )
+    expect(within(profileList).getByRole('button', { name: /fp16/i }).className).not.toContain(
+      'bg-'
     )
     expect(
       screen.queryByLabelText('Downloaded', { selector: '[data-local-plan-action]' })
@@ -2177,6 +2532,15 @@ describe('Settings', () => {
       plan: {
         ...plan,
         selectedGroupId: 'q4f16',
+        groups: plan.groups?.map((group) => ({
+          ...group,
+          status:
+            group.id === 'q4'
+              ? ('downloaded' as const)
+              : group.id === 'q4f16'
+                ? ('paused' as const)
+                : ('not-downloaded' as const),
+        })),
       },
       files: createPlanAssetFilesForTest(plan.groups?.flatMap((group) => group.files) ?? [], {
         'config.json': 1520,
@@ -2269,7 +2633,8 @@ describe('Settings', () => {
       })
     ).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: /q4f16/i }))
+    const profileList = await screen.findByLabelText('Local download profiles')
+    fireEvent.click(within(profileList).getByRole('button', { name: /^q4f16/i }))
 
     await waitFor(() =>
       expect(localModelsMock.state).toHaveBeenCalledWith({
@@ -2339,13 +2704,262 @@ describe('Settings', () => {
     const partialChip = within(profileList).getByRole('button', { name: /^q4/i })
     const notStartedChip = within(profileList).getByRole('button', { name: /^fp16/i })
 
-    expect(downloadedChip.className).toContain('border-solid')
+    expect(downloadedChip.className).toContain('border-dashed')
     expect(downloadedChip.className).toContain('text-emerald-700')
-    expect(partialChip.className).toContain('border-dashed')
+    expect(partialChip.className).toContain('border-solid')
     expect(partialChip.className).toContain('text-sky-700')
     expect(notStartedChip.className).toContain('border-dashed')
     expect(notStartedChip.className).not.toContain('text-sky-700')
     expect(notStartedChip.className).not.toContain('text-emerald-700')
+  })
+
+  it('keeps every downloaded Local profile chip green even when another profile is selected', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    const model = createFullyDownloadedGroupedLocalModelForTest('onnx-community/opus-mt-en-zh')
+    localModelsMock.listLocal.mockResolvedValueOnce({
+      items: [model],
+    })
+    localModelsMock.state.mockResolvedValue({
+      ...model.asset,
+      plan: {
+        ...model.asset.plan!,
+        selectedGroupId: 'q8',
+        groups: model.asset.plan?.groups?.map((group) => ({
+          ...group,
+          selected: group.id === 'q8',
+          status: 'downloaded' as const,
+        })),
+      },
+    })
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+          engineId: 'local',
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    const profileList = await screen.findByLabelText('Local download profiles')
+
+    expect(within(profileList).getByRole('button', { name: /^q4/i }).className).toContain(
+      'text-emerald-700'
+    )
+    expect(within(profileList).getByRole('button', { name: /^fp16/i }).className).toContain(
+      'text-emerald-700'
+    )
+  })
+
+  it('keeps Local profile chip status from server group truth while selection changes', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    const modelId = 'onnx-community/opus-mt-en-zh'
+    const q4Plan = createQ4AndQ4f16GroupedLocalPlanForTest(modelId)
+    const q4Files = q4Plan.groups?.find((group) => group.id === 'q4')?.files ?? []
+    const q4f16Files = q4Plan.groups?.find((group) => group.id === 'q4f16')?.files ?? []
+    const bnb4Files = q4f16Files.map((file) => ({
+      ...file,
+      path: file.path.includes('encoder_model_q4f16')
+        ? 'onnx/encoder_model_bnb4.onnx'
+        : file.path.includes('decoder_model_merged_q4f16')
+          ? 'onnx/decoder_model_merged_bnb4.onnx'
+          : file.path,
+      sizeBytes: file.path.includes('encoder_model_q4f16')
+        ? 91226112
+        : file.path.includes('decoder_model_merged_q4f16')
+          ? 203423744
+          : file.sizeBytes,
+    }))
+    const q8Files = createQ8PlanFilesForTest()
+    const totalBytes = (files: TranslationModelDownloadPlan['files']) =>
+      files.reduce((total, file) => total + (file.sizeBytes ?? 0), 0)
+    const groups = [
+      {
+        id: 'q4',
+        label: 'q4 (4-bit)',
+        profile: 'q4',
+        dtype: 'q4',
+        status: 'downloaded' as const,
+        estimatedTotalBytes: totalBytes(q4Files),
+        selectable: true,
+        selected: true,
+        files: q4Files,
+      },
+      {
+        id: 'q4f16',
+        label: 'q4f16',
+        profile: 'q4f16',
+        dtype: 'q4f16',
+        status: 'downloaded' as const,
+        estimatedTotalBytes: totalBytes(q4f16Files),
+        selectable: true,
+        selected: false,
+        files: q4f16Files,
+      },
+      {
+        id: 'bnb4',
+        label: 'bnb4',
+        profile: 'bnb4',
+        dtype: 'bnb4',
+        status: 'downloaded' as const,
+        estimatedTotalBytes: totalBytes(bnb4Files),
+        selectable: true,
+        selected: false,
+        files: bnb4Files,
+      },
+      {
+        id: 'q8',
+        label: 'q8 (8-bit)',
+        profile: 'q8',
+        dtype: 'q8',
+        status: 'downloaded' as const,
+        estimatedTotalBytes: totalBytes(q8Files),
+        selectable: true,
+        selected: false,
+        files: q8Files,
+      },
+    ]
+    const buildAsset = (selectedGroupId: string): LocalModelAssetState => {
+      const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0]
+      const selectedFiles = selectedGroup.files
+      return {
+        modelId,
+        status: 'downloaded',
+        selected: true,
+        progress: 1,
+        bytesDownloaded: selectedGroup.estimatedTotalBytes,
+        totalBytes: selectedGroup.estimatedTotalBytes,
+        resumable: false,
+        plan: {
+          modelId,
+          estimatedTotalBytes: selectedGroup.estimatedTotalBytes,
+          selectedGroupId,
+          files: selectedFiles,
+          groups: groups.map((group) => ({
+            ...group,
+            selected: group.id === selectedGroupId,
+          })),
+        },
+        files: createPlanAssetFilesForTest(
+          selectedFiles,
+          Object.fromEntries(selectedFiles.map((file) => [file.path, file.sizeBytes ?? 0]))
+        ),
+        updatedAt: 100,
+      }
+    }
+    localModelsMock.listLocal.mockResolvedValueOnce({
+      items: [
+        {
+          id: modelId,
+          label: modelId,
+          summary: 'Downloaded local model.',
+          downloads: 0,
+          likes: 0,
+          tags: ['local'],
+          compatibility: {
+            transformersJs: true,
+            onnx: true,
+            localRuntimeVerified: true,
+          },
+          size: {
+            estimatedTotalBytes: totalBytes(q4Files),
+            primaryBytes: totalBytes(q4Files),
+          },
+          downloadGroups: groups,
+          languageMatch: {
+            sourceMatched: false,
+            targetMatched: true,
+            directionalScore: 0,
+          },
+          asset: buildAsset('q4'),
+          selectable: true,
+          local: true,
+        },
+      ],
+    })
+    localModelsMock.state.mockImplementation(
+      async ({ selectedGroupId }: { modelId: string; selectedGroupId?: string }) =>
+        buildAsset(selectedGroupId ?? 'q4')
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+          engineId: 'local',
+          engines: {
+            local: {
+              model: modelId,
+              selectedGroupId: 'q4',
+            },
+          },
+        },
+      },
+    })
+    useGlobalSettingsSubscriptionMock.mockReturnValue({
+      data: {
+        translationCache: { entryLimit: 10000 },
+        translationEngines: {
+          openai: { baseUrl: '', token: '', model: 'gpt-4.1-mini' },
+          local: { model: modelId, selectedGroupId: 'q4', hfEndpoint: '' },
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    const profileList = await screen.findByLabelText('Local download profiles')
+    const q4Chip = within(profileList).getByRole('button', { name: /^q4 /i })
+    const q4f16Chip = within(profileList).getByRole('button', { name: /^q4f16/i })
+    const bnb4Chip = within(profileList).getByRole('button', { name: /^bnb4/i })
+
+    expect(q4Chip.className).toContain('border-solid')
+    expect(q4Chip.className).toContain('text-emerald-700')
+    expect(bnb4Chip.className).toContain('border-dashed')
+    expect(bnb4Chip.className).toContain('text-emerald-700')
+
+    fireEvent.click(q4f16Chip)
+
+    await waitFor(() =>
+      expect(localModelsMock.panelState).toHaveBeenCalledWith({
+        modelId,
+        selectedGroupId: 'q4f16',
+      })
+    )
+    const updatedProfileList = screen.getByLabelText('Local download profiles')
+    const updatedQ4Chip = within(updatedProfileList).getByRole('button', { name: /^q4 /i })
+    const updatedQ4f16Chip = within(updatedProfileList).getByRole('button', { name: /^q4f16/i })
+    const updatedBnb4Chip = within(updatedProfileList).getByRole('button', { name: /^bnb4/i })
+    expect(updatedQ4Chip.className).toContain('border-dashed')
+    expect(updatedQ4Chip.className).toContain('text-emerald-700')
+    expect(updatedQ4f16Chip.className).toContain('border-solid')
+    expect(updatedQ4f16Chip.className).toContain('text-emerald-700')
+    expect(updatedBnb4Chip.className).toContain('border-dashed')
+    expect(updatedBnb4Chip.className).toContain('text-emerald-700')
   })
 
   it('locks deleting state and hides resume/delete actions while removal is in progress', async () => {
@@ -2401,18 +3015,22 @@ describe('Settings', () => {
         removeEventListener: vi.fn(),
       }))
     )
-    translationEnginesMock.getModelDownloadPlan.mockResolvedValueOnce(null)
-    localModelsMock.state.mockImplementationOnce(async () => ({
+    localModelsMock.panelState.mockResolvedValueOnce({
       modelId: 'Xenova/opus-mt-no-de',
-      status: 'downloaded',
-      selected: true,
-      progress: 1,
-      bytesDownloaded: 246415360,
-      totalBytes: 246415360,
-      resumable: false,
-      files: createDownloadedQ8AssetFilesForTest(),
-      updatedAt: 100,
-    }))
+      selectedGroupId: 'q8',
+      asset: {
+        modelId: 'Xenova/opus-mt-no-de',
+        status: 'downloaded',
+        selected: true,
+        progress: 1,
+        bytesDownloaded: 246415360,
+        totalBytes: 246415360,
+        resumable: false,
+        files: createDownloadedQ8AssetFilesForTest(),
+        updatedAt: 100,
+      },
+      downloadPlan: null,
+    })
     localModelsMock.listLocal.mockResolvedValueOnce({
       items: [createDownloadedLocalModelForTest('Xenova/opus-mt-no-de')],
     })
@@ -2434,7 +3052,6 @@ describe('Settings', () => {
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     expect(await screen.findByText('config.json')).toBeTruthy()
     expect(await screen.findByText('onnx/encoder_model_quantized.onnx')).toBeTruthy()
-    expect(screen.queryByText('Selected local model files are ready.')).toBeNull()
     expect(screen.queryByText('No runtime download plan available.')).toBeNull()
     expect(
       screen.getByLabelText('Downloaded', { selector: '[data-local-plan-action="downloaded"]' })
@@ -2451,9 +3068,6 @@ describe('Settings', () => {
         removeEventListener: vi.fn(),
       }))
     )
-    translationEnginesMock.getModelDownloadPlan.mockImplementation(async () => {
-      throw new Error('network should not block local truth')
-    })
     const localPlan = createQ8PlanForTest('Xenova/opus-mt-no-de')
     const localAsset: LocalModelAssetState = {
       modelId: 'Xenova/opus-mt-no-de',
@@ -2498,6 +3112,12 @@ describe('Settings', () => {
       ],
     })
     localModelsMock.state.mockResolvedValue(localAsset)
+    localModelsMock.panelState.mockResolvedValue({
+      modelId: 'Xenova/opus-mt-no-de',
+      selectedGroupId: 'q8',
+      asset: localAsset,
+      downloadPlan: localPlan,
+    })
     useConfigSubscriptionMock.mockReturnValue({
       data: {
         translation: {
@@ -2521,8 +3141,8 @@ describe('Settings', () => {
     )
     expect(screen.getByText('config.json')).toBeTruthy()
     expect(screen.queryByText('Loading model files…')).toBeNull()
-    expect(localModelsMock.state).not.toHaveBeenCalled()
-    expect(translationEnginesMock.getModelDownloadPlan).not.toHaveBeenCalled()
+    expect(localModelsMock.panelState).toHaveBeenCalled()
+    expect(localModelsMock.panelState).toHaveBeenCalled()
   })
 
   it('runs a browser translation smoke test from the dialog beside the engine selector', async () => {
@@ -2589,6 +3209,9 @@ describe('Settings', () => {
     render(<Settings />)
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    expect(screen.getByRole('button', { name: 'Open translation test' }).className).toContain(
+      'bg-primary'
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Open translation test' }))
     const dialog = screen.getByRole('dialog', { name: 'Translation Test', hidden: true })
     const sourceText = within(dialog).getByRole('textbox', { name: 'Translation test source text' })

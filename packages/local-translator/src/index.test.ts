@@ -54,7 +54,7 @@ describe('local translator package', () => {
   })
 
   it('loads the configured translation model and translates batched source text', async () => {
-    const pipeline = vi.fn(async () => [{ translation_text: '你好' }])
+    const pipeline = vi.fn(async () => [{ translation_text: '你好' }, { translation_text: '世界' }])
     const status = vi.fn()
     transformersMock.pipeline.mockImplementationOnce(
       async (_task: string, _model: string, options) => {
@@ -74,18 +74,22 @@ describe('local translator package', () => {
     })
 
     const results: Array<{ index: number; output: string }> = []
-    for await (const item of translator.batchTranslate(['Hello'])) {
+    for await (const item of translator.batchTranslate(['Hello', 'World'])) {
       results.push(item)
     }
-    expect(results).toEqual([{ index: 0, output: '你好' }])
+    expect(results).toEqual([
+      { index: 0, output: '你好' },
+      { index: 1, output: '世界' },
+    ])
     expect(transformersMock.pipeline).toHaveBeenCalledWith(
       'translation',
       'Xenova/custom-model',
       expect.any(Object)
     )
-    expect(pipeline).toHaveBeenCalledWith('Hello', {
+    expect(pipeline).toHaveBeenCalledWith(['Hello', 'World'], {
       src_lang: 'en',
       tgt_lang: 'zh',
+      signal: undefined,
     })
     expect(status).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -143,6 +143,7 @@ process.exit(1)
       await kernel.ensureStatus('demo-change')
       expect(kernel.getStatus('demo-change').artifacts[0]?.status).toBe('blocked')
       await waitForReactiveStatusSetup()
+      await waitForDebounce(1000)
 
       await writeFile(join(changeDir, 'loop', 'result.md'), 'done\n', 'utf-8')
 
@@ -165,10 +166,7 @@ process.exit(1)
       const initialStatus = kernel.getStatus('demo-change')
 
       await mkdir(join(changeDir, 'loop', 'nested'), { recursive: true })
-      await waitFor(
-        () => kernel.getStatus('demo-change') !== initialStatus,
-        REACTIVE_WAIT_OPTIONS
-      )
+      await waitFor(() => kernel.getStatus('demo-change') !== initialStatus, REACTIVE_WAIT_OPTIONS)
       await writeFile(join(changeDir, 'loop', 'nested', 'result.md'), 'done\n', 'utf-8')
 
       await waitFor(

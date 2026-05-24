@@ -15,9 +15,9 @@ import type {
   OpsxKernel,
 } from '@openspecui/core'
 import {
+  BatchTranslateInputSchema,
   CodeEditorThemeSchema,
   DashboardConfigSchema,
-  BatchTranslateInputSchema,
   DocumentTranslationConfigSchema,
   getAllTools,
   getAvailableTools,
@@ -353,6 +353,26 @@ export const localModelsRouter = router({
     )
     .query(({ ctx, input }) => {
       return ctx.localModelAssetService.readSelectedModelState(input.modelId, input.selectedGroupId)
+    }),
+
+  panelState: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const asset = await ctx.localModelAssetService.readSelectedModelState(
+        input.modelId,
+        input.selectedGroupId
+      )
+      return {
+        modelId: input.modelId,
+        selectedGroupId: input.selectedGroupId ?? asset.plan?.selectedGroupId,
+        asset,
+        downloadPlan: asset.plan ?? null,
+      }
     }),
 
   subscribeLogs: publicProcedure.subscription(({ ctx }) => {

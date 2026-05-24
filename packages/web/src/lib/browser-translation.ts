@@ -39,6 +39,11 @@ import {
   restoreTranslatedPlaceholderFragment,
   type TranslationPlaceholderProtocol,
 } from './browser-translation-placeholders'
+import {
+  appendTranslationAdaptiveConcurrencyLog,
+  createTranslationAdaptiveConcurrencyScopeKey,
+  readRecentTranslationAdaptiveConcurrencyLogs,
+} from './translation-adaptive-concurrency-log'
 import { SUPPORTED_TRANSLATION_LANGUAGES } from './translation-languages'
 
 export type {
@@ -93,6 +98,20 @@ export interface DocumentTranslationResult {
 export interface DocumentTranslationProgressPatch {
   segmentIndex: number
   segment: TranslationSegment
+}
+
+interface PendingTranslationJob {
+  segmentIndex: number
+  segment: TranslationSegment
+  sourceLanguage: string
+  cacheKey: SegmentCacheKey | null
+  protectedInput: { text: string; restore: (output: string) => string }
+  estimatedTokens: number
+}
+
+interface PackedTranslationBatch {
+  jobs: PendingTranslationJob[]
+  estimatedTokens: number
 }
 
 export interface BrowserTranslationCache {
@@ -522,10 +541,10 @@ export async function translateMarkdownDocumentProgressively(
 
   const engine = args.engine ?? createBrowserTranslationExecution()
   const languageDetection = await createSourceLanguageDetectionSession(args.markdown, args.signal)
-  const translatorBySourceLanguage = new Map<string, Translator>()
+  const translatedSegments: TranslationSegment[] = [...segments]
+  const pendingJobsBySourceLanguage = new Map<string, PendingTranslationJob[]>()
 
   try {
-    const translatedSegments: TranslationSegment[] = []
     for (const [segmentIndex, segment] of segments.entries()) {
       throwIfAborted(args.signal)
       const sourceLanguage = await languageDetection.detectSegmentLanguage(
@@ -543,7 +562,7 @@ export async function translateMarkdownDocumentProgressively(
             targetLanguage: args.targetLanguage,
             status: 'translated' as const,
           }
-          translatedSegments.push(translatedSegment)
+          translatedSegments[segmentIndex] = translatedSegment
           onPatch({ segmentIndex, segment: translatedSegment })
           continue
         }
@@ -561,42 +580,25 @@ export async function translateMarkdownDocumentProgressively(
             })
           : null
         if (cachedSegment) {
-          translatedSegments.push(cachedSegment)
+          translatedSegments[segmentIndex] = cachedSegment
           onPatch({ segmentIndex, segment: cachedSegment })
           continue
         }
 
-        const translator = await getPooledTranslator(
-          engine,
-          translatorBySourceLanguage,
-          sourceLanguage,
-          args.targetLanguage,
-          args.signal
-        )
         const protectedInput = segment.placeholderProtocol
           ? { text: segment.translatorInput, restore: (output: string) => output }
           : protectTranslatorInput(segment.translatorInput)
-        const target = await raceAbort(
-          readSingleBatchOutput(
-            translator.batchTranslate([protectedInput.text], { signal: args.signal })
-          ),
-          args.signal
-        )
-        const restoredTarget = segment.placeholderProtocol
-          ? restoreTranslatedPlaceholderFragment(target, segment.placeholderProtocol)
-          : { target: protectedInput.restore(target).trim() }
-        const translatedSegment = {
-          ...segment,
-          ...restoredTarget,
+        const pendingJob: PendingTranslationJob = {
+          segmentIndex,
+          segment,
           sourceLanguage,
-          targetLanguage: args.targetLanguage,
-          status: 'translated' as const,
+          cacheKey,
+          protectedInput,
+          estimatedTokens: estimateTranslationTokens(segment.translatorInput),
         }
-        if (cacheKey) {
-          void writeCachedTranslationSegment(args.cache, cacheKey, translatedSegment)
-        }
-        translatedSegments.push(translatedSegment)
-        onPatch({ segmentIndex, segment: translatedSegment })
+        const pendingJobs = pendingJobsBySourceLanguage.get(sourceLanguage) ?? []
+        pendingJobs.push(pendingJob)
+        pendingJobsBySourceLanguage.set(sourceLanguage, pendingJobs)
       } catch (error) {
         if (args.signal.aborted) throw error
         const failedSegment = {
@@ -606,10 +608,25 @@ export async function translateMarkdownDocumentProgressively(
           status: 'error' as const,
           error: getErrorMessage(error),
         }
-        translatedSegments.push(failedSegment)
+        translatedSegments[segmentIndex] = failedSegment
         onPatch({ segmentIndex, segment: failedSegment })
       }
     }
+
+    await Promise.all(
+      [...pendingJobsBySourceLanguage.entries()].map(([sourceLanguage, jobs]) =>
+        translatePendingJobsBySourceLanguage({
+          engine,
+          sourceLanguage,
+          targetLanguage: args.targetLanguage,
+          signal: args.signal,
+          cache: args.cache,
+          jobs,
+          translatedSegments,
+          onPatch,
+        })
+      )
+    )
 
     return {
       segments: translatedSegments,
@@ -618,33 +635,300 @@ export async function translateMarkdownDocumentProgressively(
       targetLanguage: args.targetLanguage,
     }
   } finally {
-    translatorBySourceLanguage.forEach((translator) => translator.destroy?.())
     languageDetection.destroy()
   }
 }
 
-async function getPooledTranslator(
-  engine: TranslationEngineExecution,
-  translatorBySourceLanguage: Map<string, Translator>,
-  sourceLanguage: string,
-  targetLanguage: string,
+async function translatePendingJobsBySourceLanguage(input: {
+  engine: TranslationEngineExecution
+  sourceLanguage: string
+  targetLanguage: string
   signal: AbortSignal
-): Promise<Translator> {
-  const existing = translatorBySourceLanguage.get(sourceLanguage)
-  if (existing) return existing
+  cache?: BrowserTranslationCache
+  jobs: PendingTranslationJob[]
+  translatedSegments: TranslationSegment[]
+  onPatch: (patch: DocumentTranslationProgressPatch) => void
+}): Promise<void> {
+  const batches = packTranslationJobs(input.jobs)
+  if (batches.length === 0) return
 
-  const translator = await engine.factory.create({ sourceLanguage, targetLanguage, signal })
-  translatorBySourceLanguage.set(sourceLanguage, translator)
-  return translator
+  const maxConcurrency = Math.min(6, batches.length)
+  const scopeKey = createTranslationAdaptiveConcurrencyScopeKey({
+    engineId: input.engine.cacheIdentity.engineId,
+    engineVersion: input.engine.cacheIdentity.engineVersion,
+    model: input.engine.cacheIdentity.model,
+    selectedGroupId: input.engine.cacheIdentity.selectedGroupId,
+    sourceLanguage: input.sourceLanguage,
+    targetLanguage: input.targetLanguage,
+    translatorContractVersion: input.engine.cacheIdentity.translatorContractVersion,
+  })
+  let desiredConcurrency = 1
+  let nextBatchIndex = 0
+  let activeWorkers = 0
+  let completedBatches = 0
+  const workerPromises = new Set<Promise<void>>()
+
+  const startWorkersToDesired = () => {
+    while (
+      activeWorkers < desiredConcurrency &&
+      nextBatchIndex < batches.length &&
+      !input.signal.aborted
+    ) {
+      startWorker()
+    }
+  }
+
+  const maybeGrowConcurrency = () => {
+    if (desiredConcurrency >= maxConcurrency) return
+    const recentLogs = readRecentTranslationAdaptiveConcurrencyLogs({
+      scopeKey,
+      limit: Math.max(4, desiredConcurrency * 2),
+    })
+    if (desiredConcurrency === 1) {
+      if (completedBatches >= 1 && batches.length > 1 && recentLogs.length > 0) {
+        desiredConcurrency = 2
+        startWorkersToDesired()
+      }
+      return
+    }
+    if (completedBatches < desiredConcurrency) return
+    if (recentLogs.length < desiredConcurrency * 2) return
+    const window = recentLogs.slice(-desiredConcurrency * 2)
+    const split = Math.max(1, Math.floor(window.length / 2))
+    const earlierThroughput = summarizeTranslationLogThroughput(window.slice(0, split))
+    const laterThroughput = summarizeTranslationLogThroughput(window.slice(split))
+    if (earlierThroughput > 0 && laterThroughput >= earlierThroughput * 1.08) {
+      desiredConcurrency = Math.min(maxConcurrency, desiredConcurrency + 1)
+      startWorkersToDesired()
+    }
+  }
+
+  const applyBatchResult = async (
+    batch: PackedTranslationBatch,
+    outputs: string[]
+  ): Promise<void> => {
+    for (const [offset, job] of batch.jobs.entries()) {
+      const target = outputs[offset] ?? ''
+      const restoredTarget = job.segment.placeholderProtocol
+        ? restoreTranslatedPlaceholderFragment(target, job.segment.placeholderProtocol)
+        : { target: job.protectedInput.restore(target).trim() }
+      const translatedSegment = {
+        ...job.segment,
+        ...restoredTarget,
+        sourceLanguage: job.sourceLanguage,
+        targetLanguage: input.targetLanguage,
+        status: 'translated' as const,
+      }
+      input.translatedSegments[job.segmentIndex] = translatedSegment
+      if (job.cacheKey) {
+        void writeCachedTranslationSegment(input.cache, job.cacheKey, translatedSegment)
+      }
+      input.onPatch({ segmentIndex: job.segmentIndex, segment: translatedSegment })
+    }
+  }
+
+  const markBatchError = (batch: PackedTranslationBatch, error: unknown): void => {
+    const message = getErrorMessage(error)
+    for (const job of batch.jobs) {
+      const failedSegment = {
+        ...job.segment,
+        sourceLanguage: job.sourceLanguage,
+        targetLanguage: input.targetLanguage,
+        status: 'error' as const,
+        error: message,
+      }
+      input.translatedSegments[job.segmentIndex] = failedSegment
+      input.onPatch({ segmentIndex: job.segmentIndex, segment: failedSegment })
+    }
+  }
+
+  const startWorker = () => {
+    if (input.signal.aborted || nextBatchIndex >= batches.length) return
+
+    activeWorkers += 1
+    let workerPromise: Promise<void>
+    workerPromise = (async () => {
+      let translator: Translator | null = null
+      try {
+        translator = await input.engine.factory.create({
+          sourceLanguage: input.sourceLanguage,
+          targetLanguage: input.targetLanguage,
+          signal: input.signal,
+        })
+        while (!input.signal.aborted) {
+          const batchIndex = nextBatchIndex
+          if (batchIndex >= batches.length) break
+          nextBatchIndex += 1
+          const batch = batches[batchIndex]
+          const startedAt = getCurrentTimeMs()
+          try {
+            const outputs = await collectBatchTranslationOutputs(
+              translator.batchTranslate(
+                batch.jobs.map((job) => job.protectedInput.text),
+                { signal: input.signal }
+              ),
+              batch.jobs.length
+            )
+            await applyBatchResult(batch, outputs)
+            completedBatches += 1
+            const elapsedMs = Math.max(1, getCurrentTimeMs() - startedAt)
+            appendTranslationAdaptiveConcurrencyLog({
+              scopeKey,
+              recordedAt: Date.now(),
+              engineId: input.engine.cacheIdentity.engineId,
+              engineVersion: input.engine.cacheIdentity.engineVersion,
+              model: input.engine.cacheIdentity.model,
+              selectedGroupId: input.engine.cacheIdentity.selectedGroupId,
+              sourceLanguage: input.sourceLanguage,
+              targetLanguage: input.targetLanguage,
+              batchIndex,
+              batchSize: batch.jobs.length,
+              estimatedTokens: batch.estimatedTokens,
+              elapsedMs,
+              throughputTokensPerMs: batch.estimatedTokens / elapsedMs,
+              desiredConcurrency,
+              activeWorkers,
+              maxConcurrency,
+            })
+            maybeGrowConcurrency()
+          } catch (error) {
+            if (input.signal.aborted) throw error
+            markBatchError(batch, error)
+          }
+        }
+      } finally {
+        translator?.destroy?.()
+      }
+    })().finally(() => {
+      activeWorkers -= 1
+      workerPromises.delete(workerPromise)
+      startWorkersToDesired()
+    })
+
+    workerPromises.add(workerPromise)
+  }
+
+  startWorkersToDesired()
+  while (workerPromises.size > 0) {
+    await Promise.race(workerPromises)
+  }
 }
 
-async function readSingleBatchOutput(
-  stream: AsyncGenerator<{ index: number; output: string }>
-): Promise<string> {
-  for await (const item of stream) {
-    return item.output
+function summarizeTranslationLogThroughput(
+  logs: readonly {
+    estimatedTokens: number
+    elapsedMs: number
+  }[]
+): number {
+  if (logs.length === 0) return 0
+  const totalTokens = logs.reduce((total, log) => total + log.estimatedTokens, 0)
+  const totalElapsedMs = logs.reduce((total, log) => total + log.elapsedMs, 0)
+  if (totalTokens <= 0 || totalElapsedMs <= 0) return 0
+  return totalTokens / totalElapsedMs
+}
+
+function packTranslationJobs(jobs: readonly PendingTranslationJob[]): PackedTranslationBatch[] {
+  if (jobs.length === 0) return []
+
+  const averageTokens =
+    jobs.reduce((total, job) => total + job.estimatedTokens, 0) / Math.max(1, jobs.length)
+  const targetTokens = Math.max(1, Math.round(averageTokens * 6))
+  const batches: PackedTranslationBatch[] = []
+  let currentJobs: PendingTranslationJob[] = []
+  let currentTokens = 0
+
+  const flush = () => {
+    if (currentJobs.length === 0) return
+    batches.push({ jobs: currentJobs, estimatedTokens: currentTokens })
+    currentJobs = []
+    currentTokens = 0
   }
-  throw new Error('Translator returned no batch output.')
+
+  for (const job of jobs) {
+    if (currentJobs.length === 0) {
+      currentJobs = [job]
+      currentTokens = job.estimatedTokens
+      continue
+    }
+
+    const nextTokens = currentTokens + job.estimatedTokens
+    if (nextTokens <= targetTokens) {
+      currentJobs.push(job)
+      currentTokens = nextTokens
+      continue
+    }
+
+    const withoutDelta = Math.abs(currentTokens - targetTokens)
+    const withDelta = Math.abs(nextTokens - targetTokens)
+    if (withDelta <= withoutDelta) {
+      currentJobs.push(job)
+      currentTokens = nextTokens
+      flush()
+      continue
+    }
+
+    flush()
+    currentJobs = [job]
+    currentTokens = job.estimatedTokens
+  }
+
+  flush()
+  return batches
+}
+
+async function collectBatchTranslationOutputs(
+  stream: AsyncGenerator<{ index: number; output: string }>,
+  expectedCount: number
+): Promise<string[]> {
+  const outputs = new Map<number, string>()
+
+  for await (const item of stream) {
+    if (item.index < 0 || item.index >= expectedCount) {
+      throw new Error(`Translator yielded output for unexpected index ${item.index}.`)
+    }
+    if (!outputs.has(item.index)) {
+      outputs.set(item.index, item.output)
+    }
+  }
+
+  if (outputs.size !== expectedCount) {
+    throw new Error(`Translator returned ${outputs.size} outputs for ${expectedCount} inputs.`)
+  }
+
+  return Array.from({ length: expectedCount }, (_, index) => outputs.get(index) ?? '')
+}
+
+function estimateTranslationTokens(input: string): number {
+  const trimmed = input.trim()
+  if (!trimmed) return 1
+
+  const segmenter = getTokenSegmenter()
+  if (!segmenter) {
+    return Math.max(1, trimmed.split(/\s+/).filter(Boolean).length)
+  }
+
+  let count = 0
+  for (const segment of segmenter.segment(trimmed)) {
+    if (segment.isWordLike ?? segment.segment.trim().length > 0) {
+      count += 1
+    }
+  }
+  return Math.max(1, count)
+}
+
+function getTokenSegmenter(): Intl.Segmenter | null {
+  if (typeof Intl === 'undefined' || typeof Intl.Segmenter !== 'function') return null
+  try {
+    return new Intl.Segmenter(undefined, { granularity: 'word' })
+  } catch {
+    return null
+  }
+}
+
+function getCurrentTimeMs(): number {
+  return typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now()
 }
 
 interface SourceLanguageDetectionSession {

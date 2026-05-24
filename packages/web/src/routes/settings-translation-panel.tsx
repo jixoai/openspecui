@@ -24,18 +24,16 @@ import {
   type DocumentTranslationConfigUpdate,
   type DocumentTranslationDisplayMode,
 } from '@openspecui/core/document-translation'
-import { selectLocalDownloadGroup } from '@openspecui/core/local-download-profiles'
 import {
   TRANSLATION_ENGINE_IDS,
   getTranslationEngineManifest,
-  type LocalModelAssetLog,
   type LocalModelAssetState,
   type LocalModelCatalogItem,
   type TranslationDownloadGroupPlan,
   type TranslationEngineId,
   type TranslationModelDownloadPlan,
 } from '@openspecui/core/translator'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
   CheckCircle,
@@ -94,6 +92,13 @@ const BROWSER_ACTIONABLE_AVAILABILITIES = new Set<BrowserTranslationAvailability
 
 type DownloadStateChipTone = 'downloaded' | 'partial' | 'not-started'
 
+interface LocalPanelStateData {
+  modelId: string
+  selectedGroupId?: string
+  asset: LocalModelAssetState
+  downloadPlan: TranslationModelDownloadPlan | null
+}
+
 function getBrowserSupportRows(
   state: BrowserTranslationSupportTableState | null
 ): BrowserTranslationAvailabilityRow[] {
@@ -129,26 +134,15 @@ function getDownloadStateChipClasses(input: {
   interactive?: boolean
 }): string {
   const interactive = input.interactive ?? true
+  const borderClass = input.selected ? 'border-solid' : 'border-dashed'
   const toneClass =
     input.tone === 'downloaded'
-      ? input.selected
-        ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-        : interactive
-          ? 'border-emerald-500/70 text-emerald-700 hover:bg-emerald-500/8 dark:text-emerald-400'
-          : 'border-emerald-500/70 text-emerald-700 dark:text-emerald-400'
+      ? 'border-emerald-500 text-emerald-700 dark:text-emerald-400'
       : input.tone === 'partial'
-        ? input.selected
-          ? 'border-sky-500 bg-sky-500/10 text-sky-700 dark:text-sky-400'
-          : interactive
-            ? 'border-sky-500/70 text-sky-700 hover:bg-sky-500/8 dark:text-sky-400'
-            : 'border-sky-500/70 text-sky-700 dark:text-sky-400'
-        : input.selected
-          ? 'bg-primary/10 text-primary'
-          : interactive
-            ? 'text-muted-foreground hover:bg-muted/60'
-            : 'text-muted-foreground'
-  const borderClass = input.tone === 'downloaded' ? 'border-solid' : 'border-dashed'
-  return `${borderClass} ${toneClass}`
+        ? 'border-sky-500 text-sky-700 dark:text-sky-400'
+        : 'border-border text-foreground'
+  const hoverClass = interactive ? 'hover:border-current' : ''
+  return `${borderClass} ${toneClass} ${hoverClass}`.trim()
 }
 
 function getBrowserAvailabilityChipTone(
@@ -215,6 +209,41 @@ function getTranslationTestPlaceholder(sourceLanguage: string): string {
   )
 }
 
+function replaceQueryCacheData<TData>(
+  current: TData | { data?: TData; [key: string]: unknown } | undefined,
+  nextData: TData
+): unknown {
+  if (current && typeof current === 'object' && 'data' in current && 'isLoading' in current) {
+    return {
+      ...(current as Record<string, unknown>),
+      data: nextData,
+      isLoading: false,
+      isFetching: false,
+    }
+  }
+  return nextData
+}
+
+function mergeLocalCatalogItems(
+  ...sources: Array<ReadonlyArray<LocalModelCatalogItem> | null | undefined>
+): LocalModelCatalogItem[] {
+  const merged: LocalModelCatalogItem[] = []
+  const indexById = new Map<string, number>()
+
+  for (const source of sources) {
+    if (!source) continue
+    for (const item of source) {
+      const existingIndex = indexById.get(item.id)
+      if (existingIndex === undefined) {
+        indexById.set(item.id, merged.length)
+        merged.push(item)
+      }
+    }
+  }
+
+  return merged
+}
+
 export function SettingsTranslationPanel({ index }: { index: number }) {
   const inStaticMode = isStaticMode()
   const { data: config, isLoading: configLoading } = useConfigSubscription()
@@ -255,17 +284,10 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const [nmtDebouncedQuery, setNmtDebouncedQuery] = useState(DEFAULT_LOCAL_MODEL_ID)
   const [nmtHfEndpoint, setNmtHfEndpoint] = useState('')
   const [nmtSelectedGroupId, setNmtSelectedGroupId] = useState<string | undefined>(undefined)
-  const [nmtLocalLoaded, setNmtLocalLoaded] = useState(false)
   const [nmtLocalOptions, setNmtLocalOptions] = useState<LocalModelCatalogItem[]>([])
   const [nmtRemoteOptions, setNmtRemoteOptions] = useState<LocalModelCatalogItem[]>([])
   const [nmtRemoteLoading, setNmtRemoteLoading] = useState(false)
-  const [localSelectedState, setLocalSelectedState] = useState<LocalModelAssetState | null>(null)
-  const [localDownloadPlan, setLocalDownloadPlan] = useState<TranslationModelDownloadPlan | null>(
-    null
-  )
-  const [localDownloadLog, setLocalDownloadLog] = useState<LocalModelAssetLog | null>(null)
-  const [localPlanLoading, setLocalPlanLoading] = useState(false)
-  const [localPlanError, setLocalPlanError] = useState<string | null>(null)
+  const [localDownloadMessage, setLocalDownloadMessage] = useState<string | null>(null)
   const [translationTestOpen, setTranslationTestOpen] = useState(false)
   const [smokeSourceLanguage, setSmokeSourceLanguage] = useState(
     DEFAULT_TRANSLATION_SMOKE_SOURCE_LANGUAGE
@@ -274,10 +296,15 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const [smokeResult, setSmokeResult] = useState('')
   const [smokeError, setSmokeError] = useState<string | null>(null)
   const [smokeRunning, setSmokeRunning] = useState(false)
+  const queryClient = useQueryClient()
+  const queryClientRef = useRef(queryClient)
   const browserPrepareControllerRef = useRef<AbortController | null>(null)
-  const localDownloadPlanRef = useRef<TranslationModelDownloadPlan | null>(null)
   const nmtModelRef = useRef(nmtModel)
   const nmtSelectedGroupIdRef = useRef<string | undefined>(nmtSelectedGroupId)
+
+  useEffect(() => {
+    queryClientRef.current = queryClient
+  }, [queryClient])
 
   useEffect(() => {
     if (!config) return
@@ -338,94 +365,8 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   }, [nmtSelectedGroupId])
 
   useEffect(() => {
-    localDownloadPlanRef.current = localDownloadPlan
-  }, [localDownloadPlan])
-
-  useEffect(() => {
-    if (translationEngineId !== 'local') return
-    const trimmedModel = nmtModel.trim()
-    if (!trimmedModel) {
-      setLocalDownloadPlan(null)
-      setLocalDownloadLog(null)
-      setLocalSelectedState(null)
-      setLocalPlanLoading(false)
-      setLocalPlanError(null)
-      return
-    }
-    let cancelled = false
-    setLocalPlanError(null)
-    const localAsset = findLocalModelAssetSnapshot(nmtLocalOptions, trimmedModel)
-    const localPlan = localAsset
-      ? createLocalPlanFromAssetState(localAsset, nmtSelectedGroupId)
-      : null
-    const localAssetMatchesSelectedGroup = localAsset
-      ? matchesSelectedLocalGroupTruth(localAsset, nmtSelectedGroupId)
-      : false
-    if (localAsset) {
-      setLocalSelectedState(localAsset)
-      setLocalDownloadPlan(localPlan)
-      if (localAssetMatchesSelectedGroup) {
-        setLocalPlanLoading(false)
-        return
-      }
-    }
-
-    if (!nmtLocalLoaded) {
-      setLocalPlanLoading(true)
-      if (!localAsset) {
-        setLocalSelectedState(null)
-        setLocalDownloadPlan(null)
-      }
-      return
-    }
-
-    setLocalPlanLoading(true)
-    void trpcClient.localModels.state
-      .query({
-        modelId: trimmedModel,
-        selectedGroupId: nmtSelectedGroupId,
-      })
-      .then(async (state) => {
-        if (cancelled) return
-        const statePlan = createLocalPlanFromAssetState(state, nmtSelectedGroupId)
-        if (statePlan && hasLocalModelAssetTruth(state)) {
-          setLocalPlanLoading(false)
-          setLocalDownloadPlan((current) => mergeLocalPlanSnapshots(current, statePlan))
-          setLocalSelectedState(state)
-          return
-        }
-        setLocalSelectedState(state)
-        setLocalPlanLoading(true)
-        const plan = await trpcClient.translationEngines.getModelDownloadPlan.query({
-          engineId: 'local',
-          model: trimmedModel,
-          selectedGroupId: nmtSelectedGroupId,
-        })
-        if (cancelled) return
-        setLocalDownloadPlan(plan)
-        setLocalSelectedState(state)
-      })
-      .catch((error) => {
-        if (cancelled) return
-        setLocalDownloadPlan(null)
-        setLocalSelectedState(null)
-        setLocalPlanError(error instanceof Error ? error.message : 'Unable to resolve model plan.')
-      })
-      .finally(() => {
-        if (cancelled) return
-        setLocalPlanLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [
-    nmtHfEndpoint,
-    nmtLocalLoaded,
-    nmtLocalOptions,
-    nmtModel,
-    nmtSelectedGroupId,
-    translationEngineId,
-  ])
+    setLocalDownloadMessage(null)
+  }, [nmtModel, nmtSelectedGroupId, translationEngineId])
 
   useEffect(() => {
     if (translationEngineId !== 'local') return
@@ -438,18 +379,15 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   useEffect(() => {
     if (translationEngineId !== 'local') return
     let cancelled = false
-    setNmtLocalLoaded(false)
     void trpcClient.localModels.listLocal
       .query()
       .then((local) => {
         if (cancelled) return
         setNmtLocalOptions(local.items)
-        setNmtLocalLoaded(true)
       })
       .catch(() => {
         if (cancelled) return
         setNmtLocalOptions([])
-        setNmtLocalLoaded(true)
       })
     return () => {
       cancelled = true
@@ -490,32 +428,49 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     if (inStaticMode) return
     const nmtSubscription = trpcClient.localModels.subscribeLogs.subscribe(undefined, {
       onData: (log) => {
-        const trimmedModel = nmtModelRef.current.trim()
-        if (log.modelId !== trimmedModel) return
         const activeSelectedGroupId = nmtSelectedGroupIdRef.current
-        if (
-          activeSelectedGroupId &&
-          log.selectedGroupId &&
-          log.selectedGroupId !== activeSelectedGroupId
-        ) {
-          return
+        const activeModelId = nmtModelRef.current.trim()
+        const querySelectedGroupId =
+          log.modelId === activeModelId
+            ? (activeSelectedGroupId ?? log.selectedGroupId)
+            : log.selectedGroupId
+        const matchesActivePanel =
+          log.modelId === activeModelId &&
+          (!activeSelectedGroupId ||
+            !log.selectedGroupId ||
+            log.selectedGroupId === activeSelectedGroupId)
+        const selectedGroupIds = new Set<string | undefined>([
+          querySelectedGroupId,
+          log.selectedGroupId,
+        ])
+        if (selectedGroupIds.size === 0) selectedGroupIds.add(undefined)
+        for (const selectedGroupId of selectedGroupIds) {
+          const panelStateQueryKey = trpc.localModels.panelState.queryOptions({
+            modelId: log.modelId,
+            selectedGroupId,
+          }).queryKey
+          void trpcClient.localModels.panelState
+            .query({ modelId: log.modelId, selectedGroupId })
+            .then((panelState) => {
+              queryClientRef.current.setQueryData<LocalPanelStateData | undefined>(
+                panelStateQueryKey,
+                (current) =>
+                  replaceQueryCacheData(current, panelState) as LocalPanelStateData | undefined
+              )
+            })
+            .catch(() => undefined)
         }
-        const mergedPlan = mergeLocalPlanSnapshots(
-          localDownloadPlanRef.current,
-          createLocalPlanFromAssetLog(log)
-        )
-        localDownloadPlanRef.current = mergedPlan
-        setLocalPlanLoading(false)
-        setLocalPlanError(log.status === 'error' ? log.message : null)
-        setLocalDownloadLog(log)
-        setLocalDownloadPlan(mergedPlan)
-        setLocalSelectedState((current) =>
-          buildLocalModelStateFromLog({
-            current,
-            log,
-            plan: mergedPlan,
-          })
-        )
+
+        if (matchesActivePanel) {
+          setLocalDownloadMessage(
+            log.status === 'downloaded' || log.status === 'not-downloaded' ? null : log.message
+          )
+        }
+
+        void trpcClient.localModels.listLocal
+          .query()
+          .then((local) => setNmtLocalOptions(local.items))
+          .catch(() => undefined)
       },
       onError: () => undefined,
     })
@@ -527,11 +482,9 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   useEffect(() => {
     if (translationEngineId !== 'local') {
       setNmtLocalOptions([])
-      setNmtLocalLoaded(false)
       setNmtRemoteOptions([])
       setNmtRemoteLoading(false)
-      setLocalDownloadLog(null)
-      setLocalPlanLoading(false)
+      setLocalDownloadMessage(null)
     }
   }, [translationEngineId])
 
@@ -562,20 +515,6 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   })
   const deleteLocalModelMutation = useMutation({
     mutationFn: (modelId: string) => trpcClient.localModels.delete.mutate({ modelId }),
-    onSuccess: async () => {
-      const modelId = nmtModel.trim()
-      if (!modelId) return
-      const [state, plan] = await Promise.all([
-        trpcClient.localModels.state.query({ modelId, selectedGroupId: nmtSelectedGroupId }),
-        trpcClient.translationEngines.getModelDownloadPlan.query({
-          engineId: 'local',
-          model: modelId,
-          selectedGroupId: nmtSelectedGroupId,
-        }),
-      ])
-      setLocalSelectedState(state)
-      setLocalDownloadPlan(plan)
-    },
   })
   const cleanTranslationCacheMutation = useMutation({
     mutationFn: () => trpcClient.translationCache.clean.mutate(),
@@ -692,79 +631,51 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
       ? 100
       : Math.round((selectedBrowserRow?.progress ?? 0) * 100)
   const browserCheckLoading = browserSupportTable?.state === 'checking'
-  const nmtCatalogOptions = useMemo(() => {
-    const merged = new Map<string, LocalModelCatalogItem>()
-    for (const item of nmtLocalOptions) merged.set(item.id, item)
-    for (const item of nmtRemoteOptions) {
-      if (!merged.has(item.id)) merged.set(item.id, item)
-    }
-    return [...merged.values()]
-  }, [nmtLocalOptions, nmtRemoteOptions])
   const nmtModelId = nmtModel.trim()
-  const selectedLocalAsset = localSelectedState
-  const activeLocalCandidate =
-    nmtCatalogOptions.find((candidate) => candidate.id === nmtModelId) ?? null
   const persistedLocalSelectedGroupId =
     globalSettings?.translationEngines?.local?.selectedGroupId ??
     config?.translation?.engines?.local?.selectedGroupId
   const preferredLocalSelectedGroupId = nmtSelectedGroupId ?? persistedLocalSelectedGroupId
+  const localPanelStateQuery = useQuery({
+    ...trpc.localModels.panelState.queryOptions({
+      modelId: nmtModelId,
+      selectedGroupId: preferredLocalSelectedGroupId,
+    }),
+    enabled: translationEngineId === 'local' && nmtModelId.length > 0,
+  })
+  const localPanelState =
+    localPanelStateQuery.data?.modelId === nmtModelId ? localPanelStateQuery.data : null
+  const localPanelError =
+    localPanelStateQuery.error instanceof Error ? localPanelStateQuery.error.message : null
+  const nmtCatalogOptions = useMemo(() => {
+    return mergeLocalCatalogItems(nmtLocalOptions, nmtRemoteOptions)
+  }, [nmtLocalOptions, nmtRemoteOptions])
+  const selectedLocalAsset = localPanelState?.asset ?? null
+  const resolvedLocalDownloadPlan =
+    localPanelState?.downloadPlan ?? selectedLocalAsset?.plan ?? null
   const nmtDownloadGroups =
-    localDownloadPlan?.groups ??
-    selectedLocalAsset?.plan?.groups ??
-    activeLocalCandidate?.downloadGroups ??
-    []
-  const selectedLocalGroup =
-    nmtDownloadGroups.find((group) => group.id === preferredLocalSelectedGroupId) ??
-    nmtDownloadGroups.find((group) => group.selected) ??
-    null
+    resolvedLocalDownloadPlan?.groups ?? selectedLocalAsset?.plan?.groups ?? []
+  const selectedLocalGroup = nmtDownloadGroups.find((group) => group.selected) ?? null
   const effectiveLocalSelectedGroupId =
     selectedLocalGroup?.id ??
-    localDownloadPlan?.selectedGroupId ??
+    localPanelState?.selectedGroupId ??
     selectedLocalAsset?.plan?.selectedGroupId ??
     preferredLocalSelectedGroupId
   const nmtKnownSize =
-    (selectedLocalGroup?.estimatedTotalBytes ?? localDownloadPlan?.estimatedTotalBytes ?? 0) > 0
-  const displayedLocalAsset = deriveLocalGroupAssetState({
-    state: selectedLocalAsset,
-    plan: localDownloadPlan,
-    selectedGroupId: effectiveLocalSelectedGroupId,
-  })
-  const selectedLocalDownloadLog =
-    localDownloadLog?.modelId === nmtModelId &&
-    (!effectiveLocalSelectedGroupId ||
-      !localDownloadLog.selectedGroupId ||
-      localDownloadLog.selectedGroupId === effectiveLocalSelectedGroupId)
-      ? localDownloadLog
-      : null
-  const localDownloadStatusMessage = getLocalDownloadStatusMessage(selectedLocalDownloadLog)
+    (selectedLocalGroup?.estimatedTotalBytes ??
+      resolvedLocalDownloadPlan?.estimatedTotalBytes ??
+      0) > 0
+  const displayedLocalAsset = selectedLocalAsset
+  const localDownloadStatusMessage =
+    localDownloadMessage ?? getLocalDownloadStatusMessage(displayedLocalAsset)
   const nmtProgressPercent =
     displayedLocalAsset?.progress === undefined
       ? undefined
       : Math.round(displayedLocalAsset.progress * 100)
   const nmtGroupSelectionDisabled = displayedLocalAsset?.status === 'deleting'
   const nmtResolvedHfEndpoint = nmtHfEndpoint.trim() || 'https://huggingface.co'
-  const updateSelectedLocalLifecycle = useCallback(
-    (
-      status: LocalModelAssetState['status'],
-      patch: Partial<
-        Pick<LocalModelAssetState, 'progress' | 'bytesDownloaded' | 'totalBytes' | 'resumable'>
-      > = {}
-    ) => {
-      const modelId = nmtModel.trim()
-      if (!modelId) return
-      setLocalSelectedState((current) =>
-        buildOptimisticLocalModelState({
-          current,
-          modelId,
-          status,
-          plan: localDownloadPlan,
-          selectedGroupId: effectiveLocalSelectedGroupId,
-          patch,
-        })
-      )
-    },
-    [effectiveLocalSelectedGroupId, localDownloadPlan, nmtModel]
-  )
+  const localPlanLoading =
+    (localPanelStateQuery.isLoading || localPanelStateQuery.isFetching) && !selectedLocalAsset
   const startBrowserPairPreparation = useCallback(
     async (row: BrowserTranslationAvailabilityRow) => {
       browserPrepareControllerRef.current?.abort()
@@ -992,10 +903,11 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                   )}
                   <Tooltip content="Open translation test" delay={0}>
                     <Button
+                      variant="primary"
                       size="icon-md"
-                      variant="ghost"
                       aria-label="Open translation test"
                       onClick={() => setTranslationTestOpen(true)}
+                      className="bg-primary text-primary-foreground hover:bg-primary/90"
                     >
                       <FlaskConical className="h-4 w-4" />
                     </Button>
@@ -1136,10 +1048,12 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                           key={getBrowserPairKey(row)}
                           type="button"
                           onClick={() => setBrowserSelectedPairKey(getBrowserPairKey(row))}
-                          className={`border-border inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-[11px] leading-none transition-colors ${getDownloadStateChipClasses({
-                            tone: getBrowserAvailabilityChipTone(row.availability),
-                            selected,
-                          })}`}
+                          className={`inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-[11px] leading-none transition-colors ${getDownloadStateChipClasses(
+                            {
+                              tone: getBrowserAvailabilityChipTone(row.availability),
+                              selected,
+                            }
+                          )}`}
                           title={getBrowserPairDescription(row)}
                         >
                           <span className="font-medium">{getBrowserPairLabel(row)}</span>
@@ -1257,8 +1171,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                   <LocalModelCombobox
                     value={nmtModel}
                     query={nmtModelQuery}
-                    localOptions={nmtLocalOptions}
-                    remoteOptions={nmtRemoteOptions}
+                    options={nmtCatalogOptions}
                     remoteLoading={nmtRemoteLoading}
                     onQueryChange={setNmtModelQuery}
                     onChange={(nextModel) => {
@@ -1282,9 +1195,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                 </div>
                 <LocalDownloadGroupSelector
                   groups={nmtDownloadGroups}
-                  selectedGroupId={effectiveLocalSelectedGroupId}
-                  asset={selectedLocalAsset}
-                  loading={localPlanLoading}
+                  loading={localPlanLoading && !selectedLocalAsset}
                   disabled={nmtGroupSelectionDisabled}
                   onSelectGroup={(groupId) => {
                     setNmtSelectedGroupId(groupId)
@@ -1298,38 +1209,38 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                 />
               </div>
               <LocalDownloadFilesCard
-                plan={localDownloadPlan}
+                plan={displayedLocalAsset?.plan ?? resolvedLocalDownloadPlan}
+                groups={nmtDownloadGroups}
                 state={displayedLocalAsset}
                 statusMessage={localDownloadStatusMessage}
-                selectedGroupId={effectiveLocalSelectedGroupId}
                 progressPercent={nmtProgressPercent}
-                loading={localPlanLoading}
-                error={localPlanError}
+                loading={localPlanLoading && !selectedLocalAsset}
+                error={
+                  localPanelError ??
+                  (selectedLocalAsset?.status === 'error'
+                    ? (selectedLocalAsset.error ?? null)
+                    : null)
+                }
                 onDownload={() => {
-                  updateSelectedLocalLifecycle('downloading', {
-                    progress: selectedLocalAsset?.progress ?? 0,
-                  })
+                  setLocalDownloadMessage('Downloading local model files.')
                   downloadLocalModelMutation.mutate({
                     modelId: nmtModelId,
                     selectedGroupId: effectiveLocalSelectedGroupId,
                   })
                 }}
                 onPause={() => {
-                  updateSelectedLocalLifecycle('paused', { resumable: true })
+                  setLocalDownloadMessage('Local model download paused.')
                   pauseLocalModelMutation.mutate(nmtModelId)
                 }}
                 onResume={() => {
-                  updateSelectedLocalLifecycle('downloading', {
-                    progress: selectedLocalAsset?.progress ?? 0,
-                    resumable: true,
-                  })
+                  setLocalDownloadMessage('Resuming local model download.')
                   resumeLocalModelMutation.mutate({
                     modelId: nmtModelId,
                     selectedGroupId: effectiveLocalSelectedGroupId,
                   })
                 }}
                 onDelete={() => {
-                  updateSelectedLocalLifecycle('deleting')
+                  setLocalDownloadMessage('Deleting local model files.')
                   deleteLocalModelMutation.mutate(nmtModelId)
                 }}
                 knownSize={nmtKnownSize}
@@ -1460,8 +1371,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
 function LocalModelCombobox({
   value,
   query,
-  localOptions,
-  remoteOptions,
+  options,
   remoteLoading,
   onQueryChange,
   onChange,
@@ -1469,8 +1379,7 @@ function LocalModelCombobox({
 }: {
   value: string
   query: string
-  localOptions: LocalModelCatalogItem[]
-  remoteOptions: LocalModelCatalogItem[]
+  options: LocalModelCatalogItem[]
   remoteLoading: boolean
   onQueryChange: (value: string) => void
   onChange: (value: string) => void
@@ -1514,15 +1423,6 @@ function LocalModelCombobox({
       window.removeEventListener('scroll', updatePosition, true)
     }
   }, [open, updatePosition])
-
-  const options = useMemo(() => {
-    const merged = new Map<string, LocalModelCatalogItem>()
-    for (const item of localOptions) merged.set(item.id, item)
-    for (const item of remoteOptions) {
-      if (!merged.has(item.id)) merged.set(item.id, item)
-    }
-    return [...merged.values()]
-  }, [localOptions, remoteOptions])
 
   const hidePopover = useCallback(() => {
     const popover = popoverRef.current
@@ -1670,7 +1570,6 @@ function LocalModelCombobox({
                 </span>
                 <LocalModelGroupChips
                   groups={candidate.downloadGroups ?? candidate.asset.plan?.groups ?? []}
-                  asset={candidate.asset}
                 />
               </button>
             ))
@@ -1945,42 +1844,24 @@ function LocalProviderSettingsPopover({
   )
 }
 
-function LocalModelGroupChips({
-  groups,
-  asset,
-}: {
-  groups: TranslationDownloadGroupPlan[]
-  asset?: LocalModelAssetState | null
-}) {
+function LocalModelGroupChips({ groups }: { groups: TranslationDownloadGroupPlan[] }) {
   if (groups.length === 0) return null
-
-  const fileUsageCount = new Map<string, number>()
-  for (const group of groups) {
-    for (const file of group.files) {
-      fileUsageCount.set(file.path, (fileUsageCount.get(file.path) ?? 0) + 1)
-    }
-  }
 
   return (
     <span className="flex flex-wrap gap-1 pt-1">
       {groups.slice(0, 5).map((group) => {
-        const tone = asset
-          ? getLocalDownloadGroupChipState(group, asset, {
-              activeSelectedGroupId: asset.plan?.selectedGroupId,
-              fileUsageCount,
-            })
-          : 'not-started'
+        const tone = mapLocalGroupStatusToChipTone(group.status)
         return (
           <span
             key={group.id}
-            className={`border-border inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] ${
+            className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] ${
               group.selectable
                 ? getDownloadStateChipClasses({
                     tone,
-                    selected: false,
+                    selected: group.selected,
                     interactive: false,
                   })
-                : 'border-dashed text-muted-foreground/60'
+                : 'text-muted-foreground/60 border-dashed'
             }`}
           >
             <span>{group.label}</span>
@@ -1994,57 +1875,38 @@ function LocalModelGroupChips({
 
 function LocalDownloadGroupSelector({
   groups,
-  selectedGroupId,
-  asset,
   loading,
   disabled,
   onSelectGroup,
 }: {
   groups: TranslationDownloadGroupPlan[]
-  selectedGroupId?: string
-  asset: LocalModelAssetState | null
   loading: boolean
   disabled: boolean
   onSelectGroup: (groupId: string) => void
 }) {
-  const loadingIndicator = loading ? (
-    <div className="text-muted-foreground flex items-center gap-2 text-[11px] leading-5">
-      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-      Resolving download profiles…
-    </div>
-  ) : null
-
-  if (groups.length === 0) {
-    return loadingIndicator
-  }
-
-  const fileUsageCount = new Map<string, number>()
-  for (const group of groups) {
-    for (const file of group.files) {
-      fileUsageCount.set(file.path, (fileUsageCount.get(file.path) ?? 0) + 1)
-    }
-  }
+  if (groups.length === 0) return null
 
   return (
     <>
-      {loadingIndicator}
-      <div className="flex flex-wrap gap-1.5 pt-1" aria-label="Local download profiles">
+      <div
+        className="flex flex-wrap gap-1.5 pt-1"
+        aria-label="Local download profiles"
+        aria-busy={loading}
+      >
         {groups.map((group) => {
-          const selected = group.id === selectedGroupId
-          const chipState = getLocalDownloadGroupChipState(group, asset, {
-            activeSelectedGroupId: selectedGroupId,
-            fileUsageCount,
-          })
+          const chipState = mapLocalGroupStatusToChipTone(group.status)
           return (
             <button
               key={group.id}
               type="button"
               disabled={!group.selectable || disabled}
               onClick={() => onSelectGroup(group.id)}
-              className={`border-border inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-[11px] leading-none transition-colors ${getDownloadStateChipClasses({
-                tone: chipState,
-                selected,
-              })} disabled:cursor-not-allowed disabled:opacity-50`}
+              className={`inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-[11px] leading-none transition-colors ${getDownloadStateChipClasses(
+                {
+                  tone: chipState,
+                  selected: group.selected,
+                }
+              )} disabled:cursor-not-allowed disabled:opacity-50`}
             >
               <span className="font-medium">{group.label}</span>
               <span>{formatByteSize(group.estimatedTotalBytes)}</span>
@@ -2058,175 +1920,20 @@ function LocalDownloadGroupSelector({
 
 type LocalDownloadGroupChipState = 'downloaded' | 'partial' | 'not-started'
 
-function getLocalDownloadGroupChipState(
-  group: TranslationDownloadGroupPlan,
-  asset: LocalModelAssetState | null,
-  options: {
-    activeSelectedGroupId?: string
-    fileUsageCount: ReadonlyMap<string, number>
-  }
+function mapLocalGroupStatusToChipTone(
+  status: TranslationDownloadGroupPlan['status']
 ): LocalDownloadGroupChipState {
-  if (!asset || group.files.length === 0) return 'not-started'
-  const localFileByPath = new Map(asset.files.map((file) => [file.path, file]))
-  const allCached = group.files.every((file) => {
-    const localFile = localFileByPath.get(file.path)
-    return (
-      file.sizeBytes !== undefined &&
-      localFile?.downloadedBytes !== undefined &&
-      localFile.downloadedBytes >= file.sizeBytes
-    )
-  })
-  if (allCached) return 'downloaded'
-
-  const hasPartialBytes = group.files.some((file) => {
-    const downloadedBytes = localFileByPath.get(file.path)?.downloadedBytes ?? 0
-    return downloadedBytes > 0 && (options.fileUsageCount.get(file.path) ?? 0) <= 1
-  })
-  const activeGroupId = asset.plan?.selectedGroupId ?? options.activeSelectedGroupId
-  const matchesActiveGroup =
-    group.id === activeGroupId &&
-    (asset.status === 'queued' ||
-      asset.status === 'downloading' ||
-      asset.status === 'paused' ||
-      asset.status === 'error' ||
-      asset.status === 'deleting')
-  if (hasPartialBytes || matchesActiveGroup) return 'partial'
-
+  if (status === 'downloaded') return 'downloaded'
+  if (
+    status === 'queued' ||
+    status === 'downloading' ||
+    status === 'paused' ||
+    status === 'error' ||
+    status === 'deleting'
+  ) {
+    return 'partial'
+  }
   return 'not-started'
-}
-
-function findLocalModelAssetSnapshot(
-  localOptions: LocalModelCatalogItem[],
-  modelId: string
-): LocalModelAssetState | null {
-  const item = localOptions.find((option) => option.id === modelId)
-  if (!item) return null
-  if (hasLocalModelAssetTruth(item.asset)) return item.asset
-  return null
-}
-
-function hasLocalModelAssetTruth(state: LocalModelAssetState): boolean {
-  if (state.status === 'downloaded') return state.files.length > 0 || Boolean(state.plan)
-  if (state.status === 'downloading' || state.status === 'paused' || state.status === 'deleting') {
-    return state.files.length > 0 || Boolean(state.plan)
-  }
-  return false
-}
-
-function matchesSelectedLocalGroupTruth(
-  state: LocalModelAssetState,
-  selectedGroupId?: string
-): boolean {
-  if (!selectedGroupId) return true
-  const plan = state.plan
-  if (!plan?.groups?.length) {
-    return plan?.selectedGroupId === selectedGroupId
-  }
-  return plan.selectedGroupId === selectedGroupId
-}
-
-function createLocalPlanFromAssetState(
-  state: LocalModelAssetState,
-  selectedGroupId?: string
-): TranslationModelDownloadPlan | null {
-  if (state.plan) {
-    return {
-      ...state.plan,
-      selectedGroupId: selectedGroupId ?? state.plan.selectedGroupId,
-    }
-  }
-  if (state.files.length === 0) return null
-  const files = state.files.map((file) => ({
-    path: file.path,
-    sizeBytes: file.sizeBytes,
-    required: true,
-  }))
-  const totalBytes =
-    state.totalBytes ??
-    files.reduce(
-      (total, file) => (file.sizeBytes === undefined ? total : total + file.sizeBytes),
-      0
-    )
-  return {
-    modelId: state.modelId,
-    estimatedTotalBytes: totalBytes,
-    selectedGroupId,
-    files,
-  }
-}
-
-function createLocalPlanFromAssetLog(log: LocalModelAssetLog): TranslationModelDownloadPlan | null {
-  if (!log.files || log.files.length === 0) return null
-  return {
-    modelId: log.modelId,
-    estimatedTotalBytes: log.totalBytes,
-    selectedGroupId: log.selectedGroupId,
-    files: log.files.map((file) => ({
-      path: file.path,
-      sizeBytes: file.sizeBytes,
-      required: true,
-    })),
-  }
-}
-
-function mergeLocalPlanSnapshots(
-  current: TranslationModelDownloadPlan | null,
-  next: TranslationModelDownloadPlan | null
-): TranslationModelDownloadPlan | null {
-  if (!current) return next
-  if (!next) return current
-  const currentGroups = current.groups ?? []
-  const nextGroups = next.groups ?? []
-  const nextGroupIds = new Set(nextGroups.map((group) => group.id))
-  return {
-    ...current,
-    ...next,
-    selectedGroupId: next.selectedGroupId ?? current.selectedGroupId,
-    groups:
-      nextGroups.length > 0
-        ? [...nextGroups, ...currentGroups.filter((group) => !nextGroupIds.has(group.id))]
-        : current.groups,
-  }
-}
-
-function buildLocalModelStateFromLog(input: {
-  current: LocalModelAssetState | null
-  log: LocalModelAssetLog
-  plan: TranslationModelDownloadPlan | null
-}): LocalModelAssetState {
-  const fallbackPlan = createLocalPlanFromAssetLog(input.log)
-  return {
-    modelId: input.log.modelId,
-    status: input.log.status,
-    selected: input.current?.selected ?? true,
-    installedAt:
-      input.log.status === 'downloaded'
-        ? (input.current?.installedAt ?? input.log.updatedAt)
-        : input.current?.installedAt,
-    updatedAt: input.log.updatedAt,
-    bytesDownloaded: input.log.bytesDownloaded,
-    totalBytes: input.log.totalBytes,
-    progress: input.log.progress,
-    resumable: input.log.resumable ?? input.current?.resumable ?? false,
-    error: input.log.status === 'error' ? input.log.message : undefined,
-    plan: input.current?.plan ?? input.plan ?? fallbackPlan ?? undefined,
-    files: input.log.files ?? input.current?.files ?? [],
-  }
-}
-
-function getLocalDownloadStatusMessage(log: LocalModelAssetLog | null): string | null {
-  if (!log) return null
-  switch (log.status) {
-    case 'queued':
-    case 'downloading':
-    case 'paused':
-    case 'deleting':
-    case 'error':
-      return log.message
-    case 'downloaded':
-    case 'not-downloaded':
-      return null
-  }
 }
 
 type LocalPlanAction = 'download' | 'pause' | 'resume' | 'downloaded' | 'deleting' | 'progress'
@@ -2255,124 +1962,30 @@ function getLocalPlanAction(input: {
   }
 }
 
-function buildOptimisticLocalModelState(input: {
-  current: LocalModelAssetState | null
-  modelId: string
-  status: LocalModelAssetState['status']
-  plan: TranslationModelDownloadPlan | null
-  selectedGroupId?: string
-  patch: Partial<
-    Pick<LocalModelAssetState, 'progress' | 'bytesDownloaded' | 'totalBytes' | 'resumable'>
-  >
-}): LocalModelAssetState {
-  const selectedGroup =
-    input.plan?.groups?.find((group) => group.id === input.selectedGroupId) ??
-    input.plan?.groups?.find((group) => group.selected) ??
-    null
-  const planFiles = selectedGroup?.files ?? input.plan?.files ?? []
-  const files =
-    input.current?.files.length || planFiles.length === 0
-      ? (input.current?.files ?? [])
-      : planFiles.map((file) => ({
-          path: file.path,
-          sizeBytes: file.sizeBytes,
-          downloadedBytes: file.sizeBytes === undefined ? undefined : 0,
-        }))
-  const totalBytes =
-    input.patch.totalBytes ??
-    input.current?.totalBytes ??
-    selectedGroup?.estimatedTotalBytes ??
-    input.plan?.estimatedTotalBytes
-  return {
-    modelId: input.modelId,
-    status: input.status,
-    selected: true,
-    installedAt: input.current?.installedAt,
-    updatedAt: Date.now(),
-    bytesDownloaded: input.patch.bytesDownloaded ?? input.current?.bytesDownloaded,
-    totalBytes,
-    progress: input.patch.progress ?? input.current?.progress,
-    resumable: input.patch.resumable ?? input.current?.resumable ?? false,
-    error: input.status === 'error' ? input.current?.error : undefined,
-    plan: input.current?.plan ?? input.plan ?? undefined,
-    files,
-  }
-}
-
-function deriveLocalGroupAssetState(input: {
-  state: LocalModelAssetState | null
-  plan: TranslationModelDownloadPlan | null
-  selectedGroupId?: string
-}): LocalModelAssetState | null {
-  if (!input.state) return null
-  if (!input.selectedGroupId || input.state.status === 'deleting') return input.state
-
-  const selectedGroup = selectLocalDownloadGroup(
-    input.plan ?? input.state.plan ?? null,
-    input.selectedGroupId
-  )
-  if (!selectedGroup) return input.state
-
-  const sourceFiles = input.state.files
-  const sourceFileByPath = new Map(sourceFiles.map((file) => [file.path, file]))
-  const files = selectedGroup.files.map((file) => {
-    const current = sourceFileByPath.get(file.path)
-    return {
-      path: file.path,
-      sizeBytes: file.sizeBytes,
-      downloadedBytes: current?.downloadedBytes,
-    }
-  })
-  const completedBytes = files.reduce((total, file) => {
-    const downloaded = file.downloadedBytes ?? 0
-    const max = file.sizeBytes
-    return total + (max === undefined ? downloaded : Math.min(downloaded, max))
-  }, 0)
-  const totalBytes = selectedGroup.estimatedTotalBytes
-  const allCached =
-    files.length > 0 &&
-    files.every(
-      (file) =>
-        file.sizeBytes !== undefined &&
-        file.downloadedBytes !== undefined &&
-        file.downloadedBytes >= file.sizeBytes
-    )
-  const groupMatchesPersistedSelection =
-    input.selectedGroupId === input.state.plan?.selectedGroupId ||
-    input.selectedGroupId === input.plan?.selectedGroupId
-  const status =
-    allCached && groupMatchesPersistedSelection
-      ? 'downloaded'
-      : input.state.status === 'downloading' && groupMatchesPersistedSelection
-        ? 'downloading'
-        : input.state.status === 'paused' && completedBytes > 0
-          ? 'paused'
-          : input.state.status === 'error' && groupMatchesPersistedSelection
-            ? 'error'
-            : 'not-downloaded'
-  const progress =
-    totalBytes && totalBytes > 0
-      ? Math.max(0, Math.min(1, completedBytes / totalBytes))
-      : status === 'downloaded'
-        ? 1
-        : 0
-
-  return {
-    ...input.state,
-    status,
-    bytesDownloaded: completedBytes,
-    totalBytes,
-    progress,
-    resumable: status === 'paused' || (completedBytes > 0 && completedBytes < (totalBytes ?? 0)),
-    files,
+function getLocalDownloadStatusMessage(asset: LocalModelAssetState | null): string | null {
+  if (!asset) return null
+  switch (asset.status) {
+    case 'queued':
+      return 'Preparing local model download.'
+    case 'downloading':
+      return 'Downloading local model files.'
+    case 'paused':
+      return 'Local model download paused.'
+    case 'deleting':
+      return 'Deleting local model files.'
+    case 'error':
+      return asset.error ?? 'Local model download failed.'
+    case 'downloaded':
+    case 'not-downloaded':
+      return null
   }
 }
 
 function LocalDownloadFilesCard({
   plan,
+  groups,
   state,
   statusMessage,
-  selectedGroupId,
   progressPercent,
   loading,
   error,
@@ -2384,9 +1997,9 @@ function LocalDownloadFilesCard({
   modelId,
 }: {
   plan: TranslationModelDownloadPlan | null
+  groups: TranslationDownloadGroupPlan[]
   state: LocalModelAssetState | null
   statusMessage: string | null
-  selectedGroupId?: string
   progressPercent: number | undefined
   loading: boolean
   error: string | null
@@ -2404,11 +2017,7 @@ function LocalDownloadFilesCard({
   const action = getLocalPlanAction({ state, loading, knownSize })
   const canDelete = !loading && !isDeleting && (isDownloaded || isPaused || isError)
   const actionProgress = progressPercent ?? 0
-  const groups = plan?.groups ?? state?.plan?.groups ?? []
-  const selectedGroup =
-    groups.find((group) => group.id === selectedGroupId) ??
-    groups.find((group) => group.selected) ??
-    null
+  const selectedGroup = groups.find((group) => group.selected) ?? null
   const planFiles = selectedGroup?.files ?? plan?.files ?? state?.plan?.files ?? []
   const stateFileByPath = new Map(state?.files.map((file) => [file.path, file]) ?? [])
   const displayFiles =
@@ -2418,6 +2027,7 @@ function LocalDownloadFilesCard({
           downloadedBytes: stateFileByPath.get(file.path)?.downloadedBytes,
         }))
       : (state?.files ?? [])
+  const isResolving = loading && !state
 
   return (
     <div className="space-y-3">
@@ -2434,12 +2044,7 @@ function LocalDownloadFilesCard({
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
           <div className="text-foreground flex min-w-0 items-center gap-2 font-medium">
             <span>Download files</span>
-            {loading ? (
-              <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[11px] font-normal">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Resolving…
-              </span>
-            ) : plan ? (
+            {plan ? (
               <span className="text-muted-foreground text-[11px] font-normal">
                 {formatByteSize(selectedGroup?.estimatedTotalBytes ?? plan.estimatedTotalBytes)}
               </span>
@@ -2523,7 +2128,7 @@ function LocalDownloadFilesCard({
                     disabled={!modelId}
                     className="text-foreground focus-visible:ring-primary absolute inline-flex h-8 w-8 items-center justify-center rounded-full bg-transparent outline-none transition-[background-color,transform] hover:scale-105 focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <Play className="h-3.5 w-3.5" />
+                    <Download className="h-3.5 w-3.5" />
                   </button>
                 </Tooltip>
               ) : action === 'downloaded' ? (
@@ -2554,12 +2159,7 @@ function LocalDownloadFilesCard({
             </div>
           </div>
         </div>
-        {loading ? (
-          <div className="text-muted-foreground mt-2 flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading model files…
-          </div>
-        ) : isDeleting ? (
+        {isDeleting ? (
           <div className="text-muted-foreground mt-2 flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
             Removing local model files…
@@ -2574,7 +2174,12 @@ function LocalDownloadFilesCard({
             {statusMessage ? (
               <div className="text-muted-foreground mt-2 leading-5">{statusMessage}</div>
             ) : null}
-            {displayFiles.length > 0 ? (
+            {isResolving ? (
+              <div className="text-muted-foreground mt-2 flex items-center gap-2 leading-5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Loading model files…
+              </div>
+            ) : displayFiles.length > 0 ? (
               <ul className="scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[color-mix(in_srgb,currentColor,transparent_78%)] text-muted-foreground mt-2 max-h-48 space-y-1 overflow-y-auto pr-1">
                 {displayFiles.map((file) => {
                   const sizeBytes = file.sizeBytes

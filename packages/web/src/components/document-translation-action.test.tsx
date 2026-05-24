@@ -2,50 +2,55 @@ import type { BrowserTranslationSupportTableState } from '@/lib/browser-translat
 import { DOCUMENT_TRANSLATION_SESSION_STORAGE_KEY } from '@/lib/document-translation-session-state'
 import type { LocalModelAssetState } from '@openspecui/core/translator'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MarkdownViewer } from './markdown-viewer'
 
 const translateMarkdownDocumentProgressivelyMock = vi.hoisted(() => vi.fn())
 const navigateMock = vi.hoisted(() => vi.fn())
 const getBrowserSupportTableStateMock = vi.hoisted(() =>
-  vi.fn<(targetLanguage: string) => BrowserTranslationSupportTableState | null>((targetLanguage) => ({
-    state: 'ready',
-    message: 'Browser translation pairs: 1 ready.',
-    table: {
-      targetLanguage,
-      checked: 1,
-      total: 1,
-      updatedAt: 1,
-      rows: [
-        {
-          sourceLanguage: 'en',
-          targetLanguage,
-          availability: 'available',
-        },
-      ],
-    },
-  }))
+  vi.fn<(targetLanguage: string) => BrowserTranslationSupportTableState | null>(
+    (targetLanguage) => ({
+      state: 'ready',
+      message: 'Browser translation pairs: 1 ready.',
+      table: {
+        targetLanguage,
+        checked: 1,
+        total: 1,
+        updatedAt: 1,
+        rows: [
+          {
+            sourceLanguage: 'en',
+            targetLanguage,
+            availability: 'available',
+          },
+        ],
+      },
+    })
+  )
 )
 const scanBrowserTranslationPairsMock = vi.hoisted(() =>
-  vi.fn(async (targetLanguage: string): Promise<BrowserTranslationSupportTableState> => ({
-    state: 'ready',
-    message: 'Browser translation pairs: 1 ready.',
-    table: {
-      targetLanguage,
-      checked: 1,
-      total: 1,
-      updatedAt: 1,
-      rows: [
-        {
-          sourceLanguage: 'en',
-          targetLanguage,
-          availability: 'available',
-        },
-      ],
-    },
-  }))
+  vi.fn(
+    async (targetLanguage: string): Promise<BrowserTranslationSupportTableState> => ({
+      state: 'ready',
+      message: 'Browser translation pairs: 1 ready.',
+      table: {
+        targetLanguage,
+        checked: 1,
+        total: 1,
+        updatedAt: 1,
+        rows: [
+          {
+            sourceLanguage: 'en',
+            targetLanguage,
+            availability: 'available',
+          },
+        ],
+      },
+    })
+  )
 )
 const nmtModelStateMock = vi.hoisted(() => vi.fn())
+const nmtModelPanelStateMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/browser-translation', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/browser-translation')>()
@@ -61,11 +66,18 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigateMock,
 }))
 
+vi.mock('@/lib/use-subscription', () => ({
+  useGlobalSettingsSubscription: () => ({ data: undefined }),
+}))
+
 vi.mock('@/lib/trpc', () => ({
   trpcClient: {
     localModels: {
       state: {
         query: nmtModelStateMock,
+      },
+      panelState: {
+        query: nmtModelPanelStateMock,
       },
     },
     translationCache: {
@@ -85,10 +97,24 @@ vi.mock('@/lib/trpc', () => ({
 }))
 
 describe('MarkdownViewer translation plugin', () => {
+  beforeEach(() => {
+    nmtModelStateMock.mockResolvedValue(createDownloadedLocalAssetState())
+    nmtModelPanelStateMock.mockImplementation(
+      async ({ modelId, selectedGroupId }: { modelId: string; selectedGroupId?: string }) => ({
+        modelId,
+        selectedGroupId,
+        asset: await nmtModelStateMock({
+          modelId,
+          selectedGroupId,
+        }),
+        downloadPlan: null,
+      })
+    )
+  })
+
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
-    nmtModelStateMock.mockResolvedValue(createDownloadedLocalAssetState())
     sessionStorage.clear()
     window.history.replaceState(null, '', '/')
   })
@@ -226,6 +252,64 @@ describe('MarkdownViewer translation plugin', () => {
     expect(button).toBeDisabled()
     expect(button.getAttribute('title')).toContain('not installed locally')
     expect(scanBrowserTranslationPairsMock).not.toHaveBeenCalled()
+  })
+
+  it('recovers from an unavailable browser engine after switching to a ready local model', async () => {
+    getBrowserSupportTableStateMock.mockReturnValueOnce(null)
+    scanBrowserTranslationPairsMock.mockResolvedValueOnce({
+      state: 'missing',
+      message: 'Chrome Translator API is not exposed.',
+      table: null,
+    })
+
+    const { rerender } = render(
+      <MarkdownViewer
+        markdown={'# Hello'}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+          engineId: 'browser',
+          engines: {
+            local: { model: 'Xenova/opus-mt-en-zh', selectedGroupId: 'q8' },
+            openai: {},
+          },
+        }}
+      />
+    )
+
+    const unavailableButton = await screen.findByRole('button', { name: 'Translation unavailable' })
+    expect(unavailableButton).toBeDisabled()
+
+    fireEvent.click(unavailableButton)
+
+    rerender(
+      <MarkdownViewer
+        markdown={'# Hello'}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+          engineId: 'local',
+          engines: {
+            local: { model: 'Xenova/opus-mt-en-zh', selectedGroupId: 'q8' },
+            openai: {},
+          },
+        }}
+      />
+    )
+
+    await waitFor(() =>
+      expect(nmtModelStateMock).toHaveBeenCalledWith({
+        modelId: 'Xenova/opus-mt-en-zh',
+        selectedGroupId: 'q8',
+      })
+    )
+    const readyButton = await screen.findByRole('button', { name: 'Translate' })
+    expect(readyButton).not.toBeDisabled()
+    expect(readyButton).toHaveAttribute('data-translation-action-state', 'ready')
   })
 
   it('projects direct translation as the final render stage and uses translated ToC labels', async () => {

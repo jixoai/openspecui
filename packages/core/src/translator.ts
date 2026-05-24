@@ -68,6 +68,7 @@ export interface TranslationDownloadGroupPlan {
   profile?: string
   dtype?: string
   estimatedTotalBytes?: number
+  status?: LocalModelDownloadStatus
   selectable: boolean
   selected: boolean
   files: TranslationDownloadFilePlan[]
@@ -146,6 +147,7 @@ export const TranslationDownloadGroupPlanSchema = z.object({
   profile: z.string().min(1).optional(),
   dtype: z.string().min(1).optional(),
   estimatedTotalBytes: z.number().int().nonnegative().optional(),
+  status: LocalModelDownloadStatusSchema.optional(),
   selectable: z.boolean(),
   selected: z.boolean(),
   files: z.array(TranslationDownloadFilePlanSchema),
@@ -280,7 +282,8 @@ export const TRANSLATION_ENGINE_MANIFESTS = [
   {
     id: 'local',
     label: 'Local-Transformers',
-    description: 'Runs a bundled local Transformers.js translation runtime with managed model files.',
+    description:
+      'Runs a bundled local Transformers.js translation runtime with managed model files.',
     technicalSummary:
       'Server-side Transformers.js local adapter. Package payload is about 5 KB; selected model groups are downloaded separately and can range from tens to hundreds of MB.',
     runtime: 'server',
@@ -290,7 +293,8 @@ export const TRANSLATION_ENGINE_MANIFESTS = [
   {
     id: 'openai',
     label: 'OpenAI-Completion',
-    description: 'Uses an OpenAI-compatible TanStack AI completion provider for context-aware translation.',
+    description:
+      'Uses an OpenAI-compatible TanStack AI completion provider for context-aware translation.',
     technicalSummary:
       'Server-side TanStack AI adapter for OpenAI-compatible APIs. Package payload is about 5 KB; model size stays with the remote provider.',
     runtime: 'server',

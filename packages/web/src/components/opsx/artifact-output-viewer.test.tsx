@@ -21,6 +21,7 @@ vi.mock('@/lib/use-subscription', () => ({
       },
     },
   }),
+  useGlobalSettingsSubscription: () => ({ data: undefined }),
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -115,9 +116,7 @@ describe('ArtifactOutputViewer', () => {
     const content = document.querySelector('.toc-page-content')
     expect(content).toBeTruthy()
     expect(within(content as HTMLElement).getByText('content')).toBeTruthy()
-    expect(
-      within(content as HTMLElement).getByText('archive/2026-05-17-add-auth')
-    ).toBeTruthy()
+    expect(within(content as HTMLElement).getByText('archive/2026-05-17-add-auth')).toBeTruthy()
     expect(within(content as HTMLElement).getByRole('heading', { name: 'Decision' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Configure translation' })).toBeTruthy()
     expect(document.querySelectorAll('aside.toc-root')).toHaveLength(1)

@@ -1,9 +1,10 @@
 import { MarkdownViewer } from '@/components/markdown-viewer'
+import { resolveDocumentTranslationConfig } from '@/lib/resolve-document-translation-config'
 import {
   useOpsxArtifactOutputSubscription,
   useOpsxGlobArtifactFilesSubscription,
 } from '@/lib/use-opsx'
-import { useConfigSubscription } from '@/lib/use-subscription'
+import { useConfigSubscription, useGlobalSettingsSubscription } from '@/lib/use-subscription'
 import type { ArtifactStatus, OpsxEntityArtifactFile, OpsxEntityFile } from '@openspecui/core'
 import type { DocumentTranslationConfigInput } from '@openspecui/core/document-translation'
 import { Loader2 } from 'lucide-react'
@@ -222,6 +223,8 @@ function GlobContent({
 
 export function ArtifactOutputViewer({ changeId, artifact }: Props) {
   const { data: config } = useConfigSubscription()
+  const { data: globalSettings } = useGlobalSettingsSubscription()
+  const translationConfig = resolveDocumentTranslationConfig(config?.translation, globalSettings)
 
   if (artifact.files) {
     return (
@@ -230,7 +233,7 @@ export function ArtifactOutputViewer({ changeId, artifact }: Props) {
           <ArtifactFilesDocumentShell
             artifact={artifact}
             files={artifact.files}
-            translationConfig={config?.translation}
+            translationConfig={translationConfig}
           />
         </div>
       </div>
@@ -241,7 +244,7 @@ export function ArtifactOutputViewer({ changeId, artifact }: Props) {
     <LiveArtifactOutputViewer
       changeId={changeId}
       artifact={artifact}
-      translationConfig={config?.translation}
+      translationConfig={translationConfig}
     />
   )
 }
@@ -252,11 +255,13 @@ export function ContentFallbackViewer({
   fallback: DocumentContentFallbackDescriptor
 }) {
   const { data: config } = useConfigSubscription()
+  const { data: globalSettings } = useGlobalSettingsSubscription()
+  const translationConfig = resolveDocumentTranslationConfig(config?.translation, globalSettings)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1">
-        <FallbackDocumentShell fallback={fallback} translationConfig={config?.translation} />
+        <FallbackDocumentShell fallback={fallback} translationConfig={translationConfig} />
       </div>
     </div>
   )
