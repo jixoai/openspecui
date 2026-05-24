@@ -17,6 +17,10 @@ Completed code work in this implementation pass:
   - `group.status` controls green/blue/default tone.
   - The frontend no longer derives profile status from file byte progress,
     active selected group, catalog options, or client-side file sharing rules.
+- Local profile switching now keeps the last server `panelState` snapshot visible
+  while the next selected profile snapshot is resolving. This preserves the
+  server-owned single truth without letting the Settings UI collapse into an
+  empty loading state between two valid server snapshots.
 - Download Files now reads the same selected server profile truth as the chips.
 - Local download log subscription invalidates/refetches `panelState` instead of
   synthesizing local model state in the browser.
@@ -39,6 +43,8 @@ Focused tests added or updated:
   - profile chips using border style for selection and color for status
   - Download Files switching only after server profile truth changes
   - downloaded profile chips staying green even when a different profile is selected
+  - Local profile chips and Download Files remaining visible while a new
+    `panelState` request is still pending after chip selection
 - Web document translation tests cover local readiness after switching away from
   an unavailable Browser engine.
 - Browser translation tests cover batch output reordering and adaptive concurrency log recording.
@@ -61,6 +67,7 @@ Focused tests added or updated:
 
 - `pnpm --filter @openspecui/web exec vitest run src/routes/settings.test.tsx --project unit`
   - Passed: 36 tests.
+  - Re-run after the Local profile switch regression fix: passed 36 tests.
 - `pnpm --filter @openspecui/server exec vitest run src/local-model-asset-service.test.ts src/translation-engine-service.test.ts`
   - Passed: 18 tests.
 - `pnpm --filter @openspecui/core typecheck`

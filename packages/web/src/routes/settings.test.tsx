@@ -4,7 +4,7 @@ import type {
   LocalModelCatalogItem,
   TranslationModelDownloadPlan,
 } from '@openspecui/core/translator'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useSyncExternalStore, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Settings } from './settings'
@@ -476,6 +476,20 @@ function dispatchPopoverToggle(element: Element, newState: 'open' | 'closed') {
     value: newState === 'open' ? 'closed' : 'open',
   })
   fireEvent(element, event)
+}
+
+function createDeferred<T>() {
+  let resolve: (value: T) => void = () => {
+    throw new Error('Deferred promise was resolved before initialization.')
+  }
+  let reject: (reason?: unknown) => void = () => {
+    throw new Error('Deferred promise was rejected before initialization.')
+  }
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve
+    reject = promiseReject
+  })
+  return { promise, resolve, reject }
 }
 
 function createQ8PlanFilesForTest(): TranslationModelDownloadPlan['files'] {
@@ -2901,6 +2915,27 @@ describe('Settings', () => {
       async ({ selectedGroupId }: { modelId: string; selectedGroupId?: string }) =>
         buildAsset(selectedGroupId ?? 'q4')
     )
+    const pendingQ4f16PanelState = createDeferred<{
+      modelId: string
+      selectedGroupId?: string
+      asset: LocalModelAssetState
+      downloadPlan: TranslationModelDownloadPlan | null
+    }>()
+    localModelsMock.panelState.mockImplementation(
+      async ({ selectedGroupId }: { modelId: string; selectedGroupId?: string }) => {
+        if (selectedGroupId === 'q4f16') {
+          return pendingQ4f16PanelState.promise
+        }
+        const selectedGroupIdFromServer = selectedGroupId ?? 'q4'
+        const asset = buildAsset(selectedGroupIdFromServer)
+        return {
+          modelId,
+          selectedGroupId: selectedGroupIdFromServer,
+          asset,
+          downloadPlan: asset.plan ?? null,
+        }
+      }
+    )
     useConfigSubscriptionMock.mockReturnValue({
       data: {
         translation: {
@@ -2941,6 +2976,7 @@ describe('Settings', () => {
     expect(q4Chip.className).toContain('text-emerald-700')
     expect(bnb4Chip.className).toContain('border-dashed')
     expect(bnb4Chip.className).toContain('text-emerald-700')
+    expect(screen.getByText('onnx/encoder_model_q4.onnx')).toBeTruthy()
 
     fireEvent.click(q4f16Chip)
 
@@ -2950,16 +2986,37 @@ describe('Settings', () => {
         selectedGroupId: 'q4f16',
       })
     )
-    const updatedProfileList = screen.getByLabelText('Local download profiles')
+    const pendingProfileList = screen.getByLabelText('Local download profiles')
+    const pendingQ4Chip = within(pendingProfileList).getByRole('button', { name: /^q4 /i })
+    const pendingQ4f16Chip = within(pendingProfileList).getByRole('button', { name: /^q4f16/i })
+    const pendingBnb4Chip = within(pendingProfileList).getByRole('button', { name: /^bnb4/i })
+    expect(pendingQ4Chip.className).toContain('border-solid')
+    expect(pendingQ4f16Chip.className).toContain('border-dashed')
+    expect(pendingBnb4Chip.className).toContain('text-emerald-700')
+    expect(screen.queryByText('Loading model files…')).toBeNull()
+    expect(screen.getByText('onnx/encoder_model_q4.onnx')).toBeTruthy()
+
+    const q4f16Asset = buildAsset('q4f16')
+    await act(async () => {
+      pendingQ4f16PanelState.resolve({
+        modelId,
+        selectedGroupId: 'q4f16',
+        asset: q4f16Asset,
+        downloadPlan: q4f16Asset.plan ?? null,
+      })
+    })
+
+    const updatedProfileList = await screen.findByLabelText('Local download profiles')
     const updatedQ4Chip = within(updatedProfileList).getByRole('button', { name: /^q4 /i })
     const updatedQ4f16Chip = within(updatedProfileList).getByRole('button', { name: /^q4f16/i })
     const updatedBnb4Chip = within(updatedProfileList).getByRole('button', { name: /^bnb4/i })
+    await waitFor(() => expect(updatedQ4f16Chip.className).toContain('border-solid'))
     expect(updatedQ4Chip.className).toContain('border-dashed')
     expect(updatedQ4Chip.className).toContain('text-emerald-700')
-    expect(updatedQ4f16Chip.className).toContain('border-solid')
     expect(updatedQ4f16Chip.className).toContain('text-emerald-700')
     expect(updatedBnb4Chip.className).toContain('border-dashed')
     expect(updatedBnb4Chip.className).toContain('text-emerald-700')
+    expect(screen.getByText('onnx/encoder_model_q4f16.onnx')).toBeTruthy()
   })
 
   it('locks deleting state and hides resume/delete actions while removal is in progress', async () => {

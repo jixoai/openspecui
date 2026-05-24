@@ -301,6 +301,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const browserPrepareControllerRef = useRef<AbortController | null>(null)
   const nmtModelRef = useRef(nmtModel)
   const nmtSelectedGroupIdRef = useRef<string | undefined>(nmtSelectedGroupId)
+  const lastLocalPanelStateRef = useRef<LocalPanelStateData | null>(null)
 
   useEffect(() => {
     queryClientRef.current = queryClient
@@ -643,8 +644,20 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     }),
     enabled: translationEngineId === 'local' && nmtModelId.length > 0,
   })
-  const localPanelState =
+  const queriedLocalPanelState =
     localPanelStateQuery.data?.modelId === nmtModelId ? localPanelStateQuery.data : null
+  useEffect(() => {
+    if (queriedLocalPanelState) {
+      lastLocalPanelStateRef.current = queriedLocalPanelState
+      return
+    }
+    if (translationEngineId !== 'local' || nmtModelId.length === 0) {
+      lastLocalPanelStateRef.current = null
+    }
+  }, [nmtModelId, queriedLocalPanelState, translationEngineId])
+  const cachedLocalPanelState =
+    lastLocalPanelStateRef.current?.modelId === nmtModelId ? lastLocalPanelStateRef.current : null
+  const localPanelState = queriedLocalPanelState ?? cachedLocalPanelState
   const localPanelError =
     localPanelStateQuery.error instanceof Error ? localPanelStateQuery.error.message : null
   const nmtCatalogOptions = useMemo(() => {
