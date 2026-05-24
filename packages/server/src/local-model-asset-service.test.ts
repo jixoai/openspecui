@@ -571,6 +571,111 @@ describe('LocalModelAssetService', () => {
     }
   })
 
+  it('keeps active profile download status after another group is selected before file progress exists', async () => {
+    const modelId = 'onnx-community/opus-mt-en-zh'
+    const store = new LocalModelAssetStore({ indexPath })
+    await store.upsert({
+      modelId,
+      status: 'downloading',
+      selected: true,
+      progress: 0,
+      bytesDownloaded: 0,
+      totalBytes: 30,
+      resumable: true,
+      plan: {
+        modelId,
+        estimatedTotalBytes: 30,
+        selectedGroupId: 'q4',
+        files: [
+          { path: 'config.json', sizeBytes: 10, required: true },
+          { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10, required: true },
+          { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10, required: true },
+        ],
+        groups: [
+          {
+            id: 'q4',
+            label: 'q4',
+            dtype: 'q4',
+            estimatedTotalBytes: 30,
+            selectable: true,
+            selected: true,
+            status: 'downloading',
+            files: [
+              { path: 'config.json', sizeBytes: 10, required: true },
+              { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10, required: true },
+              { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10, required: true },
+            ],
+          },
+          {
+            id: 'q4f16',
+            label: 'q4f16',
+            dtype: 'q4f16',
+            estimatedTotalBytes: 30,
+            selectable: true,
+            selected: false,
+            status: 'not-downloaded',
+            files: [
+              { path: 'config.json', sizeBytes: 10, required: true },
+              { path: 'onnx/encoder_model_q4f16.onnx', sizeBytes: 10, required: true },
+              { path: 'onnx/decoder_model_merged_q4f16.onnx', sizeBytes: 10, required: true },
+            ],
+          },
+        ],
+      },
+      files: [
+        { path: 'config.json', sizeBytes: 10, downloadedBytes: 0 },
+        { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10, downloadedBytes: 0 },
+        { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10, downloadedBytes: 0 },
+      ],
+      updatedAt: 90,
+    })
+
+    const service = new LocalModelAssetService({
+      projectDir: tempDir,
+      configManager: {} as ConfigManager,
+      globalSettingsManager: {
+        readSettings: async () => ({
+          translationEngines: {
+            local: {
+              model: modelId,
+              selectedGroupId: 'q4f16',
+              hfEndpoint: 'https://huggingface.co',
+            },
+          },
+        }),
+      },
+      now: () => 100,
+      indexPath,
+      cacheDir,
+      fetchCachePath,
+    }) as TestableLocalModelAssetService
+    vi.spyOn(service, 'getTransformersModule').mockResolvedValue({
+      env: {
+        cacheDir: null,
+        allowLocalModels: false,
+        localModelPath: '',
+      },
+      ModelRegistry: {
+        get_pipeline_files: vi.fn(async (_task, _modelId, options?: { dtype?: string }) =>
+          options?.dtype === 'q4f16'
+            ? ['onnx/encoder_model_q4f16.onnx', 'onnx/decoder_model_merged_q4f16.onnx']
+            : ['onnx/encoder_model_q4.onnx', 'onnx/decoder_model_merged_q4.onnx']
+        ),
+        is_pipeline_cached_files: vi.fn(),
+        get_file_metadata: vi.fn(),
+        clear_cache: vi.fn(),
+      },
+    })
+
+    const state = await service.readSelectedModelState(modelId, 'q4f16')
+
+    expect(state.status).toBe('not-downloaded')
+    expect(state.plan?.groups?.map((group) => [group.id, group.selected, group.status])).toEqual([
+      ['q4', false, 'downloading'],
+      ['q4f16', true, 'not-downloaded'],
+    ])
+  })
+
   it('persists byte-level progress while streaming an Xet-backed file download', async () => {
     hubMock.downloadFile.mockImplementation(async (input: { path: string }) =>
       createMockDownloadBlob(

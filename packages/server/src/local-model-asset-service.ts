@@ -740,6 +740,17 @@ export class LocalModelAssetService {
     const hasProfileSpecificPartialDownload = fileProgress.some(
       (file) => file.profileSpecific && (file.cached || file.downloadedBytes > 0)
     )
+    const matchesPersistedGroup = input.group.id === input.state.plan?.selectedGroupId
+    if (
+      matchesPersistedGroup &&
+      (input.state.status === 'queued' ||
+        input.state.status === 'downloading' ||
+        input.state.status === 'paused' ||
+        input.state.status === 'error' ||
+        input.state.status === 'deleting')
+    ) {
+      return input.state.status
+    }
     if (input.session?.selectedGroupId === input.group.id) {
       if (
         input.state.status === 'queued' ||

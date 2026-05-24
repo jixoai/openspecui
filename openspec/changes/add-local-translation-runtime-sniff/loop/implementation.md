@@ -31,6 +31,10 @@ Completed code work in this implementation pass:
 - Download session teardown is explicitly guarded by session identity. Pausing
   or deleting an active download aborts the stream, and a later-settling old task
   cannot overwrite the paused/deleted server state.
+- Local profile status is now independent from the currently selected profile.
+  Changing `selectedGroupId` only changes which chip is solid and which file list
+  is displayed; it does not erase another profile's `downloading`, `paused`, or
+  `downloaded` status.
 - Document translation availability now resolves project + global translation
   config before rendering document translation controls.
 - Local translator batch translation now calls the underlying pipeline with the
@@ -48,6 +52,8 @@ Focused tests added or updated:
   - paused state surviving a later-settling aborted download stream
   - deleted state surviving a later-settling cancelled download task
   - runtime download plan/file list remaining available after local deletion
+  - a downloading profile remaining `downloading` after another profile is
+    selected before file-level ONNX progress exists
 - Server tRPC transport tests cover:
   - byte-level download progress delivered through a real WebSocket client
   - retryable stream auto-resume progress delivered through a real WebSocket client
@@ -89,7 +95,8 @@ Focused tests added or updated:
   - Passed: 38 tests after lifecycle hardening.
   - Re-run after the Local profile switch regression fix: passed 36 tests.
 - `pnpm --filter @openspecui/server exec vitest run src/local-model-asset-service.test.ts src/local-model-subscription-transport.test.ts`
-  - Passed: 20 tests after lifecycle and subscription BDD coverage.
+  - Passed: 21 tests after lifecycle, subscription, and cross-profile status
+    BDD coverage.
 - `pnpm --filter @openspecui/server exec vitest run src/local-model-asset-service.test.ts src/translation-engine-service.test.ts`
   - Passed: 18 tests.
 - `pnpm --filter @openspecui/core typecheck`
