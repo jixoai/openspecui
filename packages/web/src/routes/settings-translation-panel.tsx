@@ -664,10 +664,9 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     return mergeLocalCatalogItems(nmtLocalOptions, nmtRemoteOptions)
   }, [nmtLocalOptions, nmtRemoteOptions])
   const selectedLocalAsset = localPanelState?.asset ?? null
-  const resolvedLocalDownloadPlan =
-    localPanelState?.downloadPlan ?? selectedLocalAsset?.plan ?? null
-  const nmtDownloadGroups =
-    resolvedLocalDownloadPlan?.groups ?? selectedLocalAsset?.plan?.groups ?? []
+  const serverLocalDownloadPlan = localPanelState?.downloadPlan ?? selectedLocalAsset?.plan ?? null
+  const resolvedLocalDownloadPlan = serverLocalDownloadPlan
+  const nmtDownloadGroups = resolvedLocalDownloadPlan?.groups ?? []
   const selectedLocalGroup = nmtDownloadGroups.find((group) => group.selected) ?? null
   const effectiveLocalSelectedGroupId =
     selectedLocalGroup?.id ??
@@ -1208,7 +1207,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                 </div>
                 <LocalDownloadGroupSelector
                   groups={nmtDownloadGroups}
-                  loading={localPlanLoading && !selectedLocalAsset}
+                  loading={localPlanLoading}
                   disabled={nmtGroupSelectionDisabled}
                   onSelectGroup={(groupId) => {
                     setNmtSelectedGroupId(groupId)
@@ -1227,7 +1226,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                 state={displayedLocalAsset}
                 statusMessage={localDownloadStatusMessage}
                 progressPercent={nmtProgressPercent}
-                loading={localPlanLoading && !selectedLocalAsset}
+                loading={localPlanLoading}
                 error={
                   localPanelError ??
                   (selectedLocalAsset?.status === 'error'

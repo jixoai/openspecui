@@ -3001,6 +3001,21 @@ describe('Settings', () => {
           displayMode: 'direct',
           cacheEnabled: false,
           engineId: 'local',
+          engines: {
+            local: {
+              model: 'Xenova/opus-mt-no-de',
+              selectedGroupId: 'q4',
+            },
+          },
+        },
+      },
+    })
+    useGlobalSettingsSubscriptionMock.mockReturnValue({
+      data: {
+        translationCache: { entryLimit: 10000 },
+        translationEngines: {
+          openai: { baseUrl: '', token: '', model: 'gpt-4.1-mini' },
+          local: { model: 'Xenova/opus-mt-no-de', selectedGroupId: 'q4', hfEndpoint: '' },
         },
       },
     })
@@ -3131,7 +3146,7 @@ describe('Settings', () => {
         label: 'bnb4',
         profile: 'bnb4',
         dtype: 'bnb4',
-        status: 'downloaded' as const,
+        status: 'downloading' as const,
         estimatedTotalBytes: totalBytes(bnb4Files),
         selectable: true,
         selected: false,
@@ -3271,7 +3286,7 @@ describe('Settings', () => {
     expect(q4Chip.className).toContain('border-solid')
     expect(q4Chip.className).toContain('text-emerald-700')
     expect(bnb4Chip.className).toContain('border-dashed')
-    expect(bnb4Chip.className).toContain('text-emerald-700')
+    expect(bnb4Chip.className).toContain('text-sky-700')
     expect(screen.getByText('onnx/encoder_model_q4.onnx')).toBeTruthy()
 
     fireEvent.click(q4f16Chip)
@@ -3287,8 +3302,11 @@ describe('Settings', () => {
     const pendingQ4f16Chip = within(pendingProfileList).getByRole('button', { name: /^q4f16/i })
     const pendingBnb4Chip = within(pendingProfileList).getByRole('button', { name: /^bnb4/i })
     expect(pendingQ4Chip.className).toContain('border-solid')
+    expect(pendingQ4Chip.className).toContain('text-emerald-700')
     expect(pendingQ4f16Chip.className).toContain('border-dashed')
-    expect(pendingBnb4Chip.className).toContain('text-emerald-700')
+    expect(pendingQ4f16Chip.className).toContain('text-emerald-700')
+    expect(pendingBnb4Chip.className).toContain('border-dashed')
+    expect(pendingBnb4Chip.className).toContain('text-sky-700')
     expect(screen.queryByText('Loading model files…')).toBeNull()
     expect(screen.getByText('onnx/encoder_model_q4.onnx')).toBeTruthy()
 
@@ -3311,7 +3329,7 @@ describe('Settings', () => {
     expect(updatedQ4Chip.className).toContain('text-emerald-700')
     expect(updatedQ4f16Chip.className).toContain('text-emerald-700')
     expect(updatedBnb4Chip.className).toContain('border-dashed')
-    expect(updatedBnb4Chip.className).toContain('text-emerald-700')
+    expect(updatedBnb4Chip.className).toContain('text-sky-700')
     expect(screen.getByText('onnx/encoder_model_q4f16.onnx')).toBeTruthy()
   })
 

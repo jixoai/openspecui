@@ -671,9 +671,145 @@ describe('LocalModelAssetService', () => {
 
     expect(state.status).toBe('not-downloaded')
     expect(state.plan?.groups?.map((group) => [group.id, group.selected, group.status])).toEqual([
-      ['q4', false, 'downloading'],
+      ['q4', false, 'paused'],
       ['q4f16', true, 'not-downloaded'],
     ])
+  })
+
+  it('preserves every profile download status when only the selected group changes', async () => {
+    const modelId = 'onnx-community/opus-mt-en-zh'
+    const groups = [
+      {
+        id: 'q4',
+        label: 'q4',
+        dtype: 'q4',
+        status: 'downloaded' as const,
+        files: [
+          { path: 'config.json', sizeBytes: 10, required: true },
+          { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10, required: true },
+          { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10, required: true },
+        ],
+      },
+      {
+        id: 'q4f16',
+        label: 'q4f16',
+        dtype: 'q4f16',
+        status: 'downloaded' as const,
+        files: [
+          { path: 'config.json', sizeBytes: 10, required: true },
+          { path: 'onnx/encoder_model_q4f16.onnx', sizeBytes: 10, required: true },
+          { path: 'onnx/decoder_model_merged_q4f16.onnx', sizeBytes: 10, required: true },
+        ],
+      },
+      {
+        id: 'bnb4',
+        label: 'bnb4',
+        dtype: 'bnb4',
+        status: 'downloading' as const,
+        files: [
+          { path: 'config.json', sizeBytes: 10, required: true },
+          { path: 'onnx/encoder_model_bnb4.onnx', sizeBytes: 10, required: true },
+          { path: 'onnx/decoder_model_merged_bnb4.onnx', sizeBytes: 10, required: true },
+        ],
+      },
+      {
+        id: 'q8',
+        label: 'q8',
+        dtype: 'q8',
+        status: 'downloaded' as const,
+        files: [
+          { path: 'config.json', sizeBytes: 10, required: true },
+          { path: 'onnx/encoder_model_quantized.onnx', sizeBytes: 10, required: true },
+          { path: 'onnx/decoder_model_merged_quantized.onnx', sizeBytes: 10, required: true },
+        ],
+      },
+    ]
+    const fileProgressByPath = new Map<
+      string,
+      { path: string; sizeBytes: number; downloadedBytes: number }
+    >()
+    for (const group of groups) {
+      for (const file of group.files) {
+        fileProgressByPath.set(file.path, {
+          path: file.path,
+          sizeBytes: file.sizeBytes,
+          downloadedBytes: group.status === 'downloaded' ? file.sizeBytes : 0,
+        })
+      }
+    }
+    const store = new LocalModelAssetStore({ indexPath })
+    await store.upsert({
+      modelId,
+      status: 'downloading',
+      selected: true,
+      progress: 0,
+      bytesDownloaded: 0,
+      totalBytes: 30,
+      resumable: true,
+      plan: {
+        modelId,
+        estimatedTotalBytes: 30,
+        selectedGroupId: 'bnb4',
+        files: groups[2].files,
+        groups: groups.map((group) => ({
+          ...group,
+          estimatedTotalBytes: 30,
+          selectable: true,
+          selected: group.id === 'bnb4',
+        })),
+      },
+      files: [...fileProgressByPath.values()],
+      updatedAt: 90,
+    })
+
+    const service = new LocalModelAssetService({
+      projectDir: tempDir,
+      configManager: {} as ConfigManager,
+      globalSettingsManager: {
+        readSettings: async () => ({
+          translationEngines: {
+            local: {
+              model: modelId,
+              selectedGroupId: 'q4f16',
+              hfEndpoint: 'https://huggingface.co',
+            },
+          },
+        }),
+      },
+      now: () => 100,
+      indexPath,
+      cacheDir,
+      fetchCachePath,
+    }) as TestableLocalModelAssetService
+    const getTransformersModuleSpy = vi.spyOn(service, 'getTransformersModule').mockResolvedValue({
+      env: {
+        cacheDir: null,
+        allowLocalModels: false,
+        localModelPath: '',
+      },
+      ModelRegistry: {
+        get_pipeline_files: vi.fn(async (_task, _modelId, options?: { dtype?: string }) => {
+          const group = groups.find((item) => item.dtype === options?.dtype) ?? groups[0]
+          return group.files
+            .filter((file) => file.path.startsWith('onnx/'))
+            .map((file) => file.path)
+        }),
+        is_pipeline_cached_files: vi.fn(),
+        get_file_metadata: vi.fn(),
+        clear_cache: vi.fn(),
+      },
+    })
+
+    const state = await service.readSelectedModelState(modelId, 'q4f16')
+
+    expect(state.status).toBe('downloaded')
+    expect(state.plan?.groups?.map((group) => [group.id, group.selected, group.status])).toEqual([
+      ['q4', false, 'downloaded'],
+      ['q4f16', true, 'downloaded'],
+      ['bnb4', false, 'paused'],
+      ['q8', false, 'downloaded'],
+    ])
+    expect(getTransformersModuleSpy).not.toHaveBeenCalled()
   })
 
   it('persists byte-level progress while streaming an Xet-backed file download', async () => {
@@ -1185,8 +1321,131 @@ describe('LocalModelAssetService', () => {
       { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10, downloadedBytes: 4 },
       { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10, downloadedBytes: 0 },
     ])
-    expect(state.plan?.groups?.map((group) => [group.id, group.status])).toEqual([
-      ['q4', 'paused'],
+    expect(state.plan?.groups?.map((group) => [group.id, group.status])).toEqual([['q4', 'paused']])
+  })
+
+  it('finishes the active profile download even when a different group is selected meanwhile', async () => {
+    const resumeEncoderDownload = createDeferred<void>()
+    let selectedGroupId = 'q4'
+    hubMock.listFiles.mockImplementation(async function* (input?: {
+      fetch?: typeof fetch
+      hubUrl?: string
+    }) {
+      await input?.fetch?.(
+        `${input.hubUrl ?? 'https://huggingface.co'}/api/models/onnx-community/opus-mt-en-zh/tree/main?recursive=true&expand=true`
+      )
+      yield { path: 'config.json', type: 'file', size: 10 }
+      yield { path: 'onnx/encoder_model_q4.onnx', type: 'file', size: 10 }
+      yield { path: 'onnx/decoder_model_merged_q4.onnx', type: 'file', size: 10 }
+      yield { path: 'onnx/encoder_model_q4f16.onnx', type: 'file', size: 10 }
+      yield { path: 'onnx/decoder_model_merged_q4f16.onnx', type: 'file', size: 10 }
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+        if (url.includes('/api/models/') && url.includes('/tree/')) {
+          return Response.json([
+            { path: 'config.json', type: 'file', size: 10 },
+            { path: 'onnx/encoder_model_q4.onnx', type: 'file', size: 10 },
+            { path: 'onnx/decoder_model_merged_q4.onnx', type: 'file', size: 10 },
+            { path: 'onnx/encoder_model_q4f16.onnx', type: 'file', size: 10 },
+            { path: 'onnx/decoder_model_merged_q4f16.onnx', type: 'file', size: 10 },
+          ])
+        }
+        if (url.includes('/resolve/main/onnx/encoder_model_q4.onnx')) {
+          return new Response(
+            new ReadableStream<Uint8Array>({
+              async start(controller) {
+                controller.enqueue(new Uint8Array([1, 2, 3, 4]))
+                await resumeEncoderDownload.promise
+                controller.enqueue(new Uint8Array([5, 6, 7, 8, 9, 10]))
+                controller.close()
+              },
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Length': '10' },
+            }
+          )
+        }
+        if (url.includes('/resolve/main/')) {
+          return new Response(new Uint8Array(10), {
+            status: 200,
+            headers: { 'Content-Length': '10' },
+          })
+        }
+        return new Response(null, { status: 200 })
+      })
+    )
+
+    const service = new LocalModelAssetService({
+      projectDir: tempDir,
+      configManager: {} as ConfigManager,
+      globalSettingsManager: {
+        readSettings: async () => ({
+          translationEngines: {
+            local: {
+              model: 'onnx-community/opus-mt-en-zh',
+              selectedGroupId,
+              hfEndpoint: 'https://huggingface.co',
+            },
+          },
+        }),
+      },
+      now: () => 100,
+      indexPath,
+      cacheDir,
+      fetchCachePath,
+    }) as TestableLocalModelAssetService
+    vi.spyOn(service, 'getTransformersModule').mockResolvedValue({
+      env: {
+        cacheDir: null,
+        allowLocalModels: false,
+        localModelPath: '',
+      },
+      ModelRegistry: {
+        get_pipeline_files: vi.fn(async (_task, _modelId, options?: { dtype?: string }) =>
+          options?.dtype === 'q4f16'
+            ? ['onnx/encoder_model_q4f16.onnx', 'onnx/decoder_model_merged_q4f16.onnx']
+            : ['onnx/encoder_model_q4.onnx', 'onnx/decoder_model_merged_q4.onnx']
+        ),
+        is_pipeline_cached_files: vi.fn(),
+        get_file_metadata: vi.fn(),
+        clear_cache: vi.fn(),
+      },
+    })
+
+    await service.startDownload('onnx-community/opus-mt-en-zh', 'q4')
+    await waitForState(indexPath, (states) =>
+      states.some((entry) =>
+        entry.files?.some(
+          (file) => file.path === 'onnx/encoder_model_q4.onnx' && file.downloadedBytes === 4
+        )
+      )
+    )
+
+    selectedGroupId = 'q4f16'
+    const crossGroupState = await service.readSelectedModelState(
+      'onnx-community/opus-mt-en-zh',
+      'q4f16'
+    )
+    expect(
+      crossGroupState.plan?.groups?.map((group) => [group.id, group.selected, group.status])
+    ).toEqual([
+      ['q4', false, 'downloading'],
+      ['q4f16', true, 'not-downloaded'],
+    ])
+
+    resumeEncoderDownload.resolve()
+    await service.waitForModelTask('onnx-community/opus-mt-en-zh')
+
+    const state = await service.readSelectedModelState('onnx-community/opus-mt-en-zh', 'q4f16')
+    expect(state.status).toBe('not-downloaded')
+    expect(state.plan?.groups?.map((group) => [group.id, group.selected, group.status])).toEqual([
+      ['q4', false, 'downloaded'],
+      ['q4f16', true, 'not-downloaded'],
     ])
   })
 

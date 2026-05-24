@@ -325,9 +325,13 @@ export class LocalModelAssetService {
       session.abortController.abort()
       this.sessions.delete(modelId)
     }
-    const current = await this.readSelectedModelState(modelId)
+    const current = await this.readSelectedModelState(modelId, session?.selectedGroupId)
+    const nextPlan = current.plan
+      ? setDownloadGroupStatus(current.plan, current.plan.selectedGroupId, 'paused')
+      : current.plan
     const nextState = LocalModelAssetStateSchema.parse({
       ...current,
+      plan: nextPlan,
       status: 'paused',
       resumable: true,
       updatedAt: this.now(),
@@ -518,7 +522,11 @@ export class LocalModelAssetService {
   ): Promise<LocalModelAssetState> {
     const requestedGroupId = selectedGroupId
     const session = this.sessions.get(state.modelId)
-    const selected = state.selected || state.modelId === (await this.readSelectedModel())
+    const [selectedModel, persistedSelectedGroupId] = await Promise.all([
+      this.readSelectedModel(),
+      this.readSelectedGroupId(),
+    ])
+    const selected = state.selected || state.modelId === selectedModel
     if (state.status === 'deleting') {
       return LocalModelAssetStateSchema.parse({
         ...state,
@@ -526,12 +534,12 @@ export class LocalModelAssetService {
         updatedAt: this.now(),
       })
     }
-    const transformers = await this.getTransformersModule()
-    transformers.env.remoteHost = buildTransformersRemoteHost(await this.readHuggingFaceEndpoint())
-    const [plan, persistedSelectedGroupId] = await Promise.all([
-      this.readPlan(state.modelId, transformers, requestedGroupId ?? state.plan?.selectedGroupId),
-      this.readSelectedGroupId(),
-    ])
+    const preferredSelectedGroupId =
+      requestedGroupId ?? state.plan?.selectedGroupId ?? persistedSelectedGroupId
+    const persistedPlan = selectPersistedPlanForGroup(state.plan, preferredSelectedGroupId)
+    const plan =
+      persistedPlan ??
+      (await this.readPlanForState(state.modelId, requestedGroupId ?? state.plan?.selectedGroupId))
     if (!plan && state.status !== 'downloaded') {
       return LocalModelAssetStateSchema.parse({
         ...state,
@@ -554,7 +562,7 @@ export class LocalModelAssetService {
       modelId: state.modelId,
       persistedPlan: state.plan ?? fallbackPlan,
       runtimePlan: plan,
-      selectedGroupId: requestedGroupId ?? state.plan?.selectedGroupId ?? persistedSelectedGroupId,
+      selectedGroupId: preferredSelectedGroupId,
     })
     if (!effectivePlan) {
       return LocalModelAssetStateSchema.parse({
@@ -563,10 +571,7 @@ export class LocalModelAssetService {
         plan: undefined,
       })
     }
-    const selectedGroup = selectLocalDownloadGroup(
-      effectivePlan,
-      requestedGroupId ?? state.plan?.selectedGroupId ?? persistedSelectedGroupId
-    )
+    const selectedGroup = selectLocalDownloadGroup(effectivePlan, preferredSelectedGroupId)
     const requestedGroup =
       requestedGroupId && effectivePlan.groups?.length
         ? effectivePlan.groups.find((group) => group.id === requestedGroupId && group.selectable)
@@ -593,7 +598,6 @@ export class LocalModelAssetService {
               group,
               state,
               session,
-              selectedGroupId: selectedGroup?.id ?? effectivePlan.selectedGroupId,
             }),
           }))
         )
@@ -606,10 +610,7 @@ export class LocalModelAssetService {
           }
         : effectivePlan
     const resolvedSelectedGroup =
-      selectLocalDownloadGroup(
-        planWithGroupStatus,
-        requestedGroupId ?? state.plan?.selectedGroupId ?? persistedSelectedGroupId
-      ) ?? selectedGroup
+      selectLocalDownloadGroup(planWithGroupStatus, preferredSelectedGroupId) ?? selectedGroup
     const planFiles = resolvedSelectedGroup?.files ?? planWithGroupStatus.files
     const cacheStatus = await readLocalModelFileStatus({
       cacheDir: this.cacheDir,
@@ -627,7 +628,9 @@ export class LocalModelAssetService {
     const cachedFileSet = new Set(
       cacheStatus.files.filter((file) => file.cached).map((file) => file.file)
     )
-    const runtimeAllCached = cacheStatus.allCached
+    const selectedGroupPersistedStatus = resolvedSelectedGroup?.status
+    const selectedGroupTrustedDownloaded = selectedGroupPersistedStatus === 'downloaded'
+    const runtimeAllCached = cacheStatus.allCached || selectedGroupTrustedDownloaded
     const files = planFiles.map((file) => {
       const cached = cachedFileSet.has(file.path)
       const existingFile = state.files.find((entry) => entry.path === file.path)
@@ -637,7 +640,7 @@ export class LocalModelAssetService {
           ? cached
             ? existingDownloadedBytes
             : existingDownloadedBytes
-          : cached
+          : cached || selectedGroupTrustedDownloaded
             ? file.sizeBytes
             : Math.min(existingDownloadedBytes, file.sizeBytes)
       return {
@@ -665,7 +668,11 @@ export class LocalModelAssetService {
           (file.path.startsWith('onnx/') || file.path.endsWith('.onnx')) &&
           (file.downloadedBytes ?? 0) > 0
       )
-    const status: LocalModelDownloadStatus = runtimeAllCached
+    const selectedGroupStatus =
+      resolvedSelectedGroupId === undefined
+        ? undefined
+        : planWithGroupStatus.groups?.find((group) => group.id === resolvedSelectedGroupId)?.status
+    const detectedStatus: LocalModelDownloadStatus = runtimeAllCached
       ? 'downloaded'
       : selectedGroupMatchesSession
         ? state.status
@@ -676,10 +683,10 @@ export class LocalModelAssetService {
             : hasProfileSpecificPartialCache
               ? 'paused'
               : 'not-downloaded'
-    const reconciledPlan = reconcileSelectedGroupStatus({
+    const status = selectedGroupStatus ?? detectedStatus
+    const reconciledPlan = reconcileSelectedGroupSelection({
       plan: planWithGroupStatus,
       selectedGroupId: resolvedSelectedGroup?.id ?? planWithGroupStatus.selectedGroupId,
-      status,
     })
     return LocalModelAssetStateSchema.parse({
       ...state,
@@ -692,11 +699,14 @@ export class LocalModelAssetService {
         ? state.bytesDownloaded
         : detectedBytesDownloaded,
       error: runtimeAllCached ? undefined : state.error,
-      resumable: runtimeAllCached
-        ? false
-        : (selectedGroupMatchesState && state.status === 'paused') ||
-          (selectedGroupMatchesState && state.status === 'error') ||
-          hasProfileSpecificPartialCache,
+      resumable:
+        status === 'downloaded'
+          ? false
+          : status === 'paused' || status === 'error'
+            ? true
+            : (selectedGroupMatchesState && state.status === 'paused') ||
+              (selectedGroupMatchesState && state.status === 'error') ||
+              hasProfileSpecificPartialCache,
       files,
       updatedAt: this.now(),
       installedAt: runtimeAllCached ? (state.installedAt ?? this.now()) : state.installedAt,
@@ -707,7 +717,6 @@ export class LocalModelAssetService {
     modelId: string
     group: NonNullable<NonNullable<LocalModelAssetState['plan']>['groups']>[number]
     state: LocalModelAssetState
-    selectedGroupId?: string
     session?: DownloadSession
   }): Promise<LocalModelDownloadStatus> {
     if (input.group.files.length === 0 || !input.group.selectable) {
@@ -737,51 +746,22 @@ export class LocalModelAssetService {
     })
     const allComplete = fileProgress.length > 0 && fileProgress.every((file) => file.complete)
     if (cacheStatus.allCached || allComplete) return 'downloaded'
+
+    if (input.group.status === 'downloaded') return 'downloaded'
+
+    const sessionMatchesGroup = input.session?.selectedGroupId === input.group.id
+    if (sessionMatchesGroup && isActiveDownloadStatus(input.state.status)) {
+      return input.state.status
+    }
+
     const hasProfileSpecificPartialDownload = fileProgress.some(
       (file) => file.profileSpecific && (file.cached || file.downloadedBytes > 0)
     )
-    const matchesPersistedGroup = input.group.id === input.state.plan?.selectedGroupId
-    if (
-      matchesPersistedGroup &&
-      (input.state.status === 'queued' ||
-        input.state.status === 'downloading' ||
-        input.state.status === 'paused' ||
-        input.state.status === 'error' ||
-        input.state.status === 'deleting')
-    ) {
-      return input.state.status
+
+    if (input.group.status && input.group.status !== 'not-downloaded') {
+      return normalizePersistedGroupStatus(input.group.status)
     }
-    if (input.session?.selectedGroupId === input.group.id) {
-      if (
-        input.state.status === 'queued' ||
-        input.state.status === 'downloading' ||
-        input.state.status === 'paused' ||
-        input.state.status === 'error' ||
-        input.state.status === 'deleting'
-      ) {
-        return input.state.status
-      }
-    }
-    const matchesSelectedGroup =
-      input.group.id === (input.selectedGroupId ?? input.state.plan?.selectedGroupId)
-    if (
-      matchesSelectedGroup &&
-      (input.state.status === 'queued' ||
-        input.state.status === 'downloading' ||
-        input.state.status === 'paused' ||
-        input.state.status === 'error' ||
-        input.state.status === 'deleting')
-    ) {
-      if (
-        input.state.status === 'paused' ||
-        input.state.status === 'error' ||
-        input.state.status === 'deleting'
-      ) {
-        return input.state.status
-      }
-      if (hasProfileSpecificPartialDownload) return 'paused'
-    }
-    if (matchesSelectedGroup && hasProfileSpecificPartialDownload) return 'paused'
+
     return hasProfileSpecificPartialDownload ? 'paused' : 'not-downloaded'
   }
 
@@ -796,27 +776,46 @@ export class LocalModelAssetService {
     const sessionId = `local-model-${sanitizeId(modelId)}-${this.now()}`
     const abortController = new AbortController()
     this.sessions.set(modelId, { modelId, sessionId, abortController, selectedGroupId })
-    const current = await this.readSelectedModelState(modelId)
+    const current = await this.readSelectedModelState(modelId, selectedGroupId)
     const transformers = await this.getTransformersModule()
-    const plan = await this.readPlan(
+    const runtimePlan = await this.readPlan(
       modelId,
       transformers,
       selectedGroupId ?? current.plan?.selectedGroupId
     )
-    if (!plan || plan.files.length === 0 || plan.estimatedTotalBytes === undefined) {
+    const plan = mergeResolvedDownloadPlan({
+      modelId,
+      persistedPlan: current.plan,
+      runtimePlan,
+      selectedGroupId: selectedGroupId ?? current.plan?.selectedGroupId,
+    })
+    const selectedGroup = selectLocalDownloadGroup(plan, plan?.selectedGroupId)
+    const selectedFiles = selectedGroup?.files ?? plan?.files ?? []
+    const selectedTotalBytes = selectedGroup?.estimatedTotalBytes ?? plan?.estimatedTotalBytes
+    if (!plan || selectedFiles.length === 0 || selectedTotalBytes === undefined) {
       this.sessions.delete(modelId)
       throw new Error('No concrete local model download plan is available.')
     }
-    const totalBytes = plan.estimatedTotalBytes
+    const planWithDownloadStatus = setDownloadGroupStatus(plan, plan.selectedGroupId, targetStatus)
+    const totalBytes = selectedTotalBytes
+    const selectedCacheStatus = await readLocalModelFileStatus({
+      cacheDir: this.cacheDir,
+      modelId,
+      files: selectedFiles.map((file) => file.path),
+    })
+    const selectedCachedFiles = new Set(
+      selectedCacheStatus.files.filter((file) => file.cached).map((file) => file.file)
+    )
     const resumedFiles = buildDownloadStateFiles({
-      planFiles: plan.files,
+      planFiles: selectedFiles,
       currentFiles: current.files,
+      cachedFiles: selectedCachedFiles,
     })
     const resumedBytesDownloaded = sumDownloadedBytes(resumedFiles)
     const nextState = LocalModelAssetStateSchema.parse({
       ...current,
       modelId,
-      plan,
+      plan: planWithDownloadStatus,
       status: targetStatus,
       selected: true,
       bytesDownloaded: resumedBytesDownloaded,
@@ -1023,9 +1022,18 @@ export class LocalModelAssetService {
     message: string
   ): Promise<void> {
     if (!this.isActiveSession(modelId, sessionId)) return
-    const current = await this.readSelectedModelState(modelId)
+    const session = this.sessions.get(modelId)
+    const current = await this.readSelectedModelState(modelId, session?.selectedGroupId)
+    const nextPlan = current.plan
+      ? setDownloadGroupStatus(
+          current.plan,
+          current.plan.selectedGroupId,
+          success ? 'downloaded' : 'error'
+        )
+      : current.plan
     const nextState = LocalModelAssetStateSchema.parse({
       ...current,
+      plan: nextPlan,
       status: success ? 'downloaded' : 'error',
       progress: success ? 1 : current.progress,
       bytesDownloaded: success
@@ -1160,22 +1168,35 @@ export class LocalModelAssetService {
 function buildDownloadStateFiles(input: {
   planFiles: ReadonlyArray<{ path: string; sizeBytes?: number }>
   currentFiles: ReadonlyArray<LocalModelAssetState['files'][number]>
+  cachedFiles?: ReadonlySet<string>
 }): LocalModelAssetState['files'] {
   const currentFileByPath = new Map(input.currentFiles.map((file) => [file.path, file]))
   return input.planFiles.map((file) => {
     const currentFile = currentFileByPath.get(file.path)
     const downloadedBytes = currentFile?.downloadedBytes
+    const cached = input.cachedFiles?.has(file.path) ?? false
     return {
       path: file.path,
       sizeBytes: file.sizeBytes,
       downloadedBytes:
-        downloadedBytes === undefined
-          ? 0
-          : file.sizeBytes === undefined
-            ? downloadedBytes
-            : Math.min(downloadedBytes, file.sizeBytes),
+        cached && file.sizeBytes !== undefined
+          ? file.sizeBytes
+          : downloadedBytes === undefined
+            ? 0
+            : file.sizeBytes === undefined
+              ? downloadedBytes
+              : Math.min(downloadedBytes, file.sizeBytes),
     }
   })
+}
+
+function selectPersistedPlanForGroup(
+  plan: NonNullable<LocalModelAssetState['plan']> | undefined,
+  selectedGroupId?: string
+): NonNullable<LocalModelAssetState['plan']> | null {
+  if (!plan) return null
+  if (!plan.groups?.length || !selectedGroupId) return plan
+  return plan.groups.some((group) => group.id === selectedGroupId && group.selectable) ? plan : null
 }
 
 function mergeResolvedDownloadPlan(input: {
@@ -1279,10 +1300,9 @@ function mergeDownloadPlanFiles<T extends { path: string; sizeBytes?: number; re
   return [...fileByPath.values()]
 }
 
-function reconcileSelectedGroupStatus(input: {
+function reconcileSelectedGroupSelection(input: {
   plan: NonNullable<LocalModelAssetState['plan']>
   selectedGroupId?: string
-  status: LocalModelDownloadStatus
 }): NonNullable<LocalModelAssetState['plan']> {
   if (!input.selectedGroupId || !input.plan.groups?.length) return input.plan
   return {
@@ -1291,9 +1311,38 @@ function reconcileSelectedGroupStatus(input: {
     groups: input.plan.groups.map((group) => ({
       ...group,
       selected: group.id === input.selectedGroupId,
-      status: group.id === input.selectedGroupId ? input.status : group.status,
     })),
   }
+}
+
+function setDownloadGroupStatus(
+  plan: NonNullable<LocalModelAssetState['plan']>,
+  selectedGroupId: string | undefined,
+  status: LocalModelDownloadStatus
+): NonNullable<LocalModelAssetState['plan']> {
+  if (!selectedGroupId || !plan.groups?.length) return plan
+  return {
+    ...plan,
+    groups: plan.groups.map((group) => ({
+      ...group,
+      status: group.id === selectedGroupId ? status : group.status,
+    })),
+  }
+}
+
+function isActiveDownloadStatus(status: LocalModelDownloadStatus): boolean {
+  return (
+    status === 'queued' ||
+    status === 'downloading' ||
+    status === 'paused' ||
+    status === 'error' ||
+    status === 'deleting'
+  )
+}
+
+function normalizePersistedGroupStatus(status: LocalModelDownloadStatus): LocalModelDownloadStatus {
+  if (status === 'queued' || status === 'downloading') return 'paused'
+  return status
 }
 
 function sumDownloadedBytes(files: ReadonlyArray<LocalModelAssetState['files'][number]>): number {
