@@ -50,21 +50,18 @@ import {
   getLocalModelProfileGroupRoot,
 } from './local-model-cache-path.js'
 import { LocalModelFetchCacheStore } from './local-model-fetch-cache-store.js'
-import { LocalModelProfileManifestStore } from './local-model-profile-manifest-store.js'
 import {
   getTransformersFileCacheModelPath,
   getTransformersLocalModelPath,
 } from './local-model-local-cache.js'
+import { LocalModelProfileManifestStore } from './local-model-profile-manifest-store.js'
 import {
   readLocalModelRepositorySnapshot,
   type TransformersRuntimeModule,
 } from './local-model-runtime.js'
 import { ensureProxyAwareFetchDispatcher } from './network-dispatcher.js'
 import { isRetryableNetworkError } from './network-retry.js'
-import {
-  searchLocalModels,
-  searchLocalModelsProgressively,
-} from './translation-model-catalog.js'
+import { searchLocalModels, searchLocalModelsProgressively } from './translation-model-catalog.js'
 
 interface GlobalSettingsManagerLike {
   readSettings(): Promise<{
@@ -302,19 +299,15 @@ export class LocalModelAssetService {
   }
 
   async resumeDownload(modelId: string, groupId?: string): Promise<{ sessionId: string }> {
-    return this.runDownload(
-      modelId,
-      'downloading',
-      'Resuming local model download',
-      groupId
-    )
+    return this.runDownload(modelId, 'downloading', 'Resuming local model download', groupId)
   }
 
   async pauseDownload(modelId: string, groupId?: string): Promise<{ success: true }> {
     const requestedGroupId = groupId ?? (await this.readSelectedGroupId())
     if (!requestedGroupId) return { success: true }
     const current = await this.readSelectedModelState(modelId, requestedGroupId)
-    const effectiveGroupId = current.plan?.selectedGroupId ?? current.selectedGroupId ?? requestedGroupId
+    const effectiveGroupId =
+      current.plan?.selectedGroupId ?? current.selectedGroupId ?? requestedGroupId
     const sessionKey = buildSessionKey(modelId, effectiveGroupId)
     const session = this.sessions.get(sessionKey)
     if (session) {
@@ -363,7 +356,8 @@ export class LocalModelAssetService {
       return { success: true }
     }
     const current = await this.readSelectedModelState(modelId, requestedGroupId)
-    const effectiveGroupId = current.plan?.selectedGroupId ?? current.selectedGroupId ?? requestedGroupId
+    const effectiveGroupId =
+      current.plan?.selectedGroupId ?? current.selectedGroupId ?? requestedGroupId
     const sessionKey = buildSessionKey(modelId, effectiveGroupId)
     const session = this.sessions.get(sessionKey)
     session?.abortController.abort()
@@ -627,8 +621,9 @@ export class LocalModelAssetService {
     ])
     const selected = state.selected || state.modelId === selectedModel
     const selectedGroupIdFromSettings = selectedGroupId ?? persistedSelectedGroupId
-    const manifest =
+    const manifest = filterConcreteProfileManifest(
       state.profileManifest ?? (await this.profileManifestStore.read(state.modelId)) ?? undefined
+    )
     const migrated = migrateLegacyStateToGroups(state, manifest, this.now())
     const manifestWithHistoricalGroups = mergeHistoricalGroupsIntoManifest({
       cacheDir: this.cacheDir,
@@ -734,9 +729,9 @@ export class LocalModelAssetService {
           ? 'error'
           : current?.status === 'paused'
             ? 'paused'
-          : hasPartial
-            ? 'paused'
-            : 'not-downloaded'
+            : hasPartial
+              ? 'paused'
+              : 'not-downloaded'
       nextGroupsState[groupId] = LocalModelLifecycleGroupStateSchema.parse({
         ...current,
         groupId,
@@ -746,10 +741,13 @@ export class LocalModelAssetService {
         bytesDownloaded,
         totalBytes,
         progress:
-          totalBytes && totalBytes > 0 ? Math.max(0, Math.min(1, bytesDownloaded / totalBytes)) : undefined,
+          totalBytes && totalBytes > 0
+            ? Math.max(0, Math.min(1, bytesDownloaded / totalBytes))
+            : undefined,
         resumable: status === 'paused' || status === 'error',
         error: status === 'error' ? current?.error : undefined,
-        installedAt: status === 'downloaded' ? (current?.installedAt ?? this.now()) : current?.installedAt,
+        installedAt:
+          status === 'downloaded' ? (current?.installedAt ?? this.now()) : current?.installedAt,
         updatedAt: this.now(),
         files,
       })
@@ -776,7 +774,11 @@ export class LocalModelAssetService {
     this.sessions.set(sessionKey, { modelId, sessionId, abortController, groupId: resolvedGroupId })
     const current = await this.readSelectedModelState(modelId, resolvedGroupId)
     const manifestGroup = manifest.groups[resolvedGroupId]
-    if (!manifestGroup || manifestGroup.files.length === 0 || manifestGroup.estimatedTotalBytes === undefined) {
+    if (
+      !manifestGroup ||
+      manifestGroup.files.length === 0 ||
+      manifestGroup.estimatedTotalBytes === undefined
+    ) {
       this.sessions.delete(sessionKey)
       throw new Error('No concrete local model download plan is available.')
     }
@@ -842,7 +844,7 @@ export class LocalModelAssetService {
         if (this.sessionTasks.get(sessionKey) === task) {
           this.sessionTasks.delete(sessionKey)
         }
-    })
+      })
     this.sessionTasks.set(sessionKey, task)
     return { sessionId }
   }
@@ -880,7 +882,7 @@ export class LocalModelAssetService {
         id: groupId,
         baseGroupId: group.id,
         label: group.label,
-        displayLabel: `${group.label} ${formatBytes(group.estimatedTotalBytes)} · ${snapshot.shortCommitHash}`,
+        displayLabel: group.label,
         description: group.description,
         profile: group.profile,
         dtype: group.dtype,
@@ -988,7 +990,10 @@ export class LocalModelAssetService {
             sizeBytes: file.sizeBytes,
             downloadedBytes: boundedFileBytes,
             required: file.required,
-            status: boundedFileBytes >= (file.sizeBytes ?? Number.POSITIVE_INFINITY) ? 'downloaded' : 'downloading',
+            status:
+              boundedFileBytes >= (file.sizeBytes ?? Number.POSITIVE_INFINITY)
+                ? 'downloaded'
+                : 'downloading',
           }
           await this.emitDownloadProgress({
             modelId,
@@ -1290,8 +1295,7 @@ function migrateLegacyStateToGroups(
             ...file,
             required: true,
             status:
-              file.sizeBytes !== undefined &&
-              (file.downloadedBytes ?? 0) >= file.sizeBytes
+              file.sizeBytes !== undefined && (file.downloadedBytes ?? 0) >= file.sizeBytes
                 ? 'downloaded'
                 : normalizeLiveStatusForStoredState(groupStatus),
           }))
@@ -1349,8 +1353,7 @@ function migrateLegacyStateToGroups(
           ...file,
           required: true,
           status:
-            file.sizeBytes !== undefined &&
-            (file.downloadedBytes ?? 0) >= file.sizeBytes
+            file.sizeBytes !== undefined && (file.downloadedBytes ?? 0) >= file.sizeBytes
               ? 'downloaded'
               : state.status === 'downloaded'
                 ? 'downloaded'
@@ -1379,17 +1382,20 @@ function mergeHistoricalGroupsIntoManifest(input: {
   const fallbackGroups = input.fallbackPlan?.groups ?? []
   for (const fallbackGroup of fallbackGroups) {
     if (groups[fallbackGroup.id]) continue
+    if (
+      !isConcreteCommitHash(fallbackGroup.commitHash) ||
+      !isConcreteCommitHash(fallbackGroup.shortCommitHash)
+    ) {
+      continue
+    }
     const state = input.groupsState[fallbackGroup.id]
-    const commitHash = fallbackGroup.commitHash ?? 'legacy'
-    const shortCommitHash = fallbackGroup.shortCommitHash ?? 'legacy'
+    const commitHash = fallbackGroup.commitHash
+    const shortCommitHash = fallbackGroup.shortCommitHash
     groups[fallbackGroup.id] = {
       id: fallbackGroup.id,
       baseGroupId: fallbackGroup.baseGroupId ?? fallbackGroup.id,
       label: fallbackGroup.label,
-      displayLabel:
-        fallbackGroup.shortCommitHash && !fallbackGroup.label.includes(fallbackGroup.shortCommitHash)
-          ? `${fallbackGroup.label} · ${fallbackGroup.shortCommitHash}`
-          : fallbackGroup.label,
+      displayLabel: `${fallbackGroup.label} · ${shortCommitHash}`,
       description: fallbackGroup.description,
       profile: fallbackGroup.profile,
       dtype: fallbackGroup.dtype,
@@ -1403,7 +1409,7 @@ function mergeHistoricalGroupsIntoManifest(input: {
       selectable: fallbackGroup.selectable,
       files: fallbackGroup.files.map((file) => ({
         ...file,
-        revision: file.revision ?? (commitHash === 'legacy' ? undefined : commitHash),
+        revision: file.revision ?? commitHash,
       })),
     }
     groupOrder.push(fallbackGroup.id)
@@ -1424,25 +1430,58 @@ function mergeHistoricalGroupsIntoManifest(input: {
   })
 }
 
+function filterConcreteProfileManifest(
+  manifest: LocalModelProfileManifest | undefined
+): LocalModelProfileManifest | undefined {
+  if (!manifest || !isConcreteCommitHash(manifest.commitHash)) return undefined
+  const groups = Object.fromEntries(
+    manifest.groupOrder.flatMap((groupId) => {
+      const group = manifest.groups[groupId]
+      if (!group || !isConcreteCommitHash(group.commitHash)) return []
+      return [[groupId, group] as const]
+    })
+  )
+  const groupOrder = manifest.groupOrder.filter((groupId) => groups[groupId])
+  if (groupOrder.length === 0) return undefined
+  return LocalModelProfileManifestSchema.parse({
+    ...manifest,
+    groups,
+    groupOrder,
+  })
+}
+
+function isConcreteCommitHash(value: string | undefined): value is string {
+  return Boolean(value && value !== 'legacy')
+}
+
+function formatManifestGroupChipLabel(
+  manifest: LocalModelProfileManifest,
+  group: LocalModelProfileManifestGroup
+): string {
+  if (group.commitHash === manifest.commitHash) return group.label
+  return `${group.label} · ${group.shortCommitHash}`
+}
+
 function buildPlanFromManifest(input: {
   modelId: string
   manifest: LocalModelProfileManifest | undefined
   groupsState: LocalModelAssetState['groupsState']
   selectedGroupId?: string
 }): TranslationModelDownloadPlan | null {
-  if (!input.manifest) return null
+  const manifest = input.manifest
+  if (!manifest) return null
   const selectedGroupId =
-    input.selectedGroupId && input.manifest.groups[input.selectedGroupId]?.selectable
+    input.selectedGroupId && manifest.groups[input.selectedGroupId]?.selectable
       ? input.selectedGroupId
-      : selectFirstManifestGroupId(input.manifest)
-  const groups = input.manifest.groupOrder.flatMap((groupId): TranslationDownloadGroupPlan[] => {
-    const manifestGroup = input.manifest?.groups[groupId]
+      : selectFirstManifestGroupId(manifest)
+  const groups = manifest.groupOrder.flatMap((groupId): TranslationDownloadGroupPlan[] => {
+    const manifestGroup = manifest.groups[groupId]
     if (!manifestGroup) return []
     const groupState = input.groupsState[groupId]
     return [
       {
         id: manifestGroup.id,
-        label: manifestGroup.displayLabel,
+        label: formatManifestGroupChipLabel(manifest, manifestGroup),
         description: manifestGroup.description,
         profile: manifestGroup.profile,
         dtype: manifestGroup.dtype,
@@ -1493,7 +1532,7 @@ function reconcileGroupFiles(input: {
     const status =
       file.sizeBytes !== undefined && downloadedBytes >= file.sizeBytes
         ? 'downloaded'
-        : current?.status ?? 'not-downloaded'
+        : (current?.status ?? 'not-downloaded')
     return LocalModelLifecycleFileStateSchema.parse({
       path: file.path,
       sizeBytes: file.sizeBytes,
@@ -1542,14 +1581,12 @@ async function reconcileGroupFilesFromDisk(input: {
 }
 
 function isActiveDownloadStatus(status: LocalModelDownloadStatus): boolean {
-  return (
-    status === 'queued' ||
-    status === 'downloading' ||
-    status === 'deleting'
-  )
+  return status === 'queued' || status === 'downloading' || status === 'deleting'
 }
 
-function normalizeLiveStatusForStoredState(status: LocalModelDownloadStatus): LocalModelDownloadStatus {
+function normalizeLiveStatusForStoredState(
+  status: LocalModelDownloadStatus
+): LocalModelDownloadStatus {
   if (status === 'queued' || status === 'downloading') return 'paused'
   return status
 }

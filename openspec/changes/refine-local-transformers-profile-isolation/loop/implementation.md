@@ -48,6 +48,12 @@ Implemented execution order:
    - Add web tests for chip colors, refresh states, delete selection clearing, and document generation invalidation.
    - Run focused typecheck and tests listed in research-plan.
 
+8. Legacy/mock profile truth cleanup
+   - Reject persisted `legacy` profile manifests and fallback plan groups as concrete Local-Transformers profile truth.
+   - Require historical fallback groups to carry a real commit hash before they can be projected into a manifest.
+   - Project chip labels from manifest truth at read time: current commit labels stay concise, historical commit labels append the short hash.
+   - Keep model/file sizes as structured fields for the UI instead of embedding size text into chip labels.
+
 ## Completion Evidence
 
 - Local verification passed:
@@ -69,6 +75,12 @@ Implemented execution order:
   - Core watcher tests await asynchronous watcher teardown.
   - Local model progress streaming test uses a controlled stream gate instead of a timing window.
   - Server Vitest now runs test files serially because server tests stub process-global `fetch` and start real local servers.
+- Additional focused verification after legacy/mock profile cleanup:
+  - `pnpm --filter @openspecui/server test -- src/local-model-asset-service.test.ts --runInBand`
+  - `pnpm --filter @openspecui/server typecheck`
+  - `pnpm --filter @openspecui/web exec vitest run src/routes/settings.test.tsx --project unit`
+  - `pnpm format:check`
+  - Direct service projection against the developer's local cache no longer returns `q4 · legacy 30 B`; current profile chip labels no longer include short commit hashes.
 
 ## Decisions Taken
 
@@ -79,6 +91,8 @@ Implemented execution order:
 - Created profile downloads must use full commit hash as Hugging Face `revision`; `main` is only for search/refresh.
 - Local profile folder/group identity is versioned, e.g. `q4-abcdef`.
 - Old local profiles remain usable/manageable after refresh.
+- `legacy` is not a commit hash. Cached manifests or fallback plan groups marked `legacy` are discarded from Local-Transformers profile truth rather than surfaced as chips.
+- Current profile chips do not display short commit hashes by default; only historical profiles append the short hash to disambiguate them from the latest profile.
 - No `stale` or `needs-refresh` lifecycle status will be added.
 - Multiple group downloads are allowed concurrently.
 - Deleting in-use groups is allowed, but it aborts related references/tasks first.

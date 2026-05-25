@@ -1,4 +1,10 @@
-import type { ConfigManager } from '@openspecui/core'
+import {
+  LocalModelLifecycleGroupStateSchema,
+  LocalModelProfileManifestSchema,
+  type ConfigManager,
+  type LocalModelDownloadStatus,
+  type LocalModelProfileManifest,
+} from '@openspecui/core'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -20,6 +26,8 @@ vi.mock('@huggingface/hub', () => hubMock)
 const TEST_COMMIT_HASH = 'abcdef1234567890abcdef1234567890abcdef12'
 const TEST_SHORT_COMMIT_HASH = TEST_COMMIT_HASH.slice(0, 6)
 const TEST_GROUP_Q4 = `q4-${TEST_SHORT_COMMIT_HASH}`
+const TEST_GROUP_Q4F16 = `q4f16-${TEST_SHORT_COMMIT_HASH}`
+const TEST_GROUP_BNB4 = `bnb4-${TEST_SHORT_COMMIT_HASH}`
 const TEST_GROUP_Q8 = `q8-${TEST_SHORT_COMMIT_HASH}`
 
 function testRepositoryFile(path: string, size: number) {
@@ -33,6 +41,102 @@ function testRepositoryFile(path: string, size: number) {
       size,
     },
   }
+}
+
+type TestProfileFile = {
+  path: string
+  sizeBytes: number
+  required?: boolean
+}
+
+function testProfileManifest(input: {
+  modelId: string
+  cacheDir: string
+  groups: ReadonlyArray<{
+    id: string
+    baseGroupId: string
+    label: string
+    dtype: string
+    files: ReadonlyArray<TestProfileFile>
+    commitHash?: string
+    shortCommitHash?: string
+    displayLabel?: string
+  }>
+  commitHash?: string
+  shortCommitHash?: string
+}): LocalModelProfileManifest {
+  const commitHash = input.commitHash ?? TEST_COMMIT_HASH
+  const shortCommitHash = input.shortCommitHash ?? TEST_SHORT_COMMIT_HASH
+  return LocalModelProfileManifestSchema.parse({
+    modelId: input.modelId,
+    source: 'huggingface',
+    endpoint: 'https://huggingface.co',
+    revision: 'main',
+    commitHash,
+    shortCommitHash,
+    fetchedAt: 80,
+    updatedAt: 80,
+    groups: Object.fromEntries(
+      input.groups.map((group) => {
+        const groupCommitHash = group.commitHash ?? commitHash
+        return [
+          group.id,
+          {
+            id: group.id,
+            baseGroupId: group.baseGroupId,
+            label: group.label,
+            displayLabel: group.displayLabel ?? group.label,
+            profile: group.baseGroupId,
+            dtype: group.dtype,
+            commitHash: groupCommitHash,
+            shortCommitHash: group.shortCommitHash ?? groupCommitHash.slice(0, 6),
+            rootDir: getLocalModelProfileGroupRoot(input.cacheDir, input.modelId, group.id),
+            estimatedTotalBytes: sumTestProfileFiles(group.files),
+            selectable: true,
+            files: group.files.map((file) => ({
+              ...file,
+              required: file.required ?? true,
+              revision: groupCommitHash,
+            })),
+          },
+        ] as const
+      })
+    ),
+    groupOrder: input.groups.map((group) => group.id),
+  })
+}
+
+function testGroupState(input: {
+  groupId: string
+  baseGroupId: string
+  status: LocalModelDownloadStatus
+  rootDir: string
+  files: ReadonlyArray<TestProfileFile>
+}) {
+  const totalBytes = sumTestProfileFiles(input.files)
+  const bytesDownloaded = input.status === 'downloaded' ? totalBytes : 0
+  return LocalModelLifecycleGroupStateSchema.parse({
+    groupId: input.groupId,
+    baseGroupId: input.baseGroupId,
+    status: input.status,
+    rootDir: input.rootDir,
+    bytesDownloaded,
+    totalBytes,
+    progress: totalBytes > 0 ? bytesDownloaded / totalBytes : undefined,
+    resumable:
+      input.status === 'paused' || input.status === 'downloading' || input.status === 'error',
+    files: input.files.map((file) => ({
+      path: file.path,
+      sizeBytes: file.sizeBytes,
+      downloadedBytes: input.status === 'downloaded' ? file.sizeBytes : 0,
+      required: file.required ?? true,
+      status: input.status === 'downloaded' ? 'downloaded' : input.status,
+    })),
+  })
+}
+
+function sumTestProfileFiles(files: ReadonlyArray<TestProfileFile>): number {
+  return files.reduce((total, file) => total + file.sizeBytes, 0)
 }
 
 type TestableLocalModelAssetService = LocalModelAssetService & {
@@ -542,54 +646,55 @@ describe('LocalModelAssetService', () => {
 
   it('keeps active profile download status after another group is selected before file progress exists', async () => {
     const modelId = 'onnx-community/opus-mt-en-zh'
+    const q4Files = [
+      { path: 'config.json', sizeBytes: 10 },
+      { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10 },
+      { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10 },
+    ]
+    const q4f16Files = [
+      { path: 'config.json', sizeBytes: 10 },
+      { path: 'onnx/encoder_model_q4f16.onnx', sizeBytes: 10 },
+      { path: 'onnx/decoder_model_merged_q4f16.onnx', sizeBytes: 10 },
+    ]
+    const profileManifest = testProfileManifest({
+      modelId,
+      cacheDir,
+      groups: [
+        {
+          id: TEST_GROUP_Q4,
+          baseGroupId: 'q4',
+          label: 'q4',
+          dtype: 'q4',
+          files: q4Files,
+        },
+        {
+          id: TEST_GROUP_Q4F16,
+          baseGroupId: 'q4f16',
+          label: 'q4f16',
+          dtype: 'q4f16',
+          files: q4f16Files,
+        },
+      ],
+    })
     const store = new LocalModelAssetStore({ indexPath })
     await store.upsert({
       modelId,
-      status: 'downloading',
+      status: 'paused',
       selected: true,
       progress: 0,
       bytesDownloaded: 0,
       totalBytes: 30,
       resumable: true,
-      plan: {
-        modelId,
-        estimatedTotalBytes: 30,
-        selectedGroupId: 'q4',
-        files: [
-          { path: 'config.json', sizeBytes: 10, required: true },
-          { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10, required: true },
-          { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10, required: true },
-        ],
-        groups: [
-          {
-            id: 'q4',
-            label: 'q4',
-            dtype: 'q4',
-            estimatedTotalBytes: 30,
-            selectable: true,
-            selected: true,
-            status: 'downloading',
-            files: [
-              { path: 'config.json', sizeBytes: 10, required: true },
-              { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10, required: true },
-              { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10, required: true },
-            ],
-          },
-          {
-            id: 'q4f16',
-            label: 'q4f16',
-            dtype: 'q4f16',
-            estimatedTotalBytes: 30,
-            selectable: true,
-            selected: false,
-            status: 'not-downloaded',
-            files: [
-              { path: 'config.json', sizeBytes: 10, required: true },
-              { path: 'onnx/encoder_model_q4f16.onnx', sizeBytes: 10, required: true },
-              { path: 'onnx/decoder_model_merged_q4f16.onnx', sizeBytes: 10, required: true },
-            ],
-          },
-        ],
+      selectedGroupId: TEST_GROUP_Q4,
+      profileManifest,
+      groupsState: {
+        [TEST_GROUP_Q4]: testGroupState({
+          groupId: TEST_GROUP_Q4,
+          baseGroupId: 'q4',
+          status: 'paused',
+          rootDir: profileManifest.groups[TEST_GROUP_Q4].rootDir,
+          files: q4Files,
+        }),
       },
       files: [
         { path: 'config.json', sizeBytes: 10, downloadedBytes: 0 },
@@ -607,7 +712,7 @@ describe('LocalModelAssetService', () => {
           translationEngines: {
             local: {
               model: modelId,
-              selectedGroupId: 'q4f16',
+              selectedGroupId: TEST_GROUP_Q4F16,
               hfEndpoint: 'https://huggingface.co',
             },
           },
@@ -637,7 +742,7 @@ describe('LocalModelAssetService', () => {
       },
     })
 
-    const state = await service.readSelectedModelState(modelId, 'q4f16')
+    const state = await service.readSelectedModelState(modelId, TEST_GROUP_Q4F16)
 
     expect(state.status).toBe('not-downloaded')
     expect(
@@ -648,89 +753,51 @@ describe('LocalModelAssetService', () => {
     ])
   })
 
-  it('preserves every profile download status when only the selected group changes', async () => {
+  it('does not surface legacy fallback plan groups as concrete profile chips', async () => {
     const modelId = 'onnx-community/opus-mt-en-zh'
-    const groups = [
-      {
-        id: 'q4',
-        label: 'q4',
-        dtype: 'q4',
-        status: 'downloaded' as const,
+    const store = new LocalModelAssetStore({ indexPath })
+    await store.upsert({
+      modelId,
+      status: 'downloaded',
+      selected: true,
+      progress: 1,
+      bytesDownloaded: 30,
+      totalBytes: 30,
+      resumable: false,
+      selectedGroupId: 'q4',
+      plan: {
+        modelId,
+        estimatedTotalBytes: 30,
+        selectedGroupId: 'q4',
         files: [
           { path: 'config.json', sizeBytes: 10, required: true },
           { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10, required: true },
           { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10, required: true },
         ],
-      },
-      {
-        id: 'q4f16',
-        label: 'q4f16',
-        dtype: 'q4f16',
-        status: 'downloaded' as const,
-        files: [
-          { path: 'config.json', sizeBytes: 10, required: true },
-          { path: 'onnx/encoder_model_q4f16.onnx', sizeBytes: 10, required: true },
-          { path: 'onnx/decoder_model_merged_q4f16.onnx', sizeBytes: 10, required: true },
+        groups: [
+          {
+            id: 'q4',
+            label: 'q4 · legacy',
+            dtype: 'q4',
+            commitHash: 'legacy',
+            shortCommitHash: 'legacy',
+            estimatedTotalBytes: 30,
+            selectable: true,
+            selected: true,
+            status: 'downloaded',
+            files: [
+              { path: 'config.json', sizeBytes: 10, required: true },
+              { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10, required: true },
+              { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10, required: true },
+            ],
+          },
         ],
       },
-      {
-        id: 'bnb4',
-        label: 'bnb4',
-        dtype: 'bnb4',
-        status: 'downloading' as const,
-        files: [
-          { path: 'config.json', sizeBytes: 10, required: true },
-          { path: 'onnx/encoder_model_bnb4.onnx', sizeBytes: 10, required: true },
-          { path: 'onnx/decoder_model_merged_bnb4.onnx', sizeBytes: 10, required: true },
-        ],
-      },
-      {
-        id: 'q8',
-        label: 'q8',
-        dtype: 'q8',
-        status: 'downloaded' as const,
-        files: [
-          { path: 'config.json', sizeBytes: 10, required: true },
-          { path: 'onnx/encoder_model_quantized.onnx', sizeBytes: 10, required: true },
-          { path: 'onnx/decoder_model_merged_quantized.onnx', sizeBytes: 10, required: true },
-        ],
-      },
-    ]
-    const fileProgressByPath = new Map<
-      string,
-      { path: string; sizeBytes: number; downloadedBytes: number }
-    >()
-    for (const group of groups) {
-      for (const file of group.files) {
-        fileProgressByPath.set(file.path, {
-          path: file.path,
-          sizeBytes: file.sizeBytes,
-          downloadedBytes: group.status === 'downloaded' ? file.sizeBytes : 0,
-        })
-      }
-    }
-    const store = new LocalModelAssetStore({ indexPath })
-    await store.upsert({
-      modelId,
-      status: 'downloading',
-      selected: true,
-      progress: 0,
-      bytesDownloaded: 0,
-      totalBytes: 30,
-      resumable: true,
-      plan: {
-        modelId,
-        estimatedTotalBytes: 30,
-        selectedGroupId: 'bnb4',
-        files: groups[2].files,
-        groups: groups.map((group) => ({
-          ...group,
-          estimatedTotalBytes: 30,
-          selectable: true,
-          selected: group.id === 'bnb4',
-        })),
-      },
-      files: [...fileProgressByPath.values()],
+      files: [
+        { path: 'config.json', sizeBytes: 10, downloadedBytes: 10 },
+        { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10, downloadedBytes: 10 },
+        { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10, downloadedBytes: 10 },
+      ],
       updatedAt: 90,
     })
 
@@ -742,7 +809,203 @@ describe('LocalModelAssetService', () => {
           translationEngines: {
             local: {
               model: modelId,
-              selectedGroupId: 'q4f16',
+              selectedGroupId: 'q4',
+              hfEndpoint: 'https://huggingface.co',
+            },
+          },
+        }),
+      },
+      now: () => 100,
+      indexPath,
+      profileManifestPath,
+      cacheDir,
+      fetchCachePath,
+    }) as TestableLocalModelAssetService
+
+    const state = await service.readSelectedModelState(modelId, 'q4')
+
+    expect(state.profileManifest).toBeUndefined()
+    expect(state.plan).toBeUndefined()
+    expect(state.files).toEqual([])
+    expect(state.status).toBe('not-downloaded')
+  })
+
+  it('shows short commit hash only for historical profile chips', async () => {
+    const modelId = 'onnx-community/opus-mt-en-zh'
+    const previousCommitHash = '1234567890abcdef1234567890abcdef12345678'
+    const profileManifest = testProfileManifest({
+      modelId,
+      cacheDir,
+      groups: [
+        {
+          id: TEST_GROUP_Q4,
+          baseGroupId: 'q4',
+          label: 'q4',
+          dtype: 'q4',
+          files: [
+            { path: 'config.json', sizeBytes: 10 },
+            { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10 },
+            { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10 },
+          ],
+        },
+        {
+          id: 'q4-123456',
+          baseGroupId: 'q4',
+          label: 'q4',
+          dtype: 'q4',
+          commitHash: previousCommitHash,
+          shortCommitHash: previousCommitHash.slice(0, 6),
+          displayLabel: 'q4 30 B · 123456',
+          files: [
+            { path: 'config.json', sizeBytes: 10 },
+            { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10 },
+            { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10 },
+          ],
+        },
+      ],
+    })
+    const store = new LocalModelAssetStore({ indexPath })
+    await store.upsert({
+      modelId,
+      status: 'not-downloaded',
+      selected: true,
+      selectedGroupId: TEST_GROUP_Q4,
+      profileManifest,
+      updatedAt: 90,
+    })
+
+    const service = new LocalModelAssetService({
+      projectDir: tempDir,
+      configManager: {} as ConfigManager,
+      globalSettingsManager: {
+        readSettings: async () => ({
+          translationEngines: {
+            local: {
+              model: modelId,
+              selectedGroupId: TEST_GROUP_Q4,
+              hfEndpoint: 'https://huggingface.co',
+            },
+          },
+        }),
+      },
+      now: () => 100,
+      indexPath,
+      profileManifestPath,
+      cacheDir,
+      fetchCachePath,
+    }) as TestableLocalModelAssetService
+
+    const state = await service.readSelectedModelState(modelId, TEST_GROUP_Q4)
+
+    expect(state.plan?.groups?.map((group) => [group.id, group.label])).toEqual([
+      [TEST_GROUP_Q4, 'q4'],
+      ['q4-123456', 'q4 · 123456'],
+    ])
+  })
+
+  it('preserves every profile download status when only the selected group changes', async () => {
+    const modelId = 'onnx-community/opus-mt-en-zh'
+    const groups = [
+      {
+        id: TEST_GROUP_Q4,
+        baseGroupId: 'q4',
+        label: 'q4',
+        dtype: 'q4',
+        status: 'downloaded' as const,
+        files: [
+          { path: 'config.json', sizeBytes: 10, required: true },
+          { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10, required: true },
+          { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10, required: true },
+        ],
+      },
+      {
+        id: TEST_GROUP_Q4F16,
+        baseGroupId: 'q4f16',
+        label: 'q4f16',
+        dtype: 'q4f16',
+        status: 'downloaded' as const,
+        files: [
+          { path: 'config.json', sizeBytes: 10, required: true },
+          { path: 'onnx/encoder_model_q4f16.onnx', sizeBytes: 10, required: true },
+          { path: 'onnx/decoder_model_merged_q4f16.onnx', sizeBytes: 10, required: true },
+        ],
+      },
+      {
+        id: TEST_GROUP_BNB4,
+        baseGroupId: 'bnb4',
+        label: 'bnb4',
+        dtype: 'bnb4',
+        status: 'paused' as const,
+        files: [
+          { path: 'config.json', sizeBytes: 10, required: true },
+          { path: 'onnx/encoder_model_bnb4.onnx', sizeBytes: 10, required: true },
+          { path: 'onnx/decoder_model_merged_bnb4.onnx', sizeBytes: 10, required: true },
+        ],
+      },
+      {
+        id: TEST_GROUP_Q8,
+        baseGroupId: 'q8',
+        label: 'q8',
+        dtype: 'q8',
+        status: 'downloaded' as const,
+        files: [
+          { path: 'config.json', sizeBytes: 10, required: true },
+          { path: 'onnx/encoder_model_quantized.onnx', sizeBytes: 10, required: true },
+          { path: 'onnx/decoder_model_merged_quantized.onnx', sizeBytes: 10, required: true },
+        ],
+      },
+    ]
+    const profileManifest = testProfileManifest({
+      modelId,
+      cacheDir,
+      groups: groups.map((group) => ({
+        id: group.id,
+        baseGroupId: group.baseGroupId,
+        label: group.label,
+        dtype: group.dtype,
+        files: group.files,
+      })),
+    })
+    const store = new LocalModelAssetStore({ indexPath })
+    await store.upsert({
+      modelId,
+      status: 'downloaded',
+      selected: true,
+      progress: 1,
+      bytesDownloaded: 30,
+      totalBytes: 30,
+      resumable: false,
+      selectedGroupId: TEST_GROUP_BNB4,
+      profileManifest,
+      groupsState: Object.fromEntries(
+        groups.map((group) => [
+          group.id,
+          testGroupState({
+            groupId: group.id,
+            baseGroupId: group.baseGroupId,
+            status: group.status,
+            rootDir: profileManifest.groups[group.id].rootDir,
+            files: group.files,
+          }),
+        ])
+      ),
+      files: groups[2].files.map((file) => ({
+        path: file.path,
+        sizeBytes: file.sizeBytes,
+        downloadedBytes: 0,
+      })),
+      updatedAt: 90,
+    })
+
+    const service = new LocalModelAssetService({
+      projectDir: tempDir,
+      configManager: {} as ConfigManager,
+      globalSettingsManager: {
+        readSettings: async () => ({
+          translationEngines: {
+            local: {
+              model: modelId,
+              selectedGroupId: TEST_GROUP_Q4F16,
               hfEndpoint: 'https://huggingface.co',
             },
           },
@@ -773,7 +1036,7 @@ describe('LocalModelAssetService', () => {
       },
     })
 
-    const state = await service.readSelectedModelState(modelId, 'q4f16')
+    const state = await service.readSelectedModelState(modelId, TEST_GROUP_Q4F16)
 
     expect(state.status).toBe('downloaded')
     expect(
