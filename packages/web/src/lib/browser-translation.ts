@@ -44,7 +44,10 @@ import {
   createTranslationAdaptiveConcurrencyScopeKey,
   readRecentTranslationAdaptiveConcurrencyLogs,
 } from './translation-adaptive-concurrency-log'
-import { SUPPORTED_TRANSLATION_LANGUAGES } from './translation-languages'
+import {
+  SUPPORTED_TRANSLATION_LANGUAGES,
+  type TranslationLanguageCode,
+} from './translation-languages'
 
 export type {
   BrowserTranslationAvailability,
@@ -164,8 +167,11 @@ const DEFAULT_SOURCE_LANGUAGE = 'en'
 const DOCUMENT_LANGUAGE_CONFIDENCE_THRESHOLD = 0.45
 const SEGMENT_LANGUAGE_CONFIDENCE_THRESHOLD = 0.62
 const TRANSLATION_DISPLAY_POLICY_VERSION = TRANSLATION_CACHE_POLICY_VERSION
-const BROWSER_SOURCE_LANGUAGE_ORDER = new Map(
+const BROWSER_SOURCE_LANGUAGE_ORDER: ReadonlyMap<TranslationLanguageCode, number> = new Map(
   SUPPORTED_TRANSLATION_LANGUAGES.map((language, index) => [language.code, index] as const)
+)
+const SUPPORTED_TRANSLATION_LANGUAGE_CODES: ReadonlySet<string> = new Set(
+  SUPPORTED_TRANSLATION_LANGUAGES.map((language) => language.code)
 )
 
 export function isBrowserTranslationSupported(): boolean {
@@ -491,15 +497,24 @@ function sortBrowserSupportRows(
   rows: readonly BrowserTranslationAvailabilityRow[]
 ): BrowserTranslationAvailabilityRow[] {
   return [...rows].sort((left, right) => {
-    const leftOrder =
-      BROWSER_SOURCE_LANGUAGE_ORDER.get(left.sourceLanguage) ?? Number.MAX_SAFE_INTEGER
+    const leftOrder = getBrowserSourceLanguageOrder(left.sourceLanguage) ?? Number.MAX_SAFE_INTEGER
     const rightOrder =
-      BROWSER_SOURCE_LANGUAGE_ORDER.get(right.sourceLanguage) ?? Number.MAX_SAFE_INTEGER
+      getBrowserSourceLanguageOrder(right.sourceLanguage) ?? Number.MAX_SAFE_INTEGER
     if (leftOrder !== rightOrder) return leftOrder - rightOrder
     const targetDelta = left.targetLanguage.localeCompare(right.targetLanguage)
     if (targetDelta !== 0) return targetDelta
     return left.sourceLanguage.localeCompare(right.sourceLanguage)
   })
+}
+
+function getBrowserSourceLanguageOrder(sourceLanguage: string): number | undefined {
+  return isSupportedTranslationLanguageCode(sourceLanguage)
+    ? BROWSER_SOURCE_LANGUAGE_ORDER.get(sourceLanguage)
+    : undefined
+}
+
+function isSupportedTranslationLanguageCode(language: string): language is TranslationLanguageCode {
+  return SUPPORTED_TRANSLATION_LANGUAGE_CODES.has(language)
 }
 
 export async function translateMarkdownDocument(args: {

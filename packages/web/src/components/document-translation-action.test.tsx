@@ -178,7 +178,9 @@ describe('MarkdownViewer translation plugin', () => {
     const button = await screen.findByRole('button', { name: 'Translation unavailable' })
     await waitFor(() => expect(button).toBeDisabled())
 
-    expect(button.getAttribute('title')).toContain('Chrome Translator API is not exposed.')
+    expect(button).not.toHaveAttribute('title')
+    fireEvent.mouseEnter(button.parentElement!)
+    expect(await screen.findByText('Chrome Translator API is not exposed.')).toBeTruthy()
     expect(translateMarkdownDocumentProgressivelyMock).not.toHaveBeenCalled()
 
     fireEvent.click(button)
@@ -261,7 +263,11 @@ describe('MarkdownViewer translation plugin', () => {
 
     const button = await screen.findByRole('button', { name: 'Translation unavailable' })
     expect(button).toBeDisabled()
-    expect(button.getAttribute('title')).toContain('not installed locally')
+    expect(button).not.toHaveAttribute('title')
+    fireEvent.mouseEnter(button.parentElement!)
+    expect(
+      await screen.findByText('Selected local model files are not installed locally.')
+    ).toBeTruthy()
     expect(scanBrowserTranslationPairsMock).not.toHaveBeenCalled()
   })
 
@@ -877,6 +883,95 @@ The system SHALL detect static rendering mode.
 
     releaseFinalResult?.()
     await waitFor(() => expect(screen.getByRole('button', { name: 'Show source' })).toBeTruthy())
+  })
+
+  it('surfaces document translation failures when every translated segment fails', async () => {
+    translateMarkdownDocumentProgressivelyMock.mockImplementationOnce(async (args, onPatch) => {
+      const failedSegment = {
+        id: 'md-2',
+        sourceStartOffset: 0,
+        sourceEndOffset: 7,
+        sourceKind: 'heading',
+        source: 'Hello',
+        translatorInput: 'Hello',
+        kind: 'heading',
+        sourceLanguage: 'en',
+        targetLanguage: args.targetLanguage,
+        status: 'error',
+        error: 'fetch failed',
+      }
+      onPatch({ segmentIndex: 0, segment: failedSegment })
+      return {
+        displayMode: args.displayMode,
+        sourceLanguage: 'en',
+        targetLanguage: args.targetLanguage,
+        segments: [failedSegment],
+      }
+    })
+
+    render(
+      <MarkdownViewer
+        markdown={'# Hello'}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        }}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+
+    const retryButton = await screen.findByRole('button', { name: 'Retry translation' })
+    expect(retryButton).not.toBeDisabled()
+    expect(retryButton).not.toHaveAttribute('title')
+    fireEvent.focus(retryButton)
+    expect(await screen.findByText('fetch failed Click to retry.')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Hello' })).toBeTruthy()
+
+    mockProgressiveResult('direct', [
+      {
+        id: 'md-2',
+        sourceStartOffset: 0,
+        sourceEndOffset: 7,
+        sourceKind: 'heading',
+        source: 'Hello',
+        translatorInput: 'Hello',
+        target: '你好',
+        kind: 'heading',
+      },
+    ])
+
+    fireEvent.click(retryButton)
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: '你好' })).toBeTruthy())
+    expect(translateMarkdownDocumentProgressivelyMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the source document stable when a browser translation result has no segments', async () => {
+    translateMarkdownDocumentProgressivelyMock.mockImplementationOnce(async (args) => ({
+      displayMode: args.displayMode,
+      sourceLanguage: 'en',
+      targetLanguage: args.targetLanguage,
+    }))
+
+    render(
+      <MarkdownViewer
+        markdown={'# Hello'}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        }}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Show source' })).toBeTruthy())
+    expect(screen.getByRole('heading', { name: 'Hello' })).toBeTruthy()
   })
 
   it('turns off session activation when cancelling an in-flight translation', async () => {

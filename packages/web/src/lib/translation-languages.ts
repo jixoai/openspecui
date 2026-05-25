@@ -50,7 +50,9 @@ export const SUPPORTED_TRANSLATION_LANGUAGES = [
   { code: 'vi', englishName: 'Vietnamese', nativeName: 'Tiếng Việt' },
   { code: 'zh', englishName: 'Chinese', nativeName: '中文' },
   { code: 'zh-Hant', englishName: 'Chinese (Traditional)', nativeName: '繁體中文' },
-] satisfies TranslationLanguage[]
+] as const satisfies readonly TranslationLanguage[]
+
+export type TranslationLanguageCode = (typeof SUPPORTED_TRANSLATION_LANGUAGES)[number]['code']
 
 const LANGUAGE_SEARCH_DOCUMENTS = SUPPORTED_TRANSLATION_LANGUAGES.map(
   (language): SearchDocument => ({
