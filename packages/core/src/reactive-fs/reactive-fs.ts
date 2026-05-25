@@ -1,13 +1,38 @@
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { ReactiveState } from './reactive-state.js'
-import { acquireWatcher } from './watcher-pool.js'
+import { acquireWatcher, isWatcherPoolInitialized } from './watcher-pool.js'
 
 /** 状态缓存：路径 -> ReactiveState */
 const stateCache = new Map<string, ReactiveState<unknown>>()
 
 /** 监听器释放函数缓存 */
 const releaseCache = new Map<string, () => void>()
+
+/** 缺失路径重校验定时器缓存 */
+const missingPathPollCache = new Map<string, ReturnType<typeof setInterval>>()
+
+/** Native watcher can miss a create event on some CI filesystems; missing paths get a low-frequency fallback. */
+const MISSING_PATH_POLL_MS = 1000
+
+function stopMissingPathPoll(key: string): void {
+  const timer = missingPathPollCache.get(key)
+  if (!timer) return
+  clearInterval(timer)
+  missingPathPollCache.delete(key)
+}
+
+function ensureMissingPathPoll(key: string, poll: () => void | Promise<void>): void {
+  if (!isWatcherPoolInitialized() || missingPathPollCache.has(key)) {
+    return
+  }
+
+  const timer = setInterval(() => {
+    void poll()
+  }, MISSING_PATH_POLL_MS)
+  timer.unref?.()
+  missingPathPollCache.set(key, timer)
+}
 
 /**
  * 响应式读取文件内容
@@ -41,21 +66,28 @@ export async function reactiveReadFile(filepath: string): Promise<string | null>
     state = new ReactiveState<string | null>(initialValue)
     stateCache.set(key, state as ReactiveState<unknown>)
 
+    const refresh = async (): Promise<void> => {
+      const newValue = await getValue()
+      state!.set(newValue)
+      if (newValue === null) {
+        ensureMissingPathPoll(key, refresh)
+      } else {
+        stopMissingPathPoll(key)
+      }
+    }
+    if (initialValue === null) {
+      ensureMissingPathPoll(key, refresh)
+    }
+
     // 监听文件所在目录（支持文件删除后重建）
     const dirPath = dirname(normalizedPath)
-    const release = acquireWatcher(
-      dirPath,
-      async () => {
-        const newValue = await getValue()
-        state!.set(newValue)
+    const release = acquireWatcher(dirPath, refresh, {
+      onError: () => {
+        stopMissingPathPoll(key)
+        stateCache.delete(key)
+        releaseCache.delete(key)
       },
-      {
-        onError: () => {
-          stateCache.delete(key)
-          releaseCache.delete(key)
-        },
-      }
-    )
+    })
     releaseCache.set(key, release)
   }
 
@@ -191,21 +223,28 @@ export async function reactiveExists(path: string): Promise<boolean> {
     state = new ReactiveState<boolean>(initialValue)
     stateCache.set(key, state as ReactiveState<unknown>)
 
+    const refresh = async (): Promise<void> => {
+      const newValue = await getValue()
+      state!.set(newValue)
+      if (newValue) {
+        stopMissingPathPoll(key)
+      } else {
+        ensureMissingPathPoll(key, refresh)
+      }
+    }
+    if (!initialValue) {
+      ensureMissingPathPoll(key, refresh)
+    }
+
     // 监听父目录
     const dirPath = dirname(normalizedPath)
-    const release = acquireWatcher(
-      dirPath,
-      async () => {
-        const newValue = await getValue()
-        state!.set(newValue)
+    const release = acquireWatcher(dirPath, refresh, {
+      onError: () => {
+        stopMissingPathPoll(key)
+        stateCache.delete(key)
+        releaseCache.delete(key)
       },
-      {
-        onError: () => {
-          stateCache.delete(key)
-          releaseCache.delete(key)
-        },
-      }
-    )
+    })
     releaseCache.set(key, release)
   }
 
@@ -263,20 +302,27 @@ export async function reactiveStat(
     })
     stateCache.set(key, state as ReactiveState<unknown>)
 
-    const dirPath = dirname(normalizedPath)
-    const release = acquireWatcher(
-      dirPath,
-      async () => {
-        const newValue = await getValue()
-        state!.set(newValue)
-      },
-      {
-        onError: () => {
-          stateCache.delete(key)
-          releaseCache.delete(key)
-        },
+    const refresh = async (): Promise<void> => {
+      const newValue = await getValue()
+      state!.set(newValue)
+      if (newValue === null) {
+        ensureMissingPathPoll(key, refresh)
+      } else {
+        stopMissingPathPoll(key)
       }
-    )
+    }
+    if (initialValue === null) {
+      ensureMissingPathPoll(key, refresh)
+    }
+
+    const dirPath = dirname(normalizedPath)
+    const release = acquireWatcher(dirPath, refresh, {
+      onError: () => {
+        stopMissingPathPoll(key)
+        stateCache.delete(key)
+        releaseCache.delete(key)
+      },
+    })
     releaseCache.set(key, release)
   }
 
@@ -293,6 +339,7 @@ export function clearCache(path?: string): void {
     for (const [key, release] of releaseCache) {
       if (key.includes(normalizedPath)) {
         release()
+        stopMissingPathPoll(key)
         releaseCache.delete(key)
         stateCache.delete(key)
       }
@@ -303,6 +350,10 @@ export function clearCache(path?: string): void {
       release()
     }
     releaseCache.clear()
+    for (const timer of missingPathPollCache.values()) {
+      clearInterval(timer)
+    }
+    missingPathPollCache.clear()
     stateCache.clear()
   }
 }

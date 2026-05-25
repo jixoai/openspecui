@@ -276,6 +276,28 @@ describe('ReactiveFS', () => {
       await generator.return(undefined)
     })
 
+    it('should reconcile a missing file when watcher events are unavailable', async () => {
+      const filepath = join(tempDir, 'missing-then-created.txt')
+      const context = new ReactiveContext()
+      const generator = context.stream(async () => reactiveExists(filepath))
+
+      const first = await generator.next()
+      expect(first.value).toBe(false)
+
+      await closeAllWatchers()
+      await writeFile(filepath, 'content', 'utf-8')
+
+      const second = await Promise.race([
+        generator.next(),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('missing path poll did not refresh')), 2500)
+        }),
+      ])
+      expect(second.value).toBe(true)
+
+      await generator.return(undefined)
+    })
+
     it('should update when file is deleted', async () => {
       const filepath = await createTempFile(tempDir, 'test.txt', 'content')
       const context = new ReactiveContext()
