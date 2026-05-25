@@ -1,4 +1,5 @@
 import {
+  LocalModelAssetStateSchema,
   TRANSLATION_ENGINE_MANIFESTS,
   type BatchTranslateEvent,
   type BatchTranslateInput,
@@ -14,7 +15,7 @@ import {
   type TranslatorFactory,
 } from '@openspecui/core'
 import { observable } from '@trpc/server/observable'
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { LocalModelAssetStore } from './local-model-asset-store.js'
 import {
@@ -23,12 +24,6 @@ import {
   getDefaultLocalModelIndexPath,
 } from './local-model-cache-path.js'
 import { LocalModelFetchCacheStore } from './local-model-fetch-cache-store.js'
-import { readLocalModelFileStatus } from './local-model-local-cache.js'
-import {
-  resolveLocalModelRuntimePlanFromProject,
-  type LocalRuntimeSettingsReader,
-  type TransformersRuntimeModule,
-} from './local-model-runtime.js'
 import { ensureProxyAwareFetchDispatcher } from './network-dispatcher.js'
 import { searchLocalModels } from './translation-model-catalog.js'
 
@@ -50,17 +45,14 @@ export interface TranslationEngineServiceOptions {
 }
 
 export class TranslationEngineService {
-  private readonly projectDir: string
   private readonly configManager: ConfigManager
   private readonly globalSettingsManager: GlobalSettingsManager
   private readonly now: () => number
   private readonly localCacheDir: string
   private readonly localAssetStore: LocalModelAssetStore
-  private readonly localFetchCacheStore: LocalModelFetchCacheStore
 
   constructor(options: TranslationEngineServiceOptions) {
     ensureProxyAwareFetchDispatcher()
-    this.projectDir = options.projectDir
     this.configManager = options.configManager
     this.globalSettingsManager = options.globalSettingsManager
     this.now = options.now ?? Date.now
@@ -68,7 +60,7 @@ export class TranslationEngineService {
     this.localAssetStore = new LocalModelAssetStore({
       indexPath: options.localAssetIndexPath ?? getDefaultLocalModelIndexPath(),
     })
-    this.localFetchCacheStore = new LocalModelFetchCacheStore({
+    new LocalModelFetchCacheStore({
       cachePath: options.localFetchCachePath ?? getDefaultLocalModelFetchCachePath(),
       now: this.now,
     })
@@ -111,19 +103,7 @@ export class TranslationEngineService {
   }): Promise<TranslationModelDownloadPlan | null> {
     if (input.engineId !== 'local') return null
     const state = (await this.localAssetStore.readMap()).get(input.model)
-    const plan = await resolveLocalModelRuntimePlanFromProject({
-      projectDir: this.projectDir,
-      globalSettingsManager: this.globalSettingsManager,
-      modelId: input.model,
-      selectedGroupId: input.selectedGroupId,
-      cacheDir: this.localCacheDir,
-      fetchCacheStore: this.localFetchCacheStore,
-      loadTransformersModule: this.loadLocalTransformersModuleForPlan.bind(this),
-    }).catch(() => null)
-    const fallbackPlan = selectPersistedLocalPlan(state, input.selectedGroupId)
-    const effectivePlan = plan ?? fallbackPlan
-    if (!effectivePlan) return null
-    return enrichDownloadPlanWithAssetSnapshot(effectivePlan, state, input.selectedGroupId)
+    return selectPersistedLocalPlan(state, input.selectedGroupId)
   }
 
   async selectEngine(engineId: TranslationEngineId): Promise<{ success: true }> {
@@ -160,7 +140,7 @@ export class TranslationEngineService {
             dtype,
             runtimeConfig:
               input.engineId === 'local' && input.model
-                ? await this.readLocalRuntimeConfig(input.model)
+                ? await this.readLocalRuntimeConfig(input.model, input.selectedGroupId)
                 : undefined,
             signal: controller.signal,
           })
@@ -219,42 +199,21 @@ export class TranslationEngineService {
     const selectedGroup =
       plan?.groups?.find((group) => group.id === (selectedGroupId ?? plan.selectedGroupId)) ??
       plan?.groups?.find((group) => group.selected)
-    const files = selectedGroup?.files ?? plan?.files ?? []
-    if (!plan || files.length === 0) {
+    if (!plan || !selectedGroup || selectedGroup.files.length === 0) {
       throw new Error('No local runtime file plan is available for the selected model.')
     }
-    const cacheStatus = await readLocalModelFileStatus({
-      cacheDir: this.localCacheDir,
-      modelId: model,
-      files: files.map((file) => file.path),
-    })
-    if (cacheStatus.allCached) {
-      const states = await this.localAssetStore.readMap()
-      const current = states.get(model)
-      if (current) {
-        await this.localAssetStore.upsert({
-          ...current,
-          status: 'downloaded',
-          progress: 1,
-          bytesDownloaded: plan.estimatedTotalBytes ?? current.bytesDownloaded,
-          totalBytes: plan.estimatedTotalBytes ?? current.totalBytes,
-          resumable: false,
-          error: undefined,
-          plan,
-          files: files.map((file) => ({
-            path: file.path,
-            sizeBytes: file.sizeBytes,
-            downloadedBytes: file.sizeBytes,
-          })),
-          installedAt: current.installedAt ?? this.now(),
-          updatedAt: this.now(),
-        })
-      }
+    const files = selectedGroup.files
+    const selectedGroupState = await this.readSelectedLocalGroupState(model, selectedGroup.id)
+    if (selectedGroupState?.status === 'downloaded' && selectedGroup.rootDir) {
+      const missingFiles = await readMissingLocalGroupFiles(selectedGroup.rootDir, files)
+      if (missingFiles.length === 0) return
+    }
+    if (selectedGroupState?.status === 'downloaded') {
       return
     }
-    const allMissingFiles = cacheStatus.files
-      .filter((file) => !file.cached)
-      .map((file) => file.file)
+    const allMissingFiles = selectedGroup.rootDir
+      ? await readMissingLocalGroupFiles(selectedGroup.rootDir, files)
+      : files.map((file) => file.path)
     const missingFiles = allMissingFiles.slice(0, 3)
     const suffix =
       allMissingFiles.length > missingFiles.length
@@ -266,15 +225,30 @@ export class TranslationEngineService {
   }
 
   private async readLocalRuntimeConfig(
-    model: string
+    model: string,
+    selectedGroupId?: string
   ): Promise<Record<string, unknown> | undefined> {
+    const plan = await this.getModelDownloadPlan({
+      engineId: 'local',
+      model,
+      selectedGroupId,
+    })
+    const selectedGroup =
+      plan?.groups?.find((group) => group.id === (selectedGroupId ?? plan.selectedGroupId)) ??
+      plan?.groups?.find((group) => group.selected)
+    const configPath = selectedGroup?.rootDir
+      ? join(selectedGroup.rootDir, 'config.json')
+      : join(this.localCacheDir, 'models', model, 'config.json')
     try {
-      return JSON.parse(
-        await readFile(join(this.localCacheDir, 'models', model, 'config.json'), 'utf8')
-      ) as Record<string, unknown>
+      return JSON.parse(await readFile(configPath, 'utf8')) as Record<string, unknown>
     } catch {
       return undefined
     }
+  }
+
+  private async readSelectedLocalGroupState(model: string, selectedGroupId: string) {
+    const state = (await this.localAssetStore.readMap()).get(model)
+    return state?.groupsState[selectedGroupId]
   }
 
   protected async loadFactory(
@@ -310,52 +284,15 @@ export class TranslationEngineService {
     })
   }
 
-  protected async loadLocalTransformersModuleForPlan(
-    _projectDir: string,
-    _globalSettingsManager: LocalRuntimeSettingsReader
-  ): Promise<TransformersRuntimeModule> {
-    const mod = await import('@huggingface/transformers')
-    return mod as unknown as TransformersRuntimeModule
-  }
-}
-
-function enrichDownloadPlanWithAssetSnapshot(
-  plan: TranslationModelDownloadPlan,
-  state: LocalModelAssetState | undefined,
-  selectedGroupId?: string
-): TranslationModelDownloadPlan {
-  if (!state?.plan) return plan
-  const assetGroup = state.plan.groups?.find(
-    (group) => group.id === (selectedGroupId ?? plan.selectedGroupId)
-  )
-  const mergedGroups = plan.groups?.map((group) => {
-    const matchingAssetGroup = state.plan?.groups?.find((asset) => asset.id === group.id)
-    if (!matchingAssetGroup) return group
-    return {
-      ...group,
-      status: matchingAssetGroup.status ?? group.status,
-      estimatedTotalBytes: group.estimatedTotalBytes ?? matchingAssetGroup.estimatedTotalBytes,
-      files: group.files.map((file) => {
-        const matchingAssetFile = matchingAssetGroup.files.find((asset) => asset.path === file.path)
-        return matchingAssetFile?.sizeBytes !== undefined && file.sizeBytes === undefined
-          ? { ...file, sizeBytes: matchingAssetFile.sizeBytes }
-          : file
-      }),
-    }
-  })
-  return {
-    ...plan,
-    estimatedTotalBytes:
-      plan.estimatedTotalBytes ?? assetGroup?.estimatedTotalBytes ?? state.plan.estimatedTotalBytes,
-    groups: mergedGroups,
-  }
 }
 
 function selectPersistedLocalPlan(
   state: LocalModelAssetState | undefined,
   selectedGroupId?: string
 ): TranslationModelDownloadPlan | null {
-  const plan = state?.plan
+  if (!state) return null
+  const normalizedState = LocalModelAssetStateSchema.parse(state)
+  const plan = normalizedState.plan
   if (!plan) return null
   if (!selectedGroupId || !plan.groups?.length) {
     return {
@@ -380,4 +317,22 @@ function selectPersistedLocalPlan(
       files: [...group.files],
     })),
   }
+}
+
+async function readMissingLocalGroupFiles(
+  rootDir: string,
+  files: NonNullable<TranslationModelDownloadPlan['groups']>[number]['files']
+): Promise<string[]> {
+  const results = await Promise.all(
+    files.map(async (file) => {
+      try {
+        const entry = await stat(join(rootDir, file.path))
+        if (file.sizeBytes !== undefined && entry.size < file.sizeBytes) return file.path
+        return null
+      } catch {
+        return file.path
+      }
+    })
+  )
+  return results.filter((file): file is string => file !== null)
 }

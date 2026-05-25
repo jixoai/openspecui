@@ -16,10 +16,25 @@ const hubMock = vi.hoisted(() => ({
     etag: `${input.path.replace(/[^a-zA-Z0-9]+/g, '-')}-etag`,
     url: `https://huggingface.co/test/resolve/main/${input.path}`,
   })),
+  modelInfo: vi.fn(async () => ({
+    id: 'onnx-community/opus-mt-en-zh',
+    sha: 'abcdef1234567890abcdef1234567890abcdef12',
+  })),
   listFiles: vi.fn(async function* () {
-    yield { path: 'config.json', type: 'file', size: 10 }
-    yield { path: 'onnx/encoder_model_q4.onnx', type: 'file', size: 10 }
-    yield { path: 'onnx/decoder_model_merged_q4.onnx', type: 'file', size: 10 }
+    const commitHash = 'abcdef1234567890abcdef1234567890abcdef12'
+    const createFile = (path: string, size: number) => ({
+      path,
+      type: 'file',
+      size,
+      lastCommit: { id: commitHash },
+      lfs: {
+        oid: `${path.replace(/[^a-zA-Z0-9]+/g, '-')}-oid`,
+        size,
+      },
+    })
+    yield createFile('config.json', 10)
+    yield createFile('onnx/encoder_model_q4.onnx', 10)
+    yield createFile('onnx/decoder_model_merged_q4.onnx', 10)
   }),
 }))
 
@@ -62,6 +77,7 @@ beforeEach(() => {
   hubMock.downloadFile.mockReset()
   hubMock.fileDownloadInfo.mockClear()
   hubMock.listFiles.mockClear()
+  hubMock.modelInfo.mockClear()
   transformersMock.env.cacheDir = null
   transformersMock.env.allowLocalModels = false
   transformersMock.env.localModelPath = ''
@@ -102,6 +118,12 @@ async function createIsolatedProjectDir(): Promise<{
     translationCacheDatabasePath: join(runtimeDir, 'translation-cache.sqlite'),
     localModelCacheDir: join(runtimeDir, 'translation-engines', 'local', 'hf-cache'),
     localModelAssetIndexPath: join(runtimeDir, 'translation-engines', 'local', 'models.json'),
+    localModelProfileManifestPath: join(
+      runtimeDir,
+      'translation-engines',
+      'local',
+      'profile-manifests.json'
+    ),
     localModelFetchCachePath: join(runtimeDir, 'translation-engines', 'local', 'fetch-cache.json'),
   }
   await writeFile(
@@ -405,8 +427,9 @@ describe('localModels.subscribeLogs transport', () => {
           if (encoderAttempts === 1) {
             return new Response(
               new ReadableStream<Uint8Array>({
-                start(controller) {
+                async start(controller) {
                   controller.enqueue(new Uint8Array([1, 2, 3, 4]))
+                  await new Promise((resolve) => setTimeout(resolve, 5))
                   controller.error(new TypeError('fetch failed'))
                 },
               }),

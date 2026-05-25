@@ -333,9 +333,11 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     setAiBaseUrl(globalSettings?.translationEngines?.openai?.baseUrl ?? '')
     setAiToken(globalSettings?.translationEngines?.openai?.token ?? '')
     setAiModel(globalSettings?.translationEngines?.openai?.model ?? 'gpt-4.1-mini')
+    const projectLocalEngine =
+      globalSettings === undefined ? config?.translation?.engines?.local : undefined
     const nextNmtModel =
       globalSettings?.translationEngines?.local?.model ??
-      config?.translation?.engines?.local?.model ??
+      projectLocalEngine?.model ??
       DEFAULT_LOCAL_MODEL_ID
     setNmtModel(nextNmtModel)
     setNmtModelQuery(nextNmtModel)
@@ -343,7 +345,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     setNmtHfEndpoint(globalSettings?.translationEngines?.local?.hfEndpoint ?? '')
     setNmtSelectedGroupId(
       globalSettings?.translationEngines?.local?.selectedGroupId ??
-        config?.translation?.engines?.local?.selectedGroupId
+        projectLocalEngine?.selectedGroupId
     )
   }, [
     config?.translation?.engines?.local?.model,
@@ -504,18 +506,31 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     },
   })
   const downloadLocalModelMutation = useMutation({
-    mutationFn: (input: { modelId: string; selectedGroupId?: string }) =>
+    mutationFn: (input: { modelId: string; groupId?: string }) =>
       trpcClient.localModels.download.mutate(input),
   })
   const pauseLocalModelMutation = useMutation({
-    mutationFn: (modelId: string) => trpcClient.localModels.pause.mutate({ modelId }),
+    mutationFn: (input: { modelId: string; groupId?: string }) =>
+      trpcClient.localModels.pause.mutate(input),
   })
   const resumeLocalModelMutation = useMutation({
-    mutationFn: (input: { modelId: string; selectedGroupId?: string }) =>
+    mutationFn: (input: { modelId: string; groupId?: string }) =>
       trpcClient.localModels.resume.mutate(input),
   })
   const deleteLocalModelMutation = useMutation({
-    mutationFn: (modelId: string) => trpcClient.localModels.delete.mutate({ modelId }),
+    mutationFn: (input: { modelId: string; groupId?: string }) =>
+      trpcClient.localModels.delete.mutate(input),
+  })
+  const refreshLocalProfilesMutation = useMutation({
+    mutationFn: (input: { modelId?: string }) => trpcClient.localModels.refreshProfiles.mutate(input),
+    onSuccess: (panelState) => {
+      const queryKey = trpc.localModels.panelState.queryOptions({
+        modelId: panelState.modelId,
+        selectedGroupId: panelState.selectedGroupId,
+      }).queryKey
+      queryClient.setQueryData(queryKey, panelState)
+      lastLocalPanelStateRef.current = panelState
+    },
   })
   const cleanTranslationCacheMutation = useMutation({
     mutationFn: () => trpcClient.translationCache.clean.mutate(),
@@ -634,8 +649,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const browserCheckLoading = browserSupportTable?.state === 'checking'
   const nmtModelId = nmtModel.trim()
   const persistedLocalSelectedGroupId =
-    globalSettings?.translationEngines?.local?.selectedGroupId ??
-    config?.translation?.engines?.local?.selectedGroupId
+    globalSettings?.translationEngines?.local?.selectedGroupId
   const preferredLocalSelectedGroupId = nmtSelectedGroupId ?? persistedLocalSelectedGroupId
   const localPanelStateQuery = useQuery({
     ...trpc.localModels.panelState.queryOptions({
@@ -1167,17 +1181,37 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <label className="block text-sm font-medium">Local Model</label>
-                  <LocalProviderSettingsPopover
-                    value={nmtHfEndpoint}
-                    resolvedEndpoint={nmtResolvedHfEndpoint}
-                    onValueChange={setNmtHfEndpoint}
-                    onCommit={(endpoint) => {
-                      saveGlobalSettingsMutation.mutate({
-                        translationEngines: { local: { hfEndpoint: endpoint } },
-                      })
-                      setNmtRemoteOptions([])
-                    }}
-                  />
+                  <div className="flex items-center gap-1">
+                    <Tooltip content="Refresh local model profiles" delay={0}>
+                      <button
+                        type="button"
+                        aria-label="Refresh local model profiles"
+                        onClick={() => {
+                          if (!nmtModelId) return
+                          refreshLocalProfilesMutation.mutate({ modelId: nmtModelId })
+                        }}
+                        disabled={!nmtModelId || refreshLocalProfilesMutation.isPending}
+                        className="text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-primary inline-flex h-8 w-8 items-center justify-center rounded-md outline-none transition-colors focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <RefreshCw
+                          className={`h-4 w-4 ${
+                            refreshLocalProfilesMutation.isPending ? 'animate-spin' : ''
+                          }`}
+                        />
+                      </button>
+                    </Tooltip>
+                    <LocalProviderSettingsPopover
+                      value={nmtHfEndpoint}
+                      resolvedEndpoint={nmtResolvedHfEndpoint}
+                      onValueChange={setNmtHfEndpoint}
+                      onCommit={(endpoint) => {
+                        saveGlobalSettingsMutation.mutate({
+                          translationEngines: { local: { hfEndpoint: endpoint } },
+                        })
+                        setNmtRemoteOptions([])
+                      }}
+                    />
+                  </div>
                 </div>
                 <div className="@[42rem]:grid-cols-[minmax(0,1fr)_auto] grid gap-2">
                   <LocalModelCombobox
@@ -1195,9 +1229,6 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                       saveGlobalSettingsMutation.mutate({
                         translationEngines: { local: { model, selectedGroupId: undefined } },
                       })
-                      saveTranslationConfigMutation.mutate({
-                        engines: { local: { model, selectedGroupId: undefined } },
-                      })
                       setNmtSelectedGroupId(undefined)
                     }}
                   />
@@ -1213,9 +1244,6 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                     setNmtSelectedGroupId(groupId)
                     saveGlobalSettingsMutation.mutate({
                       translationEngines: { local: { selectedGroupId: groupId } },
-                    })
-                    saveTranslationConfigMutation.mutate({
-                      engines: { local: { selectedGroupId: groupId } },
                     })
                   }}
                 />
@@ -1237,23 +1265,29 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                   setLocalDownloadMessage('Downloading local model files.')
                   downloadLocalModelMutation.mutate({
                     modelId: nmtModelId,
-                    selectedGroupId: effectiveLocalSelectedGroupId,
+                    groupId: effectiveLocalSelectedGroupId,
                   })
                 }}
                 onPause={() => {
                   setLocalDownloadMessage('Local model download paused.')
-                  pauseLocalModelMutation.mutate(nmtModelId)
+                  pauseLocalModelMutation.mutate({
+                    modelId: nmtModelId,
+                    groupId: effectiveLocalSelectedGroupId,
+                  })
                 }}
                 onResume={() => {
                   setLocalDownloadMessage('Resuming local model download.')
                   resumeLocalModelMutation.mutate({
                     modelId: nmtModelId,
-                    selectedGroupId: effectiveLocalSelectedGroupId,
+                    groupId: effectiveLocalSelectedGroupId,
                   })
                 }}
                 onDelete={() => {
                   setLocalDownloadMessage('Deleting local model files.')
-                  deleteLocalModelMutation.mutate(nmtModelId)
+                  deleteLocalModelMutation.mutate({
+                    modelId: nmtModelId,
+                    groupId: effectiveLocalSelectedGroupId,
+                  })
                 }}
                 knownSize={nmtKnownSize}
                 modelId={nmtModelId}

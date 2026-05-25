@@ -29,34 +29,6 @@ type TestableTranslationEngineService = TranslationEngineService & {
     engineId: 'local' | 'openai',
     model: string | undefined
   ): Promise<TranslatorFactory>
-  loadLocalTransformersModuleForPlan(
-    projectDir: string,
-    globalSettingsManager: GlobalSettingsManager
-  ): Promise<{
-    env: {
-      cacheDir: string | null
-      allowLocalModels: boolean
-      localModelPath: string
-      remoteHost?: string
-    }
-    ModelRegistry: {
-      get_pipeline_files(
-        task: string,
-        modelId: string,
-        options?: { cache_dir?: string; dtype?: string }
-      ): Promise<string[]>
-      is_pipeline_cached_files(
-        task: string,
-        modelId: string,
-        options?: { cache_dir?: string; dtype?: string }
-      ): Promise<{ allCached: boolean; files: Array<{ file: string; cached: boolean }> }>
-      get_file_metadata(
-        modelId: string,
-        filename: string,
-        options?: { cache_dir?: string }
-      ): Promise<{ exists: boolean; size?: number; fromCache?: boolean }>
-    }
-  }>
 }
 
 describe('TranslationEngineService', () => {
@@ -185,33 +157,14 @@ describe('TranslationEngineService', () => {
   })
 
   it('uses strict repository profile files for local download plans', async () => {
-    const testableService = service as TestableTranslationEngineService
-    vi.spyOn(testableService, 'loadLocalTransformersModuleForPlan').mockResolvedValue({
-      env: {
-        cacheDir: null,
-        allowLocalModels: false,
-        localModelPath: '',
-        remoteHost: 'https://huggingface.co/',
-      },
-      ModelRegistry: {
-        get_pipeline_files: vi.fn(async () => [
-          'onnx/encoder_model_q4.onnx',
-          'onnx/decoder_model_merged_q4.onnx',
-        ]),
-        is_pipeline_cached_files: vi.fn(async () => ({
-          allCached: false,
-          files: [
-            { file: 'onnx/encoder_model_q4.onnx', cached: false },
-            { file: 'onnx/decoder_model_merged_q4.onnx', cached: false },
-          ],
-        })),
-        get_file_metadata: vi.fn(async (_modelId, filename) => ({
-          exists: true,
-          size: filename.endsWith('encoder_model_q4.onnx') ? 12_000_000 : 18_000_000,
-          fromCache: false,
-        })),
-      },
-    })
+    await writePersistedLocalAssetPlan(
+      localAssetIndexPath,
+      createLocalDownloadPlan('Xenova/opus-mt-en-de', 'q4', {
+        configBytes: 10,
+        encoderBytes: 12_000_000,
+        decoderBytes: 18_000_000,
+      })
+    )
 
     const plan = await service.getModelDownloadPlan({
       engineId: 'local',
@@ -227,98 +180,18 @@ describe('TranslationEngineService', () => {
   })
 
   it('keeps selected local profile sizes from the asset snapshot when provider sizes are missing', async () => {
-    const testableService = service as TestableTranslationEngineService
-    await writeFile(
+    await writePersistedLocalAssetPlan(
       localAssetIndexPath,
-      JSON.stringify(
-        [
-          LocalModelAssetStateSchema.parse({
-            modelId: 'Xenova/opus-mt-en-de',
-            status: 'paused',
-            selected: true,
-            progress: 0.42,
-            totalBytes: 159_000_000,
-            bytesDownloaded: 66_780_000,
-            resumable: true,
-            plan: {
-              modelId: 'Xenova/opus-mt-en-de',
-              selectedGroupId: 'q4f16',
-              estimatedTotalBytes: 159_000_000,
-              files: [
-                { path: 'config.json', sizeBytes: 1_500, required: true },
-                {
-                  path: 'onnx/encoder_model_q4f16.onnx',
-                  sizeBytes: 74_300_000,
-                  required: true,
-                },
-                {
-                  path: 'onnx/decoder_model_merged_q4f16.onnx',
-                  sizeBytes: 84_698_500,
-                  required: true,
-                },
-              ],
-              groups: [
-                {
-                  id: 'q4f16',
-                  label: 'q4f16',
-                  dtype: 'q4f16',
-                  estimatedTotalBytes: 159_000_000,
-                  selectable: true,
-                  selected: true,
-                  files: [
-                    { path: 'config.json', sizeBytes: 1_500, required: true },
-                    {
-                      path: 'onnx/encoder_model_q4f16.onnx',
-                      sizeBytes: 74_300_000,
-                      required: true,
-                    },
-                    {
-                      path: 'onnx/decoder_model_merged_q4f16.onnx',
-                      sizeBytes: 84_698_500,
-                      required: true,
-                    },
-                  ],
-                },
-              ],
-            },
-            files: [
-              { path: 'config.json', sizeBytes: 1_500, downloadedBytes: 1_500 },
-              {
-                path: 'onnx/encoder_model_q4f16.onnx',
-                sizeBytes: 74_300_000,
-                downloadedBytes: 0,
-              },
-              {
-                path: 'onnx/decoder_model_merged_q4f16.onnx',
-                sizeBytes: 84_698_500,
-                downloadedBytes: 66_778_500,
-              },
-            ],
-          }),
-        ],
-        null,
-        2
-      ),
-      'utf8'
-    )
-    vi.spyOn(testableService, 'loadLocalTransformersModuleForPlan').mockResolvedValue({
-      env: {
-        cacheDir: null,
-        allowLocalModels: false,
-        localModelPath: '',
-        remoteHost: 'https://huggingface.co/',
-      },
-      ModelRegistry: {
-        get_pipeline_files: vi.fn(),
-        is_pipeline_cached_files: vi.fn(),
-        get_file_metadata: vi.fn(),
-      },
-    })
-    vi.mocked(await import('@huggingface/hub')).listFiles.mockImplementationOnce(
-      async function* () {
-        yield { path: 'config.json', type: 'file' }
-        yield { path: 'onnx/encoder_model_q4f16.onnx', type: 'file' }
-        yield { path: 'onnx/decoder_model_merged_q4f16.onnx', type: 'file' }
+      createLocalDownloadPlan('Xenova/opus-mt-en-de', 'q4f16', {
+        configBytes: 1_500,
+        encoderBytes: 74_300_000,
+        decoderBytes: 84_698_500,
+      }),
+      {
+        status: 'paused',
+        bytesDownloaded: 66_780_000,
+        progress: 0.42,
+        resumable: true,
       }
     )
 
@@ -336,70 +209,14 @@ describe('TranslationEngineService', () => {
   })
 
   it('falls back to the persisted local asset plan when runtime plan refresh fails', async () => {
-    const testableService = service as TestableTranslationEngineService
-    await writeFile(
+    await writePersistedLocalAssetPlan(
       localAssetIndexPath,
-      JSON.stringify(
-        [
-          LocalModelAssetStateSchema.parse({
-            modelId: 'Xenova/opus-mt-en-de',
-            status: 'downloaded',
-            selected: true,
-            progress: 1,
-            totalBytes: 91_000_001,
-            bytesDownloaded: 91_000_001,
-            resumable: false,
-            plan: {
-              modelId: 'Xenova/opus-mt-en-de',
-              selectedGroupId: 'q4',
-              estimatedTotalBytes: 91_000_001,
-              files: [
-                { path: 'config.json', sizeBytes: 1, required: true },
-                { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 35_000_000, required: true },
-                {
-                  path: 'onnx/decoder_model_merged_q4.onnx',
-                  sizeBytes: 56_000_000,
-                  required: true,
-                },
-              ],
-              groups: [
-                {
-                  id: 'q4',
-                  label: 'q4',
-                  dtype: 'q4',
-                  estimatedTotalBytes: 91_000_001,
-                  selectable: true,
-                  selected: true,
-                  files: [
-                    { path: 'config.json', sizeBytes: 1, required: true },
-                    { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 35_000_000, required: true },
-                    {
-                      path: 'onnx/decoder_model_merged_q4.onnx',
-                      sizeBytes: 56_000_000,
-                      required: true,
-                    },
-                  ],
-                },
-              ],
-            },
-            files: [
-              { path: 'config.json', sizeBytes: 1, downloadedBytes: 1 },
-              { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 35_000_000, downloadedBytes: 35_000_000 },
-              {
-                path: 'onnx/decoder_model_merged_q4.onnx',
-                sizeBytes: 56_000_000,
-                downloadedBytes: 56_000_000,
-              },
-            ],
-          }),
-        ],
-        null,
-        2
-      ),
-      'utf8'
-    )
-    vi.spyOn(testableService, 'loadLocalTransformersModuleForPlan').mockRejectedValue(
-      new TypeError('fetch failed')
+      createLocalDownloadPlan('Xenova/opus-mt-en-de', 'q4', {
+        configBytes: 1,
+        encoderBytes: 35_000_000,
+        decoderBytes: 56_000_000,
+      }),
+      { status: 'downloaded', bytesDownloaded: 91_000_001, progress: 1 }
     )
 
     const plan = await service.getModelDownloadPlan({
@@ -429,10 +246,17 @@ describe('TranslationEngineService', () => {
       destroy: vi.fn(),
     }))
     vi.spyOn(testableService, 'loadFactory').mockResolvedValue({ create })
-    vi.spyOn(testableService, 'getModelDownloadPlan').mockResolvedValue(
-      createLocalDownloadPlan('Xenova/opus-mt-en-de', 'q4')
-    )
-    await writeLocalCachedFiles(localCacheDir, 'Xenova/opus-mt-en-de', [
+    const plan = createLocalDownloadPlan('Xenova/opus-mt-en-de', 'q4', {
+      rootDir: join(tempDir, 'profiles', 'q4'),
+    })
+    vi.spyOn(testableService, 'getModelDownloadPlan').mockResolvedValue(plan)
+    await writePersistedLocalAssetPlan(localAssetIndexPath, plan, {
+      status: 'downloaded',
+      bytesDownloaded: 31,
+      progress: 1,
+      rootDir: join(tempDir, 'profiles', 'q4'),
+    })
+    await writeLocalProfileFiles(join(tempDir, 'profiles', 'q4'), [
       'config.json',
       'onnx/encoder_model_q4.onnx',
       'onnx/decoder_model_merged_q4.onnx',
@@ -468,10 +292,17 @@ describe('TranslationEngineService', () => {
       destroy: vi.fn(),
     }))
     vi.spyOn(testableService, 'loadFactory').mockResolvedValue({ create })
-    vi.spyOn(testableService, 'getModelDownloadPlan').mockResolvedValue(
-      createLocalDownloadPlan('Xenova/opus-mt-en-de', 'q4')
-    )
-    await writeLocalCachedFiles(localCacheDir, 'Xenova/opus-mt-en-de', [
+    const plan = createLocalDownloadPlan('Xenova/opus-mt-en-de', 'q4', {
+      rootDir: join(tempDir, 'profiles', 'q4'),
+    })
+    vi.spyOn(testableService, 'getModelDownloadPlan').mockResolvedValue(plan)
+    await writePersistedLocalAssetPlan(localAssetIndexPath, plan, {
+      status: 'paused',
+      bytesDownloaded: 13,
+      progress: 13 / 31,
+      rootDir: join(tempDir, 'profiles', 'q4'),
+    })
+    await writeLocalProfileFiles(join(tempDir, 'profiles', 'q4'), [
       'config.json',
       'onnx/encoder_model_q4.onnx',
     ])
@@ -488,7 +319,7 @@ describe('TranslationEngineService', () => {
         })
       )
     ).rejects.toThrow(
-      'Selected local model files are not installed locally: onnx/decoder_model_merged_q4.onnx.'
+      'Selected local model files are not installed locally: onnx/encoder_model_q4.onnx, onnx/decoder_model_merged_q4.onnx.'
     )
     expect(create).not.toHaveBeenCalled()
   })
@@ -496,43 +327,114 @@ describe('TranslationEngineService', () => {
 
 function createLocalDownloadPlan(
   modelId: string,
-  dtype: string
+  dtype: string,
+  options: {
+    configBytes?: number
+    encoderBytes?: number
+    decoderBytes?: number
+    rootDir?: string
+  } = {}
 ): TranslationModelDownloadPlan {
+  const configBytes = options.configBytes ?? 1
+  const encoderBytes = options.encoderBytes ?? 12
+  const decoderBytes = options.decoderBytes ?? 18
+  const estimatedTotalBytes = configBytes + encoderBytes + decoderBytes
   return {
     modelId,
-    estimatedTotalBytes: 31,
+    estimatedTotalBytes,
     selectedGroupId: dtype,
     files: [
-      { path: 'config.json', sizeBytes: 1, required: true },
-      { path: `onnx/encoder_model_${dtype}.onnx`, sizeBytes: 12, required: true },
-      { path: `onnx/decoder_model_merged_${dtype}.onnx`, sizeBytes: 18, required: true },
+      { path: 'config.json', sizeBytes: configBytes, required: true },
+      { path: `onnx/encoder_model_${dtype}.onnx`, sizeBytes: encoderBytes, required: true },
+      { path: `onnx/decoder_model_merged_${dtype}.onnx`, sizeBytes: decoderBytes, required: true },
     ],
     groups: [
       {
         id: dtype,
         label: dtype,
         dtype,
-        estimatedTotalBytes: 31,
+        estimatedTotalBytes,
+        rootDir: options.rootDir,
         selectable: true,
         selected: true,
         files: [
-          { path: 'config.json', sizeBytes: 1, required: true },
-          { path: `onnx/encoder_model_${dtype}.onnx`, sizeBytes: 12, required: true },
-          { path: `onnx/decoder_model_merged_${dtype}.onnx`, sizeBytes: 18, required: true },
+          { path: 'config.json', sizeBytes: configBytes, required: true },
+          { path: `onnx/encoder_model_${dtype}.onnx`, sizeBytes: encoderBytes, required: true },
+          { path: `onnx/decoder_model_merged_${dtype}.onnx`, sizeBytes: decoderBytes, required: true },
         ],
       },
     ],
   }
 }
 
-async function writeLocalCachedFiles(
-  cacheDir: string,
-  modelId: string,
+async function writePersistedLocalAssetPlan(
+  indexPath: string,
+  plan: TranslationModelDownloadPlan,
+  options: {
+    status?: 'paused' | 'downloaded'
+    bytesDownloaded?: number
+    progress?: number
+    resumable?: boolean
+    rootDir?: string
+  } = {}
+): Promise<void> {
+  const group = plan.groups?.find((item) => item.id === plan.selectedGroupId) ?? plan.groups?.[0]
+  const status = options.status ?? 'not-downloaded'
+  await writeFile(
+    indexPath,
+    JSON.stringify(
+      [
+        LocalModelAssetStateSchema.parse({
+          modelId: plan.modelId,
+          status,
+          selected: true,
+          progress: options.progress,
+          bytesDownloaded: options.bytesDownloaded,
+          totalBytes: plan.estimatedTotalBytes,
+          resumable: options.resumable ?? status === 'paused',
+          plan,
+          groupsState: group
+            ? {
+                [group.id]: {
+                  groupId: group.id,
+                  status,
+                  rootDir: options.rootDir ?? group.rootDir,
+                  bytesDownloaded: options.bytesDownloaded,
+                  totalBytes: plan.estimatedTotalBytes,
+                  progress: options.progress,
+                  resumable: options.resumable ?? status === 'paused',
+                  files: group.files.map((file) => ({
+                    path: file.path,
+                    sizeBytes: file.sizeBytes,
+                    downloadedBytes:
+                      status === 'downloaded' ? file.sizeBytes : file.path === 'config.json' ? file.sizeBytes : 0,
+                    required: file.required,
+                    status: status === 'downloaded' || file.path === 'config.json' ? 'downloaded' : 'not-downloaded',
+                  })),
+                },
+              }
+            : {},
+          files: plan.files.map((file) => ({
+            path: file.path,
+            sizeBytes: file.sizeBytes,
+            downloadedBytes: status === 'downloaded' ? file.sizeBytes : 0,
+          })),
+        }),
+      ],
+      null,
+      2
+    ),
+    'utf8'
+  )
+}
+
+async function writeLocalProfileFiles(
+  rootDir: string,
   files: ReadonlyArray<string>
 ): Promise<void> {
   await Promise.all(
     files.map(async (file) => {
-      const path = join(cacheDir, 'models', modelId, file)
+      const path = join(rootDir, file)
       await mkdir(dirname(path), { recursive: true })
       await writeFile(path, file === 'config.json' ? '{"model_type":"marian"}' : 'cached')
     })

@@ -1,6 +1,7 @@
-import { listFiles } from '@huggingface/hub'
+import { listFiles, modelInfo } from '@huggingface/hub'
 import {
   buildLocalDownloadPlanFromRepositoryFiles,
+  type LocalRepositoryFile,
   type TranslationModelDownloadPlan,
 } from '@openspecui/core'
 import { mkdir } from 'node:fs/promises'
@@ -37,6 +38,15 @@ export interface TransformersRuntimeModule {
   ModelRegistry: TransformersModelRegistry
 }
 
+export interface LocalModelRepositorySnapshot {
+  modelId: string
+  revision: string
+  commitHash: string
+  shortCommitHash: string
+  files: LocalRepositoryFile[]
+  raw?: unknown
+}
+
 export async function configureTransformersRuntime(
   transformers: TransformersRuntimeModule,
   cacheDir: string
@@ -45,6 +55,20 @@ export async function configureTransformersRuntime(
   transformers.env.cacheDir = cacheDir
   transformers.env.allowLocalModels = false
   transformers.env.localModelPath = join(cacheDir, 'models')
+}
+
+export async function readLocalModelRepositorySnapshot(input: {
+  modelId: string
+  hfEndpoint?: string
+  fetchCacheStore?: LocalModelFetchCacheStore
+  revision?: string
+}): Promise<LocalModelRepositorySnapshot> {
+  return readHuggingFaceRepositorySnapshot({
+    modelId: input.modelId,
+    hubUrl: normalizeHuggingFaceEndpoint(input.hfEndpoint),
+    fetchCacheStore: input.fetchCacheStore,
+    revision: input.revision,
+  })
 }
 
 export async function resolveLocalModelRuntimePlan(input: {
@@ -57,8 +81,7 @@ export async function resolveLocalModelRuntimePlan(input: {
 }): Promise<TranslationModelDownloadPlan | null> {
   await configureTransformersRuntime(input.transformers, input.cacheDir)
   const hubUrl = normalizeHuggingFaceEndpoint(input.hfEndpoint)
-  const repositoryFiles = await readHuggingFaceRepositoryFiles({
-    selectedGroupId: input.selectedGroupId,
+  const snapshot = await readHuggingFaceRepositorySnapshot({
     modelId: input.modelId,
     hubUrl,
     fetchCacheStore: input.fetchCacheStore,
@@ -66,7 +89,7 @@ export async function resolveLocalModelRuntimePlan(input: {
   const repositoryPlan = buildLocalDownloadPlanFromRepositoryFiles({
     modelId: input.modelId,
     selectedGroupId: input.selectedGroupId,
-    files: repositoryFiles,
+    files: snapshot.files,
   })
   return repositoryPlan
 }
@@ -118,30 +141,48 @@ export async function readLocalModelRuntimeCacheStatus(input: {
   })
 }
 
-async function readHuggingFaceRepositoryFiles(input: {
+async function readHuggingFaceRepositorySnapshot(input: {
   modelId: string
-  selectedGroupId?: string
   hubUrl: string
   fetchCacheStore?: LocalModelFetchCacheStore
-}): Promise<Array<{ path: string; sizeBytes?: number }>> {
+  revision?: string
+}): Promise<LocalModelRepositorySnapshot> {
+  const detail = await readHuggingFaceModelSnapshotInfo(input).catch(() => null)
   let lastError: unknown
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      const files: Array<{ path: string; sizeBytes?: number }> = []
+      const files: LocalRepositoryFile[] = []
+      let commitHash = detail?.commitHash
       for await (const entry of listFiles({
         repo: { type: 'model', name: input.modelId },
         recursive: true,
         expand: true,
+        revision: input.revision,
         hubUrl: input.hubUrl,
         fetch: input.fetchCacheStore ? createProviderFetchCache(input.fetchCacheStore) : undefined,
       })) {
         if (entry.type !== 'file') continue
+        commitHash ??= entry.lastCommit?.id
+        const etag = entry.lfs?.oid ?? entry.xetHash ?? entry.oid
         files.push({
           path: entry.path,
           sizeBytes: entry.lfs?.size ?? entry.size,
+          etag,
+          revision: entry.lastCommit?.id,
+          sourceUrl: `${input.hubUrl}/${input.modelId}/resolve/${entry.lastCommit?.id ?? input.revision ?? 'main'}/${entry.path}`,
+          raw: entry,
         })
       }
-      if (files.length > 0) return files
+      if (files.length > 0 && commitHash) {
+        return {
+          modelId: input.modelId,
+          revision: input.revision ?? 'main',
+          commitHash,
+          shortCommitHash: commitHash.slice(0, 6),
+          files,
+          raw: detail?.raw,
+        }
+      }
       lastError = new Error(`No repository files were returned for ${input.modelId}.`)
     } catch (error) {
       lastError = error
@@ -149,29 +190,59 @@ async function readHuggingFaceRepositoryFiles(input: {
     if (attempt < 2) await delay(300 * (attempt + 1))
   }
   const cachedFiles = await readCachedHuggingFaceRepositoryFiles(input)
-  if (cachedFiles.length > 0) {
-    return cachedFiles
+  if (cachedFiles.files.length > 0 && cachedFiles.commitHash) {
+    return {
+      modelId: input.modelId,
+      revision: input.revision ?? 'main',
+      commitHash: cachedFiles.commitHash,
+      shortCommitHash: cachedFiles.commitHash.slice(0, 6),
+      files: cachedFiles.files,
+      raw: cachedFiles.raw,
+    }
   }
   throw lastError instanceof Error
     ? lastError
     : new Error(`Unable to read repository files for ${input.modelId}.`)
 }
 
+async function readHuggingFaceModelSnapshotInfo(input: {
+  modelId: string
+  hubUrl: string
+  revision?: string
+}): Promise<{ commitHash: string; raw: unknown }> {
+  const detail = await modelInfo({
+    name: input.modelId,
+    hubUrl: input.hubUrl,
+    revision: input.revision,
+    additionalFields: ['sha'],
+  })
+  const raw = detail as unknown
+  const commitHash =
+    typeof (detail as { sha?: unknown }).sha === 'string'
+      ? (detail as { sha: string }).sha
+      : undefined
+  if (!commitHash) {
+    throw new Error(`Unable to resolve a commit hash for ${input.modelId}.`)
+  }
+  return { commitHash, raw }
+}
+
 async function readCachedHuggingFaceRepositoryFiles(input: {
   modelId: string
   fetchCacheStore?: LocalModelFetchCacheStore
-}): Promise<Array<{ path: string; sizeBytes?: number }>> {
-  if (!input.fetchCacheStore) return []
+}): Promise<{ files: LocalRepositoryFile[]; commitHash?: string; raw?: unknown }> {
+  if (!input.fetchCacheStore) return { files: [] }
   const record = await input.fetchCacheStore.read(input.modelId)
-  if (!record?.detailRaw) return []
+  if (!record?.detailRaw) return { files: [] }
   return extractRepositoryFilesFromCachedDetail(record.detailRaw)
 }
 
 function extractRepositoryFilesFromCachedDetail(
   raw: Record<string, unknown>
-): Array<{ path: string; sizeBytes?: number }> {
+): { files: LocalRepositoryFile[]; commitHash?: string; raw?: unknown } {
   const siblings = Array.isArray(raw.siblings) ? raw.siblings : []
-  const files: Array<{ path: string; sizeBytes?: number }> = []
+  const commitHash = typeof raw.sha === 'string' ? raw.sha : undefined
+  const files: LocalRepositoryFile[] = []
   for (const sibling of siblings) {
     if (!sibling || typeof sibling !== 'object') continue
     const record = sibling as Record<string, unknown>
@@ -180,9 +251,11 @@ function extractRepositoryFilesFromCachedDetail(
     files.push({
       path,
       sizeBytes: typeof record.size === 'number' && Number.isFinite(record.size) ? record.size : undefined,
+      revision: commitHash,
+      raw: record,
     })
   }
-  return files
+  return { files, commitHash, raw }
 }
 
 function createProviderFetchCache(fetchCacheStore: LocalModelFetchCacheStore): typeof fetch {

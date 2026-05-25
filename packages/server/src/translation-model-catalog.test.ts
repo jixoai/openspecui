@@ -236,6 +236,7 @@ describe('translation-model-catalog', () => {
         modelId: 'Xenova/opus-mt-en-de',
         raw: {
           id: 'Xenova/opus-mt-en-de',
+          sha: 'abcdef1234567890abcdef1234567890abcdef12',
           siblings: [
             { rfilename: 'config.json', size: 1_500 },
             { rfilename: 'onnx/encoder_model_q4.onnx', size: 35_000_000 },

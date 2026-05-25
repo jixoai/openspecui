@@ -1,3 +1,4 @@
+import { LocalModelAssetStateSchema } from '@openspecui/core/translator'
 import type {
   LocalModelAssetLog,
   LocalModelAssetState,
@@ -8,6 +9,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { useSyncExternalStore, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Settings } from './settings'
+
+function createLocalAssetStateForTest(input: Omit<LocalModelAssetState, 'version' | 'profileLoad' | 'groupsState'> & Partial<Pick<LocalModelAssetState, 'version' | 'profileLoad' | 'groupsState'>>): LocalModelAssetState {
+  return LocalModelAssetStateSchema.parse(input)
+}
 
 const {
   useConfigSubscriptionMock,
@@ -139,7 +144,7 @@ const {
     selectedGroupId = 'q8'
   ): LocalModelAssetState => {
     const plan = createDefaultLocalDownloadPlan(modelId, selectedGroupId)
-    return {
+    return createLocalAssetStateForTest({
       modelId,
       status: 'not-downloaded',
       selected: true,
@@ -152,7 +157,7 @@ const {
         downloadedBytes: 0,
       })),
       updatedAt: 100,
-    }
+    })
   }
   const createDefaultLocalModel = (): LocalModelCatalogItem => {
     const asset = createDefaultLocalAssetState('onnx-community/opus-mt-en-zh')
@@ -253,7 +258,7 @@ const {
         targetMatched: true,
         directionalScore: 1,
       },
-      asset: {
+      asset: createLocalAssetStateForTest({
         modelId: 'onnx-community/opus-mt-en-zh',
         status: 'not-downloaded',
         selected: true,
@@ -261,7 +266,7 @@ const {
         resumable: false,
         updatedAt: 100,
         files: [],
-      },
+      }),
       selectable: true,
       local: false,
     },
@@ -301,14 +306,14 @@ const {
         targetMatched: true,
         directionalScore: 1,
       },
-      asset: {
+      asset: createLocalAssetStateForTest({
         modelId: 'Xenova/unknown-model',
         status: 'not-downloaded',
         selected: false,
         updatedAt: 100,
         resumable: false,
         files: [],
-      },
+      }),
       selectable: false,
       local: false,
     },
@@ -767,7 +772,7 @@ function createDownloadedLocalModelForTest(modelId: string): LocalModelCatalogIt
       targetMatched: true,
       directionalScore: 0,
     },
-    asset: {
+    asset: createLocalAssetStateForTest({
       modelId,
       status: 'downloaded',
       selected: true,
@@ -778,7 +783,7 @@ function createDownloadedLocalModelForTest(modelId: string): LocalModelCatalogIt
       plan,
       files: createDownloadedQ8AssetFilesForTest(),
       updatedAt: 100,
-    },
+    }),
     selectable: true,
     local: true,
   }
@@ -811,7 +816,7 @@ function createFullyDownloadedGroupedLocalModelForTest(modelId: string): LocalMo
       targetMatched: true,
       directionalScore: 0,
     },
-    asset: {
+    asset: createLocalAssetStateForTest({
       modelId,
       status: 'downloaded',
       selected: true,
@@ -839,7 +844,7 @@ function createFullyDownloadedGroupedLocalModelForTest(modelId: string): LocalMo
         'onnx/decoder_model_merged_fp16.onnx': 524288000,
       }),
       updatedAt: 100,
-    },
+    }),
     selectable: true,
     local: true,
   }
@@ -1986,7 +1991,7 @@ describe('Settings', () => {
         removeEventListener: vi.fn(),
       }))
     )
-    let serverAsset: LocalModelAssetState = {
+    let serverAsset: LocalModelAssetState = createLocalAssetStateForTest({
       modelId: 'Xenova/opus-mt-no-de',
       status: 'not-downloaded',
       selected: true,
@@ -2004,7 +2009,7 @@ describe('Settings', () => {
         'onnx/decoder_model_merged_quantized.onnx': 0,
       }),
       updatedAt: 100,
-    }
+    })
     localModelsMock.state.mockImplementation(async () => serverAsset)
     useConfigSubscriptionMock.mockReturnValue({
       data: {
@@ -2085,7 +2090,7 @@ describe('Settings', () => {
       }))
     )
     const modelId = 'Xenova/opus-mt-no-de'
-    const serverAsset: LocalModelAssetState = {
+    const serverAsset: LocalModelAssetState = createLocalAssetStateForTest({
       modelId,
       status: 'not-downloaded',
       selected: true,
@@ -2096,7 +2101,7 @@ describe('Settings', () => {
       plan: createQ8PlanForTest(modelId),
       files: createQ8AssetFilesForTest({}),
       updatedAt: 100,
-    }
+    })
     localModelsMock.state.mockImplementation(async () => serverAsset)
     localModelsMock.panelState.mockImplementation(async ({ selectedGroupId }) => ({
       modelId,
@@ -2163,7 +2168,7 @@ describe('Settings', () => {
         removeEventListener: vi.fn(),
       }))
     )
-    let serverAsset: LocalModelAssetState = {
+    let serverAsset: LocalModelAssetState = createLocalAssetStateForTest({
       modelId: 'Xenova/opus-mt-no-de',
       status: 'not-downloaded',
       selected: true,
@@ -2181,7 +2186,7 @@ describe('Settings', () => {
         'onnx/decoder_model_merged_quantized.onnx': 0,
       }),
       updatedAt: 100,
-    }
+    })
     localModelsMock.state.mockImplementation(async () => serverAsset)
     useConfigSubscriptionMock.mockReturnValue({
       data: {
@@ -2312,7 +2317,7 @@ describe('Settings', () => {
       }
     ): LocalModelAssetState => {
       const plan = buildQ8Plan(input.status)
-      return {
+      return createLocalAssetStateForTest({
         modelId,
         status: input.status,
         selected: true,
@@ -2323,7 +2328,7 @@ describe('Settings', () => {
         plan,
         files: createQ8AssetFilesForTest(input.downloadedBytes),
         updatedAt: 100,
-      }
+      })
     }
     let serverAsset = buildAsset({
       status: 'not-downloaded',
@@ -2351,7 +2356,7 @@ describe('Settings', () => {
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     const downloadButton = await screen.findByRole('button', { name: 'Download model' })
     fireEvent.click(downloadButton)
-    expect(localModelsMock.download).toHaveBeenCalledWith({ modelId, selectedGroupId: 'q8' })
+    expect(localModelsMock.download).toHaveBeenCalledWith({ modelId, groupId: 'q8' })
     expect(screen.getByRole('button', { name: 'Download model' })).toBeTruthy()
 
     localModelsMock.panelState.mockClear()
@@ -2387,7 +2392,7 @@ describe('Settings', () => {
     expect(localModelsMock.panelState).toHaveBeenCalledWith({ modelId, selectedGroupId: 'q8' })
 
     fireEvent.click(screen.getByRole('button', { name: 'Pause download' }))
-    expect(localModelsMock.pause).toHaveBeenCalledWith({ modelId })
+    expect(localModelsMock.pause).toHaveBeenCalledWith({ modelId, groupId: 'q8' })
     serverAsset = buildAsset({
       status: 'paused',
       progress: 0.2,
@@ -2418,7 +2423,7 @@ describe('Settings', () => {
     expect(screen.getByText('Local model download paused.')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Resume download' }))
-    expect(localModelsMock.resume).toHaveBeenCalledWith({ modelId, selectedGroupId: 'q8' })
+    expect(localModelsMock.resume).toHaveBeenCalledWith({ modelId, groupId: 'q8' })
     serverAsset = buildAsset({
       status: 'downloaded',
       progress: 1,
@@ -2450,7 +2455,7 @@ describe('Settings', () => {
     expect(screen.getByRole('button', { name: 'Delete model' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete model' }))
-    expect(localModelsMock.delete).toHaveBeenCalledWith({ modelId })
+    expect(localModelsMock.delete).toHaveBeenCalledWith({ modelId, groupId: 'q8' })
     serverAsset = buildAsset({
       status: 'deleting',
       progress: 1,
@@ -2529,7 +2534,7 @@ describe('Settings', () => {
               selected: group.id === 'fp16',
             })),
           }
-          return {
+          return createLocalAssetStateForTest({
             modelId: 'Xenova/opus-mt-no-de',
             status: 'not-downloaded',
             selected: true,
@@ -2544,9 +2549,9 @@ describe('Settings', () => {
               downloadedBytes: 0,
             })),
             updatedAt: 101,
-          }
+          })
         }
-        return {
+        return createLocalAssetStateForTest({
           modelId: 'Xenova/opus-mt-no-de',
           status: 'downloaded',
           selected: true,
@@ -2557,7 +2562,7 @@ describe('Settings', () => {
           plan: groupedPlan,
           files: createDownloadedQ8AssetFilesForTest(),
           updatedAt: 100,
-        }
+        })
       }
     )
     localModelsMock.listLocal.mockResolvedValueOnce({
@@ -2702,7 +2707,7 @@ describe('Settings', () => {
               selected: group.id === 'fp16',
             })),
           }
-          return {
+          return createLocalAssetStateForTest({
             modelId: 'Xenova/opus-mt-no-de',
             status: 'not-downloaded',
             selected: true,
@@ -2717,9 +2722,9 @@ describe('Settings', () => {
               downloadedBytes: 0,
             })),
             updatedAt: 101,
-          }
+          })
         }
-        return {
+        return createLocalAssetStateForTest({
           modelId: 'Xenova/opus-mt-no-de',
           status: 'downloaded',
           selected: true,
@@ -2730,7 +2735,7 @@ describe('Settings', () => {
           plan: groupedPlan,
           files: createDownloadedQ8AssetFilesForTest(),
           updatedAt: 100,
-        }
+        })
       }
     )
     localModelsMock.listLocal.mockResolvedValueOnce({
@@ -2806,7 +2811,7 @@ describe('Settings', () => {
       }))
     )
     const plan = createQ4AndQ4f16GroupedLocalPlanForTest('onnx-community/opus-mt-en-zh')
-    const localSnapshotAsset: LocalModelAssetState = {
+    const localSnapshotAsset: LocalModelAssetState = createLocalAssetStateForTest({
       modelId: 'onnx-community/opus-mt-en-zh',
       status: 'downloaded',
       selected: true,
@@ -2830,8 +2835,8 @@ describe('Settings', () => {
         'onnx/decoder_model_merged_q4f16.onnx': 0,
       }),
       updatedAt: 100,
-    }
-    const q4f16State: LocalModelAssetState = {
+    })
+    const q4f16State: LocalModelAssetState = createLocalAssetStateForTest({
       modelId: 'onnx-community/opus-mt-en-zh',
       status: 'paused',
       selected: true,
@@ -2867,7 +2872,7 @@ describe('Settings', () => {
         'onnx/decoder_model_merged_q4f16.onnx': 0,
       }),
       updatedAt: 120,
-    }
+    })
     localModelsMock.listLocal.mockResolvedValueOnce({
       items: [
         {
@@ -3167,7 +3172,7 @@ describe('Settings', () => {
     const buildAsset = (selectedGroupId: string): LocalModelAssetState => {
       const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0]
       const selectedFiles = selectedGroup.files
-      return {
+      return createLocalAssetStateForTest({
         modelId,
         status: 'downloaded',
         selected: true,
@@ -3190,7 +3195,7 @@ describe('Settings', () => {
           Object.fromEntries(selectedFiles.map((file) => [file.path, file.sizeBytes ?? 0]))
         ),
         updatedAt: 100,
-      }
+      })
     }
     localModelsMock.listLocal.mockResolvedValueOnce({
       items: [
@@ -3389,7 +3394,7 @@ describe('Settings', () => {
     localModelsMock.panelState.mockResolvedValueOnce({
       modelId: 'Xenova/opus-mt-no-de',
       selectedGroupId: 'q8',
-      asset: {
+      asset: createLocalAssetStateForTest({
         modelId: 'Xenova/opus-mt-no-de',
         status: 'downloaded',
         selected: true,
@@ -3399,7 +3404,7 @@ describe('Settings', () => {
         resumable: false,
         files: createDownloadedQ8AssetFilesForTest(),
         updatedAt: 100,
-      },
+      }),
       downloadPlan: null,
     })
     localModelsMock.listLocal.mockResolvedValueOnce({
@@ -3440,7 +3445,7 @@ describe('Settings', () => {
       }))
     )
     const localPlan = createQ8PlanForTest('Xenova/opus-mt-no-de')
-    const localAsset: LocalModelAssetState = {
+    const localAsset: LocalModelAssetState = createLocalAssetStateForTest({
       modelId: 'Xenova/opus-mt-no-de',
       status: 'downloaded',
       selected: true,
@@ -3451,7 +3456,7 @@ describe('Settings', () => {
       plan: localPlan,
       files: createDownloadedQ8AssetFilesForTest(),
       updatedAt: 100,
-    }
+    })
     localModelsMock.listLocal.mockResolvedValueOnce({
       items: [
         {

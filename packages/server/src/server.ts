@@ -59,6 +59,7 @@ import {
   getDefaultLocalModelCacheDir,
   getDefaultLocalModelFetchCachePath,
   getDefaultLocalModelIndexPath,
+  getDefaultLocalModelProfileManifestPath,
 } from './local-model-cache-path.js'
 import { NotificationService } from './notification-service.js'
 import { findAvailablePort } from './port-utils.js'
@@ -109,6 +110,7 @@ export interface ServerConfig {
     translationCacheDatabasePath?: string
     localModelCacheDir?: string
     localModelAssetIndexPath?: string
+    localModelProfileManifestPath?: string
     localModelFetchCachePath?: string
   }
 }
@@ -170,6 +172,9 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
   const nmtModelCacheDir = config.runtimePaths?.localModelCacheDir ?? getDefaultLocalModelCacheDir()
   const nmtModelIndexPath =
     config.runtimePaths?.localModelAssetIndexPath ?? getDefaultLocalModelIndexPath()
+  const nmtModelProfileManifestPath =
+    config.runtimePaths?.localModelProfileManifestPath ??
+    getDefaultLocalModelProfileManifestPath()
   const nmtModelFetchCachePath =
     config.runtimePaths?.localModelFetchCachePath ?? getDefaultLocalModelFetchCachePath()
   const translationEngineService = new TranslationEngineService({
@@ -186,6 +191,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     globalSettingsManager,
     cacheDir: nmtModelCacheDir,
     indexPath: nmtModelIndexPath,
+    profileManifestPath: nmtModelProfileManifestPath,
     fetchCachePath: nmtModelFetchCachePath,
   })
 

@@ -59,6 +59,10 @@ export interface TranslationDownloadFilePlan {
   path: string
   sizeBytes?: number
   required: boolean
+  etag?: string
+  revision?: string
+  sourceUrl?: string
+  raw?: unknown
 }
 
 export interface TranslationDownloadGroupPlan {
@@ -68,7 +72,16 @@ export interface TranslationDownloadGroupPlan {
   profile?: string
   dtype?: string
   estimatedTotalBytes?: number
+  baseGroupId?: string
+  commitHash?: string
+  shortCommitHash?: string
+  rootDir?: string
   status?: LocalModelDownloadStatus
+  progress?: number
+  bytesDownloaded?: number
+  totalBytes?: number
+  resumable?: boolean
+  error?: string
   selectable: boolean
   selected: boolean
   files: TranslationDownloadFilePlan[]
@@ -138,6 +151,10 @@ export const TranslationDownloadFilePlanSchema = z.object({
   path: z.string().min(1),
   sizeBytes: z.number().int().nonnegative().optional(),
   required: z.boolean(),
+  etag: z.string().min(1).optional(),
+  revision: z.string().min(1).optional(),
+  sourceUrl: z.string().min(1).optional(),
+  raw: z.unknown().optional(),
 })
 
 export const TranslationDownloadGroupPlanSchema = z.object({
@@ -147,16 +164,120 @@ export const TranslationDownloadGroupPlanSchema = z.object({
   profile: z.string().min(1).optional(),
   dtype: z.string().min(1).optional(),
   estimatedTotalBytes: z.number().int().nonnegative().optional(),
+  baseGroupId: z.string().min(1).optional(),
+  commitHash: z.string().min(1).optional(),
+  shortCommitHash: z.string().min(1).optional(),
+  rootDir: z.string().min(1).optional(),
   status: LocalModelDownloadStatusSchema.optional(),
+  progress: z.number().min(0).max(1).optional(),
+  bytesDownloaded: z.number().int().nonnegative().optional(),
+  totalBytes: z.number().int().nonnegative().optional(),
+  resumable: z.boolean().optional(),
+  error: z.string().optional(),
   selectable: z.boolean(),
   selected: z.boolean(),
   files: z.array(TranslationDownloadFilePlanSchema),
 })
 
+export const LocalModelProfileStatusSchema = z.enum(['idle', 'loading', 'ready', 'error'])
+
+export type LocalModelProfileStatus = z.infer<typeof LocalModelProfileStatusSchema>
+
+export const LocalModelProfileManifestFileSchema = z.object({
+  path: z.string().min(1),
+  sizeBytes: z.number().int().nonnegative().optional(),
+  required: z.boolean(),
+  etag: z.string().min(1).optional(),
+  revision: z.string().min(1).optional(),
+  sourceUrl: z.string().min(1).optional(),
+  raw: z.unknown().optional(),
+})
+
+export type LocalModelProfileManifestFile = z.infer<typeof LocalModelProfileManifestFileSchema>
+
+export const LocalModelProfileManifestGroupSchema = z.object({
+  id: z.string().min(1),
+  baseGroupId: z.string().min(1),
+  label: z.string().min(1),
+  displayLabel: z.string().min(1),
+  description: z.string().optional(),
+  profile: z.string().min(1).optional(),
+  dtype: z.string().min(1).optional(),
+  commitHash: z.string().min(1),
+  shortCommitHash: z.string().min(1),
+  rootDir: z.string().min(1),
+  estimatedTotalBytes: z.number().int().nonnegative().optional(),
+  selectable: z.boolean(),
+  files: z.array(LocalModelProfileManifestFileSchema),
+})
+
+export type LocalModelProfileManifestGroup = z.infer<
+  typeof LocalModelProfileManifestGroupSchema
+>
+
+export const LocalModelProfileManifestSchema = z.object({
+  modelId: z.string().min(1),
+  source: z.literal('huggingface'),
+  endpoint: z.string().default(''),
+  revision: z.string().min(1),
+  commitHash: z.string().min(1),
+  shortCommitHash: z.string().min(1),
+  fetchedAt: z.number().int().nonnegative(),
+  updatedAt: z.number().int().nonnegative(),
+  raw: z.unknown().optional(),
+  groups: z.record(z.string(), LocalModelProfileManifestGroupSchema).default({}),
+  groupOrder: z.array(z.string().min(1)).default([]),
+})
+
+export type LocalModelProfileManifest = z.infer<typeof LocalModelProfileManifestSchema>
+
+export const LocalModelLifecycleFileStateSchema = z.object({
+  path: z.string().min(1),
+  sizeBytes: z.number().int().nonnegative().optional(),
+  downloadedBytes: z.number().int().nonnegative().optional(),
+  required: z.boolean().default(true),
+  status: LocalModelDownloadStatusSchema.default('not-downloaded'),
+  updatedAt: z.number().int().nonnegative().optional(),
+  error: z.string().optional(),
+})
+
+export type LocalModelLifecycleFileState = z.infer<
+  typeof LocalModelLifecycleFileStateSchema
+>
+
+export const LocalModelLifecycleGroupStateSchema = z.object({
+  groupId: z.string().min(1),
+  baseGroupId: z.string().min(1).optional(),
+  status: LocalModelDownloadStatusSchema.default('not-downloaded'),
+  rootDir: z.string().min(1).optional(),
+  bytesDownloaded: z.number().int().nonnegative().optional(),
+  totalBytes: z.number().int().nonnegative().optional(),
+  progress: z.number().min(0).max(1).optional(),
+  resumable: z.boolean().default(false),
+  error: z.string().optional(),
+  installedAt: z.number().int().nonnegative().optional(),
+  updatedAt: z.number().int().nonnegative().optional(),
+  files: z.array(LocalModelLifecycleFileStateSchema).default([]),
+})
+
+export type LocalModelLifecycleGroupState = z.infer<
+  typeof LocalModelLifecycleGroupStateSchema
+>
+
+export const LocalModelProfileLoadStateSchema = z.object({
+  status: LocalModelProfileStatusSchema.default('idle'),
+  message: z.string().optional(),
+  error: z.string().optional(),
+  updatedAt: z.number().int().nonnegative().optional(),
+})
+
+export type LocalModelProfileLoadState = z.infer<typeof LocalModelProfileLoadStateSchema>
+
 export const LocalModelAssetLogSchema = z.object({
   engineId: z.literal('local'),
   modelId: z.string().min(1),
   selectedGroupId: z.string().min(1).optional(),
+  groupId: z.string().min(1).optional(),
   status: LocalModelDownloadStatusSchema,
   message: z.string(),
   progress: z.number().min(0).max(1).optional(),
@@ -191,8 +312,10 @@ export type LocalModelAssetPlanSnapshot = z.infer<typeof LocalModelAssetPlanSnap
 
 export const LocalModelAssetStateSchema = z.object({
   modelId: z.string().min(1),
+  version: z.literal(2).default(2),
   status: LocalModelDownloadStatusSchema.default('not-downloaded'),
   selected: z.boolean().default(false),
+  selectedGroupId: z.string().min(1).optional(),
   installedAt: z.number().int().nonnegative().optional(),
   updatedAt: z.number().int().nonnegative().optional(),
   bytesDownloaded: z.number().int().nonnegative().optional(),
@@ -200,6 +323,9 @@ export const LocalModelAssetStateSchema = z.object({
   progress: z.number().min(0).max(1).optional(),
   resumable: z.boolean().default(false),
   error: z.string().optional(),
+  profileLoad: LocalModelProfileLoadStateSchema.default(LocalModelProfileLoadStateSchema.parse({})),
+  profileManifest: LocalModelProfileManifestSchema.optional(),
+  groupsState: z.record(z.string(), LocalModelLifecycleGroupStateSchema).default({}),
   plan: LocalModelAssetPlanSnapshotSchema.optional(),
   files: z
     .array(

@@ -42,6 +42,10 @@ export type LocalModelProfileId = (typeof LOCAL_MODEL_PROFILE_DEFINITIONS)[numbe
 export interface LocalRepositoryFile {
   path: string
   sizeBytes?: number
+  etag?: string
+  revision?: string
+  sourceUrl?: string
+  raw?: unknown
 }
 
 export interface LocalRuntimeProfileFiles {
@@ -200,6 +204,10 @@ function createDownloadGroup(input: {
     path: file.path,
     sizeBytes: file.sizeBytes,
     required: true,
+    etag: file.etag,
+    revision: file.revision,
+    sourceUrl: file.sourceUrl,
+    raw: file.raw,
   }))
   const estimatedTotalBytes = files.reduce((total, file) => total + (file.sizeBytes ?? 0), 0)
   const hasConcreteSizes = files.length > 0 && files.every((file) => file.sizeBytes !== undefined)

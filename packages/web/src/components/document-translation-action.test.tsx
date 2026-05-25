@@ -1,9 +1,13 @@
 import type { BrowserTranslationSupportTableState } from '@/lib/browser-translation'
 import { DOCUMENT_TRANSLATION_SESSION_STORAGE_KEY } from '@/lib/document-translation-session-state'
-import type { LocalModelAssetState } from '@openspecui/core/translator'
+import { LocalModelAssetStateSchema, type LocalModelAssetState } from '@openspecui/core/translator'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MarkdownViewer } from './markdown-viewer'
+
+function createLocalAssetStateForTest(input: Omit<LocalModelAssetState, 'version' | 'profileLoad' | 'groupsState'> & Partial<Pick<LocalModelAssetState, 'version' | 'profileLoad' | 'groupsState'>>): LocalModelAssetState {
+  return LocalModelAssetStateSchema.parse(input)
+}
 
 const translateMarkdownDocumentProgressivelyMock = vi.hoisted(() => vi.fn())
 const navigateMock = vi.hoisted(() => vi.fn())
@@ -941,7 +945,7 @@ function mockProgressiveResult(
 }
 
 function createDownloadedLocalAssetState(): LocalModelAssetState {
-  return {
+  return createLocalAssetStateForTest({
     modelId: 'Xenova/opus-mt-en-zh',
     status: 'downloaded',
     selected: true,
@@ -982,5 +986,5 @@ function createDownloadedLocalAssetState(): LocalModelAssetState {
       },
     ],
     updatedAt: 100,
-  }
+  })
 }
