@@ -74,6 +74,6 @@
 - [x] 8.1 Changeset included if package behavior or published contracts change.
 - [x] 8.2 Implementation artifact updated with any divergence from this checklist.
 - [x] 8.3 CI-equivalent local checks passed or scoped failures documented.
-- [x] 8.4 PR checks passed.
+- [ ] 8.4 PR checks passed.
 - [ ] 8.5 OpenSpec archive flow completed after implementation is accepted.
 - [ ] 8.6 PR merge approved.

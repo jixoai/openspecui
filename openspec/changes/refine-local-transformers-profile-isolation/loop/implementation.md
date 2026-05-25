@@ -1,6 +1,6 @@
 ## Implementation State
 
-- Status: implemented, locally verified, and PR checks passed.
+- Status: implemented and locally verified; latest PR checks are pending after CI hardening.
 - Current branch: `fix/file-panel-release-patch`.
 - Current PR: <https://github.com/jixoai/openspecui/pull/171>.
 - OpenSpec status: ready for user acceptance; archive and merge remain intentionally pending.
@@ -56,7 +56,7 @@ Implemented execution order:
   - `pnpm typecheck`
   - `pnpm test:ci`
   - `pnpm test:browser:ci`
-- GitHub PR checks passed on PR #171:
+- Previous GitHub PR checks passed on PR #171 before the final documentation update; latest checks must pass again after this CI-hardening commit:
   - Changeset Gate
   - CI Scope
   - Fast Gate
@@ -65,8 +65,10 @@ Implemented execution order:
   - Browser Gate aggregate
 - Additional CI hardening landed during final verification:
   - Reactive watcher path resolution now resolves missing paths through the nearest existing realpath ancestor.
+  - Missing reactive file/stat/exists dependencies now have a low-frequency poll fallback so a missed native create event cannot leave artifact status stale.
   - Core watcher tests await asynchronous watcher teardown.
   - Local model progress streaming test uses a controlled stream gate instead of a timing window.
+  - Server Vitest now runs test files serially because server tests stub process-global `fetch` and start real local servers.
 
 ## Decisions Taken
 
