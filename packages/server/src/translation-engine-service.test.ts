@@ -285,6 +285,60 @@ describe('TranslationEngineService', () => {
     )
   })
 
+  it('normalizes base local group ids to versioned profile groups during batch translation', async () => {
+    const testableService = service as TestableTranslationEngineService
+    const create = vi.fn(async () => ({
+      batchTranslate: async function* (): AsyncGenerator<BatchTranslateEvent> {
+        yield { index: 0, output: 'Hallo' }
+      },
+      destroy: vi.fn(),
+    }))
+    vi.spyOn(testableService, 'loadFactory').mockResolvedValue({ create })
+    const versionedGroupId = 'q4-abcdef'
+    const plan = createLocalDownloadPlan('Xenova/opus-mt-en-de', versionedGroupId, {
+      rootDir: join(tempDir, 'profiles', versionedGroupId),
+    })
+    plan.selectedGroupId = versionedGroupId
+    plan.groups = plan.groups?.map((group) => ({
+      ...group,
+      id: versionedGroupId,
+      baseGroupId: 'q4',
+      dtype: 'q4',
+      rootDir: join(tempDir, 'profiles', versionedGroupId),
+      selected: true,
+    }))
+    await writePersistedLocalAssetPlan(localAssetIndexPath, plan, {
+      status: 'downloaded',
+      bytesDownloaded: 31,
+      progress: 1,
+      rootDir: join(tempDir, 'profiles', versionedGroupId),
+    })
+    await writeLocalProfileFiles(join(tempDir, 'profiles', versionedGroupId), [
+      'config.json',
+      `onnx/encoder_model_${versionedGroupId}.onnx`,
+      `onnx/decoder_model_merged_${versionedGroupId}.onnx`,
+    ])
+
+    const events = await collectBatchEvents(
+      service.batchTranslate({
+        engineId: 'local',
+        sourceLanguage: 'en',
+        targetLanguage: 'de',
+        model: 'Xenova/opus-mt-en-de',
+        selectedGroupId: 'q4',
+        inputs: ['Hello'],
+      })
+    )
+
+    expect(events).toEqual([{ index: 0, output: 'Hallo' }])
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dtype: 'q4',
+        runtimeConfig: { model_type: 'marian' },
+      })
+    )
+  })
+
   it('fails local batch translation before probing remote metadata when files are missing', async () => {
     const testableService = service as TestableTranslationEngineService
     const create = vi.fn(async () => ({

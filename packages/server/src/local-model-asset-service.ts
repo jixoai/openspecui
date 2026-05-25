@@ -329,7 +329,9 @@ export class LocalModelAssetService {
       groupsState: nextGroupsState,
       updatedAt: this.now(),
     })
-    const projected = await this.refreshCachedState(nextState, effectiveGroupId)
+    const projected = await this.refreshCachedState(nextState, effectiveGroupId, {
+      revalidateDisk: true,
+    })
     await this.store.upsert(projected)
     this.emitLog({
       engineId: 'local',
@@ -416,7 +418,8 @@ export class LocalModelAssetService {
         plan: nextPlan,
         updatedAt: this.now(),
       }),
-      nextSelectedGroupId
+      nextSelectedGroupId,
+      { revalidateDisk: true }
     )
     if (nextState.profileManifest) {
       await this.profileManifestStore.upsert(nextState.profileManifest)
@@ -470,7 +473,9 @@ export class LocalModelAssetService {
             updatedAt: this.now(),
           },
           updatedAt: this.now(),
-        })
+        }),
+        undefined,
+        { revalidateDisk: true }
       )
       await this.store.upsert(nextState)
       return nextState
@@ -613,7 +618,8 @@ export class LocalModelAssetService {
 
   private async refreshCachedState(
     state: LocalModelAssetState,
-    selectedGroupId?: string
+    selectedGroupId?: string,
+    options: { revalidateDisk?: boolean } = {}
   ): Promise<LocalModelAssetState> {
     const [selectedModel, persistedSelectedGroupId] = await Promise.all([
       this.readSelectedModel(),
@@ -637,11 +643,17 @@ export class LocalModelAssetService {
         manifestWithHistoricalGroups,
         selectedGroupIdFromSettings ?? migrated.selectedGroupId ?? migrated.plan?.selectedGroupId
       ) ?? selectFirstManifestGroupId(manifestWithHistoricalGroups)
-    const reconciledGroupsState = await this.reconcileGroupsFromDisk({
-      modelId: state.modelId,
-      manifest: manifestWithHistoricalGroups,
-      groupsState: migrated.groupsState,
-    })
+    const reconciledGroupsState = options.revalidateDisk
+      ? await this.reconcileGroupsFromDisk({
+          modelId: state.modelId,
+          manifest: manifestWithHistoricalGroups,
+          groupsState: migrated.groupsState,
+        })
+      : this.reconcileGroupsFromSnapshot({
+          modelId: state.modelId,
+          manifest: manifestWithHistoricalGroups,
+          groupsState: migrated.groupsState,
+        })
     const plan = buildPlanFromManifest({
       modelId: state.modelId,
       manifest: manifestWithHistoricalGroups,
@@ -680,6 +692,49 @@ export class LocalModelAssetService {
       updatedAt: this.now(),
       installedAt: selectedGroupState?.installedAt ?? state.installedAt,
     })
+  }
+
+  private reconcileGroupsFromSnapshot(input: {
+    modelId: string
+    manifest: LocalModelProfileManifest | undefined
+    groupsState: LocalModelAssetState['groupsState']
+  }): LocalModelAssetState['groupsState'] {
+    if (!input.manifest) return input.groupsState
+    const nextGroupsState: LocalModelAssetState['groupsState'] = { ...input.groupsState }
+    for (const groupId of input.manifest.groupOrder) {
+      const manifestGroup = input.manifest.groups[groupId]
+      if (!manifestGroup) continue
+      const current = nextGroupsState[groupId]
+      const files = reconcileGroupFilesFromSnapshot({
+        manifestGroup,
+        currentFiles: current?.files ?? [],
+        currentStatus: current?.status ?? 'not-downloaded',
+      })
+      const bytesDownloaded = sumDownloadedBytes(files)
+      const totalBytes = manifestGroup.estimatedTotalBytes
+      const status = current?.status ?? 'not-downloaded'
+      nextGroupsState[groupId] = LocalModelLifecycleGroupStateSchema.parse({
+        ...current,
+        groupId,
+        baseGroupId: manifestGroup.baseGroupId,
+        status,
+        rootDir: manifestGroup.rootDir,
+        bytesDownloaded,
+        totalBytes,
+        progress:
+          totalBytes && totalBytes > 0
+            ? Math.max(0, Math.min(1, bytesDownloaded / totalBytes))
+            : current?.progress,
+        resumable:
+          current?.resumable ??
+          (status === 'paused' || status === 'error' || status === 'downloading'),
+        error: current?.error,
+        installedAt: current?.installedAt,
+        updatedAt: current?.updatedAt ?? this.now(),
+        files,
+      })
+    }
+    return nextGroupsState
   }
 
   private async reconcileGroupsFromDisk(input: {
@@ -813,7 +868,9 @@ export class LocalModelAssetService {
       },
       updatedAt: this.now(),
     })
-    const projected = await this.refreshCachedState(nextState, resolvedGroupId)
+    const projected = await this.refreshCachedState(nextState, resolvedGroupId, {
+      revalidateDisk: true,
+    })
     await this.store.upsert(projected)
     this.emitLog({
       engineId: 'local',
@@ -1086,7 +1143,9 @@ export class LocalModelAssetService {
       },
       updatedAt: this.now(),
     })
-    const projected = await this.refreshCachedState(nextState, input.groupId)
+    const projected = await this.refreshCachedState(nextState, input.groupId, {
+      revalidateDisk: true,
+    })
     await this.store.upsert(projected)
     this.emitLog({
       engineId: 'local',
@@ -1158,7 +1217,9 @@ export class LocalModelAssetService {
       },
       updatedAt: this.now(),
     })
-    const projected = await this.refreshCachedState(nextState, groupId)
+    const projected = await this.refreshCachedState(nextState, groupId, {
+      revalidateDisk: true,
+    })
     await this.store.upsert(projected)
     this.sessions.delete(sessionKey)
     this.emitLog({
@@ -1533,6 +1594,47 @@ function reconcileGroupFiles(input: {
       file.sizeBytes !== undefined && downloadedBytes >= file.sizeBytes
         ? 'downloaded'
         : (current?.status ?? 'not-downloaded')
+    return LocalModelLifecycleFileStateSchema.parse({
+      path: file.path,
+      sizeBytes: file.sizeBytes,
+      downloadedBytes,
+      required: file.required,
+      status,
+      updatedAt: current?.updatedAt,
+      error: current?.error,
+    })
+  })
+}
+
+function reconcileGroupFilesFromSnapshot(input: {
+  manifestGroup: LocalModelProfileManifestGroup
+  currentFiles: ReadonlyArray<LocalModelLifecycleFileState>
+  currentStatus: LocalModelDownloadStatus
+}): LocalModelLifecycleFileState[] {
+  const currentFileByPath = new Map(input.currentFiles.map((file) => [file.path, file]))
+  return input.manifestGroup.files.map((file) => {
+    const current = currentFileByPath.get(file.path)
+    const downloadedBytes =
+      current?.downloadedBytes === undefined
+        ? input.currentStatus === 'downloaded'
+          ? file.sizeBytes
+          : 0
+        : file.sizeBytes === undefined
+          ? current.downloadedBytes
+          : Math.min(current.downloadedBytes, file.sizeBytes)
+    const status =
+      current?.status ??
+      (file.sizeBytes !== undefined &&
+      downloadedBytes !== undefined &&
+      downloadedBytes >= file.sizeBytes
+        ? 'downloaded'
+        : input.currentStatus === 'downloaded'
+          ? 'downloaded'
+          : input.currentStatus === 'paused' ||
+              input.currentStatus === 'downloading' ||
+              input.currentStatus === 'error'
+            ? input.currentStatus
+            : 'not-downloaded')
     return LocalModelLifecycleFileStateSchema.parse({
       path: file.path,
       sizeBytes: file.sizeBytes,

@@ -5,7 +5,13 @@ import type {
 } from './translator.js'
 
 export const LOCAL_MODEL_PROFILE_DEFINITIONS = [
-  { id: 'q1', label: 'q1', dtype: 'q1', suffix: '_q1', description: '1-bit quantized ONNX profile.' },
+  {
+    id: 'q1',
+    label: 'q1',
+    dtype: 'q1',
+    suffix: '_q1',
+    description: '1-bit quantized ONNX profile.',
+  },
   {
     id: 'q1f16',
     label: 'q1f16',
@@ -13,7 +19,13 @@ export const LOCAL_MODEL_PROFILE_DEFINITIONS = [
     suffix: '_q1f16',
     description: '1-bit block quantized fp16 ONNX profile.',
   },
-  { id: 'q2', label: 'q2', dtype: 'q2', suffix: '_q2', description: '2-bit quantized ONNX profile.' },
+  {
+    id: 'q2',
+    label: 'q2',
+    dtype: 'q2',
+    suffix: '_q2',
+    description: '2-bit quantized ONNX profile.',
+  },
   {
     id: 'q2f16',
     label: 'q2f16',
@@ -21,7 +33,13 @@ export const LOCAL_MODEL_PROFILE_DEFINITIONS = [
     suffix: '_q2f16',
     description: '2-bit block quantized fp16 ONNX profile.',
   },
-  { id: 'q4', label: 'q4', dtype: 'q4', suffix: '_q4', description: '4-bit quantized ONNX profile.' },
+  {
+    id: 'q4',
+    label: 'q4',
+    dtype: 'q4',
+    suffix: '_q4',
+    description: '4-bit quantized ONNX profile.',
+  },
   {
     id: 'q4f16',
     label: 'q4f16',
@@ -29,10 +47,28 @@ export const LOCAL_MODEL_PROFILE_DEFINITIONS = [
     suffix: '_q4f16',
     description: '4-bit block quantized fp16 ONNX profile.',
   },
-  { id: 'bnb4', label: 'bnb4', dtype: 'bnb4', suffix: '_bnb4', description: 'bitsandbytes 4-bit ONNX profile.' },
-  { id: 'q8', label: 'q8', dtype: 'q8', suffix: '_quantized', description: '8-bit quantized ONNX profile.' },
+  {
+    id: 'bnb4',
+    label: 'bnb4',
+    dtype: 'bnb4',
+    suffix: '_bnb4',
+    description: 'bitsandbytes 4-bit ONNX profile.',
+  },
+  {
+    id: 'q8',
+    label: 'q8',
+    dtype: 'q8',
+    suffix: '_quantized',
+    description: '8-bit quantized ONNX profile.',
+  },
   { id: 'int8', label: 'int8', dtype: 'int8', suffix: '_int8', description: 'int8 ONNX profile.' },
-  { id: 'uint8', label: 'uint8', dtype: 'uint8', suffix: '_uint8', description: 'uint8 ONNX profile.' },
+  {
+    id: 'uint8',
+    label: 'uint8',
+    dtype: 'uint8',
+    suffix: '_uint8',
+    description: 'uint8 ONNX profile.',
+  },
   { id: 'fp16', label: 'fp16', dtype: 'fp16', suffix: '_fp16', description: 'fp16 ONNX profile.' },
   { id: 'fp32', label: 'fp32', dtype: 'fp32', suffix: '', description: 'fp32 ONNX profile.' },
 ] as const
@@ -145,9 +181,17 @@ export function selectLocalDownloadGroup(
 ): TranslationDownloadGroupPlan | null {
   if (!plan?.groups?.length) return null
   const explicit = selectedGroupId
-    ? plan.groups.find((group) => group.id === selectedGroupId && group.selectable)
+    ? plan.groups.find(
+        (group) =>
+          group.selectable &&
+          (group.id === selectedGroupId || group.baseGroupId === selectedGroupId)
+      )
     : undefined
-  return explicit ?? plan.groups.find((group) => group.selected) ?? selectSmallestSelectableGroup(plan.groups)
+  return (
+    explicit ??
+    plan.groups.find((group) => group.selected) ??
+    selectSmallestSelectableGroup(plan.groups)
+  )
 }
 
 function buildPlanFromGroups(input: {
@@ -157,7 +201,8 @@ function buildPlanFromGroups(input: {
 }): TranslationModelDownloadPlan | null {
   if (input.groups.length === 0) return null
   const selectedGroup =
-    selectRequestedGroup(input.groups, input.selectedGroupId) ?? selectSmallestSelectableGroup(input.groups)
+    selectRequestedGroup(input.groups, input.selectedGroupId) ??
+    selectSmallestSelectableGroup(input.groups)
   const selectedGroupId = selectedGroup?.id
   const groups = input.groups.map((group) => ({
     ...group,
@@ -178,7 +223,12 @@ function selectRequestedGroup(
   selectedGroupId: string | undefined
 ): TranslationDownloadGroupPlan | null {
   if (!selectedGroupId) return null
-  return groups.find((group) => group.id === selectedGroupId && group.selectable) ?? null
+  return (
+    groups.find(
+      (group) =>
+        group.selectable && (group.id === selectedGroupId || group.baseGroupId === selectedGroupId)
+    ) ?? null
+  )
 }
 
 function selectSmallestSelectableGroup(
@@ -187,8 +237,9 @@ function selectSmallestSelectableGroup(
   return (
     groups
       .filter((group) => group.selectable && group.estimatedTotalBytes !== undefined)
-      .sort((left, right) => (left.estimatedTotalBytes ?? 0) - (right.estimatedTotalBytes ?? 0))[0] ??
-    null
+      .sort(
+        (left, right) => (left.estimatedTotalBytes ?? 0) - (right.estimatedTotalBytes ?? 0)
+      )[0] ?? null
   )
 }
 

@@ -434,7 +434,7 @@ describe('LocalModelAssetService', () => {
     await waitForDownloadedState(indexPath)
   })
 
-  it('returns per-group cached status so downloaded profiles stay independently visible', async () => {
+  it('returns per-group persisted status so downloaded profiles stay independently visible', async () => {
     hubMock.listFiles.mockImplementation(async function* () {
       yield testRepositoryFile('config.json', 10)
       yield testRepositoryFile('onnx/encoder_model_q4.onnx', 10)
@@ -466,48 +466,31 @@ describe('LocalModelAssetService', () => {
     }) as TestableLocalModelAssetService
 
     await service.refreshProfiles('onnx-community/opus-mt-en-zh')
-
-    await writeLocalModelProfileFile({
-      cacheDir,
-      modelId: 'onnx-community/opus-mt-en-zh',
-      groupId: TEST_GROUP_Q8,
-      path: 'config.json',
-      content: 'config',
-    })
-    await writeLocalModelProfileFile({
-      cacheDir,
-      modelId: 'onnx-community/opus-mt-en-zh',
-      groupId: TEST_GROUP_Q8,
-      path: 'onnx/encoder_model_quantized.onnx',
-      content: 'q8-encoder',
-    })
-    await writeLocalModelProfileFile({
-      cacheDir,
-      modelId: 'onnx-community/opus-mt-en-zh',
-      groupId: TEST_GROUP_Q8,
-      path: 'onnx/decoder_model_merged_quantized.onnx',
-      content: 'q8-decoder',
-    })
-    await writeLocalModelProfileFile({
-      cacheDir,
-      modelId: 'onnx-community/opus-mt-en-zh',
-      groupId: TEST_GROUP_Q4,
-      path: 'config.json',
-      content: 'config',
-    })
-    await writeLocalModelProfileFile({
-      cacheDir,
-      modelId: 'onnx-community/opus-mt-en-zh',
-      groupId: TEST_GROUP_Q4,
-      path: 'onnx/encoder_model_q4.onnx',
-      content: 'q4-encoder',
-    })
-    await writeLocalModelProfileFile({
-      cacheDir,
-      modelId: 'onnx-community/opus-mt-en-zh',
-      groupId: TEST_GROUP_Q4,
-      path: 'onnx/decoder_model_merged_q4.onnx',
-      content: 'q4-decoder',
+    const store = new LocalModelAssetStore({ indexPath })
+    const state = (await store.readAll())[0]
+    if (!state?.profileManifest) throw new Error('Expected refreshed profile manifest.')
+    const q4Files = state.profileManifest.groups[TEST_GROUP_Q4]?.files
+    const q8Files = state.profileManifest.groups[TEST_GROUP_Q8]?.files
+    if (!q4Files || !q8Files) throw new Error('Expected q4 and q8 profile groups.')
+    await store.upsert({
+      ...state,
+      groupsState: {
+        ...state.groupsState,
+        [TEST_GROUP_Q4]: testGroupState({
+          groupId: TEST_GROUP_Q4,
+          baseGroupId: 'q4',
+          status: 'downloaded',
+          rootDir: state.profileManifest.groups[TEST_GROUP_Q4].rootDir,
+          files: q4Files.map((file) => ({ path: file.path, sizeBytes: file.sizeBytes ?? 0 })),
+        }),
+        [TEST_GROUP_Q8]: testGroupState({
+          groupId: TEST_GROUP_Q8,
+          baseGroupId: 'q8',
+          status: 'downloaded',
+          rootDir: state.profileManifest.groups[TEST_GROUP_Q8].rootDir,
+          files: q8Files.map((file) => ({ path: file.path, sizeBytes: file.sizeBytes ?? 0 })),
+        }),
+      },
     })
 
     const result = await service.listLocalCatalog()
@@ -516,6 +499,172 @@ describe('LocalModelAssetService', () => {
     expect(groups.find((group) => group.baseGroupId === 'q4')?.status).toBe('downloaded')
     expect(groups.find((group) => group.baseGroupId === 'q8')?.status).toBe('downloaded')
     expect(groups.find((group) => group.baseGroupId === 'fp16')?.status).toBe('not-downloaded')
+  })
+
+  it('uses persisted local profiles without refreshing repository metadata', async () => {
+    const modelId = 'onnx-community/opus-mt-en-zh'
+    const q4Files = [
+      { path: 'config.json', sizeBytes: 10 },
+      { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10 },
+      { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10 },
+    ]
+    const profileManifest = testProfileManifest({
+      modelId,
+      cacheDir,
+      groups: [
+        {
+          id: TEST_GROUP_Q4,
+          baseGroupId: 'q4',
+          label: 'q4',
+          dtype: 'q4',
+          files: q4Files,
+        },
+      ],
+    })
+    await new LocalModelAssetStore({ indexPath }).upsert({
+      modelId,
+      status: 'downloaded',
+      selected: true,
+      progress: 1,
+      bytesDownloaded: 30,
+      totalBytes: 30,
+      resumable: false,
+      selectedGroupId: TEST_GROUP_Q4,
+      profileManifest,
+      groupsState: {
+        [TEST_GROUP_Q4]: testGroupState({
+          groupId: TEST_GROUP_Q4,
+          baseGroupId: 'q4',
+          status: 'downloaded',
+          rootDir: profileManifest.groups[TEST_GROUP_Q4].rootDir,
+          files: q4Files,
+        }),
+      },
+      files: q4Files.map((file) => ({
+        path: file.path,
+        sizeBytes: file.sizeBytes,
+        downloadedBytes: file.sizeBytes,
+      })),
+      updatedAt: 90,
+    })
+    hubMock.listFiles.mockClear()
+
+    const service = new LocalModelAssetService({
+      projectDir: tempDir,
+      configManager: {} as ConfigManager,
+      globalSettingsManager: {
+        readSettings: async () => ({
+          translationEngines: {
+            local: {
+              model: modelId,
+              selectedGroupId: TEST_GROUP_Q4,
+              hfEndpoint: 'https://huggingface.co',
+            },
+          },
+        }),
+      },
+      now: () => 100,
+      indexPath,
+      profileManifestPath,
+      cacheDir,
+      fetchCachePath,
+    })
+
+    const [localCatalog, state] = await Promise.all([
+      service.listLocalCatalog(),
+      service.readSelectedModelState(modelId, TEST_GROUP_Q4),
+    ])
+
+    expect(hubMock.listFiles).not.toHaveBeenCalled()
+    expect(localCatalog.items[0]?.id).toBe(modelId)
+    expect(state.status).toBe('downloaded')
+    expect(state.profileManifest?.commitHash).toBe(TEST_COMMIT_HASH)
+  })
+
+  it('does not reconcile persisted profile status from disk during ordinary reads', async () => {
+    const modelId = 'onnx-community/opus-mt-en-zh'
+    const q4Files = [
+      { path: 'config.json', sizeBytes: 10 },
+      { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10 },
+      { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10 },
+    ]
+    const profileManifest = testProfileManifest({
+      modelId,
+      cacheDir,
+      groups: [
+        {
+          id: TEST_GROUP_Q4,
+          baseGroupId: 'q4',
+          label: 'q4',
+          dtype: 'q4',
+          files: q4Files,
+        },
+      ],
+    })
+    await new LocalModelAssetStore({ indexPath }).upsert({
+      modelId,
+      status: 'not-downloaded',
+      selected: true,
+      progress: 0,
+      bytesDownloaded: 0,
+      totalBytes: 30,
+      resumable: false,
+      selectedGroupId: TEST_GROUP_Q4,
+      profileManifest,
+      groupsState: {
+        [TEST_GROUP_Q4]: testGroupState({
+          groupId: TEST_GROUP_Q4,
+          baseGroupId: 'q4',
+          status: 'not-downloaded',
+          rootDir: profileManifest.groups[TEST_GROUP_Q4].rootDir,
+          files: q4Files,
+        }),
+      },
+      files: q4Files.map((file) => ({
+        path: file.path,
+        sizeBytes: file.sizeBytes,
+        downloadedBytes: 0,
+      })),
+      updatedAt: 90,
+    })
+    for (const file of q4Files) {
+      await writeLocalModelProfileFile({
+        cacheDir,
+        modelId,
+        groupId: TEST_GROUP_Q4,
+        path: file.path,
+        content: file.path,
+        sizeBytes: file.sizeBytes,
+      })
+    }
+
+    const service = new LocalModelAssetService({
+      projectDir: tempDir,
+      configManager: {} as ConfigManager,
+      globalSettingsManager: {
+        readSettings: async () => ({
+          translationEngines: {
+            local: {
+              model: modelId,
+              selectedGroupId: TEST_GROUP_Q4,
+              hfEndpoint: 'https://huggingface.co',
+            },
+          },
+        }),
+      },
+      now: () => 100,
+      indexPath,
+      profileManifestPath,
+      cacheDir,
+      fetchCachePath,
+    })
+
+    const state = await service.readSelectedModelState(modelId, TEST_GROUP_Q4)
+
+    expect(state.status).toBe('not-downloaded')
+    expect(state.bytesDownloaded).toBe(0)
+    expect(state.progress).toBe(0)
+    expect(state.plan?.groups?.[0]?.status).toBe('not-downloaded')
   })
 
   it('keeps active profile download status scoped to its own group', async () => {
@@ -2017,7 +2166,7 @@ describe('LocalModelAssetService', () => {
     )
     expect(crossGroupState.plan?.groups?.map((group) => [group.baseGroupId, group.status])).toEqual(
       [
-        ['q4', 'downloaded'],
+        ['q4', 'not-downloaded'],
         ['q4f16', 'not-downloaded'],
       ]
     )

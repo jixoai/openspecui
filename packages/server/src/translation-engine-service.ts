@@ -193,7 +193,7 @@ export class TranslationEngineService {
       model,
       selectedGroupId: effectiveSelectedGroupId,
     })
-    return plan?.groups?.find((group) => group.id === effectiveSelectedGroupId)?.dtype
+    return selectLocalPlanGroup(plan, effectiveSelectedGroupId)?.dtype
   }
 
   private async assertLocalModelReady(
@@ -205,9 +205,7 @@ export class TranslationEngineService {
       model,
       selectedGroupId,
     })
-    const selectedGroup =
-      plan?.groups?.find((group) => group.id === (selectedGroupId ?? plan.selectedGroupId)) ??
-      plan?.groups?.find((group) => group.selected)
+    const selectedGroup = selectLocalPlanGroup(plan, selectedGroupId)
     if (!plan || !selectedGroup || selectedGroup.files.length === 0) {
       throw new Error('No local runtime file plan is available for the selected model.')
     }
@@ -242,9 +240,7 @@ export class TranslationEngineService {
       model,
       selectedGroupId,
     })
-    const selectedGroup =
-      plan?.groups?.find((group) => group.id === (selectedGroupId ?? plan.selectedGroupId)) ??
-      plan?.groups?.find((group) => group.selected)
+    const selectedGroup = selectLocalPlanGroup(plan, selectedGroupId)
     const configPath = selectedGroup?.rootDir
       ? join(selectedGroup.rootDir, 'config.json')
       : join(this.localCacheDir, 'models', model, 'config.json')
@@ -323,7 +319,7 @@ function selectPersistedLocalPlan(
       })),
     }
   }
-  const selectedGroup = plan.groups.find((group) => group.id === selectedGroupId)
+  const selectedGroup = selectLocalPlanGroup(plan, selectedGroupId)
   if (!selectedGroup) return null
   return {
     modelId: plan.modelId,
@@ -336,6 +332,20 @@ function selectPersistedLocalPlan(
       files: [...group.files],
     })),
   }
+}
+
+function selectLocalPlanGroup(
+  plan: TranslationModelDownloadPlan | null | undefined,
+  selectedGroupId?: string
+): NonNullable<TranslationModelDownloadPlan['groups']>[number] | undefined {
+  if (!plan?.groups?.length) return undefined
+  const requestedGroupId = selectedGroupId ?? plan.selectedGroupId
+  return (
+    plan.groups.find((group) => group.id === requestedGroupId) ??
+    plan.groups.find((group) => group.baseGroupId === requestedGroupId) ??
+    plan.groups.find((group) => group.selected) ??
+    plan.groups[0]
+  )
 }
 
 async function readMissingLocalGroupFiles(
