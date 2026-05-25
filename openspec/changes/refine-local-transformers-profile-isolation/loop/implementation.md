@@ -1,11 +1,12 @@
 ## Implementation State
 
-- Status: planned, not yet implemented in code.
-- Intake and research-plan are complete and approved enough to begin implementation work.
-- Current code still contains the old model-level local asset state and mixed profile/lifecycle plan storage.
-- Implementation must proceed as a platform-law refactor, not a UI-only chip styling patch.
+- Status: implemented, locally verified, and PR checks passed.
+- Current branch: `fix/file-panel-release-patch`.
+- Current PR: <https://github.com/jixoai/openspecui/pull/171>.
+- OpenSpec status: ready for user acceptance; archive and merge remain intentionally pending.
+- Implementation proceeded as a platform-law refactor: server-owned profile/lifecycle truth, isolated profile folders, group-scoped sessions, global-only LocalModel/group selection, and page-owned translation lifecycle guards.
 
-Proposed execution order:
+Implemented execution order:
 
 1. Core schema and state model
    - Introduce profile manifest and lifecycle state types.
@@ -46,6 +47,26 @@ Proposed execution order:
    - Add server tests before changing behavior where possible.
    - Add web tests for chip colors, refresh states, delete selection clearing, and document generation invalidation.
    - Run focused typecheck and tests listed in research-plan.
+
+## Completion Evidence
+
+- Local verification passed:
+  - `pnpm format:check`
+  - `pnpm lint:ci`
+  - `pnpm typecheck`
+  - `pnpm test:ci`
+  - `pnpm test:browser:ci`
+- GitHub PR checks passed on PR #171:
+  - Changeset Gate
+  - CI Scope
+  - Fast Gate
+  - Browser Gate (`@openspecui/web`)
+  - Browser Gate (`xterm-input-panel`)
+  - Browser Gate aggregate
+- Additional CI hardening landed during final verification:
+  - Reactive watcher path resolution now resolves missing paths through the nearest existing realpath ancestor.
+  - Core watcher tests await asynchronous watcher teardown.
+  - Local model progress streaming test uses a controlled stream gate instead of a timing window.
 
 ## Decisions Taken
 
