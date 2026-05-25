@@ -20,8 +20,6 @@ vi.mock('@huggingface/hub', () => hubMock)
 const TEST_COMMIT_HASH = 'abcdef1234567890abcdef1234567890abcdef12'
 const TEST_SHORT_COMMIT_HASH = TEST_COMMIT_HASH.slice(0, 6)
 const TEST_GROUP_Q4 = `q4-${TEST_SHORT_COMMIT_HASH}`
-const TEST_GROUP_Q4F16 = `q4f16-${TEST_SHORT_COMMIT_HASH}`
-const TEST_GROUP_BNB4 = `bnb4-${TEST_SHORT_COMMIT_HASH}`
 const TEST_GROUP_Q8 = `q8-${TEST_SHORT_COMMIT_HASH}`
 
 function testRepositoryFile(path: string, size: number) {
@@ -520,7 +518,9 @@ describe('LocalModelAssetService', () => {
       )
 
       expect(crossGroupState.status).toBe('not-downloaded')
-      expect(crossGroupState.plan?.groups?.map((group) => [group.baseGroupId, group.status])).toEqual([
+      expect(
+        crossGroupState.plan?.groups?.map((group) => [group.baseGroupId, group.status])
+      ).toEqual([
         ['q4', 'downloading'],
         ['q4f16', 'not-downloaded'],
       ])
@@ -635,7 +635,9 @@ describe('LocalModelAssetService', () => {
     const state = await service.readSelectedModelState(modelId, 'q4f16')
 
     expect(state.status).toBe('not-downloaded')
-    expect(state.plan?.groups?.map((group) => [group.baseGroupId, group.selected, group.status])).toEqual([
+    expect(
+      state.plan?.groups?.map((group) => [group.baseGroupId, group.selected, group.status])
+    ).toEqual([
       ['q4', false, 'paused'],
       ['q4f16', true, 'not-downloaded'],
     ])
@@ -769,7 +771,9 @@ describe('LocalModelAssetService', () => {
     const state = await service.readSelectedModelState(modelId, 'q4f16')
 
     expect(state.status).toBe('downloaded')
-    expect(state.plan?.groups?.map((group) => [group.baseGroupId, group.selected, group.status])).toEqual([
+    expect(
+      state.plan?.groups?.map((group) => [group.baseGroupId, group.selected, group.status])
+    ).toEqual([
       ['q4', false, 'downloaded'],
       ['q4f16', true, 'downloaded'],
       ['bnb4', false, 'paused'],
@@ -1299,7 +1303,9 @@ describe('LocalModelAssetService', () => {
       { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10, downloadedBytes: 4 },
       { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10, downloadedBytes: 0 },
     ])
-    expect(state.plan?.groups?.map((group) => [group.baseGroupId, group.status])).toEqual([['q4', 'paused']])
+    expect(state.plan?.groups?.map((group) => [group.baseGroupId, group.status])).toEqual([
+      ['q4', 'paused'],
+    ])
   })
 
   it('finishes the active profile download even when a different group is selected meanwhile', async () => {
@@ -1411,7 +1417,11 @@ describe('LocalModelAssetService', () => {
       'q4f16'
     )
     expect(
-      crossGroupState.plan?.groups?.map((group) => [group.baseGroupId, group.selected, group.status])
+      crossGroupState.plan?.groups?.map((group) => [
+        group.baseGroupId,
+        group.selected,
+        group.status,
+      ])
     ).toEqual([
       ['q4', false, 'downloading'],
       ['q4f16', true, 'not-downloaded'],
@@ -1422,7 +1432,9 @@ describe('LocalModelAssetService', () => {
 
     const state = await service.readSelectedModelState('onnx-community/opus-mt-en-zh', 'q4f16')
     expect(state.status).toBe('not-downloaded')
-    expect(state.plan?.groups?.map((group) => [group.baseGroupId, group.selected, group.status])).toEqual([
+    expect(
+      state.plan?.groups?.map((group) => [group.baseGroupId, group.selected, group.status])
+    ).toEqual([
       ['q4', false, 'downloaded'],
       ['q4f16', true, 'not-downloaded'],
     ])
@@ -1493,9 +1505,9 @@ describe('LocalModelAssetService', () => {
 
     const storedStates = await new LocalModelAssetStore({ indexPath }).readAll()
     expect(storedStates[0]?.status).toBe('not-downloaded')
-    expect(storedStates[0]?.plan?.groups?.map((group) => [group.baseGroupId, group.status])).toEqual([
-      ['q4', 'not-downloaded'],
-    ])
+    expect(
+      storedStates[0]?.plan?.groups?.map((group) => [group.baseGroupId, group.status])
+    ).toEqual([['q4', 'not-downloaded']])
 
     const state = await service.readSelectedModelState('onnx-community/opus-mt-en-zh', 'q4')
     expect(state).toMatchObject({
@@ -1735,10 +1747,12 @@ describe('LocalModelAssetService', () => {
         downloadedBytes: 0,
       }))
     )
-    expect(crossGroupState.plan?.groups?.map((group) => [group.baseGroupId, group.status])).toEqual([
-      ['q4', 'downloaded'],
-      ['q4f16', 'not-downloaded'],
-    ])
+    expect(crossGroupState.plan?.groups?.map((group) => [group.baseGroupId, group.status])).toEqual(
+      [
+        ['q4', 'downloaded'],
+        ['q4f16', 'not-downloaded'],
+      ]
+    )
   })
 
   it('keeps the runtime download plan available after deleting local model files', async () => {
