@@ -37,6 +37,7 @@ Implemented execution order:
    - Remove project-config writes for selected local model/group where they are acting as authority.
    - Chip switching updates selection only and never recomputes unrelated group status.
    - Add refresh icon button to Local Model title inline-end.
+   - Render Download Files revision metadata from server-owned `commitHash` / `revision` / `sourceUrl` truth instead of transient download log messages.
 
 6. Translation lifetime hardening
    - Make `batchTranslate` use immutable runtime snapshot and scoped pipeline lease semantics.
@@ -80,7 +81,11 @@ Implemented execution order:
   - `pnpm --filter @openspecui/server typecheck`
   - `pnpm --filter @openspecui/web exec vitest run src/routes/settings.test.tsx --project unit`
   - `pnpm format:check`
-  - Direct service projection against the developer's local cache no longer returns `q4 · legacy 30 B`; current profile chip labels no longer include short commit hashes.
+- Direct service projection against the developer's local cache no longer returns `q4 · legacy 30 B`; current profile chip labels no longer include short commit hashes.
+- Additional focused verification after Download Files revision projection:
+  - `pnpm --filter @openspecui/web exec vitest run src/routes/settings.test.tsx --project unit`
+  - `pnpm --filter @openspecui/web typecheck`
+  - `pnpm format:check`
 
 ## Decisions Taken
 

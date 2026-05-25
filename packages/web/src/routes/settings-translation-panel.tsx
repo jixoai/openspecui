@@ -39,6 +39,7 @@ import {
   CheckCircle,
   ChevronDown,
   Download,
+  ExternalLink,
   FlaskConical,
   Languages,
   Loader2,
@@ -287,7 +288,6 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const [nmtLocalOptions, setNmtLocalOptions] = useState<LocalModelCatalogItem[]>([])
   const [nmtRemoteOptions, setNmtRemoteOptions] = useState<LocalModelCatalogItem[]>([])
   const [nmtRemoteLoading, setNmtRemoteLoading] = useState(false)
-  const [localDownloadMessage, setLocalDownloadMessage] = useState<string | null>(null)
   const [translationTestOpen, setTranslationTestOpen] = useState(false)
   const [smokeSourceLanguage, setSmokeSourceLanguage] = useState(
     DEFAULT_TRANSLATION_SMOKE_SOURCE_LANGUAGE
@@ -368,10 +368,6 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   }, [nmtSelectedGroupId])
 
   useEffect(() => {
-    setLocalDownloadMessage(null)
-  }, [nmtModel, nmtSelectedGroupId, translationEngineId])
-
-  useEffect(() => {
     if (translationEngineId !== 'local') return
     const timer = window.setTimeout(() => {
       setNmtDebouncedQuery(nmtModelQuery.trim())
@@ -437,11 +433,6 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
           log.modelId === activeModelId
             ? (activeSelectedGroupId ?? log.selectedGroupId)
             : log.selectedGroupId
-        const matchesActivePanel =
-          log.modelId === activeModelId &&
-          (!activeSelectedGroupId ||
-            !log.selectedGroupId ||
-            log.selectedGroupId === activeSelectedGroupId)
         const selectedGroupIds = new Set<string | undefined>([
           querySelectedGroupId,
           log.selectedGroupId,
@@ -464,12 +455,6 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
             .catch(() => undefined)
         }
 
-        if (matchesActivePanel) {
-          setLocalDownloadMessage(
-            log.status === 'downloaded' || log.status === 'not-downloaded' ? null : log.message
-          )
-        }
-
         void trpcClient.localModels.listLocal
           .query()
           .then((local) => setNmtLocalOptions(local.items))
@@ -487,7 +472,6 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
       setNmtLocalOptions([])
       setNmtRemoteOptions([])
       setNmtRemoteLoading(false)
-      setLocalDownloadMessage(null)
     }
   }, [translationEngineId])
 
@@ -692,8 +676,6 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
       resolvedLocalDownloadPlan?.estimatedTotalBytes ??
       0) > 0
   const displayedLocalAsset = selectedLocalAsset
-  const localDownloadStatusMessage =
-    localDownloadMessage ?? getLocalDownloadStatusMessage(displayedLocalAsset)
   const nmtProgressPercent =
     displayedLocalAsset?.progress === undefined
       ? undefined
@@ -1252,7 +1234,6 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                 plan={displayedLocalAsset?.plan ?? resolvedLocalDownloadPlan}
                 groups={nmtDownloadGroups}
                 state={displayedLocalAsset}
-                statusMessage={localDownloadStatusMessage}
                 progressPercent={nmtProgressPercent}
                 loading={localPlanLoading}
                 error={
@@ -1262,28 +1243,24 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                     : null)
                 }
                 onDownload={() => {
-                  setLocalDownloadMessage('Downloading local model files.')
                   downloadLocalModelMutation.mutate({
                     modelId: nmtModelId,
                     groupId: effectiveLocalSelectedGroupId,
                   })
                 }}
                 onPause={() => {
-                  setLocalDownloadMessage('Local model download paused.')
                   pauseLocalModelMutation.mutate({
                     modelId: nmtModelId,
                     groupId: effectiveLocalSelectedGroupId,
                   })
                 }}
                 onResume={() => {
-                  setLocalDownloadMessage('Resuming local model download.')
                   resumeLocalModelMutation.mutate({
                     modelId: nmtModelId,
                     groupId: effectiveLocalSelectedGroupId,
                   })
                 }}
                 onDelete={() => {
-                  setLocalDownloadMessage('Deleting local model files.')
                   deleteLocalModelMutation.mutate({
                     modelId: nmtModelId,
                     groupId: effectiveLocalSelectedGroupId,
@@ -2003,22 +1980,16 @@ function getLocalPlanAction(input: {
   }
 }
 
-function getLocalDownloadStatusMessage(asset: LocalModelAssetState | null): string | null {
-  if (!asset) return null
-  switch (asset.status) {
-    case 'queued':
-      return 'Preparing local model download.'
-    case 'downloading':
-      return 'Downloading local model files.'
-    case 'paused':
-      return 'Local model download paused.'
-    case 'deleting':
-      return 'Deleting local model files.'
-    case 'error':
-      return asset.error ?? 'Local model download failed.'
-    case 'downloaded':
-    case 'not-downloaded':
-      return null
+function buildLocalModelRevisionLink(
+  modelId: string,
+  selectedGroup: TranslationDownloadGroupPlan | null,
+  files: TranslationModelDownloadPlan['files']
+): { commitHash: string; href: string } | null {
+  const commitHash = selectedGroup?.commitHash ?? files.find((file) => file.revision)?.revision
+  if (!commitHash) return null
+  return {
+    commitHash,
+    href: `https://huggingface.co/${modelId}/tree/${encodeURIComponent(commitHash)}`,
   }
 }
 
@@ -2026,7 +1997,6 @@ function LocalDownloadFilesCard({
   plan,
   groups,
   state,
-  statusMessage,
   progressPercent,
   loading,
   error,
@@ -2040,7 +2010,6 @@ function LocalDownloadFilesCard({
   plan: TranslationModelDownloadPlan | null
   groups: TranslationDownloadGroupPlan[]
   state: LocalModelAssetState | null
-  statusMessage: string | null
   progressPercent: number | undefined
   loading: boolean
   error: string | null
@@ -2060,6 +2029,7 @@ function LocalDownloadFilesCard({
   const actionProgress = progressPercent ?? 0
   const selectedGroup = groups.find((group) => group.selected) ?? null
   const planFiles = selectedGroup?.files ?? plan?.files ?? state?.plan?.files ?? []
+  const revisionLink = buildLocalModelRevisionLink(modelId, selectedGroup, planFiles)
   const stateFileByPath = new Map(state?.files.map((file) => [file.path, file]) ?? [])
   const displayFiles =
     planFiles.length > 0
@@ -2212,8 +2182,19 @@ function LocalDownloadFilesCard({
           </div>
         ) : (
           <>
-            {statusMessage ? (
-              <div className="text-muted-foreground mt-2 leading-5">{statusMessage}</div>
+            {revisionLink ? (
+              <div className="text-muted-foreground mt-2 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 leading-5">
+                <span>Revision</span>
+                <a
+                  href={revisionLink.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary bg-muted inline-flex min-w-0 items-center gap-1 rounded px-1 py-0.5 font-mono text-[11px] hover:underline"
+                >
+                  <span className="min-w-0 truncate">{revisionLink.commitHash}</span>
+                  <ExternalLink className="h-3 w-3 shrink-0" />
+                </a>
+              </div>
             ) : null}
             {isResolving ? (
               <div className="text-muted-foreground mt-2 flex items-center gap-2 leading-5">

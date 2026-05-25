@@ -10,6 +10,9 @@ import { useSyncExternalStore, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Settings } from './settings'
 
+const TEST_LOCAL_MODEL_COMMIT_HASH = 'abcdef1234567890abcdef1234567890abcdef12'
+const TEST_LOCAL_MODEL_SHORT_COMMIT_HASH = TEST_LOCAL_MODEL_COMMIT_HASH.slice(0, 6)
+
 function createLocalAssetStateForTest(
   input: Omit<LocalModelAssetState, 'version' | 'profileLoad' | 'groupsState'> &
     Partial<Pick<LocalModelAssetState, 'version' | 'profileLoad' | 'groupsState'>>
@@ -93,22 +96,30 @@ const {
     modelId: string,
     selectedGroupId = 'q8'
   ): TranslationModelDownloadPlan => {
-    const q8Files = [
+    const withRevision = (
+      files: TranslationModelDownloadPlan['files']
+    ): TranslationModelDownloadPlan['files'] =>
+      files.map((file) => ({
+        ...file,
+        revision: TEST_LOCAL_MODEL_COMMIT_HASH,
+        sourceUrl: `https://huggingface.co/${modelId}/resolve/${TEST_LOCAL_MODEL_COMMIT_HASH}/${file.path}`,
+      }))
+    const q8Files = withRevision([
       { path: 'config.json', sizeBytes: 1503, required: true },
       { path: 'generation_config.json', sizeBytes: 293, required: true },
       { path: 'source.spm', sizeBytes: 806435, required: true },
       { path: 'target.spm', sizeBytes: 804600, required: true },
       { path: 'onnx/encoder_model_quantized.onnx', sizeBytes: 52848230, required: true },
       { path: 'onnx/decoder_model_merged_quantized.onnx', sizeBytes: 193567130, required: true },
-    ]
-    const fp16Files = [
+    ])
+    const fp16Files = withRevision([
       { path: 'config.json', sizeBytes: 1503, required: true },
       { path: 'generation_config.json', sizeBytes: 293, required: true },
       { path: 'source.spm', sizeBytes: 806435, required: true },
       { path: 'target.spm', sizeBytes: 804600, required: true },
       { path: 'onnx/encoder_model_fp16.onnx', sizeBytes: 209715200, required: true },
       { path: 'onnx/decoder_model_merged_fp16.onnx', sizeBytes: 524288000, required: true },
-    ]
+    ])
     const groups: NonNullable<TranslationModelDownloadPlan['groups']> = [
       {
         id: 'q8',
@@ -116,6 +127,8 @@ const {
         description: '8-bit quantized ONNX profile.',
         profile: 'q8',
         dtype: 'q8',
+        commitHash: TEST_LOCAL_MODEL_COMMIT_HASH,
+        shortCommitHash: TEST_LOCAL_MODEL_SHORT_COMMIT_HASH,
         estimatedTotalBytes: 246415360,
         selectable: true,
         selected: selectedGroupId === 'q8',
@@ -127,6 +140,8 @@ const {
         description: 'fp16 ONNX profile.',
         profile: 'fp16',
         dtype: 'fp16',
+        commitHash: TEST_LOCAL_MODEL_COMMIT_HASH,
+        shortCommitHash: TEST_LOCAL_MODEL_SHORT_COMMIT_HASH,
         estimatedTotalBytes: 734003200,
         selectable: true,
         selected: selectedGroupId === 'fp16',
@@ -511,12 +526,24 @@ function createQ8PlanFilesForTest(): TranslationModelDownloadPlan['files'] {
   ]
 }
 
+function withLocalRevisionFiles(
+  modelId: string,
+  files: TranslationModelDownloadPlan['files']
+): TranslationModelDownloadPlan['files'] {
+  return files.map((file) => ({
+    ...file,
+    revision: TEST_LOCAL_MODEL_COMMIT_HASH,
+    sourceUrl: `https://huggingface.co/${modelId}/resolve/${TEST_LOCAL_MODEL_COMMIT_HASH}/${file.path}`,
+  }))
+}
+
 function createQ8PlanForTest(modelId: string): TranslationModelDownloadPlan {
+  const files = withLocalRevisionFiles(modelId, createQ8PlanFilesForTest())
   return {
     modelId,
     estimatedTotalBytes: 246415360,
     selectedGroupId: 'q8',
-    files: createQ8PlanFilesForTest(),
+    files,
     groups: [
       {
         id: 'q8',
@@ -524,11 +551,13 @@ function createQ8PlanForTest(modelId: string): TranslationModelDownloadPlan {
         description: '8-bit quantized ONNX profile.',
         profile: 'q8',
         dtype: 'q8',
+        commitHash: TEST_LOCAL_MODEL_COMMIT_HASH,
+        shortCommitHash: TEST_LOCAL_MODEL_SHORT_COMMIT_HASH,
         status: 'downloaded',
         estimatedTotalBytes: 246415360,
         selectable: true,
         selected: true,
-        files: createQ8PlanFilesForTest(),
+        files,
       },
     ],
   }
@@ -572,8 +601,8 @@ function createQ4f16PlanFilesForTest(): TranslationModelDownloadPlan['files'] {
 }
 
 function createGroupedLocalPlanForTest(modelId: string): TranslationModelDownloadPlan {
-  const q8Files = createQ8PlanFilesForTest()
-  const fp16Files = createFp16PlanFilesForTest()
+  const q8Files = withLocalRevisionFiles(modelId, createQ8PlanFilesForTest())
+  const fp16Files = withLocalRevisionFiles(modelId, createFp16PlanFilesForTest())
   return {
     modelId,
     estimatedTotalBytes: 246415360,
@@ -586,6 +615,8 @@ function createGroupedLocalPlanForTest(modelId: string): TranslationModelDownloa
         description: '8-bit quantized ONNX profile.',
         profile: 'q8',
         dtype: 'q8',
+        commitHash: TEST_LOCAL_MODEL_COMMIT_HASH,
+        shortCommitHash: TEST_LOCAL_MODEL_SHORT_COMMIT_HASH,
         status: 'downloaded',
         estimatedTotalBytes: 246415360,
         selectable: true,
@@ -598,6 +629,8 @@ function createGroupedLocalPlanForTest(modelId: string): TranslationModelDownloa
         description: 'fp16 ONNX profile.',
         profile: 'fp16',
         dtype: 'fp16',
+        commitHash: TEST_LOCAL_MODEL_COMMIT_HASH,
+        shortCommitHash: TEST_LOCAL_MODEL_SHORT_COMMIT_HASH,
         status: 'not-downloaded',
         estimatedTotalBytes: 734003200,
         selectable: true,
@@ -609,9 +642,9 @@ function createGroupedLocalPlanForTest(modelId: string): TranslationModelDownloa
 }
 
 function createTriStateGroupedLocalPlanForTest(modelId: string): TranslationModelDownloadPlan {
-  const q8Files = createQ8PlanFilesForTest()
-  const q4Files = createQ4PlanFilesForTest()
-  const fp16Files = createFp16PlanFilesForTest()
+  const q8Files = withLocalRevisionFiles(modelId, createQ8PlanFilesForTest())
+  const q4Files = withLocalRevisionFiles(modelId, createQ4PlanFilesForTest())
+  const fp16Files = withLocalRevisionFiles(modelId, createFp16PlanFilesForTest())
   return {
     modelId,
     estimatedTotalBytes: 126040951,
@@ -624,6 +657,8 @@ function createTriStateGroupedLocalPlanForTest(modelId: string): TranslationMode
         description: '8-bit quantized ONNX profile.',
         profile: 'q8',
         dtype: 'q8',
+        commitHash: TEST_LOCAL_MODEL_COMMIT_HASH,
+        shortCommitHash: TEST_LOCAL_MODEL_SHORT_COMMIT_HASH,
         status: 'downloaded',
         estimatedTotalBytes: 246415360,
         selectable: true,
@@ -636,6 +671,8 @@ function createTriStateGroupedLocalPlanForTest(modelId: string): TranslationMode
         description: '4-bit quantized ONNX profile.',
         profile: 'q4',
         dtype: 'q4',
+        commitHash: TEST_LOCAL_MODEL_COMMIT_HASH,
+        shortCommitHash: TEST_LOCAL_MODEL_SHORT_COMMIT_HASH,
         status: 'paused',
         estimatedTotalBytes: 126040951,
         selectable: true,
@@ -648,6 +685,8 @@ function createTriStateGroupedLocalPlanForTest(modelId: string): TranslationMode
         description: 'fp16 ONNX profile.',
         profile: 'fp16',
         dtype: 'fp16',
+        commitHash: TEST_LOCAL_MODEL_COMMIT_HASH,
+        shortCommitHash: TEST_LOCAL_MODEL_SHORT_COMMIT_HASH,
         status: 'not-downloaded',
         estimatedTotalBytes: 734003200,
         selectable: true,
@@ -659,7 +698,7 @@ function createTriStateGroupedLocalPlanForTest(modelId: string): TranslationMode
 }
 
 function createQ4AndQ4f16GroupedLocalPlanForTest(modelId: string): TranslationModelDownloadPlan {
-  const q4Files = [
+  const q4Files = withLocalRevisionFiles(modelId, [
     { path: 'config.json', sizeBytes: 1520, required: true },
     { path: 'generation_config.json', sizeBytes: 288, required: true },
     { path: 'source.spm', sizeBytes: 806435, required: true },
@@ -670,20 +709,23 @@ function createQ4AndQ4f16GroupedLocalPlanForTest(modelId: string): TranslationMo
     { path: 'vocab.json', sizeBytes: 1747795, required: true },
     { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 146255322, required: true },
     { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 151040867, required: true },
-  ]
-  const q4f16Files = createQ4f16PlanFilesForTest().map((file) => ({
-    ...file,
-    sizeBytes:
-      file.path === 'config.json'
-        ? 1520
-        : file.path === 'generation_config.json'
-          ? 288
-          : file.path === 'onnx/encoder_model_q4f16.onnx'
-            ? 77910507
-            : file.path === 'onnx/decoder_model_merged_q4f16.onnx'
-              ? 161874559
-              : file.sizeBytes,
-  }))
+  ])
+  const q4f16Files = withLocalRevisionFiles(
+    modelId,
+    createQ4f16PlanFilesForTest().map((file) => ({
+      ...file,
+      sizeBytes:
+        file.path === 'config.json'
+          ? 1520
+          : file.path === 'generation_config.json'
+            ? 288
+            : file.path === 'onnx/encoder_model_q4f16.onnx'
+              ? 77910507
+              : file.path === 'onnx/decoder_model_merged_q4f16.onnx'
+                ? 161874559
+                : file.sizeBytes,
+    }))
+  )
   return {
     modelId,
     estimatedTotalBytes: 307038702,
@@ -696,6 +738,8 @@ function createQ4AndQ4f16GroupedLocalPlanForTest(modelId: string): TranslationMo
         description: '4-bit quantized ONNX profile.',
         profile: 'q4',
         dtype: 'q4',
+        commitHash: TEST_LOCAL_MODEL_COMMIT_HASH,
+        shortCommitHash: TEST_LOCAL_MODEL_SHORT_COMMIT_HASH,
         status: 'downloaded',
         estimatedTotalBytes: 307038702,
         selectable: true,
@@ -708,6 +752,8 @@ function createQ4AndQ4f16GroupedLocalPlanForTest(modelId: string): TranslationMo
         description: '4-bit block quantized fp16 ONNX profile.',
         profile: 'q4f16',
         dtype: 'q4f16',
+        commitHash: TEST_LOCAL_MODEL_COMMIT_HASH,
+        shortCommitHash: TEST_LOCAL_MODEL_SHORT_COMMIT_HASH,
         status: 'paused',
         estimatedTotalBytes: 249527579,
         selectable: true,
@@ -2079,7 +2125,12 @@ describe('Settings', () => {
       })
     )
     expect(await screen.findByRole('button', { name: 'Pause download' })).toBeTruthy()
-    expect(screen.getByText('Downloading onnx/encoder_model_quantized.onnx.')).toBeTruthy()
+    expect(screen.getByText('Revision')).toBeTruthy()
+    expect(screen.getByRole('link', { name: TEST_LOCAL_MODEL_COMMIT_HASH })).toHaveAttribute(
+      'href',
+      `https://huggingface.co/Xenova/opus-mt-no-de/tree/${TEST_LOCAL_MODEL_COMMIT_HASH}`
+    )
+    expect(screen.queryByText('Downloading onnx/encoder_model_quantized.onnx.')).toBeNull()
     expect(screen.getByText('48.3 MB / 50.4 MB')).toBeTruthy()
   })
 
@@ -2423,7 +2474,12 @@ describe('Settings', () => {
       updatedAt: 300,
     })
     expect(await screen.findByRole('button', { name: 'Resume download' })).toBeTruthy()
-    expect(screen.getByText('Local model download paused.')).toBeTruthy()
+    expect(screen.getByText('Revision')).toBeTruthy()
+    expect(screen.getByRole('link', { name: TEST_LOCAL_MODEL_COMMIT_HASH })).toHaveAttribute(
+      'href',
+      `https://huggingface.co/${modelId}/tree/${TEST_LOCAL_MODEL_COMMIT_HASH}`
+    )
+    expect(screen.queryByText('Local model download paused.')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Resume download' }))
     expect(localModelsMock.resume).toHaveBeenCalledWith({ modelId, groupId: 'q8' })
