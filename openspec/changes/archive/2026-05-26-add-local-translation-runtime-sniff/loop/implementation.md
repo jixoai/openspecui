@@ -139,3 +139,128 @@ Focused tests added or updated:
   on the profile lifecycle truth conflict that was blocking Settings Translation.
 - If later work adds recommendation/fuzzy selector shaping, keep it backend-owned
   and do not reintroduce client-side state mixing for profile status.
+
+## 2026-05-25 Runtime Identity Follow-Up
+
+Implementation is reopening because investigation found a second truth split:
+Settings smoke tests and document translation can resolve different local runtime
+identities when project translation config and global engine defaults disagree.
+
+Planned code work:
+
+- [x] Reuse the existing document translation resolver in Settings so the Settings
+      panel initializes local model/profile state from the document-effective config.
+- [x] Keep global local settings as defaults, but treat project
+      `translation.engines.local` as the active document runtime owner when present.
+- [x] Persist local profile selections into both global local engine defaults and
+      project document translation config.
+- [x] Persist local model commits into both global local engine defaults and project
+      document translation config, clearing stale project selected profiles for the
+      new model.
+- [x] Keep the fix profile-agnostic; no profile-specific failure fallback belongs in
+      this layer.
+
+Focused tests to add before implementation:
+
+- [x] Project local model/profile overrides global local defaults for Settings smoke
+      tests.
+- [x] Local profile selection writes the document translation local profile.
+- [x] Local model commit writes the document translation local model and clears the
+      document translation local selected profile.
+
+Completed code work in this follow-up:
+
+- Settings now resolves the document translation config through the existing
+  `resolveDocumentTranslationConfig` helper before initializing local model and
+  profile state.
+- The Settings local panel, smoke test, and profile query now prefer the
+  document-effective local model/profile over global defaults.
+- Local model commits write both global local defaults and project
+  `translation.engines.local.model`.
+- Local profile selections write both global local defaults and project
+  `translation.engines.local.selectedGroupId`.
+- Config and global settings patch types now allow `selectedGroupId: null` as an
+  explicit deletion sentinel, while persisted/read config remains optional and
+  null-free.
+
+Focused verification performed for this follow-up:
+
+- `pnpm --filter @openspecui/web exec vitest run src/routes/settings.test.tsx --project unit`
+  - Passed: 42 tests.
+- `pnpm --filter @openspecui/core test -- src/config.test.ts src/global-settings.test.ts -t "clear"`
+  - Passed: 295 tests across the filtered run.
+- `pnpm --filter @openspecui/server exec vitest run src/router.test.ts -t "globalSettings|config.update|translation"`
+  - Passed: 3 selected router tests.
+- `pnpm --filter @openspecui/web exec vitest run src/lib/resolve-document-translation-config.test.ts src/lib/translate-service.test.ts --project unit`
+  - Passed: 2 tests.
+- `pnpm --filter @openspecui/core typecheck`
+  - Passed.
+- `pnpm --filter @openspecui/server typecheck`
+  - Passed.
+- `pnpm --filter @openspecui/web typecheck`
+  - Passed.
+
+## 2026-05-25 Page Translation Reopen
+
+Implementation is reopening again because the user's restarted app still fails on
+the real page translation path. The previous follow-up only proved Settings and
+document translation share model/profile resolution; it did not prove they share
+the same source/target execution plan.
+
+Reproduced runtime facts:
+
+- `onnx-community/opus-mt-en-zh` with `int8-4dc37a` initializes and translates
+  locally, while emitting the known Marian tokenizer warning.
+- `onnx-community/opus-mt-en-zh` with `q4f16-4dc37a` reproduces the reported
+  ONNX Runtime `InsertedPrecisionFreeCast...SimplifiedLayerNormFusion`
+  initialization error.
+- `onnx-community/opus-mt-en-zh` with requested target `de` still produces
+  Chinese output, proving a successful smoke run does not validate model
+  direction coherence.
+
+Planned code work:
+
+- [x] Add a core helper that infers supported language pairs for directional
+      local model ids such as `opus-mt-en-zh`.
+- [x] Make local document translation availability reject target languages that
+      conflict with an inferred directional local model.
+- [x] Make markdown document translation reject detected source/target groups
+      that conflict with the selected local model direction before creating a
+      translator.
+- [x] Add page-flow tests for detected source-language grouping and unsupported
+      local model directions.
+- [x] Re-run focused web/core checks for the page translation path.
+
+Completed code work in this follow-up:
+
+- Added `@openspecui/core/translation-language-pair` as a core platform helper
+  for inferring directional local model pairs such as `opus-mt-en-zh`.
+- Local document translation availability now rejects incompatible directional
+  model targets before claiming local files are ready.
+- Settings smoke tests now use the directional local model source language when
+  the selected local model and target language form a coherent pair. For example,
+  `Xenova/opus-mt-no-de` now tests `no -> de`, not `en -> de`.
+- `runSingleTranslation` now rejects unsupported local source/target pairs before
+  opening a server translator.
+- Page markdown translation now rejects unsupported detected source/target groups
+  before creating a translator. The affected segments become explicit translation
+  errors instead of attempting ONNX session creation.
+- Server-side `translationEngines.batchTranslate` enforces the same local
+  directional model law so callers cannot bypass the frontend check.
+
+Focused verification performed for this follow-up:
+
+- `pnpm --filter @openspecui/core test -- src/translation-language-pair.test.ts`
+  - Passed: 30 files, 299 tests in the filtered core run.
+- `pnpm --filter @openspecui/server exec vitest run src/translation-engine-service.test.ts`
+  - Passed: 9 tests.
+- `pnpm --filter @openspecui/web exec vitest run src/routes/settings.test.tsx src/lib/translate-service.test.ts src/lib/browser-translation.test.ts src/components/document-translation-action.test.tsx --project unit`
+  - Passed: 86 tests.
+- `pnpm --filter @openspecui/core typecheck`
+  - Passed.
+- `pnpm --filter @openspecui/server typecheck`
+  - Passed.
+- `pnpm --filter @openspecui/web typecheck`
+  - Passed.
+- `git diff --check`
+  - Passed.

@@ -44,7 +44,7 @@
    - recommended source fuzzy matching
    - final three-source merge
    - duplicate collapse with metadata merge
-   This keeps the frontend as a thin objective renderer.
+     This keeps the frontend as a thin objective renderer.
 10. Keep the planned local runtime sniff flow in the same change:
     - automatic smoke test after selected model group download completes
     - manual translation test completion can correct the current model-group verdict
@@ -53,7 +53,7 @@
     - `engineId=local`
     - `modelId`
     - `selectedGroupId`
-    Optional repository revision metadata may be captured when cheaply available, but it is not required for the loop because re-download plus re-test is the practical recovery path.
+      Optional repository revision metadata may be captured when cheaply available, but it is not required for the loop because re-download plus re-test is the practical recovery path.
 12. Treat automatic and manual verification as orthogonal test producers:
     - no priority system
     - the latest completed test updates the current record
@@ -119,3 +119,63 @@
   - keyed-query fuzzy filtering handled entirely by the backend
   - non-ONNX candidates retained but marked incompatible for the current runtime
 - Run focused typecheck and unit/component coverage for `@openspecui/core`, `@openspecui/server`, and `@openspecui/web` paths touched by selector semantics and runtime-verdict projection.
+
+## 2026-05-25 Runtime Identity Findings
+
+- `MarianTokenizer` warning is diagnostic noise for this failure mode; it should not drive the fix.
+- The failing ONNX Runtime message points at runtime initialization, not at document segmentation or cache rendering.
+- Isolated runtime checks showed at least one downloaded profile can fail at ONNX session creation while other downloaded profiles can initialize and translate, confirming the existing law that "downloaded" is not "runtime verified".
+- Settings currently initializes local model/profile state primarily from global local engine defaults once global settings are available.
+- Document translation resolves project translation config plus global settings, with project `translation.engines.local` values overriding global local defaults.
+- Therefore Settings smoke testing can validate `globalSettings.translationEngines.local.selectedGroupId` while document translation later executes `config.translation.engines.local.selectedGroupId`.
+
+## Runtime Identity Decision
+
+The platform law for this fix is:
+
+- A local translation runtime identity is the tuple `engineId`, `model`, `selectedGroupId`, `sourceLanguage`, and `targetLanguage`.
+- Settings controls, smoke tests, document availability checks, and document execution must consume the same resolved identity whenever they are speaking about the current document translation runtime.
+- Project document translation config remains the project-specific owner; global settings remain only a default source and a cross-project convenience target.
+- When Settings mutates the active local model or selected profile, it must persist the mutation into `translation.engines.local` so the document path executes the same identity that Settings just tested.
+- Runtime verification records remain separate from this loop and must eventually key verdicts by the same local runtime identity dimensions that affect execution.
+
+## Added Verification Strategy
+
+- Add a Settings test where global local settings point to one model/profile and project document translation config points to another; the local smoke test must call `batchTranslate` with the project-resolved model/profile.
+- Add a Settings test where selecting a local profile writes both global local engine defaults and project `translation.engines.local.selectedGroupId`.
+- Add a Settings test where committing a local model writes both global local engine defaults and project `translation.engines.local.model`, while clearing the stale selected profile in the project path.
+
+## 2026-05-25 Page Translation Findings
+
+- Previous verification was insufficient for the user's reported workflow because it did not execute the page markdown translation path.
+- The two runtime paths differ:
+  - Settings smoke test: `SettingsTranslationPanel -> runSingleTranslation -> TrpcTranslator`.
+  - Page translation: `DocumentTranslationAction -> useDocumentTranslation -> translateMarkdownDocumentProgressively -> createSourceLanguageDetectionSession -> translatePendingJobsBySourceLanguage -> TrpcTranslatorFactory`.
+- Page translation adds runtime dimensions that the previous tests did not cover:
+  - markdown segmentation
+  - source language detection
+  - per-source grouping
+  - one translator per detected source-language group
+  - adaptive batch workers
+- Local verification on this machine produced the following profile-level facts for `onnx-community/opus-mt-en-zh`:
+  - `int8-4dc37a` initializes and translates, while still emitting the Marian tokenizer warning.
+  - `q4f16-4dc37a` reproduces the reported ONNX Runtime `InsertedPrecisionFreeCast...SimplifiedLayerNormFusion` initialization failure.
+- Local verification also showed `onnx-community/opus-mt-en-zh` ignores a requested `targetLanguage=de` in practice and still emits Chinese text, so successful process execution is not sufficient proof that the configured language pair is coherent.
+- The current selected model/destination example `onnx-community/opus-mt-en-zh` plus target `de` is directionally invalid. This must be blocked as a platform fact, not left for ONNX Runtime or model output quality to reveal later.
+
+## Page Translation Decision
+
+The immediate platform law is:
+
+- Directional local models must declare or infer their supported language pair.
+- The document translation service state must reject a local directional model when the configured target language is incompatible with the model direction.
+- The markdown document translation engine must reject each detected source/target pair before creating a translator when the selected local model direction cannot support it.
+- Unsupported pairs must become explicit page translation errors or unavailable states; they must not attempt ONNX session creation.
+- Runtime verification records remain the long-term law for profile-specific failures such as `q4f16-4dc37a`, but this page-flow fix must first stop invalid language-pair execution and test the actual page path.
+
+## Added Page-Flow Verification Strategy
+
+- Add core tests for local directional model language-pair inference.
+- Add translate-service tests proving `onnx-community/opus-mt-en-zh` plus target `de` is unavailable before local asset readiness can claim ready.
+- Add browser-translation tests proving detected source-language groups that do not match the selected directional local model are marked as errors without calling `engine.factory.create`.
+- Keep the tests profile-agnostic; no test should hard-code `q4f16` as a special product rule.
