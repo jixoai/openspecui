@@ -1,5 +1,30 @@
 # openspecui
 
+## 3.11.1
+
+### Patch Changes
+
+- c17d198: Fix the published runtime dependency graph so `openspecui` and `@openspecui/server`
+  do not require `tsx` as an installed runtime dependency.
+
+  Fix the shared file detail layout so the editor pane and file tree share one bounded
+  height, keep their own internal scrolling, and restore HTML files to preview mode so
+  their preview actions remain available by default.
+
+- ec56e7f: Fix the published runtime package layout so `@huggingface/transformers` stays
+  external to the CLI/server bundle and can resolve its native runtime
+  dependencies from installed package dependencies.
+
+  Unify Local-Transformers model profile state behind the server `panelState`
+  source of truth so Settings chips render selection, download status, and file
+  progress from the same model lifecycle snapshot.
+
+- da4b8ee: Align Local-Transformers runtime identity between Translation Test and page translation
+  so both paths persist the same selected model/profile snapshot.
+
+  Block incompatible directional local models before document translation starts, including
+  page-level detected source-language groups, instead of letting ONNX runtime fail later.
+
 ## 3.11.0
 
 ### Minor Changes
