@@ -59,6 +59,7 @@ function isReleaseAffectingPackageFile(file) {
   if (isPrivatePackageFile(file)) return false
 
   if (file.endsWith('/README.md') || file.endsWith('/CHANGELOG.md')) return false
+  if (file.includes('/.cargo/')) return false
   if (file.includes('/__tests__/')) return false
   if (file.includes('/.storybook/')) return false
   if (/\.stories\.(t|j)sx?$/.test(file)) return false
