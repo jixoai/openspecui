@@ -158,6 +158,22 @@ describe('TranslationEngineService', () => {
     expect(models.nextCursor).toBe('NEXT')
   })
 
+  it('reports bundled browser and openai engines as installed', async () => {
+    const engines = await service.listEngines()
+
+    const browser = engines.find((engine) => engine.id === 'browser')
+    const openai = engines.find((engine) => engine.id === 'openai')
+
+    expect(browser?.installStatus).toMatchObject({
+      state: 'installed',
+      message: 'Browser translator is built in.',
+    })
+    expect(openai?.installStatus).toMatchObject({
+      state: 'installed',
+      message: 'OpenAI completion translator is bundled.',
+    })
+  })
+
   it('uses strict repository profile files for local download plans', async () => {
     await writePersistedLocalAssetPlan(
       localAssetIndexPath,

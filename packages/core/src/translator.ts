@@ -376,6 +376,99 @@ export interface TranslatorFactory {
   create(options: TranslatorFactoryCreateOptions): Promise<Translator>
 }
 
+export type TranslationEngineInstallState =
+  | 'installed'
+  | 'installing'
+  | 'not-installed'
+  | 'error'
+
+export const TranslationEngineInstallStateSchema = z.enum([
+  'installed',
+  'installing',
+  'not-installed',
+  'error',
+])
+
+export interface TranslationEngineInstallStatus {
+  state: TranslationEngineInstallState
+  message?: string
+  progress?: number
+  error?: string
+}
+
+export const TranslationEngineInstallStatusSchema = z.object({
+  state: TranslationEngineInstallStateSchema,
+  message: z.string().optional(),
+  progress: z.number().min(0).max(1).optional(),
+  error: z.string().optional(),
+})
+
+export const TranslationEngineInstallLogStreamSchema = z.enum(['stdout', 'stderr'])
+
+export type TranslationEngineInstallLogStream = z.infer<
+  typeof TranslationEngineInstallLogStreamSchema
+>
+
+export interface TranslationEngineInstallLogEvent {
+  stream: TranslationEngineInstallLogStream
+  text: string
+}
+
+export const TranslationEngineInstallLogEventSchema = z.object({
+  stream: TranslationEngineInstallLogStreamSchema,
+  text: z.string(),
+})
+
+export interface TranslationEngineInstallStatusEvent {
+  type: 'status'
+  status: TranslationEngineInstallStatus
+}
+
+export interface TranslationEngineInstallOutputEvent {
+  type: 'log'
+  stream: TranslationEngineInstallLogStream
+  text: string
+}
+
+export interface TranslationEngineInstallExitEvent {
+  type: 'exit'
+  status: TranslationEngineInstallStatus
+}
+
+export type TranslationEngineInstallEvent =
+  | TranslationEngineInstallStatusEvent
+  | TranslationEngineInstallOutputEvent
+  | TranslationEngineInstallExitEvent
+
+export const TranslationEngineInstallEventSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('status'),
+    status: TranslationEngineInstallStatusSchema,
+  }),
+  z.object({
+    type: z.literal('log'),
+    stream: TranslationEngineInstallLogStreamSchema,
+    text: z.string(),
+  }),
+  z.object({
+    type: z.literal('exit'),
+    status: TranslationEngineInstallStatusSchema,
+  }),
+])
+
+export interface TranslationEngineInstallContext {
+  projectDir: string
+  globalSettings: TranslationEngineGlobalSettings
+  signal?: AbortSignal
+  onStatus?: (status: TranslationEngineInstallStatus) => void
+  onLog?: (event: TranslationEngineInstallLogEvent) => void
+}
+
+export interface TranslationEngineInstaller {
+  detectInstallState(input: TranslationEngineInstallContext): Promise<TranslationEngineInstallStatus>
+  install(input: TranslationEngineInstallContext): Promise<TranslationEngineInstallStatus>
+}
+
 export type TranslationEngineRuntime = 'browser' | 'server'
 
 export interface TranslationEngineManifest {

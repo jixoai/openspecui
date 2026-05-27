@@ -339,6 +339,9 @@ const {
   const translationEnginesMock = {
     getModelDownloadPlan: vi.fn(),
     batchTranslate: vi.fn(),
+    getInstallStatus: vi.fn(),
+    install: vi.fn(),
+    installStream: vi.fn(),
   }
   const localModelsMock = {
     listLocal: vi.fn(),
@@ -424,6 +427,53 @@ const {
     delete: vi.fn(async () => ({ success: true })),
   }
   const restoreTranslationMocks = () => {
+    translationEnginesMock.getInstallStatus.mockImplementation(async ({ engineId }) => {
+      if (engineId === 'browser') {
+        return { state: 'installed', message: 'Browser translator is built in.' }
+      }
+      if (engineId === 'openai') {
+        return { state: 'installed', message: 'OpenAI completion translator is bundled.' }
+      }
+      return {
+        state: 'installed',
+        message: 'Local-Transformers runtime dependencies are installed.',
+      }
+    })
+    translationEnginesMock.install.mockImplementation(async ({ engineId }) =>
+      translationEnginesMock.getInstallStatus({ engineId })
+    )
+    translationEnginesMock.installStream.mockImplementation(
+      (
+        input: { engineId: 'browser' | 'local' | 'openai' },
+        handlers: {
+          onData: (event: {
+            type: 'status' | 'log' | 'exit'
+            status?: { state: string; message?: string; progress?: number; error?: string }
+            stream?: 'stdout' | 'stderr'
+            text?: string
+          }) => void
+          onError?: (error: unknown) => void
+        }
+      ) => {
+        const unsubscribe = vi.fn()
+        queueMicrotask(() => {
+          if (unsubscribe.mock.calls.length > 0) return
+          const installedStatus =
+            input.engineId === 'browser'
+              ? { state: 'installed', message: 'Browser translator is built in.' }
+              : input.engineId === 'openai'
+                ? { state: 'installed', message: 'OpenAI completion translator is bundled.' }
+                : {
+                    state: 'installed',
+                    message: 'Local-Transformers runtime dependencies are installed.',
+                  }
+          handlers.onData({ type: 'status', status: installedStatus })
+          if (unsubscribe.mock.calls.length > 0) return
+          handlers.onData({ type: 'exit', status: installedStatus })
+        })
+        return { unsubscribe }
+      }
+    )
     translationEnginesMock.batchTranslate.mockImplementation(
       (
         input: { inputs?: string[] },
@@ -959,10 +1009,42 @@ const reactQueryMockStore = vi.hoisted(() => {
   }
 })
 
+function normalizeMockQueryResult<TData>(
+  value: TData | { data?: TData; isLoading?: boolean; refetch?: () => void } | undefined
+) {
+  if (value && typeof value === 'object' && 'data' in value) {
+    return {
+      isLoading: false,
+      refetch: vi.fn(),
+      ...value,
+    }
+  }
+  return {
+    data: value,
+    isLoading: false,
+    refetch: vi.fn(),
+  }
+}
+
 vi.mock('@tanstack/react-query', () => ({
-  useMutation: ({ mutationFn }: { mutationFn?: (variables: unknown) => unknown }) => ({
+  useMutation: ({
+    mutationFn,
+    onSuccess,
+    onError,
+  }: {
+    mutationFn?: (variables: unknown) => unknown
+    onSuccess?: (data: unknown, variables: unknown) => void | Promise<void>
+    onError?: (error: unknown, variables: unknown) => void | Promise<void>
+  }) => ({
     mutate: vi.fn((variables: unknown) => {
-      mutationFn?.(variables)
+      try {
+        const result = mutationFn?.(variables)
+        void Promise.resolve(result)
+          .then((data) => onSuccess?.(data, variables))
+          .catch((error) => onError?.(error, variables))
+      } catch (error) {
+        void onError?.(error, variables)
+      }
     }),
     isPending: false,
     isSuccess: false,
@@ -1012,13 +1094,7 @@ vi.mock('@tanstack/react-query', () => ({
           )
       }
     }
-    return (
-      reactQueryMockStore.getQueryData(queryKey) ?? {
-        data: undefined,
-        isLoading: false,
-        refetch: vi.fn(),
-      }
-    )
+    return normalizeMockQueryResult(reactQueryMockStore.getQueryData(queryKey))
   },
   useQueryClient: () => ({
     setQueryData: reactQueryMockStore.setQueryData,
@@ -1110,10 +1186,11 @@ function resolveQueryResultForKey(key: string) {
           technicalSummary:
             'Browser-native Web Translator adapter. Package payload is about 5 KB; browser language packs are managed by the browser.',
           runtime: 'browser',
-          builtin: true,
-          installable: false,
           selected: true,
-          status: 'available',
+          installStatus: {
+            state: 'installed',
+            message: 'Browser translator is built in.',
+          },
         },
         {
           id: 'local',
@@ -1124,7 +1201,10 @@ function resolveQueryResultForKey(key: string) {
             'Server-side Transformers.js local adapter. Package payload is about 5 KB; selected model groups are downloaded separately and can range from tens to hundreds of MB.',
           runtime: 'server',
           selected: false,
-          status: 'available',
+          installStatus: {
+            state: 'installed',
+            message: 'Local-Transformers runtime dependencies are installed.',
+          },
           model: 'Xenova/opus-mt-no-de',
         },
         {
@@ -1136,7 +1216,10 @@ function resolveQueryResultForKey(key: string) {
             'Server-side TanStack OpenAI-Completion adapter for OpenAI-compatible APIs. Package payload is about 5 KB; model size stays with the remote provider.',
           runtime: 'server',
           selected: false,
-          status: 'available',
+          installStatus: {
+            state: 'installed',
+            message: 'OpenAI completion translator is bundled.',
+          },
           model: 'gpt-4.1-mini',
         },
       ],
@@ -1315,6 +1398,17 @@ vi.mock('@/lib/trpc', () => ({
       list: {
         queryOptions: () => ({ queryKey: ['translationEngines.list'] }),
       },
+      getInstallStatus: {
+        queryOptions: (input?: { engineId: string }) => ({
+          queryKey: ['translationEngines.getInstallStatus', input?.engineId ?? ''],
+        }),
+      },
+      install: {
+        mutationOptions: () => ({}),
+      },
+      installStream: {
+        subscriptionOptions: () => ({}),
+      },
     },
     localModels: {
       listLocal: {
@@ -1360,6 +1454,15 @@ vi.mock('@/lib/trpc', () => ({
       },
     },
     translationEngines: {
+      getInstallStatus: {
+        query: translationEnginesMock.getInstallStatus,
+      },
+      install: {
+        mutate: translationEnginesMock.install,
+      },
+      installStream: {
+        subscribe: translationEnginesMock.installStream,
+      },
       getModelDownloadPlan: {
         query: translationEnginesMock.getModelDownloadPlan,
       },
@@ -1569,6 +1672,278 @@ describe('Settings', () => {
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     expect(screen.getByRole('combobox', { name: 'Engine' })).toHaveTextContent('Local-Transformers')
     expect(browserTranslationMock.scan).not.toHaveBeenCalled()
+  })
+
+  it('shows an install action for a non-installed service engine before rendering engine cards', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+          engineId: 'local',
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+    reactQueryMockStore.setQueryData(['translationEngines.list'], [
+      {
+        id: 'browser',
+        label: 'Browser',
+        description: 'Uses the browser Translator API and future browser-side providers.',
+        technicalSummary:
+          'Browser-native Web Translator adapter. Package payload is about 5 KB; browser language packs are managed by the browser.',
+        runtime: 'browser',
+        selected: false,
+        installStatus: { state: 'installed', message: 'Browser translator is built in.' },
+      },
+      {
+        id: 'local',
+        label: 'Local-Transformers',
+        description:
+          'Runs a bundled local Transformers.js translation runtime with managed model files.',
+        technicalSummary:
+          'Server-side Transformers.js local adapter. Package payload is about 5 KB; selected model groups are downloaded separately and can range from tens to hundreds of MB.',
+        runtime: 'server',
+        selected: true,
+        installStatus: {
+          state: 'not-installed',
+          message:
+            'Install the Local-Transformers runtime package to enable server-side translation.',
+        },
+        model: 'Xenova/opus-mt-no-de',
+      },
+      {
+        id: 'openai',
+        label: 'OpenAI-Completion',
+        description:
+          'Uses an OpenAI-compatible TanStack OpenAI-Completion completion provider for context-aware translation.',
+        technicalSummary:
+          'Server-side TanStack OpenAI-Completion adapter for OpenAI-compatible APIs. Package payload is about 5 KB; model size stays with the remote provider.',
+        runtime: 'server',
+        selected: false,
+        installStatus: {
+          state: 'installed',
+          message: 'OpenAI completion translator is bundled.',
+        },
+        model: 'gpt-4.1-mini',
+      },
+    ])
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    expect(screen.getByRole('button', { name: 'Install translation engine' })).toBeTruthy()
+    expect(
+      screen.getByText(/Install the Local-Transformers runtime package to enable server-side translation\./)
+    ).toBeTruthy()
+    expect(screen.queryByLabelText('Local download profiles')).toBeNull()
+  })
+
+  it('streams install logs into the shared description area while installing a service engine', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+          engineId: 'local',
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+    reactQueryMockStore.setQueryData(['translationEngines.list'], [
+      {
+        id: 'browser',
+        label: 'Browser',
+        description: 'Uses the browser Translator API and future browser-side providers.',
+        technicalSummary:
+          'Browser-native Web Translator adapter. Package payload is about 5 KB; browser language packs are managed by the browser.',
+        runtime: 'browser',
+        selected: false,
+        installStatus: { state: 'installed', message: 'Browser translator is built in.' },
+      },
+      {
+        id: 'local',
+        label: 'Local-Transformers',
+        description:
+          'Runs a bundled local Transformers.js translation runtime with managed model files.',
+        technicalSummary:
+          'Server-side Transformers.js local adapter. Package payload is about 5 KB; selected model groups are downloaded separately and can range from tens to hundreds of MB.',
+        runtime: 'server',
+        selected: true,
+        installStatus: {
+          state: 'not-installed',
+          message:
+            'Install the Local-Transformers runtime package to enable server-side translation.',
+        },
+        model: 'Xenova/opus-mt-no-de',
+      },
+      {
+        id: 'openai',
+        label: 'OpenAI-Completion',
+        description:
+          'Uses an OpenAI-compatible TanStack OpenAI-Completion completion provider for context-aware translation.',
+        technicalSummary:
+          'Server-side TanStack OpenAI-Completion adapter for OpenAI-compatible APIs. Package payload is about 5 KB; model size stays with the remote provider.',
+        runtime: 'server',
+        selected: false,
+        installStatus: {
+          state: 'installed',
+          message: 'OpenAI completion translator is bundled.',
+        },
+        model: 'gpt-4.1-mini',
+      },
+    ])
+    translationEnginesMock.installStream.mockImplementationOnce((_input, handlers) => {
+      const unsubscribe = vi.fn()
+      queueMicrotask(() => {
+        if (unsubscribe.mock.calls.length > 0) return
+        handlers.onData({
+          type: 'status',
+          status: { state: 'installing', message: 'Installing Local-Transformers runtime.' },
+        })
+        window.setTimeout(() => {
+          if (unsubscribe.mock.calls.length > 0) return
+          handlers.onData({
+            type: 'log',
+            stream: 'stdout',
+            text: 'npm install @huggingface/transformers@~4.2.0\n',
+          })
+        }, 0)
+        window.setTimeout(() => {
+          if (unsubscribe.mock.calls.length > 0) return
+          handlers.onData({
+            type: 'log',
+            stream: 'stdout',
+            text: 'added 1 package\n',
+          })
+        }, 1)
+      })
+      return { unsubscribe }
+    })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Install translation engine' }))
+    await waitFor(() =>
+      expect(screen.getByText(/npm install @huggingface\/transformers@~4\.2\.0/)).toBeTruthy()
+    )
+    expect(screen.getByText(/added 1 package/)).toBeTruthy()
+  })
+
+  it('shows downstream engine cards again after service engine installation completes', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+          engineId: 'local',
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+    reactQueryMockStore.setQueryData(['translationEngines.list'], [
+      {
+        id: 'browser',
+        label: 'Browser',
+        description: 'Uses the browser Translator API and future browser-side providers.',
+        technicalSummary:
+          'Browser-native Web Translator adapter. Package payload is about 5 KB; browser language packs are managed by the browser.',
+        runtime: 'browser',
+        selected: false,
+        installStatus: { state: 'installed', message: 'Browser translator is built in.' },
+      },
+      {
+        id: 'local',
+        label: 'Local-Transformers',
+        description:
+          'Runs a bundled local Transformers.js translation runtime with managed model files.',
+        technicalSummary:
+          'Server-side Transformers.js local adapter. Package payload is about 5 KB; selected model groups are downloaded separately and can range from tens to hundreds of MB.',
+        runtime: 'server',
+        selected: true,
+        installStatus: {
+          state: 'not-installed',
+          message:
+            'Install the Local-Transformers runtime package to enable server-side translation.',
+        },
+        model: 'Xenova/opus-mt-no-de',
+      },
+      {
+        id: 'openai',
+        label: 'OpenAI-Completion',
+        description:
+          'Uses an OpenAI-compatible TanStack OpenAI-Completion completion provider for context-aware translation.',
+        technicalSummary:
+          'Server-side TanStack OpenAI-Completion adapter for OpenAI-compatible APIs. Package payload is about 5 KB; model size stays with the remote provider.',
+        runtime: 'server',
+        selected: false,
+        installStatus: {
+          state: 'installed',
+          message: 'OpenAI completion translator is bundled.',
+        },
+        model: 'gpt-4.1-mini',
+      },
+    ])
+    translationEnginesMock.installStream.mockImplementationOnce((_input, handlers) => {
+      const unsubscribe = vi.fn()
+      queueMicrotask(() => {
+        if (unsubscribe.mock.calls.length > 0) return
+        handlers.onData({
+          type: 'status',
+          status: { state: 'installing', message: 'Installing Local-Transformers runtime.' },
+        })
+        window.setTimeout(() => {
+          if (unsubscribe.mock.calls.length > 0) return
+          handlers.onData({
+            type: 'exit',
+            status: {
+              state: 'installed',
+              message: 'Local-Transformers runtime dependencies are installed.',
+            },
+          })
+        }, 0)
+      })
+      return { unsubscribe }
+    })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Install translation engine' }))
+    await waitFor(() =>
+      expect(screen.getByLabelText('Local download profiles')).toBeTruthy()
+    )
   })
 
   it('renders browser language-pair chips from the support table', async () => {

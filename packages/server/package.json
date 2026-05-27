@@ -23,7 +23,6 @@
   "dependencies": {
     "@hono/node-server": "^1.14.1",
     "@huggingface/hub": "^2.12.0",
-    "@huggingface/transformers": "^4.2.0",
     "@lydell/node-pty": "^1.1.0",
     "@openspecui/core": "workspace:*",
     "@openspecui/local-translator": "workspace:*",
@@ -35,6 +34,9 @@
     "undici": "^7.18.2",
     "ws": "^8.18.0",
     "zod": "^3.24.1"
+  },
+  "optionalDependencies": {
+    "@huggingface/transformers": "~4.2.0"
   },
   "devDependencies": {
     "@trpc/client": "^11.7.2",

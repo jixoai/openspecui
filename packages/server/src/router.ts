@@ -40,6 +40,7 @@ import {
   TranslationCacheSettingsSchema,
   TranslationCacheWriteInputSchema,
   TranslationEngineIdSchema,
+  TranslationEngineInstallStatusSchema,
   TranslationLocalSettingsSchema,
   TranslationOpenAISettingsSchema,
   type AIToolOption,
@@ -266,6 +267,26 @@ export const translationEnginesRouter = router({
   list: publicProcedure.query(({ ctx }) => {
     return ctx.translationEngineService.listEngines()
   }),
+
+  getInstallStatus: publicProcedure
+    .input(z.object({ engineId: TranslationEngineIdSchema }))
+    .output(TranslationEngineInstallStatusSchema)
+    .query(({ ctx, input }) => {
+      return ctx.translationEngineService.getInstallStatus(input.engineId)
+    }),
+
+  install: publicProcedure
+    .input(z.object({ engineId: TranslationEngineIdSchema }))
+    .output(TranslationEngineInstallStatusSchema)
+    .mutation(({ ctx, input }) => {
+      return ctx.translationEngineService.installEngine(input.engineId)
+    }),
+
+  installStream: publicProcedure
+    .input(z.object({ engineId: TranslationEngineIdSchema }))
+    .subscription(({ ctx, input }) => {
+      return ctx.translationEngineService.installEngineStream(input.engineId)
+    }),
 
   searchModels: publicProcedure
     .input(

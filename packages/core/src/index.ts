@@ -214,6 +214,17 @@ export {
 } from './global-settings.js'
 
 export {
+  buildRuntimePackageInstallCommand,
+  detectRuntimePackageManager,
+  resolveRuntimePackageInstallStrategy,
+  type RuntimePackageDependencyField,
+  type RuntimePackageInstallCommand,
+  type RuntimePackageInstallStrategy,
+  type RuntimePackageManagerResolution,
+  type RuntimePackageManagerSource,
+} from './runtime-package-manager.js'
+
+export {
   BUILTIN_SOUND_IDS,
   BUILTIN_SOUND_OPTIONS,
   BuiltinSoundIdSchema,
@@ -289,6 +300,11 @@ export {
   TranslationDownloadGroupPlanSchema,
   TranslationEngineGlobalSettingsSchema,
   TranslationEngineIdSchema,
+  TranslationEngineInstallEventSchema,
+  TranslationEngineInstallLogEventSchema,
+  TranslationEngineInstallLogStreamSchema,
+  TranslationEngineInstallStateSchema,
+  TranslationEngineInstallStatusSchema,
   TranslationLocalSettingsSchema,
   TranslationOpenAISettingsSchema,
   getTranslationEngineManifest,
@@ -316,6 +332,13 @@ export {
   type TranslationEngineGlobalSettings,
   type TranslationEngineGlobalSettingsUpdate,
   type TranslationEngineId,
+  type TranslationEngineInstallContext,
+  type TranslationEngineInstallEvent,
+  type TranslationEngineInstallLogEvent,
+  type TranslationEngineInstallLogStream,
+  type TranslationEngineInstallState,
+  type TranslationEngineInstallStatus,
+  type TranslationEngineInstaller,
   type TranslationEngineManifest,
   type TranslationEngineRuntime,
   type TranslationLocalSettings,

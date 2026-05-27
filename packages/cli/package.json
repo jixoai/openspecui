@@ -35,9 +35,11 @@
   },
   "dependencies": {
     "@lydell/node-pty": "^1.1.0",
-    "@huggingface/transformers": "^4.2.0",
     "@parcel/watcher": "^2.5.1",
     "better-sqlite3": "^12.5.0"
+  },
+  "optionalDependencies": {
+    "@huggingface/transformers": "~4.2.0"
   },
   "devDependencies": {
     "@hono/node-server": "^1.14.1",

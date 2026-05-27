@@ -1,7 +1,11 @@
 import {
-  LocalModelAssetStateSchema,
-  TRANSLATION_ENGINE_MANIFESTS,
+  buildRuntimePackageInstallCommand,
   checkLocalDirectionalModelLanguagePair,
+  createCleanCliEnv,
+  detectRuntimePackageManager,
+  LocalModelAssetStateSchema,
+  resolveRuntimePackageInstallStrategy,
+  TRANSLATION_ENGINE_MANIFESTS,
   type BatchTranslateEvent,
   type BatchTranslateInput,
   type ConfigManager,
@@ -9,6 +13,10 @@ import {
   type LocalModelAssetState,
   type ServiceTranslationEngineId,
   type TranslationEngineId,
+  type TranslationEngineInstaller,
+  type TranslationEngineInstallEvent,
+  type TranslationEngineInstallLogEvent,
+  type TranslationEngineInstallStatus,
   type TranslationEngineManifest,
   type TranslationModelDownloadPlan,
   type TranslationModelSearchInput,
@@ -16,8 +24,10 @@ import {
   type TranslatorFactory,
 } from '@openspecui/core'
 import { observable } from '@trpc/server/observable'
+import { spawn } from 'node:child_process'
 import { readFile, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { LocalModelAssetStore } from './local-model-asset-store.js'
 import {
   getDefaultLocalModelCacheDir,
@@ -26,13 +36,22 @@ import {
 } from './local-model-cache-path.js'
 import { LocalModelFetchCacheStore } from './local-model-fetch-cache-store.js'
 import { ensureProxyAwareFetchDispatcher } from './network-dispatcher.js'
+import {
+  hasRuntimePackageDependencyPath,
+  normalizeRuntimeHostOptionalDependencies,
+  readRuntimeHostPackageDependencyRequest,
+  readRuntimeHostPackageDependencyTree,
+  resolveRuntimeHostPackageContext,
+} from './runtime-package-host.js'
 import { searchLocalModels } from './translation-model-catalog.js'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 type TranslationEngineSettingsSnapshot = Awaited<ReturnType<GlobalSettingsManager['readSettings']>>
 
 export interface TranslationEngineListItem extends TranslationEngineManifest {
   selected: boolean
-  status: 'available' | 'unavailable'
+  installStatus: TranslationEngineInstallStatus
   message?: string
   model?: string
 }
@@ -48,6 +67,7 @@ export interface TranslationEngineServiceOptions {
 }
 
 export class TranslationEngineService {
+  private readonly projectDir: string
   private readonly configManager: ConfigManager
   private readonly globalSettingsManager: GlobalSettingsManager
   private readonly now: () => number
@@ -56,6 +76,7 @@ export class TranslationEngineService {
 
   constructor(options: TranslationEngineServiceOptions) {
     ensureProxyAwareFetchDispatcher()
+    this.projectDir = options.projectDir
     this.configManager = options.configManager
     this.globalSettingsManager = options.globalSettingsManager
     this.now = options.now ?? Date.now
@@ -74,19 +95,103 @@ export class TranslationEngineService {
       this.configManager.readConfig(),
       this.globalSettingsManager.readSettings(),
     ])
-    return TRANSLATION_ENGINE_MANIFESTS.map((manifest) => ({
-      ...manifest,
-      selected: config.translation.engineId === manifest.id,
-      status: 'available',
-      model:
-        manifest.id === 'local'
-          ? (config.translation.engines.local.model ??
-            globalSettings.translationEngines.local.model)
-          : manifest.id === 'openai'
-            ? (config.translation.engines.openai.model ??
-              globalSettings.translationEngines.openai.model)
-            : undefined,
-    }))
+    const items = await Promise.all(
+      TRANSLATION_ENGINE_MANIFESTS.map(async (manifest) => ({
+        ...manifest,
+        selected: config.translation.engineId === manifest.id,
+        installStatus: await this.getInstallStatus(manifest.id, globalSettings),
+        model:
+          manifest.id === 'local'
+            ? (config.translation.engines.local.model ??
+              globalSettings.translationEngines.local.model)
+            : manifest.id === 'openai'
+              ? (config.translation.engines.openai.model ??
+                globalSettings.translationEngines.openai.model)
+              : undefined,
+      }))
+    )
+    return items
+  }
+
+  async getInstallStatus(
+    engineId: TranslationEngineId,
+    globalSettings?: TranslationEngineSettingsSnapshot
+  ): Promise<TranslationEngineInstallStatus> {
+    const settings = globalSettings ?? (await this.globalSettingsManager.readSettings())
+    return this.getInstaller(engineId).detectInstallState({
+      projectDir: this.projectDir,
+      globalSettings: settings.translationEngines,
+    })
+  }
+
+  async installEngine(
+    engineId: TranslationEngineId,
+    callbacks?: {
+      onStatus?: (status: TranslationEngineInstallStatus) => void
+      onLog?: (event: TranslationEngineInstallLogEvent) => void
+      signal?: AbortSignal
+    }
+  ): Promise<TranslationEngineInstallStatus> {
+    const settings = await this.globalSettingsManager.readSettings()
+    return this.getInstaller(engineId).install({
+      projectDir: this.projectDir,
+      globalSettings: settings.translationEngines,
+      signal: callbacks?.signal,
+      onStatus: callbacks?.onStatus,
+      onLog: callbacks?.onLog,
+    })
+  }
+
+  installEngineStream(engineId: TranslationEngineId) {
+    return observable<TranslationEngineInstallEvent>((emit) => {
+      let closed = false
+      const controller = new AbortController()
+
+      const push = (event: TranslationEngineInstallEvent) => {
+        if (closed) return
+        emit.next(event)
+        if (event.type === 'exit') {
+          closed = true
+          emit.complete()
+        }
+      }
+
+      void (async () => {
+        try {
+          const initialStatus = await this.getInstallStatus(engineId)
+          push({ type: 'status', status: initialStatus })
+          if (initialStatus.state === 'installed') {
+            push({ type: 'exit', status: initialStatus })
+            return
+          }
+
+          const finalStatus = await this.installEngine(engineId, {
+            signal: controller.signal,
+            onStatus: (status) => {
+              push({ type: 'status', status })
+            },
+            onLog: (event) => {
+              push({ type: 'log', ...event })
+            },
+          })
+          push({ type: 'exit', status: finalStatus })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          const status: TranslationEngineInstallStatus = {
+            state: 'error',
+            message: 'Translation engine installation failed.',
+            error: message,
+          }
+          push({ type: 'status', status })
+          push({ type: 'exit', status })
+        }
+      })()
+
+      return () => {
+        closed = true
+        controller.abort()
+      }
+    })
   }
 
   async searchModels(input: TranslationModelSearchInput): Promise<TranslationModelSearchResult> {
@@ -303,6 +408,191 @@ export class TranslationEngineService {
       model: model ?? globalSettings.translationEngines.openai.model,
     })
   }
+
+  private getInstaller(engineId: TranslationEngineId): TranslationEngineInstaller {
+    if (engineId === 'browser') return browserTranslationEngineInstaller
+    if (engineId === 'openai') return openAITranslationEngineInstaller
+    return createLocalTranslationEngineInstaller()
+  }
+}
+
+const browserTranslationEngineInstaller: TranslationEngineInstaller = {
+  async detectInstallState() {
+    return { state: 'installed', message: 'Browser translator is built in.' }
+  },
+  async install() {
+    return { state: 'installed', message: 'Browser translator is built in.' }
+  },
+}
+
+const openAITranslationEngineInstaller: TranslationEngineInstaller = {
+  async detectInstallState() {
+    return { state: 'installed', message: 'OpenAI completion translator is bundled.' }
+  },
+  async install() {
+    return { state: 'installed', message: 'OpenAI completion translator is bundled.' }
+  },
+}
+
+function createLocalTranslationEngineInstaller(): TranslationEngineInstaller {
+  return {
+    async detectInstallState() {
+      return detectLocalTranslationRuntimeInstallState()
+    },
+    async install(input) {
+      input.onStatus?.({
+        state: 'installing',
+        message: 'Installing Local-Transformers runtime dependencies.',
+      })
+      return installLocalTranslationRuntime(input)
+    },
+  }
+}
+
+async function detectLocalTranslationRuntimeInstallState(): Promise<TranslationEngineInstallStatus> {
+  const runtimeHost = resolveRuntimeHostPackageContext(__dirname)
+  try {
+    const tree = await readRuntimeHostPackageDependencyTree({
+      runtimeHost,
+      packageNames: ['@huggingface/transformers', 'onnxruntime-node'],
+    })
+    const hasTransformers = hasRuntimePackageDependencyPath(tree, ['@huggingface/transformers'])
+    const hasOnnxRuntime = hasRuntimePackageDependencyPath(tree, [
+      '@huggingface/transformers',
+      'onnxruntime-node',
+    ])
+    if (!hasTransformers || !hasOnnxRuntime) {
+      throw new Error(buildMissingRuntimeDependencyMessage({ hasTransformers, hasOnnxRuntime }))
+    }
+    return {
+      state: 'installed',
+      message: 'Local-Transformers runtime dependencies are installed.',
+    }
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Local-Transformers runtime dependencies are not installed.'
+    return {
+      state: 'not-installed',
+      message: 'Install the Local-Transformers runtime package to enable server-side translation.',
+      error: message,
+    }
+  }
+}
+
+async function installLocalTranslationRuntime(
+  input: Parameters<TranslationEngineInstaller['install']>[0]
+): Promise<TranslationEngineInstallStatus> {
+  const runtimeHost = resolveRuntimeHostPackageContext(__dirname)
+  const packageManager = detectRuntimePackageManager({ startDir: runtimeHost.packageDir })
+  const strategy = resolveRuntimePackageInstallStrategy(packageManager.id)
+  const runtimePackage = readRuntimeHostPackageDependencyRequest({
+    runtimeHost,
+    packageName: '@huggingface/transformers',
+    fallbackRange: '~4.2.0',
+  })
+  const installCommand = buildRuntimePackageInstallCommand({
+    packageManager: packageManager.id,
+    packages: [runtimePackage],
+    dependencyField: 'optionalDependencies',
+    ignoreWorkspace: runtimeHost.packageName === '@openspecui/server',
+    allowBuildPackages: ['onnxruntime-node'],
+  })
+  if (!installCommand) {
+    const message = `Automatic Local-Transformers runtime installation is not supported for runtime host package manager "${packageManager.id}". Install ${runtimePackage} manually in ${runtimeHost.packageName}.`
+    input.onStatus?.({
+      state: 'error',
+      message: 'Failed to resolve a supported Local-Transformers runtime installer.',
+      error: message,
+    })
+    throw new Error(message)
+  }
+
+  input.onLog?.({
+    stream: 'stdout',
+    text: `${installCommand.displayCommand}\n`,
+  })
+
+  let child
+  try {
+    child = spawn(installCommand.cmd, installCommand.args, {
+      cwd: runtimeHost.packageDir,
+      shell: false,
+      env: createCleanCliEnv(),
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    input.onStatus?.({
+      state: 'error',
+      message: 'Failed to start Local-Transformers runtime installation.',
+      error: message,
+    })
+    throw new Error(message)
+  }
+
+  const abort = () => {
+    try {
+      child.kill()
+    } catch {
+      // ignore
+    }
+  }
+  input.signal?.addEventListener('abort', abort, { once: true })
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      child.stdout?.on('data', (data: Buffer) => {
+        const text = data.toString()
+        input.onLog?.({ stream: 'stdout', text })
+      })
+      child.stderr?.on('data', (data: Buffer) => {
+        const text = data.toString()
+        input.onLog?.({ stream: 'stderr', text })
+      })
+      child.on('error', (error) => {
+        reject(error)
+      })
+      child.on('close', (exitCode) => {
+        if (exitCode === 0) {
+          resolve()
+          return
+        }
+        reject(`${installCommand.displayCommand} exited with code ${exitCode ?? 'unknown'}.`)
+      })
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    input.onStatus?.({
+      state: 'error',
+      message: 'Local-Transformers runtime installation failed.',
+      error: message,
+    })
+    throw new Error(message)
+  } finally {
+    input.signal?.removeEventListener('abort', abort)
+  }
+
+  if (strategy && !strategy.preservesDependencyField) {
+    normalizeRuntimeHostOptionalDependencies({
+      runtimeHost,
+      packageNames: ['@huggingface/transformers'],
+    })
+  }
+
+  const finalStatus = await detectLocalTranslationRuntimeInstallState()
+  input.onStatus?.(finalStatus)
+  return finalStatus
+}
+
+function buildMissingRuntimeDependencyMessage(input: {
+  hasTransformers: boolean
+  hasOnnxRuntime: boolean
+}): string {
+  const missing: string[] = []
+  if (!input.hasTransformers) missing.push('@huggingface/transformers')
+  if (!input.hasOnnxRuntime) missing.push('onnxruntime-node')
+  return `Missing runtime dependency: ${missing.join(', ')}`
 }
 
 function resolveBatchTranslateModel(
