@@ -158,6 +158,26 @@ describe('TranslationEngineService', () => {
     expect(models.nextCursor).toBe('NEXT')
   })
 
+  it('reports bundled browser and openai engines as installed', async () => {
+    const engines = await service.listEngines()
+
+    const browser = engines.find((engine) => engine.id === 'browser')
+    const openai = engines.find((engine) => engine.id === 'openai')
+
+    expect(browser?.lifecycle).toMatchObject({
+      dependency: {
+        state: 'not-applicable',
+        message: 'Browser translation support is built into the browser runtime.',
+      },
+    })
+    expect(openai?.lifecycle).toMatchObject({
+      dependency: {
+        state: 'not-applicable',
+        message: 'OpenAI completion translation is bundled with the server runtime.',
+      },
+    })
+  })
+
   it('uses strict repository profile files for local download plans', async () => {
     await writePersistedLocalAssetPlan(
       localAssetIndexPath,

@@ -10,11 +10,12 @@ export interface LocalDirectionalModelLanguagePairCheck {
 }
 
 const OPUS_MT_DIRECTION_PATTERN = /^opus-mt-([a-z]{2,3})-([a-z]{2,3})$/i
+const OPUS_MT_CT2_SUFFIX_PATTERN = /-(?:ct2|ctranslate2)(?:-[a-z0-9]+)*$/i
 
 export function inferLocalDirectionalModelLanguagePair(
   model: string | undefined
 ): TranslationLanguagePair | null {
-  const modelName = model?.trim().split('/').pop()
+  const modelName = model?.trim().split('/').pop()?.replace(OPUS_MT_CT2_SUFFIX_PATTERN, '')
   if (!modelName) return null
 
   const match = OPUS_MT_DIRECTION_PATTERN.exec(modelName)

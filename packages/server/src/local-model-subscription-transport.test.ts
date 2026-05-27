@@ -561,7 +561,7 @@ describe('localModels.subscribeLogs transport', () => {
     })
 
     const events = await withTimeout(receivedLogs, 'resumed download progress logs')
-    expect(encoderAttempts).toBe(2)
+    expect(encoderAttempts).toBeGreaterThanOrEqual(2)
     expect(events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

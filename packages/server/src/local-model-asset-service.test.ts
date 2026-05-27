@@ -2251,6 +2251,32 @@ describe('LocalModelAssetService', () => {
       { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10, downloadedBytes: 0 },
     ])
   })
+
+  it('materializes the runtime download plan when selecting a new remote local model', async () => {
+    const service = createQ4ServiceForTest({
+      tempDir,
+      indexPath,
+      profileManifestPath,
+      cacheDir,
+      fetchCachePath,
+    })
+
+    await service.markSelectedModel('onnx-community/opus-mt-en-zh')
+
+    const state = await service.readSelectedModelState('onnx-community/opus-mt-en-zh')
+
+    expect(state.selected).toBe(true)
+    expect(state.status).toBe('not-downloaded')
+    expect(state.plan?.selectedGroupId).toBe(TEST_GROUP_Q4)
+    expect(state.plan?.groups?.map((group) => [group.baseGroupId, group.status])).toEqual([
+      ['q4', 'not-downloaded'],
+    ])
+    expect(state.files).toEqual([
+      { path: 'config.json', sizeBytes: 10, downloadedBytes: 0 },
+      { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 10, downloadedBytes: 0 },
+      { path: 'onnx/decoder_model_merged_q4.onnx', sizeBytes: 10, downloadedBytes: 0 },
+    ])
+  })
 })
 
 function createQ4ServiceForTest(input: {

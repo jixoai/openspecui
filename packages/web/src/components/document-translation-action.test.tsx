@@ -1,6 +1,10 @@
 import type { BrowserTranslationSupportTableState } from '@/lib/browser-translation'
 import { DOCUMENT_TRANSLATION_SESSION_STORAGE_KEY } from '@/lib/document-translation-session-state'
-import { LocalModelAssetStateSchema, type LocalModelAssetState } from '@openspecui/core/translator'
+import {
+  LocalModelAssetStateSchema,
+  createTranslationEngineLifecycleStatus,
+  type LocalModelAssetState,
+} from '@openspecui/core/translator'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MarkdownViewer } from './markdown-viewer'
@@ -60,6 +64,7 @@ const nmtModelStateMock = vi.hoisted(() => vi.fn())
 const nmtModelPanelStateMock = vi.hoisted(() => vi.fn())
 const translationCacheReadMock = vi.hoisted(() => vi.fn())
 const translationCacheWriteMock = vi.hoisted(() => vi.fn())
+const engineLifecycleQueryMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/browser-translation', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/browser-translation')>()
@@ -98,8 +103,8 @@ vi.mock('@/lib/trpc', () => ({
       },
     },
     translationEngines: {
-      translate: {
-        mutate: vi.fn(async ({ text }: { text?: string }) => ({ text: `server:${text ?? ''}` })),
+      getLifecycle: {
+        query: engineLifecycleQueryMock,
       },
     },
   },
@@ -109,6 +114,19 @@ describe('MarkdownViewer translation plugin', () => {
   beforeEach(() => {
     translationCacheReadMock.mockResolvedValue(null)
     translationCacheWriteMock.mockResolvedValue({ accepted: true })
+    engineLifecycleQueryMock.mockReset()
+    engineLifecycleQueryMock.mockResolvedValue(
+      createTranslationEngineLifecycleStatus({
+        dependency: {
+          state: 'installed',
+          message: 'Runtime dependencies are installed.',
+        },
+        runtime: {
+          state: 'ready',
+          message: 'Runtime is ready.',
+        },
+      })
+    )
     nmtModelStateMock.mockResolvedValue(createDownloadedLocalAssetState())
     nmtModelPanelStateMock.mockImplementation(
       async ({ modelId, selectedGroupId }: { modelId: string; selectedGroupId?: string }) => ({
@@ -221,7 +239,7 @@ describe('MarkdownViewer translation plugin', () => {
     )
 
     await waitFor(() =>
-      expect(nmtModelStateMock).toHaveBeenCalledWith({
+      expect(nmtModelPanelStateMock).toHaveBeenCalledWith({
         modelId: 'Xenova/opus-mt-en-zh',
         selectedGroupId: 'q8',
       })
@@ -353,7 +371,7 @@ describe('MarkdownViewer translation plugin', () => {
     )
 
     await waitFor(() =>
-      expect(nmtModelStateMock).toHaveBeenCalledWith({
+      expect(nmtModelPanelStateMock).toHaveBeenCalledWith({
         modelId: 'Xenova/opus-mt-en-zh',
         selectedGroupId: 'q8',
       })
@@ -1082,6 +1100,126 @@ The system SHALL detect static rendering mode.
     view.unmount()
 
     expect(capturedSignal?.aborted).toBe(true)
+  })
+
+  it('keeps rendering when translation patches arrive out of order', async () => {
+    let emitSparsePatches: (() => void) | undefined
+    let releaseFinalResult: (() => void) | undefined
+    translateMarkdownDocumentProgressivelyMock.mockImplementationOnce(async (args, onPatch) => {
+      emitSparsePatches = () => {
+        onPatch({
+          segmentIndex: 1,
+          segment: {
+            id: 'paragraph-world',
+            sourceStartOffset: 9,
+            sourceEndOffset: 14,
+            sourceKind: 'paragraph',
+            source: 'World',
+            translatorInput: 'World',
+            target: '世界',
+            kind: 'paragraph',
+            sourceLanguage: 'en',
+            targetLanguage: args.targetLanguage,
+            status: 'translated',
+          },
+        })
+        onPatch({
+          segmentIndex: 2,
+          segment: {
+            id: 'paragraph-again',
+            sourceStartOffset: 16,
+            sourceEndOffset: 25,
+            sourceKind: 'paragraph',
+            source: 'Again here',
+            translatorInput: 'Again here',
+            target: '再次出现',
+            kind: 'paragraph',
+            sourceLanguage: 'en',
+            targetLanguage: args.targetLanguage,
+            status: 'translated',
+          },
+        })
+      }
+      await new Promise<void>((resolve) => {
+        releaseFinalResult = resolve
+      })
+      return {
+        displayMode: args.displayMode,
+        sourceLanguage: 'en',
+        targetLanguage: args.targetLanguage,
+        segments: [
+          {
+            id: 'heading-hello',
+            sourceStartOffset: 0,
+            sourceEndOffset: 7,
+            sourceKind: 'heading',
+            source: 'Hello',
+            translatorInput: 'Hello',
+            target: '你好',
+            kind: 'heading',
+            sourceLanguage: 'en',
+            targetLanguage: args.targetLanguage,
+            status: 'translated',
+          },
+          {
+            id: 'paragraph-world',
+            sourceStartOffset: 9,
+            sourceEndOffset: 14,
+            sourceKind: 'paragraph',
+            source: 'World',
+            translatorInput: 'World',
+            target: '世界',
+            kind: 'paragraph',
+            sourceLanguage: 'en',
+            targetLanguage: args.targetLanguage,
+            status: 'translated',
+          },
+          {
+            id: 'paragraph-again',
+            sourceStartOffset: 16,
+            sourceEndOffset: 25,
+            sourceKind: 'paragraph',
+            source: 'Again here',
+            translatorInput: 'Again here',
+            target: '再次出现',
+            kind: 'paragraph',
+            sourceLanguage: 'en',
+            targetLanguage: args.targetLanguage,
+            status: 'translated',
+          },
+        ],
+      }
+    })
+
+    render(
+      <MarkdownViewer
+        markdown={'# Hello\n\nWorld\n\nAgain here'}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        }}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+    await waitFor(() => expect(emitSparsePatches).toBeTypeOf('function'))
+
+    act(() => {
+      emitSparsePatches?.()
+    })
+
+    expect(screen.getByRole('button', { name: 'Cancel translation' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Hello' })).toBeTruthy()
+
+    await act(async () => {
+      releaseFinalResult?.()
+    })
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: '你好' })).toBeTruthy())
+    expect(screen.getByText('世界')).toBeTruthy()
+    expect(screen.getByText('再次出现')).toBeTruthy()
   })
 
   it('rejects stale late patches after the markdown generation changes', async () => {

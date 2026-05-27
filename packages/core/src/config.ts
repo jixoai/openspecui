@@ -796,6 +796,11 @@ const PERSISTED_CONFIG_SANITIZE_RULES = [
   },
   {
     kind: 'object',
+    path: ['translation', 'engines', 'localCt2'],
+    fallback: {},
+  },
+  {
+    kind: 'object',
     path: ['translation', 'engines', 'openai'],
     fallback: {},
   },
@@ -1007,6 +1012,23 @@ export function toPersistedConfig(
   if (localEngine && hasOwnEntries(localEngine)) {
     translationEngines.local = localEngine
   }
+  const localCt2Engine: NonNullable<
+    NonNullable<PersistedOpenSpecUIConfig['translation']>['engines']
+  >['localCt2'] = {}
+  if (
+    config.translation.engines.localCt2.model !== DEFAULT_CONFIG.translation.engines.localCt2.model
+  ) {
+    localCt2Engine.model = config.translation.engines.localCt2.model
+  }
+  if (
+    config.translation.engines.localCt2.selectedGroupId !==
+    DEFAULT_CONFIG.translation.engines.localCt2.selectedGroupId
+  ) {
+    localCt2Engine.selectedGroupId = config.translation.engines.localCt2.selectedGroupId
+  }
+  if (localCt2Engine && hasOwnEntries(localCt2Engine)) {
+    translationEngines.localCt2 = localCt2Engine
+  }
   if (config.translation.engines.openai.model !== DEFAULT_CONFIG.translation.engines.openai.model) {
     translationEngines.openai = { model: config.translation.engines.openai.model }
   }
@@ -1127,6 +1149,10 @@ export class ConfigManager {
           local: mergeNullablePatch(
             current.translation.engines.local,
             config.translation?.engines?.local
+          ),
+          localCt2: mergeNullablePatch(
+            current.translation.engines.localCt2,
+            config.translation?.engines?.localCt2
           ),
           openai: mergeNullablePatch(
             current.translation.engines.openai,

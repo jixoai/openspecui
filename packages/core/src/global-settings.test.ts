@@ -99,6 +99,7 @@ describe('GlobalSettingsManager', () => {
       ...DEFAULT_GLOBAL_SETTINGS,
       translationCache: { entryLimit: 2000 },
       translationEngines: {
+        ...DEFAULT_GLOBAL_SETTINGS.translationEngines,
         openai: DEFAULT_GLOBAL_SETTINGS.translationEngines.openai,
         local: {
           ...DEFAULT_GLOBAL_SETTINGS.translationEngines.local,
@@ -161,6 +162,42 @@ describe('GlobalSettingsManager', () => {
     await settingsManager.writeSettings({
       translationEngines: {
         local: {
+          hfEndpoint: '',
+        },
+      },
+    })
+    clearCache()
+
+    await expect(settingsManager.readSettings()).resolves.toEqual(DEFAULT_GLOBAL_SETTINGS)
+  })
+
+  it('persists and clears local ct2 settings independently from local transformers', async () => {
+    await settingsManager.writeSettings({
+      translationEngines: {
+        localCt2: {
+          model: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+          selectedGroupId: 'float16',
+          hfEndpoint: 'https://hf-mirror.com',
+        },
+      },
+    })
+    clearCache()
+
+    const settings = await settingsManager.readSettings()
+    expect(settings.translationEngines.localCt2).toEqual({
+      ...DEFAULT_GLOBAL_SETTINGS.translationEngines.localCt2,
+      model: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+      selectedGroupId: 'float16',
+      hfEndpoint: 'https://hf-mirror.com',
+    })
+    await expect(readFile(settingsPath, 'utf-8')).resolves.toBe(
+      '{\n  "translationEngines": {\n    "localCt2": {\n      "selectedGroupId": "float16",\n      "hfEndpoint": "https://hf-mirror.com"\n    }\n  }\n}'
+    )
+
+    await settingsManager.writeSettings({
+      translationEngines: {
+        localCt2: {
+          selectedGroupId: null,
           hfEndpoint: '',
         },
       },

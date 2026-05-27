@@ -2,6 +2,12 @@ import { selectLocalDownloadGroup } from '@openspecui/core/local-download-profil
 import type {
   LocalModelAssetState,
   TranslationEngineId,
+  TranslationEngineLifecycleStatus,
+} from '@openspecui/core/translator'
+import {
+  getTranslationEngineLifecycleMessage,
+  isManagedLocalTranslationEngineId,
+  shouldShowTranslationEngineInstallGate,
 } from '@openspecui/core/translator'
 import type {
   BrowserTranslationStatus,
@@ -36,6 +42,8 @@ export interface TranslateServiceProjectionInput {
   browserCapability?: BrowserTranslationStatus | null
   browserCapabilityLoading?: boolean
   browserSupportTable?: BrowserTranslationSupportTableState | null
+  engineLifecycle?: TranslationEngineLifecycleStatus | null
+  engineLifecycleLoading?: boolean
   localModel?: string
   localSelectedGroupId?: string
   localAsset?: LocalModelAssetState | null
@@ -66,7 +74,8 @@ export function projectTranslateServiceStatus(
           return {
             state: 'checking',
             engineId: 'browser',
-            message: input.browserSupportTable.message ?? 'Checking browser translation capability.',
+            message:
+              input.browserSupportTable.message ?? 'Checking browser translation capability.',
           }
         case 'ready':
           return {
@@ -114,32 +123,51 @@ export function projectTranslateServiceStatus(
     }
   }
 
-  if (input.engineId === 'local') {
+  if (input.engineLifecycleLoading || input.engineLifecycle !== undefined) {
+    if (input.engineLifecycleLoading || !input.engineLifecycle) {
+      return {
+        state: 'checking',
+        engineId: input.engineId,
+        message: 'Checking translation engine runtime.',
+      }
+    }
+    if (shouldShowTranslationEngineInstallGate(input.engineLifecycle)) {
+      return {
+        state: 'unavailable',
+        engineId: input.engineId,
+        message:
+          getTranslationEngineLifecycleMessage(input.engineLifecycle) ??
+          'Translation engine runtime is not ready.',
+      }
+    }
+  }
+
+  if (isManagedLocalTranslationEngineId(input.engineId)) {
     const model = input.localModel?.trim()
     if (!model) {
       return {
         state: 'unavailable',
-        engineId: 'local',
-        message: 'Select a local model before translating.',
+        engineId: input.engineId,
+        message: 'Select a model before translating.',
       }
     }
     if (input.localAssetLoading || !input.localAsset) {
       return {
         state: 'checking',
-        engineId: 'local',
+        engineId: input.engineId,
         message: 'Checking local model files.',
       }
     }
     if (isLocalAssetReady(input.localAsset, input.localSelectedGroupId)) {
       return {
         state: 'ready',
-        engineId: 'local',
+        engineId: input.engineId,
         message: 'Selected local model files are ready.',
       }
     }
     return {
       state: 'unavailable',
-      engineId: 'local',
+      engineId: input.engineId,
       message: 'Selected local model files are not installed locally.',
     }
   }
@@ -151,10 +179,7 @@ export function projectTranslateServiceStatus(
   }
 }
 
-export function isLocalAssetReady(
-  asset: LocalModelAssetState,
-  selectedGroupId?: string
-): boolean {
+export function isLocalAssetReady(asset: LocalModelAssetState, selectedGroupId?: string): boolean {
   const selectedGroup = selectLocalDownloadGroup(
     asset.plan ?? null,
     selectedGroupId ?? asset.plan?.selectedGroupId

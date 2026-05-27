@@ -24,6 +24,7 @@ import { checkLocalDirectionalModelLanguagePair } from '@openspecui/core/transla
 import {
   DEFAULT_TRANSLATION_ENGINE_ID,
   TRANSLATOR_CONTRACT_VERSION,
+  isManagedLocalTranslationEngineId,
   type TranslationEngineId,
   type Translator,
   type TranslatorFactory,
@@ -847,7 +848,7 @@ function getUnsupportedEngineLanguagePairMessage(input: {
   sourceLanguage: string
   targetLanguage: string
 }): string | null {
-  if (input.engine.cacheIdentity.engineId !== 'local') return null
+  if (!isManagedLocalTranslationEngineId(input.engine.cacheIdentity.engineId)) return null
   const directionCheck = checkLocalDirectionalModelLanguagePair({
     model: input.engine.cacheIdentity.model,
     sourceLanguage: input.sourceLanguage,

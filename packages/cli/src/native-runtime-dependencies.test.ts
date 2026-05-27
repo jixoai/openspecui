@@ -6,6 +6,7 @@ import { CLI_NATIVE_RUNTIME_DEPENDENCIES } from './native-runtime-dependencies.j
 
 interface PackageJson {
   dependencies?: Record<string, string>
+  optionalDependencies?: Record<string, string>
 }
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -16,7 +17,10 @@ const packageJson = JSON.parse(
 describe('CLI native runtime dependencies', () => {
   it('keeps native bindings available as installed runtime dependencies', () => {
     for (const dependency of CLI_NATIVE_RUNTIME_DEPENDENCIES) {
-      expect(packageJson.dependencies).toHaveProperty(dependency)
+      expect(
+        dependency in (packageJson.dependencies ?? {}) ||
+          dependency in (packageJson.optionalDependencies ?? {})
+      ).toBe(true)
     }
   })
 })

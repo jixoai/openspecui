@@ -1,0 +1,61 @@
+{
+  "name": "ctranslate2",
+  "version": "0.1.0",
+  "description": "Native Node.js bindings for CTranslate2",
+  "type": "commonjs",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "require": "./index.js",
+      "import": "./index.js",
+      "default": "./index.js"
+    }
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "binding.js",
+    "runtime-support.js",
+    "napi.config.json",
+    "README.md",
+    "Cargo.toml",
+    "build.rs",
+    "src",
+    "ct2.*"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "pnpm --package=@napi-rs/cli dlx napi build --platform --release --config-path ./napi.config.json --js binding.js && pnpm exec prettier --write ./binding.js ./index.d.ts",
+    "dev": "pnpm --package=@napi-rs/cli dlx napi build --platform --config-path ./napi.config.json --js binding.js && pnpm exec prettier --write ./binding.js ./index.d.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "// napi-config-note": "The runnable NAPI-RS target matrix lives in napi.config.json so build/release automation can consume one truth without fighting package.json comments.",
+  "// binary-note": "Keep the generated loader on binding.js and reserve index.js for the handwritten runtime law that checks the supported matrix before loading native code.",
+  "// publish-note": "This package only publishes the handwritten entrypoint plus generated ct2.* runtime files. Stale local index.* artifacts must never be matched by the tarball file list.",
+  "devDependencies": {
+    "@napi-rs/cli": "^3.6.2",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jixoai/openspecui"
+  },
+  "license": "MIT",
+  "keywords": [
+    "ctranslate2",
+    "translation",
+    "nmt",
+    "napi",
+    "node-addon"
+  ]
+}

@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import process from 'node:process'
 
+import { verifyNapiPublishArtifacts } from './lib/publish-packages/napi-artifacts'
 import { preparePublishDirectory, resolveRepositoryUrl } from './lib/publish-packages/repository'
 import {
   orderPackagesForPublish,
@@ -75,6 +76,7 @@ function publishPackage(
   repositoryUrl: string | null
 ): void {
   const publishTarget = pkg.publishDirectory ? resolve(pkg.dir, pkg.publishDirectory) : pkg.dir
+  verifyNapiPublishArtifacts(publishTarget)
   const prepared = preparePublishDirectory(publishTarget, repositoryUrl)
   const args = ['publish', '--provenance', '--tag', 'latest', '--access', pkg.access]
   if (dryRun) args.push('--dry-run')

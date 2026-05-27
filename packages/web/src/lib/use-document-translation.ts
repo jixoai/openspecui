@@ -89,6 +89,8 @@ export function useDocumentTranslation(
     config?.engineId,
     config?.engines.local.model,
     config?.engines.local.selectedGroupId,
+    config?.engines.localCt2.model,
+    config?.engines.localCt2.selectedGroupId,
     config?.engines.openai.model,
     config?.targetLanguage,
   ])
@@ -137,6 +139,8 @@ export function useDocumentTranslation(
     config?.engineId,
     config?.engines.local.model,
     config?.engines.local.selectedGroupId,
+    config?.engines.localCt2.model,
+    config?.engines.localCt2.selectedGroupId,
     config?.targetLanguage,
     markdown.length,
   ])
@@ -251,6 +255,8 @@ export function useDocumentTranslation(
     config?.engines.openai.model,
     config?.engines.local.model,
     config?.engines.local.selectedGroupId,
+    config?.engines.localCt2.model,
+    config?.engines.localCt2.selectedGroupId,
     markdown,
     serviceStatus,
   ])
@@ -302,7 +308,7 @@ function applyDocumentTranslationPatch(
   patch: DocumentTranslationProgressPatch,
   fallback: Pick<DocumentTranslationResult, 'displayMode' | 'targetLanguage'>
 ): DocumentTranslationResult {
-  const segments = [...(current?.segments ?? [])]
+  const segments = current?.segments.slice() ?? []
   segments[patch.segmentIndex] = patch.segment
   return {
     displayMode: current?.displayMode ?? fallback.displayMode,

@@ -47,6 +47,13 @@ function getServerPackageVersion(): string {
 
 const SERVER_PACKAGE_VERSION = getServerPackageVersion()
 
+import { Ct2ModelAssetService } from './ct2-model-asset-service.js'
+import {
+  getDefaultLocalCt2ModelCacheDir,
+  getDefaultLocalCt2ModelFetchCachePath,
+  getDefaultLocalCt2ModelIndexPath,
+  getDefaultLocalCt2ModelProfileManifestPath,
+} from './ct2-model-cache-path.js'
 import { CustomSoundService } from './custom-sound-service.js'
 import { DashboardOverviewService } from './dashboard-overview-service.js'
 import { loadDashboardOverview } from './dashboard-overview.js'
@@ -112,6 +119,10 @@ export interface ServerConfig {
     localModelAssetIndexPath?: string
     localModelProfileManifestPath?: string
     localModelFetchCachePath?: string
+    localCt2ModelCacheDir?: string
+    localCt2ModelAssetIndexPath?: string
+    localCt2ModelProfileManifestPath?: string
+    localCt2ModelFetchCachePath?: string
   }
 }
 
@@ -173,10 +184,18 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
   const nmtModelIndexPath =
     config.runtimePaths?.localModelAssetIndexPath ?? getDefaultLocalModelIndexPath()
   const nmtModelProfileManifestPath =
-    config.runtimePaths?.localModelProfileManifestPath ??
-    getDefaultLocalModelProfileManifestPath()
+    config.runtimePaths?.localModelProfileManifestPath ?? getDefaultLocalModelProfileManifestPath()
   const nmtModelFetchCachePath =
     config.runtimePaths?.localModelFetchCachePath ?? getDefaultLocalModelFetchCachePath()
+  const ct2ModelCacheDir =
+    config.runtimePaths?.localCt2ModelCacheDir ?? getDefaultLocalCt2ModelCacheDir()
+  const ct2ModelIndexPath =
+    config.runtimePaths?.localCt2ModelAssetIndexPath ?? getDefaultLocalCt2ModelIndexPath()
+  const ct2ModelProfileManifestPath =
+    config.runtimePaths?.localCt2ModelProfileManifestPath ??
+    getDefaultLocalCt2ModelProfileManifestPath()
+  const ct2ModelFetchCachePath =
+    config.runtimePaths?.localCt2ModelFetchCachePath ?? getDefaultLocalCt2ModelFetchCachePath()
   const translationEngineService = new TranslationEngineService({
     projectDir: config.projectDir,
     configManager,
@@ -184,6 +203,9 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     localCacheDir: nmtModelCacheDir,
     localAssetIndexPath: nmtModelIndexPath,
     localFetchCachePath: nmtModelFetchCachePath,
+    localCt2CacheDir: ct2ModelCacheDir,
+    localCt2AssetIndexPath: ct2ModelIndexPath,
+    localCt2FetchCachePath: ct2ModelFetchCachePath,
   })
   const localModelAssetService = new LocalModelAssetService({
     projectDir: config.projectDir,
@@ -193,6 +215,14 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     indexPath: nmtModelIndexPath,
     profileManifestPath: nmtModelProfileManifestPath,
     fetchCachePath: nmtModelFetchCachePath,
+  })
+  const localCt2ModelAssetService = new Ct2ModelAssetService({
+    projectDir: config.projectDir,
+    globalSettingsManager,
+    cacheDir: ct2ModelCacheDir,
+    indexPath: ct2ModelIndexPath,
+    profileManifestPath: ct2ModelProfileManifestPath,
+    fetchCachePath: ct2ModelFetchCachePath,
   })
 
   // Create file watcher if enabled
@@ -342,6 +372,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
         filePreviewService,
         translationEngineService,
         localModelAssetService,
+        localCt2ModelAssetService,
         gitWorktreeHandoff: config.gitWorktreeHandoff,
         watcher,
         projectDir: config.projectDir,
@@ -368,6 +399,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     filePreviewService,
     translationEngineService,
     localModelAssetService,
+    localCt2ModelAssetService,
     gitWorktreeHandoff: config.gitWorktreeHandoff,
     watcher,
     projectDir: config.projectDir,
@@ -391,6 +423,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     filePreviewService,
     translationEngineService,
     localModelAssetService,
+    localCt2ModelAssetService,
     hookRuntime,
     watcher,
     createContext,
@@ -556,6 +589,7 @@ export async function startServer(
       kernel.dispose()
       await server.hookRuntime.dispose()
       await server.createContext().localModelAssetService.close()
+      await server.createContext().localCt2ModelAssetService.close()
       server.translationCacheService.close()
       wsServer.close()
       httpServer.close()

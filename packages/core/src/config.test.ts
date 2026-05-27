@@ -247,7 +247,7 @@ describe('ConfigManager', () => {
         displayMode: 'direct',
         cacheEnabled: false,
         engineId: 'browser',
-        engines: { local: {}, openai: {} },
+        engines: { local: {}, localCt2: {}, openai: {} },
       })
     })
 
@@ -371,7 +371,7 @@ describe('ConfigManager', () => {
         displayMode: 'bilingual',
         cacheEnabled: true,
         engineId: 'browser',
-        engines: { local: {}, openai: {} },
+        engines: { local: {}, localCt2: {}, openai: {} },
       })
       await expect(readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')).resolves.toBe(
         '{\n  "translation": {\n    "enabled": true,\n    "displayMode": "bilingual",\n    "cacheEnabled": true\n  }\n}'
@@ -404,6 +404,7 @@ describe('ConfigManager', () => {
       expect(config.translation.engines).toEqual({
         openai: { model: 'gpt-4.1-mini' },
         local: { model: 'Xenova/custom-nmt' },
+        localCt2: {},
       })
       await expect(readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')).resolves.toBe(
         '{\n  "translation": {\n    "engines": {\n      "local": {\n        "model": "Xenova/custom-nmt"\n      },\n      "openai": {\n        "model": "gpt-4.1-mini"\n      }\n    }\n  }\n}'
@@ -762,7 +763,7 @@ describe('OpenSpecUIConfigSchema', () => {
       expect(result.data.translation.targetLanguage).toBe('zh')
       expect(result.data.translation.displayMode).toBe('direct')
       expect(result.data.translation.engineId).toBe('browser')
-      expect(result.data.translation.engines).toEqual({ local: {}, openai: {} })
+      expect(result.data.translation.engines).toEqual({ local: {}, localCt2: {}, openai: {} })
     }
   })
 
@@ -862,7 +863,7 @@ describe('DEFAULT_CONFIG', () => {
     expect(DEFAULT_CONFIG.translation.displayMode).toBe('direct')
     expect(DEFAULT_CONFIG.translation.cacheEnabled).toBe(false)
     expect(DEFAULT_CONFIG.translation.engineId).toBe('browser')
-    expect(DEFAULT_CONFIG.translation.engines).toEqual({ local: {}, openai: {} })
+    expect(DEFAULT_CONFIG.translation.engines).toEqual({ local: {}, localCt2: {}, openai: {} })
   })
 })
 

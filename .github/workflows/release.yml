@@ -8,6 +8,7 @@ on:
       - .github/workflows/release.yml
       - package.json
       - scripts/**
+      - packages/*/napi.config.json
       - packages/*/package.json
       - packages/*/CHANGELOG.md
   workflow_dispatch:
@@ -21,8 +22,70 @@ permissions:
   id-token: write
 
 jobs:
+  ctranslate2-matrix:
+    name: CTranslate2 Release Matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Resolve CTranslate2 target matrix
+        id: plan
+        run: bun ./scripts/lib/ctranslate2-release.ts matrix --github-output "$GITHUB_OUTPUT"
+
+  build-ctranslate2:
+    name: Build CTranslate2 (${{ matrix.platformArchAbi }})
+    needs: ctranslate2-matrix
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.ctranslate2-matrix.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build native addon
+        working-directory: packages/ct2-engine
+        run: >-
+          pnpm --package=@napi-rs/cli dlx napi build
+          --platform
+          --release
+          --config-path ./napi.config.json
+          --js binding.js
+          --target ${{ matrix.target }}
+
+      - name: Upload native artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifactName }}
+          path: packages/ct2-engine/${{ matrix.artifactFileName }}
+          if-no-files-found: error
+          retention-days: 1
+
   publish:
     name: Publish Packages
+    needs: [ctranslate2-matrix, build-ctranslate2]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: npm-release
@@ -44,8 +107,18 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
+      - name: Download CTranslate2 native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ctranslate2-*
+          merge-multiple: true
+          path: packages/ct2-engine
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Verify CTranslate2 publish surface
+        run: bun ./scripts/lib/ctranslate2-release.ts verify
 
       - name: Configure git identity for release tags
         run: |

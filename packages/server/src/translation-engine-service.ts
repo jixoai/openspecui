@@ -1,14 +1,31 @@
 import {
-  LocalModelAssetStateSchema,
-  TRANSLATION_ENGINE_MANIFESTS,
+  buildRuntimePackageInstallCommand,
   checkLocalDirectionalModelLanguagePair,
+  createTranslationEngineLifecycleStatus,
+  createCleanCliEnv,
+  detectRuntimePackageManager,
+  getManagedLocalTranslationEngineManifest,
+  getTranslationEngineLifecycleMessage,
+  isManagedLocalTranslationEngineId,
+  isTranslationEngineDependencyReady,
+  isTranslationEngineRuntimeReady,
+  LocalModelAssetStateSchema,
+  resolveRuntimePackageInstallStrategy,
+  shouldShowTranslationEngineInstallGate,
+  TRANSLATION_ENGINE_MANIFESTS,
   type BatchTranslateEvent,
   type BatchTranslateInput,
   type ConfigManager,
   type GlobalSettingsManager,
   type LocalModelAssetState,
+  type ManagedLocalTranslationEngineId,
   type ServiceTranslationEngineId,
   type TranslationEngineId,
+  type TranslationEngineInstallLogEvent,
+  type TranslationEngineLifecycleContext,
+  type TranslationEngineLifecycleController,
+  type TranslationEngineLifecycleEvent,
+  type TranslationEngineLifecycleStatus,
   type TranslationEngineManifest,
   type TranslationModelDownloadPlan,
   type TranslationModelSearchInput,
@@ -16,8 +33,16 @@ import {
   type TranslatorFactory,
 } from '@openspecui/core'
 import { observable } from '@trpc/server/observable'
+import { spawn } from 'node:child_process'
 import { readFile, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import {
+  getDefaultLocalCt2ModelCacheDir,
+  getDefaultLocalCt2ModelFetchCachePath,
+  getDefaultLocalCt2ModelIndexPath,
+} from './ct2-model-cache-path.js'
+import { searchCt2Models } from './ct2-model-catalog.js'
 import { LocalModelAssetStore } from './local-model-asset-store.js'
 import {
   getDefaultLocalModelCacheDir,
@@ -26,13 +51,23 @@ import {
 } from './local-model-cache-path.js'
 import { LocalModelFetchCacheStore } from './local-model-fetch-cache-store.js'
 import { ensureProxyAwareFetchDispatcher } from './network-dispatcher.js'
+import {
+  hasRuntimePackageDependencyPath,
+  normalizeRuntimeHostOptionalDependencies,
+  readRuntimeHostPackageDependencyRequest,
+  readRuntimeHostPackageDependencyTree,
+  resolveRuntimeHostPackageContext,
+} from './runtime-package-host.js'
 import { searchLocalModels } from './translation-model-catalog.js'
 
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
 type TranslationEngineSettingsSnapshot = Awaited<ReturnType<GlobalSettingsManager['readSettings']>>
+type TranslationConfigSnapshot = Awaited<ReturnType<ConfigManager['readConfig']>>
 
 export interface TranslationEngineListItem extends TranslationEngineManifest {
   selected: boolean
-  status: 'available' | 'unavailable'
+  lifecycle: TranslationEngineLifecycleStatus
   message?: string
   model?: string
 }
@@ -45,26 +80,41 @@ export interface TranslationEngineServiceOptions {
   localCacheDir?: string
   localAssetIndexPath?: string
   localFetchCachePath?: string
+  localCt2CacheDir?: string
+  localCt2AssetIndexPath?: string
+  localCt2FetchCachePath?: string
 }
 
 export class TranslationEngineService {
+  private readonly projectDir: string
   private readonly configManager: ConfigManager
   private readonly globalSettingsManager: GlobalSettingsManager
   private readonly now: () => number
   private readonly localCacheDir: string
+  private readonly localCt2CacheDir: string
   private readonly localAssetStore: LocalModelAssetStore
+  private readonly localCt2AssetStore: LocalModelAssetStore
 
   constructor(options: TranslationEngineServiceOptions) {
     ensureProxyAwareFetchDispatcher()
+    this.projectDir = options.projectDir
     this.configManager = options.configManager
     this.globalSettingsManager = options.globalSettingsManager
     this.now = options.now ?? Date.now
     this.localCacheDir = options.localCacheDir ?? getDefaultLocalModelCacheDir()
+    this.localCt2CacheDir = options.localCt2CacheDir ?? getDefaultLocalCt2ModelCacheDir()
     this.localAssetStore = new LocalModelAssetStore({
       indexPath: options.localAssetIndexPath ?? getDefaultLocalModelIndexPath(),
     })
+    this.localCt2AssetStore = new LocalModelAssetStore({
+      indexPath: options.localCt2AssetIndexPath ?? getDefaultLocalCt2ModelIndexPath(),
+    })
     new LocalModelFetchCacheStore({
       cachePath: options.localFetchCachePath ?? getDefaultLocalModelFetchCachePath(),
+      now: this.now,
+    })
+    new LocalModelFetchCacheStore({
+      cachePath: options.localCt2FetchCachePath ?? getDefaultLocalCt2ModelFetchCachePath(),
       now: this.now,
     })
   }
@@ -74,29 +124,155 @@ export class TranslationEngineService {
       this.configManager.readConfig(),
       this.globalSettingsManager.readSettings(),
     ])
-    return TRANSLATION_ENGINE_MANIFESTS.map((manifest) => ({
-      ...manifest,
-      selected: config.translation.engineId === manifest.id,
-      status: 'available',
-      model:
-        manifest.id === 'local'
-          ? (config.translation.engines.local.model ??
-            globalSettings.translationEngines.local.model)
-          : manifest.id === 'openai'
-            ? (config.translation.engines.openai.model ??
-              globalSettings.translationEngines.openai.model)
-            : undefined,
-    }))
+    const items = await Promise.all(
+      TRANSLATION_ENGINE_MANIFESTS.map(async (manifest) => {
+        const lifecycle = await this.getLifecycle(manifest.id, {
+          config,
+          globalSettings,
+        })
+        return {
+          ...manifest,
+          selected: config.translation.engineId === manifest.id,
+          lifecycle,
+          message:
+            getTranslationEngineLifecycleMessage(lifecycle) ??
+            lifecycle.summary ??
+            manifest.description,
+          model: resolveEngineModel(manifest.id, config, globalSettings),
+        }
+      })
+    )
+    return items
+  }
+
+  async getLifecycle(
+    engineId: TranslationEngineId,
+    snapshot?: {
+      config?: TranslationConfigSnapshot
+      globalSettings?: TranslationEngineSettingsSnapshot
+    }
+  ): Promise<TranslationEngineLifecycleStatus> {
+    const config = snapshot?.config ?? (await this.configManager.readConfig())
+    const globalSettings = snapshot?.globalSettings ?? (await this.globalSettingsManager.readSettings())
+    const lifecycle = await this.getLifecycleController(engineId).detectLifecycle({
+      projectDir: this.projectDir,
+      globalSettings: globalSettings.translationEngines,
+    })
+    if (!isManagedLocalTranslationEngineId(engineId)) {
+      return lifecycle
+    }
+    return mergeManagedLocalAssetLifecycle({
+      lifecycle,
+      asset: await this.readManagedLocalAssetLifecycle(engineId, {
+        config,
+        globalSettings,
+      }),
+    })
+  }
+
+  async installEngine(
+    engineId: TranslationEngineId,
+    callbacks?: {
+      onLifecycle?: (status: TranslationEngineLifecycleStatus) => void
+      onLog?: (event: TranslationEngineInstallLogEvent) => void
+      signal?: AbortSignal
+    }
+  ): Promise<TranslationEngineLifecycleStatus> {
+    const [config, globalSettings] = await Promise.all([
+      this.configManager.readConfig(),
+      this.globalSettingsManager.readSettings(),
+    ])
+    const lifecycle = await this.getLifecycleController(engineId).install({
+      projectDir: this.projectDir,
+      globalSettings: globalSettings.translationEngines,
+      signal: callbacks?.signal,
+      onLifecycle: callbacks?.onLifecycle,
+      onLog: callbacks?.onLog,
+    })
+    if (!isManagedLocalTranslationEngineId(engineId)) {
+      return lifecycle
+    }
+    return mergeManagedLocalAssetLifecycle({
+      lifecycle,
+      asset: await this.readManagedLocalAssetLifecycle(engineId, {
+        config,
+        globalSettings,
+      }),
+    })
+  }
+
+  installEngineStream(engineId: TranslationEngineId) {
+    return observable<TranslationEngineLifecycleEvent>((emit) => {
+      let closed = false
+      const controller = new AbortController()
+
+      const push = (event: TranslationEngineLifecycleEvent) => {
+        if (closed) return
+        emit.next(event)
+        if (event.type === 'exit') {
+          closed = true
+          emit.complete()
+        }
+      }
+
+      void (async () => {
+        try {
+          const initialLifecycle = await this.getLifecycle(engineId)
+          push({ type: 'status', lifecycle: initialLifecycle })
+          if (!shouldShowTranslationEngineInstallGate(initialLifecycle)) {
+            push({ type: 'exit', lifecycle: initialLifecycle })
+            return
+          }
+
+          const finalLifecycle = await this.installEngine(engineId, {
+            signal: controller.signal,
+            onLifecycle: (lifecycle) => {
+              push({ type: 'status', lifecycle })
+            },
+            onLog: (event) => {
+              push({ type: 'log', ...event })
+            },
+          })
+          push({ type: 'exit', lifecycle: finalLifecycle })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          const lifecycle = createTranslationEngineLifecycleStatus({
+            dependency: {
+              state: 'error',
+              message: 'Translation engine installation failed.',
+              error: message,
+            },
+            runtime: {
+              state: 'error',
+              error: message,
+            },
+            summary: 'Translation engine installation failed.',
+          })
+          push({ type: 'status', lifecycle })
+          push({ type: 'exit', lifecycle })
+        }
+      })()
+
+      return () => {
+        closed = true
+        controller.abort()
+      }
+    })
   }
 
   async searchModels(input: TranslationModelSearchInput): Promise<TranslationModelSearchResult> {
-    if (input.engineId !== 'local') {
-      return { items: [] }
-    }
     const globalSettings = await this.globalSettingsManager.readSettings()
-    return searchLocalModels(input, {
-      hfEndpoint: globalSettings.translationEngines.local.hfEndpoint,
-    })
+    if (input.engineId === 'local') {
+      return searchLocalModels(input, {
+        hfEndpoint: globalSettings.translationEngines.local.hfEndpoint,
+      })
+    }
+    if (input.engineId === 'local-ct2') {
+      return searchCt2Models(input, {
+        hfEndpoint: globalSettings.translationEngines.localCt2.hfEndpoint,
+      })
+    }
+    return { items: [] }
   }
 
   async getModelDownloadPlan(input: {
@@ -104,8 +280,13 @@ export class TranslationEngineService {
     model: string
     selectedGroupId?: string
   }): Promise<TranslationModelDownloadPlan | null> {
-    if (input.engineId !== 'local') return null
-    const state = (await this.localAssetStore.readMap()).get(input.model)
+    const state =
+      input.engineId === 'local'
+        ? (await this.localAssetStore.readMap()).get(input.model)
+        : input.engineId === 'local-ct2'
+          ? (await this.localCt2AssetStore.readMap()).get(input.model)
+          : undefined
+    if (!state) return null
     return selectPersistedLocalPlan(state, input.selectedGroupId)
   }
 
@@ -129,7 +310,7 @@ export class TranslationEngineService {
           }
           const settingsSnapshot = await this.globalSettingsManager.readSettings()
           const effectiveModel = resolveBatchTranslateModel(input, settingsSnapshot)
-          if (input.engineId === 'local') {
+          if (isManagedLocalEngine(input.engineId)) {
             const directionCheck = checkLocalDirectionalModelLanguagePair({
               model: effectiveModel,
               sourceLanguage: input.sourceLanguage,
@@ -145,18 +326,29 @@ export class TranslationEngineService {
           const effectiveSelectedGroupId =
             input.engineId === 'local'
               ? (input.selectedGroupId ?? settingsSnapshot.translationEngines.local.selectedGroupId)
-              : undefined
+              : input.engineId === 'local-ct2'
+                ? (input.selectedGroupId ??
+                  settingsSnapshot.translationEngines.localCt2.selectedGroupId)
+                : undefined
           const dtype = await this.readLocalDtype(
             input.engineId,
             effectiveModel,
             effectiveSelectedGroupId
           )
-          if (input.engineId === 'local' && effectiveModel) {
-            await this.assertLocalModelReady(effectiveModel, effectiveSelectedGroupId)
+          if (isManagedLocalEngine(input.engineId) && effectiveModel) {
+            await this.assertManagedLocalModelReady(
+              input.engineId,
+              effectiveModel,
+              effectiveSelectedGroupId
+            )
           }
           const runtimeConfig =
-            input.engineId === 'local' && effectiveModel
-              ? await this.readLocalRuntimeConfig(effectiveModel, effectiveSelectedGroupId)
+            isManagedLocalEngine(input.engineId) && effectiveModel
+              ? await this.readManagedLocalRuntimeConfig(
+                  input.engineId,
+                  effectiveModel,
+                  effectiveSelectedGroupId
+                )
               : undefined
           const factory = await this.loadFactory(input.engineId, effectiveModel, settingsSnapshot)
           const translator = await factory.create({
@@ -210,12 +402,13 @@ export class TranslationEngineService {
     return selectLocalPlanGroup(plan, effectiveSelectedGroupId)?.dtype
   }
 
-  private async assertLocalModelReady(
+  private async assertManagedLocalModelReady(
+    engineId: Extract<ServiceTranslationEngineId, 'local' | 'local-ct2'>,
     model: string,
     selectedGroupId: string | undefined
   ): Promise<void> {
     const plan = await this.getModelDownloadPlan({
-      engineId: 'local',
+      engineId,
       model,
       selectedGroupId,
     })
@@ -224,7 +417,11 @@ export class TranslationEngineService {
       throw new Error('No local runtime file plan is available for the selected model.')
     }
     const files = selectedGroup.files
-    const selectedGroupState = await this.readSelectedLocalGroupState(model, selectedGroup.id)
+    const selectedGroupState = await this.readSelectedManagedLocalGroupState(
+      engineId,
+      model,
+      selectedGroup.id
+    )
     if (selectedGroupState?.status === 'downloaded' && selectedGroup.rootDir) {
       const missingFiles = await readMissingLocalGroupFiles(selectedGroup.rootDir, files)
       if (missingFiles.length === 0) return
@@ -240,33 +437,57 @@ export class TranslationEngineService {
       allMissingFiles.length > missingFiles.length
         ? ` and ${allMissingFiles.length - missingFiles.length} more`
         : ''
+    const engineLabel = engineId === 'local-ct2' ? 'CT2 model' : 'local model'
     throw new Error(
-      `Selected local model files are not installed locally: ${missingFiles.join(', ')}${suffix}.`
+      `Selected ${engineLabel} files are not installed locally: ${missingFiles.join(', ')}${suffix}.`
     )
   }
 
-  private async readLocalRuntimeConfig(
+  private async readManagedLocalRuntimeConfig(
+    engineId: Extract<ServiceTranslationEngineId, 'local' | 'local-ct2'>,
     model: string,
     selectedGroupId?: string
   ): Promise<Record<string, unknown> | undefined> {
     const plan = await this.getModelDownloadPlan({
-      engineId: 'local',
+      engineId,
       model,
       selectedGroupId,
     })
     const selectedGroup = selectLocalPlanGroup(plan, selectedGroupId)
     const configPath = selectedGroup?.rootDir
       ? join(selectedGroup.rootDir, 'config.json')
-      : join(this.localCacheDir, 'models', model, 'config.json')
+      : join(
+          engineId === 'local' ? this.localCacheDir : this.localCt2CacheDir,
+          'models',
+          model,
+          'config.json'
+        )
     try {
-      return JSON.parse(await readFile(configPath, 'utf8')) as Record<string, unknown>
+      const runtimeConfig = JSON.parse(await readFile(configPath, 'utf8')) as Record<
+        string,
+        unknown
+      >
+      if (engineId === 'local-ct2' && selectedGroup?.rootDir) {
+        return { ...runtimeConfig, modelPath: selectedGroup.rootDir }
+      }
+      return runtimeConfig
     } catch {
+      if (engineId === 'local-ct2' && selectedGroup?.rootDir) {
+        return { modelPath: selectedGroup.rootDir }
+      }
       return undefined
     }
   }
 
-  private async readSelectedLocalGroupState(model: string, selectedGroupId: string) {
-    const state = (await this.localAssetStore.readMap()).get(model)
+  private async readSelectedManagedLocalGroupState(
+    engineId: Extract<ServiceTranslationEngineId, 'local' | 'local-ct2'>,
+    model: string,
+    selectedGroupId: string
+  ) {
+    const state =
+      engineId === 'local'
+        ? (await this.localAssetStore.readMap()).get(model)
+        : (await this.localCt2AssetStore.readMap()).get(model)
     return state?.groupsState[selectedGroupId]
   }
 
@@ -290,6 +511,18 @@ export class TranslationEngineService {
         localOnly: true,
       })
     }
+    if (engineId === 'local-ct2') {
+      const mod = (await import('@openspecui/local-ct2-translator')) as unknown as {
+        createLocalCt2TranslatorFactory: (options?: {
+          defaultModel?: string
+          cacheDir?: string
+        }) => TranslatorFactory
+      }
+      return mod.createLocalCt2TranslatorFactory({
+        defaultModel: model ?? globalSettings.translationEngines.localCt2.model,
+        cacheDir: this.localCt2CacheDir,
+      })
+    }
     const mod = (await import('@openspecui/openai-completion-translator')) as unknown as {
       createOpenAICompletionTranslatorFactory: (options: {
         baseUrl: string
@@ -303,6 +536,508 @@ export class TranslationEngineService {
       model: model ?? globalSettings.translationEngines.openai.model,
     })
   }
+
+  private async readManagedLocalAssetLifecycle(
+    engineId: ManagedLocalTranslationEngineId,
+    snapshot: {
+      config?: TranslationConfigSnapshot
+      globalSettings?: TranslationEngineSettingsSnapshot
+    }
+  ): Promise<TranslationEngineLifecycleStatus['assets']> {
+    const config = snapshot.config ?? (await this.configManager.readConfig())
+    const globalSettings = snapshot.globalSettings ?? (await this.globalSettingsManager.readSettings())
+    const selection = resolveManagedLocalSelection(engineId, config, globalSettings)
+    if (!selection.model) {
+      return {
+        state: 'missing',
+        message: 'Select a model before translating.',
+      }
+    }
+    const state =
+      engineId === 'local'
+        ? (await this.localAssetStore.readMap()).get(selection.model)
+        : (await this.localCt2AssetStore.readMap()).get(selection.model)
+    const plan = selectPersistedLocalPlan(state, selection.selectedGroupId)
+    const selectedGroup = selectLocalPlanGroup(plan, selection.selectedGroupId)
+    if (!plan || !selectedGroup || selectedGroup.files.length === 0) {
+      return {
+        state: 'missing',
+        message: `Selected ${getManagedLocalAssetLabel(engineId)} files are not installed locally.`,
+      }
+    }
+    const groupState =
+      state?.groupsState[
+        selectedGroup.id
+      ] ??
+      (selectedGroup.baseGroupId ? state?.groupsState[selectedGroup.baseGroupId] : undefined)
+    if (
+      groupState?.status === 'downloading' ||
+      groupState?.status === 'queued' ||
+      groupState?.status === 'paused' ||
+      state?.status === 'downloading' ||
+      state?.status === 'queued' ||
+      state?.status === 'paused'
+    ) {
+      return {
+        state: 'downloading',
+        message: `Downloading ${getManagedLocalAssetLabel(engineId)} files.`,
+        progress: groupState?.progress ?? state?.progress,
+      }
+    }
+    const missingFiles = selectedGroup.rootDir
+      ? await readMissingLocalGroupFiles(selectedGroup.rootDir, selectedGroup.files)
+      : selectedGroup.files.map((file) => file.path)
+    if (missingFiles.length === 0 && (groupState?.status === 'downloaded' || state?.status === 'downloaded')) {
+      return {
+        state: 'ready',
+        message: `Selected ${getManagedLocalAssetLabel(engineId)} files are ready.`,
+      }
+    }
+    return {
+      state: 'missing',
+      message: `Selected ${getManagedLocalAssetLabel(engineId)} files are not installed locally.`,
+    }
+  }
+
+  private getLifecycleController(engineId: TranslationEngineId): TranslationEngineLifecycleController {
+    if (engineId === 'browser') return browserTranslationEngineLifecycleController
+    if (engineId === 'openai') return openAITranslationEngineLifecycleController
+    if (engineId === 'local-ct2') return createManagedLocalLifecycleController('local-ct2')
+    return createManagedLocalLifecycleController('local')
+  }
+}
+
+const browserTranslationEngineLifecycleController: TranslationEngineLifecycleController = {
+  async detectLifecycle() {
+    return createTranslationEngineLifecycleStatus({
+      dependency: {
+        state: 'not-applicable',
+        message: 'Browser translation support is built into the browser runtime.',
+      },
+      runtime: {
+        state: 'not-applicable',
+        message: 'Browser translation support is validated in the browser runtime.',
+      },
+      assets: {
+        state: 'not-applicable',
+      },
+      summary: 'Browser translation support is built into the browser runtime.',
+    })
+  },
+  async install() {
+    return browserTranslationEngineLifecycleController.detectLifecycle({
+      projectDir: '',
+      globalSettings: {
+        local: { model: '', hfEndpoint: '' },
+        localCt2: { model: '', hfEndpoint: '' },
+        openai: { baseUrl: '', token: '', model: '' },
+      },
+    })
+  },
+}
+
+const openAITranslationEngineLifecycleController: TranslationEngineLifecycleController = {
+  async detectLifecycle() {
+    return createTranslationEngineLifecycleStatus({
+      dependency: {
+        state: 'not-applicable',
+        message: 'OpenAI completion translation is bundled with the server runtime.',
+      },
+      runtime: {
+        state: 'not-applicable',
+        message: 'OpenAI provider validation happens when requests are sent.',
+      },
+      assets: {
+        state: 'not-applicable',
+      },
+      summary: 'OpenAI completion translation is bundled with the server runtime.',
+    })
+  },
+  async install() {
+    return openAITranslationEngineLifecycleController.detectLifecycle({
+      projectDir: '',
+      globalSettings: {
+        local: { model: '', hfEndpoint: '' },
+        localCt2: { model: '', hfEndpoint: '' },
+        openai: { baseUrl: '', token: '', model: '' },
+      },
+    })
+  },
+}
+
+function createManagedLocalLifecycleController(
+  engineId: ManagedLocalTranslationEngineId
+): TranslationEngineLifecycleController {
+  return {
+    async detectLifecycle() {
+      return detectManagedLocalLifecycle(engineId)
+    },
+    async install(input) {
+      return installManagedLocalRuntime(engineId, input)
+    },
+  }
+}
+
+function resolveEngineModel(
+  engineId: TranslationEngineId,
+  config: TranslationConfigSnapshot,
+  globalSettings: TranslationEngineSettingsSnapshot
+): string | undefined {
+  if (engineId === 'local') {
+    return config.translation.engines.local.model ?? globalSettings.translationEngines.local.model
+  }
+  if (engineId === 'local-ct2') {
+    return (
+      config.translation.engines.localCt2.model ?? globalSettings.translationEngines.localCt2.model
+    )
+  }
+  if (engineId === 'openai') {
+    return (
+      config.translation.engines.openai.model ?? globalSettings.translationEngines.openai.model
+    )
+  }
+  return undefined
+}
+
+function resolveManagedLocalSelection(
+  engineId: ManagedLocalTranslationEngineId,
+  config: TranslationConfigSnapshot,
+  globalSettings: TranslationEngineSettingsSnapshot
+): {
+  model: string
+  selectedGroupId?: string
+} {
+  const manifest = getManagedLocalTranslationEngineManifest(engineId)
+  if (manifest.settingsKey === 'local') {
+    return {
+      model:
+        config.translation.engines.local.model ??
+        globalSettings.translationEngines.local.model ??
+        manifest.defaultModel,
+      selectedGroupId:
+        config.translation.engines.local.selectedGroupId ??
+        globalSettings.translationEngines.local.selectedGroupId,
+    }
+  }
+  return {
+    model:
+      config.translation.engines.localCt2.model ??
+      globalSettings.translationEngines.localCt2.model ??
+      manifest.defaultModel,
+    selectedGroupId:
+      config.translation.engines.localCt2.selectedGroupId ??
+      globalSettings.translationEngines.localCt2.selectedGroupId,
+  }
+}
+
+function getManagedLocalAssetLabel(engineId: ManagedLocalTranslationEngineId): string {
+  const manifest = getManagedLocalTranslationEngineManifest(engineId)
+  return manifest.modelLabel.toLowerCase()
+}
+
+function mergeManagedLocalAssetLifecycle(input: {
+  lifecycle: TranslationEngineLifecycleStatus
+  asset: TranslationEngineLifecycleStatus['assets']
+}): TranslationEngineLifecycleStatus {
+  if (
+    !isTranslationEngineDependencyReady(input.lifecycle) ||
+    !isTranslationEngineRuntimeReady(input.lifecycle)
+  ) {
+    return {
+      ...input.lifecycle,
+      assets: input.asset,
+    }
+  }
+  return {
+    ...input.lifecycle,
+    assets: input.asset,
+    summary:
+      input.lifecycle.summary ??
+      input.asset.message ??
+      getTranslationEngineLifecycleMessage(input.lifecycle),
+  }
+}
+
+async function detectManagedLocalLifecycle(
+  engineId: ManagedLocalTranslationEngineId
+): Promise<TranslationEngineLifecycleStatus> {
+  const manifest = getManagedLocalTranslationEngineManifest(engineId)
+  const dependency = await detectManagedLocalDependency(engineId)
+  if (dependency.state !== 'installed') {
+    return createTranslationEngineLifecycleStatus({
+      dependency,
+      runtime: {
+        state: 'not-applicable',
+        message: manifest.installDescription,
+      },
+      summary: manifest.installDescription,
+    })
+  }
+  const runtime = await probeManagedLocalRuntime(engineId)
+  return createTranslationEngineLifecycleStatus({
+    dependency,
+    runtime,
+    summary:
+      runtime.state === 'ready'
+        ? runtime.message ?? dependency.message ?? manifest.description
+        : runtime.error ?? runtime.message ?? manifest.installDescription,
+  })
+}
+
+async function detectManagedLocalDependency(
+  engineId: ManagedLocalTranslationEngineId
+): Promise<TranslationEngineLifecycleStatus['dependency']> {
+  const manifest = getManagedLocalTranslationEngineManifest(engineId)
+  const runtimeHost = resolveRuntimeHostPackageContext(__dirname)
+  const spec = getManagedLocalRuntimeSpec(engineId)
+  try {
+    const tree = await readRuntimeHostPackageDependencyTree({
+      runtimeHost,
+      packageNames: spec.packageNames,
+    })
+    const missing = spec.detectMissing(tree)
+    if (missing.length > 0) {
+      return {
+        state: 'missing',
+        message: manifest.installDescription,
+        error: `Missing runtime dependency: ${missing.join(', ')}`,
+      }
+    }
+    return {
+      state: 'installed',
+      message: `${manifest.label} runtime dependencies are installed.`,
+    }
+  } catch (error) {
+    return {
+      state: 'missing',
+      message: manifest.installDescription,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+async function probeManagedLocalRuntime(
+  engineId: ManagedLocalTranslationEngineId
+): Promise<TranslationEngineLifecycleStatus['runtime']> {
+  const manifest = getManagedLocalTranslationEngineManifest(engineId)
+  try {
+    if (engineId === 'local') {
+      const mod = (await import('@huggingface/transformers')) as {
+        pipeline?: unknown
+      }
+      if (typeof mod.pipeline !== 'function') {
+        throw new Error('Transformers.js did not expose a translation pipeline entry point.')
+      }
+    } else {
+      const mod = (await import('ctranslate2')) as {
+        Ct2Translator?: unknown
+      }
+      if (typeof mod.Ct2Translator !== 'function') {
+        throw new Error('ctranslate2 did not expose a Ct2Translator constructor.')
+      }
+    }
+    return {
+      state: 'ready',
+      message: `${manifest.label} runtime is ready.`,
+    }
+  } catch (error) {
+    return {
+      state: 'failed',
+      message: `${manifest.label} runtime could not be loaded.`,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+async function installManagedLocalRuntime(
+  engineId: ManagedLocalTranslationEngineId,
+  input: TranslationEngineLifecycleContext
+): Promise<TranslationEngineLifecycleStatus> {
+  const manifest = getManagedLocalTranslationEngineManifest(engineId)
+  input.onLifecycle?.(
+    createTranslationEngineLifecycleStatus({
+      dependency: {
+        state: 'installing',
+        message: `Installing ${manifest.label} runtime dependencies.`,
+      },
+      runtime: {
+        state: 'not-applicable',
+      },
+      summary: `Installing ${manifest.label} runtime dependencies.`,
+    })
+  )
+
+  const runtimeHost = resolveRuntimeHostPackageContext(__dirname)
+  const packageManager = detectRuntimePackageManager({ startDir: runtimeHost.packageDir })
+  const strategy = resolveRuntimePackageInstallStrategy(packageManager.id)
+  const spec = getManagedLocalRuntimeSpec(engineId)
+  const runtimePackage = readRuntimeHostPackageDependencyRequest({
+    runtimeHost,
+    packageName: manifest.runtimePackageName,
+    fallbackRange: spec.fallbackRange,
+  })
+  const installCommand = buildRuntimePackageInstallCommand({
+    packageManager: packageManager.id,
+    packages: [runtimePackage],
+    dependencyField: 'optionalDependencies',
+    ignoreWorkspace: runtimeHost.packageName === '@openspecui/server',
+    allowBuildPackages: spec.allowBuildPackages,
+  })
+  if (!installCommand) {
+    return createTranslationEngineLifecycleStatus({
+      dependency: {
+        state: 'error',
+        message: `Failed to resolve a supported ${manifest.label} runtime installer.`,
+        error: `Automatic ${manifest.label} runtime installation is not supported for runtime host package manager "${packageManager.id}". Install ${runtimePackage} manually in ${runtimeHost.packageName}.`,
+      },
+      runtime: {
+        state: 'error',
+      },
+      summary: `Failed to resolve a supported ${manifest.label} runtime installer.`,
+    })
+  }
+
+  input.onLog?.({
+    stream: 'stdout',
+    text: `${installCommand.displayCommand}\n`,
+  })
+
+  const installError = await runRuntimeInstallCommand({
+    command: installCommand,
+    cwd: runtimeHost.packageDir,
+    signal: input.signal,
+    onLog: input.onLog,
+  })
+  if (installError) {
+    return createTranslationEngineLifecycleStatus({
+      dependency: {
+        state: 'error',
+        message: `${manifest.label} runtime installation failed.`,
+        error: installError,
+      },
+      runtime: {
+        state: 'error',
+        error: installError,
+      },
+      summary: `${manifest.label} runtime installation failed.`,
+    })
+  }
+
+  if (strategy && !strategy.preservesDependencyField) {
+    normalizeRuntimeHostOptionalDependencies({
+      runtimeHost,
+      packageNames: [manifest.runtimePackageName],
+    })
+  }
+
+  const probingLifecycle = createTranslationEngineLifecycleStatus({
+    dependency: {
+      state: 'installed',
+      message: `${manifest.label} runtime dependencies are installed.`,
+    },
+    runtime: {
+      state: 'probing',
+      message: `Probing ${manifest.label} runtime.`,
+    },
+    summary: `Probing ${manifest.label} runtime.`,
+  })
+  input.onLifecycle?.(probingLifecycle)
+
+  const finalLifecycle = await detectManagedLocalLifecycle(engineId)
+  input.onLifecycle?.(finalLifecycle)
+  return finalLifecycle
+}
+
+async function runRuntimeInstallCommand(input: {
+  command: {
+    cmd: string
+    args: string[]
+    displayCommand: string
+  }
+  cwd: string
+  signal?: AbortSignal
+  onLog?: (event: TranslationEngineInstallLogEvent) => void
+}): Promise<string | null> {
+  let child
+  try {
+    child = spawn(input.command.cmd, input.command.args, {
+      cwd: input.cwd,
+      shell: false,
+      env: createCleanCliEnv(),
+    })
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error)
+  }
+
+  const abort = () => {
+    try {
+      child.kill()
+    } catch {
+      // ignore
+    }
+  }
+  input.signal?.addEventListener('abort', abort, { once: true })
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      child.stdout?.on('data', (data: Buffer) => {
+        input.onLog?.({ stream: 'stdout', text: data.toString() })
+      })
+      child.stderr?.on('data', (data: Buffer) => {
+        input.onLog?.({ stream: 'stderr', text: data.toString() })
+      })
+      child.on('error', (error) => {
+        reject(error)
+      })
+      child.on('close', (exitCode) => {
+        if (exitCode === 0) {
+          resolve()
+          return
+        }
+        reject(new Error(`${input.command.displayCommand} exited with code ${exitCode ?? 'unknown'}.`))
+      })
+    })
+    return null
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error)
+  } finally {
+    input.signal?.removeEventListener('abort', abort)
+  }
+}
+
+function getManagedLocalRuntimeSpec(engineId: ManagedLocalTranslationEngineId): {
+  packageNames: string[]
+  allowBuildPackages: string[]
+  fallbackRange: string
+  detectMissing(tree: Parameters<typeof hasRuntimePackageDependencyPath>[0]): string[]
+} {
+  if (engineId === 'local') {
+    return {
+      packageNames: ['@huggingface/transformers', 'onnxruntime-node'],
+      allowBuildPackages: ['onnxruntime-node'],
+      fallbackRange: '~4.2.0',
+      detectMissing(tree) {
+        const missing: string[] = []
+        if (!hasRuntimePackageDependencyPath(tree, ['@huggingface/transformers'])) {
+          missing.push('@huggingface/transformers')
+        }
+        if (
+          !hasRuntimePackageDependencyPath(tree, ['@huggingface/transformers', 'onnxruntime-node'])
+        ) {
+          missing.push('onnxruntime-node')
+        }
+        return missing
+      },
+    }
+  }
+  return {
+    packageNames: ['ctranslate2'],
+    allowBuildPackages: ['ctranslate2'],
+    fallbackRange: '^0.1.0',
+    detectMissing(tree) {
+      return hasRuntimePackageDependencyPath(tree, ['ctranslate2']) ? [] : ['ctranslate2']
+    },
+  }
 }
 
 function resolveBatchTranslateModel(
@@ -311,8 +1046,15 @@ function resolveBatchTranslateModel(
 ): string | undefined {
   if (input.model) return input.model
   if (input.engineId === 'local') return settings.translationEngines.local.model
+  if (input.engineId === 'local-ct2') return settings.translationEngines.localCt2.model
   if (input.engineId === 'openai') return settings.translationEngines.openai.model
   return undefined
+}
+
+function isManagedLocalEngine(
+  engineId: TranslationEngineId
+): engineId is Extract<ServiceTranslationEngineId, 'local' | 'local-ct2'> {
+  return engineId === 'local' || engineId === 'local-ct2'
 }
 
 function selectPersistedLocalPlan(

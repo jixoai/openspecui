@@ -15,6 +15,12 @@ export const TranslationEngineProjectSettingsSchema = z
         selectedGroupId: z.string().min(1).optional(),
       })
       .default({}),
+    localCt2: z
+      .object({
+        model: z.string().min(1).optional(),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+      .default({}),
     openai: z
       .object({
         model: z.string().min(1).optional(),
@@ -40,6 +46,9 @@ export type TranslationEngineProjectSettings = z.infer<
 export type TranslationEngineProjectSettingsUpdate = {
   local?: Partial<Omit<TranslationEngineProjectSettings['local'], 'selectedGroupId'>> & {
     selectedGroupId?: TranslationEngineProjectSettings['local']['selectedGroupId'] | null
+  }
+  localCt2?: Partial<Omit<TranslationEngineProjectSettings['localCt2'], 'selectedGroupId'>> & {
+    selectedGroupId?: TranslationEngineProjectSettings['localCt2']['selectedGroupId'] | null
   }
   openai?: Partial<TranslationEngineProjectSettings['openai']>
 }
