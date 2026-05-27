@@ -1,5 +1,7 @@
 # @openspecui/web
 
+## 3.11.2
+
 ## 3.11.1
 
 ### Patch Changes

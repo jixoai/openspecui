@@ -1,5 +1,11 @@
 # openspecui
 
+## 3.11.2
+
+### Patch Changes
+
+- afedcb6: Add the Local-CT2 translation engine and lifecycle-managed runtime installation flow, and fix the managed-local/document-translation regressions discovered during real walkthroughs.
+
 ## 3.11.1
 
 ### Patch Changes
