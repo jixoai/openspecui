@@ -16,6 +16,9 @@
   "files": [
     "index.js",
     "index.d.ts",
+    "binding.js",
+    "runtime-support.js",
+    "napi.config.json",
     "README.md",
     "Cargo.toml",
     "build.rs",
@@ -26,13 +29,14 @@
     "access": "public"
   },
   "scripts": {
-    "build": "pnpm --package=@napi-rs/cli dlx napi build --platform --release",
-    "dev": "pnpm --package=@napi-rs/cli dlx napi build --platform",
+    "build": "pnpm --package=@napi-rs/cli dlx napi build --platform --release --config-path ./napi.config.json --js binding.js && pnpm exec prettier --write ./binding.js ./index.d.ts",
+    "dev": "pnpm --package=@napi-rs/cli dlx napi build --platform --config-path ./napi.config.json --js binding.js && pnpm exec prettier --write ./binding.js ./index.d.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
-  "// binary-note": "Keep napi.binaryName fixed to ct2 so the generated loader and published native artifacts stay on the ct2.* surface instead of leaking the default index.* names.",
-  "// publish-note": "This package only publishes the loader plus generated ct2.* runtime files. Stale local index.* artifacts must never be matched by the tarball file list.",
+  "// napi-config-note": "The runnable NAPI-RS target matrix lives in napi.config.json so build/release automation can consume one truth without fighting package.json comments.",
+  "// binary-note": "Keep the generated loader on binding.js and reserve index.js for the handwritten runtime law that checks the supported matrix before loading native code.",
+  "// publish-note": "This package only publishes the handwritten entrypoint plus generated ct2.* runtime files. Stale local index.* artifacts must never be matched by the tarball file list.",
   "devDependencies": {
     "@napi-rs/cli": "^3.6.2",
     "@types/node": "^22.10.2",
@@ -53,9 +57,5 @@
     "nmt",
     "napi",
     "node-addon"
-  ],
-  "napi": {
-    "binaryName": "ct2",
-    "packageName": "ctranslate2"
-  }
+  ]
 }

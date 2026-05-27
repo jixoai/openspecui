@@ -15,6 +15,20 @@ The current native host loads a CT2 model directory and translates plain strings
 
 Higher-level translation integration lives in `@openspecui/local-ct2-translator`.
 
+## Supported Native Targets
+
+The published package currently ships native addons for the targets declared in
+[`napi.config.json`](./napi.config.json):
+
+- `linux-x64-gnu`
+- `win32-x64-msvc`
+- `darwin-x64`
+- `darwin-arm64`
+
+`index.js` enforces this support matrix before it loads the generated NAPI binding. If a new
+target is added, update `napi.config.json` and the release automation together so the published
+tarball still contains every declared `ct2.*.node` artifact.
+
 ## Smoke Test
 
 Use a local CT2 model directory that contains the required artifacts:

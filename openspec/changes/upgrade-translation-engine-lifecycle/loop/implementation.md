@@ -157,3 +157,42 @@ Focused verification completed:
 - `pnpm --filter ctranslate2 build`
 - `pnpm --filter ctranslate2 test`
 - `cd packages/ct2-engine && npm pack --json --dry-run`
+
+## 2026-05-28 03:38 CST Progress
+
+- Promoted the native package truth from an implicit `package.json.napi` detail into an explicit release law:
+  - `packages/ct2-engine/napi.config.json` now declares the supported native target matrix as a dedicated source of truth.
+  - `packages/ct2-engine/index.js` is now a stable handwritten entrypoint that:
+    - normalizes `NAPI_RS_FORCE_WASI` so falsey string values no longer accidentally force the WASI branch
+    - rejects unsupported runtime targets before entering the generated binding loader
+  - `packages/ct2-engine/runtime-support.js` now owns support-matrix parsing and runtime target detection, so unsupported platforms fail with an explicit error instead of falling through to opaque loader noise.
+- Added reusable publish/release helpers so the workflow and publish step consume the same NAPI artifact truth:
+  - `scripts/lib/publish-packages/napi-artifacts.ts` verifies every declared native target artifact exists before publish
+  - `scripts/lib/ctranslate2-release.ts` derives the GitHub Actions matrix from `napi.config.json` and verifies the aggregated package surface before publish
+- Upgraded `.github/workflows/release.yml` from a single Ubuntu publish job into:
+  - a `ctranslate2` matrix-planning job
+  - per-target native build jobs
+  - a publish job that downloads the aggregated `ct2.*.node` artifacts and refuses to publish if any declared target is missing
+- Kept the current support matrix explicit and conservative:
+  - `linux-x64-gnu`
+  - `win32-x64-msvc`
+  - `darwin-x64`
+  - `darwin-arm64`
+- Confirmed locally that the published tarball surface remains on the intended package law:
+  - includes `binding.js`, `runtime-support.js`, `napi.config.json`, `ct2.*.node`
+  - excludes stale `index.*.node` native artifacts even if they still exist in the local working tree
+
+Focused verification completed:
+
+- `pnpm --filter ctranslate2 build`
+- `pnpm --filter ctranslate2 test`
+- `pnpm test:root`
+- `pnpm format:check`
+- `pnpm lint:ci`
+- `pnpm typecheck`
+- `pnpm test:ci`
+- `pnpm test:browser:ci`
+- `git diff --check`
+- `CHANGESET_CHECK_BASE_SHA=$(git merge-base HEAD origin/main) pnpm changeset:check`
+- `cd packages/ct2-engine && npm pack --json --dry-run`
+- `bun ./scripts/lib/ctranslate2-release.ts matrix`
