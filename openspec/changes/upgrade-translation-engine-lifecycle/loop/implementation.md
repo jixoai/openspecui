@@ -73,3 +73,35 @@ Focused verification completed:
 
 - `pnpm --filter @openspecui/server exec vitest run src/local-model-asset-service.test.ts src/ct2-model-asset-service.test.ts src/translation-engine-service.test.ts`
 - `pnpm --filter @openspecui/web exec vitest run src/routes/settings.test.tsx --project unit`
+
+## 2026-05-27 22:05 CST Progress
+
+- Continued the near-production packaged-host walkthrough from the freshly packed `openspecui` tarball and simulated the real first-launch missing-runtime state by deleting:
+  - `node_modules/@huggingface/transformers`
+  - `node_modules/onnxruntime-node`
+  - `node_modules/onnxruntime-common`
+  - `node_modules/onnxruntime-web`
+- The real browser walkthrough exposed a second managed-local handoff gap: after runtime installation completed, the active Settings panel could still land on `No runtime download plan available.` because `panelState` only projected existing asset truth and did not create the profile manifest for the already-selected default model.
+- Closed that gap by changing the install-success handoff from a read-only `panelState` refresh to the shared managed-local `refreshArtifacts` path, then caching the returned `panelState` truth through the existing lifecycle/UI cache helper.
+- Added a BDD regression that starts from a missing-runtime local engine, completes the install stream, and asserts the UI moves directly into `Download model` instead of staying stuck on `No runtime download plan available.`.
+- Re-ran the packaged host acceptance after the fix and verified the complete desktop lifecycle:
+  - first launch shows the runtime install gate
+  - install log streams inside the bounded `pre` card
+  - runtime-ready handoff immediately shows the managed-local model card with download groups and file plan
+  - model download reaches the completed state without manual refresh
+  - server restart preserves the downloaded state
+- Captured final walkthrough evidence under:
+  - `tmp/translation-lifecycle-walkthrough/desktop/01-desktop-missing-runtime.png`
+  - `tmp/translation-lifecycle-walkthrough/desktop/02-desktop-installing-runtime-log.png`
+  - `tmp/translation-lifecycle-walkthrough/desktop/03-desktop-runtime-ready-model-panel.png`
+  - `tmp/translation-lifecycle-walkthrough/desktop/04-desktop-model-downloading.png`
+  - `tmp/translation-lifecycle-walkthrough/desktop/05-desktop-model-downloaded.png`
+  - `tmp/translation-lifecycle-walkthrough/desktop/06-desktop-restart-ready.png`
+  - `tmp/translation-lifecycle-walkthrough/mobile/01-mobile-translation-top.png`
+  - `tmp/translation-lifecycle-walkthrough/mobile/02-mobile-translation-files.png`
+
+Focused verification completed:
+
+- `pnpm --filter @openspecui/web exec vitest run src/routes/settings.test.tsx --project unit`
+- `pnpm --filter openspecui run build`
+- `pnpm pack --pack-destination /tmp/openspecui-walkthrough-pack`

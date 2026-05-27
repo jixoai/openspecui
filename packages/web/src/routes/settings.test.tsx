@@ -2611,6 +2611,179 @@ describe('Settings', () => {
     await waitFor(() => expect(screen.getByLabelText('Local download profiles')).toBeTruthy())
   })
 
+  it('hydrates the Local download plan after runtime installation hands off to the managed-local panel', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    const modelId = 'onnx-community/opus-mt-en-zh'
+    let runtimeInstalled = false
+    localModelsMock.panelState.mockImplementation(async ({ selectedGroupId }) => {
+      if (!runtimeInstalled) {
+        return {
+          modelId,
+          selectedGroupId: selectedGroupId ?? 'q8',
+          asset: createLocalAssetStateForTest({
+            modelId,
+            status: 'not-downloaded',
+            selected: true,
+            selectedGroupId: selectedGroupId ?? 'q8',
+            progress: 0,
+            bytesDownloaded: 0,
+            totalBytes: 246415360,
+            resumable: false,
+            files: [],
+            updatedAt: 100,
+          }),
+          downloadPlan: null,
+        }
+      }
+      return {
+        modelId,
+        selectedGroupId: selectedGroupId ?? 'q8',
+        asset: createLocalAssetStateForTest({
+          modelId,
+          status: 'not-downloaded',
+          selected: true,
+          selectedGroupId: selectedGroupId ?? 'q8',
+          progress: 0,
+          bytesDownloaded: 0,
+          totalBytes: 246415360,
+          resumable: false,
+          files: [],
+          updatedAt: 100,
+        }),
+        downloadPlan: null,
+      }
+    })
+    localModelsMock.refreshArtifacts.mockImplementation(async ({ modelId: inputModelId }) => {
+      const asset = createDefaultLocalAssetState(modelId, 'q8')
+      return {
+        modelId: inputModelId ?? modelId,
+        selectedGroupId: 'q8',
+        asset,
+        downloadPlan: createDefaultLocalDownloadPlan(modelId, 'q8'),
+      }
+    })
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+          engineId: 'local',
+        },
+      },
+    })
+    useGlobalSettingsSubscriptionMock.mockReturnValue({
+      data: {
+        translationCache: { entryLimit: 10000 },
+        translationEngines: {
+          extensions: {
+            engines: {
+              local: { status: 'not-installed' },
+              localCt2: { status: 'installed' },
+              openai: { status: 'installed' },
+            },
+          },
+          local: { model: modelId, selectedGroupId: 'q8', hfEndpoint: '' },
+          localCt2: {
+            model: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+            selectedGroupId: 'float16',
+            hfEndpoint: '',
+          },
+          openai: { baseUrl: '', token: '', model: 'gpt-4.1-mini' },
+        },
+      },
+      isLoading: false,
+      error: null,
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+    reactQueryMockStore.setQueryData(
+      ['translationEngines.list'],
+      [
+        {
+          id: 'browser',
+          label: 'Browser',
+          description: 'Uses the browser Translator API and future browser-side providers.',
+          technicalSummary:
+            'Browser-native Web Translator adapter. Package payload is about 5 KB; browser language packs are managed by the browser.',
+          runtime: 'browser',
+          selected: false,
+          installStatus: { state: 'installed', message: 'Browser translator is built in.' },
+        },
+        {
+          id: 'local',
+          label: 'Local-Transformers',
+          description:
+            'Runs a bundled local Transformers.js translation runtime with managed model files.',
+          technicalSummary:
+            'Server-side Transformers.js local adapter. Package payload is about 5 KB; selected model groups are downloaded separately and can range from tens to hundreds of MB.',
+          runtime: 'server',
+          selected: true,
+          installStatus: {
+            state: 'not-installed',
+            message:
+              'Install the Local-Transformers runtime package to enable server-side translation.',
+          },
+          model: modelId,
+        },
+        {
+          id: 'openai',
+          label: 'OpenAI-Completion',
+          description:
+            'Uses an OpenAI-compatible TanStack OpenAI-Completion completion provider for context-aware translation.',
+          technicalSummary:
+            'Server-side TanStack OpenAI-Completion adapter for OpenAI-compatible APIs. Package payload is about 5 KB; model size stays with the remote provider.',
+          runtime: 'server',
+          selected: false,
+          installStatus: {
+            state: 'installed',
+            message: 'OpenAI completion translator is bundled.',
+          },
+          model: 'gpt-4.1-mini',
+        },
+      ]
+    )
+    translationEnginesMock.installStream.mockImplementationOnce((_input, handlers) => {
+      const unsubscribe = vi.fn()
+      queueMicrotask(() => {
+        if (unsubscribe.mock.calls.length > 0) return
+        handlers.onData({
+          type: 'status',
+          status: { state: 'installing', message: 'Installing Local-Transformers runtime.' },
+        })
+        window.setTimeout(() => {
+          if (unsubscribe.mock.calls.length > 0) return
+          runtimeInstalled = true
+          handlers.onData({
+            type: 'exit',
+            status: {
+              state: 'installed',
+              message: 'Local-Transformers runtime dependencies are installed.',
+            },
+          })
+        }, 0)
+      })
+      return { unsubscribe }
+    })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    expect(screen.queryByRole('button', { name: 'Download model' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Install translation engine' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Download model' })).toBeTruthy())
+    expect(screen.queryByText('No runtime download plan available.')).toBeNull()
+    expect(localModelsMock.refreshArtifacts).toHaveBeenCalledWith({ modelId })
+  })
+
   it('renders browser language-pair chips from the support table', async () => {
     vi.stubGlobal(
       'matchMedia',

@@ -490,6 +490,24 @@ async function refreshManagedLocalPanelStateSnapshot(input: {
   return panelState
 }
 
+async function refreshManagedLocalArtifactsSnapshot(input: {
+  engineId: ManagedLocalTranslationEngineId
+  modelId: string
+  requestedSelectedGroupId?: string
+  queryClient: ReturnType<typeof useQueryClient>
+}): Promise<LocalPanelStateData> {
+  const panelState = await refreshManagedLocalArtifacts(input.engineId, {
+    modelId: input.modelId,
+  })
+  cacheManagedLocalPanelState({
+    engineId: input.engineId,
+    panelState,
+    queryClient: input.queryClient,
+    requestedSelectedGroupId: input.requestedSelectedGroupId,
+  })
+  return panelState
+}
+
 export function SettingsTranslationPanel({ index }: { index: number }) {
   const inStaticMode = isStaticMode()
   const { data: config, isLoading: configLoading } = useConfigSubscription()
@@ -920,6 +938,25 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
             lifecycle,
           })
       )
+      if (isManagedLocalTranslationEngineId(engineId)) {
+        const modelId = nmtModelRef.current.trim()
+        if (modelId) {
+          try {
+            const panelState = await refreshManagedLocalArtifactsSnapshot({
+              engineId,
+              modelId,
+              requestedSelectedGroupId: nmtSelectedGroupIdRef.current,
+              queryClient,
+            })
+            if (activeManagedLocalEngineId === engineId) {
+              lastLocalPanelStateRef.current = panelState
+              setNmtSelectedGroupId(panelState.selectedGroupId)
+            }
+          } catch {
+            // Let the standard panel query surface any runtime/model errors after handoff.
+          }
+        }
+      }
       await refetchEngines()
     },
     onError: (error) => {
