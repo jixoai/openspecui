@@ -164,13 +164,17 @@ describe('TranslationEngineService', () => {
     const browser = engines.find((engine) => engine.id === 'browser')
     const openai = engines.find((engine) => engine.id === 'openai')
 
-    expect(browser?.installStatus).toMatchObject({
-      state: 'installed',
-      message: 'Browser translator is built in.',
+    expect(browser?.lifecycle).toMatchObject({
+      dependency: {
+        state: 'not-applicable',
+        message: 'Browser translation support is built into the browser runtime.',
+      },
     })
-    expect(openai?.installStatus).toMatchObject({
-      state: 'installed',
-      message: 'OpenAI completion translator is bundled.',
+    expect(openai?.lifecycle).toMatchObject({
+      dependency: {
+        state: 'not-applicable',
+        message: 'OpenAI completion translation is bundled with the server runtime.',
+      },
     })
   })
 

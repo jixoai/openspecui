@@ -35,13 +35,17 @@ import {
 } from '@openspecui/core/translation-language-pair'
 import {
   TRANSLATION_ENGINE_IDS,
+  createTranslationEngineLifecycleStatus,
+  getManagedLocalTranslationEngineManifest,
   getTranslationEngineManifest,
+  getTranslationEngineLifecycleMessage,
   isManagedLocalTranslationEngineId,
+  shouldShowTranslationEngineInstallGate,
   type LocalModelAssetState,
   type LocalModelCatalogItem,
   type TranslationDownloadGroupPlan,
   type TranslationEngineId,
-  type TranslationEngineInstallStatus,
+  type TranslationEngineLifecycleStatus,
   type TranslationModelDownloadPlan,
 } from '@openspecui/core/translator'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -105,7 +109,7 @@ type ManagedLocalTranslationEngineId = Extract<TranslationEngineId, 'local' | 'l
 
 interface TranslationEngineQueryListItem {
   id: TranslationEngineId
-  installStatus: TranslationEngineInstallStatus
+  lifecycle: TranslationEngineLifecycleStatus
 }
 
 function getBrowserSupportRows(
@@ -247,20 +251,20 @@ function replaceQueryCacheData<TData>(
   return nextData
 }
 
-function replaceTranslationEngineInstallStatusInQueryData<
+function replaceTranslationEngineLifecycleInQueryData<
   TItem extends TranslationEngineQueryListItem,
   TCurrent extends TItem[] | { data?: TItem[]; [key: string]: unknown } | undefined,
 >(
   current: TCurrent,
   input: {
     engineId: TranslationEngineId
-    installStatus: TranslationEngineInstallStatus
+    lifecycle: TranslationEngineLifecycleStatus
   }
 ): TCurrent {
   const updateItems = (items: TItem[] | undefined) =>
-    items?.map((item) =>
-      item.id === input.engineId ? { ...item, installStatus: input.installStatus } : item
-    ) as TItem[] | undefined
+    items?.map((item) => (item.id === input.engineId ? { ...item, lifecycle: input.lifecycle } : item)) as
+      | TItem[]
+      | undefined
 
   if (Array.isArray(current)) {
     return updateItems(current) as TCurrent
@@ -488,8 +492,9 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const [smokeResult, setSmokeResult] = useState('')
   const [smokeError, setSmokeError] = useState<string | null>(null)
   const [smokeRunning, setSmokeRunning] = useState(false)
-  const [engineInstallStatus, setEngineInstallStatus] =
-    useState<TranslationEngineInstallStatus | null>(null)
+  const [engineLifecycle, setEngineLifecycle] = useState<TranslationEngineLifecycleStatus | null>(
+    null
+  )
   const [engineInstallLogs, setEngineInstallLogs] = useState('')
   const queryClient = useQueryClient()
   const queryClientRef = useRef(queryClient)
@@ -786,25 +791,29 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     mutationFn: async (engineId: TranslationEngineId) => {
       engineInstallSubscriptionRef.current?.unsubscribe()
       setEngineInstallLogs('')
-      const result = await new Promise<TranslationEngineInstallStatus>((resolve, reject) => {
+      const result = await new Promise<TranslationEngineLifecycleStatus>((resolve, reject) => {
         const subscription = trpcClient.translationEngines.installStream.subscribe(
           { engineId },
           {
             onData: (event) => {
               if (event.type === 'status') {
-                setEngineInstallStatus(event.status)
+                setEngineLifecycle(event.lifecycle)
                 return
               }
               if (event.type === 'log') {
                 setEngineInstallLogs((current) => `${current}${event.text}`)
                 return
               }
-              setEngineInstallStatus(event.status)
-              if (event.status.state === 'installed') {
-                resolve(event.status)
+              setEngineLifecycle(event.lifecycle)
+              if (!shouldShowTranslationEngineInstallGate(event.lifecycle)) {
+                resolve(event.lifecycle)
                 return
               }
-              reject(new Error(event.status.error ?? event.status.message ?? 'Install failed.'))
+              reject(
+                new Error(
+                  getTranslationEngineLifecycleMessage(event.lifecycle) ?? 'Install failed.'
+                )
+              )
             },
             onError: (error) => {
               reject(error instanceof Error ? error : new Error(String(error)))
@@ -815,24 +824,34 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
       })
       return result
     },
-    onSuccess: async (status, engineId) => {
-      setEngineInstallStatus(status)
+    onSuccess: async (lifecycle, engineId) => {
+      setEngineLifecycle(lifecycle)
       queryClientRef.current.setQueryData(
         trpc.translationEngines.list.queryOptions().queryKey,
         (current) =>
-          replaceTranslationEngineInstallStatusInQueryData(current, {
+          replaceTranslationEngineLifecycleInQueryData(current, {
             engineId,
-            installStatus: status,
+            lifecycle,
           })
       )
       await refetchEngines()
     },
     onError: (error) => {
-      setEngineInstallStatus({
-        state: 'error',
-        message: 'Translation engine installation failed.',
-        error: error instanceof Error ? error.message : String(error),
-      })
+      const message = error instanceof Error ? error.message : String(error)
+      setEngineLifecycle(
+        createTranslationEngineLifecycleStatus({
+          dependency: {
+            state: 'error',
+            message: 'Translation engine installation failed.',
+            error: message,
+          },
+          runtime: {
+            state: 'error',
+            error: message,
+          },
+          summary: 'Translation engine installation failed.',
+        })
+      )
     },
   })
 
@@ -931,9 +950,12 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     [engines, inStaticMode]
   )
   const selectedEngine = engines?.find((engine) => engine.id === effectiveTranslationEngineId)
-  const selectedEngineInstallStatus = selectedEngine?.installStatus ?? null
+  const selectedEngineLifecycle = selectedEngine?.lifecycle ?? null
   const selectedEngineManifest = effectiveTranslationEngineId
     ? getTranslationEngineManifest(effectiveTranslationEngineId)
+    : null
+  const selectedManagedLocalManifest = effectiveManagedLocalEngineId
+    ? getManagedLocalTranslationEngineManifest(effectiveManagedLocalEngineId)
     : null
   const browserRows = useMemo(
     () => getBrowserSupportRows(browserSupportTable),
@@ -948,15 +970,15 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   )
   const browserStatusIconState = getBrowserStatusIconState(browserSupportTable)
   const browserSupportMessage = getBrowserSupportMessage(browserSupportTable)
-  const resolvedInstallStatus =
-    engineInstallStatus && effectiveTranslationEngineId === selectedEngine?.id
-      ? engineInstallStatus
-      : selectedEngineInstallStatus
+  const resolvedLifecycle =
+    engineLifecycle && effectiveTranslationEngineId === selectedEngine?.id
+      ? engineLifecycle
+      : selectedEngineLifecycle
   const engineStatusMessage =
     effectiveTranslationEngineId === 'browser'
       ? getBrowserCapabilityMessage(browserSupportTable)
-      : (resolvedInstallStatus?.error ??
-        resolvedInstallStatus?.message ??
+      : (getTranslationEngineLifecycleMessage(resolvedLifecycle) ??
+        selectedEngine?.message ??
         selectedEngine?.description ??
         selectedEngineManifest?.description)
   const browserRowActionKind = getBrowserRowActionKind({
@@ -975,16 +997,11 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
         globalSettings,
       })
     : null
-  const managedLocalModelLabel =
-    effectiveManagedLocalEngineId === 'local-ct2' ? 'CT2 model' : 'Local model'
+  const managedLocalModelLabel = selectedManagedLocalManifest?.modelLabel ?? 'Local model'
   const managedLocalDownloadGroupsLabel =
-    effectiveManagedLocalEngineId === 'local-ct2'
-      ? 'Local CT2 download groups'
-      : 'Local download profiles'
+    selectedManagedLocalManifest?.downloadGroupsLabel ?? 'Local download profiles'
   const managedLocalRefreshTooltip =
-    effectiveManagedLocalEngineId === 'local-ct2'
-      ? 'Refresh local model artifacts'
-      : 'Refresh local model profiles'
+    selectedManagedLocalManifest?.refreshTooltip ?? 'Refresh local model profiles'
   const nmtModelId = nmtModel.trim()
   const persistedLocalSelectedGroupId = resolvedManagedLocalSettings?.selectedGroupId
   const preferredLocalSelectedGroupId = nmtSelectedGroupId ?? persistedLocalSelectedGroupId
@@ -1052,9 +1069,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const localPlanLoading =
     (localPanelStateQuery.isLoading || localPanelStateQuery.isFetching) && !selectedLocalAsset
   const shouldShowInstallFlow =
-    effectiveTranslationEngineId !== null &&
-    effectiveTranslationEngineId !== 'browser' &&
-    resolvedInstallStatus?.state !== 'installed'
+    effectiveTranslationEngineId !== null && shouldShowTranslationEngineInstallGate(resolvedLifecycle)
   const startBrowserPairPreparation = useCallback(
     async (row: BrowserTranslationAvailabilityRow) => {
       browserPrepareControllerRef.current?.abort()
@@ -1188,33 +1203,27 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
 
   useEffect(() => {
     if (!effectiveTranslationEngineId || effectiveTranslationEngineId === 'browser') {
-      setEngineInstallStatus(null)
+      setEngineLifecycle(null)
       setEngineInstallLogs('')
       engineInstallSubscriptionRef.current?.unsubscribe()
       engineInstallSubscriptionRef.current = null
       return
     }
-    setEngineInstallStatus(selectedEngineInstallStatus)
+    setEngineLifecycle(selectedEngineLifecycle)
     setEngineInstallLogs('')
   }, [effectiveTranslationEngineId])
 
   useEffect(() => {
     if (!effectiveTranslationEngineId || effectiveTranslationEngineId === 'browser') return
-    setEngineInstallStatus((current) => {
-      if (
-        current?.state === 'installing' &&
-        selectedEngineInstallStatus?.state === 'not-installed'
-      ) {
+    setEngineLifecycle((current) => {
+      if (current?.dependency.state === 'installing' && shouldShowTranslationEngineInstallGate(selectedEngineLifecycle)) {
         return current
       }
-      return selectedEngineInstallStatus
+      return selectedEngineLifecycle
     })
   }, [
     effectiveTranslationEngineId,
-    selectedEngineInstallStatus?.state,
-    selectedEngineInstallStatus?.message,
-    selectedEngineInstallStatus?.progress,
-    selectedEngineInstallStatus?.error,
+    selectedEngineLifecycle,
   ])
 
   useEffect(() => {
@@ -1366,7 +1375,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                       ) : (
                         <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
                       )
-                    ) : resolvedInstallStatus?.state === 'installed' ? (
+                    ) : !shouldShowTranslationEngineInstallGate(resolvedLifecycle) ? (
                       <Tooltip content="Installed" delay={0}>
                         <button
                           type="button"
@@ -1376,7 +1385,8 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                           <CheckCircle className="h-4 w-4" />
                         </button>
                       </Tooltip>
-                    ) : resolvedInstallStatus?.state === 'installing' ? (
+                    ) : resolvedLifecycle?.dependency.state === 'installing' ||
+                      resolvedLifecycle?.runtime.state === 'probing' ? (
                       <Button
                         type="button"
                         size="icon-sm"
@@ -1396,10 +1406,19 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                         className="bg-primary text-primary-foreground hover:bg-primary/90 h-7 w-7 shrink-0 rounded-full"
                         onClick={() => {
                           if (!effectiveTranslationEngineId) return
-                          setEngineInstallStatus({
-                            state: 'installing',
-                            message: `Installing ${selectedEngine?.label ?? selectedEngineManifest?.label ?? effectiveTranslationEngineId}.`,
-                          })
+                          const label =
+                            selectedEngine?.label ??
+                            selectedEngineManifest?.label ??
+                            effectiveTranslationEngineId
+                          setEngineLifecycle(
+                            createTranslationEngineLifecycleStatus({
+                              dependency: {
+                                state: 'installing',
+                                message: `Installing ${label}.`,
+                              },
+                              summary: `Installing ${label}.`,
+                            })
+                          )
                           installTranslationEngineMutation.mutate(effectiveTranslationEngineId)
                         }}
                         disabled={
@@ -1415,7 +1434,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                       </Button>
                     )}
                     <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">
-                      {resolvedInstallStatus?.state === 'installing' && engineInstallLogs ? (
+                      {resolvedLifecycle?.dependency.state === 'installing' && engineInstallLogs ? (
                         <pre
                           ref={engineInstallLogRef}
                           className="bg-muted/40 border-border scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[color-mix(in_srgb,currentColor,transparent_78%)] max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md border px-3 py-2 font-mono text-[11px] leading-5"

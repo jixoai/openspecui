@@ -1,7 +1,33 @@
+import { createTranslationEngineLifecycleStatus } from '@openspecui/core/translator'
 import { describe, expect, it } from 'vitest'
-import { isLocalAssetReady } from './translate-service-status'
+import { isLocalAssetReady, projectTranslateServiceStatus } from './translate-service-status'
 
 describe('translate service status', () => {
+  it('blocks managed-local translation when runtime lifecycle is not ready', () => {
+    expect(
+      projectTranslateServiceStatus({
+        enabled: true,
+        hasSource: true,
+        engineId: 'local',
+        engineLifecycle: createTranslationEngineLifecycleStatus({
+          dependency: {
+            state: 'installed',
+            message: 'Dependencies are installed.',
+          },
+          runtime: {
+            state: 'failed',
+            error: 'Native runtime failed to load.',
+          },
+        }),
+        localModel: 'Xenova/opus-mt-en-zh',
+      })
+    ).toEqual({
+      state: 'unavailable',
+      engineId: 'local',
+      message: 'Native runtime failed to load.',
+    })
+  })
+
   it('treats a versioned downloaded local group as ready when settings store the base group id', () => {
     expect(
       isLocalAssetReady(

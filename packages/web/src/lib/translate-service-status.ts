@@ -1,6 +1,14 @@
 import { selectLocalDownloadGroup } from '@openspecui/core/local-download-profiles'
-import type { LocalModelAssetState, TranslationEngineId } from '@openspecui/core/translator'
-import { isManagedLocalTranslationEngineId } from '@openspecui/core/translator'
+import type {
+  LocalModelAssetState,
+  TranslationEngineId,
+  TranslationEngineLifecycleStatus,
+} from '@openspecui/core/translator'
+import {
+  getTranslationEngineLifecycleMessage,
+  isManagedLocalTranslationEngineId,
+  shouldShowTranslationEngineInstallGate,
+} from '@openspecui/core/translator'
 import type {
   BrowserTranslationStatus,
   BrowserTranslationSupportTableState,
@@ -34,6 +42,8 @@ export interface TranslateServiceProjectionInput {
   browserCapability?: BrowserTranslationStatus | null
   browserCapabilityLoading?: boolean
   browserSupportTable?: BrowserTranslationSupportTableState | null
+  engineLifecycle?: TranslationEngineLifecycleStatus | null
+  engineLifecycleLoading?: boolean
   localModel?: string
   localSelectedGroupId?: string
   localAsset?: LocalModelAssetState | null
@@ -110,6 +120,25 @@ export function projectTranslateServiceStatus(
           engineId: 'browser',
           message: input.browserCapability.message ?? 'Translation is unavailable.',
         }
+    }
+  }
+
+  if (input.engineLifecycleLoading || input.engineLifecycle !== undefined) {
+    if (input.engineLifecycleLoading || !input.engineLifecycle) {
+      return {
+        state: 'checking',
+        engineId: input.engineId,
+        message: 'Checking translation engine runtime.',
+      }
+    }
+    if (shouldShowTranslationEngineInstallGate(input.engineLifecycle)) {
+      return {
+        state: 'unavailable',
+        engineId: input.engineId,
+        message:
+          getTranslationEngineLifecycleMessage(input.engineLifecycle) ??
+          'Translation engine runtime is not ready.',
+      }
     }
   }
 

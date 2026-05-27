@@ -1,6 +1,10 @@
 import type { BrowserTranslationSupportTableState } from '@/lib/browser-translation'
 import { DOCUMENT_TRANSLATION_SESSION_STORAGE_KEY } from '@/lib/document-translation-session-state'
-import { LocalModelAssetStateSchema, type LocalModelAssetState } from '@openspecui/core/translator'
+import {
+  LocalModelAssetStateSchema,
+  createTranslationEngineLifecycleStatus,
+  type LocalModelAssetState,
+} from '@openspecui/core/translator'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MarkdownViewer } from './markdown-viewer'
@@ -60,6 +64,7 @@ const nmtModelStateMock = vi.hoisted(() => vi.fn())
 const nmtModelPanelStateMock = vi.hoisted(() => vi.fn())
 const translationCacheReadMock = vi.hoisted(() => vi.fn())
 const translationCacheWriteMock = vi.hoisted(() => vi.fn())
+const engineLifecycleQueryMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/browser-translation', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/browser-translation')>()
@@ -98,8 +103,8 @@ vi.mock('@/lib/trpc', () => ({
       },
     },
     translationEngines: {
-      translate: {
-        mutate: vi.fn(async ({ text }: { text?: string }) => ({ text: `server:${text ?? ''}` })),
+      getLifecycle: {
+        query: engineLifecycleQueryMock,
       },
     },
   },
@@ -109,6 +114,19 @@ describe('MarkdownViewer translation plugin', () => {
   beforeEach(() => {
     translationCacheReadMock.mockResolvedValue(null)
     translationCacheWriteMock.mockResolvedValue({ accepted: true })
+    engineLifecycleQueryMock.mockReset()
+    engineLifecycleQueryMock.mockResolvedValue(
+      createTranslationEngineLifecycleStatus({
+        dependency: {
+          state: 'installed',
+          message: 'Runtime dependencies are installed.',
+        },
+        runtime: {
+          state: 'ready',
+          message: 'Runtime is ready.',
+        },
+      })
+    )
     nmtModelStateMock.mockResolvedValue(createDownloadedLocalAssetState())
     nmtModelPanelStateMock.mockImplementation(
       async ({ modelId, selectedGroupId }: { modelId: string; selectedGroupId?: string }) => ({
@@ -221,7 +239,7 @@ describe('MarkdownViewer translation plugin', () => {
     )
 
     await waitFor(() =>
-      expect(nmtModelStateMock).toHaveBeenCalledWith({
+      expect(nmtModelPanelStateMock).toHaveBeenCalledWith({
         modelId: 'Xenova/opus-mt-en-zh',
         selectedGroupId: 'q8',
       })
@@ -353,7 +371,7 @@ describe('MarkdownViewer translation plugin', () => {
     )
 
     await waitFor(() =>
-      expect(nmtModelStateMock).toHaveBeenCalledWith({
+      expect(nmtModelPanelStateMock).toHaveBeenCalledWith({
         modelId: 'Xenova/opus-mt-en-zh',
         selectedGroupId: 'q8',
       })

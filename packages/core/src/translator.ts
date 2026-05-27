@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const TRANSLATOR_CONTRACT_VERSION = 2
+export const TRANSLATOR_CONTRACT_VERSION = 3
 
 export const TRANSLATION_ENGINE_IDS = ['browser', 'local', 'local-ct2', 'openai'] as const
 
@@ -15,6 +15,8 @@ export function isManagedLocalTranslationEngineId(
 ): engineId is Extract<TranslationEngineId, 'local' | 'local-ct2'> {
   return engineId === 'local' || engineId === 'local-ct2'
 }
+
+export type ManagedLocalTranslationEngineId = Extract<TranslationEngineId, 'local' | 'local-ct2'>
 
 export const SERVICE_TRANSLATION_ENGINE_IDS = ['local', 'local-ct2', 'openai'] as const
 
@@ -382,28 +384,161 @@ export interface TranslatorFactory {
   create(options: TranslatorFactoryCreateOptions): Promise<Translator>
 }
 
-export type TranslationEngineInstallState = 'installed' | 'installing' | 'not-installed' | 'error'
+export type TranslationEngineDependencyState =
+  | 'installed'
+  | 'installing'
+  | 'missing'
+  | 'error'
+  | 'not-applicable'
 
-export const TranslationEngineInstallStateSchema = z.enum([
+export const TranslationEngineDependencyStateSchema = z.enum([
   'installed',
   'installing',
-  'not-installed',
+  'missing',
   'error',
+  'not-applicable',
 ])
 
-export interface TranslationEngineInstallStatus {
-  state: TranslationEngineInstallState
+export type TranslationEngineRuntimeState =
+  | 'ready'
+  | 'probing'
+  | 'failed'
+  | 'error'
+  | 'not-applicable'
+
+export const TranslationEngineRuntimeStateSchema = z.enum([
+  'ready',
+  'probing',
+  'failed',
+  'error',
+  'not-applicable',
+])
+
+export type TranslationEngineAssetState =
+  | 'ready'
+  | 'missing'
+  | 'downloading'
+  | 'error'
+  | 'not-applicable'
+
+export const TranslationEngineAssetStateSchema = z.enum([
+  'ready',
+  'missing',
+  'downloading',
+  'error',
+  'not-applicable',
+])
+
+const TranslationEngineLifecyclePhaseMetaSchema = z.object({
+  message: z.string().optional(),
+  progress: z.number().min(0).max(1).optional(),
+  error: z.string().optional(),
+})
+
+export interface TranslationEngineDependencyStatus {
+  state: TranslationEngineDependencyState
   message?: string
   progress?: number
   error?: string
 }
 
-export const TranslationEngineInstallStatusSchema = z.object({
-  state: TranslationEngineInstallStateSchema,
-  message: z.string().optional(),
-  progress: z.number().min(0).max(1).optional(),
-  error: z.string().optional(),
+export const TranslationEngineDependencyStatusSchema = TranslationEngineLifecyclePhaseMetaSchema.extend(
+  {
+    state: TranslationEngineDependencyStateSchema,
+  }
+)
+
+export interface TranslationEngineRuntimeStatus {
+  state: TranslationEngineRuntimeState
+  message?: string
+  progress?: number
+  error?: string
+}
+
+export const TranslationEngineRuntimeStatusSchema = TranslationEngineLifecyclePhaseMetaSchema.extend({
+  state: TranslationEngineRuntimeStateSchema,
 })
+
+export interface TranslationEngineAssetStatus {
+  state: TranslationEngineAssetState
+  message?: string
+  progress?: number
+  error?: string
+}
+
+export const TranslationEngineAssetStatusSchema = TranslationEngineLifecyclePhaseMetaSchema.extend({
+  state: TranslationEngineAssetStateSchema,
+})
+
+export interface TranslationEngineLifecycleStatus {
+  dependency: TranslationEngineDependencyStatus
+  runtime: TranslationEngineRuntimeStatus
+  assets: TranslationEngineAssetStatus
+  summary?: string
+}
+
+export const TranslationEngineLifecycleStatusSchema = z.object({
+  dependency: TranslationEngineDependencyStatusSchema,
+  runtime: TranslationEngineRuntimeStatusSchema,
+  assets: TranslationEngineAssetStatusSchema,
+  summary: z.string().optional(),
+})
+
+export function createTranslationEngineLifecycleStatus(
+  input: Partial<TranslationEngineLifecycleStatus> & {
+    dependency?: Partial<TranslationEngineDependencyStatus>
+    runtime?: Partial<TranslationEngineRuntimeStatus>
+    assets?: Partial<TranslationEngineAssetStatus>
+  } = {}
+): TranslationEngineLifecycleStatus {
+  return {
+    dependency: {
+      state: 'not-applicable',
+      ...input.dependency,
+    },
+    runtime: {
+      state: 'not-applicable',
+      ...input.runtime,
+    },
+    assets: {
+      state: 'not-applicable',
+      ...input.assets,
+    },
+    ...(input.summary ? { summary: input.summary } : {}),
+  }
+}
+
+export function isTranslationEngineDependencyReady(status: TranslationEngineLifecycleStatus): boolean {
+  return (
+    status.dependency.state === 'installed' || status.dependency.state === 'not-applicable'
+  )
+}
+
+export function isTranslationEngineRuntimeReady(status: TranslationEngineLifecycleStatus): boolean {
+  return status.runtime.state === 'ready' || status.runtime.state === 'not-applicable'
+}
+
+export function shouldShowTranslationEngineInstallGate(
+  status: TranslationEngineLifecycleStatus | null | undefined
+): boolean {
+  if (!status) return false
+  return !isTranslationEngineDependencyReady(status) || !isTranslationEngineRuntimeReady(status)
+}
+
+export function getTranslationEngineLifecycleMessage(
+  status: TranslationEngineLifecycleStatus | null | undefined
+): string | undefined {
+  if (!status) return undefined
+  return (
+    status.summary ??
+    status.runtime.error ??
+    status.runtime.message ??
+    status.dependency.error ??
+    status.dependency.message ??
+    status.assets.error ??
+    status.assets.message
+  )
+}
 
 export const TranslationEngineInstallLogStreamSchema = z.enum(['stdout', 'stderr'])
 
@@ -421,31 +556,31 @@ export const TranslationEngineInstallLogEventSchema = z.object({
   text: z.string(),
 })
 
-export interface TranslationEngineInstallStatusEvent {
+export interface TranslationEngineLifecycleStatusEvent {
   type: 'status'
-  status: TranslationEngineInstallStatus
+  lifecycle: TranslationEngineLifecycleStatus
 }
 
-export interface TranslationEngineInstallOutputEvent {
+export interface TranslationEngineLifecycleLogEvent {
   type: 'log'
   stream: TranslationEngineInstallLogStream
   text: string
 }
 
-export interface TranslationEngineInstallExitEvent {
+export interface TranslationEngineLifecycleExitEvent {
   type: 'exit'
-  status: TranslationEngineInstallStatus
+  lifecycle: TranslationEngineLifecycleStatus
 }
 
-export type TranslationEngineInstallEvent =
-  | TranslationEngineInstallStatusEvent
-  | TranslationEngineInstallOutputEvent
-  | TranslationEngineInstallExitEvent
+export type TranslationEngineLifecycleEvent =
+  | TranslationEngineLifecycleStatusEvent
+  | TranslationEngineLifecycleLogEvent
+  | TranslationEngineLifecycleExitEvent
 
-export const TranslationEngineInstallEventSchema = z.discriminatedUnion('type', [
+export const TranslationEngineLifecycleEventSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('status'),
-    status: TranslationEngineInstallStatusSchema,
+    lifecycle: TranslationEngineLifecycleStatusSchema,
   }),
   z.object({
     type: z.literal('log'),
@@ -454,26 +589,26 @@ export const TranslationEngineInstallEventSchema = z.discriminatedUnion('type', 
   }),
   z.object({
     type: z.literal('exit'),
-    status: TranslationEngineInstallStatusSchema,
+    lifecycle: TranslationEngineLifecycleStatusSchema,
   }),
 ])
 
-export interface TranslationEngineInstallContext {
+export interface TranslationEngineLifecycleContext {
   projectDir: string
   globalSettings: TranslationEngineGlobalSettings
   signal?: AbortSignal
-  onStatus?: (status: TranslationEngineInstallStatus) => void
+  onLifecycle?: (status: TranslationEngineLifecycleStatus) => void
   onLog?: (event: TranslationEngineInstallLogEvent) => void
 }
 
-export interface TranslationEngineInstaller {
-  detectInstallState(
-    input: TranslationEngineInstallContext
-  ): Promise<TranslationEngineInstallStatus>
-  install(input: TranslationEngineInstallContext): Promise<TranslationEngineInstallStatus>
+export interface TranslationEngineLifecycleController {
+  detectLifecycle(input: TranslationEngineLifecycleContext): Promise<TranslationEngineLifecycleStatus>
+  install(input: TranslationEngineLifecycleContext): Promise<TranslationEngineLifecycleStatus>
 }
 
 export type TranslationEngineRuntime = 'browser' | 'server'
+export type TranslationEngineKind = 'browser' | 'managed-local' | 'remote-provider'
+export type TranslationEngineSettingsKey = 'local' | 'localCt2' | 'openai'
 
 export interface TranslationEngineManifest {
   id: TranslationEngineId
@@ -481,6 +616,14 @@ export interface TranslationEngineManifest {
   description: string
   technicalSummary: string
   runtime: TranslationEngineRuntime
+  kind: TranslationEngineKind
+  settingsKey?: TranslationEngineSettingsKey
+  defaultModel?: string
+  runtimePackageName?: string
+  installDescription?: string
+  modelLabel?: string
+  downloadGroupsLabel?: string
+  refreshTooltip?: string
   moduleName?: string
   factoryExport?: string
 }
@@ -493,6 +636,8 @@ export const TRANSLATION_ENGINE_MANIFESTS = [
     technicalSummary:
       'Browser-native Web Translator adapter. Package payload is about 5 KB; browser language packs are managed by the browser.',
     runtime: 'browser',
+    kind: 'browser',
+    installDescription: 'Browser translation support is built into the browser runtime.',
     moduleName: '@openspecui/browser-translator',
     factoryExport: 'createBrowserTranslatorFactory',
   },
@@ -500,10 +645,19 @@ export const TRANSLATION_ENGINE_MANIFESTS = [
     id: 'local',
     label: 'Local-Transformers',
     description:
-      'Runs a bundled local Transformers.js translation runtime with managed model files.',
+      'Runs an ONNX Runtime-backed local translation adapter through Transformers.js with managed ONNX model files.',
     technicalSummary:
-      'Server-side Transformers.js local adapter. Package payload is about 5 KB; selected model groups are downloaded separately and can range from tens to hundreds of MB.',
+      'Server-side ONNX Runtime adapter via Transformers.js. Runtime package is installed on demand; selected ONNX model groups are downloaded separately and can range from tens to hundreds of MB.',
     runtime: 'server',
+    kind: 'managed-local',
+    settingsKey: 'local',
+    defaultModel: 'Xenova/nllb-200-distilled-600M',
+    runtimePackageName: '@huggingface/transformers',
+    installDescription:
+      'Install the Local-Transformers runtime package to enable server-side translation.',
+    modelLabel: 'Local Model',
+    downloadGroupsLabel: 'Local download profiles',
+    refreshTooltip: 'Refresh local model profiles',
     moduleName: '@openspecui/local-translator',
     factoryExport: 'createLocalTranslatorFactory',
   },
@@ -512,8 +666,16 @@ export const TRANSLATION_ENGINE_MANIFESTS = [
     label: 'Local-CT2',
     description: 'Runs a bundled local CTranslate2 translation runtime with managed model files.',
     technicalSummary:
-      'Server-side CTranslate2 local adapter. Package payload is about 5 KB; selected model artifacts are downloaded separately and can range from tens to hundreds of MB.',
+      'Server-side native CTranslate2 adapter. Runtime package is installed on demand; selected model artifacts are downloaded separately and can range from tens to hundreds of MB.',
     runtime: 'server',
+    kind: 'managed-local',
+    settingsKey: 'localCt2',
+    defaultModel: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+    runtimePackageName: 'ctranslate2',
+    installDescription: 'Install the Local-CT2 runtime package to enable server-side translation.',
+    modelLabel: 'CT2 Model',
+    downloadGroupsLabel: 'Local CT2 download groups',
+    refreshTooltip: 'Refresh local model artifacts',
     moduleName: '@openspecui/local-ct2-translator',
     factoryExport: 'createLocalCt2TranslatorFactory',
   },
@@ -525,6 +687,10 @@ export const TRANSLATION_ENGINE_MANIFESTS = [
     technicalSummary:
       'Server-side TanStack AI adapter for OpenAI-compatible APIs. Package payload is about 5 KB; model size stays with the remote provider.',
     runtime: 'server',
+    kind: 'remote-provider',
+    settingsKey: 'openai',
+    defaultModel: 'gpt-4.1-mini',
+    installDescription: 'OpenAI completion translation is bundled with the server runtime.',
     moduleName: '@openspecui/openai-completion-translator',
     factoryExport: 'createOpenAICompletionTranslatorFactory',
   },
@@ -538,6 +704,34 @@ export function getTranslationEngineManifest(
     throw new Error(`Unknown translation engine: ${engineId}`)
   }
   return manifest
+}
+
+export function getManagedLocalTranslationEngineManifest(
+  engineId: ManagedLocalTranslationEngineId
+): TranslationEngineManifest & {
+  kind: 'managed-local'
+  settingsKey: Extract<TranslationEngineSettingsKey, 'local' | 'localCt2'>
+  defaultModel: string
+  runtimePackageName: string
+  installDescription: string
+  modelLabel: string
+  downloadGroupsLabel: string
+  refreshTooltip: string
+} {
+  const manifest = getTranslationEngineManifest(engineId)
+  if (manifest.kind !== 'managed-local') {
+    throw new Error(`Translation engine ${engineId} is not a managed-local engine.`)
+  }
+  return manifest as TranslationEngineManifest & {
+    kind: 'managed-local'
+    settingsKey: Extract<TranslationEngineSettingsKey, 'local' | 'localCt2'>
+    defaultModel: string
+    runtimePackageName: string
+    installDescription: string
+    modelLabel: string
+    downloadGroupsLabel: string
+    refreshTooltip: string
+  }
 }
 
 export const TranslationOpenAISettingsSchema = z.object({

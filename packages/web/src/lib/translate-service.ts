@@ -13,8 +13,10 @@ import { checkLocalDirectionalModelLanguagePair } from '@openspecui/core/transla
 import {
   TRANSLATOR_CONTRACT_VERSION,
   isManagedLocalTranslationEngineId,
+  shouldShowTranslationEngineInstallGate,
   type LocalModelAssetState,
   type TranslationEngineId,
+  type TranslationEngineLifecycleStatus,
   type TranslationModelDownloadPlan,
   type Translator,
   type TranslatorFactory,
@@ -49,6 +51,46 @@ export async function resolveTranslateServiceState(input: {
     })
   }
 
+  let engineLifecycle: TranslationEngineLifecycleStatus | null = null
+  if (config.engineId !== 'browser') {
+    input.onUpdate?.(
+      createTranslateServiceState({
+        status: projectTranslateServiceStatus({
+          enabled: config.enabled,
+          hasSource: input.hasSource,
+          engineId: config.engineId,
+          engineLifecycleLoading: true,
+        }),
+      })
+    )
+    try {
+      engineLifecycle = await trpcClient.translationEngines.getLifecycle.query({
+        engineId: config.engineId,
+      })
+    } catch (lifecycleError) {
+      return createTranslateServiceState({
+        status: {
+          state: 'unavailable',
+          engineId: config.engineId,
+          message:
+            lifecycleError instanceof Error
+              ? lifecycleError.message
+              : 'Unable to check translation engine runtime.',
+        },
+      })
+    }
+    if (shouldShowTranslationEngineInstallGate(engineLifecycle)) {
+      return createTranslateServiceState({
+        status: projectTranslateServiceStatus({
+          enabled: config.enabled,
+          hasSource: input.hasSource,
+          engineId: config.engineId,
+          engineLifecycle,
+        }),
+      })
+    }
+  }
+
   if (isManagedLocalTranslationEngineId(config.engineId)) {
     const localEngineConfig = getManagedLocalEngineConfig(config)
     const model = localEngineConfig.model?.trim()
@@ -58,6 +100,7 @@ export async function resolveTranslateServiceState(input: {
           enabled: config.enabled,
           hasSource: input.hasSource,
           engineId: config.engineId,
+          engineLifecycle,
           localModel: model,
           localSelectedGroupId: localEngineConfig.selectedGroupId,
         }),
@@ -85,6 +128,7 @@ export async function resolveTranslateServiceState(input: {
           enabled: config.enabled,
           hasSource: input.hasSource,
           engineId: config.engineId,
+          engineLifecycle,
           localModel: model,
           localSelectedGroupId: localEngineConfig.selectedGroupId,
           localAssetLoading: true,
@@ -103,6 +147,7 @@ export async function resolveTranslateServiceState(input: {
           enabled: config.enabled,
           hasSource: input.hasSource,
           engineId: config.engineId,
+          engineLifecycle,
           localModel: model,
           localSelectedGroupId: selectedGroupId,
           localAsset: panelState.asset,
@@ -126,6 +171,7 @@ export async function resolveTranslateServiceState(input: {
         enabled: config.enabled,
         hasSource: input.hasSource,
         engineId: 'openai',
+        engineLifecycle,
       }),
     })
   }

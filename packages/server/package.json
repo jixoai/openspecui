@@ -37,6 +37,8 @@
     "zod": "^3.24.1"
   },
   "optionalDependencies": {
+    "// runtime-note": "These heavy runtimes are owned by the host package because translation engine installation is lifecycle-managed at the host boundary.",
+    "// bundle-note": "The translator engine packages keep runtime imports external in tsdown output, so this host package remains the install/detect truth during development runs.",
     "@huggingface/transformers": "~4.2.0",
     "ctranslate2": "workspace:*"
   },

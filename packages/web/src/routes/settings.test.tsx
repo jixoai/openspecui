@@ -2,9 +2,13 @@ import type {
   LocalModelAssetLog,
   LocalModelAssetState,
   LocalModelCatalogItem,
+  TranslationEngineLifecycleStatus,
   TranslationModelDownloadPlan,
 } from '@openspecui/core/translator'
-import { LocalModelAssetStateSchema } from '@openspecui/core/translator'
+import {
+  LocalModelAssetStateSchema,
+  createTranslationEngineLifecycleStatus,
+} from '@openspecui/core/translator'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useSyncExternalStore, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -460,7 +464,7 @@ const {
   const translationEnginesMock = {
     getModelDownloadPlan: vi.fn(),
     batchTranslate: vi.fn(),
-    getInstallStatus: vi.fn(),
+    getLifecycle: vi.fn(),
     install: vi.fn(),
     installStream: vi.fn(),
   }
@@ -632,27 +636,73 @@ const {
     delete: vi.fn(async () => ({ success: true })),
     refreshArtifacts: vi.fn(),
   }
+  const createReadyLifecycle = (
+    message = 'Runtime is ready.'
+  ): TranslationEngineLifecycleStatus =>
+    createTranslationEngineLifecycleStatus({
+      dependency: {
+        state: 'installed',
+        message: 'Runtime dependencies are installed.',
+      },
+      runtime: {
+        state: 'ready',
+        message,
+      },
+    })
+
+  const createMissingDependencyLifecycle = (
+    message: string
+  ): TranslationEngineLifecycleStatus =>
+    createTranslationEngineLifecycleStatus({
+      dependency: {
+        state: 'missing',
+        message,
+      },
+    })
+
+  const createInstallingLifecycle = (
+    message: string
+  ): TranslationEngineLifecycleStatus =>
+    createTranslationEngineLifecycleStatus({
+      dependency: {
+        state: 'installing',
+        message,
+      },
+    })
+
   const restoreTranslationMocks = () => {
-    translationEnginesMock.getInstallStatus.mockImplementation(async ({ engineId }) => {
+    translationEnginesMock.getLifecycle.mockImplementation(async ({ engineId }) => {
       if (engineId === 'browser') {
-        return { state: 'installed', message: 'Browser translator is built in.' }
+        return createTranslationEngineLifecycleStatus({
+          dependency: {
+            state: 'not-applicable',
+            message: 'Browser translation support is built into the browser runtime.',
+          },
+          runtime: {
+            state: 'not-applicable',
+            message: 'Browser translation support is built into the browser runtime.',
+          },
+        })
       }
       if (engineId === 'openai') {
-        return { state: 'installed', message: 'OpenAI completion translator is bundled.' }
+        return createTranslationEngineLifecycleStatus({
+          dependency: {
+            state: 'not-applicable',
+            message: 'OpenAI completion translation is bundled with the server runtime.',
+          },
+          runtime: {
+            state: 'ready',
+            message: 'Runtime is ready.',
+          },
+        })
       }
       if (engineId === 'local-ct2') {
-        return {
-          state: 'installed',
-          message: 'Local-CT2 runtime dependencies are installed.',
-        }
+        return createReadyLifecycle()
       }
-      return {
-        state: 'installed',
-        message: 'Local-Transformers runtime dependencies are installed.',
-      }
+      return createReadyLifecycle()
     })
     translationEnginesMock.install.mockImplementation(async ({ engineId }) =>
-      translationEnginesMock.getInstallStatus({ engineId })
+      translationEnginesMock.getLifecycle({ engineId })
     )
     translationEnginesMock.installStream.mockImplementation(
       (
@@ -660,7 +710,7 @@ const {
         handlers: {
           onData: (event: {
             type: 'status' | 'log' | 'exit'
-            status?: { state: string; message?: string; progress?: number; error?: string }
+            lifecycle?: TranslationEngineLifecycleStatus
             stream?: 'stdout' | 'stderr'
             text?: string
           }) => void
@@ -670,23 +720,33 @@ const {
         const unsubscribe = vi.fn()
         queueMicrotask(() => {
           if (unsubscribe.mock.calls.length > 0) return
-          const installedStatus =
+          const lifecycle =
             input.engineId === 'browser'
-              ? { state: 'installed', message: 'Browser translator is built in.' }
+              ? createTranslationEngineLifecycleStatus({
+                  dependency: {
+                    state: 'not-applicable',
+                    message: 'Browser translation support is built into the browser runtime.',
+                  },
+                  runtime: {
+                    state: 'not-applicable',
+                    message: 'Browser translation support is built into the browser runtime.',
+                  },
+                })
               : input.engineId === 'openai'
-                ? { state: 'installed', message: 'OpenAI completion translator is bundled.' }
-                : input.engineId === 'local-ct2'
-                  ? {
-                      state: 'installed',
-                      message: 'Local-CT2 runtime dependencies are installed.',
-                    }
-                  : {
-                      state: 'installed',
-                      message: 'Local-Transformers runtime dependencies are installed.',
-                    }
-          handlers.onData({ type: 'status', status: installedStatus })
+                ? createTranslationEngineLifecycleStatus({
+                    dependency: {
+                      state: 'not-applicable',
+                      message: 'OpenAI completion translation is bundled with the server runtime.',
+                    },
+                    runtime: {
+                      state: 'ready',
+                      message: 'Runtime is ready.',
+                    },
+                  })
+                : createReadyLifecycle()
+          handlers.onData(normalizeLegacyLifecycleEvent({ type: 'status', lifecycle }, input.engineId))
           if (unsubscribe.mock.calls.length > 0) return
-          handlers.onData({ type: 'exit', status: installedStatus })
+          handlers.onData(normalizeLegacyLifecycleEvent({ type: 'exit', lifecycle }, input.engineId))
         })
         return { unsubscribe }
       }
@@ -1262,17 +1322,18 @@ const reactQueryMockStore = vi.hoisted(() => {
         typeof updater === 'function'
           ? (updater as (current: T | undefined) => T | undefined)(current)
           : updater
-      if (next === undefined) {
+      const normalizedNext = normalizeTranslationEngineListFixtures(next)
+      if (normalizedNext === undefined) {
         cache.delete(key)
       } else {
-        cache.set(key, next)
+        cache.set(key, normalizedNext)
       }
       notify()
-      return next
+      return normalizedNext
     },
     seedQueryData<T>(queryKey: readonly unknown[] | undefined, value: T) {
       if (!queryKey) return
-      cache.set(serialize(queryKey), value)
+      cache.set(serialize(queryKey), normalizeTranslationEngineListFixtures(value))
     },
     has(queryKey?: readonly unknown[]) {
       return cache.has(serialize(queryKey))
@@ -1298,6 +1359,134 @@ function normalizeMockQueryResult<TData>(
     data: value,
     isLoading: false,
     refetch: vi.fn(),
+  }
+}
+
+function convertLegacyInstallStatusToLifecycle(
+  installStatus:
+    | {
+        state?: string
+        message?: string
+        progress?: number
+        error?: string
+      }
+    | undefined,
+  engineId?: string
+): TranslationEngineLifecycleStatus | undefined {
+  if (!installStatus?.state) return undefined
+
+  if (engineId === 'browser') {
+    return createTranslationEngineLifecycleStatus({
+      dependency: {
+        state: 'not-applicable',
+        message:
+          installStatus.message ?? 'Browser translation support is built into the browser runtime.',
+      },
+      runtime: {
+        state: 'not-applicable',
+        message:
+          installStatus.message ?? 'Browser translation support is built into the browser runtime.',
+      },
+    })
+  }
+
+  if (engineId === 'openai') {
+    return createTranslationEngineLifecycleStatus({
+      dependency: {
+        state: 'not-applicable',
+        message:
+          installStatus.message ??
+          'OpenAI completion translation is bundled with the server runtime.',
+      },
+      runtime: {
+        state: installStatus.state === 'error' ? 'error' : 'ready',
+        message: installStatus.state === 'error' ? undefined : 'Runtime is ready.',
+        error: installStatus.error,
+      },
+    })
+  }
+
+  switch (installStatus.state) {
+    case 'not-installed':
+      return createTranslationEngineLifecycleStatus({
+        dependency: {
+          state: 'missing',
+          message: installStatus.message,
+        },
+      })
+    case 'installing':
+      return createTranslationEngineLifecycleStatus({
+        dependency: {
+          state: 'installing',
+          message: installStatus.message,
+          progress: installStatus.progress,
+        },
+      })
+    case 'error':
+      return createTranslationEngineLifecycleStatus({
+        dependency: {
+          state: 'error',
+          message: installStatus.message,
+          error: installStatus.error,
+        },
+        runtime: {
+          state: 'error',
+          error: installStatus.error,
+        },
+      })
+    case 'installed':
+    default:
+      return createTranslationEngineLifecycleStatus({
+        dependency: {
+          state: 'installed',
+          message: installStatus.message ?? 'Runtime dependencies are installed.',
+        },
+        runtime: {
+          state: 'ready',
+          message: 'Runtime is ready.',
+        },
+      })
+  }
+}
+
+function normalizeTranslationEngineListFixtures<T>(value: T): T {
+  if (!Array.isArray(value)) return value
+  return value.map((item) => {
+    if (!item || typeof item !== 'object' || !('id' in item)) return item
+    const engineItem = item as {
+      id?: string
+      lifecycle?: TranslationEngineLifecycleStatus
+      installStatus?: {
+        state?: string
+        message?: string
+        progress?: number
+        error?: string
+      }
+    }
+    if (engineItem.lifecycle || !engineItem.installStatus) return item
+    return {
+      ...engineItem,
+      lifecycle: convertLegacyInstallStatusToLifecycle(engineItem.installStatus, engineItem.id),
+    }
+  }) as T
+}
+
+function normalizeLegacyLifecycleEvent<T extends { type: 'status' | 'log' | 'exit' }>(
+  event: T & {
+    lifecycle?: TranslationEngineLifecycleStatus
+    status?: {
+      state?: string
+      message?: string
+      progress?: number
+      error?: string
+    }
+  },
+  engineId: string
+): T & { lifecycle?: TranslationEngineLifecycleStatus } {
+  if (event.type === 'log' || event.lifecycle) return event
+  return {
+    ...event,
+    lifecycle: convertLegacyInstallStatusToLifecycle(event.status, engineId),
   }
 }
 
@@ -1332,7 +1521,7 @@ vi.mock('@tanstack/react-query', () => ({
     )
     const key = queryKey?.join('.') ?? ''
     if (!reactQueryMockStore.has(queryKey)) {
-      reactQueryMockStore.seedQueryData(queryKey, resolveQueryResultForKey(key))
+      reactQueryMockStore.seedQueryData(queryKey, normalizeTranslationEngineListFixtures(resolveQueryResultForKey(key)))
       if (key.startsWith('localModels.state') && queryKey?.[1]) {
         void localModelsMock
           .state({
@@ -1750,9 +1939,9 @@ vi.mock('@/lib/trpc', () => ({
       list: {
         queryOptions: () => ({ queryKey: ['translationEngines.list'] }),
       },
-      getInstallStatus: {
+      getLifecycle: {
         queryOptions: (input?: { engineId: string }) => ({
-          queryKey: ['translationEngines.getInstallStatus', input?.engineId ?? ''],
+          queryKey: ['translationEngines.getLifecycle', input?.engineId ?? ''],
         }),
       },
       install: {
@@ -1828,14 +2017,18 @@ vi.mock('@/lib/trpc', () => ({
       },
     },
     translationEngines: {
-      getInstallStatus: {
-        query: translationEnginesMock.getInstallStatus,
+      getLifecycle: {
+        query: translationEnginesMock.getLifecycle,
       },
       install: {
         mutate: translationEnginesMock.install,
       },
       installStream: {
-        subscribe: translationEnginesMock.installStream,
+        subscribe: (input, handlers) =>
+          translationEnginesMock.installStream(input, {
+            ...handlers,
+            onData: (event) => handlers.onData(normalizeLegacyLifecycleEvent(event, input.engineId)),
+          }),
       },
       getModelDownloadPlan: {
         query: translationEnginesMock.getModelDownloadPlan,
@@ -2520,7 +2713,7 @@ describe('Settings', () => {
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     const profileList = await screen.findByLabelText('Local download profiles')
     expect(screen.getByRole('combobox', { name: 'Engine' })).toHaveTextContent('Local-Transformers')
-    expect(screen.getByRole('button', { name: 'Local model' })).toHaveTextContent(
+    expect(screen.getByRole('button', { name: 'Local Model' })).toHaveTextContent(
       'Xenova/opus-mt-en-zh'
     )
     await waitFor(() =>
@@ -2665,7 +2858,7 @@ describe('Settings', () => {
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     expect(screen.getByRole('combobox', { name: 'Engine' })).toHaveTextContent('Local-CT2')
-    expect(screen.getByRole('button', { name: 'CT2 model' })).toHaveTextContent(
+    expect(screen.getByRole('button', { name: 'CT2 Model' })).toHaveTextContent(
       'ooeoeo/opus-mt-en-zh-ct2-float16'
     )
     const ct2Groups = await screen.findByLabelText('Local CT2 download groups')
@@ -2742,7 +2935,7 @@ describe('Settings', () => {
 
     expect(localModelsMock.listLocal).toHaveBeenCalled()
     expect(localModelsMock.searchRemoteStream).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Local model' })).toHaveTextContent(
+    expect(screen.getByRole('button', { name: 'Local Model' })).toHaveTextContent(
       'onnx-community/opus-mt-en-zh'
     )
     expect(screen.getByLabelText('Local download profiles')).toBeTruthy()
@@ -2845,7 +3038,7 @@ describe('Settings', () => {
     render(<Settings />)
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
-    fireEvent.click(screen.getByRole('button', { name: 'Local model' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Local Model' }))
     dispatchPopoverToggle(screen.getByRole('dialog', { name: 'Select local model' }), 'open')
     const input = screen.getByRole('textbox', { name: 'Search local models' })
     fireEvent.change(input, { target: { value: 'opus' } })
@@ -2904,7 +3097,7 @@ describe('Settings', () => {
     render(<Settings />)
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
-    fireEvent.click(screen.getByRole('button', { name: 'Local model' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Local Model' }))
     dispatchPopoverToggle(screen.getByRole('dialog', { name: 'Select local model' }), 'open')
     const input = screen.getByRole('textbox', { name: 'Search local models' })
     fireEvent.change(input, { target: { value: 'opus' } })
@@ -3091,7 +3284,7 @@ describe('Settings', () => {
     expect(downloadButton.className).not.toContain('group')
     expect(screen.queryByRole('button', { name: 'Pause download' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Local model' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Local Model' }))
     dispatchPopoverToggle(screen.getByRole('dialog', { name: 'Select local model' }), 'open')
     const input = screen.getByRole('textbox', { name: 'Search local models' })
     fireEvent.change(input, { target: { value: 'unknown' } })
@@ -3849,7 +4042,7 @@ describe('Settings', () => {
     render(<Settings />)
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
-    const modelButton = await screen.findByRole('button', { name: 'Local model' })
+    const modelButton = await screen.findByRole('button', { name: 'Local Model' })
     const downloadFiles = screen.getByText('Download files')
     const profileList = await screen.findByLabelText('Local download profiles')
     const q8Chip = within(profileList).getByRole('button', { name: /q8/i })

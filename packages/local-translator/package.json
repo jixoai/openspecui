@@ -25,6 +25,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "// runtime-note": "tsdown keeps the dynamic import for @huggingface/transformers in the built output instead of bundling the heavy runtime into this package.",
+    "// host-note": "The real install gate and optional dependency ownership live on the runtime host packages (openspecui / @openspecui/server). Keep this dependency aligned with the source import, but do not treat this package.json as the final install truth for end users.",
     "@huggingface/hub": "^2.12.0",
     "@huggingface/transformers": "^4.2.0",
     "@openspecui/core": "workspace:*"
