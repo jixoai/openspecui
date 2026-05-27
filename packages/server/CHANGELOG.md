@@ -1,5 +1,15 @@
 # @openspecui/server
 
+## 3.11.2
+
+### Patch Changes
+
+- @openspecui/core@3.11.2
+- @openspecui/local-ct2-translator@3.11.2
+- @openspecui/local-translator@3.11.2
+- @openspecui/openai-completion-translator@3.11.2
+- @openspecui/search@3.11.2
+
 ## 3.11.1
 
 ### Patch Changes
