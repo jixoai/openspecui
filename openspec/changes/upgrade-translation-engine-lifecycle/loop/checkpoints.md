@@ -33,7 +33,7 @@
 
 ## 6. Native Runtime Packaging
 
-- [ ] 6.1 `ctranslate2` package manifest and loader truth are aligned
+- [x] 6.1 `ctranslate2` package manifest and loader truth are aligned
 - [x] 6.2 Root package pack dry-run verifies expected published files
 - [ ] 6.3 Unsupported platform behavior is explicit when full coverage is unavailable
 

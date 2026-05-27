@@ -70,7 +70,7 @@ function requireNative() {
   } else if (process.platform === 'android') {
     if (process.arch === 'arm64') {
       try {
-        return require('./index.android-arm64.node')
+        return require('./ct2.android-arm64.node')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -92,7 +92,7 @@ function requireNative() {
       }
     } else if (process.arch === 'arm') {
       try {
-        return require('./index.android-arm-eabi.node')
+        return require('./ct2.android-arm-eabi.node')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -122,7 +122,7 @@ function requireNative() {
         process.config?.variables?.node_target_type === 'shared_library'
       ) {
         try {
-          return require('./index.win32-x64-gnu.node')
+          return require('./ct2.win32-x64-gnu.node')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -144,7 +144,7 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./index.win32-x64-msvc.node')
+          return require('./ct2.win32-x64-msvc.node')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -167,7 +167,7 @@ function requireNative() {
       }
     } else if (process.arch === 'ia32') {
       try {
-        return require('./index.win32-ia32-msvc.node')
+        return require('./ct2.win32-ia32-msvc.node')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -189,7 +189,7 @@ function requireNative() {
       }
     } else if (process.arch === 'arm64') {
       try {
-        return require('./index.win32-arm64-msvc.node')
+        return require('./ct2.win32-arm64-msvc.node')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -214,7 +214,7 @@ function requireNative() {
     }
   } else if (process.platform === 'darwin') {
     try {
-      return require('./index.darwin-universal.node')
+      return require('./ct2.darwin-universal.node')
     } catch (e) {
       loadErrors.push(e)
     }
@@ -236,7 +236,7 @@ function requireNative() {
     }
     if (process.arch === 'x64') {
       try {
-        return require('./index.darwin-x64.node')
+        return require('./ct2.darwin-x64.node')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -258,7 +258,7 @@ function requireNative() {
       }
     } else if (process.arch === 'arm64') {
       try {
-        return require('./index.darwin-arm64.node')
+        return require('./ct2.darwin-arm64.node')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -284,7 +284,7 @@ function requireNative() {
   } else if (process.platform === 'freebsd') {
     if (process.arch === 'x64') {
       try {
-        return require('./index.freebsd-x64.node')
+        return require('./ct2.freebsd-x64.node')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -306,7 +306,7 @@ function requireNative() {
       }
     } else if (process.arch === 'arm64') {
       try {
-        return require('./index.freebsd-arm64.node')
+        return require('./ct2.freebsd-arm64.node')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -333,7 +333,7 @@ function requireNative() {
     if (process.arch === 'x64') {
       if (isMusl()) {
         try {
-          return require('./index.linux-x64-musl.node')
+          return require('./ct2.linux-x64-musl.node')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -355,7 +355,7 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./index.linux-x64-gnu.node')
+          return require('./ct2.linux-x64-gnu.node')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -379,7 +379,7 @@ function requireNative() {
     } else if (process.arch === 'arm64') {
       if (isMusl()) {
         try {
-          return require('./index.linux-arm64-musl.node')
+          return require('./ct2.linux-arm64-musl.node')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -401,7 +401,7 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./index.linux-arm64-gnu.node')
+          return require('./ct2.linux-arm64-gnu.node')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -425,7 +425,7 @@ function requireNative() {
     } else if (process.arch === 'arm') {
       if (isMusl()) {
         try {
-          return require('./index.linux-arm-musleabihf.node')
+          return require('./ct2.linux-arm-musleabihf.node')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -448,7 +448,7 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./index.linux-arm-gnueabihf.node')
+          return require('./ct2.linux-arm-gnueabihf.node')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -473,7 +473,7 @@ function requireNative() {
     } else if (process.arch === 'loong64') {
       if (isMusl()) {
         try {
-          return require('./index.linux-loong64-musl.node')
+          return require('./ct2.linux-loong64-musl.node')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -496,7 +496,7 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./index.linux-loong64-gnu.node')
+          return require('./ct2.linux-loong64-gnu.node')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -521,7 +521,7 @@ function requireNative() {
     } else if (process.arch === 'riscv64') {
       if (isMusl()) {
         try {
-          return require('./index.linux-riscv64-musl.node')
+          return require('./ct2.linux-riscv64-musl.node')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -544,7 +544,7 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./index.linux-riscv64-gnu.node')
+          return require('./ct2.linux-riscv64-gnu.node')
         } catch (e) {
           loadErrors.push(e)
         }
@@ -568,7 +568,7 @@ function requireNative() {
       }
     } else if (process.arch === 'ppc64') {
       try {
-        return require('./index.linux-ppc64-gnu.node')
+        return require('./ct2.linux-ppc64-gnu.node')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -590,7 +590,7 @@ function requireNative() {
       }
     } else if (process.arch === 's390x') {
       try {
-        return require('./index.linux-s390x-gnu.node')
+        return require('./ct2.linux-s390x-gnu.node')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -616,7 +616,7 @@ function requireNative() {
   } else if (process.platform === 'openharmony') {
     if (process.arch === 'arm64') {
       try {
-        return require('./index.openharmony-arm64.node')
+        return require('./ct2.openharmony-arm64.node')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -638,7 +638,7 @@ function requireNative() {
       }
     } else if (process.arch === 'x64') {
       try {
-        return require('./index.openharmony-x64.node')
+        return require('./ct2.openharmony-x64.node')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -660,7 +660,7 @@ function requireNative() {
       }
     } else if (process.arch === 'arm') {
       try {
-        return require('./index.openharmony-arm.node')
+        return require('./ct2.openharmony-arm.node')
       } catch (e) {
         loadErrors.push(e)
       }
@@ -690,23 +690,33 @@ function requireNative() {
 
 nativeBinding = requireNative()
 
-if (!nativeBinding || process.env.NAPI_RS_FORCE_WASI) {
+// NAPI_RS_FORCE_WASI is a tri-state flag:
+//   unset / any other value → native binding preferred, WASI is only a fallback
+//   'true'                   → force WASI fallback even if native loaded
+//   'error'                  → force WASI and throw if no WASI binding is found
+// Treating any non-empty string as truthy (the historical behavior) meant
+// NAPI_RS_FORCE_WASI=false, NAPI_RS_FORCE_WASI=0, etc. inadvertently triggered
+// the WASI path, causing ENOENT for packages shipped without a .wasi.cjs file.
+const forceWasi =
+  process.env.NAPI_RS_FORCE_WASI === 'true' || process.env.NAPI_RS_FORCE_WASI === 'error'
+
+if (!nativeBinding || forceWasi) {
   let wasiBinding = null
   let wasiBindingError = null
   try {
-    wasiBinding = require('./index.wasi.cjs')
+    wasiBinding = require('./ct2.wasi.cjs')
     nativeBinding = wasiBinding
   } catch (err) {
-    if (process.env.NAPI_RS_FORCE_WASI) {
+    if (forceWasi) {
       wasiBindingError = err
     }
   }
-  if (!nativeBinding || process.env.NAPI_RS_FORCE_WASI) {
+  if (!nativeBinding || forceWasi) {
     try {
       wasiBinding = require('ctranslate2-wasm32-wasi')
       nativeBinding = wasiBinding
     } catch (err) {
-      if (process.env.NAPI_RS_FORCE_WASI) {
+      if (forceWasi) {
         if (!wasiBindingError) {
           wasiBindingError = err
         } else {

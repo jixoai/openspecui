@@ -200,6 +200,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
 
 [[package]]
+name = "ct2"
+version = "0.1.0"
+dependencies = [
+ "ct2rs",
+ "napi",
+ "napi-build",
+ "napi-derive",
+]
+
+[[package]]
 name = "ct2rs"
 version = "0.9.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -765,16 +775,6 @@ checksum = "1e68317604e77e53b85896388e1a803c1d21b74c899ec9e5e1112db90735edd7"
 dependencies = [
  "cc",
  "pkg-config",
-]
-
-[[package]]
-name = "openspecui-ct2-engine"
-version = "0.1.0"
-dependencies = [
- "ct2rs",
- "napi",
- "napi-build",
- "napi-derive",
 ]
 
 [[package]]

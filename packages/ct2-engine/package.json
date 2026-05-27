@@ -20,7 +20,7 @@
     "Cargo.toml",
     "build.rs",
     "src",
-    "*.node"
+    "ct2.*"
   ],
   "publishConfig": {
     "access": "public"
@@ -31,6 +31,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "// binary-note": "Keep napi.binaryName fixed to ct2 so the generated loader and published native artifacts stay on the ct2.* surface instead of leaking the default index.* names.",
+  "// publish-note": "This package only publishes the loader plus generated ct2.* runtime files. Stale local index.* artifacts must never be matched by the tarball file list.",
   "devDependencies": {
     "@napi-rs/cli": "^3.6.2",
     "@types/node": "^22.10.2",
@@ -51,5 +53,9 @@
     "nmt",
     "napi",
     "node-addon"
-  ]
+  ],
+  "napi": {
+    "binaryName": "ct2",
+    "packageName": "ctranslate2"
+  }
 }

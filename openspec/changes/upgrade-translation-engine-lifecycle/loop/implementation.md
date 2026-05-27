@@ -141,3 +141,19 @@ CI-equivalent local verification completed:
 - `pnpm typecheck`
 - `pnpm test:ci`
 - `pnpm test:browser:ci`
+
+## 2026-05-28 03:10 CST Progress
+
+- Continued the release-prep loop at the native runtime package boundary instead of starting formal publish.
+- Verified locally that `napi.binaryName = ct2` now regenerates the loader and native artifact names onto the `ct2.*` surface:
+  - `packages/ct2-engine/index.js` now resolves `ct2.<platform>.node`
+  - local build output now includes `ct2.darwin-arm64.node`
+- The first pack dry-run exposed a packaging-law leak: legacy `index.*.node` artifacts still matched `"*.node"` and were silently included in the `ctranslate2` tarball alongside the new `ct2.*` output.
+- Closed that leak by narrowing the publish file surface to `ct2.*` only, and by adding a focused package-shape regression in `packages/ct2-engine/test/smoke.test.ts` so future name migrations cannot silently reintroduce `index.*` artifacts into the npm tarball.
+- This closes the manifest/loader alignment slice truthfully, but the multi-platform publish law remains intentionally open until release automation can build and aggregate every supported addon target.
+
+Focused verification completed:
+
+- `pnpm --filter ctranslate2 build`
+- `pnpm --filter ctranslate2 test`
+- `cd packages/ct2-engine && npm pack --json --dry-run`
