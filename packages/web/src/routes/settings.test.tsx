@@ -568,7 +568,12 @@ const {
         return { unsubscribe: vi.fn() }
       }
     ),
-    markSelected: vi.fn(async () => ({ success: true })),
+    markSelected: vi.fn(async ({ modelId }: { modelId: string }) => ({
+      modelId,
+      selectedGroupId: 'q8',
+      asset: createDefaultLocalAssetState(modelId),
+      downloadPlan: createDefaultLocalDownloadPlan(modelId),
+    })),
     download: vi.fn(async () => ({ sessionId: 'session-1' })),
     pause: vi.fn(async () => ({ success: true })),
     resume: vi.fn(async () => ({ sessionId: 'session-2' })),
@@ -652,7 +657,12 @@ const {
         return { unsubscribe: vi.fn() }
       }
     ),
-    markSelected: vi.fn(async () => ({ success: true })),
+    markSelected: vi.fn(async ({ modelId }: { modelId: string }) => ({
+      modelId,
+      selectedGroupId: 'float16',
+      asset: createDefaultLocalCt2AssetState(modelId),
+      downloadPlan: createDefaultLocalCt2DownloadPlan(modelId),
+    })),
     download: vi.fn(async () => ({ sessionId: 'ct2-session-1' })),
     pause: vi.fn(async () => ({ success: true })),
     resume: vi.fn(async () => ({ sessionId: 'ct2-session-2' })),
@@ -3018,6 +3028,44 @@ describe('Settings', () => {
         removeEventListener: vi.fn(),
       }))
     )
+    let selectionHydrated = false
+    localModelsMock.panelState.mockImplementation(
+      async ({ modelId, selectedGroupId }: { modelId: string; selectedGroupId?: string }) => {
+        if (!selectionHydrated) {
+          return {
+            modelId,
+            selectedGroupId,
+            asset: createLocalAssetStateForTest({
+              modelId,
+              status: 'not-downloaded',
+              selected: true,
+              progress: 0,
+              resumable: false,
+              files: [],
+              updatedAt: 100,
+            }),
+            downloadPlan: null,
+          }
+        }
+        const asset = createDefaultLocalAssetState(modelId, 'q8')
+        return {
+          modelId,
+          selectedGroupId: selectedGroupId ?? 'q8',
+          asset,
+          downloadPlan: createDefaultLocalDownloadPlan(modelId, 'q8'),
+        }
+      }
+    )
+    localModelsMock.markSelected.mockImplementationOnce(async ({ modelId }: { modelId: string }) => {
+      selectionHydrated = true
+      const asset = createDefaultLocalAssetState(modelId, 'q8')
+      return {
+        modelId,
+        selectedGroupId: 'q8',
+        asset,
+        downloadPlan: createDefaultLocalDownloadPlan(modelId, 'q8'),
+      }
+    })
     useConfigSubscriptionMock.mockReturnValue({
       data: {
         translation: {
@@ -3028,6 +3076,29 @@ describe('Settings', () => {
           engineId: 'local',
         },
       },
+    })
+    useGlobalSettingsSubscriptionMock.mockReturnValue({
+      data: {
+        translationCache: { entryLimit: 10000 },
+        translationEngines: {
+          extensions: {
+            engines: {
+              local: { status: 'not-installed' },
+              localCt2: { status: 'not-installed' },
+              openai: { status: 'not-installed' },
+            },
+          },
+          openai: { baseUrl: '', token: '', model: 'gpt-4.1-mini' },
+          local: { model: '', selectedGroupId: undefined, hfEndpoint: '' },
+          localCt2: {
+            model: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+            selectedGroupId: 'float16',
+            hfEndpoint: '',
+          },
+        },
+      },
+      isLoading: false,
+      error: null,
     })
     useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
 
@@ -3054,11 +3125,15 @@ describe('Settings', () => {
       expect(screen.getByText(/Download files/i)).toBeTruthy()
       expect(screen.getAllByText('235 MB').length).toBeGreaterThan(0)
     })
+    expect(localModelsMock.markSelected).toHaveBeenCalledWith({
+      modelId: 'onnx-community/opus-mt-en-zh',
+    })
     expect(localModelsMock.listLocal).toHaveBeenCalled()
     await waitFor(() => expect(localModelsMock.searchRemoteStream).toHaveBeenCalled())
     expect(localModelsMock.panelState).toHaveBeenCalled()
     expect(screen.getAllByText(/q8/).length).toBeGreaterThan(0)
     expect(screen.getByText('Local Model')).toBeTruthy()
+    expect(screen.queryByText('No runtime download plan available.')).toBeNull()
   }, 10000)
 
   it('persists Local model commits into the document translation runtime identity', async () => {

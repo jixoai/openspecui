@@ -419,8 +419,13 @@ export const localModelsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await ctx.localModelAssetService.markSelectedModel(input.modelId)
-      return { success: true }
+      const asset = await ctx.localModelAssetService.markSelectedModel(input.modelId)
+      return {
+        modelId: input.modelId,
+        selectedGroupId: asset.selectedGroupId ?? asset.plan?.selectedGroupId,
+        asset,
+        downloadPlan: asset.plan ?? null,
+      }
     }),
 
   download: publicProcedure
@@ -602,8 +607,13 @@ export const localCt2ModelsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await ctx.localCt2ModelAssetService.markSelectedModel(input.modelId)
-      return { success: true }
+      const asset = await ctx.localCt2ModelAssetService.markSelectedModel(input.modelId)
+      return {
+        modelId: input.modelId,
+        selectedGroupId: asset.selectedGroupId ?? asset.plan?.selectedGroupId,
+        asset,
+        downloadPlan: asset.plan ?? null,
+      }
     }),
 
   download: publicProcedure

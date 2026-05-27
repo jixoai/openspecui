@@ -424,7 +424,7 @@ function queryManagedLocalPanelState(input: {
 function markManagedLocalModelSelected(
   engineId: ManagedLocalTranslationEngineId,
   modelId: string
-): Promise<{ success: boolean }> {
+): Promise<LocalPanelStateData> {
   return engineId === 'local'
     ? trpcClient.localModels.markSelected.mutate({ modelId })
     : trpcClient.localCt2Models.markSelected.mutate({ modelId })
@@ -437,6 +437,30 @@ function refreshManagedLocalArtifacts(
   return engineId === 'local'
     ? trpcClient.localModels.refreshArtifacts.mutate(input)
     : trpcClient.localCt2Models.refreshArtifacts.mutate(input)
+}
+
+function cacheManagedLocalPanelState(input: {
+  engineId: ManagedLocalTranslationEngineId
+  panelState: LocalPanelStateData
+  queryClient: ReturnType<typeof useQueryClient>
+  requestedSelectedGroupId?: string
+}) {
+  const selectedGroupIds = new Set<string | undefined>([
+    input.panelState.selectedGroupId,
+    input.requestedSelectedGroupId,
+    undefined,
+  ])
+  for (const selectedGroupId of selectedGroupIds) {
+    input.queryClient.setQueryData(
+      getManagedLocalPanelStateQueryKey({
+        engineId: input.engineId,
+        modelId: input.panelState.modelId,
+        selectedGroupId,
+      }),
+      (current: LocalPanelStateData | { data?: LocalPanelStateData } | undefined) =>
+        replaceQueryCacheData(current, input.panelState)
+    )
+  }
 }
 
 export function SettingsTranslationPanel({ index }: { index: number }) {
@@ -770,14 +794,14 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
       }
       return refreshManagedLocalArtifacts(activeManagedLocalEngineId, input)
     },
-    onSuccess: (panelState) => {
+    onSuccess: (panelState, input) => {
       if (!activeManagedLocalEngineId) return
-      const queryKey = getManagedLocalPanelStateQueryKey({
+      cacheManagedLocalPanelState({
         engineId: activeManagedLocalEngineId,
-        modelId: panelState.modelId,
-        selectedGroupId: panelState.selectedGroupId,
+        panelState,
+        queryClient,
+        requestedSelectedGroupId: input.modelId ? nmtSelectedGroupIdRef.current : undefined,
       })
-      queryClient.setQueryData(queryKey, panelState)
       lastLocalPanelStateRef.current = panelState
     },
   })
@@ -1697,7 +1721,17 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                       setNmtModelQuery(nextModel)
                     }}
                     onCommit={async (model) => {
-                      await markManagedLocalModelSelected(effectiveManagedLocalEngineId, model)
+                      const panelState = await markManagedLocalModelSelected(
+                        effectiveManagedLocalEngineId,
+                        model
+                      )
+                      cacheManagedLocalPanelState({
+                        engineId: effectiveManagedLocalEngineId,
+                        panelState,
+                        queryClient,
+                        requestedSelectedGroupId: preferredLocalSelectedGroupId,
+                      })
+                      lastLocalPanelStateRef.current = panelState
                       saveGlobalSettingsMutation.mutate({
                         translationEngines: createManagedLocalGlobalSettingsPatch(
                           effectiveManagedLocalEngineId,
@@ -1710,7 +1744,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                           { model, selectedGroupId: null }
                         ),
                       })
-                      setNmtSelectedGroupId(undefined)
+                      setNmtSelectedGroupId(panelState.selectedGroupId)
                     }}
                     ariaLabel={managedLocalModelLabel}
                   />

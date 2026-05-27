@@ -496,7 +496,7 @@ export class LocalModelAssetService {
     }
   }
 
-  async markSelectedModel(modelId: string): Promise<void> {
+  async markSelectedModel(modelId: string): Promise<LocalModelAssetState> {
     const states = await this.store.readAll()
     const nextStates = states.map((state) =>
       LocalModelAssetStateSchema.parse({
@@ -516,6 +516,11 @@ export class LocalModelAssetService {
       )
     }
     await this.store.writeAll(nextStates)
+    try {
+      return await this.refreshProfiles(modelId)
+    } catch {
+      return this.readSelectedModelState(modelId)
+    }
   }
 
   async waitForModelTask(modelId: string): Promise<void> {

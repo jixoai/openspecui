@@ -442,7 +442,7 @@ export class Ct2ModelAssetService {
     }
   }
 
-  async markSelectedModel(modelId: string): Promise<void> {
+  async markSelectedModel(modelId: string): Promise<LocalModelAssetState> {
     const states = await this.store.readAll()
     const nextStates = states.map((state) =>
       LocalModelAssetStateSchema.parse({
@@ -461,6 +461,11 @@ export class Ct2ModelAssetService {
       )
     }
     await this.store.writeAll(nextStates)
+    try {
+      return await this.refreshArtifacts(modelId)
+    } catch {
+      return this.readSelectedModelState(modelId)
+    }
   }
 
   async waitForModelTask(modelId: string): Promise<void> {

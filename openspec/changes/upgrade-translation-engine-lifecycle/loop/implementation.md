@@ -58,3 +58,18 @@ Key findings from this self-review loop:
 - The first real npm-host install exposed a packaging law violation: the `// ...` documentation keys had been placed inside `dependencies` / `optionalDependencies`, which made `npm install` fail with `EINVALIDPACKAGENAME`.
 - Corrected the packaging law by moving those `// ...` documentation keys to top-level `package.json` fields while keeping the dependency maps machine-parseable for npm/pnpm host installs.
 - Repacked the host tarball and resumed verification from the isolated npm host path so the remaining browser walkthrough can continue from a package-manager-valid baseline.
+
+## 2026-05-27 20:24 CST Progress
+
+- The near-production browser walkthrough exposed a real managed-local page-flow gap: selecting a first-time remote model could leave Settings stuck on `No runtime download plan available.` even though the model selection UI expected to move directly into download planning.
+- Closed that gap by upgrading the shared managed-local selection path so `markSelected` now returns hydrated `panelState` truth for both `local` and `local-ct2`, while still keeping explicit artifact refresh endpoints available for manual revalidation.
+- Updated `settings-translation-panel.tsx` to seed the managed-local query cache from the selection result, including both the requested selector key and the resolved profile key, so the UI no longer loses the first hydrated download plan to a query-key race.
+- Added symmetric BDD coverage for this law:
+  - `packages/server/src/local-model-asset-service.test.ts`
+  - `packages/server/src/ct2-model-asset-service.test.ts`
+  - strengthened `packages/web/src/routes/settings.test.tsx` to simulate the real first-selection race instead of assuming `panelState` is already hydrated
+
+Focused verification completed:
+
+- `pnpm --filter @openspecui/server exec vitest run src/local-model-asset-service.test.ts src/ct2-model-asset-service.test.ts src/translation-engine-service.test.ts`
+- `pnpm --filter @openspecui/web exec vitest run src/routes/settings.test.tsx --project unit`
