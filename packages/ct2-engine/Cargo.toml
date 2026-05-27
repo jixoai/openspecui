@@ -1,0 +1,19 @@
+[package]
+name = "openspecui-ct2-engine"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ct2rs = "0.9.18"
+napi = { version = "3.0.0", default-features = false, features = ["napi10", "async"] }
+napi-derive = "3.0.0"
+
+[build-dependencies]
+napi-build = "2.2.1"
+
+[profile.release]
+lto = true

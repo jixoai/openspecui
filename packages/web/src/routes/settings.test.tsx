@@ -80,12 +80,19 @@ const browserTranslationMock = vi.hoisted(() => ({
 const {
   translationEnginesMock,
   localModelsMock,
+  localCt2ModelsMock,
   restoreTranslationMocks,
   emitLocalModelLog,
   createDefaultLocalAssetState,
   createDefaultLocalDownloadPlan,
 } = vi.hoisted(() => {
   let localModelsSubscribeLogHandlers:
+    | {
+        onData: (log: LocalModelAssetLog) => void
+        onError?: (error: unknown) => void
+      }
+    | undefined
+  let localCt2ModelsSubscribeLogHandlers:
     | {
         onData: (log: LocalModelAssetLog) => void
         onError?: (error: unknown) => void
@@ -336,6 +343,120 @@ const {
       local: false,
     },
   ]
+  const createDefaultLocalCt2DownloadPlan = (
+    modelId: string,
+    selectedGroupId = 'float16'
+  ): TranslationModelDownloadPlan => {
+    const files = [
+      { path: 'config.json', sizeBytes: 1024, required: true },
+      { path: 'model.bin', sizeBytes: 128_000_000, required: true },
+      { path: 'shared_vocabulary.json', sizeBytes: 4096, required: true },
+      { path: 'source.spm', sizeBytes: 800_000, required: true },
+      { path: 'target.spm', sizeBytes: 800_000, required: true },
+    ].map((file) => ({
+      ...file,
+      revision: TEST_LOCAL_MODEL_COMMIT_HASH,
+      sourceUrl: `https://huggingface.co/${modelId}/resolve/${TEST_LOCAL_MODEL_COMMIT_HASH}/${file.path}`,
+    }))
+    return {
+      modelId,
+      estimatedTotalBytes: 129_605_120,
+      selectedGroupId,
+      files,
+      groups: [
+        {
+          id: selectedGroupId,
+          label: 'float16',
+          description: 'CTranslate2 float16 artifacts.',
+          commitHash: TEST_LOCAL_MODEL_COMMIT_HASH,
+          shortCommitHash: TEST_LOCAL_MODEL_SHORT_COMMIT_HASH,
+          estimatedTotalBytes: 129_605_120,
+          selectable: true,
+          selected: true,
+          files,
+        },
+      ],
+    }
+  }
+  const createDefaultLocalCt2AssetState = (
+    modelId: string,
+    selectedGroupId = 'float16'
+  ): LocalModelAssetState => {
+    const plan = createDefaultLocalCt2DownloadPlan(modelId, selectedGroupId)
+    return createLocalAssetStateForTest({
+      modelId,
+      status: 'not-downloaded',
+      selected: true,
+      selectedGroupId,
+      progress: 0,
+      resumable: false,
+      plan,
+      files: plan.files.map((file) => ({
+        path: file.path,
+        sizeBytes: file.sizeBytes,
+        downloadedBytes: 0,
+      })),
+      updatedAt: 100,
+    })
+  }
+  const createDefaultLocalCt2Model = (): LocalModelCatalogItem => {
+    const asset = createDefaultLocalCt2AssetState('ooeoeo/opus-mt-en-zh-ct2-float16')
+    return {
+      id: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+      label: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+      summary: 'Previously selected CT2 model. Estimated download 124 MB.',
+      downloads: 0,
+      likes: 0,
+      tags: ['local', 'ct2', 'translation', 'en', 'zh'],
+      compatibility: {
+        transformersJs: false,
+        onnx: false,
+        localRuntimeVerified: true,
+      },
+      size: {
+        estimatedTotalBytes: 129_605_120,
+        primaryBytes: 128_000_000,
+      },
+      downloadGroups: asset.plan?.groups,
+      languageMatch: {
+        sourceMatched: false,
+        targetMatched: true,
+        directionalScore: 0,
+      },
+      asset,
+      selectable: true,
+      local: true,
+    }
+  }
+  const createDefaultLocalCt2RemoteItems = (): LocalModelCatalogItem[] => [
+    {
+      id: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+      label: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+      summary: 'Verified CTranslate2 translation model. Estimated download 124 MB.',
+      downloads: 42,
+      likes: 3,
+      trendingScore: 2,
+      tags: ['ct2', 'translation', 'en', 'zh'],
+      compatibility: {
+        transformersJs: false,
+        onnx: false,
+        localRuntimeVerified: true,
+      },
+      size: {
+        estimatedTotalBytes: 129_605_120,
+        primaryBytes: 128_000_000,
+      },
+      downloadGroups: createDefaultLocalCt2DownloadPlan('ooeoeo/opus-mt-en-zh-ct2-float16').groups,
+      languageMatch: {
+        sourceMatched: false,
+        targetMatched: true,
+        directionalScore: 1,
+      },
+      asset: createDefaultLocalCt2AssetState('ooeoeo/opus-mt-en-zh-ct2-float16'),
+      selectable: true,
+      local: false,
+    },
+  ]
   const translationEnginesMock = {
     getModelDownloadPlan: vi.fn(),
     batchTranslate: vi.fn(),
@@ -425,6 +546,91 @@ const {
     pause: vi.fn(async () => ({ success: true })),
     resume: vi.fn(async () => ({ sessionId: 'session-2' })),
     delete: vi.fn(async () => ({ success: true })),
+    refreshArtifacts: vi.fn(),
+  }
+  const localCt2ModelsMock = {
+    listLocal: vi.fn(),
+    searchRemote: vi.fn(),
+    searchRemoteStream: vi.fn(
+      (
+        input: { requestId: string; query?: string; targetLanguage?: string; limit?: number },
+        handlers: {
+          onData: (event: {
+            requestId: string
+            phase: 'candidates' | 'enriched' | 'complete' | 'error'
+            items?: LocalModelCatalogItem[]
+          }) => void
+          onError?: (error: unknown) => void
+        }
+      ) => {
+        const unsubscribe = vi.fn()
+        queueMicrotask(async () => {
+          if (unsubscribe.mock.calls.length > 0) return
+          const remote = (await localCt2ModelsMock.searchRemote()) as {
+            items: LocalModelCatalogItem[]
+          }
+          handlers.onData({
+            requestId: input.requestId,
+            phase: 'candidates',
+            items: remote.items.map((item) => ({ ...item, downloadGroups: undefined })),
+          })
+          if (unsubscribe.mock.calls.length > 0) return
+          handlers.onData({
+            requestId: input.requestId,
+            phase: 'enriched',
+            items: remote.items,
+          })
+          if (unsubscribe.mock.calls.length > 0) return
+          handlers.onData({
+            requestId: input.requestId,
+            phase: 'complete',
+            items: remote.items,
+          })
+        })
+        return { unsubscribe }
+      }
+    ),
+    state: vi.fn(),
+    panelState: vi.fn(
+      async ({
+        modelId,
+        selectedGroupId,
+      }: {
+        modelId: string
+        selectedGroupId?: string
+      }): Promise<{
+        modelId: string
+        selectedGroupId?: string
+        asset: LocalModelAssetState
+        downloadPlan: TranslationModelDownloadPlan | null
+      }> => {
+        const asset = await localCt2ModelsMock.state({ modelId, selectedGroupId })
+        return {
+          modelId,
+          selectedGroupId,
+          asset,
+          downloadPlan: asset.plan ?? createDefaultLocalCt2DownloadPlan(modelId),
+        }
+      }
+    ),
+    subscribeLogs: vi.fn(
+      (
+        _input: undefined,
+        handlers: {
+          onData: (log: LocalModelAssetLog) => void
+          onError?: (error: unknown) => void
+        }
+      ) => {
+        localCt2ModelsSubscribeLogHandlers = handlers
+        return { unsubscribe: vi.fn() }
+      }
+    ),
+    markSelected: vi.fn(async () => ({ success: true })),
+    download: vi.fn(async () => ({ sessionId: 'ct2-session-1' })),
+    pause: vi.fn(async () => ({ success: true })),
+    resume: vi.fn(async () => ({ sessionId: 'ct2-session-2' })),
+    delete: vi.fn(async () => ({ success: true })),
+    refreshArtifacts: vi.fn(),
   }
   const restoreTranslationMocks = () => {
     translationEnginesMock.getInstallStatus.mockImplementation(async ({ engineId }) => {
@@ -433,6 +639,12 @@ const {
       }
       if (engineId === 'openai') {
         return { state: 'installed', message: 'OpenAI completion translator is bundled.' }
+      }
+      if (engineId === 'local-ct2') {
+        return {
+          state: 'installed',
+          message: 'Local-CT2 runtime dependencies are installed.',
+        }
       }
       return {
         state: 'installed',
@@ -444,7 +656,7 @@ const {
     )
     translationEnginesMock.installStream.mockImplementation(
       (
-        input: { engineId: 'browser' | 'local' | 'openai' },
+        input: { engineId: 'browser' | 'local' | 'local-ct2' | 'openai' },
         handlers: {
           onData: (event: {
             type: 'status' | 'log' | 'exit'
@@ -463,10 +675,15 @@ const {
               ? { state: 'installed', message: 'Browser translator is built in.' }
               : input.engineId === 'openai'
                 ? { state: 'installed', message: 'OpenAI completion translator is bundled.' }
-                : {
-                    state: 'installed',
-                    message: 'Local-Transformers runtime dependencies are installed.',
-                  }
+                : input.engineId === 'local-ct2'
+                  ? {
+                      state: 'installed',
+                      message: 'Local-CT2 runtime dependencies are installed.',
+                    }
+                  : {
+                      state: 'installed',
+                      message: 'Local-Transformers runtime dependencies are installed.',
+                    }
           handlers.onData({ type: 'status', status: installedStatus })
           if (unsubscribe.mock.calls.length > 0) return
           handlers.onData({ type: 'exit', status: installedStatus })
@@ -526,16 +743,74 @@ const {
         }
       }
     )
+    localModelsMock.refreshArtifacts.mockImplementation(async ({ modelId }) => {
+      const resolvedModelId = modelId ?? 'onnx-community/opus-mt-en-zh'
+      const asset = await localModelsMock.state({ modelId: resolvedModelId, selectedGroupId: 'q8' })
+      return {
+        modelId: resolvedModelId,
+        selectedGroupId: 'q8',
+        asset,
+        downloadPlan: asset.plan ?? createDefaultLocalDownloadPlan(resolvedModelId),
+      }
+    })
+    localCt2ModelsMock.listLocal.mockImplementation(
+      async (): Promise<{ items: LocalModelCatalogItem[] }> => ({
+        items: [createDefaultLocalCt2Model()],
+      })
+    )
+    localCt2ModelsMock.searchRemote.mockImplementation(
+      async (): Promise<{ items: LocalModelCatalogItem[] }> => ({
+        items: createDefaultLocalCt2RemoteItems(),
+      })
+    )
+    localCt2ModelsMock.state.mockImplementation(
+      async ({
+        modelId,
+        selectedGroupId,
+      }: {
+        modelId: string
+        selectedGroupId?: string
+      }): Promise<LocalModelAssetState> =>
+        createDefaultLocalCt2AssetState(modelId, selectedGroupId ?? 'float16')
+    )
+    localCt2ModelsMock.panelState.mockImplementation(
+      async ({ modelId, selectedGroupId }: { modelId: string; selectedGroupId?: string }) => {
+        const asset = await localCt2ModelsMock.state({ modelId, selectedGroupId })
+        return {
+          modelId,
+          selectedGroupId,
+          asset,
+          downloadPlan: asset.plan ?? createDefaultLocalCt2DownloadPlan(modelId),
+        }
+      }
+    )
+    localCt2ModelsMock.refreshArtifacts.mockImplementation(async ({ modelId }) => {
+      const resolvedModelId = modelId ?? 'ooeoeo/opus-mt-en-zh-ct2-float16'
+      const asset = await localCt2ModelsMock.state({
+        modelId: resolvedModelId,
+        selectedGroupId: 'float16',
+      })
+      return {
+        modelId: resolvedModelId,
+        selectedGroupId: 'float16',
+        asset,
+        downloadPlan: asset.plan ?? createDefaultLocalCt2DownloadPlan(resolvedModelId),
+      }
+    })
   }
   restoreTranslationMocks()
   return {
     translationEnginesMock,
     localModelsMock,
+    localCt2ModelsMock,
     restoreTranslationMocks,
     createDefaultLocalAssetState,
     createDefaultLocalDownloadPlan,
     emitLocalModelLog(log: LocalModelAssetLog) {
       localModelsSubscribeLogHandlers?.onData(log)
+    },
+    emitLocalCt2ModelLog(log: LocalModelAssetLog) {
+      localCt2ModelsSubscribeLogHandlers?.onData(log)
     },
   }
 })
@@ -1093,6 +1368,48 @@ vi.mock('@tanstack/react-query', () => ({
             }
           )
       }
+      if (key.startsWith('translation.managed-local.local.panel-state') && queryKey?.[4]) {
+        void localModelsMock
+          .panelState({
+            modelId: queryKey[4],
+            selectedGroupId: queryKey[5] || undefined,
+          })
+          .then(
+            (data: {
+              modelId: string
+              selectedGroupId?: string
+              asset: LocalModelAssetState
+              downloadPlan: TranslationModelDownloadPlan | null
+            }) => {
+              reactQueryMockStore.setQueryData(queryKey, {
+                data,
+                isLoading: false,
+                refetch: vi.fn(),
+              })
+            }
+          )
+      }
+      if (key.startsWith('translation.managed-local.local-ct2.panel-state') && queryKey?.[4]) {
+        void localCt2ModelsMock
+          .panelState({
+            modelId: queryKey[4],
+            selectedGroupId: queryKey[5] || undefined,
+          })
+          .then(
+            (data: {
+              modelId: string
+              selectedGroupId?: string
+              asset: LocalModelAssetState
+              downloadPlan: TranslationModelDownloadPlan | null
+            }) => {
+              reactQueryMockStore.setQueryData(queryKey, {
+                data,
+                isLoading: false,
+                refetch: vi.fn(),
+              })
+            }
+          )
+      }
     }
     return normalizeMockQueryResult(reactQueryMockStore.getQueryData(queryKey))
   },
@@ -1171,6 +1488,11 @@ function resolveQueryResultForKey(key: string) {
         translationEngines: {
           openai: { baseUrl: '', token: '', model: 'gpt-4.1-mini' },
           local: { model: 'Xenova/opus-mt-no-de', selectedGroupId: 'q8', hfEndpoint: '' },
+          localCt2: {
+            model: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+            selectedGroupId: 'float16',
+            hfEndpoint: '',
+          },
         },
       },
       refetch: vi.fn(),
@@ -1208,6 +1530,21 @@ function resolveQueryResultForKey(key: string) {
           model: 'Xenova/opus-mt-no-de',
         },
         {
+          id: 'local-ct2',
+          label: 'Local-CT2',
+          description:
+            'Runs a bundled local CTranslate2 translation runtime with managed model files.',
+          technicalSummary:
+            'Server-side CTranslate2 local adapter. Package payload is about 5 KB; selected model artifacts are downloaded separately and can range from tens to hundreds of MB.',
+          runtime: 'server',
+          selected: false,
+          installStatus: {
+            state: 'installed',
+            message: 'Local-CT2 runtime dependencies are installed.',
+          },
+          model: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+        },
+        {
           id: 'openai',
           label: 'OpenAI-Completion',
           description:
@@ -1233,7 +1570,22 @@ function resolveQueryResultForKey(key: string) {
   if (key === 'localModels.searchRemote') {
     return { data: undefined, isLoading: false, refetch: vi.fn() }
   }
+  if (key === 'localCt2Models.listLocal') {
+    return { data: undefined, isLoading: false, refetch: vi.fn() }
+  }
+  if (key === 'localCt2Models.searchRemote') {
+    return { data: undefined, isLoading: false, refetch: vi.fn() }
+  }
   if (key.startsWith('localModels.state') || key.startsWith('localModels.panelState')) {
+    return { data: undefined, isLoading: true, refetch: vi.fn() }
+  }
+  if (key.startsWith('localCt2Models.state') || key.startsWith('localCt2Models.panelState')) {
+    return { data: undefined, isLoading: true, refetch: vi.fn() }
+  }
+  if (key.startsWith('translation.managed-local.local.panel-state')) {
+    return { data: undefined, isLoading: true, refetch: vi.fn() }
+  }
+  if (key.startsWith('translation.managed-local.local-ct2.panel-state')) {
     return { data: undefined, isLoading: true, refetch: vi.fn() }
   }
   if (key === 'translationCache.stats') {
@@ -1428,6 +1780,28 @@ vi.mock('@/lib/trpc', () => ({
         }),
       },
     },
+    localCt2Models: {
+      listLocal: {
+        queryOptions: () => ({ queryKey: ['localCt2Models.listLocal'] }),
+      },
+      searchRemote: {
+        queryOptions: () => ({ queryKey: ['localCt2Models.searchRemote'] }),
+      },
+      state: {
+        queryOptions: (input?: { modelId: string; selectedGroupId?: string }) => ({
+          queryKey: ['localCt2Models.state', input?.modelId ?? '', input?.selectedGroupId ?? ''],
+        }),
+      },
+      panelState: {
+        queryOptions: (input?: { modelId: string; selectedGroupId?: string }) => ({
+          queryKey: [
+            'localCt2Models.panelState',
+            input?.modelId ?? '',
+            input?.selectedGroupId ?? '',
+          ],
+        }),
+      },
+    },
   },
   trpcClient: {
     cli: {
@@ -1504,6 +1878,47 @@ vi.mock('@/lib/trpc', () => ({
       delete: {
         mutate: localModelsMock.delete,
       },
+      refreshArtifacts: {
+        mutate: localModelsMock.refreshArtifacts,
+      },
+    },
+    localCt2Models: {
+      listLocal: {
+        query: localCt2ModelsMock.listLocal,
+      },
+      searchRemote: {
+        query: localCt2ModelsMock.searchRemote,
+      },
+      searchRemoteStream: {
+        subscribe: localCt2ModelsMock.searchRemoteStream,
+      },
+      state: {
+        query: localCt2ModelsMock.state,
+      },
+      panelState: {
+        query: localCt2ModelsMock.panelState,
+      },
+      subscribeLogs: {
+        subscribe: localCt2ModelsMock.subscribeLogs,
+      },
+      markSelected: {
+        mutate: localCt2ModelsMock.markSelected,
+      },
+      download: {
+        mutate: localCt2ModelsMock.download,
+      },
+      pause: {
+        mutate: localCt2ModelsMock.pause,
+      },
+      resume: {
+        mutate: localCt2ModelsMock.resume,
+      },
+      delete: {
+        mutate: localCt2ModelsMock.delete,
+      },
+      refreshArtifacts: {
+        mutate: localCt2ModelsMock.refreshArtifacts,
+      },
     },
   },
 }))
@@ -1525,11 +1940,17 @@ describe('Settings', () => {
           extensions: {
             engines: {
               local: { status: 'not-installed' },
+              localCt2: { status: 'not-installed' },
               openai: { status: 'not-installed' },
             },
           },
           openai: { baseUrl: '', token: '', model: 'gpt-4.1-mini' },
           local: { model: 'Xenova/opus-mt-no-de', selectedGroupId: 'q8', hfEndpoint: '' },
+          localCt2: {
+            model: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+            selectedGroupId: 'float16',
+            hfEndpoint: '',
+          },
         },
       },
       isLoading: false,
@@ -1695,56 +2116,61 @@ describe('Settings', () => {
       },
     })
     useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
-    reactQueryMockStore.setQueryData(['translationEngines.list'], [
-      {
-        id: 'browser',
-        label: 'Browser',
-        description: 'Uses the browser Translator API and future browser-side providers.',
-        technicalSummary:
-          'Browser-native Web Translator adapter. Package payload is about 5 KB; browser language packs are managed by the browser.',
-        runtime: 'browser',
-        selected: false,
-        installStatus: { state: 'installed', message: 'Browser translator is built in.' },
-      },
-      {
-        id: 'local',
-        label: 'Local-Transformers',
-        description:
-          'Runs a bundled local Transformers.js translation runtime with managed model files.',
-        technicalSummary:
-          'Server-side Transformers.js local adapter. Package payload is about 5 KB; selected model groups are downloaded separately and can range from tens to hundreds of MB.',
-        runtime: 'server',
-        selected: true,
-        installStatus: {
-          state: 'not-installed',
-          message:
-            'Install the Local-Transformers runtime package to enable server-side translation.',
+    reactQueryMockStore.setQueryData(
+      ['translationEngines.list'],
+      [
+        {
+          id: 'browser',
+          label: 'Browser',
+          description: 'Uses the browser Translator API and future browser-side providers.',
+          technicalSummary:
+            'Browser-native Web Translator adapter. Package payload is about 5 KB; browser language packs are managed by the browser.',
+          runtime: 'browser',
+          selected: false,
+          installStatus: { state: 'installed', message: 'Browser translator is built in.' },
         },
-        model: 'Xenova/opus-mt-no-de',
-      },
-      {
-        id: 'openai',
-        label: 'OpenAI-Completion',
-        description:
-          'Uses an OpenAI-compatible TanStack OpenAI-Completion completion provider for context-aware translation.',
-        technicalSummary:
-          'Server-side TanStack OpenAI-Completion adapter for OpenAI-compatible APIs. Package payload is about 5 KB; model size stays with the remote provider.',
-        runtime: 'server',
-        selected: false,
-        installStatus: {
-          state: 'installed',
-          message: 'OpenAI completion translator is bundled.',
+        {
+          id: 'local',
+          label: 'Local-Transformers',
+          description:
+            'Runs a bundled local Transformers.js translation runtime with managed model files.',
+          technicalSummary:
+            'Server-side Transformers.js local adapter. Package payload is about 5 KB; selected model groups are downloaded separately and can range from tens to hundreds of MB.',
+          runtime: 'server',
+          selected: true,
+          installStatus: {
+            state: 'not-installed',
+            message:
+              'Install the Local-Transformers runtime package to enable server-side translation.',
+          },
+          model: 'Xenova/opus-mt-no-de',
         },
-        model: 'gpt-4.1-mini',
-      },
-    ])
+        {
+          id: 'openai',
+          label: 'OpenAI-Completion',
+          description:
+            'Uses an OpenAI-compatible TanStack OpenAI-Completion completion provider for context-aware translation.',
+          technicalSummary:
+            'Server-side TanStack OpenAI-Completion adapter for OpenAI-compatible APIs. Package payload is about 5 KB; model size stays with the remote provider.',
+          runtime: 'server',
+          selected: false,
+          installStatus: {
+            state: 'installed',
+            message: 'OpenAI completion translator is bundled.',
+          },
+          model: 'gpt-4.1-mini',
+        },
+      ]
+    )
 
     render(<Settings />)
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     expect(screen.getByRole('button', { name: 'Install translation engine' })).toBeTruthy()
     expect(
-      screen.getByText(/Install the Local-Transformers runtime package to enable server-side translation\./)
+      screen.getByText(
+        /Install the Local-Transformers runtime package to enable server-side translation\./
+      )
     ).toBeTruthy()
     expect(screen.queryByLabelText('Local download profiles')).toBeNull()
   })
@@ -1770,49 +2196,52 @@ describe('Settings', () => {
       },
     })
     useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
-    reactQueryMockStore.setQueryData(['translationEngines.list'], [
-      {
-        id: 'browser',
-        label: 'Browser',
-        description: 'Uses the browser Translator API and future browser-side providers.',
-        technicalSummary:
-          'Browser-native Web Translator adapter. Package payload is about 5 KB; browser language packs are managed by the browser.',
-        runtime: 'browser',
-        selected: false,
-        installStatus: { state: 'installed', message: 'Browser translator is built in.' },
-      },
-      {
-        id: 'local',
-        label: 'Local-Transformers',
-        description:
-          'Runs a bundled local Transformers.js translation runtime with managed model files.',
-        technicalSummary:
-          'Server-side Transformers.js local adapter. Package payload is about 5 KB; selected model groups are downloaded separately and can range from tens to hundreds of MB.',
-        runtime: 'server',
-        selected: true,
-        installStatus: {
-          state: 'not-installed',
-          message:
-            'Install the Local-Transformers runtime package to enable server-side translation.',
+    reactQueryMockStore.setQueryData(
+      ['translationEngines.list'],
+      [
+        {
+          id: 'browser',
+          label: 'Browser',
+          description: 'Uses the browser Translator API and future browser-side providers.',
+          technicalSummary:
+            'Browser-native Web Translator adapter. Package payload is about 5 KB; browser language packs are managed by the browser.',
+          runtime: 'browser',
+          selected: false,
+          installStatus: { state: 'installed', message: 'Browser translator is built in.' },
         },
-        model: 'Xenova/opus-mt-no-de',
-      },
-      {
-        id: 'openai',
-        label: 'OpenAI-Completion',
-        description:
-          'Uses an OpenAI-compatible TanStack OpenAI-Completion completion provider for context-aware translation.',
-        technicalSummary:
-          'Server-side TanStack OpenAI-Completion adapter for OpenAI-compatible APIs. Package payload is about 5 KB; model size stays with the remote provider.',
-        runtime: 'server',
-        selected: false,
-        installStatus: {
-          state: 'installed',
-          message: 'OpenAI completion translator is bundled.',
+        {
+          id: 'local',
+          label: 'Local-Transformers',
+          description:
+            'Runs a bundled local Transformers.js translation runtime with managed model files.',
+          technicalSummary:
+            'Server-side Transformers.js local adapter. Package payload is about 5 KB; selected model groups are downloaded separately and can range from tens to hundreds of MB.',
+          runtime: 'server',
+          selected: true,
+          installStatus: {
+            state: 'not-installed',
+            message:
+              'Install the Local-Transformers runtime package to enable server-side translation.',
+          },
+          model: 'Xenova/opus-mt-no-de',
         },
-        model: 'gpt-4.1-mini',
-      },
-    ])
+        {
+          id: 'openai',
+          label: 'OpenAI-Completion',
+          description:
+            'Uses an OpenAI-compatible TanStack OpenAI-Completion completion provider for context-aware translation.',
+          technicalSummary:
+            'Server-side TanStack OpenAI-Completion adapter for OpenAI-compatible APIs. Package payload is about 5 KB; model size stays with the remote provider.',
+          runtime: 'server',
+          selected: false,
+          installStatus: {
+            state: 'installed',
+            message: 'OpenAI completion translator is bundled.',
+          },
+          model: 'gpt-4.1-mini',
+        },
+      ]
+    )
     translationEnginesMock.installStream.mockImplementationOnce((_input, handlers) => {
       const unsubscribe = vi.fn()
       queueMicrotask(() => {
@@ -1872,49 +2301,52 @@ describe('Settings', () => {
       },
     })
     useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
-    reactQueryMockStore.setQueryData(['translationEngines.list'], [
-      {
-        id: 'browser',
-        label: 'Browser',
-        description: 'Uses the browser Translator API and future browser-side providers.',
-        technicalSummary:
-          'Browser-native Web Translator adapter. Package payload is about 5 KB; browser language packs are managed by the browser.',
-        runtime: 'browser',
-        selected: false,
-        installStatus: { state: 'installed', message: 'Browser translator is built in.' },
-      },
-      {
-        id: 'local',
-        label: 'Local-Transformers',
-        description:
-          'Runs a bundled local Transformers.js translation runtime with managed model files.',
-        technicalSummary:
-          'Server-side Transformers.js local adapter. Package payload is about 5 KB; selected model groups are downloaded separately and can range from tens to hundreds of MB.',
-        runtime: 'server',
-        selected: true,
-        installStatus: {
-          state: 'not-installed',
-          message:
-            'Install the Local-Transformers runtime package to enable server-side translation.',
+    reactQueryMockStore.setQueryData(
+      ['translationEngines.list'],
+      [
+        {
+          id: 'browser',
+          label: 'Browser',
+          description: 'Uses the browser Translator API and future browser-side providers.',
+          technicalSummary:
+            'Browser-native Web Translator adapter. Package payload is about 5 KB; browser language packs are managed by the browser.',
+          runtime: 'browser',
+          selected: false,
+          installStatus: { state: 'installed', message: 'Browser translator is built in.' },
         },
-        model: 'Xenova/opus-mt-no-de',
-      },
-      {
-        id: 'openai',
-        label: 'OpenAI-Completion',
-        description:
-          'Uses an OpenAI-compatible TanStack OpenAI-Completion completion provider for context-aware translation.',
-        technicalSummary:
-          'Server-side TanStack OpenAI-Completion adapter for OpenAI-compatible APIs. Package payload is about 5 KB; model size stays with the remote provider.',
-        runtime: 'server',
-        selected: false,
-        installStatus: {
-          state: 'installed',
-          message: 'OpenAI completion translator is bundled.',
+        {
+          id: 'local',
+          label: 'Local-Transformers',
+          description:
+            'Runs a bundled local Transformers.js translation runtime with managed model files.',
+          technicalSummary:
+            'Server-side Transformers.js local adapter. Package payload is about 5 KB; selected model groups are downloaded separately and can range from tens to hundreds of MB.',
+          runtime: 'server',
+          selected: true,
+          installStatus: {
+            state: 'not-installed',
+            message:
+              'Install the Local-Transformers runtime package to enable server-side translation.',
+          },
+          model: 'Xenova/opus-mt-no-de',
         },
-        model: 'gpt-4.1-mini',
-      },
-    ])
+        {
+          id: 'openai',
+          label: 'OpenAI-Completion',
+          description:
+            'Uses an OpenAI-compatible TanStack OpenAI-Completion completion provider for context-aware translation.',
+          technicalSummary:
+            'Server-side TanStack OpenAI-Completion adapter for OpenAI-compatible APIs. Package payload is about 5 KB; model size stays with the remote provider.',
+          runtime: 'server',
+          selected: false,
+          installStatus: {
+            state: 'installed',
+            message: 'OpenAI completion translator is bundled.',
+          },
+          model: 'gpt-4.1-mini',
+        },
+      ]
+    )
     translationEnginesMock.installStream.mockImplementationOnce((_input, handlers) => {
       const unsubscribe = vi.fn()
       queueMicrotask(() => {
@@ -1941,9 +2373,7 @@ describe('Settings', () => {
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     fireEvent.click(screen.getByRole('button', { name: 'Install translation engine' }))
-    await waitFor(() =>
-      expect(screen.getByLabelText('Local download profiles')).toBeTruthy()
-    )
+    await waitFor(() => expect(screen.getByLabelText('Local download profiles')).toBeTruthy())
   })
 
   it('renders browser language-pair chips from the support table', async () => {
@@ -2175,6 +2605,94 @@ describe('Settings', () => {
         targetLanguage: 'zh',
         model: 'onnx-community/opus-mt-en-zh',
         selectedGroupId: 'q8',
+        inputs: ['My name is Sarah and I live in London.'],
+      }),
+      expect.any(Object)
+    )
+  })
+
+  it('routes Local-CT2 settings through the ct2 model panel and smoke test runtime', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useGlobalSettingsSubscriptionMock.mockReturnValue({
+      data: {
+        translationCache: { entryLimit: 10000 },
+        translationEngines: {
+          openai: { baseUrl: '', token: '', model: 'gpt-4.1-mini' },
+          local: {
+            model: 'onnx-community/opus-mt-en-zh',
+            selectedGroupId: 'q8',
+            hfEndpoint: '',
+          },
+          localCt2: {
+            model: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+            selectedGroupId: 'float16',
+            hfEndpoint: '',
+          },
+        },
+      },
+      isLoading: false,
+      error: null,
+    })
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+          engineId: 'local-ct2',
+          engines: {
+            local: {},
+            localCt2: {
+              model: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+              selectedGroupId: 'float16',
+            },
+            openai: {},
+          },
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    expect(screen.getByRole('combobox', { name: 'Engine' })).toHaveTextContent('Local-CT2')
+    expect(screen.getByRole('button', { name: 'CT2 model' })).toHaveTextContent(
+      'ooeoeo/opus-mt-en-zh-ct2-float16'
+    )
+    const ct2Groups = await screen.findByLabelText('Local CT2 download groups')
+    expect(ct2Groups).toBeTruthy()
+    expect(localCt2ModelsMock.panelState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelId: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+        selectedGroupId: 'float16',
+      })
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open translation test' }))
+    const dialog = screen.getByRole('dialog', { name: 'Translation Test', hidden: true })
+    expect(
+      within(dialog).getByText('Uses the configured CT2 model artifacts and server runtime.')
+    ).toBeTruthy()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Run Test' }))
+
+    expect(
+      await within(dialog).findByText('server:My name is Sarah and I live in London.')
+    ).toBeTruthy()
+    expect(translationEnginesMock.batchTranslate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        engineId: 'local-ct2',
+        targetLanguage: 'zh',
+        model: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+        selectedGroupId: 'float16',
         inputs: ['My name is Sarah and I live in London.'],
       }),
       expect.any(Object)

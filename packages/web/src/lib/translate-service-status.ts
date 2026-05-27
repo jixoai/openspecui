@@ -1,8 +1,6 @@
 import { selectLocalDownloadGroup } from '@openspecui/core/local-download-profiles'
-import type {
-  LocalModelAssetState,
-  TranslationEngineId,
-} from '@openspecui/core/translator'
+import type { LocalModelAssetState, TranslationEngineId } from '@openspecui/core/translator'
+import { isManagedLocalTranslationEngineId } from '@openspecui/core/translator'
 import type {
   BrowserTranslationStatus,
   BrowserTranslationSupportTableState,
@@ -66,7 +64,8 @@ export function projectTranslateServiceStatus(
           return {
             state: 'checking',
             engineId: 'browser',
-            message: input.browserSupportTable.message ?? 'Checking browser translation capability.',
+            message:
+              input.browserSupportTable.message ?? 'Checking browser translation capability.',
           }
         case 'ready':
           return {
@@ -114,32 +113,32 @@ export function projectTranslateServiceStatus(
     }
   }
 
-  if (input.engineId === 'local') {
+  if (isManagedLocalTranslationEngineId(input.engineId)) {
     const model = input.localModel?.trim()
     if (!model) {
       return {
         state: 'unavailable',
-        engineId: 'local',
-        message: 'Select a local model before translating.',
+        engineId: input.engineId,
+        message: 'Select a model before translating.',
       }
     }
     if (input.localAssetLoading || !input.localAsset) {
       return {
         state: 'checking',
-        engineId: 'local',
+        engineId: input.engineId,
         message: 'Checking local model files.',
       }
     }
     if (isLocalAssetReady(input.localAsset, input.localSelectedGroupId)) {
       return {
         state: 'ready',
-        engineId: 'local',
+        engineId: input.engineId,
         message: 'Selected local model files are ready.',
       }
     }
     return {
       state: 'unavailable',
-      engineId: 'local',
+      engineId: input.engineId,
       message: 'Selected local model files are not installed locally.',
     }
   }
@@ -151,10 +150,7 @@ export function projectTranslateServiceStatus(
   }
 }
 
-export function isLocalAssetReady(
-  asset: LocalModelAssetState,
-  selectedGroupId?: string
-): boolean {
+export function isLocalAssetReady(asset: LocalModelAssetState, selectedGroupId?: string): boolean {
   const selectedGroup = selectLocalDownloadGroup(
     asset.plan ?? null,
     selectedGroupId ?? asset.plan?.selectedGroupId

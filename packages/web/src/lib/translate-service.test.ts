@@ -3,12 +3,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveTranslateServiceState } from './translate-service'
 
 const panelStateQueryMock = vi.hoisted(() => vi.fn())
+const ct2PanelStateQueryMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/trpc', () => ({
   trpcClient: {
     localModels: {
       panelState: {
         query: panelStateQueryMock,
+      },
+    },
+    localCt2Models: {
+      panelState: {
+        query: ct2PanelStateQueryMock,
       },
     },
     translationCache: {
@@ -39,6 +45,7 @@ vi.mock('@/lib/browser-translation', async (importOriginal) => {
 describe('translate service', () => {
   beforeEach(() => {
     panelStateQueryMock.mockReset()
+    ct2PanelStateQueryMock.mockReset()
   })
 
   it('rejects a local directional model when the document target conflicts', async () => {
@@ -54,6 +61,7 @@ describe('translate service', () => {
             model: 'onnx-community/opus-mt-en-zh',
             selectedGroupId: 'int8-4dc37a',
           },
+          localCt2: {},
           openai: {},
         },
       },
@@ -90,6 +98,7 @@ describe('translate service', () => {
             model: 'Xenova/opus-mt-en-zh',
             selectedGroupId: 'q4',
           },
+          localCt2: {},
           openai: {},
         },
       },
@@ -105,6 +114,45 @@ describe('translate service', () => {
     expect(state.status).toEqual({
       state: 'ready',
       engineId: 'local',
+      message: 'Selected local model files are ready.',
+    })
+  })
+
+  it('routes local-ct2 model availability checks through the ct2 panel state endpoint', async () => {
+    ct2PanelStateQueryMock.mockResolvedValueOnce({
+      modelId: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+      selectedGroupId: 'float16',
+      asset: createDownloadedCt2AssetState(),
+      downloadPlan: null,
+    })
+
+    const state = await resolveTranslateServiceState({
+      config: {
+        enabled: true,
+        targetLanguage: 'zh',
+        displayMode: 'direct',
+        cacheEnabled: false,
+        engineId: 'local-ct2',
+        engines: {
+          local: {},
+          localCt2: {
+            model: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+            selectedGroupId: 'float16',
+          },
+          openai: {},
+        },
+      },
+      hasSource: true,
+    })
+
+    expect(panelStateQueryMock).not.toHaveBeenCalled()
+    expect(ct2PanelStateQueryMock).toHaveBeenCalledWith({
+      modelId: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+      selectedGroupId: 'float16',
+    })
+    expect(state.status).toEqual({
+      state: 'ready',
+      engineId: 'local-ct2',
       message: 'Selected local model files are ready.',
     })
   })
@@ -152,6 +200,59 @@ function createDownloadedLocalAssetState(): LocalModelAssetState {
     files: [
       { path: 'config.json', sizeBytes: 10, downloadedBytes: 10 },
       { path: 'onnx/encoder_model_q4.onnx', sizeBytes: 20, downloadedBytes: 20 },
+    ],
+  })
+}
+
+function createDownloadedCt2AssetState(): LocalModelAssetState {
+  return LocalModelAssetStateSchema.parse({
+    modelId: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+    version: 2,
+    status: 'downloaded',
+    selected: true,
+    selectedGroupId: 'float16',
+    progress: 1,
+    bytesDownloaded: 30,
+    totalBytes: 30,
+    resumable: false,
+    groupsState: {},
+    profileLoad: {
+      status: 'ready',
+    },
+    plan: {
+      modelId: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+      estimatedTotalBytes: 30,
+      selectedGroupId: 'float16',
+      files: [
+        { path: 'config.json', sizeBytes: 5, required: true },
+        { path: 'model.bin', sizeBytes: 10, required: true },
+        { path: 'source.spm', sizeBytes: 5, required: true },
+        { path: 'target.spm', sizeBytes: 5, required: true },
+        { path: 'shared_vocabulary.json', sizeBytes: 5, required: true },
+      ],
+      groups: [
+        {
+          id: 'float16',
+          label: 'float16',
+          estimatedTotalBytes: 30,
+          selectable: true,
+          selected: true,
+          files: [
+            { path: 'config.json', sizeBytes: 5, required: true },
+            { path: 'model.bin', sizeBytes: 10, required: true },
+            { path: 'source.spm', sizeBytes: 5, required: true },
+            { path: 'target.spm', sizeBytes: 5, required: true },
+            { path: 'shared_vocabulary.json', sizeBytes: 5, required: true },
+          ],
+        },
+      ],
+    },
+    files: [
+      { path: 'config.json', sizeBytes: 5, downloadedBytes: 5 },
+      { path: 'model.bin', sizeBytes: 10, downloadedBytes: 10 },
+      { path: 'source.spm', sizeBytes: 5, downloadedBytes: 5 },
+      { path: 'target.spm', sizeBytes: 5, downloadedBytes: 5 },
+      { path: 'shared_vocabulary.json', sizeBytes: 5, downloadedBytes: 5 },
     ],
   })
 }

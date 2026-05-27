@@ -41,6 +41,7 @@ import {
   TranslationCacheWriteInputSchema,
   TranslationEngineIdSchema,
   TranslationEngineInstallStatusSchema,
+  TranslationLocalCt2SettingsSchema,
   TranslationLocalSettingsSchema,
   TranslationOpenAISettingsSchema,
   type AIToolOption,
@@ -72,6 +73,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { createCliStreamObservable } from './cli-stream-observable.js'
+import type { Ct2ModelAssetService } from './ct2-model-asset-service.js'
 import type { CustomSoundService } from './custom-sound-service.js'
 import { removeDetachedDashboardGitWorktree } from './dashboard-git-snapshot.js'
 import type { DashboardOverviewService } from './dashboard-overview-service.js'
@@ -123,6 +125,7 @@ export interface Context {
   filePreviewService: FilePreviewService
   translationEngineService: TranslationEngineService
   localModelAssetService: LocalModelAssetService
+  localCt2ModelAssetService: Ct2ModelAssetService
   gitWorktreeHandoff?: GitWorktreeHandoffService
   watcher?: OpenSpecWatcher
   projectDir: string
@@ -223,6 +226,11 @@ export const globalSettingsRouter = router({
           .object({
             openai: TranslationOpenAISettingsSchema.partial().optional(),
             local: TranslationLocalSettingsSchema.partial()
+              .extend({
+                selectedGroupId: z.string().min(1).nullable().optional(),
+              })
+              .optional(),
+            localCt2: TranslationLocalCt2SettingsSchema.partial()
               .extend({
                 selectedGroupId: z.string().min(1).nullable().optional(),
               })
@@ -483,6 +491,189 @@ export const localModelsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const asset = await ctx.localModelAssetService.refreshProfiles(input.modelId)
+      return {
+        modelId: asset.modelId,
+        selectedGroupId: asset.selectedGroupId ?? asset.plan?.selectedGroupId,
+        asset,
+        downloadPlan: asset.plan ?? null,
+      }
+    }),
+
+  refreshArtifacts: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const asset = await ctx.localModelAssetService.refreshProfiles(input.modelId)
+      return {
+        modelId: asset.modelId,
+        selectedGroupId: asset.selectedGroupId ?? asset.plan?.selectedGroupId,
+        asset,
+        downloadPlan: asset.plan ?? null,
+      }
+    }),
+})
+
+export const localCt2ModelsRouter = router({
+  listLocal: publicProcedure.query(({ ctx }) => {
+    return ctx.localCt2ModelAssetService.listLocalCatalog()
+  }),
+
+  searchRemote: publicProcedure
+    .input(
+      z.object({
+        requestId: z.string().min(1).optional(),
+        query: z.string().optional(),
+        sourceLanguage: z.string().optional(),
+        targetLanguage: z.string().optional(),
+        limit: z.number().int().positive().max(20).optional(),
+        cursor: z.string().optional(),
+      })
+    )
+    .query(({ ctx, input }) => {
+      return ctx.localCt2ModelAssetService.searchRemoteCatalog({
+        engineId: 'local-ct2',
+        ...input,
+      })
+    }),
+
+  searchRemoteStream: publicProcedure
+    .input(
+      z.object({
+        requestId: z.string().min(1),
+        query: z.string().optional(),
+        sourceLanguage: z.string().optional(),
+        targetLanguage: z.string().optional(),
+        limit: z.number().int().positive().max(20).optional(),
+        cursor: z.string().optional(),
+      })
+    )
+    .subscription(({ ctx, input }) => {
+      return ctx.localCt2ModelAssetService.subscribeRemoteCatalog({
+        engineId: 'local-ct2',
+        ...input,
+      })
+    }),
+
+  state: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .query(({ ctx, input }) => {
+      return ctx.localCt2ModelAssetService.readSelectedModelState(
+        input.modelId,
+        input.selectedGroupId
+      )
+    }),
+
+  panelState: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const asset = await ctx.localCt2ModelAssetService.readSelectedModelState(
+        input.modelId,
+        input.selectedGroupId
+      )
+      return {
+        modelId: input.modelId,
+        selectedGroupId: input.selectedGroupId ?? asset.plan?.selectedGroupId,
+        asset,
+        downloadPlan: asset.plan ?? null,
+      }
+    }),
+
+  subscribeLogs: publicProcedure.subscription(({ ctx }) => {
+    return ctx.localCt2ModelAssetService.subscribeLogs()
+  }),
+
+  markSelected: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.localCt2ModelAssetService.markSelectedModel(input.modelId)
+      return { success: true }
+    }),
+
+  download: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        groupId: z.string().min(1).optional(),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.localCt2ModelAssetService.startDownload(
+        input.modelId,
+        input.groupId ?? input.selectedGroupId
+      )
+    }),
+
+  pause: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        groupId: z.string().min(1).optional(),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .mutation(({ ctx, input }) => {
+      return ctx.localCt2ModelAssetService.pauseDownload(
+        input.modelId,
+        input.groupId ?? input.selectedGroupId
+      )
+    }),
+
+  resume: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        groupId: z.string().min(1).optional(),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.localCt2ModelAssetService.resumeDownload(
+        input.modelId,
+        input.groupId ?? input.selectedGroupId
+      )
+    }),
+
+  delete: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        groupId: z.string().min(1).optional(),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .mutation(({ ctx, input }) => {
+      return ctx.localCt2ModelAssetService.deleteModel(
+        input.modelId,
+        input.groupId ?? input.selectedGroupId
+      )
+    }),
+
+  refreshArtifacts: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const asset = await ctx.localCt2ModelAssetService.refreshArtifacts(input.modelId)
       return {
         modelId: asset.modelId,
         selectedGroupId: asset.selectedGroupId ?? asset.plan?.selectedGroupId,
@@ -1195,6 +1386,12 @@ export const configRouter = router({
             engines: z
               .object({
                 local: z
+                  .object({
+                    model: z.string().min(1).optional(),
+                    selectedGroupId: z.string().min(1).nullable().optional(),
+                  })
+                  .optional(),
+                localCt2: z
                   .object({
                     model: z.string().min(1).optional(),
                     selectedGroupId: z.string().min(1).nullable().optional(),
@@ -2146,6 +2343,7 @@ export const appRouter = router({
   translationCache: translationCacheRouter,
   translationEngines: translationEnginesRouter,
   localModels: localModelsRouter,
+  localCt2Models: localCt2ModelsRouter,
   notifications: notificationsRouter,
   sounds: soundsRouter,
   cli: cliRouter,

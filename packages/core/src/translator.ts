@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 export const TRANSLATOR_CONTRACT_VERSION = 2
 
-export const TRANSLATION_ENGINE_IDS = ['browser', 'local', 'openai'] as const
+export const TRANSLATION_ENGINE_IDS = ['browser', 'local', 'local-ct2', 'openai'] as const
 
 export const TranslationEngineIdSchema = z.enum(TRANSLATION_ENGINE_IDS)
 
@@ -10,7 +10,13 @@ export type TranslationEngineId = z.infer<typeof TranslationEngineIdSchema>
 
 export const DEFAULT_TRANSLATION_ENGINE_ID: TranslationEngineId = 'browser'
 
-export const SERVICE_TRANSLATION_ENGINE_IDS = ['local', 'openai'] as const
+export function isManagedLocalTranslationEngineId(
+  engineId: TranslationEngineId | null | undefined
+): engineId is Extract<TranslationEngineId, 'local' | 'local-ct2'> {
+  return engineId === 'local' || engineId === 'local-ct2'
+}
+
+export const SERVICE_TRANSLATION_ENGINE_IDS = ['local', 'local-ct2', 'openai'] as const
 
 export const ServiceTranslationEngineIdSchema = z.enum(SERVICE_TRANSLATION_ENGINE_IDS)
 
@@ -268,7 +274,7 @@ export const LocalModelProfileLoadStateSchema = z.object({
 export type LocalModelProfileLoadState = z.infer<typeof LocalModelProfileLoadStateSchema>
 
 export const LocalModelAssetLogSchema = z.object({
-  engineId: z.literal('local'),
+  engineId: z.enum(['local', 'local-ct2']),
   modelId: z.string().min(1),
   selectedGroupId: z.string().min(1).optional(),
   groupId: z.string().min(1).optional(),
@@ -376,11 +382,7 @@ export interface TranslatorFactory {
   create(options: TranslatorFactoryCreateOptions): Promise<Translator>
 }
 
-export type TranslationEngineInstallState =
-  | 'installed'
-  | 'installing'
-  | 'not-installed'
-  | 'error'
+export type TranslationEngineInstallState = 'installed' | 'installing' | 'not-installed' | 'error'
 
 export const TranslationEngineInstallStateSchema = z.enum([
   'installed',
@@ -465,7 +467,9 @@ export interface TranslationEngineInstallContext {
 }
 
 export interface TranslationEngineInstaller {
-  detectInstallState(input: TranslationEngineInstallContext): Promise<TranslationEngineInstallStatus>
+  detectInstallState(
+    input: TranslationEngineInstallContext
+  ): Promise<TranslationEngineInstallStatus>
   install(input: TranslationEngineInstallContext): Promise<TranslationEngineInstallStatus>
 }
 
@@ -502,6 +506,16 @@ export const TRANSLATION_ENGINE_MANIFESTS = [
     runtime: 'server',
     moduleName: '@openspecui/local-translator',
     factoryExport: 'createLocalTranslatorFactory',
+  },
+  {
+    id: 'local-ct2',
+    label: 'Local-CT2',
+    description: 'Runs a bundled local CTranslate2 translation runtime with managed model files.',
+    technicalSummary:
+      'Server-side CTranslate2 local adapter. Package payload is about 5 KB; selected model artifacts are downloaded separately and can range from tens to hundreds of MB.',
+    runtime: 'server',
+    moduleName: '@openspecui/local-ct2-translator',
+    factoryExport: 'createLocalCt2TranslatorFactory',
   },
   {
     id: 'openai',
@@ -542,9 +556,18 @@ export const TranslationLocalSettingsSchema = z.object({
 
 export type TranslationLocalSettings = z.infer<typeof TranslationLocalSettingsSchema>
 
+export const TranslationLocalCt2SettingsSchema = z.object({
+  model: z.string().default('ooeoeo/opus-mt-en-zh-ct2-float16'),
+  selectedGroupId: z.string().optional(),
+  hfEndpoint: z.string().default(''),
+})
+
+export type TranslationLocalCt2Settings = z.infer<typeof TranslationLocalCt2SettingsSchema>
+
 export const TranslationEngineGlobalSettingsSchema = z.object({
   openai: TranslationOpenAISettingsSchema.default(TranslationOpenAISettingsSchema.parse({})),
   local: TranslationLocalSettingsSchema.default(TranslationLocalSettingsSchema.parse({})),
+  localCt2: TranslationLocalCt2SettingsSchema.default(TranslationLocalCt2SettingsSchema.parse({})),
 })
 
 export type TranslationEngineGlobalSettings = z.infer<typeof TranslationEngineGlobalSettingsSchema>
@@ -553,6 +576,9 @@ export type TranslationEngineGlobalSettingsUpdate = {
   openai?: Partial<TranslationOpenAISettings>
   local?: Partial<Omit<TranslationLocalSettings, 'selectedGroupId'>> & {
     selectedGroupId?: TranslationLocalSettings['selectedGroupId'] | null
+  }
+  localCt2?: Partial<Omit<TranslationLocalCt2Settings, 'selectedGroupId'>> & {
+    selectedGroupId?: TranslationLocalCt2Settings['selectedGroupId'] | null
   }
 }
 

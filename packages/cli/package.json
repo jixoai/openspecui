@@ -39,7 +39,8 @@
     "better-sqlite3": "^12.5.0"
   },
   "optionalDependencies": {
-    "@huggingface/transformers": "~4.2.0"
+    "@huggingface/transformers": "~4.2.0",
+    "ctranslate2": "workspace:*"
   },
   "devDependencies": {
     "@hono/node-server": "^1.14.1",

@@ -14,6 +14,7 @@ import { reactiveReadFile, updateReactiveFileCache } from './reactive-fs/index.j
 import {
   TranslationEngineGlobalSettingsSchema,
   type TranslationEngineGlobalSettingsUpdate,
+  type TranslationLocalCt2Settings,
   type TranslationLocalSettings,
   type TranslationOpenAISettings,
 } from './translator.js'
@@ -39,6 +40,7 @@ export type PersistedOpenSpecUIGlobalSettings = {
   translationEngines?: {
     openai?: Partial<TranslationOpenAISettings>
     local?: Partial<TranslationLocalSettings>
+    localCt2?: Partial<TranslationLocalCt2Settings>
   }
 }
 
@@ -50,6 +52,7 @@ const PERSISTED_GLOBAL_SETTINGS_SANITIZE_RULES = [
   { kind: 'object', path: ['translationEngines'], fallback: {} },
   { kind: 'object', path: ['translationEngines', 'openai'], fallback: {} },
   { kind: 'object', path: ['translationEngines', 'local'], fallback: {} },
+  { kind: 'object', path: ['translationEngines', 'localCt2'], fallback: {} },
 ] as const satisfies readonly PersistedSanitizeRule[]
 
 export function getDefaultGlobalSettingsPath(): string {
@@ -143,6 +146,26 @@ export function toPersistedGlobalSettings(
     translationEngines.local = local
   }
 
+  const localCt2: Partial<TranslationLocalCt2Settings> = {}
+  if (settings.translationEngines.localCt2.model !== defaultTranslationEngines.localCt2.model) {
+    localCt2.model = settings.translationEngines.localCt2.model
+  }
+  if (
+    settings.translationEngines.localCt2.selectedGroupId !==
+    defaultTranslationEngines.localCt2.selectedGroupId
+  ) {
+    localCt2.selectedGroupId = settings.translationEngines.localCt2.selectedGroupId
+  }
+  if (
+    settings.translationEngines.localCt2.hfEndpoint !==
+    defaultTranslationEngines.localCt2.hfEndpoint
+  ) {
+    localCt2.hfEndpoint = settings.translationEngines.localCt2.hfEndpoint
+  }
+  if (hasOwnEntries(localCt2)) {
+    translationEngines.localCt2 = localCt2
+  }
+
   if (hasOwnEntries(translationEngines)) {
     persisted.translationEngines = translationEngines
   }
@@ -216,6 +239,10 @@ export class GlobalSettingsManager {
         local: mergeNullablePatch(
           current.translationEngines.local,
           update.translationEngines?.local
+        ),
+        localCt2: mergeNullablePatch(
+          current.translationEngines.localCt2,
+          update.translationEngines?.localCt2
         ),
       },
     })

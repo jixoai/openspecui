@@ -36,6 +36,7 @@ import {
 import {
   TRANSLATION_ENGINE_IDS,
   getTranslationEngineManifest,
+  isManagedLocalTranslationEngineId,
   type LocalModelAssetState,
   type LocalModelCatalogItem,
   type TranslationDownloadGroupPlan,
@@ -77,6 +78,7 @@ const DEFAULT_TRANSLATION_TARGET_LANGUAGE = 'zh'
 const DEFAULT_TRANSLATION_DISPLAY_MODE: DocumentTranslationDisplayMode = 'direct'
 const DEFAULT_TRANSLATION_CACHE_ENABLED = false
 const DEFAULT_LOCAL_MODEL_ID = 'Xenova/opus-mt-no-de'
+const DEFAULT_LOCAL_CT2_MODEL_ID = 'ooeoeo/opus-mt-en-zh-ct2-float16'
 const DEFAULT_TRANSLATION_SMOKE_SOURCE_LANGUAGE = DEFAULT_TRANSLATION_TEST_SOURCE_LANGUAGE
 
 const TRANSLATION_DISPLAY_MODE_OPTIONS = [
@@ -98,6 +100,8 @@ interface LocalPanelStateData {
   asset: LocalModelAssetState
   downloadPlan: TranslationModelDownloadPlan | null
 }
+
+type ManagedLocalTranslationEngineId = Extract<TranslationEngineId, 'local' | 'local-ct2'>
 
 interface TranslationEngineQueryListItem {
   id: TranslationEngineId
@@ -213,7 +217,9 @@ function getPreferredSmokeSourceLanguage(input: {
   model: string
   targetLanguage: string
 }): string {
-  if (input.engineId !== 'local') return DEFAULT_TRANSLATION_SMOKE_SOURCE_LANGUAGE
+  if (!isManagedLocalTranslationEngineId(input.engineId)) {
+    return DEFAULT_TRANSLATION_SMOKE_SOURCE_LANGUAGE
+  }
   const expectedPair = inferLocalDirectionalModelLanguagePair(input.model)
   if (!expectedPair) return DEFAULT_TRANSLATION_SMOKE_SOURCE_LANGUAGE
   const directionCheck = checkLocalDirectionalModelLanguagePair({
@@ -250,7 +256,7 @@ function replaceTranslationEngineInstallStatusInQueryData<
     engineId: TranslationEngineId
     installStatus: TranslationEngineInstallStatus
   }
-) : TCurrent {
+): TCurrent {
   const updateItems = (items: TItem[] | undefined) =>
     items?.map((item) =>
       item.id === input.engineId ? { ...item, installStatus: input.installStatus } : item
@@ -288,6 +294,145 @@ function mergeLocalCatalogItems(
   }
 
   return merged
+}
+
+function getManagedLocalDefaultModel(engineId: ManagedLocalTranslationEngineId): string {
+  return engineId === 'local-ct2' ? DEFAULT_LOCAL_CT2_MODEL_ID : DEFAULT_LOCAL_MODEL_ID
+}
+
+function getManagedLocalEngineSettings(input: {
+  engineId: ManagedLocalTranslationEngineId
+  resolvedTranslationConfig: ReturnType<typeof resolveDocumentTranslationConfig> | undefined
+  globalSettings:
+    | {
+        translationEngines?: {
+          local?: { model?: string; selectedGroupId?: string; hfEndpoint?: string }
+          localCt2?: { model?: string; selectedGroupId?: string; hfEndpoint?: string }
+        }
+      }
+    | undefined
+}): {
+  model: string
+  selectedGroupId: string | undefined
+  hfEndpoint: string
+} {
+  const projectSettings =
+    input.engineId === 'local-ct2'
+      ? input.resolvedTranslationConfig?.engines?.localCt2
+      : input.resolvedTranslationConfig?.engines?.local
+  const globalEngineSettings =
+    input.engineId === 'local-ct2'
+      ? input.globalSettings?.translationEngines?.localCt2
+      : input.globalSettings?.translationEngines?.local
+  return {
+    model:
+      projectSettings?.model ??
+      globalEngineSettings?.model ??
+      getManagedLocalDefaultModel(input.engineId),
+    selectedGroupId: projectSettings?.selectedGroupId ?? globalEngineSettings?.selectedGroupId,
+    hfEndpoint: globalEngineSettings?.hfEndpoint ?? '',
+  }
+}
+
+function createManagedLocalProjectSettingsPatch(
+  engineId: ManagedLocalTranslationEngineId,
+  patch: { model?: string; selectedGroupId?: string | null }
+): NonNullable<DocumentTranslationConfigUpdate['engines']> {
+  return engineId === 'local-ct2' ? { localCt2: patch } : { local: patch }
+}
+
+function createManagedLocalGlobalSettingsPatch(
+  engineId: ManagedLocalTranslationEngineId,
+  patch: { model?: string; selectedGroupId?: string | null; hfEndpoint?: string }
+): {
+  local?: { model?: string; selectedGroupId?: string | null; hfEndpoint?: string }
+  localCt2?: { model?: string; selectedGroupId?: string | null; hfEndpoint?: string }
+} {
+  return engineId === 'local-ct2' ? { localCt2: patch } : { local: patch }
+}
+
+function getManagedLocalPanelStateQueryKey(input: {
+  engineId: ManagedLocalTranslationEngineId
+  modelId: string
+  selectedGroupId?: string
+}) {
+  return [
+    'translation',
+    'managed-local',
+    input.engineId,
+    'panel-state',
+    input.modelId,
+    input.selectedGroupId ?? '',
+  ] as const
+}
+
+function listManagedLocalCatalog(engineId: ManagedLocalTranslationEngineId) {
+  return engineId === 'local'
+    ? trpcClient.localModels.listLocal.query()
+    : trpcClient.localCt2Models.listLocal.query()
+}
+
+function subscribeManagedLocalRemoteCatalog(
+  engineId: ManagedLocalTranslationEngineId,
+  input: {
+    requestId: string
+    query?: string
+    targetLanguage?: string
+    limit?: number
+  },
+  handlers: {
+    onData: (event: {
+      requestId: string
+      phase: 'candidates' | 'enriched' | 'complete' | 'error'
+      items?: LocalModelCatalogItem[]
+    }) => void
+    onError?: (error: unknown) => void
+  }
+) {
+  return engineId === 'local'
+    ? trpcClient.localModels.searchRemoteStream.subscribe(input, handlers)
+    : trpcClient.localCt2Models.searchRemoteStream.subscribe(input, handlers)
+}
+
+function subscribeManagedLocalLogs(
+  engineId: ManagedLocalTranslationEngineId,
+  handlers: {
+    onData: (log: { modelId: string; selectedGroupId?: string }) => void
+    onError?: (error: unknown) => void
+  }
+) {
+  return engineId === 'local'
+    ? trpcClient.localModels.subscribeLogs.subscribe(undefined, handlers)
+    : trpcClient.localCt2Models.subscribeLogs.subscribe(undefined, handlers)
+}
+
+function queryManagedLocalPanelState(input: {
+  engineId: ManagedLocalTranslationEngineId
+  modelId: string
+  selectedGroupId?: string
+}): Promise<LocalPanelStateData> {
+  const request = { modelId: input.modelId, selectedGroupId: input.selectedGroupId }
+  return input.engineId === 'local'
+    ? trpcClient.localModels.panelState.query(request)
+    : trpcClient.localCt2Models.panelState.query(request)
+}
+
+function markManagedLocalModelSelected(
+  engineId: ManagedLocalTranslationEngineId,
+  modelId: string
+): Promise<{ success: boolean }> {
+  return engineId === 'local'
+    ? trpcClient.localModels.markSelected.mutate({ modelId })
+    : trpcClient.localCt2Models.markSelected.mutate({ modelId })
+}
+
+function refreshManagedLocalArtifacts(
+  engineId: ManagedLocalTranslationEngineId,
+  input: { modelId?: string }
+): Promise<LocalPanelStateData> {
+  return engineId === 'local'
+    ? trpcClient.localModels.refreshArtifacts.mutate(input)
+    : trpcClient.localCt2Models.refreshArtifacts.mutate(input)
 }
 
 export function SettingsTranslationPanel({ index }: { index: number }) {
@@ -343,9 +488,8 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const [smokeResult, setSmokeResult] = useState('')
   const [smokeError, setSmokeError] = useState<string | null>(null)
   const [smokeRunning, setSmokeRunning] = useState(false)
-  const [engineInstallStatus, setEngineInstallStatus] = useState<TranslationEngineInstallStatus | null>(
-    null
-  )
+  const [engineInstallStatus, setEngineInstallStatus] =
+    useState<TranslationEngineInstallStatus | null>(null)
   const [engineInstallLogs, setEngineInstallLogs] = useState('')
   const queryClient = useQueryClient()
   const queryClientRef = useRef(queryClient)
@@ -359,6 +503,13 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     () => resolveDocumentTranslationConfig(config?.translation, globalSettings),
     [config?.translation, globalSettings]
   )
+  const activeTranslationEngineCandidate =
+    translationEngineId ?? config?.translation?.engineId ?? null
+  const activeManagedLocalEngineId = isManagedLocalTranslationEngineId(
+    activeTranslationEngineCandidate
+  )
+    ? activeTranslationEngineCandidate
+    : null
 
   useEffect(() => {
     queryClientRef.current = queryClient
@@ -390,22 +541,23 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     setAiBaseUrl(globalSettings?.translationEngines?.openai?.baseUrl ?? '')
     setAiToken(globalSettings?.translationEngines?.openai?.token ?? '')
     setAiModel(globalSettings?.translationEngines?.openai?.model ?? 'gpt-4.1-mini')
-    const resolvedLocalEngine = resolvedTranslationConfig?.engines?.local
-    const nextNmtModel =
-      resolvedLocalEngine?.model ??
-      globalSettings?.translationEngines?.local?.model ??
-      DEFAULT_LOCAL_MODEL_ID
-    setNmtModel(nextNmtModel)
-    setNmtModelQuery(nextNmtModel)
-    setNmtDebouncedQuery(nextNmtModel)
-    setNmtHfEndpoint(globalSettings?.translationEngines?.local?.hfEndpoint ?? '')
-    setNmtSelectedGroupId(
-      resolvedLocalEngine?.selectedGroupId ??
-        globalSettings?.translationEngines?.local?.selectedGroupId
-    )
+    if (!activeManagedLocalEngineId) return
+    const managedLocalEngine = getManagedLocalEngineSettings({
+      engineId: activeManagedLocalEngineId,
+      resolvedTranslationConfig,
+      globalSettings,
+    })
+    setNmtModel(managedLocalEngine.model)
+    setNmtModelQuery(managedLocalEngine.model)
+    setNmtDebouncedQuery(managedLocalEngine.model)
+    setNmtHfEndpoint(managedLocalEngine.hfEndpoint)
+    setNmtSelectedGroupId(managedLocalEngine.selectedGroupId)
   }, [
+    activeManagedLocalEngineId,
     config?.translation?.engines?.local?.model,
     config?.translation?.engines?.local?.selectedGroupId,
+    config?.translation?.engines?.localCt2?.model,
+    config?.translation?.engines?.localCt2?.selectedGroupId,
     globalSettings?.translationCache?.entryLimit,
     globalSettings?.translationEngines?.openai?.baseUrl,
     globalSettings?.translationEngines?.openai?.model,
@@ -413,8 +565,13 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     globalSettings?.translationEngines?.local?.hfEndpoint,
     globalSettings?.translationEngines?.local?.model,
     globalSettings?.translationEngines?.local?.selectedGroupId,
+    globalSettings?.translationEngines?.localCt2?.hfEndpoint,
+    globalSettings?.translationEngines?.localCt2?.model,
+    globalSettings?.translationEngines?.localCt2?.selectedGroupId,
     resolvedTranslationConfig?.engines?.local?.model,
     resolvedTranslationConfig?.engines?.local?.selectedGroupId,
+    resolvedTranslationConfig?.engines?.localCt2?.model,
+    resolvedTranslationConfig?.engines?.localCt2?.selectedGroupId,
   ])
 
   useEffect(() => {
@@ -426,18 +583,17 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   }, [nmtSelectedGroupId])
 
   useEffect(() => {
-    if (translationEngineId !== 'local') return
+    if (!activeManagedLocalEngineId) return
     const timer = window.setTimeout(() => {
       setNmtDebouncedQuery(nmtModelQuery.trim())
     }, 300)
     return () => window.clearTimeout(timer)
-  }, [nmtModelQuery, translationEngineId])
+  }, [activeManagedLocalEngineId, nmtModelQuery])
 
   useEffect(() => {
-    if (translationEngineId !== 'local') return
+    if (!activeManagedLocalEngineId) return
     let cancelled = false
-    void trpcClient.localModels.listLocal
-      .query()
+    void listManagedLocalCatalog(activeManagedLocalEngineId)
       .then((local) => {
         if (cancelled) return
         setNmtLocalOptions(local.items)
@@ -449,17 +605,18 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     return () => {
       cancelled = true
     }
-  }, [translationEngineId])
+  }, [activeManagedLocalEngineId])
 
   useEffect(() => {
-    if (translationEngineId !== 'local') return
+    if (!activeManagedLocalEngineId) return
     const requestId = `local-search-${Date.now()}-${Math.random().toString(36).slice(2)}`
     if (!nmtSearchOpen || !nmtSearchTouched) {
       setNmtRemoteLoading(false)
       return
     }
     setNmtRemoteLoading(true)
-    const subscription = trpcClient.localModels.searchRemoteStream.subscribe(
+    const subscription = subscribeManagedLocalRemoteCatalog(
+      activeManagedLocalEngineId,
       {
         requestId,
         targetLanguage: translationTargetLanguage,
@@ -484,17 +641,17 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
       subscription.unsubscribe()
     }
   }, [
+    activeManagedLocalEngineId,
     nmtDebouncedQuery,
     nmtHfEndpoint,
     nmtSearchOpen,
     nmtSearchTouched,
-    translationEngineId,
     translationTargetLanguage,
   ])
 
   useEffect(() => {
-    if (inStaticMode) return
-    const nmtSubscription = trpcClient.localModels.subscribeLogs.subscribe(undefined, {
+    if (inStaticMode || !activeManagedLocalEngineId) return
+    const nmtSubscription = subscribeManagedLocalLogs(activeManagedLocalEngineId, {
       onData: (log) => {
         const activeSelectedGroupId = nmtSelectedGroupIdRef.current
         const activeModelId = nmtModelRef.current.trim()
@@ -508,12 +665,16 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
         ])
         if (selectedGroupIds.size === 0) selectedGroupIds.add(undefined)
         for (const selectedGroupId of selectedGroupIds) {
-          const panelStateQueryKey = trpc.localModels.panelState.queryOptions({
+          const panelStateQueryKey = getManagedLocalPanelStateQueryKey({
+            engineId: activeManagedLocalEngineId,
             modelId: log.modelId,
             selectedGroupId,
-          }).queryKey
-          void trpcClient.localModels.panelState
-            .query({ modelId: log.modelId, selectedGroupId })
+          })
+          void queryManagedLocalPanelState({
+            engineId: activeManagedLocalEngineId,
+            modelId: log.modelId,
+            selectedGroupId,
+          })
             .then((panelState) => {
               queryClientRef.current.setQueryData<LocalPanelStateData | undefined>(
                 panelStateQueryKey,
@@ -524,8 +685,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
             .catch(() => undefined)
         }
 
-        void trpcClient.localModels.listLocal
-          .query()
+        void listManagedLocalCatalog(activeManagedLocalEngineId)
           .then((local) => setNmtLocalOptions(local.items))
           .catch(() => undefined)
       },
@@ -534,15 +694,15 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     return () => {
       nmtSubscription.unsubscribe()
     }
-  }, [inStaticMode])
+  }, [activeManagedLocalEngineId, inStaticMode])
 
   useEffect(() => {
-    if (translationEngineId !== 'local') {
+    if (!activeManagedLocalEngineId) {
       setNmtLocalOptions([])
       setNmtRemoteOptions([])
       setNmtRemoteLoading(false)
     }
-  }, [translationEngineId])
+  }, [activeManagedLocalEngineId])
 
   const saveTranslationConfigMutation = useMutation({
     mutationFn: (translation: DocumentTranslationConfigUpdate) =>
@@ -559,29 +719,59 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     },
   })
   const downloadLocalModelMutation = useMutation({
-    mutationFn: (input: { modelId: string; groupId?: string }) =>
-      trpcClient.localModels.download.mutate(input),
+    mutationFn: (input: { modelId: string; groupId?: string }) => {
+      if (!activeManagedLocalEngineId) {
+        throw new Error('A managed local translation engine is required.')
+      }
+      return activeManagedLocalEngineId === 'local'
+        ? trpcClient.localModels.download.mutate(input)
+        : trpcClient.localCt2Models.download.mutate(input)
+    },
   })
   const pauseLocalModelMutation = useMutation({
-    mutationFn: (input: { modelId: string; groupId?: string }) =>
-      trpcClient.localModels.pause.mutate(input),
+    mutationFn: (input: { modelId: string; groupId?: string }) => {
+      if (!activeManagedLocalEngineId) {
+        throw new Error('A managed local translation engine is required.')
+      }
+      return activeManagedLocalEngineId === 'local'
+        ? trpcClient.localModels.pause.mutate(input)
+        : trpcClient.localCt2Models.pause.mutate(input)
+    },
   })
   const resumeLocalModelMutation = useMutation({
-    mutationFn: (input: { modelId: string; groupId?: string }) =>
-      trpcClient.localModels.resume.mutate(input),
+    mutationFn: (input: { modelId: string; groupId?: string }) => {
+      if (!activeManagedLocalEngineId) {
+        throw new Error('A managed local translation engine is required.')
+      }
+      return activeManagedLocalEngineId === 'local'
+        ? trpcClient.localModels.resume.mutate(input)
+        : trpcClient.localCt2Models.resume.mutate(input)
+    },
   })
   const deleteLocalModelMutation = useMutation({
-    mutationFn: (input: { modelId: string; groupId?: string }) =>
-      trpcClient.localModels.delete.mutate(input),
+    mutationFn: (input: { modelId: string; groupId?: string }) => {
+      if (!activeManagedLocalEngineId) {
+        throw new Error('A managed local translation engine is required.')
+      }
+      return activeManagedLocalEngineId === 'local'
+        ? trpcClient.localModels.delete.mutate(input)
+        : trpcClient.localCt2Models.delete.mutate(input)
+    },
   })
   const refreshLocalProfilesMutation = useMutation({
-    mutationFn: (input: { modelId?: string }) =>
-      trpcClient.localModels.refreshProfiles.mutate(input),
+    mutationFn: (input: { modelId?: string }) => {
+      if (!activeManagedLocalEngineId) {
+        throw new Error('A managed local translation engine is required.')
+      }
+      return refreshManagedLocalArtifacts(activeManagedLocalEngineId, input)
+    },
     onSuccess: (panelState) => {
-      const queryKey = trpc.localModels.panelState.queryOptions({
+      if (!activeManagedLocalEngineId) return
+      const queryKey = getManagedLocalPanelStateQueryKey({
+        engineId: activeManagedLocalEngineId,
         modelId: panelState.modelId,
         selectedGroupId: panelState.selectedGroupId,
-      }).queryKey
+      })
       queryClient.setQueryData(queryKey, panelState)
       lastLocalPanelStateRef.current = panelState
     },
@@ -649,6 +839,11 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const engineConfigReady = inStaticMode || config !== undefined
   const effectiveTranslationEngineId = engineConfigReady
     ? (translationEngineId ?? config?.translation?.engineId ?? 'browser')
+    : null
+  const effectiveManagedLocalEngineId = isManagedLocalTranslationEngineId(
+    effectiveTranslationEngineId
+  )
+    ? effectiveTranslationEngineId
     : null
   const persistedTranslationEngineId = config ? (config.translation?.engineId ?? 'browser') : null
   const preferredSmokeSourceLanguage = useMemo(
@@ -773,17 +968,46 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
       ? 100
       : Math.round((selectedBrowserRow?.progress ?? 0) * 100)
   const browserCheckLoading = browserSupportTable?.state === 'checking'
+  const resolvedManagedLocalSettings = effectiveManagedLocalEngineId
+    ? getManagedLocalEngineSettings({
+        engineId: effectiveManagedLocalEngineId,
+        resolvedTranslationConfig,
+        globalSettings,
+      })
+    : null
+  const managedLocalModelLabel =
+    effectiveManagedLocalEngineId === 'local-ct2' ? 'CT2 model' : 'Local model'
+  const managedLocalDownloadGroupsLabel =
+    effectiveManagedLocalEngineId === 'local-ct2'
+      ? 'Local CT2 download groups'
+      : 'Local download profiles'
+  const managedLocalRefreshTooltip =
+    effectiveManagedLocalEngineId === 'local-ct2'
+      ? 'Refresh local model artifacts'
+      : 'Refresh local model profiles'
   const nmtModelId = nmtModel.trim()
-  const persistedLocalSelectedGroupId =
-    resolvedTranslationConfig?.engines?.local?.selectedGroupId ??
-    globalSettings?.translationEngines?.local?.selectedGroupId
+  const persistedLocalSelectedGroupId = resolvedManagedLocalSettings?.selectedGroupId
   const preferredLocalSelectedGroupId = nmtSelectedGroupId ?? persistedLocalSelectedGroupId
   const localPanelStateQuery = useQuery({
-    ...trpc.localModels.panelState.queryOptions({
-      modelId: nmtModelId,
-      selectedGroupId: preferredLocalSelectedGroupId,
-    }),
-    enabled: translationEngineId === 'local' && nmtModelId.length > 0,
+    queryKey:
+      effectiveManagedLocalEngineId && nmtModelId.length > 0
+        ? getManagedLocalPanelStateQueryKey({
+            engineId: effectiveManagedLocalEngineId,
+            modelId: nmtModelId,
+            selectedGroupId: preferredLocalSelectedGroupId,
+          })
+        : ['translation', 'managed-local', 'idle'],
+    queryFn: () => {
+      if (!effectiveManagedLocalEngineId) {
+        throw new Error('A managed local translation engine is required.')
+      }
+      return queryManagedLocalPanelState({
+        engineId: effectiveManagedLocalEngineId,
+        modelId: nmtModelId,
+        selectedGroupId: preferredLocalSelectedGroupId,
+      })
+    },
+    enabled: effectiveManagedLocalEngineId !== null && nmtModelId.length > 0,
   })
   const queriedLocalPanelState =
     localPanelStateQuery.data?.modelId === nmtModelId ? localPanelStateQuery.data : null
@@ -792,10 +1016,10 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
       lastLocalPanelStateRef.current = queriedLocalPanelState
       return
     }
-    if (translationEngineId !== 'local' || nmtModelId.length === 0) {
+    if (!effectiveManagedLocalEngineId || nmtModelId.length === 0) {
       lastLocalPanelStateRef.current = null
     }
-  }, [nmtModelId, queriedLocalPanelState, translationEngineId])
+  }, [effectiveManagedLocalEngineId, nmtModelId, queriedLocalPanelState])
   const cachedLocalPanelState =
     lastLocalPanelStateRef.current?.modelId === nmtModelId ? lastLocalPanelStateRef.current : null
   const localPanelState = queriedLocalPanelState ?? cachedLocalPanelState
@@ -915,14 +1139,19 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     setSmokeError(null)
     setSmokeResult('')
     try {
+      const smokeModel = isManagedLocalTranslationEngineId(effectiveTranslationEngineId)
+        ? nmtModel.trim() || undefined
+        : effectiveTranslationEngineId === 'openai'
+          ? aiModel.trim() || undefined
+          : undefined
       const result = await runSingleTranslation({
         engineId: effectiveTranslationEngineId,
         sourceLanguage,
         targetLanguage,
-        model:
-          effectiveTranslationEngineId === 'local' ? nmtModel.trim() : aiModel.trim() || undefined,
-        selectedGroupId:
-          effectiveTranslationEngineId === 'local' ? effectiveLocalSelectedGroupId : undefined,
+        model: smokeModel,
+        selectedGroupId: isManagedLocalTranslationEngineId(effectiveTranslationEngineId)
+          ? effectiveLocalSelectedGroupId
+          : undefined,
         text: sourceText,
       })
       setSmokeResult(result)
@@ -972,7 +1201,10 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   useEffect(() => {
     if (!effectiveTranslationEngineId || effectiveTranslationEngineId === 'browser') return
     setEngineInstallStatus((current) => {
-      if (current?.state === 'installing' && selectedEngineInstallStatus?.state === 'not-installed') {
+      if (
+        current?.state === 'installing' &&
+        selectedEngineInstallStatus?.state === 'not-installed'
+      ) {
         return current
       }
       return selectedEngineInstallStatus
@@ -1171,7 +1403,8 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                           installTranslationEngineMutation.mutate(effectiveTranslationEngineId)
                         }}
                         disabled={
-                          !effectiveTranslationEngineId || installTranslationEngineMutation.isPending
+                          !effectiveTranslationEngineId ||
+                          installTranslationEngineMutation.isPending
                         }
                       >
                         {installTranslationEngineMutation.isPending ? (
@@ -1185,7 +1418,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                       {resolvedInstallStatus?.state === 'installing' && engineInstallLogs ? (
                         <pre
                           ref={engineInstallLogRef}
-                          className="bg-muted/40 border-border scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[color-mix(in_srgb,currentColor,transparent_78%)] max-h-40 overflow-y-auto rounded-md border px-3 py-2 font-mono text-[11px] leading-5 whitespace-pre-wrap"
+                          className="bg-muted/40 border-border scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[color-mix(in_srgb,currentColor,transparent_78%)] max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md border px-3 py-2 font-mono text-[11px] leading-5"
                         >
                           <code>{engineInstallLogs}</code>
                         </pre>
@@ -1388,17 +1621,19 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
             </div>
           </div>
         ) : null}
-        {shouldShowInstallFlow ? null : effectiveTranslationEngineId === 'local' ? (
+        {shouldShowInstallFlow ? null : effectiveManagedLocalEngineId ? (
           <div className="border-border/60 border-t pt-3">
             <div className="space-y-3 text-xs">
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <label className="block text-sm font-medium">Local Model</label>
+                  <label className="block text-sm font-medium">
+                    {effectiveManagedLocalEngineId === 'local-ct2' ? 'CT2 Model' : 'Local Model'}
+                  </label>
                   <div className="flex items-center gap-1">
-                    <Tooltip content="Refresh local model profiles" delay={0}>
+                    <Tooltip content={managedLocalRefreshTooltip} delay={0}>
                       <button
                         type="button"
-                        aria-label="Refresh local model profiles"
+                        aria-label={managedLocalRefreshTooltip}
                         onClick={() => {
                           if (!nmtModelId) return
                           refreshLocalProfilesMutation.mutate({ modelId: nmtModelId })
@@ -1419,7 +1654,10 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                       onValueChange={setNmtHfEndpoint}
                       onCommit={(endpoint) => {
                         saveGlobalSettingsMutation.mutate({
-                          translationEngines: { local: { hfEndpoint: endpoint } },
+                          translationEngines: createManagedLocalGlobalSettingsPatch(
+                            effectiveManagedLocalEngineId,
+                            { hfEndpoint: endpoint }
+                          ),
                         })
                         setNmtRemoteOptions([])
                       }}
@@ -1440,31 +1678,45 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                       setNmtModelQuery(nextModel)
                     }}
                     onCommit={async (model) => {
-                      await trpcClient.localModels.markSelected.mutate({ modelId: model })
+                      await markManagedLocalModelSelected(effectiveManagedLocalEngineId, model)
                       saveGlobalSettingsMutation.mutate({
-                        translationEngines: { local: { model, selectedGroupId: null } },
+                        translationEngines: createManagedLocalGlobalSettingsPatch(
+                          effectiveManagedLocalEngineId,
+                          { model, selectedGroupId: null }
+                        ),
                       })
                       saveTranslationConfigMutation.mutate({
-                        engines: { local: { model, selectedGroupId: null } },
+                        engines: createManagedLocalProjectSettingsPatch(
+                          effectiveManagedLocalEngineId,
+                          { model, selectedGroupId: null }
+                        ),
                       })
                       setNmtSelectedGroupId(undefined)
                     }}
+                    ariaLabel={managedLocalModelLabel}
                   />
                   <div className="text-muted-foreground inline-flex min-w-0 items-center text-[11px] leading-5 [overflow-wrap:anywhere]">
                     HF: {nmtResolvedHfEndpoint}
                   </div>
                 </div>
                 <LocalDownloadGroupSelector
+                  ariaLabel={managedLocalDownloadGroupsLabel}
                   groups={nmtDownloadGroups}
                   loading={localPlanLoading}
                   disabled={nmtGroupSelectionDisabled}
                   onSelectGroup={(groupId) => {
                     setNmtSelectedGroupId(groupId)
                     saveGlobalSettingsMutation.mutate({
-                      translationEngines: { local: { selectedGroupId: groupId } },
+                      translationEngines: createManagedLocalGlobalSettingsPatch(
+                        effectiveManagedLocalEngineId,
+                        { selectedGroupId: groupId }
+                      ),
                     })
                     saveTranslationConfigMutation.mutate({
-                      engines: { local: { selectedGroupId: groupId } },
+                      engines: createManagedLocalProjectSettingsPatch(
+                        effectiveManagedLocalEngineId,
+                        { selectedGroupId: groupId }
+                      ),
                     })
                   }}
                 />
@@ -1626,6 +1878,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
 }
 
 function LocalModelCombobox({
+  ariaLabel,
   value,
   query,
   options,
@@ -1636,6 +1889,7 @@ function LocalModelCombobox({
   onChange,
   onCommit,
 }: {
+  ariaLabel?: string
   value: string
   query: string
   options: LocalModelCatalogItem[]
@@ -1716,7 +1970,7 @@ function LocalModelCombobox({
       <button
         ref={triggerRef}
         type="button"
-        aria-label="Local model"
+        aria-label={ariaLabel ?? 'Local model'}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={popoverId}
@@ -1947,9 +2201,11 @@ function TranslationTestDialog({
           <p className="text-muted-foreground text-xs">
             {engineId === 'local'
               ? 'Uses the configured local model and server runtime.'
-              : engineId === 'openai'
-                ? 'Uses the configured OpenAI-compatible provider and model.'
-                : 'Uses the current browser Translator API capability.'}
+              : engineId === 'local-ct2'
+                ? 'Uses the configured CT2 model artifacts and server runtime.'
+                : engineId === 'openai'
+                  ? 'Uses the configured OpenAI-compatible provider and model.'
+                  : 'Uses the current browser Translator API capability.'}
           </p>
         </div>
 
@@ -2143,11 +2399,13 @@ function LocalModelGroupChips({ groups }: { groups: TranslationDownloadGroupPlan
 }
 
 function LocalDownloadGroupSelector({
+  ariaLabel,
   groups,
   loading,
   disabled,
   onSelectGroup,
 }: {
+  ariaLabel?: string
   groups: TranslationDownloadGroupPlan[]
   loading: boolean
   disabled: boolean
@@ -2159,7 +2417,7 @@ function LocalDownloadGroupSelector({
     <>
       <div
         className="flex flex-wrap gap-1.5 pt-1"
-        aria-label="Local download profiles"
+        aria-label={ariaLabel ?? 'Local download profiles'}
         aria-busy={loading}
       >
         {groups.map((group) => {
@@ -2295,7 +2553,7 @@ function LocalDownloadFilesCard({
     <div className="space-y-3">
       {!loading && plan && !knownSize ? (
         <div className="text-amber-600">
-          This model is not downloadable here until a concrete ONNX size is known.
+          This model is not downloadable here until concrete artifact sizes are known.
         </div>
       ) : null}
       <div

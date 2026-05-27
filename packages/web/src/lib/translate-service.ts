@@ -12,7 +12,10 @@ import type { DocumentTranslationConfig } from '@openspecui/core/document-transl
 import { checkLocalDirectionalModelLanguagePair } from '@openspecui/core/translation-language-pair'
 import {
   TRANSLATOR_CONTRACT_VERSION,
+  isManagedLocalTranslationEngineId,
+  type LocalModelAssetState,
   type TranslationEngineId,
+  type TranslationModelDownloadPlan,
   type Translator,
   type TranslatorFactory,
   type TranslatorFactoryCreateOptions,
@@ -46,16 +49,17 @@ export async function resolveTranslateServiceState(input: {
     })
   }
 
-  if (config.engineId === 'local') {
-    const model = config.engines.local.model?.trim()
+  if (isManagedLocalTranslationEngineId(config.engineId)) {
+    const localEngineConfig = getManagedLocalEngineConfig(config)
+    const model = localEngineConfig.model?.trim()
     if (!model) {
       return emitTranslateServiceState(input.onUpdate, {
         status: projectTranslateServiceStatus({
           enabled: config.enabled,
           hasSource: input.hasSource,
-          engineId: 'local',
+          engineId: config.engineId,
           localModel: model,
-          localSelectedGroupId: config.engines.local.selectedGroupId,
+          localSelectedGroupId: localEngineConfig.selectedGroupId,
         }),
       })
     }
@@ -67,7 +71,7 @@ export async function resolveTranslateServiceState(input: {
       return emitTranslateServiceState(input.onUpdate, {
         status: {
           state: 'unavailable',
-          engineId: 'local',
+          engineId: config.engineId,
           message:
             directionCheck.message ??
             'Selected local model does not support the configured target language.',
@@ -80,25 +84,25 @@ export async function resolveTranslateServiceState(input: {
         status: projectTranslateServiceStatus({
           enabled: config.enabled,
           hasSource: input.hasSource,
-          engineId: 'local',
+          engineId: config.engineId,
           localModel: model,
-          localSelectedGroupId: config.engines.local.selectedGroupId,
+          localSelectedGroupId: localEngineConfig.selectedGroupId,
           localAssetLoading: true,
         }),
       })
     )
 
     try {
-      const panelState = await trpcClient.localModels.panelState.query({
+      const panelState = await queryManagedLocalPanelState(config.engineId, {
         modelId: model,
-        selectedGroupId: config.engines.local.selectedGroupId,
+        selectedGroupId: localEngineConfig.selectedGroupId,
       })
-      const selectedGroupId = panelState.selectedGroupId ?? config.engines.local.selectedGroupId
+      const selectedGroupId = panelState.selectedGroupId ?? localEngineConfig.selectedGroupId
       return createTranslateServiceState({
         status: projectTranslateServiceStatus({
           enabled: config.enabled,
           hasSource: input.hasSource,
-          engineId: 'local',
+          engineId: config.engineId,
           localModel: model,
           localSelectedGroupId: selectedGroupId,
           localAsset: panelState.asset,
@@ -108,7 +112,7 @@ export async function resolveTranslateServiceState(input: {
       return createTranslateServiceState({
         status: {
           state: 'unavailable',
-          engineId: 'local',
+          engineId: config.engineId,
           message:
             assetError instanceof Error ? assetError.message : 'Unable to check local model files.',
         },
@@ -262,19 +266,24 @@ export function createTranslationEngineExecution(
   }
 
   const model =
-    config.engineId === 'openai' ? config.engines.openai.model : config.engines.local.model
+    config.engineId === 'openai'
+      ? config.engines.openai.model
+      : getManagedLocalEngineConfig(config).model
 
   return {
     factory: new TrpcTranslatorFactory(
       config.engineId,
       model,
-      config.engineId === 'local' ? config.engines.local.selectedGroupId : undefined
+      isManagedLocalTranslationEngineId(config.engineId)
+        ? getManagedLocalEngineConfig(config).selectedGroupId
+        : undefined
     ),
     cacheIdentity: {
       engineId: config.engineId,
       model,
-      selectedGroupId:
-        config.engineId === 'local' ? config.engines.local.selectedGroupId : undefined,
+      selectedGroupId: isManagedLocalTranslationEngineId(config.engineId)
+        ? getManagedLocalEngineConfig(config).selectedGroupId
+        : undefined,
       translatorContractVersion: TRANSLATOR_CONTRACT_VERSION,
     },
   }
@@ -299,7 +308,7 @@ export async function runSingleTranslation(input: {
       translator.destroy?.()
     }
   }
-  if (input.engineId === 'local') {
+  if (isManagedLocalTranslationEngineId(input.engineId)) {
     const directionCheck = checkLocalDirectionalModelLanguagePair({
       model: input.model,
       sourceLanguage: input.sourceLanguage,
@@ -318,7 +327,9 @@ export async function runSingleTranslation(input: {
     sourceLanguage: input.sourceLanguage,
     targetLanguage: input.targetLanguage,
     model: input.model,
-    selectedGroupId: input.engineId === 'local' ? input.selectedGroupId : undefined,
+    selectedGroupId: isManagedLocalTranslationEngineId(input.engineId)
+      ? input.selectedGroupId
+      : undefined,
   })
   return readSingleBatchOutput(translator.batchTranslate([input.text]))
 }
@@ -336,9 +347,40 @@ export class TrpcTranslatorFactory implements TranslatorFactory {
       sourceLanguage: options.sourceLanguage,
       targetLanguage: options.targetLanguage,
       model: options.model ?? this.model,
-      selectedGroupId: this.engineId === 'local' ? this.selectedGroupId : undefined,
+      selectedGroupId: isManagedLocalTranslationEngineId(this.engineId)
+        ? this.selectedGroupId
+        : undefined,
     })
   }
+}
+
+function getManagedLocalEngineConfig(config: DocumentTranslationConfig): {
+  model: string | undefined
+  selectedGroupId: string | undefined
+} {
+  return config.engineId === 'local-ct2'
+    ? {
+        model: config.engines.localCt2.model,
+        selectedGroupId: config.engines.localCt2.selectedGroupId,
+      }
+    : {
+        model: config.engines.local.model,
+        selectedGroupId: config.engines.local.selectedGroupId,
+      }
+}
+
+async function queryManagedLocalPanelState(
+  engineId: Extract<TranslationEngineId, 'local' | 'local-ct2'>,
+  input: { modelId: string; selectedGroupId?: string }
+): Promise<{
+  modelId: string
+  selectedGroupId?: string
+  asset: LocalModelAssetState
+  downloadPlan: TranslationModelDownloadPlan | null
+}> {
+  return engineId === 'local'
+    ? trpcClient.localModels.panelState.query(input)
+    : trpcClient.localCt2Models.panelState.query(input)
 }
 
 export class TrpcTranslator implements Translator {

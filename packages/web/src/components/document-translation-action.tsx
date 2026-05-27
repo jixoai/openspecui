@@ -83,6 +83,8 @@ export function useDocumentTranslationRenderPlugin({
           resolvedTranslationConfig?.engineId,
           resolvedTranslationConfig?.engines.local.model ?? 'no-local-model',
           resolvedTranslationConfig?.engines.local.selectedGroupId ?? 'no-local-group',
+          resolvedTranslationConfig?.engines.localCt2.model ?? 'no-local-ct2-model',
+          resolvedTranslationConfig?.engines.localCt2.selectedGroupId ?? 'no-local-ct2-group',
           session.capability?.availability ?? 'unknown',
           session.capability?.message ?? 'no-message',
           session.serviceStatus.state,
