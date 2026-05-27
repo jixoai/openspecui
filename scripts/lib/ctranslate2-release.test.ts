@@ -22,7 +22,7 @@ describe('getCt2ReleaseTargets', () => {
       expect.objectContaining({
         artifactFileName: 'ct2.darwin-x64.node',
         platformArchAbi: 'darwin-x64',
-        runner: 'macos-13',
+        runner: 'macos-15-intel',
         target: 'x86_64-apple-darwin',
       }),
       expect.objectContaining({

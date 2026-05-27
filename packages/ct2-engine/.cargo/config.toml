@@ -1,0 +1,5 @@
+[target.x86_64-pc-windows-msvc]
+# ct2rs builds the bundled CTranslate2 static library with MSVC's static CRT.
+# Match that runtime at the addon boundary so napi-rs and CTranslate2 do not
+# link different CRT models into the same `ct2.*.node` artifact.
+rustflags = ["-C", "target-feature=+crt-static"]

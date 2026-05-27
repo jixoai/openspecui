@@ -16,7 +16,10 @@ type Ct2ReleaseTarget = {
 
 const RUNNER_BY_TARGET: Record<string, string> = {
   'aarch64-apple-darwin': 'macos-14',
-  'x86_64-apple-darwin': 'macos-13',
+  // GitHub-hosted Intel macOS runners now use the explicit `macos-15-intel`
+  // label for public repositories; the old `macos-13` label can sit queued
+  // indefinitely and blocks the aggregated native publish job.
+  'x86_64-apple-darwin': 'macos-15-intel',
   'x86_64-pc-windows-msvc': 'windows-2022',
   'x86_64-unknown-linux-gnu': 'ubuntu-24.04',
 }
