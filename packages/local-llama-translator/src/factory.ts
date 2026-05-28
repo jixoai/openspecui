@@ -44,6 +44,16 @@ interface ResolvedLlamaRuntimeConfig {
   systemPrompt?: string
 }
 
+export interface LocalLlamaRuntimeProbeOptions {
+  model: string
+  cacheDir?: string
+  runtimeConfig?: Record<string, unknown>
+  loadModule?: () => Promise<LlamaRuntimeModule>
+  contextSize?: number
+  gpuLayers?: number
+  monitor?: TranslatorFactoryPrepareOptions['monitor']
+}
+
 const DEFAULT_SYSTEM_PROMPT =
   'You are a translation engine. Return only the translated text, preserve Markdown structure, inline code, URLs, and file paths.'
 
@@ -55,22 +65,15 @@ export class LocalLlamaTranslatorFactory implements TranslatorFactory {
     if (!model) {
       throw new Error('A GGUF model id or runtime model path is required.')
     }
-    const module = await (this.options.loadModule ?? loadLlamaRuntimeModule)()
-    const resolvedConfig = readRuntimeConfig(options.runtimeConfig)
-    const runtimeModel = await loadRuntimeModel({
-      module,
+    await probeLocalLlamaRuntimeModel({
       model,
       cacheDir: this.options.cacheDir,
-      runtimeConfig: resolvedConfig,
-      defaultGpuLayers: this.options.gpuLayers,
+      runtimeConfig: options.runtimeConfig,
+      loadModule: this.options.loadModule,
+      contextSize: this.options.contextSize,
+      gpuLayers: this.options.gpuLayers,
       monitor: options.monitor,
     })
-    const context = await runtimeModel.createContext({
-      contextSize: resolvedConfig.contextSize ?? this.options.contextSize,
-    })
-    options.monitor?.setStatus({ message: `Llama model ${model} is ready.`, progress: 1 })
-    await disposeRuntimeNode(context)
-    await disposeRuntimeNode(runtimeModel)
   }
 
   async create(options: TranslatorFactoryCreateOptions): Promise<Translator> {
@@ -103,6 +106,33 @@ export function createLocalLlamaTranslatorFactory(
   options: LocalLlamaTranslatorFactoryOptions = {}
 ): LocalLlamaTranslatorFactory {
   return new LocalLlamaTranslatorFactory(options)
+}
+
+export async function probeLocalLlamaRuntimeModel(
+  input: LocalLlamaRuntimeProbeOptions
+): Promise<void> {
+  const module = await (input.loadModule ?? loadLlamaRuntimeModule)()
+  const resolvedConfig = readRuntimeConfig(input.runtimeConfig)
+  const runtimeModel = await loadRuntimeModel({
+    module,
+    model: input.model,
+    cacheDir: input.cacheDir,
+    runtimeConfig: resolvedConfig,
+    defaultGpuLayers: input.gpuLayers,
+    monitor: input.monitor,
+  })
+  try {
+    const context = await runtimeModel.createContext({
+      contextSize: resolvedConfig.contextSize ?? input.contextSize,
+    })
+    try {
+      input.monitor?.setStatus({ message: `Llama model ${input.model} is ready.`, progress: 1 })
+    } finally {
+      await disposeRuntimeNode(context)
+    }
+  } finally {
+    await disposeRuntimeNode(runtimeModel)
+  }
 }
 
 class LocalLlamaTranslator implements Translator {

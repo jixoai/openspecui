@@ -13,6 +13,33 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TranslationEngineService } from './translation-engine-service.js'
 
+const llamaCreateContextMock = vi.hoisted(() =>
+  vi.fn(async () => ({
+    getSequence: () => ({ id: 'sequence' }),
+    dispose: vi.fn(),
+  }))
+)
+const llamaLoadModelMock = vi.hoisted(() =>
+  vi.fn(async () => ({
+    createContext: llamaCreateContextMock,
+    dispose: vi.fn(),
+  }))
+)
+const llamaGetLlamaMock = vi.hoisted(() => vi.fn(async () => ({ loadModel: llamaLoadModelMock })))
+const runtimeDependencyTreeMock = vi.hoisted(() =>
+  vi.fn(async () => ({
+    dependencies: {
+      '@huggingface/transformers': {
+        dependencies: {
+          'onnxruntime-node': {},
+        },
+      },
+      ctranslate2: {},
+      'node-llama-cpp': {},
+    },
+  }))
+)
+
 vi.mock('@huggingface/hub', async (importOriginal) => {
   const original = await importOriginal<typeof import('@huggingface/hub')>()
   return {
@@ -22,6 +49,30 @@ vi.mock('@huggingface/hub', async (importOriginal) => {
       yield { path: 'onnx/encoder_model_q4.onnx', type: 'file', size: 12_000_000 }
       yield { path: 'onnx/decoder_model_merged_q4.onnx', type: 'file', size: 18_000_000 }
     }),
+  }
+})
+
+vi.mock('@huggingface/transformers', () => ({
+  pipeline: vi.fn(),
+}))
+
+vi.mock('ctranslate2', () => ({
+  Ct2Translator: vi.fn(),
+}))
+
+vi.mock('node-llama-cpp', async (importOriginal) => {
+  const original = await importOriginal<typeof import('node-llama-cpp')>()
+  return {
+    ...original,
+    getLlama: llamaGetLlamaMock,
+  }
+})
+
+vi.mock('./runtime-package-host.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./runtime-package-host.js')>()
+  return {
+    ...original,
+    readRuntimeHostPackageDependencyTree: runtimeDependencyTreeMock,
   }
 })
 
@@ -66,6 +117,30 @@ describe('TranslationEngineService', () => {
       localLlamaCacheDir,
       localLlamaAssetIndexPath,
       localLlamaFetchCachePath,
+    })
+    llamaCreateContextMock.mockReset()
+    llamaCreateContextMock.mockResolvedValue({
+      getSequence: () => ({ id: 'sequence' }),
+      dispose: vi.fn(),
+    })
+    llamaLoadModelMock.mockReset()
+    llamaLoadModelMock.mockResolvedValue({
+      createContext: llamaCreateContextMock,
+      dispose: vi.fn(),
+    })
+    llamaGetLlamaMock.mockReset()
+    llamaGetLlamaMock.mockResolvedValue({ loadModel: llamaLoadModelMock })
+    runtimeDependencyTreeMock.mockReset()
+    runtimeDependencyTreeMock.mockResolvedValue({
+      dependencies: {
+        '@huggingface/transformers': {
+          dependencies: {
+            'onnxruntime-node': {},
+          },
+        },
+        ctranslate2: {},
+        'node-llama-cpp': {},
+      },
     })
   })
 
@@ -168,18 +243,16 @@ describe('TranslationEngineService', () => {
   })
 
   it('reports bundled browser and openai engines as installed', async () => {
-    const engines = await service.listEngines()
+    const browser = await service.getLifecycle('browser')
+    const openai = await service.getLifecycle('openai')
 
-    const browser = engines.find((engine) => engine.id === 'browser')
-    const openai = engines.find((engine) => engine.id === 'openai')
-
-    expect(browser?.lifecycle).toMatchObject({
+    expect(browser).toMatchObject({
       dependency: {
         state: 'not-applicable',
         message: 'Browser translation support is built into the browser runtime.',
       },
     })
-    expect(openai?.lifecycle).toMatchObject({
+    expect(openai).toMatchObject({
       dependency: {
         state: 'not-applicable',
         message: 'OpenAI completion translation is bundled with the server runtime.',
@@ -460,16 +533,16 @@ describe('TranslationEngineService', () => {
     const groupId = 'Hy-MT2-1.8B-1.25Bit.gguf'
     const rootDir = join(tempDir, 'llama-profiles', groupId)
     const plan = createLlamaDownloadPlan('tencent/Hy-MT2-1.8B-1.25Bit-GGUF', groupId, {
-      modelBytes: 461_860_736,
+      modelBytes: 4,
       rootDir,
     })
     await writePersistedLocalAssetPlan(localLlamaAssetIndexPath, plan, {
       status: 'downloaded',
-      bytesDownloaded: 461_860_736,
+      bytesDownloaded: 4,
       progress: 1,
       rootDir,
     })
-    await writeLocalProfileFiles(rootDir, [groupId])
+    await writeLocalProfileFiles(rootDir, [{ path: groupId, size: 4 }])
 
     const events = await collectBatchEvents(
       service.batchTranslate({
@@ -490,6 +563,69 @@ describe('TranslationEngineService', () => {
           modelPath: join(rootDir, groupId),
         },
       })
+    )
+    expect(llamaLoadModelMock).toHaveBeenCalledWith({
+      modelPath: join(rootDir, groupId),
+      gpuLayers: undefined,
+    })
+  })
+
+  it('reports local llama asset compatibility failures through lifecycle truth', async () => {
+    const groupId = 'Hy-MT2-1.8B-1.25Bit.gguf'
+    const rootDir = join(tempDir, 'llama-profiles', groupId)
+    const plan = createLlamaDownloadPlan('tencent/Hy-MT2-1.8B-1.25Bit-GGUF', groupId, {
+      modelBytes: 4,
+      rootDir,
+    })
+    await writePersistedLocalAssetPlan(localLlamaAssetIndexPath, plan, {
+      status: 'downloaded',
+      bytesDownloaded: 4,
+      progress: 1,
+      rootDir,
+    })
+    await writeLocalProfileFiles(rootDir, [{ path: groupId, size: 4 }])
+    llamaLoadModelMock.mockRejectedValueOnce(new Error('Invalid type or block size'))
+
+    const lifecycle = await service.getLifecycle('local-llama', {
+      config: {
+        translation: {
+          engineId: 'local-llama',
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+          engines: {
+            local: {},
+            localCt2: {},
+            localLlama: {
+              model: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+              selectedGroupId: groupId,
+            },
+            openai: {},
+          },
+        },
+      },
+      globalSettings: {
+        translationEngines: {
+          local: { model: '', selectedGroupId: undefined, hfEndpoint: '' },
+          localCt2: { model: '', selectedGroupId: undefined, hfEndpoint: '' },
+          localLlama: {
+            model: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+            selectedGroupId: groupId,
+            hfEndpoint: '',
+          },
+          openai: { baseUrl: '', token: '', model: '' },
+        },
+      },
+    })
+
+    expect(lifecycle.assets).toMatchObject({
+      state: 'error',
+      message:
+        'Selected llama GGUF group Hy-MT2-1.8B-1.25Bit cannot be loaded by the current node-llama-cpp runtime: Invalid type or block size',
+      error: 'Invalid type or block size',
+    })
+    expect(lifecycle.summary).toBe(
+      'Selected llama GGUF group Hy-MT2-1.8B-1.25Bit cannot be loaded by the current node-llama-cpp runtime: Invalid type or block size'
     )
   })
 
@@ -694,13 +830,19 @@ async function writePersistedLocalAssetPlan(
 
 async function writeLocalProfileFiles(
   rootDir: string,
-  files: ReadonlyArray<string>
+  files: ReadonlyArray<string | { path: string; size?: number }>
 ): Promise<void> {
   await Promise.all(
     files.map(async (file) => {
-      const path = join(rootDir, file)
+      const relativePath = typeof file === 'string' ? file : file.path
+      const size = typeof file === 'string' ? undefined : file.size
+      const path = join(rootDir, relativePath)
       await mkdir(dirname(path), { recursive: true })
-      await writeFile(path, file === 'config.json' ? '{"model_type":"marian"}' : 'cached')
+      if (relativePath === 'config.json') {
+        await writeFile(path, '{"model_type":"marian"}')
+        return
+      }
+      await writeFile(path, Buffer.alloc(size ?? 6, 'a'))
     })
   )
 }

@@ -106,6 +106,10 @@ export class TranslationEngineService {
   private readonly localAssetStore: LocalModelAssetStore
   private readonly localCt2AssetStore: LocalModelAssetStore
   private readonly localLlamaAssetStore: LocalModelAssetStore
+  private readonly managedLocalRuntimeCompatibilityCache = new Map<
+    string,
+    TranslationEngineLifecycleStatus['assets']
+  >()
 
   constructor(options: TranslationEngineServiceOptions) {
     ensureProxyAwareFetchDispatcher()
@@ -455,7 +459,18 @@ export class TranslationEngineService {
     )
     if (selectedGroupState?.status === 'downloaded' && selectedGroup.rootDir) {
       const missingFiles = await readMissingLocalGroupFiles(selectedGroup.rootDir, files)
-      if (missingFiles.length === 0) return
+      if (missingFiles.length === 0) {
+        const runtimeCompatibility = await this.readManagedLocalRuntimeCompatibility({
+          engineId,
+          model,
+          selectedGroup,
+          selectedGroupState,
+        })
+        if (runtimeCompatibility?.state === 'error') {
+          throw new Error(runtimeCompatibility.message ?? runtimeCompatibility.error)
+        }
+        return
+      }
     }
     if (selectedGroupState?.status === 'downloaded') {
       return
@@ -472,6 +487,68 @@ export class TranslationEngineService {
     throw new Error(
       `Selected ${engineLabel} files are not installed locally: ${missingFiles.join(', ')}${suffix}.`
     )
+  }
+
+  private async readManagedLocalRuntimeCompatibility(input: {
+    engineId: ManagedLocalTranslationEngineId
+    model: string
+    selectedGroup: NonNullable<TranslationModelDownloadPlan['groups']>[number]
+    selectedGroupState: LocalModelAssetState['groupsState'][string] | undefined
+  }): Promise<TranslationEngineLifecycleStatus['assets'] | null> {
+    if (input.engineId !== 'local-llama') return null
+
+    const ggufFile = input.selectedGroup.files[0]?.path
+    if (!input.selectedGroup.rootDir || !ggufFile) {
+      return {
+        state: 'error',
+        message: 'Selected llama GGUF files are incomplete for runtime probing.',
+      }
+    }
+
+    const cacheKey = [
+      input.engineId,
+      input.model,
+      input.selectedGroup.id,
+      input.selectedGroup.rootDir,
+      input.selectedGroupState?.installedAt ?? 0,
+    ].join('|')
+    const cached = this.managedLocalRuntimeCompatibilityCache.get(cacheKey)
+    if (cached) return cached
+
+    const ggufPath = join(input.selectedGroup.rootDir, ggufFile)
+    try {
+      const mod = (await import('@openspecui/local-llama-translator')) as {
+        probeLocalLlamaRuntimeModel: (input: {
+          model: string
+          cacheDir?: string
+          runtimeConfig?: Record<string, unknown>
+        }) => Promise<void>
+      }
+      await mod.probeLocalLlamaRuntimeModel({
+        model: input.model,
+        cacheDir: this.localLlamaCacheDir,
+        runtimeConfig: { modelPath: ggufPath },
+      })
+      const result: TranslationEngineLifecycleStatus['assets'] = {
+        state: 'ready',
+        message: 'Selected llama GGUF files are ready for the current node-llama-cpp runtime.',
+      }
+      this.managedLocalRuntimeCompatibilityCache.set(cacheKey, result)
+      return result
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      const result: TranslationEngineLifecycleStatus['assets'] = {
+        state: 'error',
+        message: formatManagedLocalRuntimeCompatibilityMessage({
+          engineId: input.engineId,
+          groupLabel: input.selectedGroup.label,
+          detail,
+        }),
+        error: detail,
+      }
+      this.managedLocalRuntimeCompatibilityCache.set(cacheKey, result)
+      return result
+    }
   }
 
   private async readManagedLocalRuntimeConfig(
@@ -644,9 +721,20 @@ export class TranslationEngineService {
       missingFiles.length === 0 &&
       (groupState?.status === 'downloaded' || state?.status === 'downloaded')
     ) {
+      const runtimeCompatibility = await this.readManagedLocalRuntimeCompatibility({
+        engineId,
+        model: selection.model,
+        selectedGroup,
+        selectedGroupState: groupState,
+      })
+      if (runtimeCompatibility?.state === 'error') {
+        return runtimeCompatibility
+      }
       return {
         state: 'ready',
-        message: `Selected ${getManagedLocalAssetLabel(engineId)} files are ready.`,
+        message:
+          runtimeCompatibility?.message ??
+          `Selected ${getManagedLocalAssetLabel(engineId)} files are ready.`,
       }
     }
     return {
@@ -828,8 +916,8 @@ function mergeManagedLocalAssetLifecycle(input: {
     ...input.lifecycle,
     assets: input.asset,
     summary:
+      (input.asset.state === 'error' ? (input.asset.message ?? input.asset.error) : undefined) ??
       input.lifecycle.summary ??
-      input.asset.message ??
       getTranslationEngineLifecycleMessage(input.lifecycle),
   }
 }
@@ -1210,4 +1298,15 @@ async function readMissingLocalGroupFiles(
     })
   )
   return results.filter((file): file is string => file !== null)
+}
+
+function formatManagedLocalRuntimeCompatibilityMessage(input: {
+  engineId: ManagedLocalTranslationEngineId
+  groupLabel: string
+  detail: string
+}): string {
+  if (input.engineId === 'local-llama') {
+    return `Selected llama GGUF group ${input.groupLabel} cannot be loaded by the current node-llama-cpp runtime: ${input.detail}`
+  }
+  return input.detail
 }

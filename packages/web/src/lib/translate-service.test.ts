@@ -229,6 +229,60 @@ describe('translate service', () => {
     })
   })
 
+  it('surfaces local-llama runtime compatibility failures before treating downloaded files as ready', async () => {
+    engineLifecycleQueryMock.mockResolvedValueOnce(
+      createTranslationEngineLifecycleStatus({
+        dependency: {
+          state: 'installed',
+          message: 'Runtime dependencies are installed.',
+        },
+        runtime: {
+          state: 'ready',
+          message: 'Runtime is ready.',
+        },
+        assets: {
+          state: 'error',
+          message:
+            'Selected llama GGUF group Hy-MT2-1.8B-1.25Bit cannot be loaded by the current node-llama-cpp runtime: Invalid type or block size',
+          error: 'Invalid type or block size',
+        },
+      })
+    )
+    llamaPanelStateQueryMock.mockResolvedValueOnce({
+      modelId: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+      selectedGroupId: 'Hy-MT2-1.8B-1.25Bit.gguf',
+      asset: createDownloadedLlamaAssetState(),
+      downloadPlan: null,
+    })
+
+    const state = await resolveTranslateServiceState({
+      config: {
+        enabled: true,
+        targetLanguage: 'zh',
+        displayMode: 'direct',
+        cacheEnabled: false,
+        engineId: 'local-llama',
+        engines: {
+          local: {},
+          localCt2: {},
+          localLlama: {
+            model: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+            selectedGroupId: 'Hy-MT2-1.8B-1.25Bit.gguf',
+          },
+          openai: {},
+        },
+      },
+      hasSource: true,
+    })
+
+    expect(state.status).toEqual({
+      state: 'unavailable',
+      engineId: 'local-llama',
+      message:
+        'Selected llama GGUF group Hy-MT2-1.8B-1.25Bit cannot be loaded by the current node-llama-cpp runtime: Invalid type or block size',
+    })
+  })
+
   it('surfaces runtime lifecycle failures before checking local assets', async () => {
     engineLifecycleQueryMock.mockResolvedValueOnce(
       createTranslationEngineLifecycleStatus({

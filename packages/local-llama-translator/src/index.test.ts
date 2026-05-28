@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createLocalLlamaTranslatorFactory,
+  probeLocalLlamaRuntimeModel,
   resolveGgufModelDownloadPlanFromRepositoryFiles,
 } from './index.js'
 
@@ -83,5 +84,42 @@ describe('local-llama-translator package', () => {
     )
     expect(outputs).toEqual(['你好'])
     expect(disposeSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('probes llama model load without creating a translation session', async () => {
+    const createContext = vi.fn(async () => ({
+      getSequence: () => ({ id: 'sequence' }),
+      dispose: vi.fn(),
+    }))
+    const disposeModel = vi.fn()
+    const loadModel = vi.fn(async () => ({
+      createContext,
+      dispose: disposeModel,
+    }))
+    const getLlama = vi.fn(async () => ({ loadModel }))
+
+    await probeLocalLlamaRuntimeModel({
+      model: 'demo.gguf',
+      contextSize: 4096,
+      runtimeConfig: {
+        modelPath: '/tmp/demo.gguf',
+      },
+      loadModule: async () => ({
+        getLlama,
+        LlamaChatSession: class {
+          prompt = vi.fn()
+        },
+      }),
+    })
+
+    expect(getLlama).toHaveBeenCalledTimes(1)
+    expect(loadModel).toHaveBeenCalledWith({
+      modelPath: '/tmp/demo.gguf',
+      gpuLayers: undefined,
+    })
+    expect(createContext).toHaveBeenCalledWith({
+      contextSize: 4096,
+    })
+    expect(disposeModel).toHaveBeenCalledTimes(1)
   })
 })

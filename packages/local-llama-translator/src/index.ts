@@ -1,6 +1,8 @@
 export {
   LocalLlamaTranslatorFactory,
   createLocalLlamaTranslatorFactory,
+  probeLocalLlamaRuntimeModel,
+  type LocalLlamaRuntimeProbeOptions,
   type LocalLlamaTranslatorFactoryOptions,
 } from './factory.js'
 export {

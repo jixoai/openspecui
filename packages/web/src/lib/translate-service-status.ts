@@ -140,6 +140,16 @@ export function projectTranslateServiceStatus(
           'Translation engine runtime is not ready.',
       }
     }
+    if (input.engineLifecycle.assets.state === 'error') {
+      return {
+        state: 'unavailable',
+        engineId: input.engineId,
+        message:
+          input.engineLifecycle.assets.message ??
+          input.engineLifecycle.assets.error ??
+          'Selected local model is incompatible with the current translation runtime.',
+      }
+    }
   }
 
   if (isManagedLocalTranslationEngineId(input.engineId)) {
