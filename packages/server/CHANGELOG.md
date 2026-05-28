@@ -1,5 +1,21 @@
 # @openspecui/server
 
+## 3.11.3
+
+### Patch Changes
+
+- bc8e0a8: Add the managed `local-llama` translation engine across the shared core/server/web stack, with host-owned optional runtime installation for `node-llama-cpp` and GGUF model selection.
+
+  Also tighten the managed-local translation UX by returning recommended models for empty search, preserving server/local panel truth before auto-refreshing artifacts, and fixing local translation state handling regressions surfaced by CT2 and segment patch flows.
+
+- Updated dependencies [bc8e0a8]
+  - @openspecui/core@3.11.3
+  - @openspecui/local-ct2-translator@3.11.3
+  - @openspecui/local-llama-translator@3.11.3
+  - @openspecui/local-translator@3.11.3
+  - @openspecui/openai-completion-translator@3.11.3
+  - @openspecui/search@3.11.3
+
 ## 3.11.2
 
 ### Patch Changes
