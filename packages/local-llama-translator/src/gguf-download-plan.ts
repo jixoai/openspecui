@@ -34,7 +34,7 @@ export function resolveGgufModelDownloadPlanFromRepositoryFiles(input: {
 
   if (groups.length === 0) return null
   const selectedGroup =
-    selectRequestedGroup(groups, input.selectedGroupId) ?? selectSmallestSelectableGroup(groups)
+    selectRequestedGroup(groups, input.selectedGroupId) ?? selectPreferredSelectableGroup(groups)
   const selectedGroupId = selectedGroup?.id
 
   return {
@@ -90,19 +90,41 @@ function selectRequestedGroup(
   )
 }
 
-function selectSmallestSelectableGroup(
+function selectPreferredSelectableGroup(
   groups: ReadonlyArray<TranslationDownloadGroupPlan>
 ): TranslationDownloadGroupPlan | null {
-  return (
-    groups
-      .filter((group) => group.selectable && group.estimatedTotalBytes !== undefined)
-      .sort(
-        (left, right) =>
-          (left.estimatedTotalBytes ?? Number.POSITIVE_INFINITY) -
-            (right.estimatedTotalBytes ?? Number.POSITIVE_INFINITY) ||
-          left.id.localeCompare(right.id)
-      )[0] ?? null
+  const selectableGroups = groups.filter(
+    (group) => group.selectable && group.estimatedTotalBytes !== undefined
   )
+  if (selectableGroups.length === 0) return null
+  return (
+    selectableGroups.sort((left, right) => {
+      const compatibilityDelta =
+        scorePreferredLlamaGroup(right.baseGroupId ?? right.id) -
+        scorePreferredLlamaGroup(left.baseGroupId ?? left.id)
+      if (compatibilityDelta !== 0) return compatibilityDelta
+      return (
+        (left.estimatedTotalBytes ?? Number.POSITIVE_INFINITY) -
+          (right.estimatedTotalBytes ?? Number.POSITIVE_INFINITY) || left.id.localeCompare(right.id)
+      )
+    })[0] ?? null
+  )
+}
+
+function scorePreferredLlamaGroup(groupId: string): number {
+  const normalized = groupId.toUpperCase()
+  if (normalized.includes('Q4_K_M')) return 5
+  if (normalized.includes('Q4_K_S')) return 4
+  if (normalized.includes('Q5_K_M')) return 3
+  if (normalized.includes('Q5_K_S')) return 2
+  if (normalized.includes('Q6_K')) return 1
+  if (normalized.includes('IQ1') || normalized.includes('IQ2') || normalized.includes('IQ3')) {
+    return -2
+  }
+  if (normalized.includes('TQ1') || normalized.includes('TQ2') || normalized.includes('1.25BIT')) {
+    return -3
+  }
+  return 0
 }
 
 function stripGgufExtension(value: string): string {

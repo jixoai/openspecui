@@ -1222,6 +1222,47 @@ The system SHALL detect static rendering mode.
     expect(screen.getByText('再次出现')).toBeTruthy()
   })
 
+  it('ignores sparse translation segments before rendering the document', async () => {
+    translateMarkdownDocumentProgressivelyMock.mockImplementationOnce(async () => ({
+      displayMode: 'direct',
+      sourceLanguage: 'en',
+      targetLanguage: 'zh',
+      segments: [
+        undefined,
+        {
+          id: 'valid-heading',
+          sourceStartOffset: 0,
+          sourceEndOffset: 7,
+          sourceKind: 'heading',
+          source: 'Hello',
+          translatorInput: 'Hello',
+          target: '你好',
+          kind: 'heading',
+          sourceLanguage: 'en',
+          targetLanguage: 'zh',
+          status: 'translated',
+        },
+      ] as never,
+    }))
+
+    render(
+      <MarkdownViewer
+        markdown={'# Hello'}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        }}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: '你好' })).toBeTruthy())
+    expect(screen.queryByText('undefined')).toBeNull()
+  })
+
   it('rejects stale late patches after the markdown generation changes', async () => {
     let emitStalePatch: (() => void) | undefined
     let releaseStaleResult: (() => void) | undefined

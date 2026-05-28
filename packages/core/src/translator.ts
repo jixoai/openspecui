@@ -717,7 +717,7 @@ export const TRANSLATION_ENGINE_MANIFESTS = [
     runtime: 'server',
     kind: 'managed-local',
     settingsKey: 'localLlama',
-    defaultModel: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+    defaultModel: 'bartowski/Qwen2.5-0.5B-Instruct-GGUF',
     runtimePackageName: 'node-llama-cpp',
     installDescription:
       'Install the Local-Llama runtime package to enable server-side GGUF translation.',
@@ -807,7 +807,7 @@ export const TranslationLocalCt2SettingsSchema = z.object({
 export type TranslationLocalCt2Settings = z.infer<typeof TranslationLocalCt2SettingsSchema>
 
 export const TranslationLocalLlamaSettingsSchema = z.object({
-  model: z.string().default('tencent/Hy-MT2-1.8B-1.25Bit-GGUF'),
+  model: z.string().default('bartowski/Qwen2.5-0.5B-Instruct-GGUF'),
   selectedGroupId: z.string().optional(),
   hfEndpoint: z.string().default(''),
 })

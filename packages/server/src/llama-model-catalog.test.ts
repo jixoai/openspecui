@@ -13,12 +13,12 @@ describe('llama-model-catalog', () => {
     globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(
         JSON.stringify({
-          id: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+          id: 'bartowski/Qwen2.5-0.5B-Instruct-GGUF',
           pipeline_tag: 'text-generation',
           tags: ['gguf', 'translation'],
           downloads: 42,
           likes: 7,
-          siblings: [{ rfilename: 'Hy-MT2-1.8B-1.25Bit.gguf', size: 461_860_736 }],
+          siblings: [{ rfilename: 'Qwen2.5-0.5B-Instruct-Q4_K_M.gguf', size: 397_942_432 }],
         }),
         { status: 200 }
       )
@@ -28,9 +28,9 @@ describe('llama-model-catalog', () => {
 
     expect(result.items).toHaveLength(1)
     expect(result.items[0]).toMatchObject({
-      id: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+      id: 'bartowski/Qwen2.5-0.5B-Instruct-GGUF',
       compatibility: { localRuntimeVerified: true },
-      size: { estimatedTotalBytes: 461_860_736 },
+      size: { estimatedTotalBytes: 397_942_432 },
     })
   })
 
@@ -38,12 +38,12 @@ describe('llama-model-catalog', () => {
     globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(
         JSON.stringify({
-          id: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+          id: 'bartowski/Qwen2.5-0.5B-Instruct-GGUF',
           pipeline_tag: 'text-generation',
           tags: ['gguf', 'translation'],
           downloads: 42,
           likes: 7,
-          siblings: [{ rfilename: 'Hy-MT2-1.8B-1.25Bit.gguf', size: 461_860_736 }],
+          siblings: [{ rfilename: 'Qwen2.5-0.5B-Instruct-Q4_K_M.gguf', size: 397_942_432 }],
         }),
         { status: 200 }
       )
@@ -56,6 +56,6 @@ describe('llama-model-catalog', () => {
     })
 
     expect(events.map((event) => event.phase)).toEqual(['candidates', 'enriched', 'complete'])
-    expect(events[0]?.items?.[0]?.id).toBe('tencent/Hy-MT2-1.8B-1.25Bit-GGUF')
+    expect(events[0]?.items?.[0]?.id).toBe('bartowski/Qwen2.5-0.5B-Instruct-GGUF')
   })
 })

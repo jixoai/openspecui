@@ -1,5 +1,6 @@
 import { Button } from '@/components/button'
 import { Tooltip } from '@/components/tooltip'
+import { isRenderableTranslationSegment } from '@/lib/browser-translation'
 import { useDocumentTranslationActivation } from '@/lib/document-translation-session-state'
 import { resolveDocumentTranslationConfig } from '@/lib/resolve-document-translation-config'
 import type { TranslateServiceStatus } from '@/lib/translate-service-status'
@@ -227,7 +228,7 @@ function getRenderableTranslationSegments(
   result: NonNullable<ReturnType<typeof useDocumentTranslation>['result']>
 ): DocumentTranslationSegmentResult[] {
   return (Array.isArray(result.segments) ? result.segments : []).filter(
-    (segment): segment is DocumentTranslationSegmentResult => segment !== undefined
+    isRenderableTranslationSegment
   )
 }
 

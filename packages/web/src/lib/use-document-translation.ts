@@ -300,9 +300,15 @@ export function useDocumentTranslation(
   }
 }
 
+function isDocumentTranslationSegment(
+  segment: unknown
+): segment is NonNullable<DocumentTranslationResult['segments'][number]> {
+  return typeof segment === 'object' && segment !== null && !Array.isArray(segment)
+}
+
 function getDocumentTranslationFailureMessage(result: DocumentTranslationResult): string | null {
   const segments = (Array.isArray(result.segments) ? result.segments : []).filter(
-    (segment) => segment !== undefined
+    isDocumentTranslationSegment
   )
   if (segments.length === 0) return null
 
@@ -350,8 +356,7 @@ function normalizeDocumentTranslationResult(
   return {
     ...result,
     segments: (Array.isArray(result.segments) ? result.segments : []).filter(
-      (segment): segment is NonNullable<DocumentTranslationResult['segments'][number]> =>
-        segment !== undefined
+      isDocumentTranslationSegment
     ),
   }
 }

@@ -3538,6 +3538,12 @@ describe('Settings', () => {
       }),
       downloadPlan: null,
     })
+    localCt2ModelsMock.refreshArtifacts.mockImplementation(
+      () =>
+        new Promise<ReturnType<typeof localCt2ModelsMock.panelState>>(() => {
+          // Keep the refresh pending to emulate the first resolution pass.
+        })
+    )
     useConfigSubscriptionMock.mockReturnValue({
       data: {
         translation: {
@@ -3564,6 +3570,8 @@ describe('Settings', () => {
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     expect(await screen.findByText('Loading CT2 model artifacts.')).toBeTruthy()
     expect(screen.queryByText('No runtime download plan available.')).toBeNull()
+    expect(screen.queryByText('config.json')).toBeNull()
+    expect(screen.queryByText('model.bin')).toBeNull()
   })
 
   it('does not refresh remote Local model profiles on initial mount when local profiles exist', async () => {

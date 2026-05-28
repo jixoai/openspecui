@@ -25,6 +25,21 @@
 - `pnpm --filter @openspecui/server test -- src/translation-engine-service.test.ts src/llama-model-catalog.test.ts`
 - `pnpm --filter @openspecui/web exec vitest run --project unit src/lib/resolve-document-translation-config.test.ts src/lib/translate-service.test.ts`
 - `pnpm --filter @openspecui/web exec vitest run --project unit src/routes/settings.test.tsx`
+- `pnpm verify:llama`
+  - `tencent/Hy-MT2-1.8B-1.25Bit-GGUF` downloaded successfully but failed during `node-llama-cpp@3.18.1` model load with `Invalid type or block size`; the packaged `llama.cpp` baseline is `b8390`, which does not support the model's STQ-era quantization.
+  - `bartowski/Qwen2.5-0.5B-Instruct-GGUF` with `Qwen2.5-0.5B-Instruct-Q4_K_M.gguf` completed the end-to-end verification flow and produced a non-empty Chinese output.
+- Final release polish:
+  - normalized document-translation segments before projection so sparse patch results no longer crash on `target` access,
+  - kept CT2 panel state in loading mode while first artifact resolution is pending, so the card does not fall back to an empty download-plan view.
+  - verification rerun: `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`, `pnpm test:browser:ci`, plus focused `@openspecui/web` vitest coverage for document translation and settings.
+
+## Follow-up Correction
+
+- The original intake named `tencent/Hy-MT2-1.8B-1.25Bit-GGUF` as the desired local verification model, but real runtime validation showed that this repo's current `node-llama-cpp` baseline cannot load that quantization family yet.
+- The release-ready platform truth is therefore:
+  - keep Tencent Hy-MT2 as a future compatibility target,
+  - switch the default/recommended shipped llama model to a publicly readable GGUF that passes the current runtime,
+  - prefer stable `Q4_K_M`-style GGUF groups over smaller but less compatible `IQ*` / `1.25bit` groups when auto-selecting a llama download profile.
 
 ## Loopback Triggers
 

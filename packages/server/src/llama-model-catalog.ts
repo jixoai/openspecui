@@ -14,7 +14,7 @@ import { isRetryableNetworkError, isRetryableNetworkStatusCode } from './network
 
 const DEFAULT_SEARCH_LIMIT = 6
 const MAX_SEARCH_FETCH_LIMIT = 12
-const DEFAULT_RECOMMENDED_MODEL_IDS = ['tencent/Hy-MT2-1.8B-1.25Bit-GGUF'] as const
+const DEFAULT_RECOMMENDED_MODEL_IDS = ['bartowski/Qwen2.5-0.5B-Instruct-GGUF'] as const
 const HUGGING_FACE_FETCH_RETRY_COUNT = 2
 const HUGGING_FACE_FETCH_RETRY_DELAY_MS = 750
 

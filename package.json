@@ -42,6 +42,7 @@
     "example:dev": "pnpm example:setup && pnpm preview --dir ./example",
     "verify:nmt": "pnpm --filter @openspecui/server exec tsx ../../scripts/verify-nmt-translation.ts",
     "verify:ct2": "pnpm --filter @openspecui/server exec tsx ../../scripts/verify-ct2-translation.ts",
+    "verify:llama": "pnpm --filter @openspecui/server exec tsx ../../scripts/verify-llama-translation.ts",
     "deploy:app:cf": "pnpm --filter @openspecui/app cf:deploy",
     "deploy:website:cf": "pnpm --filter @openspecui/website cf:deploy",
     "test:root": "node scripts/test-root.mjs",

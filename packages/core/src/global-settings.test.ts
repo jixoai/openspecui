@@ -227,7 +227,7 @@ describe('GlobalSettingsManager', () => {
       hfEndpoint: 'https://hf-mirror.com',
     })
     await expect(readFile(settingsPath, 'utf-8')).resolves.toBe(
-      '{\n  "translationEngines": {\n    "localLlama": {\n      "selectedGroupId": "Hy-MT2-1.8B-1.25Bit.gguf",\n      "hfEndpoint": "https://hf-mirror.com"\n    }\n  }\n}'
+      '{\n  "translationEngines": {\n    "localLlama": {\n      "model": "tencent/Hy-MT2-1.8B-1.25Bit-GGUF",\n      "selectedGroupId": "Hy-MT2-1.8B-1.25Bit.gguf",\n      "hfEndpoint": "https://hf-mirror.com"\n    }\n  }\n}'
     )
 
     await settingsManager.writeSettings({
@@ -240,7 +240,16 @@ describe('GlobalSettingsManager', () => {
     })
     clearCache()
 
-    await expect(settingsManager.readSettings()).resolves.toEqual(DEFAULT_GLOBAL_SETTINGS)
+    await expect(settingsManager.readSettings()).resolves.toEqual({
+      ...DEFAULT_GLOBAL_SETTINGS,
+      translationEngines: {
+        ...DEFAULT_GLOBAL_SETTINGS.translationEngines,
+        localLlama: {
+          ...DEFAULT_GLOBAL_SETTINGS.translationEngines.localLlama,
+          model: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+        },
+      },
+    })
   })
 
   it('clears local selected profile settings when a patch sets them to null', async () => {

@@ -7,43 +7,40 @@ import {
 describe('local-llama-translator package', () => {
   it('builds a GGUF download plan from repository files', () => {
     const plan = resolveGgufModelDownloadPlanFromRepositoryFiles({
-      modelId: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+      modelId: 'bartowski/Qwen2.5-0.5B-Instruct-GGUF',
       files: [
         { path: 'README.md', sizeBytes: 128 },
-        { path: 'Hy-MT2-1.8B-1.25Bit.gguf', sizeBytes: 461_860_736 },
+        { path: 'Qwen2.5-0.5B-Instruct-Q4_K_M.gguf', sizeBytes: 397_942_432 },
+        { path: 'Qwen2.5-0.5B-Instruct-IQ2_M.gguf', sizeBytes: 328_597_408 },
       ],
     })
 
-    expect(plan).toEqual({
-      modelId: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
-      estimatedTotalBytes: 461_860_736,
-      files: [
-        {
-          path: 'Hy-MT2-1.8B-1.25Bit.gguf',
-          required: true,
-          sizeBytes: 461_860_736,
-        },
-      ],
-      selectedGroupId: 'Hy-MT2-1.8B-1.25Bit.gguf',
-      groups: [
-        {
-          id: 'Hy-MT2-1.8B-1.25Bit.gguf',
-          baseGroupId: 'Hy-MT2-1.8B-1.25Bit',
-          label: 'Hy-MT2-1.8B-1.25Bit',
-          description: 'GGUF runtime file from Hy-MT2-1.8B-1.25Bit.gguf.',
-          estimatedTotalBytes: 461_860_736,
-          selectable: true,
-          selected: true,
-          files: [
-            {
-              path: 'Hy-MT2-1.8B-1.25Bit.gguf',
-              required: true,
-              sizeBytes: 461_860_736,
-            },
-          ],
-        },
-      ],
+    expect(plan).toMatchObject({
+      modelId: 'bartowski/Qwen2.5-0.5B-Instruct-GGUF',
+      estimatedTotalBytes: 397_942_432,
+      selectedGroupId: 'Qwen2.5-0.5B-Instruct-Q4_K_M.gguf',
     })
+    expect(plan?.files).toEqual([
+      expect.objectContaining({
+        path: 'Qwen2.5-0.5B-Instruct-Q4_K_M.gguf',
+        required: true,
+        sizeBytes: 397_942_432,
+      }),
+    ])
+    expect(plan?.groups).toEqual([
+      expect.objectContaining({
+        id: 'Qwen2.5-0.5B-Instruct-Q4_K_M.gguf',
+        baseGroupId: 'Qwen2.5-0.5B-Instruct-Q4_K_M',
+        selectable: true,
+        selected: true,
+      }),
+      expect.objectContaining({
+        id: 'Qwen2.5-0.5B-Instruct-IQ2_M.gguf',
+        baseGroupId: 'Qwen2.5-0.5B-Instruct-IQ2_M',
+        selectable: true,
+        selected: false,
+      }),
+    ])
   })
 
   it('translates text through the llama runtime adapter', async () => {

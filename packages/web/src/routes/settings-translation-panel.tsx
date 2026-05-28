@@ -84,7 +84,7 @@ const DEFAULT_TRANSLATION_DISPLAY_MODE: DocumentTranslationDisplayMode = 'direct
 const DEFAULT_TRANSLATION_CACHE_ENABLED = false
 const DEFAULT_LOCAL_MODEL_ID = 'Xenova/opus-mt-no-de'
 const DEFAULT_LOCAL_CT2_MODEL_ID = 'ooeoeo/opus-mt-en-zh-ct2-float16'
-const DEFAULT_LOCAL_LLAMA_MODEL_ID = 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF'
+const DEFAULT_LOCAL_LLAMA_MODEL_ID = 'bartowski/Qwen2.5-0.5B-Instruct-GGUF'
 const DEFAULT_TRANSLATION_SMOKE_SOURCE_LANGUAGE = DEFAULT_TRANSLATION_TEST_SOURCE_LANGUAGE
 
 const TRANSLATION_DISPLAY_MODE_OPTIONS = [
@@ -1208,6 +1208,10 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const managedLocalRefreshTooltip =
     selectedManagedLocalManifest?.refreshTooltip ?? 'Refresh local model profiles'
   const nmtModelId = nmtModel.trim()
+  const localPanelRefreshKey =
+    effectiveManagedLocalEngineId && nmtModelId.length > 0
+      ? `${effectiveManagedLocalEngineId}:${nmtModelId}`
+      : null
   const persistedLocalSelectedGroupId = resolvedManagedLocalSettings?.selectedGroupId
   const preferredLocalSelectedGroupId = nmtSelectedGroupId ?? persistedLocalSelectedGroupId
   const localPanelStateQuery = useQuery({
@@ -1272,10 +1276,19 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const nmtGroupSelectionDisabled = displayedLocalAsset?.status === 'deleting'
   const nmtResolvedHfEndpoint = nmtHfEndpoint.trim() || 'https://huggingface.co'
   const localProfileLoading = selectedLocalAsset?.profileLoad?.status === 'loading'
+  const localPlanInitialResolvePending =
+    localPanelRefreshKey !== null &&
+    autoRefreshLocalArtifactsKeyRef.current !== localPanelRefreshKey &&
+    displayedLocalAsset !== null &&
+    displayedLocalAsset.status !== 'downloaded' &&
+    displayedLocalAsset.profileLoad?.status !== 'error' &&
+    !resolvedLocalDownloadPlan &&
+    (displayedLocalAsset.files.length ?? 0) === 0
   const localPlanLoading =
     refreshLocalProfilesMutation.isPending ||
     ((localPanelStateQuery.isLoading || localPanelStateQuery.isFetching) && !selectedLocalAsset) ||
-    localProfileLoading
+    localProfileLoading ||
+    localPlanInitialResolvePending
   useEffect(() => {
     if (!effectiveManagedLocalEngineId || !nmtModelId || inStaticMode) return
     if (shouldShowTranslationEngineInstallGate(resolvedLifecycle)) return
@@ -1284,9 +1297,9 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     if ((selectedLocalAsset?.files.length ?? 0) > 0) return
     if (selectedLocalAsset?.profileLoad?.status === 'loading') return
     if (selectedLocalAsset?.profileLoad?.status === 'error') return
-    const refreshKey = `${effectiveManagedLocalEngineId}:${nmtModelId}`
-    if (autoRefreshLocalArtifactsKeyRef.current === refreshKey) return
-    autoRefreshLocalArtifactsKeyRef.current = refreshKey
+    if (localPanelRefreshKey === null) return
+    if (autoRefreshLocalArtifactsKeyRef.current === localPanelRefreshKey) return
+    autoRefreshLocalArtifactsKeyRef.current = localPanelRefreshKey
     refreshLocalProfilesMutation.mutate({ modelId: nmtModelId })
   }, [
     effectiveManagedLocalEngineId,
@@ -1299,6 +1312,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     selectedLocalAsset?.plan?.groups?.length,
     selectedLocalAsset?.files.length,
     selectedLocalAsset?.profileLoad?.status,
+    localPanelRefreshKey,
   ])
   useEffect(() => {
     if (!activeManagedLocalEngineId || !nmtModelId || inStaticMode) return

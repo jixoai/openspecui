@@ -105,6 +105,10 @@ export interface DocumentTranslationProgressPatch {
   segment: TranslationSegment
 }
 
+export function isRenderableTranslationSegment(segment: unknown): segment is TranslationSegment {
+  return typeof segment === 'object' && segment !== null && !Array.isArray(segment)
+}
+
 interface PendingTranslationJob {
   segmentIndex: number
   segment: TranslationSegment
@@ -532,7 +536,9 @@ export async function translateMarkdownDocument(args: {
     translatedSegments[segmentIndex] = segment
   }).then((result) => ({
     ...result,
-    segments: translatedSegments.length > 0 ? translatedSegments : result.segments,
+    segments: normalizeTranslationSegments(
+      translatedSegments.length > 0 ? translatedSegments : result.segments
+    ),
   }))
 }
 
@@ -646,7 +652,7 @@ export async function translateMarkdownDocumentProgressively(
     )
 
     return {
-      segments: translatedSegments,
+      segments: normalizeTranslationSegments(translatedSegments),
       displayMode: args.displayMode,
       sourceLanguage: languageDetection.documentLanguage,
       targetLanguage: args.targetLanguage,
@@ -861,6 +867,12 @@ function getUnsupportedEngineLanguagePairMessage(input: {
     directionCheck.message ??
     'Selected local model does not support the detected translation direction.'
   )
+}
+
+export function normalizeTranslationSegments(
+  segments: readonly TranslationSegment[]
+): TranslationSegment[] {
+  return segments.filter(isRenderableTranslationSegment)
 }
 
 function summarizeTranslationLogThroughput(
