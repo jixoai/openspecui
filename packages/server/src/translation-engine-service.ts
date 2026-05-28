@@ -1,11 +1,12 @@
 import {
   buildRuntimePackageInstallCommand,
   checkLocalDirectionalModelLanguagePair,
-  createTranslationEngineLifecycleStatus,
   createCleanCliEnv,
+  createTranslationEngineLifecycleStatus,
   detectRuntimePackageManager,
   getManagedLocalTranslationEngineManifest,
   getTranslationEngineLifecycleMessage,
+  isDirectionalManagedLocalTranslationEngineId,
   isManagedLocalTranslationEngineId,
   isTranslationEngineDependencyReady,
   isTranslationEngineRuntimeReady,
@@ -43,6 +44,12 @@ import {
   getDefaultLocalCt2ModelIndexPath,
 } from './ct2-model-cache-path.js'
 import { searchCt2Models } from './ct2-model-catalog.js'
+import { searchLlamaModels } from './llama-model-catalog.js'
+import {
+  getDefaultLocalLlamaModelCacheDir,
+  getDefaultLocalLlamaModelFetchCachePath,
+  getDefaultLocalLlamaModelIndexPath,
+} from './local-llama-model-cache-path.js'
 import { LocalModelAssetStore } from './local-model-asset-store.js'
 import {
   getDefaultLocalModelCacheDir,
@@ -83,6 +90,9 @@ export interface TranslationEngineServiceOptions {
   localCt2CacheDir?: string
   localCt2AssetIndexPath?: string
   localCt2FetchCachePath?: string
+  localLlamaCacheDir?: string
+  localLlamaAssetIndexPath?: string
+  localLlamaFetchCachePath?: string
 }
 
 export class TranslationEngineService {
@@ -92,8 +102,10 @@ export class TranslationEngineService {
   private readonly now: () => number
   private readonly localCacheDir: string
   private readonly localCt2CacheDir: string
+  private readonly localLlamaCacheDir: string
   private readonly localAssetStore: LocalModelAssetStore
   private readonly localCt2AssetStore: LocalModelAssetStore
+  private readonly localLlamaAssetStore: LocalModelAssetStore
 
   constructor(options: TranslationEngineServiceOptions) {
     ensureProxyAwareFetchDispatcher()
@@ -103,11 +115,15 @@ export class TranslationEngineService {
     this.now = options.now ?? Date.now
     this.localCacheDir = options.localCacheDir ?? getDefaultLocalModelCacheDir()
     this.localCt2CacheDir = options.localCt2CacheDir ?? getDefaultLocalCt2ModelCacheDir()
+    this.localLlamaCacheDir = options.localLlamaCacheDir ?? getDefaultLocalLlamaModelCacheDir()
     this.localAssetStore = new LocalModelAssetStore({
       indexPath: options.localAssetIndexPath ?? getDefaultLocalModelIndexPath(),
     })
     this.localCt2AssetStore = new LocalModelAssetStore({
       indexPath: options.localCt2AssetIndexPath ?? getDefaultLocalCt2ModelIndexPath(),
+    })
+    this.localLlamaAssetStore = new LocalModelAssetStore({
+      indexPath: options.localLlamaAssetIndexPath ?? getDefaultLocalLlamaModelIndexPath(),
     })
     new LocalModelFetchCacheStore({
       cachePath: options.localFetchCachePath ?? getDefaultLocalModelFetchCachePath(),
@@ -115,6 +131,10 @@ export class TranslationEngineService {
     })
     new LocalModelFetchCacheStore({
       cachePath: options.localCt2FetchCachePath ?? getDefaultLocalCt2ModelFetchCachePath(),
+      now: this.now,
+    })
+    new LocalModelFetchCacheStore({
+      cachePath: options.localLlamaFetchCachePath ?? getDefaultLocalLlamaModelFetchCachePath(),
       now: this.now,
     })
   }
@@ -153,7 +173,8 @@ export class TranslationEngineService {
     }
   ): Promise<TranslationEngineLifecycleStatus> {
     const config = snapshot?.config ?? (await this.configManager.readConfig())
-    const globalSettings = snapshot?.globalSettings ?? (await this.globalSettingsManager.readSettings())
+    const globalSettings =
+      snapshot?.globalSettings ?? (await this.globalSettingsManager.readSettings())
     const lifecycle = await this.getLifecycleController(engineId).detectLifecycle({
       projectDir: this.projectDir,
       globalSettings: globalSettings.translationEngines,
@@ -272,6 +293,11 @@ export class TranslationEngineService {
         hfEndpoint: globalSettings.translationEngines.localCt2.hfEndpoint,
       })
     }
+    if (input.engineId === 'local-llama') {
+      return searchLlamaModels(input, {
+        hfEndpoint: globalSettings.translationEngines.localLlama.hfEndpoint,
+      })
+    }
     return { items: [] }
   }
 
@@ -285,7 +311,9 @@ export class TranslationEngineService {
         ? (await this.localAssetStore.readMap()).get(input.model)
         : input.engineId === 'local-ct2'
           ? (await this.localCt2AssetStore.readMap()).get(input.model)
-          : undefined
+          : input.engineId === 'local-llama'
+            ? (await this.localLlamaAssetStore.readMap()).get(input.model)
+            : undefined
     if (!state) return null
     return selectPersistedLocalPlan(state, input.selectedGroupId)
   }
@@ -310,7 +338,7 @@ export class TranslationEngineService {
           }
           const settingsSnapshot = await this.globalSettingsManager.readSettings()
           const effectiveModel = resolveBatchTranslateModel(input, settingsSnapshot)
-          if (isManagedLocalEngine(input.engineId)) {
+          if (isDirectionalManagedLocalTranslationEngineId(input.engineId)) {
             const directionCheck = checkLocalDirectionalModelLanguagePair({
               model: effectiveModel,
               sourceLanguage: input.sourceLanguage,
@@ -329,13 +357,16 @@ export class TranslationEngineService {
               : input.engineId === 'local-ct2'
                 ? (input.selectedGroupId ??
                   settingsSnapshot.translationEngines.localCt2.selectedGroupId)
-                : undefined
+                : input.engineId === 'local-llama'
+                  ? (input.selectedGroupId ??
+                    settingsSnapshot.translationEngines.localLlama.selectedGroupId)
+                  : undefined
           const dtype = await this.readLocalDtype(
             input.engineId,
             effectiveModel,
             effectiveSelectedGroupId
           )
-          if (isManagedLocalEngine(input.engineId) && effectiveModel) {
+          if (isManagedLocalTranslationEngineId(input.engineId) && effectiveModel) {
             await this.assertManagedLocalModelReady(
               input.engineId,
               effectiveModel,
@@ -343,7 +374,7 @@ export class TranslationEngineService {
             )
           }
           const runtimeConfig =
-            isManagedLocalEngine(input.engineId) && effectiveModel
+            isManagedLocalTranslationEngineId(input.engineId) && effectiveModel
               ? await this.readManagedLocalRuntimeConfig(
                   input.engineId,
                   effectiveModel,
@@ -403,7 +434,7 @@ export class TranslationEngineService {
   }
 
   private async assertManagedLocalModelReady(
-    engineId: Extract<ServiceTranslationEngineId, 'local' | 'local-ct2'>,
+    engineId: ManagedLocalTranslationEngineId,
     model: string,
     selectedGroupId: string | undefined
   ): Promise<void> {
@@ -437,14 +468,14 @@ export class TranslationEngineService {
       allMissingFiles.length > missingFiles.length
         ? ` and ${allMissingFiles.length - missingFiles.length} more`
         : ''
-    const engineLabel = engineId === 'local-ct2' ? 'CT2 model' : 'local model'
+    const engineLabel = getManagedLocalTranslationEngineManifest(engineId).modelLabel.toLowerCase()
     throw new Error(
       `Selected ${engineLabel} files are not installed locally: ${missingFiles.join(', ')}${suffix}.`
     )
   }
 
   private async readManagedLocalRuntimeConfig(
-    engineId: Extract<ServiceTranslationEngineId, 'local' | 'local-ct2'>,
+    engineId: ManagedLocalTranslationEngineId,
     model: string,
     selectedGroupId?: string
   ): Promise<Record<string, unknown> | undefined> {
@@ -454,6 +485,13 @@ export class TranslationEngineService {
       selectedGroupId,
     })
     const selectedGroup = selectLocalPlanGroup(plan, selectedGroupId)
+    if (engineId === 'local-llama') {
+      const ggufPath =
+        selectedGroup?.rootDir && selectedGroup.files[0]?.path
+          ? join(selectedGroup.rootDir, selectedGroup.files[0].path)
+          : selectedGroup?.rootDir
+      return ggufPath ? { modelPath: ggufPath } : undefined
+    }
     const configPath = selectedGroup?.rootDir
       ? join(selectedGroup.rootDir, 'config.json')
       : join(
@@ -480,14 +518,16 @@ export class TranslationEngineService {
   }
 
   private async readSelectedManagedLocalGroupState(
-    engineId: Extract<ServiceTranslationEngineId, 'local' | 'local-ct2'>,
+    engineId: ManagedLocalTranslationEngineId,
     model: string,
     selectedGroupId: string
   ) {
     const state =
       engineId === 'local'
         ? (await this.localAssetStore.readMap()).get(model)
-        : (await this.localCt2AssetStore.readMap()).get(model)
+        : engineId === 'local-ct2'
+          ? (await this.localCt2AssetStore.readMap()).get(model)
+          : (await this.localLlamaAssetStore.readMap()).get(model)
     return state?.groupsState[selectedGroupId]
   }
 
@@ -523,6 +563,18 @@ export class TranslationEngineService {
         cacheDir: this.localCt2CacheDir,
       })
     }
+    if (engineId === 'local-llama') {
+      const mod = (await import('@openspecui/local-llama-translator')) as unknown as {
+        createLocalLlamaTranslatorFactory: (options?: {
+          defaultModel?: string
+          cacheDir?: string
+        }) => TranslatorFactory
+      }
+      return mod.createLocalLlamaTranslatorFactory({
+        defaultModel: model ?? globalSettings.translationEngines.localLlama.model,
+        cacheDir: this.localLlamaCacheDir,
+      })
+    }
     const mod = (await import('@openspecui/openai-completion-translator')) as unknown as {
       createOpenAICompletionTranslatorFactory: (options: {
         baseUrl: string
@@ -545,7 +597,8 @@ export class TranslationEngineService {
     }
   ): Promise<TranslationEngineLifecycleStatus['assets']> {
     const config = snapshot.config ?? (await this.configManager.readConfig())
-    const globalSettings = snapshot.globalSettings ?? (await this.globalSettingsManager.readSettings())
+    const globalSettings =
+      snapshot.globalSettings ?? (await this.globalSettingsManager.readSettings())
     const selection = resolveManagedLocalSelection(engineId, config, globalSettings)
     if (!selection.model) {
       return {
@@ -556,7 +609,9 @@ export class TranslationEngineService {
     const state =
       engineId === 'local'
         ? (await this.localAssetStore.readMap()).get(selection.model)
-        : (await this.localCt2AssetStore.readMap()).get(selection.model)
+        : engineId === 'local-ct2'
+          ? (await this.localCt2AssetStore.readMap()).get(selection.model)
+          : (await this.localLlamaAssetStore.readMap()).get(selection.model)
     const plan = selectPersistedLocalPlan(state, selection.selectedGroupId)
     const selectedGroup = selectLocalPlanGroup(plan, selection.selectedGroupId)
     if (!plan || !selectedGroup || selectedGroup.files.length === 0) {
@@ -566,9 +621,7 @@ export class TranslationEngineService {
       }
     }
     const groupState =
-      state?.groupsState[
-        selectedGroup.id
-      ] ??
+      state?.groupsState[selectedGroup.id] ??
       (selectedGroup.baseGroupId ? state?.groupsState[selectedGroup.baseGroupId] : undefined)
     if (
       groupState?.status === 'downloading' ||
@@ -587,7 +640,10 @@ export class TranslationEngineService {
     const missingFiles = selectedGroup.rootDir
       ? await readMissingLocalGroupFiles(selectedGroup.rootDir, selectedGroup.files)
       : selectedGroup.files.map((file) => file.path)
-    if (missingFiles.length === 0 && (groupState?.status === 'downloaded' || state?.status === 'downloaded')) {
+    if (
+      missingFiles.length === 0 &&
+      (groupState?.status === 'downloaded' || state?.status === 'downloaded')
+    ) {
       return {
         state: 'ready',
         message: `Selected ${getManagedLocalAssetLabel(engineId)} files are ready.`,
@@ -599,10 +655,13 @@ export class TranslationEngineService {
     }
   }
 
-  private getLifecycleController(engineId: TranslationEngineId): TranslationEngineLifecycleController {
+  private getLifecycleController(
+    engineId: TranslationEngineId
+  ): TranslationEngineLifecycleController {
     if (engineId === 'browser') return browserTranslationEngineLifecycleController
     if (engineId === 'openai') return openAITranslationEngineLifecycleController
     if (engineId === 'local-ct2') return createManagedLocalLifecycleController('local-ct2')
+    if (engineId === 'local-llama') return createManagedLocalLifecycleController('local-llama')
     return createManagedLocalLifecycleController('local')
   }
 }
@@ -630,6 +689,7 @@ const browserTranslationEngineLifecycleController: TranslationEngineLifecycleCon
       globalSettings: {
         local: { model: '', hfEndpoint: '' },
         localCt2: { model: '', hfEndpoint: '' },
+        localLlama: { model: '', hfEndpoint: '' },
         openai: { baseUrl: '', token: '', model: '' },
       },
     })
@@ -659,6 +719,7 @@ const openAITranslationEngineLifecycleController: TranslationEngineLifecycleCont
       globalSettings: {
         local: { model: '', hfEndpoint: '' },
         localCt2: { model: '', hfEndpoint: '' },
+        localLlama: { model: '', hfEndpoint: '' },
         openai: { baseUrl: '', token: '', model: '' },
       },
     })
@@ -691,10 +752,14 @@ function resolveEngineModel(
       config.translation.engines.localCt2.model ?? globalSettings.translationEngines.localCt2.model
     )
   }
-  if (engineId === 'openai') {
+  if (engineId === 'local-llama') {
     return (
-      config.translation.engines.openai.model ?? globalSettings.translationEngines.openai.model
+      config.translation.engines.localLlama.model ??
+      globalSettings.translationEngines.localLlama.model
     )
+  }
+  if (engineId === 'openai') {
+    return config.translation.engines.openai.model ?? globalSettings.translationEngines.openai.model
   }
   return undefined
 }
@@ -717,6 +782,17 @@ function resolveManagedLocalSelection(
       selectedGroupId:
         config.translation.engines.local.selectedGroupId ??
         globalSettings.translationEngines.local.selectedGroupId,
+    }
+  }
+  if (manifest.settingsKey === 'localLlama') {
+    return {
+      model:
+        config.translation.engines.localLlama.model ??
+        globalSettings.translationEngines.localLlama.model ??
+        manifest.defaultModel,
+      selectedGroupId:
+        config.translation.engines.localLlama.selectedGroupId ??
+        globalSettings.translationEngines.localLlama.selectedGroupId,
     }
   }
   return {
@@ -779,8 +855,8 @@ async function detectManagedLocalLifecycle(
     runtime,
     summary:
       runtime.state === 'ready'
-        ? runtime.message ?? dependency.message ?? manifest.description
-        : runtime.error ?? runtime.message ?? manifest.installDescription,
+        ? (runtime.message ?? dependency.message ?? manifest.description)
+        : (runtime.error ?? runtime.message ?? manifest.installDescription),
   })
 }
 
@@ -828,12 +904,19 @@ async function probeManagedLocalRuntime(
       if (typeof mod.pipeline !== 'function') {
         throw new Error('Transformers.js did not expose a translation pipeline entry point.')
       }
-    } else {
+    } else if (engineId === 'local-ct2') {
       const mod = (await import('ctranslate2')) as {
         Ct2Translator?: unknown
       }
       if (typeof mod.Ct2Translator !== 'function') {
         throw new Error('ctranslate2 did not expose a Ct2Translator constructor.')
+      }
+    } else {
+      const mod = (await import('node-llama-cpp')) as {
+        getLlama?: unknown
+      }
+      if (typeof mod.getLlama !== 'function') {
+        throw new Error('node-llama-cpp did not expose a getLlama entry point.')
       }
     }
     return {
@@ -994,7 +1077,9 @@ async function runRuntimeInstallCommand(input: {
           resolve()
           return
         }
-        reject(new Error(`${input.command.displayCommand} exited with code ${exitCode ?? 'unknown'}.`))
+        reject(
+          new Error(`${input.command.displayCommand} exited with code ${exitCode ?? 'unknown'}.`)
+        )
       })
     })
     return null
@@ -1030,6 +1115,16 @@ function getManagedLocalRuntimeSpec(engineId: ManagedLocalTranslationEngineId): 
       },
     }
   }
+  if (engineId === 'local-llama') {
+    return {
+      packageNames: ['node-llama-cpp'],
+      allowBuildPackages: ['node-llama-cpp'],
+      fallbackRange: '~3.18.1',
+      detectMissing(tree) {
+        return hasRuntimePackageDependencyPath(tree, ['node-llama-cpp']) ? [] : ['node-llama-cpp']
+      },
+    }
+  }
   return {
     packageNames: ['ctranslate2'],
     allowBuildPackages: ['ctranslate2'],
@@ -1047,14 +1142,9 @@ function resolveBatchTranslateModel(
   if (input.model) return input.model
   if (input.engineId === 'local') return settings.translationEngines.local.model
   if (input.engineId === 'local-ct2') return settings.translationEngines.localCt2.model
+  if (input.engineId === 'local-llama') return settings.translationEngines.localLlama.model
   if (input.engineId === 'openai') return settings.translationEngines.openai.model
   return undefined
-}
-
-function isManagedLocalEngine(
-  engineId: TranslationEngineId
-): engineId is Extract<ServiceTranslationEngineId, 'local' | 'local-ct2'> {
-  return engineId === 'local' || engineId === 'local-ct2'
 }
 
 function selectPersistedLocalPlan(

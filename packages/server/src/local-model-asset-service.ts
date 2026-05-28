@@ -2096,16 +2096,19 @@ function toCatalogItem(
 ): LocalModelCatalogItem {
   const downloadGroups = asset.plan?.groups ?? candidate.downloadGroups
   const hasSelectableGroup = downloadGroups?.some((group) => group.selectable) ?? false
+  const local =
+    asset.status === 'downloaded' ||
+    asset.status === 'paused' ||
+    asset.status === 'downloading' ||
+    (asset.progress ?? 0) > 0
   return {
     ...candidate,
     downloadGroups,
     asset,
     selectable: hasSelectableGroup || (candidate.size.estimatedTotalBytes ?? 0) > 0,
-    local:
-      asset.status === 'downloaded' ||
-      asset.status === 'paused' ||
-      asset.status === 'downloading' ||
-      (asset.progress ?? 0) > 0,
+    local,
+    primarySource: local ? 'local' : 'network',
+    sources: [local ? 'local' : 'network'],
   }
 }
 

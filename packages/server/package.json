@@ -26,6 +26,7 @@
     "@lydell/node-pty": "^1.1.0",
     "@openspecui/core": "workspace:*",
     "@openspecui/local-ct2-translator": "workspace:*",
+    "@openspecui/local-llama-translator": "workspace:*",
     "@openspecui/local-translator": "workspace:*",
     "@openspecui/openai-completion-translator": "workspace:*",
     "@openspecui/search": "workspace:*",
@@ -37,10 +38,11 @@
     "zod": "^3.24.1"
   },
   "// runtime-note": "These heavy runtimes are owned by the host package because translation engine installation is lifecycle-managed at the host boundary.",
-  "// bundle-note": "The translator engine packages keep runtime imports external in tsdown output, so this host package remains the install/detect truth during development runs.",
+  "// bundle-note": "The translator engine packages keep heavyweight runtime imports external in tsdown output, so this host package remains the install/detect truth during development runs even when the translator adapters are bundled.",
   "optionalDependencies": {
     "@huggingface/transformers": "~4.2.0",
-    "ctranslate2": "workspace:*"
+    "ctranslate2": "workspace:*",
+    "node-llama-cpp": "~3.18.1"
   },
   "devDependencies": {
     "@trpc/client": "^11.7.2",

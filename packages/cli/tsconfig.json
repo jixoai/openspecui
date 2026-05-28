@@ -20,6 +20,7 @@
       "@openspecui/search/node": ["../search/src/node.ts"],
       "@openspecui/local-translator": ["../local-translator/src/index.ts"],
       "@openspecui/local-ct2-translator": ["../local-ct2-translator/src/index.ts"],
+      "@openspecui/local-llama-translator": ["../local-llama-translator/src/index.ts"],
       "@openspecui/openai-completion-translator": ["../openai-completion-translator/src/index.ts"]
     }
   },
@@ -32,6 +33,7 @@
     "../search/src/**/*.ts",
     "../local-translator/src/**/*.ts",
     "../local-ct2-translator/src/**/*.ts",
+    "../local-llama-translator/src/**/*.ts",
     "../openai-completion-translator/src/**/*.ts"
   ],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "../*/src/**/*.test.ts"]

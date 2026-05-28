@@ -37,6 +37,7 @@
       "@openspecui/search/node": ["../search/src/node.ts"],
       "@openspecui/browser-translator": ["../browser-translator/src/index.ts"],
       "@openspecui/local-ct2-translator": ["../local-ct2-translator/src/index.ts"],
+      "@openspecui/local-llama-translator": ["../local-llama-translator/src/index.ts"],
       "@openspecui/local-translator": ["../local-translator/src/index.ts"],
       "@openspecui/openai-completion-translator": ["../openai-completion-translator/src/index.ts"],
       "@openspecui/ai-provider": ["../ai-provider/src/index.ts"],

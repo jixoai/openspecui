@@ -39,10 +39,11 @@
     "better-sqlite3": "^12.5.0"
   },
   "// runtime-note": "The published openspecui package is the production runtime host for heavyweight translation runtimes.",
-  "// bundle-note": "tsdown keeps translator package runtime imports external, so these optionalDependencies are the source of truth for install detection and on-demand installation.",
+  "// bundle-note": "tsdown keeps translator package runtime imports external, so these optionalDependencies are the source of truth for install detection and on-demand installation even though the adapter packages themselves are bundled.",
   "optionalDependencies": {
     "@huggingface/transformers": "~4.2.0",
-    "ctranslate2": "workspace:*"
+    "ctranslate2": "workspace:*",
+    "node-llama-cpp": "~3.18.1"
   },
   "devDependencies": {
     "@hono/node-server": "^1.14.1",

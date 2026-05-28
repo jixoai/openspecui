@@ -61,6 +61,13 @@ import { DocumentService } from './document-service.js'
 import { buildEntityReadOptions } from './entity-read-options.js'
 import { FilePreviewService } from './file-preview-service.js'
 import { createHookRuntime } from './hook-runtime.js'
+import { LlamaModelAssetService } from './llama-model-asset-service.js'
+import {
+  getDefaultLocalLlamaModelCacheDir,
+  getDefaultLocalLlamaModelFetchCachePath,
+  getDefaultLocalLlamaModelIndexPath,
+  getDefaultLocalLlamaModelProfileManifestPath,
+} from './local-llama-model-cache-path.js'
 import { LocalModelAssetService } from './local-model-asset-service.js'
 import {
   getDefaultLocalModelCacheDir,
@@ -123,6 +130,10 @@ export interface ServerConfig {
     localCt2ModelAssetIndexPath?: string
     localCt2ModelProfileManifestPath?: string
     localCt2ModelFetchCachePath?: string
+    localLlamaModelCacheDir?: string
+    localLlamaModelAssetIndexPath?: string
+    localLlamaModelProfileManifestPath?: string
+    localLlamaModelFetchCachePath?: string
   }
 }
 
@@ -196,6 +207,15 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     getDefaultLocalCt2ModelProfileManifestPath()
   const ct2ModelFetchCachePath =
     config.runtimePaths?.localCt2ModelFetchCachePath ?? getDefaultLocalCt2ModelFetchCachePath()
+  const llamaModelCacheDir =
+    config.runtimePaths?.localLlamaModelCacheDir ?? getDefaultLocalLlamaModelCacheDir()
+  const llamaModelIndexPath =
+    config.runtimePaths?.localLlamaModelAssetIndexPath ?? getDefaultLocalLlamaModelIndexPath()
+  const llamaModelProfileManifestPath =
+    config.runtimePaths?.localLlamaModelProfileManifestPath ??
+    getDefaultLocalLlamaModelProfileManifestPath()
+  const llamaModelFetchCachePath =
+    config.runtimePaths?.localLlamaModelFetchCachePath ?? getDefaultLocalLlamaModelFetchCachePath()
   const translationEngineService = new TranslationEngineService({
     projectDir: config.projectDir,
     configManager,
@@ -206,6 +226,9 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     localCt2CacheDir: ct2ModelCacheDir,
     localCt2AssetIndexPath: ct2ModelIndexPath,
     localCt2FetchCachePath: ct2ModelFetchCachePath,
+    localLlamaCacheDir: llamaModelCacheDir,
+    localLlamaAssetIndexPath: llamaModelIndexPath,
+    localLlamaFetchCachePath: llamaModelFetchCachePath,
   })
   const localModelAssetService = new LocalModelAssetService({
     projectDir: config.projectDir,
@@ -223,6 +246,14 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     indexPath: ct2ModelIndexPath,
     profileManifestPath: ct2ModelProfileManifestPath,
     fetchCachePath: ct2ModelFetchCachePath,
+  })
+  const localLlamaModelAssetService = new LlamaModelAssetService({
+    projectDir: config.projectDir,
+    globalSettingsManager,
+    cacheDir: llamaModelCacheDir,
+    indexPath: llamaModelIndexPath,
+    profileManifestPath: llamaModelProfileManifestPath,
+    fetchCachePath: llamaModelFetchCachePath,
   })
 
   // Create file watcher if enabled
@@ -373,6 +404,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
         translationEngineService,
         localModelAssetService,
         localCt2ModelAssetService,
+        localLlamaModelAssetService,
         gitWorktreeHandoff: config.gitWorktreeHandoff,
         watcher,
         projectDir: config.projectDir,
@@ -400,6 +432,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     translationEngineService,
     localModelAssetService,
     localCt2ModelAssetService,
+    localLlamaModelAssetService,
     gitWorktreeHandoff: config.gitWorktreeHandoff,
     watcher,
     projectDir: config.projectDir,
@@ -424,6 +457,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     translationEngineService,
     localModelAssetService,
     localCt2ModelAssetService,
+    localLlamaModelAssetService,
     hookRuntime,
     watcher,
     createContext,
@@ -590,6 +624,7 @@ export async function startServer(
       await server.hookRuntime.dispose()
       await server.createContext().localModelAssetService.close()
       await server.createContext().localCt2ModelAssetService.close()
+      await server.createContext().localLlamaModelAssetService.close()
       server.translationCacheService.close()
       wsServer.close()
       httpServer.close()

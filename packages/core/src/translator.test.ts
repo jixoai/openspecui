@@ -3,8 +3,9 @@ import {
   TRANSLATOR_CONTRACT_VERSION,
   createTranslationEngineLifecycleStatus,
   getManagedLocalTranslationEngineManifest,
-  getTranslationEngineManifest,
   getTranslationEngineLifecycleMessage,
+  getTranslationEngineManifest,
+  isDirectionalManagedLocalTranslationEngineId,
   isManagedLocalTranslationEngineId,
   shouldShowTranslationEngineInstallGate,
   type TranslationModelCandidate,
@@ -15,6 +16,7 @@ describe('translator platform contract', () => {
     const browser = getTranslationEngineManifest('browser')
     const local = getTranslationEngineManifest('local')
     const localCt2 = getTranslationEngineManifest('local-ct2')
+    const localLlama = getTranslationEngineManifest('local-llama')
     const openai = getTranslationEngineManifest('openai')
 
     expect(browser.runtime).toBe('browser')
@@ -22,6 +24,8 @@ describe('translator platform contract', () => {
     expect(local.factoryExport).toBe('createLocalTranslatorFactory')
     expect(localCt2.moduleName).toBe('@openspecui/local-ct2-translator')
     expect(localCt2.factoryExport).toBe('createLocalCt2TranslatorFactory')
+    expect(localLlama.moduleName).toBe('@openspecui/local-llama-translator')
+    expect(localLlama.factoryExport).toBe('createLocalLlamaTranslatorFactory')
     expect(openai.moduleName).toBe('@openspecui/openai-completion-translator')
     expect(openai.factoryExport).toBe('createOpenAICompletionTranslatorFactory')
   })
@@ -33,8 +37,12 @@ describe('translator platform contract', () => {
   it('distinguishes managed local engines from browser and remote providers', () => {
     expect(isManagedLocalTranslationEngineId('local')).toBe(true)
     expect(isManagedLocalTranslationEngineId('local-ct2')).toBe(true)
+    expect(isManagedLocalTranslationEngineId('local-llama')).toBe(true)
     expect(isManagedLocalTranslationEngineId('browser')).toBe(false)
     expect(isManagedLocalTranslationEngineId('openai')).toBe(false)
+    expect(isDirectionalManagedLocalTranslationEngineId('local')).toBe(true)
+    expect(isDirectionalManagedLocalTranslationEngineId('local-ct2')).toBe(true)
+    expect(isDirectionalManagedLocalTranslationEngineId('local-llama')).toBe(false)
   })
 
   it('defines model candidates with ranking and size metadata for catalog UIs', () => {
@@ -68,11 +76,14 @@ describe('translator platform contract', () => {
   it('exposes managed-local manifest metadata for shared install gate UI', () => {
     const local = getManagedLocalTranslationEngineManifest('local')
     const localCt2 = getManagedLocalTranslationEngineManifest('local-ct2')
+    const localLlama = getManagedLocalTranslationEngineManifest('local-llama')
 
     expect(local.runtimePackageName).toBe('@huggingface/transformers')
     expect(local.modelLabel).toBe('Local Model')
     expect(localCt2.runtimePackageName).toBe('ctranslate2')
     expect(localCt2.downloadGroupsLabel).toBe('Local CT2 download groups')
+    expect(localLlama.runtimePackageName).toBe('node-llama-cpp')
+    expect(localLlama.downloadGroupsLabel).toBe('Local GGUF files')
   })
 
   it('shows the install gate until dependency and runtime lifecycle are both ready', () => {

@@ -21,6 +21,12 @@ export const TranslationEngineProjectSettingsSchema = z
         selectedGroupId: z.string().min(1).optional(),
       })
       .default({}),
+    localLlama: z
+      .object({
+        model: z.string().min(1).optional(),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+      .default({}),
     openai: z
       .object({
         model: z.string().min(1).optional(),
@@ -49,6 +55,9 @@ export type TranslationEngineProjectSettingsUpdate = {
   }
   localCt2?: Partial<Omit<TranslationEngineProjectSettings['localCt2'], 'selectedGroupId'>> & {
     selectedGroupId?: TranslationEngineProjectSettings['localCt2']['selectedGroupId'] | null
+  }
+  localLlama?: Partial<Omit<TranslationEngineProjectSettings['localLlama'], 'selectedGroupId'>> & {
+    selectedGroupId?: TranslationEngineProjectSettings['localLlama']['selectedGroupId'] | null
   }
   openai?: Partial<TranslationEngineProjectSettings['openai']>
 }

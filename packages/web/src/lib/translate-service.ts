@@ -12,6 +12,7 @@ import type { DocumentTranslationConfig } from '@openspecui/core/document-transl
 import { checkLocalDirectionalModelLanguagePair } from '@openspecui/core/translation-language-pair'
 import {
   TRANSLATOR_CONTRACT_VERSION,
+  isDirectionalManagedLocalTranslationEngineId,
   isManagedLocalTranslationEngineId,
   shouldShowTranslationEngineInstallGate,
   type LocalModelAssetState,
@@ -106,20 +107,22 @@ export async function resolveTranslateServiceState(input: {
         }),
       })
     }
-    const directionCheck = checkLocalDirectionalModelLanguagePair({
-      model,
-      targetLanguage: config.targetLanguage,
-    })
-    if (!directionCheck.supported) {
-      return emitTranslateServiceState(input.onUpdate, {
-        status: {
-          state: 'unavailable',
-          engineId: config.engineId,
-          message:
-            directionCheck.message ??
-            'Selected local model does not support the configured target language.',
-        },
+    if (isDirectionalManagedLocalTranslationEngineId(config.engineId)) {
+      const directionCheck = checkLocalDirectionalModelLanguagePair({
+        model,
+        targetLanguage: config.targetLanguage,
       })
+      if (!directionCheck.supported) {
+        return emitTranslateServiceState(input.onUpdate, {
+          status: {
+            state: 'unavailable',
+            engineId: config.engineId,
+            message:
+              directionCheck.message ??
+              'Selected local model does not support the configured target language.',
+          },
+        })
+      }
     }
 
     input.onUpdate?.(
@@ -354,7 +357,7 @@ export async function runSingleTranslation(input: {
       translator.destroy?.()
     }
   }
-  if (isManagedLocalTranslationEngineId(input.engineId)) {
+  if (isDirectionalManagedLocalTranslationEngineId(input.engineId)) {
     const directionCheck = checkLocalDirectionalModelLanguagePair({
       model: input.model,
       sourceLanguage: input.sourceLanguage,
@@ -409,14 +412,19 @@ function getManagedLocalEngineConfig(config: DocumentTranslationConfig): {
         model: config.engines.localCt2.model,
         selectedGroupId: config.engines.localCt2.selectedGroupId,
       }
-    : {
-        model: config.engines.local.model,
-        selectedGroupId: config.engines.local.selectedGroupId,
-      }
+    : config.engineId === 'local-llama'
+      ? {
+          model: config.engines.localLlama.model,
+          selectedGroupId: config.engines.localLlama.selectedGroupId,
+        }
+      : {
+          model: config.engines.local.model,
+          selectedGroupId: config.engines.local.selectedGroupId,
+        }
 }
 
 async function queryManagedLocalPanelState(
-  engineId: Extract<TranslationEngineId, 'local' | 'local-ct2'>,
+  engineId: Extract<TranslationEngineId, 'local' | 'local-ct2' | 'local-llama'>,
   input: { modelId: string; selectedGroupId?: string }
 ): Promise<{
   modelId: string
@@ -426,7 +434,9 @@ async function queryManagedLocalPanelState(
 }> {
   return engineId === 'local'
     ? trpcClient.localModels.panelState.query(input)
-    : trpcClient.localCt2Models.panelState.query(input)
+    : engineId === 'local-ct2'
+      ? trpcClient.localCt2Models.panelState.query(input)
+      : trpcClient.localLlamaModels.panelState.query(input)
 }
 
 export class TrpcTranslator implements Translator {

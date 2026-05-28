@@ -2,7 +2,13 @@ import { z } from 'zod'
 
 export const TRANSLATOR_CONTRACT_VERSION = 3
 
-export const TRANSLATION_ENGINE_IDS = ['browser', 'local', 'local-ct2', 'openai'] as const
+export const TRANSLATION_ENGINE_IDS = [
+  'browser',
+  'local',
+  'local-ct2',
+  'local-llama',
+  'openai',
+] as const
 
 export const TranslationEngineIdSchema = z.enum(TRANSLATION_ENGINE_IDS)
 
@@ -12,13 +18,27 @@ export const DEFAULT_TRANSLATION_ENGINE_ID: TranslationEngineId = 'browser'
 
 export function isManagedLocalTranslationEngineId(
   engineId: TranslationEngineId | null | undefined
+): engineId is Extract<TranslationEngineId, 'local' | 'local-ct2' | 'local-llama'> {
+  return engineId === 'local' || engineId === 'local-ct2' || engineId === 'local-llama'
+}
+
+export function isDirectionalManagedLocalTranslationEngineId(
+  engineId: TranslationEngineId | null | undefined
 ): engineId is Extract<TranslationEngineId, 'local' | 'local-ct2'> {
   return engineId === 'local' || engineId === 'local-ct2'
 }
 
-export type ManagedLocalTranslationEngineId = Extract<TranslationEngineId, 'local' | 'local-ct2'>
+export type ManagedLocalTranslationEngineId = Extract<
+  TranslationEngineId,
+  'local' | 'local-ct2' | 'local-llama'
+>
 
-export const SERVICE_TRANSLATION_ENGINE_IDS = ['local', 'local-ct2', 'openai'] as const
+export const SERVICE_TRANSLATION_ENGINE_IDS = [
+  'local',
+  'local-ct2',
+  'local-llama',
+  'openai',
+] as const
 
 export const ServiceTranslationEngineIdSchema = z.enum(SERVICE_TRANSLATION_ENGINE_IDS)
 
@@ -276,7 +296,7 @@ export const LocalModelProfileLoadStateSchema = z.object({
 export type LocalModelProfileLoadState = z.infer<typeof LocalModelProfileLoadStateSchema>
 
 export const LocalModelAssetLogSchema = z.object({
-  engineId: z.enum(['local', 'local-ct2']),
+  engineId: z.enum(['local', 'local-ct2', 'local-llama']),
   modelId: z.string().min(1),
   selectedGroupId: z.string().min(1).optional(),
   groupId: z.string().min(1).optional(),
@@ -342,10 +362,16 @@ export const LocalModelAssetStateSchema = z.object({
 
 export type LocalModelAssetState = z.infer<typeof LocalModelAssetStateSchema>
 
+export const ManagedLocalCatalogSourceSchema = z.enum(['local', 'network', 'recommended'])
+
+export type ManagedLocalCatalogSource = z.infer<typeof ManagedLocalCatalogSourceSchema>
+
 export interface LocalModelCatalogItem extends TranslationModelCandidate {
   asset: LocalModelAssetState
   selectable: boolean
   local: boolean
+  primarySource: ManagedLocalCatalogSource
+  sources: ManagedLocalCatalogSource[]
 }
 
 export interface LocalModelCatalogResult {
@@ -442,11 +468,10 @@ export interface TranslationEngineDependencyStatus {
   error?: string
 }
 
-export const TranslationEngineDependencyStatusSchema = TranslationEngineLifecyclePhaseMetaSchema.extend(
-  {
+export const TranslationEngineDependencyStatusSchema =
+  TranslationEngineLifecyclePhaseMetaSchema.extend({
     state: TranslationEngineDependencyStateSchema,
-  }
-)
+  })
 
 export interface TranslationEngineRuntimeStatus {
   state: TranslationEngineRuntimeState
@@ -455,9 +480,10 @@ export interface TranslationEngineRuntimeStatus {
   error?: string
 }
 
-export const TranslationEngineRuntimeStatusSchema = TranslationEngineLifecyclePhaseMetaSchema.extend({
-  state: TranslationEngineRuntimeStateSchema,
-})
+export const TranslationEngineRuntimeStatusSchema =
+  TranslationEngineLifecyclePhaseMetaSchema.extend({
+    state: TranslationEngineRuntimeStateSchema,
+  })
 
 export interface TranslationEngineAssetStatus {
   state: TranslationEngineAssetState
@@ -508,10 +534,10 @@ export function createTranslationEngineLifecycleStatus(
   }
 }
 
-export function isTranslationEngineDependencyReady(status: TranslationEngineLifecycleStatus): boolean {
-  return (
-    status.dependency.state === 'installed' || status.dependency.state === 'not-applicable'
-  )
+export function isTranslationEngineDependencyReady(
+  status: TranslationEngineLifecycleStatus
+): boolean {
+  return status.dependency.state === 'installed' || status.dependency.state === 'not-applicable'
 }
 
 export function isTranslationEngineRuntimeReady(status: TranslationEngineLifecycleStatus): boolean {
@@ -602,13 +628,15 @@ export interface TranslationEngineLifecycleContext {
 }
 
 export interface TranslationEngineLifecycleController {
-  detectLifecycle(input: TranslationEngineLifecycleContext): Promise<TranslationEngineLifecycleStatus>
+  detectLifecycle(
+    input: TranslationEngineLifecycleContext
+  ): Promise<TranslationEngineLifecycleStatus>
   install(input: TranslationEngineLifecycleContext): Promise<TranslationEngineLifecycleStatus>
 }
 
 export type TranslationEngineRuntime = 'browser' | 'server'
 export type TranslationEngineKind = 'browser' | 'managed-local' | 'remote-provider'
-export type TranslationEngineSettingsKey = 'local' | 'localCt2' | 'openai'
+export type TranslationEngineSettingsKey = 'local' | 'localCt2' | 'localLlama' | 'openai'
 
 export interface TranslationEngineManifest {
   id: TranslationEngineId
@@ -680,6 +708,26 @@ export const TRANSLATION_ENGINE_MANIFESTS = [
     factoryExport: 'createLocalCt2TranslatorFactory',
   },
   {
+    id: 'local-llama',
+    label: 'Local-Llama',
+    description:
+      'Runs a local GGUF translation-capable LLM through node-llama-cpp with managed GGUF model files.',
+    technicalSummary:
+      'Server-side llama.cpp adapter via node-llama-cpp. Runtime package is installed on demand; selected GGUF model files are downloaded separately and can range from hundreds of MB to multiple GB.',
+    runtime: 'server',
+    kind: 'managed-local',
+    settingsKey: 'localLlama',
+    defaultModel: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+    runtimePackageName: 'node-llama-cpp',
+    installDescription:
+      'Install the Local-Llama runtime package to enable server-side GGUF translation.',
+    modelLabel: 'Llama Model',
+    downloadGroupsLabel: 'Local GGUF files',
+    refreshTooltip: 'Refresh local GGUF artifacts',
+    moduleName: '@openspecui/local-llama-translator',
+    factoryExport: 'createLocalLlamaTranslatorFactory',
+  },
+  {
     id: 'openai',
     label: 'OpenAI-Completion',
     description:
@@ -710,7 +758,7 @@ export function getManagedLocalTranslationEngineManifest(
   engineId: ManagedLocalTranslationEngineId
 ): TranslationEngineManifest & {
   kind: 'managed-local'
-  settingsKey: Extract<TranslationEngineSettingsKey, 'local' | 'localCt2'>
+  settingsKey: Extract<TranslationEngineSettingsKey, 'local' | 'localCt2' | 'localLlama'>
   defaultModel: string
   runtimePackageName: string
   installDescription: string
@@ -724,7 +772,7 @@ export function getManagedLocalTranslationEngineManifest(
   }
   return manifest as TranslationEngineManifest & {
     kind: 'managed-local'
-    settingsKey: Extract<TranslationEngineSettingsKey, 'local' | 'localCt2'>
+    settingsKey: Extract<TranslationEngineSettingsKey, 'local' | 'localCt2' | 'localLlama'>
     defaultModel: string
     runtimePackageName: string
     installDescription: string
@@ -758,10 +806,21 @@ export const TranslationLocalCt2SettingsSchema = z.object({
 
 export type TranslationLocalCt2Settings = z.infer<typeof TranslationLocalCt2SettingsSchema>
 
+export const TranslationLocalLlamaSettingsSchema = z.object({
+  model: z.string().default('tencent/Hy-MT2-1.8B-1.25Bit-GGUF'),
+  selectedGroupId: z.string().optional(),
+  hfEndpoint: z.string().default(''),
+})
+
+export type TranslationLocalLlamaSettings = z.infer<typeof TranslationLocalLlamaSettingsSchema>
+
 export const TranslationEngineGlobalSettingsSchema = z.object({
   openai: TranslationOpenAISettingsSchema.default(TranslationOpenAISettingsSchema.parse({})),
   local: TranslationLocalSettingsSchema.default(TranslationLocalSettingsSchema.parse({})),
   localCt2: TranslationLocalCt2SettingsSchema.default(TranslationLocalCt2SettingsSchema.parse({})),
+  localLlama: TranslationLocalLlamaSettingsSchema.default(
+    TranslationLocalLlamaSettingsSchema.parse({})
+  ),
 })
 
 export type TranslationEngineGlobalSettings = z.infer<typeof TranslationEngineGlobalSettingsSchema>
@@ -773,6 +832,9 @@ export type TranslationEngineGlobalSettingsUpdate = {
   }
   localCt2?: Partial<Omit<TranslationLocalCt2Settings, 'selectedGroupId'>> & {
     selectedGroupId?: TranslationLocalCt2Settings['selectedGroupId'] | null
+  }
+  localLlama?: Partial<Omit<TranslationLocalLlamaSettings, 'selectedGroupId'>> & {
+    selectedGroupId?: TranslationLocalLlamaSettings['selectedGroupId'] | null
   }
 }
 

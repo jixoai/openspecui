@@ -207,6 +207,42 @@ describe('GlobalSettingsManager', () => {
     await expect(settingsManager.readSettings()).resolves.toEqual(DEFAULT_GLOBAL_SETTINGS)
   })
 
+  it('persists and clears local llama settings independently from other managed engines', async () => {
+    await settingsManager.writeSettings({
+      translationEngines: {
+        localLlama: {
+          model: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+          selectedGroupId: 'Hy-MT2-1.8B-1.25Bit.gguf',
+          hfEndpoint: 'https://hf-mirror.com',
+        },
+      },
+    })
+    clearCache()
+
+    const settings = await settingsManager.readSettings()
+    expect(settings.translationEngines.localLlama).toEqual({
+      ...DEFAULT_GLOBAL_SETTINGS.translationEngines.localLlama,
+      model: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+      selectedGroupId: 'Hy-MT2-1.8B-1.25Bit.gguf',
+      hfEndpoint: 'https://hf-mirror.com',
+    })
+    await expect(readFile(settingsPath, 'utf-8')).resolves.toBe(
+      '{\n  "translationEngines": {\n    "localLlama": {\n      "selectedGroupId": "Hy-MT2-1.8B-1.25Bit.gguf",\n      "hfEndpoint": "https://hf-mirror.com"\n    }\n  }\n}'
+    )
+
+    await settingsManager.writeSettings({
+      translationEngines: {
+        localLlama: {
+          selectedGroupId: null,
+          hfEndpoint: '',
+        },
+      },
+    })
+    clearCache()
+
+    await expect(settingsManager.readSettings()).resolves.toEqual(DEFAULT_GLOBAL_SETTINGS)
+  })
+
   it('clears local selected profile settings when a patch sets them to null', async () => {
     await settingsManager.writeSettings({
       translationEngines: {

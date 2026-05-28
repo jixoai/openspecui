@@ -53,12 +53,14 @@ export function useDocumentTranslation(
   const abortRef = useRef<AbortController | null>(null)
   const generationRef = useRef(0)
   const latestStartRef = useRef<(() => Promise<void>) | null>(null)
+  const segmentPatchMapRef = useRef(new Map<number, DocumentTranslationProgressPatch['segment']>())
   const { activation } = useDocumentTranslationActivation()
 
   const cancel = useCallback(() => {
     generationRef.current += 1
     abortRef.current?.abort()
     abortRef.current = null
+    segmentPatchMapRef.current.clear()
     setStatus('source')
     setResult(null)
     setError(null)
@@ -68,6 +70,7 @@ export function useDocumentTranslation(
     generationRef.current += 1
     abortRef.current?.abort()
     abortRef.current = null
+    segmentPatchMapRef.current.clear()
     setStatus('source')
     setResult(null)
     setError(null)
@@ -79,6 +82,7 @@ export function useDocumentTranslation(
     generationRef.current += 1
     setCapability(null)
     setBrowserSupportTable(null)
+    segmentPatchMapRef.current.clear()
     setResult(null)
     setStatus('source')
     setError(null)
@@ -91,6 +95,8 @@ export function useDocumentTranslation(
     config?.engines.local.selectedGroupId,
     config?.engines.localCt2.model,
     config?.engines.localCt2.selectedGroupId,
+    config?.engines.localLlama.model,
+    config?.engines.localLlama.selectedGroupId,
     config?.engines.openai.model,
     config?.targetLanguage,
   ])
@@ -141,6 +147,8 @@ export function useDocumentTranslation(
     config?.engines.local.selectedGroupId,
     config?.engines.localCt2.model,
     config?.engines.localCt2.selectedGroupId,
+    config?.engines.localLlama.model,
+    config?.engines.localLlama.selectedGroupId,
     config?.targetLanguage,
     markdown.length,
   ])
@@ -153,6 +161,7 @@ export function useDocumentTranslation(
     const generationId = generationRef.current + 1
     generationRef.current = generationId
     abortRef.current = controller
+    segmentPatchMapRef.current.clear()
     setError(null)
     setStatus('initializing')
 
@@ -208,10 +217,15 @@ export function useDocumentTranslation(
             return
           }
           setResult((current) =>
-            applyDocumentTranslationPatch(current, patch, {
-              displayMode: config.displayMode,
-              targetLanguage: config.targetLanguage,
-            })
+            applyDocumentTranslationPatch(
+              current,
+              patch,
+              {
+                displayMode: config.displayMode,
+                targetLanguage: config.targetLanguage,
+              },
+              segmentPatchMapRef.current
+            )
           )
         }
       )
@@ -223,7 +237,7 @@ export function useDocumentTranslation(
         return
       }
       const documentFailure = getDocumentTranslationFailureMessage(nextResult)
-      setResult(nextResult)
+      setResult(normalizeDocumentTranslationResult(nextResult))
       if (documentFailure) {
         setError(documentFailure)
         setStatus('error')
@@ -257,6 +271,8 @@ export function useDocumentTranslation(
     config?.engines.local.selectedGroupId,
     config?.engines.localCt2.model,
     config?.engines.localCt2.selectedGroupId,
+    config?.engines.localLlama.model,
+    config?.engines.localLlama.selectedGroupId,
     markdown,
     serviceStatus,
   ])
@@ -306,14 +322,36 @@ function getDocumentTranslationFailureMessage(result: DocumentTranslationResult)
 function applyDocumentTranslationPatch(
   current: DocumentTranslationResult | null,
   patch: DocumentTranslationProgressPatch,
-  fallback: Pick<DocumentTranslationResult, 'displayMode' | 'targetLanguage'>
+  fallback: Pick<DocumentTranslationResult, 'displayMode' | 'targetLanguage'>,
+  patchMap: Map<number, DocumentTranslationProgressPatch['segment']>
 ): DocumentTranslationResult {
-  const segments = current?.segments.slice() ?? []
-  segments[patch.segmentIndex] = patch.segment
-  return {
+  patchMap.set(patch.segmentIndex, patch.segment)
+  return buildPatchedDocumentTranslationResult(current, fallback, patchMap)
+}
+
+function buildPatchedDocumentTranslationResult(
+  current: DocumentTranslationResult | null,
+  fallback: Pick<DocumentTranslationResult, 'displayMode' | 'targetLanguage'>,
+  patchMap: Map<number, DocumentTranslationProgressPatch['segment']>
+): DocumentTranslationResult {
+  return normalizeDocumentTranslationResult({
     displayMode: current?.displayMode ?? fallback.displayMode,
     sourceLanguage: current?.sourceLanguage,
     targetLanguage: current?.targetLanguage ?? fallback.targetLanguage,
-    segments,
+    segments: [...patchMap.entries()]
+      .sort((left, right) => left[0] - right[0])
+      .map(([, segment]) => segment),
+  })
+}
+
+function normalizeDocumentTranslationResult(
+  result: DocumentTranslationResult
+): DocumentTranslationResult {
+  return {
+    ...result,
+    segments: (Array.isArray(result.segments) ? result.segments : []).filter(
+      (segment): segment is NonNullable<DocumentTranslationResult['segments'][number]> =>
+        segment !== undefined
+    ),
   }
 }

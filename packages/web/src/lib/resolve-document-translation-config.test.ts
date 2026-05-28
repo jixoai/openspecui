@@ -14,6 +14,7 @@ describe('resolveDocumentTranslationConfig', () => {
           engines: {
             local: {},
             localCt2: {},
+            localLlama: {},
             openai: {},
           },
         },
@@ -28,6 +29,11 @@ describe('resolveDocumentTranslationConfig', () => {
             localCt2: {
               model: 'ooeoeo/opus-mt-en-zh-ct2-float16',
               selectedGroupId: 'float16',
+              hfEndpoint: 'https://hf-mirror.com',
+            },
+            localLlama: {
+              model: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+              selectedGroupId: 'Hy-MT2-1.8B-1.25Bit.gguf',
               hfEndpoint: 'https://hf-mirror.com',
             },
             openai: {
@@ -52,6 +58,10 @@ describe('resolveDocumentTranslationConfig', () => {
         localCt2: {
           model: 'ooeoeo/opus-mt-en-zh-ct2-float16',
           selectedGroupId: 'float16',
+        },
+        localLlama: {
+          model: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+          selectedGroupId: 'Hy-MT2-1.8B-1.25Bit.gguf',
         },
         openai: {
           model: 'gpt-4.1-mini',

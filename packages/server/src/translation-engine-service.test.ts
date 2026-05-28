@@ -40,6 +40,9 @@ describe('TranslationEngineService', () => {
   let localCacheDir: string
   let localAssetIndexPath: string
   let localFetchCachePath: string
+  let localLlamaCacheDir: string
+  let localLlamaAssetIndexPath: string
+  let localLlamaFetchCachePath: string
   let service: TranslationEngineService
 
   beforeEach(async () => {
@@ -49,6 +52,9 @@ describe('TranslationEngineService', () => {
     localCacheDir = join(tempDir, 'local-cache')
     localAssetIndexPath = join(tempDir, 'local-models.json')
     localFetchCachePath = join(tempDir, 'local-fetch-cache.json')
+    localLlamaCacheDir = join(tempDir, 'local-llama-cache')
+    localLlamaAssetIndexPath = join(tempDir, 'local-llama-models.json')
+    localLlamaFetchCachePath = join(tempDir, 'local-llama-fetch-cache.json')
     service = new TranslationEngineService({
       projectDir,
       configManager: new ConfigManager(projectDir),
@@ -57,6 +63,9 @@ describe('TranslationEngineService', () => {
       localCacheDir: localCacheDir,
       localAssetIndexPath: localAssetIndexPath,
       localFetchCachePath: localFetchCachePath,
+      localLlamaCacheDir,
+      localLlamaAssetIndexPath,
+      localLlamaFetchCachePath,
     })
   })
 
@@ -199,6 +208,25 @@ describe('TranslationEngineService', () => {
       'onnx/decoder_model_merged_q4.onnx',
     ])
     expect(plan?.estimatedTotalBytes).toBe(30_000_010)
+  })
+
+  it('uses persisted gguf download plans for local llama models', async () => {
+    await writePersistedLocalAssetPlan(
+      localLlamaAssetIndexPath,
+      createLlamaDownloadPlan('tencent/Hy-MT2-1.8B-1.25Bit-GGUF', 'Hy-MT2-1.8B-1.25Bit.gguf', {
+        modelBytes: 461_860_736,
+        rootDir: join(tempDir, 'llama-profiles', 'Hy-MT2-1.8B-1.25Bit.gguf'),
+      })
+    )
+
+    const plan = await service.getModelDownloadPlan({
+      engineId: 'local-llama',
+      model: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+      selectedGroupId: 'Hy-MT2-1.8B-1.25Bit.gguf',
+    })
+
+    expect(plan?.files.map((file) => file.path)).toEqual(['Hy-MT2-1.8B-1.25Bit.gguf'])
+    expect(plan?.estimatedTotalBytes).toBe(461_860_736)
   })
 
   it('keeps selected local profile sizes from the asset snapshot when provider sizes are missing', async () => {
@@ -420,6 +448,51 @@ describe('TranslationEngineService', () => {
     expect(create).not.toHaveBeenCalled()
   })
 
+  it('passes the resolved gguf model path into local llama batch translation runtime', async () => {
+    const testableService = service as TestableTranslationEngineService
+    const create = vi.fn(async () => ({
+      batchTranslate: async function* (): AsyncGenerator<BatchTranslateEvent> {
+        yield { index: 0, output: '你好' }
+      },
+      destroy: vi.fn(),
+    }))
+    vi.spyOn(testableService, 'loadFactory').mockResolvedValue({ create })
+    const groupId = 'Hy-MT2-1.8B-1.25Bit.gguf'
+    const rootDir = join(tempDir, 'llama-profiles', groupId)
+    const plan = createLlamaDownloadPlan('tencent/Hy-MT2-1.8B-1.25Bit-GGUF', groupId, {
+      modelBytes: 461_860_736,
+      rootDir,
+    })
+    await writePersistedLocalAssetPlan(localLlamaAssetIndexPath, plan, {
+      status: 'downloaded',
+      bytesDownloaded: 461_860_736,
+      progress: 1,
+      rootDir,
+    })
+    await writeLocalProfileFiles(rootDir, [groupId])
+
+    const events = await collectBatchEvents(
+      service.batchTranslate({
+        engineId: 'local-llama',
+        sourceLanguage: 'en',
+        targetLanguage: 'zh',
+        model: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+        selectedGroupId: groupId,
+        inputs: ['Hello'],
+      })
+    )
+
+    expect(events).toEqual([{ index: 0, output: '你好' }])
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+        runtimeConfig: {
+          modelPath: join(rootDir, groupId),
+        },
+      })
+    )
+  })
+
   it('uses one immutable settings snapshot for a batch translation subscription', async () => {
     const settingsManager = new GlobalSettingsManager(settingsPath)
     await settingsManager.writeSettings({
@@ -517,6 +590,35 @@ function createLocalDownloadPlan(
             required: true,
           },
         ],
+      },
+    ],
+  }
+}
+
+function createLlamaDownloadPlan(
+  modelId: string,
+  groupId: string,
+  options: {
+    modelBytes?: number
+    rootDir?: string
+  } = {}
+): TranslationModelDownloadPlan {
+  const modelBytes = options.modelBytes ?? 461_860_736
+  return {
+    modelId,
+    estimatedTotalBytes: modelBytes,
+    selectedGroupId: groupId,
+    files: [{ path: groupId, sizeBytes: modelBytes, required: true }],
+    groups: [
+      {
+        id: groupId,
+        baseGroupId: groupId.replace(/\.gguf$/u, ''),
+        label: groupId.replace(/\.gguf$/u, ''),
+        estimatedTotalBytes: modelBytes,
+        rootDir: options.rootDir,
+        selectable: true,
+        selected: true,
+        files: [{ path: groupId, sizeBytes: modelBytes, required: true }],
       },
     ],
   }

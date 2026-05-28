@@ -9,6 +9,7 @@ import type {
   LocalModelLifecycleFileState,
   LocalModelProfileManifest,
   LocalModelProfileManifestGroup,
+  TranslationDownloadFilePlan,
   TranslationDownloadGroupPlan,
   TranslationModelCandidate,
   TranslationModelSearchInput,
@@ -20,19 +21,19 @@ import {
   LocalModelLifecycleGroupStateSchema,
   LocalModelProfileManifestSchema,
 } from '@openspecui/core'
-import { resolveCt2ModelDownloadPlanFromRepositoryFiles } from '@openspecui/local-ct2-translator'
+import { resolveGgufModelDownloadPlanFromRepositoryFiles } from '@openspecui/local-llama-translator'
 import { observable } from '@trpc/server/observable'
 import { mkdir, open, rename, rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import {
-  getDefaultLocalCt2ModelCacheDir,
-  getDefaultLocalCt2ModelFetchCachePath,
-  getDefaultLocalCt2ModelIndexPath,
-  getDefaultLocalCt2ModelProfileManifestPath,
-  getLocalCt2ModelArtifactGroupRoot,
-} from './ct2-model-cache-path.js'
-import { searchCt2Models, searchCt2ModelsProgressively } from './ct2-model-catalog.js'
 import { normalizeHuggingFaceEndpoint } from './huggingface-endpoint.js'
+import { searchLlamaModels, searchLlamaModelsProgressively } from './llama-model-catalog.js'
+import {
+  getDefaultLocalLlamaModelCacheDir,
+  getDefaultLocalLlamaModelFetchCachePath,
+  getDefaultLocalLlamaModelIndexPath,
+  getDefaultLocalLlamaModelProfileManifestPath,
+  getLocalLlamaModelArtifactGroupRoot,
+} from './local-llama-model-cache-path.js'
 import { LocalModelAssetStore } from './local-model-asset-store.js'
 import { LocalModelFetchCacheStore } from './local-model-fetch-cache-store.js'
 import { LocalModelProfileManifestStore } from './local-model-profile-manifest-store.js'
@@ -43,7 +44,7 @@ import { isRetryableNetworkError } from './network-retry.js'
 interface GlobalSettingsManagerLike {
   readSettings(): Promise<{
     translationEngines: {
-      localCt2: {
+      localLlama: {
         model: string
         selectedGroupId?: string
         hfEndpoint: string
@@ -65,13 +66,13 @@ const DEFAULT_NETWORK_RETRY_LIMIT = Number.POSITIVE_INFINITY
 const DEFAULT_NETWORK_RETRY_DELAY_MS = 500
 const DEFAULT_NETWORK_RETRY_DELAY_MAX_MS = 5_000
 
-interface Ct2ModelNetworkRetryPolicy {
+interface LlamaModelNetworkRetryPolicy {
   limit?: number
   delayMs?: number
   maxDelayMs?: number
 }
 
-export interface Ct2ModelAssetServiceOptions {
+export interface LlamaModelAssetServiceOptions {
   projectDir: string
   globalSettingsManager: GlobalSettingsManagerLike
   now?: () => number
@@ -79,38 +80,38 @@ export interface Ct2ModelAssetServiceOptions {
   profileManifestPath?: string
   cacheDir?: string
   fetchCachePath?: string
-  networkRetryPolicy?: Ct2ModelNetworkRetryPolicy
+  networkRetryPolicy?: LlamaModelNetworkRetryPolicy
 }
 
-export class Ct2ModelAssetService {
+export class LlamaModelAssetService {
   private readonly now: () => number
   private readonly store: LocalModelAssetStore
   private readonly profileManifestStore: LocalModelProfileManifestStore
   private readonly cacheDir: string
   private readonly fetchCacheStore: LocalModelFetchCacheStore
-  private readonly networkRetryPolicy: Required<Ct2ModelNetworkRetryPolicy>
+  private readonly networkRetryPolicy: Required<LlamaModelNetworkRetryPolicy>
   private readonly listeners = new Set<LogListener>()
   private readonly sessions = new Map<string, DownloadSession>()
   private readonly sessionTasks = new Map<string, Promise<void>>()
   private readonly logs = new Map<string, LocalModelAssetLog>()
 
-  constructor(private readonly options: Ct2ModelAssetServiceOptions) {
+  constructor(private readonly options: LlamaModelAssetServiceOptions) {
     ensureProxyAwareFetchDispatcher()
     this.now = options.now ?? Date.now
-    this.cacheDir = options.cacheDir ?? getDefaultLocalCt2ModelCacheDir()
+    this.cacheDir = options.cacheDir ?? getDefaultLocalLlamaModelCacheDir()
     this.networkRetryPolicy = {
       limit: options.networkRetryPolicy?.limit ?? DEFAULT_NETWORK_RETRY_LIMIT,
       delayMs: options.networkRetryPolicy?.delayMs ?? DEFAULT_NETWORK_RETRY_DELAY_MS,
       maxDelayMs: options.networkRetryPolicy?.maxDelayMs ?? DEFAULT_NETWORK_RETRY_DELAY_MAX_MS,
     }
     this.store = new LocalModelAssetStore({
-      indexPath: options.indexPath ?? getDefaultLocalCt2ModelIndexPath(),
+      indexPath: options.indexPath ?? getDefaultLocalLlamaModelIndexPath(),
     })
     this.profileManifestStore = new LocalModelProfileManifestStore({
-      manifestPath: options.profileManifestPath ?? getDefaultLocalCt2ModelProfileManifestPath(),
+      manifestPath: options.profileManifestPath ?? getDefaultLocalLlamaModelProfileManifestPath(),
     })
     this.fetchCacheStore = new LocalModelFetchCacheStore({
-      cachePath: options.fetchCachePath ?? getDefaultLocalCt2ModelFetchCachePath(),
+      cachePath: options.fetchCachePath ?? getDefaultLocalLlamaModelFetchCachePath(),
       now: this.now,
     })
   }
@@ -138,11 +139,11 @@ export class Ct2ModelAssetService {
           label: state.modelId,
           summary:
             state.plan?.estimatedTotalBytes !== undefined
-              ? `Previously selected CT2 model. Estimated download ${formatBytes(state.plan.estimatedTotalBytes)}.`
-              : 'Previously selected CT2 model.',
+              ? `Previously selected llama GGUF model. Estimated download ${formatBytes(state.plan.estimatedTotalBytes)}.`
+              : 'Previously selected llama GGUF model.',
           downloads: 0,
           likes: 0,
-          tags: ['local-ct2'],
+          tags: ['local-llama'],
           compatibility: {
             transformersJs: false,
             onnx: false,
@@ -185,7 +186,7 @@ export class Ct2ModelAssetService {
       let active = true
       void (async () => {
         try {
-          const events = await searchCt2ModelsProgressively(
+          const events = await searchLlamaModelsProgressively(
             {
               query: input.query,
               sourceLanguage: input.sourceLanguage,
@@ -221,7 +222,8 @@ export class Ct2ModelAssetService {
           emit.next({
             requestId: input.requestId,
             phase: 'error',
-            message: error instanceof Error ? error.message : 'Unable to search remote CT2 models.',
+            message:
+              error instanceof Error ? error.message : 'Unable to search remote llama models.',
           })
         }
       })()
@@ -251,11 +253,11 @@ export class Ct2ModelAssetService {
   }
 
   async startDownload(modelId: string, groupId?: string): Promise<{ sessionId: string }> {
-    return this.runDownload(modelId, 'Downloading CT2 model', groupId)
+    return this.runDownload(modelId, 'Downloading llama GGUF model', groupId)
   }
 
   async resumeDownload(modelId: string, groupId?: string): Promise<{ sessionId: string }> {
-    return this.runDownload(modelId, 'Resuming CT2 model download', groupId)
+    return this.runDownload(modelId, 'Resuming llama GGUF model download', groupId)
   }
 
   async pauseDownload(modelId: string, groupId?: string): Promise<{ success: true }> {
@@ -289,12 +291,12 @@ export class Ct2ModelAssetService {
     })
     await this.store.upsert(projected)
     this.emitLog({
-      engineId: 'local-ct2',
+      engineId: 'local-llama',
       modelId,
       selectedGroupId: effectiveGroupId,
       groupId: effectiveGroupId,
       status: 'paused',
-      message: 'CT2 model download paused.',
+      message: 'Llama GGUF download paused.',
       progress: projected.progress,
       bytesDownloaded: projected.bytesDownloaded,
       totalBytes: projected.totalBytes,
@@ -334,16 +336,16 @@ export class Ct2ModelAssetService {
       })
     )
     this.emitLog({
-      engineId: 'local-ct2',
+      engineId: 'local-llama',
       modelId,
       selectedGroupId: effectiveGroupId,
       groupId: effectiveGroupId,
       status: 'deleting',
-      message: 'Deleting CT2 model files.',
+      message: 'Deleting llama GGUF files.',
       files: current.files,
       updatedAt: this.now(),
     })
-    await rm(getLocalCt2ModelArtifactGroupRoot(this.cacheDir, modelId, effectiveGroupId), {
+    await rm(getLocalLlamaModelArtifactGroupRoot(this.cacheDir, modelId, effectiveGroupId), {
       recursive: true,
       force: true,
     })
@@ -379,12 +381,12 @@ export class Ct2ModelAssetService {
       await this.store.remove(modelId)
     }
     this.emitLog({
-      engineId: 'local-ct2',
+      engineId: 'local-llama',
       modelId,
       selectedGroupId: effectiveGroupId,
       groupId: effectiveGroupId,
       status: 'not-downloaded',
-      message: 'CT2 model files were removed.',
+      message: 'Llama GGUF files were removed.',
       progress: 0,
       bytesDownloaded: 0,
       totalBytes: 0,
@@ -400,7 +402,7 @@ export class Ct2ModelAssetService {
       ...(await this.readSelectedModelState(targetModelId)),
       profileLoad: {
         status: 'loading',
-        message: 'Loading CT2 model artifacts.',
+        message: 'Loading llama GGUF artifacts.',
         updatedAt: this.now(),
       },
       updatedAt: this.now(),
@@ -416,7 +418,7 @@ export class Ct2ModelAssetService {
           profileManifest: manifest,
           profileLoad: {
             status: 'ready',
-            message: 'CT2 model artifacts are ready.',
+            message: 'Llama GGUF artifacts are ready.',
             updatedAt: this.now(),
           },
           updatedAt: this.now(),
@@ -427,7 +429,8 @@ export class Ct2ModelAssetService {
       await this.store.upsert(nextState)
       return nextState
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to load CT2 model artifacts.'
+      const message =
+        error instanceof Error ? error.message : 'Unable to load llama GGUF artifacts.'
       const failedState = LocalModelAssetStateSchema.parse({
         ...(await this.readSelectedModelState(targetModelId)),
         profileLoad: {
@@ -486,7 +489,7 @@ export class Ct2ModelAssetService {
   private async searchRemote(
     input: TranslationModelSearchInput
   ): Promise<TranslationModelSearchResult> {
-    return searchCt2Models(
+    return searchLlamaModels(
       {
         query: input.query,
         sourceLanguage: input.sourceLanguage,
@@ -536,11 +539,11 @@ export class Ct2ModelAssetService {
                   label: state.modelId,
                   summary:
                     state.plan?.estimatedTotalBytes !== undefined
-                      ? `Previously selected CT2 model. Estimated download ${formatBytes(state.plan.estimatedTotalBytes)}.`
-                      : 'Previously selected CT2 model.',
+                      ? `Previously selected llama GGUF model. Estimated download ${formatBytes(state.plan.estimatedTotalBytes)}.`
+                      : 'Previously selected llama GGUF model.',
                   downloads: 0,
                   likes: 0,
-                  tags: ['local-ct2'],
+                  tags: ['local-llama'],
                   compatibility: {
                     transformersJs: false,
                     onnx: false,
@@ -759,14 +762,14 @@ export class Ct2ModelAssetService {
     groupId?: string
   ): Promise<{ sessionId: string }> {
     const effectiveGroupId = groupId ?? (await this.readSelectedGroupId())
-    if (!effectiveGroupId) throw new Error('No CT2 model artifact group is selected.')
+    if (!effectiveGroupId) throw new Error('No llama GGUF artifact group is selected.')
     const manifest = await this.ensureProfileManifest(modelId)
     const resolvedGroupId = resolveManifestGroupId(manifest, effectiveGroupId)
-    if (!resolvedGroupId) throw new Error('No concrete CT2 model download plan is available.')
+    if (!resolvedGroupId) throw new Error('No concrete llama GGUF download plan is available.')
     const sessionKey = buildSessionKey(modelId, resolvedGroupId)
     const existing = this.sessions.get(sessionKey)
     if (existing) return { sessionId: existing.sessionId }
-    const sessionId = `local-ct2-model-${sanitizeId(modelId)}-${sanitizeId(resolvedGroupId)}-${this.now()}`
+    const sessionId = `local-llama-model-${sanitizeId(modelId)}-${sanitizeId(resolvedGroupId)}-${this.now()}`
     const abortController = new AbortController()
     this.sessions.set(sessionKey, { modelId, sessionId, abortController, groupId: resolvedGroupId })
     const current = await this.readSelectedModelState(modelId, resolvedGroupId)
@@ -777,7 +780,7 @@ export class Ct2ModelAssetService {
       manifestGroup.estimatedTotalBytes === undefined
     ) {
       this.sessions.delete(sessionKey)
-      throw new Error('No concrete CT2 model download plan is available.')
+      throw new Error('No concrete llama GGUF download plan is available.')
     }
     const totalBytes = manifestGroup.estimatedTotalBytes
     const currentGroup = current.groupsState[resolvedGroupId]
@@ -815,7 +818,7 @@ export class Ct2ModelAssetService {
     })
     await this.store.upsert(projected)
     this.emitLog({
-      engineId: 'local-ct2',
+      engineId: 'local-llama',
       modelId,
       selectedGroupId: resolvedGroupId,
       groupId: resolvedGroupId,
@@ -865,7 +868,7 @@ export class Ct2ModelAssetService {
       hfEndpoint,
       fetchCacheStore: this.fetchCacheStore,
     })
-    const basePlan = resolveCt2ModelDownloadPlanFromRepositoryFiles({
+    const basePlan = resolveGgufModelDownloadPlanFromRepositoryFiles({
       modelId,
       files: snapshot.files.map((file) => ({
         ...file,
@@ -873,41 +876,43 @@ export class Ct2ModelAssetService {
       })),
     })
     if (!basePlan?.groups?.length) {
-      throw new Error(`No recognizable CT2 model artifacts were found for ${modelId}.`)
+      throw new Error(`No recognizable GGUF artifacts were found for ${modelId}.`)
     }
-    const groupsEntries = basePlan.groups.flatMap((group) => {
-      if (!group.selectable || group.estimatedTotalBytes === undefined) return []
-      const groupId = buildVersionedGroupId(group.id, snapshot.shortCommitHash)
-      const rootDir = getLocalCt2ModelArtifactGroupRoot(this.cacheDir, modelId, groupId)
-      return [
-        [
-          groupId,
-          {
-            id: groupId,
-            baseGroupId: group.id,
-            label: group.label,
-            displayLabel: group.label,
-            description: group.description,
-            profile: group.profile,
-            dtype: group.dtype,
-            commitHash: snapshot.commitHash,
-            shortCommitHash: snapshot.shortCommitHash,
-            rootDir,
-            estimatedTotalBytes: group.estimatedTotalBytes,
-            selectable: group.selectable,
-            files: group.files.map((file) => ({
-              ...file,
-              revision: snapshot.commitHash,
-              sourceUrl:
-                file.sourceUrl ??
-                `${normalizeHuggingFaceEndpoint(hfEndpoint)}/${modelId}/resolve/${snapshot.commitHash}/${file.path}`,
-            })),
-          } satisfies LocalModelProfileManifestGroup,
-        ] as const,
-      ]
-    })
+    const groupsEntries = basePlan.groups.flatMap(
+      (group): ReadonlyArray<readonly [string, LocalModelProfileManifestGroup]> => {
+        if (!group.selectable || group.estimatedTotalBytes === undefined) return []
+        const groupId = buildVersionedGroupId(group.id, snapshot.shortCommitHash)
+        const rootDir = getLocalLlamaModelArtifactGroupRoot(this.cacheDir, modelId, groupId)
+        return [
+          [
+            groupId,
+            {
+              id: groupId,
+              baseGroupId: group.id,
+              label: group.label,
+              displayLabel: group.label,
+              description: group.description,
+              profile: group.profile,
+              dtype: group.dtype,
+              commitHash: snapshot.commitHash,
+              shortCommitHash: snapshot.shortCommitHash,
+              rootDir,
+              estimatedTotalBytes: group.estimatedTotalBytes,
+              selectable: group.selectable,
+              files: group.files.map((file: TranslationDownloadFilePlan) => ({
+                ...file,
+                revision: snapshot.commitHash,
+                sourceUrl:
+                  file.sourceUrl ??
+                  `${normalizeHuggingFaceEndpoint(hfEndpoint)}/${modelId}/resolve/${snapshot.commitHash}/${file.path}`,
+              })),
+            } satisfies LocalModelProfileManifestGroup,
+          ] as const,
+        ]
+      }
+    )
     if (groupsEntries.length === 0) {
-      throw new Error(`No selectable CT2 model artifacts were found for ${modelId}.`)
+      throw new Error(`No selectable GGUF artifacts were found for ${modelId}.`)
     }
     return LocalModelProfileManifestSchema.parse({
       modelId,
@@ -920,7 +925,9 @@ export class Ct2ModelAssetService {
       updatedAt: this.now(),
       raw: snapshot.raw,
       groups: Object.fromEntries(groupsEntries),
-      groupOrder: groupsEntries.map(([groupId]) => groupId),
+      groupOrder: groupsEntries.map(
+        ([groupId]: readonly [string, LocalModelProfileManifestGroup]) => groupId
+      ),
     })
   }
 
@@ -933,7 +940,7 @@ export class Ct2ModelAssetService {
     const manifest = await this.ensureProfileManifest(modelId)
     const manifestGroup = manifest.groups[groupId]
     if (!manifestGroup) {
-      throw new Error(`Unknown CT2 model artifact group: ${groupId}.`)
+      throw new Error(`Unknown llama GGUF artifact group: ${groupId}.`)
     }
     const files = manifestGroup.files
     const totalBytes = manifestGroup.estimatedTotalBytes
@@ -946,7 +953,7 @@ export class Ct2ModelAssetService {
     })
     let bytesDownloaded = sumDownloadedBytes(downloadedFiles)
     if (files.length === 0 || totalBytes === undefined) {
-      throw new Error('No concrete CT2 model download files were selected.')
+      throw new Error('No concrete llama GGUF download files were selected.')
     }
 
     for (const [fileIndex, file] of files.entries()) {
@@ -1041,7 +1048,13 @@ export class Ct2ModelAssetService {
       })
     }
 
-    await this.finishDownload(modelId, groupId, sessionId, true, `CT2 model ${modelId} is ready.`)
+    await this.finishDownload(
+      modelId,
+      groupId,
+      sessionId,
+      true,
+      `Llama GGUF model ${modelId} is ready.`
+    )
   }
 
   private async emitDownloadProgress(input: {
@@ -1083,7 +1096,7 @@ export class Ct2ModelAssetService {
     })
     await this.store.upsert(projected)
     this.emitLog({
-      engineId: 'local-ct2',
+      engineId: 'local-llama',
       modelId: input.modelId,
       selectedGroupId: input.groupId,
       groupId: input.groupId,
@@ -1158,7 +1171,7 @@ export class Ct2ModelAssetService {
     await this.store.upsert(projected)
     this.sessions.delete(sessionKey)
     this.emitLog({
-      engineId: 'local-ct2',
+      engineId: 'local-llama',
       modelId,
       selectedGroupId: groupId,
       groupId,
@@ -1176,17 +1189,17 @@ export class Ct2ModelAssetService {
 
   private async readSelectedModel(): Promise<string> {
     const settings = await this.options.globalSettingsManager.readSettings()
-    return settings.translationEngines.localCt2.model
+    return settings.translationEngines.localLlama.model
   }
 
   private async readSelectedGroupId(): Promise<string | undefined> {
     const settings = await this.options.globalSettingsManager.readSettings()
-    return settings.translationEngines.localCt2.selectedGroupId
+    return settings.translationEngines.localLlama.selectedGroupId
   }
 
   private async readHuggingFaceEndpoint(): Promise<string> {
     const settings = await this.options.globalSettingsManager.readSettings()
-    return settings.translationEngines.localCt2.hfEndpoint
+    return settings.translationEngines.localLlama.hfEndpoint
   }
 
   private isActiveSession(modelId: string, groupId: string, sessionId: string): boolean {
@@ -1218,8 +1231,14 @@ function toCatalogItem(
     asset,
     selectable: hasSelectableGroup || (candidate.size.estimatedTotalBytes ?? 0) > 0,
     local,
-    primarySource: local ? 'local' : 'network',
-    sources: [local ? 'local' : 'network'],
+    primarySource: local
+      ? 'local'
+      : candidate.compatibility.localRuntimeVerified
+        ? 'recommended'
+        : 'network',
+    sources: [
+      local ? 'local' : candidate.compatibility.localRuntimeVerified ? 'recommended' : 'network',
+    ],
   }
 }
 
@@ -1264,7 +1283,7 @@ function createSyntheticManifestFromPlan(input: {
           shortCommitHash: group.shortCommitHash,
           rootDir:
             group.rootDir ??
-            getLocalCt2ModelArtifactGroupRoot(input.cacheDir, input.modelId, group.id),
+            getLocalLlamaModelArtifactGroupRoot(input.cacheDir, input.modelId, group.id),
           estimatedTotalBytes: group.estimatedTotalBytes,
           selectable: group.selectable,
           files: group.files.map((file) => ({
@@ -1366,117 +1385,93 @@ function resolveManifestGroupId(
 function selectFirstManifestGroupId(
   manifest: LocalModelProfileManifest | undefined
 ): string | undefined {
-  return manifest?.groupOrder.find((groupId) => manifest.groups[groupId]?.selectable)
+  if (!manifest) return undefined
+  return manifest.groupOrder.find((groupId) => manifest.groups[groupId]?.selectable)
 }
 
 function selectPlanGroup(
-  plan: LocalModelAssetState['plan'] | null | undefined,
+  plan: { groups?: TranslationDownloadGroupPlan[]; selectedGroupId?: string } | undefined,
   selectedGroupId: string | undefined
-): TranslationDownloadGroupPlan | null {
-  if (!plan) return null
-  if (selectedGroupId) {
-    return plan.groups?.find((group) => group.id === selectedGroupId) ?? null
-  }
-  return plan.groups?.find((group) => group.selected) ?? plan.groups?.[0] ?? null
+): TranslationDownloadGroupPlan | undefined {
+  if (!plan?.groups?.length) return undefined
+  return (
+    plan.groups.find((group) => group.id === selectedGroupId) ??
+    plan.groups.find((group) => group.baseGroupId === selectedGroupId) ??
+    plan.groups.find((group) => group.selected) ??
+    plan.groups[0]
+  )
 }
 
 function removeManifestGroup(
   manifest: LocalModelProfileManifest | undefined,
   groupId: string
 ): LocalModelProfileManifest | undefined {
-  if (!manifest) return undefined
+  if (!manifest || !manifest.groups[groupId]) return manifest
   const groups = { ...manifest.groups }
   delete groups[groupId]
-  const groupOrder = manifest.groupOrder.filter((id) => id !== groupId)
+  const groupOrder = manifest.groupOrder.filter((entry) => entry !== groupId)
   if (groupOrder.length === 0) return undefined
   return LocalModelProfileManifestSchema.parse({
     ...manifest,
     groups,
     groupOrder,
+    updatedAt: manifest.updatedAt,
   })
 }
 
-function removePlanGroup(plan: LocalModelAssetState['plan'], groupId: string) {
-  if (!plan) return undefined
-  const groups = plan.groups?.filter((group) => group.id !== groupId)
-  if (!groups?.length) return undefined
+function removePlanGroup(
+  plan: LocalModelAssetState['plan'],
+  groupId: string
+): LocalModelAssetState['plan'] | undefined {
+  if (!plan?.groups?.length) return undefined
+  const groups = plan.groups.filter((group) => group.id !== groupId)
+  if (groups.length === 0) return undefined
   const selectedGroup = groups.find((group) => group.selected) ?? groups[0]
   return {
-    ...plan,
-    selectedGroupId: selectedGroup?.id,
+    modelId: plan.modelId,
     estimatedTotalBytes: selectedGroup?.estimatedTotalBytes,
     files: selectedGroup?.files ?? [],
+    selectedGroupId: selectedGroup?.id,
     groups: groups.map((group) => ({
       ...group,
       selected: group.id === selectedGroup?.id,
+      files: [...group.files],
     })),
   }
 }
 
-function reconcileGroupFiles(input: {
+function reconcileGroupFilesFromSnapshot(input: {
   manifestGroup: LocalModelProfileManifestGroup
-  currentFiles: ReadonlyArray<LocalModelLifecycleFileState>
+  currentFiles: LocalModelLifecycleFileState[]
+  currentStatus: LocalModelDownloadStatus
 }): LocalModelLifecycleFileState[] {
-  const currentFileByPath = new Map(input.currentFiles.map((file) => [file.path, file]))
   return input.manifestGroup.files.map((file) => {
-    const current = currentFileByPath.get(file.path)
-    const downloadedBytes =
-      current?.downloadedBytes === undefined
-        ? 0
-        : file.sizeBytes === undefined
-          ? current.downloadedBytes
-          : Math.min(current.downloadedBytes, file.sizeBytes)
-    const status =
-      file.sizeBytes !== undefined && downloadedBytes >= file.sizeBytes
-        ? 'downloaded'
-        : (current?.status ?? 'not-downloaded')
+    const current = input.currentFiles.find((entry) => entry.path === file.path)
     return LocalModelLifecycleFileStateSchema.parse({
       path: file.path,
       sizeBytes: file.sizeBytes,
-      downloadedBytes,
+      downloadedBytes:
+        current?.downloadedBytes ?? (input.currentStatus === 'downloaded' ? file.sizeBytes : 0),
       required: file.required,
-      status,
+      status: current?.status ?? input.currentStatus,
       updatedAt: current?.updatedAt,
       error: current?.error,
     })
   })
 }
 
-function reconcileGroupFilesFromSnapshot(input: {
+function reconcileGroupFiles(input: {
   manifestGroup: LocalModelProfileManifestGroup
-  currentFiles: ReadonlyArray<LocalModelLifecycleFileState>
-  currentStatus: LocalModelDownloadStatus
+  currentFiles: LocalModelLifecycleFileState[]
 }): LocalModelLifecycleFileState[] {
-  const currentFileByPath = new Map(input.currentFiles.map((file) => [file.path, file]))
   return input.manifestGroup.files.map((file) => {
-    const current = currentFileByPath.get(file.path)
-    const downloadedBytes =
-      current?.downloadedBytes === undefined
-        ? input.currentStatus === 'downloaded'
-          ? file.sizeBytes
-          : 0
-        : file.sizeBytes === undefined
-          ? current.downloadedBytes
-          : Math.min(current.downloadedBytes, file.sizeBytes)
-    const status =
-      current?.status ??
-      (file.sizeBytes !== undefined &&
-      downloadedBytes !== undefined &&
-      downloadedBytes >= file.sizeBytes
-        ? 'downloaded'
-        : input.currentStatus === 'downloaded'
-          ? 'downloaded'
-          : input.currentStatus === 'paused' ||
-              input.currentStatus === 'downloading' ||
-              input.currentStatus === 'error'
-            ? input.currentStatus
-            : 'not-downloaded')
+    const current = input.currentFiles.find((entry) => entry.path === file.path)
     return LocalModelLifecycleFileStateSchema.parse({
       path: file.path,
       sizeBytes: file.sizeBytes,
-      downloadedBytes,
+      downloadedBytes: current?.downloadedBytes,
       required: file.required,
-      status,
+      status: current?.status ?? 'not-downloaded',
       updatedAt: current?.updatedAt,
       error: current?.error,
     })
@@ -1486,54 +1481,45 @@ function reconcileGroupFilesFromSnapshot(input: {
 async function reconcileGroupFilesFromDisk(input: {
   rootDir: string
   manifestGroup: LocalModelProfileManifestGroup
-  currentFiles: ReadonlyArray<LocalModelLifecycleFileState>
+  currentFiles: LocalModelLifecycleFileState[]
 }): Promise<LocalModelLifecycleFileState[]> {
-  const currentFileByPath = new Map(input.currentFiles.map((file) => [file.path, file]))
   return Promise.all(
     input.manifestGroup.files.map(async (file) => {
-      const current = currentFileByPath.get(file.path)
-      const diskBytes = await readPathSize(join(input.rootDir, file.path))
-      const downloadedBytes =
-        diskBytes === null
-          ? (current?.downloadedBytes ?? 0)
-          : file.sizeBytes === undefined
-            ? diskBytes
-            : Math.min(diskBytes, file.sizeBytes)
-      const status =
-        file.sizeBytes !== undefined && downloadedBytes >= file.sizeBytes
-          ? 'downloaded'
-          : downloadedBytes > 0
-            ? 'paused'
-            : 'not-downloaded'
-      return LocalModelLifecycleFileStateSchema.parse({
-        path: file.path,
-        sizeBytes: file.sizeBytes,
-        downloadedBytes,
-        required: file.required,
-        status,
-        updatedAt: current?.updatedAt,
-        error: current?.error,
-      })
+      const current = input.currentFiles.find((entry) => entry.path === file.path)
+      try {
+        const fileStat = await stat(join(input.rootDir, file.path))
+        const downloadedBytes = fileStat.size
+        const complete = file.sizeBytes !== undefined && downloadedBytes >= file.sizeBytes
+        return LocalModelLifecycleFileStateSchema.parse({
+          path: file.path,
+          sizeBytes: file.sizeBytes,
+          downloadedBytes,
+          required: file.required,
+          status: complete ? 'downloaded' : downloadedBytes > 0 ? 'paused' : 'not-downloaded',
+          updatedAt: current?.updatedAt,
+          error: current?.error,
+        })
+      } catch {
+        return LocalModelLifecycleFileStateSchema.parse({
+          path: file.path,
+          sizeBytes: file.sizeBytes,
+          downloadedBytes: 0,
+          required: file.required,
+          status: 'not-downloaded',
+          updatedAt: current?.updatedAt,
+          error: current?.error,
+        })
+      }
     })
   )
 }
 
-function isActiveDownloadStatus(status: LocalModelDownloadStatus): boolean {
-  return status === 'queued' || status === 'downloading' || status === 'deleting'
-}
-
-function sumDownloadedBytes(
-  files: ReadonlyArray<{ sizeBytes?: number; downloadedBytes?: number }>
-): number {
-  return files.reduce((total, file) => {
-    const downloadedBytes = file.downloadedBytes ?? 0
-    if (file.sizeBytes === undefined) return total + downloadedBytes
-    return total + Math.min(downloadedBytes, file.sizeBytes)
-  }, 0)
+function sumDownloadedBytes(files: ReadonlyArray<LocalModelLifecycleFileState>): number {
+  return files.reduce((total, file) => total + (file.downloadedBytes ?? 0), 0)
 }
 
 function buildSessionKey(modelId: string, groupId: string): string {
-  return `${modelId}::${groupId}`
+  return `${modelId}:${groupId}`
 }
 
 function buildVersionedGroupId(baseGroupId: string, shortCommitHash: string): string {
@@ -1541,38 +1527,35 @@ function buildVersionedGroupId(baseGroupId: string, shortCommitHash: string): st
 }
 
 function sanitizeId(value: string): string {
-  return value.replace(/[^a-zA-Z0-9_-]+/g, '-')
+  return value.replace(/[^a-zA-Z0-9._-]+/g, '-')
+}
+
+function isActiveDownloadStatus(status: LocalModelDownloadStatus): boolean {
+  return status === 'queued' || status === 'downloading' || status === 'deleting'
 }
 
 function formatBytes(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  let size = value
+  if (value < 1024) return `${value} B`
+  const units = ['KB', 'MB', 'GB', 'TB']
+  let size = value / 1024
   let unitIndex = 0
   while (size >= 1024 && unitIndex < units.length - 1) {
     size /= 1024
     unitIndex += 1
   }
-  const digits = size >= 100 || unitIndex === 0 ? 0 : 1
+  const digits = size >= 100 ? 0 : size >= 10 ? 1 : 2
   return `${size.toFixed(digits)} ${units[unitIndex]}`
 }
 
 function formatDuration(ms: number): string {
-  if (ms < 1_000) return `${ms} ms`
-  return `${(ms / 1_000).toFixed(ms >= 10_000 ? 0 : 1)} s`
+  if (ms < 1000) return `${ms} ms`
+  const seconds = ms / 1000
+  return seconds >= 10 ? `${seconds.toFixed(0)} s` : `${seconds.toFixed(1)} s`
 }
 
 function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) {
-    throw new Error('CT2 model download aborted.')
-  }
-}
-
-async function readPathSize(path: string): Promise<number | null> {
-  try {
-    return (await stat(path)).size
-  } catch {
-    return null
+    throw new DOMException('The operation was aborted.', 'AbortError')
   }
 }
 
@@ -1580,137 +1563,91 @@ async function downloadUrlFileWithProgress(input: {
   url: string
   targetPath: string
   expectedSizeBytes?: number
-  retryPolicy: Required<Ct2ModelNetworkRetryPolicy>
+  retryPolicy: Required<LlamaModelNetworkRetryPolicy>
   signal: AbortSignal
   onProgress: (downloadedBytes: number) => Promise<void>
-  onRetry?: (input: { retryDelayMs: number }) => Promise<void>
+  onRetry: (input: { retryDelayMs: number }) => Promise<void>
 }): Promise<void> {
-  if (input.expectedSizeBytes !== undefined) {
-    const existingTargetSize = await readPathSize(input.targetPath)
-    if (existingTargetSize !== null && existingTargetSize >= input.expectedSizeBytes) {
-      await input.onProgress(input.expectedSizeBytes)
-      return
-    }
-  }
-
-  let lastError: unknown
-  for (let attempt = 0; attempt <= input.retryPolicy.limit; attempt += 1) {
+  let attempt = 0
+  let downloadedBytes = 0
+  while (true) {
     try {
-      throwIfAborted(input.signal)
-      await streamDownloadAttempt(input)
+      await downloadUrlFileWithProgressOnce({
+        ...input,
+        existingBytes: downloadedBytes,
+        onProgress: async (nextDownloadedBytes) => {
+          downloadedBytes = nextDownloadedBytes
+          await input.onProgress(nextDownloadedBytes)
+        },
+      })
       return
     } catch (error) {
-      lastError = error
-      if (!isRetryableDownloadError(error) || attempt === input.retryPolicy.limit) {
+      throwIfAborted(input.signal)
+      if (!isRetryableNetworkError(error) || attempt >= input.retryPolicy.limit) {
         throw error
       }
+      attempt += 1
       const retryDelayMs = Math.min(
         input.retryPolicy.maxDelayMs,
-        input.retryPolicy.delayMs * (attempt + 1)
+        input.retryPolicy.delayMs * Math.max(1, attempt)
       )
-      await input.onRetry?.({ retryDelayMs })
-      await delay(retryDelayMs, input.signal)
+      await input.onRetry({ retryDelayMs })
+      await delay(retryDelayMs)
     }
   }
-  throw lastError instanceof Error ? lastError : new Error(`Cannot download ${input.url}.`)
 }
 
-async function streamDownloadAttempt(input: {
+async function downloadUrlFileWithProgressOnce(input: {
   url: string
   targetPath: string
   expectedSizeBytes?: number
+  existingBytes: number
   signal: AbortSignal
   onProgress: (downloadedBytes: number) => Promise<void>
 }): Promise<void> {
-  const incompletePath = `${input.targetPath}.incomplete`
-  let resumeBytes = await readPathSize(incompletePath)
-  if (
-    resumeBytes !== null &&
-    input.expectedSizeBytes !== undefined &&
-    resumeBytes > input.expectedSizeBytes
-  ) {
-    await rm(incompletePath, { force: true })
-    resumeBytes = 0
-  }
   await mkdir(dirname(input.targetPath), { recursive: true })
-  const headers = new Headers()
-  if ((resumeBytes ?? 0) > 0) {
-    headers.set('Range', `bytes=${resumeBytes}-`)
-    await input.onProgress(resumeBytes ?? 0)
+  const tempPath = `${input.targetPath}.part`
+  const requestHeaders = new Headers()
+  if (input.existingBytes > 0) {
+    requestHeaders.set('Range', `bytes=${input.existingBytes}-`)
   }
-  let response = await fetch(input.url, {
-    headers,
+  const response = await fetch(input.url, {
     signal: input.signal,
+    headers: requestHeaders,
   })
-  if ((resumeBytes ?? 0) > 0 && response.status === 200) {
-    await response.body?.cancel().catch(() => undefined)
-    await rm(incompletePath, { force: true })
-    resumeBytes = 0
-    response = await fetch(input.url, {
-      signal: input.signal,
-    })
+  if (!response.ok && response.status !== 206) {
+    throw new Error(`Download failed with status ${response.status}.`)
   }
-  if (!response.ok) {
-    throw new Error(`Download failed with status ${response.status} for ${input.url}.`)
-  }
-  const body = response.body
-  if (!body) {
-    throw new Error(`Invalid response body for ${input.url}.`)
-  }
-  const fileHandle = await open(incompletePath, (resumeBytes ?? 0) > 0 ? 'a' : 'w')
-  let downloadedBytes = resumeBytes ?? 0
+  const contentLength = Number(response.headers.get('content-length') ?? '0')
+  const totalBytes =
+    input.expectedSizeBytes ?? (contentLength > 0 ? input.existingBytes + contentLength : undefined)
+  const fileHandle = await open(tempPath, input.existingBytes > 0 ? 'a' : 'w')
   try {
-    const reader = body.getReader()
+    const reader = response.body?.getReader()
+    if (!reader) {
+      throw new Error('Download stream was not readable.')
+    }
+    let bytesDownloaded = input.existingBytes
     while (true) {
       throwIfAborted(input.signal)
       const { done, value } = await reader.read()
       if (done) break
       if (!value) continue
       await fileHandle.write(value)
-      downloadedBytes += value.byteLength
-      await input.onProgress(downloadedBytes)
+      bytesDownloaded += value.byteLength
+      await input.onProgress(bytesDownloaded)
     }
-  } finally {
     await fileHandle.close()
-  }
-  if (input.expectedSizeBytes !== undefined && downloadedBytes < input.expectedSizeBytes) {
-    throw new Error(
-      `Incomplete response for ${input.url}: downloaded ${downloadedBytes} of ${input.expectedSizeBytes} bytes.`
-    )
-  }
-  await finalizeDownloadedFile({
-    incompletePath,
-    targetPath: input.targetPath,
-  })
-}
-
-async function finalizeDownloadedFile(input: {
-  incompletePath: string
-  targetPath: string
-}): Promise<void> {
-  await mkdir(dirname(input.targetPath), { recursive: true })
-  await rm(input.targetPath, { force: true })
-  await rename(input.incompletePath, input.targetPath)
-}
-
-function isRetryableDownloadError(error: unknown): boolean {
-  if (isRetryableNetworkError(error)) return true
-  if (!(error instanceof Error)) return false
-  return /status 408|status 409|status 425|status 429|status 500|status 502|status 503|status 504/u.test(
-    error.message
-  )
-}
-
-function delay(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort)
-      resolve()
-    }, ms)
-    const onAbort = () => {
-      clearTimeout(timeout)
-      reject(new Error('CT2 model download aborted.'))
+    if (totalBytes !== undefined && bytesDownloaded < totalBytes) {
+      throw new Error(`Download ended early for ${input.targetPath}.`)
     }
-    signal?.addEventListener('abort', onAbort, { once: true })
-  })
+    await rename(tempPath, input.targetPath)
+  } catch (error) {
+    await fileHandle.close().catch(() => undefined)
+    throw error
+  }
+}
+
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms))
 }

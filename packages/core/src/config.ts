@@ -801,6 +801,11 @@ const PERSISTED_CONFIG_SANITIZE_RULES = [
   },
   {
     kind: 'object',
+    path: ['translation', 'engines', 'localLlama'],
+    fallback: {},
+  },
+  {
+    kind: 'object',
     path: ['translation', 'engines', 'openai'],
     fallback: {},
   },
@@ -1029,6 +1034,24 @@ export function toPersistedConfig(
   if (localCt2Engine && hasOwnEntries(localCt2Engine)) {
     translationEngines.localCt2 = localCt2Engine
   }
+  const localLlamaEngine: NonNullable<
+    NonNullable<PersistedOpenSpecUIConfig['translation']>['engines']
+  >['localLlama'] = {}
+  if (
+    config.translation.engines.localLlama.model !==
+    DEFAULT_CONFIG.translation.engines.localLlama.model
+  ) {
+    localLlamaEngine.model = config.translation.engines.localLlama.model
+  }
+  if (
+    config.translation.engines.localLlama.selectedGroupId !==
+    DEFAULT_CONFIG.translation.engines.localLlama.selectedGroupId
+  ) {
+    localLlamaEngine.selectedGroupId = config.translation.engines.localLlama.selectedGroupId
+  }
+  if (localLlamaEngine && hasOwnEntries(localLlamaEngine)) {
+    translationEngines.localLlama = localLlamaEngine
+  }
   if (config.translation.engines.openai.model !== DEFAULT_CONFIG.translation.engines.openai.model) {
     translationEngines.openai = { model: config.translation.engines.openai.model }
   }
@@ -1153,6 +1176,10 @@ export class ConfigManager {
           localCt2: mergeNullablePatch(
             current.translation.engines.localCt2,
             config.translation?.engines?.localCt2
+          ),
+          localLlama: mergeNullablePatch(
+            current.translation.engines.localLlama,
+            config.translation?.engines?.localLlama
           ),
           openai: mergeNullablePatch(
             current.translation.engines.openai,

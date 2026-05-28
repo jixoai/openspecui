@@ -8,6 +8,7 @@ import { resolveTranslateServiceState } from './translate-service'
 
 const panelStateQueryMock = vi.hoisted(() => vi.fn())
 const ct2PanelStateQueryMock = vi.hoisted(() => vi.fn())
+const llamaPanelStateQueryMock = vi.hoisted(() => vi.fn())
 const engineLifecycleQueryMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/trpc', () => ({
@@ -20,6 +21,11 @@ vi.mock('@/lib/trpc', () => ({
     localCt2Models: {
       panelState: {
         query: ct2PanelStateQueryMock,
+      },
+    },
+    localLlamaModels: {
+      panelState: {
+        query: llamaPanelStateQueryMock,
       },
     },
     translationCache: {
@@ -54,6 +60,7 @@ describe('translate service', () => {
   beforeEach(() => {
     panelStateQueryMock.mockReset()
     ct2PanelStateQueryMock.mockReset()
+    llamaPanelStateQueryMock.mockReset()
     engineLifecycleQueryMock.mockReset()
     engineLifecycleQueryMock.mockResolvedValue(
       createTranslationEngineLifecycleStatus({
@@ -83,6 +90,7 @@ describe('translate service', () => {
             selectedGroupId: 'int8-4dc37a',
           },
           localCt2: {},
+          localLlama: {},
           openai: {},
         },
       },
@@ -120,6 +128,7 @@ describe('translate service', () => {
             selectedGroupId: 'q4',
           },
           localCt2: {},
+          localLlama: {},
           openai: {},
         },
       },
@@ -160,6 +169,7 @@ describe('translate service', () => {
             model: 'ooeoeo/opus-mt-en-zh-ct2-float16',
             selectedGroupId: 'float16',
           },
+          localLlama: {},
           openai: {},
         },
       },
@@ -174,6 +184,47 @@ describe('translate service', () => {
     expect(state.status).toEqual({
       state: 'ready',
       engineId: 'local-ct2',
+      message: 'Selected local model files are ready.',
+    })
+  })
+
+  it('routes local-llama availability checks through the llama panel state endpoint without directional gating', async () => {
+    llamaPanelStateQueryMock.mockResolvedValueOnce({
+      modelId: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+      selectedGroupId: 'Hy-MT2-1.8B-1.25Bit.gguf',
+      asset: createDownloadedLlamaAssetState(),
+      downloadPlan: null,
+    })
+
+    const state = await resolveTranslateServiceState({
+      config: {
+        enabled: true,
+        targetLanguage: 'zh',
+        displayMode: 'direct',
+        cacheEnabled: false,
+        engineId: 'local-llama',
+        engines: {
+          local: {},
+          localCt2: {},
+          localLlama: {
+            model: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+            selectedGroupId: 'Hy-MT2-1.8B-1.25Bit.gguf',
+          },
+          openai: {},
+        },
+      },
+      hasSource: true,
+    })
+
+    expect(panelStateQueryMock).not.toHaveBeenCalled()
+    expect(ct2PanelStateQueryMock).not.toHaveBeenCalled()
+    expect(llamaPanelStateQueryMock).toHaveBeenCalledWith({
+      modelId: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+      selectedGroupId: 'Hy-MT2-1.8B-1.25Bit.gguf',
+    })
+    expect(state.status).toEqual({
+      state: 'ready',
+      engineId: 'local-llama',
       message: 'Selected local model files are ready.',
     })
   })
@@ -206,6 +257,7 @@ describe('translate service', () => {
             selectedGroupId: 'q4',
           },
           localCt2: {},
+          localLlama: {},
           openai: {},
         },
       },
@@ -317,5 +369,40 @@ function createDownloadedCt2AssetState(): LocalModelAssetState {
       { path: 'target.spm', sizeBytes: 5, downloadedBytes: 5 },
       { path: 'shared_vocabulary.json', sizeBytes: 5, downloadedBytes: 5 },
     ],
+  })
+}
+
+function createDownloadedLlamaAssetState(): LocalModelAssetState {
+  return LocalModelAssetStateSchema.parse({
+    modelId: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+    version: 2,
+    status: 'downloaded',
+    selected: true,
+    selectedGroupId: 'Hy-MT2-1.8B-1.25Bit.gguf',
+    progress: 1,
+    bytesDownloaded: 30,
+    totalBytes: 30,
+    resumable: false,
+    groupsState: {},
+    profileLoad: {
+      status: 'ready',
+    },
+    plan: {
+      modelId: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+      estimatedTotalBytes: 30,
+      selectedGroupId: 'Hy-MT2-1.8B-1.25Bit.gguf',
+      files: [{ path: 'Hy-MT2-1.8B-1.25Bit.gguf', sizeBytes: 30, required: true }],
+      groups: [
+        {
+          id: 'Hy-MT2-1.8B-1.25Bit.gguf',
+          label: 'Hy-MT2-1.8B-1.25Bit',
+          estimatedTotalBytes: 30,
+          selectable: true,
+          selected: true,
+          files: [{ path: 'Hy-MT2-1.8B-1.25Bit.gguf', sizeBytes: 30, required: true }],
+        },
+      ],
+    },
+    files: [{ path: 'Hy-MT2-1.8B-1.25Bit.gguf', sizeBytes: 30, downloadedBytes: 30 }],
   })
 }

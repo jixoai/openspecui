@@ -13,7 +13,7 @@
     "dev:web": "pnpm --filter @openspecui/web dev",
     "dev:website": "pnpm --filter @openspecui/website dev",
     "build": "pnpm run build:deps && pnpm run typecheck && pnpm run build:packages && pnpm run build:cli",
-    "build:deps": "pnpm --filter @openspecui/core build && pnpm --filter @openspecui/search build && pnpm --filter @openspecui/ai-provider build && pnpm --filter @openspecui/browser-translator build && pnpm --filter ctranslate2 build && pnpm --filter @openspecui/local-ct2-translator build && pnpm --filter @openspecui/local-translator build && pnpm --filter @openspecui/openai-completion-translator build",
+    "build:deps": "pnpm --filter @openspecui/core build && pnpm --filter @openspecui/search build && pnpm --filter @openspecui/ai-provider build && pnpm --filter @openspecui/browser-translator build && pnpm --filter ctranslate2 build && pnpm --filter @openspecui/local-ct2-translator build && pnpm --filter @openspecui/local-llama-translator build && pnpm --filter @openspecui/local-translator build && pnpm --filter @openspecui/openai-completion-translator build",
     "build:packages": "pnpm --filter @openspecui/server build && pnpm --filter @openspecui/web build",
     "build:cli": "pnpm --filter openspecui run build:copy-web && pnpm --filter openspecui exec tsdown",
     "typecheck": "pnpm -r --parallel run typecheck",

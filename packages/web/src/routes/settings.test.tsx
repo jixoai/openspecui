@@ -47,6 +47,18 @@ function createLocalAssetStateForTest(
   return LocalModelAssetStateSchema.parse(input)
 }
 
+function createLocalModelCatalogItemForTest(
+  input: Omit<LocalModelCatalogItem, 'primarySource' | 'sources'> &
+    Partial<Pick<LocalModelCatalogItem, 'primarySource' | 'sources'>>
+): LocalModelCatalogItem {
+  const primarySource = input.primarySource ?? (input.local ? 'local' : 'network')
+  return {
+    ...input,
+    primarySource,
+    sources: input.sources ?? [primarySource],
+  }
+}
+
 const {
   useConfigSubscriptionMock,
   useGlobalSettingsSubscriptionMock,
@@ -108,6 +120,7 @@ const {
   translationEnginesMock,
   localModelsMock,
   localCt2ModelsMock,
+  localLlamaModelsMock,
   restoreTranslationMocks,
   emitLocalModelLog,
   createDefaultLocalAssetState,
@@ -120,6 +133,12 @@ const {
       }
     | undefined
   let localCt2ModelsSubscribeLogHandlers:
+    | {
+        onData: (log: LocalModelAssetLog) => void
+        onError?: (error: unknown) => void
+      }
+    | undefined
+  let localLlamaModelsSubscribeLogHandlers:
     | {
         onData: (log: LocalModelAssetLog) => void
         onError?: (error: unknown) => void
@@ -213,7 +232,7 @@ const {
   }
   const createDefaultLocalModel = (): LocalModelCatalogItem => {
     const asset = createDefaultLocalAssetState('onnx-community/opus-mt-en-zh')
-    return {
+    return createLocalModelCatalogItemForTest({
       id: 'onnx-community/opus-mt-en-zh',
       label: 'onnx-community/opus-mt-en-zh',
       summary: 'Previously selected local model. Estimated download 235 MB.',
@@ -238,10 +257,10 @@ const {
       asset,
       selectable: true,
       local: true,
-    }
+    })
   }
   const createDefaultRemoteItems = (): LocalModelCatalogItem[] => [
-    {
+    createLocalModelCatalogItemForTest({
       id: 'onnx-community/opus-mt-en-zh',
       label: 'onnx-community/opus-mt-en-zh',
       summary:
@@ -321,8 +340,8 @@ const {
       }),
       selectable: true,
       local: false,
-    },
-    {
+    }),
+    createLocalModelCatalogItemForTest({
       id: 'Xenova/unknown-model',
       label: 'Xenova/unknown-model',
       summary: 'Missing known file size.',
@@ -368,7 +387,7 @@ const {
       }),
       selectable: false,
       local: false,
-    },
+    }),
   ]
   const createDefaultLocalCt2DownloadPlan = (
     modelId: string,
@@ -428,7 +447,7 @@ const {
   }
   const createDefaultLocalCt2Model = (): LocalModelCatalogItem => {
     const asset = createDefaultLocalCt2AssetState('ooeoeo/opus-mt-en-zh-ct2-float16')
-    return {
+    return createLocalModelCatalogItemForTest({
       id: 'ooeoeo/opus-mt-en-zh-ct2-float16',
       label: 'ooeoeo/opus-mt-en-zh-ct2-float16',
       summary: 'Previously selected CT2 model. Estimated download 124 MB.',
@@ -453,10 +472,10 @@ const {
       asset,
       selectable: true,
       local: true,
-    }
+    })
   }
   const createDefaultLocalCt2RemoteItems = (): LocalModelCatalogItem[] => [
-    {
+    createLocalModelCatalogItemForTest({
       id: 'ooeoeo/opus-mt-en-zh-ct2-float16',
       label: 'ooeoeo/opus-mt-en-zh-ct2-float16',
       summary: 'Verified CTranslate2 translation model. Estimated download 124 MB.',
@@ -482,7 +501,122 @@ const {
       asset: createDefaultLocalCt2AssetState('ooeoeo/opus-mt-en-zh-ct2-float16'),
       selectable: true,
       local: false,
-    },
+    }),
+  ]
+  const createDefaultLocalLlamaDownloadPlan = (
+    modelId: string,
+    selectedGroupId = 'Hy-MT2-1.8B-1.25Bit-Q4_K_M.gguf'
+  ): TranslationModelDownloadPlan => {
+    const file = {
+      path: 'Hy-MT2-1.8B-1.25Bit-Q4_K_M.gguf',
+      sizeBytes: 603_979_776,
+      required: true,
+      revision: TEST_LOCAL_MODEL_COMMIT_HASH,
+      sourceUrl: `https://huggingface.co/${modelId}/resolve/${TEST_LOCAL_MODEL_COMMIT_HASH}/Hy-MT2-1.8B-1.25Bit-Q4_K_M.gguf`,
+    }
+    const groups: NonNullable<TranslationModelDownloadPlan['groups']> = [
+      {
+        id: file.path,
+        baseGroupId: 'Hy-MT2-1.8B-1.25Bit-Q4_K_M',
+        label: 'Hy-MT2-1.8B-1.25Bit-Q4_K_M',
+        description: 'Recommended GGUF runtime profile.',
+        commitHash: TEST_LOCAL_MODEL_COMMIT_HASH,
+        shortCommitHash: TEST_LOCAL_MODEL_SHORT_COMMIT_HASH,
+        estimatedTotalBytes: file.sizeBytes,
+        selectable: true,
+        selected: selectedGroupId === file.path,
+        files: [file],
+      },
+    ]
+    const selectedGroup = groups.find((group) => group.selected) ?? groups[0]
+    return {
+      modelId,
+      estimatedTotalBytes: selectedGroup.estimatedTotalBytes,
+      selectedGroupId: selectedGroup.id,
+      files: selectedGroup.files,
+      groups,
+    }
+  }
+  const createDefaultLocalLlamaAssetState = (
+    modelId: string,
+    selectedGroupId = 'Hy-MT2-1.8B-1.25Bit-Q4_K_M.gguf'
+  ): LocalModelAssetState => {
+    const plan = createDefaultLocalLlamaDownloadPlan(modelId, selectedGroupId)
+    return createLocalAssetStateForTest({
+      modelId,
+      status: 'not-downloaded',
+      selected: true,
+      selectedGroupId,
+      progress: 0,
+      resumable: false,
+      plan,
+      files: plan.files.map((file) => ({
+        path: file.path,
+        sizeBytes: file.sizeBytes,
+        downloadedBytes: 0,
+      })),
+      updatedAt: 100,
+    })
+  }
+  const createDefaultLocalLlamaModel = (): LocalModelCatalogItem => {
+    const asset = createDefaultLocalLlamaAssetState('tencent/Hy-MT2-1.8B-1.25Bit-GGUF')
+    return createLocalModelCatalogItemForTest({
+      id: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+      label: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+      summary: 'Previously selected llama GGUF model. Estimated download 576 MB.',
+      downloads: 0,
+      likes: 0,
+      tags: ['local', 'llama', 'gguf', 'translation', 'zh'],
+      compatibility: {
+        transformersJs: false,
+        onnx: false,
+        localRuntimeVerified: true,
+      },
+      size: {
+        estimatedTotalBytes: 603_979_776,
+        primaryBytes: 603_979_776,
+      },
+      downloadGroups: asset.plan?.groups,
+      languageMatch: {
+        sourceMatched: false,
+        targetMatched: true,
+        directionalScore: 0,
+      },
+      asset,
+      selectable: true,
+      local: true,
+    })
+  }
+  const createDefaultLocalLlamaRemoteItems = (): LocalModelCatalogItem[] => [
+    createLocalModelCatalogItemForTest({
+      id: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+      label: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+      summary: 'Verified GGUF runtime model. Estimated download 576 MB.',
+      downloads: 128,
+      likes: 18,
+      trendingScore: 5,
+      tags: ['llama', 'gguf', 'translation', 'zh'],
+      compatibility: {
+        transformersJs: false,
+        onnx: false,
+        localRuntimeVerified: true,
+      },
+      size: {
+        estimatedTotalBytes: 603_979_776,
+        primaryBytes: 603_979_776,
+      },
+      downloadGroups: createDefaultLocalLlamaDownloadPlan('tencent/Hy-MT2-1.8B-1.25Bit-GGUF')
+        .groups,
+      languageMatch: {
+        sourceMatched: false,
+        targetMatched: true,
+        directionalScore: 0,
+      },
+      asset: createDefaultLocalLlamaAssetState('tencent/Hy-MT2-1.8B-1.25Bit-GGUF'),
+      selectable: true,
+      local: false,
+      primarySource: 'recommended',
+    }),
   ]
   const translationEnginesMock = {
     getModelDownloadPlan: vi.fn(),
@@ -666,6 +800,95 @@ const {
     download: vi.fn(async () => ({ sessionId: 'ct2-session-1' })),
     pause: vi.fn(async () => ({ success: true })),
     resume: vi.fn(async () => ({ sessionId: 'ct2-session-2' })),
+    delete: vi.fn(async () => ({ success: true })),
+    refreshArtifacts: vi.fn(),
+  }
+  const localLlamaModelsMock = {
+    listLocal: vi.fn(),
+    searchRemote: vi.fn(),
+    searchRemoteStream: vi.fn(
+      (
+        input: { requestId: string; query?: string; targetLanguage?: string; limit?: number },
+        handlers: {
+          onData: (event: {
+            requestId: string
+            phase: 'candidates' | 'enriched' | 'complete' | 'error'
+            items?: LocalModelCatalogItem[]
+          }) => void
+          onError?: (error: unknown) => void
+        }
+      ) => {
+        const unsubscribe = vi.fn()
+        queueMicrotask(async () => {
+          if (unsubscribe.mock.calls.length > 0) return
+          const remote = (await localLlamaModelsMock.searchRemote()) as {
+            items: LocalModelCatalogItem[]
+          }
+          handlers.onData({
+            requestId: input.requestId,
+            phase: 'candidates',
+            items: remote.items.map((item) => ({ ...item, downloadGroups: undefined })),
+          })
+          if (unsubscribe.mock.calls.length > 0) return
+          handlers.onData({
+            requestId: input.requestId,
+            phase: 'enriched',
+            items: remote.items,
+          })
+          if (unsubscribe.mock.calls.length > 0) return
+          handlers.onData({
+            requestId: input.requestId,
+            phase: 'complete',
+            items: remote.items,
+          })
+        })
+        return { unsubscribe }
+      }
+    ),
+    state: vi.fn(),
+    panelState: vi.fn(
+      async ({
+        modelId,
+        selectedGroupId,
+      }: {
+        modelId: string
+        selectedGroupId?: string
+      }): Promise<{
+        modelId: string
+        selectedGroupId?: string
+        asset: LocalModelAssetState
+        downloadPlan: TranslationModelDownloadPlan | null
+      }> => {
+        const asset = await localLlamaModelsMock.state({ modelId, selectedGroupId })
+        return {
+          modelId,
+          selectedGroupId,
+          asset,
+          downloadPlan: asset.plan ?? createDefaultLocalLlamaDownloadPlan(modelId),
+        }
+      }
+    ),
+    subscribeLogs: vi.fn(
+      (
+        _input: undefined,
+        handlers: {
+          onData: (log: LocalModelAssetLog) => void
+          onError?: (error: unknown) => void
+        }
+      ) => {
+        localLlamaModelsSubscribeLogHandlers = handlers
+        return { unsubscribe: vi.fn() }
+      }
+    ),
+    markSelected: vi.fn(async ({ modelId }: { modelId: string }) => ({
+      modelId,
+      selectedGroupId: 'Hy-MT2-1.8B-1.25Bit-Q4_K_M.gguf',
+      asset: createDefaultLocalLlamaAssetState(modelId),
+      downloadPlan: createDefaultLocalLlamaDownloadPlan(modelId),
+    })),
+    download: vi.fn(async () => ({ sessionId: 'llama-session-1' })),
+    pause: vi.fn(async () => ({ success: true })),
+    resume: vi.fn(async () => ({ sessionId: 'llama-session-2' })),
     delete: vi.fn(async () => ({ success: true })),
     refreshArtifacts: vi.fn(),
   }
@@ -864,12 +1087,60 @@ const {
         downloadPlan: asset.plan ?? createDefaultLocalCt2DownloadPlan(resolvedModelId),
       }
     })
+    localLlamaModelsMock.listLocal.mockImplementation(
+      async (): Promise<{ items: LocalModelCatalogItem[] }> => ({
+        items: [createDefaultLocalLlamaModel()],
+      })
+    )
+    localLlamaModelsMock.searchRemote.mockImplementation(
+      async (): Promise<{ items: LocalModelCatalogItem[] }> => ({
+        items: createDefaultLocalLlamaRemoteItems(),
+      })
+    )
+    localLlamaModelsMock.state.mockImplementation(
+      async ({
+        modelId,
+        selectedGroupId,
+      }: {
+        modelId: string
+        selectedGroupId?: string
+      }): Promise<LocalModelAssetState> =>
+        createDefaultLocalLlamaAssetState(
+          modelId,
+          selectedGroupId ?? 'Hy-MT2-1.8B-1.25Bit-Q4_K_M.gguf'
+        )
+    )
+    localLlamaModelsMock.panelState.mockImplementation(
+      async ({ modelId, selectedGroupId }: { modelId: string; selectedGroupId?: string }) => {
+        const asset = await localLlamaModelsMock.state({ modelId, selectedGroupId })
+        return {
+          modelId,
+          selectedGroupId,
+          asset,
+          downloadPlan: asset.plan ?? createDefaultLocalLlamaDownloadPlan(modelId),
+        }
+      }
+    )
+    localLlamaModelsMock.refreshArtifacts.mockImplementation(async ({ modelId }) => {
+      const resolvedModelId = modelId ?? 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF'
+      const asset = await localLlamaModelsMock.state({
+        modelId: resolvedModelId,
+        selectedGroupId: 'Hy-MT2-1.8B-1.25Bit-Q4_K_M.gguf',
+      })
+      return {
+        modelId: resolvedModelId,
+        selectedGroupId: 'Hy-MT2-1.8B-1.25Bit-Q4_K_M.gguf',
+        asset,
+        downloadPlan: asset.plan ?? createDefaultLocalLlamaDownloadPlan(resolvedModelId),
+      }
+    })
   }
   restoreTranslationMocks()
   return {
     translationEnginesMock,
     localModelsMock,
     localCt2ModelsMock,
+    localLlamaModelsMock,
     restoreTranslationMocks,
     createDefaultLocalAssetState,
     createDefaultLocalDownloadPlan,
@@ -878,6 +1149,9 @@ const {
     },
     emitLocalCt2ModelLog(log: LocalModelAssetLog) {
       localCt2ModelsSubscribeLogHandlers?.onData(log)
+    },
+    emitLocalLlamaModelLog(log: LocalModelAssetLog) {
+      localLlamaModelsSubscribeLogHandlers?.onData(log)
     },
   }
 })
@@ -1227,7 +1501,7 @@ function createPlanAssetFilesForTest(
 
 function createDownloadedLocalModelForTest(modelId: string): LocalModelCatalogItem {
   const plan = createGroupedLocalPlanForTest(modelId)
-  return {
+  return createLocalModelCatalogItemForTest({
     id: modelId,
     label: modelId,
     summary: 'Downloaded local model.',
@@ -1263,12 +1537,12 @@ function createDownloadedLocalModelForTest(modelId: string): LocalModelCatalogIt
     }),
     selectable: true,
     local: true,
-  }
+  })
 }
 
 function createFullyDownloadedGroupedLocalModelForTest(modelId: string): LocalModelCatalogItem {
   const plan = createTriStateGroupedLocalPlanForTest(modelId)
-  return {
+  return createLocalModelCatalogItemForTest({
     id: modelId,
     label: modelId,
     summary: 'Downloaded local model.',
@@ -1324,7 +1598,7 @@ function createFullyDownloadedGroupedLocalModelForTest(modelId: string): LocalMo
     }),
     selectable: true,
     local: true,
-  }
+  })
 }
 
 function getTranslationTargetLanguageDialog() {
@@ -1645,6 +1919,27 @@ vi.mock('@tanstack/react-query', () => ({
             }
           )
       }
+      if (key.startsWith('translation.managed-local.local-llama.panel-state') && queryKey?.[4]) {
+        void localLlamaModelsMock
+          .panelState({
+            modelId: queryKey[4],
+            selectedGroupId: queryKey[5] || undefined,
+          })
+          .then(
+            (data: {
+              modelId: string
+              selectedGroupId?: string
+              asset: LocalModelAssetState
+              downloadPlan: TranslationModelDownloadPlan | null
+            }) => {
+              reactQueryMockStore.setQueryData(queryKey, {
+                data,
+                isLoading: false,
+                refetch: vi.fn(),
+              })
+            }
+          )
+      }
     }
     return normalizeMockQueryResult(reactQueryMockStore.getQueryData(queryKey))
   },
@@ -1728,6 +2023,11 @@ function resolveQueryResultForKey(key: string) {
             selectedGroupId: 'float16',
             hfEndpoint: '',
           },
+          localLlama: {
+            model: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+            selectedGroupId: 'Hy-MT2-1.8B-1.25Bit-Q4_K_M.gguf',
+            hfEndpoint: '',
+          },
         },
       },
       refetch: vi.fn(),
@@ -1780,6 +2080,21 @@ function resolveQueryResultForKey(key: string) {
           model: 'ooeoeo/opus-mt-en-zh-ct2-float16',
         },
         {
+          id: 'local-llama',
+          label: 'Local-Llama',
+          description:
+            'Runs a bundled local llama.cpp translation runtime with managed GGUF model files.',
+          technicalSummary:
+            'Server-side llama.cpp local adapter. Package payload is about 5 KB; selected GGUF files are downloaded separately and can range from hundreds of MB upward.',
+          runtime: 'server',
+          selected: false,
+          installStatus: {
+            state: 'installed',
+            message: 'Local-Llama runtime dependencies are installed.',
+          },
+          model: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+        },
+        {
           id: 'openai',
           label: 'OpenAI-Completion',
           description:
@@ -1811,16 +2126,28 @@ function resolveQueryResultForKey(key: string) {
   if (key === 'localCt2Models.searchRemote') {
     return { data: undefined, isLoading: false, refetch: vi.fn() }
   }
+  if (key === 'localLlamaModels.listLocal') {
+    return { data: undefined, isLoading: false, refetch: vi.fn() }
+  }
+  if (key === 'localLlamaModels.searchRemote') {
+    return { data: undefined, isLoading: false, refetch: vi.fn() }
+  }
   if (key.startsWith('localModels.state') || key.startsWith('localModels.panelState')) {
     return { data: undefined, isLoading: true, refetch: vi.fn() }
   }
   if (key.startsWith('localCt2Models.state') || key.startsWith('localCt2Models.panelState')) {
     return { data: undefined, isLoading: true, refetch: vi.fn() }
   }
+  if (key.startsWith('localLlamaModels.state') || key.startsWith('localLlamaModels.panelState')) {
+    return { data: undefined, isLoading: true, refetch: vi.fn() }
+  }
   if (key.startsWith('translation.managed-local.local.panel-state')) {
     return { data: undefined, isLoading: true, refetch: vi.fn() }
   }
   if (key.startsWith('translation.managed-local.local-ct2.panel-state')) {
+    return { data: undefined, isLoading: true, refetch: vi.fn() }
+  }
+  if (key.startsWith('translation.managed-local.local-llama.panel-state')) {
     return { data: undefined, isLoading: true, refetch: vi.fn() }
   }
   if (key === 'translationCache.stats') {
@@ -2037,6 +2364,28 @@ vi.mock('@/lib/trpc', () => ({
         }),
       },
     },
+    localLlamaModels: {
+      listLocal: {
+        queryOptions: () => ({ queryKey: ['localLlamaModels.listLocal'] }),
+      },
+      searchRemote: {
+        queryOptions: () => ({ queryKey: ['localLlamaModels.searchRemote'] }),
+      },
+      state: {
+        queryOptions: (input?: { modelId: string; selectedGroupId?: string }) => ({
+          queryKey: ['localLlamaModels.state', input?.modelId ?? '', input?.selectedGroupId ?? ''],
+        }),
+      },
+      panelState: {
+        queryOptions: (input?: { modelId: string; selectedGroupId?: string }) => ({
+          queryKey: [
+            'localLlamaModels.panelState',
+            input?.modelId ?? '',
+            input?.selectedGroupId ?? '',
+          ],
+        }),
+      },
+    },
   },
   trpcClient: {
     cli: {
@@ -2163,6 +2512,44 @@ vi.mock('@/lib/trpc', () => ({
         mutate: localCt2ModelsMock.refreshArtifacts,
       },
     },
+    localLlamaModels: {
+      listLocal: {
+        query: localLlamaModelsMock.listLocal,
+      },
+      searchRemote: {
+        query: localLlamaModelsMock.searchRemote,
+      },
+      searchRemoteStream: {
+        subscribe: localLlamaModelsMock.searchRemoteStream,
+      },
+      state: {
+        query: localLlamaModelsMock.state,
+      },
+      panelState: {
+        query: localLlamaModelsMock.panelState,
+      },
+      subscribeLogs: {
+        subscribe: localLlamaModelsMock.subscribeLogs,
+      },
+      markSelected: {
+        mutate: localLlamaModelsMock.markSelected,
+      },
+      download: {
+        mutate: localLlamaModelsMock.download,
+      },
+      pause: {
+        mutate: localLlamaModelsMock.pause,
+      },
+      resume: {
+        mutate: localLlamaModelsMock.resume,
+      },
+      delete: {
+        mutate: localLlamaModelsMock.delete,
+      },
+      refreshArtifacts: {
+        mutate: localLlamaModelsMock.refreshArtifacts,
+      },
+    },
   },
 }))
 
@@ -2184,6 +2571,7 @@ describe('Settings', () => {
             engines: {
               local: { status: 'not-installed' },
               localCt2: { status: 'not-installed' },
+              localLlama: { status: 'not-installed' },
               openai: { status: 'not-installed' },
             },
           },
@@ -2192,6 +2580,11 @@ describe('Settings', () => {
           localCt2: {
             model: 'ooeoeo/opus-mt-en-zh-ct2-float16',
             selectedGroupId: 'float16',
+            hfEndpoint: '',
+          },
+          localLlama: {
+            model: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+            selectedGroupId: 'Hy-MT2-1.8B-1.25Bit-Q4_K_M.gguf',
             hfEndpoint: '',
           },
         },
@@ -4731,7 +5124,7 @@ describe('Settings', () => {
     })
     localModelsMock.listLocal.mockResolvedValueOnce({
       items: [
-        {
+        createLocalModelCatalogItemForTest({
           id: 'onnx-community/opus-mt-en-zh',
           label: 'onnx-community/opus-mt-en-zh',
           summary: 'Previously selected local model. Estimated download 293 MB.',
@@ -4756,7 +5149,7 @@ describe('Settings', () => {
           asset: localSnapshotAsset,
           selectable: true,
           local: true,
-        },
+        }),
       ],
     })
     localModelsMock.state.mockImplementation(
@@ -5055,7 +5448,7 @@ describe('Settings', () => {
     }
     localModelsMock.listLocal.mockResolvedValueOnce({
       items: [
-        {
+        createLocalModelCatalogItemForTest({
           id: modelId,
           label: modelId,
           summary: 'Downloaded local model.',
@@ -5080,7 +5473,7 @@ describe('Settings', () => {
           asset: buildAsset('q4'),
           selectable: true,
           local: true,
-        },
+        }),
       ],
     })
     localModelsMock.state.mockImplementation(
@@ -5315,7 +5708,7 @@ describe('Settings', () => {
     })
     localModelsMock.listLocal.mockResolvedValueOnce({
       items: [
-        {
+        createLocalModelCatalogItemForTest({
           id: 'Xenova/opus-mt-no-de',
           label: 'Xenova/opus-mt-no-de',
           summary: 'Downloaded local model.',
@@ -5340,7 +5733,7 @@ describe('Settings', () => {
           asset: localAsset,
           selectable: true,
           local: true,
-        },
+        }),
       ],
     })
     localModelsMock.state.mockResolvedValue(localAsset)

@@ -42,6 +42,7 @@ import {
   TranslationEngineIdSchema,
   TranslationEngineLifecycleStatusSchema,
   TranslationLocalCt2SettingsSchema,
+  TranslationLocalLlamaSettingsSchema,
   TranslationLocalSettingsSchema,
   TranslationOpenAISettingsSchema,
   type AIToolOption,
@@ -95,6 +96,7 @@ import {
   listCurrentWorktreeGitEntries,
   resolveGitWorktreeSwitchTarget,
 } from './git-panel-data.js'
+import type { LlamaModelAssetService } from './llama-model-asset-service.js'
 import type { LocalModelAssetService } from './local-model-asset-service.js'
 import type { NotificationService } from './notification-service.js'
 import type { ProjectRecoveryService } from './project-recovery-service.js'
@@ -126,6 +128,7 @@ export interface Context {
   translationEngineService: TranslationEngineService
   localModelAssetService: LocalModelAssetService
   localCt2ModelAssetService: Ct2ModelAssetService
+  localLlamaModelAssetService: LlamaModelAssetService
   gitWorktreeHandoff?: GitWorktreeHandoffService
   watcher?: OpenSpecWatcher
   projectDir: string
@@ -231,6 +234,11 @@ export const globalSettingsRouter = router({
               })
               .optional(),
             localCt2: TranslationLocalCt2SettingsSchema.partial()
+              .extend({
+                selectedGroupId: z.string().min(1).nullable().optional(),
+              })
+              .optional(),
+            localLlama: TranslationLocalLlamaSettingsSchema.partial()
               .extend({
                 selectedGroupId: z.string().min(1).nullable().optional(),
               })
@@ -684,6 +692,178 @@ export const localCt2ModelsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const asset = await ctx.localCt2ModelAssetService.refreshArtifacts(input.modelId)
+      return {
+        modelId: asset.modelId,
+        selectedGroupId: asset.selectedGroupId ?? asset.plan?.selectedGroupId,
+        asset,
+        downloadPlan: asset.plan ?? null,
+      }
+    }),
+})
+
+export const localLlamaModelsRouter = router({
+  listLocal: publicProcedure.query(({ ctx }) => {
+    return ctx.localLlamaModelAssetService.listLocalCatalog()
+  }),
+
+  searchRemote: publicProcedure
+    .input(
+      z.object({
+        requestId: z.string().min(1).optional(),
+        query: z.string().optional(),
+        sourceLanguage: z.string().optional(),
+        targetLanguage: z.string().optional(),
+        limit: z.number().int().positive().max(20).optional(),
+        cursor: z.string().optional(),
+      })
+    )
+    .query(({ ctx, input }) => {
+      return ctx.localLlamaModelAssetService.searchRemoteCatalog({
+        engineId: 'local-llama',
+        ...input,
+      })
+    }),
+
+  searchRemoteStream: publicProcedure
+    .input(
+      z.object({
+        requestId: z.string().min(1),
+        query: z.string().optional(),
+        sourceLanguage: z.string().optional(),
+        targetLanguage: z.string().optional(),
+        limit: z.number().int().positive().max(20).optional(),
+        cursor: z.string().optional(),
+      })
+    )
+    .subscription(({ ctx, input }) => {
+      return ctx.localLlamaModelAssetService.subscribeRemoteCatalog({
+        engineId: 'local-llama',
+        ...input,
+      })
+    }),
+
+  state: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .query(({ ctx, input }) => {
+      return ctx.localLlamaModelAssetService.readSelectedModelState(
+        input.modelId,
+        input.selectedGroupId
+      )
+    }),
+
+  panelState: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const asset = await ctx.localLlamaModelAssetService.readSelectedModelState(
+        input.modelId,
+        input.selectedGroupId
+      )
+      return {
+        modelId: input.modelId,
+        selectedGroupId: asset.selectedGroupId ?? asset.plan?.selectedGroupId,
+        asset,
+        downloadPlan: asset.plan ?? null,
+      }
+    }),
+
+  subscribeLogs: publicProcedure.subscription(({ ctx }) => {
+    return ctx.localLlamaModelAssetService.subscribeLogs()
+  }),
+
+  markSelected: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const asset = await ctx.localLlamaModelAssetService.markSelectedModel(input.modelId)
+      return {
+        modelId: input.modelId,
+        selectedGroupId: asset.selectedGroupId ?? asset.plan?.selectedGroupId,
+        asset,
+        downloadPlan: asset.plan ?? null,
+      }
+    }),
+
+  download: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        groupId: z.string().min(1).optional(),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.localLlamaModelAssetService.startDownload(
+        input.modelId,
+        input.groupId ?? input.selectedGroupId
+      )
+    }),
+
+  pause: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        groupId: z.string().min(1).optional(),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .mutation(({ ctx, input }) => {
+      return ctx.localLlamaModelAssetService.pauseDownload(
+        input.modelId,
+        input.groupId ?? input.selectedGroupId
+      )
+    }),
+
+  resume: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        groupId: z.string().min(1).optional(),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.localLlamaModelAssetService.resumeDownload(
+        input.modelId,
+        input.groupId ?? input.selectedGroupId
+      )
+    }),
+
+  delete: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1),
+        groupId: z.string().min(1).optional(),
+        selectedGroupId: z.string().min(1).optional(),
+      })
+    )
+    .mutation(({ ctx, input }) => {
+      return ctx.localLlamaModelAssetService.deleteModel(
+        input.modelId,
+        input.groupId ?? input.selectedGroupId
+      )
+    }),
+
+  refreshArtifacts: publicProcedure
+    .input(
+      z.object({
+        modelId: z.string().min(1).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const asset = await ctx.localLlamaModelAssetService.refreshArtifacts(input.modelId)
       return {
         modelId: asset.modelId,
         selectedGroupId: asset.selectedGroupId ?? asset.plan?.selectedGroupId,
@@ -2354,6 +2534,7 @@ export const appRouter = router({
   translationEngines: translationEnginesRouter,
   localModels: localModelsRouter,
   localCt2Models: localCt2ModelsRouter,
+  localLlamaModels: localLlamaModelsRouter,
   notifications: notificationsRouter,
   sounds: soundsRouter,
   cli: cliRouter,

@@ -15,6 +15,7 @@ import {
   TranslationEngineGlobalSettingsSchema,
   type TranslationEngineGlobalSettingsUpdate,
   type TranslationLocalCt2Settings,
+  type TranslationLocalLlamaSettings,
   type TranslationLocalSettings,
   type TranslationOpenAISettings,
 } from './translator.js'
@@ -41,6 +42,7 @@ export type PersistedOpenSpecUIGlobalSettings = {
     openai?: Partial<TranslationOpenAISettings>
     local?: Partial<TranslationLocalSettings>
     localCt2?: Partial<TranslationLocalCt2Settings>
+    localLlama?: Partial<TranslationLocalLlamaSettings>
   }
 }
 
@@ -53,6 +55,7 @@ const PERSISTED_GLOBAL_SETTINGS_SANITIZE_RULES = [
   { kind: 'object', path: ['translationEngines', 'openai'], fallback: {} },
   { kind: 'object', path: ['translationEngines', 'local'], fallback: {} },
   { kind: 'object', path: ['translationEngines', 'localCt2'], fallback: {} },
+  { kind: 'object', path: ['translationEngines', 'localLlama'], fallback: {} },
 ] as const satisfies readonly PersistedSanitizeRule[]
 
 export function getDefaultGlobalSettingsPath(): string {
@@ -166,6 +169,26 @@ export function toPersistedGlobalSettings(
     translationEngines.localCt2 = localCt2
   }
 
+  const localLlama: Partial<TranslationLocalLlamaSettings> = {}
+  if (settings.translationEngines.localLlama.model !== defaultTranslationEngines.localLlama.model) {
+    localLlama.model = settings.translationEngines.localLlama.model
+  }
+  if (
+    settings.translationEngines.localLlama.selectedGroupId !==
+    defaultTranslationEngines.localLlama.selectedGroupId
+  ) {
+    localLlama.selectedGroupId = settings.translationEngines.localLlama.selectedGroupId
+  }
+  if (
+    settings.translationEngines.localLlama.hfEndpoint !==
+    defaultTranslationEngines.localLlama.hfEndpoint
+  ) {
+    localLlama.hfEndpoint = settings.translationEngines.localLlama.hfEndpoint
+  }
+  if (hasOwnEntries(localLlama)) {
+    translationEngines.localLlama = localLlama
+  }
+
   if (hasOwnEntries(translationEngines)) {
     persisted.translationEngines = translationEngines
   }
@@ -243,6 +266,10 @@ export class GlobalSettingsManager {
         localCt2: mergeNullablePatch(
           current.translationEngines.localCt2,
           update.translationEngines?.localCt2
+        ),
+        localLlama: mergeNullablePatch(
+          current.translationEngines.localLlama,
+          update.translationEngines?.localLlama
         ),
       },
     })
