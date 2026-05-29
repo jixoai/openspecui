@@ -11,7 +11,12 @@ export function resolveDocumentTranslationConfig(
 ): DocumentTranslationConfigInput | undefined {
   if (!translationConfig) return undefined
 
-  const projectOwnsEngineId = configPresence?.translation.engineId ?? true
+  const translationPresence = configPresence?.translation
+  const projectOwnsEnabled = translationPresence?.enabled ?? false
+  const projectOwnsTargetLanguage = translationPresence?.targetLanguage ?? false
+  const projectOwnsDisplayMode = translationPresence?.displayMode ?? false
+  const projectOwnsCacheEnabled = translationPresence?.cacheEnabled ?? false
+  const projectOwnsEngineId = translationPresence?.engineId ?? false
   const local = translationConfig.engines?.local ?? {}
   const localCt2 = translationConfig.engines?.localCt2 ?? {}
   const localLlama = translationConfig.engines?.localLlama ?? {}
@@ -31,6 +36,18 @@ export function resolveDocumentTranslationConfig(
 
   return {
     ...translationConfig,
+    enabled: projectOwnsEnabled
+      ? translationConfig.enabled
+      : (globalSettings?.translation?.enabled ?? translationConfig.enabled),
+    targetLanguage: projectOwnsTargetLanguage
+      ? translationConfig.targetLanguage
+      : (globalSettings?.translation?.targetLanguage ?? translationConfig.targetLanguage),
+    displayMode: projectOwnsDisplayMode
+      ? translationConfig.displayMode
+      : (globalSettings?.translation?.displayMode ?? translationConfig.displayMode),
+    cacheEnabled: projectOwnsCacheEnabled
+      ? translationConfig.cacheEnabled
+      : (globalSettings?.translation?.cacheEnabled ?? translationConfig.cacheEnabled),
     engineId: projectOwnsEngineId
       ? translationConfig.engineId
       : (globalSettings?.translationEngines.engineId ?? translationConfig.engineId),

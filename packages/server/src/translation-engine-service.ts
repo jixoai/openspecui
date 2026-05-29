@@ -863,20 +863,9 @@ export class TranslationEngineService {
       missingFiles.length === 0 &&
       (groupState?.status === 'downloaded' || state?.status === 'downloaded')
     ) {
-      const runtimeCompatibility = await this.readManagedLocalRuntimeCompatibility({
-        engineId,
-        model: selection.model,
-        selectedGroup,
-        selectedGroupState: groupState,
-      })
-      if (runtimeCompatibility?.state === 'error') {
-        return runtimeCompatibility
-      }
       return {
         state: 'ready',
-        message:
-          runtimeCompatibility?.message ??
-          `Selected ${getManagedLocalAssetLabel(engineId)} files are ready.`,
+        message: `Selected ${getManagedLocalAssetLabel(engineId)} files are ready.`,
       }
     }
     return {
@@ -1091,14 +1080,13 @@ async function detectManagedLocalLifecycle(
       summary: manifest.installDescription,
     })
   }
-  const runtime = await probeManagedLocalRuntime(engineId)
   return createTranslationEngineLifecycleStatus({
     dependency,
-    runtime,
-    summary:
-      runtime.state === 'ready'
-        ? (runtime.message ?? dependency.message ?? manifest.description)
-        : (runtime.error ?? runtime.message ?? manifest.installDescription),
+    runtime: {
+      state: 'not-applicable',
+      message: 'Run Test Translate to validate runtime errors and latency.',
+    },
+    summary: dependency.message ?? manifest.description,
   })
 }
 
@@ -1129,46 +1117,6 @@ async function detectManagedLocalDependency(
     return {
       state: 'missing',
       message: manifest.installDescription,
-      error: error instanceof Error ? error.message : String(error),
-    }
-  }
-}
-
-async function probeManagedLocalRuntime(
-  engineId: ManagedLocalTranslationEngineId
-): Promise<TranslationEngineLifecycleStatus['runtime']> {
-  const manifest = getManagedLocalTranslationEngineManifest(engineId)
-  try {
-    if (engineId === 'local') {
-      const mod = (await import('@huggingface/transformers')) as {
-        pipeline?: unknown
-      }
-      if (typeof mod.pipeline !== 'function') {
-        throw new Error('Transformers.js did not expose a translation pipeline entry point.')
-      }
-    } else if (engineId === 'local-ct2') {
-      const mod = (await import('ctranslate2')) as {
-        Ct2Translator?: unknown
-      }
-      if (typeof mod.Ct2Translator !== 'function') {
-        throw new Error('ctranslate2 did not expose a Ct2Translator constructor.')
-      }
-    } else {
-      const mod = (await import('node-llama-cpp')) as {
-        getLlama?: unknown
-      }
-      if (typeof mod.getLlama !== 'function') {
-        throw new Error('node-llama-cpp did not expose a getLlama entry point.')
-      }
-    }
-    return {
-      state: 'ready',
-      message: `${manifest.label} runtime is ready.`,
-    }
-  } catch (error) {
-    return {
-      state: 'failed',
-      message: `${manifest.label} runtime could not be loaded.`,
       error: error instanceof Error ? error.message : String(error),
     }
   }

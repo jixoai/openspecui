@@ -19,6 +19,12 @@ describe('resolveDocumentTranslationConfig', () => {
           },
         },
         {
+          translation: {
+            enabled: false,
+            targetLanguage: 'de',
+            displayMode: 'bilingual',
+            cacheEnabled: true,
+          },
           translationCache: { entryLimit: 10000 },
           translationEngines: {
             engineId: 'local-llama',
@@ -49,6 +55,10 @@ describe('resolveDocumentTranslationConfig', () => {
         },
         {
           translation: {
+            enabled: true,
+            targetLanguage: true,
+            displayMode: true,
+            cacheEnabled: true,
             engineId: true,
             engines: {
               local: false,
@@ -102,6 +112,12 @@ describe('resolveDocumentTranslationConfig', () => {
           },
         },
         {
+          translation: {
+            enabled: false,
+            targetLanguage: 'de',
+            displayMode: 'bilingual',
+            cacheEnabled: true,
+          },
           translationCache: { entryLimit: 10000 },
           translationEngines: {
             engineId: 'local-llama',
@@ -132,6 +148,10 @@ describe('resolveDocumentTranslationConfig', () => {
         },
         {
           translation: {
+            enabled: true,
+            targetLanguage: true,
+            displayMode: true,
+            cacheEnabled: true,
             engineId: false,
             engines: {
               local: false,
@@ -143,5 +163,77 @@ describe('resolveDocumentTranslationConfig', () => {
         }
       )?.engineId
     ).toBe('local-llama')
+  })
+
+  it('uses global scalar translation fields when project config has no overrides', () => {
+    expect(
+      resolveDocumentTranslationConfig(
+        {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+          engineId: 'browser',
+          engines: {
+            local: {},
+            localCt2: {},
+            localLlama: {},
+            openai: {},
+          },
+        },
+        {
+          translation: {
+            enabled: true,
+            targetLanguage: 'de',
+            displayMode: 'bilingual',
+            cacheEnabled: true,
+          },
+          translationCache: { entryLimit: 10000 },
+          translationEngines: {
+            engineId: 'browser',
+            local: {
+              model: 'onnx-community/opus-mt-en-zh',
+              hfEndpoint: '',
+              memoryBudgetPercent: 25,
+            },
+            localCt2: {
+              model: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+              hfEndpoint: '',
+              memoryBudgetPercent: 25,
+            },
+            localLlama: {
+              model: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+              hfEndpoint: '',
+              memoryBudgetPercent: 25,
+            },
+            openai: {
+              baseUrl: '',
+              token: '',
+              model: 'gpt-4.1-mini',
+            },
+          },
+        },
+        {
+          translation: {
+            enabled: false,
+            targetLanguage: false,
+            displayMode: false,
+            cacheEnabled: false,
+            engineId: false,
+            engines: {
+              local: false,
+              localCt2: false,
+              localLlama: false,
+              openai: false,
+            },
+          },
+        }
+      )
+    ).toMatchObject({
+      enabled: true,
+      targetLanguage: 'de',
+      displayMode: 'bilingual',
+      cacheEnabled: true,
+    })
   })
 })

@@ -2017,6 +2017,12 @@ function resolveQueryResultForKey(key: string) {
   if (key === 'globalSettings.get') {
     return {
       data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        },
         translationCache: { entryLimit: 10000 },
         translationEngines: {
           openai: { baseUrl: '', token: '', model: 'gpt-4.1-mini' },
@@ -2574,6 +2580,10 @@ describe('Settings', () => {
       const config = useConfigSubscriptionMock().data as
         | {
             translation?: {
+              enabled?: unknown
+              targetLanguage?: unknown
+              displayMode?: unknown
+              cacheEnabled?: unknown
               engineId?: unknown
               engines?: {
                 local?: unknown
@@ -2587,6 +2597,18 @@ describe('Settings', () => {
       return {
         data: {
           translation: {
+            enabled:
+              config?.translation !== undefined &&
+              Object.prototype.hasOwnProperty.call(config.translation, 'enabled'),
+            targetLanguage:
+              config?.translation !== undefined &&
+              Object.prototype.hasOwnProperty.call(config.translation, 'targetLanguage'),
+            displayMode:
+              config?.translation !== undefined &&
+              Object.prototype.hasOwnProperty.call(config.translation, 'displayMode'),
+            cacheEnabled:
+              config?.translation !== undefined &&
+              Object.prototype.hasOwnProperty.call(config.translation, 'cacheEnabled'),
             engineId:
               config?.translation !== undefined &&
               Object.prototype.hasOwnProperty.call(config.translation, 'engineId'),
@@ -2612,6 +2634,12 @@ describe('Settings', () => {
     })
     useGlobalSettingsSubscriptionMock.mockReturnValue({
       data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        },
         translationCache: { entryLimit: 10000 },
         translationEngines: {
           engineId: 'browser',
@@ -2697,6 +2725,9 @@ describe('Settings', () => {
     expect(
       screen.getByText(/Package payload is about 5 KB; browser language packs are managed/)
     ).toBeTruthy()
+    expect(
+      screen.getByText(/Run Test Translate manually to validate runtime errors and latency/)
+    ).toBeTruthy()
     expect(screen.getByRole('switch', { name: 'Enable translation cache' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('switch', { name: 'Enable document translation' }))
@@ -2707,6 +2738,60 @@ describe('Settings', () => {
     await waitFor(() =>
       expect(browserTranslationMock.scan).toHaveBeenCalledWith('zh', expect.any(Object))
     )
+  })
+
+  it('stores document translation scalar preferences globally when the project has no overrides', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {},
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    fireEvent.click(screen.getByRole('switch', { name: 'Enable document translation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Bilingual' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Enable translation cache' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Translation target language' }))
+    const dialog = getTranslationTargetLanguageDialog()
+    dispatchPopoverToggle(dialog, 'open')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search translation languages' }), {
+      target: { value: '繁體' },
+    })
+    fireEvent.click(
+      await within(dialog).findByRole('option', {
+        name: /Chinese \(Traditional\) 繁體中文/,
+      })
+    )
+
+    await waitFor(() =>
+      expect(updateGlobalSettingsMock).toHaveBeenCalledWith({ translation: { enabled: true } })
+    )
+    expect(updateGlobalSettingsMock).toHaveBeenCalledWith({
+      translation: { displayMode: 'bilingual' },
+    })
+    expect(updateGlobalSettingsMock).toHaveBeenCalledWith({
+      translation: { cacheEnabled: true },
+    })
+    expect(updateGlobalSettingsMock).toHaveBeenCalledWith({
+      translation: { targetLanguage: 'zh-Hant' },
+    })
+    expect(updateConfigMock).not.toHaveBeenCalledWith({ translation: { enabled: true } })
+    expect(updateConfigMock).not.toHaveBeenCalledWith({ translation: { displayMode: 'bilingual' } })
+    expect(updateConfigMock).not.toHaveBeenCalledWith({ translation: { cacheEnabled: true } })
+    expect(updateConfigMock).not.toHaveBeenCalledWith({
+      translation: { targetLanguage: 'zh-Hant' },
+    })
   })
 
   it('checks browser translation support automatically after selecting the browser engine', async () => {
@@ -3961,6 +4046,80 @@ describe('Settings', () => {
     expect(screen.getAllByRole('button', { name: 'Installed' }).length).toBeGreaterThan(0)
     expect(screen.queryByText('Install')).toBeNull()
     expect(screen.queryByRole('progressbar')).toBeNull()
+  })
+
+  it('persists OpenAI model globally unless the project owns OpenAI engine settings', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          engineId: 'openai',
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    const modelInput = screen.getByLabelText('Model')
+    fireEvent.change(modelInput, { target: { value: 'gpt-4.1' } })
+    fireEvent.blur(modelInput)
+
+    await waitFor(() =>
+      expect(updateGlobalSettingsMock).toHaveBeenCalledWith({
+        translationEngines: { openai: { model: 'gpt-4.1' } },
+      })
+    )
+    expect(updateConfigMock).not.toHaveBeenCalledWith({
+      translation: { engines: { openai: { model: 'gpt-4.1' } } },
+    })
+  })
+
+  it('persists OpenAI model in project config when the project owns OpenAI engine settings', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          engineId: 'openai',
+          engines: {
+            openai: { model: 'project-model' },
+          },
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    const modelInput = screen.getByLabelText('Model')
+    expect(modelInput).toHaveValue('project-model')
+    fireEvent.change(modelInput, { target: { value: 'project-gpt' } })
+    fireEvent.blur(modelInput)
+
+    await waitFor(() =>
+      expect(updateConfigMock).toHaveBeenCalledWith({
+        translation: { engines: { openai: { model: 'project-gpt' } } },
+      })
+    )
+    expect(updateGlobalSettingsMock).not.toHaveBeenCalledWith({
+      translationEngines: { openai: { model: 'project-gpt' } },
+    })
   })
 
   it('searches Local-Transformers models through the autocomplete popover and shows the download plan', async () => {

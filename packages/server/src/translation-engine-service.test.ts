@@ -771,7 +771,7 @@ describe('TranslationEngineService', () => {
     })
   })
 
-  it('reports local llama asset compatibility failures through lifecycle truth', async () => {
+  it('does not probe local llama runtime compatibility while reading lifecycle truth', async () => {
     const groupId = 'Hy-MT2-1.8B-1.25Bit.gguf'
     const rootDir = join(tempDir, 'llama-profiles', groupId)
     const plan = createLlamaDownloadPlan('tencent/Hy-MT2-1.8B-1.25Bit-GGUF', groupId, {
@@ -820,14 +820,15 @@ describe('TranslationEngineService', () => {
     })
 
     expect(lifecycle.assets).toMatchObject({
-      state: 'error',
-      message:
-        'Selected llama GGUF group Hy-MT2-1.8B-1.25Bit cannot be loaded by the current node-llama-cpp runtime: Invalid type or block size',
-      error: 'Invalid type or block size',
+      state: 'ready',
+      message: 'Selected llama model files are ready.',
     })
-    expect(lifecycle.summary).toBe(
-      'Selected llama GGUF group Hy-MT2-1.8B-1.25Bit cannot be loaded by the current node-llama-cpp runtime: Invalid type or block size'
-    )
+    expect(lifecycle.runtime).toMatchObject({
+      state: 'not-applicable',
+      message: 'Run Test Translate to validate runtime errors and latency.',
+    })
+    expect(lifecycle.summary).toBe('Local-Llama runtime dependencies are installed.')
+    expect(llamaLoadModelMock).not.toHaveBeenCalled()
   })
 
   it('uses one immutable settings snapshot for a batch translation subscription', async () => {

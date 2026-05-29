@@ -42,6 +42,10 @@ describe('ConfigManager', () => {
     it('reports project translation engine field presence separately from defaults', async () => {
       await expect(configManager.readConfigPresence()).resolves.toEqual({
         translation: {
+          enabled: false,
+          targetLanguage: false,
+          displayMode: false,
+          cacheEnabled: false,
           engineId: false,
           engines: {
             local: false,
@@ -70,6 +74,10 @@ describe('ConfigManager', () => {
 
       await expect(configManager.readConfigPresence()).resolves.toEqual({
         translation: {
+          enabled: false,
+          targetLanguage: false,
+          displayMode: false,
+          cacheEnabled: false,
           engineId: true,
           engines: {
             local: false,

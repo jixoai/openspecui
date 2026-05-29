@@ -688,6 +688,10 @@ export type PersistedOpenSpecUIConfig = {
 
 export interface OpenSpecUIConfigPresence {
   translation: {
+    enabled: boolean
+    targetLanguage: boolean
+    displayMode: boolean
+    cacheEnabled: boolean
     engineId: boolean
     engines: {
       local: boolean
@@ -1105,6 +1109,10 @@ function readConfigPresenceFromContent(content: string | null): OpenSpecUIConfig
   const parsed = parsePersistedConfigObject(content)
   return {
     translation: {
+      enabled: hasOwnPath(parsed, ['translation', 'enabled']),
+      targetLanguage: hasOwnPath(parsed, ['translation', 'targetLanguage']),
+      displayMode: hasOwnPath(parsed, ['translation', 'displayMode']),
+      cacheEnabled: hasOwnPath(parsed, ['translation', 'cacheEnabled']),
       engineId: hasOwnPath(parsed, ['translation', 'engineId']),
       engines: {
         local: hasOwnPath(parsed, ['translation', 'engines', 'local']),

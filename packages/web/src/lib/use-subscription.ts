@@ -292,6 +292,10 @@ export function useConfigPresenceSubscription(): SubscriptionState<OpenSpecUICon
       }),
     async () => ({
       translation: {
+        enabled: false,
+        targetLanguage: false,
+        displayMode: false,
+        cacheEnabled: false,
         engineId: false,
         engines: {
           local: false,

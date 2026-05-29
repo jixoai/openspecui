@@ -120,6 +120,13 @@ type ManagedLocalTranslationEngineId = Extract<
   'local' | 'local-ct2' | 'local-llama'
 >
 
+type TranslationPreferencePatch = Partial<
+  Pick<
+    DocumentTranslationConfigUpdate,
+    'enabled' | 'targetLanguage' | 'displayMode' | 'cacheEnabled'
+  >
+>
+
 interface TranslationEngineQueryListItem {
   id: TranslationEngineId
   lifecycle: TranslationEngineLifecycleStatus
@@ -472,6 +479,51 @@ function createManagedLocalGlobalSettingsPatch(
       : { local: patch }
 }
 
+function hasTranslationPreferencePatch(patch: TranslationPreferencePatch): boolean {
+  return (
+    patch.enabled !== undefined ||
+    patch.targetLanguage !== undefined ||
+    patch.displayMode !== undefined ||
+    patch.cacheEnabled !== undefined
+  )
+}
+
+function splitTranslationPreferencePatchByOwnership(
+  configPresence: ReturnType<typeof useConfigPresenceSubscription>['data'] | undefined,
+  patch: TranslationPreferencePatch
+): { project: TranslationPreferencePatch; global: TranslationPreferencePatch } {
+  const project: TranslationPreferencePatch = {}
+  const global: TranslationPreferencePatch = {}
+
+  if (patch.enabled !== undefined) {
+    if (configPresence?.translation.enabled) project.enabled = patch.enabled
+    else global.enabled = patch.enabled
+  }
+  if (patch.targetLanguage !== undefined) {
+    if (configPresence?.translation.targetLanguage) project.targetLanguage = patch.targetLanguage
+    else global.targetLanguage = patch.targetLanguage
+  }
+  if (patch.displayMode !== undefined) {
+    if (configPresence?.translation.displayMode) project.displayMode = patch.displayMode
+    else global.displayMode = patch.displayMode
+  }
+  if (patch.cacheEnabled !== undefined) {
+    if (configPresence?.translation.cacheEnabled) project.cacheEnabled = patch.cacheEnabled
+    else global.cacheEnabled = patch.cacheEnabled
+  }
+
+  return { project, global }
+}
+
+function projectOwnsManagedLocalEngineSettings(
+  configPresence: ReturnType<typeof useConfigPresenceSubscription>['data'] | undefined,
+  engineId: ManagedLocalTranslationEngineId
+): boolean {
+  if (engineId === 'local-ct2') return configPresence?.translation.engines.localCt2 === true
+  if (engineId === 'local-llama') return configPresence?.translation.engines.localLlama === true
+  return configPresence?.translation.engines.local === true
+}
+
 function getManagedLocalPanelStateQueryKey(input: {
   engineId: ManagedLocalTranslationEngineId
   modelId: string
@@ -650,9 +702,13 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     ...trpc.translationEngines.list.queryOptions(),
     enabled: !inStaticMode,
   })
+  const resolvedTranslationConfig = useMemo(
+    () => resolveDocumentTranslationConfig(config?.translation, globalSettings, configPresence),
+    [config?.translation, configPresence, globalSettings]
+  )
   const { data: translationCacheStats, refetch: refetchTranslationCacheStats } = useQuery({
     ...trpc.translationCache.stats.queryOptions(),
-    enabled: !inStaticMode && (config?.translation?.cacheEnabled ?? false),
+    enabled: !inStaticMode && (resolvedTranslationConfig?.cacheEnabled ?? false),
   })
 
   const [translationEnabled, setTranslationEnabled] = useState(false)
@@ -712,10 +768,6 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
   const nmtSelectedGroupIdRef = useRef<string | undefined>(nmtSelectedGroupId)
   const lastLocalPanelStateRef = useRef<LocalPanelStateData | null>(null)
   const autoRefreshLocalArtifactsKeyRef = useRef<string | null>(null)
-  const resolvedTranslationConfig = useMemo(
-    () => resolveDocumentTranslationConfig(config?.translation, globalSettings, configPresence),
-    [config?.translation, configPresence, globalSettings]
-  )
   const activeTranslationEngineCandidate =
     translationEngineId ?? resolvedTranslationConfig?.engineId ?? null
   const activeManagedLocalEngineId = isManagedLocalTranslationEngineId(
@@ -730,21 +782,24 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
 
   useEffect(() => {
     if (!config) return
-    setTranslationEnabled(config?.translation?.enabled ?? false)
+    setTranslationEnabled(resolvedTranslationConfig?.enabled ?? false)
     setTranslationTargetLanguage(
-      config?.translation?.targetLanguage ?? DEFAULT_TRANSLATION_TARGET_LANGUAGE
+      resolvedTranslationConfig?.targetLanguage ?? DEFAULT_TRANSLATION_TARGET_LANGUAGE
     )
-    setTranslationDisplayMode(config?.translation?.displayMode ?? DEFAULT_TRANSLATION_DISPLAY_MODE)
+    setTranslationDisplayMode(
+      resolvedTranslationConfig?.displayMode ?? DEFAULT_TRANSLATION_DISPLAY_MODE
+    )
     setTranslationEngineId(resolvedTranslationConfig?.engineId ?? 'browser')
     setTranslationCacheEnabled(
-      config?.translation?.cacheEnabled ?? DEFAULT_TRANSLATION_CACHE_ENABLED
+      resolvedTranslationConfig?.cacheEnabled ?? DEFAULT_TRANSLATION_CACHE_ENABLED
     )
   }, [
-    config?.translation?.cacheEnabled,
-    config?.translation?.displayMode,
-    config?.translation?.enabled,
+    config,
+    resolvedTranslationConfig?.cacheEnabled,
+    resolvedTranslationConfig?.displayMode,
+    resolvedTranslationConfig?.enabled,
     resolvedTranslationConfig?.engineId,
-    config?.translation?.targetLanguage,
+    resolvedTranslationConfig?.targetLanguage,
   ])
 
   useEffect(() => {
@@ -753,7 +808,11 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     )
     setAiBaseUrl(globalSettings?.translationEngines?.openai?.baseUrl ?? '')
     setAiToken(globalSettings?.translationEngines?.openai?.token ?? '')
-    setAiModel(globalSettings?.translationEngines?.openai?.model ?? 'gpt-4.1-mini')
+    setAiModel(
+      resolvedTranslationConfig?.engines?.openai?.model ??
+        globalSettings?.translationEngines?.openai?.model ??
+        'gpt-4.1-mini'
+    )
     if (!activeManagedLocalEngineId) return
     const managedLocalEngine = getManagedLocalEngineSettings({
       engineId: activeManagedLocalEngineId,
@@ -796,6 +855,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     resolvedTranslationConfig?.engines?.localCt2?.selectedGroupId,
     resolvedTranslationConfig?.engines?.localLlama?.model,
     resolvedTranslationConfig?.engines?.localLlama?.selectedGroupId,
+    resolvedTranslationConfig?.engines?.openai?.model,
   ])
 
   useEffect(() => {
@@ -939,12 +999,24 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
       await refetchEngines()
     },
   })
+  const saveTranslationPreferencePatch = useCallback(
+    (patch: TranslationPreferencePatch) => {
+      const splitPatch = splitTranslationPreferencePatchByOwnership(configPresence, patch)
+      if (hasTranslationPreferencePatch(splitPatch.project)) {
+        saveTranslationConfigMutation.mutate(splitPatch.project)
+      }
+      if (hasTranslationPreferencePatch(splitPatch.global)) {
+        saveGlobalSettingsMutation.mutate({ translation: splitPatch.global })
+      }
+    },
+    [configPresence, saveGlobalSettingsMutation, saveTranslationConfigMutation]
+  )
   const saveManagedLocalSelectionSettings = useCallback(
     (
       engineId: ManagedLocalTranslationEngineId,
       patch: { model?: string; selectedGroupId?: string | null }
     ) => {
-      if (configPresence?.translation.engineId) {
+      if (projectOwnsManagedLocalEngineSettings(configPresence, engineId)) {
         saveTranslationConfigMutation.mutate({
           engines: createManagedLocalProjectSettingsPatch(engineId, patch),
         })
@@ -955,7 +1027,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
       })
     },
     [
-      configPresence?.translation.engineId,
+      configPresence,
       saveGlobalSettingsMutation,
       saveTranslationConfigMutation,
     ]
@@ -1597,10 +1669,10 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
     translationTargetLanguage,
   ])
   const savedTranslationConfig = {
-    enabled: config?.translation?.enabled ?? false,
-    targetLanguage: config?.translation?.targetLanguage ?? DEFAULT_TRANSLATION_TARGET_LANGUAGE,
-    displayMode: config?.translation?.displayMode ?? DEFAULT_TRANSLATION_DISPLAY_MODE,
-    cacheEnabled: config?.translation?.cacheEnabled ?? DEFAULT_TRANSLATION_CACHE_ENABLED,
+    enabled: resolvedTranslationConfig?.enabled ?? false,
+    targetLanguage: resolvedTranslationConfig?.targetLanguage ?? DEFAULT_TRANSLATION_TARGET_LANGUAGE,
+    displayMode: resolvedTranslationConfig?.displayMode ?? DEFAULT_TRANSLATION_DISPLAY_MODE,
+    cacheEnabled: resolvedTranslationConfig?.cacheEnabled ?? DEFAULT_TRANSLATION_CACHE_ENABLED,
     engineId: resolvedTranslationConfig?.engineId ?? 'browser',
   }
   const savedTranslationCacheEntryLimit =
@@ -1670,13 +1742,17 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
             checked={translationEnabled}
             onCheckedChange={(checked) => {
               setTranslationEnabled(checked)
-              saveTranslationConfigMutation.mutate({ enabled: checked })
+              saveTranslationPreferencePatch({ enabled: checked })
               if (checked && effectiveTranslationEngineId === 'browser') {
                 void refreshBrowserSupportTable(translationTargetLanguage)
               }
             }}
             ariaLabel="Enable document translation"
-            disabled={saveTranslationConfigMutation.isPending || inStaticMode}
+            disabled={
+              saveTranslationConfigMutation.isPending ||
+              saveGlobalSettingsMutation.isPending ||
+              inStaticMode
+            }
           />
         </div>
 
@@ -1687,14 +1763,18 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
               value={translationTargetLanguage}
               onChange={(targetLanguage) => {
                 setTranslationTargetLanguage(targetLanguage)
-                saveTranslationConfigMutation.mutate({ targetLanguage })
+                saveTranslationPreferencePatch({ targetLanguage })
                 if (effectiveTranslationEngineId === 'browser') {
                   setBrowserSupportTable(null)
                   setBrowserSelectedPairKey(null)
                   void refreshBrowserSupportTable(targetLanguage)
                 }
               }}
-              disabled={saveTranslationConfigMutation.isPending || inStaticMode}
+              disabled={
+                saveTranslationConfigMutation.isPending ||
+                saveGlobalSettingsMutation.isPending ||
+                inStaticMode
+              }
             />
           </div>
           <div>
@@ -1703,7 +1783,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
               value={translationDisplayMode}
               onChange={(displayMode) => {
                 setTranslationDisplayMode(displayMode)
-                saveTranslationConfigMutation.mutate({ displayMode })
+                saveTranslationPreferencePatch({ displayMode })
               }}
               options={TRANSLATION_DISPLAY_MODE_OPTIONS}
             />
@@ -1777,6 +1857,10 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                       {selectedEngine.technicalSummary}
                     </div>
                   ) : null}
+                  <div className="text-muted-foreground whitespace-normal text-xs leading-5 [overflow-wrap:anywhere]">
+                    Switching engines only checks installation state. Run Test Translate manually
+                    to validate runtime errors and latency.
+                  </div>
                   <div className="text-muted-foreground flex min-w-0 items-center gap-2 leading-5">
                     {effectiveTranslationEngineId === 'browser' ? (
                       browserStatusIconState === 'checking' ? (
@@ -1921,10 +2005,13 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                 onChange={(event) => setAiModel(event.currentTarget.value)}
                 onBlur={() => {
                   const model = aiModel.trim()
+                  if (configPresence?.translation.engines.openai) {
+                    saveTranslationConfigMutation.mutate({ engines: { openai: { model } } })
+                    return
+                  }
                   saveGlobalSettingsMutation.mutate({
                     translationEngines: { openai: { model } },
                   })
-                  saveTranslationConfigMutation.mutate({ engines: { openai: { model } } })
                 }}
                 className="border-input bg-background mt-2 h-9 w-full rounded-md border px-3 text-sm"
               />
@@ -2227,11 +2314,15 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
               checked={translationCacheEnabled}
               onCheckedChange={(checked) => {
                 setTranslationCacheEnabled(checked)
-                saveTranslationConfigMutation.mutate({ cacheEnabled: checked })
+                saveTranslationPreferencePatch({ cacheEnabled: checked })
                 if (checked) void refetchTranslationCacheStats()
               }}
               ariaLabel="Enable translation cache"
-              disabled={saveTranslationConfigMutation.isPending || inStaticMode}
+              disabled={
+                saveTranslationConfigMutation.isPending ||
+                saveGlobalSettingsMutation.isPending ||
+                inStaticMode
+              }
             />
           </div>
 
