@@ -51,6 +51,8 @@ export interface ManagedLocalTranslationChildProcess {
   on(event: 'message', listener: (message: unknown) => void): this
   on(event: 'error', listener: (error: Error) => void): this
   on(event: 'exit', listener: (code: number | null, signal: NodeJS.Signals | null) => void): this
+  on(event: 'disconnect', listener: () => void): this
+  on(event: 'close', listener: (code: number | null, signal: NodeJS.Signals | null) => void): this
 }
 
 interface ManagedLocalTranslationHostPort {
@@ -288,8 +290,7 @@ async function* executeManagedLocalBatchTranslateInProcess(input: {
   const queue: BatchTranslateEvent[] = []
   const settledIndexes = new Set<number>()
   let completed = false
-  let ready = false
-  let exited = false
+  let processEnded = false
   let rssCheckRunning = false
   let rssTimer: ReturnType<typeof setInterval> | undefined
 
@@ -300,6 +301,7 @@ async function* executeManagedLocalBatchTranslateInProcess(input: {
     }
   }
   const failPending = (error: unknown) => {
+    if (completed) return
     const normalized = normalizeBatchTranslationError(error, input.signal)
     for (const [index] of input.request.inputs.entries()) {
       if (settledIndexes.has(index)) continue
@@ -307,6 +309,13 @@ async function* executeManagedLocalBatchTranslateInProcess(input: {
       queue.push({ index, error: normalized })
     }
     completed = true
+  }
+  const failProcess = (error: unknown, options?: { ended?: boolean }) => {
+    if (options?.ended) {
+      processEnded = true
+    }
+    stopRssWatchdog()
+    failPending(error)
   }
   const abort = () => {
     try {
@@ -320,8 +329,14 @@ async function* executeManagedLocalBatchTranslateInProcess(input: {
   child.on('message', (message) => {
     if (!isManagedLocalTranslationWorkerMessage(message)) return
     if (message.type === 'ready') {
-      ready = true
-      child.send(input.request)
+      try {
+        const sent = child.send(input.request)
+        if (!sent && child.connected === false) {
+          failProcess(new Error('Translation engine process IPC disconnected unexpectedly.'))
+        }
+      } catch (error) {
+        failProcess(error)
+      }
       return
     }
     if (message.type === 'event') {
@@ -336,19 +351,22 @@ async function* executeManagedLocalBatchTranslateInProcess(input: {
     failPending(message.error)
   })
   child.on('error', (error) => {
-    failPending(error)
+    failProcess(error)
   })
   child.on('exit', (code, signal) => {
-    exited = true
-    stopRssWatchdog()
-    if (completed) return
-    failPending(createProcessExitError({ code, signal }))
+    failProcess(createProcessExitError({ code, signal }), { ended: true })
+  })
+  child.on('disconnect', () => {
+    failProcess(new Error('Translation engine process IPC disconnected unexpectedly.'))
+  })
+  child.on('close', (code, signal) => {
+    failProcess(createProcessCloseError({ code, signal }), { ended: true })
   })
 
   if (input.resourceLimits?.maxRssMb && input.resourceLimits.maxRssMb > 0 && child.pid) {
     const readRss = input.readProcessRssMb ?? readProcessRssMb
     rssTimer = setInterval(() => {
-      if (rssCheckRunning || completed || exited || !child.pid) return
+      if (rssCheckRunning || completed || processEnded || !child.pid) return
       rssCheckRunning = true
       void readRss(child.pid)
         .then((rssMb) => {
@@ -386,16 +404,12 @@ async function* executeManagedLocalBatchTranslateInProcess(input: {
         yield next
         continue
       }
-      if (!ready && exited) {
-        completed = true
-        continue
-      }
       await new Promise((resolve) => setTimeout(resolve, 0))
     }
   } finally {
     input.signal.removeEventListener('abort', abort)
     stopRssWatchdog()
-    if (!exited) {
+    if (!processEnded) {
       child.kill('SIGTERM')
     }
   }
@@ -578,13 +592,31 @@ function createProcessExitError(input: {
   code: number | null
   signal: NodeJS.Signals | null
 }): Error {
+  return new Error(
+    `Translation engine process exited unexpectedly with ${formatProcessStatus(input)}.`
+  )
+}
+
+function createProcessCloseError(input: {
+  code: number | null
+  signal: NodeJS.Signals | null
+}): Error {
+  return new Error(
+    `Translation engine process closed unexpectedly with ${formatProcessStatus(input)}.`
+  )
+}
+
+function formatProcessStatus(input: {
+  code: number | null
+  signal: NodeJS.Signals | null
+}): string {
   const detail =
     input.signal !== null
       ? `signal ${input.signal}`
       : input.code !== null
         ? `exit code ${input.code}`
         : 'unknown exit status'
-  return new Error(`Translation engine process exited unexpectedly with ${detail}.`)
+  return detail
 }
 
 async function readProcessRssMb(pid: number): Promise<number | undefined> {
