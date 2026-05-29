@@ -37,3 +37,23 @@
 - Document translation can render retry affordances for failed translated segments without collapsing the whole document into an error state.
 - Heavy local translation engines can be launched with a memory-budget strategy derived from the configured percentage.
 - The new OpenSpec loop captures the original requirement and the requirement-bearing discussion trace.
+
+## Follow-up User Input
+
+> continue
+>
+> 还有，顺便修复一个问题，我发现你现在对于翻译引擎的配置，是项目级别的。理论上可以支持（但是项目级别的支持我们默认不开放，有需要用户自己去改项目级别的配置字段就好）。
+> 默认使用全局配置。
+> 这里的写入逻辑是：如果本地项目配置存在相关的配置字段：`"translation": {"engineId": "local-llama"}`，那么就继续写入项目配置中，否则就写入到全局配置中。
+> 读取的话，当然也是优先项目，然后全局。
+>
+> ---
+>
+> 使用openspec推进任务
+
+## Follow-up Acceptance Boundary
+
+- Translation engine selection SHALL default to global settings.
+- Project-level translation engine selection SHALL remain supported when the project config explicitly contains `translation.engineId`.
+- Reads SHALL resolve project-level translation engine fields before global settings.
+- Writes SHALL update project config only when the related project-level field already exists; otherwise writes SHALL update global settings.

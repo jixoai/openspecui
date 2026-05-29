@@ -52,3 +52,10 @@
 - Real runtime regression found during walkthrough and fixed in this pass:
   - unresolved engine lifecycle fallback recreated a new probing object every render, which caused a render loop until the backend query resolved
   - install command generation for pnpm needed `--allow-build=onnxruntime-node` instead of the invalid split form
+- 2026-05-29 follow-up scoped checks passed:
+  - `pnpm --filter @openspecui/core exec vitest run src/config.test.ts src/global-settings.test.ts src/translator.test.ts`
+  - `pnpm --filter @openspecui/server exec vitest run src/translation-engine-runtime-strategy.test.ts src/translation-engine-service.test.ts`
+  - `pnpm --filter @openspecui/web exec vitest run --project unit src/lib/resolve-document-translation-config.test.ts src/routes/settings.test.tsx`
+  - `pnpm --filter @openspecui/web exec tsc --noEmit`
+  - `pnpm --filter @openspecui/server typecheck`
+  - `git diff --check`

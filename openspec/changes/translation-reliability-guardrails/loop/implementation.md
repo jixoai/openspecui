@@ -21,6 +21,8 @@
 - Restrict worker isolation to heavy local engines in this loop, because network/browser engines do not share the same resource-risk profile.
 - Keep runtime-strategy ownership inside `TranslationEngineService` rather than duplicating global-settings logic in `server.ts`; the host injects the executor boundary, while the service computes the execution plan.
 - Use shared timeout constants instead of per-surface magic numbers so smoke tests and document translation default to one contract value.
+- Default translation engine ownership is now global; project ownership is an explicit opt-in detected from persisted project config field presence.
+- Local-llama runtime planning now performs a model-size-aware memory preflight before `node-llama-cpp` model loading.
 
 ## Divergence Notes
 
@@ -31,6 +33,13 @@
 - One runtime-strategy correction was made during self-review:
   - worker memory budgeting now prefers `process.constrainedMemory()` and otherwise falls back to `os.totalmem()`,
   - it no longer derives the budget from transient `process.availableMemory()`, which would undercut the user-facing intent parameter.
+- One follow-up correction was made after the local-llama resource discussion:
+  - Apple Silicon/unified-memory defaults now use a conservative power-saver plan at the default 25% budget,
+  - local-llama model loading is rejected before `loadModel()` when estimated model/context/native memory exceeds the safe runtime budget,
+  - deterministic tests inject a runtime-memory snapshot instead of depending on the host machine's current free memory.
+- One ownership readiness correction was made during verification:
+  - the Settings UI now resolves the effective engine from the shared project-presence/global fallback resolver,
+  - engine selection waits for the project presence signal and only waits for global settings when the project does not own `translation.engineId`.
 
 ## Loopback Triggers
 

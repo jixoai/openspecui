@@ -71,6 +71,18 @@
   - Mitigation: centralize timeout enforcement at the per-task wrapper layer and verify with focused translator tests.
 - Risk: retry UI can devolve into duplicated overlay logic.
   - Mitigation: inject retry controls at the shared segment-render layer and reuse existing popover/top-layer patterns already present in the web app.
+- Risk: project config parsing currently applies defaults, so `translation.engineId` always looks present after parsing.
+  - Mitigation: add an explicit project-config presence/read-source signal and use it to decide whether engine selection is project-owned or global-owned.
+
+## Follow-up Plan: Translation Engine Config Ownership
+
+- Add global translation engine selection to the existing `translationEngines` global settings object.
+- Add project config presence detection for `translation.engineId` and engine-specific project override fields.
+- Resolve effective engine selection as project override first, then global settings, then the product default.
+- Route Settings writes through the ownership signal:
+  - if project `translation.engineId` exists, write engine selection and managed-local model/profile overrides to project config,
+  - otherwise write engine selection and managed-local model/profile settings to global settings.
+- Keep provider endpoint and memory-budget settings global in this pass because they describe user/runtime environment rather than project identity.
 
 ## Verification Strategy
 
