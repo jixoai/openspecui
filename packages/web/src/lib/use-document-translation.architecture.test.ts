@@ -7,6 +7,7 @@ describe('useDocumentTranslation architecture', () => {
     const source = await readFile(resolve(__dirname, 'use-document-translation.ts'), 'utf8')
 
     expect(source).toContain('resolveTranslateServiceState')
+    expect(source).toContain('ensureBrowserTranslationReady')
     expect(source).not.toContain('localModels.panelState')
     expect(source).not.toContain('projectTranslateServiceStatus')
   })

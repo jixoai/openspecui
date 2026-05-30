@@ -98,3 +98,7 @@
   - `pnpm --filter @openspecui/web exec tsc --noEmit`
   - `pnpm --filter @openspecui/server typecheck`
   - `git diff --check`
+- 2026-05-30 markdown table translation follow-up scoped checks passed:
+  - `pnpm --filter @openspecui/web exec vitest run --project unit src/lib/browser-translation.test.ts src/components/document-translation-action.test.tsx`
+  - `pnpm --filter @openspecui/web typecheck`
+  - `git diff --check`

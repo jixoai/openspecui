@@ -1,12 +1,13 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanupTempDir, createTempDir } from './__tests__/test-utils.js'
 import {
   DEFAULT_GLOBAL_SETTINGS,
   GlobalSettingsManager,
   toPersistedGlobalSettings,
 } from './global-settings.js'
+import * as reactiveFs from './reactive-fs/index.js'
 import { clearCache } from './reactive-fs/index.js'
 import { closeAllWatchers, initWatcherPool } from './reactive-fs/watcher-pool.js'
 
@@ -192,6 +193,44 @@ describe('GlobalSettingsManager', () => {
     clearCache()
 
     await expect(settingsManager.readSettings()).resolves.toEqual(DEFAULT_GLOBAL_SETTINGS)
+  })
+
+  it('serializes concurrent global translation writes without dropping sibling fields', async () => {
+    const originalRead = reactiveFs.reactiveReadFile
+    let readsSeen = 0
+    let releaseReads: (() => void) | null = null
+    const readsReady = new Promise<void>((resolve) => {
+      releaseReads = resolve
+    })
+    const readSpy = vi
+      .spyOn(reactiveFs, 'reactiveReadFile')
+      .mockImplementation(async (path: string) => {
+        if (path === settingsPath) {
+          readsSeen += 1
+          if (readsSeen === 2) {
+            releaseReads?.()
+          }
+          await Promise.race([readsReady, new Promise<void>((resolve) => setTimeout(resolve, 20))])
+        }
+        return originalRead(path)
+      })
+
+    try {
+      await Promise.all([
+        settingsManager.writeSettings({ translation: { displayMode: 'bilingual' } }),
+        settingsManager.writeSettings({ translation: { enabled: true } }),
+      ])
+    } finally {
+      readSpy.mockRestore()
+    }
+
+    clearCache()
+    await expect(settingsManager.readSettings()).resolves.toMatchObject({
+      translation: {
+        enabled: true,
+        displayMode: 'bilingual',
+      },
+    })
   })
 
   it('merges translator engine settings and prunes default siblings', async () => {

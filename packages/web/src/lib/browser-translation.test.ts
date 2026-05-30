@@ -123,6 +123,19 @@ const value = 'keep source'
     ])
   })
 
+  it('extracts markdown table cells as independent segments', () => {
+    const segments = extractTranslatableSegments(`| Key | Value |
+| --- | --- |
+| Hello | World |`)
+
+    expect(segments.map((segment) => [segment.sourceKind, segment.kind, segment.source])).toEqual([
+      ['tableCell', 'paragraph', 'Key'],
+      ['tableCell', 'paragraph', 'Value'],
+      ['tableCell', 'paragraph', 'Hello'],
+      ['tableCell', 'paragraph', 'World'],
+    ])
+  })
+
   it('uses document and segment-level language detection while protecting technical spans', async () => {
     const availability = vi.fn(async () => 'available')
     const translate = vi.fn(async (input: string) => `zh:${input}`)

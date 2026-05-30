@@ -2,7 +2,9 @@ import {
   createBrowserTranslationExecution,
   getBrowserSupportTableState,
   patchBrowserSupportTableRow,
+  prepareBrowserTranslation,
   scanBrowserTranslationPairs,
+  type BrowserTranslationAvailabilityRow,
   type BrowserTranslationStatus,
   type BrowserTranslationSupportTableState,
   type TranslationEngineExecution,
@@ -36,6 +38,8 @@ export interface TranslateServiceState {
   browserSupportTable: BrowserTranslationSupportTableState | null
   status: TranslateServiceStatus
 }
+
+const DEFAULT_BROWSER_SOURCE_LANGUAGE = 'en'
 
 export async function resolveTranslateServiceState(input: {
   config: DocumentTranslationConfig | undefined
@@ -270,11 +274,7 @@ export function prepareTranslateServiceRun(input: {
     })
   }
 
-  const preferredRow =
-    input.browserSupportTable?.table?.rows.find((row) => row.availability === 'available') ??
-    input.browserSupportTable?.table?.rows.find((row) => row.availability === 'downloading') ??
-    input.browserSupportTable?.table?.rows.find((row) => row.availability === 'downloadable') ??
-    null
+  const preferredRow = selectPreferredBrowserSupportRow(input.browserSupportTable)
 
   if (!preferredRow) {
     return createTranslateServiceState({
@@ -307,6 +307,96 @@ export function prepareTranslateServiceRun(input: {
       browserCapability: nextCapability,
     }),
   })
+}
+
+export async function ensureBrowserTranslationReady(input: {
+  targetLanguage: string
+  sourceLanguage?: string
+  browserSupportTable: BrowserTranslationSupportTableState | null
+  signal?: AbortSignal
+  onUpdate?: (state: {
+    capability: BrowserTranslationStatus
+    browserSupportTable: BrowserTranslationSupportTableState | null
+    sourceLanguage: string
+  }) => void
+}): Promise<{
+  capability: BrowserTranslationStatus
+  browserSupportTable: BrowserTranslationSupportTableState | null
+  sourceLanguage: string
+}> {
+  const preferredRow = selectPreferredBrowserSupportRow(
+    input.browserSupportTable,
+    input.sourceLanguage
+  )
+  const sourceLanguage =
+    input.sourceLanguage?.trim() || preferredRow?.sourceLanguage || DEFAULT_BROWSER_SOURCE_LANGUAGE
+
+  if (!sourceLanguage) {
+    throw new Error('No browser translation language pair is available to prepare.')
+  }
+
+  if (
+    preferredRow?.availability === 'available' &&
+    normalizeBrowserLanguageTag(preferredRow.sourceLanguage) ===
+      normalizeBrowserLanguageTag(sourceLanguage)
+  ) {
+    return {
+      capability: {
+        availability: 'available',
+        message: preferredRow.message,
+      },
+      browserSupportTable: input.browserSupportTable,
+      sourceLanguage,
+    }
+  }
+
+  let nextTable = input.browserSupportTable
+  const emit = (capability: BrowserTranslationStatus) => {
+    nextTable = patchBrowserSupportTableRow(
+      input.targetLanguage,
+      {
+        sourceLanguage,
+        targetLanguage: input.targetLanguage,
+        availability: capability.availability,
+        progress: capability.progress,
+        message: capability.message,
+      },
+      {
+        state: capability.availability === 'error' ? 'error' : 'ready',
+      }
+    )
+    input.onUpdate?.({
+      capability,
+      browserSupportTable: nextTable,
+      sourceLanguage,
+    })
+  }
+
+  const finalStatus = await prepareBrowserTranslation(input.targetLanguage, {
+    sourceLanguage,
+    signal: input.signal ?? new AbortController().signal,
+    onStatus: emit,
+  })
+
+  if (input.signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError')
+  }
+
+  if (finalStatus.availability !== 'available') {
+    throw new Error(finalStatus.message ?? 'Browser translator is not ready.')
+  }
+
+  const readyCapability: BrowserTranslationStatus = {
+    availability: 'available',
+    message: finalStatus.message,
+  }
+  emit(readyCapability)
+
+  return {
+    capability: readyCapability,
+    browserSupportTable: nextTable,
+    sourceLanguage,
+  }
 }
 
 export function createTranslationEngineExecution(
@@ -350,6 +440,11 @@ export async function runSingleTranslation(input: {
   timeoutMs?: number
 }): Promise<string> {
   if (input.engineId === 'browser') {
+    await ensureBrowserTranslationReady({
+      targetLanguage: input.targetLanguage,
+      sourceLanguage: input.sourceLanguage,
+      browserSupportTable: getBrowserSupportTableState(input.targetLanguage),
+    })
     const translator = await createBrowserTranslationExecution().factory.create({
       sourceLanguage: input.sourceLanguage,
       targetLanguage: input.targetLanguage,
@@ -432,6 +527,31 @@ function getManagedLocalEngineConfig(config: DocumentTranslationConfig): {
           model: config.engines.local.model,
           selectedGroupId: config.engines.local.selectedGroupId,
         }
+}
+
+function selectPreferredBrowserSupportRow(
+  browserSupportTable: BrowserTranslationSupportTableState | null,
+  sourceLanguage?: string
+): BrowserTranslationAvailabilityRow | null {
+  const rows = browserSupportTable?.table?.rows ?? []
+  if (sourceLanguage) {
+    const normalizedSourceLanguage = normalizeBrowserLanguageTag(sourceLanguage)
+    const matchingRow = rows.find(
+      (row) => normalizeBrowserLanguageTag(row.sourceLanguage) === normalizedSourceLanguage
+    )
+    if (matchingRow) return matchingRow
+  }
+
+  return (
+    rows.find((row) => row.availability === 'available') ??
+    rows.find((row) => row.availability === 'downloading') ??
+    rows.find((row) => row.availability === 'downloadable') ??
+    null
+  )
+}
+
+function normalizeBrowserLanguageTag(language: string): string {
+  return language.trim().toLowerCase()
 }
 
 async function queryManagedLocalPanelState(

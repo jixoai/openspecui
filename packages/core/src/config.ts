@@ -1138,6 +1138,7 @@ export class ConfigManager {
   private projectDir: string
   private resolvedRunner: ResolvedCliRunner | null = null
   private resolvingRunnerPromise: Promise<ResolvedCliRunner> | null = null
+  private writeChain: Promise<void> = Promise.resolve()
 
   constructor(projectDir: string) {
     this.projectDir = projectDir
@@ -1189,82 +1190,95 @@ export class ConfigManager {
    * 会触发文件监听，自动更新订阅者。
    */
   async writeConfig(config: OpenSpecUIConfigUpdate): Promise<void> {
-    const currentContent = await reactiveReadFile(this.configPath)
-    const fileExists = currentContent !== null
-    const current = this.parseConfigContent(currentContent)
-    const nextCli = { ...current.cli }
-    if (config.cli && Object.prototype.hasOwnProperty.call(config.cli, 'command')) {
-      const raw = config.cli.command
-      const trimmed = raw?.trim()
-      if (trimmed) {
-        nextCli.command = trimmed
-      } else {
-        delete nextCli.command
+    return this.enqueueWrite(async () => {
+      const currentContent = await reactiveReadFile(this.configPath)
+      const fileExists = currentContent !== null
+      const current = this.parseConfigContent(currentContent)
+      const nextCli = { ...current.cli }
+      if (config.cli && Object.prototype.hasOwnProperty.call(config.cli, 'command')) {
+        const raw = config.cli.command
+        const trimmed = raw?.trim()
+        if (trimmed) {
+          nextCli.command = trimmed
+        } else {
+          delete nextCli.command
+          delete nextCli.args
+        }
+      }
+      if (config.cli && Object.prototype.hasOwnProperty.call(config.cli, 'args')) {
+        const args = (config.cli.args ?? []).map((arg) => arg.trim()).filter(Boolean)
+        if (args.length > 0) {
+          nextCli.args = args
+        } else {
+          delete nextCli.args
+        }
+      }
+      if (!nextCli.command) {
         delete nextCli.args
       }
-    }
-    if (config.cli && Object.prototype.hasOwnProperty.call(config.cli, 'args')) {
-      const args = (config.cli.args ?? []).map((arg) => arg.trim()).filter(Boolean)
-      if (args.length > 0) {
-        nextCli.args = args
-      } else {
-        delete nextCli.args
-      }
-    }
-    if (!nextCli.command) {
-      delete nextCli.args
-    }
-    const merged = {
-      ...current,
-      cli: nextCli,
-      theme: config.theme ?? current.theme,
-      codeEditor: { ...current.codeEditor, ...config.codeEditor },
-      appBaseUrl: config.appBaseUrl ?? current.appBaseUrl,
-      opsx: { ...current.opsx, ...config.opsx },
-      terminal: { ...current.terminal, ...config.terminal },
-      dashboard: { ...current.dashboard, ...config.dashboard },
-      git: { ...current.git, ...config.git },
-      notifications: { ...current.notifications, ...config.notifications },
-      translation: {
-        ...current.translation,
-        ...config.translation,
-        engines: {
-          local: mergeNullablePatch(
-            current.translation.engines.local,
-            config.translation?.engines?.local
-          ),
-          localCt2: mergeNullablePatch(
-            current.translation.engines.localCt2,
-            config.translation?.engines?.localCt2
-          ),
-          localLlama: mergeNullablePatch(
-            current.translation.engines.localLlama,
-            config.translation?.engines?.localLlama
-          ),
-          openai: mergeNullablePatch(
-            current.translation.engines.openai,
-            config.translation?.engines?.openai
-          ),
+      const merged = {
+        ...current,
+        cli: nextCli,
+        theme: config.theme ?? current.theme,
+        codeEditor: { ...current.codeEditor, ...config.codeEditor },
+        appBaseUrl: config.appBaseUrl ?? current.appBaseUrl,
+        opsx: { ...current.opsx, ...config.opsx },
+        terminal: { ...current.terminal, ...config.terminal },
+        dashboard: { ...current.dashboard, ...config.dashboard },
+        git: { ...current.git, ...config.git },
+        notifications: { ...current.notifications, ...config.notifications },
+        translation: {
+          ...current.translation,
+          ...config.translation,
+          engines: {
+            local: mergeNullablePatch(
+              current.translation.engines.local,
+              config.translation?.engines?.local
+            ),
+            localCt2: mergeNullablePatch(
+              current.translation.engines.localCt2,
+              config.translation?.engines?.localCt2
+            ),
+            localLlama: mergeNullablePatch(
+              current.translation.engines.localLlama,
+              config.translation?.engines?.localLlama
+            ),
+            openai: mergeNullablePatch(
+              current.translation.engines.openai,
+              config.translation?.engines?.openai
+            ),
+          },
         },
-      },
-    }
+      }
 
-    const persisted = toPersistedConfig(merged)
+      const persisted = toPersistedConfig(merged)
 
-    if (isPersistedConfigEmpty(persisted) && !fileExists) {
-      return
-    }
+      if (isPersistedConfigEmpty(persisted) && !fileExists) {
+        return
+      }
 
-    const serialized = isPersistedConfigEmpty(persisted) ? '{}' : JSON.stringify(persisted, null, 2)
+      const serialized = isPersistedConfigEmpty(persisted)
+        ? '{}'
+        : JSON.stringify(persisted, null, 2)
 
-    if (currentContent === serialized) {
-      return
-    }
+      if (currentContent === serialized) {
+        return
+      }
 
-    await mkdir(dirname(this.configPath), { recursive: true })
-    await writeFile(this.configPath, serialized, 'utf-8')
-    updateReactiveFileCache(this.configPath, serialized)
-    this.invalidateResolvedCliRunner()
+      await mkdir(dirname(this.configPath), { recursive: true })
+      await writeFile(this.configPath, serialized, 'utf-8')
+      updateReactiveFileCache(this.configPath, serialized)
+      this.invalidateResolvedCliRunner()
+    })
+  }
+
+  private enqueueWrite<T>(operation: () => Promise<T>): Promise<T> {
+    const run = this.writeChain.then(operation, operation)
+    this.writeChain = run.then(
+      () => undefined,
+      () => undefined
+    )
+    return run
   }
 
   private async resolveDefaultCliCommandParts(): Promise<readonly string[]> {

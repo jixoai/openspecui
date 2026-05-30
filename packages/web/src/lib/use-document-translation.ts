@@ -14,6 +14,7 @@ import { useDocumentTranslationActivation } from './document-translation-session
 import { isStaticMode } from './static-mode'
 import {
   createTranslationEngineExecution,
+  ensureBrowserTranslationReady,
   prepareTranslateServiceRun,
   resolveTranslateServiceState,
 } from './translate-service'
@@ -84,8 +85,6 @@ export function useDocumentTranslation(
 
   useEffect(() => {
     generationRef.current += 1
-    setCapability(null)
-    setBrowserSupportTable(null)
     segmentPatchMapRef.current.clear()
     setResult(null)
     setStatus('source')
@@ -93,6 +92,22 @@ export function useDocumentTranslation(
   }, [
     markdown,
     config?.displayMode,
+    config?.enabled,
+    config?.engineId,
+    config?.engines.local.model,
+    config?.engines.local.selectedGroupId,
+    config?.engines.localCt2.model,
+    config?.engines.localCt2.selectedGroupId,
+    config?.engines.localLlama.model,
+    config?.engines.localLlama.selectedGroupId,
+    config?.engines.openai.model,
+    config?.targetLanguage,
+  ])
+
+  useEffect(() => {
+    setCapability(null)
+    setBrowserSupportTable(null)
+  }, [
     config?.enabled,
     config?.engineId,
     config?.engines.local.model,
@@ -168,6 +183,7 @@ export function useDocumentTranslation(
     segmentPatchMapRef.current.clear()
     setError(null)
     setStatus('initializing')
+    let restoreServiceStatus: TranslateServiceStatus | null = null
 
     try {
       if (serviceStatus.state !== 'ready') {
@@ -189,6 +205,48 @@ export function useDocumentTranslation(
           setStatus('unavailable')
           return
         }
+        restoreServiceStatus = nextState.status
+
+        const preparedState = await ensureBrowserTranslationReady({
+          targetLanguage: config.targetLanguage,
+          browserSupportTable: nextState.browserSupportTable,
+          signal: controller.signal,
+          onUpdate: (browserState) => {
+            if (
+              controller.signal.aborted ||
+              abortRef.current !== controller ||
+              generationRef.current !== generationId
+            ) {
+              return
+            }
+            setCapability(browserState.capability)
+            setBrowserSupportTable(browserState.browserSupportTable)
+            setServiceStatus(
+              browserState.capability.availability === 'available'
+                ? nextState.status
+                : {
+                    state: 'checking',
+                    engineId: 'browser',
+                    message:
+                      browserState.capability.message ?? 'Preparing browser translation support.',
+                  }
+            )
+          },
+        })
+        if (
+          controller.signal.aborted ||
+          abortRef.current !== controller ||
+          generationRef.current !== generationId
+        ) {
+          return
+        }
+        setCapability(preparedState.capability)
+        setBrowserSupportTable(preparedState.browserSupportTable)
+        setServiceStatus({
+          state: 'ready',
+          engineId: 'browser',
+          message: preparedState.capability.message ?? 'Browser translator is ready.',
+        })
       }
 
       setStatus('translating')
@@ -257,6 +315,12 @@ export function useDocumentTranslation(
       ) {
         return
       }
+      if (restoreServiceStatus?.engineId === 'browser') {
+        const fallbackServiceStatus = restoreServiceStatus
+        setServiceStatus((current) =>
+          current.state === 'checking' ? fallbackServiceStatus : current
+        )
+      }
       setError(translationError instanceof Error ? translationError.message : 'Translation failed.')
       setStatus('error')
     } finally {
@@ -290,6 +354,7 @@ export function useDocumentTranslation(
       if (segmentIndex < 0 || !segment || segment.status !== 'error') return
 
       const controller = new AbortController()
+      let restoreServiceStatus: TranslateServiceStatus | null = null
       const retryingSegment = {
         ...segment,
         error: undefined,
@@ -307,6 +372,45 @@ export function useDocumentTranslation(
       )
 
       try {
+        if (config.engineId === 'browser') {
+          restoreServiceStatus = {
+            state: 'ready',
+            engineId: 'browser',
+            message: capability?.message ?? 'Browser translator is ready.',
+          }
+          const preparedState = await ensureBrowserTranslationReady({
+            targetLanguage: config.targetLanguage,
+            sourceLanguage: segment.sourceLanguage,
+            browserSupportTable,
+            signal: controller.signal,
+            onUpdate: (browserState) => {
+              setCapability(browserState.capability)
+              setBrowserSupportTable(browserState.browserSupportTable)
+              setServiceStatus(
+                browserState.capability.availability === 'available'
+                  ? {
+                      state: 'ready',
+                      engineId: 'browser',
+                      message: browserState.capability.message ?? 'Browser translator is ready.',
+                    }
+                  : {
+                      state: 'checking',
+                      engineId: 'browser',
+                      message:
+                        browserState.capability.message ?? 'Preparing browser translation support.',
+                    }
+              )
+            },
+          })
+          setCapability(preparedState.capability)
+          setBrowserSupportTable(preparedState.browserSupportTable)
+          setServiceStatus({
+            state: 'ready',
+            engineId: 'browser',
+            message: preparedState.capability.message ?? 'Browser translator is ready.',
+          })
+        }
+
         const nextSegment = await retryTranslationSegment({
           segment,
           sourceLanguage: segment.sourceLanguage,
@@ -345,6 +449,12 @@ export function useDocumentTranslation(
           return getDocumentTranslationFailureMessage(nextResult) ? 'error' : 'translated'
         })
       } catch (retryError) {
+        if (restoreServiceStatus?.engineId === 'browser') {
+          const fallbackServiceStatus = restoreServiceStatus
+          setServiceStatus((current) =>
+            current.state === 'checking' ? fallbackServiceStatus : current
+          )
+        }
         setResult((current) =>
           current
             ? {
@@ -366,7 +476,7 @@ export function useDocumentTranslation(
         )
       }
     },
-    [config, result]
+    [browserSupportTable, capability?.message, config, result]
   )
 
   useEffect(() => {
@@ -377,8 +487,23 @@ export function useDocumentTranslation(
     if (activation !== 'translated' || !config?.enabled || markdown.length === 0) return
     if (status !== 'source') return
     if (serviceStatus.state !== 'ready') return
+    if (
+      config.engineId === 'browser' &&
+      !canAutoStartBrowserTranslation(capability, browserSupportTable)
+    ) {
+      return
+    }
     void latestStartRef.current?.()
-  }, [activation, config?.enabled, markdown.length, serviceStatus.state, status])
+  }, [
+    activation,
+    browserSupportTable,
+    capability,
+    config?.enabled,
+    config?.engineId,
+    markdown.length,
+    serviceStatus.state,
+    status,
+  ])
 
   return {
     status,
@@ -465,4 +590,12 @@ function buildRetriedDocumentResult(
       index === segmentIndex ? nextSegment : entry
     ),
   })
+}
+
+function canAutoStartBrowserTranslation(
+  capability: BrowserTranslationStatus | null,
+  browserSupportTable: BrowserTranslationSupportTableState | null
+): boolean {
+  if (capability?.availability === 'available') return true
+  return (browserSupportTable?.table?.rows ?? []).some((row) => row.availability === 'available')
 }

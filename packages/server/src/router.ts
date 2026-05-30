@@ -18,7 +18,7 @@ import {
   BatchTranslateInputSchema,
   CodeEditorThemeSchema,
   DashboardConfigSchema,
-  DocumentTranslationConfigSchema,
+  DocumentTranslationConfigUpdateSchema,
   getAllTools,
   getAvailableTools,
   getConfiguredTools,
@@ -28,7 +28,7 @@ import {
   getWatcherRuntimeStatus,
   GitConfigSchema,
   NotificationSettingsSchema,
-  OpenSpecUIGlobalSettingsSchema,
+  OpenSpecUIGlobalSettingsUpdateSchema,
   OpsxConfigSchema,
   resolveTerminalShellDefaults,
   ServiceTranslationEngineIdSchema,
@@ -37,14 +37,9 @@ import {
   TerminalConfigSchema,
   TerminalRendererEngineSchema,
   TranslationCacheReadInputSchema,
-  TranslationCacheSettingsSchema,
   TranslationCacheWriteInputSchema,
   TranslationEngineIdSchema,
   TranslationEngineLifecycleStatusSchema,
-  TranslationLocalCt2SettingsSchema,
-  TranslationLocalLlamaSettingsSchema,
-  TranslationLocalSettingsSchema,
-  TranslationOpenAISettingsSchema,
   type AIToolOption,
   type ApplyInstructions,
   type ArtifactInstructions,
@@ -222,32 +217,7 @@ export const globalSettingsRouter = router({
   }),
 
   update: publicProcedure
-    .input(
-      OpenSpecUIGlobalSettingsSchema.partial().extend({
-        translationCache: TranslationCacheSettingsSchema.partial().optional(),
-        translationEngines: z
-          .object({
-            engineId: TranslationEngineIdSchema.optional(),
-            openai: TranslationOpenAISettingsSchema.partial().optional(),
-            local: TranslationLocalSettingsSchema.partial()
-              .extend({
-                selectedGroupId: z.string().min(1).nullable().optional(),
-              })
-              .optional(),
-            localCt2: TranslationLocalCt2SettingsSchema.partial()
-              .extend({
-                selectedGroupId: z.string().min(1).nullable().optional(),
-              })
-              .optional(),
-            localLlama: TranslationLocalLlamaSettingsSchema.partial()
-              .extend({
-                selectedGroupId: z.string().min(1).nullable().optional(),
-              })
-              .optional(),
-          })
-          .optional(),
-      })
-    )
+    .input(OpenSpecUIGlobalSettingsUpdateSchema)
     .mutation(async ({ ctx, input }) => {
       await ctx.globalSettingsManager.writeSettings(input)
       return { success: true }
@@ -1576,33 +1546,7 @@ export const configRouter = router({
         dashboard: DashboardConfigSchema.partial().optional(),
         git: GitConfigSchema.partial().optional(),
         notifications: NotificationSettingsSchema.partial().optional(),
-        translation: DocumentTranslationConfigSchema.partial()
-          .extend({
-            engines: z
-              .object({
-                local: z
-                  .object({
-                    model: z.string().min(1).optional(),
-                    selectedGroupId: z.string().min(1).nullable().optional(),
-                  })
-                  .optional(),
-                localCt2: z
-                  .object({
-                    model: z.string().min(1).optional(),
-                    selectedGroupId: z.string().min(1).nullable().optional(),
-                  })
-                  .optional(),
-                localLlama: z
-                  .object({
-                    model: z.string().min(1).optional(),
-                    selectedGroupId: z.string().min(1).nullable().optional(),
-                  })
-                  .optional(),
-                openai: z.object({ model: z.string().min(1).optional() }).optional(),
-              })
-              .optional(),
-          })
-          .optional(),
+        translation: DocumentTranslationConfigUpdateSchema.optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {

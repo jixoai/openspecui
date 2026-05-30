@@ -796,6 +796,12 @@ export const TranslationOpenAISettingsSchema = z.object({
   model: z.string().default('gpt-4.1-mini'),
 })
 
+export const TranslationOpenAISettingsUpdateSchema = z.object({
+  baseUrl: z.string().optional(),
+  token: z.string().optional(),
+  model: z.string().optional(),
+})
+
 export type TranslationOpenAISettings = z.infer<typeof TranslationOpenAISettingsSchema>
 
 export const TranslationLocalSettingsSchema = z.object({
@@ -803,6 +809,13 @@ export const TranslationLocalSettingsSchema = z.object({
   selectedGroupId: z.string().optional(),
   hfEndpoint: z.string().default(''),
   memoryBudgetPercent: z.number().min(0).max(100).default(25),
+})
+
+export const TranslationLocalSettingsUpdateSchema = z.object({
+  model: z.string().min(1).optional(),
+  selectedGroupId: z.string().min(1).nullable().optional(),
+  hfEndpoint: z.string().optional(),
+  memoryBudgetPercent: z.number().min(0).max(100).optional(),
 })
 
 export type TranslationLocalSettings = z.infer<typeof TranslationLocalSettingsSchema>
@@ -814,6 +827,13 @@ export const TranslationLocalCt2SettingsSchema = z.object({
   memoryBudgetPercent: z.number().min(0).max(100).default(25),
 })
 
+export const TranslationLocalCt2SettingsUpdateSchema = z.object({
+  model: z.string().min(1).optional(),
+  selectedGroupId: z.string().min(1).nullable().optional(),
+  hfEndpoint: z.string().optional(),
+  memoryBudgetPercent: z.number().min(0).max(100).optional(),
+})
+
 export type TranslationLocalCt2Settings = z.infer<typeof TranslationLocalCt2SettingsSchema>
 
 export const TranslationLocalLlamaSettingsSchema = z.object({
@@ -821,6 +841,13 @@ export const TranslationLocalLlamaSettingsSchema = z.object({
   selectedGroupId: z.string().optional(),
   hfEndpoint: z.string().default(''),
   memoryBudgetPercent: z.number().min(0).max(100).default(25),
+})
+
+export const TranslationLocalLlamaSettingsUpdateSchema = z.object({
+  model: z.string().min(1).optional(),
+  selectedGroupId: z.string().min(1).nullable().optional(),
+  hfEndpoint: z.string().optional(),
+  memoryBudgetPercent: z.number().min(0).max(100).optional(),
 })
 
 export type TranslationLocalLlamaSettings = z.infer<typeof TranslationLocalLlamaSettingsSchema>
@@ -833,6 +860,14 @@ export const TranslationEngineGlobalSettingsSchema = z.object({
   localLlama: TranslationLocalLlamaSettingsSchema.default(
     TranslationLocalLlamaSettingsSchema.parse({})
   ),
+})
+
+export const TranslationEngineGlobalSettingsUpdateSchema = z.object({
+  engineId: TranslationEngineIdSchema.optional(),
+  openai: TranslationOpenAISettingsUpdateSchema.optional(),
+  local: TranslationLocalSettingsUpdateSchema.optional(),
+  localCt2: TranslationLocalCt2SettingsUpdateSchema.optional(),
+  localLlama: TranslationLocalLlamaSettingsUpdateSchema.optional(),
 })
 
 export type TranslationEngineGlobalSettings = z.infer<typeof TranslationEngineGlobalSettingsSchema>

@@ -105,12 +105,26 @@ export function projectTranslateServiceStatus(
     }
     switch (input.browserCapability.availability) {
       case 'available':
+        return {
+          state: 'ready',
+          engineId: 'browser',
+          message: input.browserCapability.message ?? 'Browser translator is ready.',
+        }
       case 'downloadable':
+        return {
+          state: 'ready',
+          engineId: 'browser',
+          message:
+            input.browserCapability.message ??
+            'Browser translation support will be downloaded when translation starts.',
+        }
       case 'downloading':
         return {
           state: 'ready',
           engineId: 'browser',
-          message: 'Browser translator is ready.',
+          message:
+            input.browserCapability.message ??
+            'Browser translation support is downloading and will continue when ready.',
         }
       case 'missing':
       case 'unavailable':

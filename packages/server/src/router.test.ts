@@ -518,12 +518,22 @@ describe('appRouter', () => {
       const context = createMockContext()
       const caller = appRouter.createCaller(context)
 
-      await caller.config.update({ translation: { enabled: true, cacheEnabled: true } })
+      await caller.config.update({ translation: { displayMode: 'bilingual' } })
 
       const writeConfig = context.configManager.writeConfig as unknown as ReturnType<typeof vi.fn>
-      expect(writeConfig).toHaveBeenCalledWith({
-        translation: { enabled: true, cacheEnabled: true },
-      })
+      expect(writeConfig).toHaveBeenCalledWith({ translation: { displayMode: 'bilingual' } })
+    })
+
+    it('accepts global translation config updates as patches', async () => {
+      const context = createMockContext()
+      const caller = appRouter.createCaller(context)
+
+      await caller.globalSettings.update({ translation: { enabled: true } })
+
+      const writeSettings = context.globalSettingsManager.writeSettings as unknown as ReturnType<
+        typeof vi.fn
+      >
+      expect(writeSettings).toHaveBeenCalledWith({ translation: { enabled: true } })
     })
 
     it('accepts user-level translation cache settings updates', async () => {

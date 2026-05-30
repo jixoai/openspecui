@@ -18,6 +18,7 @@ function createLocalAssetStateForTest(
 
 const translateMarkdownDocumentProgressivelyMock = vi.hoisted(() => vi.fn())
 const navigateMock = vi.hoisted(() => vi.fn())
+const prepareBrowserTranslationMock = vi.hoisted(() => vi.fn())
 const getBrowserSupportTableStateMock = vi.hoisted(() =>
   vi.fn<(targetLanguage: string) => BrowserTranslationSupportTableState | null>(
     (targetLanguage) => ({
@@ -71,6 +72,7 @@ vi.mock('@/lib/browser-translation', async (importOriginal) => {
   return {
     ...original,
     getBrowserSupportTableState: getBrowserSupportTableStateMock,
+    prepareBrowserTranslation: prepareBrowserTranslationMock,
     scanBrowserTranslationPairs: scanBrowserTranslationPairsMock,
     translateMarkdownDocumentProgressively: translateMarkdownDocumentProgressivelyMock,
   }
@@ -112,6 +114,11 @@ vi.mock('@/lib/trpc', () => ({
 
 describe('MarkdownViewer translation plugin', () => {
   beforeEach(() => {
+    prepareBrowserTranslationMock.mockReset()
+    prepareBrowserTranslationMock.mockResolvedValue({
+      availability: 'available',
+      message: 'Browser translator is ready.',
+    })
     translationCacheReadMock.mockResolvedValue(null)
     translationCacheWriteMock.mockResolvedValue({ accepted: true })
     engineLifecycleQueryMock.mockReset()
@@ -379,6 +386,68 @@ describe('MarkdownViewer translation plugin', () => {
     const readyButton = await screen.findByRole('button', { name: 'Translate' })
     expect(readyButton).not.toBeDisabled()
     expect(readyButton).toHaveAttribute('data-translation-action-state', 'ready')
+  })
+
+  it('keeps browser translation active when switching display mode while translated view stays active', async () => {
+    prepareBrowserTranslationMock.mockRejectedValue(
+      new Error(
+        'NotAllowedError: Requires a user gesture when availability is "downloading" or "downloadable".'
+      )
+    )
+    mockProgressiveResult('direct', [
+      {
+        id: 'md-2',
+        sourceStartOffset: 0,
+        sourceEndOffset: 7,
+        sourceKind: 'heading',
+        source: 'Hello',
+        translatorInput: 'Hello',
+        target: '你好',
+        kind: 'heading',
+      },
+    ])
+
+    const baseProps = {
+      markdown: '# Hello',
+      translationConfig: {
+        enabled: true,
+        targetLanguage: 'zh',
+        displayMode: 'direct' as const,
+        cacheEnabled: false,
+        engineId: 'browser' as const,
+      },
+    }
+    const { rerender } = render(<MarkdownViewer {...baseProps} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Translate' }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: '你好' })).toBeTruthy())
+
+    mockProgressiveResult('bilingual', [
+      {
+        id: 'md-2',
+        sourceStartOffset: 0,
+        sourceEndOffset: 7,
+        sourceKind: 'heading',
+        source: 'Hello',
+        translatorInput: 'Hello',
+        target: '你好',
+        kind: 'heading',
+      },
+    ])
+
+    rerender(
+      <MarkdownViewer
+        {...baseProps}
+        translationConfig={{
+          ...baseProps.translationConfig,
+          displayMode: 'bilingual',
+        }}
+      />
+    )
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Hello 你好' })).toBeTruthy())
+    expect(prepareBrowserTranslationMock).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Show source' })).not.toBeDisabled()
   })
 
   it('projects direct translation as the final render stage and uses translated ToC labels', async () => {
@@ -716,6 +785,51 @@ The system SHALL detect static rendering mode.
     expect(within(items[0]!).getByText('报告的表面：')).toBeTruthy()
     expect(within(items[1]!).getByText('规格：确定')).toBeTruthy()
     expect(within(items[2]!).getByText('更改/规格：未渲染')).toBeTruthy()
+  })
+
+  it('renders bilingual translations inside markdown table cells', async () => {
+    const markdown = `# Table
+
+| Key | Value |
+| --- | --- |
+| Hello | World |`
+    const targets = new Map([
+      ['Key', '键'],
+      ['Value', '值'],
+      ['Hello', '你好'],
+      ['World', '世界'],
+    ])
+    const { extractTranslatableSegments } = await import('@/lib/browser-translation')
+
+    mockProgressiveResult(
+      'bilingual',
+      extractTranslatableSegments(markdown).map((segment) => ({
+        ...segment,
+        target: targets.get(segment.source) ?? `ZH:${segment.source}`,
+      }))
+    )
+
+    render(
+      <MarkdownViewer
+        markdown={markdown}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'bilingual',
+          cacheEnabled: false,
+        }}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+
+    await waitFor(() => expect(screen.getByText('键')).toBeTruthy())
+    const headers = screen.getAllByRole('columnheader')
+    const cells = screen.getAllByRole('cell')
+    expect(within(headers[0]!).getByText('键')).toBeTruthy()
+    expect(within(headers[1]!).getByText('值')).toBeTruthy()
+    expect(within(cells[0]!).getByText('你好')).toBeTruthy()
+    expect(within(cells[1]!).getByText('世界')).toBeTruthy()
   })
 
   it('keeps a parent list translation before its nested list and renders translated code text', async () => {

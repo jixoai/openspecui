@@ -35,6 +35,32 @@ export const TranslationEngineProjectSettingsSchema = z
   })
   .default({})
 
+export const TranslationEngineProjectSettingsUpdateSchema = z.object({
+  local: z
+    .object({
+      model: z.string().min(1).optional(),
+      selectedGroupId: z.string().min(1).nullable().optional(),
+    })
+    .optional(),
+  localCt2: z
+    .object({
+      model: z.string().min(1).optional(),
+      selectedGroupId: z.string().min(1).nullable().optional(),
+    })
+    .optional(),
+  localLlama: z
+    .object({
+      model: z.string().min(1).optional(),
+      selectedGroupId: z.string().min(1).nullable().optional(),
+    })
+    .optional(),
+  openai: z
+    .object({
+      model: z.string().min(1).optional(),
+    })
+    .optional(),
+})
+
 export const DocumentTranslationConfigSchema = z.object({
   enabled: z.boolean().default(false),
   targetLanguage: z.string().min(1).default('zh'),
@@ -42,6 +68,15 @@ export const DocumentTranslationConfigSchema = z.object({
   cacheEnabled: z.boolean().default(false),
   engineId: TranslationEngineIdSchema.default(DEFAULT_TRANSLATION_ENGINE_ID),
   engines: TranslationEngineProjectSettingsSchema,
+})
+
+export const DocumentTranslationConfigUpdateSchema = z.object({
+  enabled: z.boolean().optional(),
+  targetLanguage: z.string().min(1).optional(),
+  displayMode: DocumentTranslationDisplayModeSchema.optional(),
+  cacheEnabled: z.boolean().optional(),
+  engineId: TranslationEngineIdSchema.optional(),
+  engines: TranslationEngineProjectSettingsUpdateSchema.optional(),
 })
 
 export type DocumentTranslationConfig = z.infer<typeof DocumentTranslationConfigSchema>
@@ -79,6 +114,15 @@ export const TranslationCacheSettingsSchema = z.object({
     .min(MIN_TRANSLATION_CACHE_ENTRY_LIMIT)
     .max(MAX_TRANSLATION_CACHE_ENTRY_LIMIT)
     .default(DEFAULT_TRANSLATION_CACHE_ENTRY_LIMIT),
+})
+
+export const TranslationCacheSettingsUpdateSchema = z.object({
+  entryLimit: z
+    .number()
+    .int()
+    .min(MIN_TRANSLATION_CACHE_ENTRY_LIMIT)
+    .max(MAX_TRANSLATION_CACHE_ENTRY_LIMIT)
+    .optional(),
 })
 
 export type TranslationCacheSettings = z.infer<typeof TranslationCacheSettingsSchema>

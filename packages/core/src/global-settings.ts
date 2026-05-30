@@ -5,6 +5,7 @@ import { z } from 'zod'
 import {
   DocumentTranslationDisplayModeSchema,
   TranslationCacheSettingsSchema,
+  TranslationCacheSettingsUpdateSchema,
   type TranslationCacheSettings,
 } from './document-translation.js'
 import {
@@ -14,6 +15,7 @@ import {
 import { reactiveReadFile, updateReactiveFileCache } from './reactive-fs/index.js'
 import {
   TranslationEngineGlobalSettingsSchema,
+  TranslationEngineGlobalSettingsUpdateSchema,
   TranslationEngineIdSchema,
   type TranslationEngineGlobalSettingsUpdate,
   type TranslationEngineId,
@@ -28,6 +30,13 @@ export const DocumentTranslationGlobalSettingsSchema = z.object({
   targetLanguage: z.string().min(1).default('zh'),
   displayMode: DocumentTranslationDisplayModeSchema.default('direct'),
   cacheEnabled: z.boolean().default(false),
+})
+
+export const DocumentTranslationGlobalSettingsUpdateSchema = z.object({
+  enabled: z.boolean().optional(),
+  targetLanguage: z.string().min(1).optional(),
+  displayMode: DocumentTranslationDisplayModeSchema.optional(),
+  cacheEnabled: z.boolean().optional(),
 })
 
 export type DocumentTranslationGlobalSettings = z.infer<
@@ -53,6 +62,12 @@ export type OpenSpecUIGlobalSettingsUpdate = {
   translationCache?: Partial<TranslationCacheSettings>
   translationEngines?: TranslationEngineGlobalSettingsUpdate
 }
+
+export const OpenSpecUIGlobalSettingsUpdateSchema = z.object({
+  translation: DocumentTranslationGlobalSettingsUpdateSchema.optional(),
+  translationCache: TranslationCacheSettingsUpdateSchema.optional(),
+  translationEngines: TranslationEngineGlobalSettingsUpdateSchema.optional(),
+})
 
 export type PersistedOpenSpecUIGlobalSettings = {
   translation?: Partial<OpenSpecUIGlobalSettings['translation']>
@@ -297,6 +312,7 @@ function isPersistedGlobalSettingsEmpty(settings: PersistedOpenSpecUIGlobalSetti
  */
 export class GlobalSettingsManager {
   private readonly settingsPath: string
+  private writeChain: Promise<void> = Promise.resolve()
 
   constructor(settingsPath: string = getDefaultGlobalSettingsPath()) {
     this.settingsPath = settingsPath
@@ -333,56 +349,67 @@ export class GlobalSettingsManager {
   }
 
   async writeSettings(update: OpenSpecUIGlobalSettingsUpdate): Promise<void> {
-    const currentContent = await reactiveReadFile(this.settingsPath)
-    const fileExists = currentContent !== null
-    const current = this.parseSettingsContent(currentContent)
-    const merged = OpenSpecUIGlobalSettingsSchema.parse({
-      ...current,
-      translation: {
-        ...current.translation,
-        ...update.translation,
-      },
-      translationCache: {
-        ...current.translationCache,
-        ...update.translationCache,
-      },
-      translationEngines: {
-        ...current.translationEngines,
-        engineId: update.translationEngines?.engineId ?? current.translationEngines.engineId,
-        openai: mergeNullablePatch(
-          current.translationEngines.openai,
-          update.translationEngines?.openai
-        ),
-        local: mergeNullablePatch(
-          current.translationEngines.local,
-          update.translationEngines?.local
-        ),
-        localCt2: mergeNullablePatch(
-          current.translationEngines.localCt2,
-          update.translationEngines?.localCt2
-        ),
-        localLlama: mergeNullablePatch(
-          current.translationEngines.localLlama,
-          update.translationEngines?.localLlama
-        ),
-      },
+    return this.enqueueWrite(async () => {
+      const currentContent = await reactiveReadFile(this.settingsPath)
+      const fileExists = currentContent !== null
+      const current = this.parseSettingsContent(currentContent)
+      const merged = OpenSpecUIGlobalSettingsSchema.parse({
+        ...current,
+        translation: {
+          ...current.translation,
+          ...update.translation,
+        },
+        translationCache: {
+          ...current.translationCache,
+          ...update.translationCache,
+        },
+        translationEngines: {
+          ...current.translationEngines,
+          engineId: update.translationEngines?.engineId ?? current.translationEngines.engineId,
+          openai: mergeNullablePatch(
+            current.translationEngines.openai,
+            update.translationEngines?.openai
+          ),
+          local: mergeNullablePatch(
+            current.translationEngines.local,
+            update.translationEngines?.local
+          ),
+          localCt2: mergeNullablePatch(
+            current.translationEngines.localCt2,
+            update.translationEngines?.localCt2
+          ),
+          localLlama: mergeNullablePatch(
+            current.translationEngines.localLlama,
+            update.translationEngines?.localLlama
+          ),
+        },
+      })
+      const persisted = toPersistedGlobalSettings(merged)
+
+      if (isPersistedGlobalSettingsEmpty(persisted) && !fileExists) {
+        return
+      }
+
+      const serialized = isPersistedGlobalSettingsEmpty(persisted)
+        ? '{}'
+        : JSON.stringify(persisted, null, 2)
+
+      if (currentContent === serialized) {
+        return
+      }
+
+      await mkdir(dirname(this.settingsPath), { recursive: true })
+      await writeFile(this.settingsPath, serialized, 'utf-8')
+      updateReactiveFileCache(this.settingsPath, serialized)
     })
-    const persisted = toPersistedGlobalSettings(merged)
+  }
 
-    if (isPersistedGlobalSettingsEmpty(persisted) && !fileExists) {
-      return
-    }
-
-    const serialized = isPersistedGlobalSettingsEmpty(persisted)
-      ? '{}'
-      : JSON.stringify(persisted, null, 2)
-
-    if (currentContent === serialized) {
-      return
-    }
-
-    await mkdir(dirname(this.settingsPath), { recursive: true })
-    await writeFile(this.settingsPath, serialized, 'utf-8')
-    updateReactiveFileCache(this.settingsPath, serialized)
+  private enqueueWrite<T>(operation: () => Promise<T>): Promise<T> {
+    const run = this.writeChain.then(operation, operation)
+    this.writeChain = run.then(
+      () => undefined,
+      () => undefined
+    )
+    return run
   }
 }

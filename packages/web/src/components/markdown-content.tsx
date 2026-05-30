@@ -370,12 +370,28 @@ function createAnnotationComponents(
       )
     },
     th: ({ children, node, ...props }: MarkdownComponentProps<'th'>) => {
-      void node
-      return <th {...props}>{render(children)}</th>
+      const annotation = getBlockAnnotation(node, blockAnnotationByOffset, 'tableCell')
+      return (
+        <th
+          {...props}
+          {...annotation?.dataAttributes}
+          className={mergeClassName(props.className, annotation?.className)}
+        >
+          {renderBlockChildren(children, annotation)}
+        </th>
+      )
     },
     td: ({ children, node, ...props }: MarkdownComponentProps<'td'>) => {
-      void node
-      return <td {...props}>{render(children)}</td>
+      const annotation = getBlockAnnotation(node, blockAnnotationByOffset, 'tableCell')
+      return (
+        <td
+          {...props}
+          {...annotation?.dataAttributes}
+          className={mergeClassName(props.className, annotation?.className)}
+        >
+          {renderBlockChildren(children, annotation)}
+        </td>
+      )
     },
   }
 }
@@ -471,7 +487,7 @@ export function CodeBlock({ children, className, title }: CodeBlockProps) {
   if (isInline) {
     return (
       <code
-        className="bg-muted text-foreground rounded px-1.5 py-0.5 font-mono text-sm"
+        className="text-foreground rounded px-1 font-mono text-sm [box-shadow:0_1px_0px_var(--primary)]"
         title={title}
       >
         {code}

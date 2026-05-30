@@ -1509,6 +1509,7 @@ function toMarkdownFactKindFromHast(tagName: string): MarkdownFactKind {
   if (/^h[1-6]$/.test(tagName)) return 'heading'
   if (tagName === 'li') return 'listItem'
   if (tagName === 'blockquote') return 'blockquote'
+  if (tagName === 'td' || tagName === 'th') return 'tableCell'
   return 'paragraph'
 }
 

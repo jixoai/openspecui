@@ -1,15 +1,20 @@
 import {
   LocalModelAssetStateSchema,
+  TRANSLATOR_CONTRACT_VERSION,
   createTranslationEngineLifecycleStatus,
   type LocalModelAssetState,
 } from '@openspecui/core/translator'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { resolveTranslateServiceState } from './translate-service'
+import { resolveTranslateServiceState, runSingleTranslation } from './translate-service'
 
 const panelStateQueryMock = vi.hoisted(() => vi.fn())
 const ct2PanelStateQueryMock = vi.hoisted(() => vi.fn())
 const llamaPanelStateQueryMock = vi.hoisted(() => vi.fn())
 const engineLifecycleQueryMock = vi.hoisted(() => vi.fn())
+const getBrowserSupportTableStateMock = vi.hoisted(() => vi.fn(() => null))
+const scanBrowserTranslationPairsMock = vi.hoisted(() => vi.fn())
+const prepareBrowserTranslationMock = vi.hoisted(() => vi.fn())
+const createBrowserTranslationExecutionMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/trpc', () => ({
   trpcClient: {
@@ -51,8 +56,10 @@ vi.mock('@/lib/browser-translation', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/browser-translation')>()
   return {
     ...original,
-    getBrowserSupportTableState: vi.fn(() => null),
-    scanBrowserTranslationPairs: vi.fn(),
+    createBrowserTranslationExecution: createBrowserTranslationExecutionMock,
+    getBrowserSupportTableState: getBrowserSupportTableStateMock,
+    prepareBrowserTranslation: prepareBrowserTranslationMock,
+    scanBrowserTranslationPairs: scanBrowserTranslationPairsMock,
   }
 })
 
@@ -62,6 +69,15 @@ describe('translate service', () => {
     ct2PanelStateQueryMock.mockReset()
     llamaPanelStateQueryMock.mockReset()
     engineLifecycleQueryMock.mockReset()
+    getBrowserSupportTableStateMock.mockReset()
+    getBrowserSupportTableStateMock.mockReturnValue(null)
+    scanBrowserTranslationPairsMock.mockReset()
+    prepareBrowserTranslationMock.mockReset()
+    prepareBrowserTranslationMock.mockResolvedValue({
+      availability: 'available',
+      message: 'Browser translator is ready.',
+    })
+    createBrowserTranslationExecutionMock.mockReset()
     engineLifecycleQueryMock.mockResolvedValue(
       createTranslationEngineLifecycleStatus({
         dependency: {
@@ -74,6 +90,22 @@ describe('translate service', () => {
         },
       })
     )
+    createBrowserTranslationExecutionMock.mockReturnValue({
+      cacheIdentity: {
+        engineId: 'browser',
+        translatorContractVersion: TRANSLATOR_CONTRACT_VERSION,
+      },
+      factory: {
+        create: vi.fn(async () => ({
+          async *batchTranslate(inputs: string[]) {
+            for (const [index, value] of inputs.entries()) {
+              yield { index, output: `ZH:${value}` }
+            }
+          },
+          destroy: vi.fn(),
+        })),
+      },
+    })
   })
 
   it('rejects a local directional model when the document target conflicts', async () => {
@@ -324,6 +356,91 @@ describe('translate service', () => {
       engineId: 'local',
       message: 'Native binding failed to load.',
     })
+  })
+
+  it('prepares downloadable browser support before creating a browser translator', async () => {
+    const createMock = vi.fn(async () => ({
+      async *batchTranslate(inputs: string[]) {
+        for (const [index, value] of inputs.entries()) {
+          yield { index, output: `ZH:${value}` }
+        }
+      },
+      destroy: vi.fn(),
+    }))
+    createBrowserTranslationExecutionMock.mockReturnValue({
+      cacheIdentity: {
+        engineId: 'browser',
+        translatorContractVersion: TRANSLATOR_CONTRACT_VERSION,
+      },
+      factory: {
+        create: createMock,
+      },
+    })
+    getBrowserSupportTableStateMock.mockReturnValue({
+      state: 'ready',
+      message: 'Browser translation pairs: 1 downloadable.',
+      table: {
+        targetLanguage: 'zh',
+        checked: 1,
+        total: 1,
+        updatedAt: 1,
+        rows: [
+          {
+            sourceLanguage: 'en',
+            targetLanguage: 'zh',
+            availability: 'downloadable',
+          },
+        ],
+      },
+    })
+
+    await expect(
+      runSingleTranslation({
+        engineId: 'browser',
+        sourceLanguage: 'en',
+        targetLanguage: 'zh',
+        text: 'Hello world',
+      })
+    ).resolves.toBe('ZH:Hello world')
+
+    expect(prepareBrowserTranslationMock).toHaveBeenCalledWith(
+      'zh',
+      expect.objectContaining({
+        sourceLanguage: 'en',
+      })
+    )
+    expect(prepareBrowserTranslationMock.mock.invocationCallOrder[0]).toBeLessThan(
+      createMock.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+    )
+  })
+
+  it('stops browser smoke translations when browser preparation never reaches available', async () => {
+    const createMock = vi.fn()
+    createBrowserTranslationExecutionMock.mockReturnValue({
+      cacheIdentity: {
+        engineId: 'browser',
+        translatorContractVersion: TRANSLATOR_CONTRACT_VERSION,
+      },
+      factory: {
+        create: createMock,
+      },
+    })
+    prepareBrowserTranslationMock.mockResolvedValue({
+      availability: 'error',
+      message:
+        'NotAllowedError: Requires a user gesture when availability is "downloading" or "downloadable".',
+    })
+
+    await expect(
+      runSingleTranslation({
+        engineId: 'browser',
+        sourceLanguage: 'en',
+        targetLanguage: 'zh',
+        text: 'Hello world',
+      })
+    ).rejects.toThrow(/Requires a user gesture/)
+
+    expect(createMock).not.toHaveBeenCalled()
   })
 })
 

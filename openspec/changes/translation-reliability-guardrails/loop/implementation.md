@@ -57,6 +57,12 @@
   - Settings prompts users to run Test Translate manually for errors and latency,
   - scalar `translation.*` fields default to global settings with explicit project override support,
   - model-selection writes use the related `translation.engines.*` ownership instead of `translation.engineId`.
+- One patch-shape correction was required after real UI verification:
+  - `config.update` and `globalSettings.update` now use dedicated update schemas instead of full schemas with defaults,
+  - this preserves partial writes such as `displayMode` or `enabled` without rehydrating sibling defaults and overwriting the previous write.
+- One markdown-table rendering correction was required after follow-up bug review:
+  - HAST table-cell segments now keep `sourceKind: tableCell` instead of collapsing to `paragraph`,
+  - `MarkdownContent` now applies translation block annotations to `th/td`, so bilingual table cells render translated targets instead of staying source-only.
 
 ## Loopback Triggers
 

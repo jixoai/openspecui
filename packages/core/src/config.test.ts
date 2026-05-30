@@ -8,6 +8,7 @@ import {
   OpenSpecUIConfigSchema,
   buildCliRunnerCandidates,
 } from './config.js'
+import * as reactiveFs from './reactive-fs/index.js'
 import { clearCache } from './reactive-fs/index.js'
 import { ReactiveContext } from './reactive-fs/reactive-context.js'
 import { closeAllWatchers, initWatcherPool } from './reactive-fs/watcher-pool.js'
@@ -437,6 +438,45 @@ describe('ConfigManager', () => {
       await expect(readFile(join(tempDir, 'openspec', '.openspecui.json'), 'utf-8')).resolves.toBe(
         '{}'
       )
+    })
+
+    it('should serialize concurrent translation preference writes without dropping sibling fields', async () => {
+      const configPath = join(tempDir, 'openspec', '.openspecui.json')
+      const originalRead = reactiveFs.reactiveReadFile
+      let readsSeen = 0
+      let releaseReads: (() => void) | null = null
+      const readsReady = new Promise<void>((resolve) => {
+        releaseReads = resolve
+      })
+      const readSpy = vi
+        .spyOn(reactiveFs, 'reactiveReadFile')
+        .mockImplementation(async (path: string) => {
+          if (path === configPath) {
+            readsSeen += 1
+            if (readsSeen === 2) {
+              releaseReads?.()
+            }
+            await Promise.race([
+              readsReady,
+              new Promise<void>((resolve) => setTimeout(resolve, 20)),
+            ])
+          }
+          return originalRead(path)
+        })
+
+      try {
+        await Promise.all([
+          configManager.writeConfig({ translation: { displayMode: 'bilingual' } }),
+          configManager.writeConfig({ translation: { enabled: true } }),
+        ])
+      } finally {
+        readSpy.mockRestore()
+      }
+
+      clearCache()
+      const config = await configManager.readConfig()
+      expect(config.translation.enabled).toBe(true)
+      expect(config.translation.displayMode).toBe('bilingual')
     })
 
     it('should merge per-engine translation model patches without overwriting siblings', async () => {
