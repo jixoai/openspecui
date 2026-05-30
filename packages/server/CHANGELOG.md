@@ -1,5 +1,19 @@
 # @openspecui/server
 
+## 3.11.4
+
+### Patch Changes
+
+- b02c131: Improve translation reliability by enforcing per-item timeout/error handling across service-side translators, mapping managed-local memory budgets into runtime and worker execution strategy, and surfacing segment-level retry flows with configurable smoke-test timeouts in the settings UI.
+- e078127: Keep the CT2 model download card in a loading state while artifact profiles are still resolving, ignore malformed translation segments before rendering translated Markdown, and surface unsupported local-llama GGUF groups as explicit runtime compatibility failures before translation starts.
+- Updated dependencies [b02c131]
+  - @openspecui/core@3.11.4
+  - @openspecui/local-ct2-translator@3.11.4
+  - @openspecui/local-llama-translator@3.11.4
+  - @openspecui/local-translator@3.11.4
+  - @openspecui/openai-completion-translator@3.11.4
+  - @openspecui/search@3.11.4
+
 ## 3.11.3
 
 ### Patch Changes

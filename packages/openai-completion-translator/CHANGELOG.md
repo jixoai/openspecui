@@ -1,5 +1,12 @@
 # @openspecui/openai-completion-translator
 
+## 3.11.4
+
+### Patch Changes
+
+- Updated dependencies [b02c131]
+  - @openspecui/core@3.11.4
+
 ## 3.11.3
 
 ### Patch Changes

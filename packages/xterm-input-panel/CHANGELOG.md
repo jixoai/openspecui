@@ -1,5 +1,11 @@
 # xterm-input-panel
 
+## 1.2.5
+
+### Patch Changes
+
+- c265719: Add shared terminal keybindings for OS copy/paste behavior, preserve terminal selection when switching InputPanel tabs, and translate terminal touch gestures into mouse events for mobile terminal interaction.
+
 ## 1.2.4
 
 ### Patch Changes

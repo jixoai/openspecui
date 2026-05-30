@@ -1,5 +1,14 @@
 # @openspecui/web
 
+## 3.11.4
+
+### Patch Changes
+
+- f66c98c: Bundle local mono fonts instead of loading Google Fonts at runtime, and restore persisted project navigation layout on initial load.
+- c265719: Add shared terminal keybindings for OS copy/paste behavior, preserve terminal selection when switching InputPanel tabs, and translate terminal touch gestures into mouse events for mobile terminal interaction.
+- b02c131: Improve translation reliability by enforcing per-item timeout/error handling across service-side translators, mapping managed-local memory budgets into runtime and worker execution strategy, and surfacing segment-level retry flows with configurable smoke-test timeouts in the settings UI.
+- e078127: Keep the CT2 model download card in a loading state while artifact profiles are still resolving, ignore malformed translation segments before rendering translated Markdown, and surface unsupported local-llama GGUF groups as explicit runtime compatibility failures before translation starts.
+
 ## 3.11.3
 
 ### Patch Changes
