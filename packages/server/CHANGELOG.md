@@ -1,5 +1,24 @@
 # @openspecui/server
 
+## 3.11.5
+
+### Patch Changes
+
+- a055d57: Fix translation reliability around managed local engines and markdown rendering.
+  - preserve translation config writes without overwriting sibling defaults
+  - honor global-first translation settings with project overrides
+  - keep managed local engine readiness and selected download groups in sync
+  - translate markdown table cells in bilingual/direct rendering
+  - refine inline markdown code styling
+
+- Updated dependencies [a055d57]
+  - @openspecui/core@3.11.5
+  - @openspecui/local-ct2-translator@3.11.5
+  - @openspecui/local-llama-translator@3.11.5
+  - @openspecui/local-translator@3.11.5
+  - @openspecui/openai-completion-translator@3.11.5
+  - @openspecui/search@3.11.5
+
 ## 3.11.4
 
 ### Patch Changes
