@@ -1,3 +1,4 @@
+@import './lib/local-fonts.css';
 @import 'tailwindcss';
 @plugin '@tailwindcss/typography';
 @custom-variant dark (&:where(.dark, .dark *));
@@ -37,10 +38,15 @@
   --sidebar-accent-foreground: oklch(1 0 0);
   --sidebar-border: oklch(0 0 0);
   --sidebar-ring: oklch(0.6489 0.237 26.9728);
-  --font-sans: 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  --font-sans:
+    'JetBrains Mono Variable', 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono',
+    monospace;
   --font-serif: ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
-  --font-mono: 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-  --font-nav: 'Share Tech Mono', 'JetBrains Mono', SFMono-Regular, monospace;
+  --font-mono:
+    'JetBrains Mono Variable', 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono',
+    monospace;
+  --font-nav:
+    'Share Tech Mono', 'JetBrains Mono Variable', 'JetBrains Mono', SFMono-Regular, monospace;
   --radius: 0px;
   @supports (corner-shape: bevel) {
     --radius: 8px;
@@ -109,10 +115,15 @@
   --sidebar-accent-foreground: oklch(0 0 0);
   --sidebar-border: oklch(1 0 0);
   --sidebar-ring: oklch(0.7044 0.1872 23.1858);
-  --font-sans: 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  --font-sans:
+    'JetBrains Mono Variable', 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono',
+    monospace;
   --font-serif: ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
-  --font-mono: 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-  --font-nav: 'Share Tech Mono', 'JetBrains Mono', SFMono-Regular, monospace;
+  --font-mono:
+    'JetBrains Mono Variable', 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono',
+    monospace;
+  --font-nav:
+    'Share Tech Mono', 'JetBrains Mono Variable', 'JetBrains Mono', SFMono-Regular, monospace;
   --radius: 0px;
   @supports (corner-shape: bevel) {
     --radius: 8px;

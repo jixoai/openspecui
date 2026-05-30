@@ -488,4 +488,27 @@ describe('NavController kernel lifecycle', () => {
       '/settings',
     ])
   })
+
+  it('notifies subscribers when project-scoped layout initializes from local storage', async () => {
+    nav = createController('/dashboard', {
+      mainTabs: ['/archive', '/dashboard', '/config', '/specs', '/changes', '/settings'],
+      bottomTabs: ['/terminal'],
+    })
+    setProjectScopedLayout('/repo/current', {
+      mainTabs: ['/specs', '/dashboard', '/config', '/changes', '/archive', '/settings'],
+      bottomTabs: ['/terminal'],
+    })
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ projectDir: '/repo/current' }),
+    } as Response)
+
+    const listener = vi.fn()
+    nav.subscribe(listener)
+
+    await nav.init()
+
+    expect(listener).toHaveBeenCalled()
+    expect(nav.getSnapshot().mainTabs[0]).toBe('/specs')
+  })
 })
