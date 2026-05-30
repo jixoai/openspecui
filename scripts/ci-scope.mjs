@@ -13,8 +13,6 @@ if (scope.browser.runXterm) {
   browserMatrix.push({
     id: 'xterm',
     label: 'xterm-input-panel',
-    playwright_install:
-      'pnpm --filter xterm-input-panel exec playwright install --with-deps --only-shell chromium',
     test_command: 'pnpm --filter xterm-input-panel test:browser',
   })
 }
@@ -22,8 +20,6 @@ if (scope.browser.runWeb) {
   browserMatrix.push({
     id: 'web',
     label: '@openspecui/web',
-    playwright_install:
-      'pnpm --filter @openspecui/web exec playwright install --with-deps --only-shell chromium',
     test_command: 'pnpm --filter @openspecui/web test:browser:ci',
   })
 }

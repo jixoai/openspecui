@@ -137,6 +137,9 @@ jobs:
     if: >-
       !startsWith(github.head_ref, 'chore/release/changeversion-') &&
       needs.ci-scope.outputs.browser_required == 'true'
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --user 1001
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -155,17 +158,8 @@ jobs:
           node-version: 24
           cache: pnpm
 
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml', '.github/workflows/pr-quality.yml') }}
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright browser and deps
-        run: ${{ matrix.playwright_install }}
 
       - name: Run browser shard
         run: ${{ matrix.test_command }}
