@@ -2,6 +2,7 @@ import type { ITerminalAddon, Terminal } from '@xterm/xterm'
 import { iconKeyboard, iconMousePointer2 } from './icons.js'
 import type { InputPanelLayout, InputPanelTab } from './input-panel.js'
 import type { HostPlatform } from './platform.js'
+import type { ShortcutCommand } from './shortcut-pages.js'
 import { getSessionScopedStorageKey } from './storage-namespace.js'
 
 const SENSITIVITY = 1.5
@@ -11,6 +12,32 @@ const EDGE_SCROLL_OVERSHOOT = 15
 
 function isTouchDevice(): boolean {
   return 'ontouchstart' in window || navigator.maxTouchPoints > 0
+}
+
+function isTerminalTouchMouseOverlay(element: Element): element is HTMLElement {
+  return (
+    element instanceof HTMLElement && element.classList.contains('terminal-touch-mouse-overlay')
+  )
+}
+
+export function resolveTerminalPointerTarget(
+  container: HTMLElement,
+  clientX: number,
+  clientY: number
+): Element {
+  let element = document.elementFromPoint(clientX, clientY)
+  if (element && isTerminalTouchMouseOverlay(element)) {
+    const overlayElement = element
+    const previousPointerEvents = overlayElement.style.pointerEvents
+    overlayElement.style.pointerEvents = 'none'
+    element = document.elementFromPoint(clientX, clientY)
+    overlayElement.style.pointerEvents = previousPointerEvents
+  }
+
+  if (element && container.contains(element) && !isTerminalTouchMouseOverlay(element)) {
+    return element
+  }
+  return container.querySelector('.xterm-screen') ?? container
 }
 
 export interface InputPanelHistoryItem {
@@ -24,6 +51,12 @@ export interface InputPanelSettingsPayload {
   floatingHeight: number
   vibrationIntensity: number
   historyLimit: number
+}
+
+export type InputPanelCommand = ShortcutCommand
+
+export interface InputPanelCommandOptions {
+  fallbackData?: string
 }
 
 interface InputPanelSessionState {
@@ -47,6 +80,10 @@ function isInputPanelTab(value: unknown): value is InputPanelTab {
     value === 'trackpad' ||
     value === 'settings'
   )
+}
+
+function isInputPanelCommand(value: unknown): value is InputPanelCommand {
+  return value === 'copy' || value === 'paste' || value === 'select-all'
 }
 
 interface InputPanelStateStore {
@@ -373,6 +410,12 @@ export class InputPanelAddon implements ITerminalAddon {
   private _listenersAttached = false
 
   private _onInput: (data: string) => void
+  private _onCommand:
+    | ((
+        command: InputPanelCommand,
+        options: InputPanelCommandOptions
+      ) => boolean | Promise<boolean>)
+    | null
   private _onOpenCb: (() => void) | null
   private _onCloseCb: (() => void) | null
   private _getHistory: (() => Promise<readonly InputPanelHistoryItem[]>) | null
@@ -391,6 +434,10 @@ export class InputPanelAddon implements ITerminalAddon {
 
   constructor(opts?: {
     onInput?: (data: string) => void
+    onCommand?: (
+      command: InputPanelCommand,
+      options: InputPanelCommandOptions
+    ) => boolean | Promise<boolean>
     onOpen?: () => void
     onClose?: () => void
     getHistory?: () => Promise<readonly InputPanelHistoryItem[]>
@@ -403,6 +450,7 @@ export class InputPanelAddon implements ITerminalAddon {
     stateKey?: string
   }) {
     this._onInput = opts?.onInput ?? (() => {})
+    this._onCommand = opts?.onCommand ?? null
     this._onOpenCb = opts?.onOpen ?? null
     this._onCloseCb = opts?.onClose ?? null
     this._getHistory = opts?.getHistory ?? null
@@ -441,6 +489,17 @@ export class InputPanelAddon implements ITerminalAddon {
   }
   set onInput(fn: (data: string) => void) {
     this._onInput = fn
+  }
+
+  set onCommand(
+    fn:
+      | ((
+          command: InputPanelCommand,
+          options: InputPanelCommandOptions
+        ) => boolean | Promise<boolean>)
+      | null
+  ) {
+    this._onCommand = fn
   }
 
   setPlatform(platform: HostPlatform): void {
@@ -676,6 +735,25 @@ export class InputPanelAddon implements ITerminalAddon {
             .catch(() => {})
         }
       }
+    })
+    this._on(panel, 'input-panel:command', (e) => {
+      const detail = (e as CustomEvent).detail
+      if (!isRecord(detail)) return
+      const command = detail.command
+      if (!isInputPanelCommand(command)) return
+      const fallbackData = typeof detail.fallbackData === 'string' ? detail.fallbackData : undefined
+
+      void Promise.resolve(this._onCommand?.(command, { fallbackData }) ?? false)
+        .then((handled) => {
+          if (!handled && fallbackData) {
+            this._onInput(fallbackData)
+          }
+        })
+        .catch(() => {
+          if (fallbackData) {
+            this._onInput(fallbackData)
+          }
+        })
     })
     this._on(inputTab, 'input-panel:input-change', (e) => {
       const value = (e as CustomEvent).detail?.value
@@ -972,9 +1050,7 @@ export class InputPanelAddon implements ITerminalAddon {
   private _resolveTarget(clientX: number, clientY: number): Element {
     const container = this._getTerminalHostElement()
     if (!container) return document.body
-    const el = document.elementFromPoint(clientX, clientY)
-    if (el && container.contains(el)) return el
-    return container.querySelector('.xterm-screen') ?? container
+    return resolveTerminalPointerTarget(container, clientX, clientY)
   }
 
   private _dispatchMouse(

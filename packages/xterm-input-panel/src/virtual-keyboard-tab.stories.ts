@@ -363,6 +363,79 @@ export const MacosCapsRow: StoryObj = {
 }
 
 /**
+ * macOS Command+C is an OS clipboard command, not terminal text input.
+ */
+export const MacosCommandCopyCommand: StoryObj = {
+  render: () =>
+    html`<virtual-keyboard-tab platform="macos" style="height: 100%;"></virtual-keyboard-tab>`,
+  play: async ({ canvasElement }) => {
+    const el = await setup(canvasElement)
+    const commandKey = findKey(el, 'Command')
+    expect(commandKey).toBeDefined()
+
+    const commandHandler = fn()
+    const sendHandler = fn()
+    el.addEventListener('input-panel:command', commandHandler)
+    el.addEventListener('input-panel:send', sendHandler)
+
+    emitDown(commandKey!.container)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    const cKey = el._keys.find((k) => k.def.data === 'c')
+    expect(cKey).toBeDefined()
+    emitDown(cKey!.container)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    emitUp(cKey!.container)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(sendHandler).toHaveBeenCalledTimes(0)
+    expect(commandHandler).toHaveBeenCalledTimes(1)
+    const detail = (commandHandler.mock.calls[0] as unknown[])[0] as CustomEvent
+    expect(detail.detail).toEqual({ command: 'copy', fallbackData: undefined })
+
+    el.removeEventListener('input-panel:command', commandHandler)
+    el.removeEventListener('input-panel:send', sendHandler)
+  },
+}
+
+/**
+ * Windows/Linux Ctrl+C uses the same command path, with terminal interrupt as
+ * fallback when no terminal selection can be copied.
+ */
+export const CommonCtrlCopyCommandWithFallback: StoryObj = {
+  render: () =>
+    html`<virtual-keyboard-tab platform="common" style="height: 100%;"></virtual-keyboard-tab>`,
+  play: async ({ canvasElement }) => {
+    const el = await setup(canvasElement)
+    const ctrlKey = findKey(el, 'Ctrl')
+    expect(ctrlKey).toBeDefined()
+
+    const commandHandler = fn()
+    const sendHandler = fn()
+    el.addEventListener('input-panel:command', commandHandler)
+    el.addEventListener('input-panel:send', sendHandler)
+
+    emitDown(ctrlKey!.container)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    const cKey = el._keys.find((k) => k.def.data === 'c')
+    expect(cKey).toBeDefined()
+    emitDown(cKey!.container)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    emitUp(cKey!.container)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(sendHandler).toHaveBeenCalledTimes(0)
+    expect(commandHandler).toHaveBeenCalledTimes(1)
+    const detail = (commandHandler.mock.calls[0] as unknown[])[0] as CustomEvent
+    expect(detail.detail).toEqual({ command: 'copy', fallbackData: '\x03' })
+
+    el.removeEventListener('input-panel:command', commandHandler)
+    el.removeEventListener('input-panel:send', sendHandler)
+  },
+}
+
+/**
  * Swipe up on a key sends shifted value without pressing Shift key.
  */
 export const SwipeUpShift: StoryObj = {

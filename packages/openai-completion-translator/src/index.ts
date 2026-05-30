@@ -1,9 +1,11 @@
 import type {
+  BatchTranslationResult,
   Translator,
   TranslatorFactory,
   TranslatorFactoryCreateOptions,
   TranslatorOptions,
 } from '@openspecui/core/translator'
+import { runControlledTranslationTask } from '@openspecui/core/translator'
 import { chat, createModel, extendAdapter } from '@tanstack/ai'
 import {
   createOpenaiChatCompletions,
@@ -51,43 +53,50 @@ class OpenAICompletionTranslator implements Translator {
   async *batchTranslate(
     inputs: string[],
     options?: TranslatorOptions
-  ): AsyncGenerator<{ index: number; output: string }> {
-    const abortController = createAbortController(options?.signal)
-    const adapter = createConfiguredOpenAiAdapter({
-      model: this.options.model,
-      token: this.options.token,
-      baseUrl: this.options.baseUrl,
-    })
-
+  ): AsyncGenerator<BatchTranslationResult> {
     for (const [index, source] of inputs.entries()) {
-      const text = await chat({
-        adapter,
-        stream: false,
-        temperature: 0,
-        abortController,
-        systemPrompts: [
-          [
-            'You are a translation engine.',
-            `Translate from ${this.options.sourceLanguage} to ${this.options.targetLanguage}.`,
-            options?.instructions ?? 'Translate the source accurately.',
-            'Return only the translated source without commentary.',
-          ]
-            .filter(Boolean)
-            .join('\n'),
-        ],
-        messages: [
-          {
-            role: 'user',
-            content: [
-              options?.context ? `<context>\n${options.context}\n</context>` : '',
-              `<source>\n${source}\n</source>`,
+      const controlled = await runControlledTranslationTask(async (signal) => {
+        const abortController = createAbortController(signal)
+        const adapter = createConfiguredOpenAiAdapter({
+          model: this.options.model,
+          token: this.options.token,
+          baseUrl: this.options.baseUrl,
+        })
+        const text = await chat({
+          adapter,
+          stream: false,
+          temperature: 0,
+          abortController,
+          systemPrompts: [
+            [
+              'You are a translation engine.',
+              `Translate from ${this.options.sourceLanguage} to ${this.options.targetLanguage}.`,
+              options?.instructions ?? 'Translate the source accurately.',
+              'Return only the translated source without commentary.',
             ]
               .filter(Boolean)
-              .join('\n\n'),
-          },
-        ],
-      })
-      yield { index, output: text.trim() }
+              .join('\n'),
+          ],
+          messages: [
+            {
+              role: 'user',
+              content: [
+                options?.context ? `<context>\n${options.context}\n</context>` : '',
+                `<source>\n${source}\n</source>`,
+              ]
+                .filter(Boolean)
+                .join('\n\n'),
+            },
+          ],
+        })
+        return text.trim()
+      }, options)
+
+      if (controlled.ok) {
+        yield { index, output: controlled.value }
+        continue
+      }
+      yield { index, error: controlled.error }
     }
   }
 }

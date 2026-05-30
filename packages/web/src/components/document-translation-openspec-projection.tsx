@@ -34,21 +34,29 @@ const OPENSPEC_SECTION_TARGET_LABELS: Record<string, string> = {
 export function createTranslatedOpenSpecHeadingProjection(
   input: MarkdownHeadingTransformInput,
   segment: DocumentTranslationSegmentResult,
-  displayMode: DocumentTranslationConfig['displayMode']
+  displayMode: DocumentTranslationConfig['displayMode'],
+  onRetry?: (segmentId: string) => void
 ): { children: ReactNode; tocDataLabel: string; target: string } | undefined {
   const kind = getCurrentDataAttribute(input, 'data-openspec-kind')
   if (kind === 'section') {
-    return createTranslatedOpenSpecSectionHeadingProjection(input, segment, displayMode)
+    return createTranslatedOpenSpecSectionHeadingProjection(input, segment, displayMode, onRetry)
   }
   if (kind !== 'requirement' && kind !== 'scenario') return undefined
 
-  return createTranslatedOpenSpecStructureHeadingProjection(input, segment, displayMode, kind)
+  return createTranslatedOpenSpecStructureHeadingProjection(
+    input,
+    segment,
+    displayMode,
+    kind,
+    onRetry
+  )
 }
 
 function createTranslatedOpenSpecSectionHeadingProjection(
   input: MarkdownHeadingTransformInput,
   segment: DocumentTranslationSegmentResult,
-  displayMode: DocumentTranslationConfig['displayMode']
+  displayMode: DocumentTranslationConfig['displayMode'],
+  onRetry?: (segmentId: string) => void
 ): { children: ReactNode; tocDataLabel: string; target: string } | undefined {
   const sectionKind = getCurrentDataAttribute(input, 'data-openspec-section-kind')
   if (!sectionKind) return undefined
@@ -73,6 +81,7 @@ function createTranslatedOpenSpecSectionHeadingProjection(
       displayMode,
       targetChildren: targetTitle,
       className: 'document-translation-heading-segment',
+      onRetry,
     }),
   }
 }
@@ -81,7 +90,8 @@ function createTranslatedOpenSpecStructureHeadingProjection(
   input: MarkdownHeadingTransformInput,
   segment: DocumentTranslationSegmentResult,
   displayMode: DocumentTranslationConfig['displayMode'],
-  kind: OpenSpecStructureHeadingKind
+  kind: OpenSpecStructureHeadingKind,
+  onRetry?: (segmentId: string) => void
 ): { children: ReactNode; tocDataLabel: string; target: string } {
   const sourceParts = splitOpenSpecHeadingText(segment.source, kind)
   const targetParts = splitOpenSpecHeadingText(segment.target ?? '', kind)
@@ -138,6 +148,7 @@ function createTranslatedOpenSpecStructureHeadingProjection(
             displayMode,
             targetChildren: targetNodes ? renderTranslatedHastNodes(targetNodes) : undefined,
             className: 'document-translation-heading-segment',
+            onRetry,
           })}
         </span>
       </>

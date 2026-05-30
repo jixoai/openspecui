@@ -54,7 +54,10 @@ describe('local translator package', () => {
   })
 
   it('loads the configured translation model and translates batched source text', async () => {
-    const pipeline = vi.fn(async () => [{ translation_text: '你好' }, { translation_text: '世界' }])
+    const pipeline = vi
+      .fn()
+      .mockResolvedValueOnce([{ translation_text: '你好' }])
+      .mockResolvedValueOnce([{ translation_text: '世界' }])
     const status = vi.fn()
     transformersMock.pipeline.mockImplementationOnce(
       async (_task: string, _model: string, options) => {
@@ -73,7 +76,11 @@ describe('local translator package', () => {
       monitor: { setStatus: status },
     })
 
-    const results: Array<{ index: number; output: string }> = []
+    const results: Array<{
+      index: number
+      output?: string
+      error?: { kind: string; message: string }
+    }> = []
     for await (const item of translator.batchTranslate(['Hello', 'World'])) {
       results.push(item)
     }
@@ -86,17 +93,61 @@ describe('local translator package', () => {
       'Xenova/custom-model',
       expect.any(Object)
     )
-    expect(pipeline).toHaveBeenCalledWith(['Hello', 'World'], {
-      src_lang: 'en',
-      tgt_lang: 'zh',
-      signal: undefined,
-    })
+    expect(pipeline).toHaveBeenNthCalledWith(
+      1,
+      'Hello',
+      expect.objectContaining({
+        src_lang: 'en',
+        tgt_lang: 'zh',
+        signal: expect.any(AbortSignal),
+      })
+    )
+    expect(pipeline).toHaveBeenNthCalledWith(
+      2,
+      'World',
+      expect.objectContaining({
+        src_lang: 'en',
+        tgt_lang: 'zh',
+        signal: expect.any(AbortSignal),
+      })
+    )
     expect(status).toHaveBeenCalledWith(
       expect.objectContaining({
         message: 'Downloading local model Xenova/custom-model 50%.',
         progress: 0.5,
       })
     )
+  })
+
+  it('yields per-input timeout errors instead of throwing the whole batch', async () => {
+    const pipeline = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => resolve([{ translation_text: '迟到' }]), 20)
+        })
+    )
+    transformersMock.pipeline.mockImplementationOnce(async () => pipeline)
+
+    const { createLocalTranslatorFactory } = await import('./index.js')
+    const translator = await createLocalTranslatorFactory().create({
+      sourceLanguage: 'en',
+      targetLanguage: 'zh',
+    })
+
+    const results = []
+    for await (const item of translator.batchTranslate(['Hello'], { timeoutMs: 1 })) {
+      results.push(item)
+    }
+
+    expect(results).toEqual([
+      {
+        index: 0,
+        error: {
+          kind: 'timeout',
+          message: 'Translation task timed out after 1ms.',
+        },
+      },
+    ])
   })
 
   it('passes dtype to Transformers.js when a download profile is selected', async () => {

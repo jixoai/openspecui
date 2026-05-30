@@ -9,8 +9,9 @@ import {
   TextStyle,
 } from 'pixi.js'
 import { onThemeChange, resolvePixiTheme, type PixiTheme } from './pixi-theme.js'
-import { detectHostPlatform, type PlatformMode } from './platform.js'
+import { detectHostPlatform, type HostPlatform, type PlatformMode } from './platform.js'
 import { LAYOUTS, type KeyDef, type ModifierKey } from './virtual-keyboard-layouts.js'
+import type { InputPanelCommand } from './xterm-addon.js'
 
 const KEY_PADDING = 3
 const KEY_RADIUS = 4
@@ -112,12 +113,14 @@ export class VirtualKeyboardTab extends LitElement {
     this._activePointerId = null
   }
 
+  private _hostPlatform(): HostPlatform {
+    return this.platform === 'windows' || this.platform === 'macos' || this.platform === 'common'
+      ? this.platform
+      : detectHostPlatform()
+  }
+
   private getRows(): KeyDef[][] {
-    const hostPlatform =
-      this.platform === 'windows' || this.platform === 'macos' || this.platform === 'common'
-        ? this.platform
-        : detectHostPlatform()
-    return LAYOUTS[hostPlatform]
+    return LAYOUTS[this._hostPlatform()]
   }
 
   private async _initPixi() {
@@ -566,9 +569,9 @@ export class VirtualKeyboardTab extends LitElement {
     return def.data
   }
 
-  private _sendKey(def: KeyDef, forceShift: boolean) {
+  private _resolveTerminalData(def: KeyDef, forceShift: boolean): string {
     let data = this._resolveOutputData(def, forceShift)
-    if (!data) return
+    if (!data) return ''
 
     if (this._modifiers.ctrl && data.length === 1) {
       const code = data.toUpperCase().charCodeAt(0) - 64
@@ -579,6 +582,47 @@ export class VirtualKeyboardTab extends LitElement {
 
     if (this._modifiers.alt || this._modifiers.meta) {
       data = `\x1b${data}`
+    }
+
+    return data
+  }
+
+  private _resolvePrimaryCommand(def: KeyDef): InputPanelCommand | null {
+    if (this._modifiers.alt || this._modifiers.shift) return null
+
+    const platform = this._hostPlatform()
+    const primaryModifierActive =
+      platform === 'macos'
+        ? this._modifiers.meta && !this._modifiers.ctrl
+        : this._modifiers.ctrl && !this._modifiers.meta
+    if (!primaryModifierActive) return null
+
+    const key = def.data.toLowerCase()
+    if (key === 'c') return 'copy'
+    if (key === 'v') return 'paste'
+    if (key === 'a') return 'select-all'
+    return null
+  }
+
+  private _sendCommand(command: InputPanelCommand, fallbackData?: string) {
+    this.dispatchEvent(
+      new CustomEvent('input-panel:command', {
+        detail: { command, fallbackData },
+        bubbles: true,
+        composed: true,
+      })
+    )
+  }
+
+  private _sendKey(def: KeyDef, forceShift: boolean) {
+    const data = this._resolveTerminalData(def, forceShift)
+    if (!data) return
+
+    const command = this._resolvePrimaryCommand(def)
+    if (command) {
+      const fallbackData = this._hostPlatform() === 'macos' ? undefined : data
+      this._sendCommand(command, fallbackData)
+      return
     }
 
     this.dispatchEvent(

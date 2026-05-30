@@ -1,6 +1,9 @@
 import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
+import { DEFAULT_BATCH_TRANSLATION_TIMEOUT_MS } from '@openspecui/core/translator'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  isRenderableTranslationSegment,
+  retryTranslationSegment,
   translateMarkdownDocumentProgressively,
   type BrowserTranslationStatus,
   type BrowserTranslationSupportTableState,
@@ -32,6 +35,7 @@ export interface DocumentTranslationSession {
   error: string | null
   result: DocumentTranslationResult | null
   start: () => Promise<void>
+  retrySegment: (segmentId: string) => Promise<void>
   cancel: () => void
   reset: () => void
 }
@@ -199,6 +203,7 @@ export function useDocumentTranslation(
           targetLanguage: config.targetLanguage,
           displayMode: config.displayMode,
           signal: controller.signal,
+          timeoutMs: DEFAULT_BATCH_TRANSLATION_TIMEOUT_MS,
           engine: createTranslationEngineExecution(config),
           cache:
             config.cacheEnabled && !isStaticMode()
@@ -277,6 +282,93 @@ export function useDocumentTranslation(
     serviceStatus,
   ])
 
+  const retrySegment = useCallback(
+    async (segmentId: string) => {
+      if (!config?.enabled || !result) return
+      const segmentIndex = result.segments.findIndex((segment) => segment.id === segmentId)
+      const segment = result.segments[segmentIndex]
+      if (segmentIndex < 0 || !segment || segment.status !== 'error') return
+
+      const controller = new AbortController()
+      const retryingSegment = {
+        ...segment,
+        error: undefined,
+        status: 'pending' as const,
+      }
+      setResult((current) =>
+        current
+          ? {
+              ...current,
+              segments: current.segments.map((entry, index) =>
+                index === segmentIndex ? retryingSegment : entry
+              ),
+            }
+          : current
+      )
+
+      try {
+        const nextSegment = await retryTranslationSegment({
+          segment,
+          sourceLanguage: segment.sourceLanguage,
+          targetLanguage: config.targetLanguage,
+          signal: controller.signal,
+          timeoutMs: DEFAULT_BATCH_TRANSLATION_TIMEOUT_MS,
+          engine: createTranslationEngineExecution(config),
+          cache:
+            config.cacheEnabled && !isStaticMode()
+              ? {
+                  read: (keyHash) => trpcClient.translationCache.read.query({ keyHash }),
+                  write: (input) => trpcClient.translationCache.write.mutate(input),
+                }
+              : undefined,
+        })
+
+        setResult((current) =>
+          current
+            ? {
+                ...current,
+                segments: current.segments.map((entry, index) =>
+                  index === segmentIndex ? nextSegment : entry
+                ),
+              }
+            : current
+        )
+        setError((current) => {
+          if (nextSegment.status === 'error') return nextSegment.error ?? current
+          const nextResult = buildRetriedDocumentResult(result, segmentIndex, nextSegment)
+          return getDocumentTranslationFailureMessage(nextResult)
+        })
+        setStatus((current) => {
+          if (nextSegment.status === 'error')
+            return current === 'translated' ? 'translated' : 'error'
+          const nextResult = buildRetriedDocumentResult(result, segmentIndex, nextSegment)
+          return getDocumentTranslationFailureMessage(nextResult) ? 'error' : 'translated'
+        })
+      } catch (retryError) {
+        setResult((current) =>
+          current
+            ? {
+                ...current,
+                segments: current.segments.map((entry, index) =>
+                  index === segmentIndex
+                    ? {
+                        ...segment,
+                        status: 'error',
+                        error:
+                          retryError instanceof Error
+                            ? retryError.message
+                            : 'Translation retry failed.',
+                      }
+                    : entry
+                ),
+              }
+            : current
+        )
+      }
+    },
+    [config, result]
+  )
+
   useEffect(() => {
     latestStartRef.current = start
   }, [start])
@@ -295,6 +387,7 @@ export function useDocumentTranslation(
     error,
     result,
     start,
+    retrySegment,
     cancel,
     reset,
   }
@@ -303,7 +396,7 @@ export function useDocumentTranslation(
 function isDocumentTranslationSegment(
   segment: unknown
 ): segment is NonNullable<DocumentTranslationResult['segments'][number]> {
-  return typeof segment === 'object' && segment !== null && !Array.isArray(segment)
+  return isRenderableTranslationSegment(segment)
 }
 
 function getDocumentTranslationFailureMessage(result: DocumentTranslationResult): string | null {
@@ -359,4 +452,17 @@ function normalizeDocumentTranslationResult(
       isDocumentTranslationSegment
     ),
   }
+}
+
+function buildRetriedDocumentResult(
+  current: DocumentTranslationResult,
+  segmentIndex: number,
+  nextSegment: NonNullable<DocumentTranslationResult['segments'][number]>
+): DocumentTranslationResult {
+  return normalizeDocumentTranslationResult({
+    ...current,
+    segments: current.segments.map((entry, index) =>
+      index === segmentIndex ? nextSegment : entry
+    ),
+  })
 }

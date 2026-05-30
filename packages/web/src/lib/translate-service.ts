@@ -11,10 +11,12 @@ import { trpcClient } from '@/lib/trpc'
 import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
 import { checkLocalDirectionalModelLanguagePair } from '@openspecui/core/translation-language-pair'
 import {
+  DEFAULT_BATCH_TRANSLATION_TIMEOUT_MS,
   TRANSLATOR_CONTRACT_VERSION,
   isDirectionalManagedLocalTranslationEngineId,
   isManagedLocalTranslationEngineId,
   shouldShowTranslationEngineInstallGate,
+  type BatchTranslationResult,
   type LocalModelAssetState,
   type TranslationEngineId,
   type TranslationEngineLifecycleStatus,
@@ -345,6 +347,7 @@ export async function runSingleTranslation(input: {
   text: string
   model?: string
   selectedGroupId?: string
+  timeoutMs?: number
 }): Promise<string> {
   if (input.engineId === 'browser') {
     const translator = await createBrowserTranslationExecution().factory.create({
@@ -352,7 +355,11 @@ export async function runSingleTranslation(input: {
       targetLanguage: input.targetLanguage,
     })
     try {
-      return await readSingleBatchOutput(translator.batchTranslate([input.text]))
+      return await readSingleBatchOutput(
+        translator.batchTranslate([input.text], {
+          timeoutMs: input.timeoutMs ?? DEFAULT_BATCH_TRANSLATION_TIMEOUT_MS,
+        })
+      )
     } finally {
       translator.destroy?.()
     }
@@ -380,7 +387,11 @@ export async function runSingleTranslation(input: {
       ? input.selectedGroupId
       : undefined,
   })
-  return readSingleBatchOutput(translator.batchTranslate([input.text]))
+  return readSingleBatchOutput(
+    translator.batchTranslate([input.text], {
+      timeoutMs: input.timeoutMs ?? DEFAULT_BATCH_TRANSLATION_TIMEOUT_MS,
+    })
+  )
 }
 
 export class TrpcTranslatorFactory implements TranslatorFactory {
@@ -452,13 +463,18 @@ export class TrpcTranslator implements Translator {
 
   async *batchTranslate(
     inputs: string[],
-    options?: { instructions?: string; context?: string; signal?: AbortSignal }
-  ): AsyncGenerator<{ index: number; output: string }> {
+    options?: {
+      instructions?: string
+      context?: string
+      signal?: AbortSignal
+      timeoutMs?: number
+    }
+  ): AsyncGenerator<BatchTranslationResult> {
     if (options?.signal?.aborted) {
       throw new DOMException('Translation cancelled.', 'AbortError')
     }
 
-    const queue: Array<{ index: number; output: string }> = []
+    const queue: BatchTranslationResult[] = []
     let completed = false
     let thrown: Error | null = null
 
@@ -472,6 +488,7 @@ export class TrpcTranslator implements Translator {
         inputs,
         instructions: options?.instructions,
         context: options?.context,
+        timeoutMs: options?.timeoutMs ?? DEFAULT_BATCH_TRANSLATION_TIMEOUT_MS,
       },
       {
         onData(event) {
@@ -507,10 +524,15 @@ export class TrpcTranslator implements Translator {
 }
 
 export async function readSingleBatchOutput(
-  stream: AsyncGenerator<{ index: number; output: string }>
+  stream: AsyncGenerator<{
+    index: number
+    output?: string
+    error?: { kind: string; message: string }
+  }>
 ): Promise<string> {
   for await (const item of stream) {
-    return item.output
+    if (item.output !== undefined) return item.output
+    throw new Error(item.error?.message ?? 'Translator returned an error.')
   }
   throw new Error('Translator returned no batch output.')
 }

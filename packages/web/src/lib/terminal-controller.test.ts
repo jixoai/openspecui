@@ -24,6 +24,8 @@ class MockTerminal {
   protected customKeyEventHandler: ((event: KeyboardEvent) => boolean) | null = null
   disposed = false
   focusCalls = 0
+  selection = ''
+  pastes: string[] = []
 
   constructor(options: MockTerminalOptions) {
     this.options = options
@@ -60,6 +62,27 @@ class MockTerminal {
 
   write(_data: string): void {
     // noop
+  }
+
+  hasSelection(): boolean {
+    return this.selection.length > 0
+  }
+
+  getSelection(): string {
+    return this.selection
+  }
+
+  clearSelection(): void {
+    this.selection = ''
+  }
+
+  selectAll(): void {
+    this.selection = 'all-terminal-output'
+  }
+
+  paste(data: string): void {
+    this.pastes.push(data)
+    this.emitData(data)
   }
 
   focus(): void {
@@ -171,6 +194,25 @@ class MockGhosttyTerminal extends MockTerminal {
   }
 }
 
+interface MockClipboard {
+  readText: ReturnType<typeof vi.fn<() => Promise<string>>>
+  writeText: ReturnType<typeof vi.fn<(value: string) => Promise<void>>>
+}
+
+let clipboardDescriptor: PropertyDescriptor | undefined
+
+function installClipboard(text = ''): MockClipboard {
+  const clipboard: MockClipboard = {
+    readText: vi.fn(async () => text),
+    writeText: vi.fn(async () => undefined),
+  }
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: clipboard,
+  })
+  return clipboard
+}
+
 const ghosttyInitMock = vi.fn(async () => {})
 
 class MockInputPanelAddon {
@@ -181,10 +223,18 @@ class MockInputPanelAddon {
 
   attachListenerCalls = 0
   private onInput: (data: string) => void
+  private onCommand:
+    | ((command: 'copy' | 'paste' | 'select-all') => boolean | Promise<boolean>)
+    | null
   private isOpen = false
 
-  constructor(options: { onInput: (data: string) => void; showFab?: boolean }) {
+  constructor(options: {
+    onInput: (data: string) => void
+    onCommand?: (command: 'copy' | 'paste' | 'select-all') => boolean | Promise<boolean>
+    showFab?: boolean
+  }) {
     this.onInput = options.onInput
+    this.onCommand = options.onCommand ?? null
     MockInputPanelAddon.options.push({ showFab: options.showFab })
     MockInputPanelAddon.instances.push(this)
   }
@@ -223,6 +273,10 @@ class MockInputPanelAddon {
 
   emitInput(data: string): void {
     this.onInput(data)
+  }
+
+  async emitCommand(command: 'copy' | 'paste' | 'select-all'): Promise<boolean> {
+    return (await this.onCommand?.(command)) ?? false
   }
 
   static reset(): void {
@@ -342,6 +396,7 @@ async function loadTerminalController() {
 
 describe('terminal-controller PTY behavior', () => {
   beforeEach(() => {
+    clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
     window.history.replaceState({}, '', '/')
     vi.useFakeTimers()
     MockTerminal.reset()
@@ -356,6 +411,11 @@ describe('terminal-controller PTY behavior', () => {
   })
 
   afterEach(() => {
+    if (clipboardDescriptor) {
+      Object.defineProperty(navigator, 'clipboard', clipboardDescriptor)
+    } else {
+      Reflect.deleteProperty(navigator, 'clipboard')
+    }
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })
@@ -1069,6 +1129,158 @@ describe('terminal-controller PTY behavior', () => {
     expect(
       sent.some((msg) => msg.type === 'input' && msg.sessionId === 'pty-719' && msg.data === '\x05')
     ).toBe(true)
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('copies selected xterm text through the default OS copy keybinding', async () => {
+    const clipboard = installClipboard()
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-copy', platform: 'macos' })
+
+    const terminal = MockTerminal.instances.at(-1)
+    expect(terminal).toBeDefined()
+    terminal!.selection = 'selected terminal text'
+    terminal!.emitKeydown('c', 'KeyC', { metaKey: true })
+
+    await vi.waitFor(() => {
+      expect(clipboard.writeText).toHaveBeenCalledWith('selected terminal text')
+    })
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('pastes clipboard text through the default OS paste keybinding', async () => {
+    installClipboard('echo pasted\n')
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-paste', platform: 'macos' })
+
+    const terminal = MockTerminal.instances.at(-1)
+    expect(terminal).toBeDefined()
+    terminal!.emitKeydown('v', 'KeyV', { metaKey: true })
+
+    await vi.waitFor(() => {
+      expect(terminal!.pastes).toEqual(['echo pasted\n'])
+      expect(
+        parseSent(ws).some(
+          (msg) =>
+            msg.type === 'input' && msg.sessionId === 'pty-paste' && msg.data === 'echo pasted\n'
+        )
+      ).toBe(true)
+    })
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('uses the same copy keybinding in ghostty mode', async () => {
+    const clipboard = installClipboard()
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({
+      type: 'created',
+      requestId: localId,
+      sessionId: 'pty-ghostty-copy',
+      platform: 'macos',
+    })
+    await terminalController.setRendererEngine('ghostty')
+
+    const container = document.createElement('div')
+    terminalController.mount(localId, container)
+
+    const ghostty = MockGhosttyTerminal.instances.at(-1)
+    expect(ghostty).toBeDefined()
+    ghostty!.selection = 'ghostty selected text'
+    ghostty!.emitKeydown('c', 'KeyC', { metaKey: true })
+
+    await vi.waitFor(() => {
+      expect(clipboard.writeText).toHaveBeenCalledWith('ghostty selected text')
+    })
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('routes virtual input panel copy commands through the active terminal selection', async () => {
+    const clipboard = installClipboard()
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({
+      type: 'created',
+      requestId: localId,
+      sessionId: 'pty-panel-copy',
+      platform: 'macos',
+    })
+
+    const terminal = MockTerminal.instances.at(-1)
+    const addon = MockInputPanelAddon.instances.at(-1)
+    expect(terminal).toBeDefined()
+    expect(addon).toBeDefined()
+    terminal!.selection = 'virtual selected text'
+
+    await addon!.emitCommand('copy')
+
+    await vi.waitFor(() => {
+      expect(clipboard.writeText).toHaveBeenCalledWith('virtual selected text')
+    })
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('routes virtual input panel paste commands through the terminal paste API', async () => {
+    installClipboard('echo virtual paste\n')
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({
+      type: 'created',
+      requestId: localId,
+      sessionId: 'pty-panel-paste',
+      platform: 'macos',
+    })
+
+    const terminal = MockTerminal.instances.at(-1)
+    const addon = MockInputPanelAddon.instances.at(-1)
+    expect(terminal).toBeDefined()
+    expect(addon).toBeDefined()
+
+    await addon!.emitCommand('paste')
+
+    await vi.waitFor(() => {
+      expect(terminal!.pastes).toEqual(['echo virtual paste\n'])
+      expect(
+        parseSent(ws).some(
+          (msg) =>
+            msg.type === 'input' &&
+            msg.sessionId === 'pty-panel-paste' &&
+            msg.data === 'echo virtual paste\n'
+        )
+      ).toBe(true)
+    })
 
     terminalController.closeAll()
     unsubscribe()

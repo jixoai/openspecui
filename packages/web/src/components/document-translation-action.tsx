@@ -55,8 +55,8 @@ export function useDocumentTranslationRenderPlugin({
     resolvedTranslationConfig !== undefined && typeof markdown === 'string' && markdown.length > 0
 
   const translationProjection = useMemo(
-    () => createTranslationProjection(session.result),
-    [session.result]
+    () => createTranslationProjection(session.result, session.retrySegment),
+    [session.result, session.retrySegment]
   )
   const translationAction = useMemo(
     () =>
@@ -151,7 +151,10 @@ function hashString(value: string): string {
   return hash.toString(36)
 }
 
-function createTranslationProjection(result: ReturnType<typeof useDocumentTranslation>['result']): {
+function createTranslationProjection(
+  result: ReturnType<typeof useDocumentTranslation>['result'],
+  onRetrySegment: (segmentId: string) => Promise<void>
+): {
   headingProcessor?: MarkdownRenderProcessor
   blockAnnotations: MarkdownBlockAnnotation[]
 } {
@@ -185,7 +188,7 @@ function createTranslationProjection(result: ReturnType<typeof useDocumentTransl
             ? undefined
             : segmentByOffset.get(input.sourceStartOffset)
         if (!segment?.target || segment.kind !== 'heading') return undefined
-        return createTranslatedHeadingTransform(input, segment, result.displayMode)
+        return createTranslatedHeadingTransform(input, segment, result.displayMode, onRetrySegment)
       },
     },
     blockAnnotations: segments
@@ -218,6 +221,7 @@ function createTranslationProjection(result: ReturnType<typeof useDocumentTransl
                   sourceChildren: children,
                   segment,
                   displayMode: result.displayMode,
+                  onRetry: onRetrySegment,
                 }),
         })
       ),
@@ -235,10 +239,16 @@ function getRenderableTranslationSegments(
 function createTranslatedHeadingTransform(
   input: MarkdownHeadingTransformInput,
   segment: DocumentTranslationSegmentResult,
-  displayMode: DocumentTranslationConfig['displayMode']
+  displayMode: DocumentTranslationConfig['displayMode'],
+  onRetrySegment: (segmentId: string) => Promise<void>
 ): MarkdownHeadingTransformResult {
   const projectedTarget = segment.target ?? ''
-  const openSpecHeading = createTranslatedOpenSpecHeadingProjection(input, segment, displayMode)
+  const openSpecHeading = createTranslatedOpenSpecHeadingProjection(
+    input,
+    segment,
+    displayMode,
+    onRetrySegment
+  )
 
   if (openSpecHeading) {
     return {
@@ -265,6 +275,7 @@ function createTranslatedHeadingTransform(
         displayMode,
         targetChildren,
         className: 'document-translation-heading-segment',
+        onRetry: onRetrySegment,
       }),
       dataAttributes: createTranslationDataAttributes(segment, projectedTarget, displayMode),
     }
@@ -278,6 +289,7 @@ function createTranslatedHeadingTransform(
       displayMode,
       targetChildren,
       className: 'document-translation-heading-segment',
+      onRetry: onRetrySegment,
     }),
     dataAttributes: createTranslationDataAttributes(segment, projectedTarget, displayMode),
   }

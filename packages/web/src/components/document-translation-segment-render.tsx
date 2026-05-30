@@ -1,6 +1,7 @@
 import type { useDocumentTranslation } from '@/lib/use-document-translation'
 import type { DocumentTranslationConfig } from '@openspecui/core/document-translation'
 import type { ReactNode } from 'react'
+import { Button } from './button'
 import { renderTranslatedHastNodes } from './document-translation-hast-render'
 import { MarkdownInlineContent } from './markdown-content'
 
@@ -14,14 +15,17 @@ export function renderTranslationSegmentChildren({
   displayMode,
   targetChildren,
   className,
+  onRetry,
 }: {
   sourceChildren: ReactNode
   segment: DocumentTranslationSegmentResult
   displayMode: DocumentTranslationConfig['displayMode']
   targetChildren?: ReactNode
   className?: string
+  onRetry?: (segmentId: string) => void
 }) {
   const target = segment.target ?? ''
+  const showRetry = segment.status === 'error' && typeof onRetry === 'function'
   return (
     <span className={mergeClassName('document-translation-segment', className)}>
       {displayMode === 'bilingual' ? (
@@ -39,12 +43,28 @@ export function renderTranslationSegmentChildren({
         lang={segment.targetLanguage}
         data-translation-target=""
       >
-        {targetChildren ??
+        {showRetry ? (
+          <span className="inline-flex items-center gap-2">
+            {displayMode === 'direct' ? (
+              <span className="text-muted-foreground">{segment.source}</span>
+            ) : null}
+            <Button
+              size="sm"
+              variant="secondary"
+              aria-label="Retry translation"
+              onClick={() => onRetry(segment.id)}
+            >
+              Retry
+            </Button>
+          </span>
+        ) : (
+          (targetChildren ??
           (segment.targetNodes ? (
             renderTranslatedHastNodes(segment.targetNodes)
           ) : (
             <MarkdownInlineContent markdown={target} />
-          ))}
+          )))
+        )}
       </span>
     </span>
   )

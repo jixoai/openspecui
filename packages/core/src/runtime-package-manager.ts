@@ -157,7 +157,7 @@ function appendOptionalDependencyFlag(args: string[], field: RuntimePackageDepen
 
 function appendAllowBuildFlags(args: string[], packages: readonly string[]): void {
   for (const packageName of packages) {
-    args.push('--allow-build', packageName)
+    args.push(`--allow-build=${packageName}`)
   }
 }
 

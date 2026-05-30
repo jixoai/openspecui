@@ -21,6 +21,7 @@ function pointer(target: Element, type: string, x: number, y: number, id = 1) {
       pointerId: id,
       pointerType: 'mouse',
       bubbles: true,
+      composed: true,
       cancelable: true,
     })
   )
@@ -171,6 +172,42 @@ export const TabSwitching: StoryObj = {
 
     // Verify the active attribute changed
     expect(keysTab.hasAttribute('data-active')).toBe(true)
+  },
+}
+
+/**
+ * Toolbar controls must not leak pointer events to the terminal host. Terminal
+ * renderers treat outside pointerdown as a selection boundary, so tab switching
+ * must stay inside the panel.
+ */
+export const ToolbarEventBoundary: StoryObj = {
+  render: () => html`
+    <div data-terminal-boundary style="height: 100%;">
+      <input-panel layout="fixed" style="height: 100%;">
+        <input-method-tab slot="input"></input-method-tab>
+        <virtual-keyboard-tab slot="keys"></virtual-keyboard-tab>
+        <shortcut-tab slot="shortcuts"></shortcut-tab>
+        <virtual-trackpad-tab slot="trackpad"></virtual-trackpad-tab>
+      </input-panel>
+    </div>
+  `,
+  play: async ({ canvasElement }) => {
+    const panel = await getLitElement(canvasElement, 'input-panel')
+    const boundary = canvasElement.querySelector('[data-terminal-boundary]') as HTMLElement
+    const shadow = panel.shadowRoot!
+    const tabButtons = shadow.querySelectorAll('.tab-btn')
+    const keysTab = tabButtons[1] as HTMLButtonElement
+    const boundaryPointerDown = fn()
+
+    boundary.addEventListener('pointerdown', boundaryPointerDown)
+    pointer(keysTab, 'pointerdown', 20, 20)
+    keysTab.click()
+    await panel.updateComplete
+
+    expect(boundaryPointerDown).not.toHaveBeenCalled()
+    expect(keysTab.hasAttribute('data-active')).toBe(true)
+
+    boundary.removeEventListener('pointerdown', boundaryPointerDown)
   },
 }
 

@@ -1,9 +1,11 @@
 import type {
+  BatchTranslationResult,
   Translator,
   TranslatorFactory,
   TranslatorFactoryCreateOptions,
   TranslatorFactoryPrepareOptions,
 } from '@openspecui/core/translator'
+import { runControlledTranslationTask } from '@openspecui/core/translator'
 import type { TranslateBatchOptions, TranslationResult } from 'ctranslate2'
 import { join } from 'node:path'
 
@@ -92,22 +94,28 @@ class LocalCt2Translator implements Translator {
 
   async *batchTranslate(
     inputs: string[],
-    options?: { signal?: AbortSignal }
-  ): AsyncGenerator<{ index: number; output: string }> {
-    throwIfAborted(options?.signal)
-    const result = await this.translator.translateBatch(inputs, {
-      beamSize: this.runtimeConfig.beamSize ?? this.factoryOptions.beamSize,
-      maxBatchSize: this.runtimeConfig.maxBatchSize ?? this.factoryOptions.maxBatchSize,
-      returnScores: false,
-    })
-    throwIfAborted(options?.signal)
-    if (result.length !== inputs.length) {
-      throw new Error(
-        `CT2 translator returned ${result.length} outputs for ${inputs.length} inputs.`
-      )
-    }
-    for (const [index, entry] of result.entries()) {
-      yield { index, output: entry.text }
+    options?: { signal?: AbortSignal; timeoutMs?: number }
+  ): AsyncGenerator<BatchTranslationResult> {
+    for (const [index, input] of inputs.entries()) {
+      const controlled = await runControlledTranslationTask(async (signal) => {
+        throwIfAborted(signal)
+        const result = await this.translator.translateBatch([input], {
+          beamSize: this.runtimeConfig.beamSize ?? this.factoryOptions.beamSize,
+          maxBatchSize: this.runtimeConfig.maxBatchSize ?? this.factoryOptions.maxBatchSize,
+          returnScores: false,
+        })
+        throwIfAborted(signal)
+        if (result.length !== 1) {
+          throw new Error(`CT2 translator returned ${result.length} outputs for 1 input.`)
+        }
+        return result[0]?.text ?? ''
+      }, options)
+
+      if (controlled.ok) {
+        yield { index, output: controlled.value }
+        continue
+      }
+      yield { index, error: controlled.error }
     }
   }
 }

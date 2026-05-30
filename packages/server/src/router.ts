@@ -227,6 +227,7 @@ export const globalSettingsRouter = router({
         translationCache: TranslationCacheSettingsSchema.partial().optional(),
         translationEngines: z
           .object({
+            engineId: TranslationEngineIdSchema.optional(),
             openai: TranslationOpenAISettingsSchema.partial().optional(),
             local: TranslationLocalSettingsSchema.partial()
               .extend({
@@ -1535,6 +1536,10 @@ export const configRouter = router({
     return ctx.configManager.readConfig()
   }),
 
+  getPresence: publicProcedure.query(async ({ ctx }) => {
+    return ctx.configManager.readConfigPresence()
+  }),
+
   /** 获取实际使用的 CLI 命令（runner 解析后的 execute-path，字符串形式用于 UI 显示） */
   getEffectiveCliCommand: publicProcedure.query(async ({ ctx }) => {
     return ctx.configManager.getCliCommandString()
@@ -1582,6 +1587,12 @@ export const configRouter = router({
                   })
                   .optional(),
                 localCt2: z
+                  .object({
+                    model: z.string().min(1).optional(),
+                    selectedGroupId: z.string().min(1).nullable().optional(),
+                  })
+                  .optional(),
+                localLlama: z
                   .object({
                     model: z.string().min(1).optional(),
                     selectedGroupId: z.string().min(1).nullable().optional(),
@@ -1635,6 +1646,10 @@ export const configRouter = router({
   // Reactive subscription
   subscribe: publicProcedure.subscription(({ ctx }) => {
     return createReactiveSubscription(() => ctx.configManager.readConfig())
+  }),
+
+  subscribePresence: publicProcedure.subscription(({ ctx }) => {
+    return createReactiveSubscription(() => ctx.configManager.readConfigPresence())
   }),
 
   getTerminalShellDefaults: publicProcedure.query(async () => {

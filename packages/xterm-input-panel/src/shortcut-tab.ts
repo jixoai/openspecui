@@ -427,34 +427,14 @@ export class ShortcutTab extends LitElement {
     )
   }
 
-  private async _handleCommand(command: 'copy' | 'paste' | 'select-all') {
-    if (command === 'copy') {
-      const selection = window.getSelection()?.toString() ?? ''
-      if (!selection) return
-      try {
-        await navigator.clipboard.writeText(selection)
-      } catch {
-        document.execCommand('copy')
-      }
-      return
-    }
-
-    if (command === 'paste') {
-      try {
-        const text = await navigator.clipboard.readText()
-        if (text) this._send(text)
-      } catch {
-        // ignore clipboard permission failures
-      }
-      return
-    }
-
-    const active = document.activeElement
-    if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
-      active.select()
-      return
-    }
-    document.execCommand('selectAll')
+  private _handleCommand(command: 'copy' | 'paste' | 'select-all') {
+    this.dispatchEvent(
+      new CustomEvent('input-panel:command', {
+        detail: { command },
+        bubbles: true,
+        composed: true,
+      })
+    )
   }
 
   private _dpadData(
@@ -477,7 +457,7 @@ export class ShortcutTab extends LitElement {
     return dy < 0 ? '\x1b[A' : '\x1b[B'
   }
 
-  private async _activateShortcut(
+  private _activateShortcut(
     item: ShortcutItem,
     event: FederatedPointerEvent,
     width: number,
@@ -502,7 +482,7 @@ export class ShortcutTab extends LitElement {
       return
     }
 
-    await this._handleCommand(action.command)
+    this._handleCommand(action.command)
   }
 
   private _setActivePage(pageId: string) {

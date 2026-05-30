@@ -1,6 +1,7 @@
 import { terminalController } from '@/lib/terminal-controller'
 import '@xterm/xterm/css/xterm.css'
 import { useEffect, useRef } from 'react'
+import { TerminalTouchMouseOverlay } from './terminal-touch-mouse-overlay'
 
 interface Props {
   sessionId: string
@@ -24,6 +25,8 @@ export function XtermTerminal({ sessionId }: Props) {
       className="relative h-full w-full"
       style={{ minHeight: 0 }}
       onPointerDown={() => terminalController.focusSession(sessionId)}
-    />
+    >
+      <TerminalTouchMouseOverlay sessionId={sessionId} />
+    </div>
   )
 }

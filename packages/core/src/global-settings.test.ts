@@ -115,9 +115,83 @@ describe('GlobalSettingsManager', () => {
     expect(
       toPersistedGlobalSettings({
         ...DEFAULT_GLOBAL_SETTINGS,
+        translation: {
+          ...DEFAULT_GLOBAL_SETTINGS.translation,
+          enabled: true,
+          targetLanguage: 'de',
+          displayMode: 'bilingual',
+          cacheEnabled: true,
+        },
         translationCache: { entryLimit: 12000 },
       })
-    ).toEqual({ translationCache: { entryLimit: 12000 } })
+    ).toEqual({
+      translation: {
+        enabled: true,
+        targetLanguage: 'de',
+        displayMode: 'bilingual',
+        cacheEnabled: true,
+      },
+      translationCache: { entryLimit: 12000 },
+    })
+  })
+
+  it('persists global document translation settings outside project config', async () => {
+    await settingsManager.writeSettings({
+      translation: {
+        enabled: true,
+        targetLanguage: 'de',
+        displayMode: 'bilingual',
+        cacheEnabled: true,
+      },
+    })
+    clearCache()
+
+    const settings = await settingsManager.readSettings()
+    expect(settings.translation).toEqual({
+      enabled: true,
+      targetLanguage: 'de',
+      displayMode: 'bilingual',
+      cacheEnabled: true,
+    })
+    await expect(readFile(settingsPath, 'utf-8')).resolves.toBe(
+      '{\n  "translation": {\n    "enabled": true,\n    "targetLanguage": "de",\n    "displayMode": "bilingual",\n    "cacheEnabled": true\n  }\n}'
+    )
+
+    await settingsManager.writeSettings({
+      translation: {
+        enabled: false,
+        targetLanguage: 'zh',
+        displayMode: 'direct',
+        cacheEnabled: false,
+      },
+    })
+    clearCache()
+
+    await expect(settingsManager.readSettings()).resolves.toEqual(DEFAULT_GLOBAL_SETTINGS)
+  })
+
+  it('persists global translation engine selection outside project config', async () => {
+    await settingsManager.writeSettings({
+      translationEngines: {
+        engineId: 'local-llama',
+      },
+    })
+    clearCache()
+
+    const settings = await settingsManager.readSettings()
+    expect(settings.translationEngines.engineId).toBe('local-llama')
+    await expect(readFile(settingsPath, 'utf-8')).resolves.toBe(
+      '{\n  "translationEngines": {\n    "engineId": "local-llama"\n  }\n}'
+    )
+
+    await settingsManager.writeSettings({
+      translationEngines: {
+        engineId: 'browser',
+      },
+    })
+    clearCache()
+
+    await expect(settingsManager.readSettings()).resolves.toEqual(DEFAULT_GLOBAL_SETTINGS)
   })
 
   it('merges translator engine settings and prunes default siblings', async () => {

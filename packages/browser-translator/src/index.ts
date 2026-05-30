@@ -1,9 +1,11 @@
 import type {
+  BatchTranslationResult,
   Translator,
   TranslatorCreateMonitor,
   TranslatorFactory,
   TranslatorFactoryCreateOptions,
 } from '@openspecui/core/translator'
+import { runControlledTranslationTask } from '@openspecui/core/translator'
 
 export type BrowserTranslationAvailability =
   | 'available'
@@ -207,7 +209,10 @@ export async function prepareBrowserTranslator(
     )
     native.destroy?.()
 
-    const finalStatus = { availability: 'available' as const, message: 'Browser translator is ready.' }
+    const finalStatus = {
+      availability: 'available' as const,
+      message: 'Browser translator is ready.',
+    }
     options.onStatus?.(finalStatus)
     return finalStatus
   } catch (error) {
@@ -247,11 +252,18 @@ export class BrowserTranslatorFactory implements TranslatorFactory {
     return {
       async *batchTranslate(
         inputs: string[],
-        batchOptions?: { signal?: AbortSignal }
-      ): AsyncGenerator<{ index: number; output: string }> {
+        batchOptions?: { signal?: AbortSignal; timeoutMs?: number }
+      ): AsyncGenerator<BatchTranslationResult> {
         for (const [index, input] of inputs.entries()) {
-          const output = await native.translate(input, batchOptions)
-          yield { index, output }
+          const controlled = await runControlledTranslationTask(
+            (signal) => native.translate(input, { signal }),
+            batchOptions
+          )
+          if (controlled.ok) {
+            yield { index, output: controlled.value }
+            continue
+          }
+          yield { index, error: controlled.error }
         }
       },
       destroy() {

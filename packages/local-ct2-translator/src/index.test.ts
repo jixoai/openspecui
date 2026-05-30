@@ -157,7 +157,11 @@ describe('local-ct2-translator package', () => {
       targetLanguage: 'zh',
       model: '/tmp/models/ct2-root',
     })
-    const result: Array<{ index: number; output: string }> = []
+    const result: Array<{
+      index: number
+      output?: string
+      error?: { kind: string; message: string }
+    }> = []
     for await (const item of translator.batchTranslate(['Hello', 'World'])) {
       result.push(item)
     }
@@ -166,10 +170,53 @@ describe('local-ct2-translator package', () => {
       { index: 0, output: 'zh:Hello' },
       { index: 1, output: 'zh:World' },
     ])
-    expect(translateBatch).toHaveBeenCalledWith(['Hello', 'World'], {
+    expect(translateBatch).toHaveBeenNthCalledWith(1, ['Hello'], {
       beamSize: 3,
       maxBatchSize: 8,
       returnScores: false,
     })
+    expect(translateBatch).toHaveBeenNthCalledWith(2, ['World'], {
+      beamSize: 3,
+      maxBatchSize: 8,
+      returnScores: false,
+    })
+  })
+
+  it('reports timeout failures per input instead of throwing the whole CT2 batch', async () => {
+    const translateBatch = vi.fn(
+      () =>
+        new Promise<Array<{ text: string }>>((resolve) => {
+          setTimeout(() => resolve([{ text: 'zh:Hello' }]), 20)
+        })
+    )
+    const factory = createLocalCt2TranslatorFactory({
+      loadModule: async () => ({
+        Ct2Translator: class {
+          async translateBatch(source: string[]) {
+            return translateBatch(source)
+          }
+        },
+      }),
+    })
+
+    const translator = await factory.create({
+      sourceLanguage: 'en',
+      targetLanguage: 'zh',
+      model: '/tmp/models/ct2-root',
+    })
+    const result = []
+    for await (const item of translator.batchTranslate(['Hello'], { timeoutMs: 1 })) {
+      result.push(item)
+    }
+
+    expect(result).toEqual([
+      {
+        index: 0,
+        error: {
+          kind: 'timeout',
+          message: 'Translation task timed out after 1ms.',
+        },
+      },
+    ])
   })
 })

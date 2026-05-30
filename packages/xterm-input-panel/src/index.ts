@@ -11,6 +11,8 @@ export { blendHex, cssColorToHex, onThemeChange, resolvePixiTheme } from './pixi
 export type { PixiTheme } from './pixi-theme.js'
 export {
   InputPanelAddon,
+  type InputPanelCommand,
+  type InputPanelCommandOptions,
   type InputPanelHistoryItem,
   type InputPanelSettingsPayload,
 } from './xterm-addon.js'

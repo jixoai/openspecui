@@ -1263,6 +1263,52 @@ The system SHALL detect static rendering mode.
     expect(screen.queryByText('undefined')).toBeNull()
   })
 
+  it('ignores malformed translation segments that would otherwise override a valid heading patch', async () => {
+    translateMarkdownDocumentProgressivelyMock.mockImplementationOnce(async () => ({
+      displayMode: 'direct',
+      sourceLanguage: 'en',
+      targetLanguage: 'zh',
+      segments: [
+        {
+          id: 'valid-heading',
+          sourceStartOffset: 0,
+          sourceEndOffset: 7,
+          sourceKind: 'heading',
+          source: 'Hello',
+          translatorInput: 'Hello',
+          target: '你好',
+          kind: 'heading',
+          sourceLanguage: 'en',
+          targetLanguage: 'zh',
+          status: 'translated',
+        },
+        {
+          id: 'broken-heading',
+          sourceStartOffset: 0,
+          target: '损坏结果',
+          kind: 'heading',
+        },
+      ] as never,
+    }))
+
+    render(
+      <MarkdownViewer
+        markdown={'# Hello'}
+        translationConfig={{
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        }}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: '你好' })).toBeTruthy())
+    expect(screen.queryByRole('heading', { name: '损坏结果' })).toBeNull()
+  })
+
   it('rejects stale late patches after the markdown generation changes', async () => {
     let emitStalePatch: (() => void) | undefined
     let releaseStaleResult: (() => void) | undefined

@@ -1,3 +1,5 @@
+import '../lib/local-fonts.css'
+
 export function getRequestedFileUrl(): string {
   if (typeof window === 'undefined') return ''
   const params = new URLSearchParams(window.location.search)
@@ -44,8 +46,9 @@ function getPreviewThemeTokens(theme: 'light' | 'dark'): PreviewThemeTokens {
       border: 'oklch(0 0 0)',
       panelBorder: 'transparent',
       fontMono:
-        "'JetBrains Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace",
-      fontNav: "'Share Tech Mono', 'JetBrains Mono', SFMono-Regular, monospace",
+        "'JetBrains Mono Variable', 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace",
+      fontNav:
+        "'Share Tech Mono', 'JetBrains Mono Variable', 'JetBrains Mono', SFMono-Regular, monospace",
       radius: '8px',
       shadowSm: '4px 4px 0px 0px hsl(0 0% 0% / 1), 4px 1px 2px -1px hsl(0 0% 100% / 1)',
       shadowMd: '4px 4px 0px 0px hsl(0 0% 0% / 1), 4px 2px 4px -1px hsl(0 0% 100% / 1)',
@@ -63,47 +66,15 @@ function getPreviewThemeTokens(theme: 'light' | 'dark'): PreviewThemeTokens {
     mutedForeground: 'oklch(0.8452 0 0)',
     border: 'oklch(1 0 0)',
     panelBorder: 'transparent',
-    fontMono: "'JetBrains Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace",
-    fontNav: "'Share Tech Mono', 'JetBrains Mono', SFMono-Regular, monospace",
+    fontMono:
+      "'JetBrains Mono Variable', 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace",
+    fontNav:
+      "'Share Tech Mono', 'JetBrains Mono Variable', 'JetBrains Mono', SFMono-Regular, monospace",
     radius: '8px',
     shadowSm: '4px 4px 0px 0px hsl(0 0% 100% / 1), 4px 1px 2px -1px hsl(0 0% 0% / 1)',
     shadowMd: '4px 4px 0px 0px hsl(0 0% 100% / 1), 4px 2px 4px -1px hsl(0 0% 0% / 1)',
     shadowLg: '4px 4px 0px 0px hsl(0 0% 100% / 1), 4px 4px 6px -1px hsl(0 0% 0% / 1)',
   }
-}
-
-function ensurePreviewFonts(): void {
-  if (typeof document === 'undefined') return
-  if (document.head.querySelector('link[data-openspec-preview-fonts="stylesheet"]')) {
-    return
-  }
-
-  const lang =
-    (navigator.languages && navigator.languages[0]) ||
-    navigator.language ||
-    (navigator as typeof navigator & { userLanguage?: string }).userLanguage ||
-    ''
-  const useCnCdn = /^zh\b/i.test(lang)
-  const apiHost = useCnCdn ? 'https://fonts.googleapis.cn' : 'https://fonts.googleapis.com'
-  const staticHost = useCnCdn ? 'https://fonts.gstatic.cn' : 'https://fonts.gstatic.com'
-
-  const preconnectApi = document.createElement('link')
-  preconnectApi.rel = 'preconnect'
-  preconnectApi.href = apiHost
-  preconnectApi.dataset.openspecPreviewFonts = 'preconnect-api'
-
-  const preconnectStatic = document.createElement('link')
-  preconnectStatic.rel = 'preconnect'
-  preconnectStatic.href = staticHost
-  preconnectStatic.crossOrigin = 'anonymous'
-  preconnectStatic.dataset.openspecPreviewFonts = 'preconnect-static'
-
-  const stylesheet = document.createElement('link')
-  stylesheet.rel = 'stylesheet'
-  stylesheet.href = `${apiHost}/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Share+Tech+Mono&display=swap`
-  stylesheet.dataset.openspecPreviewFonts = 'stylesheet'
-
-  document.head.append(preconnectApi, preconnectStatic, stylesheet)
 }
 
 function applyPreviewThemeVariables(tokens: PreviewThemeTokens): void {
@@ -147,10 +118,7 @@ function applyPreviewThemeVariables(tokens: PreviewThemeTokens): void {
     '--preview-toolbar-background',
     'color-mix(in oklab, var(--preview-muted) 20%, var(--preview-background))'
   )
-  set(
-    '--preview-panel',
-    'color-mix(in oklab, var(--preview-muted) 28%, var(--preview-background))'
-  )
+  set('--preview-panel', 'color-mix(in oklab, var(--preview-muted) 28%, var(--preview-background))')
   set(
     '--preview-panel-secondary',
     'color-mix(in oklab, var(--preview-muted) 14%, var(--preview-background))'
@@ -210,10 +178,7 @@ function applyPreviewThemeVariables(tokens: PreviewThemeTokens): void {
   set('--media-tooltip-border', '1px solid var(--preview-border)')
   set('--media-tooltip-border-radius', '0px')
   set('--media-tooltip-color', 'var(--preview-foreground)')
-  set(
-    '--media-slider-track-bg',
-    'color-mix(in oklab, var(--preview-foreground) 24%, transparent)'
-  )
+  set('--media-slider-track-bg', 'color-mix(in oklab, var(--preview-foreground) 24%, transparent)')
   set(
     '--media-slider-track-progress-bg',
     'color-mix(in oklab, var(--preview-foreground) 36%, transparent)'
@@ -259,10 +224,7 @@ function applyPreviewThemeVariables(tokens: PreviewThemeTokens): void {
   set('--video-font-family', 'var(--preview-font-mono)')
   set('--video-border-radius', '0px')
   set('--video-time-bg', 'color-mix(in oklab, var(--preview-card) 82%, transparent)')
-  set(
-    '--video-scrim-bg',
-    'color-mix(in oklab, var(--preview-background) 56%, transparent)'
-  )
+  set('--video-scrim-bg', 'color-mix(in oklab, var(--preview-background) 56%, transparent)')
 
   const styleId = 'openspec-preview-media-overrides'
   let styleElement = document.getElementById(styleId)
@@ -308,7 +270,6 @@ export function getPreviewRootElement(rootId = 'root'): HTMLElement {
   } satisfies Partial<CSSStyleDeclaration>
 
   Object.assign(document.documentElement.style, fullHeightStyles)
-  ensurePreviewFonts()
   const theme = getRequestedTheme()
   const isDarkMode = theme === 'dark'
   const tokens = getPreviewThemeTokens(theme)

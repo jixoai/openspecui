@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import {
+  DocumentTranslationDisplayModeSchema,
   TranslationCacheSettingsSchema,
   type TranslationCacheSettings,
 } from './document-translation.js'
@@ -13,14 +14,30 @@ import {
 import { reactiveReadFile, updateReactiveFileCache } from './reactive-fs/index.js'
 import {
   TranslationEngineGlobalSettingsSchema,
+  TranslationEngineIdSchema,
   type TranslationEngineGlobalSettingsUpdate,
+  type TranslationEngineId,
   type TranslationLocalCt2Settings,
   type TranslationLocalLlamaSettings,
   type TranslationLocalSettings,
   type TranslationOpenAISettings,
 } from './translator.js'
 
+export const DocumentTranslationGlobalSettingsSchema = z.object({
+  enabled: z.boolean().default(false),
+  targetLanguage: z.string().min(1).default('zh'),
+  displayMode: DocumentTranslationDisplayModeSchema.default('direct'),
+  cacheEnabled: z.boolean().default(false),
+})
+
+export type DocumentTranslationGlobalSettings = z.infer<
+  typeof DocumentTranslationGlobalSettingsSchema
+>
+
 export const OpenSpecUIGlobalSettingsSchema = z.object({
+  translation: DocumentTranslationGlobalSettingsSchema.default(
+    DocumentTranslationGlobalSettingsSchema.parse({})
+  ),
   translationCache: TranslationCacheSettingsSchema.default(
     TranslationCacheSettingsSchema.parse({})
   ),
@@ -32,13 +49,16 @@ export const OpenSpecUIGlobalSettingsSchema = z.object({
 export type OpenSpecUIGlobalSettings = z.infer<typeof OpenSpecUIGlobalSettingsSchema>
 
 export type OpenSpecUIGlobalSettingsUpdate = {
+  translation?: Partial<DocumentTranslationGlobalSettings>
   translationCache?: Partial<TranslationCacheSettings>
   translationEngines?: TranslationEngineGlobalSettingsUpdate
 }
 
 export type PersistedOpenSpecUIGlobalSettings = {
+  translation?: Partial<OpenSpecUIGlobalSettings['translation']>
   translationCache?: Partial<TranslationCacheSettings>
   translationEngines?: {
+    engineId?: TranslationEngineId
     openai?: Partial<TranslationOpenAISettings>
     local?: Partial<TranslationLocalSettings>
     localCt2?: Partial<TranslationLocalCt2Settings>
@@ -50,8 +70,39 @@ export const DEFAULT_GLOBAL_SETTINGS: OpenSpecUIGlobalSettings =
   OpenSpecUIGlobalSettingsSchema.parse({})
 
 const PERSISTED_GLOBAL_SETTINGS_SANITIZE_RULES = [
+  { kind: 'object', path: ['translation'], fallback: {} },
+  {
+    kind: 'field',
+    path: ['translation', 'enabled'],
+    schema: DocumentTranslationGlobalSettingsSchema.shape.enabled,
+    fallback: DEFAULT_GLOBAL_SETTINGS.translation.enabled,
+  },
+  {
+    kind: 'field',
+    path: ['translation', 'targetLanguage'],
+    schema: DocumentTranslationGlobalSettingsSchema.shape.targetLanguage,
+    fallback: DEFAULT_GLOBAL_SETTINGS.translation.targetLanguage,
+  },
+  {
+    kind: 'field',
+    path: ['translation', 'displayMode'],
+    schema: DocumentTranslationGlobalSettingsSchema.shape.displayMode,
+    fallback: DEFAULT_GLOBAL_SETTINGS.translation.displayMode,
+  },
+  {
+    kind: 'field',
+    path: ['translation', 'cacheEnabled'],
+    schema: DocumentTranslationGlobalSettingsSchema.shape.cacheEnabled,
+    fallback: DEFAULT_GLOBAL_SETTINGS.translation.cacheEnabled,
+  },
   { kind: 'object', path: ['translationCache'], fallback: {} },
   { kind: 'object', path: ['translationEngines'], fallback: {} },
+  {
+    kind: 'field',
+    path: ['translationEngines', 'engineId'],
+    schema: TranslationEngineIdSchema,
+    fallback: DEFAULT_GLOBAL_SETTINGS.translationEngines.engineId,
+  },
   { kind: 'object', path: ['translationEngines', 'openai'], fallback: {} },
   { kind: 'object', path: ['translationEngines', 'local'], fallback: {} },
   { kind: 'object', path: ['translationEngines', 'localCt2'], fallback: {} },
@@ -102,7 +153,21 @@ export function toPersistedGlobalSettings(
   settings: OpenSpecUIGlobalSettings
 ): PersistedOpenSpecUIGlobalSettings {
   const persisted: PersistedOpenSpecUIGlobalSettings = {}
+  const translation: NonNullable<PersistedOpenSpecUIGlobalSettings['translation']> = {}
   const translationCache: NonNullable<PersistedOpenSpecUIGlobalSettings['translationCache']> = {}
+
+  if (settings.translation.enabled !== DEFAULT_GLOBAL_SETTINGS.translation.enabled) {
+    translation.enabled = settings.translation.enabled
+  }
+  if (settings.translation.targetLanguage !== DEFAULT_GLOBAL_SETTINGS.translation.targetLanguage) {
+    translation.targetLanguage = settings.translation.targetLanguage
+  }
+  if (settings.translation.displayMode !== DEFAULT_GLOBAL_SETTINGS.translation.displayMode) {
+    translation.displayMode = settings.translation.displayMode
+  }
+  if (settings.translation.cacheEnabled !== DEFAULT_GLOBAL_SETTINGS.translation.cacheEnabled) {
+    translation.cacheEnabled = settings.translation.cacheEnabled
+  }
 
   if (
     settings.translationCache.entryLimit !== DEFAULT_GLOBAL_SETTINGS.translationCache.entryLimit
@@ -110,6 +175,9 @@ export function toPersistedGlobalSettings(
     translationCache.entryLimit = settings.translationCache.entryLimit
   }
 
+  if (hasOwnEntries(translation)) {
+    persisted.translation = translation
+  }
   if (hasOwnEntries(translationCache)) {
     persisted.translationCache = translationCache
   }
@@ -117,6 +185,9 @@ export function toPersistedGlobalSettings(
   const translationEngines: NonNullable<PersistedOpenSpecUIGlobalSettings['translationEngines']> =
     {}
   const defaultTranslationEngines = DEFAULT_GLOBAL_SETTINGS.translationEngines
+  if (settings.translationEngines.engineId !== defaultTranslationEngines.engineId) {
+    translationEngines.engineId = settings.translationEngines.engineId
+  }
 
   const openai: Partial<TranslationOpenAISettings> = {}
   if (settings.translationEngines.openai.baseUrl !== defaultTranslationEngines.openai.baseUrl) {
@@ -145,6 +216,12 @@ export function toPersistedGlobalSettings(
   if (settings.translationEngines.local.hfEndpoint !== defaultTranslationEngines.local.hfEndpoint) {
     local.hfEndpoint = settings.translationEngines.local.hfEndpoint
   }
+  if (
+    settings.translationEngines.local.memoryBudgetPercent !==
+    defaultTranslationEngines.local.memoryBudgetPercent
+  ) {
+    local.memoryBudgetPercent = settings.translationEngines.local.memoryBudgetPercent
+  }
   if (hasOwnEntries(local)) {
     translationEngines.local = local
   }
@@ -165,6 +242,12 @@ export function toPersistedGlobalSettings(
   ) {
     localCt2.hfEndpoint = settings.translationEngines.localCt2.hfEndpoint
   }
+  if (
+    settings.translationEngines.localCt2.memoryBudgetPercent !==
+    defaultTranslationEngines.localCt2.memoryBudgetPercent
+  ) {
+    localCt2.memoryBudgetPercent = settings.translationEngines.localCt2.memoryBudgetPercent
+  }
   if (hasOwnEntries(localCt2)) {
     translationEngines.localCt2 = localCt2
   }
@@ -184,6 +267,12 @@ export function toPersistedGlobalSettings(
     defaultTranslationEngines.localLlama.hfEndpoint
   ) {
     localLlama.hfEndpoint = settings.translationEngines.localLlama.hfEndpoint
+  }
+  if (
+    settings.translationEngines.localLlama.memoryBudgetPercent !==
+    defaultTranslationEngines.localLlama.memoryBudgetPercent
+  ) {
+    localLlama.memoryBudgetPercent = settings.translationEngines.localLlama.memoryBudgetPercent
   }
   if (hasOwnEntries(localLlama)) {
     translationEngines.localLlama = localLlama
@@ -249,12 +338,17 @@ export class GlobalSettingsManager {
     const current = this.parseSettingsContent(currentContent)
     const merged = OpenSpecUIGlobalSettingsSchema.parse({
       ...current,
+      translation: {
+        ...current.translation,
+        ...update.translation,
+      },
       translationCache: {
         ...current.translationCache,
         ...update.translationCache,
       },
       translationEngines: {
         ...current.translationEngines,
+        engineId: update.translationEngines?.engineId ?? current.translationEngines.engineId,
         openai: mergeNullablePatch(
           current.translationEngines.openai,
           update.translationEngines?.openai

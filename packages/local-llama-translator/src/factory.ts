@@ -1,9 +1,11 @@
 import type {
+  BatchTranslationResult,
   Translator,
   TranslatorFactory,
   TranslatorFactoryCreateOptions,
   TranslatorFactoryPrepareOptions,
 } from '@openspecui/core/translator'
+import { runControlledTranslationTask } from '@openspecui/core/translator'
 import { join } from 'node:path'
 
 interface LlamaRuntimeModule {
@@ -15,11 +17,21 @@ interface LlamaRuntimeModule {
 }
 
 interface LlamaRuntime {
-  loadModel(options: { modelPath: string; gpuLayers?: number }): Promise<LlamaRuntimeModel>
+  loadModel(options: {
+    modelPath: string
+    gpuLayers?: number | 'auto' | 'max'
+    useMmap?: boolean
+    useMlock?: boolean
+    defaultContextFlashAttention?: boolean
+  }): Promise<LlamaRuntimeModel>
 }
 
 interface LlamaRuntimeModel {
-  createContext(options?: { contextSize?: number }): Promise<LlamaRuntimeContext>
+  createContext(options?: {
+    contextSize?: number
+    batchSize?: number
+    flashAttention?: boolean
+  }): Promise<LlamaRuntimeContext>
   dispose?: () => Promise<void> | void
 }
 
@@ -35,13 +47,31 @@ export interface LocalLlamaTranslatorFactoryOptions {
   contextSize?: number
   gpuLayers?: number
   systemPrompt?: string
+  batchSize?: number
+  flashAttention?: boolean
+  useMmap?: boolean
+  useMlock?: boolean
 }
 
 interface ResolvedLlamaRuntimeConfig {
   modelPath?: string
   contextSize?: number
-  gpuLayers?: number
+  gpuLayers?: number | 'auto' | 'max'
   systemPrompt?: string
+  batchSize?: number
+  flashAttention?: boolean
+  useMmap?: boolean
+  useMlock?: boolean
+}
+
+export interface LocalLlamaRuntimeProbeOptions {
+  model: string
+  cacheDir?: string
+  runtimeConfig?: Record<string, unknown>
+  loadModule?: () => Promise<LlamaRuntimeModule>
+  contextSize?: number
+  gpuLayers?: number
+  monitor?: TranslatorFactoryPrepareOptions['monitor']
 }
 
 const DEFAULT_SYSTEM_PROMPT =
@@ -55,22 +85,15 @@ export class LocalLlamaTranslatorFactory implements TranslatorFactory {
     if (!model) {
       throw new Error('A GGUF model id or runtime model path is required.')
     }
-    const module = await (this.options.loadModule ?? loadLlamaRuntimeModule)()
-    const resolvedConfig = readRuntimeConfig(options.runtimeConfig)
-    const runtimeModel = await loadRuntimeModel({
-      module,
+    await probeLocalLlamaRuntimeModel({
       model,
       cacheDir: this.options.cacheDir,
-      runtimeConfig: resolvedConfig,
-      defaultGpuLayers: this.options.gpuLayers,
+      runtimeConfig: options.runtimeConfig,
+      loadModule: this.options.loadModule,
+      contextSize: this.options.contextSize,
+      gpuLayers: this.options.gpuLayers,
       monitor: options.monitor,
     })
-    const context = await runtimeModel.createContext({
-      contextSize: resolvedConfig.contextSize ?? this.options.contextSize,
-    })
-    options.monitor?.setStatus({ message: `Llama model ${model} is ready.`, progress: 1 })
-    await disposeRuntimeNode(context)
-    await disposeRuntimeNode(runtimeModel)
   }
 
   async create(options: TranslatorFactoryCreateOptions): Promise<Translator> {
@@ -105,6 +128,33 @@ export function createLocalLlamaTranslatorFactory(
   return new LocalLlamaTranslatorFactory(options)
 }
 
+export async function probeLocalLlamaRuntimeModel(
+  input: LocalLlamaRuntimeProbeOptions
+): Promise<void> {
+  const module = await (input.loadModule ?? loadLlamaRuntimeModule)()
+  const resolvedConfig = readRuntimeConfig(input.runtimeConfig)
+  const runtimeModel = await loadRuntimeModel({
+    module,
+    model: input.model,
+    cacheDir: input.cacheDir,
+    runtimeConfig: resolvedConfig,
+    defaultGpuLayers: input.gpuLayers,
+    monitor: input.monitor,
+  })
+  try {
+    const context = await runtimeModel.createContext({
+      contextSize: resolvedConfig.contextSize ?? input.contextSize,
+    })
+    try {
+      input.monitor?.setStatus({ message: `Llama model ${input.model} is ready.`, progress: 1 })
+    } finally {
+      await disposeRuntimeNode(context)
+    }
+  } finally {
+    await disposeRuntimeNode(runtimeModel)
+  }
+}
+
 class LocalLlamaTranslator implements Translator {
   constructor(
     private readonly module: LlamaRuntimeModule,
@@ -120,40 +170,51 @@ class LocalLlamaTranslator implements Translator {
 
   async *batchTranslate(
     inputs: string[],
-    options?: { instructions?: string; context?: string; signal?: AbortSignal }
-  ): AsyncGenerator<{ index: number; output: string }> {
+    options?: { instructions?: string; context?: string; signal?: AbortSignal; timeoutMs?: number }
+  ): AsyncGenerator<BatchTranslationResult> {
     for (const [index, input] of inputs.entries()) {
-      throwIfAborted(options?.signal)
-      const context = await this.model.createContext({
-        contextSize:
-          this.options.runtimeConfig.contextSize ?? this.options.factoryOptions.contextSize,
-      })
-      try {
-        const session = new this.module.LlamaChatSession({
-          contextSequence: context.getSequence(),
-          systemPrompt:
-            this.options.runtimeConfig.systemPrompt ??
-            this.options.factoryOptions.systemPrompt ??
-            DEFAULT_SYSTEM_PROMPT,
+      const controlled = await runControlledTranslationTask(async (signal) => {
+        throwIfAborted(signal)
+        const context = await this.model.createContext({
+          contextSize:
+            this.options.runtimeConfig.contextSize ?? this.options.factoryOptions.contextSize,
+          batchSize: this.options.runtimeConfig.batchSize ?? this.options.factoryOptions.batchSize,
+          flashAttention:
+            this.options.runtimeConfig.flashAttention ?? this.options.factoryOptions.flashAttention,
         })
         try {
-          const output = await session.prompt(
-            buildTranslationPrompt({
-              sourceLanguage: this.options.sourceLanguage,
-              targetLanguage: this.options.targetLanguage,
-              text: input,
-              instructions: options?.instructions,
-              context: options?.context,
-            })
-          )
-          throwIfAborted(options?.signal)
-          yield { index, output: output.trim() }
+          const session = new this.module.LlamaChatSession({
+            contextSequence: context.getSequence(),
+            systemPrompt:
+              this.options.runtimeConfig.systemPrompt ??
+              this.options.factoryOptions.systemPrompt ??
+              DEFAULT_SYSTEM_PROMPT,
+          })
+          try {
+            const output = await session.prompt(
+              buildTranslationPrompt({
+                sourceLanguage: this.options.sourceLanguage,
+                targetLanguage: this.options.targetLanguage,
+                text: input,
+                instructions: options?.instructions,
+                context: options?.context,
+              })
+            )
+            throwIfAborted(signal)
+            return output.trim()
+          } finally {
+            await disposeRuntimeNode(session)
+          }
         } finally {
-          await disposeRuntimeNode(session)
+          await disposeRuntimeNode(context)
         }
-      } finally {
-        await disposeRuntimeNode(context)
+      }, options)
+
+      if (controlled.ok) {
+        yield { index, output: controlled.value }
+        continue
       }
+      yield { index, error: controlled.error }
     }
   }
 
@@ -179,6 +240,9 @@ async function loadRuntimeModel(input: {
       runtimeConfig: input.runtimeConfig,
     }),
     gpuLayers: input.runtimeConfig.gpuLayers ?? input.defaultGpuLayers,
+    useMmap: input.runtimeConfig.useMmap,
+    useMlock: input.runtimeConfig.useMlock,
+    defaultContextFlashAttention: input.runtimeConfig.flashAttention,
   })
 }
 
@@ -223,8 +287,12 @@ function readRuntimeConfig(
   return {
     modelPath: readString(runtimeConfig, 'modelPath'),
     contextSize: readNumber(runtimeConfig, 'contextSize'),
-    gpuLayers: readNumber(runtimeConfig, 'gpuLayers'),
+    gpuLayers: readGpuLayers(runtimeConfig?.gpuLayers),
     systemPrompt: readString(runtimeConfig, 'systemPrompt'),
+    batchSize: readNumber(runtimeConfig, 'batchSize'),
+    flashAttention: readBoolean(runtimeConfig, 'flashAttention'),
+    useMmap: readBoolean(runtimeConfig, 'useMmap'),
+    useMlock: readBoolean(runtimeConfig, 'useMlock'),
   }
 }
 
@@ -236,6 +304,20 @@ function readString(record: Record<string, unknown> | undefined, key: string): s
 function readNumber(record: Record<string, unknown> | undefined, key: string): number | undefined {
   const value = record?.[key]
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function readBoolean(
+  record: Record<string, unknown> | undefined,
+  key: string
+): boolean | undefined {
+  const value = record?.[key]
+  return typeof value === 'boolean' ? value : undefined
+}
+
+function readGpuLayers(value: unknown): ResolvedLlamaRuntimeConfig['gpuLayers'] {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (value === 'auto' || value === 'max') return value
+  return undefined
 }
 
 async function disposeRuntimeNode(

@@ -14,7 +14,10 @@ class MockWindow extends EventTarget {
       targetLanguage: string
       monitor?: (monitor: EventTarget) => void
       signal?: AbortSignal
-    }) => Promise<{ translate: (input: string) => Promise<string>; destroy?: () => void }>
+    }) => Promise<{
+      translate: (input: string, options?: { signal?: AbortSignal }) => Promise<string>
+      destroy?: () => void
+    }>
   }
 }
 
@@ -42,12 +45,7 @@ describe('browser translator package', () => {
     const win = new MockWindow()
     win.Translator = {
       availability: vi.fn(
-        async ({
-          sourceLanguage,
-        }: {
-          sourceLanguage: string
-          targetLanguage: string
-        }) => {
+        async ({ sourceLanguage }: { sourceLanguage: string; targetLanguage: string }) => {
           switch (sourceLanguage) {
             case 'en':
               return 'available'
@@ -247,17 +245,62 @@ describe('browser translator package', () => {
       monitor: { setStatus: status },
     })
 
-    const outputs: Array<{ index: number; output: string }> = []
+    const outputs: Array<{
+      index: number
+      output?: string
+      error?: { kind: string; message: string }
+    }> = []
     for await (const item of translator.batchTranslate(['<x1>Hello</x1>'])) {
       outputs.push(item)
     }
     expect(outputs).toEqual([{ index: 0, output: 'zh:<x1>Hello</x1>' }])
-    expect(translate).toHaveBeenCalledWith('<x1>Hello</x1>', undefined)
+    expect(translate).toHaveBeenCalledWith(
+      '<x1>Hello</x1>',
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(status).toHaveBeenCalledWith(
       expect.objectContaining({
         message: 'Downloading browser translation support 25%.',
         progress: 0.25,
       })
     )
+  })
+
+  it('reports per-input timeout failures without aborting the whole browser batch contract', async () => {
+    const translate = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          setTimeout(() => resolve('late'), 20)
+        })
+    )
+    const win = new MockWindow()
+    win.Translator = {
+      availability: vi.fn(async () => 'available'),
+      create: vi.fn(async () => ({ translate })),
+    }
+
+    const translator = await new BrowserTranslatorFactory(win as Window).create({
+      sourceLanguage: 'en',
+      targetLanguage: 'zh',
+    })
+
+    const outputs: Array<{
+      index: number
+      output?: string
+      error?: { kind: string; message: string }
+    }> = []
+    for await (const item of translator.batchTranslate(['Hello'], { timeoutMs: 1 })) {
+      outputs.push(item)
+    }
+
+    expect(outputs).toEqual([
+      {
+        index: 0,
+        error: {
+          kind: 'timeout',
+          message: 'Translation task timed out after 1ms.',
+        },
+      },
+    ])
   })
 })

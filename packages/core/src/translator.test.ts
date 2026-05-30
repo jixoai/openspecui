@@ -5,8 +5,11 @@ import {
   getManagedLocalTranslationEngineManifest,
   getTranslationEngineLifecycleMessage,
   getTranslationEngineManifest,
+  isBatchTranslationAbort,
   isDirectionalManagedLocalTranslationEngineId,
   isManagedLocalTranslationEngineId,
+  normalizeBatchTranslationError,
+  runControlledTranslationTask,
   shouldShowTranslationEngineInstallGate,
   type TranslationModelCandidate,
 } from './translator.js'
@@ -129,5 +132,54 @@ describe('translator platform contract', () => {
 
     expect(shouldShowTranslationEngineInstallGate(readyLifecycle)).toBe(false)
     expect(getTranslationEngineLifecycleMessage(readyLifecycle)).toBe('Runtime is ready.')
+  })
+
+  it('normalizes timeout and memory-limit translation task failures', () => {
+    expect(
+      normalizeBatchTranslationError(new Error('Translation task timed out after 15000ms.'))
+    ).toEqual({
+      kind: 'timeout',
+      message: 'Translation task timed out after 15000ms.',
+    })
+    expect(normalizeBatchTranslationError(new Error('ERR_WORKER_OUT_OF_MEMORY'))).toEqual({
+      kind: 'memory-limit',
+      message: 'ERR_WORKER_OUT_OF_MEMORY',
+    })
+  })
+
+  it('runs controlled translation tasks with per-task timeout truth', async () => {
+    const result = await runControlledTranslationTask(
+      () =>
+        new Promise<string>((resolve) => {
+          setTimeout(() => resolve('late'), 25)
+        }),
+      { timeoutMs: 1 }
+    )
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        kind: 'timeout',
+        message: 'Translation task timed out after 1ms.',
+      },
+    })
+  })
+
+  it('treats caller cancellation as a batch abort instead of a runtime error', async () => {
+    const controller = new AbortController()
+    controller.abort(new Error('Translation cancelled by user.'))
+    const result = await runControlledTranslationTask(async () => 'unused', {
+      signal: controller.signal,
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        kind: 'abort',
+        message: 'Translation cancelled by user.',
+      },
+    })
+    if (result.ok) throw new Error('Expected abort result.')
+    expect(isBatchTranslationAbort(result.error, controller.signal)).toBe(true)
   })
 })

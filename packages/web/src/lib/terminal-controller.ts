@@ -13,13 +13,16 @@ import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import {
   InputPanelAddon,
+  type InputPanelCommand,
   type InputPanelLayout,
   type InputPanelSettingsPayload,
 } from 'xterm-input-panel'
 import { getPtyWsUrl } from './api-config'
+import { loadGoogleFontsStylesheet } from './google-font-loader'
 import { navController } from './nav-controller'
 import { TerminalBellSoundEngine } from './terminal-bell-sound-engine'
 import { TerminalInputHistoryStore } from './terminal-input-history'
+import { TerminalKeybindingRegistry } from './terminal-keybindings'
 import {
   resolveTerminalTheme,
   type ResolvedTerminalTheme,
@@ -69,6 +72,11 @@ type TerminalLike = {
   open: (container: HTMLElement) => void
   focus?: () => void
   attachCustomKeyEventHandler: (handler: (event: KeyboardEvent) => boolean) => void
+  hasSelection?: () => boolean
+  getSelection?: () => string
+  clearSelection?: () => void
+  selectAll?: () => void
+  paste?: (data: string) => void
   write: (data: string) => void
   dispose: () => void
 }
@@ -84,7 +92,8 @@ type GhosttyTerminalLike = TerminalLike & {
 type TerminalKeyEventResult = 'allow' | 'block'
 type TerminalActivationListener = (localSessionId: string) => void
 
-const DEFAULT_FONT_FAMILY = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace'
+const DEFAULT_FONT_FAMILY =
+  '"JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace'
 
 const DEFAULT_TERMINAL_CONFIG: TerminalConfig = {
   fontSize: 13,
@@ -140,6 +149,11 @@ export const GOOGLE_FONT_PRESETS = [
   'Ubuntu Mono',
   'Space Mono',
 ]
+
+const LOCAL_FONT_FAMILY_ALIASES: Readonly<Record<string, string>> = {
+  'JetBrains Mono': '"JetBrains Mono Variable"',
+  'Share Tech Mono': '"Share Tech Mono"',
+}
 
 // --- Font loading helpers ---
 
@@ -212,16 +226,10 @@ function loadGoogleFont(fontName: string): void {
   const key = `google:${fontName}`
   if (loadedFontSources.has(key)) return
 
-  const lang = navigator.language ?? ''
-  const apiHost = /^zh\b/i.test(lang)
-    ? 'https://fonts.googleapis.cn'
-    : 'https://fonts.googleapis.com'
-
-  const link = document.createElement('link')
-  link.rel = 'stylesheet'
-  link.href = `${apiHost}/css2?family=${fontName.replace(/ /g, '+')}&display=swap`
-  link.dataset.fontSrc = key
-  document.head.appendChild(link)
+  const link = loadGoogleFontsStylesheet({ families: [fontName] })
+  if (link) {
+    link.dataset.fontSrc = key
+  }
   loadedFontSources.add(key)
 }
 
@@ -302,6 +310,7 @@ class TerminalController {
   private snapshotCache: TerminalSnapshot | null = null
   private inputHistoryStore = new TerminalInputHistoryStore()
   private bellSoundEngine = new TerminalBellSoundEngine()
+  private keybindings = new TerminalKeybindingRegistry()
   private ghosttyModule: GhosttyModule | null = null
   private ghosttyInitPromise: Promise<GhosttyModule> | null = null
   private appDarkMode = false
@@ -541,6 +550,7 @@ class TerminalController {
   private createInputPanelAddon(sessionId: string, platform: PtyPlatform): InputPanelAddon {
     return new InputPanelAddon({
       onInput: (data) => this.writeToSession(sessionId, data),
+      onCommand: (command) => this.runInputPanelCommand(sessionId, command),
       getHistory: async () => this.inputHistoryStore.list(),
       addHistory: async (text) => this.inputHistoryStore.add(text),
       subscribeHistory: (listener) => this.inputHistoryStore.subscribe(listener),
@@ -552,6 +562,21 @@ class TerminalController {
         await this.inputHistoryStore.setLimit(settings.historyLimit)
       },
     })
+  }
+
+  private runInputPanelCommand(sessionId: string, command: InputPanelCommand): boolean {
+    const instance = this.instances.get(sessionId)
+    if (!instance) return false
+
+    const result = this.keybindings.runCommand(command, {
+      terminal: instance.terminal,
+      writeInput: (data) => this.writeToSession(sessionId, data),
+      zoomFont: (delta) => this.zoomFont(delta),
+      resetFontSize: () => this.resetFontSize(),
+      onAsyncError: (error) => console.error('[terminal] input panel command failed:', error),
+    })
+
+    return result === 'block'
   }
 
   private applyGhosttyBackground(instance: TerminalInstance, container: HTMLElement): void {
@@ -637,21 +662,19 @@ class TerminalController {
         return this.getKeyEventResult(engine, 'allow')
       }
 
-      let handled = false
+      const keybindingResult = this.keybindings.handleKeyEvent(event, {
+        terminal,
+        writeInput,
+        zoomFont: (delta) => this.zoomFont(delta),
+        resetFontSize: () => this.resetFontSize(),
+        onAsyncError: (error) => console.error('[terminal] keybinding failed:', error),
+      })
 
-      if ((event.key === '=' || event.key === '+') && mod) {
-        this.zoomFont(1)
-        handled = true
+      if (keybindingResult === 'block') {
+        event.preventDefault()
+        event.stopPropagation()
       }
-      if (event.key === '-' && mod && !handled) {
-        this.zoomFont(-1)
-        handled = true
-      }
-      if (event.key === '0' && mod && !handled) {
-        this.resetFontSize()
-        handled = true
-      }
-      return this.getKeyEventResult(engine, handled ? 'block' : 'allow')
+      return this.getKeyEventResult(engine, keybindingResult)
     })
   }
 
@@ -1071,7 +1094,10 @@ class TerminalController {
     const resolved: string[] = []
 
     for (const entry of entries) {
-      if (GOOGLE_FONT_PRESETS.includes(entry)) {
+      const localFontFamily = LOCAL_FONT_FAMILY_ALIASES[entry]
+      if (localFontFamily) {
+        resolved.push(localFontFamily)
+      } else if (GOOGLE_FONT_PRESETS.includes(entry)) {
         loadGoogleFont(entry)
         resolved.push(entry)
       } else {

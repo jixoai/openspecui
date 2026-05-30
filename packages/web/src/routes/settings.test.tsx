@@ -61,11 +61,13 @@ function createLocalModelCatalogItemForTest(
 
 const {
   useConfigSubscriptionMock,
+  useConfigPresenceSubscriptionMock,
   useGlobalSettingsSubscriptionMock,
   staticModeMock,
   useServerStatusMock,
 } = vi.hoisted(() => ({
   useConfigSubscriptionMock: vi.fn(),
+  useConfigPresenceSubscriptionMock: vi.fn(),
   useGlobalSettingsSubscriptionMock: vi.fn(),
   staticModeMock: vi.fn(() => false),
   useServerStatusMock: vi.fn(),
@@ -624,6 +626,7 @@ const {
     getLifecycle: vi.fn(),
     install: vi.fn(),
     installStream: vi.fn(),
+    select: vi.fn(),
   }
   const localModelsMock = {
     listLocal: vi.fn(),
@@ -2014,6 +2017,12 @@ function resolveQueryResultForKey(key: string) {
   if (key === 'globalSettings.get') {
     return {
       data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        },
         translationCache: { entryLimit: 10000 },
         translationEngines: {
           openai: { baseUrl: '', token: '', model: 'gpt-4.1-mini' },
@@ -2204,6 +2213,7 @@ vi.mock('@/lib/use-server-status', () => ({
 
 vi.mock('@/lib/use-subscription', () => ({
   useConfigSubscription: () => useConfigSubscriptionMock(),
+  useConfigPresenceSubscription: () => useConfigPresenceSubscriptionMock(),
   useGlobalSettingsSubscription: () => useGlobalSettingsSubscriptionMock(),
 }))
 
@@ -2435,6 +2445,9 @@ vi.mock('@/lib/trpc', () => ({
       batchTranslate: {
         subscribe: translationEnginesMock.batchTranslate,
       },
+      select: {
+        mutate: translationEnginesMock.select,
+      },
     },
     localModels: {
       listLocal: {
@@ -2563,10 +2576,73 @@ describe('Settings', () => {
     vi.useRealTimers()
   })
   beforeEach(() => {
+    useConfigPresenceSubscriptionMock.mockImplementation(() => {
+      const config = useConfigSubscriptionMock().data as
+        | {
+            translation?: {
+              enabled?: unknown
+              targetLanguage?: unknown
+              displayMode?: unknown
+              cacheEnabled?: unknown
+              engineId?: unknown
+              engines?: {
+                local?: unknown
+                localCt2?: unknown
+                localLlama?: unknown
+                openai?: unknown
+              }
+            }
+          }
+        | undefined
+      return {
+        data: {
+          translation: {
+            enabled:
+              config?.translation !== undefined &&
+              Object.prototype.hasOwnProperty.call(config.translation, 'enabled'),
+            targetLanguage:
+              config?.translation !== undefined &&
+              Object.prototype.hasOwnProperty.call(config.translation, 'targetLanguage'),
+            displayMode:
+              config?.translation !== undefined &&
+              Object.prototype.hasOwnProperty.call(config.translation, 'displayMode'),
+            cacheEnabled:
+              config?.translation !== undefined &&
+              Object.prototype.hasOwnProperty.call(config.translation, 'cacheEnabled'),
+            engineId:
+              config?.translation !== undefined &&
+              Object.prototype.hasOwnProperty.call(config.translation, 'engineId'),
+            engines: {
+              local:
+                config?.translation?.engines !== undefined &&
+                Object.prototype.hasOwnProperty.call(config.translation.engines, 'local'),
+              localCt2:
+                config?.translation?.engines !== undefined &&
+                Object.prototype.hasOwnProperty.call(config.translation.engines, 'localCt2'),
+              localLlama:
+                config?.translation?.engines !== undefined &&
+                Object.prototype.hasOwnProperty.call(config.translation.engines, 'localLlama'),
+              openai:
+                config?.translation?.engines !== undefined &&
+                Object.prototype.hasOwnProperty.call(config.translation.engines, 'openai'),
+            },
+          },
+        },
+        isLoading: false,
+        error: null,
+      }
+    })
     useGlobalSettingsSubscriptionMock.mockReturnValue({
       data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        },
         translationCache: { entryLimit: 10000 },
         translationEngines: {
+          engineId: 'browser',
           extensions: {
             engines: {
               local: { status: 'not-installed' },
@@ -2649,6 +2725,9 @@ describe('Settings', () => {
     expect(
       screen.getByText(/Package payload is about 5 KB; browser language packs are managed/)
     ).toBeTruthy()
+    expect(
+      screen.getByText(/Run Test Translate manually to validate runtime errors and latency/)
+    ).toBeTruthy()
     expect(screen.getByRole('switch', { name: 'Enable translation cache' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('switch', { name: 'Enable document translation' }))
@@ -2659,6 +2738,60 @@ describe('Settings', () => {
     await waitFor(() =>
       expect(browserTranslationMock.scan).toHaveBeenCalledWith('zh', expect.any(Object))
     )
+  })
+
+  it('stores document translation scalar preferences globally when the project has no overrides', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {},
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    fireEvent.click(screen.getByRole('switch', { name: 'Enable document translation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Bilingual' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Enable translation cache' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Translation target language' }))
+    const dialog = getTranslationTargetLanguageDialog()
+    dispatchPopoverToggle(dialog, 'open')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search translation languages' }), {
+      target: { value: '繁體' },
+    })
+    fireEvent.click(
+      await within(dialog).findByRole('option', {
+        name: /Chinese \(Traditional\) 繁體中文/,
+      })
+    )
+
+    await waitFor(() =>
+      expect(updateGlobalSettingsMock).toHaveBeenCalledWith({ translation: { enabled: true } })
+    )
+    expect(updateGlobalSettingsMock).toHaveBeenCalledWith({
+      translation: { displayMode: 'bilingual' },
+    })
+    expect(updateGlobalSettingsMock).toHaveBeenCalledWith({
+      translation: { cacheEnabled: true },
+    })
+    expect(updateGlobalSettingsMock).toHaveBeenCalledWith({
+      translation: { targetLanguage: 'zh-Hant' },
+    })
+    expect(updateConfigMock).not.toHaveBeenCalledWith({ translation: { enabled: true } })
+    expect(updateConfigMock).not.toHaveBeenCalledWith({ translation: { displayMode: 'bilingual' } })
+    expect(updateConfigMock).not.toHaveBeenCalledWith({ translation: { cacheEnabled: true } })
+    expect(updateConfigMock).not.toHaveBeenCalledWith({
+      translation: { targetLanguage: 'zh-Hant' },
+    })
   })
 
   it('checks browser translation support automatically after selecting the browser engine', async () => {
@@ -2694,7 +2827,7 @@ describe('Settings', () => {
     fireEvent.click(browserOption)
 
     await waitFor(() =>
-      expect(updateConfigMock).toHaveBeenCalledWith({ translation: { engineId: 'browser' } })
+      expect(translationEnginesMock.select).toHaveBeenCalledWith({ engineId: 'browser' })
     )
     await waitFor(() =>
       expect(browserTranslationMock.scan).toHaveBeenCalledWith('zh', expect.any(Object))
@@ -2914,6 +3047,99 @@ describe('Settings', () => {
       expect(screen.getByText(/npm install @huggingface\/transformers@~4\.2\.0/)).toBeTruthy()
     )
     expect(screen.getByText(/added 1 package/)).toBeTruthy()
+  })
+
+  it('keeps install logs visible when service engine installation fails', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+          engineId: 'local',
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+    reactQueryMockStore.setQueryData(
+      ['translationEngines.list'],
+      [
+        {
+          id: 'browser',
+          label: 'Browser',
+          description: 'Uses the browser Translator API and future browser-side providers.',
+          technicalSummary:
+            'Browser-native Web Translator adapter. Package payload is about 5 KB; browser language packs are managed by the browser.',
+          runtime: 'browser',
+          selected: false,
+          installStatus: { state: 'installed', message: 'Browser translator is built in.' },
+        },
+        {
+          id: 'local',
+          label: 'Local-Transformers',
+          description:
+            'Runs a bundled local Transformers.js translation runtime with managed model files.',
+          technicalSummary:
+            'Server-side Transformers.js local adapter. Package payload is about 5 KB; selected model groups are downloaded separately and can range from tens to hundreds of MB.',
+          runtime: 'server',
+          selected: true,
+          installStatus: {
+            state: 'not-installed',
+            message:
+              'Install the Local-Transformers runtime package to enable server-side translation.',
+          },
+          model: 'Xenova/opus-mt-no-de',
+        },
+      ]
+    )
+    translationEnginesMock.installStream.mockImplementationOnce((_input, handlers) => {
+      const unsubscribe = vi.fn()
+      queueMicrotask(() => {
+        if (unsubscribe.mock.calls.length > 0) return
+        handlers.onData({
+          type: 'status',
+          status: { state: 'installing', message: 'Installing Local-Transformers runtime.' },
+        })
+        window.setTimeout(() => {
+          if (unsubscribe.mock.calls.length > 0) return
+          handlers.onData({
+            type: 'log',
+            stream: 'stderr',
+            text: 'ERR_PNPM_ALLOW_BUILD_MISSING_PACKAGE\n',
+          })
+        }, 0)
+        window.setTimeout(() => {
+          if (unsubscribe.mock.calls.length > 0) return
+          handlers.onData({
+            type: 'exit',
+            status: {
+              state: 'error',
+              message: 'Local-Transformers runtime installation failed.',
+              error: 'pnpm add exited with code 1.',
+            },
+          })
+        }, 1)
+      })
+      return { unsubscribe }
+    })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Install translation engine' }))
+    await waitFor(() =>
+      expect(screen.getByText(/ERR_PNPM_ALLOW_BUILD_MISSING_PACKAGE/)).toBeTruthy()
+    )
+    expect(screen.getByRole('button', { name: 'Install translation engine' })).toBeTruthy()
   })
 
   it('shows downstream engine cards again after service engine installation completes', async () => {
@@ -3293,6 +3519,58 @@ describe('Settings', () => {
     expect(screen.getByRole('button', { name: 'es -> zh' })).toHaveClass('text-emerald-700')
   }, 10000)
 
+  it('prefers the first downloaded browser language pair as the default selection', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    browserTranslationMock.scan.mockResolvedValueOnce({
+      state: 'ready',
+      message: 'Browser translation pairs: 2 ready.',
+      table: {
+        targetLanguage: 'zh',
+        checked: 2,
+        total: 2,
+        updatedAt: 1,
+        rows: [
+          {
+            sourceLanguage: 'en',
+            targetLanguage: 'zh',
+            availability: 'downloadable',
+          },
+          {
+            sourceLanguage: 'es',
+            targetLanguage: 'zh',
+            availability: 'available',
+          },
+        ],
+      },
+    })
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+          engineId: 'browser',
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    expect(screen.getByRole('button', { name: 'en -> zh' })).toHaveClass('border-dashed')
+    expect(screen.getByRole('button', { name: 'es -> zh' })).toHaveClass('border-solid')
+    expect(screen.getByText('Spanish Español to Chinese 中文')).toBeTruthy()
+  })
+
   it('uses project Local model settings before global settings resolve', async () => {
     vi.stubGlobal(
       'matchMedia',
@@ -3574,6 +3852,72 @@ describe('Settings', () => {
     expect(screen.queryByText('model.bin')).toBeNull()
   })
 
+  it('keeps the CT2 download card in loading state when artifact refresh has only produced an empty plan shell', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    const modelId = 'ooeoeo/opus-mt-en-zh-ct2-float16'
+    const emptyPlan: TranslationModelDownloadPlan = {
+      modelId,
+      estimatedTotalBytes: 0,
+      selectedGroupId: 'float16',
+      files: [],
+      groups: [],
+    }
+    localCt2ModelsMock.panelState.mockResolvedValue({
+      modelId,
+      selectedGroupId: 'float16',
+      asset: createLocalAssetStateForTest({
+        modelId,
+        status: 'not-downloaded',
+        selected: true,
+        selectedGroupId: 'float16',
+        progress: 0,
+        resumable: false,
+        plan: emptyPlan,
+        files: [],
+        profileLoad: {
+          status: 'loading',
+          message: 'Loading CT2 model artifacts.',
+          updatedAt: 101,
+        },
+        updatedAt: 101,
+      }),
+      downloadPlan: emptyPlan,
+    })
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+          engineId: 'local-ct2',
+          engines: {
+            local: {},
+            localCt2: {
+              model: modelId,
+              selectedGroupId: 'float16',
+            },
+            openai: {},
+          },
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    expect(await screen.findByText('Loading CT2 model artifacts.')).toBeTruthy()
+    expect(screen.queryByText('No runtime download plan available.')).toBeNull()
+  })
+
   it('does not refresh remote Local model profiles on initial mount when local profiles exist', async () => {
     vi.stubGlobal(
       'matchMedia',
@@ -3624,7 +3968,7 @@ describe('Settings', () => {
     expect(screen.queryByText('Loading remote models…')).toBeNull()
   })
 
-  it('shows bundled engine status without install controls while the engine list is still resolving', async () => {
+  it('shows metadata loading instead of runtime checking while the engine list is still resolving', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -3656,13 +4000,24 @@ describe('Settings', () => {
       },
     })
     useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+    reactQueryMockStore.setQueryData(['translationEngines.list'], {
+      data: undefined,
+      isLoading: true,
+      isFetching: true,
+      error: null,
+      refetch: vi.fn(),
+    })
 
     render(<Settings />)
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     expect(screen.getByRole('combobox', { name: 'Engine' })).toHaveTextContent('Local-Transformers')
-    expect(screen.getByText(/selected model groups are downloaded separately/i)).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Install' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Loading translation engine metadata' })).toBeTruthy()
+    expect(screen.getByText('Loading translation engine metadata.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Checking translation engine status' })).toBeNull()
+    expect(screen.queryByText('Checking translation engine status.')).toBeNull()
+    expect(screen.queryByLabelText('Local download profiles')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Install translation engine' })).toBeNull()
   })
 
   it('hides engine progress after a service engine is already installed', async () => {
@@ -3693,6 +4048,80 @@ describe('Settings', () => {
     expect(screen.getAllByRole('button', { name: 'Installed' }).length).toBeGreaterThan(0)
     expect(screen.queryByText('Install')).toBeNull()
     expect(screen.queryByRole('progressbar')).toBeNull()
+  })
+
+  it('persists OpenAI model globally unless the project owns OpenAI engine settings', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          engineId: 'openai',
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    const modelInput = screen.getByLabelText('Model')
+    fireEvent.change(modelInput, { target: { value: 'gpt-4.1' } })
+    fireEvent.blur(modelInput)
+
+    await waitFor(() =>
+      expect(updateGlobalSettingsMock).toHaveBeenCalledWith({
+        translationEngines: { openai: { model: 'gpt-4.1' } },
+      })
+    )
+    expect(updateConfigMock).not.toHaveBeenCalledWith({
+      translation: { engines: { openai: { model: 'gpt-4.1' } } },
+    })
+  })
+
+  it('persists OpenAI model in project config when the project owns OpenAI engine settings', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          engineId: 'openai',
+          engines: {
+            openai: { model: 'project-model' },
+          },
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    const modelInput = screen.getByLabelText('Model')
+    expect(modelInput).toHaveValue('project-model')
+    fireEvent.change(modelInput, { target: { value: 'project-gpt' } })
+    fireEvent.blur(modelInput)
+
+    await waitFor(() =>
+      expect(updateConfigMock).toHaveBeenCalledWith({
+        translation: { engines: { openai: { model: 'project-gpt' } } },
+      })
+    )
+    expect(updateGlobalSettingsMock).not.toHaveBeenCalledWith({
+      translationEngines: { openai: { model: 'project-gpt' } },
+    })
   })
 
   it('searches Local-Transformers models through the autocomplete popover and shows the download plan', async () => {
@@ -3861,12 +4290,93 @@ describe('Settings', () => {
         modelId: 'onnx-community/opus-mt-en-zh',
       })
     )
-    expect(updateGlobalSettingsMock).toHaveBeenCalledWith({
+    expect(updateConfigMock).toHaveBeenCalledWith({
+      translation: {
+        engines: {
+          local: { model: 'onnx-community/opus-mt-en-zh', selectedGroupId: null },
+        },
+      },
+    })
+    expect(updateGlobalSettingsMock).not.toHaveBeenCalledWith({
       translationEngines: {
         local: { model: 'onnx-community/opus-mt-en-zh', selectedGroupId: null },
       },
     })
-    expect(updateConfigMock).toHaveBeenCalledWith({
+  })
+
+  it('persists Local model commits globally when the project has no engine override', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useGlobalSettingsSubscriptionMock.mockReturnValue({
+      data: {
+        translationCache: { entryLimit: 10000 },
+        translationEngines: {
+          engineId: 'local',
+          extensions: {
+            engines: {
+              local: { status: 'not-installed' },
+              localCt2: { status: 'not-installed' },
+              localLlama: { status: 'not-installed' },
+              openai: { status: 'not-installed' },
+            },
+          },
+          openai: { baseUrl: '', token: '', model: 'gpt-4.1-mini' },
+          local: { model: 'Xenova/opus-mt-no-de', selectedGroupId: 'q8', hfEndpoint: '' },
+          localCt2: {
+            model: 'ooeoeo/opus-mt-en-zh-ct2-float16',
+            selectedGroupId: 'float16',
+            hfEndpoint: '',
+          },
+          localLlama: {
+            model: 'tencent/Hy-MT2-1.8B-1.25Bit-GGUF',
+            selectedGroupId: 'Hy-MT2-1.8B-1.25Bit-Q4_K_M.gguf',
+            hfEndpoint: '',
+          },
+        },
+      },
+      isLoading: false,
+      error: null,
+    })
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: true,
+          targetLanguage: 'zh',
+          displayMode: 'direct',
+          cacheEnabled: false,
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Local Model' }))
+    dispatchPopoverToggle(screen.getByRole('dialog', { name: 'Select local model' }), 'open')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search local models' }), {
+      target: { value: 'opus' },
+    })
+    fireEvent.click(
+      await screen.findByRole('option', {
+        name: /onnx-community\/opus-mt-en-zh/,
+      })
+    )
+
+    await waitFor(() =>
+      expect(updateGlobalSettingsMock).toHaveBeenCalledWith({
+        translationEngines: {
+          local: { model: 'onnx-community/opus-mt-en-zh', selectedGroupId: null },
+        },
+      })
+    )
+    expect(updateConfigMock).not.toHaveBeenCalledWith({
       translation: {
         engines: {
           local: { model: 'onnx-community/opus-mt-en-zh', selectedGroupId: null },
@@ -3910,11 +4420,11 @@ describe('Settings', () => {
     const profileList = await screen.findByLabelText('Local download profiles')
     fireEvent.click(within(profileList).getByRole('button', { name: /^fp16/i }))
 
-    expect(updateGlobalSettingsMock).toHaveBeenCalledWith({
-      translationEngines: { local: { selectedGroupId: 'fp16' } },
-    })
     expect(updateConfigMock).toHaveBeenCalledWith({
       translation: { engines: { local: { selectedGroupId: 'fp16' } } },
+    })
+    expect(updateGlobalSettingsMock).not.toHaveBeenCalledWith({
+      translationEngines: { local: { selectedGroupId: 'fp16' } },
     })
   })
 
@@ -3945,13 +4455,20 @@ describe('Settings', () => {
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     fireEvent.click(screen.getByRole('button', { name: 'Local provider settings' }))
     dispatchPopoverToggle(screen.getByRole('dialog', { name: 'Local provider settings' }), 'open')
+    const endpointHint = screen.getByText(/Current endpoint:/)
+    const memoryLabel = screen.getByText('Max memory budget')
+    expect(
+      endpointHint.compareDocumentPosition(memoryLabel) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     const endpointInput = screen.getByLabelText('HF Endpoint')
     fireEvent.change(endpointInput, { target: { value: 'https://hf-mirror.com' } })
     fireEvent.keyDown(endpointInput, { key: 'Enter' })
 
     await waitFor(() =>
       expect(updateGlobalSettingsMock).toHaveBeenCalledWith({
-        translationEngines: { local: { hfEndpoint: 'https://hf-mirror.com' } },
+        translationEngines: {
+          local: { hfEndpoint: 'https://hf-mirror.com', memoryBudgetPercent: 25 },
+        },
       })
     )
   })
@@ -5861,16 +6378,62 @@ describe('Settings', () => {
         'server:Dette er en liten oversettelsestest fra norsk til tysk.'
       )
     ).toBeTruthy()
+    expect(await within(dialog).findByLabelText('Translation test elapsed time')).toHaveTextContent(
+      /^Elapsed /
+    )
     expect(translationEnginesMock.batchTranslate).toHaveBeenCalledWith(
       expect.objectContaining({
         engineId: 'local',
         sourceLanguage: 'no',
         targetLanguage: 'de',
         model: 'Xenova/opus-mt-no-de',
+        timeoutMs: 15000,
         selectedGroupId: 'q8',
         inputs: ['Dette er en liten oversettelsestest fra norsk til tysk.'],
       }),
       expect.any(Object)
+    )
+  })
+
+  it('passes the edited translation smoke timeout to the server batch request', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        translation: {
+          enabled: false,
+          targetLanguage: 'de',
+          displayMode: 'direct',
+          cacheEnabled: false,
+          engineId: 'local',
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Open translation test' }))
+    const dialog = screen.getByRole('dialog', { name: 'Translation Test', hidden: true })
+    fireEvent.change(within(dialog).getByLabelText('Timeout (seconds)'), {
+      target: { value: '7' },
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Run Test' }))
+
+    await waitFor(() =>
+      expect(translationEnginesMock.batchTranslate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          timeoutMs: 7000,
+        }),
+        expect.any(Object)
+      )
     )
   })
 

@@ -22,9 +22,11 @@ import {
 import { getMarkdownFactSpan } from '@openspecui/core/markdown-reading'
 import { checkLocalDirectionalModelLanguagePair } from '@openspecui/core/translation-language-pair'
 import {
+  DEFAULT_BATCH_TRANSLATION_TIMEOUT_MS,
   DEFAULT_TRANSLATION_ENGINE_ID,
   TRANSLATOR_CONTRACT_VERSION,
   isDirectionalManagedLocalTranslationEngineId,
+  type BatchTranslationResult,
   type TranslationEngineId,
   type Translator,
   type TranslatorFactory,
@@ -105,8 +107,40 @@ export interface DocumentTranslationProgressPatch {
   segment: TranslationSegment
 }
 
+function isFiniteTranslationOffset(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function isTranslationSegmentKind(value: unknown): value is TranslationSegment['kind'] {
+  return (
+    value === 'heading' ||
+    value === 'listItem' ||
+    value === 'paragraph' ||
+    value === 'blockquote' ||
+    value === 'text'
+  )
+}
+
 export function isRenderableTranslationSegment(segment: unknown): segment is TranslationSegment {
-  return typeof segment === 'object' && segment !== null && !Array.isArray(segment)
+  if (typeof segment !== 'object' || segment === null || Array.isArray(segment)) return false
+
+  const id = Reflect.get(segment, 'id')
+  const sourceStartOffset = Reflect.get(segment, 'sourceStartOffset')
+  const sourceEndOffset = Reflect.get(segment, 'sourceEndOffset')
+  const sourceKind = Reflect.get(segment, 'sourceKind')
+  const source = Reflect.get(segment, 'source')
+  const translatorInput = Reflect.get(segment, 'translatorInput')
+  const kind = Reflect.get(segment, 'kind')
+
+  return (
+    typeof id === 'string' &&
+    isFiniteTranslationOffset(sourceStartOffset) &&
+    isFiniteTranslationOffset(sourceEndOffset) &&
+    typeof sourceKind === 'string' &&
+    typeof source === 'string' &&
+    typeof translatorInput === 'string' &&
+    isTranslationSegmentKind(kind)
+  )
 }
 
 interface PendingTranslationJob {
@@ -121,6 +155,11 @@ interface PendingTranslationJob {
 interface PackedTranslationBatch {
   jobs: PendingTranslationJob[]
   estimatedTokens: number
+}
+
+interface BatchTranslationCollectionResult {
+  outputs: Map<number, string>
+  errors: Map<number, string>
 }
 
 export interface BrowserTranslationCache {
@@ -528,6 +567,7 @@ export async function translateMarkdownDocument(args: {
   targetLanguage: string
   displayMode: DocumentTranslationDisplayMode
   signal: AbortSignal
+  timeoutMs?: number
   cache?: BrowserTranslationCache
   engine?: TranslationEngineExecution
 }): Promise<DocumentTranslationResult> {
@@ -548,6 +588,7 @@ export async function translateMarkdownDocumentProgressively(
     targetLanguage: string
     displayMode: DocumentTranslationDisplayMode
     signal: AbortSignal
+    timeoutMs?: number
     cache?: BrowserTranslationCache
     engine?: TranslationEngineExecution
   },
@@ -643,6 +684,7 @@ export async function translateMarkdownDocumentProgressively(
           sourceLanguage,
           targetLanguage: args.targetLanguage,
           signal: args.signal,
+          timeoutMs: args.timeoutMs,
           cache: args.cache,
           jobs,
           translatedSegments,
@@ -667,6 +709,7 @@ async function translatePendingJobsBySourceLanguage(input: {
   sourceLanguage: string
   targetLanguage: string
   signal: AbortSignal
+  timeoutMs?: number
   cache?: BrowserTranslationCache
   jobs: PendingTranslationJob[]
   translatedSegments: TranslationSegment[]
@@ -751,10 +794,24 @@ async function translatePendingJobsBySourceLanguage(input: {
 
   const applyBatchResult = async (
     batch: PackedTranslationBatch,
-    outputs: string[]
+    result: BatchTranslationCollectionResult
   ): Promise<void> => {
     for (const [offset, job] of batch.jobs.entries()) {
-      const target = outputs[offset] ?? ''
+      const error = result.errors.get(offset)
+      if (error) {
+        const failedSegment = {
+          ...job.segment,
+          sourceLanguage: job.sourceLanguage,
+          targetLanguage: input.targetLanguage,
+          status: 'error' as const,
+          error,
+        }
+        input.translatedSegments[job.segmentIndex] = failedSegment
+        input.onPatch({ segmentIndex: job.segmentIndex, segment: failedSegment })
+        continue
+      }
+
+      const target = result.outputs.get(offset) ?? ''
       const restoredTarget = job.segment.placeholderProtocol
         ? restoreTranslatedPlaceholderFragment(target, job.segment.placeholderProtocol)
         : { target: job.protectedInput.restore(target).trim() }
@@ -800,7 +857,10 @@ async function translatePendingJobsBySourceLanguage(input: {
             const outputs = await collectBatchTranslationOutputs(
               translator.batchTranslate(
                 batch.jobs.map((job) => job.protectedInput.text),
-                { signal: input.signal }
+                {
+                  signal: input.signal,
+                  timeoutMs: input.timeoutMs ?? DEFAULT_BATCH_TRANSLATION_TIMEOUT_MS,
+                }
               ),
               batch.jobs.length
             )
@@ -846,6 +906,118 @@ async function translatePendingJobsBySourceLanguage(input: {
   startWorkersToDesired()
   while (workerPromises.size > 0) {
     await Promise.race(workerPromises)
+  }
+}
+
+export async function retryTranslationSegment(input: {
+  segment: TranslationSegment
+  sourceLanguage?: string
+  targetLanguage: string
+  signal: AbortSignal
+  timeoutMs?: number
+  cache?: BrowserTranslationCache
+  engine?: TranslationEngineExecution
+}): Promise<TranslationSegment> {
+  const engine = input.engine ?? createBrowserTranslationExecution()
+  const sourceLanguage =
+    input.sourceLanguage ?? input.segment.sourceLanguage ?? DEFAULT_SOURCE_LANGUAGE
+
+  if (areEquivalentTranslationLanguages(sourceLanguage, input.targetLanguage)) {
+    return {
+      ...input.segment,
+      target: input.segment.source,
+      sourceLanguage,
+      targetLanguage: input.targetLanguage,
+      status: 'translated',
+      error: undefined,
+    }
+  }
+
+  const unsupportedLanguagePairMessage = getUnsupportedEngineLanguagePairMessage({
+    engine,
+    sourceLanguage,
+    targetLanguage: input.targetLanguage,
+  })
+  if (unsupportedLanguagePairMessage) {
+    return {
+      ...input.segment,
+      sourceLanguage,
+      targetLanguage: input.targetLanguage,
+      status: 'error',
+      error: unsupportedLanguagePairMessage,
+    }
+  }
+
+  const cacheKey = createSegmentCacheKey(
+    input.segment,
+    sourceLanguage,
+    input.targetLanguage,
+    engine.cacheIdentity
+  )
+  const cachedSegment = cacheKey
+    ? await readCachedTranslationSegment(input.cache, cacheKey, input.segment, {
+        sourceLanguage,
+        targetLanguage: input.targetLanguage,
+      })
+    : null
+  if (cachedSegment) return cachedSegment
+
+  const protectedInput = input.segment.placeholderProtocol
+    ? { text: input.segment.translatorInput, restore: (output: string) => output }
+    : protectTranslatorInput(input.segment.translatorInput)
+
+  let translator: Translator | null = null
+  try {
+    translator = await engine.factory.create({
+      sourceLanguage,
+      targetLanguage: input.targetLanguage,
+      signal: input.signal,
+    })
+    const result = await collectBatchTranslationOutputs(
+      translator.batchTranslate([protectedInput.text], {
+        signal: input.signal,
+        timeoutMs: input.timeoutMs ?? DEFAULT_BATCH_TRANSLATION_TIMEOUT_MS,
+      }),
+      1
+    )
+    const error = result.errors.get(0)
+    if (error) {
+      return {
+        ...input.segment,
+        sourceLanguage,
+        targetLanguage: input.targetLanguage,
+        status: 'error',
+        error,
+      }
+    }
+
+    const target = result.outputs.get(0) ?? ''
+    const restoredTarget = input.segment.placeholderProtocol
+      ? restoreTranslatedPlaceholderFragment(target, input.segment.placeholderProtocol)
+      : { target: protectedInput.restore(target).trim() }
+    const translatedSegment: TranslationSegment = {
+      ...input.segment,
+      ...restoredTarget,
+      sourceLanguage,
+      targetLanguage: input.targetLanguage,
+      status: 'translated',
+      error: undefined,
+    }
+    if (cacheKey) {
+      void writeCachedTranslationSegment(input.cache, cacheKey, translatedSegment)
+    }
+    return translatedSegment
+  } catch (error) {
+    if (input.signal.aborted) throw error
+    return {
+      ...input.segment,
+      sourceLanguage,
+      targetLanguage: input.targetLanguage,
+      status: 'error',
+      error: getErrorMessage(error),
+    }
+  } finally {
+    translator?.destroy?.()
   }
 }
 
@@ -938,25 +1110,31 @@ function packTranslationJobs(jobs: readonly PendingTranslationJob[]): PackedTran
 }
 
 async function collectBatchTranslationOutputs(
-  stream: AsyncGenerator<{ index: number; output: string }>,
+  stream: AsyncGenerator<BatchTranslationResult>,
   expectedCount: number
-): Promise<string[]> {
+): Promise<BatchTranslationCollectionResult> {
   const outputs = new Map<number, string>()
+  const errors = new Map<number, string>()
 
   for await (const item of stream) {
     if (item.index < 0 || item.index >= expectedCount) {
       throw new Error(`Translator yielded output for unexpected index ${item.index}.`)
     }
-    if (!outputs.has(item.index)) {
+    if (item.output !== undefined && !outputs.has(item.index)) {
       outputs.set(item.index, item.output)
+    }
+    if (item.error && !errors.has(item.index)) {
+      errors.set(item.index, item.error.message)
     }
   }
 
-  if (outputs.size !== expectedCount) {
-    throw new Error(`Translator returned ${outputs.size} outputs for ${expectedCount} inputs.`)
+  if (outputs.size + errors.size !== expectedCount) {
+    throw new Error(
+      `Translator returned ${outputs.size + errors.size} results for ${expectedCount} inputs.`
+    )
   }
 
-  return Array.from({ length: expectedCount }, (_, index) => outputs.get(index) ?? '')
+  return { outputs, errors }
 }
 
 function estimateTranslationTokens(input: string): number {

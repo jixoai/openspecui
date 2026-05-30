@@ -186,12 +186,11 @@ describe('buildRuntimePackageInstallCommand', () => {
       args: [
         'add',
         '--save-optional',
-        '--allow-build',
-        'onnxruntime-node',
+        '--allow-build=onnxruntime-node',
         '@huggingface/transformers@~4.2.0',
       ],
       displayCommand:
-        'pnpm add --save-optional --allow-build onnxruntime-node @huggingface/transformers@~4.2.0',
+        'pnpm add --save-optional --allow-build=onnxruntime-node @huggingface/transformers@~4.2.0',
     })
     expect(
       buildRuntimePackageInstallCommand({
@@ -227,12 +226,11 @@ describe('buildRuntimePackageInstallCommand', () => {
       args: [
         'add',
         '--save-optional',
-        '--allow-build',
-        'onnxruntime-node',
+        '--allow-build=onnxruntime-node',
         '@huggingface/transformers@~4.2.0',
       ],
       displayCommand:
-        'vp add --save-optional --allow-build onnxruntime-node @huggingface/transformers@~4.2.0',
+        'vp add --save-optional --allow-build=onnxruntime-node @huggingface/transformers@~4.2.0',
     })
   })
 

@@ -71,7 +71,7 @@ type KernelEvent =
   | { type: 'DEACTIVATE_BOTTOM' }
   | { type: 'ACTIVATE_POP'; location: HistoryLocation }
   | { type: 'DEACTIVATE_POP' }
-  | { type: 'APPLY_LAYOUT'; layout: PersistedNavLayout }
+  | { type: 'APPLY_LAYOUT'; layout: PersistedNavLayout; force?: boolean }
 
 type BehaviorEvent = KernelEvent | { type: 'BOOTSTRAP' }
 
@@ -665,11 +665,15 @@ function reduceKernel(state: KernelState, event: KernelEvent): KernelTransition 
     }
 
     case 'APPLY_LAYOUT': {
-      if (event.layout.updatedAt <= state.updatedAt) {
+      const merged = mergeLayout(event.layout)
+      const changed =
+        event.layout.updatedAt !== state.updatedAt ||
+        !areTabsEqual(state.mainTabs, merged.mainTabs) ||
+        !areTabsEqual(state.bottomTabs, merged.bottomTabs)
+
+      if (!changed || (!event.force && event.layout.updatedAt <= state.updatedAt)) {
         return { nextState: state, changed: false, notify: [], persist: 'none' }
       }
-
-      const merged = mergeLayout(event.layout)
 
       return {
         nextState: {
@@ -1127,14 +1131,7 @@ export class NavController {
   private rebindProjectScopedLayout(storageKey: string): void {
     const scopedLocal = readLocalStorageByKey(storageKey)
     if (scopedLocal) {
-      const merged = mergeLayout(scopedLocal)
-      this.state = normalizeState({
-        ...this.state,
-        mainTabs: merged.mainTabs,
-        bottomTabs: merged.bottomTabs,
-        updatedAt: scopedLocal.updatedAt,
-      })
-      this.normalizeUrl()
+      this.dispatch({ type: 'APPLY_LAYOUT', layout: scopedLocal, force: true })
       return
     }
 

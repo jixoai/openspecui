@@ -79,9 +79,10 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@lydell/node-pty",
       "@parcel/watcher",
       "better-sqlite3",
-      "@lydell/node-pty"
+      "onnxruntime-node"
     ],
     "patchedDependencies": {}
   },

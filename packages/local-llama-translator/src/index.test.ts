@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createLocalLlamaTranslatorFactory,
+  probeLocalLlamaRuntimeModel,
   resolveGgufModelDownloadPlanFromRepositoryFiles,
 } from './index.js'
 
@@ -72,7 +73,7 @@ describe('local-llama-translator package', () => {
     })
     const outputs: string[] = []
     for await (const event of translator.batchTranslate(['Hello'])) {
-      outputs.push(event.output)
+      if (event.output) outputs.push(event.output)
     }
 
     expect(getLlama).toHaveBeenCalledTimes(1)
@@ -83,5 +84,87 @@ describe('local-llama-translator package', () => {
     )
     expect(outputs).toEqual(['你好'])
     expect(disposeSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports per-input timeout failures for llama translation tasks', async () => {
+    const prompt = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          setTimeout(() => resolve('你好'), 20)
+        })
+    )
+    const factory = createLocalLlamaTranslatorFactory({
+      defaultModel: 'demo.gguf',
+      loadModule: async () => ({
+        getLlama: async () => ({
+          loadModel: async () => ({
+            createContext: async () => ({
+              getSequence: () => ({ id: 'sequence' }),
+              dispose: vi.fn(),
+            }),
+            dispose: vi.fn(),
+          }),
+        }),
+        LlamaChatSession: class {
+          prompt = prompt
+        },
+      }),
+    })
+
+    const translator = await factory.create({
+      sourceLanguage: 'en',
+      targetLanguage: 'zh',
+    })
+    const outputs = []
+    for await (const event of translator.batchTranslate(['Hello'], { timeoutMs: 1 })) {
+      outputs.push(event)
+    }
+
+    expect(outputs).toEqual([
+      {
+        index: 0,
+        error: {
+          kind: 'timeout',
+          message: 'Translation task timed out after 1ms.',
+        },
+      },
+    ])
+  })
+
+  it('probes llama model load without creating a translation session', async () => {
+    const createContext = vi.fn(async () => ({
+      getSequence: () => ({ id: 'sequence' }),
+      dispose: vi.fn(),
+    }))
+    const disposeModel = vi.fn()
+    const loadModel = vi.fn(async () => ({
+      createContext,
+      dispose: disposeModel,
+    }))
+    const getLlama = vi.fn(async () => ({ loadModel }))
+
+    await probeLocalLlamaRuntimeModel({
+      model: 'demo.gguf',
+      contextSize: 4096,
+      runtimeConfig: {
+        modelPath: '/tmp/demo.gguf',
+      },
+      loadModule: async () => ({
+        getLlama,
+        LlamaChatSession: class {
+          prompt = vi.fn()
+        },
+      }),
+    })
+
+    expect(getLlama).toHaveBeenCalledTimes(1)
+    expect(loadModel).toHaveBeenCalledWith({
+      modelPath: '/tmp/demo.gguf',
+      gpuLayers: undefined,
+    })
+    expect(createContext).toHaveBeenCalledWith({
+      contextSize: 4096,
+    })
+    expect(disposeModel).toHaveBeenCalledTimes(1)
   })
 })

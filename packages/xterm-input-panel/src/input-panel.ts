@@ -568,6 +568,30 @@ export class InputPanel extends LitElement {
     this.requestUpdate()
   }
 
+  private _stopToolbarControlPointer(e: Event) {
+    e.stopPropagation()
+    e.preventDefault()
+  }
+
+  private _stopToolbarControlEvent(e: Event) {
+    e.stopPropagation()
+  }
+
+  private _switchTabFromToolbar(e: Event, tab: InputPanelTab) {
+    this._stopToolbarControlEvent(e)
+    this._switchTab(tab)
+  }
+
+  private _toggleLayoutFromToolbar(e: Event) {
+    this._stopToolbarControlEvent(e)
+    this._toggleLayout()
+  }
+
+  private _closeFromToolbar(e: Event) {
+    this._stopToolbarControlEvent(e)
+    this._close()
+  }
+
   private _toggleLayout() {
     this.layout = this.layout === 'fixed' ? 'floating' : 'fixed'
     if (this.layout === 'fixed') {
@@ -861,7 +885,9 @@ export class InputPanel extends LitElement {
                 class="tab-btn"
                 part="tab-btn"
                 ?data-active=${this.activeTab === t.id}
-                @click=${() => this._switchTab(t.id)}
+                @pointerdown=${(e: PointerEvent) => this._stopToolbarControlPointer(e)}
+                @mousedown=${(e: MouseEvent) => this._stopToolbarControlPointer(e)}
+                @click=${(e: Event) => this._switchTabFromToolbar(e, t.id)}
               >
                 ${t.icon} ${this.activeTab === t.id ? t.label : ''}
               </button>
@@ -869,10 +895,23 @@ export class InputPanel extends LitElement {
           )}
         </div>
         <div class="action-group">
-          <button class="icon-btn" @click=${this._toggleLayout} title="Toggle layout mode">
+          <button
+            class="icon-btn"
+            @pointerdown=${(e: PointerEvent) => this._stopToolbarControlPointer(e)}
+            @mousedown=${(e: MouseEvent) => this._stopToolbarControlPointer(e)}
+            @click=${(e: Event) => this._toggleLayoutFromToolbar(e)}
+            title="Toggle layout mode"
+          >
             ${this.layout === 'fixed' ? iconPin(14) : iconPinOff(14)}
           </button>
-          <button class="icon-btn" part="close-btn" @click=${this._close} title="Close panel">
+          <button
+            class="icon-btn"
+            part="close-btn"
+            @pointerdown=${(e: PointerEvent) => this._stopToolbarControlPointer(e)}
+            @mousedown=${(e: MouseEvent) => this._stopToolbarControlPointer(e)}
+            @click=${(e: Event) => this._closeFromToolbar(e)}
+            title="Close panel"
+          >
             ${iconX(14)}
           </button>
         </div>

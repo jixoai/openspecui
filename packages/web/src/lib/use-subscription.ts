@@ -3,8 +3,9 @@ import type {
   ChangeFile,
   ChangeMeta,
   NotificationRecord,
-  OpenSpecUIGlobalSettings,
   OpenSpecUIConfig,
+  OpenSpecUIConfigPresence,
+  OpenSpecUIGlobalSettings,
   OpsxEntityDetail,
   Spec,
   SpecMeta,
@@ -279,6 +280,33 @@ export function useConfigSubscription(): SubscriptionState<OpenSpecUIConfig> {
     StaticProvider.getConfig,
     [],
     'config.subscribe'
+  )
+}
+
+export function useConfigPresenceSubscription(): SubscriptionState<OpenSpecUIConfigPresence> {
+  return useSubscription<OpenSpecUIConfigPresence>(
+    (callbacks) =>
+      trpcClient.config.subscribePresence.subscribe(undefined, {
+        onData: callbacks.onData,
+        onError: callbacks.onError,
+      }),
+    async () => ({
+      translation: {
+        enabled: false,
+        targetLanguage: false,
+        displayMode: false,
+        cacheEnabled: false,
+        engineId: false,
+        engines: {
+          local: false,
+          localCt2: false,
+          localLlama: false,
+          openai: false,
+        },
+      },
+    }),
+    [],
+    'config.subscribePresence'
   )
 }
 

@@ -40,6 +40,13 @@
   animation: terminal-shimmer 1.8s linear infinite;
 }
 
+.terminal-touch-mouse-overlay {
+  pointer-events: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 @keyframes terminal-shimmer {
   0% {
     background-position: -120% 0;

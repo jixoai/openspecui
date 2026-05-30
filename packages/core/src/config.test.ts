@@ -39,6 +39,56 @@ describe('ConfigManager', () => {
       expect(config).toEqual(DEFAULT_CONFIG)
     })
 
+    it('reports project translation engine field presence separately from defaults', async () => {
+      await expect(configManager.readConfigPresence()).resolves.toEqual({
+        translation: {
+          enabled: false,
+          targetLanguage: false,
+          displayMode: false,
+          cacheEnabled: false,
+          engineId: false,
+          engines: {
+            local: false,
+            localCt2: false,
+            localLlama: false,
+            openai: false,
+          },
+        },
+      })
+
+      await writeFile(
+        join(tempDir, 'openspec', '.openspecui.json'),
+        JSON.stringify({
+          translation: {
+            engineId: 'local-llama',
+            engines: {
+              localLlama: {
+                selectedGroupId: 'q4',
+              },
+            },
+          },
+        }),
+        'utf-8'
+      )
+      clearCache()
+
+      await expect(configManager.readConfigPresence()).resolves.toEqual({
+        translation: {
+          enabled: false,
+          targetLanguage: false,
+          displayMode: false,
+          cacheEnabled: false,
+          engineId: true,
+          engines: {
+            local: false,
+            localCt2: false,
+            localLlama: true,
+            openai: false,
+          },
+        },
+      })
+    })
+
     it('should read config from file', async () => {
       const customConfig = {
         cli: { command: 'bunx', args: ['openspec'] },

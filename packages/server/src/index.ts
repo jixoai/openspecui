@@ -5,6 +5,7 @@ export {
   createHookRuntime,
   type HookRuntime,
 } from './hook-runtime.js'
+export { LocalModelAssetService } from './local-model-asset-service.js'
 export { findAvailablePort, isPortAvailable } from './port-utils.js'
 export { type AppRouter, type Context, type GitWorktreeHandoffService } from './router.js'
 export {
@@ -14,8 +15,8 @@ export {
   type RunningServer,
   type ServerConfig,
 } from './server.js'
-export { LocalModelAssetService } from './local-model-asset-service.js'
 export { TranslationEngineService } from './translation-engine-service.js'
+export { runManagedLocalTranslationChildProcess } from './translation-engine-worker.js'
 export {
   WorkflowInvocationService,
   type WorkflowInvocationServiceOptions,

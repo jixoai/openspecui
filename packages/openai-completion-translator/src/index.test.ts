@@ -57,7 +57,11 @@ describe('openai completion translator package', () => {
       targetLanguage: 'zh',
     })
 
-    const outputs: Array<{ index: number; output: string }> = []
+    const outputs: Array<{
+      index: number
+      output?: string
+      error?: { kind: string; message: string }
+    }> = []
     for await (const item of translator.batchTranslate(['<x1>Hello</x1>'], {
       instructions: 'Keep xN tags.',
       context: '# Proposal',
@@ -88,5 +92,38 @@ describe('openai completion translator package', () => {
         ],
       })
     )
+  })
+
+  it('surfaces per-input timeout failures for OpenAI translation tasks', async () => {
+    chatMock.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          setTimeout(() => resolve('你好'), 20)
+        })
+    )
+    const { createOpenAICompletionTranslatorFactory } = await import('./index.js')
+    const translator = await createOpenAICompletionTranslatorFactory({
+      baseUrl: 'https://api.example.com/v1/',
+      token: 'secret-token',
+      model: 'vendor/custom-model',
+    }).create({
+      sourceLanguage: 'en',
+      targetLanguage: 'zh',
+    })
+
+    const outputs = []
+    for await (const item of translator.batchTranslate(['Hello'], { timeoutMs: 1 })) {
+      outputs.push(item)
+    }
+
+    expect(outputs).toEqual([
+      {
+        index: 0,
+        error: {
+          kind: 'timeout',
+          message: 'Translation task timed out after 1ms.',
+        },
+      },
+    ])
   })
 })

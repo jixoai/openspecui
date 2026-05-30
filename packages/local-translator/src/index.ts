@@ -1,11 +1,13 @@
 import { buildLocalDownloadPlanFromRepositoryFiles } from '@openspecui/core/local-download-profiles'
 import type {
+  BatchTranslationResult,
   TranslationModelDownloadPlan,
   Translator,
   TranslatorFactory,
   TranslatorFactoryCreateOptions,
   TranslatorFactoryPrepareOptions,
 } from '@openspecui/core/translator'
+import { runControlledTranslationTask } from '@openspecui/core/translator'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -105,18 +107,24 @@ class LocalTranslator implements Translator {
 
   async *batchTranslate(
     inputs: string[],
-    options?: { signal?: AbortSignal }
-  ): AsyncGenerator<{ index: number; output: string }> {
-    throwIfAborted(options?.signal)
-    const result = await this.pipeline(inputs, {
-      src_lang: this.languages.sourceLanguage,
-      tgt_lang: this.languages.targetLanguage,
-      signal: options?.signal,
-    })
-    throwIfAborted(options?.signal)
-    const outputs = readTranslatedOutputs(result, inputs.length)
-    for (const [index, output] of outputs.entries()) {
-      yield { index, output }
+    options?: { signal?: AbortSignal; timeoutMs?: number }
+  ): AsyncGenerator<BatchTranslationResult> {
+    for (const [index, input] of inputs.entries()) {
+      const controlled = await runControlledTranslationTask(async (signal) => {
+        const result = await this.pipeline(input, {
+          src_lang: this.languages.sourceLanguage,
+          tgt_lang: this.languages.targetLanguage,
+          signal,
+        })
+        throwIfAborted(signal)
+        return readTranslatedOutputs(result, 1)[0] ?? ''
+      }, options)
+
+      if (controlled.ok) {
+        yield { index, output: controlled.value }
+        continue
+      }
+      yield { index, error: controlled.error }
     }
   }
 

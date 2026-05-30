@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/web-components-vite'
 import { Terminal } from '@xterm/xterm'
 import { html } from 'lit'
 import { expect, fn, waitFor } from 'storybook/test'
-import { InputPanelAddon } from './xterm-addon.js'
+import { InputPanelAddon, resolveTerminalPointerTarget } from './xterm-addon.js'
 
 // Register all custom elements (critical — xterm-addon.ts does NOT import these)
 import './index.js'
@@ -32,7 +32,13 @@ function resetAddonState() {
 }
 
 /** Create a real xterm Terminal + InputPanelAddon, mount into container */
-function setupTerminal(container: HTMLElement, opts?: { stateKey?: string }) {
+function setupTerminal(
+  container: HTMLElement,
+  opts?: {
+    stateKey?: string
+    onCommand?: (command: 'copy' | 'paste' | 'select-all') => boolean | Promise<boolean>
+  }
+) {
   const terminal = new Terminal({
     cols: 80,
     rows: 10,
@@ -41,7 +47,11 @@ function setupTerminal(container: HTMLElement, opts?: { stateKey?: string }) {
   })
 
   const inputHandler = fn()
-  const addon = new InputPanelAddon({ onInput: inputHandler, stateKey: opts?.stateKey })
+  const addon = new InputPanelAddon({
+    onInput: inputHandler,
+    onCommand: opts?.onCommand,
+    stateKey: opts?.stateKey,
+  })
   terminal.loadAddon(addon)
   terminal.open(container)
   storyCleanups.add(() => {
@@ -275,6 +285,83 @@ export const InputForwarding: StoryObj = {
     expect(inputHandler).toHaveBeenCalledWith('hello\r')
 
     addon.close()
+  },
+}
+
+/**
+ * Command forwarding: input-panel:command events are delegated to the host.
+ * If the host allows the command, the addon writes fallback terminal data.
+ */
+export const CommandForwardingWithFallback: StoryObj = {
+  render: () => html`<div id="term-container" style="width:100%;height:100%;"></div>`,
+  play: async ({ canvasElement }) => {
+    resetAddonState()
+    const container = canvasElement.querySelector('#term-container') as HTMLElement
+    const commandHandler = fn(() => false)
+    const { addon, inputHandler } = setupTerminal(container, { onCommand: commandHandler })
+
+    addon.open()
+    expect(addon.isOpen).toBe(true)
+
+    const panel = container.querySelector('input-panel')!
+    await (panel as any).updateComplete
+
+    panel.dispatchEvent(
+      new CustomEvent('input-panel:command', {
+        detail: { command: 'copy', fallbackData: '\x03' },
+        bubbles: true,
+        composed: true,
+      })
+    )
+
+    await waitFor(() => {
+      expect(commandHandler).toHaveBeenCalledWith('copy', { fallbackData: '\x03' })
+      expect(inputHandler).toHaveBeenCalledWith('\x03')
+    })
+
+    addon.close()
+  },
+}
+
+/**
+ * Mouse target resolution ignores the transparent touch overlay so the virtual
+ * trackpad can still deliver down/move/up events to the terminal screen.
+ */
+export const PointerTargetIgnoresTouchOverlay: StoryObj = {
+  render: () => html`
+    <div id="term-container" style="width:100%;height:100%;position:relative;">
+      <div class="xterm-screen" id="screen" style="position:absolute;inset:0;"></div>
+      <div
+        class="terminal-touch-mouse-overlay"
+        id="overlay"
+        style="position:absolute;inset:0;z-index:20;pointer-events:auto;"
+      ></div>
+    </div>
+  `,
+  play: async ({ canvasElement }) => {
+    const container = canvasElement.querySelector('#term-container') as HTMLElement
+    const screen = canvasElement.querySelector('#screen') as HTMLElement
+    const overlay = canvasElement.querySelector('#overlay') as HTMLElement
+
+    const descriptor = Object.getOwnPropertyDescriptor(document, 'elementFromPoint')
+    let overlayEnabled = true
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: () => (overlayEnabled && overlay.style.pointerEvents !== 'none' ? overlay : screen),
+    })
+
+    try {
+      const target = resolveTerminalPointerTarget(container, 24, 32)
+      overlayEnabled = false
+      expect(target).toBe(screen)
+      expect(overlay.style.pointerEvents).toBe('auto')
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(document, 'elementFromPoint', descriptor)
+      } else {
+        Reflect.deleteProperty(document, 'elementFromPoint')
+      }
+    }
   },
 }
 

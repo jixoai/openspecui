@@ -185,7 +185,7 @@ export function Dialog({
       >
         <div
           ref={panelRef}
-          className={`bg-background text-foreground relative flex h-fit w-[calc(100%-0.5rem)] max-w-2xl flex-col overflow-hidden rounded-[var(--openspec-dialog-radius,0.75rem)] border shadow-xl ${borderClass} ${className}`}
+          className={`@container/dialog bg-background text-foreground relative flex h-fit w-[calc(100%-0.5rem)] max-w-2xl flex-col overflow-hidden rounded-[var(--openspec-dialog-radius,0.75rem)] border shadow-xl ${borderClass} ${className}`}
           style={{ maxHeight }}
         >
           {/* Header (non-shrinking) */}

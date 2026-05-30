@@ -686,6 +686,22 @@ export type PersistedOpenSpecUIConfig = {
   translation?: DocumentTranslationConfigUpdate
 }
 
+export interface OpenSpecUIConfigPresence {
+  translation: {
+    enabled: boolean
+    targetLanguage: boolean
+    displayMode: boolean
+    cacheEnabled: boolean
+    engineId: boolean
+    engines: {
+      local: boolean
+      localCt2: boolean
+      localLlama: boolean
+      openai: boolean
+    }
+  }
+}
+
 /** 默认配置（静态，用于测试和类型） */
 export const DEFAULT_CONFIG: OpenSpecUIConfig = {
   cli: {
@@ -1069,6 +1085,45 @@ function isPersistedConfigEmpty(config: PersistedOpenSpecUIConfig): boolean {
   return !hasOwnEntries(config)
 }
 
+function parsePersistedConfigObject(content: string | null): Record<string, unknown> {
+  if (!content) return {}
+  try {
+    const parsed = JSON.parse(content)
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function hasOwnPath(value: unknown, path: readonly string[]): boolean {
+  let current = value
+  for (const segment of path) {
+    if (typeof current !== 'object' || current === null) return false
+    if (!Object.prototype.hasOwnProperty.call(current, segment)) return false
+    current = Reflect.get(current, segment)
+  }
+  return true
+}
+
+function readConfigPresenceFromContent(content: string | null): OpenSpecUIConfigPresence {
+  const parsed = parsePersistedConfigObject(content)
+  return {
+    translation: {
+      enabled: hasOwnPath(parsed, ['translation', 'enabled']),
+      targetLanguage: hasOwnPath(parsed, ['translation', 'targetLanguage']),
+      displayMode: hasOwnPath(parsed, ['translation', 'displayMode']),
+      cacheEnabled: hasOwnPath(parsed, ['translation', 'cacheEnabled']),
+      engineId: hasOwnPath(parsed, ['translation', 'engineId']),
+      engines: {
+        local: hasOwnPath(parsed, ['translation', 'engines', 'local']),
+        localCt2: hasOwnPath(parsed, ['translation', 'engines', 'localCt2']),
+        localLlama: hasOwnPath(parsed, ['translation', 'engines', 'localLlama']),
+        openai: hasOwnPath(parsed, ['translation', 'engines', 'openai']),
+      },
+    },
+  }
+}
+
 /**
  * 配置管理器
  *
@@ -1121,6 +1176,11 @@ export class ConfigManager {
   async readConfig(): Promise<OpenSpecUIConfig> {
     const content = await reactiveReadFile(this.configPath)
     return this.parseConfigContent(content)
+  }
+
+  async readConfigPresence(): Promise<OpenSpecUIConfigPresence> {
+    const content = await reactiveReadFile(this.configPath)
+    return readConfigPresenceFromContent(content)
   }
 
   /**

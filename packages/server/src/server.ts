@@ -86,6 +86,7 @@ import { createRuntimeSqliteTranslationCacheAdapter } from './translation-cache-
 import { getDefaultTranslationCacheDatabasePath } from './translation-cache-path.js'
 import { TranslationCacheService } from './translation-cache-service.js'
 import { TranslationEngineService } from './translation-engine-service.js'
+import { createManagedLocalBatchTranslateWorkerExecutor } from './translation-engine-worker.js'
 import { WorkflowInvocationService } from './workflow-invocation-service.js'
 
 function buildEmbeddedUiUrlForPort(port: number): string {
@@ -216,6 +217,18 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     getDefaultLocalLlamaModelProfileManifestPath()
   const llamaModelFetchCachePath =
     config.runtimePaths?.localLlamaModelFetchCachePath ?? getDefaultLocalLlamaModelFetchCachePath()
+  const managedLocalWorkerExecutor = createManagedLocalBatchTranslateWorkerExecutor({
+    resolveCacheDir(engineId) {
+      return engineId === 'local-ct2'
+        ? ct2ModelCacheDir
+        : engineId === 'local-llama'
+          ? llamaModelCacheDir
+          : nmtModelCacheDir
+    },
+    resolveHost(input) {
+      return input.engineId === 'local-llama' ? 'process' : 'thread'
+    },
+  })
   const translationEngineService = new TranslationEngineService({
     projectDir: config.projectDir,
     configManager,
@@ -229,6 +242,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     localLlamaCacheDir: llamaModelCacheDir,
     localLlamaAssetIndexPath: llamaModelIndexPath,
     localLlamaFetchCachePath: llamaModelFetchCachePath,
+    executeManagedLocalBatchTranslate: managedLocalWorkerExecutor,
   })
   const localModelAssetService = new LocalModelAssetService({
     projectDir: config.projectDir,
