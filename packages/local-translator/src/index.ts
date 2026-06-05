@@ -142,7 +142,7 @@ async function loadTranslationPipeline(
   runtimeConfig?: Record<string, unknown>
 ): Promise<TranslationPipeline & { dispose?: () => Promise<void> }> {
   monitor?.setStatus({ message: `Loading local model ${model}.` })
-  const transformers = (await import('@huggingface/transformers')) as TransformersModule
+  const transformers = (await import('@huggingface/transformers')) as unknown as TransformersModule
   if (cacheDir && transformers.env) {
     transformers.env.cacheDir = cacheDir
     transformers.env.localModelPath = join(cacheDir, 'models')

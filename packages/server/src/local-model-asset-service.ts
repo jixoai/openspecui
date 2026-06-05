@@ -1278,7 +1278,7 @@ export class LocalModelAssetService {
   }
 
   private async loadTransformersModule(): Promise<TransformersModule> {
-    return import('@huggingface/transformers') as Promise<TransformersModule>
+    return import('@huggingface/transformers') as unknown as Promise<TransformersModule>
   }
 }
 

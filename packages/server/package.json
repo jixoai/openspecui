@@ -37,10 +37,9 @@
     "ws": "^8.18.0",
     "zod": "^3.24.1"
   },
-  "// runtime-note": "These heavy runtimes are owned by the host package because translation engine installation is lifecycle-managed at the host boundary.",
-  "// bundle-note": "The translator engine packages keep heavyweight runtime imports external in tsdown output, so this host package remains the install/detect truth during development runs even when the translator adapters are bundled.",
+  "// runtime-note": "Translation runtimes are installed on demand from the settings panel instead of being pulled in during startup.",
+  "// bundle-note": "The translator engine packages keep heavyweight runtime imports external in tsdown output, so this host package resolves install ranges on demand when the user chooses a local engine.",
   "optionalDependencies": {
-    "@huggingface/transformers": "~4.2.0",
     "ctranslate2": "workspace:*",
     "node-llama-cpp": "~3.18.1"
   },

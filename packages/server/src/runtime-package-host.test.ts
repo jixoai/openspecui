@@ -82,6 +82,19 @@ describe('readRuntimeHostPackageDependencyRequest', () => {
       })
     ).toBe('@huggingface/transformers@~4.2.0')
   })
+
+  it('falls back to the hardcoded range when the host manifest omits the runtime package', async () => {
+    const dir = await createTempTree()
+    await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'openspecui' }, null, 2))
+
+    expect(
+      readRuntimeHostPackageDependencyRequest({
+        runtimeHost: createRuntimeHostContext(dir),
+        packageName: '@huggingface/transformers',
+        fallbackRange: '~4.2.0',
+      })
+    ).toBe('@huggingface/transformers@~4.2.0')
+  })
 })
 
 describe('hasRuntimePackageDependencyPath', () => {
