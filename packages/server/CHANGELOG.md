@@ -1,5 +1,18 @@
 # @openspecui/server
 
+## 3.11.6
+
+### Patch Changes
+
+- 13801a5: Stop preinstalling the Local-Transformers runtime at startup. The runtime is now installed only when the translation settings panel asks for it, so the default install graph no longer pulls in `@huggingface/transformers` or `onnxruntime-node` unless the user opts into that engine.
+- Updated dependencies [13801a5]
+  - @openspecui/local-translator@3.11.6
+  - @openspecui/core@3.11.6
+  - @openspecui/local-ct2-translator@3.11.6
+  - @openspecui/local-llama-translator@3.11.6
+  - @openspecui/openai-completion-translator@3.11.6
+  - @openspecui/search@3.11.6
+
 ## 3.11.5
 
 ### Patch Changes

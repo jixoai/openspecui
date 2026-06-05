@@ -1,5 +1,11 @@
 # @openspecui/openai-completion-translator
 
+## 3.11.6
+
+### Patch Changes
+
+- @openspecui/core@3.11.6
+
 ## 3.11.5
 
 ### Patch Changes
