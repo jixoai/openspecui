@@ -224,6 +224,35 @@ Testing purposes.
       expect(snapshot.changes[0].parsedTasks[0].completed).toBe(false)
     })
 
+    it('should snapshot schema change task progress without proposal.md', async () => {
+      const changeDir = join(testProjectDir, 'openspec', 'changes', 'vision-change')
+      await mkdir(join(testProjectDir, 'openspec', 'schemas', 'vision-driven'), { recursive: true })
+      await mkdir(join(changeDir, 'plans'), { recursive: true })
+      await writeFile(join(changeDir, '.openspec.yaml'), 'schema: vision-driven\n', 'utf-8')
+      await writeFile(
+        join(testProjectDir, 'openspec', 'schemas', 'vision-driven', 'schema.yaml'),
+        `name: vision-driven
+artifacts:
+  - id: plan
+    generates: plans/*.md
+  - id: tasks
+    generates: tasks.md
+apply:
+  tracks: tasks.md
+`,
+        'utf-8'
+      )
+      await writeFile(join(changeDir, 'tasks.md'), '- [x] Done\n- [ ] Todo\n', 'utf-8')
+      await writeFile(join(changeDir, 'plans', 'plan.md'), '- [x] Planned\n', 'utf-8')
+
+      const snapshot = await generateSnapshot(testProjectDir)
+      const change = snapshot.changes.find((item) => item.id === 'vision-change')
+
+      expect(change?.proposal).toBe('')
+      expect(change?.progress).toEqual({ total: 3, completed: 2 })
+      expect(change?.parsedTasks.map((task) => task.text)).toEqual(['Planned', 'Done', 'Todo'])
+    })
+
     it('should parse change with deltas correctly', async () => {
       // Create a test change with delta spec
       const changeDir = join(testProjectDir, 'openspec', 'changes', 'test-change-with-delta')
@@ -317,7 +346,11 @@ Historical change.
       )
       await mkdir(join(archiveDir, 'reports'), { recursive: true })
       await writeFile(join(archiveDir, '.openspec.yaml'), 'schema: custom-audit\n', 'utf-8')
-      await writeFile(join(archiveDir, 'reports', 'summary.md'), '# Audit Summary\n', 'utf-8')
+      await writeFile(
+        join(archiveDir, 'reports', 'summary.md'),
+        '# Audit Summary\n\n- [x] Reviewed\n',
+        'utf-8'
+      )
 
       const snapshot = await generateSnapshot(testProjectDir)
       const archive = snapshot.archives.find((item) => item.id === '2026-05-17-custom-audit')
@@ -328,6 +361,7 @@ Historical change.
       expect(archive?.entity.diagnostics.map((item) => item.message).join('\n')).toContain(
         'custom-audit'
       )
+      expect(archive?.progress).toEqual({ total: 1, completed: 1 })
     })
 
     it('should handle spec with multiple requirements', async () => {

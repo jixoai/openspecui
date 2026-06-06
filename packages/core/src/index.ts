@@ -117,6 +117,16 @@ export {
 } from './schemas.js'
 
 export {
+  computeTaskProgress,
+  isMarkdownTaskSourcePath,
+  parseMarkdownTasks,
+  projectTasksFromMarkdownFiles,
+  type TaskProgress,
+  type TaskProjection,
+  type TaskProjectionOptions,
+} from './task-progress.js'
+
+export {
   isBatchTranslationAbort,
   normalizeBatchTranslationError,
   runControlledTranslationTask,

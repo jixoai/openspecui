@@ -105,6 +105,7 @@ export interface ExportSnapshot {
     name: string
     /** Schema-neutral archived entity detail used by archive views, search, and dashboard facts. */
     entity: OpsxEntityDetail
+    progress?: { total: number; completed: number }
     createdAt: number
     updatedAt: number
   }>

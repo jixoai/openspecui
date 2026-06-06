@@ -338,9 +338,10 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
     const changesMeta = await adapter.listChangesWithMeta()
     const changes = await Promise.all(
       changesMeta.map(async (meta) => {
-        const [change, raw] = await Promise.all([
+        const [change, raw, taskProjection] = await Promise.all([
           documentService.readChange(meta.id, 'export', 'processed'),
           documentService.readChangeRaw(meta.id, 'export', 'processed'),
+          adapter.readChangeTaskProjection(meta.id),
         ])
 
         const deltas =
@@ -361,9 +362,9 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
           sourceDesign: raw?.design?.sourceMarkdown,
           why: change?.why || '',
           whatChanges: change?.whatChanges || '',
-          parsedTasks: change?.tasks || [],
+          parsedTasks: taskProjection.tasks,
           deltas,
-          progress: change?.progress ?? meta.progress,
+          progress: taskProjection.progress,
           createdAt: meta.createdAt,
           updatedAt: meta.updatedAt,
         }
@@ -572,6 +573,7 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
           id: meta.id,
           name: meta.name || meta.id,
           entity,
+          progress: meta.progress,
           createdAt: meta.createdAt,
           updatedAt: meta.updatedAt,
         }

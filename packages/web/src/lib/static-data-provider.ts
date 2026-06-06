@@ -33,6 +33,7 @@ import { DocumentTranslationConfigSchema } from '@openspecui/core/document-trans
 import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
 import { isOpsxGlobPattern, opsxPathMatchesPattern } from '@openspecui/core/opsx-entity'
 import { DEFAULT_BELL_SOUND_ID, DEFAULT_NOTIFICATION_SOUND_ID } from '@openspecui/core/sounds'
+import { projectTasksFromMarkdownFiles } from '@openspecui/core/task-progress'
 import type { SearchDocument } from '@openspecui/search'
 import { parse as parseYaml } from 'yaml'
 import type { ExportSnapshot } from '../ssg/types'
@@ -60,6 +61,8 @@ interface TrendEvent {
   ts: number
   value: number
 }
+
+type SnapshotArchive = ExportSnapshot['archives'][number]
 
 function createEmptyTrends(): Record<DashboardMetricKey, DashboardTrendPoint[]> {
   const trends = {} as Record<DashboardMetricKey, DashboardTrendPoint[]>
@@ -246,6 +249,17 @@ function buildStaticObjectiveTrends(
   )
 
   return trends
+}
+
+function getArchiveTaskProgress(snapshot: ExportSnapshot, archive: SnapshotArchive) {
+  if (archive.progress) return archive.progress
+  const schemaDetail = archive.entity.schemaName
+    ? (snapshot.opsx?.schemaDetails[archive.entity.schemaName] ?? null)
+    : null
+  return projectTasksFromMarkdownFiles(archive.entity.files, {
+    schemaDetail,
+    hasSchemaMetadata: Boolean(archive.entity.schemaName),
+  }).progress
 }
 
 interface GlobArtifactFile {
@@ -656,7 +670,10 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     (sum, change) => sum + change.progress.completed,
     0
   )
-  const archivedTasksCompleted = 0
+  const archivedTasksCompleted = snapshot.archives.reduce(
+    (sum, archive) => sum + getArchiveTaskProgress(snapshot, archive).completed,
+    0
+  )
   const taskCompletionPercent =
     tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : null
   const inProgressChanges = allActiveChanges.filter(
@@ -818,6 +835,7 @@ export async function getArchives(): Promise<ArchiveMeta[]> {
   return snapshot.archives.map((archive) => ({
     id: archive.id,
     name: archive.name,
+    progress: getArchiveTaskProgress(snapshot, archive),
     createdAt: archive.createdAt,
     updatedAt: archive.updatedAt,
   }))

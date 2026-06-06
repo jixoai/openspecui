@@ -9,6 +9,7 @@ import type {
   Spec,
   Task,
 } from './schemas.js'
+import { parseMarkdownTasks } from './task-progress.js'
 
 type ParsedScenario = Requirement['scenarios'][number]
 
@@ -288,32 +289,7 @@ export class MarkdownParser {
    * Parse tasks from a tasks.md content
    */
   parseTasks(content: string): Task[] {
-    if (!content) return []
-
-    const tasks: Task[] = []
-    const lines = content.split('\n')
-    let currentSection = ''
-    let taskIndex = 0
-
-    for (const line of lines) {
-      if (line.startsWith('## ')) {
-        currentSection = line.slice(3).trim()
-        continue
-      }
-
-      const taskMatch = line.match(/^[-*]\s+\[([ xX])\]\s+(.+)$/)
-      if (taskMatch) {
-        taskIndex++
-        tasks.push({
-          id: `task-${taskIndex}`,
-          text: taskMatch[2].trim(),
-          completed: taskMatch[1].toLowerCase() === 'x',
-          section: currentSection || undefined,
-        })
-      }
-    }
-
-    return tasks
+    return parseMarkdownTasks(content)
   }
 
   /**

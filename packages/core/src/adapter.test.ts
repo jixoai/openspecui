@@ -58,4 +58,57 @@ describe('OpenSpecAdapter change files', () => {
     await expect(stat(join(tempDir, 'openspec', 'project.md'))).resolves.toBeDefined()
     await expect(stat(join(tempDir, 'openspec', 'AGENTS.md'))).rejects.toThrow()
   })
+
+  it('computes schema-driven change progress without requiring proposal.md', async () => {
+    const changeDir = join(tempDir, 'openspec', 'changes', 'vision-demo')
+    await mkdir(join(tempDir, 'openspec', 'schemas', 'vision-driven'), { recursive: true })
+    await mkdir(join(changeDir, 'plans'), { recursive: true })
+    await writeFile(join(changeDir, '.openspec.yaml'), 'schema: vision-driven\n', 'utf-8')
+    await writeFile(
+      join(tempDir, 'openspec', 'schemas', 'vision-driven', 'schema.yaml'),
+      `name: vision-driven
+artifacts:
+  - id: plan
+    generates: plans/*.md
+  - id: tasks
+    generates: tasks.md
+apply:
+  tracks: tasks.md
+`,
+      'utf-8'
+    )
+    await writeFile(join(changeDir, 'tasks.md'), '- [x] Done\n- [ ] Todo\n', 'utf-8')
+    await writeFile(join(changeDir, 'plans', 'plan.md'), '- [x] Planned\n', 'utf-8')
+    await writeFile(join(changeDir, 'notes.md'), '- [x] Untracked\n', 'utf-8')
+    clearCache()
+
+    const changes = await adapter.listChangesWithMeta()
+    const meta = changes.find((change) => change.id === 'vision-demo')
+
+    expect(meta?.name).toBe('vision-demo')
+    expect(meta?.progress).toEqual({ total: 3, completed: 2 })
+  })
+
+  it('computes archived schema task progress from matched markdown files', async () => {
+    const archiveDir = join(tempDir, 'openspec', 'changes', 'archive', '2026-06-01-vision-demo')
+    await mkdir(join(tempDir, 'openspec', 'schemas', 'vision-driven'), { recursive: true })
+    await mkdir(join(archiveDir, 'plan'), { recursive: true })
+    await writeFile(join(archiveDir, '.openspec.yaml'), 'schema: vision-driven\n', 'utf-8')
+    await writeFile(
+      join(tempDir, 'openspec', 'schemas', 'vision-driven', 'schema.yaml'),
+      `name: vision-driven
+artifacts:
+  - id: plan
+    generates: plan/*.md
+`,
+      'utf-8'
+    )
+    await writeFile(join(archiveDir, 'plan', 'todo.md'), '- [x] Archived task\n', 'utf-8')
+    clearCache()
+
+    const archives = await adapter.listArchivedChangesWithMeta()
+    const meta = archives.find((archive) => archive.id === '2026-06-01-vision-demo')
+
+    expect(meta?.progress).toEqual({ total: 1, completed: 1 })
+  })
 })
