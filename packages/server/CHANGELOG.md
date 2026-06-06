@@ -1,5 +1,21 @@
 # @openspecui/server
 
+## 3.12.0
+
+### Minor Changes
+
+- dc997ea: Project task progress from schema-matched Markdown checklist items across active and archived changes.
+
+### Patch Changes
+
+- Updated dependencies [dc997ea]
+  - @openspecui/core@3.12.0
+  - @openspecui/local-ct2-translator@3.12.0
+  - @openspecui/local-llama-translator@3.12.0
+  - @openspecui/local-translator@3.12.0
+  - @openspecui/openai-completion-translator@3.12.0
+  - @openspecui/search@3.12.0
+
 ## 3.11.6
 
 ### Patch Changes

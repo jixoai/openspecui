@@ -1,5 +1,12 @@
 # @openspecui/local-ct2-translator
 
+## 3.12.0
+
+### Patch Changes
+
+- Updated dependencies [dc997ea]
+  - @openspecui/core@3.12.0
+
 ## 3.11.6
 
 ### Patch Changes

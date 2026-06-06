@@ -1,5 +1,11 @@
 # @openspecui/web
 
+## 3.12.0
+
+### Minor Changes
+
+- dc997ea: Project task progress from schema-matched Markdown checklist items across active and archived changes.
+
 ## 3.11.6
 
 ## 3.11.5
