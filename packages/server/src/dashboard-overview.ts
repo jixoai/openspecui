@@ -209,7 +209,10 @@ export async function loadDashboardOverview(
     (sum, change) => sum + change.progress.completed,
     0
   )
-  const archivedTasksCompleted = 0
+  const archivedTasksCompleted = archiveMetas.reduce(
+    (sum, archive) => sum + archive.progress.completed,
+    0
+  )
   const taskCompletionPercent =
     tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : null
   const inProgressChanges = allActiveChanges.filter(

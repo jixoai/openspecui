@@ -27,6 +27,7 @@
       "@openspecui/core/opsx-display-path": ["../core/src/opsx-display-path.ts"],
       "@openspecui/core/opsx-entity": ["../core/src/opsx-entity.ts"],
       "@openspecui/core/opsx-schema-detail": ["../core/src/opsx-schema-detail.ts"],
+      "@openspecui/core/task-progress": ["../core/src/task-progress.ts"],
       "@openspecui/core/pty-protocol": ["../core/src/pty-protocol.ts"],
       "@openspecui/core/sounds": ["../core/src/sounds.ts"],
       "@openspecui/core/terminal-audio": ["../core/src/terminal-audio.ts"],

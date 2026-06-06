@@ -3,12 +3,19 @@ import { join } from 'path'
 import { inferFileMime, inferFilePreviewKind, isTextLikeFile } from './file-preview.js'
 import {
   buildOpsxEntityDetail,
+  parseOpsxEntityMetadata,
   type OpsxEntityDetail,
   type OpsxEntityReadOptions,
 } from './opsx-entity.js'
+import { parseOpsxSchemaDetail } from './opsx-schema-detail.js'
 import { MarkdownParser } from './parser.js'
 import { reactiveReadDir, reactiveReadFile, reactiveStat } from './reactive-fs/index.js'
 import type { Change, ChangeFile, DeltaSpec, Spec } from './schemas.js'
+import {
+  projectTasksFromMarkdownFiles,
+  type TaskProgress,
+  type TaskProjection,
+} from './task-progress.js'
 import { Validator, type ValidationResult } from './validator.js'
 
 /** Spec metadata with time info */
@@ -23,7 +30,7 @@ export interface SpecMeta {
 export interface ChangeMeta {
   id: string
   name: string
-  progress: { total: number; completed: number }
+  progress: TaskProgress
   createdAt: number
   updatedAt: number
 }
@@ -32,6 +39,7 @@ export interface ChangeMeta {
 export interface ArchiveMeta {
   id: string
   name: string
+  progress: TaskProgress
   createdAt: number
   updatedAt: number
 }
@@ -135,15 +143,18 @@ export class OpenSpecAdapter {
     const ids = await this.listChanges()
     const results = await Promise.all(
       ids.map(async (id) => {
-        const change = await this.readChange(id)
         const changeDir = join(this.changesDir, id)
-        const timeInfo = await this.getFileTimeInfo(changeDir)
+        const [change, taskProjection, timeInfo] = await Promise.all([
+          this.readChange(id),
+          this.readChangeTaskProjection(id),
+          this.getFileTimeInfo(changeDir),
+        ])
         return {
           id,
           // Legacy parser can be unavailable for custom schemas; keep the
           // change visible with objective fallback metadata.
           name: change?.name ?? id,
-          progress: change?.progress ?? { total: 0, completed: 0 },
+          progress: taskProjection.progress,
           createdAt: timeInfo?.createdAt ?? 0,
           updatedAt: timeInfo?.updatedAt ?? 0,
         }
@@ -167,10 +178,14 @@ export class OpenSpecAdapter {
     const results = await Promise.all(
       ids.map(async (id) => {
         const archiveDir = join(this.archiveDir, id)
-        const timeInfo = await this.getFileTimeInfo(archiveDir)
+        const [taskProjection, timeInfo] = await Promise.all([
+          this.readArchivedChangeTaskProjection(id),
+          this.getFileTimeInfo(archiveDir),
+        ])
         return {
           id,
           name: id,
+          progress: taskProjection.progress,
           createdAt: timeInfo?.createdAt ?? 0,
           updatedAt: timeInfo?.updatedAt ?? 0,
         }
@@ -241,6 +256,14 @@ export class OpenSpecAdapter {
     return this.readFilesUnderRoot(archiveRoot)
   }
 
+  async readChangeTaskProjection(changeId: string): Promise<TaskProjection> {
+    return this.readEntityTaskProjection(join(this.changesDir, changeId))
+  }
+
+  async readArchivedChangeTaskProjection(changeId: string): Promise<TaskProjection> {
+    return this.readEntityTaskProjection(join(this.archiveDir, changeId))
+  }
+
   async readEntityDetail(
     stage: 'change' | 'archive',
     id: string,
@@ -302,6 +325,30 @@ export class OpenSpecAdapter {
     }
 
     return files
+  }
+
+  private async readProjectSchemaDetail(schemaName: string) {
+    const schemaPath = join(this.openspecDir, 'schemas', schemaName, 'schema.yaml')
+    const schemaContent = await reactiveReadFile(schemaPath)
+    if (!schemaContent) return null
+    return parseOpsxSchemaDetail(schemaContent, schemaName, {
+      path: `openspec/schemas/${schemaName}/schema.yaml`,
+    }).detail
+  }
+
+  private async readEntityTaskProjection(root: string): Promise<TaskProjection> {
+    const files = await this.readFilesUnderRoot(root)
+    const metadataContent =
+      files.find((file) => file.type === 'file' && file.path === '.openspec.yaml')?.content ?? null
+    const metadata = parseOpsxEntityMetadata(metadataContent)
+    const schemaDetail = metadata.schemaName
+      ? await this.readProjectSchemaDetail(metadata.schemaName)
+      : null
+
+    return projectTasksFromMarkdownFiles(files, {
+      schemaDetail,
+      hasSchemaMetadata: Boolean(metadata.schemaName),
+    })
   }
 
   async readChangeRaw(

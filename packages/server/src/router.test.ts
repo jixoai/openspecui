@@ -63,9 +63,15 @@ const createMockAdapter = () => ({
     },
   ]),
   listArchivedChanges: vi.fn().mockResolvedValue(['old-change']),
-  listArchivedChangesWithMeta: vi
-    .fn()
-    .mockResolvedValue([{ id: 'old-change', name: 'Old Change', createdAt: 1, updatedAt: 1 }]),
+  listArchivedChangesWithMeta: vi.fn().mockResolvedValue([
+    {
+      id: 'old-change',
+      name: 'Old Change',
+      progress: { total: 1, completed: 1 },
+      createdAt: 1,
+      updatedAt: 1,
+    },
+  ]),
   readArchivedChangeFiles: vi.fn().mockResolvedValue([
     { path: '.openspec.yaml', type: 'file', content: 'schema: custom-audit\n' },
     { path: 'reports/summary.md', type: 'file', content: '# Summary\n' },
@@ -571,7 +577,7 @@ describe('appRouter', () => {
 
       expect(overview.summary.specifications).toBe(2)
       expect(overview.summary.requirements).toBe(3)
-      expect(overview.summary.archivedTasksCompleted).toBe(0)
+      expect(overview.summary.archivedTasksCompleted).toBe(1)
       expect(overview.summary.taskCompletionPercent).toBeNull()
       expect(overview.trends.requirements.length).toBeGreaterThan(0)
       expect(overview.trends.activeChanges).toEqual([])
@@ -698,12 +704,14 @@ describe('appRouter', () => {
         {
           id: '2026-01-23-add-static-export',
           name: 'Archive A',
+          progress: { total: 1, completed: 1 },
           createdAt: 2_000_000_000_000,
           updatedAt: 2_000_000_000_000,
         },
         {
           id: '2026-02-21-opsx-config-center',
           name: 'Archive B',
+          progress: { total: 1, completed: 1 },
           createdAt: 2_000_000_000_000,
           updatedAt: 2_000_000_000_000,
         },
