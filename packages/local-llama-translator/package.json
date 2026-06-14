@@ -1,7 +1,7 @@
 {
   "name": "@openspecui/local-llama-translator",
   "private": true,
-  "version": "3.12.0",
+  "version": "4.0.0",
   "description": "Server-side llama.cpp translator engine for OpenSpecUI",
   "type": "module",
   "main": "./dist/index.mjs",
