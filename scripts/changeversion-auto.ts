@@ -334,7 +334,9 @@ function main(): void {
         runInheritOrThrow(commandFor('git'), ['switch', MAIN_BRANCH])
         deleteLocalBranchIfExists(releaseBranch)
       } else {
-        runInheritOrThrow(commandFor('git'), ['commit', '-m', COMMIT_MESSAGE])
+        // Bypass environment-local pre-commit hooks: this commit is purely the
+        // changeset-generated version bump, and the release PR's CI is the real gate.
+        runInheritOrThrow(commandFor('git'), ['commit', '--no-verify', '-m', COMMIT_MESSAGE])
         runInheritOrThrow(commandFor('git'), ['push', '-u', REMOTE, releaseBranch])
 
         const prCreateOutput = runCapture(commandFor('gh'), [
