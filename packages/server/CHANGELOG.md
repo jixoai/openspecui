@@ -1,5 +1,17 @@
 # @openspecui/server
 
+## 4.0.0
+
+### Patch Changes
+
+- Updated dependencies [b8d85f9]
+  - @openspecui/core@4.0.0
+  - @openspecui/local-ct2-translator@4.0.0
+  - @openspecui/local-llama-translator@4.0.0
+  - @openspecui/local-translator@4.0.0
+  - @openspecui/openai-completion-translator@4.0.0
+  - @openspecui/search@4.0.0
+
 ## 3.12.0
 
 ### Minor Changes
