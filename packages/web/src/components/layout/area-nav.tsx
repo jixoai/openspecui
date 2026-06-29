@@ -4,6 +4,7 @@ import { VTLink, vtNavController } from '@/lib/view-transitions/navigation'
 import { GripVertical } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { Tooltip } from '../tooltip'
+import { BetaCornerMark, BetaPill } from './beta-mark'
 import { allNavItems, type NavItem } from './nav-items'
 
 interface AreaNavProps {
@@ -181,9 +182,15 @@ export function AreaNav({ area, tabs, className, useLinks, onNavigate, collapsed
                   {!iconOnly ? (
                     <GripVertical className="-ml-2.5 -mr-1.5 h-3 w-3 shrink-0 opacity-0 group-hover:opacity-40" />
                   ) : null}
-                  <item.icon className="h-4 w-4 shrink-0" />
+                  <span className="relative">
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    {item.beta && iconOnly ? <BetaCornerMark /> : null}
+                  </span>
                   {!iconOnly ? (
-                    <span className="font-nav text-base tracking-[0.04em]">{item.label}</span>
+                    <>
+                      <span className="font-nav text-base tracking-[0.04em]">{item.label}</span>
+                      {item.beta ? <BetaPill /> : null}
+                    </>
                   ) : null}
                 </VTLink>
               </Tooltip>
@@ -208,9 +215,15 @@ export function AreaNav({ area, tabs, className, useLinks, onNavigate, collapsed
                   {!iconOnly ? (
                     <GripVertical className="-ml-2.5 -mr-1.5 h-3 w-3 shrink-0 opacity-0 group-hover:opacity-40" />
                   ) : null}
-                  <item.icon className="h-4 w-4 shrink-0" />
+                  <span className="relative">
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    {item.beta && iconOnly ? <BetaCornerMark /> : null}
+                  </span>
                   {!iconOnly ? (
-                    <span className="font-nav text-base tracking-[0.04em]">{item.label}</span>
+                    <>
+                      <span className="font-nav text-base tracking-[0.04em]">{item.label}</span>
+                      {item.beta ? <BetaPill /> : null}
+                    </>
                   ) : null}
                 </button>
               </Tooltip>

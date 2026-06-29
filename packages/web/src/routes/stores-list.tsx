@@ -1,7 +1,7 @@
 import { Badge } from '@/components/badge'
 import { isStaticMode } from '@/lib/static-mode'
 import { useStoresSubscription } from '@/lib/use-subscription'
-import { AlertCircle, Store } from 'lucide-react'
+import { AlertCircle, Store, Warehouse } from 'lucide-react'
 
 import type { StoreFeatureResult, StoreListEntry } from '@openspecui/core/store-types'
 
@@ -33,7 +33,7 @@ export function StoresList() {
   return (
     <div className="space-y-6 p-4">
       <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
-        <Store className="h-6 w-6 shrink-0" />
+        <Warehouse className="h-6 w-6 shrink-0" />
         Stores
         <Badge tone="subtle" size="xs">
           Beta
