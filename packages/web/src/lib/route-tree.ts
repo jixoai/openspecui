@@ -16,6 +16,7 @@ import { SearchRoute } from '../routes/search'
 import { Settings } from '../routes/settings'
 import { SpecList } from '../routes/spec-list'
 import { SpecView } from '../routes/spec-view'
+import { StoresList } from '../routes/stores-list'
 import { TerminalPage } from '../routes/terminal'
 
 /** Create the interactive route tree (includes terminal route by default). */
@@ -53,6 +54,7 @@ export function createRouteTree(rootRoute: AnyRootRoute, opts?: { includeTermina
       path: '/archive/$changeId',
       component: ArchiveView,
     }),
+    createRoute({ getParentRoute: () => rootRoute, path: '/stores', component: StoresList }),
     createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: Settings }),
   ]
 

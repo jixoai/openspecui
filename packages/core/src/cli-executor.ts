@@ -169,6 +169,29 @@ export class CliExecutor {
   }
 
   /**
+   * 执行 openspec store list --json
+   *
+   * Beta 功能（Stores）。返回原始 CliResult；数据归类（ok / 异常一数据不兼容 /
+   * 异常二指令变更）由调用方用 classifyStoreCliOutput 完成。这样 CliExecutor 保持单一职责。
+   * Spec: openspec-cli-integration › Stores CLI Query Mapping / Beta Feature Fault Tolerance。
+   */
+  async listStores(): Promise<CliResult> {
+    return this.execute(['store', 'list', '--json'])
+  }
+
+  /**
+   * 执行 openspec store doctor [--json] [id]
+   *
+   * Beta 功能（Stores）。同 listStores，归类交给调用方。
+   */
+  async doctorStores(id?: string): Promise<CliResult> {
+    const args = ['store', 'doctor']
+    if (id) args.push(id)
+    args.push('--json')
+    return this.execute(args)
+  }
+
+  /**
    * 流式执行 openspec validate
    */
   validateStream(

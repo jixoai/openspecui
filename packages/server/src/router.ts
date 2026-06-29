@@ -16,6 +16,7 @@ import type {
 } from '@openspecui/core'
 import {
   BatchTranslateInputSchema,
+  classifyStoreCliOutput,
   CodeEditorThemeSchema,
   DashboardConfigSchema,
   DocumentTranslationConfigUpdateSchema,
@@ -33,9 +34,12 @@ import {
   resolveTerminalShellDefaults,
   ServiceTranslationEngineIdSchema,
   sniffGlobalCli,
+  StoreDoctorResultSchema,
+  StoreListResultSchema,
   subscribeWatcherRuntimeStatus,
   TerminalConfigSchema,
   TerminalRendererEngineSchema,
+  toStoreFeatureResult,
   TranslationCacheReadInputSchema,
   TranslationCacheWriteInputSchema,
   TranslationEngineIdSchema,
@@ -51,6 +55,11 @@ import {
   type SchemaDetail,
   type SchemaInfo,
   type SchemaResolution,
+  type StoreDoctorResult,
+  type StoreDoctorStore,
+  type StoreFeatureResult,
+  type StoreListEntry,
+  type StoreListResult,
   type TemplateContentMap,
   type TemplatesMap,
   type ToolInitDelivery,
@@ -2477,6 +2486,128 @@ export const gitRouter = router({
 })
 
 /**
+ * Stores router — read-only discovery of machine-registered OpenSpec stores (beta).
+ *
+ * 实现 beta 功能容错范式（spec: openspec-cli-integration › Beta Feature Fault Tolerance）：
+ * 后端对 `openspec store list/doctor --json` 做宽松解析，把失败归类为两类异常，**永不抛未捕获错误**。
+ *  - 异常一（数据不兼容）：exit 0 但 zod 宽松验证失败 → available=false + error.kind='data-incompatible'
+ *  - 异常二（指令变更/缺失）：非零退出 → available=false + error.kind='command-unavailable'
+ * 两种异常都尽力携带 cliVersion（版本信息非常重要）。前端据此决定"显示错误+版本"或"隐藏入口"。
+ */
+const STORES_LIST_CACHE_TTL_MS = 30_000
+let cachedCliVersion: { value: string | undefined; expiresAt: number } | null = null
+
+async function resolveCliVersion(ctx: Context): Promise<string | undefined> {
+  const now = Date.now()
+  if (cachedCliVersion && cachedCliVersion.expiresAt > now) {
+    return cachedCliVersion.value
+  }
+  try {
+    const availability = await ctx.cliExecutor.checkAvailability()
+    cachedCliVersion = { value: availability.version, expiresAt: now + STORES_LIST_CACHE_TTL_MS }
+    return availability.version
+  } catch {
+    cachedCliVersion = { value: undefined, expiresAt: now + STORES_LIST_CACHE_TTL_MS }
+    return undefined
+  }
+}
+
+async function fetchStoresList(ctx: Context): Promise<StoreFeatureResult<StoreListEntry[]>> {
+  // 永不抛：CLI 调用、解析、版本探测全部包裹，失败归类为两类异常之一。
+  const cliVersion = await resolveCliVersion(ctx).catch(() => undefined)
+  try {
+    const result = await ctx.cliExecutor.listStores()
+    const classification = classifyStoreCliOutput({
+      success: result.success,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      parse: (stdout) => StoreListResultSchema.parse(JSON.parse(stdout)),
+      cliVersion,
+    })
+    return toStoreFeatureResult(classification, {
+      fromData: (data) => {
+        const parsed = data as StoreListResult
+        return Array.isArray(parsed.stores) ? parsed.stores : []
+      },
+      fallback: [],
+      cliVersion,
+    })
+  } catch (error) {
+    // 兜底：任何未预期错误都归类为指令变更（异常二），让前端隐藏入口，绝不崩溃。
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      available: false,
+      stores: [],
+      error: { kind: 'command-unavailable', message, ...(cliVersion ? { cliVersion } : {}) },
+      ...(cliVersion ? { cliVersion } : {}),
+    }
+  }
+}
+
+async function fetchStoresDoctor(
+  ctx: Context,
+  id?: string
+): Promise<StoreFeatureResult<StoreDoctorStore[]>> {
+  const cliVersion = await resolveCliVersion(ctx).catch(() => undefined)
+  try {
+    const result = await ctx.cliExecutor.doctorStores(id)
+    const classification = classifyStoreCliOutput({
+      success: result.success,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      parse: (stdout) => StoreDoctorResultSchema.parse(JSON.parse(stdout)),
+      cliVersion,
+    })
+    return toStoreFeatureResult(classification, {
+      fromData: (data) => {
+        const parsed = data as StoreDoctorResult
+        return Array.isArray(parsed.stores) ? parsed.stores : []
+      },
+      fallback: [],
+      cliVersion,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      available: false,
+      stores: [],
+      error: { kind: 'command-unavailable', message, ...(cliVersion ? { cliVersion } : {}) },
+      ...(cliVersion ? { cliVersion } : {}),
+    }
+  }
+}
+
+export const storesRouter = router({
+  /** store 列表（只读，带异常归类） */
+  list: publicProcedure.query(({ ctx }) => fetchStoresList(ctx)),
+
+  /** 单个/全部 store 健康诊断（按需，带异常归类） */
+  doctor: publicProcedure
+    .input(z.object({ id: z.string().optional() }).optional())
+    .query(({ ctx, input }) => fetchStoresDoctor(ctx, input?.id)),
+
+  /**
+   * 响应式订阅。registry 在 ~/.local/share/openspec（projectDir 之外，watcher 不可达），
+   * 故用轮询（间隔 5s）而非文件订阅。手动刷新通过重新订阅或 refetch 实现。
+   */
+  subscribe: publicProcedure.subscription(({ ctx }) => {
+    return observable<StoreFeatureResult<StoreListEntry[]>>((emit) => {
+      const push = () => {
+        void fetchStoresList(ctx)
+          .then((result) => emit.next(result))
+          .catch(() => {
+            // 订阅永不抛：最坏情况静默，前端保持上一次已知状态。
+          })
+      }
+      push()
+      const timer = setInterval(push, 5_000)
+      timer.unref()
+      return () => clearInterval(timer)
+    })
+  }),
+})
+
+/**
  * Main app router
  */
 export const appRouter = router({
@@ -2498,6 +2629,7 @@ export const appRouter = router({
   sounds: soundsRouter,
   cli: cliRouter,
   opsx: opsxRouter,
+  stores: storesRouter,
   kv: kvRouter,
   search: searchRouter,
   system: systemRouter,

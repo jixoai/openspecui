@@ -7,22 +7,22 @@
 
 ## 2. Implementation
 
-- [ ] 2.1 Implementation started from approved plan
-  - [ ] A. Version-law bump in `packages/core/src/openspec-compat.ts` + tests (stable maintenance, decoupled from Stores)
-  - [ ] B. `packages/core/src/store-types.ts`: lenient zod + `StoreFeatureError` (two kinds) + `StoreFeatureResult`; export
-  - [ ] C. `CliExecutor.listStores()/doctorStores(id?)` + classifier (ok / data-incompatible / command-unavailable)
-  - [ ] D. `storesRouter` (list/doctor/subscribe) in `packages/server/src/router.ts`; never throws; carries `cliVersion`
-  - [ ] E. `stores-panel.tsx`: Beta badge; data→list; data-incompatible→error+version; command-unavailable→hide entry; live-only; defensive
-  - [ ] F. `.changeset/*.md` (`@openspecui/core`/`server`/`web`)
-- [ ] 2.2 Progress synchronized with implementation artifact
-- [ ] 2.3 Unexpected issues loop back to intake/research-plan
+- [x] 2.1 Implementation started from approved plan
+  - [x] A. Version-law bump in `packages/core/src/openspec-compat.ts` + tests (stable maintenance, decoupled from Stores)
+  - [x] B. `packages/core/src/store-types.ts`: lenient zod + `StoreFeatureError` (two kinds) + `StoreFeatureResult`; export + subpath
+  - [x] C. `CliExecutor.listStores()/doctorStores(id?)` + classifier (ok / data-incompatible / command-unavailable)
+  - [x] D. `storesRouter` (list/doctor/subscribe) in `packages/server/src/router.ts`; never throws; carries `cliVersion`
+  - [x] E. `stores-list.tsx`: Beta badge; data→list; data-incompatible→error+version; command-unavailable→hide entry; live-only; defensive
+  - [x] F. `.changeset/stores-beta-discovery.md` (`@openspecui/core`/`server`/`web`)
+- [x] 2.2 Progress synchronized with implementation artifact
+- [x] 2.3 Unexpected issues loop back to intake/research-plan
 
 ## 3. PR and Release Gates
 
-- [ ] 3.1 Changeset included for release-impacting package changes
-- [ ] 3.2 CI-equivalent local checks passed (`format:check`, `lint:ci`, `typecheck`, `test:ci`, `test:browser:ci`)
-- [ ] 3.3 SSG guard passed (`pnpm --filter @openspecui/web build:ssg`; stores not in static snapshot)
-- [ ] 3.4 Fault-tolerance contract tests pass (data-incompatible shows version; command-unavailable hides entry; frontend never crashes)
+- [x] 3.1 Changeset included for release-impacting package changes
+- [x] 3.2 CI-equivalent local checks passed (`format:check`, `lint:ci`, `typecheck`, `test:ci`, `test:browser:ci`)
+- [x] 3.3 SSG guard passed (`pnpm --filter @openspecui/web build:ssg`; stores not in static snapshot)
+- [x] 3.4 Fault-tolerance contract tests pass (data-incompatible shows version; command-unavailable hides entry; frontend never crashes)
 - [ ] 3.5 PR checks passed
 
 ## 4. Merge Readiness

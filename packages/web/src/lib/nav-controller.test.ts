@@ -27,6 +27,7 @@ const DEFAULT_MAIN_TABS: TabId[] = [
   '/specs',
   '/changes',
   '/archive',
+  '/stores',
   '/settings',
 ]
 
@@ -37,6 +38,7 @@ const ALL_TABS: TabId[] = [
   '/specs',
   '/changes',
   '/archive',
+  '/stores',
   '/settings',
   '/terminal',
 ]

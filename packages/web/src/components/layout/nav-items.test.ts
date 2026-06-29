@@ -17,4 +17,13 @@ describe('navItems', () => {
     })
     expect(navItems.some((item) => item.to === '/git')).toBe(false)
   })
+
+  it('registers Stores as a beta main-area entry', () => {
+    expect(allNavItems.find((item) => item.to === '/stores')).toMatchObject({
+      label: 'Stores',
+      defaultArea: 'main',
+      beta: true,
+    })
+    expect(navItems.some((item) => item.to === '/stores')).toBe(true)
+  })
 })

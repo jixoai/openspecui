@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Settings,
   SlidersHorizontal,
+  Store,
   Terminal,
   type LucideIcon,
 } from 'lucide-react'
@@ -18,6 +19,7 @@ export type AppRoute =
   | '/specs'
   | '/changes'
   | '/archive'
+  | '/stores'
   | '/settings'
   | '/terminal'
 
@@ -27,6 +29,12 @@ export interface NavItem {
   label: string
   /** Which area this tab defaults to */
   defaultArea: 'main' | 'bottom'
+  /**
+   * Whether this entry is a beta feature whose visibility is controlled at
+   * runtime by fault tolerance (e.g. Stores hides when its CLI command is
+   * unavailable). Non-beta entries are always visible.
+   */
+  beta?: boolean
 }
 
 /** All navigation items — single source of truth */
@@ -37,6 +45,7 @@ export const allNavItems: NavItem[] = [
   { to: '/specs', icon: FileText, label: 'Specs', defaultArea: 'main' },
   { to: '/changes', icon: GitBranch, label: 'Changes', defaultArea: 'main' },
   { to: '/archive', icon: Archive, label: 'Archive', defaultArea: 'main' },
+  { to: '/stores', icon: Store, label: 'Stores', defaultArea: 'main', beta: true },
   { to: '/settings', icon: Settings, label: 'Settings', defaultArea: 'main' },
   { to: '/terminal', icon: Terminal, label: 'Terminal', defaultArea: 'bottom' },
 ]

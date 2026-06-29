@@ -1,13 +1,14 @@
 export const OPENSPECUI_TARGET_MAJOR = 4
-export const OPENSPEC_CLI_TARGET_SERIES = '1.4'
+export const OPENSPEC_CLI_TARGET_SERIES = '1.5'
 export const OPENSPEC_CLI_LEGACY_SERIES = '1.3'
 export const OPENSPEC_CLI_MIN_VERSION = '1.3.0'
-export const OPENSPEC_CLI_TARGET_MIN_VERSION = '1.4.0'
-export const OPENSPEC_CLI_NEXT_SERIES_MIN_VERSION = '1.5.0'
-export const OPENSPEC_CLI_ACCEPTED_RANGE = '>=1.3.0 <1.5.0'
-export const OPENSPEC_CLI_RECOMMENDED_RANGE = '>=1.4.0 <1.5.0'
+export const OPENSPEC_CLI_TARGET_MIN_VERSION = '1.5.0'
+export const OPENSPEC_CLI_RECOMMENDED_MIN_VERSION = '1.4.0'
+export const OPENSPEC_CLI_NEXT_SERIES_MIN_VERSION = '1.6.0'
+export const OPENSPEC_CLI_ACCEPTED_RANGE = '>=1.3.0 <1.6.0'
+export const OPENSPEC_CLI_RECOMMENDED_RANGE = '>=1.4.0 <1.6.0'
 export const OPENSPEC_CLI_LEGACY_RANGE = '>=1.3.0 <1.4.0'
-export const OPENSPEC_CLI_REFERENCE_TAG_PATTERN = 'v1.4.*'
+export const OPENSPEC_CLI_REFERENCE_TAG_PATTERN = 'v1.5.*'
 
 export interface OpenSpecCliVersion {
   major: number
@@ -60,6 +61,21 @@ function isSeries(version: OpenSpecCliVersion, series: string): boolean {
   return version.major === major && version.minor === minor
 }
 
+/**
+ * A version is "current/recommended" when it falls inside the recommended
+ * range (e.g. `>=1.4.0 <1.6.0`). This intentionally spans more than one minor
+ * series so that both the previous and the target OpenSpec CLI lines are
+ * treated as current without a version-law bump per release.
+ */
+function isCurrentRecommended(version: OpenSpecCliVersion): boolean {
+  const min = parseOpenSpecCliVersion(OPENSPEC_CLI_RECOMMENDED_MIN_VERSION)
+  const max = parseOpenSpecCliVersion(OPENSPEC_CLI_NEXT_SERIES_MIN_VERSION)
+  if (!min || !max) return isSeries(version, OPENSPEC_CLI_TARGET_SERIES)
+  const atOrAboveMin = compareOpenSpecCliVersions(version, min) >= 0
+  const belowMax = compareOpenSpecCliVersions(version, max) < 0
+  return atOrAboveMin && belowMax
+}
+
 export function classifyOpenSpecCliVersion(
   rawVersion: string | undefined
 ): OpenSpecCliCompatibility {
@@ -77,7 +93,7 @@ export function classifyOpenSpecCliVersion(
     }
   }
 
-  if (isSeries(version, OPENSPEC_CLI_TARGET_SERIES)) {
+  if (isCurrentRecommended(version)) {
     return {
       rawVersion,
       version,

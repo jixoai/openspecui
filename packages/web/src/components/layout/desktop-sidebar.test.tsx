@@ -20,6 +20,10 @@ vi.mock('@/lib/use-dark-mode', () => ({
   useDarkMode: () => false,
 }))
 
+vi.mock('@/lib/use-stores-visibility', () => ({
+  useStoresVisibility: () => ({ visible: true }),
+}))
+
 vi.mock('@/lib/use-nav-controller', () => ({
   useNavLayout: () => ({
     mainTabs: ['/dashboard', '/config', '/settings'],

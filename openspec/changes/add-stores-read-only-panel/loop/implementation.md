@@ -1,18 +1,15 @@
 ## Implementation State
 
-Status: **Not started** — revised plan approved (beta fault-tolerance paradigm), implementation pending kickoff.
+Status: **Implemented** — all planned steps landed; local CI-equivalent checks + SSG guard + `openspec validate --strict` pass.
 
-The plan was revised to center on the **beta feature fault-tolerance model**: Stores does NOT rely on the stable version gate; instead it tolerates CLI absence/incompatibility at runtime, classifying failures into two kinds (data-incompatible → show error + version; command-unavailable → hide entry). The version-law bump (A) remains, but as independent stable maintenance, not a Stores prerequisite.
-
-Pending steps (checked off as code lands):
-- [ ] A. Update `packages/core/src/openspec-compat.ts` version constants + tests (stable maintenance, independent of Stores).
-- [ ] B. Add `packages/core/src/store-types.ts`: lenient zod schemas + `StoreFeatureError` (two kinds) + `StoreFeatureResult`; export from `index.ts`.
-- [ ] C. Add `CliExecutor.listStores()` / `doctorStores(id?)` + a classification helper (exit-code + zod → ok / data-incompatible / command-unavailable).
-- [ ] D. Add `storesRouter` in `packages/server/src/router.ts` (list/doctor/subscribe); every endpoint wraps try/catch, returns `StoreFeatureResult`, never throws; `cliVersion` from `checkAvailability`.
-- [ ] E. `packages/web/src/components/stores/stores-panel.tsx`: Beta badge; data→list; data-incompatible→error+version; command-unavailable→hide entry; live-only; defensive render.
-- [ ] F. Add `.changeset/*.md`.
-- [ ] Run local CI-equivalent checks.
-- [ ] Open PR.
+Completed steps:
+- [x] A. Version-law bump in `packages/core/src/openspec-compat.ts` + tests. 1.5 is target, 1.4 stays current via new `isCurrentRecommended` (recommended range `>=1.4.0 <1.6.0`), 1.3 legacy, accepted `>=1.3.0 <1.6.0`, reference tag `v1.5.*`.
+- [x] B. `packages/core/src/store-types.ts`: lenient passthrough zod + `StoreFeatureError` (two kinds) + `StoreFeatureResult` + `classifyStoreCliOutput`/`toStoreFeatureResult`; exported from `index.ts` and new `./store-types` subpath.
+- [x] C. `CliExecutor.listStores()` / `doctorStores(id?)` (raw CliResult; classification at router layer).
+- [x] D. `storesRouter` (list/doctor/subscribe) in `packages/server/src/router.ts`; every path wrapped, never throws, carries cached `cliVersion` (30s TTL); polling subscription (5s, unref).
+- [x] E. `packages/web/src/routes/stores-list.tsx` + `use-stores-visibility.ts`; Beta badge; data→list; data-incompatible→error+version; command-unavailable→hide entry (nav filters via visibility hook); live-only; defensive render. Registered in nav-items / nav-controller / route-tree.
+- [x] F. `.changeset/stores-beta-discovery.md` (core/server/web minor).
+- [x] G. Local checks pass: `format:check`, `lint:ci`, `typecheck`, `test:ci`, `test:browser:ci`, SSG build (`static-data-provider` has no stores wiring), `openspec validate --strict`.
 
 ## Decisions Taken
 

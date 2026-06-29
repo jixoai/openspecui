@@ -582,6 +582,22 @@ export {
 export { VIRTUAL_PROJECT_DIRNAME, toOpsxDisplayPath } from './opsx-display-path.js'
 export { type ProjectRecoveryStatus } from './runtime-types.js'
 export {
+  StoreDoctorResultSchema,
+  StoreListResultSchema,
+  classifyStoreCliOutput,
+  toStoreFeatureResult,
+  type StoreClassification,
+  type StoreCommandUnavailableError,
+  type StoreDataIncompatibleError,
+  type StoreDiagnostic,
+  type StoreDoctorResult,
+  type StoreDoctorStore,
+  type StoreFeatureError,
+  type StoreFeatureResult,
+  type StoreListEntry,
+  type StoreListResult,
+} from './store-types.js'
+export {
   BUILTIN_TERMINAL_SPAWN_COMMANDS,
   TERMINAL_COMMAND_FIELD_TYPE_VALUES,
   TERMINAL_SHELL_QUOTE_STYLE_VALUES,

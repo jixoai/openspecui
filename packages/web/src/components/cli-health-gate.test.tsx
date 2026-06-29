@@ -94,12 +94,12 @@ describe('CliHealthGate', () => {
 
     renderGate()
 
-    expect(await screen.findByText(/OpenSpec CLI >=1.3.0 <1.5.0 Required/)).toBeInTheDocument()
+    expect(await screen.findByText(/OpenSpec CLI >=1.3.0 <1.6.0 Required/)).toBeInTheDocument()
     expect(screen.getByText(/Detected OpenSpec CLI 1.2.0/)).toBeInTheDocument()
   })
 
   it('offers a skip-version-check escape hatch when the CLI is available', async () => {
-    availability = { available: true, version: '1.5.0' }
+    availability = { available: true, version: '1.6.0' }
 
     renderGate()
 
@@ -107,7 +107,7 @@ describe('CliHealthGate', () => {
   })
 
   it('clears the blocking dialog after skipping the version check', async () => {
-    availability = { available: true, version: '1.5.0' }
+    availability = { available: true, version: '1.6.0' }
 
     renderGate()
 
@@ -115,7 +115,7 @@ describe('CliHealthGate', () => {
     fireEvent.click(skip)
 
     await waitFor(() => {
-      expect(screen.queryByText(/OpenSpec CLI >=1.3.0 <1.5.0 Required/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/OpenSpec CLI >=1.3.0 <1.6.0 Required/)).not.toBeInTheDocument()
     })
   })
 
@@ -124,7 +124,7 @@ describe('CliHealthGate', () => {
 
     renderGate()
 
-    expect(await screen.findByText(/OpenSpec CLI >=1.3.0 <1.5.0 Required/)).toBeInTheDocument()
+    expect(await screen.findByText(/OpenSpec CLI >=1.3.0 <1.6.0 Required/)).toBeInTheDocument()
     expect(screen.queryByText(/Skip version check/)).not.toBeInTheDocument()
   })
 })

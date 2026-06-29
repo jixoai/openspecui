@@ -46,6 +46,14 @@ OpenSpecUI SHALL select the OpenSpec CLI command based on availability and enfor
 
 For beta-gated features (e.g., Stores), OpenSpecUI SHALL NOT rely on the stable version gate for availability. Instead it SHALL tolerate CLI absence or incompatibility at runtime so the UI never crashes, classifying failures into two kinds and reacting accordingly.
 
+> **Rationale (manager directive, verbatim intent):**
+> 对于 beta 功能，openspecui 不负责兼容性。但这也意味着所有功能在后台需要有较强的容错能力（没有这个功能也要能捕捉到错误），然后前端显示这个错误。这个错误一般是两种：
+>
+> 1. **数据不兼容** — 当前的 openspecui 不支持/不兼容 openspec-cli 提供的数据。通过 zod 对 CLI 输出做**宽松验证**，所以除非 openspec-cli 破坏性更新提供了不兼容的数据结构，我们才会异常。
+> 2. **指令用法变了** — openspec-cli 直接修改了指令的用法，这属于 openspec 上了比较大的破坏性更新。
+>
+> 不论哪种情况，前端都不能因此崩溃。要么客观显示错误，并提供错误的**版本来源信息**（版本信息非常重要）。像 Store 这种 beta 功能是很弱的入口——低版本没有、当前版本不稳定：遇到异常一就直接客观显示版本信息即可；遇到异常二就直接隐藏入口。
+
 #### Scenario: Lenient parsing of beta CLI output
 
 - **GIVEN** a beta feature reads OpenSpec CLI JSON output
