@@ -8,7 +8,7 @@ import {
   OPENSPECUI_TARGET_MAJOR,
 } from '@openspecui/core/openspec-compat'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { AlertCircle, Loader2, Terminal } from 'lucide-react'
+import { AlertCircle, Loader2, ShieldAlert, Terminal } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 function formatExecutePath(command: string, args: readonly string[] = []): string {
@@ -61,13 +61,17 @@ export function CliHealthGate() {
     },
   })
 
+  // Session-only escape hatch: lets users force OpenSpecUI to work with an
+  // out-of-range OpenSpec CLI version. Not persisted — a refresh re-checks.
+  const [forceBypassed, setForceBypassed] = useState(false)
+
   if (isLoading) {
     return null
   }
 
   const compatibility = classifyOpenSpecCliVersion(data?.version)
 
-  if (data?.available && compatibility.status === 'current') {
+  if (data?.available && (compatibility.status === 'current' || forceBypassed)) {
     return null
   }
 
@@ -139,7 +143,24 @@ export function CliHealthGate() {
             )}
             {checking ? 'Checking...' : 'Recheck'}
           </button>
+          {data?.available && (
+            <button
+              onClick={() => setForceBypassed(true)}
+              className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs underline-offset-2 hover:underline"
+              title="Force OpenSpecUI to run with this OpenSpec CLI version anyway. Not supported."
+            >
+              <ShieldAlert className="h-3.5 w-3.5" />
+              Skip version check
+            </button>
+          )}
         </div>
+        {data?.available && (
+          <p className="text-muted-foreground text-xs">
+            The detected OpenSpec CLI is usable but outside the supported range. You can skip the
+            version check to continue at your own risk; this is a temporary override and is not
+            supported.
+          </p>
+        )}
       </div>
     </div>
   )
