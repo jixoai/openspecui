@@ -1,8 +1,7 @@
 import { Badge } from '@/components/badge'
 import { isStaticMode } from '@/lib/static-mode'
 import { useStoresSubscription } from '@/lib/use-subscription'
-import { AlertCircle, RefreshCw, Store } from 'lucide-react'
-import { useState } from 'react'
+import { AlertCircle, Store } from 'lucide-react'
 
 import type { StoreFeatureResult, StoreListEntry } from '@openspecui/core/store-types'
 
@@ -15,12 +14,12 @@ import type { StoreFeatureResult, StoreListEntry } from '@openspecui/core/store-
  *  - 异常二（command-unavailable）：入口本身在 nav 层隐藏（见 useStoresVisibility），
  *    即使渲染到这里也给出最简提示而非崩溃。
  *
- * 数据由 server 端轮询 registry 并推送（订阅），前端不感知轮询细节。仅 live 模式可见。
+ * 数据由 server 端轮询 registry 并推送（订阅），前端只消费推送结果，不感知轮询细节、无手动刷新。仅 live 模式可见。
  */
 export function StoresList() {
   const staticMode = isStaticMode()
-  // 手动刷新：递增 refreshKey 重新挂载订阅子树，触发 server 立即推送一次最新数据。
-  const [refreshKey, setRefreshKey] = useState(0)
+  const { data, isLoading } = useStoresSubscription()
+  const loading = isLoading && data === undefined
 
   if (staticMode) {
     return (
@@ -33,38 +32,17 @@ export function StoresList() {
 
   return (
     <div className="space-y-6 p-4">
-      <div className="flex items-center justify-between">
-        <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
-          <Store className="h-6 w-6 shrink-0" />
-          Stores
-          <Badge tone="subtle" size="xs">
-            Beta
-          </Badge>
-        </h1>
-        <button
-          onClick={() => setRefreshKey((k) => k + 1)}
-          className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs"
-          title="Refresh stores"
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-          Refresh
-        </button>
-      </div>
+      <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
+        <Store className="h-6 w-6 shrink-0" />
+        Stores
+        <Badge tone="subtle" size="xs">
+          Beta
+        </Badge>
+      </h1>
 
-      <StoresSubscriptionBody refreshKey={refreshKey} />
+      <StoresBody data={data} loading={loading} />
     </div>
   )
-}
-
-function StoresSubscriptionBody({ refreshKey }: { refreshKey: number }) {
-  // key 变化时整个子树重新挂载，从而重建订阅并立即拿到一次最新推送。
-  return <StoresSubscriptionBodyInner key={refreshKey} />
-}
-
-function StoresSubscriptionBodyInner() {
-  const { data, isLoading } = useStoresSubscription()
-  const loading = isLoading && data === undefined
-  return <StoresBody data={data} loading={loading} />
 }
 
 function StoresBody({
