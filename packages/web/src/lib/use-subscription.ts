@@ -10,6 +10,7 @@ import type {
   Spec,
   SpecMeta,
 } from '@openspecui/core'
+import type { StoreFeatureResult, StoreListEntry } from '@openspecui/core/store-types'
 import { useEffect, useRef, useState } from 'react'
 import * as StaticProvider from './static-data-provider'
 import { isStaticMode } from './static-mode'
@@ -354,5 +355,28 @@ export function useConfiguredToolsSubscription(): SubscriptionState<string[]> {
     StaticProvider.getConfiguredTools,
     [],
     'cli.subscribeConfiguredTools'
+  )
+}
+
+// =====================
+// Stores subscriptions (beta)
+// =====================
+
+/**
+ * Stores 订阅（beta）。
+ *
+ * 底层由 server 端轮询 registry 并推送（registry 在 projectDir 之外，watcher 不可达），
+ * 前端只消费推送结果，不感知轮询细节。无静态加载器——stores 仅 live 模式可见。
+ */
+export function useStoresSubscription(): SubscriptionState<StoreFeatureResult<StoreListEntry[]>> {
+  return useSubscription<StoreFeatureResult<StoreListEntry[]>>(
+    (callbacks) =>
+      trpcClient.stores.subscribe.subscribe(undefined, {
+        onData: callbacks.onData,
+        onError: callbacks.onError,
+      }),
+    undefined,
+    [],
+    'stores.subscribe'
   )
 }

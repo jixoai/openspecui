@@ -2,40 +2,24 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StoresList } from './stores-list'
 
-const storesListDataMock = vi.hoisted(() => vi.fn())
+const useStoresSubscriptionMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/static-mode', () => ({
   isStaticMode: () => false,
 }))
 
-vi.mock('@/lib/trpc', () => ({
-  trpc: {
-    stores: {
-      list: {
-        // TanStack Query 的 queryOptions() 调用：返回一个带 queryKey/queryFn 的对象。
-        queryOptions: () => ({
-          queryKey: ['stores', 'list'],
-          queryFn: () => storesListDataMock(),
-        }),
-      },
-    },
-  },
+vi.mock('@/lib/use-subscription', () => ({
+  // 数据由 server 端轮询并推送；测试直接控制订阅返回的数据。
+  useStoresSubscription: useStoresSubscriptionMock,
 }))
 
-vi.mock('@tanstack/react-query', () => ({
-  useQuery: ({ queryFn }: { queryFn: () => unknown }) => {
-    try {
-      const data = queryFn()
-      return { data, isLoading: false, isFetching: false, refetch: vi.fn() }
-    } catch {
-      return { data: undefined, isLoading: false, isFetching: false, refetch: vi.fn() }
-    }
-  },
-}))
+function mockSubscription(data: unknown) {
+  useStoresSubscriptionMock.mockReturnValue({ data, isLoading: data === undefined })
+}
 
 describe('StoresList (beta fault-tolerance)', () => {
   beforeEach(() => {
-    storesListDataMock.mockReset()
+    useStoresSubscriptionMock.mockReset()
   })
 
   afterEach(() => {
@@ -43,7 +27,7 @@ describe('StoresList (beta fault-tolerance)', () => {
   })
 
   it('renders the list and Beta badge when stores are available', () => {
-    storesListDataMock.mockReturnValue({
+    mockSubscription({
       available: true,
       stores: [{ id: 'team', root: '/repo/team' }],
     })
@@ -57,7 +41,7 @@ describe('StoresList (beta fault-tolerance)', () => {
   })
 
   it('renders an objective error with version source on data-incompatible (异常一)', () => {
-    storesListDataMock.mockReturnValue({
+    mockSubscription({
       available: false,
       stores: [],
       error: {
@@ -77,7 +61,7 @@ describe('StoresList (beta fault-tolerance)', () => {
   })
 
   it('renders a minimal unavailable notice on command-unavailable (异常二)', () => {
-    storesListDataMock.mockReturnValue({
+    mockSubscription({
       available: false,
       stores: [],
       error: {
@@ -96,7 +80,7 @@ describe('StoresList (beta fault-tolerance)', () => {
   })
 
   it('renders an empty state when no stores are registered', () => {
-    storesListDataMock.mockReturnValue({ available: true, stores: [] })
+    mockSubscription({ available: true, stores: [] })
 
     render(<StoresList />)
 

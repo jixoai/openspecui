@@ -1,6 +1,5 @@
 import { isStaticMode } from '@/lib/static-mode'
-import { trpc } from '@/lib/trpc'
-import { useQuery } from '@tanstack/react-query'
+import { useStoresSubscription } from '@/lib/use-subscription'
 
 import type { StoreFeatureResult, StoreListEntry } from '@openspecui/core/store-types'
 
@@ -10,16 +9,12 @@ import type { StoreFeatureResult, StoreListEntry } from '@openspecui/core/store-
  * 异常二（command-unavailable）：指令用法变了/指令缺失，直接隐藏入口。
  * 异常一（data-incompatible）：数据不兼容，不隐藏入口（面板内客观显示错误 + 版本信息）。
  *
- * 与 StoresList 共享同一份 TanStack Query 缓存（同 queryKey），避免重复请求。
+ * 数据由 server 端轮询 registry 并推送（订阅），与 StoresList 共享同一订阅缓存。
  */
 export function useStoresVisibility(): { visible: boolean } {
   const staticMode = isStaticMode()
 
-  const { data } = useQuery({
-    ...trpc.stores.list.queryOptions(),
-    enabled: !staticMode,
-    staleTime: 30_000,
-  })
+  const { data } = useStoresSubscription()
 
   if (staticMode) {
     return { visible: false }

@@ -1,8 +1,8 @@
 import { Badge } from '@/components/badge'
 import { isStaticMode } from '@/lib/static-mode'
-import { trpc } from '@/lib/trpc'
-import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, LoaderCircle, RefreshCw, Store } from 'lucide-react'
+import { useStoresSubscription } from '@/lib/use-subscription'
+import { AlertCircle, RefreshCw, Store } from 'lucide-react'
+import { useState } from 'react'
 
 import type { StoreFeatureResult, StoreListEntry } from '@openspecui/core/store-types'
 
@@ -15,16 +15,12 @@ import type { StoreFeatureResult, StoreListEntry } from '@openspecui/core/store-
  *  - 异常二（command-unavailable）：入口本身在 nav 层隐藏（见 useStoresVisibility），
  *    即使渲染到这里也给出最简提示而非崩溃。
  *
- * 数据来自 `openspec store list --json`（后端宽松解析 + 两类异常归类），仅 live 模式可见。
+ * 数据由 server 端轮询 registry 并推送（订阅），前端不感知轮询细节。仅 live 模式可见。
  */
 export function StoresList() {
   const staticMode = isStaticMode()
-
-  const { data, isLoading, isFetching, refetch } = useQuery({
-    ...trpc.stores.list.queryOptions(),
-    enabled: !staticMode,
-    staleTime: 30_000,
-  })
+  // 手动刷新：递增 refreshKey 重新挂载订阅子树，触发 server 立即推送一次最新数据。
+  const [refreshKey, setRefreshKey] = useState(0)
 
   if (staticMode) {
     return (
@@ -46,23 +42,29 @@ export function StoresList() {
           </Badge>
         </h1>
         <button
-          onClick={() => void refetch()}
-          disabled={isFetching}
-          className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs disabled:opacity-50"
+          onClick={() => setRefreshKey((k) => k + 1)}
+          className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs"
           title="Refresh stores"
         >
-          {isFetching ? (
-            <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
-          )}
+          <RefreshCw className="h-3.5 w-3.5" />
           Refresh
         </button>
       </div>
 
-      <StoresBody data={data} loading={isLoading && !data} />
+      <StoresSubscriptionBody refreshKey={refreshKey} />
     </div>
   )
+}
+
+function StoresSubscriptionBody({ refreshKey }: { refreshKey: number }) {
+  // key 变化时整个子树重新挂载，从而重建订阅并立即拿到一次最新推送。
+  return <StoresSubscriptionBodyInner key={refreshKey} />
+}
+
+function StoresSubscriptionBodyInner() {
+  const { data, isLoading } = useStoresSubscription()
+  const loading = isLoading && data === undefined
+  return <StoresBody data={data} loading={loading} />
 }
 
 function StoresBody({
@@ -106,26 +108,18 @@ function StoresBody({
   const stores = data?.stores ?? []
 
   return (
-    <>
-      <p className="text-muted-foreground text-sm">
-        Machine-registered OpenSpec stores.{' '}
-        <span className="text-xs">
-          (Beta — auto-refreshes every 5s; the registry lives outside the project directory.)
-        </span>
-      </p>
-      <div className="border-border divide-border divide-y rounded-lg border">
-        {stores.map((store) => (
-          <StoresRow key={`${store.id}:${store.root}`} store={store} />
-        ))}
-        {stores.length === 0 && (
-          <div className="text-muted-foreground p-4 text-center">
-            No stores registered. Use{' '}
-            <code className="bg-muted rounded px-1">openspec store setup/register</code> in a
-            terminal.
-          </div>
-        )}
-      </div>
-    </>
+    <div className="border-border divide-border divide-y rounded-lg border">
+      {stores.map((store) => (
+        <StoresRow key={`${store.id}:${store.root}`} store={store} />
+      ))}
+      {stores.length === 0 && (
+        <div className="text-muted-foreground p-4 text-center">
+          No stores registered. Use{' '}
+          <code className="bg-muted rounded px-1">openspec store setup/register</code> in a
+          terminal.
+        </div>
+      )}
+    </div>
   )
 }
 
