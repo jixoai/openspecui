@@ -487,8 +487,9 @@ OpenSpecUI SHALL provide a read-only Stores panel, gated behind a visible Beta b
 
 - **GIVEN** the Stores panel is open
 - **WHEN** the local store registry changes
-- **THEN** the UI SHALL update via a polling subscription (the registry lives outside the project directory)
-- **AND** SHALL offer a manual refresh control
+- **THEN** the UI SHALL update via a polling subscription (the registry lives outside the project directory) that the server polls and pushes to the frontend
+- **AND** SHALL NOT expose polling cadence or registry-location details to the user
+- **AND** SHALL NOT offer a manual refresh control
 
 #### Scenario: Restrict to live mode
 
