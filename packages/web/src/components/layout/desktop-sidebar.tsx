@@ -8,6 +8,7 @@ import { PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Tooltip } from '../tooltip'
 import { AreaNav } from './area-nav'
+import { BetaCornerMark, BetaPill } from './beta-mark'
 import { navItems, settingsItem } from './nav-items'
 import { TopLayerEntryButton } from './top-layer-entry-button'
 
@@ -109,9 +110,15 @@ export function DesktopSidebar() {
                         collapsed ? 'justify-center px-2' : 'px-3'
                       }`}
                     >
-                      <item.icon className="h-4 w-4 shrink-0" />
+                      <span className="relative">
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        {item.beta && collapsed ? <BetaCornerMark /> : null}
+                      </span>
                       {!collapsed ? (
-                        <span className="font-nav text-base tracking-[0.04em]">{item.label}</span>
+                        <>
+                          <span className="font-nav text-base tracking-[0.04em]">{item.label}</span>
+                          {item.beta ? <BetaPill /> : null}
+                        </>
                       ) : null}
                     </VTLink>
                   </Tooltip>

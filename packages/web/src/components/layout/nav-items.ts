@@ -1,13 +1,13 @@
 import {
   Archive,
-  FileCode2,
   FileText,
   GitBranch,
   LayoutDashboard,
+  ListTodo,
   Settings,
   SlidersHorizontal,
-  Store,
   Terminal,
+  Warehouse,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -41,11 +41,11 @@ export interface NavItem {
 export const allNavItems: NavItem[] = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', defaultArea: 'main' },
   { to: '/config', icon: SlidersHorizontal, label: 'Config', defaultArea: 'main' },
-  { to: '/git', icon: FileCode2, label: 'Git', defaultArea: 'bottom' },
+  { to: '/git', icon: GitBranch, label: 'Git', defaultArea: 'bottom' },
   { to: '/specs', icon: FileText, label: 'Specs', defaultArea: 'main' },
-  { to: '/changes', icon: GitBranch, label: 'Changes', defaultArea: 'main' },
+  { to: '/changes', icon: ListTodo, label: 'Changes', defaultArea: 'main' },
   { to: '/archive', icon: Archive, label: 'Archive', defaultArea: 'main' },
-  { to: '/stores', icon: Store, label: 'Stores', defaultArea: 'main', beta: true },
+  { to: '/stores', icon: Warehouse, label: 'Stores', defaultArea: 'main', beta: true },
   { to: '/settings', icon: Settings, label: 'Settings', defaultArea: 'main' },
   { to: '/terminal', icon: Terminal, label: 'Terminal', defaultArea: 'bottom' },
 ]
