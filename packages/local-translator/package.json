@@ -1,7 +1,7 @@
 {
   "name": "@openspecui/local-translator",
   "private": true,
-  "version": "4.0.1",
+  "version": "4.0.2",
   "description": "Server-side local translator engine for OpenSpecUI",
   "type": "module",
   "main": "./dist/index.mjs",
