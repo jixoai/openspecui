@@ -1,5 +1,11 @@
 # @openspecui/browser-translator
 
+## 4.0.2
+
+### Patch Changes
+
+- @openspecui/core@4.0.2
+
 ## 4.0.1
 
 ### Patch Changes
