@@ -64,14 +64,14 @@ function renderGate() {
 
 describe('CliHealthGate', () => {
   beforeEach(() => {
-    availability = { available: true, version: '1.4.1' }
+    availability = { available: true, version: '1.5.0' }
   })
 
   afterEach(() => {
     cleanup()
   })
 
-  it('does not render for current OpenSpec CLI 1.4.x', async () => {
+  it('does not render for current OpenSpec CLI 1.5.x', async () => {
     renderGate()
 
     await waitFor(() => {
@@ -80,22 +80,22 @@ describe('CliHealthGate', () => {
     })
   })
 
-  it('renders a non-blocking legacy-compatible notice for OpenSpec CLI 1.3.x', async () => {
-    availability = { available: true, version: '1.3.0' }
+  it('renders a non-blocking legacy-compatible notice for OpenSpec CLI 1.4.x', async () => {
+    availability = { available: true, version: '1.4.1' }
 
     renderGate()
 
-    expect(await screen.findByText('OpenSpec CLI 1.3.0 is legacy-compatible')).toBeInTheDocument()
+    expect(await screen.findByText('OpenSpec CLI 1.4.1 is legacy-compatible')).toBeInTheDocument()
     expect(screen.queryByText(/OpenSpec CLI .* Required/)).not.toBeInTheDocument()
   })
 
   it('blocks unsupported OpenSpec CLI versions', async () => {
-    availability = { available: true, version: '1.2.0' }
+    availability = { available: true, version: '1.3.0' }
 
     renderGate()
 
-    expect(await screen.findByText(/OpenSpec CLI >=1.3.0 <1.6.0 Required/)).toBeInTheDocument()
-    expect(screen.getByText(/Detected OpenSpec CLI 1.2.0/)).toBeInTheDocument()
+    expect(await screen.findByText(/OpenSpec CLI >=1.4.0 <1.6.0 Required/)).toBeInTheDocument()
+    expect(screen.getByText(/Detected OpenSpec CLI 1.3.0/)).toBeInTheDocument()
   })
 
   it('offers a skip-version-check escape hatch when the CLI is available', async () => {
@@ -115,7 +115,7 @@ describe('CliHealthGate', () => {
     fireEvent.click(skip)
 
     await waitFor(() => {
-      expect(screen.queryByText(/OpenSpec CLI >=1.3.0 <1.6.0 Required/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/OpenSpec CLI >=1.4.0 <1.6.0 Required/)).not.toBeInTheDocument()
     })
   })
 
@@ -124,7 +124,7 @@ describe('CliHealthGate', () => {
 
     renderGate()
 
-    expect(await screen.findByText(/OpenSpec CLI >=1.3.0 <1.6.0 Required/)).toBeInTheDocument()
+    expect(await screen.findByText(/OpenSpec CLI >=1.4.0 <1.6.0 Required/)).toBeInTheDocument()
     expect(screen.queryByText(/Skip version check/)).not.toBeInTheDocument()
   })
 })

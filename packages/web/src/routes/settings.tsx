@@ -45,6 +45,10 @@ import { useConfigSubscription } from '@/lib/use-subscription'
 import { OFFICIAL_APP_BASE_URL } from '@openspecui/core/hosted-app'
 import { NotificationSoundSchema } from '@openspecui/core/notifications'
 import {
+  OPENSPEC_CLI_TARGET_SERIES,
+  OPENSPECUI_TARGET_MAJOR,
+} from '@openspecui/core/openspec-compat'
+import {
   DEFAULT_BELL_SOUND_ID,
   DEFAULT_NOTIFICATION_SOUND_ID,
   type SoundId,
@@ -1832,8 +1836,9 @@ export function Settings() {
                         className="w-full"
                       />
                       <p className="text-muted-foreground text-xs">
-                        OpenSpec CLI can auto-detect existing tool directories. OpenSpecUI 4.x uses
-                        OpenSpec CLI 1.4.x as the current tool line.
+                        OpenSpec CLI can auto-detect existing tool directories. OpenSpecUI{' '}
+                        {OPENSPECUI_TARGET_MAJOR}.x uses OpenSpec CLI {OPENSPEC_CLI_TARGET_SERIES}.x
+                        as the current tool line.
                       </p>
                     </label>
 

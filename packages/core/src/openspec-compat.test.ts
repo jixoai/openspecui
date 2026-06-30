@@ -8,14 +8,14 @@ import {
 describe('openspec CLI compatibility law', () => {
   it('parses versions from raw CLI output', () => {
     expect(parseOpenSpecCliVersion('1.5.0')).toEqual({ major: 1, minor: 5, patch: 0 })
-    expect(parseOpenSpecCliVersion('openspec 1.3.0')).toEqual({
+    expect(parseOpenSpecCliVersion('openspec 1.4.0')).toEqual({
       major: 1,
-      minor: 3,
+      minor: 4,
       patch: 0,
     })
   })
 
-  it('classifies the 1.5 target line as the current OpenSpecUI 4.x target line', () => {
+  it('classifies the 1.5 target line as the current OpenSpecUI 5.x target line', () => {
     expect(classifyOpenSpecCliVersion('1.5.0')).toMatchObject({
       status: 'current',
       supported: true,
@@ -24,17 +24,8 @@ describe('openspec CLI compatibility law', () => {
     })
   })
 
-  it('classifies the prior 1.4 recommended line as current', () => {
+  it('classifies the prior 1.4 line as legacy-compatible but not recommended', () => {
     expect(classifyOpenSpecCliVersion('1.4.1')).toMatchObject({
-      status: 'current',
-      supported: true,
-      recommended: true,
-      blocksCoreInteractions: false,
-    })
-  })
-
-  it('classifies 1.3.x as backward-compatible but not recommended', () => {
-    expect(classifyOpenSpecCliVersion('1.3.0')).toMatchObject({
       status: 'legacy-compatible',
       supported: true,
       recommended: false,
@@ -42,7 +33,12 @@ describe('openspec CLI compatibility law', () => {
     })
   })
 
-  it('blocks versions outside the 4.x accepted range', () => {
+  it('blocks versions outside the 5.x accepted range (1.3 and below are no longer supported)', () => {
+    expect(classifyOpenSpecCliVersion('1.3.0')).toMatchObject({
+      status: 'unsupported',
+      supported: false,
+      blocksCoreInteractions: true,
+    })
     expect(classifyOpenSpecCliVersion('1.2.0')).toMatchObject({
       status: 'unsupported',
       supported: false,

@@ -1,13 +1,13 @@
-export const OPENSPECUI_TARGET_MAJOR = 4
+export const OPENSPECUI_TARGET_MAJOR = 5
 export const OPENSPEC_CLI_TARGET_SERIES = '1.5'
-export const OPENSPEC_CLI_LEGACY_SERIES = '1.3'
-export const OPENSPEC_CLI_MIN_VERSION = '1.3.0'
+export const OPENSPEC_CLI_LEGACY_SERIES = '1.4'
+export const OPENSPEC_CLI_MIN_VERSION = '1.4.0'
 export const OPENSPEC_CLI_TARGET_MIN_VERSION = '1.5.0'
-export const OPENSPEC_CLI_RECOMMENDED_MIN_VERSION = '1.4.0'
+export const OPENSPEC_CLI_RECOMMENDED_MIN_VERSION = '1.5.0'
 export const OPENSPEC_CLI_NEXT_SERIES_MIN_VERSION = '1.6.0'
-export const OPENSPEC_CLI_ACCEPTED_RANGE = '>=1.3.0 <1.6.0'
-export const OPENSPEC_CLI_RECOMMENDED_RANGE = '>=1.4.0 <1.6.0'
-export const OPENSPEC_CLI_LEGACY_RANGE = '>=1.3.0 <1.4.0'
+export const OPENSPEC_CLI_ACCEPTED_RANGE = '>=1.4.0 <1.6.0'
+export const OPENSPEC_CLI_RECOMMENDED_RANGE = '>=1.5.0 <1.6.0'
+export const OPENSPEC_CLI_LEGACY_RANGE = '>=1.4.0 <1.5.0'
 export const OPENSPEC_CLI_REFERENCE_TAG_PATTERN = 'v1.5.*'
 
 export interface OpenSpecCliVersion {
@@ -63,9 +63,10 @@ function isSeries(version: OpenSpecCliVersion, series: string): boolean {
 
 /**
  * A version is "current/recommended" when it falls inside the recommended
- * range (e.g. `>=1.4.0 <1.6.0`). This intentionally spans more than one minor
- * series so that both the previous and the target OpenSpec CLI lines are
- * treated as current without a version-law bump per release.
+ * range (e.g. `>=1.5.0 <1.6.0`). OpenSpecUI follows a 1:1 major-to-minor
+ * version law: one OpenSpecUI major line targets exactly one OpenSpec CLI
+ * minor line (2.x→1.2, 3.x→1.3, 4.x→1.4, 5.x→1.5). The previous minor line
+ * is accepted as legacy-compatible; older lines are unsupported.
  */
 function isCurrentRecommended(version: OpenSpecCliVersion): boolean {
   const min = parseOpenSpecCliVersion(OPENSPEC_CLI_RECOMMENDED_MIN_VERSION)
