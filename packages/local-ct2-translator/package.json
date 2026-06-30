@@ -1,7 +1,7 @@
 {
   "name": "@openspecui/local-ct2-translator",
   "private": true,
-  "version": "4.0.2",
+  "version": "4.1.0",
   "description": "Server-side CTranslate2 translator engine for OpenSpecUI",
   "type": "module",
   "main": "./dist/index.mjs",
