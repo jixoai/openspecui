@@ -1,3 +1,9 @@
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Provide the canonical Chinese product-site copy.
+ *
+ * Original request (2026-07-15): "CLI 1.6 兼容性门禁。"
+ */
 import type { WebsiteContent } from '$lib/i18n/schema'
 
 export const zh = {
@@ -51,7 +57,7 @@ export const zh = {
     appOffSummary: '启动本地后端，并由当前机器直接提供本地 Web UI。',
     exportLabel: '静态导出',
     exportSummary: '生成可部署的静态快照，用于文档站点或离线审阅。',
-    compatibility: 'OpenSpecUI 4.x 面向 OpenSpec CLI 1.4.x，并兼容 1.3.x 项目。',
+    compatibility: 'OpenSpecUI 6.x 面向 OpenSpec CLI 1.6.x，并将 1.5.x 作为遗留兼容线。',
   },
   modes: {
     title: '选择合适的界面',

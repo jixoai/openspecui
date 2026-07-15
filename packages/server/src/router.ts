@@ -1,3 +1,16 @@
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Register project document, OPSX, dashboard, and archive procedures.
+ * 2. Register CLI, tool initialization, configuration, and Store projections.
+ * 3. Register Git, terminal, system, notification, and recovery procedures.
+ * 4. Register translation runtime, model, asset, and cache procedures.
+ * 5. Compose the public tRPC application router and shared procedure schemas.
+ *
+ * Compromise: tRPC router inference currently requires one composition module; splitting its
+ * established 2,600-line registration surface is outside the OpenSpec 1.6 contract slice.
+ *
+ * Original request (2026-07-15): "你先负责后端（内核）的开发。"
+ */
 import type {
   ChangeFile,
   CliExecutor,
@@ -853,7 +866,14 @@ export const localLlamaModelsRouter = router({
     }),
 })
 
-const OPSX_CORE_PROFILE_WORKFLOWS = ['propose', 'explore', 'apply', 'archive'] as const
+const OPSX_CORE_PROFILE_WORKFLOWS = [
+  'propose',
+  'explore',
+  'apply',
+  'update',
+  'sync',
+  'archive',
+] as const
 const gitEntrySelectorSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('uncommitted') }),
   z.object({ type: z.literal('commit'), hash: z.string().min(1) }),
@@ -876,7 +896,7 @@ const runWorkflowInputSchema = z.discriminatedUnion('action', [
     schema: z.string().optional(),
   }),
   z.object({
-    action: z.enum(['apply', 'archive', 'verify', 'sync']),
+    action: z.enum(['apply', 'update', 'archive', 'verify', 'sync']),
     changeId: z.string(),
     schema: z.string().optional(),
     strict: z.boolean().optional(),
@@ -1772,24 +1792,44 @@ export const cliRouter = router({
         changeId: z.string(),
         skipSpecs: z.boolean().optional(),
         noValidate: z.boolean().optional(),
+        store: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.cliExecutor.archive(input.changeId, {
+      return ctx.cliExecutor.contracts.archive(input.changeId, {
         skipSpecs: input.skipSpecs,
         noValidate: input.noValidate,
+        store: input.store,
       })
     }),
 
   validate: publicProcedure
     .input(
-      z.object({
-        type: z.enum(['spec', 'change']).optional(),
-        id: z.string().optional(),
-      })
+      z.discriminatedUnion('kind', [
+        z.object({
+          kind: z.literal('item'),
+          id: z.string().min(1),
+          type: z.enum(['spec', 'change']).optional(),
+          strict: z.boolean().optional(),
+          store: z.string().optional(),
+        }),
+        z.object({
+          kind: z.literal('scope'),
+          scope: z.enum(['all', 'changes', 'specs']),
+          strict: z.boolean().optional(),
+          store: z.string().optional(),
+        }),
+      ])
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.cliExecutor.validate(input.type, input.id)
+      return ctx.cliExecutor.contracts.validate({
+        target:
+          input.kind === 'item'
+            ? { kind: 'item', id: input.id, type: input.type }
+            : { kind: 'scope', scope: input.scope },
+        strict: input.strict,
+        store: input.store,
+      })
     }),
 
   /** 流式执行 validate（实时输出） */
@@ -2516,7 +2556,7 @@ async function fetchStoresList(ctx: Context): Promise<StoreFeatureResult<StoreLi
   // 永不抛：CLI 调用、解析、版本探测全部包裹，失败归类为两类异常之一。
   const cliVersion = await resolveCliVersion(ctx).catch(() => undefined)
   try {
-    const result = await ctx.cliExecutor.listStores()
+    const result = await ctx.cliExecutor.contracts.listStores()
     const classification = classifyStoreCliOutput({
       success: result.success,
       stdout: result.stdout,
@@ -2550,7 +2590,7 @@ async function fetchStoresDoctor(
 ): Promise<StoreFeatureResult<StoreDoctorStore[]>> {
   const cliVersion = await resolveCliVersion(ctx).catch(() => undefined)
   try {
-    const result = await ctx.cliExecutor.doctorStores(id)
+    const result = await ctx.cliExecutor.contracts.doctorStores(id)
     const classification = classifyStoreCliOutput({
       success: result.success,
       stdout: result.stdout,

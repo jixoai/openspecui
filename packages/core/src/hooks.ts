@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Define the stable project document-read hook contract.
+ * 2. Define the stable OPSX workflow invocation hook contract.
+ *
+ * Original request (2026-07-15): "sync、update 的完整交付链。"
+ */
 export const OPENSPECUI_HOOKS_VERSION = 1
 
 /** Severity level for diagnostics returned by project hooks. */
@@ -72,6 +79,7 @@ export type WorkflowActionV1 =
   | 'continue'
   | 'ff'
   | 'apply'
+  | 'update'
   | 'verify'
   | 'sync'
   | 'archive'
@@ -93,7 +101,7 @@ export type RunWorkflowInputV1 =
     }
   | { action: 'continue' | 'ff'; changeId: string; artifactId: string; schema?: string }
   | {
-      action: 'apply' | 'archive' | 'verify' | 'sync'
+      action: 'apply' | 'update' | 'archive' | 'verify' | 'sync'
       changeId: string
       schema?: string
       strict?: boolean

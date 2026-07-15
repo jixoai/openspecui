@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Map official OPSX workflows to generated skill and command locations.
+ * 2. Project complete, missing, unexpected, and legacy tool initialization state.
+ *
+ * Original request (2026-07-15): "sync、update、Oh My Pi、Trae 的完整交付链。"
+ */
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { clearCache, reactiveExists } from './reactive-fs/index.js'
@@ -9,6 +16,7 @@ export const TOOL_WORKFLOW_TO_SKILL_DIR = {
   new: 'openspec-new-change',
   continue: 'openspec-continue-change',
   apply: 'openspec-apply-change',
+  update: 'openspec-update-change',
   ff: 'openspec-ff-change',
   sync: 'openspec-sync-specs',
   archive: 'openspec-archive-change',
@@ -153,6 +161,10 @@ const TOOL_COMMAND_PATHS: Record<string, ToolCommandPathConfig> = {
       (projectDir, workflow) => resolve(projectDir, '.opencode', 'command', `opsx-${workflow}.md`),
     ],
   },
+  'oh-my-pi': {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.omp', 'commands', `opsx-${workflow}.md`),
+  },
   pi: {
     primary: (projectDir, workflow) => resolve(projectDir, '.pi', 'prompts', `opsx-${workflow}.md`),
   },
@@ -167,6 +179,10 @@ const TOOL_COMMAND_PATHS: Record<string, ToolCommandPathConfig> = {
   roocode: {
     primary: (projectDir, workflow) =>
       resolve(projectDir, '.roo', 'commands', `opsx-${workflow}.md`),
+  },
+  trae: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.trae', 'commands', `opsx-${workflow}.md`),
   },
   windsurf: {
     primary: (projectDir, workflow) =>

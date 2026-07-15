@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Resolve OPSX compose/command/direct invocation modes.
+ * 2. Build CLI-owned workflow context and generated agent command payloads.
+ * 3. Apply project workflow hooks without losing default invocation evidence.
+ *
+ * Original request (2026-07-15): "sync、update 的完整交付链。"
+ */
 import {
   OPENSPECUI_HOOKS_VERSION,
   type HookDiagnosticV1,
@@ -11,6 +19,8 @@ import type { HookRuntime } from './hook-runtime.js'
 const COMMAND_CAPABLE_ACTIONS = new Set<RunWorkflowInputV1['action']>([
   'propose',
   'apply',
+  'update',
+  'sync',
   'archive',
 ])
 
@@ -76,6 +86,8 @@ function buildSlashCommand(input: RunWorkflowInputV1): string | null {
       return `/opsx:propose ${normalized}`
     }
     case 'apply':
+    case 'update':
+    case 'sync':
     case 'archive':
       return `/opsx:${input.action} ${input.changeId.trim()}`
     default:
@@ -113,6 +125,8 @@ function buildFallbackPrompt(input: RunWorkflowInputV1): string {
       return `Fast-forward artifact ${input.artifactId} for change ${input.changeId}.`
     case 'apply':
       return `Apply change ${input.changeId} based on current completed artifacts.`
+    case 'update':
+      return `Update the existing planning artifacts for change ${input.changeId} without creating missing artifacts or editing implementation code.`
     case 'archive':
       return `Archive change ${input.changeId} after verifying completion and risks.`
     case 'sync':
@@ -232,6 +246,7 @@ export class WorkflowInvocationService {
       (input.action === 'continue' ||
         input.action === 'ff' ||
         input.action === 'apply' ||
+        input.action === 'update' ||
         input.action === 'archive')
     ) {
       if ((input.action === 'continue' || input.action === 'ff') && !input.artifactId.trim()) {
@@ -246,10 +261,10 @@ export class WorkflowInvocationService {
 
       const args =
         input.action === 'continue' || input.action === 'ff'
-          ? ['instructions', input.artifactId, '--change', input.changeId]
+          ? ['instructions', input.artifactId, '--change', input.changeId, '--json']
           : input.action === 'apply'
-            ? ['instructions', 'apply', '--change', input.changeId]
-            : ['status', '--change', input.changeId]
+            ? ['instructions', 'apply', '--change', input.changeId, '--json']
+            : ['status', '--change', input.changeId, '--json']
       const captured = await captureCliText(executeCli, args, buildFallbackPrompt(input))
       return {
         kind: 'agent-prompt',

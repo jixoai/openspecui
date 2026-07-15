@@ -1,11 +1,22 @@
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Verify the change workflow dialog preserves route action and invocation-mode inputs.
+ * 2. Verify the shared terminal dispatch surface remains available.
+ *
+ * Original request (2026-07-15): "sync、update 的完整交付链。"
+ */
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OpsxComposeRoute } from './opsx-compose'
 
-const { setConfigMock, useLocationMock } = vi.hoisted(() => ({
-  setConfigMock: vi.fn(),
-  useLocationMock: vi.fn(),
-}))
+const { prepareWorkflowInvocationMock, setConfigMock, uiConfigMock, useLocationMock } = vi.hoisted(
+  () => ({
+    prepareWorkflowInvocationMock: vi.fn(),
+    setConfigMock: vi.fn(),
+    uiConfigMock: vi.fn(),
+    useLocationMock: vi.fn(),
+  })
+)
 
 vi.mock('@/components/layout/pop-area', () => ({
   usePopAreaConfigContext: () => ({
@@ -70,19 +81,12 @@ vi.mock('@/lib/terminal-controller', () => ({
 }))
 
 vi.mock('@/lib/use-subscription', () => ({
-  useConfigSubscription: () => ({
-    data: { opsx: { agentInvocationMode: 'compose' } },
-  }),
+  useConfigSubscription: () => uiConfigMock(),
 }))
 
 vi.mock('@/lib/opsx-workflow-invocation', () => ({
-  prepareWorkflowInvocation: vi.fn().mockResolvedValue({
-    kind: 'agent-prompt',
-    text: 'prepared prompt',
-    format: 'markdown',
-    mode: { requestedMode: 'compose', actualMode: 'compose', fallbackReason: null },
-  }),
-  stringifyWorkflowInvocation: vi.fn(() => 'prepared prompt'),
+  prepareWorkflowInvocation: prepareWorkflowInvocationMock,
+  stringifyWorkflowInvocation: vi.fn((result: { text: string }) => result.text),
   workflowDiagnosticsToText: vi.fn(() => null),
 }))
 
@@ -92,7 +96,16 @@ vi.mock('@tanstack/react-router', () => ({
 
 describe('OpsxComposeRoute', () => {
   beforeEach(() => {
+    prepareWorkflowInvocationMock.mockReset().mockResolvedValue({
+      kind: 'agent-prompt',
+      text: 'prepared prompt',
+      format: 'markdown',
+      mode: { requestedMode: 'compose', actualMode: 'compose', fallbackReason: null },
+    })
     setConfigMock.mockReset()
+    uiConfigMock.mockReset().mockReturnValue({
+      data: { opsx: { agentInvocationMode: 'compose' } },
+    })
     useLocationMock.mockReturnValue({
       pathname: '/opsx-compose',
       search: '?action=archive&change=add-terminal-spawn-command',
@@ -123,4 +136,35 @@ describe('OpsxComposeRoute', () => {
       )
     })
   })
+
+  it.each(['update', 'sync'] as const)(
+    'passes the %s action through command-mode workflow preparation',
+    async (action) => {
+      uiConfigMock.mockReturnValue({
+        data: { opsx: { agentInvocationMode: 'command' } },
+      })
+      useLocationMock.mockReturnValue({
+        pathname: '/opsx-compose',
+        search: `?action=${action}&change=add-search`,
+        hash: '',
+        state: null,
+      })
+      prepareWorkflowInvocationMock.mockResolvedValue({
+        kind: 'agent-command',
+        text: `/opsx:${action} add-search`,
+        mode: { requestedMode: 'command', actualMode: 'command', fallbackReason: null },
+      })
+
+      render(<OpsxComposeRoute />)
+
+      await waitFor(() => {
+        expect(prepareWorkflowInvocationMock).toHaveBeenCalledWith({
+          requestedMode: 'command',
+          workflowInput: { action, changeId: 'add-search' },
+          staticFallback: expect.any(Function),
+        })
+      })
+      expect(screen.getByLabelText('Prompt')).toHaveValue(`/opsx:${action} add-search`)
+    }
+  )
 })

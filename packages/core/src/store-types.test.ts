@@ -11,7 +11,7 @@ describe('classifyStoreCliOutput (beta fault-tolerance classification)', () => {
   it('classifies a successful, parseable output as ok', () => {
     const result = classifyStoreCliOutput({
       success: true,
-      stdout: JSON.stringify({ stores: [{ id: 'team', root: '/x' }] }),
+      stdout: JSON.stringify({ stores: [{ id: 'team', root: '/x' }], status: [] }),
       stderr: '',
       parse,
     })
@@ -23,6 +23,7 @@ describe('classifyStoreCliOutput (beta fault-tolerance classification)', () => {
       success: true,
       stdout: JSON.stringify({
         stores: [{ id: 'team', root: '/x', extra: 'future-field' }],
+        status: [],
         unknownTopLevel: true,
       }),
       stderr: '',
@@ -68,12 +69,12 @@ describe('toStoreFeatureResult', () => {
   it('returns available=true with parsed stores for ok classification', () => {
     const cls = classifyStoreCliOutput({
       success: true,
-      stdout: JSON.stringify({ stores: [{ id: 'a', root: '/a' }] }),
+      stdout: JSON.stringify({ stores: [{ id: 'a', root: '/a' }], status: [] }),
       stderr: '',
       parse,
     })
     const result = toStoreFeatureResult(cls, {
-      fromData: (data) => (data as { stores: { id: string }[] }).stores,
+      fromData: (data) => StoreListResultSchema.parse(data).stores,
       fallback: [],
       cliVersion: '1.5.0',
     })

@@ -148,4 +148,31 @@ describe('getToolInitStates', () => {
 
     expect(after.find((entry) => entry.toolId === 'claude')?.status).toBe('initialized')
   })
+
+  it('detects OpenSpec 1.6 update skills and commands for Oh My Pi and Trae', async () => {
+    await writeArtifact(join(tempDir, '.omp', 'skills', 'openspec-update-change', 'SKILL.md'))
+    await writeArtifact(join(tempDir, '.omp', 'commands', 'opsx-update.md'))
+    await writeArtifact(join(tempDir, '.trae', 'skills', 'openspec-update-change', 'SKILL.md'))
+    await writeArtifact(join(tempDir, '.trae', 'commands', 'opsx-update.md'))
+
+    const states = await getToolInitStates(tempDir, {
+      delivery: 'both',
+      workflows: ['update'],
+    })
+
+    expect(states.find((entry) => entry.toolId === 'oh-my-pi')).toMatchObject({
+      status: 'initialized',
+      expectedSkillCount: 1,
+      presentExpectedSkillCount: 1,
+      expectedCommandCount: 1,
+      presentExpectedCommandCount: 1,
+    })
+    expect(states.find((entry) => entry.toolId === 'trae')).toMatchObject({
+      status: 'initialized',
+      expectedSkillCount: 1,
+      presentExpectedSkillCount: 1,
+      expectedCommandCount: 1,
+      presentExpectedCommandCount: 1,
+    })
+  })
 })

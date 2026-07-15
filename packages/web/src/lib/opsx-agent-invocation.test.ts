@@ -1,3 +1,9 @@
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Verify Web OPSX command and compose-mode resolution.
+ *
+ * Original request (2026-07-15): "sync、update 的完整交付链。"
+ */
 import { describe, expect, it } from 'vitest'
 import {
   buildOpsxProposeComposePrompt,
@@ -41,6 +47,12 @@ describe('opsx agent invocation helpers', () => {
     expect(buildOpsxSlashCommand({ action: 'archive', changeId: 'add-auth' })).toBe(
       '/opsx:archive add-auth'
     )
+    expect(buildOpsxSlashCommand({ action: 'update', changeId: 'add-auth' })).toBe(
+      '/opsx:update add-auth'
+    )
+    expect(buildOpsxSlashCommand({ action: 'sync', changeId: 'add-auth' })).toBe(
+      '/opsx:sync add-auth'
+    )
   })
 
   it('rejects slash command generation for non-equivalent actions', () => {
@@ -65,5 +77,7 @@ describe('opsx agent invocation helpers', () => {
       actualMode: 'command',
       fallbackReason: null,
     })
+    expect(resolveOpsxInvocationMode('update', 'command').actualMode).toBe('command')
+    expect(resolveOpsxInvocationMode('sync', 'command').actualMode).toBe('command')
   })
 })

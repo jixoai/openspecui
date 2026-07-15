@@ -1,4 +1,14 @@
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Execute buffered CLI processes with runner recovery and complete process evidence.
+ * 2. Execute and cancel streaming CLI processes without a shell.
+ * 3. Retain established init/schema/template and human validate/archive helpers.
+ * 4. Expose the physically separated OpenSpec 1.6 typed command facade.
+ *
+ * Original request (2026-07-15): "你先负责后端（内核）的开发。"
+ */
 import { type ChildProcess } from 'child_process'
+import { OpenSpecCliContractExecutor } from './cli-contracts/index.js'
 import { createCleanCliEnv, type ConfigManager } from './config.js'
 import { formatSpawnError, runBufferedCommand, spawnSafe } from './spawn-safe.js'
 
@@ -28,10 +38,14 @@ interface CliResultInternal extends CliResult {
  * 所有命令都使用 shell: false，避免 shell 注入风险。
  */
 export class CliExecutor {
+  readonly contracts: OpenSpecCliContractExecutor
+
   constructor(
     private configManager: ConfigManager,
     private projectDir: string
-  ) {}
+  ) {
+    this.contracts = new OpenSpecCliContractExecutor((args) => this.execute(args))
+  }
 
   private async buildCommandArray(args: string[]): Promise<string[]> {
     const commandParts = await this.configManager.getCliCommand()
@@ -140,8 +154,8 @@ export class CliExecutor {
    */
   async validate(type?: 'spec' | 'change', id?: string): Promise<CliResult> {
     const args = ['validate']
-    if (type) args.push(type)
     if (id) args.push(id)
+    if (type) args.push('--type', type)
     return this.execute(args)
   }
 
@@ -169,29 +183,6 @@ export class CliExecutor {
   }
 
   /**
-   * 执行 openspec store list --json
-   *
-   * Beta 功能（Stores）。返回原始 CliResult；数据归类（ok / 异常一数据不兼容 /
-   * 异常二指令变更）由调用方用 classifyStoreCliOutput 完成。这样 CliExecutor 保持单一职责。
-   * Spec: openspec-cli-integration › Stores CLI Query Mapping / Beta Feature Fault Tolerance。
-   */
-  async listStores(): Promise<CliResult> {
-    return this.execute(['store', 'list', '--json'])
-  }
-
-  /**
-   * 执行 openspec store doctor [--json] [id]
-   *
-   * Beta 功能（Stores）。同 listStores，归类交给调用方。
-   */
-  async doctorStores(id?: string): Promise<CliResult> {
-    const args = ['store', 'doctor']
-    if (id) args.push(id)
-    args.push('--json')
-    return this.execute(args)
-  }
-
-  /**
    * 流式执行 openspec validate
    */
   validateStream(
@@ -200,8 +191,8 @@ export class CliExecutor {
     onEvent: (event: CliStreamEvent) => void
   ): Promise<() => void> {
     const args = ['validate']
-    if (type) args.push(type)
     if (id) args.push(id)
+    if (type) args.push('--type', type)
     return this.executeStream(args, onEvent)
   }
 

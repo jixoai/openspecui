@@ -7,16 +7,16 @@ import {
 
 describe('openspec CLI compatibility law', () => {
   it('parses versions from raw CLI output', () => {
-    expect(parseOpenSpecCliVersion('1.5.0')).toEqual({ major: 1, minor: 5, patch: 0 })
-    expect(parseOpenSpecCliVersion('openspec 1.4.0')).toEqual({
+    expect(parseOpenSpecCliVersion('1.6.0')).toEqual({ major: 1, minor: 6, patch: 0 })
+    expect(parseOpenSpecCliVersion('openspec 1.5.0')).toEqual({
       major: 1,
-      minor: 4,
+      minor: 5,
       patch: 0,
     })
   })
 
-  it('classifies the 1.5 target line as the current OpenSpecUI 5.x target line', () => {
-    expect(classifyOpenSpecCliVersion('1.5.0')).toMatchObject({
+  it('classifies the 1.6 target line as the current OpenSpecUI 6.x target line', () => {
+    expect(classifyOpenSpecCliVersion('1.6.0')).toMatchObject({
       status: 'current',
       supported: true,
       recommended: true,
@@ -24,8 +24,8 @@ describe('openspec CLI compatibility law', () => {
     })
   })
 
-  it('classifies the prior 1.4 line as legacy-compatible but not recommended', () => {
-    expect(classifyOpenSpecCliVersion('1.4.1')).toMatchObject({
+  it('classifies the prior 1.5 line as legacy-compatible but not recommended', () => {
+    expect(classifyOpenSpecCliVersion('1.5.0')).toMatchObject({
       status: 'legacy-compatible',
       supported: true,
       recommended: false,
@@ -33,23 +33,23 @@ describe('openspec CLI compatibility law', () => {
     })
   })
 
-  it('blocks versions outside the 5.x accepted range (1.3 and below are no longer supported)', () => {
+  it('blocks versions outside the 6.x accepted range', () => {
+    expect(classifyOpenSpecCliVersion('1.4.1')).toMatchObject({
+      status: 'unsupported',
+      supported: false,
+      blocksCoreInteractions: true,
+    })
     expect(classifyOpenSpecCliVersion('1.3.0')).toMatchObject({
       status: 'unsupported',
       supported: false,
       blocksCoreInteractions: true,
     })
-    expect(classifyOpenSpecCliVersion('1.2.0')).toMatchObject({
+    expect(classifyOpenSpecCliVersion('1.7.0')).toMatchObject({
       status: 'unsupported',
       supported: false,
       blocksCoreInteractions: true,
     })
-    expect(classifyOpenSpecCliVersion('1.6.0')).toMatchObject({
-      status: 'unsupported',
-      supported: false,
-      blocksCoreInteractions: true,
-    })
-    expect(classifyOpenSpecCliVersion('1.6.0').message).toContain(OPENSPEC_CLI_ACCEPTED_RANGE)
+    expect(classifyOpenSpecCliVersion('1.7.0').message).toContain(OPENSPEC_CLI_ACCEPTED_RANGE)
   })
 
   it('blocks unknown versions', () => {

@@ -1,3 +1,15 @@
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Project and environment-global OpenSpec configuration editing.
+ * 2. Schema discovery, inspection, creation, and file editing.
+ * 3. OpenSpec profile delivery/workflow configuration and drift repair.
+ * 4. Live CLI execution evidence and static-mode read-only projection.
+ *
+ * Compromise: these concerns share one routed Config workspace because splitting them before the
+ * Root Context ownership change would duplicate coordinated tab, editor, and loading state.
+ *
+ * Original request (2026-07-15): "sync、update 的完整交付链。"
+ */
 import { Button } from '@/components/button'
 import { ButtonGroup } from '@/components/button-group'
 import { CliTerminal } from '@/components/cli-terminal'
@@ -21,6 +33,12 @@ import { Select, type SelectOption } from '@/components/select'
 import { Switch } from '@/components/switch'
 import { Tabs, type Tab } from '@/components/tabs'
 import { navController } from '@/lib/nav-controller'
+import {
+  isOpsxCoreWorkflowSelection,
+  OPSX_ALL_WORKFLOWS,
+  OPSX_CORE_PROFILE_WORKFLOWS,
+  OPSX_WORKFLOW_LABELS,
+} from '@/lib/opsx-profile'
 import { isStaticMode } from '@/lib/static-mode'
 import { useTerminalContext } from '@/lib/terminal-context'
 import { queryClient, trpc, trpcClient } from '@/lib/trpc'
@@ -71,34 +89,6 @@ const DELIVERY_MODE_OPTIONS: SelectOption<DeliveryMode>[] = [
 ]
 
 const DEFAULT_CONFIG_TEMPLATE = `schema: spec-driven\n\ncontext: |\n  \n\nrules:\n  proposal:\n    - \n`
-const CORE_WORKFLOWS = ['propose', 'explore', 'apply', 'archive'] as const
-const ALL_WORKFLOWS = [
-  'propose',
-  'explore',
-  'new',
-  'continue',
-  'apply',
-  'ff',
-  'sync',
-  'archive',
-  'bulk-archive',
-  'verify',
-  'onboard',
-] as const
-const WORKFLOW_LABELS: Record<string, string> = {
-  propose: 'Propose change',
-  explore: 'Explore ideas',
-  new: 'New change',
-  continue: 'Continue change',
-  apply: 'Apply tasks',
-  ff: 'Fast-forward',
-  sync: 'Sync specs',
-  archive: 'Archive change',
-  'bulk-archive': 'Bulk archive',
-  verify: 'Verify change',
-  onboard: 'Onboard',
-}
-
 const PATH_KEYS = new Set(['generates', 'template', 'path', 'outputPath'])
 const TAG_KEYS = new Set(['requires', 'tags'])
 const KNOWN_ARTIFACT_KEYS = new Set([
@@ -140,13 +130,6 @@ function isRecordObject(value: unknown): value is Record<string, unknown> {
 function normalizeWorkflowList(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value.filter((item): item is string => typeof item === 'string' && item.length > 0)
-}
-
-function isCoreWorkflowSelection(workflows: readonly string[]): boolean {
-  return (
-    workflows.length === CORE_WORKFLOWS.length &&
-    CORE_WORKFLOWS.every((workflow) => workflows.includes(workflow))
-  )
 }
 
 function createRunnerLineId() {
@@ -291,7 +274,9 @@ export function Config() {
   const [autoUpdateAfterProfileChange, setAutoUpdateAfterProfileChange] = useState(true)
   const [profileEditMode, setProfileEditMode] = useState<ProfileEditMode>('both')
   const [profileDelivery, setProfileDelivery] = useState<DeliveryMode>('both')
-  const [profileWorkflows, setProfileWorkflows] = useState<string[]>([...CORE_WORKFLOWS])
+  const [profileWorkflows, setProfileWorkflows] = useState<string[]>([
+    ...OPSX_CORE_PROFILE_WORKFLOWS,
+  ])
   const [globalConfigTab, setGlobalConfigTab] = useState<GlobalConfigTab>('preview')
   const [globalConfigDraft, setGlobalConfigDraft] = useState('{}')
   const [globalConfigDraftDirty, setGlobalConfigDraftDirty] = useState(false)
@@ -932,7 +917,7 @@ export function Config() {
     }
     if (profileEditMode === 'both' || profileEditMode === 'workflows') {
       nextConfig.workflows = [...profileWorkflows]
-      nextConfig.profile = isCoreWorkflowSelection(profileWorkflows) ? 'core' : 'custom'
+      nextConfig.profile = isOpsxCoreWorkflowSelection(profileWorkflows) ? 'core' : 'custom'
     }
 
     setGlobalConfigError(null)
@@ -1123,11 +1108,11 @@ export function Config() {
     return new Set(normalizeWorkflowList(globalConfigData.workflows))
   }, [globalConfigData])
   const selectedWorkflowList = useMemo(
-    () => ALL_WORKFLOWS.filter((workflow) => selectedWorkflowSet.has(workflow)),
+    () => OPSX_ALL_WORKFLOWS.filter((workflow) => selectedWorkflowSet.has(workflow)),
     [selectedWorkflowSet]
   )
   const unselectedWorkflowList = useMemo(
-    () => ALL_WORKFLOWS.filter((workflow) => !selectedWorkflowSet.has(workflow)),
+    () => OPSX_ALL_WORKFLOWS.filter((workflow) => !selectedWorkflowSet.has(workflow)),
     [selectedWorkflowSet]
   )
   const profileRequiresWorkflowSelection =
@@ -2023,7 +2008,7 @@ export function Config() {
                     </div>
                   </div>
                   <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2">
-                    {ALL_WORKFLOWS.map((workflow) => {
+                    {OPSX_ALL_WORKFLOWS.map((workflow) => {
                       const isSelected = selectedWorkflowSet.has(workflow)
                       const isActive = activeWorkflowSet.has(workflow)
                       const isDirty = isSelected !== isActive
@@ -2050,7 +2035,7 @@ export function Config() {
                         >
                           <span className="flex items-center gap-1.5">
                             {isSelected && <Check className="h-3 w-3 shrink-0" />}
-                            <span>{WORKFLOW_LABELS[workflow] ?? workflow}</span>
+                            <span>{OPSX_WORKFLOW_LABELS[workflow]}</span>
                           </span>
                         </button>
                       )

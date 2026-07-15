@@ -256,6 +256,28 @@ const createMockContext = (
     init: vi.fn().mockResolvedValue({ success: true }),
     archive: vi.fn().mockResolvedValue({ success: true }),
     validate: vi.fn().mockResolvedValue({ valid: true, issues: [] }),
+    contracts: {
+      archive: vi.fn().mockResolvedValue({ success: true }),
+      validate: vi.fn().mockResolvedValue({ success: true }),
+      listStores: vi.fn().mockResolvedValue({
+        success: true,
+        stdout: '{"stores":[],"status":[]}',
+        stderr: '',
+        exitCode: 0,
+        data: { stores: [], status: [] },
+        payload: { stores: [], status: [] },
+        diagnostics: [],
+      }),
+      doctorStores: vi.fn().mockResolvedValue({
+        success: true,
+        stdout: '{"stores":[],"status":[]}',
+        stderr: '',
+        exitCode: 0,
+        data: { stores: [], status: [] },
+        payload: { stores: [], status: [] },
+        diagnostics: [],
+      }),
+    },
     execute: vi.fn().mockResolvedValue({ success: true, stdout: '{}', stderr: '', exitCode: 0 }),
     initStream: vi.fn(),
     archiveStream: vi.fn(),
@@ -1252,7 +1274,7 @@ describe('appRouter', () => {
       expect(state.available).toBe(true)
       expect(state.profile).toBe('core')
       expect(state.delivery).toBe('both')
-      expect(state.workflows).toEqual(['propose', 'explore', 'apply', 'archive'])
+      expect(state.workflows).toEqual(['propose', 'explore', 'apply', 'update', 'sync', 'archive'])
       expect(state.driftStatus).toBe('in-sync')
     })
   })

@@ -1,3 +1,9 @@
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Verify the website launch controls and current compatibility guidance.
+ *
+ * Original request (2026-07-15): "CLI 1.6 compatibility gate."
+ */
 import { en } from '$lib/i18n/locales/en'
 import HomePage from '$lib/pages/home-page.svelte'
 import '@testing-library/jest-dom/vitest'
@@ -13,6 +19,11 @@ describe('HomePage', () => {
     ).toBeVisible()
     expect(screen.getAllByText('npx openspecui@latest --app')).toHaveLength(2)
     expect(screen.getByText('npx openspecui@latest export -o ./dist')).toBeVisible()
+    expect(
+      screen.getByText(
+        'OpenSpecUI 6.x targets OpenSpec CLI 1.6.x and accepts 1.5.x as legacy-compatible.'
+      )
+    ).toBeVisible()
 
     await fireEvent.change(screen.getByLabelText('Runner'), { target: { value: 'pnpm' } })
 

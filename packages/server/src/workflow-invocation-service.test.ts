@@ -50,7 +50,46 @@ describe('WorkflowInvocationService', () => {
     const result = await service.runWorkflow({ action: 'apply', changeId: 'add-auth' }, 'compose')
 
     expect(result).toMatchObject({ kind: 'agent-prompt', text: 'apply instructions' })
-    expect(executeCli).toHaveBeenCalledWith(['instructions', 'apply', '--change', 'add-auth'])
+    expect(executeCli).toHaveBeenCalledWith([
+      'instructions',
+      'apply',
+      '--change',
+      'add-auth',
+      '--json',
+    ])
+  })
+
+  it('delivers update and sync through their OpenSpec 1.6 agent commands', async () => {
+    const service = new WorkflowInvocationService({
+      projectDir: '/project',
+      hookRuntime: createRuntime(),
+    })
+
+    await expect(
+      service.runWorkflow({ action: 'update', changeId: 'add-auth' }, 'command')
+    ).resolves.toMatchObject({ kind: 'agent-command', text: '/opsx:update add-auth' })
+    await expect(
+      service.runWorkflow({ action: 'sync', changeId: 'add-auth' }, 'command')
+    ).resolves.toMatchObject({ kind: 'agent-command', text: '/opsx:sync add-auth' })
+  })
+
+  it('uses root-aware status JSON as update compose evidence', async () => {
+    const executeCli = vi.fn().mockResolvedValue({
+      success: true,
+      stdout: '{"changeName":"add-auth"}',
+      stderr: '',
+      exitCode: 0,
+    })
+    const service = new WorkflowInvocationService({
+      projectDir: '/project',
+      hookRuntime: createRuntime(),
+      executeCli,
+    })
+
+    await expect(
+      service.runWorkflow({ action: 'update', changeId: 'add-auth' }, 'compose')
+    ).resolves.toMatchObject({ kind: 'agent-prompt', text: '{"changeName":"add-auth"}' })
+    expect(executeCli).toHaveBeenCalledWith(['status', '--change', 'add-auth', '--json'])
   })
 
   it('lets onRunWorkflow override the final invocation payload', async () => {

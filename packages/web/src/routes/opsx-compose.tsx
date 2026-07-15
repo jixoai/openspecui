@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Prepare and dispatch change-scoped OPSX workflow prompts or commands.
+ * 2. Preserve invocation diagnostics and action identity in the compose dialog.
+ *
+ * Original request (2026-07-15): "sync、update 的完整交付链。"
+ */
 import { CodeEditor } from '@/components/code-editor'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
 import { TerminalDispatchActions } from '@/components/terminal/terminal-dispatch-actions'
@@ -21,6 +28,8 @@ const ACTION_LABELS = {
   continue: 'Continue',
   ff: 'Fast-forward',
   apply: 'Apply',
+  update: 'Update',
+  sync: 'Sync',
   archive: 'Archive',
 } as const
 

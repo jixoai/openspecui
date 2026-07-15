@@ -1,0 +1,174 @@
+<!--
+Orthogonal intents (created 2026-07-15 Asia/Shanghai):
+1. Track completed research and approval gates.
+2. Sequence root, CLI, reactive, and projection implementation.
+3. Track project, static, hosted, and App product surfaces.
+4. Bind implementation tasks to objective verification.
+5. Track PR, archive, merge, and release gates.
+
+Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配，目前我们的进度有点落后。"
+Original request (2026-07-14): "我们最终使用openspec来管理 wayfinder 产出的文档。"
+-->
+
+## 1. Research and Planning
+
+- [x] 1.1 User input, objective scope, non-goals, and acceptance boundary are captured in `loop/intake.md`
+- [x] 1.2 Official OpenSpec 1.4 through 1.6 source, tests, changelog, and agent contracts are audited
+- [x] 1.3 `references/openspec` is pinned to official `v1.6.0` (`e1b51d1`)
+- [x] 1.4 Data scope, App/project ownership, hosted protocol, task projection, and static export decisions are closed in Wayfinder
+- [x] 1.5 Store Manager Inspector + Context Matrix + Inventory composition is selected from the prototype
+- [x] 1.6 Approved research and delivery order are recorded in `loop/research-plan.md`
+- [x] 1.7 Pre-implementation truth and loopback triggers are recorded in `loop/implementation.md`
+
+## 2. CLI 1.6 Contract Baseline
+
+- [x] 2.1 OpenSpecUI compatibility targets the CLI 1.6 line and rejects unsupported versions with accurate guidance
+- [x] 2.2 Typed command adapters preserve CLI JSON, stderr, structured diagnostics, root provenance, and exit status
+- [x] 2.3 Root/context adapters cover nearest root, declared Store fallback, and explicit `--store` selection
+- [x] 2.4 Store adapters cover list, doctor, setup, register, unregister, remove, empty healthy Stores, and command failures
+- [x] 2.5 Reference adapters cover declared, self, missing, unhealthy, and direct one-level Reference indexes
+- [x] 2.6 The 1.4 core-profile `sync` workflow is present across tool state, initialization, hooks, invocation, actions, and tests
+- [x] 2.7 The 1.6 `update` workflow is present across tool state, initialization, hooks, invocation, actions, and tests
+- [x] 2.8 Oh My Pi support and Trae command-delivery state are complete and fixture-tested
+- [x] 2.9 Validate/archive adapters use process exit status and preserve strict diagnostics without implicit `--no-validate` retry
+- [x] 2.10 Scenario-loss protection and multiline requirement bodies render without truncation or synthesized merges
+- [x] 2.11 First-party 1.4, 1.5, and 1.6 contract fixtures prove feature completeness beyond the version gate
+
+## 3. Root Context and Service Ownership
+
+- [ ] 3.1 Core defines one typed Root Context containing launch project, planning root, root source, Store id, CLI health, References, and data-scope diagnostics
+- [ ] 3.2 Server exposes one query/subscription contract for Root Context with full loading, stale-data, and error states
+- [ ] 3.3 Planning-root adapters and document services consume the CLI-resolved root instead of launch `projectDir`
+- [ ] 3.4 Change actions preserve `changeRoot`, Store flags, artifact paths, existing output paths, action context, References, and diagnostics
+- [ ] 3.5 Root-dependent actions remain locked until root selection succeeds and show CLI-owned failure evidence when it does not
+- [ ] 3.6 Config ownership separates launch-project binding, active-root config, and environment-global config
+- [ ] 3.7 Git exposes explicit code-repository and planning-repository scopes when they differ
+- [ ] 3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited `XDG_DATA_HOME`
+- [ ] 3.9 Agent prompts and OPSX commands use CLI-resolved paths and never reconstruct `<launch-project>/openspec`
+- [ ] 3.10 Project-owned `.env`, `StoreRoot`, registry overlay, and synthesized registry paths remain absent
+- [ ] 3.11 Tests assert actual file mutations occur only inside the selected planning root
+
+## 4. Multi-Root Reactive Kernel
+
+- [ ] 4.1 Reactive observation supports a reference-counted dynamic set of roots per runtime environment
+- [ ] 4.2 Effective OpenSpec data home changes invalidate Store, Workset, schema, and Context facets
+- [ ] 4.3 Registered Store roots are added/removed from observation as registry truth changes
+- [ ] 4.4 Launch-project and connected planning-root changes invalidate their project/context facets
+- [ ] 4.5 CLI mutation terminal or indeterminate outcomes invalidate affected facets before clients pull again
+- [ ] 4.6 Push messages carry invalidation identity only; clients pull fresh CLI projections
+- [ ] 4.7 Duplicate invalidations coalesce or remain idempotent across subscribers
+- [ ] 4.8 Store polling is removed as the primary path and retained only as a bounded watcher-failure fallback
+- [ ] 4.9 Watchers and fallback timers are released after unregister, root removal, disconnect, and environment teardown
+- [ ] 4.10 Multi-client tests cover external Store edits, registry changes, concurrent operations, reconnect, and root disappearance
+
+## 5. Task and Spec Projection Contracts
+
+- [ ] 5.1 Generic task `progress` is replaced without alias by `trackedTaskProgress`, `documentChecklistSummary`, and `applyInstructionProgress`
+- [ ] 5.2 `trackedTaskProgress` resolves only the artifact selected by `apply.tracks` and expands its output glob
+- [ ] 5.3 Tracked progress falls back to top-level `tasks.md` only when schema/artifact resolution or matched files yield no source
+- [ ] 5.4 `documentChecklistSummary` scans schema Markdown documents, groups statistics by artifact/file, and never drives workflow state
+- [ ] 5.5 `applyInstructionProgress` preserves the raw Apply result and visibly attributes divergence from tracked progress
+- [ ] 5.6 `0/0` maps to `no-tasks`, never complete; archive readiness remains a CLI validate/archive outcome
+- [ ] 5.7 Core defines compound Spec identity as `(owned, specId)` or `(referenced, storeId, specId)`
+- [ ] 5.8 Shared Spec Catalog combines owned and direct referenced Specs without flattening source or read-only state
+- [ ] 5.9 Live and static routes use `/specs/owned/<specId>` and `/specs/referenced/<storeId>/<specId>`
+- [ ] 5.10 Search records, cache keys, view-transition keys, links, and provider lookups preserve complete Spec identity
+- [ ] 5.11 Duplicate `specId` fixtures across owned and multiple Store sources navigate to the correct content
+
+## 6. Project Workspace Surfaces
+
+- [ ] 6.1 Global shell distinguishes launch project from active planning root and exposes full Root Context on demand
+- [ ] 6.2 Dashboard metrics derive from the planning root and show root source, Store id, Reference health, and separately scoped Git facts
+- [ ] 6.3 Changes lists only writable-root changes and uses formal tracked progress for workflow state
+- [ ] 6.4 Change detail preserves CLI paths/context, adds `update`, shows Reference context, and renders strict validate/archive diagnostics
+- [ ] 6.5 Specs defaults to Owned and provides a Store-grouped Referenced view with immutable entries
+- [ ] 6.6 Spec detail shows source/read-only state, disables mutation for References, and returns to the correct list scope
+- [ ] 6.7 Archive lists only writable-root archives and never retries validation bypass automatically
+- [ ] 6.8 Config implements Project Binding, Active Root Config, and Environment Global Config ownership sections
+- [ ] 6.9 Project Stores route is replaced by Context with root, Reference, environment, and read-only registry diagnostics
+- [ ] 6.10 Search defaults to the active root and offers an explicit Referenced Specs scope without referenced changes
+- [ ] 6.11 Git makes repository scope explicit for status, history, worktrees, and every mutation
+- [ ] 6.12 Terminal shows selected cwd/root identity in creation controls and tab labels
+- [ ] 6.13 Settings exposes 1.6 compatibility, workflow/tool delivery, root selection, environment, and data-scope diagnostics
+- [ ] 6.14 OPSX New/Propose/Compose/Verify/Update shows and preserves its target planning root
+- [ ] 6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging
+- [ ] 6.16 Every network-triggering control binds loading/disabled state and every page covers empty/loading/loaded/updating/error topologies
+- [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns
+
+## 7. Static Export Parity and Privacy
+
+- [ ] 7.1 `ExportSnapshot` carries Root provenance, compound Spec identity, source/read-only state, observation time, and Reference policy state
+- [ ] 7.2 Snapshot generation resolves the active planning root through CLI instead of assuming `OpenSpecAdapter(projectDir)` is root truth
+- [ ] 7.3 Export CLI parses `--references=include|omit` with yargs and requires a choice when effective References exist
+- [ ] 7.4 Include enumerates direct Reference Specs through `list --specs --store --json` and materializes bodies through `show --type spec --store --json`
+- [ ] 7.5 Include never follows transitive References or serializes referenced changes, archives, config, Git, registry, or unrelated Stores
+- [ ] 7.6 Any Reference resolution/list/show failure exits nonzero before a new partial snapshot/site is published
+- [ ] 7.7 Omit exports owned Specs and a visible omission state without unpublished Store ids or Spec metadata
+- [ ] 7.8 Snapshot serialization removes absolute project/Store paths, data-home/registry paths, remotes, `envUri`, host identity, and path-bearing raw diagnostics
+- [ ] 7.9 Static provider, search, dashboard, detail caches, and SSG enumeration hydrate the shared Spec Catalog contract
+- [ ] 7.10 Live/static parity tests cover Owned, Referenced, duplicate ids, include, omit, missing policy, failure atomicity, and redaction
+- [ ] 7.11 Fresh SSG output renders compound routes correctly after cleaning stale artifacts
+
+## 8. Hosted Environment and Access Protocol
+
+- [ ] 8.1 Backend health separates protocol version, `apiBaseUrl`, server/CLI versions, Root Context summary, and optional capabilities
+- [ ] 8.2 Backend issues opaque stable `envUri` for host identity plus effective OpenSpec data home without exposing either component
+- [ ] 8.3 Required protocol version gates connection while optional capabilities gate only dependent surfaces
+- [ ] 8.4 Capability vocabulary is limited to `stores.inspect`, `stores.mutate`, and `contexts.inspect` and carries no permission meaning
+- [ ] 8.5 Inventory, Inspector, and project Context envelopes preserve upstream Store list/doctor/context facts and provenance
+- [ ] 8.6 Context Matrix joins only currently observed online project contexts by `envUri` and Store id
+- [ ] 8.7 Store mutation lifecycle is `accepted -> running -> succeeded | failed`, with lost terminal truth reported as `indeterminate`
+- [ ] 8.8 Request ids deduplicate starts within one backend process; V1 exposes no Cancel and no automatic retry
+- [ ] 8.9 `--auth` generates a high-entropy Bearer credential and prints the complete Authorization header
+- [ ] 8.10 `--password` supports hidden prompt input and warns when inline values can leak through history/process inspection
+- [ ] 8.11 Access Gate protects `/api/*`, HTTP tRPC, tRPC subscriptions, PTY WebSocket, files, terminals, notifications, and Store operations
+- [ ] 8.12 Auto-launch credential fragment is consumed once and credentials never enter query parameters, persisted tabs, or `localStorage`
+- [ ] 8.13 Non-loopback gated deployments clearly require HTTPS/WSS and never claim transport encryption
+- [ ] 8.14 Protocol tests cover valid/invalid/missing credentials, reconnect, capability absence, multiple backends sharing one `envUri`, and environment separation
+
+## 9. App and Experimental Store Manager
+
+- [ ] 9.1 App Home/Connections persists backend entries without credentials and shows checking/online/offline/unsupported states
+- [ ] 9.2 Add, reconnect, open, remove, and reorder actions preserve one tab per project backend
+- [ ] 9.3 First-run App state connects the auto-launched backend or accepts another backend URL without a marketing page
+- [ ] 9.4 Environment Center groups online backends by opaque `envUri` and shows connected projects, diagnostics, and capabilities
+- [ ] 9.5 Environment-scoped operations require an explicitly selected online environment
+- [ ] 9.6 Store Inspector owns Store identity, doctor evidence, and setup/register/unregister/remove controls
+- [ ] 9.7 Context Matrix owns observed project-to-Root/Reference relationships and never claims machine-wide completeness
+- [ ] 9.8 Inventory provides dense wide-screen registry scanning without becoming the only navigation model
+- [ ] 9.9 Destructive remove names environment, host, Store, and checkout path and requires explicit confirmation
+- [ ] 9.10 Mutation UI covers accepted/running/succeeded/failed/indeterminate, disconnect, and invalidation-driven refresh states
+- [ ] 9.11 App implements no Store Git clone/pull/push/synchronization and no filesystem-wide project scan
+- [ ] 9.12 Store Manager remains explicitly experimental and does not become an OpenSpecUI 6.0 support gate
+- [ ] 9.13 Desktop/mobile layouts preserve readable data density, stable control dimensions, and non-overlapping content
+
+## 10. Verification and Acceptance
+
+- [ ] 10.1 Root matrix passes for nearest, declared Store, explicit Store, missing Store, and separated code/planning repositories
+- [ ] 10.2 Reference matrix passes for none, healthy, unresolved, self, empty Store, and duplicate ids
+- [ ] 10.3 Task matrix passes for tracked glob, fallback, no tasks, secondary checklists, and Apply divergence
+- [ ] 10.4 Reactive matrix passes for two clients, external edits, registry mutation, reconnect, unregister, and watcher teardown
+- [ ] 10.5 Access matrix passes across HTTP, tRPC WebSocket, PTY WebSocket, invalid credentials, and plaintext-deployment diagnostics
+- [ ] 10.6 Static matrix passes for no References, include, omit, absent policy, incomplete include, route collision, and forbidden-value redaction
+- [ ] 10.7 Project page unit/integration tests cover every surface in Section 6 and its loading lifecycle
+- [ ] 10.8 App tests cover connection retention, `envUri` grouping, capability degradation, Store views, and mutation terminal states
+- [ ] 10.9 Real-browser acceptance passes on desktop and mobile for project, static, and experimental App workflows
+- [ ] 10.10 `pnpm --filter @openspecui/web build:ssg` passes from clean static artifacts
+- [ ] 10.11 `pnpm format:check` passes
+- [ ] 10.12 `pnpm lint:ci` passes
+- [ ] 10.13 `pnpm typecheck` passes
+- [ ] 10.14 `pnpm test:ci` passes
+- [ ] 10.15 `pnpm test:browser:ci` passes
+- [ ] 10.16 `loop/implementation.md` records each completed slice, focused evidence, and every approved divergence
+
+## 11. PR, Archive, and Release Gates
+
+- [ ] 11.1 Each implementation slice uses a feature branch and a reviewable PR against protected `main`
+- [ ] 11.2 Every publishable package change includes an accurate `.changeset/*.md`
+- [ ] 11.3 Required local checks pass before each PR is opened or updated
+- [ ] 11.4 Required GitHub PR checks pass before merge
+- [ ] 11.5 All implementation checkpoints and acceptance evidence are complete before archive
+- [ ] 11.6 OpenSpec verify/archive flow succeeds and the change leaves no unresolved tracked task
+- [ ] 11.7 Final PR merge is approved and completed through branch protection
+- [ ] 11.8 Manager is asked whether to release only after merge to `main`
+- [ ] 11.9 If release is approved, changeversion PR, checks, auto-merge, `release.yml`, package publication, and tags all succeed before notification

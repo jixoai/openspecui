@@ -1,6 +1,20 @@
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Project official change-scoped OPSX actions with objective applicability locks.
+ *
+ * Original request (2026-07-15): "sync、update 的完整交付链。"
+ */
 import type { OpsxComposeActionId } from '@/lib/opsx-compose'
 import type { ChangeStatus } from '@openspecui/core'
-import { Archive, CheckCircle, Play, Rocket, ShieldCheck } from 'lucide-react'
+import {
+  Archive,
+  CheckCircle,
+  GitCompareArrows,
+  Play,
+  RefreshCw,
+  Rocket,
+  ShieldCheck,
+} from 'lucide-react'
 
 type ComposeActionId = OpsxComposeActionId
 
@@ -53,6 +67,18 @@ export function ChangeCommandBar({
       icon: CheckCircle,
       disabled: missingApply.length > 0,
       hint: missingApply.length > 0 ? `missing: ${missingApply.join(', ')}` : undefined,
+    },
+    {
+      id: 'update',
+      label: 'Update',
+      icon: RefreshCw,
+      disabled: false,
+    },
+    {
+      id: 'sync',
+      label: 'Sync',
+      icon: GitCompareArrows,
+      disabled: false,
     },
     {
       id: 'archive',

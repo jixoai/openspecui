@@ -1,4 +1,19 @@
-import { z } from 'zod'
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Reuse the official typed Store schemas for the existing beta projection.
+ * 2. Classify projection compatibility failures without crashing legacy Store UI.
+ *
+ * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
+ */
+import {
+  CliStoreDoctorSchema,
+  CliStoreListSchema,
+  type CliDiagnostic,
+  type CliStore,
+  type CliStoreDoctor,
+  type CliStoreDoctorEntry,
+  type CliStoreList,
+} from './cli-contracts/index.js'
 
 /**
  * Beta feature fault-tolerance model (manager directive).
@@ -21,91 +36,16 @@ import { z } from 'zod'
  * Spec: openspec-cli-integration › "Beta Feature Fault Tolerance".
  */
 
-// ---------------------------------------------------------------------------
-// Lenient zod schemas
-// ---------------------------------------------------------------------------
-//
-// 宽松验证：用 .passthrough() 容忍 CLI 新增字段，关键字段可选。这样 openspec-cli 的非破坏性
-// （加字段）更新不会误报为异常一；只有真正破坏性的数据结构变更才会让解析失败。
+// The beta projection and typed executor share one official Store schema. Required
+// 1.6 semantics are strict; `.passthrough()` in the command schemas accepts additions.
+export const StoreListResultSchema = CliStoreListSchema
+export const StoreDoctorResultSchema = CliStoreDoctorSchema
 
-const StoreDiagnosticSchema = z
-  .object({
-    severity: z.string().optional(),
-    code: z.string().optional(),
-    message: z.string().optional(),
-    target: z.string().optional(),
-    fix: z.string().optional(),
-  })
-  .passthrough()
-
-const StoreListEntrySchema = z
-  .object({
-    id: z.string(),
-    root: z.string(),
-  })
-  .passthrough()
-
-export const StoreListResultSchema = z
-  .object({
-    stores: z.array(StoreListEntrySchema).default([]),
-    status: z.array(StoreDiagnosticSchema).optional(),
-  })
-  .passthrough()
-
-const StoreOpenSpecRootSchema = z
-  .object({
-    present: z.boolean().nullable().optional(),
-    healthy: z.boolean().nullable().optional(),
-  })
-  .passthrough()
-
-const StoreMetadataSchema = z
-  .object({
-    present: z.boolean().nullable().optional(),
-    valid: z.boolean().nullable().optional(),
-    id: z.string().nullable().optional(),
-    remote: z.string().nullable().optional(),
-  })
-  .passthrough()
-
-const StoreGitFactsSchema = z
-  .object({
-    is_repository: z.boolean().nullable().optional(),
-    has_commits: z.boolean().nullable().optional(),
-    has_uncommitted_changes: z.boolean().nullable().optional(),
-    has_remote: z.boolean().nullable().optional(),
-    origin_url: z.string().nullable().optional(),
-  })
-  .passthrough()
-
-const StoreDoctorStoreSchema = z
-  .object({
-    id: z.string().optional(),
-    root: z.string().optional(),
-    metadata_path: z.string().nullable().optional(),
-    openspec_root: StoreOpenSpecRootSchema.optional(),
-    metadata: StoreMetadataSchema.optional(),
-    git: StoreGitFactsSchema.optional(),
-    status: z.array(StoreDiagnosticSchema).optional(),
-  })
-  .passthrough()
-
-export const StoreDoctorResultSchema = z
-  .object({
-    stores: z.array(StoreDoctorStoreSchema).default([]),
-    status: z.array(StoreDiagnosticSchema).optional(),
-  })
-  .passthrough()
-
-// ---------------------------------------------------------------------------
-// Public lenient field types (inferred; all extra fields tolerated)
-// ---------------------------------------------------------------------------
-
-export type StoreListEntry = z.infer<typeof StoreListEntrySchema>
-export type StoreDoctorStore = z.infer<typeof StoreDoctorStoreSchema>
-export type StoreListResult = z.infer<typeof StoreListResultSchema>
-export type StoreDoctorResult = z.infer<typeof StoreDoctorResultSchema>
-export type StoreDiagnostic = z.infer<typeof StoreDiagnosticSchema>
+export type StoreListEntry = CliStore
+export type StoreDoctorStore = CliStoreDoctorEntry
+export type StoreListResult = CliStoreList
+export type StoreDoctorResult = CliStoreDoctor
+export type StoreDiagnostic = CliDiagnostic
 
 // ---------------------------------------------------------------------------
 // Fault-tolerance error classification

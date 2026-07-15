@@ -101,6 +101,29 @@ describe('CliExecutor', () => {
       const normalizedTempDir = tempDir.replace('/private', '')
       expect(normalizedOutput).toBe(normalizedTempDir)
     })
+
+    it('preserves the launch environment XDG_DATA_HOME', async () => {
+      const previousDataHome = process.env.XDG_DATA_HOME
+      process.env.XDG_DATA_HOME = join(tempDir, 'xdg-data')
+      try {
+        await configManager.writeConfig({ cli: { command: 'node' } })
+        clearCache()
+
+        const result = await cliExecutor.execute([
+          '-e',
+          "process.stdout.write(process.env.XDG_DATA_HOME ?? '')",
+        ])
+
+        expect(result.success).toBe(true)
+        expect(result.stdout).toBe(join(tempDir, 'xdg-data'))
+      } finally {
+        if (previousDataHome === undefined) {
+          delete process.env.XDG_DATA_HOME
+        } else {
+          process.env.XDG_DATA_HOME = previousDataHome
+        }
+      }
+    })
   })
 
   describe('init()', () => {
@@ -235,7 +258,7 @@ describe('CliExecutor', () => {
 
       await cliExecutor.validate('spec')
 
-      expect(executeSpy).toHaveBeenCalledWith(['validate', 'spec'])
+      expect(executeSpy).toHaveBeenCalledWith(['validate', '--type', 'spec'])
     })
 
     it('should call execute with validate args (type and id)', async () => {
@@ -248,7 +271,7 @@ describe('CliExecutor', () => {
 
       await cliExecutor.validate('change', 'change-123')
 
-      expect(executeSpy).toHaveBeenCalledWith(['validate', 'change', 'change-123'])
+      expect(executeSpy).toHaveBeenCalledWith(['validate', 'change-123', '--type', 'change'])
     })
   })
 
