@@ -1,0 +1,49 @@
+<!--
+Orthogonal intents (created 2026-07-15 Asia/Shanghai):
+1. Host three App-native Store Manager layout variants.
+2. Host the shared operation dialog and prototype switcher.
+
+Original request (2026-07-15): "平铺所有功能和信息来验证故事闭环还是有必要的。"
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Store Manager prototype - OpenSpec UI</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <dialog id="operation-dialog" aria-labelledby="operation-title">
+      <form id="operation-form">
+        <header class="dialog-header">
+          <div>
+            <div class="prototype-kicker">Simulated operation</div>
+            <h2 id="operation-title">Store operation</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Close dialog">
+            ×
+          </button>
+        </header>
+        <div id="operation-fields" class="dialog-body"></div>
+        <footer class="dialog-footer">
+          <button class="button secondary-button" type="button" data-close-dialog>Cancel</button>
+          <button id="operation-submit" class="button primary-button" type="submit">Run</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <nav class="prototype-switcher" aria-label="Prototype variants">
+      <button type="button" data-variant-direction="-1" aria-label="Previous variant">←</button>
+      <span id="variant-label">A - Registry table</span>
+      <button type="button" data-variant-direction="1" aria-label="Next variant">→</button>
+    </nav>
+
+    <script src="prototype.js"></script>
+  </body>
+</html>
