@@ -17,6 +17,7 @@
       "@openspecui/core/opsx-schema-detail": ["../core/src/opsx-schema-detail.ts"],
       "@openspecui/core/spec-catalog": ["../core/src/spec-catalog.ts"],
       "@openspecui/core/sounds": ["../core/src/sounds.ts"],
+      "@openspecui/core/store-types": ["../core/src/store-types.ts"],
       "@openspecui/search": ["../search/src/index.ts"],
       "@openspecui/search/node": ["../search/src/node.ts"],
       "@openspecui/local-translator": ["../local-translator/src/index.ts"],

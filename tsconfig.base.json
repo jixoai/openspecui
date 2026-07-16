@@ -39,6 +39,7 @@
       "@openspecui/core/opsx-workflows": ["packages/core/src/opsx-workflows.ts"],
       "@openspecui/core/opsx-entity": ["packages/core/src/opsx-entity.ts"],
       "@openspecui/core/opsx-schema-detail": ["packages/core/src/opsx-schema-detail.ts"],
+      "@openspecui/core/store-types": ["packages/core/src/store-types.ts"],
       "@openspecui/core/task-progress": ["packages/core/src/task-progress.ts"],
       "@openspecui/core/spec-catalog": ["packages/core/src/spec-catalog.ts"],
       "@openspecui/core/pty-protocol": ["packages/core/src/pty-protocol.ts"],

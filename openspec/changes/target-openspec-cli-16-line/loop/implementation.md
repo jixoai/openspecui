@@ -13,7 +13,7 @@ Original request (2026-07-16): "代码已经提交，开始review。如果有问
 
 ## Implementation State
 
-Status: **Independent review reopened six Section 2 checkpoints; later implementation remains provisional until the corrected baseline is reviewed**.
+Status: **Independent-review corrections are complete; PR #207 is awaiting refreshed CI and independent re-review before later checkpoints continue**.
 
 Completed before code execution:
 
@@ -873,6 +873,27 @@ Verification:
 - `pnpm test:browser:ci` passed: xterm-input-panel 60 with one existing skip; Web Storybook 12.
 - Fresh `pnpm --filter @openspecui/web build:ssg` passed. The only CSS warning is the pre-existing unsupported `scroll-button` pseudo-element warning.
 - `git diff --check` and frozen offline lockfile installation passed.
+
+## Verification: 2026-07-16 clean-environment Core subpath resolution
+
+Changed contracts:
+
+- Added the public `@openspecui/core/store-types` source alias to the shared TypeScript path map and to the CLI package's overriding path map. Server and CLI clean typecheck lanes now resolve the same exported Core subpath without depending on a previously built `packages/core/dist`.
+- Kept the package export and runtime contract unchanged. Browser Gate had no independent failure; its shard was skipped after Fast Gate failed, and the aggregate Browser Gate correctly propagated that skipped dependency state as failure.
+
+Root cause and checkpoint state:
+
+- PR #207 Fast Gate failed in a clean checkout because `packages/server/src/store-observation-service.ts` imports `@openspecui/core/store-types`, but the source alias was absent. Local verification had passed only while stale Core declarations existed in `packages/core/dist`.
+- No product checkpoint transitioned. This repairs the delivery evidence for the already completed Store observation and CLI contract slices; final verification and PR gates remain open until all implementation checkpoints complete.
+- No loopback trigger fired. The fix changes build-time source resolution only and does not alter package boundaries, runtime behavior, or approved product scope.
+
+Verification after removing `packages/core/dist`:
+
+- Server and CLI package typechecks passed; Store observation/fallback tests passed 9/9.
+- `pnpm format:check` passed; `pnpm lint:ci` passed across 808 files with zero warnings and errors; `pnpm typecheck` passed across all 15 runnable workspace packages.
+- `pnpm test:ci` passed: root 43, Core 405, Server 275, Web 617, App 78, CLI 49, and every remaining workspace package.
+- `pnpm test:browser:ci` passed: xterm-input-panel 60 with one existing skip; Web Storybook 12.
+- Fresh `pnpm --filter @openspecui/web build:ssg` passed with only the existing `scroll-button` CSS warning; `git diff --check` passed.
 
 ## Decisions Taken
 
