@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Validate filesystem-backed OpenSpec entity ids as canonical single path segments.
  * 2. Validate entity-relative file and glob paths before filesystem access.
  * 3. Share traversal guards across Core adapters, kernels, and Server path resolvers.
  *
  * Original request (2026-07-16): "实际文件变更只能发生在选定的 planning root 内。"
+ * Original request (2026-07-17): "Every client-supplied Archive changeId passes the shared canonical entity guard."
  */
 
 export type OpenSpecEntityIdField = 'changeId' | 'specId'
@@ -18,6 +19,7 @@ export function requireCanonicalOpenSpecEntityId(
 ): string {
   if (
     value.length === 0 ||
+    value !== value.trim() ||
     value === '.' ||
     value === '..' ||
     value.includes('/') ||

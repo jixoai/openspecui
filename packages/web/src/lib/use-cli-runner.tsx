@@ -1,16 +1,18 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Run ordered CLI streams with stable process and loading state.
  * 2. Preserve stdout, stderr, exit, cancellation, and multiline diagnostics verbatim.
  * 3. Route root-dependent operations through dedicated Server-owned transports.
- * 4. Keep global installation fixed and generic browser execution read-only.
+ * 4. Make every browser execution transport dedicated and exhaustively typed.
  *
  * Original request (2026-07-15): "场景丢失保护的诊断必须原样显示，不能合成重试。"
+ * Original request (2026-07-17): "Remove the Web generic fallback when no production caller requires it."
  */
 import '@/styles/terminal-effects.css'
 import type { CliStreamEvent } from '@openspecui/core'
 import { Check, Loader2, Sparkles, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { match } from 'ts-pattern'
 import { isStaticMode } from './static-mode'
 import { trpcClient } from './trpc'
 
@@ -30,7 +32,7 @@ export interface CommandDescriptor {
   args: string[]
   status: CommandRunStatus
   exitCode: number | null
-  stream?: CliStreamTransport
+  stream: CliStreamTransport
 }
 
 /** Process event names exposed by the runner facade. */
@@ -94,7 +96,7 @@ type CliStreamTransport =
 interface CommandInput {
   command: string
   args?: string[]
-  stream?: CliStreamTransport
+  stream: CliStreamTransport
 }
 
 interface UseCliRunnerOptions {
@@ -187,27 +189,6 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
     }
     activeCommandIdRef.current = null
   }, [updateCommands])
-
-  const add = useCallback((command: string, args: string[] = [], at = -1) => {
-    const id = createId()
-    updateCommands((prev) => {
-      const next = [...prev]
-      const descriptor: CommandDescriptor = {
-        id,
-        command,
-        args,
-        status: 'idle',
-        exitCode: null,
-      }
-      if (at >= 0 && at < next.length) {
-        next.splice(at, 0, descriptor)
-      } else {
-        next.push(descriptor)
-      }
-      return next
-    })
-    return id
-  }, [])
 
   const remove = useCallback(
     (id: string) => {
@@ -378,32 +359,21 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
           activeCommandIdRef.current = null
         },
       }
-      const subscription = (() => {
-        if (target.stream?.type === 'archive-strict') {
-          return trpcClient.cli.archiveStrictStream.subscribe(target.stream.input, handlers)
-        }
-        if (target.stream?.type === 'init') {
-          return trpcClient.cli.initStream.subscribe(target.stream.input, handlers)
-        }
-        if (target.stream?.type === 'planning-root-update') {
-          return trpcClient.cli.updateStream.subscribe(target.stream.input, handlers)
-        }
-        if (target.stream?.type === 'validate') {
-          return trpcClient.cli.validateStream.subscribe(target.stream.input, handlers)
-        }
-        if (target.stream?.type === 'install-global-cli') {
-          return trpcClient.cli.installGlobalCliStream.subscribe(undefined, handlers)
-        }
-        if (target.command !== 'openspec') {
-          handlers.onError(
-            new Error(`Unsupported public CLI command: ${target.command || '<empty>'}`)
-          )
-          return null
-        }
-        return trpcClient.cli.executeOpenSpecStream.subscribe({ args: target.args }, handlers)
-      })()
-
-      if (!subscription) return process
+      const subscription = match(target.stream)
+        .with({ type: 'archive-strict' }, ({ input }) =>
+          trpcClient.cli.archiveStrictStream.subscribe(input, handlers)
+        )
+        .with({ type: 'init' }, ({ input }) => trpcClient.cli.initStream.subscribe(input, handlers))
+        .with({ type: 'planning-root-update' }, ({ input }) =>
+          trpcClient.cli.updateStream.subscribe(input, handlers)
+        )
+        .with({ type: 'validate' }, ({ input }) =>
+          trpcClient.cli.validateStream.subscribe(input, handlers)
+        )
+        .with({ type: 'install-global-cli' }, () =>
+          trpcClient.cli.installGlobalCliStream.subscribe(undefined, handlers)
+        )
+        .exhaustive()
 
       process.status = 'running'
       activeSubscriptionRef.current = subscription
@@ -503,14 +473,13 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
     hasStarted,
     commands: useMemo(
       () => ({
-        add,
         remove,
         list,
         replaceAll,
         run,
         runAll,
       }),
-      [add, list, remove, replaceAll, run, runAll]
+      [list, remove, replaceAll, run, runAll]
     ),
     reset,
     cancel,

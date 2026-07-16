@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Validate and route PTY WebSocket lifecycle messages.
- * 2. Resolve explicit terminal cwd targets before process creation.
+ * 2. Create planning-target terminals inside the Manager-owned root operation lifetime.
  * 3. Attach/replay session output and project terminal control metadata.
  * 4. Publish terminal notifications without duplicating protocol fanout.
  *
  * Original request (2026-07-16): "3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited XDG_DATA_HOME"
+ * Original request (2026-07-17): "A later root operation must not keep using an owner selected before replacement."
  */
 import {
   PtyClientMessageSchema,
@@ -80,9 +81,10 @@ export function createPtyWebSocketHandler(
   ptyManager: PtyManager,
   notificationService: NotificationService | undefined,
   options: {
-    resolveCwdTarget: (
-      target: TerminalCwdTarget
-    ) => Promise<{ cwdTarget: TerminalCwdTarget; cwd: string }>
+    withCwdTarget: <T>(
+      target: TerminalCwdTarget,
+      task: (cwd: { cwdTarget: TerminalCwdTarget; cwd: string }) => Promise<T> | T
+    ) => Promise<T>
   }
 ) {
   return (ws: WebSocket) => {
@@ -212,31 +214,32 @@ export function createPtyWebSocketHandler(
       switch (msg.type) {
         case 'create': {
           try {
-            const cwd = await options.resolveCwdTarget(msg.cwdTarget)
-            const createMessage = msg as typeof msg & {
-              closeTip?: string
-              closeCallbackUrl?: string | Record<string, string>
-            }
-            const session = ptyManager.create({
-              cols: msg.cols,
-              rows: msg.rows,
-              command: msg.command,
-              args: msg.args,
-              cwdTarget: cwd.cwdTarget,
-              cwd: cwd.cwd,
-              closeTip: createMessage.closeTip,
-              closeCallbackUrl: createMessage.closeCallbackUrl,
-            })
+            await options.withCwdTarget(msg.cwdTarget, (cwd) => {
+              const createMessage = msg as typeof msg & {
+                closeTip?: string
+                closeCallbackUrl?: string | Record<string, string>
+              }
+              const session = ptyManager.create({
+                cols: msg.cols,
+                rows: msg.rows,
+                command: msg.command,
+                args: msg.args,
+                cwdTarget: cwd.cwdTarget,
+                cwd: cwd.cwd,
+                closeTip: createMessage.closeTip,
+                closeCallbackUrl: createMessage.closeCallbackUrl,
+              })
 
-            send({
-              type: 'created',
-              requestId: msg.requestId,
-              sessionId: session.id,
-              platform: session.platform,
-              cwdTarget: session.cwdTarget,
-              initialCwd: session.initialCwd,
+              send({
+                type: 'created',
+                requestId: msg.requestId,
+                sessionId: session.id,
+                platform: session.platform,
+                cwdTarget: session.cwdTarget,
+                initialCwd: session.initialCwd,
+              })
+              attachToSession(session)
             })
-            attachToSession(session)
           } catch (err) {
             const errorMessage = err instanceof Error ? err.message : String(err)
             sendError('PTY_CREATE_FAILED', errorMessage, { sessionId: msg.requestId })

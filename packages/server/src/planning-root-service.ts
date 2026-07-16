@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
- * 1. Own every root-scoped service and project-Schema mutation for the CLI-selected Planning root.
- * 2. Serialize one active-root replacement lifecycle without reconstructing root selection.
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * 1. Own every root-scoped operation and project-Schema mutation for the CLI-selected Planning root.
+ * 2. Serialize replacement behind admitted operations without reconstructing root selection.
  * 3. Acquire and retire observation/invalidation leases with each active root.
  * 4. Keep reactive subscriptions bound to Root Context dependencies and current root selection.
- * 5. Dispose Kernel, hooks, Search, Dashboard, and preview resources exactly once.
+ * 5. Revoke leased service capabilities and dispose every root resource exactly once.
  *
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
  * Original request (2026-07-16): "PlanningRootServiceResolver.mutateSchema(action) owns the entire mutation inside the manager transition lane."
+ * Original request (2026-07-17): "An admitted A operation settles before A is retired and B is exposed."
  */
 import {
   CliExecutor,
@@ -34,7 +35,7 @@ import { SearchService } from './search-service.js'
 import { readSpecCatalog } from './spec-catalog-service.js'
 import { WorkflowInvocationService } from './workflow-invocation-service.js'
 
-/** Services whose filesystem meaning belongs to the currently selected Planning root. */
+/** Revocable services available only while one Manager-owned Planning-root operation is active. */
 export interface PlanningRootServices {
   rootContext: RootContext
   adapter: OpenSpecAdapter
@@ -53,18 +54,38 @@ interface PlanningRootServiceRecord extends PlanningRootServices {
   observationRelease: Promise<WatcherRootRelease | null>
   projectInvalidationRelease: () => void
   rootContextRef: { current: RootContext }
+  activeOperationCount: number
+  operationDrainListeners: Set<() => void>
   disposePromise: Promise<void> | null
 }
 
-/** Public active-root resolver and preview lifecycle boundary used by the Server router. */
+interface PlanningRootOperationLease {
+  services: PlanningRootServices
+  release(): Promise<void>
+}
+
+/** Async work admitted against one current Planning-root service record. */
+export type PlanningRootOperation<T> = (services: PlanningRootServices) => Promise<T> | T
+
+/** Stream startup admitted against one current Planning-root service record. */
+export type PlanningRootStreamOperation = (
+  services: PlanningRootServices,
+  settle: () => void
+) => Promise<() => void> | (() => void)
+
+/** Public operation, stream, Root Context, and preview boundary used by the Server runtime. */
 export interface PlanningRootServiceResolver {
   /** Resolve Root Context only after the matching active-record transition settles. */
   resolveRootContext(): Promise<RootContextResolvedState>
   /** Resolve and track reactive Root Context dependencies inside the same serialized transition. */
   resolveRootContextReactive(): Promise<RootContextResolvedState>
-  resolve(): Promise<PlanningRootServices>
-  resolveReactive(): Promise<PlanningRootServices>
-  /** Mutate one project Schema while the selected Planning-root transition remains exclusively owned. */
+  /** Run one complete operation while its selected Planning-root record remains alive. */
+  runOperation<T>(operation: PlanningRootOperation<T>): Promise<T>
+  /** Run one complete reactive operation while tracking current root dependencies. */
+  runReactiveOperation<T>(operation: PlanningRootOperation<T>): Promise<T>
+  /** Retain one operation lease until a stream settles, fails startup, or is cancelled. */
+  startOperationStream(operation: PlanningRootStreamOperation): Promise<() => void>
+  /** Mutate one project Schema inside a Manager-owned operation lease. */
   mutateSchema(
     action: SchemaMutationAction
   ): Promise<Awaited<ReturnType<SchemaMutationService['mutate']>>>
@@ -186,6 +207,8 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       dashboardOverviewService,
       workflowInvocationService,
       rootContextRef,
+      activeOperationCount: 0,
+      operationDrainListeners: new Set(),
       disposePromise: null,
     }
   }
@@ -219,6 +242,83 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       }
     })()
     return record.disposePromise
+  }
+
+  private async waitForOperations(record: PlanningRootServiceRecord): Promise<void> {
+    if (record.activeOperationCount === 0) return
+    await new Promise<void>((resolve) => {
+      record.operationDrainListeners.add(resolve)
+    })
+  }
+
+  private createOperationLease(record: PlanningRootServiceRecord): PlanningRootOperationLease {
+    record.activeOperationCount += 1
+    let acceptingCalls = true
+    let releasePromise: Promise<void> | null = null
+    const pendingCalls = new Set<Promise<unknown>>()
+
+    const assertActive = () => {
+      if (!acceptingCalls) {
+        throw new Error('Planning-root operation capability is no longer active.')
+      }
+    }
+    const trackCall = (value: unknown): unknown => {
+      if (
+        !value ||
+        (typeof value !== 'object' && typeof value !== 'function') ||
+        typeof (value as PromiseLike<unknown>).then !== 'function'
+      ) {
+        return value
+      }
+      const tracked = Promise.resolve(value).finally(() => pendingCalls.delete(tracked))
+      pendingCalls.add(tracked)
+      void tracked.catch(() => {})
+      return tracked
+    }
+    const guardCapability = <T extends object>(capability: T): T =>
+      new Proxy(capability, {
+        get(target, property) {
+          assertActive()
+          const value = Reflect.get(target, property, target)
+          if (typeof value !== 'function') return value
+          return (...args: unknown[]) => {
+            assertActive()
+            return trackCall(Reflect.apply(value, target, args))
+          }
+        },
+      })
+
+    const services: PlanningRootServices = {
+      rootContext: record.rootContext,
+      adapter: guardCapability(record.adapter),
+      documentService: guardCapability(record.documentService),
+      kernel: guardCapability(record.kernel),
+      filePreviewService: guardCapability(record.filePreviewService),
+      searchService: guardCapability(record.searchService),
+      dashboardOverviewService: guardCapability(record.dashboardOverviewService),
+      workflowInvocationService: guardCapability(record.workflowInvocationService),
+    }
+
+    return {
+      services,
+      release: () => {
+        if (releasePromise) return releasePromise
+        acceptingCalls = false
+        const finish = () => {
+          record.activeOperationCount -= 1
+          if (record.activeOperationCount !== 0) return
+          for (const listener of record.operationDrainListeners) listener()
+          record.operationDrainListeners.clear()
+        }
+        if (pendingCalls.size === 0) {
+          finish()
+          releasePromise = Promise.resolve()
+          return releasePromise
+        }
+        releasePromise = Promise.allSettled(pendingCalls).then(finish)
+        return releasePromise
+      },
+    }
   }
 
   private rootIdentity(rootContext: RootContext): string {
@@ -259,7 +359,10 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     if (state.state === 'error') {
       const previous = this.activeRecord
       this.activeRecord = null
-      if (previous) await this.disposeRecord(previous)
+      if (previous) {
+        await this.waitForOperations(previous)
+        await this.disposeRecord(previous)
+      }
       return null
     }
 
@@ -275,7 +378,10 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     }
 
     this.activeRecord = null
-    if (active) await this.disposeRecord(active)
+    if (active) {
+      await this.waitForOperations(active)
+      await this.disposeRecord(active)
+    }
     const created = this.createRecord(state.data)
     this.activeRecord = created
     return created
@@ -330,6 +436,16 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     return result.services
   }
 
+  private acquireOperation(reactive: boolean): Promise<{
+    lease: PlanningRootOperationLease
+    record: PlanningRootServiceRecord
+  }> {
+    return this.runTransition(async () => {
+      const record = this.requireActiveServices(await this.resolveActiveTransition(reactive))
+      return { lease: this.createOperationLease(record), record }
+    })
+  }
+
   /** Resolve Root Context only after the active Planning-root lifecycle has converged. */
   async resolveRootContext(): Promise<RootContextResolvedState> {
     return (await this.resolveTransition(false)).state
@@ -340,24 +456,60 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     return (await this.resolveTransition(true)).state
   }
 
-  async resolve(): Promise<PlanningRootServices> {
-    const result = await this.resolveTransition(false)
-    return this.requireActiveServices(result)
+  /** Run one complete operation without exposing a durable service handle. */
+  async runOperation<T>(operation: PlanningRootOperation<T>): Promise<T> {
+    const { lease } = await this.acquireOperation(false)
+    try {
+      return await operation(lease.services)
+    } finally {
+      await lease.release()
+    }
   }
 
-  async resolveReactive(): Promise<PlanningRootServices> {
-    const result = await this.resolveTransition(true)
-    return this.requireActiveServices(result)
+  /** Run one complete reactive operation without exposing a durable service handle. */
+  async runReactiveOperation<T>(operation: PlanningRootOperation<T>): Promise<T> {
+    const { lease } = await this.acquireOperation(true)
+    try {
+      return await operation(lease.services)
+    } finally {
+      await lease.release()
+    }
   }
 
-  /** Run one Schema action while no Root Context replacement can expose another physical owner. */
-  mutateSchema(
+  /** Retain a revocable operation capability until terminal settlement or cancellation. */
+  async startOperationStream(operation: PlanningRootStreamOperation): Promise<() => void> {
+    const { lease } = await this.acquireOperation(false)
+    const settle = () => {
+      void lease.release()
+    }
+    try {
+      const cancel = await operation(lease.services, settle)
+      let cancelled = false
+      return () => {
+        if (cancelled) return
+        cancelled = true
+        try {
+          cancel()
+        } finally {
+          settle()
+        }
+      }
+    } catch (error) {
+      await lease.release()
+      throw error
+    }
+  }
+
+  /** Run one Schema action inside the same operation-lifetime contract as every Router caller. */
+  async mutateSchema(
     action: SchemaMutationAction
   ): Promise<Awaited<ReturnType<SchemaMutationService['mutate']>>> {
-    return this.runTransition(async () => {
-      const services = this.requireActiveServices(await this.resolveActiveTransition(false))
-      return services.schemaMutationService.mutate(action)
-    })
+    const { lease, record } = await this.acquireOperation(false)
+    try {
+      return await record.schemaMutationService.mutate(action)
+    } finally {
+      await lease.release()
+    }
   }
 
   readPreviewRequest(
@@ -373,7 +525,10 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       this.disposed = true
       const active = this.activeRecord
       this.activeRecord = null
-      if (active) await this.disposeRecord(active)
+      if (active) {
+        await this.waitForOperations(active)
+        await this.disposeRecord(active)
+      }
     })
     return this.disposePromise
   }

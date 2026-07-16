@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Verify ordered CLI stream execution and immediate state visibility.
  * 2. Preserve multiline failure evidence and stop the queue after nonzero exit.
- * 3. Keep arbitrary commands outside the public OpenSpec execution transport.
+ * 3. Prove every queue item selects one exhaustive dedicated Server transport.
  *
  * Original request (2026-07-15): "场景丢失保护的诊断必须原样显示，不能合成重试。"
  */
@@ -14,7 +14,6 @@ const {
   initSubscribeMock,
   installSubscribeMock,
   setStreamEvents,
-  subscribeMock,
   updateSubscribeMock,
   validateSubscribeMock,
 } = vi.hoisted(() => {
@@ -36,7 +35,6 @@ const {
     setStreamEvents: (events: unknown[]) => {
       streamEvents = events
     },
-    subscribeMock: createSubscribeMock(),
     updateSubscribeMock: createSubscribeMock(),
     validateSubscribeMock: createSubscribeMock(),
   }
@@ -54,9 +52,6 @@ vi.mock('./trpc', () => ({
       },
       initStream: {
         subscribe: initSubscribeMock,
-      },
-      executeOpenSpecStream: {
-        subscribe: subscribeMock,
       },
       installGlobalCliStream: {
         subscribe: installSubscribeMock,
@@ -87,7 +82,6 @@ describe('useCliRunner', () => {
     archiveStrictSubscribeMock.mockClear()
     initSubscribeMock.mockClear()
     installSubscribeMock.mockClear()
-    subscribeMock.mockClear()
     updateSubscribeMock.mockClear()
     validateSubscribeMock.mockClear()
     setStreamEvents([
@@ -109,6 +103,7 @@ describe('useCliRunner', () => {
         {
           command: 'openspec',
           args: ['config', 'list', '--json'],
+          stream: { type: 'validate', input: { id: 'demo', type: 'change' } },
         },
       ])
     })
@@ -118,7 +113,7 @@ describe('useCliRunner', () => {
     })
 
     await waitFor(() => {
-      expect(subscribeMock).toHaveBeenCalledTimes(1)
+      expect(validateSubscribeMock).toHaveBeenCalledTimes(1)
     })
     expect(result.current.status).toBe('success')
   })
@@ -147,7 +142,6 @@ describe('useCliRunner', () => {
       { changeId: 'add-search', skipSpecs: false, noValidate: false },
       expect.any(Object)
     )
-    expect(subscribeMock).not.toHaveBeenCalled()
     expect(result.current.status).toBe('success')
   })
 
@@ -169,7 +163,6 @@ describe('useCliRunner', () => {
     })
 
     expect(installSubscribeMock).toHaveBeenCalledWith(undefined, expect.any(Object))
-    expect(subscribeMock).not.toHaveBeenCalled()
     expect(result.current.status).toBe('success')
   })
 
@@ -221,29 +214,9 @@ describe('useCliRunner', () => {
       })
 
       expect(expectedSubscribe).toHaveBeenCalledWith(expectedInput, expect.any(Object))
-      expect(subscribeMock).not.toHaveBeenCalled()
       expect(result.current.status).toBe('success')
     }
   )
-
-  it('rejects arbitrary commands without a dedicated Server transport', async () => {
-    const { result } = renderHook(() => useCliRunner())
-
-    act(() => {
-      result.current.commands.replaceAll([
-        { command: 'node', args: ['openspec', 'archive', 'add-search'] },
-      ])
-    })
-
-    await act(async () => {
-      await result.current.commands.runAll()
-    })
-
-    expect(archiveStrictSubscribeMock).not.toHaveBeenCalled()
-    expect(installSubscribeMock).not.toHaveBeenCalled()
-    expect(subscribeMock).not.toHaveBeenCalled()
-    expect(result.current.status).toBe('error')
-  })
 
   it('renders scenario-loss diagnostics verbatim and does not start a synthesized retry', async () => {
     const diagnostic = [
@@ -276,7 +249,6 @@ describe('useCliRunner', () => {
     })
 
     expect(archiveStrictSubscribeMock).toHaveBeenCalledTimes(1)
-    expect(subscribeMock).not.toHaveBeenCalled()
     expect(result.current.status).toBe('error')
     expect(result.current.commands.list()).toEqual([
       expect.objectContaining({
@@ -335,7 +307,6 @@ describe('useCliRunner', () => {
     })
 
     expect(archiveStrictSubscribeMock).toHaveBeenCalledTimes(1)
-    expect(subscribeMock).not.toHaveBeenCalled()
     expect(result.current.status).toBe('error')
     expect(
       result.current.lines.map((line) => ('text' in line ? line.text : '')).join('\n')

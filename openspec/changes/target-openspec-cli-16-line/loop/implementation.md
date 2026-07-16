@@ -1282,3 +1282,136 @@ Full local gates:
 Residual limits remain explicit: `realpath`/`lstat` confinement has TOCTOU and hard-link-alias limits; per-Store enumeration is not a cross-Store atomic snapshot; external filesystem changes converge through watchers/fallbacks; and PTY/configured CLI runners are operator capabilities, not sandboxes.
 
 Checkpoint transition: `50/131 -> 58/131`; only the eight scoped checkpoints above changed. Do not merge, archive, release, or implement `6.8`/`6.9` before a new independent review.
+
+## Blocking Independent Re-review after `a6e2dcd`: 2026-07-17
+
+Review target: `f138765...a6e2dcd` on PR #207. The branch and remote both resolve to `a6e2dcd5f271f2aec727efb724deb8aa43a9a32e`; the worktree was clean before review. Standards and Spec were reviewed independently, then the highest-risk lifetime counterexample was reproduced through the public Router.
+
+Spec blockers:
+
+1. `cli.archiveStrictStream` accepts `changeId: z.string()` and forwards it unchanged to strict validation and Archive. Pinned OpenSpec 1.6 constructs source and destination through `path.join`; `archive/../legit` with explicit no-validation is accepted and moves the active Change to an unintended undated archive path. This bypasses the shared canonical Change-id guard before the only public Archive mutation.
+2. `PlanningRootServiceManager.resolve*()` serializes root resolution/replacement but returns raw mutable services whose operations run outside the transition lane. A public `spec.save` reproduction paused after receiving root A, completed A -> B Root Context replacement, then resumed and successfully wrote A after B had been exposed. Disposing watchers, Kernel, and Preview does not revoke the Adapter capability or wait for in-flight mutations.
+
+Standards blockers:
+
+1. `public-cli-execution.ts` implements a custom argv parser for command paths, positionals, boolean/value options, and inline values. This violates the mandatory `CLAUDE.md` `yargs` rule. Its positive tests iterate the production policy's own `exampleArgs`, so they prove internal consistency rather than pinned OpenSpec 1.6 compatibility.
+2. The new Schema-action validation/execution switches and CLI-stream discriminant cascade ignore the repository's `ts-pattern` preference. The duplicated Schema action vocabulary is also a Repeated Switches drift risk.
+
+Independent evidence:
+
+- Focused package rerun passed Core `430/430`, Server `374/374`, and Web `629/629`; these green suites do not contain either counterexample above.
+- A temporary public-Router reproduction passed `1/1` by proving the defect: an in-flight `spec.save` wrote `root-a/openspec/specs/stale-after-switch/spec.md` after `resolveRootContext()` had returned ready root B. The temporary test file was removed after capture.
+- Source inspection plus pinned executable reproduction confirms OpenSpec 1.6 accepts the traversal-shaped Archive id when validation is skipped. The application must reject it before invoking upstream.
+- GitHub reports Changeset, CI Scope, Fast, Web Browser, xterm Browser, and aggregate Browser gates green; `mergeStateStatus=CLEAN`. CI success does not cover these review counterexamples.
+- `git diff --check f138765...a6e2dcd` passed. Checkpoint arithmetic before this review was correctly `58/131`.
+
+Checkpoint state:
+
+- Reopened `3.11` for canonical Archive identity and stale-root mutations, `4.9` for operation-lifetime retirement, and `6.7` for the unsafe Archive input boundary. Progress returns to `55/131`.
+- `4.5`, `5.8`, `6.5`, `6.6`, and `10.17` remain closed: this review found no counterexample to physical/reactive settlement, exact Reference provenance, pinned Catalog/detail flow, supported Archive diagnostic rendering, or changed-file documentation.
+- No new Change or loopback is justified. These are direct violations of the current Change's recurrence-safe ownership and canonical-input laws. PR #207 remains merge-blocked; do not merge, archive, release, or continue `6.8+` before correction and another independent review.
+
+## Corrective Worker Goal after `a6e2dcd`
+
+The worker continues on `feat/openspec-cli-16-contract-baseline` and updates PR #207. Repository-root `GOAL.md` contains the complete executable brief; this section preserves the same ownership decisions inside the active Change.
+
+Construction order:
+
+```text
+permanent public red tests against a6e2dcd
+                    |
+                    v
+canonical Archive identity before Root/CLI work
+                    +
+Manager-owned operation lifetime for every root-scoped caller
+                    |
+                    v
+remove unused generic argv execution + exhaustive typed dispatch
+                    |
+                    v
+full caller re-audit -> focused green -> all gates -> remote CI -> review
+```
+
+1. Guard Archive `changeId` with `requireCanonicalOpenSpecEntityId` before Root Context, preflight, stream, invalidation, or CLI execution. Use the canonical value for both validate and Archive. Permanently cover traversal and malformed ids through strict and explicit no-validation inputs, including a pinned OpenSpec 1.6 boundary fixture.
+2. Replace raw mutable `PlanningRootServices` use with a Manager-owned scoped operation/lease. An admitted A operation completes before A is retired and B is exposed; a later operation queues behind replacement and resolves B. Release must cover buffered success/failure, stream terminal/indeterminate/cancel/startup failure, and disposal without deadlock.
+3. Migrate and inventory every root-scoped query/mutation/stream. Acceptance must directly cover Spec, Change/task, Change/Archive entity file, artifact output, Schema/Template, Active Root Config, Update, strict Archive, and any root-scoped workflow mutation found by audit. A lease-disposal or Preview-only test is insufficient.
+4. Audit generic OpenSpec RPC/Web fallback consumers. The default construction is deletion because no current production caller was found. If a real caller exists, retain only strict `yargs` parsing with independent pinned 1.6 fixtures; handwritten parsing and production-policy-derived tests are forbidden.
+5. Replace duplicated Schema action switches and CLI-stream discriminant cascades with Zod plus exhaustive `ts-pattern`, or one typed descriptor map. Invalid Schema actions still fail before Root Context/Kernel/CLI/filesystem access.
+6. Append exact red/green evidence, the Manager state machine, complete capability/caller inventory, recurrence reflection, checkpoint transitions, full gates, remote CI, and residual risks here before changing checkboxes.
+
+Scope and acceptance:
+
+- Preserve the reviewer's current uncommitted updates to `AGENTS.md`, `i18n.zh.md`, `loop/checkpoints.md`, and this file; include them in the correction commit.
+- Re-close only `3.11`, `4.9`, and `6.7`, returning progress from `55/131` to `58/131` only if every matrix passes. Keep `6.8`, `6.9`, and later phases open.
+- Run focused tests, `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`, `pnpm test:browser:ci`, clean SSG, and `git diff --check`; push PR #207 and wait for all remote checks.
+- Return the pushed SHA, Archive and operation-lifetime inventories, red/green evidence, local/remote gates, remaining checkpoints, and residual risks. Do not merge, archive, or release; stop for another independent review.
+
+## Corrective Implementation Evidence after `df41665`: 2026-07-17
+
+The permanent red commit is `df41665e72b7d4750b919515fa3f24d6b22ba52a` (`test: capture archive and root lifetime counterexamples`). It records both counterexamples before the owner correction:
+
+- Pinned OpenSpec 1.6 test `executes the complete 1.6 root, Reference, task, archive, and failure matrix` proves that `archive/../legit` with validation skipped exits zero, removes the active Change, and writes the unintended `archive/legit` destination. Upstream validation is therefore not an identity or path-confinement boundary.
+- Public Router test `keeps root B unexposed until an admitted root A Router mutation settles` failed against `a6e2dcd`: root B became ready while the paused `spec.save` still held A, then that stale operation wrote A after replacement.
+
+Canonical Archive-input inventory:
+
+| Public input                                                                      | Owner boundary                                                                                                                                                 | Permanent evidence                                                                                                                                                                                   |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Canonical `changeId`, strict preflight                                            | `requireCanonicalOpenSpecEntityId` runs before `startOperationStream`; one canonical value and Root Context Store selector are reused by validate and Archive. | Strict success, strict failure/no retry, and one-selector tests pass.                                                                                                                                |
+| Canonical `changeId`, explicit `noValidate`                                       | The same entity guard runs before the operator skip is interpreted; Archive still uses the Manager-owned stream lease.                                         | Explicit-skip test passes without calling validate.                                                                                                                                                  |
+| Traversal, slash/backslash, absolute, dot, leading/trailing whitespace, or NUL id | Rejected before Manager acquisition, Root Context, validate, Archive, invalidation, or filesystem mutation.                                                    | Eight malformed ids multiplied by strict/skip inputs produce sixteen public Router cases.                                                                                                            |
+| Generic or legacy Archive entry                                                   | No public capability exists.                                                                                                                                   | Route-absence test covers `cli.archive`, `cli.archiveStream`, `cli.execute`, `cli.runCommandStream`, `cli.executeOpenSpec`, `cli.executeOpenSpecStream`, and retains only `cli.archiveStrictStream`. |
+
+The Manager now owns operation lifetime rather than returning a durable mutable service record:
+
+```text
+operation A request           replacement A -> B            later operation
+        |                            |                              |
+        v                            v                              v
+transition admits A --------> queue replacement ------------> queue behind B
+        |                            |
+        v                            |
+run with revocable proxy            |
+        |                            |
+success | throw | terminal | indeterminate | cancel | startup failure | dispose
+        |                            |
+        +------ idempotent release --+
+                                     |
+                                     v
+                         drain A -> revoke capabilities
+                                  -> retire Preview/hooks/Kernel/
+                                     Search/Dashboard/watchers/invalidation
+                                  -> expose B -> admit later operation
+```
+
+`runOperation`, `runReactiveOperation`, `startOperationStream`, and `mutateSchema` are the only mutable Planning-root acquisition paths. The operation lease increments the active record before returning a revocable proxy and decrements it exactly once. Replacement first becomes the transition-queue head, so later calls cannot re-enter A; it waits for admitted A work without holding a lock that release must re-enter. Escaped Adapter/service capabilities throw after their operation ends. Stream settlement and cancellation are independently idempotent, and Manager disposal waits for admitted streams before final record teardown.
+
+Complete root-scoped caller inventory:
+
+| Lifetime class                 | Migrated callers                                                                                                                                                                                                                                                                                                |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Buffered operation             | Owned Spec catalog/read/save/validate; Change/list/read/save/validate/task; Change and Archive entity files; OPSX artifact reads/writes; Schema/Template init/fork/write/create/delete; Active Root Config; workflow preparation; Search; Dashboard; Planning Git; buffered Update; PTY planning-root creation. |
+| Reactive operation             | Spec, Change, Archive, OPSX artifact, Schema/Template, Active Root Config, Search, Dashboard, and Planning-root subscriptions execute the complete pull inside `runReactiveOperation`.                                                                                                                          |
+| Streamed operation             | Planning-root validate, Update, and strict validate-then-Archive retain one lease through terminal exit, indeterminate exit, unsubscribe/cancel, startup failure, and backend disposal.                                                                                                                         |
+| Synchronous active-record read | Preview HTTP lookup exposes only the current record's prepared asset; old hashes disappear before B is exposed and no mutable service is returned.                                                                                                                                                              |
+| Explicitly separate owner      | Launch Project Binding, Code Git, fixed launch init, argument-free global CLI install, and user-controlled PTY shell remain outside Planning-root mutation ownership.                                                                                                                                           |
+
+The public generic OpenSpec capability was deleted because no production caller existed: `public-cli-execution.ts`, `cli.executeOpenSpec`, `cli.executeOpenSpecStream`, and the Web generic fallback are absent. The Web runner now has exactly five dedicated transports (`archive-strict`, `init`, `planning-root-update`, `validate`, `install-global-cli`) selected by exhaustive `ts-pattern`. Schema mutation uses one Zod discriminated union as the action vocabulary and one exhaustive `ts-pattern` execution match; malformed input is rejected before Manager/Root/Kernel/CLI/filesystem access.
+
+Green evidence before remote CI:
+
+- Manager tests prove revocation, A -> B -> A, root disappearance, concurrent transition order, subscription ordering, Preview retirement, zero stale observation/invalidation releases, stream terminal, indeterminate terminal through the public Update path, cancellation, startup failure, Schema mutation, and idempotent disposal.
+- Public Router lifetime test covers direct Spec write, buffered Update, streamed indeterminate Update, strict validate -> Archive, and verifies the next mutation targets B only after A settles. Router ownership tests also cover task/entity/artifact writes and all nine Schema/Template actions.
+- Core full suite: `433/433`; Server full suite: `331/331`; Web unit suite: `628/628`.
+- `pnpm format:check`: pass for 21 changed files.
+- `pnpm lint:ci`: pass after removing the sole `no-useless-spread` warning.
+- `pnpm typecheck`: pass for all 15 runnable workspace packages.
+- `pnpm test:ci`: pass, including Root `43`, Core `433`, Server `331`, Web `628`, App `78`, and CLI `49`.
+- `pnpm test:browser:ci`: pass: xterm `60 passed / 1 skipped`; Web Storybook `12/12`. The known xterm post-success close timeout warning remains non-fatal.
+- Clean `packages/web/dist-ssg` and `.vite`, then `pnpm --filter @openspecui/web build:ssg`: pass. Existing `scroll-button` and ineffective dynamic-import warnings remain non-fatal and outside this correction.
+
+Recurrence reflection: the previous Manager serialized root selection and replacement but let the returned service outlive that serialization. Endpoint-local guards could therefore never close the class. The corrected public type makes the invalid lifetime unrepresentable: mutable services exist only behind revocable operation proxies, every sibling caller enters through the same Manager, and replacement owns both admission and retirement.
+
+Residual limits remain unchanged and explicit: physical `realpath`/`lstat` checks are not race-free `openat` and cannot detect hard-link aliases; per-Store Reference enumeration is not one atomic snapshot; external filesystem writes converge through watcher/fallback delivery; PTY and configured CLI executables are operator trust boundaries rather than command sandboxes.
+
+Checkpoint state remains `55/131` until the correction commit is pushed and every PR #207 remote check passes. Only then may `3.11`, `4.9`, and `6.7` return to closed; `6.8`, `6.9`, and all later product work remain open.

@@ -100,6 +100,7 @@
     "@rjsf/validator-ajv8": "^6.5.2",
     "media-icons": "^0.10.0",
     "pdfjs-dist": "^5.7.284",
+    "ts-pattern": "5.9.0",
     "vidstack": "^0.6.15",
     "view-transitions-toolkit": "1.0.0",
     "yet-another-react-lightbox": "^3.32.0"

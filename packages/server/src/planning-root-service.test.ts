@@ -38,6 +38,7 @@ import {
   PlanningRootUnavailableError,
 } from './planning-root-service.js'
 import { createRootContextSubscription } from './root-context-service.js'
+import { SchemaMutationService } from './schema-mutation-service.js'
 import { SearchService } from './search-service.js'
 
 const tempDirs: string[] = []
@@ -168,91 +169,100 @@ describe('PlanningRootServiceManager', () => {
       projectInvalidation,
       runtimeInvalidation,
     })
-    const services = await manager.resolve()
-
-    expect(await services.adapter.listSpecs()).toEqual(['planning-only', 'planning-secondary'])
-    expect(await services.documentService.readSpecRaw('planning-only', 'view', 'source')).toEqual(
-      expect.objectContaining({ markdown: expect.stringContaining('Planning only') })
-    )
-
-    await services.adapter.writeSpec('created', '# Created\n\n## Purpose\n\nCreated.\n')
-    await services.adapter.writeChange(
-      'created-change',
-      '# Change: Created\n',
-      '- [ ] First task\n'
-    )
-    await expect(
-      readFile(join(planningRootDir, 'openspec', 'specs', 'created', 'spec.md'), 'utf8')
-    ).resolves.toContain('# Created')
-    await expect(
-      readFile(join(launchProjectDir, 'openspec', 'specs', 'created', 'spec.md'), 'utf8')
-    ).rejects.toThrow()
-    await expect(
-      readFile(
-        join(planningRootDir, 'openspec', 'changes', 'created-change', 'proposal.md'),
-        'utf8'
+    await manager.runOperation(async (services) => {
+      expect(await services.adapter.listSpecs()).toEqual(['planning-only', 'planning-secondary'])
+      expect(await services.documentService.readSpecRaw('planning-only', 'view', 'source')).toEqual(
+        expect.objectContaining({ markdown: expect.stringContaining('Planning only') })
       )
-    ).resolves.toContain('# Change: Created')
-    await expect(
-      readFile(join(planningRootDir, 'openspec', 'changes', 'created-change', 'tasks.md'), 'utf8')
-    ).resolves.toContain('- [ ] First task')
-    await expect(
-      readFile(
-        join(launchProjectDir, 'openspec', 'changes', 'created-change', 'proposal.md'),
-        'utf8'
+
+      await services.adapter.writeSpec('created', '# Created\n\n## Purpose\n\nCreated.\n')
+      await services.adapter.writeChange(
+        'created-change',
+        '# Change: Created\n',
+        '- [ ] First task\n'
       )
-    ).rejects.toThrow()
-    await expect(services.adapter.writeSpec('../escaped', '# Escaped\n')).rejects.toThrow(
-      /Invalid specId/
+      await expect(
+        readFile(join(planningRootDir, 'openspec', 'specs', 'created', 'spec.md'), 'utf8')
+      ).resolves.toContain('# Created')
+      await expect(
+        readFile(join(launchProjectDir, 'openspec', 'specs', 'created', 'spec.md'), 'utf8')
+      ).rejects.toThrow()
+      await expect(
+        readFile(
+          join(planningRootDir, 'openspec', 'changes', 'created-change', 'proposal.md'),
+          'utf8'
+        )
+      ).resolves.toContain('# Change: Created')
+      await expect(
+        readFile(join(planningRootDir, 'openspec', 'changes', 'created-change', 'tasks.md'), 'utf8')
+      ).resolves.toContain('- [ ] First task')
+      await expect(
+        readFile(
+          join(launchProjectDir, 'openspec', 'changes', 'created-change', 'proposal.md'),
+          'utf8'
+        )
+      ).rejects.toThrow()
+      await expect(services.adapter.writeSpec('../escaped', '# Escaped\n')).rejects.toThrow(
+        /Invalid specId/
+      )
+      await expect(
+        services.adapter.writeChange('../escaped-change', '# Escaped change\n')
+      ).rejects.toThrow(/Invalid changeId/)
+      await expect(
+        services.adapter.readEntityDetail('change', '../escaped-change')
+      ).rejects.toThrow(/Invalid changeId/)
+      await expect(
+        readFile(join(planningRootDir, 'openspec', 'escaped', 'spec.md'), 'utf8')
+      ).rejects.toThrow()
+      await expect(
+        readFile(join(planningRootDir, 'openspec', 'escaped-change', 'proposal.md'), 'utf8')
+      ).rejects.toThrow()
+
+      await mkdir(join(launchProjectDir, 'openspec', 'changes', 'launch-only-change'), {
+        recursive: true,
+      })
+      await Promise.all([
+        writeFile(
+          join(launchProjectDir, 'openspec', 'changes', 'launch-only-change', 'proposal.md'),
+          '# Change: Launch only\n'
+        ),
+        writeFile(
+          join(launchProjectDir, 'openspec', 'changes', 'launch-only-change', 'tasks.md'),
+          '- [ ] Launch task one\n- [ ] Launch task two\n'
+        ),
+      ])
+
+      const activeChanges = await services.adapter.listChangesWithMeta()
+      expect(activeChanges.map((change) => change.id)).toEqual(['created-change'])
+
+      expect(await services.adapter.listArchivedChanges()).toEqual(['planning-only-archive'])
+
+      const dashboard = await services.dashboardOverviewService.getCurrent()
+      expect(dashboard.summary).toMatchObject({
+        specifications: 3,
+        activeChanges: 1,
+        tasksTotal: 1,
+        tasksCompleted: 0,
+      })
+      expect(dashboard.specifications.map((specification) => specification.id).sort()).toEqual([
+        'created',
+        'planning-only',
+        'planning-secondary',
+      ])
+      expect(dashboard.activeChanges.map((change) => change.id)).toEqual(['created-change'])
+    })
+
+    await expect(manager.runOperation(({ adapter }) => adapter.listSpecs())).resolves.toContain(
+      'created'
     )
     await expect(
-      services.adapter.writeChange('../escaped-change', '# Escaped change\n')
-    ).rejects.toThrow(/Invalid changeId/)
-    await expect(services.adapter.readEntityDetail('change', '../escaped-change')).rejects.toThrow(
-      /Invalid changeId/
+      manager.runReactiveOperation(({ adapter }) => adapter.listSpecs())
+    ).resolves.toContain('created')
+    await expect(manager.runOperation(({ adapter }) => adapter)).rejects.toThrow(
+      /operation capability is no longer active/i
     )
-    await expect(
-      readFile(join(planningRootDir, 'openspec', 'escaped', 'spec.md'), 'utf8')
-    ).rejects.toThrow()
-    await expect(
-      readFile(join(planningRootDir, 'openspec', 'escaped-change', 'proposal.md'), 'utf8')
-    ).rejects.toThrow()
-
-    await mkdir(join(launchProjectDir, 'openspec', 'changes', 'launch-only-change'), {
-      recursive: true,
-    })
-    await Promise.all([
-      writeFile(
-        join(launchProjectDir, 'openspec', 'changes', 'launch-only-change', 'proposal.md'),
-        '# Change: Launch only\n'
-      ),
-      writeFile(
-        join(launchProjectDir, 'openspec', 'changes', 'launch-only-change', 'tasks.md'),
-        '- [ ] Launch task one\n- [ ] Launch task two\n'
-      ),
-    ])
-
-    const activeChanges = await services.adapter.listChangesWithMeta()
-    expect(activeChanges.map((change) => change.id)).toEqual(['created-change'])
-
-    expect(await services.adapter.listArchivedChanges()).toEqual(['planning-only-archive'])
-
-    const dashboard = await services.dashboardOverviewService.getCurrent()
-    expect(dashboard.summary).toMatchObject({
-      specifications: 3,
-      activeChanges: 1,
-      tasksTotal: 1,
-      tasksCompleted: 0,
-    })
-    expect(dashboard.specifications.map((specification) => specification.id).sort()).toEqual([
-      'created',
-      'planning-only',
-      'planning-secondary',
-    ])
-    expect(dashboard.activeChanges.map((change) => change.id)).toEqual(['created-change'])
-
-    expect((await manager.resolve()).adapter).toBe(services.adapter)
-    expect((await manager.resolveReactive()).adapter).toBe(services.adapter)
+    const escaped = await manager.runOperation(({ adapter }) => ({ adapter }))
+    expect(() => escaped.adapter.listSpecs()).toThrow(/operation capability is no longer active/i)
     expect(observationEnvironment.acquireRoot).toHaveBeenCalledTimes(1)
     expect(observationEnvironment.acquireRoot).toHaveBeenCalledWith(planningRootDir)
     expect(projectInvalidation.acquireRoot).toHaveBeenCalledTimes(1)
@@ -387,7 +397,9 @@ describe('PlanningRootServiceManager', () => {
       runtimeInvalidation,
     })
 
-    await expect(manager.resolve()).rejects.toMatchObject<PlanningRootUnavailableError>({
+    await expect(
+      manager.runOperation(() => undefined)
+    ).rejects.toMatchObject<PlanningRootUnavailableError>({
       name: 'PlanningRootUnavailableError',
       state: {
         state: 'error',
@@ -466,12 +478,12 @@ describe('PlanningRootServiceManager', () => {
       runtimeInvalidation: new RuntimeInvalidationIndex(),
     })
 
-    const nearest = await manager.resolve()
+    const nearest = await manager.runOperation(({ rootContext }) => rootContext)
     storeId = 'shared'
-    const explicitStore = await manager.resolve()
+    const explicitStore = await manager.runOperation(({ rootContext }) => rootContext)
 
     expect(explicitStore).not.toBe(nearest)
-    expect(explicitStore.rootContext).toMatchObject({
+    expect(explicitStore).toMatchObject({
       planningRoot: { path: tempDir, source: 'store' },
       storeId: 'shared',
     })
@@ -550,18 +562,19 @@ describe('PlanningRootServiceManager', () => {
       runtimeInvalidation: new RuntimeInvalidationIndex(),
     })
 
-    const firstA = await manager.resolve()
-    const preview = firstA.filePreviewService.prepareEntityFilePreview({
-      stage: 'change',
-      changeId: 'preview',
-      path: 'index.html',
-    })
+    const preview = await manager.runOperation(({ filePreviewService }) =>
+      filePreviewService.prepareEntityFilePreview({
+        stage: 'change',
+        changeId: 'preview',
+        path: 'index.html',
+      })
+    )
     expect(manager.readPreviewRequest(preview.hash, 'index.html')?.content.toString()).toContain(
       'Root A'
     )
 
     selectedRoot = rootB
-    await manager.resolve()
+    await manager.runOperation(() => undefined)
     expect(observationReleases[0]).toHaveBeenCalledOnce()
     expect(invalidationReleases[0]).toHaveBeenCalledOnce()
     expect(kernelDispose).toHaveBeenCalledTimes(1)
@@ -572,13 +585,13 @@ describe('PlanningRootServiceManager', () => {
     expect(manager.readPreviewRequest(preview.hash, 'index.html')).toBeNull()
 
     selectedRoot = rootA
-    const secondA = await manager.resolve()
-    expect(secondA).not.toBe(firstA)
-    const secondPreview = secondA.filePreviewService.prepareEntityFilePreview({
-      stage: 'change',
-      changeId: 'preview',
-      path: 'index.html',
-    })
+    const secondPreview = await manager.runOperation(({ filePreviewService }) =>
+      filePreviewService.prepareEntityFilePreview({
+        stage: 'change',
+        changeId: 'preview',
+        path: 'index.html',
+      })
+    )
     expect(secondPreview.hash).not.toBe(preview.hash)
     expect(manager.readPreviewRequest(preview.hash, 'index.html')).toBeNull()
     expect(
@@ -607,7 +620,9 @@ describe('PlanningRootServiceManager', () => {
       payload: { status: [] },
       diagnostics: [],
     })
-    await expect(manager.resolve()).rejects.toBeInstanceOf(PlanningRootUnavailableError)
+    await expect(manager.runOperation(() => undefined)).rejects.toBeInstanceOf(
+      PlanningRootUnavailableError
+    )
     expect(observationReleases[2]).toHaveBeenCalledOnce()
     expect(invalidationReleases[2]).toHaveBeenCalledOnce()
     expect(manager.readPreviewRequest(preview.hash, 'index.html')).toBeNull()
@@ -623,6 +638,165 @@ describe('PlanningRootServiceManager', () => {
     expect(searchDispose).toHaveBeenCalledTimes(3)
     expect(dashboardDispose).toHaveBeenCalledTimes(3)
     expect(previewDispose).toHaveBeenCalledTimes(3)
+  })
+
+  it('holds replacement through stream terminal, cancellation, startup failure, and disposal', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-planning-stream-leases-'))
+    tempDirs.push(tempDir)
+    const launchProjectDir = join(tempDir, 'launch')
+    const roots = ['a', 'b', 'c', 'd', 'e'].map((name) => join(tempDir, `root-${name}`))
+    await Promise.all([
+      mkdir(join(launchProjectDir, 'openspec'), { recursive: true }),
+      ...roots.map((root) => mkdir(join(root, 'openspec'), { recursive: true })),
+    ])
+
+    const configManager = new ConfigManager(launchProjectDir)
+    const cliExecutor = new CliExecutor(configManager, launchProjectDir)
+    let selectedRoot = roots[0]!
+    vi.spyOn(cliExecutor, 'checkAvailability').mockResolvedValue({
+      available: true,
+      version: '1.6.0',
+    })
+    vi.spyOn(cliExecutor.contracts, 'doctorRoot').mockImplementation(async () =>
+      commandResult({
+        root: { path: selectedRoot, source: 'nearest', healthy: true, status: [] },
+        store: null,
+        references: [],
+        status: [],
+      })
+    )
+    vi.spyOn(cliExecutor.contracts, 'context').mockImplementation(async () =>
+      commandResult({
+        root: { path: selectedRoot, source: 'nearest', role: 'openspec_root' },
+        members: [],
+        status: [],
+      })
+    )
+    const observationReleases: Array<ReturnType<typeof vi.fn>> = []
+    const observationEnvironment: ObservationRootOwner = {
+      acquireRoot: vi.fn(async () => {
+        const release = vi.fn(async () => {})
+        observationReleases.push(release)
+        return release
+      }),
+    }
+    const invalidationReleases: Array<ReturnType<typeof vi.fn>> = []
+    const projectInvalidation: RuntimeRootInvalidationOwner = {
+      acquireRoot: vi.fn(() => {
+        const release = vi.fn()
+        invalidationReleases.push(release)
+        return release
+      }),
+    }
+    const manager = new PlanningRootServiceManager({
+      launchProjectDir,
+      previewAssetsDir: join(tempDir, 'preview-assets'),
+      configManager,
+      cliExecutor,
+      observationEnvironment,
+      projectInvalidation,
+      runtimeInvalidation: new RuntimeInvalidationIndex(),
+    })
+
+    const terminal = Promise.withResolvers<void>()
+    const cancelAProcess = vi.fn()
+    const cancelA = await manager.startOperationStream(({ rootContext }, settle) => {
+      expect(rootContext.planningRoot?.path).toBe(roots[0])
+      void terminal.promise.then(settle)
+      return cancelAProcess
+    })
+    selectedRoot = roots[1]!
+    const replacementB = manager.resolveRootContext()
+    const bExposedBeforeTerminal = await Promise.race([
+      replacementB.then(() => true),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 25)),
+    ])
+    expect(bExposedBeforeTerminal).toBe(false)
+    terminal.resolve()
+    await expect(replacementB).resolves.toMatchObject({
+      state: 'ready',
+      data: { planningRoot: { path: roots[1] } },
+    })
+    cancelA()
+    cancelA()
+    expect(cancelAProcess).toHaveBeenCalledOnce()
+
+    const cancelBProcess = vi.fn()
+    const cancelB = await manager.startOperationStream(({ rootContext }) => {
+      expect(rootContext.planningRoot?.path).toBe(roots[1])
+      return cancelBProcess
+    })
+    selectedRoot = roots[2]!
+    const replacementC = manager.resolveRootContext()
+    const cExposedBeforeCancel = await Promise.race([
+      replacementC.then(() => true),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 25)),
+    ])
+    expect(cExposedBeforeCancel).toBe(false)
+    cancelB()
+    cancelB()
+    expect(cancelBProcess).toHaveBeenCalledOnce()
+    await expect(replacementC).resolves.toMatchObject({
+      state: 'ready',
+      data: { planningRoot: { path: roots[2] } },
+    })
+
+    const schemaStarted = Promise.withResolvers<void>()
+    const resumeSchema = Promise.withResolvers<void>()
+    const schemaMutation = vi
+      .spyOn(SchemaMutationService.prototype, 'mutate')
+      .mockImplementationOnce(async () => {
+        schemaStarted.resolve()
+        await resumeSchema.promise
+        return null
+      })
+    const schemaWrite = manager.mutateSchema({
+      action: 'write-yaml',
+      schema: 'demo',
+      content: 'name: demo\n',
+    })
+    await schemaStarted.promise
+    selectedRoot = roots[3]!
+    const replacementD = manager.resolveRootContext()
+    const dExposedBeforeSchema = await Promise.race([
+      replacementD.then(() => true),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 25)),
+    ])
+    expect(dExposedBeforeSchema).toBe(false)
+    resumeSchema.resolve()
+    await Promise.all([schemaWrite, replacementD])
+    schemaMutation.mockRestore()
+
+    await expect(
+      manager.startOperationStream(() => {
+        throw new Error('stream startup failed')
+      })
+    ).rejects.toThrow('stream startup failed')
+    selectedRoot = roots[4]!
+    await expect(manager.resolveRootContext()).resolves.toMatchObject({
+      state: 'ready',
+      data: { planningRoot: { path: roots[4] } },
+    })
+
+    const terminalD = Promise.withResolvers<void>()
+    await manager.startOperationStream((_services, settle) => {
+      void terminalD.promise.then(settle)
+      return vi.fn()
+    })
+    const disposal = manager.dispose()
+    const disposedBeforeTerminal = await Promise.race([
+      disposal.then(() => true),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 25)),
+    ])
+    expect(disposedBeforeTerminal).toBe(false)
+    terminalD.resolve()
+    await disposal
+    await manager.dispose()
+
+    expect(observationReleases).toHaveLength(5)
+    expect(invalidationReleases).toHaveLength(5)
+    for (const release of observationReleases) expect(release).toHaveBeenCalledOnce()
+    for (const release of invalidationReleases) expect(release).toHaveBeenCalledOnce()
   })
 
   it('retires A before a Root Context subscription exposes B', async () => {
@@ -690,12 +864,13 @@ describe('PlanningRootServiceManager', () => {
       projectInvalidation,
       runtimeInvalidation,
     })
-    const firstA = await manager.resolve()
-    const preview = firstA.filePreviewService.prepareEntityFilePreview({
-      stage: 'change',
-      changeId: 'preview',
-      path: 'index.html',
-    })
+    const preview = await manager.runOperation(({ filePreviewService }) =>
+      filePreviewService.prepareEntityFilePreview({
+        stage: 'change',
+        changeId: 'preview',
+        path: 'index.html',
+      })
+    )
 
     const firstReady = Promise.withResolvers<void>()
     const readyB = Promise.withResolvers<void>()
@@ -909,7 +1084,7 @@ describe('PlanningRootServiceManager', () => {
       runtimeInvalidation: new RuntimeInvalidationIndex(),
     })
 
-    const resolvingA = manager.resolve()
+    const resolvingA = manager.runOperation(({ rootContext }) => rootContext)
     await vi.waitFor(() => expect(doctorRoot).toHaveBeenCalledTimes(1))
     const resolvingB = manager.resolveRootContextReactive()
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -930,9 +1105,9 @@ describe('PlanningRootServiceManager', () => {
       })
     )
 
-    const [servicesA, stateB] = await Promise.all([resolvingA, resolvingB])
+    const [rootContextA, stateB] = await Promise.all([resolvingA, resolvingB])
     expect(callsBeforeFirstSettled).toBe(1)
-    expect(servicesA.rootContext.planningRoot?.path).toBe(rootA)
+    expect(rootContextA.planningRoot?.path).toBe(rootA)
     expect(stateB).toMatchObject({ state: 'ready', data: { planningRoot: { path: rootB } } })
     expect(observationEnvironment.acquireRoot).toHaveBeenCalledTimes(2)
 

@@ -27,7 +27,7 @@ describe('search router', () => {
     const caller = appRouter.createCaller({
       launchProjectAdapter: {} as never,
       planningRootServices: {
-        resolve: vi.fn().mockResolvedValue({ searchService }),
+        runOperation: vi.fn(async (operation) => operation({ searchService } as never)),
       } as never,
       configManager: {} as never,
       cliExecutor: {} as never,

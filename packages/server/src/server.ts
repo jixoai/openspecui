@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Bootstrap the HTTP/tRPC server and launch-project runtime services.
  * 2. Delegate OpenSpec filesystem ownership to the CLI-selected planning-root manager.
  * 3. Host notification, sound, preview-resource, and translation HTTP boundaries.
@@ -7,6 +7,7 @@
  * 5. Own the runtime observation environment and warm root-scoped services without blocking readiness.
  *
  * Original request (2026-07-15): "你先负责后端（内核）的开发。"
+ * Original request (2026-07-17): "Every Planning-root execution surface uses the same operation lifetime owner."
  *
  * @module server
  */
@@ -491,15 +492,17 @@ export async function createWebSocketServer(
   const ptyManager = new PtyManager()
   const ptyWss = new WebSocketServer({ noServer: true })
   const ptyHandler = createPtyWebSocketHandler(ptyManager, server.notificationService, {
-    async resolveCwdTarget(cwdTarget) {
+    async withCwdTarget(cwdTarget, task) {
       if (cwdTarget === 'launch-project') {
-        return { cwdTarget, cwd: config.projectDir }
+        return task({ cwdTarget, cwd: config.projectDir })
       }
-      const planningRoot = (await server.planningRootServices.resolve()).rootContext.planningRoot
-      if (!planningRoot) {
-        throw new Error('Planning root cwd is unavailable.')
-      }
-      return { cwdTarget, cwd: planningRoot.path }
+      return server.planningRootServices.runOperation(({ rootContext }) => {
+        const planningRoot = rootContext.planningRoot
+        if (!planningRoot) {
+          throw new Error('Planning root cwd is unavailable.')
+        }
+        return task({ cwdTarget, cwd: planningRoot.path })
+      })
     },
   })
   ptyWss.on('connection', ptyHandler)
@@ -649,8 +652,7 @@ export async function startServer(
   deferBackgroundTask(() => {
     if (runtimeClosing) return
     server.planningRootServices
-      .resolve()
-      .then(async (services) => {
+      .runOperation(async (services) => {
         await Promise.all([
           services.kernel.warmup(),
           services.searchService.init(),

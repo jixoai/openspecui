@@ -7,10 +7,11 @@ function createPtyWebSocketHandler(
   notificationService?: Parameters<typeof createPtyWebSocketHandlerBase>[1]
 ) {
   return createPtyWebSocketHandlerBase(ptyManager, notificationService, {
-    resolveCwdTarget: async (cwdTarget) => ({
-      cwdTarget,
-      cwd: cwdTarget === 'planning-root' ? '/planning' : '/launch',
-    }),
+    withCwdTarget: async (cwdTarget, task) =>
+      task({
+        cwdTarget,
+        cwd: cwdTarget === 'planning-root' ? '/planning' : '/launch',
+      }),
   })
 }
 
@@ -110,13 +111,19 @@ describe('createPtyWebSocketHandler', () => {
         return session
       }
     )
-    const resolveCwdTarget = vi.fn(async (cwdTarget: 'launch-project' | 'planning-root') => ({
-      cwdTarget,
-      cwd: cwdTarget === 'planning-root' ? '/planning' : '/launch',
-    }))
+    const withCwdTarget = vi.fn(
+      async <T>(
+        cwdTarget: 'launch-project' | 'planning-root',
+        task: (cwd: { cwdTarget: 'launch-project' | 'planning-root'; cwd: string }) => T
+      ) =>
+        task({
+          cwdTarget,
+          cwd: cwdTarget === 'planning-root' ? '/planning' : '/launch',
+        })
+    )
     const ws = new MockWebSocket()
     const handler = createPtyWebSocketHandlerBase({ create } as never, undefined, {
-      resolveCwdTarget,
+      withCwdTarget,
     })
 
     handler(ws as never)
@@ -137,7 +144,7 @@ describe('createPtyWebSocketHandler', () => {
         })
       )
     })
-    expect(resolveCwdTarget).toHaveBeenCalledWith('planning-root')
+    expect(withCwdTarget).toHaveBeenCalledWith('planning-root', expect.any(Function))
     expect(JSON.parse(ws.sent[0]!)).toMatchObject({
       type: 'created',
       requestId: 'term-planning',
@@ -150,7 +157,7 @@ describe('createPtyWebSocketHandler', () => {
     const create = vi.fn()
     const ws = new MockWebSocket()
     const handler = createPtyWebSocketHandlerBase({ create } as never, undefined, {
-      resolveCwdTarget: vi.fn(async () => {
+      withCwdTarget: vi.fn(async () => {
         throw new Error('Planning root cwd is unavailable.')
       }),
     })

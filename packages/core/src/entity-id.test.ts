@@ -10,12 +10,20 @@ import { describe, expect, it } from 'vitest'
 import { requireCanonicalOpenSpecEntityId, requireOpenSpecEntityRelativePath } from './entity-id.js'
 
 describe('requireCanonicalOpenSpecEntityId', () => {
-  it.each(['../escaped', './nested', 'nested/change', 'nested\\change', '.', '..', ''])(
-    'rejects non-canonical path input %j',
-    (value) => {
-      expect(() => requireCanonicalOpenSpecEntityId(value, 'changeId')).toThrow(/Invalid changeId/)
-    }
-  )
+  it.each([
+    '../escaped',
+    './nested',
+    'nested/change',
+    'nested\\change',
+    '.',
+    '..',
+    '',
+    ' leading-space',
+    'trailing-space ',
+    'nul\0change',
+  ])('rejects non-canonical path input %j', (value) => {
+    expect(() => requireCanonicalOpenSpecEntityId(value, 'changeId')).toThrow(/Invalid changeId/)
+  })
 
   it('preserves an opaque single path segment', () => {
     expect(requireCanonicalOpenSpecEntityId('add-search', 'specId')).toBe('add-search')

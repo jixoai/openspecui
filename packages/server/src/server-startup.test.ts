@@ -193,17 +193,20 @@ describe('server startup runtime contract', () => {
         status: [],
       })
     )
-    const previewService = (await server.planningRootServices.resolve()).filePreviewService
-    const preparedHtml = previewService.prepareEntityFilePreview({
-      stage: 'change',
-      changeId: 'preview-demo',
-      path: 'site/index.html',
-    })
-    const preparedPdf = previewService.prepareEntityFilePreview({
-      stage: 'change',
-      changeId: 'preview-demo',
-      path: 'docs/guide.pdf',
-    })
+    const [preparedHtml, preparedPdf] = await server.planningRootServices.runOperation(
+      ({ filePreviewService }) => [
+        filePreviewService.prepareEntityFilePreview({
+          stage: 'change',
+          changeId: 'preview-demo',
+          path: 'site/index.html',
+        }),
+        filePreviewService.prepareEntityFilePreview({
+          stage: 'change',
+          changeId: 'preview-demo',
+          path: 'docs/guide.pdf',
+        }),
+      ]
+    )
     const removedEntryResponse = await server.app.request(
       new Request(`http://openspecui.test/api/file-preview/${preparedHtml.hash}/html-preview.html`)
     )
@@ -237,12 +240,14 @@ describe('server startup runtime contract', () => {
     expect(retiredResponse.status).toBe(404)
 
     selectedRoot = rootA
-    const replacementA = await server.planningRootServices.resolve()
-    const replacementPreview = replacementA.filePreviewService.prepareEntityFilePreview({
-      stage: 'change',
-      changeId: 'preview-demo',
-      path: 'site/index.html',
-    })
+    const replacementPreview = await server.planningRootServices.runOperation(
+      ({ filePreviewService }) =>
+        filePreviewService.prepareEntityFilePreview({
+          stage: 'change',
+          changeId: 'preview-demo',
+          path: 'site/index.html',
+        })
+    )
     expect(replacementPreview.hash).not.toBe(preparedHtml.hash)
     const stillRetiredResponse = await server.app.request(
       new Request(`http://openspecui.test/api/file-preview/${preparedHtml.hash}/index.html`)

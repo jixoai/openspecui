@@ -419,6 +419,9 @@ importers:
       hono:
         specifier: ^4.7.3
         version: 4.10.6
+      ts-pattern:
+        specifier: 5.9.0
+        version: 5.9.0
       undici:
         specifier: ^7.18.2
         version: 7.18.2
@@ -496,6 +499,9 @@ importers:
       pdfjs-dist:
         specifier: ^5.7.284
         version: 5.7.284
+      ts-pattern:
+        specifier: 5.9.0
+        version: 5.9.0
       vidstack:
         specifier: ^0.6.15
         version: 0.6.15
@@ -11412,6 +11418,12 @@ packages:
         integrity: sha512-ztMO++owQnz8c/gIENcM9XfCEzgoGphTv+nKpYNM1bgsdOVC/jRZuEBf6N+mLLDNg68Kl+GgUZfOySaRiG1/Ug==,
       }
 
+  ts-pattern@5.9.0:
+    resolution:
+      {
+        integrity: sha512-6s5V71mX8qBUmlgbrfL33xDUwO0fq48rxAu2LBE11WBeGdpCPOsXksQbZJHvHwhrd3QjUusd3mAOM5Gg0mFBLg==,
+      }
+
   tsconfig-paths@4.2.0:
     resolution:
       {
@@ -18832,6 +18844,8 @@ snapshots:
     dependencies:
       '@ts-morph/common': 0.27.0
       code-block-writer: 13.0.3
+
+  ts-pattern@5.9.0: {}
 
   tsconfig-paths@4.2.0:
     dependencies:
