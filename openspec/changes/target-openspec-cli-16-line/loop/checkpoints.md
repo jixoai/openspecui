@@ -97,7 +97,7 @@ Third-review construction directives after `a6e2dcd`:
 - [x] 3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited `XDG_DATA_HOME`
 - [x] 3.9 Agent prompts and OPSX commands use CLI-resolved paths and never reconstruct `<launch-project>/openspec`
 - [x] 3.10 Project-owned `.env`, `StoreRoot`, registry overlay, and synthesized registry paths remain absent
-- [ ] 3.11 Tests assert every application mutation path, including Archive identity, concurrent root replacement, generic CLI, and Schema/Template routes, can mutate only its Server-owned selected root and cannot escape through path traversal, stale handles, or symlinks
+- [x] 3.11 Tests assert every application mutation path, including Archive identity, concurrent root replacement, generic CLI, and Schema/Template routes, can mutate only its Server-owned selected root and cannot escape through path traversal, stale handles, or symlinks
 
 ## 4. Multi-Root Reactive Kernel
 
@@ -109,7 +109,7 @@ Third-review construction directives after `a6e2dcd`:
 - [x] 4.6 Push messages carry invalidation identity only; clients pull fresh CLI projections
 - [x] 4.7 Duplicate invalidations coalesce or remain idempotent across subscribers
 - [x] 4.8 Store polling is removed as the primary path and retained only as a bounded watcher-failure fallback
-- [ ] 4.9 Root Context replacement/removal waits for admitted old-root operations, actively retires all old capabilities/watchers/services/previews, and exposes the new root only after retirement
+- [x] 4.9 Root Context replacement/removal waits for admitted old-root operations, actively retires all old capabilities/watchers/services/previews, and exposes the new root only after retirement
 - [x] 4.10 Multi-client tests cover external Store edits, registry changes, concurrent operations, reconnect, and root disappearance
 
 ## 5. Task and Spec Projection Contracts
@@ -134,7 +134,7 @@ Third-review construction directives after `a6e2dcd`:
 - [x] 6.4 Change detail preserves CLI paths/context, adds `update`, shows Reference context, and renders strict validate/archive diagnostics
 - [x] 6.5 Specs defaults to Owned and provides a Store-grouped Referenced view with immutable entries sourced from end-to-end pinned CLI 1.6 Reference enumeration
 - [x] 6.6 Spec detail validates returned Store and Spec provenance, shows source/read-only state, disables mutation for References, and returns to the correct list scope
-- [ ] 6.7 Archive lists only writable-root archives, validates canonical Change identity before any CLI path, has one Server-owned strict mutation entry, cannot be reached through a generic CLI bypass, and tests diagnostics through that supported entry
+- [x] 6.7 Archive lists only writable-root archives, validates canonical Change identity before any CLI path, has one Server-owned strict mutation entry, cannot be reached through a generic CLI bypass, and tests diagnostics through that supported entry
 - [ ] 6.8 Config implements Project Binding, Active Root Config, and Environment Global Config ownership sections
 - [ ] 6.9 Project Stores route is replaced by Context with root, Reference, environment, and read-only registry diagnostics
 - [ ] 6.10 Search defaults to the active root and offers an explicit Referenced Specs scope without referenced changes

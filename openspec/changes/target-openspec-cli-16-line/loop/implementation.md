@@ -1414,4 +1414,6 @@ Recurrence reflection: the previous Manager serialized root selection and replac
 
 Residual limits remain unchanged and explicit: physical `realpath`/`lstat` checks are not race-free `openat` and cannot detect hard-link aliases; per-Store Reference enumeration is not one atomic snapshot; external filesystem writes converge through watcher/fallback delivery; PTY and configured CLI executables are operator trust boundaries rather than command sandboxes.
 
-Checkpoint state remains `55/131` until the correction commit is pushed and every PR #207 remote check passes. Only then may `3.11`, `4.9`, and `6.7` return to closed; `6.8`, `6.9`, and all later product work remain open.
+Remote CI for correction commit `50b9faba358f573aa11e6cbbb418090d481239c2` is green: Changeset Gate, CI Scope, Fast Gate, Browser Gate (`@openspecui/web`), Browser Gate (`xterm-input-panel`), and the aggregate Browser Gate all completed successfully with zero failures; GitHub reports `mergeStateStatus=CLEAN`.
+
+Checkpoint transition: `55/131 -> 58/131`. Only `3.11`, `4.9`, and `6.7` returned to closed. `6.8`, `6.9`, and every later product checkpoint remain open. PR #207 must stop for another independent review; do not merge, archive, release, or continue implementation.
