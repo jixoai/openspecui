@@ -112,6 +112,8 @@ line, and rejects older or forward CLI lines by default.
   bypasses CLI evidence.
 - Reject non-canonical filesystem-backed Spec and Change ids through one shared
   Core/Server guard before any read or mutation can escape its entity root.
+  Entity-relative file and glob paths use the same boundary before OPSX queries,
+  subscriptions, watcher dependencies, previews, or writes touch the filesystem.
 - Default the Spec Catalog to writable Owned entries and place direct
   Referenced Specs in a Store-grouped, visibly read-only sibling view while
   retaining compound routes for duplicate ids.

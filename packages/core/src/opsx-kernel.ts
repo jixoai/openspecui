@@ -17,7 +17,7 @@ import {
   CliWorkflowStatusSuccessSchema,
 } from './cli-contracts/index.js'
 import type { CliExecutor } from './cli-executor.js'
-import { requireCanonicalOpenSpecEntityId } from './entity-id.js'
+import { requireCanonicalOpenSpecEntityId, requireOpenSpecEntityRelativePath } from './entity-id.js'
 import { inferFileMime, inferFilePreviewKind, isTextLikeFile } from './file-preview.js'
 import { toOpsxDisplayPath } from './opsx-display-path.js'
 import { parseOpsxSchemaDetail } from './opsx-schema-detail.js'
@@ -145,6 +145,13 @@ interface GlobArtifactFile {
   content: string
 }
 
+function requireCanonicalArtifactLocation(changeId: string, outputPath: string) {
+  return {
+    changeId: requireCanonicalOpenSpecEntityId(changeId, 'changeId'),
+    outputPath: requireOpenSpecEntityRelativePath(outputPath, 'outputPath'),
+  }
+}
+
 function splitRelativePathSegments(path: string): string[] {
   return path.replace(/\\/g, '/').split('/').filter(Boolean)
 }
@@ -166,10 +173,11 @@ async function readGlobArtifactFiles(
   changeId: string,
   outputPath: string
 ): Promise<GlobArtifactFile[]> {
-  const changeDir = join(projectDir, 'openspec', 'changes', changeId)
+  const location = requireCanonicalArtifactLocation(changeId, outputPath)
+  const changeDir = join(projectDir, 'openspec', 'changes', location.changeId)
   const allEntries = await readEntriesUnderRoot(changeDir)
   return allEntries
-    .filter((entry) => entry.type === 'file' && matchesGlob(entry.path, outputPath))
+    .filter((entry) => entry.type === 'file' && matchesGlob(entry.path, location.outputPath))
     .map((entry) => ({
       path: entry.path,
       type: 'file' as const,
@@ -242,8 +250,9 @@ async function touchArtifactOutputDeps(
   changeId: string,
   outputPath: string
 ): Promise<void> {
-  const changeDir = join(projectDir, 'openspec', 'changes', changeId)
-  const normalizedOutputPath = outputPath.replace(/\\/g, '/')
+  const location = requireCanonicalArtifactLocation(changeId, outputPath)
+  const changeDir = join(projectDir, 'openspec', 'changes', location.changeId)
+  const normalizedOutputPath = location.outputPath
 
   if (isGlobPattern(normalizedOutputPath)) {
     const staticPrefix = getGlobStaticPrefix(normalizedOutputPath)
@@ -1128,7 +1137,14 @@ export class OpsxKernel {
   }
 
   private async fetchArtifactOutput(changeId: string, outputPath: string): Promise<string | null> {
-    const artifactPath = join(this.projectDir, 'openspec', 'changes', changeId, outputPath)
+    const location = requireCanonicalArtifactLocation(changeId, outputPath)
+    const artifactPath = join(
+      this.projectDir,
+      'openspec',
+      'changes',
+      location.changeId,
+      location.outputPath
+    )
     return reactiveReadFile(artifactPath)
   }
 
@@ -1206,29 +1222,29 @@ export class OpsxKernel {
   }
 
   async ensureArtifactOutput(changeId: string, outputPath: string): Promise<void> {
-    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
-    const key = `${canonicalChangeId}:${outputPath}`
+    const location = requireCanonicalArtifactLocation(changeId, outputPath)
+    const key = `${location.changeId}:${location.outputPath}`
     if (!this._artifactOutputs.has(key)) {
       this._artifactOutputs.set(key, new ReactiveState<string | null>(null))
     }
     await this.startStreamOnce(
-      `change:${canonicalChangeId}:output:${outputPath}`,
+      `change:${location.changeId}:output:${location.outputPath}`,
       this._artifactOutputs.get(key)!,
-      () => this.fetchArtifactOutput(canonicalChangeId, outputPath),
+      () => this.fetchArtifactOutput(location.changeId, location.outputPath),
       this.controller.signal
     )
   }
 
   async ensureGlobArtifactFiles(changeId: string, outputPath: string): Promise<void> {
-    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
-    const key = `${canonicalChangeId}:${outputPath}`
+    const location = requireCanonicalArtifactLocation(changeId, outputPath)
+    const key = `${location.changeId}:${location.outputPath}`
     if (!this._globArtifactFiles.has(key)) {
       this._globArtifactFiles.set(key, new ReactiveState<GlobArtifactFile[]>([]))
     }
     await this.startStreamOnce(
-      `change:${canonicalChangeId}:glob:${outputPath}`,
+      `change:${location.changeId}:glob:${location.outputPath}`,
       this._globArtifactFiles.get(key)!,
-      () => readGlobArtifactFiles(this.projectDir, canonicalChangeId, outputPath),
+      () => readGlobArtifactFiles(this.projectDir, location.changeId, location.outputPath),
       this.controller.signal
     )
   }

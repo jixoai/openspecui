@@ -13,7 +13,7 @@ Original request (2026-07-16): "代码已经提交，开始review。如果有问
 
 ## Implementation State
 
-Status: **Second independent re-review corrections are complete and locally verified; PR #207 awaits refreshed CI and final re-review before later checkpoints continue**.
+Status: **PR #207 remains unmerged after the latest review-correction cycle; later checkpoints remain paused**.
 
 Completed before code execution:
 
@@ -968,6 +968,29 @@ Verification and checkpoint state:
 - `pnpm test:ci` passed: Root 43, Core 417, Server 283, Web 620, App 78, CLI 49, and every remaining workspace package.
 - `pnpm test:browser:ci` passed: xterm-input-panel 60 with one existing skip; Web Storybook 12. Fresh SSG passed while reporting the existing `scroll-button` CSS warning and an ineffective dynamic-import bundling warning.
 - Checkpoints 3.11 and 6.7 remain closed on stronger evidence. Overall progress remains 57/130; no other checkpoint transitioned.
+
+## Final Dual-Axis Re-review: 2026-07-16 artifact-read and archive-entry closure
+
+Review target: `origin/main...1a8fdc5` after all six refreshed PR checks passed. Standards and Spec independently confirmed the earlier entity-id, reactive task, legacy rename, and strict archive-race corrections, then found two remaining parallel boundaries.
+
+Findings:
+
+- OPSX artifact queries and subscriptions accepted unchecked literal/glob `outputPath` values. Kernel dependency registration could join parent traversal outside the selected Change root before the processed DocumentService projection ran.
+- Public `cli.archive` and `cli.archiveStream` procedures remained parallel typed Archive mutations beside `archiveStrictStream`, so callers could bypass the single Server-owned strict preflight flow.
+
+Corrections:
+
+- Added one shared Core entity-relative path guard for file and glob paths. Router queries/subscriptions, OPSX Kernel reads/watcher dependencies, and Server entity resolvers now reject absolute, drive/UNC, NUL, and parent-traversal inputs before projection access.
+- Removed direct buffered and streaming Archive procedures from the public router. `archiveStrictStream` is the only typed Archive mutation procedure; the lower-level executor stream remains private to its validated archive phase.
+- Added query/subscription traversal, Kernel literal/glob traversal, shared path normalization, and public route-absence regression tests.
+
+Verification and checkpoint state:
+
+- Focused Core entity/OPSX matrix passed 23/23; focused Server Router/archive/task/Planning matrix passed 71/71.
+- `pnpm format:check` passed across 12 changed files; `pnpm lint:ci` passed across 814 files with zero warnings/errors; all 15 workspace typechecks passed; `git diff --check` passed.
+- `pnpm test:ci` passed: Root 43, Core 419, Server 285, Web 620, App 78, CLI 49, and every remaining workspace package.
+- `pnpm test:browser:ci` passed: xterm-input-panel 60 with one existing skip; Web Storybook 12. Fresh SSG passed while reporting the existing `scroll-button` CSS warning and an ineffective dynamic-import bundling warning.
+- Checkpoints 3.11 and 6.7 remain closed on stronger evidence. Overall progress remains 57/130; no other checkpoint transitioned and no loopback trigger fired.
 
 ## Decisions Taken
 

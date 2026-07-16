@@ -276,6 +276,12 @@ process.exit(1)
       /Invalid changeId/
     )
     await expect(kernel.ensureChangeMetadata('../escaped')).rejects.toThrow(/Invalid changeId/)
+    await expect(kernel.ensureArtifactOutput('demo-change', '../../escaped.md')).rejects.toThrow(
+      /Invalid outputPath/
+    )
+    await expect(
+      kernel.ensureGlobArtifactFiles('demo-change', '../outside/**/*.md')
+    ).rejects.toThrow(/Invalid outputPath/)
   })
 
   it(

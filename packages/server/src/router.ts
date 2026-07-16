@@ -55,6 +55,7 @@ import {
   OwnedSpecIdentitySchema,
   ProjectBindingUpdateSchema,
   requireCanonicalOpenSpecEntityId,
+  requireOpenSpecEntityRelativePath,
   resolveTerminalShellDefaults,
   RUNTIME_INVALIDATION_FACETS,
   ServiceTranslationEngineIdSchema,
@@ -992,7 +993,14 @@ function requireChangeId(changeId: string | undefined): string {
   if (!changeId) {
     throw new Error('change is required')
   }
-  return changeId
+  return requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+}
+
+function requireOpsxArtifactLocation(input: { changeId: string; outputPath: string }) {
+  return {
+    changeId: requireCanonicalOpenSpecEntityId(input.changeId, 'changeId'),
+    outputPath: requireOpenSpecEntityRelativePath(input.outputPath, 'outputPath'),
+  }
 }
 
 function parseOpsxProfileListJson(stdout: string): {
@@ -1859,26 +1867,6 @@ export const cliRouter = router({
       )
     }),
 
-  /** 归档 change（非交互式） */
-  archive: publicProcedure
-    .input(
-      z.object({
-        changeId: z.string(),
-        skipSpecs: z.boolean().optional(),
-        noValidate: z.boolean().optional(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      const { rootContext } = await resolvePlanningRoot(ctx)
-      return runOpenSpecCliMutation(ctx, ['archive'], () =>
-        ctx.cliExecutor.contracts.archive(input.changeId, {
-          skipSpecs: input.skipSpecs,
-          noValidate: input.noValidate,
-          ...getRootContextCliSelector(rootContext),
-        })
-      )
-    }),
-
   validate: publicProcedure
     .input(
       z.discriminatedUnion('kind', [
@@ -1960,36 +1948,6 @@ export const cliRouter = router({
           onEvent
         )
       )
-    }),
-
-  /** 流式执行 archive（实时输出） */
-  archiveStream: publicProcedure
-    .input(
-      z.object({
-        changeId: z.string(),
-        skipSpecs: z.boolean().optional(),
-        noValidate: z.boolean().optional(),
-      })
-    )
-    .subscription(({ ctx, input }) => {
-      return createCliStreamObservable(async (onEvent) => {
-        const { rootContext } = await resolvePlanningRoot(ctx)
-        return streamOpenSpecCliMutation(
-          ctx,
-          ['archive'],
-          (mutationEvent) =>
-            ctx.cliExecutor.archiveStream(
-              input.changeId,
-              {
-                skipSpecs: input.skipSpecs,
-                noValidate: input.noValidate,
-                ...getRootContextCliSelector(rootContext),
-              },
-              mutationEvent
-            ),
-          onEvent
-        )
-      })
     }),
 
   /** Strict validate then archive against one Server-owned Root Context selection. */
@@ -2336,12 +2294,13 @@ export const opsxRouter = router({
   readArtifactOutput: publicProcedure
     .input(z.object({ changeId: z.string(), outputPath: z.string() }))
     .query(async ({ ctx, input }) => {
+      const location = requireOpsxArtifactLocation(input)
       const { kernel, documentService } = await resolvePlanningRoot(ctx)
       await kernel.waitForWarmup()
-      await kernel.ensureArtifactOutput(input.changeId, input.outputPath)
+      await kernel.ensureArtifactOutput(location.changeId, location.outputPath)
       return documentService.readChangeArtifactOutput(
-        input.changeId,
-        input.outputPath,
+        location.changeId,
+        location.outputPath,
         'view',
         'processed'
       )
@@ -2350,12 +2309,13 @@ export const opsxRouter = router({
   subscribeArtifactOutput: publicProcedure
     .input(z.object({ changeId: z.string(), outputPath: z.string() }))
     .subscription(({ ctx, input }) => {
+      const location = requireOpsxArtifactLocation(input)
       return createPlanningRootSubscription(ctx, async ({ kernel, documentService }) => {
         await kernel.waitForWarmup()
-        await kernel.ensureArtifactOutput(input.changeId, input.outputPath)
+        await kernel.ensureArtifactOutput(location.changeId, location.outputPath)
         return documentService.readChangeArtifactOutput(
-          input.changeId,
-          input.outputPath,
+          location.changeId,
+          location.outputPath,
           'view',
           'processed'
         )
@@ -2365,12 +2325,13 @@ export const opsxRouter = router({
   readGlobArtifactFiles: publicProcedure
     .input(z.object({ changeId: z.string(), outputPath: z.string() }))
     .query(async ({ ctx, input }) => {
+      const location = requireOpsxArtifactLocation(input)
       const { kernel, documentService } = await resolvePlanningRoot(ctx)
       await kernel.waitForWarmup()
-      await kernel.ensureGlobArtifactFiles(input.changeId, input.outputPath)
+      await kernel.ensureGlobArtifactFiles(location.changeId, location.outputPath)
       return documentService.readChangeGlobArtifactFiles(
-        input.changeId,
-        input.outputPath,
+        location.changeId,
+        location.outputPath,
         'view',
         'processed'
       )
@@ -2379,12 +2340,13 @@ export const opsxRouter = router({
   subscribeGlobArtifactFiles: publicProcedure
     .input(z.object({ changeId: z.string(), outputPath: z.string() }))
     .subscription(({ ctx, input }) => {
+      const location = requireOpsxArtifactLocation(input)
       return createPlanningRootSubscription(ctx, async ({ kernel, documentService }) => {
         await kernel.waitForWarmup()
-        await kernel.ensureGlobArtifactFiles(input.changeId, input.outputPath)
+        await kernel.ensureGlobArtifactFiles(location.changeId, location.outputPath)
         return documentService.readChangeGlobArtifactFiles(
-          input.changeId,
-          input.outputPath,
+          location.changeId,
+          location.outputPath,
           'view',
           'processed'
         )

@@ -814,7 +814,12 @@ export {
 export { OpsxKernel, type TemplateContentMap } from './opsx-kernel.js'
 
 // OPSX CLI output schemas and types
-export { requireCanonicalOpenSpecEntityId, type OpenSpecEntityIdField } from './entity-id.js'
+export {
+  requireCanonicalOpenSpecEntityId,
+  requireOpenSpecEntityRelativePath,
+  type OpenSpecEntityIdField,
+  type OpenSpecEntityPathField,
+} from './entity-id.js'
 export {
   buildOpsxEntityDetail,
   getOpsxEntityMetadataPath,

@@ -1927,7 +1927,7 @@ apply:
   })
 
   describe('cli', () => {
-    it('derives buffered validate and archive Store selection from Root Context', async () => {
+    it('derives buffered validate Store selection from Root Context', async () => {
       const context = createMockContext()
       const planning = await resolveMockPlanningRoot(context)
       planning.rootContext = {
@@ -1949,26 +1949,19 @@ apply:
         type: 'change',
         strict: true,
       })
-      await caller.cli.archive({ changeId: 'add-search', skipSpecs: true })
 
       const validate = context.cliExecutor.contracts.validate as unknown as ReturnType<typeof vi.fn>
-      const archive = context.cliExecutor.contracts.archive as unknown as ReturnType<typeof vi.fn>
       expect(validate).toHaveBeenCalledWith({
         target: { kind: 'item', id: 'add-search', type: 'change' },
         strict: true,
         store: 'shared',
       })
-      expect(archive).toHaveBeenCalledWith('add-search', {
-        skipSpecs: true,
-        noValidate: undefined,
-        store: 'shared',
-      })
       const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
-      expect(invalidation.current('project')).toBe(1)
-      expect(invalidation.current('context')).toBe(1)
+      expect(invalidation.current('project')).toBe(0)
+      expect(invalidation.current('context')).toBe(0)
     })
 
-    it('derives streaming validate and archive Store selection from Root Context', async () => {
+    it('derives streaming validate Store selection from Root Context', async () => {
       const context = createMockContext()
       const planning = await resolveMockPlanningRoot(context)
       planning.rootContext = {
@@ -1985,12 +1978,7 @@ apply:
       const validateStream = context.cliExecutor.validateStream as unknown as ReturnType<
         typeof vi.fn
       >
-      const archiveStream = context.cliExecutor.archiveStream as unknown as ReturnType<typeof vi.fn>
       validateStream.mockImplementation(async (_options, onEvent) => {
-        onEvent({ type: 'exit', exitCode: 0 })
-        return () => undefined
-      })
-      archiveStream.mockImplementation(async (_changeId, _options, onEvent) => {
         onEvent({ type: 'exit', exitCode: 0 })
         return () => undefined
       })
@@ -2001,31 +1989,23 @@ apply:
         type: 'change',
         strict: true,
       })
-      const archiveObservable = await caller.cli.archiveStream({
-        changeId: 'add-search',
-        noValidate: true,
+      await new Promise<void>((resolve, reject) => {
+        validateObservable.subscribe({ error: reject, complete: resolve })
       })
-      await Promise.all(
-        [validateObservable, archiveObservable].map(
-          (stream) =>
-            new Promise<void>((resolve, reject) => {
-              stream.subscribe({ error: reject, complete: resolve })
-            })
-        )
-      )
 
       expect(validateStream).toHaveBeenCalledWith(
         { id: 'add-search', type: 'change', strict: true, store: 'shared' },
         expect.any(Function)
       )
-      expect(archiveStream).toHaveBeenCalledWith(
-        'add-search',
-        { skipSpecs: undefined, noValidate: true, store: 'shared' },
-        expect.any(Function)
-      )
       const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
-      expect(invalidation.current('project')).toBe(1)
-      expect(invalidation.current('context')).toBe(1)
+      expect(invalidation.current('project')).toBe(0)
+      expect(invalidation.current('context')).toBe(0)
+    })
+
+    it('exposes archive only through the strict Server-owned stream', () => {
+      expect(appRouter._def.procedures).not.toHaveProperty('cli.archive')
+      expect(appRouter._def.procedures).not.toHaveProperty('cli.archiveStream')
+      expect(appRouter._def.procedures).toHaveProperty('cli.archiveStrictStream')
     })
 
     it('keeps strict archive preflight and mutation on one Server-owned root selection', async () => {
@@ -2382,6 +2362,42 @@ apply:
         'processed'
       )
       expect(planning.kernel.getGlobArtifactFiles).not.toHaveBeenCalled()
+    })
+
+    it('rejects artifact path traversal for queries and subscriptions before projection access', async () => {
+      const context = createMockContext()
+      const caller = appRouter.createCaller(context)
+
+      await expect(
+        caller.opsx.readArtifactOutput({
+          changeId: 'add-caching',
+          outputPath: '../../outside.md',
+        })
+      ).rejects.toThrow(/Invalid outputPath/)
+      await expect(
+        caller.opsx.subscribeArtifactOutput({
+          changeId: 'add-caching',
+          outputPath: '../../outside.md',
+        })
+      ).rejects.toThrow(/Invalid outputPath/)
+      await expect(
+        caller.opsx.readGlobArtifactFiles({
+          changeId: 'add-caching',
+          outputPath: '../outside/**/*.md',
+        })
+      ).rejects.toThrow(/Invalid outputPath/)
+      await expect(
+        caller.opsx.subscribeGlobArtifactFiles({
+          changeId: 'add-caching',
+          outputPath: '../outside/**/*.md',
+        })
+      ).rejects.toThrow(/Invalid outputPath/)
+
+      const planning = await resolveMockPlanningRoot(context)
+      expect(planning.kernel.ensureArtifactOutput).not.toHaveBeenCalled()
+      expect(planning.kernel.ensureGlobArtifactFiles).not.toHaveBeenCalled()
+      expect(planning.documentService.readChangeArtifactOutput).not.toHaveBeenCalled()
+      expect(planning.documentService.readChangeGlobArtifactFiles).not.toHaveBeenCalled()
     })
   })
 })

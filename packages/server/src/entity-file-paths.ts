@@ -1,7 +1,7 @@
 import {
   getOpsxEntityRootRelativePath,
-  normalizeOpsxEntityPath,
   requireCanonicalOpenSpecEntityId,
+  requireOpenSpecEntityRelativePath,
   type OpsxEntityStage,
 } from '@openspecui/core'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
@@ -36,10 +36,7 @@ export function resolveEntityEntryPath(input: {
   relativePath: string
   absolutePath: string
 } {
-  const relativePath = normalizeOpsxEntityPath(input.path)
-  if (!relativePath) {
-    throw new Error('path is required')
-  }
+  const relativePath = requireOpenSpecEntityRelativePath(input.path, 'path')
 
   const entityRoot = getEntityRootPath(input.projectDir, input.stage, input.changeId)
   const absolutePath = resolve(entityRoot, relativePath)
