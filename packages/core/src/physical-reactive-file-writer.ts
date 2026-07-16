@@ -10,6 +10,7 @@ import { lstat, mkdir, realpath, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { settleReactiveFileWrite } from './reactive-fs/index.js'
 
+/** Input for one Planning-root-confined UTF-8 write with post-commit reactive settlement. */
 export interface PhysicalReactiveFileWrite {
   /** Existing Planning root that owns the write. The root itself may be a symlink. */
   rootPath: string

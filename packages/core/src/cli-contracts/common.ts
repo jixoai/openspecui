@@ -64,6 +64,8 @@ export const CliDiagnosticFailureSchema = z
 export type CliDiagnostic = z.infer<typeof CliDiagnosticSchema>
 export type CliRoot = z.infer<typeof CliRootSchema>
 export type CliRootSource = z.infer<typeof CliRootSourceSchema>
+/** Health-only direct Reference entry returned by OpenSpec Doctor. */
 export type CliDoctorReferenceEntry = z.infer<typeof CliDoctorReferenceEntrySchema>
+/** Spec-bearing direct Reference index returned by workflow Instructions. */
 export type CliReferenceIndexEntry = z.infer<typeof CliReferenceIndexEntrySchema>
 export type CliDiagnosticFailure = z.infer<typeof CliDiagnosticFailureSchema>

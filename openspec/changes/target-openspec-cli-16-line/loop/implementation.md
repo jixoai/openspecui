@@ -1094,6 +1094,7 @@ Focused green evidence after the final public CLI correction:
 - Server correction matrix: 5 files, 89/89 passed (Planning-root lifecycle, Router/public CLI, Search, Spec Catalog, strict Archive).
 - Web correction matrix: 3 files, 11/11 passed (CLI runner, Spec list, Spec detail). App skeleton suite: 18 files, 78/78 passed.
 - Core, Server, Web, and App package typechecks passed. The production-header audit found no missing timestamped intent/original-request header among added non-test TS/TSX files, and the new public contracts carry API comments.
+- The final completion audit rejected the earlier assumption that field/schema comments also documented the exported `PhysicalReactiveFileWrite` and `CliDoctorReferenceEntry` contracts. Direct interface/type API comments were added, including the now-distinct Instructions Reference type; the added-export diff has no remaining undocumented contract in this correction range.
 
 Full update-PR gate evidence:
 
