@@ -1,4 +1,5 @@
 import '@/styles/terminal-effects.css'
+import type { CliStreamEvent } from '@openspecui/core'
 import { Check, Loader2, Sparkles, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { isStaticMode } from './static-mode'
@@ -16,6 +17,7 @@ export interface CommandDescriptor {
   args: string[]
   status: CommandRunStatus
   exitCode: number | null
+  stream?: ArchiveStrictStreamTransport
 }
 
 export type ProcessEvent = 'data' | 'error' | 'close' | 'exit'
@@ -31,9 +33,19 @@ export interface CommandProcess {
   cancel: () => void
 }
 
+interface ArchiveStrictStreamTransport {
+  type: 'archive-strict'
+  input: {
+    changeId: string
+    skipSpecs?: boolean
+    noValidate?: boolean
+  }
+}
+
 interface CommandInput {
   command: string
   args?: string[]
+  stream?: ArchiveStrictStreamTransport
 }
 
 interface UseCliRunnerOptions {
@@ -170,6 +182,7 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
           id: createId(),
           command: item.command,
           args: item.args ?? [],
+          stream: item.stream,
           status: 'idle',
           exitCode: null,
         }))
@@ -237,87 +250,91 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
 
       optionsRef.current.onCreateProcess?.(process)
 
-      const subscription = trpcClient.cli.runCommandStream.subscribe(
-        { command: target.command, args: target.args },
-        {
-          onData: (event) => {
-            if (event.type === 'command') {
-              updateCommands((prev) =>
-                prev.map((c) => (c.id === target.id ? { ...c, status: 'running' } : c))
-              )
-              process.status = 'running'
-              emit('data', event.data ?? '')
-              return
-            }
-
-            if (event.type === 'stdout' && event.data) {
-              appendLog({
-                id: createId(),
-                commandId: target.id,
-                kind: 'stdout',
-                text: event.data,
-              })
-              emit('data', event.data)
-              return
-            }
-
-            if (event.type === 'stderr' && event.data) {
-              appendLog({
-                id: createId(),
-                commandId: target.id,
-                kind: 'stderr',
-                text: event.data,
-                tone: 'error',
-              })
-              emit('error', event.data)
-              return
-            }
-
-            if (event.type === 'exit') {
-              const exitCode = event.exitCode ?? null
-              setLastExitCode(exitCode)
-              const status: CommandRunStatus = exitCode === 0 ? 'success' : 'error'
-              updateCommands((prev) =>
-                prev.map((c) => (c.id === target.id ? { ...c, status, exitCode } : c))
-              )
-              process.status = status
-              process.exitCode = exitCode
-              appendLog({
-                id: createId(),
-                commandId: target.id,
-                kind: 'meta',
-                text: `Process exited with code ${exitCode ?? 'unknown'}`,
-                tone: exitCode === 0 ? 'success' : 'error',
-              })
-              emit('close', exitCode)
-              emit('exit', exitCode)
-              resolveDone(exitCode)
-              activeSubscriptionRef.current?.unsubscribe?.()
-              activeSubscriptionRef.current = null
-              activeCommandIdRef.current = null
-            }
-          },
-          onError: (err) => {
-            const message = err instanceof Error ? err.message : String(err)
+      const handlers = {
+        onData: (event: CliStreamEvent) => {
+          if (event.type === 'command') {
             updateCommands((prev) =>
-              prev.map((c) => (c.id === target.id ? { ...c, status: 'error', exitCode: null } : c))
+              prev.map((c) => (c.id === target.id ? { ...c, status: 'running' } : c))
             )
-            process.status = 'error'
+            process.status = 'running'
+            emit('data', event.data ?? '')
+            return
+          }
+
+          if (event.type === 'stdout' && event.data) {
+            appendLog({
+              id: createId(),
+              commandId: target.id,
+              kind: 'stdout',
+              text: event.data,
+            })
+            emit('data', event.data)
+            return
+          }
+
+          if (event.type === 'stderr' && event.data) {
+            appendLog({
+              id: createId(),
+              commandId: target.id,
+              kind: 'stderr',
+              text: event.data,
+              tone: 'error',
+            })
+            emit('error', event.data)
+            return
+          }
+
+          if (event.type === 'exit') {
+            const exitCode = event.exitCode ?? null
+            setLastExitCode(exitCode)
+            const status: CommandRunStatus = exitCode === 0 ? 'success' : 'error'
+            updateCommands((prev) =>
+              prev.map((c) => (c.id === target.id ? { ...c, status, exitCode } : c))
+            )
+            process.status = status
+            process.exitCode = exitCode
             appendLog({
               id: createId(),
               commandId: target.id,
               kind: 'meta',
-              text: `Error: ${message}`,
-              tone: 'error',
+              text: `Process exited with code ${exitCode ?? 'unknown'}`,
+              tone: exitCode === 0 ? 'success' : 'error',
             })
-            emit('error', message)
-            resolveDone(null)
+            emit('close', exitCode)
+            emit('exit', exitCode)
+            resolveDone(exitCode)
             activeSubscriptionRef.current?.unsubscribe?.()
             activeSubscriptionRef.current = null
             activeCommandIdRef.current = null
-          },
-        }
-      )
+          }
+        },
+        onError: (err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err)
+          updateCommands((prev) =>
+            prev.map((c) => (c.id === target.id ? { ...c, status: 'error', exitCode: null } : c))
+          )
+          process.status = 'error'
+          appendLog({
+            id: createId(),
+            commandId: target.id,
+            kind: 'meta',
+            text: `Error: ${message}`,
+            tone: 'error',
+          })
+          emit('error', message)
+          resolveDone(null)
+          activeSubscriptionRef.current?.unsubscribe?.()
+          activeSubscriptionRef.current = null
+          activeCommandIdRef.current = null
+        },
+      }
+      const subscription =
+        target.stream?.type === 'archive-strict'
+          ? trpcClient.cli.archiveStrictStream.subscribe(target.stream.input, handlers)
+          : trpcClient.cli.runCommandStream.subscribe(
+              { command: target.command, args: target.args },
+              handlers
+            )
 
       process.status = 'running'
       activeSubscriptionRef.current = subscription

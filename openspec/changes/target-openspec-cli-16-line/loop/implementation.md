@@ -13,7 +13,7 @@ Original request (2026-07-16): "代码已经提交，开始review。如果有问
 
 ## Implementation State
 
-Status: **Independent-review corrections are complete; PR #207 is awaiting refreshed CI and independent re-review before later checkpoints continue**.
+Status: **Independent re-review corrections are complete and locally verified; PR #207 awaits refreshed CI and re-review before later checkpoints continue**.
 
 Completed before code execution:
 
@@ -894,6 +894,54 @@ Verification after removing `packages/core/dist`:
 - `pnpm test:ci` passed: root 43, Core 405, Server 275, Web 617, App 78, CLI 49, and every remaining workspace package.
 - `pnpm test:browser:ci` passed: xterm-input-panel 60 with one existing skip; Web Storybook 12.
 - Fresh `pnpm --filter @openspecui/web build:ssg` passed with only the existing `scroll-button` CSS warning; `git diff --check` passed.
+
+## Independent Re-review: 2026-07-16 PR #207 root and mutation boundaries
+
+Review target: `origin/main...31fe6f6`. Remote Changeset, CI Scope, Fast Gate, Web browser, xterm browser, and aggregate Browser Gate checks passed before this semantic review.
+
+Standards findings:
+
+- Checkpoint 2.3 reopened: buffered typed commands preserve explicit empty Store selectors, but `validateStream` and `archiveStream` still use truthiness and silently drop `store: ''`.
+- Checkpoints 3.5 and 6.7 reopened: Global Archive reconstructs the Root Context Store selector in the browser, imports the Core root entry at runtime, and sends generic CLI command arrays. The dedicated Server validate/archive procedures already own selector derivation but are bypassed by this surface.
+
+Spec findings:
+
+- Checkpoint 3.5 reopened: Root Context converts every non-info Reference diagnostic into a root-resolution failure. OpenSpec 1.6 intentionally degrades missing or unhealthy References to warning evidence while preserving successful root operation.
+- Checkpoints 3.11 and 5.2 reopened: task mutation accepts an unguarded `changeId`, always writes top-level `tasks.md`, and receives only one flattened task index. It cannot mutate the exact tracked file selected by a custom `apply.tracks` glob and does not enforce the selected entity-root boundary.
+
+No loopback trigger fired. All findings correct existing approved contracts without changing product scope, security posture, package ownership, or the Intake non-goals.
+
+## Progress: 2026-07-16 independent re-review root and mutation corrections
+
+Changed contracts:
+
+- Preserved explicit empty Store selectors in buffered and streaming CLI surfaces. `validateStream` and `archiveStream` now use presence semantics consistently with the typed contract executor.
+- Kept successful writable-root resolution available when OpenSpec reports degraded Reference warnings. Warning evidence remains in Root Context; only error-level Reference diagnostics can produce `references-unresolved`.
+- Added exact `{ filePath, taskIndex }` identity to every formal tracked task. Glob-expanded tasks retain their physical source, the Server resolves that source through the guarded Planning-root entity path, and the fixed top-level `tasks.md` Adapter mutation was removed without an alias.
+- Hardened entity-root resolution against `changeId` and entry-path traversal before task and artifact writes.
+- Replaced Global Archive's browser-authored Store selector and generic CLI queue with one typed `archiveStrictStream`. The Server resolves Root Context once, runs strict validation, starts archive only after exit zero, preserves nonzero diagnostics without retry, and owns mutation invalidation and cancellation across both phases.
+- Removed the Global Archive runtime import of the Core root entry; its remaining Core dependency is type-only inside the shared runner.
+
+Checkpoint state:
+
+- Re-closed checkpoints 2.3, 3.5, 3.11, 5.2, and 6.7 after focused regression evidence passed. Overall progress returns to 57/130.
+- No loopback trigger fired. The corrections preserve the approved CLI-first, single writable root, tracked-artifact, and strict archive laws.
+
+Verification:
+
+- Focused Core root/selector/task/parser/Adapter matrix -> 66 passed; focused Server strict archive and guarded mutation matrix -> 3 passed; focused Web archive runner/task matrix -> 8 passed.
+- `pnpm format:check` passed across 24 changed files; `pnpm lint:ci` passed across 809 files with zero warnings and errors; `pnpm typecheck` passed across all 15 runnable workspace packages.
+- The first full test run exposed one stale PlanningRootService fixture expectation after removing the old Adapter toggle. Its isolated test passed 2/2 after aligning the expected unchecked file and Dashboard count.
+- Final `pnpm test:ci` passed: root 43, Core 408, Server 277, Web 618, App 78, CLI 49, and every remaining workspace package.
+- `pnpm test:browser:ci` passed: xterm-input-panel 60 with one existing skip; Web Storybook 12.
+- Fresh `pnpm --filter @openspecui/web build:ssg` passed with only the existing `scroll-button` CSS warning; `git diff --check` passed.
+
+## Verification: 2026-07-16 tracked-task Router fixture closure
+
+- Added the missing `readChangeTaskProjection` contract to the Server Router test Adapter. The fixture now returns the two exact `work/backend/tasks.md` task locations used by the separated Launch/Planning mutation matrix; no production contract changed.
+- Focused Router verification passed 61/61, including exact tracked-file mutation, canonical `changeId` rejection, entity-path escape rejection, and non-tracked Markdown rejection.
+- Current full gates passed: `pnpm format:check` across 27 changed files; `pnpm lint:ci` across 809 files; all 15 workspace typechecks; `pnpm test:ci` with Root 43, Core 408, Server 277, Web 618, App 78, and CLI 49; browser tests with xterm 60 passed/1 skipped and Web Storybook 12 passed; fresh SSG with only the existing `scroll-button` warning; and `git diff --check`.
+- OpenSpec progress remains 57/130. No checkpoint transition or loopback trigger occurred; this closes stale test infrastructure after the already recorded root/mutation correction.
 
 ## Decisions Taken
 

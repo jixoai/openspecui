@@ -167,7 +167,6 @@ describe('PlanningRootServiceManager', () => {
       '# Change: Created\n',
       '- [ ] First task\n'
     )
-    await expect(services.adapter.toggleTask('created-change', 1, true)).resolves.toBe(true)
     await expect(
       readFile(join(planningRootDir, 'openspec', 'specs', 'created', 'spec.md'), 'utf8')
     ).resolves.toContain('# Created')
@@ -182,7 +181,7 @@ describe('PlanningRootServiceManager', () => {
     ).resolves.toContain('# Change: Created')
     await expect(
       readFile(join(planningRootDir, 'openspec', 'changes', 'created-change', 'tasks.md'), 'utf8')
-    ).resolves.toContain('- [x] First task')
+    ).resolves.toContain('- [ ] First task')
     await expect(
       readFile(
         join(launchProjectDir, 'openspec', 'changes', 'created-change', 'proposal.md'),
@@ -214,7 +213,7 @@ describe('PlanningRootServiceManager', () => {
       specifications: 2,
       activeChanges: 1,
       tasksTotal: 1,
-      tasksCompleted: 1,
+      tasksCompleted: 0,
     })
     expect(dashboard.specifications.map((specification) => specification.id).sort()).toEqual([
       'planning-only',
@@ -228,7 +227,7 @@ describe('PlanningRootServiceManager', () => {
         join(planningRootDir, 'openspec', 'changes', 'archive', 'created-change', 'tasks.md'),
         'utf8'
       )
-    ).resolves.toContain('- [x] First task')
+    ).resolves.toContain('- [ ] First task')
     await expect(
       readFile(
         join(launchProjectDir, 'openspec', 'changes', 'archive', 'created-change', 'tasks.md'),

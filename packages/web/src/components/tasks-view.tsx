@@ -1,19 +1,19 @@
 import { TocSection, type TocItem } from '@/components/toc'
-import type { Task, TrackedTaskProgress } from '@openspecui/core'
+import type { TrackedTask, TrackedTaskLocation, TrackedTaskProgress } from '@openspecui/core'
 import { CheckCircle, Circle, Loader2 } from 'lucide-react'
 import { memo, useMemo } from 'react'
 
 /** Group tasks by their section */
 interface TaskGroup {
   section: string
-  tasks: Task[]
+  tasks: TrackedTask[]
   completed: number
   total: number
 }
 
 /** Group tasks by section and calculate progress per group */
-function groupTasksBySection(tasks: Task[]): TaskGroup[] {
-  const groups = new Map<string, Task[]>()
+function groupTasksBySection(tasks: TrackedTask[]): TaskGroup[] {
+  const groups = new Map<string, TrackedTask[]>()
 
   for (const task of tasks) {
     const section = task.section || 'General'
@@ -48,15 +48,14 @@ export function buildTaskTocItems(taskGroups: TaskGroup[]): TocItem[] {
 }
 
 interface TaskItemProps {
-  task: Task
-  taskIndex: number
+  task: TrackedTask
   isToggling: boolean
-  onToggle?: (taskIndex: number, completed: boolean) => void
+  onToggle?: (location: TrackedTaskLocation, completed: boolean) => void
   readonly?: boolean
 }
 
 const TaskItem = memo(
-  function TaskItem({ task, taskIndex, isToggling, onToggle, readonly }: TaskItemProps) {
+  function TaskItem({ task, isToggling, onToggle, readonly }: TaskItemProps) {
     const content = (
       <>
         {isToggling ? (
@@ -78,7 +77,7 @@ const TaskItem = memo(
 
     return (
       <button
-        onClick={() => onToggle(taskIndex, !task.completed)}
+        onClick={() => onToggle(task.location, !task.completed)}
         className="hover:bg-muted/50 group flex w-full items-center gap-3 p-3 text-left transition-colors"
       >
         {content}
@@ -96,9 +95,9 @@ const TaskItem = memo(
 export interface TasksViewProps {
   trackedTaskProgress: TrackedTaskProgress
   /** Callback when a task is toggled. If not provided, tasks are readonly. */
-  onToggleTask?: (taskIndex: number, completed: boolean) => void
-  /** Index of the task currently being toggled (for loading state) */
-  togglingIndex?: number | null
+  onToggleTask?: (location: TrackedTaskLocation, completed: boolean) => void
+  /** Location of the task currently being toggled (for loading state) */
+  togglingLocation?: TrackedTaskLocation | null
   /** Base index for TocSection (for proper ToC navigation) */
   tocBaseIndex?: number
   /** Whether to show as readonly (no interaction) */
@@ -112,7 +111,7 @@ export interface TasksViewProps {
 export function TasksView({
   trackedTaskProgress,
   onToggleTask,
-  togglingIndex = null,
+  togglingLocation = null,
   tocBaseIndex = 0,
   readonly = false,
 }: TasksViewProps) {
@@ -123,15 +122,6 @@ export function TasksView({
     trackedTaskProgress.total > 0
       ? Math.round((trackedTaskProgress.completed / trackedTaskProgress.total) * 100)
       : 0
-
-  // Calculate task index offset for each group (for toggle mutation)
-  const getTaskIndex = (groupIndex: number, taskIndexInGroup: number): number => {
-    let offset = 0
-    for (let i = 0; i < groupIndex; i++) {
-      offset += taskGroups[i].tasks.length
-    }
-    return offset + taskIndexInGroup + 1
-  }
 
   return (
     <TocSection id="tasks" index={tocBaseIndex}>
@@ -170,14 +160,15 @@ export function TasksView({
                 </span>
               </div>
               <div className="border-border divide-border divide-y rounded-lg border">
-                {group.tasks.map((task, taskIndexInGroup) => {
-                  const taskIndex = getTaskIndex(groupIndex, taskIndexInGroup)
+                {group.tasks.map((task) => {
                   return (
                     <TaskItem
                       key={task.id}
                       task={task}
-                      taskIndex={taskIndex}
-                      isToggling={togglingIndex === taskIndex}
+                      isToggling={
+                        togglingLocation?.filePath === task.location.filePath &&
+                        togglingLocation.taskIndex === task.location.taskIndex
+                      }
                       onToggle={onToggleTask}
                       readonly={readonly}
                     />
@@ -198,6 +189,6 @@ export function TasksView({
 }
 
 /** Hook to get task groups for ToC building */
-export function useTaskGroups(tasks: Task[]) {
+export function useTaskGroups(tasks: TrackedTask[]) {
   return useMemo(() => groupTasksBySection(tasks), [tasks])
 }

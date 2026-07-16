@@ -3,11 +3,12 @@ import {
   normalizeOpsxEntityPath,
   type OpsxEntityStage,
 } from '@openspecui/core'
-import { resolve } from 'node:path'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
 
 function ensureInsideRoot(rootPath: string, candidatePath: string): void {
-  if (candidatePath === rootPath) return
-  if (!candidatePath.startsWith(rootPath + '/')) {
+  const relativePath = relative(rootPath, candidatePath)
+  if (relativePath === '') return
+  if (relativePath === '..' || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath)) {
     throw new Error('Resolved path escaped entity root.')
   }
 }
@@ -17,7 +18,14 @@ export function getEntityRootPath(
   stage: OpsxEntityStage,
   changeId: string
 ): string {
-  return resolve(projectDir, getOpsxEntityRootRelativePath(stage, changeId))
+  const normalizedChangeId = normalizeOpsxEntityPath(changeId)
+  if (!normalizedChangeId || normalizedChangeId !== changeId || normalizedChangeId.includes('/')) {
+    throw new Error('Invalid changeId: expected one canonical path segment.')
+  }
+  const stageRoot = resolve(projectDir, getOpsxEntityRootRelativePath(stage, ''))
+  const entityRoot = resolve(projectDir, getOpsxEntityRootRelativePath(stage, normalizedChangeId))
+  ensureInsideRoot(stageRoot, entityRoot)
+  return entityRoot
 }
 
 export function resolveEntityEntryPath(input: {

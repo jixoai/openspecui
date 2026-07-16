@@ -306,11 +306,11 @@ function classifyRootContext(
     )
   }
 
-  const unresolvedReference = references
+  const failedReference = references
     .flatMap((reference) => reference.status)
-    .find((diagnostic) => diagnostic.severity !== 'info')
-  if (unresolvedReference) {
-    return errorState(attempt, 'references-unresolved', unresolvedReference.message)
+    .find((diagnostic) => diagnostic.severity === 'error')
+  if (failedReference) {
+    return errorState(attempt, 'references-unresolved', failedReference.message)
   }
 
   return {

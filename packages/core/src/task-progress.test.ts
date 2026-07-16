@@ -4,6 +4,7 @@ import type { ChangeFile } from './schemas.js'
 import {
   createApplyInstructionProgress,
   projectTaskProjectionsFromMarkdownFiles,
+  toggleMarkdownTask,
 } from './task-progress.js'
 
 function file(path: string, content: string): ChangeFile {
@@ -58,6 +59,19 @@ describe('task projections', () => {
       'Backend follow-up',
       'Frontend',
     ])
+    expect(projection.trackedTaskProgress.tasks.map((task) => task.location)).toEqual([
+      { filePath: 'work/backend/tasks.md', taskIndex: 1 },
+      { filePath: 'work/backend/tasks.md', taskIndex: 2 },
+      { filePath: 'work/frontend/tasks.md', taskIndex: 1 },
+    ])
+  })
+
+  it('toggles the exact checkbox index while preserving Markdown structure', () => {
+    const content = '# Work\n  * [ ] First\n- [ ] Second\n'
+
+    expect(toggleMarkdownTask(content, 2, true)).toBe('# Work\n  * [ ] First\n- [x] Second\n')
+    expect(toggleMarkdownTask(content, 3, true)).toBeNull()
+    expect(toggleMarkdownTask(content, 0, true)).toBeNull()
   })
 
   it('falls back only to top-level tasks.md when tracked artifact resolution fails', () => {

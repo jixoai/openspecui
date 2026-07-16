@@ -108,36 +108,26 @@ describe('GlobalArchiveModal', () => {
     expect(closeArchiveModalMock).not.toHaveBeenCalled()
   })
 
-  it('queues validate and archive against the explicit Store selected by Root Context', async () => {
+  it('delegates strict validation and archive Store selection to one Server stream', async () => {
     render(<GlobalArchiveModal />)
 
     await waitFor(() => {
       expect(replaceAllMock).toHaveBeenCalledWith([
         {
           command: 'openspec',
-          args: [
-            'validate',
-            'add-terminal-spawn-command',
-            '--type',
-            'change',
-            '--strict',
-            '--store',
-            'shared',
-          ],
-        },
-        {
-          command: 'openspec',
-          args: [
-            'archive',
-            '-y',
-            'add-terminal-spawn-command',
-            '--no-validate',
-            '--store',
-            'shared',
-          ],
+          args: ['archive', '-y', 'add-terminal-spawn-command'],
+          stream: {
+            type: 'archive-strict',
+            input: {
+              changeId: 'add-terminal-spawn-command',
+              noValidate: false,
+              skipSpecs: false,
+            },
+          },
         },
       ])
     })
+    expect(JSON.stringify(replaceAllMock.mock.calls)).not.toContain('--store')
   })
 
   it('does not queue or start archive while Root Context is blocked', () => {

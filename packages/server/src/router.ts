@@ -64,6 +64,7 @@ import {
   subscribeWatcherRuntimeStatus,
   TerminalConfigSchema,
   TerminalRendererEngineSchema,
+  toggleMarkdownTask,
   toStoreFeatureResult,
   TranslationCacheReadInputSchema,
   TranslationCacheWriteInputSchema,
@@ -100,7 +101,7 @@ import { CustomSoundIdSchema } from '@openspecui/core/sounds'
 import { SearchQuerySchema } from '@openspecui/search'
 import { initTRPC, TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { CliMutationInvalidator } from './cli-mutation-invalidator.js'
@@ -154,6 +155,7 @@ import {
   SpecCatalogIdentityNotFoundError,
 } from './spec-catalog-service.js'
 import type { StoreObservationReconciler } from './store-observation-service.js'
+import { startStrictArchiveStream } from './strict-archive-stream.js'
 import type { TranslationCacheService } from './translation-cache-service.js'
 import type { TranslationEngineService } from './translation-engine-service.js'
 
@@ -1331,17 +1333,41 @@ export const changeRouter = router({
     .input(
       z.object({
         changeId: z.string(),
-        taskIndex: z.number().int().positive(),
+        location: z.object({
+          filePath: z.string().min(1),
+          taskIndex: z.number().int().positive(),
+        }),
         completed: z.boolean(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const success = await (
-        await resolvePlanningRoot(ctx)
-      ).adapter.toggleTask(input.changeId, input.taskIndex, input.completed)
-      if (!success) {
-        throw new Error(`Failed to toggle task ${input.taskIndex} in change ${input.changeId}`)
+      const services = await resolvePlanningRoot(ctx)
+      const { rootContext } = services
+      const projectDir = rootContext.planningRoot?.path
+      if (!projectDir) throw new Error('Planning root is unavailable.')
+      const info = resolveEntityEntryPath({
+        projectDir,
+        stage: 'change',
+        changeId: input.changeId,
+        path: input.location.filePath,
+      })
+      const projection = await services.adapter.readChangeTaskProjection(input.changeId)
+      const trackedTask = projection.trackedTaskProgress.tasks.find(
+        (task) =>
+          task.location.filePath === info.relativePath &&
+          task.location.taskIndex === input.location.taskIndex
+      )
+      if (!trackedTask) {
+        throw new Error('Task location is not part of the current tracked artifact projection.')
       }
+      const content = await readFile(info.absolutePath, 'utf8')
+      const updated = toggleMarkdownTask(content, input.location.taskIndex, input.completed)
+      if (updated === null) {
+        throw new Error(
+          `Failed to toggle task ${input.location.taskIndex} in ${input.location.filePath}`
+        )
+      }
+      await writeFile(info.absolutePath, updated, 'utf8')
       return { success: true }
     }),
 
@@ -1980,6 +2006,52 @@ export const cliRouter = router({
             ),
           onEvent
         )
+      })
+    }),
+
+  /** Strict validate then archive against one Server-owned Root Context selection. */
+  archiveStrictStream: publicProcedure
+    .input(
+      z.object({
+        changeId: z.string(),
+        skipSpecs: z.boolean().optional(),
+        noValidate: z.boolean().optional(),
+      })
+    )
+    .subscription(({ ctx, input }) => {
+      return createCliStreamObservable(async (onEvent) => {
+        const { rootContext } = await resolvePlanningRoot(ctx)
+        const selector = getRootContextCliSelector(rootContext)
+        return startStrictArchiveStream({
+          skipValidation: input.noValidate === true,
+          startValidate: (validateEvent) =>
+            ctx.cliExecutor.validateStream(
+              {
+                id: input.changeId,
+                type: 'change',
+                strict: true,
+                ...selector,
+              },
+              validateEvent
+            ),
+          startArchive: (archiveEvent) =>
+            streamOpenSpecCliMutation(
+              ctx,
+              ['archive'],
+              (mutationEvent) =>
+                ctx.cliExecutor.archiveStream(
+                  input.changeId,
+                  {
+                    skipSpecs: input.skipSpecs,
+                    noValidate: true,
+                    ...selector,
+                  },
+                  mutationEvent
+                ),
+              archiveEvent
+            ),
+          onEvent,
+        })
       })
     }),
 })

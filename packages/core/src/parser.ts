@@ -101,7 +101,6 @@ export class MarkdownParser {
       }
     }
 
-    const tasks = this.parseTasks(tasksContent)
     const taskProjections = projectTaskProjectionsFromMarkdownFiles(
       tasksContent.length > 0 ? [{ path: 'tasks.md', type: 'file', content: tasksContent }] : []
     )
@@ -118,10 +117,7 @@ export class MarkdownParser {
       why: why.trim(),
       whatChanges: whatChanges.trim(),
       deltas: finalDeltas,
-      trackedTaskProgress: {
-        ...taskProjections.trackedTaskProgress,
-        tasks,
-      },
+      trackedTaskProgress: taskProjections.trackedTaskProgress,
       documentChecklistSummary: taskProjections.documentChecklistSummary,
       design: options?.design,
       deltaSpecs: options?.deltaSpecs,

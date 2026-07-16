@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
- * 1. Run one serial strict-validate-then-archive queue with explicit user options.
- * 2. Preserve the CLI-selected Store selector for both commands.
+ * 1. Run one Server-owned strict-validate-then-archive stream with explicit user options.
+ * 2. Keep Root Context and Store selector derivation outside the browser command payload.
  * 3. Lock execution until Root Context is ready and show failed-attempt evidence.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
@@ -10,7 +10,6 @@ import { useArchiveModal } from '@/lib/archive-modal-context'
 import { useCliRunner } from '@/lib/use-cli-runner'
 import { useRootActionState } from '@/lib/use-root-action-state'
 import { useVTHrefNavigate } from '@/lib/view-transitions/navigation'
-import { getRootContextCliSelector } from '@openspecui/core'
 import { Archive, CheckCircle, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { CliTerminal } from './cli-terminal'
@@ -61,24 +60,20 @@ export function GlobalArchiveModal() {
 
   const buildQueue = useCallback(() => {
     if (!changeId || rootAction.disabled) return []
-    const queue: Array<{ command: string; args?: string[] }> = []
-    const explicitStore = rootAction.context
-      ? getRootContextCliSelector(rootAction.context).store
-      : undefined
-    if (!noValidate) {
-      const validateArgs = ['validate', changeId, '--type', 'change', '--strict']
-      if (explicitStore) validateArgs.push('--store', explicitStore)
-      queue.push({ command: 'openspec', args: validateArgs })
-    }
-    // The serial runner stops after a nonzero exit. This flag only avoids duplicate validation
-    // after a successful explicit preflight, or reflects the user's explicit Skip validation choice.
     const archiveArgs = ['archive', '-y', changeId]
     if (skipSpecs) archiveArgs.push('--skip-specs')
-    archiveArgs.push('--no-validate')
-    if (explicitStore) archiveArgs.push('--store', explicitStore)
-    queue.push({ command: 'openspec', args: archiveArgs })
-    return queue
-  }, [changeId, noValidate, rootAction.context, rootAction.disabled, skipSpecs])
+    if (noValidate) archiveArgs.push('--no-validate')
+    return [
+      {
+        command: 'openspec',
+        args: archiveArgs,
+        stream: {
+          type: 'archive-strict' as const,
+          input: { changeId, skipSpecs, noValidate },
+        },
+      },
+    ]
+  }, [changeId, noValidate, rootAction.disabled, skipSpecs])
 
   const isRunning = status === 'running'
   const isArchiveSuccess = status === 'success' && !!detectedArchiveId

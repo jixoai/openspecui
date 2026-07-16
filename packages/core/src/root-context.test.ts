@@ -157,7 +157,7 @@ describe('resolveRootContext', () => {
     expect(state.attempt.planningRoot).toBeNull()
   })
 
-  it('does not treat unresolved Reference diagnostics as ready', async () => {
+  it('preserves unresolved Reference warnings without blocking the writable root', async () => {
     const state = await resolveRootContext({
       launchProjectDir: '/workspace/app',
       cliExecutor: createCli({
@@ -180,10 +180,38 @@ describe('resolveRootContext', () => {
       }),
     })
 
+    expect(state.state).toBe('ready')
+    if (state.state !== 'ready') return
+    expect(state.data.references[0]?.status[0]?.code).toBe('reference_unresolved')
+  })
+
+  it('blocks the writable root on error-level Reference diagnostics', async () => {
+    const state = await resolveRootContext({
+      launchProjectDir: '/workspace/app',
+      cliExecutor: createCli({
+        doctor: commandResult(
+          healthyDoctor({
+            references: [
+              {
+                store_id: 'broken',
+                status: [
+                  {
+                    severity: 'error',
+                    code: 'reference_invalid',
+                    message: 'Reference metadata is invalid.',
+                  },
+                ],
+              },
+            ],
+          })
+        ),
+      }),
+    })
+
     expect(state.state).toBe('error')
     if (state.state !== 'error') return
     expect(state.error.code).toBe('references-unresolved')
-    expect(state.attempt.references[0]?.status[0]?.code).toBe('reference_unresolved')
+    expect(state.attempt.references[0]?.status[0]?.code).toBe('reference_invalid')
   })
 
   it('reports cross-command root mismatch instead of choosing one silently', async () => {

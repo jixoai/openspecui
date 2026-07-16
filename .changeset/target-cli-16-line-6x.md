@@ -89,7 +89,9 @@ line, and rejects older or forward CLI lines by default.
   schema-document checklist analytics, and attributed Apply instruction
   progress. Tracked globs follow OpenSpec 1.6 selection/fallback semantics,
   `0/0` remains `no-tasks`, and divergent Apply counts stay visible without
-  normalization.
+  normalization. Every formal task retains its exact source file and file-local
+  checkbox index so guarded mutations update the tracked artifact rather than a
+  fixed `tasks.md`.
 - Replace bare Spec ids and RPCs with one Core-owned compound identity and
   source-aware Catalog/Document contract. Direct Reference detail remains
   CLI-backed and read-only; routes, search records, caches, View Transitions,
@@ -102,9 +104,9 @@ line, and rejects older or forward CLI lines by default.
   from the full formal tracked-task phase, including an explicit `no-tasks`
   presentation that cannot become workflow or archive completion.
 - Preserve typed CLI Status/Instructions paths, action context, References, and
-  explicit Store selection on Change detail. Archive now delegates readiness to
-  strict CLI validation, retains multiline diagnostics, and never starts a
-  synthesized validation-bypass retry.
+  explicit Store selection on Change detail. Archive now uses one Server-owned
+  Root Context selection for strict validation and archive, retains multiline
+  diagnostics, and never starts a synthesized validation-bypass retry.
 - Default the Spec Catalog to writable Owned entries and place direct
   Referenced Specs in a Store-grouped, visibly read-only sibling view while
   retaining compound routes for duplicate ids.

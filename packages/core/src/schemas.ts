@@ -187,8 +187,15 @@ const TrackedTaskSourceSchema = z.discriminatedUnion('kind', [
   }),
 ])
 
+const TrackedTaskSchema = TaskSchema.extend({
+  location: z.object({
+    filePath: z.string(),
+    taskIndex: z.number().int().positive(),
+  }),
+})
+
 const TrackedTaskProgressSchema = z.object({
-  tasks: z.array(TaskSchema),
+  tasks: z.array(TrackedTaskSchema),
   total: z.number(),
   completed: z.number(),
   remaining: z.number(),

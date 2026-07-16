@@ -4,6 +4,7 @@
  * 2. Preserve schema-document checklists as grouped secondary analytics.
  * 3. Attribute raw Apply instruction counts without normalizing tracked divergence.
  * 4. Parse Markdown checkbox tasks once without exposing a generic progress alias.
+ * 5. Attach mutation-safe file identity to every tracked task.
  *
  * Original request (2026-07-15): "统计信息仍然有一定的间接价值。"
  */
@@ -12,6 +13,17 @@ import type { SchemaArtifact, SchemaDetail } from './opsx-types.js'
 import type { ChangeFile, Task } from './schemas.js'
 
 export type TrackedTaskPhase = 'no-tasks' | 'in-progress' | 'complete'
+
+/** Exact tracked Markdown checkbox location used for a guarded mutation. */
+export interface TrackedTaskLocation {
+  filePath: string
+  taskIndex: number
+}
+
+/** Formal tracked task with its physical source identity. */
+export interface TrackedTask extends Task {
+  location: TrackedTaskLocation
+}
 
 export type TrackedTaskSource =
   | {
@@ -35,7 +47,7 @@ export type TrackedTaskSource =
 
 /** Formal workflow task truth resolved from the OpenSpec tracked artifact. */
 export interface TrackedTaskProgress {
-  tasks: Task[]
+  tasks: TrackedTask[]
   total: number
   completed: number
   remaining: number
@@ -148,7 +160,7 @@ export function deriveTrackedTaskPhase(total: number, completed: number): Tracke
 }
 
 export function createTrackedTaskProgress(
-  tasks: Task[],
+  tasks: TrackedTask[],
   source: TrackedTaskSource = {
     kind: 'none',
     artifactId: null,
@@ -281,12 +293,40 @@ function selectTrackedSources(
   }
 }
 
-function parseSources(sources: readonly TextTaskSource[]): Task[] {
-  const tasks: Task[] = []
+function parseSources(sources: readonly TextTaskSource[]): TrackedTask[] {
+  const tasks: TrackedTask[] = []
   for (const source of sources) {
-    tasks.push(...parseMarkdownTasks(source.content, { initialIndex: tasks.length }))
+    const sourceTasks = parseMarkdownTasks(source.content, { initialIndex: tasks.length })
+    tasks.push(
+      ...sourceTasks.map((task, index) => ({
+        ...task,
+        location: { filePath: source.path, taskIndex: index + 1 },
+      }))
+    )
   }
   return tasks
+}
+
+/** Toggle one checkbox by its 1-based index while preserving the surrounding Markdown. */
+export function toggleMarkdownTask(
+  content: string,
+  taskIndex: number,
+  completed: boolean
+): string | null {
+  if (!Number.isInteger(taskIndex) || taskIndex < 1) return null
+
+  const lines = content.split('\n')
+  let currentTaskIndex = 0
+  for (let index = 0; index < lines.length; index += 1) {
+    const taskMatch = /^(\s*[-*]\s+)\[([ xX])\](\s+.*)$/.exec(lines[index])
+    if (!taskMatch) continue
+    currentTaskIndex += 1
+    if (currentTaskIndex !== taskIndex) continue
+
+    lines[index] = `${taskMatch[1]}[${completed ? 'x' : ' '}]${taskMatch[3]}`
+    return lines.join('\n')
+  }
+  return null
 }
 
 function selectDocumentSources(

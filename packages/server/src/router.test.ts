@@ -25,6 +25,7 @@ function trackedTaskProgress(total: number, completed: number) {
       id: `task-${index + 1}`,
       text: `Task ${index + 1}`,
       completed: index < completed,
+      location: { filePath: 'tasks.md', taskIndex: index + 1 },
     }))
   )
 }
@@ -157,6 +158,31 @@ const createMockAdapter = () => ({
     documentChecklistSummary: documentChecklistSummary(),
   }),
   readChangeRaw: vi.fn().mockResolvedValue({ proposal: '# Add Caching', tasks: '' }),
+  readChangeTaskProjection: vi.fn().mockResolvedValue({
+    trackedTaskProgress: createTrackedTaskProgress(
+      [
+        {
+          id: 'task-1',
+          text: 'Backend',
+          completed: false,
+          location: { filePath: 'work/backend/tasks.md', taskIndex: 1 },
+        },
+        {
+          id: 'task-2',
+          text: 'Backend follow-up',
+          completed: false,
+          location: { filePath: 'work/backend/tasks.md', taskIndex: 2 },
+        },
+      ],
+      {
+        kind: 'artifact',
+        artifactId: 'work',
+        outputPath: 'work/**/*.md',
+        filePaths: ['work/backend/tasks.md'],
+      }
+    ),
+    documentChecklistSummary: documentChecklistSummary(),
+  }),
   writeSpec: vi.fn().mockResolvedValue(undefined),
   writeChange: vi.fn().mockResolvedValue(undefined),
   archiveChange: vi.fn().mockResolvedValue(true),
@@ -798,11 +824,53 @@ describe('appRouter', () => {
       const launchProject = join(tempDir, 'launch')
       const planningRoot = join(tempDir, 'planning')
       await Promise.all([
-        mkdir(join(launchProject, 'openspec', 'changes', 'mutation-demo'), { recursive: true }),
-        mkdir(join(planningRoot, 'openspec', 'changes', 'mutation-demo'), { recursive: true }),
+        mkdir(join(launchProject, 'openspec', 'changes', 'mutation-demo', 'work', 'backend'), {
+          recursive: true,
+        }),
+        mkdir(join(planningRoot, 'openspec', 'changes', 'mutation-demo', 'work', 'backend'), {
+          recursive: true,
+        }),
         mkdir(join(planningRoot, 'openspec', 'changes', 'archive', 'archived-demo'), {
           recursive: true,
         }),
+        mkdir(join(planningRoot, 'openspec', 'schemas', 'vision-driven'), { recursive: true }),
+      ])
+      const trackedTasks = '- [ ] Backend\n- [ ] Backend follow-up\n'
+      await Promise.all([
+        writeFile(
+          join(
+            launchProject,
+            'openspec',
+            'changes',
+            'mutation-demo',
+            'work',
+            'backend',
+            'tasks.md'
+          ),
+          trackedTasks,
+          'utf8'
+        ),
+        writeFile(
+          join(planningRoot, 'openspec', 'changes', 'mutation-demo', 'work', 'backend', 'tasks.md'),
+          trackedTasks,
+          'utf8'
+        ),
+        writeFile(
+          join(planningRoot, 'openspec', 'changes', 'mutation-demo', '.openspec.yaml'),
+          'schema: vision-driven\n',
+          'utf8'
+        ),
+        writeFile(
+          join(planningRoot, 'openspec', 'schemas', 'vision-driven', 'schema.yaml'),
+          `name: vision-driven
+artifacts:
+  - id: work
+    generates: work/**/*.md
+apply:
+  tracks: work/**/*.md
+`,
+          'utf8'
+        ),
       ])
       const context = createMockContext(createMockAdapter(), { projectDir: launchProject })
       const planning = await resolveMockPlanningRoot(context)
@@ -835,6 +903,11 @@ describe('appRouter', () => {
         path: 'notes/archive.md',
         content: '# Archive note\n',
       })
+      await caller.change.toggleTask({
+        changeId: 'mutation-demo',
+        location: { filePath: 'work/backend/tasks.md', taskIndex: 2 },
+        completed: true,
+      })
 
       await expect(
         readFile(
@@ -862,6 +935,12 @@ describe('appRouter', () => {
           'utf8'
         )
       ).resolves.toBe('# Archive note\n')
+      await expect(
+        readFile(
+          join(planningRoot, 'openspec', 'changes', 'mutation-demo', 'work', 'backend', 'tasks.md'),
+          'utf8'
+        )
+      ).resolves.toBe('- [ ] Backend\n- [x] Backend follow-up\n')
 
       await expect(
         readFile(
@@ -869,6 +948,20 @@ describe('appRouter', () => {
           'utf8'
         )
       ).rejects.toThrow()
+      await expect(
+        readFile(
+          join(
+            launchProject,
+            'openspec',
+            'changes',
+            'mutation-demo',
+            'work',
+            'backend',
+            'tasks.md'
+          ),
+          'utf8'
+        )
+      ).resolves.toBe(trackedTasks)
       await expect(
         readFile(
           join(launchProject, 'openspec', 'changes', 'mutation-demo', 'artifacts', 'output.md'),
@@ -897,6 +990,34 @@ describe('appRouter', () => {
           content: 'nope',
         })
       ).rejects.toThrow(/escaped entity root|path/i)
+      await expect(
+        caller.change.toggleTask({
+          changeId: 'mutation-demo',
+          location: { filePath: '../escaped.md', taskIndex: 1 },
+          completed: true,
+        })
+      ).rejects.toThrow(/escaped entity root|path/i)
+      await expect(
+        caller.change.toggleTask({
+          changeId: '../escaped-change',
+          location: { filePath: 'tasks.md', taskIndex: 1 },
+          completed: true,
+        })
+      ).rejects.toThrow(/invalid changeId|escaped entity root|path/i)
+      await expect(
+        caller.change.toggleTask({
+          changeId: 'nested/../mutation-demo',
+          location: { filePath: 'work/backend/tasks.md', taskIndex: 1 },
+          completed: true,
+        })
+      ).rejects.toThrow(/invalid changeId/i)
+      await expect(
+        caller.change.toggleTask({
+          changeId: 'mutation-demo',
+          location: { filePath: 'notes/not-tracked.md', taskIndex: 1 },
+          completed: true,
+        })
+      ).rejects.toThrow(/not part of the current tracked artifact projection/i)
     })
 
     it('writes change entity files through a guarded relative path', async () => {
@@ -1893,6 +2014,90 @@ describe('appRouter', () => {
       const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
       expect(invalidation.current('project')).toBe(1)
       expect(invalidation.current('context')).toBe(1)
+    })
+
+    it('keeps strict archive preflight and mutation on one Server-owned root selection', async () => {
+      const context = createMockContext()
+      const planning = await resolveMockPlanningRoot(context)
+      planning.rootContext = {
+        ...planning.rootContext,
+        planningRoot: {
+          path: '/stores/shared',
+          source: 'store',
+          store_id: 'shared',
+          healthy: true,
+          status: [],
+        },
+        storeId: 'shared',
+      }
+      const validateStream = context.cliExecutor.validateStream as unknown as ReturnType<
+        typeof vi.fn
+      >
+      const archiveStream = context.cliExecutor.archiveStream as unknown as ReturnType<typeof vi.fn>
+      validateStream.mockImplementation(async (_options, onEvent) => {
+        onEvent({ type: 'command', data: 'openspec validate add-search --strict' })
+        onEvent({ type: 'exit', exitCode: 0 })
+        return () => undefined
+      })
+      archiveStream.mockImplementation(async (_changeId, _options, onEvent) => {
+        onEvent({ type: 'command', data: 'openspec archive -y add-search --no-validate' })
+        onEvent({ type: 'exit', exitCode: 0 })
+        return () => undefined
+      })
+      const stream = await appRouter.createCaller(context).cli.archiveStrictStream({
+        changeId: 'add-search',
+        skipSpecs: true,
+        noValidate: false,
+      })
+      const events: Array<{ type: string; exitCode?: number | null }> = []
+      await new Promise<void>((resolve, reject) => {
+        stream.subscribe({
+          next: (event) => events.push(event),
+          error: reject,
+          complete: resolve,
+        })
+      })
+
+      expect(validateStream).toHaveBeenCalledWith(
+        { id: 'add-search', type: 'change', strict: true, store: 'shared' },
+        expect.any(Function)
+      )
+      expect(archiveStream).toHaveBeenCalledWith(
+        'add-search',
+        { skipSpecs: true, noValidate: true, store: 'shared' },
+        expect.any(Function)
+      )
+      expect(events.filter((event) => event.type === 'exit')).toEqual([
+        { type: 'exit', exitCode: 0 },
+      ])
+    })
+
+    it('does not archive after strict preflight failure', async () => {
+      const context = createMockContext()
+      const validateStream = context.cliExecutor.validateStream as unknown as ReturnType<
+        typeof vi.fn
+      >
+      const archiveStream = context.cliExecutor.archiveStream as unknown as ReturnType<typeof vi.fn>
+      validateStream.mockImplementation(async (_options, onEvent) => {
+        onEvent({ type: 'stderr', data: 'strict validation failed' })
+        onEvent({ type: 'exit', exitCode: 1 })
+        return () => undefined
+      })
+      const stream = await appRouter.createCaller(context).cli.archiveStrictStream({
+        changeId: 'add-search',
+        noValidate: false,
+      })
+      const events: Array<{ type: string; exitCode?: number | null }> = []
+      await new Promise<void>((resolve, reject) => {
+        stream.subscribe({
+          next: (event) => events.push(event),
+          error: reject,
+          complete: resolve,
+        })
+      })
+
+      expect(archiveStream).not.toHaveBeenCalled()
+      expect(events.at(-1)).toEqual({ type: 'exit', exitCode: 1 })
     })
 
     it('reads and writes global config via path resolution', async () => {

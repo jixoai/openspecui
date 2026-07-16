@@ -7,7 +7,7 @@
  *
  * Original request (2026-07-15): "Split formal tracked progress, document checklist statistics, and Apply instruction progress into non-interchangeable facts."
  */
-import { mkdir, readFile, rename, writeFile } from 'fs/promises'
+import { mkdir, rename, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { inferFileMime, inferFilePreviewKind, isTextLikeFile } from './file-preview.js'
 import {
@@ -512,52 +512,6 @@ This project uses OpenSpec for spec-driven development.
 - \`changes/archive/\` - Completed changes
 `
     await writeFile(join(this.openspecDir, 'project.md'), projectMd, 'utf-8')
-  }
-
-  // =====================
-  // Task operations
-  // =====================
-
-  /**
-   * Toggle a task's completion status in tasks.md
-   * @param changeId - The change ID
-   * @param taskIndex - 1-based task index
-   * @param completed - New completion status
-   */
-  async toggleTask(changeId: string, taskIndex: number, completed: boolean): Promise<boolean> {
-    try {
-      const tasksPath = join(this.changesDir, changeId, 'tasks.md')
-      const content = await readFile(tasksPath, 'utf-8')
-
-      const lines = content.split('\n')
-      let currentTaskIndex = 0
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i]
-        // Match task lines: - [ ] or - [x] or * [ ] or * [x]
-        const taskMatch = line.match(/^([-*]\s+)\[([ xX])\](\s+.*)$/)
-        if (taskMatch) {
-          currentTaskIndex++
-          if (currentTaskIndex === taskIndex) {
-            // Update the checkbox
-            const prefix = taskMatch[1]
-            const suffix = taskMatch[3]
-            const newCheckbox = completed ? '[x]' : '[ ]'
-            lines[i] = `${prefix}${newCheckbox}${suffix}`
-            break
-          }
-        }
-      }
-
-      if (currentTaskIndex < taskIndex) {
-        return false // Task not found
-      }
-
-      await writeFile(tasksPath, lines.join('\n'), 'utf-8')
-      return true
-    } catch {
-      return false
-    }
   }
 
   // =====================

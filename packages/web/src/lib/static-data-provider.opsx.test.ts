@@ -47,7 +47,12 @@ function createSnapshot(): ExportSnapshot {
           },
         ],
         trackedTaskProgress: createTrackedTaskProgress([
-          { id: 'task-1', text: 'task', completed: false },
+          {
+            id: 'task-1',
+            text: 'task',
+            completed: false,
+            location: { filePath: 'tasks.md', taskIndex: 1 },
+          },
         ]),
         documentChecklistSummary: documentChecklistSummary(),
         createdAt: 1,

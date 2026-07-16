@@ -314,6 +314,25 @@ describe('CliExecutor', () => {
     })
   })
 
+  describe('streaming root selectors', () => {
+    it('preserves an explicitly empty Store selector for validate and archive', async () => {
+      const executeStreamSpy = vi
+        .spyOn(cliExecutor, 'executeStream')
+        .mockResolvedValue(() => undefined)
+      const onEvent = vi.fn()
+
+      await cliExecutor.validateStream({ store: '' }, onEvent)
+      await cliExecutor.archiveStream('change-123', { store: '' }, onEvent)
+
+      expect(executeStreamSpy).toHaveBeenNthCalledWith(1, ['validate', '--store', ''], onEvent)
+      expect(executeStreamSpy).toHaveBeenNthCalledWith(
+        2,
+        ['archive', '-y', 'change-123', '--store', ''],
+        onEvent
+      )
+    })
+  })
+
   describe('executeCommandStream()', () => {
     it('should resolve bare openspec through the configured runner', async () => {
       await configManager.writeConfig({ cli: { command: 'echo' } })

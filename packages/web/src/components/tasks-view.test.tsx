@@ -1,9 +1,9 @@
-import type { Task, TrackedTaskProgress } from '@openspecui/core'
+import type { TrackedTask, TrackedTaskProgress } from '@openspecui/core'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { TasksView } from './tasks-view'
 
-function trackedTaskProgress(tasks: Task[]): TrackedTaskProgress {
+function trackedTaskProgress(tasks: TrackedTask[]): TrackedTaskProgress {
   const completed = tasks.filter((task) => task.completed).length
   return {
     tasks,
@@ -21,18 +21,19 @@ function trackedTaskProgress(tasks: Task[]): TrackedTaskProgress {
   }
 }
 
-function renderTasks(tasks: Task[]) {
+function renderTasks(tasks: TrackedTask[]) {
   return render(<TasksView trackedTaskProgress={trackedTaskProgress(tasks)} tocBaseIndex={0} />)
 }
 
 describe('TasksView', () => {
   it('updates text when task text changes', () => {
-    const tasks: Task[] = [
+    const tasks: TrackedTask[] = [
       {
         id: 'task-1',
         text: 'Initial task text',
         completed: false,
         section: 'Setup',
+        location: { filePath: 'tasks.md', taskIndex: 1 },
       },
     ]
 
@@ -40,7 +41,7 @@ describe('TasksView', () => {
 
     expect(screen.getByText('Initial task text')).toBeTruthy()
 
-    const updatedTasks: Task[] = [
+    const updatedTasks: TrackedTask[] = [
       {
         ...tasks[0],
         text: 'Updated task text',

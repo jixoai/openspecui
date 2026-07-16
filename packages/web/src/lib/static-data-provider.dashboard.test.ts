@@ -20,6 +20,7 @@ function trackedTaskProgress(total: number, completed: number) {
       id: `task-${index + 1}`,
       text: `Task ${index + 1}`,
       completed: index < completed,
+      location: { filePath: 'tasks.md', taskIndex: index + 1 },
     }))
   )
 }
