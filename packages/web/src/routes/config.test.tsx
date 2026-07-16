@@ -80,16 +80,13 @@ vi.mock('@/lib/trpc', () => ({
       writeActiveRoot: { mutate: vi.fn() },
       writeEnvironmentGlobal: { mutate: vi.fn() },
     },
-    cli: {
-      execute: {
-        mutate: vi.fn(),
-      },
-    },
     opsx: {
       createSchemaDirectory: { mutate: vi.fn() },
       createSchemaFile: { mutate: vi.fn() },
       deleteSchema: { mutate: vi.fn() },
       deleteSchemaEntry: { mutate: vi.fn() },
+      forkSchema: { mutate: vi.fn() },
+      initSchema: { mutate: vi.fn() },
       writeSchemaFile: { mutate: vi.fn() },
     },
   },

@@ -9,28 +9,38 @@
 import { act, cleanup, render, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { archiveStrictSubscribeMock, installSubscribeMock, setStreamEvents, subscribeMock } =
-  vi.hoisted(() => {
-    let streamEvents: unknown[] = []
-    const createSubscribeMock = () =>
-      vi.fn((_input: unknown, handlers: { onData: (event: unknown) => void }) => {
+const {
+  archiveStrictSubscribeMock,
+  initSubscribeMock,
+  installSubscribeMock,
+  setStreamEvents,
+  subscribeMock,
+  updateSubscribeMock,
+  validateSubscribeMock,
+} = vi.hoisted(() => {
+  let streamEvents: unknown[] = []
+  const createSubscribeMock = () =>
+    vi.fn((_input: unknown, handlers: { onData: (event: unknown) => void }) => {
+      for (const event of streamEvents) handlers.onData(event)
+      return { unsubscribe: vi.fn() }
+    })
+  return {
+    archiveStrictSubscribeMock: vi.fn(
+      (_input: unknown, handlers: { onData: (event: unknown) => void }) => {
         for (const event of streamEvents) handlers.onData(event)
         return { unsubscribe: vi.fn() }
-      })
-    return {
-      archiveStrictSubscribeMock: vi.fn(
-        (_input: unknown, handlers: { onData: (event: unknown) => void }) => {
-          for (const event of streamEvents) handlers.onData(event)
-          return { unsubscribe: vi.fn() }
-        }
-      ),
-      installSubscribeMock: createSubscribeMock(),
-      setStreamEvents: (events: unknown[]) => {
-        streamEvents = events
-      },
-      subscribeMock: createSubscribeMock(),
-    }
-  })
+      }
+    ),
+    initSubscribeMock: createSubscribeMock(),
+    installSubscribeMock: createSubscribeMock(),
+    setStreamEvents: (events: unknown[]) => {
+      streamEvents = events
+    },
+    subscribeMock: createSubscribeMock(),
+    updateSubscribeMock: createSubscribeMock(),
+    validateSubscribeMock: createSubscribeMock(),
+  }
+})
 
 vi.mock('./static-mode', () => ({
   isStaticMode: () => false,
@@ -42,11 +52,20 @@ vi.mock('./trpc', () => ({
       archiveStrictStream: {
         subscribe: archiveStrictSubscribeMock,
       },
+      initStream: {
+        subscribe: initSubscribeMock,
+      },
       executeOpenSpecStream: {
         subscribe: subscribeMock,
       },
       installGlobalCliStream: {
         subscribe: installSubscribeMock,
+      },
+      updateStream: {
+        subscribe: updateSubscribeMock,
+      },
+      validateStream: {
+        subscribe: validateSubscribeMock,
       },
     },
   },
@@ -55,11 +74,22 @@ vi.mock('./trpc', () => ({
 import { CliTerminal } from '../components/cli-terminal'
 import { useCliRunner } from './use-cli-runner'
 
+type QueuedCommandInput = Parameters<
+  ReturnType<typeof useCliRunner>['commands']['replaceAll']
+>[0][number]
+
+function queuedCommand(input: QueuedCommandInput): QueuedCommandInput {
+  return input
+}
+
 describe('useCliRunner', () => {
   beforeEach(() => {
     archiveStrictSubscribeMock.mockClear()
+    initSubscribeMock.mockClear()
     installSubscribeMock.mockClear()
     subscribeMock.mockClear()
+    updateSubscribeMock.mockClear()
+    validateSubscribeMock.mockClear()
     setStreamEvents([
       { type: 'command', data: 'openspec config list --json' },
       { type: 'stdout', data: '{"profile":"core"}\n' },
@@ -143,6 +173,59 @@ describe('useCliRunner', () => {
     expect(result.current.status).toBe('success')
   })
 
+  it.each([
+    [
+      'Init',
+      queuedCommand({
+        command: 'openspec',
+        args: ['init', '--tools', 'claude', '--force'],
+        stream: { type: 'init', input: { tools: ['claude'], force: true } },
+      }),
+      initSubscribeMock,
+      { tools: ['claude'], force: true },
+    ],
+    [
+      'Planning-root Update',
+      queuedCommand({
+        command: 'openspec',
+        args: ['update'],
+        stream: { type: 'planning-root-update' },
+      }),
+      updateSubscribeMock,
+      undefined,
+    ],
+    [
+      'Validate',
+      queuedCommand({
+        command: 'openspec',
+        args: ['validate', 'demo', '--type', 'change', '--strict'],
+        stream: {
+          type: 'validate',
+          input: { id: 'demo', type: 'change', strict: true },
+        },
+      }),
+      validateSubscribeMock,
+      { id: 'demo', type: 'change', strict: true },
+    ],
+  ] as const)(
+    'uses the typed Server-owned stream for %s',
+    async (_label, descriptor, expectedSubscribe, expectedInput) => {
+      const { result } = renderHook(() => useCliRunner())
+
+      act(() => {
+        result.current.commands.replaceAll([descriptor])
+      })
+
+      await act(async () => {
+        await result.current.commands.runAll()
+      })
+
+      expect(expectedSubscribe).toHaveBeenCalledWith(expectedInput, expect.any(Object))
+      expect(subscribeMock).not.toHaveBeenCalled()
+      expect(result.current.status).toBe('success')
+    }
+  )
+
   it('rejects arbitrary commands without a dedicated Server transport', async () => {
     const { result } = renderHook(() => useCliRunner())
 
@@ -177,8 +260,14 @@ describe('useCliRunner', () => {
 
     act(() => {
       result.current.commands.replaceAll([
-        { command: 'openspec', args: ['archive', '-y', 'add-search'] },
-        { command: 'openspec', args: ['archive', '-y', 'add-search', '--no-validate'] },
+        {
+          command: 'openspec',
+          args: ['archive', '-y', 'add-search'],
+          stream: {
+            type: 'archive-strict',
+            input: { changeId: 'add-search', skipSpecs: false, noValidate: false },
+          },
+        },
       ])
     })
 
@@ -186,12 +275,22 @@ describe('useCliRunner', () => {
       await result.current.commands.runAll()
     })
 
-    expect(subscribeMock).toHaveBeenCalledTimes(1)
+    expect(archiveStrictSubscribeMock).toHaveBeenCalledTimes(1)
+    expect(subscribeMock).not.toHaveBeenCalled()
     expect(result.current.status).toBe('error')
-    expect(result.current.commands.list().map((command) => command.status)).toEqual([
-      'error',
-      'idle',
+    expect(result.current.commands.list()).toEqual([
+      expect.objectContaining({
+        args: ['archive', '-y', 'add-search'],
+        status: 'error',
+        stream: {
+          type: 'archive-strict',
+          input: { changeId: 'add-search', skipSpecs: false, noValidate: false },
+        },
+      }),
     ])
+    expect(result.current.commands.list().flatMap((command) => command.args)).not.toContain(
+      '--no-validate'
+    )
 
     const { container } = render(<CliTerminal lines={result.current.lines} />)
     const terminalText = container.textContent ?? ''
@@ -201,5 +300,45 @@ describe('useCliRunner', () => {
         line.textContent?.includes('archive_spec_update_failed')
       )
     ).toBe(true)
+  })
+
+  it.each([
+    ['failed', 1],
+    ['indeterminate', null],
+  ])('keeps a %s strict preflight inside one Server-owned stream', async (_label, exitCode) => {
+    const diagnostic = 'archive_validation_failed\nThe change did not pass strict validation.'
+    setStreamEvents([
+      {
+        type: 'command',
+        data: 'openspec validate add-search --type change --strict',
+      },
+      { type: 'stderr', data: diagnostic },
+      { type: 'exit', exitCode },
+    ])
+    const { result } = renderHook(() => useCliRunner())
+
+    act(() => {
+      result.current.commands.replaceAll([
+        {
+          command: 'openspec',
+          args: ['archive', '-y', 'add-search'],
+          stream: {
+            type: 'archive-strict',
+            input: { changeId: 'add-search', skipSpecs: false, noValidate: false },
+          },
+        },
+      ])
+    })
+
+    await act(async () => {
+      await result.current.commands.runAll()
+    })
+
+    expect(archiveStrictSubscribeMock).toHaveBeenCalledTimes(1)
+    expect(subscribeMock).not.toHaveBeenCalled()
+    expect(result.current.status).toBe('error')
+    expect(
+      result.current.lines.map((line) => ('text' in line ? line.text : '')).join('\n')
+    ).toContain(diagnostic)
   })
 })

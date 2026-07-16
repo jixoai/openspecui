@@ -20,6 +20,8 @@ import type { Context } from '../src/router.js'
 import { appRouter } from '../src/router.js'
 import { FilePreviewService } from './file-preview-service.js'
 import type { PlanningRootServices } from './planning-root-service.js'
+import { GENERIC_READ_ONLY_OPEN_SPEC_COMMAND_POLICIES } from './public-cli-execution.js'
+import type { SchemaMutationAction } from './schema-mutation-service.js'
 
 function trackedTaskProgress(total: number, completed: number) {
   return createTrackedTaskProgress(
@@ -402,6 +404,7 @@ const createMockContext = (
       }),
     },
     execute: vi.fn().mockResolvedValue({ success: true, stdout: '{}', stderr: '', exitCode: 0 }),
+    executeStream: vi.fn(),
     initStream: vi.fn(),
     archiveStream: vi.fn(),
     validateStream: vi.fn(),
@@ -541,6 +544,13 @@ artifacts:
     workflowInvocationService:
       workflowInvocationService as unknown as PlanningRootServices['workflowInvocationService'],
   } satisfies PlanningRootServices
+  const rootContextState = {
+    state: 'ready' as const,
+    data: rootContext,
+    attempt: null,
+    error: null,
+    observedAt: rootContext.observedAt,
+  }
   const runtimeInvalidation = new RuntimeInvalidationIndex()
   const storeObservation = {
     reconcile: vi.fn().mockResolvedValue(undefined),
@@ -550,8 +560,11 @@ artifacts:
   return {
     launchProjectAdapter: adapter as unknown as Context['launchProjectAdapter'],
     planningRootServices: {
+      resolveRootContext: vi.fn().mockResolvedValue(rootContextState),
+      resolveRootContextReactive: vi.fn().mockResolvedValue(rootContextState),
       resolve: vi.fn().mockResolvedValue(planningRootServices),
       resolveReactive: vi.fn().mockResolvedValue(planningRootServices),
+      mutateSchema: vi.fn().mockResolvedValue(null),
       readPreviewRequest: vi.fn().mockReturnValue(null),
       dispose: vi.fn().mockResolvedValue(undefined),
     },
@@ -797,6 +810,7 @@ describe('appRouter', () => {
         storeId: 'shared',
         externalToLaunchProject: true,
       })
+      expect(context.planningRootServices.resolveRootContext).toHaveBeenCalled()
       await expect(
         readFile(join(launchProject, 'openspec', 'config.yaml'), 'utf8')
       ).resolves.toMatch(/schema: launch[\s\S]*store: shared/)
@@ -2064,12 +2078,25 @@ apply:
         ['--store=other', 'archive', 'add-search', '--yes', '--no-validate'],
       ],
       ['argument separator', ['--', 'archive', 'add-search', '--yes', '--no-validate']],
-    ])('rejects Archive through generic buffered execution using %s', async (_name, args) => {
+      ['new change with another Store', ['new', 'change', 'demo', '--store', 'other']],
+      ['Store removal', ['store', 'remove', 'shared']],
+      ['global config reset', ['config', 'reset', '--yes']],
+      ['read command with Store selector', ['list', '--store', 'other', '--json']],
+      ['read command with inline Store selector', ['list', '--store=other', '--json']],
+      ['read command with hidden root selector', ['list', '--store-path', '/tmp/other', '--json']],
+      [
+        'Context workspace write',
+        ['context', '--code-workspace', '/tmp/other.code-workspace', '--force', '--json'],
+      ],
+      ['unknown Show option', ['show', 'demo', '--future-write', '/tmp/output']],
+      ['read group with mutation-shaped suffix', ['store', 'list', 'remove', 'shared']],
+      ['missing required Config key', ['config', 'get']],
+    ])('rejects %s through generic buffered execution', async (_name, args) => {
       const context = createMockContext()
       const execute = context.cliExecutor.execute as unknown as ReturnType<typeof vi.fn>
 
       await expect(appRouter.createCaller(context).cli.executeOpenSpec({ args })).rejects.toThrow(
-        /archiveStrictStream/
+        /generic|Server-owned|archiveStrictStream/i
       )
       expect(execute).not.toHaveBeenCalled()
     })
@@ -2084,19 +2111,73 @@ apply:
         ['--store=other', 'archive', 'add-search', '--yes', '--no-validate'],
       ],
       ['argument separator', ['--', 'archive', 'add-search', '--yes', '--no-validate']],
-    ])('rejects Archive through generic streamed execution using %s', async (_name, args) => {
+      ['new change with another Store', ['new', 'change', 'demo', '--store', 'other']],
+      ['Store removal', ['store', 'remove', 'shared']],
+      ['global config reset', ['config', 'reset', '--yes']],
+      ['read command with Store selector', ['list', '--store', 'other', '--json']],
+      ['read command with inline Store selector', ['list', '--store=other', '--json']],
+      ['read command with hidden root selector', ['list', '--store-path', '/tmp/other', '--json']],
+      [
+        'Context workspace write',
+        ['context', '--code-workspace', '/tmp/other.code-workspace', '--force', '--json'],
+      ],
+      ['unknown Show option', ['show', 'demo', '--future-write', '/tmp/output']],
+      ['read group with mutation-shaped suffix', ['store', 'list', 'remove', 'shared']],
+      ['missing required Config key', ['config', 'get']],
+    ])('rejects %s through generic streamed execution', async (_name, args) => {
       const context = createMockContext()
       const executeCommandStream = context.cliExecutor
         .executeCommandStream as unknown as ReturnType<typeof vi.fn>
+      executeCommandStream.mockImplementation((_command, onEvent) => {
+        onEvent({ type: 'exit', exitCode: 0 })
+        return vi.fn()
+      })
       const stream = await appRouter.createCaller(context).cli.executeOpenSpecStream({ args })
 
       await expect(
         new Promise<void>((resolve, reject) => {
           stream.subscribe({ complete: resolve, error: reject })
         })
-      ).rejects.toThrow(/archiveStrictStream/)
+      ).rejects.toThrow(/generic|Server-owned|archiveStrictStream/i)
       expect(executeCommandStream).not.toHaveBeenCalled()
     })
+
+    it.each(GENERIC_READ_ONLY_OPEN_SPEC_COMMAND_POLICIES)(
+      'allows read-only buffered command path %j',
+      async ({ exampleArgs }) => {
+        const context = createMockContext()
+        const execute = context.cliExecutor.execute as unknown as ReturnType<typeof vi.fn>
+        const args = [...exampleArgs]
+
+        await appRouter.createCaller(context).cli.executeOpenSpec({ args })
+
+        expect(execute).toHaveBeenCalledWith(args)
+      }
+    )
+
+    it.each(GENERIC_READ_ONLY_OPEN_SPEC_COMMAND_POLICIES)(
+      'allows read-only streamed command path %j',
+      async ({ exampleArgs }) => {
+        const context = createMockContext()
+        const executeCommandStream = context.cliExecutor
+          .executeCommandStream as unknown as ReturnType<typeof vi.fn>
+        executeCommandStream.mockImplementation((_command, onEvent) => {
+          onEvent({ type: 'exit', exitCode: 0 })
+          return vi.fn()
+        })
+        const args = [...exampleArgs]
+        const stream = await appRouter.createCaller(context).cli.executeOpenSpecStream({ args })
+
+        await new Promise<void>((resolve, reject) => {
+          stream.subscribe({ complete: resolve, error: reject })
+        })
+
+        expect(executeCommandStream).toHaveBeenCalledWith(
+          ['openspec', ...args],
+          expect.any(Function)
+        )
+      }
+    )
 
     it('keeps strict archive preflight and mutation on one Server-owned root selection', async () => {
       const context = createMockContext()
@@ -2242,6 +2323,7 @@ apply:
       expect(environment.file.path).toBe('/tmp/mock-openspec-config.json')
       expect(environment.config).toMatchObject({ profile: 'core', delivery: 'both' })
       expect(environment.owner.kind).toBe('runtime-environment')
+      expect(context.planningRootServices.resolveRootContext).toHaveBeenCalledOnce()
       expect(setResult.success).toBe(true)
       const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
       expect(invalidation.current('stores')).toBe(1)
@@ -2281,6 +2363,7 @@ apply:
         config: { profile: 'core', delivery: 'both', workflows: ['propose'] },
         owner: { kind: 'runtime-environment' },
       })
+      expect(context.planningRootServices.resolveRootContextReactive).toHaveBeenCalledOnce()
       subscription.unsubscribe()
     })
 
@@ -2297,7 +2380,7 @@ apply:
       expect(invalidation.current('context')).toBe(1)
     })
 
-    it('invalidates mapped raw CLI mutations but not read-only commands', async () => {
+    it('keeps generic execution read-only without mutation invalidation', async () => {
       const context = createMockContext()
       const caller = appRouter.createCaller(context)
       const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
@@ -2305,24 +2388,55 @@ apply:
       await caller.cli.executeOpenSpec({ args: ['schemas', '--json'] })
       expect(invalidation.current('project')).toBe(0)
       expect(invalidation.current('schemas')).toBe(0)
-
-      await caller.cli.executeOpenSpec({ args: ['schema', 'init', 'custom'] })
-      expect(invalidation.current('project')).toBe(1)
-      expect(invalidation.current('context')).toBe(1)
-      expect(invalidation.current('schemas')).toBe(1)
     })
 
-    it('invalidates a streamed OpenSpec mutation before completing the client stream', async () => {
+    it('updates only the Server-selected Planning root', async () => {
       const context = createMockContext()
+      const planning = await resolveMockPlanningRoot(context)
+      planning.rootContext = {
+        ...planning.rootContext,
+        planningRoot: {
+          path: '/stores/shared',
+          source: 'store',
+          store_id: 'shared',
+          healthy: true,
+          status: [],
+        },
+        storeId: 'shared',
+      }
+      const execute = context.cliExecutor.execute as unknown as ReturnType<typeof vi.fn>
+      const caller = appRouter.createCaller(context)
+
+      await caller.cli.update({ force: true })
+
+      expect(execute).toHaveBeenCalledWith(['update', '/stores/shared', '--force'])
       const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
-      const executeCommandStream = context.cliExecutor
-        .executeCommandStream as unknown as ReturnType<typeof vi.fn>
-      executeCommandStream.mockImplementation((_command, onEvent) => {
+      expect(invalidation.current('project')).toBe(1)
+      expect(invalidation.current('context')).toBe(1)
+    })
+
+    it('settles streamed Planning-root Update invalidation before completing the client stream', async () => {
+      const context = createMockContext()
+      const planning = await resolveMockPlanningRoot(context)
+      planning.rootContext = {
+        ...planning.rootContext,
+        planningRoot: {
+          path: '/stores/shared',
+          source: 'store',
+          store_id: 'shared',
+          healthy: true,
+          status: [],
+        },
+        storeId: 'shared',
+      }
+      const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
+      const executeStream = context.cliExecutor.executeStream as unknown as ReturnType<typeof vi.fn>
+      executeStream.mockImplementation((_args, onEvent) => {
         onEvent({ type: 'exit', exitCode: null })
         return vi.fn()
       })
       const caller = appRouter.createCaller(context)
-      const stream = await caller.cli.executeOpenSpecStream({ args: ['update'] })
+      const stream = await caller.cli.updateStream()
 
       await new Promise<void>((resolve, reject) => {
         stream.subscribe({
@@ -2334,6 +2448,22 @@ apply:
           },
         })
       })
+
+      expect(executeStream).toHaveBeenCalledWith(['update', '/stores/shared'], expect.any(Function))
+    })
+
+    it('applies the fixed Core profile through the Environment Global owner', async () => {
+      const context = createMockContext()
+      const execute = context.cliExecutor.execute as unknown as ReturnType<typeof vi.fn>
+
+      await appRouter.createCaller(context).planningConfig.applyCoreProfile()
+
+      expect(execute).toHaveBeenCalledWith(['config', 'profile', 'core'])
+      const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
+      expect(invalidation.current('stores')).toBe(1)
+      expect(invalidation.current('worksets')).toBe(1)
+      expect(invalidation.current('schemas')).toBe(1)
+      expect(invalidation.current('context')).toBe(1)
     })
 
     it('parses profile state and detects drift warning', async () => {
@@ -2394,6 +2524,79 @@ apply:
   })
 
   describe('opsx', () => {
+    it('adapts every Schema and Template mutation through the Planning-root owner', async () => {
+      const context = createMockContext()
+      const mutateSchema = vi.fn(async (action: SchemaMutationAction) =>
+        action.action === 'init' || action.action === 'fork'
+          ? { success: true, stdout: '{}', stderr: '', exitCode: 0 }
+          : null
+      )
+      context.planningRootServices.mutateSchema = mutateSchema
+      const caller = appRouter.createCaller(context)
+
+      await expect(
+        caller.opsx.writeSchemaFile({ schema: 'demo', path: '../outside.md', content: 'outside' })
+      ).rejects.toThrow(/invalid|relative/i)
+      expect(mutateSchema).not.toHaveBeenCalled()
+      expect((context.runtimeInvalidation as RuntimeInvalidationIndex).current('schemas')).toBe(0)
+
+      await caller.opsx.writeSchemaYaml({ name: 'demo', content: 'name: demo\n' })
+      await caller.opsx.writeSchemaFile({ schema: 'demo', path: 'notes.md', content: '# Notes\n' })
+      await caller.opsx.createSchemaFile({ schema: 'demo', path: 'new.md', content: '' })
+      await caller.opsx.createSchemaDirectory({ schema: 'demo', path: 'templates/nested' })
+      await caller.opsx.deleteSchemaEntry({ schema: 'demo', path: 'new.md' })
+      await caller.opsx.writeTemplateContent({
+        schema: 'demo',
+        artifactId: 'proposal',
+        content: '# Proposal\n',
+      })
+      await caller.opsx.deleteSchema({ name: 'demo' })
+      await caller.opsx.initSchema({ name: 'new-schema' })
+      await caller.opsx.forkSchema({ source: 'spec-driven', name: 'derived-schema' })
+
+      expect(mutateSchema).toHaveBeenNthCalledWith(1, {
+        action: 'write-yaml',
+        schema: 'demo',
+        content: 'name: demo\n',
+      })
+      expect(mutateSchema).toHaveBeenNthCalledWith(2, {
+        action: 'write-file',
+        schema: 'demo',
+        path: 'notes.md',
+        content: '# Notes\n',
+      })
+      expect(mutateSchema).toHaveBeenNthCalledWith(3, {
+        action: 'create-file',
+        schema: 'demo',
+        path: 'new.md',
+        content: '',
+      })
+      expect(mutateSchema).toHaveBeenNthCalledWith(4, {
+        action: 'create-directory',
+        schema: 'demo',
+        path: 'templates/nested',
+      })
+      expect(mutateSchema).toHaveBeenNthCalledWith(5, {
+        action: 'delete-entry',
+        schema: 'demo',
+        path: 'new.md',
+      })
+      expect(mutateSchema).toHaveBeenNthCalledWith(6, {
+        action: 'write-template',
+        schema: 'demo',
+        artifactId: 'proposal',
+        content: '# Proposal\n',
+      })
+      expect(mutateSchema).toHaveBeenNthCalledWith(7, { action: 'delete-schema', schema: 'demo' })
+      expect(mutateSchema).toHaveBeenNthCalledWith(8, { action: 'init', name: 'new-schema' })
+      expect(mutateSchema).toHaveBeenNthCalledWith(9, {
+        action: 'fork',
+        source: 'spec-driven',
+        name: 'derived-schema',
+      })
+      expect((context.runtimeInvalidation as RuntimeInvalidationIndex).current('schemas')).toBe(9)
+    })
+
     it('delegates workflow invocation preparation to the workflow service', async () => {
       const context = createMockContext()
       const runWorkflow = vi.fn().mockResolvedValue({

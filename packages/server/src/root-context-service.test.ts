@@ -13,6 +13,7 @@ import {
   createRootContextSubscription,
   resolveServerRootContext,
   retainStaleRootContext,
+  trackRootContextDependencies,
 } from './root-context-service.js'
 
 function commandResult<T>(data: T): CliCommandResult<T> {
@@ -48,6 +49,28 @@ function createCli(): RootContextCli {
   }
 }
 
+function createSubscriptionSource(input: {
+  projectDir: string
+  cliExecutor: RootContextCli
+  runtimeInvalidation: RuntimeInvalidationIndex
+  now?: () => number
+}) {
+  const rootSource = {
+    projectDir: input.projectDir,
+    cliExecutor: input.cliExecutor,
+    now: input.now,
+  }
+  return {
+    now: input.now,
+    async resolveRootContextReactive(): Promise<RootContextResolvedState> {
+      input.runtimeInvalidation.track('context')
+      const state = await resolveServerRootContext(rootSource)
+      await trackRootContextDependencies(rootSource, state)
+      return state
+    },
+  }
+}
+
 describe('Root Context server projection', () => {
   it('uses the same resolved contract for a query', async () => {
     const state = await resolveServerRootContext({
@@ -66,12 +89,15 @@ describe('Root Context server projection', () => {
   it('emits loading before the first ready subscription snapshot', async () => {
     const states: string[] = []
     const ready = Promise.withResolvers<void>()
-    const subscription = createRootContextSubscription({
-      projectDir: '/launch',
-      cliExecutor: createCli(),
-      runtimeInvalidation: new RuntimeInvalidationIndex(),
-      now: () => 20,
-    }).subscribe({
+    const runtimeInvalidation = new RuntimeInvalidationIndex()
+    const subscription = createRootContextSubscription(
+      createSubscriptionSource({
+        projectDir: '/launch',
+        cliExecutor: createCli(),
+        runtimeInvalidation,
+        now: () => 20,
+      })
+    ).subscribe({
       next: (state) => {
         states.push(state.state)
         if (state.state === 'ready') ready.resolve()
@@ -89,12 +115,14 @@ describe('Root Context server projection', () => {
     const runtimeInvalidation = new RuntimeInvalidationIndex()
     const readyStates = Promise.withResolvers<void>()
     let readyCount = 0
-    const subscription = createRootContextSubscription({
-      projectDir: '/launch',
-      cliExecutor,
-      runtimeInvalidation,
-      now: () => 30,
-    }).subscribe({
+    const subscription = createRootContextSubscription(
+      createSubscriptionSource({
+        projectDir: '/launch',
+        cliExecutor,
+        runtimeInvalidation,
+        now: () => 30,
+      })
+    ).subscribe({
       next: (state) => {
         if (state.state !== 'ready') return
         readyCount += 1

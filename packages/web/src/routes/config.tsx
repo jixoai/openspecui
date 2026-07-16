@@ -209,6 +209,7 @@ function JsonStructuredValue({ value }: { value: unknown }) {
   return <span className="font-mono text-xs">{String(value)}</span>
 }
 
+/** Render configuration ownership and the read-only/editable Schema workspace for one project. */
 export function Config() {
   const isStatic = isStaticMode()
   const { viewportHeight: schemaViewportHeight, setViewportNode: setSchemaViewportNode } =
@@ -670,8 +671,17 @@ export function Config() {
   })
 
   const createSchemaMutation = useMutation({
-    mutationFn: async (args: string[]) => {
-      return trpcClient.cli.executeOpenSpec.mutate({ args })
+    mutationFn: async (
+      input: { mode: 'init'; name: string } | { mode: 'fork'; source: string; name: string }
+    ) => {
+      const result =
+        input.mode === 'init'
+          ? await trpcClient.opsx.initSchema.mutate({ name: input.name })
+          : await trpcClient.opsx.forkSchema.mutate({ source: input.source, name: input.name })
+      if (!result.success) {
+        throw new Error(result.stderr || `Schema ${input.mode} failed.`)
+      }
+      return result
     },
     onSuccess: () => {
       setSchemaActionError(null)
@@ -878,11 +888,15 @@ export function Config() {
       setSchemaActionError('Schema name is required.')
       return
     }
-    const args: string[] =
+    const input =
       newSchemaMode === 'fork'
-        ? ['schema', 'fork', newSchemaSource.trim() || 'spec-driven', normalizedName]
-        : ['schema', 'init', normalizedName]
-    createSchemaMutation.mutate(args, {
+        ? {
+            mode: 'fork' as const,
+            source: newSchemaSource.trim() || 'spec-driven',
+            name: normalizedName,
+          }
+        : { mode: 'init' as const, name: normalizedName }
+    createSchemaMutation.mutate(input, {
       onSuccess: () => {
         setIsAddSchemaOpen(false)
         setActiveTab(`schema:${normalizedName}`)
@@ -899,7 +913,7 @@ export function Config() {
   }, [deleteSchemaMutation])
 
   const runConfigCommands = useCallback(
-    (commands: Array<{ command: string; args: string[] }>) => {
+    (commands: Parameters<typeof configRunnerCommands.replaceAll>[0]) => {
       if (isStatic) return
       setShouldScrollRunner(true)
       configRunnerCommands.replaceAll(commands)
@@ -969,7 +983,13 @@ export function Config() {
             text: 'Starting openspec update...',
           },
         ])
-        runConfigCommands([{ command: 'openspec', args: ['update'] }])
+        runConfigCommands([
+          {
+            command: 'openspec',
+            args: ['update'],
+            stream: { type: 'planning-root-update' },
+          },
+        ])
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -1015,7 +1035,13 @@ export function Config() {
       if (pendingCommandKind === 'apply') {
         await executeApplyProfile()
       } else {
-        runConfigCommands([{ command: 'openspec', args: ['update'] }])
+        runConfigCommands([
+          {
+            command: 'openspec',
+            args: ['update'],
+            stream: { type: 'planning-root-update' },
+          },
+        ])
       }
     } catch {
       // errors are already surfaced via mutation state and terminal lines

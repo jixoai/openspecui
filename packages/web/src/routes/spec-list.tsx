@@ -25,6 +25,7 @@ function readSpecListScopeState(state: unknown): SpecScope {
     : 'owned'
 }
 
+/** Render the owned-default and Store-grouped referenced Spec Catalog views. */
 export function SpecList() {
   const location = useLocation()
   const { data: catalog, isLoading } = useSpecsSubscription()

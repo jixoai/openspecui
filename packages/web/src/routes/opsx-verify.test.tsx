@@ -149,6 +149,14 @@ describe('OpsxVerifyRoute', () => {
       {
         command: 'openspec',
         args: ['validate', 'add-terminal-spawn-command', '--type', 'change', '--strict'],
+        stream: {
+          type: 'validate',
+          input: {
+            id: 'add-terminal-spawn-command',
+            type: 'change',
+            strict: true,
+          },
+        },
       },
     ])
     expect(screen.getByText(/MODIFIED requirement would remove existing scenarios/)).toBeTruthy()

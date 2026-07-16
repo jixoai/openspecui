@@ -2,6 +2,7 @@ import type { ToolInitState } from '@openspecui/core'
 import { describe, expect, it } from 'vitest'
 import {
   buildSettingsInitArgs,
+  buildSettingsInitInput,
   canAutoInit,
   countSelectedToolActions,
   formatSelectedInitLabel,
@@ -30,6 +31,30 @@ function createToolState(toolId: string, status: ToolInitState['status']): ToolI
 }
 
 describe('settings-init helpers', () => {
+  it('builds typed Init input from the same normalized tool selection as display argv', () => {
+    const options = {
+      mode: 'selected' as const,
+      selectedToolIds: ['claude', 'unsupported-tool'],
+      cliSupportedToolIds: new Set(['claude', 'cursor']),
+      profileOverride: 'custom' as const,
+      force: true,
+    }
+
+    expect(buildSettingsInitInput(options)).toEqual({
+      tools: ['claude'],
+      profile: 'custom',
+      force: true,
+    })
+    expect(buildSettingsInitArgs(options)).toEqual([
+      'init',
+      '--tools',
+      'claude',
+      '--profile',
+      'custom',
+      '--force',
+    ])
+  })
+
   it('builds selected init args with --force by default', () => {
     expect(
       buildSettingsInitArgs({

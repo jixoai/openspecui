@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Present backend, CLI, workflow delivery, terminal, notification, and appearance settings.
+ * 2. Preserve OpenSpec 1.6 compatibility and tool/profile drift evidence.
+ * 3. Bind network-triggered settings actions to visible loading and failure state.
+ * 4. Delegate CLI installation and project mutations through Server-owned transports.
+ *
+ * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
+ */
 import { Button } from '@/components/button'
 import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
 import { CliTerminal } from '@/components/cli-terminal'
@@ -81,6 +90,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   buildSettingsInitArgs,
+  buildSettingsInitInput,
   canAutoInit,
   countSelectedToolActions,
   formatSelectedInitLabel,
@@ -278,6 +288,7 @@ function FontFamilyEditor({
   )
 }
 
+/** Render the project-backend Settings workspace. */
 export function Settings() {
   const [theme, setTheme] = useState<Theme>(getStoredTheme)
   const [codeEditorTheme, setCodeEditorTheme] = useState<CodeEditorTheme>(DEFAULT_CODE_EDITOR_THEME)
@@ -518,10 +529,28 @@ export function Settings() {
     [cliSupportedTools, initForce, initProfileOverride, initToolsMode, selectedTools]
   )
 
+  const initInput = useMemo(
+    () =>
+      buildSettingsInitInput({
+        mode: initToolsMode,
+        selectedToolIds: selectedTools,
+        cliSupportedToolIds: cliSupportedTools,
+        profileOverride: initProfileOverride,
+        force: initForce,
+      }),
+    [cliSupportedTools, initForce, initProfileOverride, initToolsMode, selectedTools]
+  )
+
   useEffect(() => {
     if (!showInitModal) return
-    initCommands.replaceAll([{ command: 'openspec', args: initArgs }])
-  }, [initArgs, initCommands, showInitModal])
+    initCommands.replaceAll([
+      {
+        command: 'openspec',
+        args: initArgs,
+        stream: { type: 'init', input: initInput },
+      },
+    ])
+  }, [initArgs, initCommands, initInput, showInitModal])
 
   useEffect(() => {
     if (showInstallModal) {
@@ -622,7 +651,7 @@ export function Settings() {
   })
 
   const syncOpsxProjectMutation = useMutation({
-    mutationFn: () => trpcClient.cli.executeOpenSpec.mutate({ args: ['update'] }),
+    mutationFn: () => trpcClient.cli.update.mutate(),
     onSuccess: async () => {
       await Promise.allSettled([
         refetchOpsxProfileState(),
@@ -634,8 +663,7 @@ export function Settings() {
   })
 
   const setCoreProfileMutation = useMutation({
-    mutationFn: () =>
-      trpcClient.cli.executeOpenSpec.mutate({ args: ['config', 'profile', 'core'] }),
+    mutationFn: () => trpcClient.planningConfig.applyCoreProfile.mutate(),
     onSuccess: async () => {
       await Promise.allSettled([refetchOpsxProfileState()])
     },

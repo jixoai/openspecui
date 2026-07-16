@@ -2,7 +2,7 @@
  * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
  * 1. Cache reactive file, directory, existence, and stat reads.
  * 2. Bind cached reads to shared watcher roots and missing-path fallback checks.
- * 3. Settle relevant cached projections synchronously after owned filesystem writes.
+ * 3. Settle overlapping cached projections as one coherent post-mutation snapshot.
  * 4. Release watcher, polling, state, and refresh registrations together.
  *
  * Original request (2026-07-16): "direct filesystem mutations update reactive state before returning."
@@ -18,6 +18,7 @@ const stateCache = new Map<string, ReactiveState<unknown>>()
 interface CacheRefreshRegistration {
   kind: 'file' | 'directory' | 'exists' | 'stat'
   path: string
+  prepareRefresh: () => Promise<() => void>
   refresh: () => Promise<void>
 }
 
@@ -84,16 +85,22 @@ export async function reactiveReadFile(filepath: string): Promise<string | null>
     state = new ReactiveState<string | null>(initialValue)
     stateCache.set(key, state as ReactiveState<unknown>)
 
-    const refresh = async (): Promise<void> => {
+    const prepareRefresh = async (): Promise<() => void> => {
       const newValue = await getValue()
-      state!.set(newValue)
-      if (newValue === null) {
-        ensureMissingPathPoll(key, refresh)
-      } else {
-        stopMissingPathPoll(key)
+      return () => {
+        state!.set(newValue)
+        if (newValue === null) {
+          ensureMissingPathPoll(key, refresh)
+        } else {
+          stopMissingPathPoll(key)
+        }
       }
     }
-    refreshCache.set(key, { kind: 'file', path: normalizedPath, refresh })
+    const refresh = async (): Promise<void> => {
+      const commit = await prepareRefresh()
+      commit()
+    }
+    refreshCache.set(key, { kind: 'file', path: normalizedPath, prepareRefresh, refresh })
     if (initialValue === null) {
       ensureMissingPathPoll(key, refresh)
     }
@@ -134,20 +141,46 @@ function containsPath(rootPath: string, candidatePath: string): boolean {
   )
 }
 
+function pathsOverlap(firstPath: string, secondPath: string): boolean {
+  return containsPath(firstPath, secondPath) || containsPath(secondPath, firstPath)
+}
+
+async function settleReactivePathMutationInternal(
+  path: string,
+  exactFileContent?: string
+): Promise<void> {
+  const normalizedPath = resolve(path)
+  const registrations = [...refreshCache.values()].filter((registration) =>
+    pathsOverlap(registration.path, normalizedPath)
+  )
+  const commits = await Promise.all(
+    registrations.flatMap((registration) =>
+      exactFileContent !== undefined &&
+      registration.kind === 'file' &&
+      registration.path === normalizedPath
+        ? []
+        : [registration.prepareRefresh()]
+    )
+  )
+
+  // Promise continuations cannot observe a partial snapshot until this synchronous commit ends.
+  for (const commit of commits) commit()
+  if (exactFileContent !== undefined) {
+    updateReactiveFileCache(normalizedPath, exactFileContent)
+  }
+}
+
+/** Re-read and atomically publish every cached projection overlapping one committed path mutation. */
+export async function settleReactivePathMutation(path: string): Promise<void> {
+  await settleReactivePathMutationInternal(path)
+}
+
 /**
  * Publish a successful file write to every cached projection whose value can change.
  * File content is set from the committed bytes; directory/existence/stat views re-read disk.
  */
 export async function settleReactiveFileWrite(filepath: string, content: string): Promise<void> {
-  const normalizedPath = resolve(filepath)
-  updateReactiveFileCache(normalizedPath, content)
-
-  const refreshes: Promise<void>[] = []
-  for (const registration of refreshCache.values()) {
-    const affected = registration.kind !== 'file' && containsPath(registration.path, normalizedPath)
-    if (affected) refreshes.push(registration.refresh())
-  }
-  await Promise.all(refreshes)
+  await settleReactivePathMutationInternal(filepath, content)
 }
 
 /**
@@ -221,28 +254,29 @@ export async function reactiveReadDir(
 
     // 监听目录（包括目录的创建和删除）
     // @parcel/watcher 会自动处理目录不存在的情况
-    const release = acquireWatcher(
-      normalizedPath,
-      async () => {
-        const newValue = await getValue()
+    const prepareRefresh = async (): Promise<() => void> => {
+      const newValue = await getValue()
+      return () => {
         state!.set(newValue)
-      },
-      {
-        recursive: true,
-        onError: () => {
-          stateCache.delete(key)
-          refreshCache.delete(key)
-          releaseCache.delete(key)
-        },
       }
-    )
+    }
+    const refresh = async (): Promise<void> => {
+      const commit = await prepareRefresh()
+      commit()
+    }
+    const release = acquireWatcher(normalizedPath, refresh, {
+      recursive: true,
+      onError: () => {
+        stateCache.delete(key)
+        refreshCache.delete(key)
+        releaseCache.delete(key)
+      },
+    })
     refreshCache.set(key, {
       kind: 'directory',
       path: normalizedPath,
-      refresh: async () => {
-        const newValue = await getValue()
-        state!.set(newValue)
-      },
+      prepareRefresh,
+      refresh,
     })
     releaseCache.set(key, release)
   }
@@ -276,16 +310,22 @@ export async function reactiveExists(path: string): Promise<boolean> {
     state = new ReactiveState<boolean>(initialValue)
     stateCache.set(key, state as ReactiveState<unknown>)
 
-    const refresh = async (): Promise<void> => {
+    const prepareRefresh = async (): Promise<() => void> => {
       const newValue = await getValue()
-      state!.set(newValue)
-      if (newValue) {
-        stopMissingPathPoll(key)
-      } else {
-        ensureMissingPathPoll(key, refresh)
+      return () => {
+        state!.set(newValue)
+        if (newValue) {
+          stopMissingPathPoll(key)
+        } else {
+          ensureMissingPathPoll(key, refresh)
+        }
       }
     }
-    refreshCache.set(key, { kind: 'exists', path: normalizedPath, refresh })
+    const refresh = async (): Promise<void> => {
+      const commit = await prepareRefresh()
+      commit()
+    }
+    refreshCache.set(key, { kind: 'exists', path: normalizedPath, prepareRefresh, refresh })
     if (!initialValue) {
       ensureMissingPathPoll(key, refresh)
     }
@@ -357,16 +397,22 @@ export async function reactiveStat(
     })
     stateCache.set(key, state as ReactiveState<unknown>)
 
-    const refresh = async (): Promise<void> => {
+    const prepareRefresh = async (): Promise<() => void> => {
       const newValue = await getValue()
-      state!.set(newValue)
-      if (newValue === null) {
-        ensureMissingPathPoll(key, refresh)
-      } else {
-        stopMissingPathPoll(key)
+      return () => {
+        state!.set(newValue)
+        if (newValue === null) {
+          ensureMissingPathPoll(key, refresh)
+        } else {
+          stopMissingPathPoll(key)
+        }
       }
     }
-    refreshCache.set(key, { kind: 'stat', path: normalizedPath, refresh })
+    const refresh = async (): Promise<void> => {
+      const commit = await prepareRefresh()
+      commit()
+    }
+    refreshCache.set(key, { kind: 'stat', path: normalizedPath, prepareRefresh, refresh })
     if (initialValue === null) {
       ensureMissingPathPoll(key, refresh)
     }

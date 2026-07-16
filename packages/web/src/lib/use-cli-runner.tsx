@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Run ordered CLI streams with stable process and loading state.
+ * 2. Preserve stdout, stderr, exit, cancellation, and multiline diagnostics verbatim.
+ * 3. Route root-dependent operations through dedicated Server-owned transports.
+ * 4. Keep global installation fixed and generic browser execution read-only.
+ *
+ * Original request (2026-07-15): "场景丢失保护的诊断必须原样显示，不能合成重试。"
+ */
 import '@/styles/terminal-effects.css'
 import type { CliStreamEvent } from '@openspecui/core'
 import { Check, Loader2, Sparkles, XCircle } from 'lucide-react'
@@ -5,12 +14,16 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { isStaticMode } from './static-mode'
 import { trpcClient } from './trpc'
 
+/** Lifecycle state for one queued command. */
 export type CommandRunStatus = 'idle' | 'loading' | 'running' | 'success' | 'error'
+/** Aggregate lifecycle state for the current command queue. */
 export type OverallStatus = 'idle' | 'running' | 'success' | 'error'
+/** Terminal-renderable text or React content emitted by the runner. */
 export type CliRunnerLine =
   | { id: string; kind: 'ascii'; text: string; tone?: 'success' | 'error' | 'info' }
   | { id: string; kind: 'html'; node: ReactNode }
 
+/** Stable queued-command projection exposed to CLI surfaces. */
 export interface CommandDescriptor {
   id: string
   command: string
@@ -20,8 +33,10 @@ export interface CommandDescriptor {
   stream?: CliStreamTransport
 }
 
+/** Process event names exposed by the runner facade. */
 export type ProcessEvent = 'data' | 'error' | 'close' | 'exit'
 
+/** Observable command-process facade returned for one running queue item. */
 export interface CommandProcess {
   id: string
   command: string
@@ -42,11 +57,39 @@ interface ArchiveStrictStreamTransport {
   }
 }
 
+interface InitStreamTransport {
+  type: 'init'
+  input?: {
+    tools?: string[] | 'all' | 'none'
+    profile?: 'core' | 'custom'
+    force?: boolean
+  }
+}
+
+interface PlanningRootUpdateStreamTransport {
+  type: 'planning-root-update'
+  input?: { force?: boolean }
+}
+
+interface ValidateStreamTransport {
+  type: 'validate'
+  input: {
+    type?: 'spec' | 'change'
+    id?: string
+    strict?: boolean
+  }
+}
+
 interface InstallGlobalCliStreamTransport {
   type: 'install-global-cli'
 }
 
-type CliStreamTransport = ArchiveStrictStreamTransport | InstallGlobalCliStreamTransport
+type CliStreamTransport =
+  | ArchiveStrictStreamTransport
+  | InitStreamTransport
+  | PlanningRootUpdateStreamTransport
+  | ValidateStreamTransport
+  | InstallGlobalCliStreamTransport
 
 interface CommandInput {
   command: string
@@ -84,6 +127,7 @@ function deriveOverallStatus(commands: CommandDescriptor[]): OverallStatus {
   return 'idle'
 }
 
+/** Create one ordered Server-stream CLI queue for a React surface. */
 export function useCliRunner(options: UseCliRunnerOptions = {}) {
   const [commands, setCommands] = useState<CommandDescriptor[]>([])
   const [logs, setLogs] = useState<LogLine[]>([])
@@ -337,6 +381,15 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
       const subscription = (() => {
         if (target.stream?.type === 'archive-strict') {
           return trpcClient.cli.archiveStrictStream.subscribe(target.stream.input, handlers)
+        }
+        if (target.stream?.type === 'init') {
+          return trpcClient.cli.initStream.subscribe(target.stream.input, handlers)
+        }
+        if (target.stream?.type === 'planning-root-update') {
+          return trpcClient.cli.updateStream.subscribe(target.stream.input, handlers)
+        }
+        if (target.stream?.type === 'validate') {
+          return trpcClient.cli.validateStream.subscribe(target.stream.input, handlers)
         }
         if (target.stream?.type === 'install-global-cli') {
           return trpcClient.cli.installGlobalCliStream.subscribe(undefined, handlers)

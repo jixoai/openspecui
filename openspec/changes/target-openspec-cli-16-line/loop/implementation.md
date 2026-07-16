@@ -1117,6 +1117,69 @@ Checkpoint state:
 - Checkpoint 6.9 remains open because `/context` is additive and the project Stores panel still exists. Checkpoints 6.8+ remain paused, and PR #207 requires full local gates plus a new independent review before any merge decision.
 - No loopback trigger fired. The corrections implement the already approved CLI-first, one-writable-root, reactive, direct-Reference, and strict Archive laws without changing product scope or security posture.
 
+## Blocking Independent Re-review: 2026-07-16 recurrence remains after `f138765`
+
+Review target: `8d38f35...f138765` (`8e2cf32`, `f138765`) on PR #207. The worktree was clean and matched the remote branch. Standards and Spec were reviewed independently against the correction work package, `AGENTS.md`, `CLAUDE.md`, and pinned OpenSpec 1.6 behavior.
+
+Standards findings:
+
+- The Web scenario-loss regression still submits two generic `openspec archive` commands and mocks `executeOpenSpecStream`. Production rejects the first command before CLI diagnostics can exist, so this test proves neither the supported `archiveStrictStream` diagnostic path nor absence of a synthesized retry.
+- The completion audit checked only newly added production files. Seven modified production files still lack the required timestamped orthogonal-intent/original-request header: Core and reactive-fs barrels, Server Search service/documents, Web CLI runner, static provider, and Settings route.
+
+Spec findings and direct reproductions:
+
+- `assertGenericOpenSpecCommandAllowed` rejects only an argv element equal to `archive`. Public buffered/streamed RPCs still accept `new change demo --store other`, `store remove shared`, and `config reset --yes`; the first is an official root-dependent mutation that writes the caller-selected Store instead of the current Server-owned Planning root. The claimed capability-complete audit therefore repeated the same deny-one-endpoint failure pattern.
+- Config's live Schema/Template write, create, directory-create, delete, and template-write routes still call `mkdir`, `writeFile`, and `rm` behind lexical guards. They bypass `physical-reactive-file-writer`, permit intermediate-symlink escape, and return before cached OPSX projections settle. The 6.x changeset claim that schema and active-config writes use one physical/reactive owner is false.
+- Reference enumeration accepts a successful Spec list with `root: null` as ready. A local contract reproduction produced a Referenced Catalog entry under the requested Store without any returned Store provenance. Referenced detail validates only `upstream.id`; a payload whose `root.store_id` names another Store was returned as `state: ready`. The pinned executable fixture separately asserts Doctor and list payloads but never drives those real results through Catalog and detail as required by the corrective goal.
+- Planning-root retirement is lazy. Root Context query/subscription resolves new truth independently of `PlanningRootServiceManager`; `/api/file-preview/:hash/*` reads the manager's old active record synchronously. After clients observe root B, root A preview URLs remain readable until another Planning-root RPC happens to trigger manager transition.
+
+Checkpoint state:
+
+- Reopened 3.11 and 4.5 for generic/Schema mutation ownership and reactive settlement; 4.9 for Root Context-driven preview retirement; 5.8, 6.5, and 6.6 for end-to-end Store provenance; 6.7 for supported-path Archive diagnostic evidence; and 10.17 for the full modified-file documentation audit.
+- Progress returns from 58/131 to 50/131. No separate change or loopback is justified: every issue is inside the recurrence-safe closure contract already approved for this change.
+
+Verification:
+
+- Focused Core correction matrix passed 57/57; focused Server Planning/Router/Catalog/Search/Archive matrix passed 89/89; focused Web CLI runner/Spec matrix passed 11/11. These suites do not cover the reachable counterexamples above.
+- `FORMAT_CHECK_BASE_SHA=8d38f35 pnpm format:check` passed across 89 changed files and `git diff --check 8d38f35...f138765` passed.
+- Remote Changeset, CI Scope, Fast Gate, and Web Browser Gate passed. `Browser Gate (xterm-input-panel)` failed after all retries because `Persist State Across Terminal Switch` timed out; the aggregate Browser Gate is therefore red. This package is outside the correction diff, but PR #207 still cannot merge until the required gate passes.
+
+## Corrective Worker Goal after `f138765`
+
+The worker continues on `feat/openspec-cli-16-contract-baseline` and updates PR #207. The complete executable brief is mirrored at repository-root `GOAL.md`; this section is the durable Change record and remains authoritative if that transient worker file is later replaced.
+
+Construction order:
+
+```text
+counterexample that fails on f138765
+                 |
+                 v
+complete public caller/capability inventory
+                 |
+                 v
+one Server owner + invariant-level correction
+                 |
+                 v
+sibling-route re-audit + pinned CLI/physical/reactive/lifecycle proof
+                 |
+                 v
+focused green -> full gates -> clean SSG -> remote CI -> independent review
+```
+
+1. Replace the generic OpenSpec deny-one-command gate with an explicit read-only allowlist. Every root/environment mutation uses a typed Server owner; `archiveStrictStream` remains the only application Archive mutation. Reproduce and reject `new change demo --store other`, `store remove shared`, and `config reset --yes`, then positively cover every command left on the allowlist.
+2. Route every live OPSX Schema/Template write, create, directory-create, delete, and template-write through one physical/reactive Planning-root mutation owner. Project schemas are Planning-root owned. User/package schemas stay read-only unless a distinct environment-global owner is separately designed; that capability is not authorized by this correction.
+3. Require exact non-null `root.store_id` provenance matching the requested Store for both Reference list and show, plus matching Spec id for detail. Add a pinned executable OpenSpec 1.6 test that drives real Doctor/list/show outputs through the production Catalog and referenced-detail path while retaining per-Store partial failure evidence.
+4. Make Root Context replacement/removal actively drive the serialized `PlanningRootServiceManager` transition. Do not expose root B until A's leases, services, and previews are retired; prove A -> B -> A, disappearance, concurrency, old-preview rejection, zero stale leases, and idempotent disposal.
+5. Rewrite Archive scenario-loss/no-retry coverage through `archiveStrictStream`. Add accurate intent/timestamp/original-request headers to the seven known modified files listed in `GOAL.md`, then audit the complete production diff and all changed public APIs.
+6. Record red/green evidence, final capability/owner inventory, sibling routes audited, recurrence reflection, checkpoint transitions, and residual limits here. Pre-write physical checks are not race-free `openat` and cannot detect hard-link aliases; independent per-Store enumeration is not an atomic snapshot; external writes still require watcher/fallback convergence.
+
+Acceptance and scope:
+
+- Re-close only `3.11`, `4.5`, `4.9`, `5.8`, `6.5`, `6.6`, `6.7`, and `10.17`, and only from direct evidence. Keep `6.8` and `6.9` open.
+- Run focused tests, `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`, `pnpm test:browser:ci`, clean `packages/web/dist-ssg` and `packages/web/.vite`, rebuild SSG, and run `git diff --check`.
+- Commit and push PR #207, wait for remote CI, and return the SHA, capability/owner inventory, focused and full test evidence, remaining checkpoints, and residual risks. The existing xterm Browser Gate timeout remains a merge blocker until green but is not part of this correction without causal evidence.
+- Do not merge, archive, release, implement `6.8` or `6.9`, or begin later product phases. Stop for a new independent review.
+
 ## Decisions Taken
 
 The following approved decisions constrain implementation:
@@ -1157,3 +1220,65 @@ Return to `loop/intake.md` and `loop/research-plan.md` for explicit manager appr
 - The three task projections cannot remain type-distinct without a public compatibility alias.
 - Store Manager begins to block the 6.0 root/Reference correctness baseline or requires a new package before a second consumer exists.
 - A phase changes user-visible scope, security posture, destructive behavior, package boundaries, release law, or any Non-Goal from Intake.
+
+## PR #207 Closure Audit: 2026-07-17
+
+Scope is limited to re-closing `3.11`, `4.5`, `4.9`, `5.8`, `6.5`, `6.6`, `6.7`, and `10.17`. `6.8` and `6.9` remain open.
+
+Public execution and ownership inventory:
+
+| Reachable capability                                        | Server-owned boundary                                                                                                | Browser caller/result                                   |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `cli.executeOpenSpec`, `cli.executeOpenSpecStream`          | `assertGenericOpenSpecCommandAllowed` accepts only canonical read-only argv and rejects every browser root selector. | `useCliRunner` fallback only; no mutation path remains. |
+| `cli.init`, `cli.initStream`                                | Fixed typed launch-project initialization.                                                                           | Settings init transport.                                |
+| `cli.update`, `cli.updateStream`                            | Server resolves current Planning root and supplies the upstream `update [path]` target.                              | Settings/config dedicated update transport.             |
+| `cli.validate`, `cli.validateStream`                        | Server derives the Root Context selector.                                                                            | Verify and strict-archive preflight transports.         |
+| `cli.archiveStrictStream`                                   | One Root Context resolution, strict validation, then Archive with `--no-validate`; no generic retry.                 | `useCliRunner` archive transport only.                  |
+| `planningConfig.applyCoreProfile`, `writeEnvironmentGlobal` | Fixed environment-global command families; no browser argv.                                                          | Settings/config typed mutations.                        |
+| `opsx.initSchema`, `opsx.forkSchema`                        | `PlanningRootServiceManager` serializes a root-local `SchemaMutationService`.                                        | Config Schema creation only.                            |
+
+`CliExecutor.execute*` sibling audit also covers fixed `config path/list` projections, typed Store/Workflow/Reference contracts, and the argument-free global-install route. `CliExecutor.executeCommandStream` is reachable only for fixed global install and the read-only-gated OpenSpec stream. PTY remains an explicit operator shell rather than an application command sandbox.
+
+Schema/Template routes now share one path:
+
+```text
+Router write/create/delete
+        |
+        v
+PlanningRootServiceManager transition lane
+        |
+        v
+SchemaMutationService
+        |
+        v
+physical/reactive Core mutation
+```
+
+The nine Schema/Template operations (`write-yaml`, file write/create/directory/delete, template write, schema delete, init, fork) validate before root/CLI/filesystem access. Project-only resolution and physical ancestor/final-target checks prevent observed symlink escape; direct writes settle cached file, directory, exists, and stat projections before success. User/package Schema sources remain read-only.
+
+Root and Reference re-audit:
+
+- Production `resolveServerRootContext` is called only by `PlanningRootServiceManager`; Root Context query/subscription and Project Binding/Environment Global previews consume that manager. No non-manager Root Context projection remains.
+- `PlanningRootServiceManager` clears and disposes A before installing B. Tests prove A -> B -> A, root disappearance, concurrent resolution ordering, preview invalidation/404, lease release, and idempotent disposal.
+- Catalog list requires non-null `root.store_id === requestedStore`; detail additionally requires the requested Spec id and matching non-null Store provenance. Mismatch/missing provenance stays per-Store error evidence. The pinned `openspec-cli-16` integration invokes real Doctor, Store list, and show through production Catalog/detail code.
+
+Red/green evidence:
+
+- The preceding `f138765` re-review records the red counterexamples: generic Store/root mutation, Schema intermediate-symlink escape, stale reactive reads, missing/wrong Store provenance, lazy root retirement, and unsupported generic Archive diagnostics.
+- Current focused confirmation: Core `430/430`, Server `374/374`, Web `629/629`; Core/Server/Web/App typechecks pass.
+- Documentation audit covers all 76 changed non-test production TS/TSX files in `8d38f35...HEAD`: every file has the timestamped intent/original-request header and every exported public contract has an API comment. The earlier App `no-explicit-any` suppression is removed.
+- Changeset review confirms `/context` is described as additive while `6.9` remains open.
+
+Full local gates:
+
+- `pnpm format:check`: pass (41 changed files).
+- `pnpm lint:ci`: pass (820 files, zero warnings/errors).
+- `pnpm typecheck`: pass (15 runnable workspace packages).
+- `pnpm test:ci`: pass: Root 43, Core 430, Server 374, Web 629, App 78, CLI 49, plus all remaining workspace suites.
+- `pnpm test:browser:ci`: pass: xterm 60 passed/1 skipped; Web Storybook 12/12.
+- Clean `packages/web/dist-ssg` and `.vite`, then `pnpm --filter @openspecui/web build:ssg`: pass. Existing `scroll-button` and ineffective dynamic-import warnings remain non-fatal and outside this correction.
+- `git diff --check`: pass.
+
+Residual limits remain explicit: `realpath`/`lstat` confinement has TOCTOU and hard-link-alias limits; per-Store enumeration is not a cross-Store atomic snapshot; external filesystem changes converge through watchers/fallbacks; and PTY/configured CLI runners are operator capabilities, not sandboxes.
+
+Checkpoint transition: `50/131 -> 58/131`; only the eight scoped checkpoints above changed. Do not merge, archive, release, or implement `6.8`/`6.9` before a new independent review.

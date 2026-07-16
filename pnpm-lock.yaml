@@ -444,6 +444,9 @@ importers:
       '@types/yargs':
         specifier: ^17.0.35
         version: 17.0.35
+      openspec-cli-16:
+        specifier: npm:@fission-ai/openspec@1.6.0
+        version: '@fission-ai/openspec@1.6.0(@types/node@22.19.1)'
       tsdown:
         specifier: ^0.16.6
         version: 0.16.6(typescript@5.9.3)

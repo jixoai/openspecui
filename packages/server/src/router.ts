@@ -102,8 +102,6 @@ import { CustomSoundIdSchema } from '@openspecui/core/sounds'
 import { SearchQuerySchema } from '@openspecui/search'
 import { initTRPC, TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
-import { dirname, join, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { CliMutationInvalidator } from './cli-mutation-invalidator.js'
 import { createCliStreamObservable } from './cli-stream-observable.js'
@@ -149,7 +147,11 @@ import type { ProjectRecoveryService } from './project-recovery-service.js'
 import { assertGenericOpenSpecCommandAllowed } from './public-cli-execution.js'
 import { reactiveKV } from './reactive-kv.js'
 import { createReactiveSubscription } from './reactive-subscription.js'
-import { createRootContextSubscription, resolveServerRootContext } from './root-context-service.js'
+import { createRootContextSubscription } from './root-context-service.js'
+import {
+  assertValidSchemaMutationAction,
+  type SchemaMutationAction,
+} from './schema-mutation-service.js'
 import {
   readSpecCatalog,
   readSpecDocument,
@@ -161,6 +163,7 @@ import { setTrackedTaskCompletion } from './tracked-task-mutation.js'
 import type { TranslationCacheService } from './translation-cache-service.js'
 import type { TranslationEngineService } from './translation-engine-service.js'
 
+/** Dependencies injected into every OpenSpecUI Server tRPC procedure. */
 export interface Context {
   /** Launch-project adapter; only launch-scoped operations such as init may use it. */
   launchProjectAdapter: OpenSpecAdapter
@@ -186,13 +189,16 @@ export interface Context {
   projectDir: string
 }
 
+/** Launch-scoped handoff owner used to start a backend for one Git worktree. */
 export interface GitWorktreeHandoffService {
   ensureWorktreeServer(input: { targetPath: string }): Promise<GitWorktreeHandoff>
 }
 
 const t = initTRPC.context<Context>().create()
 
+/** Typed tRPC router factory bound to the OpenSpecUI Server context. */
 export const router = t.router
+/** Typed public tRPC procedure factory bound to the OpenSpecUI Server context. */
 export const publicProcedure = t.procedure
 
 function resolvePlanningRoot(
@@ -211,6 +217,16 @@ function createPlanningRootSubscription<T>(
   return createReactiveSubscription(async () =>
     task(await resolvePlanningRoot(ctx, { reactive: true }))
   )
+}
+
+async function mutatePlanningSchema(ctx: Context, action: SchemaMutationAction) {
+  assertValidSchemaMutationAction(action)
+  try {
+    return await ctx.planningRootServices.mutateSchema(action)
+  } finally {
+    // Direct filesystem mutations and schema CLI commands both change these Planning-root facets.
+    ctx.runtimeInvalidation.invalidate(['project', 'context', 'schemas'])
+  }
 }
 
 function runOpenSpecCliMutation<T>(
@@ -234,6 +250,7 @@ async function streamOpenSpecCliMutation(
   return new CliMutationInvalidator(ctx.runtimeInvalidation).stream(facets, start, onEvent)
 }
 
+/** Project-backend notification query, subscription, and mutation procedures. */
 export const notificationsRouter = router({
   list: publicProcedure.query(({ ctx }) => {
     return ctx.notificationService.list()
@@ -288,6 +305,7 @@ export const notificationsRouter = router({
   }),
 })
 
+/** Custom notification-sound query and mutation procedures. */
 export const soundsRouter = router({
   listCustom: publicProcedure.query(({ ctx }) => {
     return ctx.customSoundService.listAvailable()
@@ -307,6 +325,7 @@ export const soundsRouter = router({
     }),
 })
 
+/** Process-global OpenSpecUI settings query and mutation procedures. */
 export const globalSettingsRouter = router({
   get: publicProcedure.query(({ ctx }) => {
     return ctx.globalSettingsManager.readSettings()
@@ -324,6 +343,7 @@ export const globalSettingsRouter = router({
   }),
 })
 
+/** Translation-cache inspection and maintenance procedures. */
 export const translationCacheRouter = router({
   stats: publicProcedure.query(({ ctx }) => {
     return ctx.translationCacheService.getStats()
@@ -346,6 +366,7 @@ export const translationCacheRouter = router({
   }),
 })
 
+/** Translation-engine selection and diagnostic procedures. */
 export const translationEnginesRouter = router({
   list: publicProcedure.query(({ ctx }) => {
     return ctx.translationEngineService.listEngines()
@@ -411,6 +432,7 @@ export const translationEnginesRouter = router({
     }),
 })
 
+/** Local NMT model catalog and lifecycle procedures. */
 export const localModelsRouter = router({
   listLocal: publicProcedure.query(({ ctx }) => {
     return ctx.localModelAssetService.listLocalCatalog()
@@ -596,6 +618,7 @@ export const localModelsRouter = router({
     }),
 })
 
+/** Local CTranslate2 model catalog and lifecycle procedures. */
 export const localCt2ModelsRouter = router({
   listLocal: publicProcedure.query(({ ctx }) => {
     return ctx.localCt2ModelAssetService.listLocalCatalog()
@@ -768,6 +791,7 @@ export const localCt2ModelsRouter = router({
     }),
 })
 
+/** Local Llama model catalog and lifecycle procedures. */
 export const localLlamaModelsRouter = router({
   listLocal: publicProcedure.query(({ ctx }) => {
     return ctx.localLlamaModelAssetService.listLocalCatalog()
@@ -1095,22 +1119,6 @@ async function fetchOpsxProfileState(ctx: Context): Promise<OpsxProfileState> {
   }
 }
 
-function ensureEditableSource(source: SchemaResolution['source'], label: string): void {
-  if (source === 'package') {
-    throw new Error(`${label} is read-only (package source)`)
-  }
-}
-
-function resolveEntryPath(root: string, entryPath: string): string {
-  const normalizedRoot = resolve(root)
-  const resolvedPath = resolve(normalizedRoot, entryPath)
-  const rootPrefix = normalizedRoot + sep
-  if (resolvedPath !== normalizedRoot && !resolvedPath.startsWith(rootPrefix)) {
-    throw new Error('Invalid path: outside schema root')
-  }
-  return resolvedPath
-}
-
 async function fetchOpsxStatus(
   ctx: Context,
   input: { change?: string; schema?: string },
@@ -1183,17 +1191,6 @@ async function fetchOpsxConfigBundle(
   }
 
   return { schemas, schemaDetails, schemaResolutions }
-}
-
-async function fetchOpsxSchemaResolution(
-  ctx: Context,
-  name: string,
-  reactive = false
-): Promise<SchemaResolution> {
-  const { kernel } = await resolvePlanningRoot(ctx, { reactive })
-  await kernel.waitForWarmup()
-  await kernel.ensureSchemaResolution(name)
-  return kernel.getSchemaResolution(name)
 }
 
 async function fetchOpsxTemplates(
@@ -1711,6 +1708,17 @@ export const configRouter = router({
   }),
 })
 
+function buildPlanningRootUpdateArgs(
+  rootContext: PlanningRootServices['rootContext'],
+  options: { force?: boolean } = {}
+): string[] {
+  const planningRoot = rootContext.planningRoot
+  if (!planningRoot) throw new Error('Planning root is unavailable.')
+  const args = ['update', planningRoot.path]
+  if (options.force) args.push('--force')
+  return args
+}
+
 /**
  * CLI router - execute external openspec CLI commands
  */
@@ -1886,6 +1894,31 @@ export const cliRouter = router({
         const { rootContext } = await resolvePlanningRoot(ctx)
         return ctx.cliExecutor.validateStream(
           { ...input, ...getRootContextCliSelector(rootContext) },
+          onEvent
+        )
+      })
+    }),
+
+  /** Update instruction files only in the current Server-selected Planning root. */
+  update: publicProcedure
+    .input(z.object({ force: z.boolean().optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      const { rootContext } = await resolvePlanningRoot(ctx)
+      const args = buildPlanningRootUpdateArgs(rootContext, input)
+      return runOpenSpecCliMutation(ctx, args, () => ctx.cliExecutor.execute(args))
+    }),
+
+  /** Stream one Planning-root Update without accepting a browser path or Store selector. */
+  updateStream: publicProcedure
+    .input(z.object({ force: z.boolean().optional() }).optional())
+    .subscription(({ ctx, input }) => {
+      return createCliStreamObservable(async (onEvent) => {
+        const { rootContext } = await resolvePlanningRoot(ctx)
+        const args = buildPlanningRootUpdateArgs(rootContext, input)
+        return streamOpenSpecCliMutation(
+          ctx,
+          args,
+          (mutationEvent) => ctx.cliExecutor.executeStream(args, mutationEvent),
           onEvent
         )
       })
@@ -2143,68 +2176,57 @@ export const opsxRouter = router({
   writeSchemaYaml: publicProcedure
     .input(z.object({ name: z.string(), content: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const resolution = await fetchOpsxSchemaResolution(ctx, input.name)
-      ensureEditableSource(resolution.source, 'schema.yaml')
-      const schemaPath = join(resolution.path, 'schema.yaml')
-      await mkdir(dirname(schemaPath), { recursive: true })
-      await writeFile(schemaPath, input.content, 'utf-8')
+      await mutatePlanningSchema(ctx, {
+        action: 'write-yaml',
+        schema: input.name,
+        content: input.content,
+      })
       return { success: true }
     }),
 
   writeSchemaFile: publicProcedure
     .input(z.object({ schema: z.string(), path: z.string(), content: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const resolution = await fetchOpsxSchemaResolution(ctx, input.schema)
-      ensureEditableSource(resolution.source, 'schema file')
-      if (!input.path.trim()) {
-        throw new Error('path is required')
-      }
-      const fullPath = resolveEntryPath(resolution.path, input.path)
-      await mkdir(dirname(fullPath), { recursive: true })
-      await writeFile(fullPath, input.content, 'utf-8')
+      await mutatePlanningSchema(ctx, {
+        action: 'write-file',
+        schema: input.schema,
+        path: input.path,
+        content: input.content,
+      })
       return { success: true }
     }),
 
   createSchemaFile: publicProcedure
     .input(z.object({ schema: z.string(), path: z.string(), content: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const resolution = await fetchOpsxSchemaResolution(ctx, input.schema)
-      ensureEditableSource(resolution.source, 'schema file')
-      if (!input.path.trim()) {
-        throw new Error('path is required')
-      }
-      const fullPath = resolveEntryPath(resolution.path, input.path)
-      await mkdir(dirname(fullPath), { recursive: true })
-      await writeFile(fullPath, input.content ?? '', 'utf-8')
+      await mutatePlanningSchema(ctx, {
+        action: 'create-file',
+        schema: input.schema,
+        path: input.path,
+        ...(input.content === undefined ? {} : { content: input.content }),
+      })
       return { success: true }
     }),
 
   createSchemaDirectory: publicProcedure
     .input(z.object({ schema: z.string(), path: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const resolution = await fetchOpsxSchemaResolution(ctx, input.schema)
-      ensureEditableSource(resolution.source, 'schema directory')
-      if (!input.path.trim()) {
-        throw new Error('path is required')
-      }
-      const fullPath = resolveEntryPath(resolution.path, input.path)
-      await mkdir(fullPath, { recursive: true })
+      await mutatePlanningSchema(ctx, {
+        action: 'create-directory',
+        schema: input.schema,
+        path: input.path,
+      })
       return { success: true }
     }),
 
   deleteSchemaEntry: publicProcedure
     .input(z.object({ schema: z.string(), path: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const resolution = await fetchOpsxSchemaResolution(ctx, input.schema)
-      ensureEditableSource(resolution.source, 'schema entry')
-      if (!input.path.trim()) {
-        throw new Error('path is required')
-      }
-      const fullPath = resolveEntryPath(resolution.path, input.path)
-      if (fullPath === resolve(resolution.path)) {
-        throw new Error('cannot delete schema root')
-      }
-      await rm(fullPath, { recursive: true, force: true })
+      await mutatePlanningSchema(ctx, {
+        action: 'delete-entry',
+        schema: input.schema,
+        path: input.path,
+      })
       return { success: true }
     }),
 
@@ -2235,24 +2257,42 @@ export const opsxRouter = router({
   writeTemplateContent: publicProcedure
     .input(z.object({ schema: z.string(), artifactId: z.string(), content: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const templates = await fetchOpsxTemplates(ctx, input.schema)
-      const info = templates[input.artifactId]
-      if (!info) {
-        throw new Error(`Template not found for ${input.schema}:${input.artifactId}`)
-      }
-      ensureEditableSource(info.source, 'template')
-      await mkdir(dirname(info.path), { recursive: true })
-      await writeFile(info.path, input.content, 'utf-8')
+      await mutatePlanningSchema(ctx, {
+        action: 'write-template',
+        schema: input.schema,
+        artifactId: input.artifactId,
+        content: input.content,
+      })
       return { success: true }
     }),
 
   deleteSchema: publicProcedure
     .input(z.object({ name: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const resolution = await fetchOpsxSchemaResolution(ctx, input.name)
-      ensureEditableSource(resolution.source, 'schema')
-      await rm(resolution.path, { recursive: true, force: true })
+      await mutatePlanningSchema(ctx, { action: 'delete-schema', schema: input.name })
       return { success: true }
+    }),
+
+  /** Create one project-local Schema from the selected Planning root. */
+  initSchema: publicProcedure
+    .input(z.object({ name: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const result = await mutatePlanningSchema(ctx, { action: 'init', name: input.name })
+      if (!result) throw new Error('Schema init did not return CLI evidence.')
+      return result
+    }),
+
+  /** Fork one available Schema into the selected Planning root. */
+  forkSchema: publicProcedure
+    .input(z.object({ source: z.string(), name: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const result = await mutatePlanningSchema(ctx, {
+        action: 'fork',
+        source: input.source,
+        name: input.name,
+      })
+      if (!result) throw new Error('Schema fork did not return CLI evidence.')
+      return result
     }),
 
   listChanges: publicProcedure.query(async ({ ctx }) => {
@@ -2562,6 +2602,7 @@ function gitRepositoryCwd(scope: GitRepositoryScopeDescriptor): string {
   return scope.repository?.topLevel ?? scope.rootPath
 }
 
+/** Explicit code/planning Git repository query and mutation procedures. */
 export const gitRouter = router({
   scopes: publicProcedure.query(({ ctx }): Promise<GitRepositoryScopes> => fetchGitScopes(ctx)),
 
@@ -2767,6 +2808,7 @@ async function fetchStoresDoctor(
   }
 }
 
+/** Read-only Store registry and Doctor projections for the current runtime environment. */
 export const storesRouter = router({
   /** store 列表（只读，带异常归类） */
   list: publicProcedure.query(({ ctx }) => fetchStoresList(ctx)),
@@ -2798,8 +2840,10 @@ export const runtimeInvalidationRouter = router({
     }),
 })
 
-async function fetchProjectBindingConfig(ctx: Context) {
-  const rootPreview = await resolveServerRootContext(ctx)
+async function fetchProjectBindingConfig(ctx: Context, reactive = false) {
+  const rootPreview = reactive
+    ? await ctx.planningRootServices.resolveRootContextReactive()
+    : await ctx.planningRootServices.resolveRootContext()
   return readProjectBindingConfig({
     launchProjectDir: ctx.projectDir,
     rootPreview,
@@ -2814,8 +2858,10 @@ async function fetchActiveRootConfig(ctx: Context, reactive = false) {
   })
 }
 
-async function fetchEnvironmentGlobalConfig(ctx: Context) {
-  const rootPreview = await resolveServerRootContext(ctx)
+async function fetchEnvironmentGlobalConfig(ctx: Context, reactive = false) {
+  const rootPreview = reactive
+    ? await ctx.planningRootServices.resolveRootContextReactive()
+    : await ctx.planningRootServices.resolveRootContext()
   return readEnvironmentGlobalConfig({
     dataScope: dataScopeFromRootPreview(rootPreview),
     cliExecutor: ctx.cliExecutor,
@@ -2827,7 +2873,7 @@ export const planningConfigRouter = router({
   projectBinding: publicProcedure.query(({ ctx }) => fetchProjectBindingConfig(ctx)),
 
   subscribeProjectBinding: publicProcedure.subscription(({ ctx }) =>
-    createReactiveSubscription(() => fetchProjectBindingConfig(ctx))
+    createReactiveSubscription(() => fetchProjectBindingConfig(ctx, true))
   ),
 
   updateProjectBinding: publicProcedure
@@ -2860,8 +2906,14 @@ export const planningConfigRouter = router({
   environmentGlobal: publicProcedure.query(({ ctx }) => fetchEnvironmentGlobalConfig(ctx)),
 
   subscribeEnvironmentGlobal: publicProcedure.subscription(({ ctx }) =>
-    createReactiveSubscription(() => fetchEnvironmentGlobalConfig(ctx))
+    createReactiveSubscription(() => fetchEnvironmentGlobalConfig(ctx, true))
   ),
+
+  /** Apply the official Core profile preset in the backend runtime environment. */
+  applyCoreProfile: publicProcedure.mutation(async ({ ctx }) => {
+    const args = ['config', 'profile', 'core']
+    return runOpenSpecCliMutation(ctx, args, () => ctx.cliExecutor.execute(args))
+  }),
 
   writeEnvironmentGlobal: publicProcedure
     .input(z.object({ config: EnvironmentGlobalConfigValueSchema }))
@@ -2875,8 +2927,10 @@ export const planningConfigRouter = router({
 
 /** CLI-owned planning Root Context shared by every project-workspace surface. */
 export const rootContextRouter = router({
-  get: publicProcedure.query(({ ctx }) => resolveServerRootContext(ctx)),
-  subscribe: publicProcedure.subscription(({ ctx }) => createRootContextSubscription(ctx)),
+  get: publicProcedure.query(({ ctx }) => ctx.planningRootServices.resolveRootContext()),
+  subscribe: publicProcedure.subscription(({ ctx }) =>
+    createRootContextSubscription(ctx.planningRootServices)
+  ),
 })
 
 /**
@@ -2910,4 +2964,5 @@ export const appRouter = router({
   system: systemRouter,
 })
 
+/** Complete OpenSpecUI Server tRPC contract. */
 export type AppRouter = typeof appRouter

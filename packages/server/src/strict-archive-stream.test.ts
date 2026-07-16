@@ -39,7 +39,10 @@ describe('startStrictArchiveStream', () => {
     expect(archiveCancel).toHaveBeenCalledOnce()
   })
 
-  it('preserves validation failure and does not start archive', async () => {
+  it.each([
+    ['failed', 1],
+    ['indeterminate', null],
+  ] as const)('preserves %s validation and does not start archive', async (_label, exitCode) => {
     const events: CliStreamEvent[] = []
     const startArchive = vi.fn(() => vi.fn())
 
@@ -47,7 +50,7 @@ describe('startStrictArchiveStream', () => {
       skipValidation: false,
       startValidate: (onEvent) => {
         onEvent({ type: 'stderr', data: 'strict validation failed' })
-        onEvent({ type: 'exit', exitCode: 1 })
+        onEvent({ type: 'exit', exitCode })
         return vi.fn()
       },
       startArchive,
@@ -55,7 +58,7 @@ describe('startStrictArchiveStream', () => {
     })
 
     expect(startArchive).not.toHaveBeenCalled()
-    expect(events.at(-1)).toEqual({ type: 'exit', exitCode: 1 })
+    expect(events.at(-1)).toEqual({ type: 'exit', exitCode })
   })
 
   it('cancels archive startup that resolves after client detachment', async () => {

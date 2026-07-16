@@ -2,23 +2,30 @@
  * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
  * 1. Prove filesystem services read and mutate only the CLI-selected planning root.
  * 2. Prove failed Root Context resolution creates no root-dependent actions.
- * 3. Prove planning-root observation is acquired once per service record and released on teardown.
- * 4. Prove planning roots own project/context invalidation registrations and reactive dependencies.
+ * 3. Prove root identity transitions retire services, leases, and preview capabilities before exposure.
+ * 4. Prove planning roots own reactive dependencies and leave zero observation/invalidation residue.
  * 5. Prove Change/Archive lists and Dashboard metrics remain scoped to the selected planning root.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  */
 import {
   CliExecutor,
+  closeAllWatchers,
   ConfigManager,
+  getActiveWatcherCount,
+  getWatcherRuntimeStatus,
   OpsxKernel,
+  ReactiveObservationEnvironment,
   RuntimeInvalidationIndex,
+  RuntimeRootInvalidationRegistry,
   type CliCommandResult,
   type CliContext,
   type CliDoctor,
   type ObservationRootOwner,
+  type RootContextResolvedState,
   type RuntimeRootInvalidationOwner,
 } from '@openspecui/core'
+import { realpathSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -30,6 +37,7 @@ import {
   PlanningRootServiceManager,
   PlanningRootUnavailableError,
 } from './planning-root-service.js'
+import { createRootContextSubscription } from './root-context-service.js'
 import { SearchService } from './search-service.js'
 
 const tempDirs: string[] = []
@@ -48,6 +56,7 @@ function commandResult<T>(data: T): CliCommandResult<T> {
 
 afterEach(async () => {
   vi.restoreAllMocks()
+  await closeAllWatchers()
   await Promise.all(tempDirs.splice(0).map((path) => rm(path, { recursive: true, force: true })))
 })
 
@@ -249,9 +258,85 @@ describe('PlanningRootServiceManager', () => {
     expect(projectInvalidation.acquireRoot).toHaveBeenCalledTimes(1)
     expect(projectInvalidation.acquireRoot).toHaveBeenCalledWith(planningRootDir)
     expect(trackInvalidation).toHaveBeenCalledWith('project', 'context')
-    await manager.dispose()
+    const disposePromise = manager.dispose()
+    expect(manager.dispose()).toBe(disposePromise)
+    await disposePromise
     expect(releaseObservationRoot).toHaveBeenCalledTimes(1)
     expect(releaseProjectInvalidation).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs typed Schema init from the selected Planning root, never the launch project', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-planning-schema-command-'))
+    tempDirs.push(tempDir)
+    const launchProjectDir = join(tempDir, 'launch')
+    const planningRootDir = join(tempDir, 'planning')
+    const runnerPath = join(tempDir, 'schema-runner.mjs')
+    await Promise.all([
+      mkdir(join(launchProjectDir, 'openspec'), { recursive: true }),
+      mkdir(join(planningRootDir, 'openspec', 'schemas'), { recursive: true }),
+    ])
+    await writeFile(
+      runnerPath,
+      [
+        "import { mkdir, writeFile } from 'node:fs/promises'",
+        "import { join } from 'node:path'",
+        'const args = process.argv.slice(2)',
+        'if (args.includes("--version")) { process.stdout.write("1.6.0"); process.exit(0) }',
+        "if (args[0] !== 'schema' || args[1] !== 'init') process.exit(2)",
+        'const schemaRoot = join(process.cwd(), "openspec", "schemas", args[2])',
+        'await mkdir(schemaRoot, { recursive: true })',
+        'await writeFile(join(schemaRoot, "schema.yaml"), `name: ${args[2]}\\n`, "utf8")',
+        'await writeFile(join(schemaRoot, "cwd.txt"), process.cwd(), "utf8")',
+        'process.stdout.write(JSON.stringify({ created: true }))',
+      ].join('\n'),
+      'utf8'
+    )
+
+    const configManager = new ConfigManager(launchProjectDir)
+    await configManager.writeConfig({ cli: { command: `${process.execPath} ${runnerPath}` } })
+    const cliExecutor = new CliExecutor(configManager, launchProjectDir)
+    const doctor: CliDoctor = {
+      root: { path: planningRootDir, source: 'declared', healthy: true, status: [] },
+      store: { id: 'planning', metadata: { present: true, valid: true }, status: [] },
+      references: [],
+      status: [],
+    }
+    const context: CliContext = {
+      root: { path: planningRootDir, source: 'declared', role: 'openspec_root' },
+      members: [],
+      status: [],
+    }
+    vi.spyOn(cliExecutor, 'checkAvailability').mockResolvedValue({
+      available: true,
+      version: '1.6.0',
+    })
+    vi.spyOn(cliExecutor.contracts, 'doctorRoot').mockResolvedValue(commandResult(doctor))
+    vi.spyOn(cliExecutor.contracts, 'context').mockResolvedValue(commandResult(context))
+    const manager = new PlanningRootServiceManager({
+      launchProjectDir,
+      previewAssetsDir: join(tempDir, 'preview-assets'),
+      configManager,
+      cliExecutor,
+      observationEnvironment: { acquireRoot: vi.fn(async () => async () => {}) },
+      projectInvalidation: { acquireRoot: vi.fn(() => () => {}) },
+      runtimeInvalidation: new RuntimeInvalidationIndex(),
+    })
+
+    const result = await manager.mutateSchema({ action: 'init', name: 'owned-schema' })
+
+    expect(result?.success, result?.stderr).toBe(true)
+    expect(result).toMatchObject({ exitCode: 0 })
+    await expect(
+      readFile(join(planningRootDir, 'openspec', 'schemas', 'owned-schema', 'schema.yaml'), 'utf8')
+    ).resolves.toBe('name: owned-schema\n')
+    await expect(
+      readFile(join(planningRootDir, 'openspec', 'schemas', 'owned-schema', 'cwd.txt'), 'utf8')
+    ).resolves.toBe(realpathSync(planningRootDir))
+    await expect(
+      readFile(join(launchProjectDir, 'openspec', 'schemas', 'owned-schema', 'schema.yaml'), 'utf8')
+    ).rejects.toThrow()
+
+    await manager.dispose()
   })
 
   it('rejects failed root resolution before any workflow action can be created', async () => {
@@ -316,6 +401,82 @@ describe('PlanningRootServiceManager', () => {
     expect(projectInvalidation.acquireRoot).not.toHaveBeenCalled()
     expect(manager.readPreviewRequest('missing', '/index.html')).toBeNull()
 
+    await manager.dispose()
+  })
+
+  it('replaces services when Store identity changes on the same physical root', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-planning-services-identity-'))
+    tempDirs.push(tempDir)
+    await mkdir(join(tempDir, 'openspec'), { recursive: true })
+    const configManager = new ConfigManager(tempDir)
+    const cliExecutor = new CliExecutor(configManager, tempDir)
+    let storeId: string | null = null
+    vi.spyOn(cliExecutor, 'checkAvailability').mockResolvedValue({
+      available: true,
+      version: '1.6.0',
+    })
+    vi.spyOn(cliExecutor.contracts, 'doctorRoot').mockImplementation(async () =>
+      commandResult<CliDoctor>({
+        root: storeId
+          ? {
+              path: tempDir,
+              source: 'store',
+              store_id: storeId,
+              healthy: true,
+              status: [],
+            }
+          : { path: tempDir, source: 'nearest', healthy: true, status: [] },
+        store: null,
+        references: [],
+        status: [],
+      })
+    )
+    vi.spyOn(cliExecutor.contracts, 'context').mockImplementation(async () =>
+      commandResult<CliContext>({
+        root: storeId
+          ? { path: tempDir, source: 'store', store_id: storeId, role: 'openspec_root' }
+          : { path: tempDir, source: 'nearest', role: 'openspec_root' },
+        members: [],
+        status: [],
+      })
+    )
+    const releases: Array<ReturnType<typeof vi.fn>> = []
+    const observationEnvironment: ObservationRootOwner = {
+      acquireRoot: vi.fn(async () => {
+        const release = vi.fn(async () => {})
+        releases.push(release)
+        return release
+      }),
+    }
+    const invalidationReleases: Array<ReturnType<typeof vi.fn>> = []
+    const projectInvalidation: RuntimeRootInvalidationOwner = {
+      acquireRoot: vi.fn(() => {
+        const release = vi.fn()
+        invalidationReleases.push(release)
+        return release
+      }),
+    }
+    const manager = new PlanningRootServiceManager({
+      launchProjectDir: tempDir,
+      previewAssetsDir: join(tempDir, 'preview-assets'),
+      configManager,
+      cliExecutor,
+      observationEnvironment,
+      projectInvalidation,
+      runtimeInvalidation: new RuntimeInvalidationIndex(),
+    })
+
+    const nearest = await manager.resolve()
+    storeId = 'shared'
+    const explicitStore = await manager.resolve()
+
+    expect(explicitStore).not.toBe(nearest)
+    expect(explicitStore.rootContext).toMatchObject({
+      planningRoot: { path: tempDir, source: 'store' },
+      storeId: 'shared',
+    })
+    expect(releases[0]).toHaveBeenCalledOnce()
+    expect(invalidationReleases[0]).toHaveBeenCalledOnce()
     await manager.dispose()
   })
 
@@ -413,6 +574,16 @@ describe('PlanningRootServiceManager', () => {
     selectedRoot = rootA
     const secondA = await manager.resolve()
     expect(secondA).not.toBe(firstA)
+    const secondPreview = secondA.filePreviewService.prepareEntityFilePreview({
+      stage: 'change',
+      changeId: 'preview',
+      path: 'index.html',
+    })
+    expect(secondPreview.hash).not.toBe(preview.hash)
+    expect(manager.readPreviewRequest(preview.hash, 'index.html')).toBeNull()
+    expect(
+      manager.readPreviewRequest(secondPreview.hash, 'index.html')?.content.toString()
+    ).toContain('Root A')
     expect(observationReleases[1]).toHaveBeenCalledOnce()
     expect(invalidationReleases[1]).toHaveBeenCalledOnce()
     expect(observationEnvironment.acquireRoot).toHaveBeenCalledTimes(3)
@@ -452,6 +623,237 @@ describe('PlanningRootServiceManager', () => {
     expect(searchDispose).toHaveBeenCalledTimes(3)
     expect(dashboardDispose).toHaveBeenCalledTimes(3)
     expect(previewDispose).toHaveBeenCalledTimes(3)
+  })
+
+  it('retires A before a Root Context subscription exposes B', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-planning-services-subscription-'))
+    tempDirs.push(tempDir)
+    const launchProjectDir = join(tempDir, 'launch')
+    const rootA = join(tempDir, 'root-a')
+    const rootB = join(tempDir, 'root-b')
+    await Promise.all([
+      mkdir(join(launchProjectDir, 'openspec'), { recursive: true }),
+      mkdir(join(rootA, 'openspec', 'changes', 'preview'), { recursive: true }),
+      mkdir(join(rootB, 'openspec'), { recursive: true }),
+    ])
+    await writeFile(
+      join(rootA, 'openspec', 'changes', 'preview', 'index.html'),
+      '<h1>Root A</h1>',
+      'utf8'
+    )
+
+    const configManager = new ConfigManager(launchProjectDir)
+    const cliExecutor = new CliExecutor(configManager, launchProjectDir)
+    let selectedRoot = rootA
+    vi.spyOn(cliExecutor, 'checkAvailability').mockResolvedValue({
+      available: true,
+      version: '1.6.0',
+    })
+    const doctorRoot = vi.spyOn(cliExecutor.contracts, 'doctorRoot').mockImplementation(async () =>
+      commandResult({
+        root: { path: selectedRoot, source: 'nearest', healthy: true, status: [] },
+        store: null,
+        references: [],
+        status: [],
+      })
+    )
+    const contextCommand = vi.spyOn(cliExecutor.contracts, 'context').mockImplementation(async () =>
+      commandResult({
+        root: { path: selectedRoot, source: 'nearest', role: 'openspec_root' },
+        members: [],
+        status: [],
+      })
+    )
+    const observationReleases: Array<ReturnType<typeof vi.fn>> = []
+    const observationEnvironment: ObservationRootOwner = {
+      acquireRoot: vi.fn(async () => {
+        const release = vi.fn(async () => {})
+        observationReleases.push(release)
+        return release
+      }),
+    }
+    const invalidationReleases: Array<ReturnType<typeof vi.fn>> = []
+    const projectInvalidation: RuntimeRootInvalidationOwner = {
+      acquireRoot: vi.fn(() => {
+        const release = vi.fn()
+        invalidationReleases.push(release)
+        return release
+      }),
+    }
+    const runtimeInvalidation = new RuntimeInvalidationIndex()
+    const manager = new PlanningRootServiceManager({
+      launchProjectDir,
+      previewAssetsDir: join(tempDir, 'preview-assets'),
+      configManager,
+      cliExecutor,
+      observationEnvironment,
+      projectInvalidation,
+      runtimeInvalidation,
+    })
+    const firstA = await manager.resolve()
+    const preview = firstA.filePreviewService.prepareEntityFilePreview({
+      stage: 'change',
+      changeId: 'preview',
+      path: 'index.html',
+    })
+
+    const firstReady = Promise.withResolvers<void>()
+    const readyB = Promise.withResolvers<void>()
+    const disappeared =
+      Promise.withResolvers<Extract<RootContextResolvedState, { state: 'error' }>>()
+    const subscription = createRootContextSubscription(manager).subscribe({
+      next: (state) => {
+        if (state.state === 'error') {
+          disappeared.resolve(state)
+          return
+        }
+        if (state.state !== 'ready') return
+        if (state.data.planningRoot?.path === rootA) firstReady.resolve()
+        if (state.data.planningRoot?.path === rootB) readyB.resolve()
+      },
+      error: (error) => {
+        readyB.reject(error)
+        disappeared.reject(error)
+      },
+    })
+
+    await firstReady.promise
+    selectedRoot = rootB
+    runtimeInvalidation.invalidate(['context'])
+    await readyB.promise
+
+    expect(observationReleases[0]).toHaveBeenCalledOnce()
+    expect(invalidationReleases[0]).toHaveBeenCalledOnce()
+    expect(manager.readPreviewRequest(preview.hash, 'index.html')).toBeNull()
+
+    doctorRoot.mockResolvedValueOnce({
+      success: false,
+      stdout: '{"status":[]}',
+      stderr: 'Planning root disappeared.',
+      exitCode: 1,
+      data: null,
+      payload: { status: [] },
+      diagnostics: [],
+    })
+    contextCommand.mockResolvedValueOnce({
+      success: false,
+      stdout: '{"status":[]}',
+      stderr: 'Planning root disappeared.',
+      exitCode: 1,
+      data: null,
+      payload: { status: [] },
+      diagnostics: [],
+    })
+    runtimeInvalidation.invalidate(['context'])
+    const errorState = await disappeared.promise
+    expect(errorState.error.code).toBe('doctor-command-failed')
+    expect(observationReleases[1]).toHaveBeenCalledOnce()
+    expect(invalidationReleases[1]).toHaveBeenCalledOnce()
+
+    subscription.unsubscribe()
+    await manager.dispose()
+  })
+
+  it('releases physical and invalidation roots across replacement and disappearance', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-planning-services-real-leases-'))
+    tempDirs.push(tempDir)
+    const rootA = join(tempDir, 'root-a')
+    const rootB = join(tempDir, 'root-b')
+    await Promise.all([
+      mkdir(join(rootA, 'openspec'), { recursive: true }),
+      mkdir(join(rootB, 'openspec'), { recursive: true }),
+    ])
+    const configManager = new ConfigManager(tempDir)
+    const cliExecutor = new CliExecutor(configManager, tempDir)
+    let selectedRoot = rootA
+    let available = true
+    vi.spyOn(cliExecutor, 'checkAvailability').mockResolvedValue({
+      available: true,
+      version: '1.6.0',
+    })
+    vi.spyOn(cliExecutor.contracts, 'doctorRoot').mockImplementation(async () =>
+      available
+        ? commandResult({
+            root: { path: selectedRoot, source: 'nearest', healthy: true, status: [] },
+            store: null,
+            references: [],
+            status: [],
+          })
+        : {
+            success: false,
+            stdout: '{"status":[]}',
+            stderr: 'Planning root disappeared.',
+            exitCode: 1,
+            data: null,
+            payload: { status: [] },
+            diagnostics: [],
+          }
+    )
+    vi.spyOn(cliExecutor.contracts, 'context').mockImplementation(async () =>
+      available
+        ? commandResult({
+            root: { path: selectedRoot, source: 'nearest', role: 'openspec_root' },
+            members: [],
+            status: [],
+          })
+        : {
+            success: false,
+            stdout: '{"status":[]}',
+            stderr: 'Planning root disappeared.',
+            exitCode: 1,
+            data: null,
+            payload: { status: [] },
+            diagnostics: [],
+          }
+    )
+    const runtimeInvalidation = new RuntimeInvalidationIndex()
+    const observationEnvironment = new ReactiveObservationEnvironment()
+    const projectInvalidation = new RuntimeRootInvalidationRegistry(runtimeInvalidation, [
+      'project',
+      'context',
+    ])
+    const manager = new PlanningRootServiceManager({
+      launchProjectDir: tempDir,
+      previewAssetsDir: join(tempDir, 'preview-assets'),
+      configManager,
+      cliExecutor,
+      observationEnvironment,
+      projectInvalidation,
+      runtimeInvalidation,
+    })
+
+    await manager.resolveRootContext()
+    expect(observationEnvironment.getRoots()).toEqual([
+      { rootPath: realpathSync(rootA), referenceCount: 1 },
+    ])
+    expect(projectInvalidation.getRoots()).toEqual([
+      { rootPath: realpathSync(rootA), referenceCount: 1 },
+    ])
+
+    selectedRoot = rootB
+    await manager.resolveRootContext()
+    expect(observationEnvironment.getRoots()).toEqual([
+      { rootPath: realpathSync(rootB), referenceCount: 1 },
+    ])
+    expect(projectInvalidation.getRoots()).toEqual([
+      { rootPath: realpathSync(rootB), referenceCount: 1 },
+    ])
+
+    available = false
+    const missing = await manager.resolveRootContext()
+    expect(missing.state).toBe('error')
+    expect(observationEnvironment.getRoots()).toEqual([])
+    expect(projectInvalidation.getRoots()).toEqual([])
+    expect(getActiveWatcherCount()).toBe(0)
+    expect(getWatcherRuntimeStatus()).toBeNull()
+
+    const firstDispose = manager.dispose()
+    expect(manager.dispose()).toBe(firstDispose)
+    await firstDispose
+    projectInvalidation.dispose()
+    await observationEnvironment.dispose()
+    expect(getActiveWatcherCount()).toBe(0)
+    expect(getWatcherRuntimeStatus()).toBeNull()
   })
 
   it('serializes concurrent root transitions in request order', async () => {
@@ -509,7 +911,7 @@ describe('PlanningRootServiceManager', () => {
 
     const resolvingA = manager.resolve()
     await vi.waitFor(() => expect(doctorRoot).toHaveBeenCalledTimes(1))
-    const resolvingB = manager.resolveReactive()
+    const resolvingB = manager.resolveRootContextReactive()
     await new Promise((resolve) => setTimeout(resolve, 0))
     const callsBeforeFirstSettled = doctorRoot.mock.calls.length
     firstDoctor.resolve(
@@ -528,10 +930,10 @@ describe('PlanningRootServiceManager', () => {
       })
     )
 
-    const [servicesA, servicesB] = await Promise.all([resolvingA, resolvingB])
+    const [servicesA, stateB] = await Promise.all([resolvingA, resolvingB])
     expect(callsBeforeFirstSettled).toBe(1)
     expect(servicesA.rootContext.planningRoot?.path).toBe(rootA)
-    expect(servicesB.rootContext.planningRoot?.path).toBe(rootB)
+    expect(stateB).toMatchObject({ state: 'ready', data: { planningRoot: { path: rootB } } })
     expect(observationEnvironment.acquireRoot).toHaveBeenCalledTimes(2)
 
     await manager.dispose()

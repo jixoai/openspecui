@@ -49,6 +49,7 @@
     "@types/node": "^22.10.2",
     "@types/ws": "^8.5.13",
     "@types/yargs": "^17.0.35",
+    "openspec-cli-16": "npm:@fission-ai/openspec@1.6.0",
     "tsx": "^4.19.2",
     "tsdown": "^0.16.6",
     "typescript": "^5.7.2",

@@ -20,6 +20,7 @@ import { useLocation } from '@tanstack/react-router'
 import { CheckCircle, Loader2, ShieldCheck } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
+/** Render the root-aware OPSX verification workflow route. */
 export function OpsxVerifyRoute() {
   const location = useLocation()
   const { setConfig } = usePopAreaConfigContext()
@@ -73,7 +74,16 @@ export function OpsxVerifyRoute() {
         }
         const diagnostics = workflowDiagnosticsToText(result)
         if (diagnostics) setCommandError(diagnostics)
-        commands.replaceAll([{ command: result.command, args: result.args }])
+        commands.replaceAll([
+          {
+            command: result.command,
+            args: result.args,
+            stream: {
+              type: 'validate',
+              input: { id: changeId, type: 'change', strict },
+            },
+          },
+        ])
         void commands.runAll()
       } catch (error) {
         setCommandError(error instanceof Error ? error.message : String(error))

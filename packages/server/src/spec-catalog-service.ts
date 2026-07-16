@@ -93,8 +93,11 @@ function referenceListContractError(
   if (!result.data) {
     return result.contractError ?? `OpenSpec returned no Spec list for Store ${storeId}.`
   }
-  const selectedStore = result.data.root?.store_id
-  if (selectedStore !== undefined && selectedStore !== storeId) {
+  const selectedStore = result.data.root?.store_id ?? null
+  if (selectedStore === null) {
+    return `OpenSpec returned no Store provenance for requested Store ${storeId}.`
+  }
+  if (selectedStore !== storeId) {
     return `OpenSpec returned Store ${selectedStore} for requested Store ${storeId}.`
   }
   return result.contractError
@@ -187,19 +190,29 @@ export async function readSpecDocument(
 
   const result = await source.contracts.showSpec(identity.specId, { store: identity.storeId })
   const upstream = showSpecDocument(result)
-  const identityError =
-    upstream && upstream.id !== identity.specId
-      ? `OpenSpec returned Spec ${upstream.id} for requested identity ${identity.specId}.`
-      : undefined
+  const returnedStore = upstream?.root?.store_id ?? null
+  const identityError = (() => {
+    if (upstream && upstream.id !== identity.specId) {
+      return `OpenSpec returned Spec ${upstream.id} for requested identity ${identity.specId}.`
+    }
+    if (upstream && returnedStore === null) {
+      return `OpenSpec returned no Store provenance for requested Store ${identity.storeId}.`
+    }
+    if (upstream && returnedStore !== identity.storeId) {
+      return `OpenSpec returned Store ${returnedStore} for requested Store ${identity.storeId}.`
+    }
+    return undefined
+  })()
+  const ready = result.success && upstream !== null && !identityError
 
   return {
     identity,
     source: 'referenced',
     readOnly: true,
-    state: result.success && upstream !== null && !identityError ? 'ready' : 'error',
+    state: ready ? 'ready' : 'error',
     spec: null,
     rawMarkdown: null,
-    upstream,
+    upstream: ready ? upstream : null,
     evidence: commandEvidence(result, identityError),
   }
 }

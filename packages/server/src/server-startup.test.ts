@@ -1,3 +1,4 @@
+import type { CliCommandResult, CliContext, CliDoctor } from '@openspecui/core'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -33,12 +34,23 @@ vi.mock('@openspecui/core', async () => {
   }
 })
 
-import { FilePreviewService } from './file-preview-service.js'
 import { findAvailablePort } from './port-utils.js'
 import { createServer, startServer, type RunningServer } from './server.js'
 
 const tempDirs: string[] = []
 const runningServers: RunningServer[] = []
+
+function commandResult<T>(data: T): CliCommandResult<T> {
+  return {
+    success: true,
+    stdout: JSON.stringify(data),
+    stderr: '',
+    exitCode: 0,
+    data,
+    payload: data,
+    diagnostics: [],
+  }
+}
 
 afterEach(async () => {
   await Promise.all(runningServers.splice(0).map((server) => server.close()))
@@ -99,28 +111,54 @@ describe('server startup runtime contract', () => {
     expect(coreMockState.startDataHomeObservation).toHaveBeenCalledTimes(1)
   })
 
+  it('continues final teardown after one owner fails and memoizes the result', async () => {
+    coreMockState.acquireObservationRoot.mockResolvedValue(async () => {})
+    coreMockState.disposeObservationEnvironment.mockResolvedValue(undefined)
+    coreMockState.startDataHomeObservation.mockResolvedValue(undefined)
+    coreMockState.disposeDataHomeObservation.mockRejectedValue(
+      new Error('data-home teardown failed')
+    )
+    const projectDir = await createProjectDir()
+    const port = await findAvailablePort(34_600, 100)
+    const started = await startServer({
+      projectDir,
+      port,
+      enableWatcher: false,
+    })
+
+    const firstClose = started.close()
+    expect(started.close()).toBe(firstClose)
+    await expect(firstClose).rejects.toBeInstanceOf(AggregateError)
+    expect(coreMockState.disposeDataHomeObservation).toHaveBeenCalledOnce()
+    expect(coreMockState.disposeProjectInvalidation).toHaveBeenCalledTimes(2)
+    expect(coreMockState.disposeObservationEnvironment).toHaveBeenCalledOnce()
+  })
+
   it('serves prepared preview entry assets and guarded resources through the API route', async () => {
     coreMockState.acquireObservationRoot.mockResolvedValue(async () => {})
     coreMockState.disposeObservationEnvironment.mockResolvedValue(undefined)
     coreMockState.startDataHomeObservation.mockResolvedValue(undefined)
     coreMockState.disposeDataHomeObservation.mockResolvedValue(undefined)
     const projectDir = await createProjectDir()
+    const rootA = join(projectDir, 'planning-a')
+    const rootB = join(projectDir, 'planning-b')
     const previewAssetsDir = join(projectDir, '.preview-assets')
-    await mkdir(join(projectDir, 'openspec', 'changes', 'preview-demo', 'site'), {
+    await mkdir(join(rootA, 'openspec', 'changes', 'preview-demo', 'site'), {
       recursive: true,
     })
-    await mkdir(join(projectDir, 'openspec', 'changes', 'preview-demo', 'docs'), {
+    await mkdir(join(rootA, 'openspec', 'changes', 'preview-demo', 'docs'), {
       recursive: true,
     })
+    await mkdir(join(rootB, 'openspec'), { recursive: true })
     await mkdir(previewAssetsDir, { recursive: true })
     await mkdir(join(previewAssetsDir, 'assets'), { recursive: true })
     await writeFile(
-      join(projectDir, 'openspec', 'changes', 'preview-demo', 'site', 'index.html'),
+      join(rootA, 'openspec', 'changes', 'preview-demo', 'site', 'index.html'),
       '<!doctype html><h1>demo</h1>',
       'utf8'
     )
     await writeFile(
-      join(projectDir, 'openspec', 'changes', 'preview-demo', 'docs', 'guide.pdf'),
+      join(rootA, 'openspec', 'changes', 'preview-demo', 'docs', 'guide.pdf'),
       '%PDF-1.4\n%',
       'utf8'
     )
@@ -135,7 +173,27 @@ describe('server startup runtime contract', () => {
       enableWatcher: false,
       previewAssetsDir,
     })
-    const previewService = new FilePreviewService(projectDir, previewAssetsDir)
+    let selectedRoot = rootA
+    vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
+      available: true,
+      version: '1.6.0',
+    })
+    vi.spyOn(server.cliExecutor.contracts, 'doctorRoot').mockImplementation(async () =>
+      commandResult<CliDoctor>({
+        root: { path: selectedRoot, source: 'nearest', healthy: true, status: [] },
+        store: null,
+        references: [],
+        status: [],
+      })
+    )
+    vi.spyOn(server.cliExecutor.contracts, 'context').mockImplementation(async () =>
+      commandResult<CliContext>({
+        root: { path: selectedRoot, source: 'nearest', role: 'openspec_root' },
+        members: [],
+        status: [],
+      })
+    )
+    const previewService = (await server.planningRootServices.resolve()).filePreviewService
     const preparedHtml = previewService.prepareEntityFilePreview({
       stage: 'change',
       changeId: 'preview-demo',
@@ -146,18 +204,6 @@ describe('server startup runtime contract', () => {
       changeId: 'preview-demo',
       path: 'docs/guide.pdf',
     })
-    const appPreviewService = server.filePreviewService
-    appPreviewService.prepareEntityFilePreview({
-      stage: 'change',
-      changeId: 'preview-demo',
-      path: 'site/index.html',
-    })
-    appPreviewService.prepareEntityFilePreview({
-      stage: 'change',
-      changeId: 'preview-demo',
-      path: 'docs/guide.pdf',
-    })
-
     const removedEntryResponse = await server.app.request(
       new Request(`http://openspecui.test/api/file-preview/${preparedHtml.hash}/html-preview.html`)
     )
@@ -178,6 +224,36 @@ describe('server startup runtime contract', () => {
     await expect(assetResponse.text()).resolves.toContain(
       `/api/file-preview/${preparedPdf.hash}/assets/pdf.worker.min-demo.mjs`
     )
+
+    selectedRoot = rootB
+    const rootBState = await server.planningRootServices.resolveRootContext()
+    expect(rootBState).toMatchObject({
+      state: 'ready',
+      data: { planningRoot: { path: rootB } },
+    })
+    const retiredResponse = await server.app.request(
+      new Request(`http://openspecui.test/api/file-preview/${preparedHtml.hash}/index.html`)
+    )
+    expect(retiredResponse.status).toBe(404)
+
+    selectedRoot = rootA
+    const replacementA = await server.planningRootServices.resolve()
+    const replacementPreview = replacementA.filePreviewService.prepareEntityFilePreview({
+      stage: 'change',
+      changeId: 'preview-demo',
+      path: 'site/index.html',
+    })
+    expect(replacementPreview.hash).not.toBe(preparedHtml.hash)
+    const stillRetiredResponse = await server.app.request(
+      new Request(`http://openspecui.test/api/file-preview/${preparedHtml.hash}/index.html`)
+    )
+    expect(stillRetiredResponse.status).toBe(404)
+    const replacementResponse = await server.app.request(
+      new Request(`http://openspecui.test${replacementPreview.entryPathname}`)
+    )
+    expect(replacementResponse.ok).toBe(true)
+    await server.planningRootServices.dispose()
     server.projectInvalidation.dispose()
+    await server.observationEnvironment.dispose()
   })
 })

@@ -1,10 +1,11 @@
 /**
- * Static Data Provider
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Project one immutable export snapshot through the live provider-shaped API.
+ * 2. Preserve compound Spec identity and source/read-only state in static routes and search.
+ * 3. Reconstruct Dashboard, workflow, schema, template, and entity reads without a backend.
+ * 4. Keep unsupported live mutations and provenance explicitly absent in static mode.
  *
- * Provides data from the static snapshot (data.json) instead of WebSocket subscriptions
- *
- * The snapshot includes fully parsed markdown content generated during export,
- * so specs, changes, and archives can be displayed with proper rendering.
+ * Original request (2026-07-15): "这是额外的工作还是可以和 live 版本保持尽可能的一致？"
  */
 
 import type {
@@ -979,16 +980,19 @@ export async function getConfiguredTools(): Promise<string[]> {
 // OPSX Config data (static mode)
 // =====================
 
+/** Return the exported OPSX project configuration, or null when the snapshot omitted it. */
 export async function getOpsxProjectConfig(): Promise<string | null> {
   const snapshot = await loadSnapshot()
   return snapshot?.opsx?.configYaml ?? null
 }
 
+/** Return all Schema summaries captured in the static snapshot. */
 export async function getOpsxSchemas(): Promise<SchemaInfo[]> {
   const snapshot = await loadSnapshot()
   return snapshot?.opsx?.schemas ?? []
 }
 
+/** Return the static Schema list together with its detail and resolution projections. */
 export async function getOpsxConfigBundle(): Promise<{
   schemas: SchemaInfo[]
   schemaDetails: Record<string, SchemaDetail | null>
@@ -1002,6 +1006,7 @@ export async function getOpsxConfigBundle(): Promise<{
   }
 }
 
+/** Return one exported Schema detail by name. */
 export async function getOpsxSchemaDetail(name?: string): Promise<SchemaDetail | null> {
   if (!name) return null
   const snapshot = await loadSnapshot()
@@ -1009,6 +1014,7 @@ export async function getOpsxSchemaDetail(name?: string): Promise<SchemaDetail |
   return details?.[name] ?? null
 }
 
+/** Return one exported Schema resolution with display paths projected for static presentation. */
 export async function getOpsxSchemaResolution(name?: string): Promise<SchemaResolution | null> {
   if (!name) return null
   const snapshot = await loadSnapshot()
@@ -1036,6 +1042,7 @@ export async function getOpsxSchemaResolution(name?: string): Promise<SchemaReso
   }
 }
 
+/** Return exported templates for the requested Schema, or the snapshot default Schema. */
 export async function getOpsxTemplates(schema?: string): Promise<TemplatesMap | null> {
   const snapshot = await loadSnapshot()
   if (!snapshot?.opsx?.templates) return null
@@ -1076,6 +1083,7 @@ export async function getOpsxTemplates(schema?: string): Promise<TemplatesMap | 
   )
 }
 
+/** Reconstruct the exported file tree for one Schema without enabling mutations. */
 export async function getOpsxSchemaFiles(name?: string): Promise<ChangeFile[] | null> {
   const snapshot = await loadSnapshot()
   if (!snapshot?.opsx) return null
@@ -1124,12 +1132,14 @@ export async function getOpsxSchemaFiles(name?: string): Promise<ChangeFile[] | 
   return entries
 }
 
+/** Return the exported YAML document for one Schema. */
 export async function getOpsxSchemaYaml(name?: string): Promise<string | null> {
   if (!name) return null
   const snapshot = await loadSnapshot()
   return snapshot?.opsx?.schemaYamls?.[name] ?? null
 }
 
+/** Return one exported template document by compound Schema/artifact identity. */
 export async function getOpsxTemplateContent(
   schema?: string,
   artifactId?: string
@@ -1145,6 +1155,7 @@ export async function getOpsxTemplateContent(
   return all[artifactId] ?? null
 }
 
+/** Return all exported template documents for the requested or default Schema. */
 export async function getOpsxTemplateContents(schema?: string): Promise<Record<
   string,
   {
@@ -1189,6 +1200,7 @@ export async function getOpsxTemplateContents(schema?: string): Promise<Record<
   return merged
 }
 
+/** Return all Change ids available in the static snapshot. */
 export async function getOpsxChangeList(): Promise<string[]> {
   const snapshot = await loadSnapshot()
   if (snapshot?.opsx?.changeMetadata) {
@@ -1197,6 +1209,7 @@ export async function getOpsxChangeList(): Promise<string[]> {
   return snapshot?.changes.map((change) => change.id) ?? []
 }
 
+/** Return the exported OPSX metadata document for one Change. */
 export async function getOpsxChangeMetadata(changeId?: string): Promise<string | null> {
   if (!changeId) return null
   const snapshot = await loadSnapshot()
@@ -1207,6 +1220,7 @@ export async function getOpsxChangeMetadata(changeId?: string): Promise<string |
   return null
 }
 
+/** Project one Change status from immutable snapshot artifacts. */
 export async function getOpsxStatus(
   changeId?: string,
   schema?: string
@@ -1219,12 +1233,14 @@ export async function getOpsxStatus(
   return buildChangeStatus(snapshot, change, schema)
 }
 
+/** Project status for every static Change. */
 export async function getOpsxStatusList(): Promise<ChangeStatus[]> {
   const snapshot = await loadSnapshot()
   if (!snapshot) return []
   return snapshot.changes.map((change) => buildChangeStatus(snapshot, change))
 }
 
+/** Return one non-glob artifact output captured for a Change. */
 export async function getOpsxArtifactOutput(
   changeId?: string,
   outputPath?: string
@@ -1240,6 +1256,7 @@ export async function getOpsxArtifactOutput(
   return resolveArtifactOutput(change, outputPath)
 }
 
+/** Return captured files matching one glob artifact output. */
 export async function getOpsxGlobArtifactFiles(
   changeId?: string,
   outputPath?: string
@@ -1255,6 +1272,7 @@ export async function getOpsxGlobArtifactFiles(
   return resolveGlobArtifactFiles(change, outputPath)
 }
 
+/** Build the static search index from exported Specs, Changes, and Archives. */
 export async function getSearchDocuments(): Promise<SearchDocument[]> {
   const snapshot = await loadSnapshot()
   if (!snapshot) return []

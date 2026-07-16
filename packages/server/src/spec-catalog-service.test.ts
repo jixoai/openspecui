@@ -247,4 +247,88 @@ describe('Spec Catalog service', () => {
       ],
     })
   })
+
+  it.each([
+    ['missing', null],
+    [
+      'mismatched',
+      {
+        path: '/stores/platform-b',
+        source: 'store' as const,
+        store_id: 'platform-b',
+      },
+    ],
+  ])('rejects %s Store provenance from referenced list results', async (_label, root) => {
+    const { source, listSpecs } = createSource()
+    source.rootContext.references.splice(1)
+    listSpecs.mockResolvedValueOnce({
+      success: true,
+      stdout: JSON.stringify({ specs: [{ id: 'auth', requirementCount: 1 }], root, status: [] }),
+      stderr: '',
+      exitCode: 0,
+      data: { specs: [{ id: 'auth', requirementCount: 1 }], root, status: [] },
+      payload: { specs: [{ id: 'auth', requirementCount: 1 }], root, status: [] },
+      diagnostics: [],
+    })
+
+    const catalog = await readSpecCatalog(source)
+
+    expect(catalog.entries.filter((entry) => entry.source === 'referenced')).toEqual([])
+    expect(catalog.referenceSources).toEqual([
+      expect.objectContaining({
+        storeId: 'platform-a',
+        state: 'error',
+        evidence: expect.objectContaining({
+          contractError: expect.stringMatching(/platform-a/i),
+        }),
+      }),
+    ])
+  })
+
+  it.each([
+    ['missing', null],
+    [
+      'mismatched',
+      {
+        path: '/stores/platform-b',
+        source: 'store' as const,
+        store_id: 'platform-b',
+      },
+    ],
+  ])('rejects %s Store provenance from referenced show results', async (_label, root) => {
+    const { source, showSpec } = createSource()
+    const data = {
+      id: 'auth',
+      title: 'Wrongly attributed auth',
+      overview: 'This payload must not be relabeled.',
+      requirementCount: 0,
+      requirements: [],
+      metadata: { version: '1.0.0', format: 'openspec' as const },
+      root,
+    }
+    showSpec.mockResolvedValueOnce({
+      success: true,
+      stdout: JSON.stringify(data),
+      stderr: '',
+      exitCode: 0,
+      data,
+      payload: data,
+      diagnostics: [],
+    })
+
+    const document = await readSpecDocument(source, {
+      kind: 'referenced',
+      storeId: 'platform-a',
+      specId: 'auth',
+    })
+
+    expect(document).toMatchObject({
+      state: 'error',
+      source: 'referenced',
+      upstream: null,
+      evidence: {
+        contractError: expect.stringMatching(/platform-a/i),
+      },
+    })
+  })
 })

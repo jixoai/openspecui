@@ -123,7 +123,6 @@ export function createAppRouter(context: AppRouterContext) {
 
 // 让 TanStack Router 类型推断锁定到本模块创建的 router 实例。
 // 必须位于文件顶层（ambient module 声明要求）。
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare module '@tanstack/react-router' {
   interface Register {
     router: ReturnType<typeof createAppRouter>

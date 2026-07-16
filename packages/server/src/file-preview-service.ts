@@ -12,7 +12,7 @@ import {
   type FilePreviewKind,
   type OpsxEntityStage,
 } from '@openspecui/core'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { basename, extname, resolve } from 'node:path'
 import { resolveEntityEntryPath } from './entity-file-paths.js'
@@ -113,6 +113,8 @@ function rewritePreviewAssetPaths(content: string, hash: string): string {
 /** Source-bound entity preview session owner for one project or Planning root. */
 export class FilePreviewService {
   private readonly sessions = new Map<string, PreviewSession>()
+  private readonly sessionNamespace = randomUUID()
+  private disposed = false
 
   constructor(
     private readonly projectDir: string,
@@ -124,6 +126,9 @@ export class FilePreviewService {
     changeId: string
     path: string
   }): PreparedFilePreview {
+    if (this.disposed) {
+      throw new Error('Cannot prepare a preview after its source owner was retired.')
+    }
     const resolved = resolveEntityEntryPath({
       projectDir: this.projectDir,
       stage: input.stage,
@@ -146,7 +151,7 @@ export class FilePreviewService {
     }
 
     const directoryPath = resolve(resolved.absolutePath, '..')
-    const hash = toHash(`${directoryPath}:${mime}`)
+    const hash = toHash(`${this.sessionNamespace}:${directoryPath}:${mime}`)
     const entryFileName = previewKind === 'html' ? null : PREVIEW_ENTRY_FILE_BY_KIND[previewKind]
     const fileName = basename(resolved.absolutePath)
 
@@ -181,6 +186,7 @@ export class FilePreviewService {
     hash: string,
     requestPath: string
   ): { content: Buffer; contentType: string } | null {
+    if (this.disposed) return null
     const session = this.sessions.get(hash)
     if (!session) return null
 
@@ -240,6 +246,8 @@ export class FilePreviewService {
 
   /** Retire every source-bound preview session owned by this service instance. */
   dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
     this.sessions.clear()
   }
 }

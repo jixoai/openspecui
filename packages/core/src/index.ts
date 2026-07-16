@@ -1,4 +1,12 @@
 /**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Expose the public Core package contract through one stable barrel.
+ * 2. Keep filesystem, CLI, Root Context, workflow, and projection types source-distinct.
+ * 3. Publish browser-safe subpath contracts without forcing browser runtimes through this root.
+ *
+ * Original request (2026-07-15): "用强类型合同承载 OpenSpec 1.6 的客观事实。"
+ */
+/**
  * @openspecui/core
  *
  * Core library for OpenSpec file operations, parsing, and validation.
@@ -542,8 +550,12 @@ export {
 export { CliExecutor, type CliResult, type CliStreamEvent } from './cli-executor.js'
 
 export {
+  createPhysicalReactiveDirectory,
+  removePhysicalReactivePath,
+  runPhysicalReactivePathMutation,
   writePhysicalReactiveFile,
   type PhysicalReactiveFileWrite,
+  type PhysicalReactivePathTarget,
 } from './physical-reactive-file-writer.js'
 
 export {

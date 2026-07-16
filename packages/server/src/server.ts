@@ -57,7 +57,6 @@ import {
   getDefaultLocalCt2ModelProfileManifestPath,
 } from './ct2-model-cache-path.js'
 import { CustomSoundService } from './custom-sound-service.js'
-import { FilePreviewService } from './file-preview-service.js'
 import { LlamaModelAssetService } from './llama-model-asset-service.js'
 import {
   getDefaultLocalLlamaModelCacheDir,
@@ -138,10 +137,6 @@ export function createServer(config: ServerConfig) {
   const configManager = new ConfigManager(config.projectDir)
   const globalSettingsManager = new GlobalSettingsManager(config.runtimePaths?.globalSettingsPath)
   const cliExecutor = new CliExecutor(configManager, config.projectDir)
-  const filePreviewService = new FilePreviewService(
-    config.projectDir,
-    config.previewAssetsDir ?? join(__dirname, '..', '..', 'web', 'dist')
-  )
   const observationEnvironment = new ReactiveObservationEnvironment()
   const runtimeInvalidation = new RuntimeInvalidationIndex()
   const projectInvalidation = new RuntimeRootInvalidationRegistry(runtimeInvalidation, [
@@ -372,9 +367,7 @@ export function createServer(config: ServerConfig) {
     const hash = c.req.param('hash')
     const prefix = `/api/file-preview/${hash}/`
     const requestPath = c.req.path.startsWith(prefix) ? c.req.path.slice(prefix.length) : ''
-    const asset =
-      planningRootServices.readPreviewRequest(hash, requestPath) ??
-      filePreviewService.readPreviewRequest(hash, requestPath)
+    const asset = planningRootServices.readPreviewRequest(hash, requestPath)
     if (!asset) {
       return c.notFound()
     }
@@ -462,7 +455,6 @@ export function createServer(config: ServerConfig) {
     customSoundService,
     globalSettingsManager,
     translationCacheService,
-    filePreviewService,
     translationEngineService,
     localModelAssetService,
     localCt2ModelAssetService,
@@ -541,6 +533,16 @@ export async function createWebSocketServer(
 
   let closePromise: Promise<void> | null = null
 
+  const settleCleanupPhase = async (
+    failures: unknown[],
+    tasks: Array<() => void | Promise<void>>
+  ): Promise<void> => {
+    const results = await Promise.allSettled(tasks.map((task) => Promise.resolve().then(task)))
+    for (const result of results) {
+      if (result.status === 'rejected') failures.push(result.reason)
+    }
+  }
+
   return {
     wss,
     ptyWss,
@@ -548,20 +550,30 @@ export async function createWebSocketServer(
     handler,
     close: () => {
       closePromise ??= (async () => {
-        handler.broadcastReconnectNotification()
-        ptyManager.closeAll()
-        ptyWss.close()
-        wss.close()
-        server.watcher?.stop()
-        await server.storeObservationFallback.dispose()
-        await server.planningRootServices.dispose()
-        await server.storeObservation.dispose()
-        await server.dataHomeObserver.dispose()
-        server.storeInvalidation.dispose()
-        server.projectInvalidation.dispose()
-        await server.observationEnvironment.dispose()
-        server.projectRecoveryService.dispose()
-        server.translationCacheService.close()
+        const failures: unknown[] = []
+        await settleCleanupPhase(failures, [
+          () => handler.broadcastReconnectNotification(),
+          () => ptyManager.closeAll(),
+          () => ptyWss.close(),
+          () => wss.close(),
+          () => server.watcher?.stop(),
+        ])
+        await settleCleanupPhase(failures, [() => server.storeObservationFallback.dispose()])
+        await settleCleanupPhase(failures, [() => server.planningRootServices.dispose()])
+        await settleCleanupPhase(failures, [() => server.storeObservation.dispose()])
+        await settleCleanupPhase(failures, [() => server.dataHomeObserver.dispose()])
+        await settleCleanupPhase(failures, [
+          () => server.storeInvalidation.dispose(),
+          () => server.projectInvalidation.dispose(),
+        ])
+        await settleCleanupPhase(failures, [() => server.observationEnvironment.dispose()])
+        await settleCleanupPhase(failures, [
+          () => server.projectRecoveryService.dispose(),
+          () => server.translationCacheService.close(),
+        ])
+        if (failures.length > 0) {
+          throw new AggregateError(failures, 'Server runtime teardown failed.')
+        }
       })()
       return closePromise
     },
@@ -629,6 +641,7 @@ export async function startServer(
   const wsServer = await createWebSocketServer(server, httpServer, {
     projectDir: config.projectDir,
   })
+  let closePromise: Promise<void> | null = null
 
   const url = `http://localhost:${port}`
 
@@ -653,13 +666,29 @@ export async function startServer(
     url,
     port,
     preferredPort,
-    close: async () => {
-      runtimeClosing = true
-      await server.createContext().localModelAssetService.close()
-      await server.createContext().localCt2ModelAssetService.close()
-      await server.createContext().localLlamaModelAssetService.close()
-      await wsServer.close()
-      httpServer.close()
+    close: () => {
+      closePromise ??= (async () => {
+        runtimeClosing = true
+        const context = server.createContext()
+        const modelResults = await Promise.allSettled([
+          Promise.resolve().then(() => context.localModelAssetService.close()),
+          Promise.resolve().then(() => context.localCt2ModelAssetService.close()),
+          Promise.resolve().then(() => context.localLlamaModelAssetService.close()),
+        ])
+        const websocketResults = await Promise.allSettled([
+          Promise.resolve().then(() => wsServer.close()),
+        ])
+        const httpResults = await Promise.allSettled([
+          Promise.resolve().then(() => httpServer.close()),
+        ])
+        const failures = [...modelResults, ...websocketResults, ...httpResults].flatMap((result) =>
+          result.status === 'rejected' ? [result.reason] : []
+        )
+        if (failures.length > 0) {
+          throw new AggregateError(failures, 'Server shutdown failed.')
+        }
+      })()
+      return closePromise
     },
   }
 }

@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Project Planning-root Specs, Changes, and Archives into search documents.
+ * 2. Preserve compound identity for read-only Referenced Specs.
+ * 3. Apply processed document reads without flattening entity provenance.
+ *
+ * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
+ */
 import type { OpenSpecAdapter, OpsxEntityReadOptions, OpsxEntityStage } from '@openspecui/core'
 import {
   specIdentityKey,
@@ -7,6 +15,7 @@ import {
 import type { SearchDocument } from '@openspecui/search'
 import type { DocumentService } from './document-service.js'
 
+/** Resolve stage-specific processed-document options for one searchable entity. */
 export type EntityReadOptionsResolver = (
   stage: OpsxEntityStage,
   id: string
@@ -19,6 +28,7 @@ function joinParts(parts: Array<string | undefined>): string {
     .join('\n\n')
 }
 
+/** Collect the complete search index projection owned by one Planning-root service record. */
 export async function collectSearchDocuments(
   adapter: OpenSpecAdapter,
   documentService?: DocumentService,

@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Own one Planning-root search provider and its rebuild lifecycle.
+ * 2. Rebuild from processed owned documents plus direct Referenced Spec metadata.
+ * 3. Dispose scheduled and worker resources with the owning Planning root.
+ *
+ * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
+ */
 import type { OpenSpecAdapter, OpenSpecWatcher } from '@openspecui/core'
 import type { ReferencedSpecCatalogEntry } from '@openspecui/core/spec-catalog'
 import {
@@ -12,6 +20,7 @@ import { collectSearchDocuments, type EntityReadOptionsResolver } from './search
 
 const REBUILD_DEBOUNCE_MS = 250
 
+/** Search index lifecycle owned by one active Planning-root service record. */
 export class SearchService {
   private provider: SearchProvider
   private initialized = false
@@ -36,6 +45,7 @@ export class SearchService {
     })
   }
 
+  /** Initialize the backing provider exactly once from current Planning-root truth. */
   async init(): Promise<void> {
     if (this.initialized) return
     if (this.initPromise) return this.initPromise
@@ -49,18 +59,21 @@ export class SearchService {
     }
   }
 
+  /** Query the initialized index without forcing a rebuild. */
   async query(input: SearchQuery): Promise<SearchHit[]> {
     const parsed = SearchQuerySchema.parse(input)
     await this.init()
     return this.provider.search(parsed)
   }
 
+  /** Rebuild an initialized index before running a reactive query. */
   async queryReactive(input: SearchQuery): Promise<SearchHit[]> {
     const parsed = SearchQuerySchema.parse(input)
     await this.rebuildIndex()
     return this.provider.search(parsed)
   }
 
+  /** Stop scheduled rebuilds and dispose the backing provider. */
   async dispose(): Promise<void> {
     this.cancelRebuild()
     await this.provider.dispose()
