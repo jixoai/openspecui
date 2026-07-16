@@ -10,7 +10,7 @@ import { z } from 'zod'
 import {
   CliDiagnosticFailureSchema,
   CliDiagnosticSchema,
-  CliReferenceIndexEntrySchema,
+  CliDoctorReferenceEntrySchema,
   CliRootSchema,
 } from './common.js'
 
@@ -155,7 +155,7 @@ export const CliDoctorSchema = z
   .object({
     root: CliDoctorRootSchema.nullable(),
     store: CliDoctorStoreSchema.nullable(),
-    references: z.array(CliReferenceIndexEntrySchema),
+    references: z.array(CliDoctorReferenceEntrySchema),
     status: z.array(CliDiagnosticSchema),
   })
   .passthrough()

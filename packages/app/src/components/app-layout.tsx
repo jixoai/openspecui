@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Provide the persistent App navigation and routed content layout.
+ * 2. Keep project Sessions separate from environment-scoped administration.
+ *
+ * Original request (2026-07-15): "在没有后端的基础上，先把前端的初步工作先完成。"
+ */
 import { Link, Outlet, useRouterState } from '@tanstack/react-router'
 import { Boxes, Home, MonitorSmartphone, Settings, Store, type LucideIcon } from 'lucide-react'
 
@@ -20,6 +27,7 @@ const APP_NAV_ITEMS: AppNavItem[] = [
 
 const SETTINGS_ITEM: AppNavItem = { to: '/settings', icon: Settings, label: 'Settings' }
 
+/** Render the persistent App navigation around the current child route. */
 export function AppLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   // /environment/stores 下的任意子路由都高亮 Environment。

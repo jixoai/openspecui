@@ -12,6 +12,7 @@ type StartCliStream = (
   onEvent: (event: CliStreamEvent) => void
 ) => Promise<() => void> | (() => void)
 
+/** Validation, Archive, cancellation, and event boundaries for one strict Archive stream. */
 export interface StrictArchiveStreamOptions {
   skipValidation: boolean
   startValidate: StartCliStream

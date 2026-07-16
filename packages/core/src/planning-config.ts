@@ -13,6 +13,7 @@ import type { CliResult } from './cli-executor.js'
 import type { OpenSpecDataScope } from './open-spec-data-scope.js'
 import type { RootContextResolvedState } from './root-context.js'
 
+/** Runtime schema for JSON values accepted by OpenSpec global configuration. */
 export const PlanningConfigJsonValueSchema: z.ZodType<CliJsonValue> = z.lazy(() =>
   z.union([
     z.string(),
@@ -24,11 +25,13 @@ export const PlanningConfigJsonValueSchema: z.ZodType<CliJsonValue> = z.lazy(() 
   ])
 )
 
+/** Runtime schema for the complete environment-global OpenSpec configuration document. */
 export const EnvironmentGlobalConfigValueSchema = z.record(
   z.string(),
   PlanningConfigJsonValueSchema
 )
 
+/** Runtime schema for one project-declared Store Reference entry. */
 export const PlanningConfigReferenceSchema = z
   .object({
     id: z.string().min(1),
@@ -36,8 +39,10 @@ export const PlanningConfigReferenceSchema = z
   })
   .strict()
 
+/** Normalized project-declared Store Reference entry. */
 export type PlanningConfigReference = z.infer<typeof PlanningConfigReferenceSchema>
 
+/** Runtime schema for project binding mutations. */
 export const ProjectBindingUpdateSchema = z
   .object({
     store: z.string().min(1).nullable().optional(),
@@ -47,8 +52,10 @@ export const ProjectBindingUpdateSchema = z
     message: 'At least one Project Binding field is required.',
   })
 
+/** Validated project binding mutation. */
 export type ProjectBindingUpdate = z.infer<typeof ProjectBindingUpdateSchema>
 
+/** One configuration file and its current source content. */
 export interface PlanningConfigFile {
   path: string | null
   format: 'yaml' | 'yml' | 'json'
@@ -56,6 +63,7 @@ export interface PlanningConfigFile {
   content: string | null
 }
 
+/** Objective parse or ownership diagnostic for a configuration projection. */
 export interface PlanningConfigDiagnostic {
   code:
     | 'config-unparseable'
@@ -66,22 +74,26 @@ export interface PlanningConfigDiagnostic {
   message: string
 }
 
+/** Project Store binding state without registry inference. */
 export type ProjectBindingStore =
   | { state: 'absent'; id: null }
   | { state: 'declared'; id: string }
   | { state: 'invalid'; id: null }
 
+/** Project Reference declaration state and normalized entries. */
 export interface ProjectBindingReferences {
   state: 'absent' | 'declared' | 'invalid'
   entries: PlanningConfigReference[]
 }
 
+/** Read-only inspection of project binding source and diagnostics. */
 export interface ProjectBindingInspection {
   store: ProjectBindingStore
   references: ProjectBindingReferences
   diagnostics: PlanningConfigDiagnostic[]
 }
 
+/** Writable project binding projection. */
 export interface ProjectBindingConfig {
   kind: 'project-binding'
   owner: { kind: 'launch-project'; path: string }
@@ -90,6 +102,7 @@ export interface ProjectBindingConfig {
   rootPreview: RootContextResolvedState
 }
 
+/** Active Planning-root configuration and CLI-owned root provenance. */
 export interface ActiveRootConfig {
   kind: 'active-root'
   owner: {
@@ -102,6 +115,7 @@ export interface ActiveRootConfig {
   file: PlanningConfigFile
 }
 
+/** Environment-global configuration projection selected by the CLI. */
 export interface EnvironmentGlobalConfig {
   kind: 'environment-global'
   owner: {

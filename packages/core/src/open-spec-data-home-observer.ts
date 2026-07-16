@@ -14,12 +14,14 @@ import {
   type RuntimeInvalidationFacet,
 } from './runtime-invalidation.js'
 
+/** Dependencies required to observe the effective OpenSpec data home. */
 export interface OpenSpecDataHomeObserverOptions {
   dataHomePath: string
   environment: ObservationRootOwner
   invalidation: RuntimeInvalidationController
 }
 
+/** Runtime facets invalidated by effective OpenSpec data-home changes. */
 export const OPEN_SPEC_DATA_HOME_INVALIDATION_FACETS = [
   'stores',
   'worksets',
@@ -27,6 +29,7 @@ export const OPEN_SPEC_DATA_HOME_INVALIDATION_FACETS = [
   'context',
 ] as const satisfies readonly RuntimeInvalidationFacet[]
 
+/** Lifecycle state of effective OpenSpec data-home observation. */
 export type OpenSpecDataHomeObservationState =
   | 'idle'
   | 'starting'

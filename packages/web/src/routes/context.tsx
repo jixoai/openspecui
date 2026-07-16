@@ -11,6 +11,7 @@ import { selectRootContextSnapshot, useContextSubscription } from '@/lib/use-con
 import type { RootContext, RootContextCommandEvidence } from '@openspecui/core'
 import { AlertCircle, FileText, Network, RefreshCw } from 'lucide-react'
 
+/** Render project Root, observed References, registry diagnostics, and raw CLI evidence. */
 export function ContextView() {
   const { data: projection, isLoading, error: transportError } = useContextSubscription()
   const context = selectRootContextSnapshot(projection)

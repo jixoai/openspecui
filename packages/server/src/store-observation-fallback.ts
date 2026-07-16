@@ -17,6 +17,7 @@ import {
 
 const DEFAULT_FALLBACK_INTERVAL_MS = 5_000
 
+/** Dependencies and bounds for watcher-failure Store observation fallback. */
 export interface StoreObservationFallbackOptions {
   invalidation: RuntimeInvalidationController
   dataHomeObservation: {

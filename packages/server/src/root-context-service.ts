@@ -19,12 +19,14 @@ import {
 import { observable } from '@trpc/server/observable'
 import { join } from 'node:path'
 
+/** Server-side dependencies for one Root Context resolution attempt. */
 export interface RootContextServerSource {
   projectDir: string
   cliExecutor: RootContextCli
   now?: () => number
 }
 
+/** Root Context subscription source with runtime invalidation tracking. */
 export interface RootContextSubscriptionSource extends RootContextServerSource {
   runtimeInvalidation: RuntimeInvalidationReader
 }
@@ -37,6 +39,7 @@ function currentAttempt(state: RootContextResolvedState): RootContext {
   return state.state === 'ready' ? state.data : state.attempt
 }
 
+/** Register reactive file dependencies that can change Root Context selection. */
 export async function trackRootContextDependencies(
   source: RootContextServerSource,
   state: RootContextResolvedState

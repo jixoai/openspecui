@@ -1,10 +1,10 @@
 /**
  * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
  * 1. Own every service whose filesystem meaning is scoped to the CLI-selected planning root.
- * 2. Cache service bundles by resolved root without reconstructing root selection.
- * 3. Acquire one environment-owned observation lease for each resolved planning root.
- * 4. Map each connected planning root to project/context invalidation facets.
- * 5. Keep reactive subscriptions bound to Root Context dependencies and current root selection.
+ * 2. Serialize one active-root replacement lifecycle without reconstructing root selection.
+ * 3. Acquire and retire observation/invalidation leases with each active root.
+ * 4. Keep reactive subscriptions bound to Root Context dependencies and current root selection.
+ * 5. Dispose Kernel, hooks, Search, Dashboard, and preview resources exactly once.
  *
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
  */
@@ -29,8 +29,10 @@ import { FilePreviewService } from './file-preview-service.js'
 import { createHookRuntime, type HookRuntime } from './hook-runtime.js'
 import { resolveServerRootContext, trackRootContextDependencies } from './root-context-service.js'
 import { SearchService } from './search-service.js'
+import { readSpecCatalog } from './spec-catalog-service.js'
 import { WorkflowInvocationService } from './workflow-invocation-service.js'
 
+/** Services whose filesystem meaning belongs to the currently selected Planning root. */
 export interface PlanningRootServices {
   rootContext: RootContext
   adapter: OpenSpecAdapter
@@ -47,8 +49,10 @@ interface PlanningRootServiceRecord extends PlanningRootServices {
   observationRelease: Promise<WatcherRootRelease | null>
   projectInvalidationRelease: () => void
   rootContextRef: { current: RootContext }
+  disposePromise: Promise<void> | null
 }
 
+/** Public active-root resolver and preview lifecycle boundary used by the Server router. */
 export interface PlanningRootServiceResolver {
   resolve(): Promise<PlanningRootServices>
   resolveReactive(): Promise<PlanningRootServices>
@@ -59,6 +63,7 @@ export interface PlanningRootServiceResolver {
   dispose(): Promise<void>
 }
 
+/** Root resolution failure that retains the complete failed Root Context state. */
 export class PlanningRootUnavailableError extends Error {
   readonly state: Extract<RootContextResolvedState, { state: 'error' }>
 
@@ -69,6 +74,7 @@ export class PlanningRootUnavailableError extends Error {
   }
 }
 
+/** Runtime dependencies required to own one serialized active Planning root. */
 export interface PlanningRootServiceManagerOptions {
   launchProjectDir: string
   previewAssetsDir: string
@@ -79,9 +85,11 @@ export interface PlanningRootServiceManagerOptions {
   runtimeInvalidation: RuntimeInvalidationReader
 }
 
-/** Deep owner for planning-root filesystem services. */
+/** Serialized deep owner for one replaceable Planning-root service record. */
 export class PlanningRootServiceManager implements PlanningRootServiceResolver {
-  private readonly records = new Map<string, PlanningRootServiceRecord>()
+  private activeRecord: PlanningRootServiceRecord | null = null
+  private transitionTail: Promise<void> = Promise.resolve()
+  private disposed = false
 
   constructor(private readonly options: PlanningRootServiceManagerOptions) {}
 
@@ -115,7 +123,15 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       undefined,
       documentService,
       (stage, id) => buildEntityReadOptions(entityReadOptionsContext, stage, id),
-      () => rootContextRef.current.references
+      async () => {
+        const catalog = await readSpecCatalog({
+          rootContext: rootContextRef.current,
+          adapter,
+          documentService,
+          contracts: this.options.cliExecutor.contracts,
+        })
+        return catalog.entries.filter((entry) => entry.source === 'referenced')
+      }
     )
     const dashboardOverviewService = new DashboardOverviewService((reason) =>
       loadDashboardOverview(
@@ -146,11 +162,47 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
         contracts: this.options.cliExecutor.contracts,
       }),
       rootContextRef,
+      disposePromise: null,
     }
   }
 
-  private servicesFor(state: RootContextResolvedState): PlanningRootServices {
+  private runTransition<T>(task: () => Promise<T>): Promise<T> {
+    const result = this.transitionTail.then(task, task)
+    this.transitionTail = result.then(
+      () => undefined,
+      () => undefined
+    )
+    return result
+  }
+
+  private async disposeRecord(record: PlanningRootServiceRecord): Promise<void> {
+    if (record.disposePromise) return record.disposePromise
+    record.disposePromise = (async () => {
+      record.filePreviewService.dispose()
+      const releaseObservationRoot = await record.observationRelease
+      const results = await Promise.allSettled([
+        Promise.resolve().then(() => record.projectInvalidationRelease()),
+        Promise.resolve().then(() => record.kernel.dispose()),
+        Promise.resolve().then(() => record.dashboardOverviewService.dispose()),
+        record.hookRuntime.dispose(),
+        record.searchService.dispose(),
+        Promise.resolve().then(() => releaseObservationRoot?.()),
+      ])
+      const failures = results.flatMap((result) =>
+        result.status === 'rejected' ? [result.reason] : []
+      )
+      if (failures.length > 0) {
+        throw new AggregateError(failures, 'Planning-root service teardown failed.')
+      }
+    })()
+    return record.disposePromise
+  }
+
+  private async activate(state: RootContextResolvedState): Promise<PlanningRootServices> {
     if (state.state === 'error') {
+      const previous = this.activeRecord
+      this.activeRecord = null
+      if (previous) await this.disposeRecord(previous)
       throw new PlanningRootUnavailableError(state)
     }
 
@@ -159,68 +211,63 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       throw new Error('Root Context reached ready state without a planning root.')
     }
 
-    const existing = this.records.get(rootPath)
-    if (existing) {
-      existing.rootContext = state.data
-      existing.rootContextRef.current = state.data
-      return existing
+    const active = this.activeRecord
+    if (active?.rootContext.planningRoot?.path === rootPath) {
+      active.rootContext = state.data
+      active.rootContextRef.current = state.data
+      return active
     }
 
     const created = this.createRecord(state.data)
-    this.records.set(rootPath, created)
+    this.activeRecord = created
+    if (active) await this.disposeRecord(active)
     return created
   }
 
   async resolve(): Promise<PlanningRootServices> {
-    const state = await resolveServerRootContext({
-      projectDir: this.options.launchProjectDir,
-      cliExecutor: this.options.cliExecutor,
+    return this.runTransition(async () => {
+      if (this.disposed) throw new Error('Planning-root service manager is disposed.')
+      const state = await resolveServerRootContext({
+        projectDir: this.options.launchProjectDir,
+        cliExecutor: this.options.cliExecutor,
+      })
+      return this.activate(state)
     })
-    return this.servicesFor(state)
   }
 
   async resolveReactive(): Promise<PlanningRootServices> {
-    this.options.runtimeInvalidation.track('project', 'context')
-    const state = await resolveServerRootContext({
-      projectDir: this.options.launchProjectDir,
-      cliExecutor: this.options.cliExecutor,
-    })
-    await trackRootContextDependencies(
-      {
+    return this.runTransition(async () => {
+      if (this.disposed) throw new Error('Planning-root service manager is disposed.')
+      this.options.runtimeInvalidation.track('project', 'context')
+      const state = await resolveServerRootContext({
         projectDir: this.options.launchProjectDir,
         cliExecutor: this.options.cliExecutor,
-      },
-      state
-    )
-    return this.servicesFor(state)
+      })
+      await trackRootContextDependencies(
+        {
+          projectDir: this.options.launchProjectDir,
+          cliExecutor: this.options.cliExecutor,
+        },
+        state
+      )
+      return this.activate(state)
+    })
   }
 
   readPreviewRequest(
     hash: string,
     requestPath: string
   ): ReturnType<FilePreviewService['readPreviewRequest']> {
-    for (const record of this.records.values()) {
-      const result = record.filePreviewService.readPreviewRequest(hash, requestPath)
-      if (result) return result
-    }
-    return null
+    return this.activeRecord?.filePreviewService.readPreviewRequest(hash, requestPath) ?? null
   }
 
   async dispose(): Promise<void> {
-    const records = [...this.records.values()]
-    this.records.clear()
-    await Promise.all(
-      records.map(async (record) => {
-        record.projectInvalidationRelease()
-        record.kernel.dispose()
-        record.dashboardOverviewService.dispose()
-        const releaseObservationRoot = await record.observationRelease
-        await Promise.all([
-          record.hookRuntime.dispose(),
-          record.searchService.dispose(),
-          releaseObservationRoot?.(),
-        ])
-      })
-    )
+    await this.runTransition(async () => {
+      if (this.disposed) return
+      this.disposed = true
+      const active = this.activeRecord
+      this.activeRecord = null
+      if (active) await this.disposeRecord(active)
+    })
   }
 }

@@ -992,6 +992,130 @@ Verification and checkpoint state:
 - `pnpm test:browser:ci` passed: xterm-input-panel 60 with one existing skip; Web Storybook 12. Fresh SSG passed while reporting the existing `scroll-button` CSS warning and an ineffective dynamic-import bundling warning.
 - Checkpoints 3.11 and 6.7 remain closed on stronger evidence. Overall progress remains 57/130; no other checkpoint transitioned and no loopback trigger fired.
 
+## Blocking Dual-Axis Re-review: 2026-07-16 committed correction range
+
+Review target: committed range `8b81f7d...8d38f35` on PR #207. All six refreshed remote checks were green. Standards and Spec were reviewed independently against `CLAUDE.md`, `AGENTS.md`, the formal loop artifacts, and the pinned OpenSpec 1.6 source. Passing checks do not discharge the reachable contract defects below.
+
+Standards findings:
+
+- Spec, Change, entity-file, Archive-file, and artifact-output writes use direct `node:fs/promises` writes without updating reactive-fs state. An immediate Adapter read after `writeSpec` returned the old cached content, violating the reactive filesystem and next-action convergence laws.
+- Three Router entity write paths duplicate planning-root resolution, lexical guarding, directory creation, and write behavior. One physical-boundary/reactive-write owner is required so every caller receives the same symlink and cache guarantees.
+- 24 of 59 newly added production files lack the required timestamped orthogonal-intent/original-request header. Several new public contracts also lack API comments. This is tracked explicitly by checkpoint 10.17 rather than being hidden behind passing lint.
+
+Spec findings:
+
+- Public `cli.runCommandStream` and `cli.execute` still accept arbitrary OpenSpec argv. A caller can run `archive <change> --yes --no-validate --store <other>`, bypassing `archiveStrictStream`, Root Context selection, and the single strict Archive mutation law.
+- Referenced Spec Catalog reads `doctor.references[*].specs`, but official OpenSpec 1.6 Doctor explicitly returns only `{ store_id, root, status }`. Real Referenced Catalogs are therefore empty and referenced detail identity checks reject valid Specs; each direct Reference must be enumerated through the typed `list --specs --store --json` contract before Catalog construction.
+- Entity entry guards prove only lexical containment. A symlink below a valid Change or Archive entity can redirect `mkdir`/`writeFile` outside the selected planning root.
+- Direct filesystem mutations can return success while reactive readers and subscribers still hold old cached content until watcher timing happens to repair it.
+- `PlanningRootServiceManager` retains every root-path record until backend teardown. Replacing root A with root B leaves A's watcher lease, invalidation lease, Kernel, hooks, Search, Dashboard, and preview sessions live and readable.
+- The Web changeset says `/context` replaces the project Stores panel under checkpoint 6.9, while both routes remain in navigation and 6.9 is correctly still open. Release metadata must describe the current additive state until replacement is actually complete.
+
+Checkpoint state:
+
+- Reopened 3.11 for physical symlink containment; 4.5 for immediate reactive write settlement; 4.9 for root-record replacement teardown; 5.8, 6.5, and 6.6 for real CLI-backed Referenced Catalog data; and 6.7 for the generic CLI Archive bypass.
+- Checkpoint 6.9 remains open. Checkpoint 10.17 now makes the mandatory file-header/public-contract documentation gate explicit. Progress is 50/131.
+- No loopback trigger fired and no separate change is justified. Every finding is a defect inside the already approved CLI-first, single writable root, reactive convergence, Referenced Spec, and strict Archive boundaries.
+
+Review evidence:
+
+- Focused Core official-fixture/Adapter/Root Context/entity-guard matrix passed 31/31; focused Server Planning-root/Router/tracked-task/strict-Archive/reactive matrix passed 73/73.
+- Symlink reproduction wrote `escape/pwn.md` through a valid lexical entity path and observed the content in the external symlink target.
+- Reactive-cache reproduction read `old`, called `writeSpec(..., 'new')`, then immediately read `old` again while disk contained the new content.
+- `FORMAT_CHECK_BASE_SHA=8b81f7d pnpm format:check` passed across 263 changed files; `git diff --check 8b81f7d...8d38f35` passed. A whole-repository Prettier audit reports 11 pre-existing files outside this PR range and is not attributed to this change.
+- Full local CI was not rerun during this review; the current remote Changeset, CI Scope, Fast Gate, Web browser, xterm browser, and aggregate Browser Gate checks all passed.
+
+## Corrective Worker Goal: 2026-07-16 recurrence-safe closure
+
+This goal supersedes the historical corrective goal at the start of this file, whose Section 2 findings were already implemented and reviewed. Do not repeat that completed scope; use the latest blocking review and reopened checkpoints below as current truth.
+
+Use `openspec-apply-change` with change `target-openspec-cli-16-line`. Read every CLI-reported context file before editing. Preserve the current uncommitted review documentation in `AGENTS.md`, `loop/checkpoints.md`, and this file; it is part of the correction, not disposable reviewer residue.
+
+Goal:
+
+> Close the independent review of PR #207 by replacing endpoint-local fixes with ownership-complete contracts for public Archive execution, physical/reactive filesystem writes, CLI-backed Referenced Catalogs, and Planning-root replacement lifecycle. Correct release metadata and mandatory source documentation, prove each repaired class against its full reachable surface, update PR #207, and stop before checkpoints 6.8+.
+
+Required execution order:
+
+1. Build and record a public capability inventory from Router inputs and all Web/App callers to every `CliExecutor.execute*` path. Make `archiveStrictStream` the only public Archive mutation. Generic execution must reject or delegate protected root-dependent mutations; a new spelling or streaming/buffered sibling must not restore the bypass.
+2. Introduce one physical/reactive entity-write owner shared by Spec, Change, entity-file, Archive-file, artifact-output, and tracked-task paths. Keep lexical validation, add physical ancestor/symlink confinement, write disk first, then settle reactive state before success. Do not claim stronger TOCTOU protection than the implementation provides.
+3. Replace `doctor.references[*].specs` consumption with explicit typed per-Store `list --specs --store --json` enumeration. Preserve direct-only scope, compound identity, read-only state, command evidence, and partial Store failure diagnostics. Use official 1.6 payloads; remove synthetic Doctor fields from fixtures.
+4. Give `PlanningRootServiceManager` one serialized active-root replacement lifecycle. Root A resources and previews must retire when B becomes active without corrupting concurrent in-flight resolution; final backend disposal remains idempotent.
+5. Correct `.changeset/openspec-16-frontend-skeleton.md` so it describes `/context` as additive while 6.9 is open. Complete checkpoint 10.17 across the changed production surface and public contracts without adding placeholder comments.
+6. Re-audit every sibling entry after implementation. Append the inventory, recurrence reflection, focused red/green evidence, residual limits, and exact checkpoint transitions here before changing any checkbox.
+
+Required regression evidence:
+
+- Generic buffered and streamed OpenSpec execution cannot archive, inject `--no-validate`, or choose another Store; `archiveStrictStream` still preserves strict failure, explicit operator skip, cancellation, and indeterminate settlement.
+- Intermediate and final symlink escapes fail before write; valid missing-leaf creation remains functional; no external file is created.
+- Every direct write path returns only after an immediate reactive read sees new bytes, and two subscribers converge without waiting for a watcher event.
+- A pinned executable OpenSpec 1.6 scenario with a Doctor-declared Reference and real Store Specs produces non-empty Store-grouped Catalog/detail results; missing/unhealthy Store evidence remains visible without fabricating Specs.
+- A -> B -> A root replacement releases obsolete watchers, invalidation leases, services, and preview access; concurrent resolution and final teardown leak nothing and dispose once.
+- Focused Core/Server/Web tests pass first, followed by `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`, `pnpm test:browser:ci`, fresh `pnpm --filter @openspecui/web build:ssg`, and `git diff --check`.
+
+Completion boundary:
+
+- Re-close only 3.11, 4.5, 4.9, 5.8, 6.5, 6.6, 6.7, and 10.17 when their evidence is present. Keep 6.9 open unless project Stores is actually replaced in the same reviewed scope.
+- Commit the review documents and implementation together on `feat/openspec-cli-16-contract-baseline`, push PR #207, and return commit SHA, capability inventory, tests, remaining checkpoints, and any residual risk. Do not merge, archive, release, or continue into 6.8+; independent re-review remains required.
+
+## Review Correction Closure: 2026-07-16 ownership-complete contracts
+
+Public CLI capability and caller inventory:
+
+| Public capability                     | Server owner                                                             | Web/App caller                                                         | Archive reachability                                                                 |
+| ------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `cli.executeOpenSpec`                 | buffered OpenSpec argv plus `assertGenericOpenSpecCommandAllowed`        | Config schema creation; Settings Update/profile actions; no App caller | `archive` argv rejected before `CliExecutor.execute`                                 |
+| `cli.executeOpenSpecStream`           | streamed OpenSpec argv plus the same protected-command gate              | `useCliRunner` for literal OpenSpec commands; no App caller            | `archive` argv rejected before process start; client cannot select a wrapper command |
+| `cli.installGlobalCliStream`          | fixed `npm install -g @fission-ai/openspec` command with no client input | Settings explicit `install-global-cli` transport                       | no OpenSpec argv or Archive capability                                               |
+| `cli.initStream`                      | fixed typed Init stream                                                  | existing initialization surface                                        | no client-selected subcommand                                                        |
+| `cli.validate` / `cli.validateStream` | Server-derived Root Context selector and typed validation                | Verify and strict preflight consumers                                  | read-only validation only                                                            |
+| `cli.archiveStrictStream`             | `startStrictArchiveStream` plus one Root Context selector                | Global Archive dedicated transport                                     | only public application Archive mutation RPC                                         |
+
+- Removed public `cli.execute` and `cli.runCommandStream`; the Web runner rejects non-OpenSpec commands unless a dedicated Server transport exists. `CliExecutor.executeCommandStream` remains an internal primitive used by the fixed installer and the dedicated OpenSpec stream. Typed Store, workflow, Root, and config procedures construct their own fixed command families rather than accepting command names from callers.
+- PTY remains the intentionally user-controlled shell and is outside the application Archive RPC contract. This boundary is not an operating-system command sandbox. The configured OpenSpec runner is likewise an operator-owned trust boundary; the public command gate governs official OpenSpec argv and cannot prove the semantics of a malicious replacement executable.
+
+Shared owners introduced:
+
+1. `public-cli-execution.ts` owns the protected OpenSpec argv policy used by both buffered and streamed RPCs; `archiveStrictStream` owns Root Context selection, strict validation, explicit operator skip, Archive start, cancellation, and settlement.
+2. `physical-reactive-file-writer.ts` owns lexical containment, existing-ancestor physical confinement, disk write, and post-write reactive settlement. `OpenSpecAdapter.writeSpec`, `writeChange`, and `writeEntityFile` delegate to it; Router entity/Archive/artifact writers and tracked-task mutation delegate through the Adapter.
+3. `spec-catalog-service.ts` owns direct Reference enumeration and detail. It lists each Doctor-declared Store through typed `listSpecs({ store })`, retains per-Store list evidence, validates compound identity before typed `showSpec`, and lets Search consume the same Catalog entries.
+4. `PlanningRootServiceManager` owns one serialized active record. A -> B -> A and root disappearance retire observation/invalidation leases, Kernel, hooks, Search, Dashboard, and preview state before the transition resolves; final disposal is idempotent.
+
+Recurrence reflection and regression evidence:
+
+- Earlier Archive corrections removed one endpoint at a time while generic buffered/streamed execution remained. Against `8d38f35`, all six canonical/global-prefix/argument-separator generic Archive rejection tests failed. Both current OpenSpec RPCs now share one gate, the public arbitrary-command route is absent, and the Web transport cannot choose `node`, a shell, or another wrapper.
+- Earlier path guards proved only lexical syntax and task mutation alone updated one reactive cache. Against `8d38f35`, an intermediate-directory symlink wrote outside the Planning root and an immediate reactive read returned old bytes. The shared writer now rejects intermediate and final target symlinks, supports missing-leaf creation, settles file/directory/exists/stat projections after disk success, and converges two subscribers without watcher timing.
+- Earlier synthetic Doctor fixtures embedded a nonexistent `specs` field. Against `8d38f35`, three of four real-contract Catalog tests failed: Referenced entries were empty, valid detail was rejected, and a partial Store failure erased healthy results. Doctor and Instructions types are now physically distinct; the pinned 1.6 fixture supplies a Doctor Store id and real per-Store list output, while partial failures retain evidence beside healthy Store groups.
+- Earlier teardown covered backend disposal but retained every Planning-root record. Against `8d38f35`, both A -> B lease release and concurrent transition tests failed. The manager now serializes transition requests, disposes the replaced record, removes stale preview access, handles root disappearance, and disposes every resource once.
+
+Focused green evidence after the final public CLI correction:
+
+- Core correction matrix: 6 files, 72/72 passed (`adapter`, entity guard, reactive-fs, CLI command result, official 1.6 fixture, Spec Catalog).
+- Server correction matrix: 5 files, 89/89 passed (Planning-root lifecycle, Router/public CLI, Search, Spec Catalog, strict Archive).
+- Web correction matrix: 3 files, 11/11 passed (CLI runner, Spec list, Spec detail). App skeleton suite: 18 files, 78/78 passed.
+- Core, Server, Web, and App package typechecks passed. The production-header audit found no missing timestamped intent/original-request header among added non-test TS/TSX files, and the new public contracts carry API comments.
+
+Full update-PR gate evidence:
+
+- `pnpm format:check` passed across 88 changed files; `pnpm lint:ci` passed across 816 files with zero warnings/errors; `pnpm typecheck` passed all 15 runnable workspace packages.
+- `pnpm test:ci` exited zero: Root 43, Core 427, Server 295, Web 623, App 78, CLI 49, and every remaining workspace package passed.
+- `pnpm test:browser:ci` exited zero: xterm-input-panel 60 passed with one existing skip; Web Storybook 12/12 passed.
+- Removed `packages/web/dist-ssg` and `packages/web/.vite`, then `pnpm --filter @openspecui/web build:ssg` exited zero. It retained only the existing unsupported `scroll-button` pseudo-element warning and ineffective dynamic-import warning.
+- `git diff --check` passed. These slice-level gate results do not close final acceptance checkpoints 10.10-10.16 while later product phases remain open.
+
+Residual limits:
+
+- Physical confinement uses pre-write `realpath`/`lstat` checks and is not race-free `openat`/directory-handle-relative I/O. Hard-link aliases are not distinguishable by `realpath`; macOS symlink behavior is directly covered, while other platforms remain CI evidence.
+- Per-Store Reference list calls are independent observations, not one cross-Store atomic snapshot. A failing Store remains explicit and does not erase healthy entries.
+- Immediate reactive settlement covers OpenSpecUI-owned direct writes. External mutations still converge through watcher-first observation and the bounded missing-path/watcher-failure fallback.
+- The public OpenSpec gate recognizes the official `archive` command spelling. A configured replacement executable and the explicit PTY shell are trusted operator capabilities, not adversarially sandboxed processes.
+
+Checkpoint state:
+
+- Re-closed 3.11, 4.5, 4.9, 5.8, 6.5, 6.6, 6.7, and 10.17. Progress is 58/131.
+- Checkpoint 6.9 remains open because `/context` is additive and the project Stores panel still exists. Checkpoints 6.8+ remain paused, and PR #207 requires full local gates plus a new independent review before any merge decision.
+- No loopback trigger fired. The corrections implement the already approved CLI-first, one-writable-root, reactive, direct-Reference, and strict Archive laws without changing product scope or security posture.
+
 ## Decisions Taken
 
 The following approved decisions constrain implementation:

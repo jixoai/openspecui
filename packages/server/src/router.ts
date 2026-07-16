@@ -116,7 +116,6 @@ import {
   touchDashboardGitRefreshStamp,
   type DashboardGitTaskStatus,
 } from './dashboard-overview.js'
-import { resolveEntityEntryPath } from './entity-file-paths.js'
 import { buildEntityReadOptions } from './entity-read-options.js'
 import { invalidateGitPanelCache } from './git-panel-cache.js'
 import {
@@ -147,6 +146,7 @@ import {
 } from './planning-config-service.js'
 import type { PlanningRootServiceResolver, PlanningRootServices } from './planning-root-service.js'
 import type { ProjectRecoveryService } from './project-recovery-service.js'
+import { assertGenericOpenSpecCommandAllowed } from './public-cli-execution.js'
 import { reactiveKV } from './reactive-kv.js'
 import { createReactiveSubscription } from './reactive-subscription.js'
 import { createRootContextSubscription, resolveServerRootContext } from './root-context-service.js'
@@ -1382,17 +1382,9 @@ export const changeRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { rootContext } = await resolvePlanningRoot(ctx)
-      const projectDir = rootContext.planningRoot?.path
-      if (!projectDir) throw new Error('Planning root is unavailable.')
-      const info = resolveEntityEntryPath({
-        projectDir,
-        stage: 'change',
-        changeId: input.id,
-        path: input.path,
-      })
-      await mkdir(dirname(info.absolutePath), { recursive: true })
-      await writeFile(info.absolutePath, input.content, 'utf-8')
+      await (
+        await resolvePlanningRoot(ctx)
+      ).adapter.writeEntityFile('change', input.id, input.path, input.content)
       return { success: true }
     }),
 
@@ -1494,17 +1486,9 @@ export const archiveRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { rootContext } = await resolvePlanningRoot(ctx)
-      const projectDir = rootContext.planningRoot?.path
-      if (!projectDir) throw new Error('Planning root is unavailable.')
-      const info = resolveEntityEntryPath({
-        projectDir,
-        stage: 'archive',
-        changeId: input.id,
-        path: input.path,
-      })
-      await mkdir(dirname(info.absolutePath), { recursive: true })
-      await writeFile(info.absolutePath, input.content, 'utf-8')
+      await (
+        await resolvePlanningRoot(ctx)
+      ).adapter.writeEntityFile('archive', input.id, input.path, input.content)
       return { success: true }
     }),
 
@@ -1763,24 +1747,17 @@ export const cliRouter = router({
     })
   }),
 
-  /** 流式执行任意命令（用于前端通用终端） */
-  runCommandStream: publicProcedure
-    .input(
-      z.object({
-        command: z.string(),
-        args: z.array(z.string()).default([]),
-      })
-    )
+  /** Stream one OpenSpec command through the configured CLI runner. */
+  executeOpenSpecStream: publicProcedure
+    .input(z.object({ args: z.array(z.string()).default([]) }))
     .subscription(({ ctx, input }) => {
       return createCliStreamObservable(async (onEvent) => {
-        if (input.command !== 'openspec') {
-          return ctx.cliExecutor.executeCommandStream([input.command, ...input.args], onEvent)
-        }
+        assertGenericOpenSpecCommandAllowed(input.args)
         return streamOpenSpecCliMutation(
           ctx,
           input.args,
           (mutationEvent) =>
-            ctx.cliExecutor.executeCommandStream([input.command, ...input.args], mutationEvent),
+            ctx.cliExecutor.executeCommandStream(['openspec', ...input.args], mutationEvent),
           onEvent
         )
       })
@@ -1914,9 +1891,11 @@ export const cliRouter = router({
       })
     }),
 
-  execute: publicProcedure
+  /** Execute one buffered OpenSpec command through the configured CLI runner. */
+  executeOpenSpec: publicProcedure
     .input(z.object({ args: z.array(z.string()) }))
     .mutation(async ({ ctx, input }) => {
+      assertGenericOpenSpecCommandAllowed(input.args)
       return runOpenSpecCliMutation(ctx, input.args, () => ctx.cliExecutor.execute(input.args))
     }),
 
@@ -2356,17 +2335,9 @@ export const opsxRouter = router({
   writeArtifactOutput: publicProcedure
     .input(z.object({ changeId: z.string(), outputPath: z.string(), content: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const { rootContext } = await resolvePlanningRoot(ctx)
-      const projectDir = rootContext.planningRoot?.path
-      if (!projectDir) throw new Error('Planning root is unavailable.')
-      const info = resolveEntityEntryPath({
-        projectDir,
-        stage: 'change',
-        changeId: input.changeId,
-        path: input.outputPath,
-      })
-      await mkdir(dirname(info.absolutePath), { recursive: true })
-      await writeFile(info.absolutePath, input.content, 'utf-8')
+      await (
+        await resolvePlanningRoot(ctx)
+      ).adapter.writeEntityFile('change', input.changeId, input.outputPath, input.content)
       return { success: true }
     }),
 })

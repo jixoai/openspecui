@@ -159,6 +159,7 @@ export {
   type ReferencedSpecIdentity,
   type SpecCatalog,
   type SpecCatalogEntry,
+  type SpecCatalogReferenceSource,
   type SpecCommandEvidence,
   type SpecDocumentProjection,
   type SpecIdentity,
@@ -541,6 +542,11 @@ export {
 export { CliExecutor, type CliResult, type CliStreamEvent } from './cli-executor.js'
 
 export {
+  writePhysicalReactiveFile,
+  type PhysicalReactiveFileWrite,
+} from './physical-reactive-file-writer.js'
+
+export {
   CliApplyInstructionsSchema,
   CliArchiveSchema,
   CliArtifactInstructionsSchema,
@@ -548,6 +554,7 @@ export {
   CliContextSchema,
   CliDiagnosticFailureSchema,
   CliDiagnosticSchema,
+  CliDoctorReferenceEntrySchema,
   CliDoctorSchema,
   CliReferenceIndexEntrySchema,
   CliRootSchema,
@@ -573,6 +580,7 @@ export {
   type CliDiagnostic,
   type CliDiagnosticFailure,
   type CliDoctor,
+  type CliDoctorReferenceEntry,
   type CliJsonValue,
   type CliReferenceIndexEntry,
   type CliRoot,

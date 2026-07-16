@@ -19,6 +19,7 @@ const STATIC_PENDING_ROOT_CONTEXT: RootContextState = {
   observedAt: 0,
 }
 
+/** Root Context subscription lifecycle consumed by project workspace views. */
 export type ContextSubscriptionState = SubscriptionState<RootContextState>
 
 /** Select renderable current or stale data without hiding the latest failed CLI attempt. */
@@ -29,6 +30,7 @@ export function selectRootContextSnapshot(state: RootContextState | undefined): 
   return state.data
 }
 
+/** Subscribe to live Root Context or hydrate the equivalent static projection. */
 export function useContextSubscription(): ContextSubscriptionState {
   return useSubscription<RootContextState>(
     (callbacks) =>

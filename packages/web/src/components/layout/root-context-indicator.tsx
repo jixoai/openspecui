@@ -12,6 +12,7 @@ import { VTLink } from '@/lib/view-transitions/navigation'
 import { AlertCircle, Folder, GitBranch, RefreshCw } from 'lucide-react'
 import { Tooltip } from '../tooltip'
 
+/** Compact shell projection for launch-project and active Planning-root identity. */
 export interface RootContextIndicatorProps {
   variant: 'sidebar' | 'mobile'
   collapsed?: boolean

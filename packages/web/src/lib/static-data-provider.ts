@@ -580,7 +580,7 @@ function snapshotChangeToChange(snapChange: ExportSnapshot['changes'][0]): Chang
 /** Get the source-aware static Spec Catalog. */
 export async function getSpecCatalog(): Promise<SpecCatalog> {
   const snapshot = await loadSnapshot()
-  if (!snapshot) return { entries: [], observedAt: 0 }
+  if (!snapshot) return { entries: [], referenceSources: [], observedAt: 0 }
 
   return {
     entries: snapshot.specs.map((spec) => ({
@@ -591,6 +591,7 @@ export async function getSpecCatalog(): Promise<SpecCatalog> {
       summary: null,
       updatedAt: spec.updatedAt,
     })),
+    referenceSources: [],
     observedAt: Date.parse(snapshot.meta.timestamp) || 0,
   }
 }

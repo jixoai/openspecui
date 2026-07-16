@@ -9,10 +9,13 @@
 import { homedir as getHomeDirectory, platform as getPlatform } from 'node:os'
 import { posix, win32 } from 'node:path'
 
+/** Directory name appended to the selected platform user-data root. */
 export const OPEN_SPEC_DATA_DIRECTORY_NAME = 'openspec'
 
+/** Provenance categories for the effective OpenSpec user-data root. */
 export type OpenSpecDataScopeSource = 'xdg-data-home' | 'local-app-data' | 'user-home-default'
 
+/** Effective OpenSpec user-data root and its selection provenance. */
 export interface OpenSpecDataScope {
   /** Effective OpenSpec user-data root used by the inherited process environment. */
   path: string
@@ -22,6 +25,7 @@ export interface OpenSpecDataScope {
   environmentVariable: 'XDG_DATA_HOME' | 'LOCALAPPDATA' | null
 }
 
+/** Optional process/platform inputs used to resolve OpenSpec data scope deterministically. */
 export interface ResolveOpenSpecDataScopeOptions {
   env?: NodeJS.ProcessEnv
   platform?: NodeJS.Platform

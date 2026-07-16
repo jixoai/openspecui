@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Preserve the existing multi-tab HostedShell as the project Sessions surface.
+ * 2. Reuse router-owned launch parameters without reparsing them.
+ *
+ * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ */
 import { HostedShell } from '../components/hosted-shell'
 import { useRouterContext } from '../lib/use-router-context'
 

@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Register App-native Connections, Environment, Sessions, Settings, and Store routes.
+ * 2. Preserve one typed launch context across the App route tree.
+ *
+ * Original request (2026-07-15): "在没有后端的基础上，先把前端的初步工作先完成。"
+ */
 import {
   createRootRouteWithContext,
   createRoute,
@@ -103,6 +110,7 @@ const routeTree = rootRoute.addChildren([
   storeInventoryRoute,
 ])
 
+/** Create one App router instance with its launch context injected at the root. */
 export function createAppRouter(context: AppRouterContext) {
   const router = createRouter({
     routeTree,

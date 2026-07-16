@@ -8,6 +8,7 @@
  */
 
 export type OpenSpecEntityIdField = 'changeId' | 'specId'
+/** Public field names accepted by OpenSpec entity path validation. */
 export type OpenSpecEntityPathField = 'outputPath' | 'path'
 
 /** Return one path-safe OpenSpec entity id or reject it before filesystem access. */

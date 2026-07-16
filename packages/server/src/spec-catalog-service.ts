@@ -8,8 +8,11 @@
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
  */
 import type {
+  CliCommandResult,
+  CliDoctorReferenceEntry,
   CliExecutor,
   CliShowSpec,
+  CliSpecList,
   OpenSpecAdapter,
   OpenSpecCliContractExecutor,
   RootContext,
@@ -18,23 +21,27 @@ import {
   buildSpecCatalog,
   type CliShowSpecDocument,
   type SpecCatalog,
+  type SpecCatalogReferenceSource,
   type SpecCommandEvidence,
   type SpecDocumentProjection,
   type SpecIdentity,
 } from '@openspecui/core/spec-catalog'
 import type { DocumentService } from './document-service.js'
 
+/** Planning-root and CLI dependencies required to build/read the shared Spec Catalog. */
 export interface SpecCatalogServiceSource {
   rootContext: RootContext
   adapter: Pick<OpenSpecAdapter, 'listSpecsWithMeta'>
   documentService: Pick<DocumentService, 'readSpec' | 'readSpecRaw'>
-  contracts: Pick<OpenSpecCliContractExecutor, 'showSpec'>
+  contracts: Pick<OpenSpecCliContractExecutor, 'listSpecs' | 'showSpec'>
 }
 
+/** Optional clock injection for deterministic Catalog observation timestamps. */
 export interface ReadSpecCatalogOptions {
   now?: () => number
 }
 
+/** Exact compound identity was absent from the current direct project Catalog. */
 export class SpecCatalogIdentityNotFoundError extends Error {
   constructor(readonly identity: SpecIdentity) {
     super('The requested Spec identity is not present in the active project catalog.')
@@ -47,16 +54,24 @@ export async function readSpecCatalog(
   source: SpecCatalogServiceSource,
   options: ReadSpecCatalogOptions = {}
 ): Promise<SpecCatalog> {
-  const owned = await source.adapter.listSpecsWithMeta()
+  const [owned, references] = await Promise.all([
+    source.adapter.listSpecsWithMeta(),
+    Promise.all(
+      source.rootContext.references.map((reference) => enumerateReference(source, reference))
+    ),
+  ])
   return buildSpecCatalog({
     owned,
-    references: source.rootContext.references,
+    referenced: references.flatMap((reference) =>
+      reference.state === 'ready' ? [{ storeId: reference.storeId, specs: reference.specs }] : []
+    ),
+    referenceSources: references.map(({ specs: _specs, ...reference }) => reference),
     observedAt: (options.now ?? Date.now)(),
   })
 }
 
-function commandEvidence(
-  result: Awaited<ReturnType<CliExecutor['contracts']['showSpec']>>,
+function commandEvidence<T>(
+  result: CliCommandResult<T>,
   contractError?: string
 ): SpecCommandEvidence {
   return {
@@ -71,6 +86,40 @@ function commandEvidence(
   }
 }
 
+function referenceListContractError(
+  result: CliCommandResult<CliSpecList>,
+  storeId: string
+): string | undefined {
+  if (!result.data) {
+    return result.contractError ?? `OpenSpec returned no Spec list for Store ${storeId}.`
+  }
+  const selectedStore = result.data.root?.store_id
+  if (selectedStore !== undefined && selectedStore !== storeId) {
+    return `OpenSpec returned Store ${selectedStore} for requested Store ${storeId}.`
+  }
+  return result.contractError
+}
+
+interface EnumeratedReference extends SpecCatalogReferenceSource {
+  specs: CliSpecList['specs']
+}
+
+async function enumerateReference(
+  source: SpecCatalogServiceSource,
+  reference: CliDoctorReferenceEntry
+): Promise<EnumeratedReference> {
+  const result = await source.contracts.listSpecs({ store: reference.store_id })
+  const contractError = referenceListContractError(result, reference.store_id)
+  const ready = result.success && result.data !== null && contractError === undefined
+  return {
+    storeId: reference.store_id,
+    state: ready ? 'ready' : 'error',
+    diagnostics: reference.status,
+    evidence: commandEvidence(result, contractError),
+    specs: ready ? result.data!.specs : [],
+  }
+}
+
 function isShowSpecDocument(data: CliShowSpec | null): data is CliShowSpecDocument {
   return data !== null && 'id' in data && typeof data.id === 'string'
 }
@@ -81,12 +130,14 @@ function showSpecDocument(
   return isShowSpecDocument(result.data) ? result.data : null
 }
 
-function isDirectReference(source: SpecCatalogServiceSource, identity: SpecIdentity): boolean {
-  if (identity.kind !== 'referenced') return true
-  return source.rootContext.references.some(
-    (reference) =>
-      reference.store_id === identity.storeId &&
-      reference.specs?.some((spec) => spec.id === identity.specId)
+function getDirectReference(
+  source: SpecCatalogServiceSource,
+  identity: SpecIdentity
+): CliDoctorReferenceEntry | null {
+  if (identity.kind !== 'referenced') return null
+  return (
+    source.rootContext.references.find((reference) => reference.store_id === identity.storeId) ??
+    null
   )
 }
 
@@ -112,7 +163,25 @@ export async function readSpecDocument(
     }
   }
 
-  if (!isDirectReference(source, identity)) {
+  const reference = getDirectReference(source, identity)
+  if (!reference) {
+    throw new SpecCatalogIdentityNotFoundError(identity)
+  }
+
+  const enumeration = await enumerateReference(source, reference)
+  if (enumeration.state === 'error') {
+    return {
+      identity,
+      source: 'referenced',
+      readOnly: true,
+      state: 'error',
+      spec: null,
+      rawMarkdown: null,
+      upstream: null,
+      evidence: enumeration.evidence,
+    }
+  }
+  if (!enumeration.specs.some((spec) => spec.id === identity.specId)) {
     throw new SpecCatalogIdentityNotFoundError(identity)
   }
 

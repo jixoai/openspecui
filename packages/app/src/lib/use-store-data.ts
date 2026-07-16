@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Define the App data seam for Store list, Doctor, and mutation projections.
+ * 2. Keep Store truth and mutation lifecycle backend-owned.
+ *
+ * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
+ */
 import type { StoreDoctorResult, StoreListResult } from '@openspecui/core/store-types'
 import type { StoreInspectorProjection, StoreInventoryProjection } from '../types/root-context'
 import type { StoreMutation } from '../types/store-mutation'
@@ -28,6 +35,7 @@ export interface StoreDataState {
   recentMutations: StoreMutation[]
 }
 
+/** Read Store list, Doctor, and backend-owned mutation projections for the selected environment. */
 export function useStoreData(): StoreDataState {
   // TODO(kernel): 待 backend store 投影协议落地，替换为真实订阅（push invalidation -> client pull）。
   //               当前骨架无数据源，返回空投影 + 非加载态。

@@ -72,6 +72,7 @@ export async function resolveGitRepositoryDescriptor(
   }
 }
 
+/** Return whether two filesystem locations resolve to the same Git repository identity. */
 export function isSameGitRepositoryIdentity(
   left: GitRepositoryIdentity | null,
   right: GitRepositoryIdentity | null

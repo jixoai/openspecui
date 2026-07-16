@@ -10,8 +10,9 @@ Context subscription, and the three task projections have migrated to the
 shared Core contract. The source-aware Spec Catalog now uses one Core identity
 contract across Server, Web, Search, View Transitions, and static providers.
 
-- **Project Context view** (`/context`, 6.9): replaces the project Stores panel as
-  the root/Reference/registry read-only diagnostics surface. Uses neutral
+- **Project Context view** (`/context`, additive while 6.9 remains open): adds a
+  root/Reference/registry read-only diagnostics surface alongside the existing
+  project Stores panel. Uses neutral
   "observed references" / "no reference currently observed" copy — never claims
   machine-wide completeness.
 - **Global Root Context identity** (6.1): desktop and mobile shells display the

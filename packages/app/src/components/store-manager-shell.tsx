@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Compose Inspector, Context Matrix, and Inventory as sibling Store views.
+ * 2. Keep Store Manager explicitly experimental.
+ *
+ * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
+ */
 import { Link, useRouterState } from '@tanstack/react-router'
 import { Columns3, FlaskConical, List, Search } from 'lucide-react'
 import type { ReactNode } from 'react'

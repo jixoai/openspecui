@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Reserve the App settings surface for hosted protocol and environment diagnostics.
+ * 2. Keep the optional Access Gate distinct from users or permissions.
+ *
+ * Original request (2026-07-15): "前端缺少的东西你可以通过注释补充。"
+ */
 import { Settings } from 'lucide-react'
 
 /**

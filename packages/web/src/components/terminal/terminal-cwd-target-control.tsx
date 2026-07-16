@@ -23,6 +23,7 @@ interface TerminalCwdTargetControlProps {
 
 const TARGETS: readonly TerminalCwdTarget[] = ['launch-project', 'planning-root']
 
+/** Select launch-project or Planning-root cwd while displaying its explicit identity. */
 export function TerminalCwdTargetControl({
   value,
   state,

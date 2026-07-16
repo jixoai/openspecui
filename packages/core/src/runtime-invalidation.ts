@@ -8,6 +8,7 @@
  */
 import { ReactiveState } from './reactive-fs/reactive-state.js'
 
+/** Complete runtime projection facet vocabulary. */
 export const RUNTIME_INVALIDATION_FACETS = [
   'project',
   'stores',
@@ -16,15 +17,19 @@ export const RUNTIME_INVALIDATION_FACETS = [
   'context',
 ] as const
 
+/** One invalidatable runtime projection facet. */
 export type RuntimeInvalidationFacet = (typeof RUNTIME_INVALIDATION_FACETS)[number]
 
+/** Monotonic invalidation identity for one runtime facet. */
 export interface RuntimeInvalidationToken {
   facet: RuntimeInvalidationFacet
   generation: number
 }
 
+/** Listener notified with invalidation identities rather than projected data. */
 export type RuntimeInvalidationListener = (tokens: RuntimeInvalidationToken[]) => void
 
+/** Read/subscribe surface for runtime invalidation identities. */
 export interface RuntimeInvalidationReader {
   track(...facets: RuntimeInvalidationFacet[]): RuntimeInvalidationToken[]
   subscribe(
@@ -33,6 +38,7 @@ export interface RuntimeInvalidationReader {
   ): () => void
 }
 
+/** Mutable runtime invalidation surface used by backend owners. */
 export interface RuntimeInvalidationController extends RuntimeInvalidationReader {
   invalidate(facets: readonly RuntimeInvalidationFacet[]): RuntimeInvalidationToken[]
 }

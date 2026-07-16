@@ -18,6 +18,7 @@ import {
   CliContextSchema,
   CliDiagnosticFailureSchema,
   CliDoctorSchema,
+  CliSpecListSchema,
   CliStoreDoctorSchema,
   CliStoreMutationSchema,
 } from './cli-contracts/index.js'
@@ -272,10 +273,27 @@ describe('official executable OpenSpec CLI fixtures', () => {
 
       const declaredResult = await runCli('1.6.0', ['doctor', '--json'], launch, env)
       expectExit(declaredResult, 0)
-      expect(parseJson(declaredResult, CliDoctorSchema).root).toMatchObject({
+      const declaredDoctor = parseJson(declaredResult, CliDoctorSchema)
+      expect(declaredDoctor.root).toMatchObject({
         path: team,
         source: 'declared',
         store_id: 'team',
+      })
+      expect(declaredDoctor.references).toEqual([
+        { store_id: 'platform', root: platform, status: [] },
+      ])
+      expect(declaredDoctor.references[0]).not.toHaveProperty('specs')
+
+      const referencedSpecsResult = await runCli(
+        '1.6.0',
+        ['list', '--specs', '--store', 'platform', '--json'],
+        launch,
+        env
+      )
+      expectExit(referencedSpecsResult, 0)
+      expect(parseJson(referencedSpecsResult, CliSpecListSchema)).toMatchObject({
+        specs: [{ id: 'identity', requirementCount: 1 }],
+        root: { path: platform, source: 'store', store_id: 'platform' },
       })
 
       const explicitResult = await runCli(

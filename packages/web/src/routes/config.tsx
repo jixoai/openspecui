@@ -671,7 +671,7 @@ export function Config() {
 
   const createSchemaMutation = useMutation({
     mutationFn: async (args: string[]) => {
-      return trpcClient.cli.execute.mutate({ args })
+      return trpcClient.cli.executeOpenSpec.mutate({ args })
     },
     onSuccess: () => {
       setSchemaActionError(null)

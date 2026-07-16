@@ -1,10 +1,28 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Cache reactive file, directory, existence, and stat reads.
+ * 2. Bind cached reads to shared watcher roots and missing-path fallback checks.
+ * 3. Settle relevant cached projections synchronously after owned filesystem writes.
+ * 4. Release watcher, polling, state, and refresh registrations together.
+ *
+ * Original request (2026-07-16): "direct filesystem mutations update reactive state before returning."
+ */
 import { readFile, readdir, stat } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { ReactiveState } from './reactive-state.js'
 import { acquireWatcher, isWatcherPoolInitialized } from './watcher-pool.js'
 
 /** 状态缓存：路径 -> ReactiveState */
 const stateCache = new Map<string, ReactiveState<unknown>>()
+
+interface CacheRefreshRegistration {
+  kind: 'file' | 'directory' | 'exists' | 'stat'
+  path: string
+  refresh: () => Promise<void>
+}
+
+/** Cache refreshers retained so owned writes can settle projections without watcher timing. */
+const refreshCache = new Map<string, CacheRefreshRegistration>()
 
 /** 监听器释放函数缓存 */
 const releaseCache = new Map<string, () => void>()
@@ -75,6 +93,7 @@ export async function reactiveReadFile(filepath: string): Promise<string | null>
         stopMissingPathPoll(key)
       }
     }
+    refreshCache.set(key, { kind: 'file', path: normalizedPath, refresh })
     if (initialValue === null) {
       ensureMissingPathPoll(key, refresh)
     }
@@ -85,6 +104,7 @@ export async function reactiveReadFile(filepath: string): Promise<string | null>
       onError: () => {
         stopMissingPathPoll(key)
         stateCache.delete(key)
+        refreshCache.delete(key)
         releaseCache.delete(key)
       },
     })
@@ -104,6 +124,30 @@ export function updateReactiveFileCache(filepath: string, content: string | null
   const key = `file:${normalizedPath}`
   const state = stateCache.get(key) as ReactiveState<string | null> | undefined
   state?.set(content)
+}
+
+function containsPath(rootPath: string, candidatePath: string): boolean {
+  const childPath = relative(rootPath, candidatePath)
+  return (
+    childPath === '' ||
+    (!isAbsolute(childPath) && !childPath.startsWith(`..${sep}`) && childPath !== '..')
+  )
+}
+
+/**
+ * Publish a successful file write to every cached projection whose value can change.
+ * File content is set from the committed bytes; directory/existence/stat views re-read disk.
+ */
+export async function settleReactiveFileWrite(filepath: string, content: string): Promise<void> {
+  const normalizedPath = resolve(filepath)
+  updateReactiveFileCache(normalizedPath, content)
+
+  const refreshes: Promise<void>[] = []
+  for (const registration of refreshCache.values()) {
+    const affected = registration.kind !== 'file' && containsPath(registration.path, normalizedPath)
+    if (affected) refreshes.push(registration.refresh())
+  }
+  await Promise.all(refreshes)
 }
 
 /**
@@ -187,10 +231,19 @@ export async function reactiveReadDir(
         recursive: true,
         onError: () => {
           stateCache.delete(key)
+          refreshCache.delete(key)
           releaseCache.delete(key)
         },
       }
     )
+    refreshCache.set(key, {
+      kind: 'directory',
+      path: normalizedPath,
+      refresh: async () => {
+        const newValue = await getValue()
+        state!.set(newValue)
+      },
+    })
     releaseCache.set(key, release)
   }
 
@@ -232,6 +285,7 @@ export async function reactiveExists(path: string): Promise<boolean> {
         ensureMissingPathPoll(key, refresh)
       }
     }
+    refreshCache.set(key, { kind: 'exists', path: normalizedPath, refresh })
     if (!initialValue) {
       ensureMissingPathPoll(key, refresh)
     }
@@ -242,6 +296,7 @@ export async function reactiveExists(path: string): Promise<boolean> {
       onError: () => {
         stopMissingPathPoll(key)
         stateCache.delete(key)
+        refreshCache.delete(key)
         releaseCache.delete(key)
       },
     })
@@ -311,6 +366,7 @@ export async function reactiveStat(
         stopMissingPathPoll(key)
       }
     }
+    refreshCache.set(key, { kind: 'stat', path: normalizedPath, refresh })
     if (initialValue === null) {
       ensureMissingPathPoll(key, refresh)
     }
@@ -320,6 +376,7 @@ export async function reactiveStat(
       onError: () => {
         stopMissingPathPoll(key)
         stateCache.delete(key)
+        refreshCache.delete(key)
         releaseCache.delete(key)
       },
     })
@@ -342,6 +399,7 @@ export function clearCache(path?: string): void {
         stopMissingPathPoll(key)
         releaseCache.delete(key)
         stateCache.delete(key)
+        refreshCache.delete(key)
       }
     }
   } else {
@@ -355,6 +413,7 @@ export function clearCache(path?: string): void {
     }
     missingPathPollCache.clear()
     stateCache.clear()
+    refreshCache.clear()
   }
 }
 

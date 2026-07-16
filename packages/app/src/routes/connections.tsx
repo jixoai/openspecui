@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Render backend connection discovery and retained entry actions.
+ * 2. Keep credentials outside persisted connection state.
+ *
+ * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ */
 import { Dialog } from '@openspecui/web-src/components/dialog'
 import { Link } from '@tanstack/react-router'
 import { Home, Loader2, Plus, Trash2 } from 'lucide-react'

@@ -41,12 +41,11 @@ export function SpecList() {
       entries.push(entry)
       groups.set(entry.identity.storeId, entries)
     }
-    return [...groups.entries()].sort(([left], [right]) => left.localeCompare(right))
+    return (catalog?.referenceSources ?? [])
+      .map((source) => ({ source, specs: groups.get(source.storeId) ?? [] }))
+      .sort((left, right) => left.source.storeId.localeCompare(right.source.storeId))
   }, [catalog])
-  const referencedCount = referencedByStore.reduce(
-    (total, [, entries]) => total + entries.length,
-    0
-  )
+  const referencedCount = referencedByStore.reduce((total, { specs }) => total + specs.length, 0)
 
   if (isLoading && !catalog) {
     return <div className="route-loading animate-pulse">Loading specs...</div>
@@ -93,18 +92,18 @@ export function SpecList() {
         </div>
       ) : (
         <div className="border-border divide-border divide-y rounded-lg border">
-          {referencedByStore.map(([storeId, specs]) => (
+          {referencedByStore.map(({ source, specs }) => (
             <section
-              key={storeId}
-              aria-labelledby={`reference-store-${encodeURIComponent(storeId)}`}
+              key={source.storeId}
+              aria-labelledby={`reference-store-${encodeURIComponent(source.storeId)}`}
             >
               <div className="bg-muted/30 border-border flex min-w-0 flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
                 <h2
-                  id={`reference-store-${encodeURIComponent(storeId)}`}
+                  id={`reference-store-${encodeURIComponent(source.storeId)}`}
                   className="min-w-0 truncate font-mono text-sm font-semibold"
-                  title={storeId}
+                  title={source.storeId}
                 >
-                  {storeId}
+                  {source.storeId}
                 </h2>
                 <div className="text-muted-foreground flex items-center gap-2 text-xs">
                   <span>{specs.length} Specs</span>
@@ -114,11 +113,34 @@ export function SpecList() {
                   </span>
                 </div>
               </div>
-              <div className="divide-border divide-y">
-                {specs.map((spec) => (
-                  <SpecCatalogRow key={specIdentityKey(spec.identity)} spec={spec} />
-                ))}
-              </div>
+              {source.state === 'error' ? (
+                <div role="alert" className="text-destructive space-y-1 px-4 py-3 text-sm">
+                  <div>OpenSpec could not enumerate this observed Reference Store.</div>
+                  <div>Exit status: {source.evidence.exitCode ?? 'unknown'}</div>
+                  {source.evidence.contractError ? (
+                    <div>{source.evidence.contractError}</div>
+                  ) : null}
+                  {source.evidence.stderr ? <div>{source.evidence.stderr}</div> : null}
+                  {[...source.diagnostics, ...source.evidence.diagnostics].map(
+                    (diagnostic, index) => (
+                      <div key={`${diagnostic.code}:${index}`}>
+                        {diagnostic.code}: {diagnostic.message}
+                      </div>
+                    )
+                  )}
+                </div>
+              ) : (
+                <div className="divide-border divide-y">
+                  {specs.map((spec) => (
+                    <SpecCatalogRow key={specIdentityKey(spec.identity)} spec={spec} />
+                  ))}
+                  {specs.length === 0 ? (
+                    <div className="text-muted-foreground px-4 py-3 text-sm">
+                      OpenSpec reported no Specs for this Store.
+                    </div>
+                  ) : null}
+                </div>
+              )}
             </section>
           ))}
           {referencedByStore.length === 0 ? (

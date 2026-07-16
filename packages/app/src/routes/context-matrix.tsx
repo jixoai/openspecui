@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Project observed project-to-Root and Reference relationships by environment.
+ * 2. Avoid machine-wide completeness claims.
+ *
+ * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
+ */
 import { Columns3 } from 'lucide-react'
 import { EmptyView, ErrorView, LoadingView } from '../components/state-views'
 import { StoreManagerShell } from '../components/store-manager-shell'

@@ -2,31 +2,35 @@
  * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
  * 1. Verify ordered CLI stream execution and immediate state visibility.
  * 2. Preserve multiline failure evidence and stop the queue after nonzero exit.
+ * 3. Keep arbitrary commands outside the public OpenSpec execution transport.
  *
  * Original request (2026-07-15): "场景丢失保护的诊断必须原样显示，不能合成重试。"
  */
 import { act, cleanup, render, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { archiveStrictSubscribeMock, setStreamEvents, subscribeMock } = vi.hoisted(() => {
-  let streamEvents: unknown[] = []
-  const subscribe = vi.fn((_input: unknown, handlers: { onData: (event: unknown) => void }) => {
-    for (const event of streamEvents) handlers.onData(event)
-    return { unsubscribe: vi.fn() }
-  })
-  return {
-    archiveStrictSubscribeMock: vi.fn(
-      (_input: unknown, handlers: { onData: (event: unknown) => void }) => {
+const { archiveStrictSubscribeMock, installSubscribeMock, setStreamEvents, subscribeMock } =
+  vi.hoisted(() => {
+    let streamEvents: unknown[] = []
+    const createSubscribeMock = () =>
+      vi.fn((_input: unknown, handlers: { onData: (event: unknown) => void }) => {
         for (const event of streamEvents) handlers.onData(event)
         return { unsubscribe: vi.fn() }
-      }
-    ),
-    setStreamEvents: (events: unknown[]) => {
-      streamEvents = events
-    },
-    subscribeMock: subscribe,
-  }
-})
+      })
+    return {
+      archiveStrictSubscribeMock: vi.fn(
+        (_input: unknown, handlers: { onData: (event: unknown) => void }) => {
+          for (const event of streamEvents) handlers.onData(event)
+          return { unsubscribe: vi.fn() }
+        }
+      ),
+      installSubscribeMock: createSubscribeMock(),
+      setStreamEvents: (events: unknown[]) => {
+        streamEvents = events
+      },
+      subscribeMock: createSubscribeMock(),
+    }
+  })
 
 vi.mock('./static-mode', () => ({
   isStaticMode: () => false,
@@ -38,8 +42,11 @@ vi.mock('./trpc', () => ({
       archiveStrictStream: {
         subscribe: archiveStrictSubscribeMock,
       },
-      runCommandStream: {
+      executeOpenSpecStream: {
         subscribe: subscribeMock,
+      },
+      installGlobalCliStream: {
+        subscribe: installSubscribeMock,
       },
     },
   },
@@ -51,6 +58,7 @@ import { useCliRunner } from './use-cli-runner'
 describe('useCliRunner', () => {
   beforeEach(() => {
     archiveStrictSubscribeMock.mockClear()
+    installSubscribeMock.mockClear()
     subscribeMock.mockClear()
     setStreamEvents([
       { type: 'command', data: 'openspec config list --json' },
@@ -111,6 +119,47 @@ describe('useCliRunner', () => {
     )
     expect(subscribeMock).not.toHaveBeenCalled()
     expect(result.current.status).toBe('success')
+  })
+
+  it('uses the fixed Server-owned stream for global CLI installation', async () => {
+    const { result } = renderHook(() => useCliRunner())
+
+    act(() => {
+      result.current.commands.replaceAll([
+        {
+          command: 'npm',
+          args: ['install', '-g', '@fission-ai/openspec'],
+          stream: { type: 'install-global-cli' },
+        },
+      ])
+    })
+
+    await act(async () => {
+      await result.current.commands.runAll()
+    })
+
+    expect(installSubscribeMock).toHaveBeenCalledWith(undefined, expect.any(Object))
+    expect(subscribeMock).not.toHaveBeenCalled()
+    expect(result.current.status).toBe('success')
+  })
+
+  it('rejects arbitrary commands without a dedicated Server transport', async () => {
+    const { result } = renderHook(() => useCliRunner())
+
+    act(() => {
+      result.current.commands.replaceAll([
+        { command: 'node', args: ['openspec', 'archive', 'add-search'] },
+      ])
+    })
+
+    await act(async () => {
+      await result.current.commands.runAll()
+    })
+
+    expect(archiveStrictSubscribeMock).not.toHaveBeenCalled()
+    expect(installSubscribeMock).not.toHaveBeenCalled()
+    expect(subscribeMock).not.toHaveBeenCalled()
+    expect(result.current.status).toBe('error')
   })
 
   it('renders scenario-loss diagnostics verbatim and does not start a synthesized retry', async () => {

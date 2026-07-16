@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Centralize semantic status badges and compact status dots.
+ * 2. Keep labels caller-owned so presentation does not reinterpret upstream facts.
+ *
+ * Original request (2026-07-15): "前端缺少的东西你可以通过注释补充。"
+ */
 import type { LucideIcon } from 'lucide-react'
 import { AlertCircle, CheckCircle2, CircleSlash, Loader2, MinusCircle } from 'lucide-react'
 
@@ -9,6 +16,7 @@ import { AlertCircle, CheckCircle2, CircleSlash, Loader2, MinusCircle } from 'lu
  * 颜色与图标由 variant 单点映射，文案由调用方传入（保留客观上游事实）。
  */
 
+/** Presentation-only semantic variants shared by badges and dots. */
 export type StatusVariant =
   | 'healthy' // 绿：健康/在线/成功
   | 'issue' // 琥珀：需关注/警告
@@ -48,6 +56,7 @@ const VARIANT_STYLES: Record<
   },
 }
 
+/** Accessible semantic badge input; callers retain ownership of objective labels. */
 export interface StatusBadgeProps {
   variant: StatusVariant
   /** 展示文案（客观保留上游事实，不由徽章推断）。 */
@@ -59,6 +68,7 @@ export interface StatusBadgeProps {
   className?: string
 }
 
+/** Render one icon-and-label semantic status badge. */
 export function StatusBadge({
   variant,
   label,

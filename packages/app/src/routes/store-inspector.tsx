@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Make Store Doctor evidence the primary Store Manager interaction.
+ * 2. Reserve backend-owned mutation controls without inferring applicability.
+ *
+ * Original request (2026-07-15): "Store Manager uses the Store Inspector as its primary interaction."
+ */
 import type { StoreDoctorStore } from '@openspecui/core/store-types'
 import { Search, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'

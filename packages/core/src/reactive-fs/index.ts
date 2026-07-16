@@ -51,6 +51,7 @@ export {
   reactiveReadDir,
   reactiveReadFile,
   reactiveStat,
+  settleReactiveFileWrite,
   updateReactiveFileCache,
 } from './reactive-fs.js'
 

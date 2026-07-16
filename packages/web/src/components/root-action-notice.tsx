@@ -8,6 +8,7 @@
 import type { RootActionState } from '@/lib/use-root-action-state'
 import { AlertCircle, Loader2 } from 'lucide-react'
 
+/** Render objective loading or failure evidence that locks root-dependent actions. */
 export function RootActionNotice({ state }: { state: RootActionState }) {
   if (state.status === 'ready') return null
   const checking = state.status === 'checking'

@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Confirm destructive Store removal with explicit environment and checkout identity.
+ * 2. Reserve the backend-owned mutation seam without browser-side deletion.
+ *
+ * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
+ */
 import type { StoreDoctorStore } from '@openspecui/core/store-types'
 import { Dialog } from '@openspecui/web-src/components/dialog'
 import { AlertTriangle, Loader2 } from 'lucide-react'

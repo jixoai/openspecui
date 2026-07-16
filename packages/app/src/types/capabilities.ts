@@ -1,4 +1,11 @@
 /**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Define the three product-level hosted capability facts.
+ * 2. Prevent capability vocabulary from becoming a permission model.
+ *
+ * Original request (2026-07-15): "前端缺少的东西你可以通过注释补充。"
+ */
+/**
  * Hosted-protocol capability vocabulary.
  *
  * TODO(kernel): 待 packages/server 实现后端协议后，此类型迁移至 @openspecui/core 并由后端权威输出。

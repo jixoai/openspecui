@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Group online backends by opaque backend-issued environment identity.
+ * 2. Expose capabilities as compatibility facts rather than permissions.
+ *
+ * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ */
 import { Link } from '@tanstack/react-router'
 import { Boxes, FlaskConical, MonitorSmartphone, Store } from 'lucide-react'
 import { EmptyView } from '../components/state-views'

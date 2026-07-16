@@ -1,4 +1,11 @@
 /**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Derive one exhaustive data lifecycle for empty and stale-data projections.
+ * 2. Expose reusable pending and renderable-state predicates.
+ *
+ * Original request (2026-07-15): "前端缺少的东西你可以通过注释补充。"
+ */
+/**
  * 统一的 8-拓扑数据状态机（Style 指令：全生命周期状态机）。
  *
  * 任何触发网络请求的视图都用这套状态推导渲染分支，杜绝幽灵操作与等待焦虑。
@@ -14,6 +21,7 @@
  */
 export type DataState = 'idle' | 'loading' | 'loaded' | 'updating' | 'error' | 'error-stale'
 
+/** Inputs used to derive the complete data rendering lifecycle. */
 export interface DataStateInput<T> {
   /** 当前数据（可能 undefined）。 */
   data: T | undefined

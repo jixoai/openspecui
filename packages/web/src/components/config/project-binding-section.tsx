@@ -30,6 +30,7 @@ function currentRootPreview(config: ProjectBindingConfig) {
     : { context: config.rootPreview.attempt, error: config.rootPreview.error }
 }
 
+/** Render and mutate launch-project Store/Reference binding independently of active-root config. */
 export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
   const { data: config, isLoading, error: subscriptionError } = useProjectBindingSubscription()
   const [storeId, setStoreId] = useState('')

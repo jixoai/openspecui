@@ -16,11 +16,13 @@ interface EnvironmentRootRecord {
   lease: Promise<WatcherRootRelease>
 }
 
+/** One observed root and its reference count inside an environment. */
 export interface ObservationEnvironmentRoot {
   rootPath: string
   referenceCount: number
 }
 
+/** Reference-counted root acquisition boundary for reactive observation. */
 export interface ObservationRootOwner {
   acquireRoot(rootPath: string): Promise<WatcherRootRelease>
 }

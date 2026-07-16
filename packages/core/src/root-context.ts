@@ -12,7 +12,7 @@ import type {
   CliContext,
   CliDiagnostic,
   CliDoctor,
-  CliReferenceIndexEntry,
+  CliDoctorReferenceEntry,
   CliRootSelector,
   OpenSpecCliContractExecutor,
 } from './cli-contracts/index.js'
@@ -23,6 +23,7 @@ import {
   type ResolveOpenSpecDataScopeOptions,
 } from './open-spec-data-scope.js'
 
+/** OpenSpec CLI availability and runner provenance observed by Root Context resolution. */
 export interface RootContextCliAvailability {
   available: boolean
   version?: string
@@ -31,11 +32,13 @@ export interface RootContextCliAvailability {
   tried?: string[]
 }
 
+/** Minimal typed CLI surface required to resolve Root Context. */
 export interface RootContextCli {
   checkAvailability(timeout?: number): Promise<RootContextCliAvailability>
   contracts: Pick<OpenSpecCliContractExecutor, 'doctorRoot' | 'context'>
 }
 
+/** Raw public evidence for one Root Context CLI command. */
 export interface RootContextCommandEvidence {
   success: boolean
   /** Raw CLI JSON document, preserved byte-for-byte as process stdout. */
@@ -46,6 +49,7 @@ export interface RootContextCommandEvidence {
   contractError?: string
 }
 
+/** Complete launch-project, planning-root, Context, Reference, and data-scope projection. */
 export interface RootContext {
   launchProject: {
     /** Absolute launch-project path used as the CLI working directory. */
@@ -57,7 +61,7 @@ export interface RootContext {
   storeId: string | null
   cli: RootContextCliAvailability
   /** Direct one-level Reference index from CLI Doctor. */
-  references: CliReferenceIndexEntry[]
+  references: CliDoctorReferenceEntry[]
   /** Direct Context members from `openspec context --json`. */
   contextMembers: CliContext['members']
   /** Read-only effective OpenSpec user-data root diagnostic. */
@@ -74,6 +78,7 @@ export interface RootContext {
   observedAt: number
 }
 
+/** Stable error categories emitted by Root Context resolution. */
 export type RootContextErrorCode =
   | 'cli-unavailable'
   | 'doctor-command-failed'
@@ -86,11 +91,13 @@ export type RootContextErrorCode =
   | 'references-unresolved'
   | 'resolver-failed'
 
+/** Root Context resolution failure with objective category and message. */
 export interface RootContextError {
   code: RootContextErrorCode
   message: string
 }
 
+/** Full subscription lifecycle for Root Context, including stale-data failure. */
 export type RootContextState =
   | {
       state: 'loading'
@@ -123,6 +130,7 @@ export type RootContextState =
       observedAt: number
     }
 
+/** Terminal ready/error result of one Root Context resolution attempt. */
 export type RootContextResolvedState = Extract<RootContextState, { state: 'ready' | 'error' }>
 
 /** Derive the only CLI selector that preserves an already resolved Root Context. */
@@ -138,6 +146,7 @@ export function getRootContextCliSelector(rootContext: RootContext): CliRootSele
   return { store: rootContext.storeId }
 }
 
+/** Inputs required to resolve one Root Context attempt. */
 export interface ResolveRootContextOptions extends ResolveOpenSpecDataScopeOptions {
   launchProjectDir: string
   cliExecutor: RootContextCli
@@ -373,6 +382,7 @@ export async function resolveRootContext(
   return classifyRootContext(attempt, doctor, context)
 }
 
+/** Concrete CliExecutor surface that satisfies Root Context resolution. */
 export type RootContextCliExecutor = Pick<CliExecutor, 'checkAvailability'> & {
   contracts: Pick<OpenSpecCliContractExecutor, 'doctorRoot' | 'context'>
 }

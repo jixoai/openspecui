@@ -8,6 +8,7 @@
 import type { ApplyInstructionProgress } from '@openspecui/core'
 import { AlertTriangle } from 'lucide-react'
 
+/** Render source-attributed Apply progress and any tracked-progress divergence. */
 export function ApplyProgressNotice({
   applyInstructionProgress,
 }: {

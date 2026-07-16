@@ -16,6 +16,7 @@ import * as StaticProvider from './static-data-provider'
 import { trpcClient } from './trpc'
 import { useSubscription, type SubscriptionState } from './use-subscription'
 
+/** Active-root configuration subscription with its current Root Context state. */
 export interface ActiveRootConfigView {
   content: string | null
   exists: boolean
@@ -23,6 +24,7 @@ export interface ActiveRootConfigView {
   owner: ActiveRootConfig['owner'] | null
 }
 
+/** Subscription state that exposes an explicit invalidation-driven refresh action. */
 export interface RefreshableSubscriptionState<T> extends SubscriptionState<T> {
   refresh: () => void
 }

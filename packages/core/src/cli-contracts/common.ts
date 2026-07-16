@@ -39,16 +39,20 @@ export const CliReferenceSpecSchema = z
   })
   .passthrough()
 
-/** Direct Reference entry resolved by the active planning root. */
-export const CliReferenceIndexEntrySchema = z
+/** Health-only direct Reference entry emitted by OpenSpec Doctor. */
+export const CliDoctorReferenceEntrySchema = z
   .object({
     store_id: z.string(),
     root: z.string().optional(),
-    specs: z.array(CliReferenceSpecSchema).optional(),
-    fetch: z.string().optional(),
     status: z.array(CliDiagnosticSchema),
   })
   .passthrough()
+
+/** Spec-bearing direct Reference index emitted by workflow Instructions. */
+export const CliReferenceIndexEntrySchema = CliDoctorReferenceEntrySchema.extend({
+  specs: z.array(CliReferenceSpecSchema).optional(),
+  fetch: z.string().optional(),
+}).passthrough()
 
 /** JSON failure payload whose truth is carried entirely by upstream diagnostics. */
 export const CliDiagnosticFailureSchema = z
@@ -60,5 +64,6 @@ export const CliDiagnosticFailureSchema = z
 export type CliDiagnostic = z.infer<typeof CliDiagnosticSchema>
 export type CliRoot = z.infer<typeof CliRootSchema>
 export type CliRootSource = z.infer<typeof CliRootSourceSchema>
+export type CliDoctorReferenceEntry = z.infer<typeof CliDoctorReferenceEntrySchema>
 export type CliReferenceIndexEntry = z.infer<typeof CliReferenceIndexEntrySchema>
 export type CliDiagnosticFailure = z.infer<typeof CliDiagnosticFailureSchema>

@@ -181,14 +181,22 @@ describe('SearchService', () => {
       undefined,
       () => [
         {
-          store_id: 'platform-a',
-          specs: [{ id: 'auth', summary: 'Platform A auth' }],
-          status: [],
+          identity: { kind: 'referenced', storeId: 'platform-a', specId: 'auth' },
+          source: 'referenced',
+          readOnly: true,
+          name: 'auth',
+          summary: null,
+          requirementCount: 1,
+          updatedAt: 0,
         },
         {
-          store_id: 'platform-b',
-          specs: [{ id: 'auth', summary: 'Platform B auth' }],
-          status: [],
+          identity: { kind: 'referenced', storeId: 'platform-b', specId: 'auth' },
+          source: 'referenced',
+          readOnly: true,
+          name: 'auth',
+          summary: null,
+          requirementCount: 2,
+          updatedAt: 0,
         },
       ]
     )

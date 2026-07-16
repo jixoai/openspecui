@@ -1,7 +1,9 @@
 import {
-  RuntimeInvalidationIndex,
   createDocumentChecklistSummary,
   createTrackedTaskProgress,
+  OpenSpecAdapter,
+  reactiveReadFile,
+  RuntimeInvalidationIndex,
 } from '@openspecui/core'
 import { DEFAULT_BELL_SOUND_ID, DEFAULT_NOTIFICATION_SOUND_ID } from '@openspecui/core/sounds'
 import { execFile } from 'node:child_process'
@@ -185,6 +187,7 @@ const createMockAdapter = () => ({
   }),
   writeSpec: vi.fn().mockResolvedValue(undefined),
   writeChange: vi.fn().mockResolvedValue(undefined),
+  writeEntityFile: vi.fn().mockResolvedValue(undefined),
   validateSpec: vi.fn().mockResolvedValue({ valid: true, issues: [] }),
   validateChange: vi.fn().mockResolvedValue({ valid: true, issues: [] }),
   init: vi.fn().mockResolvedValue(undefined),
@@ -873,6 +876,7 @@ apply:
       ])
       const context = createMockContext(createMockAdapter(), { projectDir: launchProject })
       const planning = await resolveMockPlanningRoot(context)
+      planning.adapter = new OpenSpecAdapter(planningRoot)
       planning.rootContext = {
         ...planning.rootContext,
         launchProject: { path: launchProject },
@@ -886,6 +890,34 @@ apply:
         storeId: 'shared',
       }
       const caller = appRouter.createCaller(context)
+      const changeNotePath = join(
+        planningRoot,
+        'openspec',
+        'changes',
+        'mutation-demo',
+        'notes',
+        'change.md'
+      )
+      const artifactPath = join(
+        planningRoot,
+        'openspec',
+        'changes',
+        'mutation-demo',
+        'artifacts',
+        'output.md'
+      )
+      const archiveNotePath = join(
+        planningRoot,
+        'openspec',
+        'changes',
+        'archive',
+        'archived-demo',
+        'notes',
+        'archive.md'
+      )
+      expect(await reactiveReadFile(changeNotePath)).toBeNull()
+      expect(await reactiveReadFile(artifactPath)).toBeNull()
+      expect(await reactiveReadFile(archiveNotePath)).toBeNull()
 
       await caller.change.writeFile({
         id: 'mutation-demo',
@@ -907,6 +939,10 @@ apply:
         location: { filePath: 'work/backend/tasks.md', taskIndex: 2 },
         completed: true,
       })
+
+      expect(await reactiveReadFile(changeNotePath)).toBe('# Change note\n')
+      expect(await reactiveReadFile(artifactPath)).toBe('# Artifact\n')
+      expect(await reactiveReadFile(archiveNotePath)).toBe('# Archive note\n')
 
       await expect(
         readFile(
@@ -1022,7 +1058,10 @@ apply:
     it('writes change entity files through a guarded relative path', async () => {
       const projectDir = await createTempProjectDir('openspecui-router-change-file-')
       await mkdir(join(projectDir, 'openspec', 'changes', 'preview-demo'), { recursive: true })
-      const caller = createCaller(createMockAdapter(), { projectDir })
+      const caller = createCaller(
+        new OpenSpecAdapter(projectDir) as unknown as ReturnType<typeof createMockAdapter>,
+        { projectDir }
+      )
 
       await caller.change.writeFile({
         id: 'preview-demo',
@@ -1041,7 +1080,10 @@ apply:
     it('rejects entity file writes that try to escape the change root', async () => {
       const projectDir = await createTempProjectDir('openspecui-router-change-escape-')
       await mkdir(join(projectDir, 'openspec', 'changes', 'preview-demo'), { recursive: true })
-      const caller = createCaller(createMockAdapter(), { projectDir })
+      const caller = createCaller(
+        new OpenSpecAdapter(projectDir) as unknown as ReturnType<typeof createMockAdapter>,
+        { projectDir }
+      )
 
       await expect(
         caller.change.writeFile({
@@ -2005,7 +2047,55 @@ apply:
     it('exposes archive only through the strict Server-owned stream', () => {
       expect(appRouter._def.procedures).not.toHaveProperty('cli.archive')
       expect(appRouter._def.procedures).not.toHaveProperty('cli.archiveStream')
+      expect(appRouter._def.procedures).not.toHaveProperty('cli.execute')
+      expect(appRouter._def.procedures).not.toHaveProperty('cli.runCommandStream')
+      expect(appRouter._def.procedures).toHaveProperty('cli.executeOpenSpec')
+      expect(appRouter._def.procedures).toHaveProperty('cli.executeOpenSpecStream')
       expect(appRouter._def.procedures).toHaveProperty('cli.archiveStrictStream')
+    })
+
+    it.each([
+      [
+        'canonical command',
+        ['archive', 'add-search', '--yes', '--no-validate', '--store', 'other'],
+      ],
+      [
+        'global option prefix',
+        ['--store=other', 'archive', 'add-search', '--yes', '--no-validate'],
+      ],
+      ['argument separator', ['--', 'archive', 'add-search', '--yes', '--no-validate']],
+    ])('rejects Archive through generic buffered execution using %s', async (_name, args) => {
+      const context = createMockContext()
+      const execute = context.cliExecutor.execute as unknown as ReturnType<typeof vi.fn>
+
+      await expect(appRouter.createCaller(context).cli.executeOpenSpec({ args })).rejects.toThrow(
+        /archiveStrictStream/
+      )
+      expect(execute).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      [
+        'canonical command',
+        ['archive', 'add-search', '--yes', '--no-validate', '--store', 'other'],
+      ],
+      [
+        'global option prefix',
+        ['--store=other', 'archive', 'add-search', '--yes', '--no-validate'],
+      ],
+      ['argument separator', ['--', 'archive', 'add-search', '--yes', '--no-validate']],
+    ])('rejects Archive through generic streamed execution using %s', async (_name, args) => {
+      const context = createMockContext()
+      const executeCommandStream = context.cliExecutor
+        .executeCommandStream as unknown as ReturnType<typeof vi.fn>
+      const stream = await appRouter.createCaller(context).cli.executeOpenSpecStream({ args })
+
+      await expect(
+        new Promise<void>((resolve, reject) => {
+          stream.subscribe({ complete: resolve, error: reject })
+        })
+      ).rejects.toThrow(/archiveStrictStream/)
+      expect(executeCommandStream).not.toHaveBeenCalled()
     })
 
     it('keeps strict archive preflight and mutation on one Server-owned root selection', async () => {
@@ -2090,6 +2180,33 @@ apply:
 
       expect(archiveStream).not.toHaveBeenCalled()
       expect(events.at(-1)).toEqual({ type: 'exit', exitCode: 1 })
+    })
+
+    it('honors an explicit operator validation skip only through the strict Archive stream', async () => {
+      const context = createMockContext()
+      const validateStream = context.cliExecutor.validateStream as unknown as ReturnType<
+        typeof vi.fn
+      >
+      const archiveStream = context.cliExecutor.archiveStream as unknown as ReturnType<typeof vi.fn>
+      archiveStream.mockImplementation(async (_changeId, _options, onEvent) => {
+        onEvent({ type: 'exit', exitCode: 0 })
+        return () => undefined
+      })
+
+      const stream = await appRouter.createCaller(context).cli.archiveStrictStream({
+        changeId: 'add-search',
+        noValidate: true,
+      })
+      await new Promise<void>((resolve, reject) => {
+        stream.subscribe({ complete: resolve, error: reject })
+      })
+
+      expect(validateStream).not.toHaveBeenCalled()
+      expect(archiveStream).toHaveBeenCalledWith(
+        'add-search',
+        { skipSpecs: undefined, noValidate: true },
+        expect.any(Function)
+      )
     })
 
     it('reads and writes global config via path resolution', async () => {
@@ -2185,11 +2302,11 @@ apply:
       const caller = appRouter.createCaller(context)
       const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
 
-      await caller.cli.execute({ args: ['schemas', '--json'] })
+      await caller.cli.executeOpenSpec({ args: ['schemas', '--json'] })
       expect(invalidation.current('project')).toBe(0)
       expect(invalidation.current('schemas')).toBe(0)
 
-      await caller.cli.execute({ args: ['schema', 'init', 'custom'] })
+      await caller.cli.executeOpenSpec({ args: ['schema', 'init', 'custom'] })
       expect(invalidation.current('project')).toBe(1)
       expect(invalidation.current('context')).toBe(1)
       expect(invalidation.current('schemas')).toBe(1)
@@ -2205,7 +2322,7 @@ apply:
         return vi.fn()
       })
       const caller = appRouter.createCaller(context)
-      const stream = await caller.cli.runCommandStream({ command: 'openspec', args: ['update'] })
+      const stream = await caller.cli.executeOpenSpecStream({ args: ['update'] })
 
       await new Promise<void>((resolve, reject) => {
         stream.subscribe({

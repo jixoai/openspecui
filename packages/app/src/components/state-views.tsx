@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Render shared loading, empty, error, and stale-data states.
+ * 2. Preserve accessible live-region semantics for asynchronous views.
+ *
+ * Original request (2026-07-15): "前端缺少的东西你可以通过注释补充。"
+ */
 import { AlertCircle, Inbox, Loader2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { DataState } from '../lib/data-state'

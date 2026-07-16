@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Define the App seam for backend-issued environment and Context observations.
+ * 2. Gate Store views through objective hosted-protocol capabilities.
+ *
+ * Original request (2026-07-15): "前端缺少的东西你可以通过注释补充。"
+ */
 import type { StoreCapabilitySet } from '../types/capabilities'
 import type { HostedEnvironment, ProjectContextObservation } from '../types/root-context'
 
@@ -23,6 +30,7 @@ export interface EnvironmentObservation {
   error: Error | null
 }
 
+/** Read the current backend-issued environment and observed Context projections. */
 export function useEnvironmentObservation(): EnvironmentObservation {
   // TODO(kernel): 待 backend envUri 协议落地，替换为真实订阅（push invalidation -> client pull）。
   //               当前骨架无数据源，返回空 + 非加载态，让视图渲染空态。

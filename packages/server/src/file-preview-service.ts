@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Prepare source-bound preview sessions for supported entity files.
+ * 2. Serve preview documents and bundled assets with confined path resolution.
+ * 3. Retire every preview session when its owning Planning root is replaced.
+ *
+ * Original request (2026-07-16): "A -> B 后必须清退 A 的 preview。"
+ */
 import {
   inferFileMime,
   inferFilePreviewKind,
@@ -9,6 +17,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { basename, extname, resolve } from 'node:path'
 import { resolveEntityEntryPath } from './entity-file-paths.js'
 
+/** Prepared source-bound preview route and content metadata. */
 export interface PreparedFilePreview {
   hash: string
   mime: string
@@ -48,7 +57,9 @@ const SESSION_PREVIEW_KINDS = new Set<Exclude<FilePreviewKind, 'markdown' | 'tex
 function isSessionPreviewKind(
   previewKind: FilePreviewKind
 ): previewKind is Exclude<FilePreviewKind, 'markdown' | 'text' | 'none'> {
-  return SESSION_PREVIEW_KINDS.has(previewKind as Exclude<FilePreviewKind, 'markdown' | 'text' | 'none'>)
+  return SESSION_PREVIEW_KINDS.has(
+    previewKind as Exclude<FilePreviewKind, 'markdown' | 'text' | 'none'>
+  )
 }
 
 function toHash(input: string): string {
@@ -89,7 +100,9 @@ function inferPreviewAssetContentType(path: string): string {
 
 function isRewritablePreviewAsset(path: string): boolean {
   const extension = extname(path).toLowerCase()
-  return extension === '.html' || extension === '.js' || extension === '.mjs' || extension === '.css'
+  return (
+    extension === '.html' || extension === '.js' || extension === '.mjs' || extension === '.css'
+  )
 }
 
 function rewritePreviewAssetPaths(content: string, hash: string): string {
@@ -97,6 +110,7 @@ function rewritePreviewAssetPaths(content: string, hash: string): string {
   return content.replaceAll('/assets/', sessionAssetPrefix)
 }
 
+/** Source-bound entity preview session owner for one project or Planning root. */
 export class FilePreviewService {
   private readonly sessions = new Map<string, PreviewSession>()
 
@@ -156,7 +170,10 @@ export class FilePreviewService {
       relativePath: resolved.relativePath,
       resourcePathname,
       entryPathname,
-      urlPath: previewKind === 'html' ? htmlPathname : `${entryPathname}?file=${encodeURIComponent(fileName)}`,
+      urlPath:
+        previewKind === 'html'
+          ? htmlPathname
+          : `${entryPathname}?file=${encodeURIComponent(fileName)}`,
     }
   }
 
@@ -219,5 +236,10 @@ export class FilePreviewService {
       content: readFileSync(absolutePath),
       contentType: inferPreviewAssetContentType(absolutePath),
     }
+  }
+
+  /** Retire every source-bound preview session owned by this service instance. */
+  dispose(): void {
+    this.sessions.clear()
   }
 }

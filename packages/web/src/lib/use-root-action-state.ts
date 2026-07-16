@@ -10,6 +10,7 @@ import type { RootContext, RootContextCommandEvidence, RootContextState } from '
 import { isStaticMode } from './static-mode'
 import { useContextSubscription } from './use-context-subscription'
 
+/** Action-gating state derived from CLI-owned Root Context lifecycle. */
 export type RootActionState =
   | {
       status: 'ready'
@@ -152,6 +153,7 @@ export function selectRootActionState(input: SelectRootActionStateInput): RootAc
   }
 }
 
+/** Derive the current root-dependent action gate and objective failure evidence. */
 export function useRootActionState(): RootActionState {
   const subscription = useContextSubscription()
   return selectRootActionState({

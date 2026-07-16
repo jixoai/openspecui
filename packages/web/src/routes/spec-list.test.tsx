@@ -58,11 +58,12 @@ describe('SpecList', () => {
   })
   afterEach(() => cleanup())
 
-  function setCatalog(entries: unknown[]) {
+  function setCatalog(entries: unknown[], referenceSources: unknown[] = []) {
     useSpecsSubscriptionMock.mockReturnValue({
       data: {
         observedAt: 1,
         entries,
+        referenceSources,
       },
       isLoading: false,
       error: null,
@@ -70,32 +71,48 @@ describe('SpecList', () => {
   }
 
   it('defaults to Owned, then groups duplicate referenced ids by Store', () => {
-    setCatalog([
-      {
-        identity: { kind: 'owned', specId: 'auth' },
-        source: 'owned',
-        readOnly: false,
-        name: 'Owned Auth',
-        summary: null,
-        updatedAt: 1,
-      },
-      {
-        identity: { kind: 'referenced', storeId: 'platform-a', specId: 'auth' },
-        source: 'referenced',
-        readOnly: true,
-        name: 'auth',
-        summary: 'Platform A auth',
-        updatedAt: 0,
-      },
-      {
-        identity: { kind: 'referenced', storeId: 'platform-b', specId: 'auth' },
-        source: 'referenced',
-        readOnly: true,
-        name: 'auth',
-        summary: 'Platform B auth',
-        updatedAt: 0,
-      },
-    ])
+    setCatalog(
+      [
+        {
+          identity: { kind: 'owned', specId: 'auth' },
+          source: 'owned',
+          readOnly: false,
+          name: 'Owned Auth',
+          summary: null,
+          updatedAt: 1,
+        },
+        {
+          identity: { kind: 'referenced', storeId: 'platform-a', specId: 'auth' },
+          source: 'referenced',
+          readOnly: true,
+          name: 'auth',
+          summary: 'Platform A auth',
+          updatedAt: 0,
+        },
+        {
+          identity: { kind: 'referenced', storeId: 'platform-b', specId: 'auth' },
+          source: 'referenced',
+          readOnly: true,
+          name: 'auth',
+          summary: 'Platform B auth',
+          updatedAt: 0,
+        },
+      ],
+      [
+        {
+          storeId: 'platform-a',
+          state: 'ready',
+          diagnostics: [],
+          evidence: { success: true, stdout: '{}', stderr: '', exitCode: 0, diagnostics: [] },
+        },
+        {
+          storeId: 'platform-b',
+          state: 'ready',
+          diagnostics: [],
+          evidence: { success: true, stdout: '{}', stderr: '', exitCode: 0, diagnostics: [] },
+        },
+      ]
+    )
 
     render(<SpecList />)
 
@@ -132,16 +149,26 @@ describe('SpecList', () => {
 
   it('restores the Referenced list scope after returning from a referenced detail', () => {
     locationState.current = { __specListScope: 'referenced' }
-    setCatalog([
-      {
-        identity: { kind: 'referenced', storeId: 'platform-b', specId: 'auth' },
-        source: 'referenced',
-        readOnly: true,
-        name: 'auth',
-        summary: 'Platform B auth',
-        updatedAt: 0,
-      },
-    ])
+    setCatalog(
+      [
+        {
+          identity: { kind: 'referenced', storeId: 'platform-b', specId: 'auth' },
+          source: 'referenced',
+          readOnly: true,
+          name: 'auth',
+          summary: 'Platform B auth',
+          updatedAt: 0,
+        },
+      ],
+      [
+        {
+          storeId: 'platform-b',
+          state: 'ready',
+          diagnostics: [],
+          evidence: { success: true, stdout: '{}', stderr: '', exitCode: 0, diagnostics: [] },
+        },
+      ]
+    )
 
     render(<SpecList />)
 
@@ -152,5 +179,39 @@ describe('SpecList', () => {
     expect(screen.getByRole('link', { name: /Platform B auth/ }).getAttribute('href')).toBe(
       '/specs/referenced/platform-b/auth'
     )
+  })
+
+  it('keeps failed Store enumeration evidence visible beside healthy sources', () => {
+    setCatalog(
+      [],
+      [
+        {
+          storeId: 'broken',
+          state: 'error',
+          diagnostics: [
+            {
+              severity: 'warning',
+              code: 'reference_root_unhealthy',
+              message: 'Store root is unhealthy.',
+            },
+          ],
+          evidence: {
+            success: false,
+            stdout: '{}',
+            stderr: 'Store is unavailable.',
+            exitCode: 1,
+            diagnostics: [],
+          },
+        },
+      ]
+    )
+
+    render(<SpecList />)
+    fireEvent.click(screen.getByRole('tab', { name: 'Referenced 0' }))
+
+    expect(screen.getByRole('heading', { name: 'broken' })).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toContain('reference_root_unhealthy')
+    expect(screen.getByRole('alert').textContent).toContain('Store is unavailable.')
+    expect(screen.queryByText('No Referenced Specs currently observed.')).toBeNull()
   })
 })

@@ -9,9 +9,10 @@
 import { selectRootContextSnapshot, useContextSubscription } from '@/lib/use-context-subscription'
 import { useGitRepositoryScopes } from '@/lib/use-git-repository-scope'
 import { VTLink } from '@/lib/view-transitions/navigation'
-import type { CliReferenceIndexEntry } from '@openspecui/core'
+import type { CliDoctorReferenceEntry } from '@openspecui/core'
 import { AlertCircle, Code2, FileStack, GitBranch, Network, RefreshCw } from 'lucide-react'
 
+/** Root Context and scoped Git facts shown in the Dashboard summary. */
 export interface DashboardContextSummaryProps {
   staticMode: boolean
 }
@@ -139,7 +140,7 @@ function LiveDashboardContextSummary() {
   )
 }
 
-function ReferenceEvidence({ reference }: { reference: CliReferenceIndexEntry }) {
+function ReferenceEvidence({ reference }: { reference: CliDoctorReferenceEntry }) {
   const errors = reference.status.filter((diagnostic) => diagnostic.severity === 'error').length
   const warnings = reference.status.filter((diagnostic) => diagnostic.severity === 'warning').length
   const evidence =

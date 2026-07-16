@@ -9,6 +9,7 @@
 import type { ChangeStatus, CliReferenceIndexEntry } from '@openspecui/core'
 import { FileCode2, Network } from 'lucide-react'
 
+/** Root/Reference and raw command evidence rendered beside one Change. */
 export interface ChangeContextEvidenceProps {
   status: ChangeStatus
   references: CliReferenceIndexEntry[]

@@ -21,8 +21,10 @@ export const OPSX_ALL_WORKFLOWS = [
   'onboard',
 ] as const
 
+/** Complete supported OPSX workflow identifier union. */
 export type OpsxWorkflowId = (typeof OPSX_ALL_WORKFLOWS)[number]
 
+/** Workflows delivered by the OpenSpec core profile. */
 export const OPSX_CORE_PROFILE_WORKFLOWS = [
   'propose',
   'explore',
@@ -32,9 +34,13 @@ export const OPSX_CORE_PROFILE_WORKFLOWS = [
   'archive',
 ] as const satisfies readonly OpsxWorkflowId[]
 
+/** OPSX actions whose primary input is free text. */
 export const OPSX_TEXT_INPUT_ACTIONS = ['explore', 'propose'] as const
+/** OPSX actions whose primary input is an artifact identity. */
 export const OPSX_ARTIFACT_INPUT_ACTIONS = ['continue', 'ff'] as const
+/** OPSX actions whose primary input is an existing Change identity. */
 export const OPSX_CHANGE_INPUT_ACTIONS = ['apply', 'update', 'archive', 'verify', 'sync'] as const
+/** Workflows that can be delivered as explicit agent commands. */
 export const OPSX_COMMAND_CAPABLE_WORKFLOWS = [
   'propose',
   'apply',
@@ -43,10 +49,14 @@ export const OPSX_COMMAND_CAPABLE_WORKFLOWS = [
   'archive',
 ] as const satisfies readonly OpsxWorkflowId[]
 
+/** Text-input OPSX action union. */
 export type OpsxTextInputAction = (typeof OPSX_TEXT_INPUT_ACTIONS)[number]
+/** Artifact-input OPSX action union. */
 export type OpsxArtifactInputAction = (typeof OPSX_ARTIFACT_INPUT_ACTIONS)[number]
+/** Change-input OPSX action union. */
 export type OpsxChangeInputAction = (typeof OPSX_CHANGE_INPUT_ACTIONS)[number]
 
+/** User-facing labels for every supported OPSX workflow. */
 export const OPSX_WORKFLOW_LABELS: Record<OpsxWorkflowId, string> = {
   propose: 'Propose change',
   explore: 'Explore ideas',
@@ -62,6 +72,7 @@ export const OPSX_WORKFLOW_LABELS: Record<OpsxWorkflowId, string> = {
   onboard: 'Onboard',
 }
 
+/** First-party skill directory selected for each OPSX workflow. */
 export const OPSX_WORKFLOW_TO_SKILL_DIR: Record<OpsxWorkflowId, string> = {
   propose: 'openspec-propose',
   explore: 'openspec-explore',
@@ -77,6 +88,7 @@ export const OPSX_WORKFLOW_TO_SKILL_DIR: Record<OpsxWorkflowId, string> = {
   onboard: 'openspec-onboard',
 }
 
+/** Return whether a workflow selection exactly represents the core profile. */
 export function isOpsxCoreWorkflowSelection(workflows: readonly string[]): boolean {
   return (
     workflows.length === OPSX_CORE_PROFILE_WORKFLOWS.length &&

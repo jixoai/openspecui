@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Render a dense wide-screen projection of Store list facts.
+ * 2. Keep Inventory secondary to Inspector and Context navigation.
+ *
+ * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
+ */
 import type { StoreListEntry } from '@openspecui/core/store-types'
 import { EmptyView, ErrorView, LoadingView } from '../components/state-views'
 import { StatusBadge } from '../components/status-badge'

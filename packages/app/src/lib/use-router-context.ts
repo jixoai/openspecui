@@ -1,3 +1,9 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Read the typed App launch context from the router owner.
+ *
+ * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ */
 import { useRouter } from '@tanstack/react-router'
 import type { AppRouterContext } from '../app-router'
 

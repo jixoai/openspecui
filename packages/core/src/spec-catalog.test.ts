@@ -16,18 +16,28 @@ import {
 describe('Spec Catalog', () => {
   const catalog = buildSpecCatalog({
     owned: [{ id: 'auth', name: 'Owned Auth', updatedAt: 3 }],
-    references: [
+    referenced: [
       {
-        store_id: 'platform-a',
-        specs: [{ id: 'auth', summary: 'Platform A auth' }],
-        status: [],
+        storeId: 'platform-a',
+        specs: [{ id: 'auth', requirementCount: 1 }],
       },
       {
-        store_id: 'platform-b',
-        specs: [{ id: 'auth', summary: 'Platform B auth' }],
-        status: [],
+        storeId: 'platform-b',
+        specs: [{ id: 'auth', requirementCount: 2 }],
       },
     ],
+    referenceSources: ['platform-a', 'platform-b'].map((storeId) => ({
+      storeId,
+      state: 'ready' as const,
+      diagnostics: [],
+      evidence: {
+        success: true,
+        stdout: '{}',
+        stderr: '',
+        exitCode: 0,
+        diagnostics: [],
+      },
+    })),
     observedAt: 10,
   })
 
@@ -48,7 +58,7 @@ describe('Spec Catalog', () => {
         storeId: 'platform-b',
         specId: 'auth',
       })
-    ).toMatchObject({ summary: 'Platform B auth', readOnly: true })
+    ).toMatchObject({ requirementCount: 2, readOnly: true })
   })
 
   it('uses compound live/static routes and round-trips route params', () => {

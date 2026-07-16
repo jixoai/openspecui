@@ -9,13 +9,12 @@
 import {
   reactiveReadFile,
   toggleMarkdownTask,
-  updateReactiveFileCache,
   type OpenSpecAdapter,
   type TrackedTaskLocation,
 } from '@openspecui/core'
-import { writeFile } from 'node:fs/promises'
 import { resolveEntityEntryPath } from './entity-file-paths.js'
 
+/** Exact tracked-task identity and selected Planning root required for one mutation. */
 export interface SetTrackedTaskCompletionOptions {
   adapter: OpenSpecAdapter
   projectDir: string
@@ -53,6 +52,5 @@ export async function setTrackedTaskCompletion(
     throw new Error(`Failed to toggle task ${options.location.taskIndex} in ${info.relativePath}`)
   }
 
-  await writeFile(info.absolutePath, updated, 'utf8')
-  updateReactiveFileCache(info.absolutePath, updated)
+  await options.adapter.writeEntityFile('change', options.changeId, info.relativePath, updated)
 }

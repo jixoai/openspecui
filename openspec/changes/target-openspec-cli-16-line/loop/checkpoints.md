@@ -21,6 +21,39 @@ Original request (2026-07-16): "代码已经提交，开始review。如果有问
 - [x] 1.6 Approved research and delivery order are recorded in `loop/research-plan.md`
 - [x] 1.7 Pre-implementation truth and loopback triggers are recorded in `loop/implementation.md`
 
+## Blocking Review Correction Work Package
+
+This work package precedes every still-planned product checkpoint. The same boundaries have failed repeatedly, so endpoint-local patches are not sufficient evidence of completion.
+
+```text
+reachable capability inventory
+          |
+          v
+one explicit owner per mutation / projection / lifecycle
+          |
+          v
+official CLI + physical FS + immediate reactive + root-rotation tests
+          |
+          v
+re-audit every public entry and only then close checkpoints
+```
+
+Recurring failure analysis:
+
+- **Archive ownership recurred across different public entries.** Global Archive generic commands, legacy Adapter rename, `change.archive`, typed `cli.archive*`, and now generic `cli.execute` / `runCommandStream` were closed one name at a time while the reachable capability remained. Construction must begin from an inventory of every public route and caller that can reach `CliExecutor.execute*`; `archiveStrictStream` must be the only reachable Archive mutation, and route-absence/rejection tests must cover every generic path.
+- **Filesystem protection stopped at the last discovered syntax.** Change/task ids, literal/glob output paths, and parent traversal were guarded separately, but lexical containment was mistaken for physical containment. Create one shared physical entity-write boundary. Validate ids and relative paths, resolve the Planning root and existing ancestors physically immediately before mutation, reject symlink escape, and update reactive state only after the disk write succeeds. Test intermediate-directory symlinks, existing-target symlinks, missing leaf creation, and normal in-root writes.
+- **Reactive correctness was repaired for one task writer, not owned by the write primitive.** A successful direct write must make the next reactive read and subscriber pull observe the new bytes without watcher timing. Prefer one reusable reactive write operation or one Server write owner used by Adapter and Router paths; do not scatter `updateReactiveFileCache` calls without auditing every write caller.
+- **Synthetic fixtures hid an upstream contract mismatch.** OpenSpec 1.6 Doctor does not embed Reference Specs. Do not add optional `specs` to Doctor fixtures. Enumerate every Doctor-declared direct Store through the typed `list --specs --store --json` contract, preserve per-Store failures/evidence, and prove the Catalog with the pinned executable 1.6 fixture.
+- **Environment teardown was mistaken for root-replacement teardown.** Planning-root A must stop owning background resources when B becomes active. Implement an explicit serialized replacement lifecycle and test A -> B -> A, concurrent resolve during replacement, preview isolation, zero stale leases, and idempotent backend disposal.
+- **Release prose advanced ahead of product state.** Changesets may describe only checked and user-reachable behavior. Keep `/context` additive until checkpoint 6.9 actually removes/replaces project Stores.
+
+Reflection required before re-closing any reopened checkpoint:
+
+- Record the complete capability/caller inventory, the shared owner introduced, and why no sibling route can bypass it.
+- Record the regression test that fails against `8d38f35`, not only a test written after the fix.
+- Explain why the previous correction was local rather than ownership-complete and what now prevents the same class from reappearing under a new endpoint, path shape, fixture, or lifecycle transition.
+- List residual platform limits explicitly. In particular, do not claim race-free filesystem confinement if the implementation only performs pre-write path checks.
+
 ## 2. CLI 1.6 Contract Baseline
 
 - [x] 2.1 OpenSpecUI compatibility targets the CLI 1.6 line and rejects unsupported versions with accurate guidance
@@ -47,7 +80,7 @@ Original request (2026-07-16): "代码已经提交，开始review。如果有问
 - [x] 3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited `XDG_DATA_HOME`
 - [x] 3.9 Agent prompts and OPSX commands use CLI-resolved paths and never reconstruct `<launch-project>/openspec`
 - [x] 3.10 Project-owned `.env`, `StoreRoot`, registry overlay, and synthesized registry paths remain absent
-- [x] 3.11 Tests assert actual file mutations occur only inside the selected planning root
+- [x] 3.11 Tests assert actual file mutations occur only inside the selected planning root, including when entity directories contain symlinks
 
 ## 4. Multi-Root Reactive Kernel
 
@@ -55,11 +88,11 @@ Original request (2026-07-16): "代码已经提交，开始review。如果有问
 - [x] 4.2 Effective OpenSpec data home changes invalidate Store, Workset, schema, and Context facets
 - [x] 4.3 Registered Store roots are added/removed from observation as registry truth changes
 - [x] 4.4 Launch-project and connected planning-root changes invalidate their project/context facets
-- [x] 4.5 CLI mutation terminal or indeterminate outcomes invalidate affected facets before clients pull again
+- [x] 4.5 CLI mutation terminal or indeterminate outcomes invalidate affected facets, and direct filesystem mutations update reactive state before returning
 - [x] 4.6 Push messages carry invalidation identity only; clients pull fresh CLI projections
 - [x] 4.7 Duplicate invalidations coalesce or remain idempotent across subscribers
 - [x] 4.8 Store polling is removed as the primary path and retained only as a bounded watcher-failure fallback
-- [x] 4.9 Watchers and fallback timers are released after unregister, root removal, disconnect, and environment teardown
+- [x] 4.9 Watchers, planning-root service records, preview sessions, and fallback timers are released after unregister, root replacement/removal, disconnect, and environment teardown
 - [x] 4.10 Multi-client tests cover external Store edits, registry changes, concurrent operations, reconnect, and root disappearance
 
 ## 5. Task and Spec Projection Contracts
@@ -71,7 +104,7 @@ Original request (2026-07-16): "代码已经提交，开始review。如果有问
 - [x] 5.5 `applyInstructionProgress` preserves the raw Apply result and visibly attributes divergence from tracked progress
 - [x] 5.6 `0/0` maps to `no-tasks`, never complete; archive readiness remains a CLI validate/archive outcome
 - [x] 5.7 Core defines compound Spec identity as `(owned, specId)` or `(referenced, storeId, specId)`
-- [x] 5.8 Shared Spec Catalog combines owned and direct referenced Specs without flattening source or read-only state
+- [x] 5.8 Shared Spec Catalog combines owned and direct referenced Specs by enumerating each Doctor-declared Reference through the CLI without flattening source or read-only state
 - [x] 5.9 Live and static routes use `/specs/owned/<specId>` and `/specs/referenced/<storeId>/<specId>`
 - [x] 5.10 Search records, cache keys, view-transition keys, links, and provider lookups preserve complete Spec identity
 - [x] 5.11 Duplicate `specId` fixtures across owned and multiple Store sources navigate to the correct content
@@ -82,9 +115,9 @@ Original request (2026-07-16): "代码已经提交，开始review。如果有问
 - [x] 6.2 Dashboard metrics derive from the planning root and show root source, Store id, Reference health, and separately scoped Git facts
 - [x] 6.3 Changes lists only writable-root changes and uses formal tracked progress for workflow state
 - [x] 6.4 Change detail preserves CLI paths/context, adds `update`, shows Reference context, and renders strict validate/archive diagnostics
-- [x] 6.5 Specs defaults to Owned and provides a Store-grouped Referenced view with immutable entries
+- [x] 6.5 Specs defaults to Owned and provides a Store-grouped Referenced view with immutable entries sourced from real CLI 1.6 Reference enumeration
 - [x] 6.6 Spec detail shows source/read-only state, disables mutation for References, and returns to the correct list scope
-- [x] 6.7 Archive lists only writable-root archives and never retries validation bypass automatically
+- [x] 6.7 Archive lists only writable-root archives, has one Server-owned strict mutation entry, and cannot be reached through a generic CLI bypass
 - [ ] 6.8 Config implements Project Binding, Active Root Config, and Environment Global Config ownership sections
 - [ ] 6.9 Project Stores route is replaced by Context with root, Reference, environment, and read-only registry diagnostics
 - [ ] 6.10 Search defaults to the active root and offers an explicit Referenced Specs scope without referenced changes
@@ -161,6 +194,7 @@ Original request (2026-07-16): "代码已经提交，开始review。如果有问
 - [ ] 10.14 `pnpm test:ci` passes
 - [ ] 10.15 `pnpm test:browser:ci` passes
 - [ ] 10.16 `loop/implementation.md` records each completed slice, focused evidence, and every approved divergence
+- [x] 10.17 New production files carry the required timestamped orthogonal-intent/original-request header and new public contracts carry API comments
 
 ## 11. PR, Archive, and Release Gates
 

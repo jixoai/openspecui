@@ -19,11 +19,13 @@ interface RootInvalidationRecord {
   releasePath: () => void
 }
 
+/** One physical root mapped to the runtime facets it can invalidate. */
 export interface RuntimeInvalidationRoot {
   rootPath: string
   referenceCount: number
 }
 
+/** Reference-counted physical-root to runtime-facet invalidation owner. */
 export interface RuntimeRootInvalidationOwner {
   acquireRoot(rootPath: string): () => void
 }

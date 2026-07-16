@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Render backend-owned Store mutation lifecycle states consistently.
+ * 2. Preserve indeterminate as distinct from failure or cancellation.
+ *
+ * Original request (2026-07-15): "前端缺少的东西你可以通过注释补充。"
+ */
 import { CheckCircle2, CircleSlash, Loader2, Timer, XCircle } from 'lucide-react'
 import type { StoreMutationStatus } from '../types/store-mutation'
 
@@ -53,6 +60,7 @@ export function MutationStatusBadge({ status }: { status: StoreMutationStatus })
   )
 }
 
+/** Return the user-facing label for one backend-owned mutation status. */
 export function getStatusLabel(status: StoreMutationStatus): string {
   return STATUS_META[status].label
 }

@@ -9,6 +9,7 @@
 import type { RootContextState, TerminalCwdTarget } from '@openspecui/core'
 import { useContextSubscription } from './use-context-subscription'
 
+/** One explicit terminal cwd target and its root provenance label. */
 export interface TerminalCwdTargetOption {
   target: TerminalCwdTarget
   label: string
@@ -17,6 +18,7 @@ export interface TerminalCwdTargetOption {
   unavailableReason: string | null
 }
 
+/** Available terminal cwd targets and the current selection. */
 export interface TerminalCwdTargetState {
   launchProject: TerminalCwdTargetOption
   planningRoot: TerminalCwdTargetOption
@@ -80,6 +82,7 @@ export function selectTerminalCwdTargetState(
   }
 }
 
+/** Derive terminal cwd choices from the current Root Context. */
 export function useTerminalCwdTargetState(): TerminalCwdTargetState {
   const subscription = useContextSubscription()
   return selectTerminalCwdTargetState({
@@ -89,6 +92,7 @@ export function useTerminalCwdTargetState(): TerminalCwdTargetState {
   })
 }
 
+/** Resolve one cwd target id from an already derived terminal target state. */
 export function getTerminalCwdTargetOption(
   state: TerminalCwdTargetState,
   target: TerminalCwdTarget

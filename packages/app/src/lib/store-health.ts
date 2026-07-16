@@ -1,5 +1,13 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Map Store diagnostics to presentation-only health states.
+ * 2. Avoid ownership, completeness, or authorization inference.
+ *
+ * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影。"
+ */
 import type { StoreDiagnostic } from '@openspecui/core/store-types'
 
+/** Presentation-only Store health summary derived from upstream diagnostics. */
 export interface StoreHealthSummary {
   state: 'healthy' | 'issue' | 'unknown'
   label: string

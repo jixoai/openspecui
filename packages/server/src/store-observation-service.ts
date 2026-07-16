@@ -23,11 +23,13 @@ interface ObservedStoreRecord {
   releaseInvalidation: () => void
 }
 
+/** One CLI-listed Store identity and canonical root currently under observation. */
 export interface ObservedStoreRoot {
   storeId: string
   rootPath: string
 }
 
+/** Reconcile/dispose surface for CLI-owned registered Store observation. */
 export interface StoreObservationReconciler {
   reconcile(stores: readonly StoreListEntry[]): Promise<void>
   dispose(): Promise<void>

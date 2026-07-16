@@ -16,6 +16,7 @@ import type {
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
 
+/** Git repository scopes plus the current explicit user selection. */
 export interface GitRepositoryScopeState {
   requestedScope: GitRepositoryScope
   scope: GitRepositoryScope
@@ -36,6 +37,7 @@ export function useGitRepositoryScopes(enabled = true): UseQueryResult<GitReposi
   })
 }
 
+/** Resolve and retain explicit code/planning Git repository scope selection. */
 export function useGitRepositoryScope(enabled = true): GitRepositoryScopeState {
   const location = useLocation()
   const locationSearch = location.searchStr

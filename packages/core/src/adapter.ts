@@ -9,16 +9,19 @@
  */
 import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
-import { requireCanonicalOpenSpecEntityId } from './entity-id.js'
+import { requireCanonicalOpenSpecEntityId, requireOpenSpecEntityRelativePath } from './entity-id.js'
 import { inferFileMime, inferFilePreviewKind, isTextLikeFile } from './file-preview.js'
 import {
   buildOpsxEntityDetail,
+  getOpsxEntityRootRelativePath,
   parseOpsxEntityMetadata,
   type OpsxEntityDetail,
   type OpsxEntityReadOptions,
+  type OpsxEntityStage,
 } from './opsx-entity.js'
 import { parseOpsxSchemaDetail } from './opsx-schema-detail.js'
 import { MarkdownParser } from './parser.js'
+import { writePhysicalReactiveFile } from './physical-reactive-file-writer.js'
 import { reactiveReadDir, reactiveReadFile, reactiveStat } from './reactive-fs/index.js'
 import type { Change, ChangeFile, DeltaSpec, Spec } from './schemas.js'
 import {
@@ -472,19 +475,43 @@ export class OpenSpecAdapter {
 
   async writeSpec(specId: string, content: string): Promise<void> {
     const canonicalSpecId = requireCanonicalOpenSpecEntityId(specId, 'specId')
-    const specDir = join(this.specsDir, canonicalSpecId)
-    await mkdir(specDir, { recursive: true })
-    await writeFile(join(specDir, 'spec.md'), content, 'utf-8')
+    await writePhysicalReactiveFile({
+      rootPath: this.projectDir,
+      relativePath: join('openspec', 'specs', canonicalSpecId, 'spec.md'),
+      content,
+    })
   }
 
   async writeChange(changeId: string, proposal: string, tasks?: string): Promise<void> {
     const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
-    const changeDir = join(this.changesDir, canonicalChangeId)
-    await mkdir(changeDir, { recursive: true })
-    await writeFile(join(changeDir, 'proposal.md'), proposal, 'utf-8')
+    await writePhysicalReactiveFile({
+      rootPath: this.projectDir,
+      relativePath: join('openspec', 'changes', canonicalChangeId, 'proposal.md'),
+      content: proposal,
+    })
     if (tasks !== undefined) {
-      await writeFile(join(changeDir, 'tasks.md'), tasks, 'utf-8')
+      await writePhysicalReactiveFile({
+        rootPath: this.projectDir,
+        relativePath: join('openspec', 'changes', canonicalChangeId, 'tasks.md'),
+        content: tasks,
+      })
     }
+  }
+
+  /** Write one validated Change or Archive entity file through the shared physical/reactive owner. */
+  async writeEntityFile(
+    stage: OpsxEntityStage,
+    changeId: string,
+    path: string,
+    content: string
+  ): Promise<void> {
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    const relativePath = requireOpenSpecEntityRelativePath(path, 'path')
+    await writePhysicalReactiveFile({
+      rootPath: this.projectDir,
+      relativePath: join(getOpsxEntityRootRelativePath(stage, canonicalChangeId), relativePath),
+      content,
+    })
   }
 
   // =====================

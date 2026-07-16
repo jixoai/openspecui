@@ -1,9 +1,9 @@
-import { mkdir, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cleanupTempDir, createTempDir } from './__tests__/test-utils.js'
 import { OpenSpecAdapter } from './adapter.js'
-import { clearCache } from './reactive-fs/index.js'
+import { clearCache, ReactiveContext, reactiveReadFile } from './reactive-fs/index.js'
 import { closeAllWatchers } from './reactive-fs/watcher-pool.js'
 
 describe('OpenSpecAdapter change files', () => {
@@ -57,6 +57,118 @@ describe('OpenSpecAdapter change files', () => {
 
     await expect(stat(join(tempDir, 'openspec', 'project.md'))).resolves.toBeDefined()
     await expect(stat(join(tempDir, 'openspec', 'AGENTS.md'))).rejects.toThrow()
+  })
+
+  it('rejects intermediate-directory and existing-target symlink escapes', async () => {
+    const externalDir = await createTempDir()
+    try {
+      await mkdir(join(tempDir, 'openspec', 'specs'), { recursive: true })
+      await symlink(externalDir, join(tempDir, 'openspec', 'specs', 'escaped'))
+
+      await expect(adapter.writeSpec('escaped', '# Escaped\n')).rejects.toThrow(/physical root/i)
+      await expect(readFile(join(externalDir, 'spec.md'), 'utf8')).rejects.toThrow()
+
+      const changeDir = join(tempDir, 'openspec', 'changes', 'existing-target')
+      const externalTarget = join(externalDir, 'proposal.md')
+      await mkdir(changeDir, { recursive: true })
+      await writeFile(externalTarget, '# External\n', 'utf8')
+      await symlink(externalTarget, join(changeDir, 'proposal.md'))
+
+      await expect(adapter.writeChange('existing-target', '# Changed\n')).rejects.toThrow(
+        /physical root/i
+      )
+      await expect(readFile(externalTarget, 'utf8')).resolves.toBe('# External\n')
+    } finally {
+      await cleanupTempDir(externalDir)
+    }
+  })
+
+  it('settles direct writes for immediate reads and multiple subscribers', async () => {
+    const specPath = join(tempDir, 'openspec', 'specs', 'reactive', 'spec.md')
+    await adapter.writeSpec('reactive', '# Before\n')
+    expect(await reactiveReadFile(specPath)).toBe('# Before\n')
+
+    const firstContext = new ReactiveContext()
+    const secondContext = new ReactiveContext()
+    const firstStream = firstContext.stream(() => reactiveReadFile(specPath))
+    const secondStream = secondContext.stream(() => reactiveReadFile(specPath))
+    expect((await firstStream.next()).value).toBe('# Before\n')
+    expect((await secondStream.next()).value).toBe('# Before\n')
+    const firstUpdate = firstStream.next()
+    const secondUpdate = secondStream.next()
+
+    await adapter.writeSpec('reactive', '# After\n')
+
+    expect(await reactiveReadFile(specPath)).toBe('# After\n')
+    await expect(Promise.all([firstUpdate, secondUpdate])).resolves.toEqual([
+      expect.objectContaining({ value: '# After\n' }),
+      expect.objectContaining({ value: '# After\n' }),
+    ])
+
+    const proposalPath = join(tempDir, 'openspec', 'changes', 'reactive-change', 'proposal.md')
+    const tasksPath = join(tempDir, 'openspec', 'changes', 'reactive-change', 'tasks.md')
+    expect(await reactiveReadFile(proposalPath)).toBeNull()
+    expect(await reactiveReadFile(tasksPath)).toBeNull()
+    await adapter.writeChange('reactive-change', '# Proposal\n', '- [ ] Task\n')
+    expect(await reactiveReadFile(proposalPath)).toBe('# Proposal\n')
+    expect(await reactiveReadFile(tasksPath)).toBe('- [ ] Task\n')
+
+    const firstListContext = new ReactiveContext()
+    const secondListContext = new ReactiveContext()
+    const firstListStream = firstListContext.stream(() => adapter.listSpecs())
+    const secondListStream = secondListContext.stream(() => adapter.listSpecs())
+    expect((await firstListStream.next()).value).toContain('reactive')
+    expect((await secondListStream.next()).value).toContain('reactive')
+    const firstListUpdate = firstListStream.next()
+    const secondListUpdate = secondListStream.next()
+    await adapter.writeSpec('reactive-new', '# New\n')
+    await expect(Promise.all([firstListUpdate, secondListUpdate])).resolves.toEqual([
+      expect.objectContaining({ value: expect.arrayContaining(['reactive-new']) }),
+      expect.objectContaining({ value: expect.arrayContaining(['reactive-new']) }),
+    ])
+
+    await firstStream.return(undefined)
+    await secondStream.return(undefined)
+    await firstListStream.return(undefined)
+    await secondListStream.return(undefined)
+  })
+
+  it('settles newly created entity files for two directory subscribers', async () => {
+    const firstContext = new ReactiveContext()
+    const secondContext = new ReactiveContext()
+    const firstStream = firstContext.stream(() => adapter.readChangeFiles('demo'))
+    const secondStream = secondContext.stream(() => adapter.readChangeFiles('demo'))
+    await firstStream.next()
+    await secondStream.next()
+    const firstUpdate = (async () => {
+      while (true) {
+        const result = await firstStream.next()
+        if (result.value?.some((file) => file.path === 'notes/reactive.md')) return result
+      }
+    })()
+    const secondUpdate = (async () => {
+      while (true) {
+        const result = await secondStream.next()
+        if (result.value?.some((file) => file.path === 'notes/reactive.md')) return result
+      }
+    })()
+
+    await adapter.writeEntityFile('change', 'demo', 'notes/reactive.md', '# Entity\n')
+
+    await expect(Promise.all([firstUpdate, secondUpdate])).resolves.toEqual([
+      expect.objectContaining({
+        value: expect.arrayContaining([
+          expect.objectContaining({ path: 'notes/reactive.md', content: '# Entity\n' }),
+        ]),
+      }),
+      expect.objectContaining({
+        value: expect.arrayContaining([
+          expect.objectContaining({ path: 'notes/reactive.md', content: '# Entity\n' }),
+        ]),
+      }),
+    ])
+    await firstStream.return(undefined)
+    await secondStream.return(undefined)
   })
 
   it('separates tracked workflow tasks from schema-document checklists', async () => {

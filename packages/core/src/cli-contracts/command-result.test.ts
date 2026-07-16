@@ -63,8 +63,6 @@ describe('OpenSpec CLI command contract parsing', () => {
           {
             store_id: 'healthy',
             root: '/stores/healthy',
-            specs: [{ id: 'auth', summary: 'Authentication.' }],
-            fetch: 'openspec show <spec-id> --type spec --store healthy',
             status: [],
           },
           {
@@ -94,7 +92,7 @@ describe('OpenSpec CLI command contract parsing', () => {
     )
 
     expect(parsed.data?.references).toHaveLength(3)
-    expect(parsed.data?.references[0]?.specs?.[0]?.id).toBe('auth')
+    expect(parsed.data?.references[0]).not.toHaveProperty('specs')
     expect(parsed.data?.references[1]?.status[0]?.code).toBe('reference_unresolved')
     expect(parsed.data?.references[2]?.status[0]?.code).toBe('reference_root_unhealthy')
   })

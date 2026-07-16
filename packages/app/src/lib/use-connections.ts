@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Project persisted credential-free backend connection entries.
+ * 2. Observe backend reachability without conflating it with environment identity.
+ *
+ * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ */
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { probeHostedBackend, type HostedTabReachability } from './reachability'
 import {
@@ -71,6 +78,7 @@ function createShellStateStore() {
 
 const shellStateStore = createShellStateStore()
 
+/** Subscribe to the persisted credential-free backend connection list. */
 export function useConnections() {
   const state = useSyncExternalStore(shellStateStore.subscribe, shellStateStore.getState)
 
@@ -83,8 +91,10 @@ export function useConnectionsActions() {
 }
 
 /** 单个 backend 的可达性（checking | online | offline）。 */
+/** Reachability fact observed for one retained backend connection. */
 export type ConnectionReachability = HostedTabReachability
 
+/** Reachability observations indexed by retained connection id. */
 export interface ConnectionReachabilityMap {
   [apiBaseUrl: string]: ConnectionReachability
 }
@@ -96,6 +106,7 @@ export interface ConnectionReachabilityMap {
  * TODO(kernel): 后端 health 协议落地后，从同一探测结果提取 envUri + capabilities，
  *               并据 envUri 分组（Environment Center 使用），此处保留纯可达性职责。
  */
+/** Probe and subscribe to reachability for the supplied backend tabs. */
 export function useConnectionReachability(tabs: HostedShellTab[]): ConnectionReachabilityMap {
   const [reachability, setReachability] = useState<ConnectionReachabilityMap>({})
 

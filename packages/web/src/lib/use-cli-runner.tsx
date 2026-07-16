@@ -17,7 +17,7 @@ export interface CommandDescriptor {
   args: string[]
   status: CommandRunStatus
   exitCode: number | null
-  stream?: ArchiveStrictStreamTransport
+  stream?: CliStreamTransport
 }
 
 export type ProcessEvent = 'data' | 'error' | 'close' | 'exit'
@@ -42,10 +42,16 @@ interface ArchiveStrictStreamTransport {
   }
 }
 
+interface InstallGlobalCliStreamTransport {
+  type: 'install-global-cli'
+}
+
+type CliStreamTransport = ArchiveStrictStreamTransport | InstallGlobalCliStreamTransport
+
 interface CommandInput {
   command: string
   args?: string[]
-  stream?: ArchiveStrictStreamTransport
+  stream?: CliStreamTransport
 }
 
 interface UseCliRunnerOptions {
@@ -328,13 +334,23 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
           activeCommandIdRef.current = null
         },
       }
-      const subscription =
-        target.stream?.type === 'archive-strict'
-          ? trpcClient.cli.archiveStrictStream.subscribe(target.stream.input, handlers)
-          : trpcClient.cli.runCommandStream.subscribe(
-              { command: target.command, args: target.args },
-              handlers
-            )
+      const subscription = (() => {
+        if (target.stream?.type === 'archive-strict') {
+          return trpcClient.cli.archiveStrictStream.subscribe(target.stream.input, handlers)
+        }
+        if (target.stream?.type === 'install-global-cli') {
+          return trpcClient.cli.installGlobalCliStream.subscribe(undefined, handlers)
+        }
+        if (target.command !== 'openspec') {
+          handlers.onError(
+            new Error(`Unsupported public CLI command: ${target.command || '<empty>'}`)
+          )
+          return null
+        }
+        return trpcClient.cli.executeOpenSpecStream.subscribe({ args: target.args }, handlers)
+      })()
+
+      if (!subscription) return process
 
       process.status = 'running'
       activeSubscriptionRef.current = subscription

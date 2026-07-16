@@ -1,10 +1,9 @@
-import type {
-  CliReferenceIndexEntry,
-  OpenSpecAdapter,
-  OpsxEntityReadOptions,
-  OpsxEntityStage,
-} from '@openspecui/core'
-import { specIdentityKey, specRoutePath } from '@openspecui/core/spec-catalog'
+import type { OpenSpecAdapter, OpsxEntityReadOptions, OpsxEntityStage } from '@openspecui/core'
+import {
+  specIdentityKey,
+  specRoutePath,
+  type ReferencedSpecCatalogEntry,
+} from '@openspecui/core/spec-catalog'
 import type { SearchDocument } from '@openspecui/search'
 import type { DocumentService } from './document-service.js'
 
@@ -24,7 +23,7 @@ export async function collectSearchDocuments(
   adapter: OpenSpecAdapter,
   documentService?: DocumentService,
   resolveEntityReadOptions?: EntityReadOptionsResolver,
-  references: readonly CliReferenceIndexEntry[] = []
+  referencedSpecs: readonly ReferencedSpecCatalogEntry[] = []
 ): Promise<SearchDocument[]> {
   const docs: SearchDocument[] = []
 
@@ -47,23 +46,16 @@ export async function collectSearchDocuments(
     })
   }
 
-  for (const reference of references) {
-    for (const spec of reference.specs ?? []) {
-      const identity = {
-        kind: 'referenced' as const,
-        storeId: reference.store_id,
-        specId: spec.id,
-      }
-      docs.push({
-        id: `spec:${specIdentityKey(identity)}`,
-        kind: 'spec',
-        title: spec.id,
-        href: specRoutePath(identity),
-        path: `referenced:${reference.store_id}:specs/${spec.id}`,
-        content: spec.summary,
-        updatedAt: 0,
-      })
-    }
+  for (const spec of referencedSpecs) {
+    docs.push({
+      id: `spec:${specIdentityKey(spec.identity)}`,
+      kind: 'spec',
+      title: spec.name,
+      href: specRoutePath(spec.identity),
+      path: `referenced:${spec.identity.storeId}:specs/${spec.identity.specId}`,
+      content: `Requirement count: ${spec.requirementCount}`,
+      updatedAt: 0,
+    })
   }
 
   const changes = await adapter.listChangesWithMeta()

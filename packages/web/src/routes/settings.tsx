@@ -526,7 +526,11 @@ export function Settings() {
   useEffect(() => {
     if (showInstallModal) {
       installCommands.replaceAll([
-        { command: 'npm', args: ['install', '-g', '@fission-ai/openspec'] },
+        {
+          command: 'npm',
+          args: ['install', '-g', '@fission-ai/openspec'],
+          stream: { type: 'install-global-cli' },
+        },
       ])
       installCommands.runAll()
     } else {
@@ -618,7 +622,7 @@ export function Settings() {
   })
 
   const syncOpsxProjectMutation = useMutation({
-    mutationFn: () => trpcClient.cli.execute.mutate({ args: ['update'] }),
+    mutationFn: () => trpcClient.cli.executeOpenSpec.mutate({ args: ['update'] }),
     onSuccess: async () => {
       await Promise.allSettled([
         refetchOpsxProfileState(),
@@ -630,7 +634,8 @@ export function Settings() {
   })
 
   const setCoreProfileMutation = useMutation({
-    mutationFn: () => trpcClient.cli.execute.mutate({ args: ['config', 'profile', 'core'] }),
+    mutationFn: () =>
+      trpcClient.cli.executeOpenSpec.mutate({ args: ['config', 'profile', 'core'] }),
     onSuccess: async () => {
       await Promise.allSettled([refetchOpsxProfileState()])
     },

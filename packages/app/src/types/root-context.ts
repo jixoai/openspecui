@@ -1,4 +1,11 @@
 /**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Define hosted environment and observed project Context projections.
+ * 2. Preserve upstream Store payloads without browser-owned registry semantics.
+ *
+ * Original request (2026-07-15): "前端缺少的东西你可以通过注释补充。"
+ */
+/**
  * Hosted runtime environment + project Context observation projections.
  *
  * TODO(kernel): 待 packages/server 实现后端协议后，此类型迁移至 @openspecui/core 并由后端权威输出。

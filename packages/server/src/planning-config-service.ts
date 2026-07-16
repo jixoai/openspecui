@@ -52,6 +52,7 @@ function currentRootContext(state: RootContextResolvedState): RootContext {
   return state.state === 'ready' ? state.data : state.attempt
 }
 
+/** Read project-owned Store and Reference declarations from the launch project. */
 export async function readProjectBindingConfig(input: {
   launchProjectDir: string
   rootPreview: RootContextResolvedState
@@ -66,6 +67,7 @@ export async function readProjectBindingConfig(input: {
   }
 }
 
+/** Read configuration owned by the currently selected writable Planning root. */
 export async function readActiveRootConfig(input: {
   launchProjectDir: string
   rootContext: RootContext
@@ -85,6 +87,7 @@ export async function readActiveRootConfig(input: {
   }
 }
 
+/** Resolve and read the CLI-selected environment-global configuration file. */
 export async function readEnvironmentGlobalConfig(input: {
   dataScope: OpenSpecDataScope
   cliExecutor: CliExecutor
@@ -117,6 +120,7 @@ async function writeConfigFile(path: string, content: string): Promise<void> {
   updateReactiveFileCache(path, content)
 }
 
+/** Update only project binding fields in the launch-project configuration. */
 export async function writeProjectBindingConfig(input: {
   launchProjectDir: string
   update: ProjectBindingUpdate
@@ -126,6 +130,7 @@ export async function writeProjectBindingConfig(input: {
   await writeConfigFile(file.path, updateProjectBindingContent(file.content, input.update))
 }
 
+/** Replace the active Planning-root configuration through its reactive file owner. */
 export async function writeActiveRootConfig(input: {
   launchProjectDir: string
   rootContext: RootContext
@@ -136,6 +141,7 @@ export async function writeActiveRootConfig(input: {
   await writeConfigFile(active.file.path, input.content)
 }
 
+/** Replace the CLI-selected environment-global configuration document. */
 export async function writeEnvironmentGlobalConfig(input: {
   cliExecutor: CliExecutor
   config: Record<string, CliJsonValue>
@@ -149,6 +155,7 @@ export async function writeEnvironmentGlobalConfig(input: {
   await writeConfigFile(configPath, `${JSON.stringify(input.config, null, 2)}\n`)
 }
 
+/** Read effective OpenSpec data scope from a successful or failed Root Context attempt. */
 export function dataScopeFromRootPreview(state: RootContextResolvedState): OpenSpecDataScope {
   return currentRootContext(state).dataScope
 }

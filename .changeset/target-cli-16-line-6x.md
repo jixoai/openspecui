@@ -52,8 +52,10 @@ line, and rejects older or forward CLI lines by default.
   `StoreRoot`, synthesized registry, registry overlay, or project configuration
   fields that could redirect `XDG_DATA_HOME`.
 - Route Spec, Change, task, archive, entity, artifact, schema, and active-config
-  writes through the selected planning root, and reject relative artifact paths
-  that escape their CLI-selected change root.
+  writes through one physical/reactive owner under the selected planning root.
+  Reject lexical and observed symlink escapes, write disk before settling
+  reactive file/directory state, and return only after subscribed projections
+  can observe OpenSpecUI-owned writes.
 - Replace the single-project watcher pool with runtime-environment-owned,
   reference-counted dynamic observation roots. Existing reactive reads rebind
   when matching roots appear, overlapping roots choose the deepest owner, and
@@ -94,9 +96,11 @@ line, and rejects older or forward CLI lines by default.
   fixed `tasks.md`. Task writes use reactive file state, immediately refresh
   subscribed projections, and lock the active task control until settlement.
 - Replace bare Spec ids and RPCs with one Core-owned compound identity and
-  source-aware Catalog/Document contract. Direct Reference detail remains
-  CLI-backed and read-only; routes, search records, caches, View Transitions,
-  static providers, and SSG enumeration preserve full source identity.
+  source-aware Catalog/Document contract. Enumerate every Doctor-declared
+  direct Reference through typed per-Store Spec list commands, retain partial
+  failure evidence, and keep detail CLI-backed and read-only; routes, search
+  records, caches, View Transitions, static providers, and SSG enumeration
+  preserve full source identity.
 - Attribute Dashboard planning metrics to the CLI-selected root, expose its
   source, Store, and direct Reference evidence, and keep the Code Git snapshot
   distinct from an optional Planning repository. Workflow completion no longer
@@ -110,6 +114,14 @@ line, and rejects older or forward CLI lines by default.
   diagnostics, and never starts a synthesized validation-bypass retry. The
   legacy direct filesystem rename endpoint is removed so no public Archive path
   bypasses CLI evidence.
+- Replace generic `cli.execute` / arbitrary-command streaming RPCs with
+  dedicated buffered and streamed OpenSpec argv procedures. Both reject Archive
+  before `CliExecutor` starts, fixed global installation has its own route, and
+  `archiveStrictStream` remains the only public application Archive mutation.
+- Serialize Planning-root replacement around one active service record. Root
+  changes and disappearance retire obsolete watcher/invalidation leases,
+  Kernel, hooks, Search, Dashboard, and preview state before callers observe a
+  completed transition; final backend disposal remains idempotent.
 - Reject non-canonical filesystem-backed Spec and Change ids through one shared
   Core/Server guard before any read or mutation can escape its entity root.
   Entity-relative file and glob paths use the same boundary before OPSX queries,
