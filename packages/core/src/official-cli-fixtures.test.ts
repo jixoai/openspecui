@@ -429,6 +429,30 @@ describe('official executable OpenSpec CLI fixtures', () => {
       expect(await readFile(mainSpec, 'utf8')).toBe(mainContent)
       expect(await pathExists(staleChange)).toBe(true)
 
+      const traversalChange = await writeChange(team, 'legit', VALID_SCENARIO)
+      const traversalArchiveResult = await runCli(
+        '1.6.0',
+        [
+          'archive',
+          'archive/../legit',
+          '--store',
+          'team',
+          '--yes',
+          '--json',
+          '--no-validate',
+          '--skip-specs',
+        ],
+        nearest,
+        env
+      )
+      expectExit(traversalArchiveResult, 0)
+      expect(parseJson(traversalArchiveResult, CliArchiveSchema).archive).toMatchObject({
+        change: 'archive/../legit',
+        archivedAs: expect.stringContaining('archive/../legit'),
+      })
+      expect(await pathExists(traversalChange)).toBe(false)
+      expect(await pathExists(join(team, 'openspec', 'changes', 'archive', 'legit'))).toBe(true)
+
       const emptySelectorResult = await runCli(
         '1.6.0',
         ['doctor', '--store', '', '--json'],

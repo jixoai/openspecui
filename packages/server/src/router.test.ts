@@ -1,9 +1,16 @@
 import {
+  CliExecutor,
+  ConfigManager,
   createDocumentChecklistSummary,
   createTrackedTaskProgress,
   OpenSpecAdapter,
   reactiveReadFile,
   RuntimeInvalidationIndex,
+  type CliCommandResult,
+  type CliContext,
+  type CliDoctor,
+  type ObservationRootOwner,
+  type RuntimeRootInvalidationOwner,
 } from '@openspecui/core'
 import { DEFAULT_BELL_SOUND_ID, DEFAULT_NOTIFICATION_SOUND_ID } from '@openspecui/core/sounds'
 import { execFile } from 'node:child_process'
@@ -19,7 +26,7 @@ import { sameGitPath } from '../src/git-shared.js'
 import type { Context } from '../src/router.js'
 import { appRouter } from '../src/router.js'
 import { FilePreviewService } from './file-preview-service.js'
-import type { PlanningRootServices } from './planning-root-service.js'
+import { PlanningRootServiceManager, type PlanningRootServices } from './planning-root-service.js'
 import { GENERIC_READ_ONLY_OPEN_SPEC_COMMAND_POLICIES } from './public-cli-execution.js'
 import type { SchemaMutationAction } from './schema-mutation-service.js'
 
@@ -36,6 +43,18 @@ function trackedTaskProgress(total: number, completed: number) {
 
 function documentChecklistSummary() {
   return createDocumentChecklistSummary([])
+}
+
+function commandResult<T>(data: T): CliCommandResult<T> {
+  return {
+    success: true,
+    stdout: JSON.stringify(data),
+    stderr: '',
+    exitCode: 0,
+    data,
+    payload: data,
+    diagnostics: [],
+  }
 }
 
 const dashboardGitSnapshotState = vi.hoisted(() => ({
@@ -623,6 +642,114 @@ describe('appRouter', () => {
         path: '/tmp/openspecui-router-test',
         source: 'nearest',
       })
+    })
+
+    it('keeps root B unexposed until an admitted root A Router mutation settles', async () => {
+      const tempDir = await createTempProjectDir('openspecui-router-root-operation-')
+      const launchProjectDir = join(tempDir, 'launch')
+      const rootA = join(tempDir, 'root-a')
+      const rootB = join(tempDir, 'root-b')
+      await Promise.all([
+        mkdir(join(launchProjectDir, 'openspec'), { recursive: true }),
+        mkdir(join(rootA, 'openspec', 'specs'), { recursive: true }),
+        mkdir(join(rootB, 'openspec', 'specs'), { recursive: true }),
+      ])
+
+      const configManager = new ConfigManager(launchProjectDir)
+      const cliExecutor = new CliExecutor(configManager, launchProjectDir)
+      let selectedRoot = rootA
+      vi.spyOn(cliExecutor, 'checkAvailability').mockResolvedValue({
+        available: true,
+        version: '1.6.0',
+      })
+      vi.spyOn(cliExecutor.contracts, 'doctorRoot').mockImplementation(async () =>
+        commandResult<CliDoctor>({
+          root: { path: selectedRoot, source: 'nearest', healthy: true, status: [] },
+          store: null,
+          references: [],
+          status: [],
+        })
+      )
+      vi.spyOn(cliExecutor.contracts, 'context').mockImplementation(async () =>
+        commandResult<CliContext>({
+          root: { path: selectedRoot, source: 'nearest', role: 'openspec_root' },
+          members: [],
+          status: [],
+        })
+      )
+      const observationEnvironment: ObservationRootOwner = {
+        acquireRoot: vi.fn(async () => async () => {}),
+      }
+      const projectInvalidation: RuntimeRootInvalidationOwner = {
+        acquireRoot: vi.fn(() => () => {}),
+      }
+      const manager = new PlanningRootServiceManager({
+        launchProjectDir,
+        previewAssetsDir: join(tempDir, 'preview-assets'),
+        configManager,
+        cliExecutor,
+        observationEnvironment,
+        projectInvalidation,
+        runtimeInvalidation: new RuntimeInvalidationIndex(),
+      })
+      const context = createMockContext(createMockAdapter(), { projectDir: launchProjectDir })
+      context.planningRootServices = manager
+      const caller = appRouter.createCaller(context)
+
+      const originalWriteSpec = OpenSpecAdapter.prototype.writeSpec
+      const firstWriteStarted = Promise.withResolvers<void>()
+      const resumeFirstWrite = Promise.withResolvers<void>()
+      let writeCount = 0
+      const writeSpec = vi
+        .spyOn(OpenSpecAdapter.prototype, 'writeSpec')
+        .mockImplementation(async function (
+          this: OpenSpecAdapter,
+          ...args: Parameters<OpenSpecAdapter['writeSpec']>
+        ) {
+          writeCount += 1
+          if (writeCount === 1) {
+            firstWriteStarted.resolve()
+            await resumeFirstWrite.promise
+          }
+          return originalWriteSpec.apply(this, args)
+        })
+
+      try {
+        const firstSave = caller.spec.save({
+          identity: { kind: 'owned', specId: 'first-on-a' },
+          content: '# First on A\n',
+        })
+        await firstWriteStarted.promise
+
+        selectedRoot = rootB
+        const replacement = caller.rootContext.get()
+        const replacementSettledBeforeA = await Promise.race([
+          replacement.then(() => true),
+          new Promise<false>((resolve) => setTimeout(() => resolve(false), 25)),
+        ])
+        const laterSave = caller.spec.save({
+          identity: { kind: 'owned', specId: 'later-on-b' },
+          content: '# Later on B\n',
+        })
+
+        resumeFirstWrite.resolve()
+        await Promise.all([firstSave, replacement, laterSave])
+
+        expect(replacementSettledBeforeA).toBe(false)
+        await expect(
+          readFile(join(rootA, 'openspec', 'specs', 'first-on-a', 'spec.md'), 'utf8')
+        ).resolves.toContain('First on A')
+        await expect(
+          readFile(join(rootB, 'openspec', 'specs', 'later-on-b', 'spec.md'), 'utf8')
+        ).resolves.toContain('Later on B')
+        expect(await pathExists(join(rootA, 'openspec', 'specs', 'later-on-b', 'spec.md'))).toBe(
+          false
+        )
+      } finally {
+        resumeFirstWrite.resolve()
+        writeSpec.mockRestore()
+        await manager.dispose()
+      }
     })
   })
 
@@ -2234,6 +2361,57 @@ apply:
         { type: 'exit', exitCode: 0 },
       ])
     })
+
+    it.each(
+      [
+        'archive/../legit',
+        'archive\\..\\legit',
+        '/absolute-change',
+        '../legit',
+        '.',
+        ' leading-space',
+        'trailing-space ',
+        'nul\0change',
+      ].flatMap((changeId) => [
+        { changeId, noValidate: false },
+        { changeId, noValidate: true },
+      ])
+    )(
+      'rejects non-canonical Archive id $changeId before Root or CLI work (noValidate=$noValidate)',
+      async ({ changeId, noValidate }) => {
+        const context = createMockContext()
+        const resolvePlanningRoot = context.planningRootServices.resolve as unknown as ReturnType<
+          typeof vi.fn
+        >
+        const validateStream = context.cliExecutor.validateStream as unknown as ReturnType<
+          typeof vi.fn
+        >
+        const archiveStream = context.cliExecutor.archiveStream as unknown as ReturnType<
+          typeof vi.fn
+        >
+        validateStream.mockImplementation(async (_options, onEvent) => {
+          onEvent({ type: 'exit', exitCode: 1 })
+          return () => undefined
+        })
+        archiveStream.mockImplementation(async (_changeId, _options, onEvent) => {
+          onEvent({ type: 'exit', exitCode: 0 })
+          return () => undefined
+        })
+
+        const stream = await appRouter.createCaller(context).cli.archiveStrictStream({
+          changeId,
+          noValidate,
+        })
+        await expect(
+          new Promise<void>((resolve, reject) => {
+            stream.subscribe({ complete: resolve, error: reject })
+          })
+        ).rejects.toThrow(/Invalid changeId/)
+        expect(resolvePlanningRoot).not.toHaveBeenCalled()
+        expect(validateStream).not.toHaveBeenCalled()
+        expect(archiveStream).not.toHaveBeenCalled()
+      }
+    )
 
     it('does not archive after strict preflight failure', async () => {
       const context = createMockContext()
