@@ -91,7 +91,8 @@ line, and rejects older or forward CLI lines by default.
   `0/0` remains `no-tasks`, and divergent Apply counts stay visible without
   normalization. Every formal task retains its exact source file and file-local
   checkbox index so guarded mutations update the tracked artifact rather than a
-  fixed `tasks.md`.
+  fixed `tasks.md`. Task writes use reactive file state, immediately refresh
+  subscribed projections, and lock the active task control until settlement.
 - Replace bare Spec ids and RPCs with one Core-owned compound identity and
   source-aware Catalog/Document contract. Direct Reference detail remains
   CLI-backed and read-only; routes, search records, caches, View Transitions,
@@ -106,7 +107,11 @@ line, and rejects older or forward CLI lines by default.
 - Preserve typed CLI Status/Instructions paths, action context, References, and
   explicit Store selection on Change detail. Archive now uses one Server-owned
   Root Context selection for strict validation and archive, retains multiline
-  diagnostics, and never starts a synthesized validation-bypass retry.
+  diagnostics, and never starts a synthesized validation-bypass retry. The
+  legacy direct filesystem rename endpoint is removed so no public Archive path
+  bypasses CLI evidence.
+- Reject non-canonical filesystem-backed Spec and Change ids through one shared
+  Core/Server guard before any read or mutation can escape its entity root.
 - Default the Spec Catalog to writable Owned entries and place direct
   Referenced Specs in a Store-grouped, visibly read-only sibling view while
   retaining compound routes for duplicate ids.

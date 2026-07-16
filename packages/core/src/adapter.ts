@@ -7,8 +7,9 @@
  *
  * Original request (2026-07-15): "Split formal tracked progress, document checklist statistics, and Apply instruction progress into non-interchangeable facts."
  */
-import { mkdir, rename, writeFile } from 'fs/promises'
+import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
+import { requireCanonicalOpenSpecEntityId } from './entity-id.js'
 import { inferFileMime, inferFilePreviewKind, isTextLikeFile } from './file-preview.js'
 import {
   buildOpsxEntityDetail,
@@ -243,7 +244,8 @@ export class OpenSpecAdapter {
   }
 
   async readSpecRaw(specId: string): Promise<string | null> {
-    const specPath = join(this.specsDir, specId, 'spec.md')
+    const canonicalSpecId = requireCanonicalOpenSpecEntityId(specId, 'specId')
+    const specPath = join(this.specsDir, canonicalSpecId, 'spec.md')
     return reactiveReadFile(specPath)
   }
 
@@ -261,21 +263,25 @@ export class OpenSpecAdapter {
   }
 
   async readChangeFiles(changeId: string): Promise<ChangeFile[]> {
-    const changeRoot = join(this.changesDir, changeId)
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    const changeRoot = join(this.changesDir, canonicalChangeId)
     return this.readFilesUnderRoot(changeRoot)
   }
 
   async readArchivedChangeFiles(changeId: string): Promise<ChangeFile[]> {
-    const archiveRoot = join(this.archiveDir, changeId)
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    const archiveRoot = join(this.archiveDir, canonicalChangeId)
     return this.readFilesUnderRoot(archiveRoot)
   }
 
   async readChangeTaskProjection(changeId: string): Promise<TaskProjections> {
-    return this.readEntityTaskProjection(join(this.changesDir, changeId))
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    return this.readEntityTaskProjection(join(this.changesDir, canonicalChangeId))
   }
 
   async readArchivedChangeTaskProjection(changeId: string): Promise<TaskProjections> {
-    return this.readEntityTaskProjection(join(this.archiveDir, changeId))
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    return this.readEntityTaskProjection(join(this.archiveDir, canonicalChangeId))
   }
 
   async readEntityDetail(
@@ -283,7 +289,9 @@ export class OpenSpecAdapter {
     id: string,
     options: OpsxEntityReadOptions = {}
   ): Promise<OpsxEntityDetail | null> {
-    const root = stage === 'change' ? join(this.changesDir, id) : join(this.archiveDir, id)
+    const canonicalId = requireCanonicalOpenSpecEntityId(id, 'changeId')
+    const root =
+      stage === 'change' ? join(this.changesDir, canonicalId) : join(this.archiveDir, canonicalId)
     const files = await this.readFilesUnderRoot(root)
     if (files.length === 0) {
       const statInfo = await reactiveStat(root)
@@ -291,7 +299,7 @@ export class OpenSpecAdapter {
     }
     return buildOpsxEntityDetail({
       stage,
-      id,
+      id: canonicalId,
       files,
       schemas: options.schemas,
       schemaDiagnostics: options.schemaDiagnostics,
@@ -368,7 +376,8 @@ export class OpenSpecAdapter {
   async readChangeRaw(
     changeId: string
   ): Promise<{ proposal: string; tasks: string; design?: string; deltaSpecs: DeltaSpec[] } | null> {
-    const changeDir = join(this.changesDir, changeId)
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    const changeDir = join(this.changesDir, canonicalChangeId)
     const proposalPath = join(changeDir, 'proposal.md')
     const tasksPath = join(changeDir, 'tasks.md')
     const designPath = join(changeDir, 'design.md')
@@ -431,7 +440,8 @@ export class OpenSpecAdapter {
   async readArchivedChangeRaw(
     changeId: string
   ): Promise<{ proposal: string; tasks: string; design?: string; deltaSpecs: DeltaSpec[] } | null> {
-    const archiveChangeDir = join(this.archiveDir, changeId)
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    const archiveChangeDir = join(this.archiveDir, canonicalChangeId)
     const proposalPath = join(archiveChangeDir, 'proposal.md')
     const tasksPath = join(archiveChangeDir, 'tasks.md')
     const designPath = join(archiveChangeDir, 'design.md')
@@ -461,34 +471,19 @@ export class OpenSpecAdapter {
   // =====================
 
   async writeSpec(specId: string, content: string): Promise<void> {
-    const specDir = join(this.specsDir, specId)
+    const canonicalSpecId = requireCanonicalOpenSpecEntityId(specId, 'specId')
+    const specDir = join(this.specsDir, canonicalSpecId)
     await mkdir(specDir, { recursive: true })
     await writeFile(join(specDir, 'spec.md'), content, 'utf-8')
   }
 
   async writeChange(changeId: string, proposal: string, tasks?: string): Promise<void> {
-    const changeDir = join(this.changesDir, changeId)
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    const changeDir = join(this.changesDir, canonicalChangeId)
     await mkdir(changeDir, { recursive: true })
     await writeFile(join(changeDir, 'proposal.md'), proposal, 'utf-8')
     if (tasks !== undefined) {
       await writeFile(join(changeDir, 'tasks.md'), tasks, 'utf-8')
-    }
-  }
-
-  // =====================
-  // Archive operations
-  // =====================
-
-  async archiveChange(changeId: string): Promise<boolean> {
-    try {
-      const changeDir = join(this.changesDir, changeId)
-      const archivePath = join(this.archiveDir, changeId)
-
-      await mkdir(this.archiveDir, { recursive: true })
-      await rename(changeDir, archivePath)
-      return true
-    } catch {
-      return false
     }
   }
 

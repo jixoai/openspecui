@@ -188,6 +188,21 @@ describe('PlanningRootServiceManager', () => {
         'utf8'
       )
     ).rejects.toThrow()
+    await expect(services.adapter.writeSpec('../escaped', '# Escaped\n')).rejects.toThrow(
+      /Invalid specId/
+    )
+    await expect(
+      services.adapter.writeChange('../escaped-change', '# Escaped change\n')
+    ).rejects.toThrow(/Invalid changeId/)
+    await expect(services.adapter.readEntityDetail('change', '../escaped-change')).rejects.toThrow(
+      /Invalid changeId/
+    )
+    await expect(
+      readFile(join(planningRootDir, 'openspec', 'escaped', 'spec.md'), 'utf8')
+    ).rejects.toThrow()
+    await expect(
+      readFile(join(planningRootDir, 'openspec', 'escaped-change', 'proposal.md'), 'utf8')
+    ).rejects.toThrow()
 
     await mkdir(join(launchProjectDir, 'openspec', 'changes', 'launch-only-change'), {
       recursive: true,
@@ -220,20 +235,6 @@ describe('PlanningRootServiceManager', () => {
       'planning-secondary',
     ])
     expect(dashboard.activeChanges.map((change) => change.id)).toEqual(['created-change'])
-
-    await expect(services.adapter.archiveChange('created-change')).resolves.toBe(true)
-    await expect(
-      readFile(
-        join(planningRootDir, 'openspec', 'changes', 'archive', 'created-change', 'tasks.md'),
-        'utf8'
-      )
-    ).resolves.toContain('- [ ] First task')
-    await expect(
-      readFile(
-        join(launchProjectDir, 'openspec', 'changes', 'archive', 'created-change', 'tasks.md'),
-        'utf8'
-      )
-    ).rejects.toThrow()
 
     expect((await manager.resolve()).adapter).toBe(services.adapter)
     expect((await manager.resolveReactive()).adapter).toBe(services.adapter)

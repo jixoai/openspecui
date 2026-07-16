@@ -185,7 +185,6 @@ const createMockAdapter = () => ({
   }),
   writeSpec: vi.fn().mockResolvedValue(undefined),
   writeChange: vi.fn().mockResolvedValue(undefined),
-  archiveChange: vi.fn().mockResolvedValue(true),
   validateSpec: vi.fn().mockResolvedValue({ valid: true, issues: [] }),
   validateChange: vi.fn().mockResolvedValue({ valid: true, issues: [] }),
   init: vi.fn().mockResolvedValue(undefined),
@@ -1796,6 +1795,19 @@ apply:
       expect(adapter.writeSpec).toHaveBeenCalledWith('test', '# Test')
     })
 
+    it('rejects a non-canonical spec id before Adapter mutation', async () => {
+      const adapter = createMockAdapter()
+      const caller = createCaller(adapter)
+
+      await expect(
+        caller.spec.save({
+          identity: { kind: 'owned', specId: '../escaped' },
+          content: '# Escaped',
+        })
+      ).rejects.toThrow(/Invalid specId/)
+      expect(adapter.writeSpec).not.toHaveBeenCalled()
+    })
+
     it('should validate a spec', async () => {
       const caller = createCaller()
       const result = await caller.spec.validate({ kind: 'owned', specId: 'auth' })
@@ -1826,14 +1838,14 @@ apply:
       expect(change?.id).toBe('add-caching')
     })
 
-    it('should archive a change', async () => {
+    it('rejects a non-canonical change id before Adapter mutation', async () => {
       const adapter = createMockAdapter()
       const caller = createCaller(adapter)
 
-      const result = await caller.change.archive({ id: 'add-caching' })
-
-      expect(result).toBe(true)
-      expect(adapter.archiveChange).toHaveBeenCalledWith('add-caching')
+      await expect(caller.change.save({ id: '../escaped', proposal: '# Escaped' })).rejects.toThrow(
+        /Invalid changeId/
+      )
+      expect(adapter.writeChange).not.toHaveBeenCalled()
     })
   })
 

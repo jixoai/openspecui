@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Group formal tracked tasks into readable sections and progress summaries.
+ * 2. Preserve exact physical task identity through rendering and mutation callbacks.
+ * 3. Lock task controls while their network mutation is running.
+ *
+ * Original request (2026-07-15): "trackedTaskProgress alone drives workflow state."
+ */
 import { TocSection, type TocItem } from '@/components/toc'
 import type { TrackedTask, TrackedTaskLocation, TrackedTaskProgress } from '@openspecui/core'
 import { CheckCircle, Circle, Loader2 } from 'lucide-react'
@@ -78,7 +86,8 @@ const TaskItem = memo(
     return (
       <button
         onClick={() => onToggle(task.location, !task.completed)}
-        className="hover:bg-muted/50 group flex w-full items-center gap-3 p-3 text-left transition-colors"
+        className="hover:bg-muted/50 group flex w-full items-center gap-3 p-3 text-left transition-colors disabled:cursor-wait disabled:opacity-70"
+        disabled={isToggling}
       >
         {content}
       </button>
@@ -88,7 +97,10 @@ const TaskItem = memo(
     prev.task.id === next.task.id &&
     prev.task.text === next.task.text &&
     prev.task.completed === next.task.completed &&
+    prev.task.location.filePath === next.task.location.filePath &&
+    prev.task.location.taskIndex === next.task.location.taskIndex &&
     prev.isToggling === next.isToggling &&
+    prev.onToggle === next.onToggle &&
     prev.readonly === next.readonly
 )
 

@@ -13,7 +13,7 @@ Original request (2026-07-16): "代码已经提交，开始review。如果有问
 
 ## Implementation State
 
-Status: **Independent re-review corrections are complete and locally verified; PR #207 awaits refreshed CI and re-review before later checkpoints continue**.
+Status: **Second independent re-review corrections are complete and locally verified; PR #207 awaits refreshed CI and final re-review before later checkpoints continue**.
 
 Completed before code execution:
 
@@ -942,6 +942,32 @@ Verification:
 - Focused Router verification passed 61/61, including exact tracked-file mutation, canonical `changeId` rejection, entity-path escape rejection, and non-tracked Markdown rejection.
 - Current full gates passed: `pnpm format:check` across 27 changed files; `pnpm lint:ci` across 809 files; all 15 workspace typechecks; `pnpm test:ci` with Root 43, Core 408, Server 277, Web 618, App 78, and CLI 49; browser tests with xterm 60 passed/1 skipped and Web Storybook 12 passed; fresh SSG with only the existing `scroll-button` warning; and `git diff --check`.
 - OpenSpec progress remains 57/130. No checkpoint transition or loopback trigger occurred; this closes stale test infrastructure after the already recorded root/mutation correction.
+
+## Independent Re-review: 2026-07-16 filesystem and archive closure
+
+Review target: `origin/main...bd74ff6` after all remote PR gates passed. Standards and Spec were reviewed independently against `CLAUDE.md`, `AGENTS.md`, and the formal loop artifacts.
+
+Findings:
+
+- Standards found one hard violation: task mutation read a live OpenSpec document through `node:fs/promises.readFile` instead of reactive-fs, so a successful write had no immediate reactive-cache update guarantee.
+- Spec found checkpoint 3.11 partial: legacy Spec/Change save paths still joined unchecked client ids inside the Adapter, allowing path syntax to escape the intended entity directory.
+- Spec found checkpoint 6.7 partial: public `change.archive` still called the legacy Adapter rename path and could bypass the Server-owned strict CLI validate/archive stream.
+- Review residual risk identified missing direct tests for strict-stream cancellation and archive startup failure. No loopback trigger fired; all findings tighten already approved boundaries.
+
+Corrections:
+
+- Added one shared Core canonical OpenSpec entity-id guard and applied it in Core Adapter reads/writes, OPSX Kernel path-backed projections, Server entity resolvers, and public Spec/Change save mutations before filesystem access.
+- Removed `change.archive` and `OpenSpecAdapter.archiveChange` without compatibility aliases. The strict Server CLI stream is now the only public archive mutation boundary.
+- Extracted tracked-task mutation into a Server module using `reactiveReadFile`, exact tracked-file identity, guarded path resolution, and immediate `updateReactiveFileCache` after write. Its reactive projection test proves subscribers observe the updated task without waiting for watcher timing.
+- Added strict archive tests for successful phase handoff, validation failure, detach during asynchronous archive startup, and archive startup rejection. Added task UI tests for memoized physical-location changes and loading-state locking.
+
+Verification and checkpoint state:
+
+- Focused Core entity/task/OPSX matrix passed 25/25; focused Server task/archive/Router/Planning matrix passed 69/69; focused Web task/archive runner matrix passed 10/10.
+- `pnpm format:check` passed across 19 changed files; `pnpm lint:ci` passed across 814 files; all 15 workspace typechecks passed; `git diff --check` passed.
+- `pnpm test:ci` passed: Root 43, Core 417, Server 283, Web 620, App 78, CLI 49, and every remaining workspace package.
+- `pnpm test:browser:ci` passed: xterm-input-panel 60 with one existing skip; Web Storybook 12. Fresh SSG passed while reporting the existing `scroll-button` CSS warning and an ineffective dynamic-import bundling warning.
+- Checkpoints 3.11 and 6.7 remain closed on stronger evidence. Overall progress remains 57/130; no other checkpoint transitioned.
 
 ## Decisions Taken
 

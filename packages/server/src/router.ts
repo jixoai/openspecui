@@ -54,6 +54,7 @@ import {
   OpsxConfigSchema,
   OwnedSpecIdentitySchema,
   ProjectBindingUpdateSchema,
+  requireCanonicalOpenSpecEntityId,
   resolveTerminalShellDefaults,
   RUNTIME_INVALIDATION_FACETS,
   ServiceTranslationEngineIdSchema,
@@ -64,7 +65,6 @@ import {
   subscribeWatcherRuntimeStatus,
   TerminalConfigSchema,
   TerminalRendererEngineSchema,
-  toggleMarkdownTask,
   toStoreFeatureResult,
   TranslationCacheReadInputSchema,
   TranslationCacheWriteInputSchema,
@@ -101,7 +101,7 @@ import { CustomSoundIdSchema } from '@openspecui/core/sounds'
 import { SearchQuerySchema } from '@openspecui/search'
 import { initTRPC, TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { CliMutationInvalidator } from './cli-mutation-invalidator.js'
@@ -156,6 +156,7 @@ import {
 } from './spec-catalog-service.js'
 import type { StoreObservationReconciler } from './store-observation-service.js'
 import { startStrictArchiveStream } from './strict-archive-stream.js'
+import { setTrackedTaskCompletion } from './tracked-task-mutation.js'
 import type { TranslationCacheService } from './translation-cache-service.js'
 import type { TranslationEngineService } from './translation-engine-service.js'
 
@@ -1264,7 +1265,8 @@ export const specRouter = router({
   save: publicProcedure
     .input(z.object({ identity: OwnedSpecIdentitySchema, content: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await (await resolvePlanningRoot(ctx)).adapter.writeSpec(input.identity.specId, input.content)
+      const specId = requireCanonicalOpenSpecEntityId(input.identity.specId, 'specId')
+      await (await resolvePlanningRoot(ctx)).adapter.writeSpec(specId, input.content)
       return { success: true }
     }),
 
@@ -1315,15 +1317,12 @@ export const changeRouter = router({
   save: publicProcedure
     .input(z.object({ id: z.string(), proposal: z.string(), tasks: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
+      const changeId = requireCanonicalOpenSpecEntityId(input.id, 'changeId')
       await (
         await resolvePlanningRoot(ctx)
-      ).adapter.writeChange(input.id, input.proposal, input.tasks)
+      ).adapter.writeChange(changeId, input.proposal, input.tasks)
       return { success: true }
     }),
-
-  archive: publicProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
-    return (await resolvePlanningRoot(ctx)).adapter.archiveChange(input.id)
-  }),
 
   validate: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
     return (await resolvePlanningRoot(ctx)).adapter.validateChange(input.id)
@@ -1345,29 +1344,13 @@ export const changeRouter = router({
       const { rootContext } = services
       const projectDir = rootContext.planningRoot?.path
       if (!projectDir) throw new Error('Planning root is unavailable.')
-      const info = resolveEntityEntryPath({
+      await setTrackedTaskCompletion({
+        adapter: services.adapter,
         projectDir,
-        stage: 'change',
         changeId: input.changeId,
-        path: input.location.filePath,
+        location: input.location,
+        completed: input.completed,
       })
-      const projection = await services.adapter.readChangeTaskProjection(input.changeId)
-      const trackedTask = projection.trackedTaskProgress.tasks.find(
-        (task) =>
-          task.location.filePath === info.relativePath &&
-          task.location.taskIndex === input.location.taskIndex
-      )
-      if (!trackedTask) {
-        throw new Error('Task location is not part of the current tracked artifact projection.')
-      }
-      const content = await readFile(info.absolutePath, 'utf8')
-      const updated = toggleMarkdownTask(content, input.location.taskIndex, input.completed)
-      if (updated === null) {
-        throw new Error(
-          `Failed to toggle task ${input.location.taskIndex} in ${input.location.filePath}`
-        )
-      }
-      await writeFile(info.absolutePath, updated, 'utf8')
       return { success: true }
     }),
 

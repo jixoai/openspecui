@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Prove path-backed OPSX projections react to planning-root changes.
+ * 2. Prove non-canonical Change ids are rejected before projection streams start.
+ *
+ * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
+ */
 import { mkdir, realpath, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -252,6 +259,23 @@ process.exit(1)
     })
     expect(changeDir).toBe(join(tempDir, 'openspec', 'changes', 'demo-change'))
     expect(kernel.getApplyInstructions('demo-change').instruction).toBe('Apply via Store shared.')
+  })
+
+  it('rejects non-canonical Change ids before starting path-backed projections', async () => {
+    const { kernel } = await prepareKernel('result.md')
+
+    await expect(kernel.ensureStatus('../escaped')).rejects.toThrow(/Invalid changeId/)
+    await expect(kernel.ensureInstructions('../escaped', 'artifact')).rejects.toThrow(
+      /Invalid changeId/
+    )
+    await expect(kernel.ensureApplyInstructions('../escaped')).rejects.toThrow(/Invalid changeId/)
+    await expect(kernel.ensureArtifactOutput('../escaped', 'result.md')).rejects.toThrow(
+      /Invalid changeId/
+    )
+    await expect(kernel.ensureGlobArtifactFiles('../escaped', '**/*.md')).rejects.toThrow(
+      /Invalid changeId/
+    )
+    await expect(kernel.ensureChangeMetadata('../escaped')).rejects.toThrow(/Invalid changeId/)
   })
 
   it(

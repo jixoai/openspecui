@@ -1,6 +1,7 @@
 import {
   getOpsxEntityRootRelativePath,
   normalizeOpsxEntityPath,
+  requireCanonicalOpenSpecEntityId,
   type OpsxEntityStage,
 } from '@openspecui/core'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
@@ -18,10 +19,7 @@ export function getEntityRootPath(
   stage: OpsxEntityStage,
   changeId: string
 ): string {
-  const normalizedChangeId = normalizeOpsxEntityPath(changeId)
-  if (!normalizedChangeId || normalizedChangeId !== changeId || normalizedChangeId.includes('/')) {
-    throw new Error('Invalid changeId: expected one canonical path segment.')
-  }
+  const normalizedChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
   const stageRoot = resolve(projectDir, getOpsxEntityRootRelativePath(stage, ''))
   const entityRoot = resolve(projectDir, getOpsxEntityRootRelativePath(stage, normalizedChangeId))
   ensureInsideRoot(stageRoot, entityRoot)

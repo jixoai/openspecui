@@ -4,6 +4,7 @@
  * 2. Share and release per-entity streams through one planning-root kernel lifecycle.
  * 3. Keep OpenSpec configuration ownership outside the workflow projection cache.
  * 4. Preserve typed Status/Instructions provenance with the resolved root selector.
+ * 5. Reject non-canonical Change ids before any path-backed projection starts.
  *
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
  */
@@ -16,6 +17,7 @@ import {
   CliWorkflowStatusSuccessSchema,
 } from './cli-contracts/index.js'
 import type { CliExecutor } from './cli-executor.js'
+import { requireCanonicalOpenSpecEntityId } from './entity-id.js'
 import { inferFileMime, inferFilePreviewKind, isTextLikeFile } from './file-preview.js'
 import { toOpsxDisplayPath } from './opsx-display-path.js'
 import { parseOpsxSchemaDetail } from './opsx-schema-detail.js'
@@ -1162,66 +1164,71 @@ export class OpsxKernel {
   }
 
   async ensureStatus(changeId: string, schema?: string): Promise<void> {
-    const key = `${changeId}:${schema ?? ''}`
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    const key = `${canonicalChangeId}:${schema ?? ''}`
     if (!this._statuses.has(key)) {
       this._statuses.set(key, new ReactiveState<ChangeStatus>(null!))
     }
     await this.startStreamOnce(
-      `change:${changeId}:status:${schema ?? ''}`,
+      `change:${canonicalChangeId}:status:${schema ?? ''}`,
       this._statuses.get(key)!,
-      () => this.fetchStatus(changeId, schema),
+      () => this.fetchStatus(canonicalChangeId, schema),
       this.controller.signal
     )
   }
 
   async ensureInstructions(changeId: string, artifact: string, schema?: string): Promise<void> {
-    const key = `${changeId}:${artifact}:${schema ?? ''}`
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    const key = `${canonicalChangeId}:${artifact}:${schema ?? ''}`
     if (!this._instructions.has(key)) {
       this._instructions.set(key, new ReactiveState<ArtifactInstructions>(null!))
     }
     await this.startStreamOnce(
-      `change:${changeId}:instructions:${artifact}:${schema ?? ''}`,
+      `change:${canonicalChangeId}:instructions:${artifact}:${schema ?? ''}`,
       this._instructions.get(key)!,
-      () => this.fetchInstructions(changeId, artifact, schema),
+      () => this.fetchInstructions(canonicalChangeId, artifact, schema),
       this.controller.signal
     )
   }
 
   async ensureApplyInstructions(changeId: string, schema?: string): Promise<void> {
-    const key = `${changeId}:${schema ?? ''}`
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    const key = `${canonicalChangeId}:${schema ?? ''}`
     if (!this._applyInstructions.has(key)) {
       this._applyInstructions.set(key, new ReactiveState<ApplyInstructions>(null!))
     }
     await this.startStreamOnce(
-      `change:${changeId}:apply:${schema ?? ''}`,
+      `change:${canonicalChangeId}:apply:${schema ?? ''}`,
       this._applyInstructions.get(key)!,
-      () => this.fetchApplyInstructions(changeId, schema),
+      () => this.fetchApplyInstructions(canonicalChangeId, schema),
       this.controller.signal
     )
   }
 
   async ensureArtifactOutput(changeId: string, outputPath: string): Promise<void> {
-    const key = `${changeId}:${outputPath}`
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    const key = `${canonicalChangeId}:${outputPath}`
     if (!this._artifactOutputs.has(key)) {
       this._artifactOutputs.set(key, new ReactiveState<string | null>(null))
     }
     await this.startStreamOnce(
-      `change:${changeId}:output:${outputPath}`,
+      `change:${canonicalChangeId}:output:${outputPath}`,
       this._artifactOutputs.get(key)!,
-      () => this.fetchArtifactOutput(changeId, outputPath),
+      () => this.fetchArtifactOutput(canonicalChangeId, outputPath),
       this.controller.signal
     )
   }
 
   async ensureGlobArtifactFiles(changeId: string, outputPath: string): Promise<void> {
-    const key = `${changeId}:${outputPath}`
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    const key = `${canonicalChangeId}:${outputPath}`
     if (!this._globArtifactFiles.has(key)) {
       this._globArtifactFiles.set(key, new ReactiveState<GlobArtifactFile[]>([]))
     }
     await this.startStreamOnce(
-      `change:${changeId}:glob:${outputPath}`,
+      `change:${canonicalChangeId}:glob:${outputPath}`,
       this._globArtifactFiles.get(key)!,
-      () => readGlobArtifactFiles(this.projectDir, changeId, outputPath),
+      () => readGlobArtifactFiles(this.projectDir, canonicalChangeId, outputPath),
       this.controller.signal
     )
   }
@@ -1304,13 +1311,14 @@ export class OpsxKernel {
   }
 
   async ensureChangeMetadata(changeId: string): Promise<void> {
-    if (!this._changeMetadata.has(changeId)) {
-      this._changeMetadata.set(changeId, new ReactiveState<string | null>(null))
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    if (!this._changeMetadata.has(canonicalChangeId)) {
+      this._changeMetadata.set(canonicalChangeId, new ReactiveState<string | null>(null))
     }
     await this.startStreamOnce(
-      `change:${changeId}:metadata`,
-      this._changeMetadata.get(changeId)!,
-      () => this.fetchChangeMetadata(changeId),
+      `change:${canonicalChangeId}:metadata`,
+      this._changeMetadata.get(canonicalChangeId)!,
+      () => this.fetchChangeMetadata(canonicalChangeId),
       this.controller.signal
     )
   }
