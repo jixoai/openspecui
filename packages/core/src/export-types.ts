@@ -4,6 +4,8 @@
 import type { OpenSpecUIConfig } from './config.js'
 import type { OpsxEntityDetail } from './opsx-entity.js'
 import type { SchemaDetail, SchemaInfo, SchemaResolution, TemplatesMap } from './opsx-types.js'
+import type { OwnedSpecIdentity } from './spec-catalog.js'
+import type { DocumentChecklistSummary, TrackedTaskProgress } from './task-progress.js'
 
 /**
  * Complete snapshot of an OpenSpec project for static export
@@ -42,6 +44,10 @@ export interface ExportSnapshot {
   config?: OpenSpecUIConfig
   /** All specs with parsed content */
   specs: Array<{
+    /** Compound identity remains source-aware even before Reference export is enabled. */
+    identity: OwnedSpecIdentity
+    source: 'owned'
+    readOnly: false
     id: string
     name: string
     /** Processed markdown shown by default in static OpenSpecUI. */
@@ -82,12 +88,10 @@ export interface ExportSnapshot {
     sourceDesign?: string
     why: string
     whatChanges: string
-    parsedTasks: Array<{
-      id: string
-      text: string
-      completed: boolean
-      section?: string
-    }>
+    /** Formal workflow task truth from the tracked artifact glob. */
+    trackedTaskProgress: TrackedTaskProgress
+    /** Secondary schema-document checkbox analytics. */
+    documentChecklistSummary: DocumentChecklistSummary
     deltas: Array<{
       capability: string
       /** Processed delta spec markdown. */
@@ -95,7 +99,6 @@ export interface ExportSnapshot {
       /** Original source delta spec markdown. */
       sourceContent?: string
     }>
-    progress: { total: number; completed: number }
     createdAt: number
     updatedAt: number
   }>
@@ -105,7 +108,8 @@ export interface ExportSnapshot {
     name: string
     /** Schema-neutral archived entity detail used by archive views, search, and dashboard facts. */
     entity: OpsxEntityDetail
-    progress?: { total: number; completed: number }
+    trackedTaskProgress: TrackedTaskProgress
+    documentChecklistSummary: DocumentChecklistSummary
     createdAt: number
     updatedAt: number
   }>

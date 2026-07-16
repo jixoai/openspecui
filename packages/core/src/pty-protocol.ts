@@ -1,7 +1,16 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Define the type-safe PTY client/server transport protocol.
+ * 2. Preserve explicit launch-project or planning-root cwd identity across create/list/reconnect.
+ * 3. Carry terminal output, control metadata, lifecycle, and failure messages.
+ *
+ * Original request (2026-07-16): "3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited XDG_DATA_HOME"
+ */
 import { z } from 'zod'
 
 const PositiveInt = z.number().int().positive()
 export const PtyPlatformSchema = z.enum(['windows', 'macos', 'common'])
+export const TerminalCwdTargetSchema = z.enum(['launch-project', 'planning-root'])
 const CloseCallbackUrlSchema = z.union([z.string(), z.record(z.string())])
 
 const PtySessionInfoSchema = z.object({
@@ -14,6 +23,8 @@ const PtySessionInfoSchema = z.object({
   exitCode: z.number().int().nullable(),
   closeTip: z.string().optional(),
   closeCallbackUrl: CloseCallbackUrlSchema.optional(),
+  cwdTarget: TerminalCwdTargetSchema,
+  initialCwd: z.string().min(1),
 })
 
 export const PtyCreateMessageSchema = z.object({
@@ -23,6 +34,7 @@ export const PtyCreateMessageSchema = z.object({
   rows: PositiveInt.optional(),
   command: z.string().min(1).optional(),
   args: z.array(z.string()).optional(),
+  cwdTarget: TerminalCwdTargetSchema,
   closeTip: z.string().optional(),
   closeCallbackUrl: CloseCallbackUrlSchema.optional(),
 })
@@ -70,6 +82,8 @@ export const PtyCreatedResponseSchema = z.object({
   requestId: z.string().min(1),
   sessionId: z.string().min(1),
   platform: PtyPlatformSchema,
+  cwdTarget: TerminalCwdTargetSchema,
+  initialCwd: z.string().min(1),
 })
 
 export const PtyOutputResponseSchema = z.object({
@@ -166,3 +180,4 @@ export type PtyClientMessage = z.infer<typeof PtyClientMessageSchema>
 export type PtyServerMessage = z.infer<typeof PtyServerMessageSchema>
 export type PtySessionInfo = z.infer<typeof PtySessionInfoSchema>
 export type PtyPlatform = z.infer<typeof PtyPlatformSchema>
+export type TerminalCwdTarget = z.infer<typeof TerminalCwdTargetSchema>

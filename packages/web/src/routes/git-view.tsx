@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Render commit and uncommitted detail from an explicit repository scope.
+ * 2. Preserve scope across back links, metadata/files/patch queries, and cache keys.
+ * 3. Preserve shared-element handoff and long-diff document flow.
+ *
+ * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
+ */
 import { GitEntryDetailPanel } from '@/components/git/git-panel-detail'
 import {
   DiffStat,
@@ -5,15 +13,20 @@ import {
   getGitEntrySharedDescriptor,
   GitFilesBadge,
 } from '@/components/git/git-shared'
+import {
+  buildGitRepositoryHref,
+  getGitEntryFilesQueryKey,
+  getGitEntryMetaQueryKey,
+} from '@/lib/git-panel'
 import { isStaticMode } from '@/lib/static-mode'
 import { trpcClient } from '@/lib/trpc'
-import { useServerStatus } from '@/lib/use-server-status'
+import { useGitRepositoryScope } from '@/lib/use-git-repository-scope'
 import { VTLink } from '@/lib/view-transitions/navigation'
 import {
   getSharedElementBinding,
   readSharedElementHandoffState,
 } from '@/lib/view-transitions/shared-elements'
-import type { GitEntryFilePatch, GitEntrySelector } from '@openspecui/core'
+import type { GitEntrySelector } from '@openspecui/core'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation, useParams } from '@tanstack/react-router'
 import { AlertCircle, ArrowLeft, GitCommitHorizontal, LoaderCircle } from 'lucide-react'
@@ -29,30 +42,29 @@ function entrySubtitle(selector: GitEntrySelector, relatedChanges: string[]): st
 function GitEntryView({ selector }: { selector: GitEntrySelector }) {
   const staticMode = isStaticMode()
   const location = useLocation()
-  const { projectDir } = useServerStatus()
+  const {
+    scope,
+    descriptor: scopeDescriptor,
+    scopes,
+    locationSearch,
+    query: scopesQuery,
+  } = useGitRepositoryScope(!staticMode)
   const headerRef = useRef<HTMLDivElement | null>(null)
   const sharedDescriptor = useMemo(() => getGitEntrySharedDescriptor(selector), [selector])
   const handoff = readSharedElementHandoffState(location.state)
+  const backHref = buildGitRepositoryHref('/git', scope, locationSearch)
   const metaQuery = useQuery({
-    queryKey:
-      selector.type === 'commit'
-        ? ['git', 'meta', 'commit', selector.hash]
-        : ['git', 'meta', 'uncommitted'],
-    queryFn: () => trpcClient.git.getEntryMeta.query({ selector }),
-    enabled: !staticMode,
-    placeholderData: (previousData) => previousData,
+    queryKey: getGitEntryMetaQueryKey(scope, selector),
+    queryFn: () => trpcClient.git.getEntryMeta.query({ scope, selector }),
+    enabled: !staticMode && scopeDescriptor !== null,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
   })
   const filesQuery = useQuery({
-    queryKey:
-      selector.type === 'commit'
-        ? ['git', 'files', 'commit', selector.hash]
-        : ['git', 'files', 'uncommitted'],
-    queryFn: () => trpcClient.git.getEntryFiles.query({ selector }),
-    enabled: !staticMode,
-    placeholderData: (previousData) => previousData,
+    queryKey: getGitEntryFilesQueryKey(scope, selector),
+    queryFn: () => trpcClient.git.getEntryFiles.query({ scope, selector }),
+    enabled: !staticMode && scopeDescriptor !== null,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -60,7 +72,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
 
   const entry = metaQuery.data ?? null
   const files = filesQuery.data?.files ?? []
-  const eagerFiles = (filesQuery.data?.eagerFiles ?? []) as GitEntryFilePatch[]
+  const eagerFiles = filesQuery.data?.eagerFiles ?? []
   const EntryIcon = selector.type === 'commit' ? GitCommitHorizontal : LoaderCircle
 
   if (staticMode) {
@@ -72,13 +84,26 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
     )
   }
 
+  if (scopesQuery.isLoading && !scopes) {
+    return <div className="route-loading animate-pulse">Loading git repository scope...</div>
+  }
+
+  if (scopesQuery.error && !scopes) {
+    return (
+      <div className="text-destructive flex items-center gap-2 p-4 text-sm">
+        <AlertCircle className="h-4 w-4 shrink-0" />
+        Error loading git repository scope: {scopesQuery.error.message}
+      </div>
+    )
+  }
+
   if (metaQuery.isLoading && !entry) {
     if (handoff) {
       return (
         <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
           <div className="flex items-start gap-4">
             <VTLink
-              to="/git"
+              to={backHref}
               vt={{ source: headerRef, sharedElements: sharedDescriptor }}
               className="hover:bg-muted rounded-md p-2"
               aria-label="Back to commits"
@@ -125,7 +150,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
           Error loading commit detail: {metaQuery.error.message}
         </div>
         <div>
-          <VTLink to="/git" className="text-primary hover:underline">
+          <VTLink to={backHref} className="text-primary hover:underline">
             Back to Commits
           </VTLink>
         </div>
@@ -141,7 +166,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
           Commit detail is unavailable in the current project.
         </div>
         <div>
-          <VTLink to="/git" className="text-primary hover:underline">
+          <VTLink to={backHref} className="text-primary hover:underline">
             Back to Commits
           </VTLink>
         </div>
@@ -154,7 +179,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-4">
           <VTLink
-            to="/git"
+            to={backHref}
             vt={{ source: headerRef, sharedElements: sharedDescriptor }}
             className="hover:bg-muted rounded-md p-2"
             aria-label="Back to commits"
@@ -181,6 +206,10 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
             <p className="text-muted-foreground whitespace-normal text-sm [overflow-wrap:anywhere]">
               {entrySubtitle(selector, entry.relatedChanges)}
             </p>
+            <p className="text-muted-foreground whitespace-normal text-xs [overflow-wrap:anywhere]">
+              {scope === 'code' ? 'Code repository' : 'Planning repository'} ·{' '}
+              {scopeDescriptor?.repository?.topLevel ?? scopeDescriptor?.rootPath}
+            </p>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -195,7 +224,8 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
           entry={entry}
           files={files}
           eagerFiles={eagerFiles}
-          projectDir={projectDir}
+          projectDir={scopeDescriptor?.repository?.topLevel ?? scopeDescriptor?.rootPath}
+          repositoryScope={scope}
           isLoading={filesQuery.isLoading || filesQuery.isFetching}
           error={
             (filesQuery.error instanceof Error ? filesQuery.error : null) ??

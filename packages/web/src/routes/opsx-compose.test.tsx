@@ -1,7 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
  * 1. Verify the change workflow dialog preserves route action and invocation-mode inputs.
  * 2. Verify the shared terminal dispatch surface remains available.
+ * 3. Verify server-owned planning-root and Store targets remain visible before dispatch.
+ * 4. Verify failed Root Context prevents preparation and every terminal dispatch action.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  */
@@ -9,14 +11,35 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OpsxComposeRoute } from './opsx-compose'
 
-const { prepareWorkflowInvocationMock, setConfigMock, uiConfigMock, useLocationMock } = vi.hoisted(
-  () => ({
-    prepareWorkflowInvocationMock: vi.fn(),
-    setConfigMock: vi.fn(),
-    uiConfigMock: vi.fn(),
-    useLocationMock: vi.fn(),
-  })
-)
+const WORKFLOW_TARGET = {
+  launchProject: { path: '/launch' },
+  planningRoot: {
+    path: '/stores/shared',
+    source: 'store' as const,
+    store_id: 'shared',
+    healthy: true,
+    status: [],
+  },
+  storeId: 'shared',
+  rootSelector: { store: 'shared' },
+  references: [],
+  diagnostics: { root: [], doctor: [], context: [] },
+  rootEvidence: { doctor: null, context: null },
+}
+
+const {
+  prepareWorkflowInvocationMock,
+  rootActionMock,
+  setConfigMock,
+  uiConfigMock,
+  useLocationMock,
+} = vi.hoisted(() => ({
+  prepareWorkflowInvocationMock: vi.fn(),
+  rootActionMock: vi.fn(),
+  setConfigMock: vi.fn(),
+  uiConfigMock: vi.fn(),
+  useLocationMock: vi.fn(),
+}))
 
 vi.mock('@/components/layout/pop-area', () => ({
   usePopAreaConfigContext: () => ({
@@ -73,6 +96,29 @@ vi.mock('@/lib/use-terminal-invocation-config', () => ({
   }),
 }))
 
+vi.mock('@/lib/use-terminal-cwd-target', () => ({
+  useTerminalCwdTargetState: () => ({
+    launchProject: {
+      target: 'launch-project',
+      label: 'Launch project',
+      path: '/launch',
+      available: true,
+      unavailableReason: null,
+    },
+    planningRoot: {
+      target: 'planning-root',
+      label: 'Planning root',
+      path: '/stores/shared',
+      available: true,
+      unavailableReason: null,
+    },
+  }),
+  getTerminalCwdTargetOption: (
+    state: { launchProject: unknown; planningRoot: unknown },
+    target: 'launch-project' | 'planning-root'
+  ) => (target === 'planning-root' ? state.planningRoot : state.launchProject),
+}))
+
 vi.mock('@/lib/terminal-controller', () => ({
   terminalController: {
     writeToSession: vi.fn(),
@@ -82,6 +128,10 @@ vi.mock('@/lib/terminal-controller', () => ({
 
 vi.mock('@/lib/use-subscription', () => ({
   useConfigSubscription: () => uiConfigMock(),
+}))
+
+vi.mock('@/lib/use-root-action-state', () => ({
+  useRootActionState: () => rootActionMock(),
 }))
 
 vi.mock('@/lib/opsx-workflow-invocation', () => ({
@@ -101,8 +151,19 @@ describe('OpsxComposeRoute', () => {
       text: 'prepared prompt',
       format: 'markdown',
       mode: { requestedMode: 'compose', actualMode: 'compose', fallbackReason: null },
+      target: WORKFLOW_TARGET,
+      evidence: null,
     })
     setConfigMock.mockReset()
+    rootActionMock.mockReset().mockReturnValue({
+      status: 'ready',
+      disabled: false,
+      context: null,
+      observedAt: 1,
+      title: null,
+      message: null,
+      evidence: [],
+    })
     uiConfigMock.mockReset().mockReturnValue({
       data: { opsx: { agentInvocationMode: 'compose' } },
     })
@@ -137,6 +198,72 @@ describe('OpsxComposeRoute', () => {
     })
   })
 
+  it('shows the CLI-selected planning root and Store before dispatch', async () => {
+    render(<OpsxComposeRoute />)
+
+    await waitFor(() => {
+      expect(screen.getByText('/stores/shared')).toBeInTheDocument()
+      expect(screen.getByText('store · Store shared')).toBeInTheDocument()
+    })
+  })
+
+  it('retains complete CLI evidence in a secondary disclosure', async () => {
+    prepareWorkflowInvocationMock.mockResolvedValue({
+      kind: 'agent-prompt',
+      text: 'prepared prompt',
+      format: 'markdown',
+      mode: { requestedMode: 'compose', actualMode: 'compose', fallbackReason: null },
+      target: WORKFLOW_TARGET,
+      evidence: {
+        kind: 'workflow-status',
+        options: { store: 'shared' },
+        result: {
+          success: false,
+          stdout: '{"changeRoot":"/stores/shared/openspec/changes/add-search"}',
+          stderr: 'status warning',
+          exitCode: 1,
+          data: null,
+          payload: { changeRoot: '/stores/shared/openspec/changes/add-search' },
+          diagnostics: [],
+          contractError: 'artifacts: Required',
+        },
+      },
+    })
+
+    render(<OpsxComposeRoute />)
+
+    await waitFor(() => {
+      expect(screen.getByText('CLI evidence')).toBeInTheDocument()
+    })
+    const evidence = screen.getByText('CLI evidence').parentElement
+    expect(evidence).toHaveTextContent('workflow-status')
+    expect(evidence).toHaveTextContent('status warning')
+    expect(evidence).toHaveTextContent('artifacts: Required')
+    expect(evidence).toHaveTextContent('/stores/shared/openspec/changes/add-search')
+  })
+
+  it('does not prepare or dispatch while Root Context is blocked', async () => {
+    rootActionMock.mockReturnValue({
+      status: 'blocked',
+      disabled: true,
+      context: null,
+      observedAt: 2,
+      title: 'Planning root unavailable',
+      message: 'OpenSpec Doctor rejected the selected Store.',
+      evidence: ['Doctor exit: 1'],
+    })
+
+    render(<OpsxComposeRoute />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Doctor exit: 1')
+    })
+    expect(prepareWorkflowInvocationMock).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Create' })).toBeDisabled()
+  })
+
   it.each(['update', 'sync'] as const)(
     'passes the %s action through command-mode workflow preparation',
     async (action) => {
@@ -153,6 +280,8 @@ describe('OpsxComposeRoute', () => {
         kind: 'agent-command',
         text: `/opsx:${action} add-search`,
         mode: { requestedMode: 'command', actualMode: 'command', fallbackReason: null },
+        target: WORKFLOW_TARGET,
+        evidence: null,
       })
 
       render(<OpsxComposeRoute />)

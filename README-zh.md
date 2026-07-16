@@ -85,7 +85,7 @@ Hooks 刻意放在 `openspec/.openspecui.json` 之外，避免可执行的项目
 安装期类型可从 CLI 包导入：
 
 ```ts
-import type { OnReadDocumentHookV1, OnRunWorkflowHookV1 } from 'openspecui/hooks'
+import type { OnReadDocumentHookV1, OnRunWorkflowHookV2 } from 'openspecui/hooks'
 ```
 
 ### `onReadDocument`
@@ -122,15 +122,15 @@ export const onReadDocument: OnReadDocumentHookV1 = async (ctx, read) => {
 OpenSpec CLI 仍是 workflow 状态、指令、schema、校验与归档行为的唯一事实来源。
 
 ```ts
-import type { OnRunWorkflowHookV1 } from 'openspecui/hooks'
+import type { OnRunWorkflowHookV2 } from 'openspecui/hooks'
 
-export const onRunWorkflow: OnRunWorkflowHookV1 = async (ctx, run) => {
+export const onRunWorkflow: OnRunWorkflowHookV2 = async (ctx, run) => {
   const result = await run()
   if (result.kind !== 'agent-prompt') return result
 
   return {
     ...result,
-    text: `${result.text}\n\nProject policy: include security impact in the final summary.`,
+    text: `${result.text}\n\nPlanning root: ${ctx.target.planningRoot.path}\nProject policy: include security impact in the final summary.`,
   }
 }
 ```

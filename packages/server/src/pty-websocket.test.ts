@@ -1,6 +1,18 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
-import { createPtyWebSocketHandler } from './pty-websocket.js'
+import { createPtyWebSocketHandler as createPtyWebSocketHandlerBase } from './pty-websocket.js'
+
+function createPtyWebSocketHandler(
+  ptyManager: Parameters<typeof createPtyWebSocketHandlerBase>[0],
+  notificationService?: Parameters<typeof createPtyWebSocketHandlerBase>[1]
+) {
+  return createPtyWebSocketHandlerBase(ptyManager, notificationService, {
+    resolveCwdTarget: async (cwdTarget) => ({
+      cwdTarget,
+      cwd: cwdTarget === 'planning-root' ? '/planning' : '/launch',
+    }),
+  })
+}
 
 class MockWebSocket extends EventEmitter {
   readonly OPEN = 1
@@ -24,6 +36,8 @@ function createMockPtySession(opts: { id?: string; title?: string; command?: str
     platform: string
     isExited: boolean
     exitCode: number | null
+    cwdTarget: 'launch-project' | 'planning-root'
+    initialCwd: string
     resize: ReturnType<typeof vi.fn>
     getBuffer: () => string
     oscTitle: string
@@ -38,6 +52,8 @@ function createMockPtySession(opts: { id?: string; title?: string; command?: str
   session.platform = 'common'
   session.isExited = false
   session.exitCode = null
+  session.cwdTarget = 'launch-project'
+  session.initialCwd = '/launch'
   session.resize = vi.fn()
   session.getBuffer = () => ''
   session.setTargetTitle = (title: string, target: 'icon' | 'window' | 'both') => {
@@ -56,7 +72,7 @@ function createMockPtySession(opts: { id?: string; title?: string; command?: str
 }
 
 describe('createPtyWebSocketHandler', () => {
-  it('returns PTY_CREATE_FAILED when session creation throws', () => {
+  it('returns PTY_CREATE_FAILED when session creation throws', async () => {
     const ptyManager = {
       create: vi.fn(() => {
         throw new Error('File not found')
@@ -72,15 +88,90 @@ describe('createPtyWebSocketHandler', () => {
       JSON.stringify({
         type: 'create',
         requestId: 'term-1',
+        cwdTarget: 'launch-project',
       })
     )
 
-    expect(ws.sent.length).toBe(1)
+    await vi.waitFor(() => expect(ws.sent.length).toBe(1))
     expect(JSON.parse(ws.sent[0]!)).toMatchObject({
       type: 'error',
       code: 'PTY_CREATE_FAILED',
       sessionId: 'term-1',
       message: 'File not found',
+    })
+  })
+
+  it('resolves launch and planning cwd targets before PTY creation', async () => {
+    const session = createMockPtySession()
+    const create = vi.fn(
+      (input: { cwdTarget: 'launch-project' | 'planning-root'; cwd: string }) => {
+        session.cwdTarget = input.cwdTarget
+        session.initialCwd = input.cwd
+        return session
+      }
+    )
+    const resolveCwdTarget = vi.fn(async (cwdTarget: 'launch-project' | 'planning-root') => ({
+      cwdTarget,
+      cwd: cwdTarget === 'planning-root' ? '/planning' : '/launch',
+    }))
+    const ws = new MockWebSocket()
+    const handler = createPtyWebSocketHandlerBase({ create } as never, undefined, {
+      resolveCwdTarget,
+    })
+
+    handler(ws as never)
+    ws.emit(
+      'message',
+      JSON.stringify({
+        type: 'create',
+        requestId: 'term-planning',
+        cwdTarget: 'planning-root',
+      })
+    )
+
+    await vi.waitFor(() => {
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwdTarget: 'planning-root',
+          cwd: '/planning',
+        })
+      )
+    })
+    expect(resolveCwdTarget).toHaveBeenCalledWith('planning-root')
+    expect(JSON.parse(ws.sent[0]!)).toMatchObject({
+      type: 'created',
+      requestId: 'term-planning',
+      cwdTarget: 'planning-root',
+      initialCwd: '/planning',
+    })
+  })
+
+  it('rejects planning-root creation when current Root Context cannot resolve it', async () => {
+    const create = vi.fn()
+    const ws = new MockWebSocket()
+    const handler = createPtyWebSocketHandlerBase({ create } as never, undefined, {
+      resolveCwdTarget: vi.fn(async () => {
+        throw new Error('Planning root cwd is unavailable.')
+      }),
+    })
+
+    handler(ws as never)
+    ws.emit(
+      'message',
+      JSON.stringify({
+        type: 'create',
+        requestId: 'term-planning-unavailable',
+        cwdTarget: 'planning-root',
+      })
+    )
+
+    await vi.waitFor(() => expect(ws.sent.length).toBe(1))
+    expect(create).not.toHaveBeenCalled()
+    expect(JSON.parse(ws.sent[0]!)).toMatchObject({
+      type: 'error',
+      code: 'PTY_CREATE_FAILED',
+      sessionId: 'term-planning-unavailable',
+      message: 'Planning root cwd is unavailable.',
     })
   })
 

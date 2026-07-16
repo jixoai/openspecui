@@ -87,7 +87,7 @@ does not pollute persisted UI configuration.
 Install-time types are available from the CLI package:
 
 ```ts
-import type { OnReadDocumentHookV1, OnRunWorkflowHookV1 } from 'openspecui/hooks'
+import type { OnReadDocumentHookV1, OnRunWorkflowHookV2 } from 'openspecui/hooks'
 ```
 
 ### `onReadDocument`
@@ -127,15 +127,15 @@ agent or command runner. OpenSpec CLI remains the source of truth for workflow s
 instructions, schemas, validation, and archive behavior.
 
 ```ts
-import type { OnRunWorkflowHookV1 } from 'openspecui/hooks'
+import type { OnRunWorkflowHookV2 } from 'openspecui/hooks'
 
-export const onRunWorkflow: OnRunWorkflowHookV1 = async (ctx, run) => {
+export const onRunWorkflow: OnRunWorkflowHookV2 = async (ctx, run) => {
   const result = await run()
   if (result.kind !== 'agent-prompt') return result
 
   return {
     ...result,
-    text: `${result.text}\n\nProject policy: include security impact in the final summary.`,
+    text: `${result.text}\n\nPlanning root: ${ctx.target.planningRoot.path}\nProject policy: include security impact in the final summary.`,
   }
 }
 ```

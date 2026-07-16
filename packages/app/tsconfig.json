@@ -9,6 +9,7 @@
       "@openspecui/core": ["../core/src/index.ts"],
       "@openspecui/core/hosted-app": ["../core/src/hosted-app.ts"],
       "@openspecui/core/sounds": ["../core/src/sounds.ts"],
+      "@openspecui/core/store-types": ["../core/src/store-types.ts"],
       "@openspecui/web-src/*": ["../web/src/*"]
     }
   },

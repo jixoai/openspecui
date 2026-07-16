@@ -4,6 +4,7 @@ import { ArchiveView } from '../routes/archive-view'
 import { ChangeList } from '../routes/change-list'
 import { ChangeView } from '../routes/change-view'
 import { Config } from '../routes/config'
+import { ContextView } from '../routes/context'
 import { Dashboard } from '../routes/dashboard'
 import { GitRoute } from '../routes/git'
 import { GitCommitViewRoute, GitUncommittedViewRoute } from '../routes/git-view'
@@ -41,7 +42,18 @@ export function createRouteTree(rootRoute: AnyRootRoute, opts?: { includeTermina
       component: GitCommitViewRoute,
     }),
     createRoute({ getParentRoute: () => rootRoute, path: '/specs', component: SpecList }),
-    createRoute({ getParentRoute: () => rootRoute, path: '/specs/$specId', component: SpecView }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/specs/owned/$specId',
+      component: SpecView,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/specs/referenced/$storeId/$specId',
+      component: SpecView,
+    }),
+    // 6.9 项目级 Context 视图（取代项目 Stores 页）。
+    createRoute({ getParentRoute: () => rootRoute, path: '/context', component: ContextView }),
     createRoute({ getParentRoute: () => rootRoute, path: '/changes', component: ChangeList }),
     createRoute({
       getParentRoute: () => rootRoute,

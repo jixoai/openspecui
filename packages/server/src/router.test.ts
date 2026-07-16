@@ -1,3 +1,8 @@
+import {
+  RuntimeInvalidationIndex,
+  createDocumentChecklistSummary,
+  createTrackedTaskProgress,
+} from '@openspecui/core'
 import { DEFAULT_BELL_SOUND_ID, DEFAULT_NOTIFICATION_SOUND_ID } from '@openspecui/core/sounds'
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
@@ -12,6 +17,21 @@ import { sameGitPath } from '../src/git-shared.js'
 import type { Context } from '../src/router.js'
 import { appRouter } from '../src/router.js'
 import { FilePreviewService } from './file-preview-service.js'
+import type { PlanningRootServices } from './planning-root-service.js'
+
+function trackedTaskProgress(total: number, completed: number) {
+  return createTrackedTaskProgress(
+    Array.from({ length: total }, (_, index) => ({
+      id: `task-${index + 1}`,
+      text: `Task ${index + 1}`,
+      completed: index < completed,
+    }))
+  )
+}
+
+function documentChecklistSummary() {
+  return createDocumentChecklistSummary([])
+}
 
 const dashboardGitSnapshotState = vi.hoisted(() => ({
   removeDetachedWorktree: vi.fn().mockResolvedValue(undefined),
@@ -57,7 +77,8 @@ const createMockAdapter = () => ({
     {
       id: 'add-caching',
       name: 'Add Caching',
-      progress: { total: 0, completed: 0 },
+      trackedTaskProgress: trackedTaskProgress(0, 0),
+      documentChecklistSummary: documentChecklistSummary(),
       createdAt: 1,
       updatedAt: 30,
     },
@@ -67,7 +88,8 @@ const createMockAdapter = () => ({
     {
       id: 'old-change',
       name: 'Old Change',
-      progress: { total: 1, completed: 1 },
+      trackedTaskProgress: trackedTaskProgress(1, 1),
+      documentChecklistSummary: documentChecklistSummary(),
       createdAt: 1,
       updatedAt: 1,
     },
@@ -82,8 +104,8 @@ const createMockAdapter = () => ({
     why: 'why',
     whatChanges: 'what',
     deltas: [],
-    tasks: [{ id: '1', text: 'done', completed: true }],
-    progress: { total: 1, completed: 1 },
+    trackedTaskProgress: trackedTaskProgress(1, 1),
+    documentChecklistSummary: documentChecklistSummary(),
   }),
   readSpec: vi.fn().mockImplementation(async (id: string) => {
     if (id === 'api') {
@@ -131,8 +153,8 @@ const createMockAdapter = () => ({
     why: 'Performance improvement',
     whatChanges: 'Add Redis',
     deltas: [],
-    tasks: [],
-    progress: { total: 0, completed: 0 },
+    trackedTaskProgress: trackedTaskProgress(0, 0),
+    documentChecklistSummary: documentChecklistSummary(),
   }),
   readChangeRaw: vi.fn().mockResolvedValue({ proposal: '# Add Caching', tasks: '' }),
   writeSpec: vi.fn().mockResolvedValue(undefined),
@@ -259,6 +281,79 @@ const createMockContext = (
     contracts: {
       archive: vi.fn().mockResolvedValue({ success: true }),
       validate: vi.fn().mockResolvedValue({ success: true }),
+      doctorRoot: vi.fn().mockResolvedValue({
+        success: true,
+        stdout: JSON.stringify({
+          root: {
+            path: '/tmp/openspecui-router-test',
+            source: 'nearest',
+            healthy: true,
+            status: [],
+          },
+          store: null,
+          references: [],
+          status: [],
+        }),
+        stderr: '',
+        exitCode: 0,
+        data: {
+          root: {
+            path: '/tmp/openspecui-router-test',
+            source: 'nearest',
+            healthy: true,
+            status: [],
+          },
+          store: null,
+          references: [],
+          status: [],
+        },
+        payload: {
+          root: {
+            path: '/tmp/openspecui-router-test',
+            source: 'nearest',
+            healthy: true,
+            status: [],
+          },
+          store: null,
+          references: [],
+          status: [],
+        },
+        diagnostics: [],
+      }),
+      context: vi.fn().mockResolvedValue({
+        success: true,
+        stdout: JSON.stringify({
+          root: {
+            path: '/tmp/openspecui-router-test',
+            source: 'nearest',
+            role: 'openspec_root',
+          },
+          members: [],
+          status: [],
+        }),
+        stderr: '',
+        exitCode: 0,
+        data: {
+          root: {
+            path: '/tmp/openspecui-router-test',
+            source: 'nearest',
+            role: 'openspec_root',
+          },
+          members: [],
+          status: [],
+        },
+        payload: {
+          root: {
+            path: '/tmp/openspecui-router-test',
+            source: 'nearest',
+            role: 'openspec_root',
+          },
+          members: [],
+          status: [],
+        },
+        diagnostics: [],
+      }),
+      showSpec: vi.fn(),
       listStores: vi.fn().mockResolvedValue({
         success: true,
         stdout: '{"stores":[],"status":[]}',
@@ -291,7 +386,14 @@ const createMockContext = (
     getStatusList: vi.fn().mockReturnValue([]),
     ensureApplyInstructions: vi.fn().mockResolvedValue(undefined),
     getApplyInstructions: vi.fn().mockReturnValue({
-      progress: { total: 0, complete: 0, remaining: 0 },
+      applyInstructionProgress: {
+        source: 'openspec-instructions-apply',
+        total: 0,
+        complete: 0,
+        remaining: 0,
+        state: 'all_done',
+        divergence: null,
+      },
     }),
     ensureArtifactOutput: vi.fn().mockResolvedValue(undefined),
     getArtifactOutput: vi.fn().mockReturnValue('# Source artifact'),
@@ -372,24 +474,63 @@ artifacts:
   const dashboardOverviewService = new DashboardOverviewService((reason) =>
     loadDashboardOverview(
       {
-        adapter: adapter as unknown as Context['adapter'],
+        adapter: adapter as unknown as PlanningRootServices['adapter'],
         configManager: configManager as unknown as Context['configManager'],
         projectDir,
       },
       reason
     )
   )
+  const rootContext = {
+    launchProject: { path: projectDir },
+    planningRoot: {
+      path: projectDir,
+      source: 'nearest' as const,
+      healthy: true,
+      status: [],
+    },
+    storeId: null,
+    cli: { available: true, version: '1.6.0' },
+    references: [],
+    contextMembers: [],
+    dataScope: {
+      path: join(projectDir, '.openspec-data'),
+      source: 'user-home-default' as const,
+      environmentVariable: null,
+    },
+    diagnostics: { root: [], doctor: [], context: [] },
+    evidence: { doctor: null, context: null },
+    observedAt: 1,
+  }
+  const planningRootServices = {
+    rootContext,
+    adapter: adapter as unknown as PlanningRootServices['adapter'],
+    documentService: documentService as unknown as PlanningRootServices['documentService'],
+    kernel: kernel as unknown as PlanningRootServices['kernel'],
+    filePreviewService,
+    searchService: searchService as unknown as PlanningRootServices['searchService'],
+    dashboardOverviewService,
+    workflowInvocationService:
+      workflowInvocationService as unknown as PlanningRootServices['workflowInvocationService'],
+  } satisfies PlanningRootServices
+  const runtimeInvalidation = new RuntimeInvalidationIndex()
+  const storeObservation = {
+    reconcile: vi.fn().mockResolvedValue(undefined),
+    dispose: vi.fn().mockResolvedValue(undefined),
+  }
 
   return {
-    adapter: adapter as unknown as Context['adapter'],
+    launchProjectAdapter: adapter as unknown as Context['launchProjectAdapter'],
+    planningRootServices: {
+      resolve: vi.fn().mockResolvedValue(planningRootServices),
+      resolveReactive: vi.fn().mockResolvedValue(planningRootServices),
+      readPreviewRequest: vi.fn().mockReturnValue(null),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    },
+    runtimeInvalidation,
+    storeObservation,
     configManager: configManager as unknown as Context['configManager'],
-    documentService: documentService as unknown as Context['documentService'],
     cliExecutor: cliExecutor as unknown as Context['cliExecutor'],
-    kernel: kernel as unknown as Context['kernel'],
-    workflowInvocationService:
-      workflowInvocationService as unknown as Context['workflowInvocationService'],
-    searchService: searchService as unknown as Context['searchService'],
-    dashboardOverviewService,
     projectRecoveryService: options.projectRecoveryService ?? createMockProjectRecoveryService(),
     notificationService: notificationService as unknown as Context['notificationService'],
     customSoundService: customSoundService as unknown as Context['customSoundService'],
@@ -405,11 +546,14 @@ artifacts:
       clear: vi.fn().mockResolvedValue({ deleted: 0 }),
       close: vi.fn(),
     } as unknown as Context['translationCacheService'],
-    filePreviewService,
     gitWorktreeHandoff: options.gitWorktreeHandoff,
     watcher: undefined,
     projectDir,
   }
+}
+
+function resolveMockPlanningRoot(context: Context): Promise<PlanningRootServices> {
+  return context.planningRootServices.resolve()
 }
 
 const createCaller = (
@@ -426,6 +570,214 @@ const createCaller = (
 }
 
 describe('appRouter', () => {
+  describe('root context', () => {
+    it('exposes the shared CLI-owned Root Context projection', async () => {
+      const caller = createCaller()
+      const state = await caller.rootContext.get()
+
+      expect(state.state).toBe('ready')
+      if (state.state !== 'ready') return
+      expect(state.data.launchProject.path).toBe('/tmp/openspecui-router-test')
+      expect(state.data.planningRoot).toMatchObject({
+        path: '/tmp/openspecui-router-test',
+        source: 'nearest',
+      })
+    })
+  })
+
+  describe('runtime invalidation', () => {
+    it('pushes identity-only tokens and lets the client pull the Store projection', async () => {
+      const context = createMockContext()
+      const observable = await appRouter.createCaller(context).runtimeInvalidation.subscribe({
+        facets: ['stores'],
+      })
+      const first = Promise.withResolvers<void>()
+      const second = Promise.withResolvers<void>()
+      let emissionCount = 0
+      let firstTokens: unknown
+      let secondTokens: unknown
+      const subscription = observable.subscribe({
+        next: (tokens) => {
+          emissionCount += 1
+          if (emissionCount === 1) {
+            firstTokens = tokens
+            first.resolve()
+          }
+          if (emissionCount === 2) {
+            secondTokens = tokens
+            second.resolve()
+          }
+        },
+        error: second.reject,
+      })
+
+      await first.promise
+      ;(context.runtimeInvalidation as RuntimeInvalidationIndex).invalidate(['stores'])
+      await second.promise
+
+      expect(firstTokens).toEqual([{ facet: 'stores', generation: 0 }])
+      expect(secondTokens).toEqual([{ facet: 'stores', generation: 1 }])
+      expect(context.cliExecutor.contracts.listStores).not.toHaveBeenCalled()
+      await appRouter.createCaller(context).stores.list()
+      expect(context.cliExecutor.contracts.listStores).toHaveBeenCalledTimes(1)
+      expect(context.storeObservation.reconcile).toHaveBeenCalledTimes(1)
+      subscription.unsubscribe()
+    })
+
+    it('retains the observed Store-root set when the CLI list attempt fails', async () => {
+      const context = createMockContext()
+      const caller = appRouter.createCaller(context)
+
+      await caller.stores.list()
+      vi.mocked(context.cliExecutor.contracts.listStores).mockResolvedValueOnce({
+        success: false,
+        stdout: '',
+        stderr: 'registry unavailable',
+        exitCode: 1,
+        data: null,
+        payload: null,
+        diagnostics: [],
+      })
+      const failed = await caller.stores.list()
+
+      expect(failed.available).toBe(false)
+      expect(context.storeObservation.reconcile).toHaveBeenCalledTimes(1)
+    })
+
+    it('projects lenient Store data from typed payload and preserves complete evidence', async () => {
+      const context = createMockContext()
+      const evidence = {
+        success: true,
+        stdout: 'typed executor already parsed this document',
+        stderr: 'upstream warning',
+        exitCode: 0,
+        data: null,
+        payload: {
+          stores: [{ id: 'team', root: '/stores/team', future: true }],
+        },
+        diagnostics: [],
+        contractError: 'status: Required',
+      }
+      vi.mocked(context.cliExecutor.contracts.listStores).mockResolvedValueOnce(evidence)
+
+      const result = await appRouter.createCaller(context).stores.list()
+
+      expect(result).toMatchObject({
+        available: true,
+        stores: [{ id: 'team', root: '/stores/team', future: true }],
+        evidence,
+      })
+      expect(context.storeObservation.reconcile).toHaveBeenCalledWith([
+        { id: 'team', root: '/stores/team', future: true },
+      ])
+    })
+
+    it('projects partial doctor facts from typed payload without reparsing stdout', async () => {
+      const context = createMockContext()
+      const evidence = {
+        success: true,
+        stdout: 'typed executor already parsed this document',
+        stderr: '',
+        exitCode: 0,
+        data: null,
+        payload: {
+          stores: [
+            {
+              id: 'empty',
+              root: '/stores/empty',
+              openspec_root: { present: true, healthy: true },
+            },
+          ],
+        },
+        diagnostics: [],
+        contractError: 'metadata: Required',
+      }
+      vi.mocked(context.cliExecutor.contracts.doctorStores).mockResolvedValueOnce(evidence)
+
+      await expect(
+        appRouter.createCaller(context).stores.doctor({ id: '' })
+      ).resolves.toMatchObject({
+        available: true,
+        stores: [{ id: 'empty', openspec_root: { present: true, healthy: true } }],
+        evidence,
+      })
+      expect(context.cliExecutor.contracts.doctorStores).toHaveBeenCalledWith('')
+    })
+
+    it('does not attach a Store polling timer to each invalidation subscriber', async () => {
+      vi.useFakeTimers()
+      try {
+        const context = createMockContext()
+        const observable = await appRouter.createCaller(context).runtimeInvalidation.subscribe({
+          facets: ['stores'],
+        })
+        const listener = vi.fn()
+        const subscription = observable.subscribe({ next: listener })
+
+        expect(listener).toHaveBeenCalledTimes(1)
+        await vi.advanceTimersByTimeAsync(15_000)
+        expect(listener).toHaveBeenCalledTimes(1)
+        subscription.unsubscribe()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
+
+  describe('planning config ownership', () => {
+    it('keeps launch Project Binding and external Active Root writes physically separate', async () => {
+      const tempDir = await createTempProjectDir('openspecui-router-planning-config-')
+      const launchProject = join(tempDir, 'launch')
+      const planningRoot = join(tempDir, 'planning')
+      await Promise.all([
+        mkdir(join(launchProject, 'openspec'), { recursive: true }),
+        mkdir(join(planningRoot, 'openspec'), { recursive: true }),
+      ])
+      await Promise.all([
+        writeFile(join(launchProject, 'openspec', 'config.yaml'), 'schema: launch\n', 'utf8'),
+        writeFile(join(planningRoot, 'openspec', 'config.yaml'), 'schema: old\n', 'utf8'),
+      ])
+      const context = createMockContext(createMockAdapter(), { projectDir: launchProject })
+      const planning = await resolveMockPlanningRoot(context)
+      planning.rootContext = {
+        ...planning.rootContext,
+        launchProject: { path: launchProject },
+        planningRoot: {
+          path: planningRoot,
+          source: 'store',
+          store_id: 'shared',
+          healthy: true,
+          status: [],
+        },
+        storeId: 'shared',
+      }
+      const caller = appRouter.createCaller(context)
+
+      const binding = await caller.planningConfig.updateProjectBinding({
+        store: 'shared',
+        references: [{ id: 'platform' }],
+      })
+      const active = await caller.planningConfig.activeRoot()
+      await caller.planningConfig.writeActiveRoot({ content: 'schema: active\n' })
+
+      expect(binding.kind).toBe('project-binding')
+      expect(binding.owner.path).toBe(launchProject)
+      expect(binding.binding.store).toEqual({ state: 'declared', id: 'shared' })
+      expect(active.owner).toMatchObject({
+        path: planningRoot,
+        source: 'store',
+        storeId: 'shared',
+        externalToLaunchProject: true,
+      })
+      await expect(
+        readFile(join(launchProject, 'openspec', 'config.yaml'), 'utf8')
+      ).resolves.toMatch(/schema: launch[\s\S]*store: shared/)
+      await expect(readFile(join(planningRoot, 'openspec', 'config.yaml'), 'utf8')).resolves.toBe(
+        'schema: active\n'
+      )
+    })
+  })
+
   describe('system', () => {
     it('should return runtime status', async () => {
       const caller = createCaller()
@@ -433,13 +785,120 @@ describe('appRouter', () => {
 
       expect(status.projectDir).toBe('/tmp/openspecui-router-test')
       expect(typeof status.watcherEnabled).toBe('boolean')
-      expect(typeof status.watcherGeneration).toBe('number')
-      expect(typeof status.watcherReinitializeCount).toBe('number')
+      expect(typeof status.watcherRootCount).toBe('number')
+      expect(typeof status.watcherSubscriptionCount).toBe('number')
+      expect(Array.isArray(status.watcherRoots)).toBe(true)
       expect(status.projectRecovery).toEqual({ state: 'idle' })
     })
   })
 
   describe('entity file preview platform', () => {
+    it('writes entity and artifact files only inside the selected planning root', async () => {
+      const tempDir = await createTempProjectDir('openspecui-router-separated-write-')
+      const launchProject = join(tempDir, 'launch')
+      const planningRoot = join(tempDir, 'planning')
+      await Promise.all([
+        mkdir(join(launchProject, 'openspec', 'changes', 'mutation-demo'), { recursive: true }),
+        mkdir(join(planningRoot, 'openspec', 'changes', 'mutation-demo'), { recursive: true }),
+        mkdir(join(planningRoot, 'openspec', 'changes', 'archive', 'archived-demo'), {
+          recursive: true,
+        }),
+      ])
+      const context = createMockContext(createMockAdapter(), { projectDir: launchProject })
+      const planning = await resolveMockPlanningRoot(context)
+      planning.rootContext = {
+        ...planning.rootContext,
+        launchProject: { path: launchProject },
+        planningRoot: {
+          path: planningRoot,
+          source: 'store',
+          store_id: 'shared',
+          healthy: true,
+          status: [],
+        },
+        storeId: 'shared',
+      }
+      const caller = appRouter.createCaller(context)
+
+      await caller.change.writeFile({
+        id: 'mutation-demo',
+        path: 'notes/change.md',
+        content: '# Change note\n',
+      })
+      await caller.opsx.writeArtifactOutput({
+        changeId: 'mutation-demo',
+        outputPath: 'artifacts/output.md',
+        content: '# Artifact\n',
+      })
+      await caller.archive.writeFile({
+        id: 'archived-demo',
+        path: 'notes/archive.md',
+        content: '# Archive note\n',
+      })
+
+      await expect(
+        readFile(
+          join(planningRoot, 'openspec', 'changes', 'mutation-demo', 'notes', 'change.md'),
+          'utf8'
+        )
+      ).resolves.toBe('# Change note\n')
+      await expect(
+        readFile(
+          join(planningRoot, 'openspec', 'changes', 'mutation-demo', 'artifacts', 'output.md'),
+          'utf8'
+        )
+      ).resolves.toBe('# Artifact\n')
+      await expect(
+        readFile(
+          join(
+            planningRoot,
+            'openspec',
+            'changes',
+            'archive',
+            'archived-demo',
+            'notes',
+            'archive.md'
+          ),
+          'utf8'
+        )
+      ).resolves.toBe('# Archive note\n')
+
+      await expect(
+        readFile(
+          join(launchProject, 'openspec', 'changes', 'mutation-demo', 'notes', 'change.md'),
+          'utf8'
+        )
+      ).rejects.toThrow()
+      await expect(
+        readFile(
+          join(launchProject, 'openspec', 'changes', 'mutation-demo', 'artifacts', 'output.md'),
+          'utf8'
+        )
+      ).rejects.toThrow()
+      await expect(
+        readFile(
+          join(
+            launchProject,
+            'openspec',
+            'changes',
+            'archive',
+            'archived-demo',
+            'notes',
+            'archive.md'
+          ),
+          'utf8'
+        )
+      ).rejects.toThrow()
+
+      await expect(
+        caller.opsx.writeArtifactOutput({
+          changeId: 'mutation-demo',
+          outputPath: '../escaped.md',
+          content: 'nope',
+        })
+      ).rejects.toThrow(/escaped entity root|path/i)
+    })
+
     it('writes change entity files through a guarded relative path', async () => {
       const projectDir = await createTempProjectDir('openspecui-router-change-file-')
       await mkdir(join(projectDir, 'openspec', 'changes', 'preview-demo'), { recursive: true })
@@ -494,7 +953,8 @@ describe('appRouter', () => {
 
     it('subscribes archive folder files from source content', async () => {
       const context = createMockContext()
-      const documentService = context.documentService as unknown as {
+      const planning = await resolveMockPlanningRoot(context)
+      const documentService = planning.documentService as unknown as {
         readArchivedChangeFiles: ReturnType<typeof vi.fn>
       }
       documentService.readArchivedChangeFiles = vi
@@ -625,8 +1085,9 @@ describe('appRouter', () => {
       expect(overview.triColorTrends.specifications).toEqual([])
       expect(overview.git.defaultBranch).toBe('origin/main')
       expect(overview.git.worktrees[0]?.branchName).toBe('main')
-      expect(context.kernel.waitForWarmup).not.toHaveBeenCalled()
-      expect(context.kernel.ensureApplyInstructions).not.toHaveBeenCalled()
+      const planning = await resolveMockPlanningRoot(context)
+      expect(planning.kernel.waitForWarmup).not.toHaveBeenCalled()
+      expect(planning.kernel.ensureApplyInstructions).not.toHaveBeenCalled()
     })
 
     it('marks objective trend cards unavailable when timestamps are missing', async () => {
@@ -681,7 +1142,8 @@ describe('appRouter', () => {
         Array.from({ length: 12 }, (_, index) => ({
           id: `change-${index}`,
           name: `Change ${index}`,
-          progress: { total: 1, completed: index % 2 },
+          trackedTaskProgress: trackedTaskProgress(1, index % 2),
+          documentChecklistSummary: documentChecklistSummary(),
           createdAt: 1,
           updatedAt: index + 1,
         }))
@@ -726,14 +1188,16 @@ describe('appRouter', () => {
         {
           id: '2026-01-23-add-static-export',
           name: 'Archive A',
-          progress: { total: 1, completed: 1 },
+          trackedTaskProgress: trackedTaskProgress(1, 1),
+          documentChecklistSummary: documentChecklistSummary(),
           createdAt: 2_000_000_000_000,
           updatedAt: 2_000_000_000_000,
         },
         {
           id: '2026-02-21-opsx-config-center',
           name: 'Archive B',
-          progress: { total: 1, completed: 1 },
+          trackedTaskProgress: trackedTaskProgress(1, 1),
+          documentChecklistSummary: documentChecklistSummary(),
           createdAt: 2_000_000_000_000,
           updatedAt: 2_000_000_000_000,
         },
@@ -765,7 +1229,10 @@ describe('appRouter', () => {
       await initGitRepo(projectDir)
       const dotGitDir = await runGit(projectDir, ['rev-parse', '--git-dir'])
       const caller = createCaller(createMockAdapter(), { projectDir })
-      const result = await caller.dashboard.refreshGitSnapshot({ reason: 'test-manual' })
+      const result = await caller.dashboard.refreshGitSnapshot({
+        scope: 'code',
+        reason: 'test-manual',
+      })
       const stampPath = resolvePath(projectDir, dotGitDir, 'openspecui-dashboard-git-refresh.stamp')
 
       expect(result.success).toBe(true)
@@ -781,7 +1248,10 @@ describe('appRouter', () => {
       await runGit(baseRepoDir, ['worktree', 'add', projectDir, '-b', 'feature-refresh-stamp'])
 
       const caller = createCaller(createMockAdapter(), { projectDir })
-      const result = await caller.dashboard.refreshGitSnapshot({ reason: 'worktree' })
+      const result = await caller.dashboard.refreshGitSnapshot({
+        scope: 'code',
+        reason: 'worktree',
+      })
       const gitDir = await runGit(projectDir, ['rev-parse', '--git-dir'])
       const stampPath = resolvePath(projectDir, gitDir, 'openspecui-dashboard-git-refresh.stamp')
 
@@ -795,7 +1265,7 @@ describe('appRouter', () => {
       const projectDir = await createTempProjectDir('openspecui-router-nogit-')
       const caller = createCaller(createMockAdapter(), { projectDir })
 
-      const result = await caller.dashboard.refreshGitSnapshot({ reason: 'no-git' })
+      const result = await caller.dashboard.refreshGitSnapshot({ scope: 'code', reason: 'no-git' })
 
       expect(result.success).toBe(true)
       expect(
@@ -810,6 +1280,7 @@ describe('appRouter', () => {
 
       const caller = createCaller(createMockAdapter(), { projectDir })
       const result = await caller.dashboard.removeDetachedWorktree({
+        scope: 'code',
         path: '/tmp/detached-worktree',
       })
 
@@ -829,13 +1300,116 @@ describe('appRouter', () => {
 
       const caller = createCaller(createMockAdapter(), { projectDir })
 
-      await expect(caller.dashboard.removeDetachedWorktree({ path: projectDir })).rejects.toThrow(
-        /Only detached worktrees can be removed/
-      )
+      await expect(
+        caller.dashboard.removeDetachedWorktree({ scope: 'code', path: projectDir })
+      ).rejects.toThrow(/Only detached worktrees can be removed/)
     })
   })
 
   describe('git', () => {
+    it('collapses nested launch and planning roots inside the same Git worktree', async () => {
+      const repositoryDir = await createTempProjectDir('openspecui-router-git-same-repo-')
+      await initGitRepo(repositoryDir)
+      const launchProject = join(repositoryDir, 'apps', 'web')
+      const planningRoot = join(repositoryDir, 'planning')
+      await Promise.all([
+        mkdir(launchProject, { recursive: true }),
+        mkdir(planningRoot, { recursive: true }),
+      ])
+
+      const context = createMockContext(createMockAdapter(), { projectDir: launchProject })
+      const planning = await resolveMockPlanningRoot(context)
+      planning.rootContext = {
+        ...planning.rootContext,
+        launchProject: { path: launchProject },
+        planningRoot: {
+          path: planningRoot,
+          source: 'nearest',
+          healthy: true,
+          status: [],
+        },
+      }
+      const caller = appRouter.createCaller(context)
+
+      const scopes = await caller.git.scopes()
+
+      expect(scopes.code).toMatchObject({
+        scope: 'code',
+        rootPath: resolvePath(launchProject),
+      })
+      expect(await sameGitPath(scopes.code.repository?.topLevel ?? '', repositoryDir)).toBe(true)
+      expect(scopes.planning).toBeNull()
+      await expect(caller.git.overview({ scope: 'planning' })).rejects.toThrow(
+        /Planning repository scope is unavailable or identical/
+      )
+    })
+
+    it('keeps status, history, detail, and refresh mutations inside the selected repository', async () => {
+      const codeRepository = await createTempProjectDir('openspecui-router-git-code-repo-')
+      const planningRepository = await createTempProjectDir('openspecui-router-git-planning-repo-')
+      await Promise.all([initGitRepo(codeRepository), initGitRepo(planningRepository)])
+      await Promise.all([
+        writeGitFile(codeRepository, 'src/code-only.ts', 'export const code = true\n'),
+        writeGitFile(
+          planningRepository,
+          'openspec/specs/planning-only/spec.md',
+          '# Planning only\n'
+        ),
+      ])
+
+      const context = createMockContext(createMockAdapter(), { projectDir: codeRepository })
+      const planning = await resolveMockPlanningRoot(context)
+      planning.rootContext = {
+        ...planning.rootContext,
+        launchProject: { path: codeRepository },
+        planningRoot: {
+          path: planningRepository,
+          source: 'store',
+          store_id: 'shared',
+          healthy: true,
+          status: [],
+        },
+        storeId: 'shared',
+      }
+      const caller = appRouter.createCaller(context)
+
+      const scopes = await caller.git.scopes()
+      const [codeEntries, planningEntries, codeFiles, planningFiles] = await Promise.all([
+        caller.git.listEntries({ scope: 'code' }),
+        caller.git.listEntries({ scope: 'planning' }),
+        caller.git.getEntryFiles({ scope: 'code', selector: { type: 'uncommitted' } }),
+        caller.git.getEntryFiles({ scope: 'planning', selector: { type: 'uncommitted' } }),
+      ])
+
+      expect(scopes.planning).toMatchObject({
+        scope: 'planning',
+        rootPath: resolvePath(planningRepository),
+      })
+      expect(
+        await sameGitPath(scopes.planning?.repository?.topLevel ?? '', planningRepository)
+      ).toBe(true)
+      expect(codeEntries.items[0]).toMatchObject({ type: 'uncommitted' })
+      expect(planningEntries.items[0]).toMatchObject({ type: 'uncommitted' })
+      expect(codeFiles.files.map((file) => file.path)).toEqual(['src/code-only.ts'])
+      expect(planningFiles.files.map((file) => file.path)).toEqual([
+        'openspec/specs/planning-only/spec.md',
+      ])
+
+      await caller.git.refresh({ scope: 'planning', reason: 'planning-scope-test' })
+      const codeGitDir = await runGit(codeRepository, ['rev-parse', '--git-dir'])
+      const planningGitDir = await runGit(planningRepository, ['rev-parse', '--git-dir'])
+      await expect(
+        pathExists(
+          resolvePath(planningRepository, planningGitDir, 'openspecui-dashboard-git-refresh.stamp')
+        )
+      ).resolves.toBe(true)
+      await expect(
+        pathExists(
+          resolvePath(codeRepository, codeGitDir, 'openspecui-dashboard-git-refresh.stamp')
+        )
+      ).resolves.toBe(false)
+    })
+
     it('returns overview, paged entries, and detail for the current worktree', async () => {
       const projectDir = await createTempProjectDir('openspecui-router-git-')
       const remoteDir = await createTempProjectDir('openspecui-router-git-remote-')
@@ -870,8 +1444,8 @@ describe('appRouter', () => {
       ])
 
       const caller = createCaller(createMockAdapter(), { projectDir })
-      const overview = await caller.git.overview()
-      const entries = await caller.git.listEntries()
+      const overview = await caller.git.overview({ scope: 'code' })
+      const entries = await caller.git.listEntries({ scope: 'code' })
 
       expect(overview.defaultBranch).toBe('origin/main')
       expect(overview.currentWorktree?.branchName).toBe('feature-git-panel')
@@ -890,6 +1464,7 @@ describe('appRouter', () => {
       })
 
       const uncommittedMeta = await caller.git.getEntryMeta({
+        scope: 'code',
         selector: { type: 'uncommitted' },
       })
       expect(uncommittedMeta).toMatchObject({
@@ -898,6 +1473,7 @@ describe('appRouter', () => {
       })
 
       const uncommittedFiles = await caller.git.getEntryFiles({
+        scope: 'code',
         selector: { type: 'uncommitted' },
       })
       expect(uncommittedFiles.files[0]).toMatchObject({
@@ -912,6 +1488,7 @@ describe('appRouter', () => {
       })
 
       const uncommittedPatch = await caller.git.getEntryPatch({
+        scope: 'code',
         selector: { type: 'uncommitted' },
         fileId: uncommittedFiles.files[0]!.fileId,
       })
@@ -927,6 +1504,7 @@ describe('appRouter', () => {
       }
 
       const commitMeta = await caller.git.getEntryMeta({
+        scope: 'code',
         selector: { type: 'commit', hash: commitEntry.hash },
       })
       expect(commitMeta).toMatchObject({
@@ -935,6 +1513,7 @@ describe('appRouter', () => {
       })
 
       const commitFiles = await caller.git.getEntryFiles({
+        scope: 'code',
         selector: { type: 'commit', hash: commitEntry.hash },
       })
       expect(commitFiles.files[0]?.path).toBe(
@@ -945,6 +1524,7 @@ describe('appRouter', () => {
       )
 
       const commitPatch = await caller.git.getEntryPatch({
+        scope: 'code',
         selector: { type: 'commit', hash: commitEntry.hash },
         fileId: commitFiles.files[0]!.fileId,
       })
@@ -973,13 +1553,13 @@ describe('appRouter', () => {
         },
       })
 
-      const overview = await caller.git.overview()
+      const overview = await caller.git.overview({ scope: 'code' })
       const targetPath = overview.otherWorktrees[0]?.path
       if (!targetPath) {
         throw new Error('Expected overview to include the sibling worktree')
       }
 
-      const handoff = await caller.git.switchWorktree({ path: targetPath })
+      const handoff = await caller.git.switchWorktree({ scope: 'code', path: targetPath })
 
       expect(ensureWorktreeServer).toHaveBeenCalledWith({
         targetPath,
@@ -1028,38 +1608,57 @@ describe('appRouter', () => {
   })
 
   describe('spec', () => {
-    it('should list specs', async () => {
+    it('should return the source-aware catalog', async () => {
       const caller = createCaller()
-      const specs = await caller.spec.list()
+      const catalog = await caller.spec.catalog()
 
-      expect(specs).toEqual(['auth', 'api'])
+      expect(catalog.entries).toEqual([
+        {
+          identity: { kind: 'owned', specId: 'auth' },
+          source: 'owned',
+          readOnly: false,
+          name: 'Authentication',
+          summary: null,
+          updatedAt: 20,
+        },
+        {
+          identity: { kind: 'owned', specId: 'api' },
+          source: 'owned',
+          readOnly: false,
+          name: 'Public API',
+          summary: null,
+          updatedAt: 10,
+        },
+      ])
     })
 
-    it('should get a spec', async () => {
+    it('should get an owned Spec document', async () => {
       const caller = createCaller()
-      const spec = await caller.spec.get({ id: 'auth' })
+      const document = await caller.spec.document({ kind: 'owned', specId: 'auth' })
 
-      expect(spec?.id).toBe('auth')
-      expect(spec?.name).toBe('Authentication')
-    })
-
-    it('should get raw spec', async () => {
-      const caller = createCaller()
-      const raw = await caller.spec.getRaw({ id: 'auth' })
-
-      expect(raw).toContain('# Auth')
+      expect(document).toMatchObject({
+        identity: { kind: 'owned', specId: 'auth' },
+        source: 'owned',
+        readOnly: false,
+        state: 'ready',
+        spec: { id: 'auth', name: 'Authentication' },
+        rawMarkdown: '# Auth\n## Purpose\nAuth spec',
+      })
     })
 
     it('gets processed raw spec markdown through the document service', async () => {
       const adapter = createMockAdapter()
       const context = createMockContext(adapter)
-      const readSpecRaw = context.documentService.readSpecRaw as unknown as ReturnType<typeof vi.fn>
+      const planning = await resolveMockPlanningRoot(context)
+      const readSpecRaw = planning.documentService.readSpecRaw as unknown as ReturnType<
+        typeof vi.fn
+      >
       readSpecRaw.mockResolvedValueOnce({ markdown: '# Processed Auth' })
       const caller = appRouter.createCaller(context)
 
-      const raw = await caller.spec.getRaw({ id: 'auth' })
+      const document = await caller.spec.document({ kind: 'owned', specId: 'auth' })
 
-      expect(raw).toBe('# Processed Auth')
+      expect(document.rawMarkdown).toBe('# Processed Auth')
       expect(readSpecRaw).toHaveBeenCalledWith('auth', 'view', 'processed')
     })
 
@@ -1067,7 +1666,10 @@ describe('appRouter', () => {
       const adapter = createMockAdapter()
       const caller = createCaller(adapter)
 
-      const result = await caller.spec.save({ id: 'test', content: '# Test' })
+      const result = await caller.spec.save({
+        identity: { kind: 'owned', specId: 'test' },
+        content: '# Test',
+      })
 
       expect(result.success).toBe(true)
       expect(adapter.writeSpec).toHaveBeenCalledWith('test', '# Test')
@@ -1075,7 +1677,7 @@ describe('appRouter', () => {
 
     it('should validate a spec', async () => {
       const caller = createCaller()
-      const result = await caller.spec.validate({ id: 'auth' })
+      const result = await caller.spec.validate({ kind: 'owned', specId: 'auth' })
 
       expect(result.valid).toBe(true)
     })
@@ -1115,9 +1717,24 @@ describe('appRouter', () => {
   })
 
   describe('archive', () => {
+    it('lists archives from the selected planning-root adapter only', async () => {
+      const context = createMockContext()
+      const planning = await resolveMockPlanningRoot(context)
+      const planningAdapter = createMockAdapter()
+      planningAdapter.listArchivedChanges.mockResolvedValue(['planning-only-archive'])
+      context.launchProjectAdapter.listArchivedChanges.mockResolvedValue(['launch-only-archive'])
+      planning.adapter = planningAdapter as unknown as PlanningRootServices['adapter']
+      const caller = appRouter.createCaller(context)
+
+      await expect(caller.archive.list()).resolves.toEqual(['planning-only-archive'])
+      expect(planningAdapter.listArchivedChanges).toHaveBeenCalledTimes(1)
+      expect(context.launchProjectAdapter.listArchivedChanges).not.toHaveBeenCalled()
+    })
+
     it('reads archive detail with schema diagnostics from the shared entity read options', async () => {
       const context = createMockContext()
-      const readEntityDetail = context.documentService.readEntityDetail as unknown as ReturnType<
+      const planning = await resolveMockPlanningRoot(context)
+      const readEntityDetail = planning.documentService.readEntityDetail as unknown as ReturnType<
         typeof vi.fn
       >
       const caller = appRouter.createCaller(context)
@@ -1146,7 +1763,8 @@ describe('appRouter', () => {
 
     it('exposes raw archive data as schema-neutral entity source detail', async () => {
       const context = createMockContext()
-      const readEntityDetail = context.documentService.readEntityDetail as unknown as ReturnType<
+      const planning = await resolveMockPlanningRoot(context)
+      const readEntityDetail = planning.documentService.readEntityDetail as unknown as ReturnType<
         typeof vi.fn
       >
       const caller = appRouter.createCaller(context)
@@ -1176,6 +1794,107 @@ describe('appRouter', () => {
   })
 
   describe('cli', () => {
+    it('derives buffered validate and archive Store selection from Root Context', async () => {
+      const context = createMockContext()
+      const planning = await resolveMockPlanningRoot(context)
+      planning.rootContext = {
+        ...planning.rootContext,
+        planningRoot: {
+          path: '/stores/shared',
+          source: 'store',
+          store_id: 'shared',
+          healthy: true,
+          status: [],
+        },
+        storeId: 'shared',
+      }
+      const caller = appRouter.createCaller(context)
+
+      await caller.cli.validate({
+        kind: 'item',
+        id: 'add-search',
+        type: 'change',
+        strict: true,
+      })
+      await caller.cli.archive({ changeId: 'add-search', skipSpecs: true })
+
+      const validate = context.cliExecutor.contracts.validate as unknown as ReturnType<typeof vi.fn>
+      const archive = context.cliExecutor.contracts.archive as unknown as ReturnType<typeof vi.fn>
+      expect(validate).toHaveBeenCalledWith({
+        target: { kind: 'item', id: 'add-search', type: 'change' },
+        strict: true,
+        store: 'shared',
+      })
+      expect(archive).toHaveBeenCalledWith('add-search', {
+        skipSpecs: true,
+        noValidate: undefined,
+        store: 'shared',
+      })
+      const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
+      expect(invalidation.current('project')).toBe(1)
+      expect(invalidation.current('context')).toBe(1)
+    })
+
+    it('derives streaming validate and archive Store selection from Root Context', async () => {
+      const context = createMockContext()
+      const planning = await resolveMockPlanningRoot(context)
+      planning.rootContext = {
+        ...planning.rootContext,
+        planningRoot: {
+          path: '/stores/shared',
+          source: 'store',
+          store_id: 'shared',
+          healthy: true,
+          status: [],
+        },
+        storeId: 'shared',
+      }
+      const validateStream = context.cliExecutor.validateStream as unknown as ReturnType<
+        typeof vi.fn
+      >
+      const archiveStream = context.cliExecutor.archiveStream as unknown as ReturnType<typeof vi.fn>
+      validateStream.mockImplementation(async (_options, onEvent) => {
+        onEvent({ type: 'exit', exitCode: 0 })
+        return () => undefined
+      })
+      archiveStream.mockImplementation(async (_changeId, _options, onEvent) => {
+        onEvent({ type: 'exit', exitCode: 0 })
+        return () => undefined
+      })
+      const caller = appRouter.createCaller(context)
+
+      const validateObservable = await caller.cli.validateStream({
+        id: 'add-search',
+        type: 'change',
+        strict: true,
+      })
+      const archiveObservable = await caller.cli.archiveStream({
+        changeId: 'add-search',
+        noValidate: true,
+      })
+      await Promise.all(
+        [validateObservable, archiveObservable].map(
+          (stream) =>
+            new Promise<void>((resolve, reject) => {
+              stream.subscribe({ error: reject, complete: resolve })
+            })
+        )
+      )
+
+      expect(validateStream).toHaveBeenCalledWith(
+        { id: 'add-search', type: 'change', strict: true, store: 'shared' },
+        expect.any(Function)
+      )
+      expect(archiveStream).toHaveBeenCalledWith(
+        'add-search',
+        { skipSpecs: undefined, noValidate: true, store: 'shared' },
+        expect.any(Function)
+      )
+      const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
+      expect(invalidation.current('project')).toBe(1)
+      expect(invalidation.current('context')).toBe(1)
+    })
+
     it('reads and writes global config via path resolution', async () => {
       const context = createMockContext()
       const executeMock = context.cliExecutor.execute as unknown as ReturnType<typeof vi.fn>
@@ -1201,15 +1920,54 @@ describe('appRouter', () => {
         })
 
       const caller = appRouter.createCaller(context)
-      const path = await caller.cli.getGlobalConfigPath()
-      const config = await caller.cli.getGlobalConfig()
-      const setResult = await caller.cli.setGlobalConfig({
+      const environment = await caller.planningConfig.environmentGlobal()
+      const setResult = await caller.planningConfig.writeEnvironmentGlobal({
         config: { profile: 'core', delivery: 'both', workflows: ['propose'] },
       })
 
-      expect(path.path).toBe('/tmp/mock-openspec-config.json')
-      expect(config).toMatchObject({ profile: 'core', delivery: 'both' })
+      expect(environment.file.path).toBe('/tmp/mock-openspec-config.json')
+      expect(environment.config).toMatchObject({ profile: 'core', delivery: 'both' })
+      expect(environment.owner.kind).toBe('runtime-environment')
       expect(setResult.success).toBe(true)
+      const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
+      expect(invalidation.current('stores')).toBe(1)
+      expect(invalidation.current('worksets')).toBe(1)
+      expect(invalidation.current('schemas')).toBe(1)
+      expect(invalidation.current('context')).toBe(1)
+    })
+
+    it('subscribes to Environment Global Config through the resolved CLI file', async () => {
+      const context = createMockContext()
+      const executeMock = context.cliExecutor.execute as unknown as ReturnType<typeof vi.fn>
+      executeMock
+        .mockResolvedValueOnce({
+          success: true,
+          stdout: '/tmp/mock-openspec-config.json\n',
+          stderr: '',
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          stdout: '{"profile":"core","delivery":"both","workflows":["propose"]}',
+          stderr: '',
+          exitCode: 0,
+        })
+
+      const observable = await appRouter
+        .createCaller(context)
+        .planningConfig.subscribeEnvironmentGlobal()
+      const firstResult = Promise.withResolvers<unknown>()
+      const subscription = observable.subscribe({
+        next: firstResult.resolve,
+        error: firstResult.reject,
+      })
+
+      await expect(firstResult.promise).resolves.toMatchObject({
+        file: { path: '/tmp/mock-openspec-config.json' },
+        config: { profile: 'core', delivery: 'both', workflows: ['propose'] },
+        owner: { kind: 'runtime-environment' },
+      })
+      subscription.unsubscribe()
     })
 
     it('passes force flag to init command', async () => {
@@ -1220,6 +1978,48 @@ describe('appRouter', () => {
 
       const initMock = context.cliExecutor.init as unknown as ReturnType<typeof vi.fn>
       expect(initMock).toHaveBeenCalledWith({ force: true, profile: undefined, tools: undefined })
+      const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
+      expect(invalidation.current('project')).toBe(1)
+      expect(invalidation.current('context')).toBe(1)
+    })
+
+    it('invalidates mapped raw CLI mutations but not read-only commands', async () => {
+      const context = createMockContext()
+      const caller = appRouter.createCaller(context)
+      const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
+
+      await caller.cli.execute({ args: ['schemas', '--json'] })
+      expect(invalidation.current('project')).toBe(0)
+      expect(invalidation.current('schemas')).toBe(0)
+
+      await caller.cli.execute({ args: ['schema', 'init', 'custom'] })
+      expect(invalidation.current('project')).toBe(1)
+      expect(invalidation.current('context')).toBe(1)
+      expect(invalidation.current('schemas')).toBe(1)
+    })
+
+    it('invalidates a streamed OpenSpec mutation before completing the client stream', async () => {
+      const context = createMockContext()
+      const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
+      const executeCommandStream = context.cliExecutor
+        .executeCommandStream as unknown as ReturnType<typeof vi.fn>
+      executeCommandStream.mockImplementation((_command, onEvent) => {
+        onEvent({ type: 'exit', exitCode: null })
+        return vi.fn()
+      })
+      const caller = appRouter.createCaller(context)
+      const stream = await caller.cli.runCommandStream({ command: 'openspec', args: ['update'] })
+
+      await new Promise<void>((resolve, reject) => {
+        stream.subscribe({
+          error: reject,
+          complete: () => {
+            expect(invalidation.current('project')).toBe(1)
+            expect(invalidation.current('context')).toBe(1)
+            resolve()
+          },
+        })
+      })
     })
 
     it('parses profile state and detects drift warning', async () => {
@@ -1286,12 +2086,9 @@ describe('appRouter', () => {
         kind: 'agent-command',
         text: '/opsx:propose add auth',
       })
-      const caller = appRouter.createCaller({
-        ...context,
-        workflowInvocationService: {
-          runWorkflow,
-        } as unknown as Context['workflowInvocationService'],
-      })
+      const planning = await resolveMockPlanningRoot(context)
+      planning.workflowInvocationService.runWorkflow = runWorkflow
+      const caller = appRouter.createCaller(context)
 
       const result = await caller.opsx.runWorkflow({
         requestedMode: 'command',
@@ -1300,6 +2097,27 @@ describe('appRouter', () => {
 
       expect(result).toEqual({ kind: 'agent-command', text: '/opsx:propose add auth' })
       expect(runWorkflow).toHaveBeenCalledWith({ action: 'propose', text: 'add auth' }, 'command')
+    })
+
+    it('rejects before creating a workflow action when Root Context resolution fails', async () => {
+      const context = createMockContext()
+      const planning = await resolveMockPlanningRoot(context)
+      const runWorkflow = planning.workflowInvocationService.runWorkflow as unknown as ReturnType<
+        typeof vi.fn
+      >
+      const rootFailure = new Error('OpenSpec Doctor rejected the selected Store.')
+      ;(
+        context.planningRootServices.resolve as unknown as ReturnType<typeof vi.fn>
+      ).mockRejectedValue(rootFailure)
+      const caller = appRouter.createCaller(context)
+
+      await expect(
+        caller.opsx.runWorkflow({
+          requestedMode: 'command',
+          input: { action: 'apply', changeId: 'add-search' },
+        })
+      ).rejects.toThrow(rootFailure.message)
+      expect(runWorkflow).not.toHaveBeenCalled()
     })
 
     it('reads artifact preview output through the processed document service path', async () => {
@@ -1312,14 +2130,15 @@ describe('appRouter', () => {
       })
 
       expect(result).toBe('# Processed artifact')
-      expect(context.kernel.ensureArtifactOutput).toHaveBeenCalledWith('add-caching', 'tasks.md')
-      expect(context.documentService.readChangeArtifactOutput).toHaveBeenCalledWith(
+      const planning = await resolveMockPlanningRoot(context)
+      expect(planning.kernel.ensureArtifactOutput).toHaveBeenCalledWith('add-caching', 'tasks.md')
+      expect(planning.documentService.readChangeArtifactOutput).toHaveBeenCalledWith(
         'add-caching',
         'tasks.md',
         'view',
         'processed'
       )
-      expect(context.kernel.getArtifactOutput).not.toHaveBeenCalled()
+      expect(planning.kernel.getArtifactOutput).not.toHaveBeenCalled()
     })
 
     it('reads glob artifact preview files through the processed document service path', async () => {
@@ -1334,17 +2153,18 @@ describe('appRouter', () => {
       expect(result).toEqual([
         { path: 'specs/auth/spec.md', type: 'file', content: '# Processed delta spec' },
       ])
-      expect(context.kernel.ensureGlobArtifactFiles).toHaveBeenCalledWith(
+      const planning = await resolveMockPlanningRoot(context)
+      expect(planning.kernel.ensureGlobArtifactFiles).toHaveBeenCalledWith(
         'add-caching',
         'specs/**/*.md'
       )
-      expect(context.documentService.readChangeGlobArtifactFiles).toHaveBeenCalledWith(
+      expect(planning.documentService.readChangeGlobArtifactFiles).toHaveBeenCalledWith(
         'add-caching',
         'specs/**/*.md',
         'view',
         'processed'
       )
-      expect(context.kernel.getGlobArtifactFiles).not.toHaveBeenCalled()
+      expect(planning.kernel.getGlobArtifactFiles).not.toHaveBeenCalled()
     })
   })
 })

@@ -66,6 +66,7 @@ export default defineConfig({
       '@': resolve(__dirname, './src'),
       '@openspecui/core': resolve(__dirname, '../core/src'),
       '@openspecui/core/hosted-app': resolve(__dirname, '../core/src/hosted-app.ts'),
+      '@openspecui/core/store-types': resolve(__dirname, '../core/src/store-types.ts'),
       '@openspecui/web-src': resolve(__dirname, '../web/src'),
     },
   },

@@ -66,10 +66,10 @@ export function useDashboardGitTaskStatusSubscription(): SubscriptionState<Dashb
 
 export async function refreshDashboardGitSnapshot(reason: string): Promise<void> {
   if (isStaticMode()) return
-  await trpcClient.dashboard.refreshGitSnapshot.mutate({ reason })
+  await trpcClient.dashboard.refreshGitSnapshot.mutate({ scope: 'code', reason })
 }
 
 export async function removeDetachedDashboardWorktree(path: string): Promise<void> {
   if (isStaticMode()) return
-  await trpcClient.dashboard.removeDetachedWorktree.mutate({ path })
+  await trpcClient.dashboard.removeDetachedWorktree.mutate({ scope: 'code', path })
 }

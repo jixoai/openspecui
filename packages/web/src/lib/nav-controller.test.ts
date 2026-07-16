@@ -27,6 +27,7 @@ const DEFAULT_MAIN_TABS: TabId[] = [
   '/specs',
   '/changes',
   '/archive',
+  '/context',
   '/stores',
   '/settings',
 ]
@@ -38,6 +39,7 @@ const ALL_TABS: TabId[] = [
   '/specs',
   '/changes',
   '/archive',
+  '/context',
   '/stores',
   '/settings',
   '/terminal',
@@ -450,7 +452,7 @@ describe('NavController kernel lifecycle', () => {
   })
 
   it('preserves direct spec detail links with bottom no-focus marker during project rebind', async () => {
-    nav = createController('/specs/cli-shell-product?_b=%2F')
+    nav = createController('/specs/owned/cli-shell-product?_b=%2F')
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({ projectDir: '/repo/current' }),
@@ -458,9 +460,9 @@ describe('NavController kernel lifecycle', () => {
 
     await nav.init()
 
-    expect(nav.getLocation('main').pathname).toBe('/specs/cli-shell-product')
+    expect(nav.getLocation('main').pathname).toBe('/specs/owned/cli-shell-product')
     expect(nav.getLocation('bottom').pathname).toBe('/')
-    expect(window.location.pathname).toBe('/specs/cli-shell-product')
+    expect(window.location.pathname).toBe('/specs/owned/cli-shell-product')
     expect(window.location.search).toContain('_b=%2F')
   })
 

@@ -1,4 +1,4 @@
-import type { OpenSpecAdapter, OpenSpecWatcher } from '@openspecui/core'
+import type { CliReferenceIndexEntry, OpenSpecAdapter, OpenSpecWatcher } from '@openspecui/core'
 import {
   SearchQuerySchema,
   type SearchHit,
@@ -23,7 +23,8 @@ export class SearchService {
     watcher?: OpenSpecWatcher,
     provider: SearchProvider = new NodeWorkerSearchProvider(),
     private documentService?: DocumentService,
-    private resolveEntityReadOptions?: EntityReadOptionsResolver
+    private resolveEntityReadOptions?: EntityReadOptionsResolver,
+    private getReferences: () => readonly CliReferenceIndexEntry[] = () => []
   ) {
     this.provider = provider
 
@@ -86,7 +87,8 @@ export class SearchService {
       const docs = await collectSearchDocuments(
         this.adapter,
         this.documentService,
-        this.resolveEntityReadOptions
+        this.resolveEntityReadOptions,
+        this.getReferences()
       )
       if (this.initialized) {
         await this.provider.replaceAll(docs)

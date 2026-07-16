@@ -322,6 +322,9 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
         const raw = await documentService.readSpecRaw(meta.id, 'export', 'processed')
         const parsed = await documentService.readSpec(meta.id, 'export', 'processed')
         return {
+          identity: { kind: 'owned' as const, specId: meta.id },
+          source: 'owned' as const,
+          readOnly: false as const,
           id: meta.id,
           name: meta.name,
           content: raw?.markdown || '',
@@ -362,9 +365,9 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
           sourceDesign: raw?.design?.sourceMarkdown,
           why: change?.why || '',
           whatChanges: change?.whatChanges || '',
-          parsedTasks: taskProjection.tasks,
+          trackedTaskProgress: taskProjection.trackedTaskProgress,
+          documentChecklistSummary: taskProjection.documentChecklistSummary,
           deltas,
-          progress: taskProjection.progress,
           createdAt: meta.createdAt,
           updatedAt: meta.updatedAt,
         }
@@ -573,7 +576,8 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
           id: meta.id,
           name: meta.name || meta.id,
           entity,
-          progress: meta.progress,
+          trackedTaskProgress: meta.trackedTaskProgress,
+          documentChecklistSummary: meta.documentChecklistSummary,
           createdAt: meta.createdAt,
           updatedAt: meta.updatedAt,
         }

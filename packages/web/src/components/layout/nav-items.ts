@@ -4,6 +4,7 @@ import {
   GitBranch,
   LayoutDashboard,
   ListTodo,
+  Network,
   Settings,
   SlidersHorizontal,
   Terminal,
@@ -19,6 +20,7 @@ export type AppRoute =
   | '/specs'
   | '/changes'
   | '/archive'
+  | '/context'
   | '/stores'
   | '/settings'
   | '/terminal'
@@ -45,6 +47,8 @@ export const allNavItems: NavItem[] = [
   { to: '/specs', icon: FileText, label: 'Specs', defaultArea: 'main' },
   { to: '/changes', icon: ListTodo, label: 'Changes', defaultArea: 'main' },
   { to: '/archive', icon: Archive, label: 'Archive', defaultArea: 'main' },
+  // 6.9 Context 取代项目 Stores 页（root/Reference/registry 只读诊断）。
+  { to: '/context', icon: Network, label: 'Context', defaultArea: 'main' },
   { to: '/stores', icon: Warehouse, label: 'Stores', defaultArea: 'main', beta: true },
   { to: '/settings', icon: Settings, label: 'Settings', defaultArea: 'main' },
   { to: '/terminal', icon: Terminal, label: 'Terminal', defaultArea: 'bottom' },

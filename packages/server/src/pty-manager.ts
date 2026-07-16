@@ -1,6 +1,16 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Own PTY session process, buffer, title, and lifecycle state.
+ * 2. Spawn each session at an explicitly resolved launch-project or planning-root cwd.
+ * 3. Preserve the inherited backend environment, including XDG_DATA_HOME, across cwd targets.
+ * 4. List and close server-owned sessions for reconnect and teardown.
+ *
+ * Original request (2026-07-16): "3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited XDG_DATA_HOME"
+ */
 import * as pty from '@lydell/node-pty'
 import {
   resolveTerminalShellDefaults,
+  type TerminalCwdTarget,
   type TerminalShellDefaults,
   type TerminalTitleTarget,
 } from '@openspecui/core'
@@ -34,6 +44,18 @@ export interface PtySessionInfo {
   closeTip?: string
   closeCallbackUrl?: string | Record<string, string>
   createdAt: number
+  cwdTarget: TerminalCwdTarget
+  initialCwd: string
+}
+
+/** Build the PTY environment without project-owned overlays or target-specific mutation. */
+export function resolvePtySpawnEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
+  const inherited: Record<string, string> = {}
+  for (const [key, value] of Object.entries(env)) {
+    if (value !== undefined) inherited[key] = value
+  }
+  inherited.TERM = 'xterm-256color'
+  return inherited
 }
 
 function resolveDefaultShell(platform: PtyPlatform, env: NodeJS.ProcessEnv): string {
@@ -84,6 +106,8 @@ export class PtySession extends EventEmitter {
   readonly closeTip?: string
   readonly closeCallbackUrl?: string | Record<string, string>
   readonly createdAt: number
+  readonly cwdTarget: TerminalCwdTarget
+  readonly initialCwd: string
   private process: pty.IPty
   private titleInterval: ReturnType<typeof setInterval> | null = null
   private lastTitle = ''
@@ -106,6 +130,7 @@ export class PtySession extends EventEmitter {
       closeTip?: string
       closeCallbackUrl?: string | Record<string, string>
       cwd: string
+      cwdTarget: TerminalCwdTarget
       scrollback?: number
       maxBufferBytes?: number
       platform: PtyPlatform
@@ -125,6 +150,8 @@ export class PtySession extends EventEmitter {
     this.platform = opts.platform
     this.closeTip = opts.closeTip
     this.closeCallbackUrl = opts.closeCallbackUrl
+    this.cwdTarget = opts.cwdTarget
+    this.initialCwd = opts.cwd
     this.maxBufferLines = opts.scrollback ?? DEFAULT_SCROLLBACK
     this.maxBufferBytes = opts.maxBufferBytes ?? DEFAULT_MAX_BUFFER_BYTES
 
@@ -133,10 +160,7 @@ export class PtySession extends EventEmitter {
       cols: opts.cols ?? 80,
       rows: opts.rows ?? 24,
       cwd: opts.cwd,
-      env: {
-        ...process.env,
-        TERM: 'xterm-256color',
-      } as Record<string, string>,
+      env: resolvePtySpawnEnvironment(process.env),
     })
 
     this.process.onData((data) => {
@@ -253,6 +277,8 @@ export class PtySession extends EventEmitter {
       closeTip: this.closeTip,
       closeCallbackUrl: this.closeCallbackUrl,
       createdAt: this.createdAt,
+      cwdTarget: this.cwdTarget,
+      initialCwd: this.initialCwd,
     }
   }
 }
@@ -262,7 +288,7 @@ export class PtyManager {
   private idCounter = 0
   private readonly platform: PtyPlatform
 
-  constructor(private defaultCwd: string) {
+  constructor() {
     this.platform = detectPtyPlatform()
   }
 
@@ -280,6 +306,8 @@ export class PtyManager {
     args?: string[]
     closeTip?: string
     closeCallbackUrl?: string | Record<string, string>
+    cwdTarget: TerminalCwdTarget
+    cwd: string
     scrollback?: number
     maxBufferBytes?: number
   }): PtySession {
@@ -291,7 +319,8 @@ export class PtyManager {
       args: opts.args,
       closeTip: opts.closeTip,
       closeCallbackUrl: opts.closeCallbackUrl,
-      cwd: this.defaultCwd,
+      cwd: opts.cwd,
+      cwdTarget: opts.cwdTarget,
       scrollback: opts.scrollback,
       maxBufferBytes: opts.maxBufferBytes,
       platform: this.platform,

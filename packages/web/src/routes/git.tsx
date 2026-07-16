@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Make Code versus distinct Planning repository scope explicit in URL and UI.
+ * 2. Render scoped status, history, worktrees, pagination, and refresh lifecycles.
+ * 3. Execute worktree removal and handoff only against the selected repository.
+ * 4. Preserve Git list/detail View Transition continuity without cross-scope cache reuse.
+ *
+ * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
+ */
 import {
   getGitEntrySharedDescriptor,
   getGitEntrySharedHandoff,
@@ -16,15 +25,15 @@ import {
   persistDashboardGitAutoRefreshPreset,
   type DashboardGitAutoRefreshPreset,
 } from '@/lib/dashboard-git'
-import { buildGitEntryHrefFromEntry, GIT_ENTRY_PAGE_SIZE } from '@/lib/git-panel'
+import {
+  buildGitEntryHrefFromEntry,
+  buildGitRepositoryHref,
+  GIT_ENTRY_PAGE_SIZE,
+} from '@/lib/git-panel'
 import { navigateToServerHandoff } from '@/lib/server-handoff'
 import { isStaticMode } from '@/lib/static-mode'
 import { trpcClient } from '@/lib/trpc'
-import {
-  refreshDashboardGitSnapshot,
-  removeDetachedDashboardWorktree,
-  useDashboardGitTaskStatusSubscription,
-} from '@/lib/use-dashboard'
+import { useGitRepositoryScope } from '@/lib/use-git-repository-scope'
 import { vtNavController } from '@/lib/view-transitions/navigation'
 import { withSharedElementHandoffState } from '@/lib/view-transitions/shared-elements'
 import type { GitWorktreeSummary } from '@openspecui/core'
@@ -53,27 +62,33 @@ function isAnimatedGitRefreshReason(reason: string | null): boolean {
 export function GitRoute() {
   const staticMode = isStaticMode()
   const queryClient = useQueryClient()
-  const { data: gitTaskStatus } = useDashboardGitTaskStatusSubscription()
+  const {
+    requestedScope,
+    scope,
+    descriptor: scopeDescriptor,
+    scopes,
+    locationSearch,
+    query: scopesQuery,
+  } = useGitRepositoryScope(!staticMode)
   const overviewQuery = useQuery({
-    queryKey: ['git', 'overview'],
-    queryFn: () => trpcClient.git.overview.query(),
-    enabled: !staticMode,
-    placeholderData: (previousData) => previousData,
+    queryKey: ['git', scope, 'overview'],
+    queryFn: () => trpcClient.git.overview.query({ scope }),
+    enabled: !staticMode && scopeDescriptor !== null,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
   })
   const entriesQuery = useInfiniteQuery({
-    queryKey: ['git', 'entries'],
+    queryKey: ['git', scope, 'entries'],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
       trpcClient.git.listEntries.query({
+        scope,
         cursor: pageParam,
         limit: GIT_ENTRY_PAGE_SIZE,
       }),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    enabled: !staticMode,
-    placeholderData: (previousData) => previousData,
+    enabled: !staticMode && scopeDescriptor !== null,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -95,10 +110,9 @@ export function GitRoute() {
   } | null>(null)
   const [removingWorktreePath, setRemovingWorktreePath] = useState<string | null>(null)
   const [switchingWorktreePath, setSwitchingWorktreePath] = useState<string | null>(null)
-  const lastHandledGitRefreshAtRef = useRef<number | null>(null)
 
   const switchWorktreeMutation = useMutation({
-    mutationFn: (path: string) => trpcClient.git.switchWorktree.mutate({ path }),
+    mutationFn: (path: string) => trpcClient.git.switchWorktree.mutate({ scope, path }),
   })
 
   const gitEntries = useMemo(
@@ -111,10 +125,8 @@ export function GitRoute() {
   const gitRefreshRequestRef = useRef(gitRefreshRequest)
   const refreshBusyRef = useRef(false)
   const refreshBusy =
-    gitRefreshRequest !== null ||
-    gitTaskStatus?.running === true ||
-    switchWorktreeMutation.isPending
-  const refreshReason = gitRefreshRequest?.reason ?? gitTaskStatus?.lastReason ?? null
+    gitRefreshRequest !== null || switchWorktreeMutation.isPending || removingWorktreePath !== null
+  const refreshReason = gitRefreshRequest?.reason ?? null
 
   const clearGitAutoRefreshTimer = useCallback(() => {
     if (gitAutoRefreshTimerRef.current === null) return
@@ -122,17 +134,29 @@ export function GitRoute() {
     gitAutoRefreshTimerRef.current = null
   }, [])
 
-  const runGitRefresh = useCallback((reason: string) => {
-    const requestedAt = Date.now()
-    setGitRefreshRequest({ reason, requestedAt })
+  const runGitRefresh = useCallback(
+    (reason: string) => {
+      const requestedAt = Date.now()
+      setGitRefreshRequest({ reason, requestedAt })
 
-    void refreshDashboardGitSnapshot(reason).catch((error) => {
-      console.error('[GitRoute] Failed to refresh git data:', error)
-      setGitRefreshRequest((current) =>
-        current?.reason === reason && current.requestedAt === requestedAt ? null : current
-      )
-    })
-  }, [])
+      void (async () => {
+        try {
+          await trpcClient.git.refresh.mutate({ scope, reason })
+          await queryClient.invalidateQueries({
+            queryKey: ['git', scope],
+            refetchType: 'active',
+          })
+        } catch (error) {
+          console.error('[GitRoute] Failed to refresh git data:', error)
+        } finally {
+          setGitRefreshRequest((current) =>
+            current?.reason === reason && current.requestedAt === requestedAt ? null : current
+          )
+        }
+      })()
+    },
+    [queryClient, scope]
+  )
 
   const scheduleGitAutoRefresh = useCallback(() => {
     clearGitAutoRefreshTimer()
@@ -200,8 +224,8 @@ export function GitRoute() {
 
       setRemovingWorktreePath(worktree.path)
       try {
-        await removeDetachedDashboardWorktree(worktree.path)
-        await overviewQuery.refetch()
+        await trpcClient.git.removeDetachedWorktree.mutate({ scope, path: worktree.path })
+        await queryClient.invalidateQueries({ queryKey: ['git', scope], refetchType: 'active' })
       } catch (error) {
         console.error('[GitRoute] Failed to remove detached worktree:', error)
         window.alert(error instanceof Error ? error.message : 'Failed to remove detached worktree.')
@@ -209,7 +233,7 @@ export function GitRoute() {
         setRemovingWorktreePath((current) => (current === worktree.path ? null : current))
       }
     },
-    [overviewQuery, staticMode]
+    [queryClient, scope, staticMode]
   )
 
   const handleSwitchWorktree = useCallback(
@@ -273,29 +297,6 @@ export function GitRoute() {
   }, [clearGitAutoRefreshTimer, runGitRefresh, staticMode])
 
   useEffect(() => {
-    if (!gitTaskStatus || !gitRefreshRequest) return
-
-    const finishedAfterRequest =
-      gitTaskStatus.running === false &&
-      (gitTaskStatus.lastFinishedAt ?? 0) >= gitRefreshRequest.requestedAt
-
-    if (!finishedAfterRequest) return
-
-    setGitRefreshRequest((current) =>
-      current?.reason === gitRefreshRequest.reason &&
-      current.requestedAt === gitRefreshRequest.requestedAt
-        ? null
-        : current
-    )
-  }, [gitRefreshRequest, gitTaskStatus])
-
-  useEffect(() => {
-    if (staticMode) return
-    if (!gitTaskStatus?.lastFinishedAt) return
-    setGitAutoRefreshNow(Date.now())
-  }, [gitTaskStatus?.lastFinishedAt, staticMode])
-
-  useEffect(() => {
     if (staticMode) return
     persistDashboardGitAutoRefreshPreset(gitAutoRefreshPreset)
   }, [gitAutoRefreshPreset, staticMode])
@@ -325,30 +326,6 @@ export function GitRoute() {
     }
   }, [gitAutoRefreshCycleStartedAt, gitAutoRefreshPreset, refreshBusy, staticMode])
 
-  useEffect(() => {
-    if (staticMode) return
-
-    const lastFinishedAt = gitTaskStatus?.lastFinishedAt ?? null
-    if (lastFinishedAt === null || lastHandledGitRefreshAtRef.current === lastFinishedAt) {
-      return
-    }
-
-    lastHandledGitRefreshAtRef.current = lastFinishedAt
-
-    const hasCachedGitData = queryClient
-      .getQueriesData({ queryKey: ['git'] })
-      .some(([, data]) => data !== undefined)
-
-    if (!hasCachedGitData) {
-      return
-    }
-
-    void queryClient.invalidateQueries({
-      queryKey: ['git'],
-      refetchType: 'active',
-    })
-  }, [gitTaskStatus?.lastFinishedAt, queryClient, staticMode])
-
   const overview = overviewQuery.data
   const currentWorktree = overview?.currentWorktree ?? null
   const otherWorktrees = overview?.otherWorktrees ?? []
@@ -368,6 +345,19 @@ export function GitRoute() {
       <div className="text-muted-foreground flex items-center gap-2 p-4 text-sm">
         <AlertCircle className="h-4 w-4 shrink-0" />
         Git panel is only available in live mode.
+      </div>
+    )
+  }
+
+  if (scopesQuery.isLoading && !scopes) {
+    return <div className="route-loading animate-pulse">Loading git repository scopes...</div>
+  }
+
+  if (scopesQuery.error && !scopes) {
+    return (
+      <div className="text-destructive flex items-center gap-2 p-4">
+        <AlertCircle className="h-5 w-5 shrink-0" />
+        Error loading git repository scopes: {scopesQuery.error.message}
       </div>
     )
   }
@@ -440,6 +430,51 @@ export function GitRoute() {
         </div>
       </div>
 
+      <section className="border-border bg-card flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
+        <div className="min-w-0">
+          <div className="text-sm font-medium">
+            {scope === 'code' ? 'Code repository' : 'Planning repository'}
+          </div>
+          <div className="text-muted-foreground truncate text-xs" title={scopeDescriptor?.rootPath}>
+            {scopeDescriptor?.repository?.topLevel ?? scopeDescriptor?.rootPath}
+          </div>
+          {requestedScope === 'planning' && scope === 'code' ? (
+            <div className="text-muted-foreground mt-1 text-xs">
+              Planning root is not a distinct Git repository; using Code repository.
+            </div>
+          ) : null}
+        </div>
+
+        {scopes?.planning ? (
+          <div
+            role="group"
+            aria-label="Git repository scope"
+            className="border-border bg-muted/30 inline-flex overflow-hidden rounded-md border"
+          >
+            {(['code', 'planning'] as const).map((nextScope) => (
+              <button
+                key={nextScope}
+                type="button"
+                aria-pressed={scope === nextScope}
+                disabled={refreshBusy}
+                onClick={() => {
+                  if (scope === nextScope) return
+                  const href = buildGitRepositoryHref('/git', nextScope, locationSearch)
+                  void vtNavController.replace(vtNavController.getAreaForPath('/git'), href)
+                }}
+                className={`h-8 px-3 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                  scope === nextScope
+                    ? 'bg-background text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {nextScope === 'code' ? 'Code repository' : 'Planning repository'}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </section>
+
       <section className="bg-card space-y-3 rounded-lg border border-zinc-500/20 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
@@ -484,7 +519,7 @@ export function GitRoute() {
               onSelect={(selectedEntry, sourceElement) => {
                 void vtNavController.push(
                   'bottom',
-                  buildGitEntryHrefFromEntry(selectedEntry),
+                  buildGitEntryHrefFromEntry(selectedEntry, scope, locationSearch),
                   withSharedElementHandoffState(undefined, getGitEntrySharedHandoff(selectedEntry)),
                   {
                     source: sourceElement,

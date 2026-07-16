@@ -166,6 +166,52 @@ export const TaskSchema = z.object({
 
 export type Task = z.infer<typeof TaskSchema>
 
+const TrackedTaskSourceSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('artifact'),
+    artifactId: z.string(),
+    outputPath: z.string(),
+    filePaths: z.array(z.string()),
+  }),
+  z.object({
+    kind: z.literal('top-level-fallback'),
+    artifactId: z.null(),
+    outputPath: z.literal('tasks.md'),
+    filePaths: z.tuple([z.literal('tasks.md')]),
+  }),
+  z.object({
+    kind: z.literal('none'),
+    artifactId: z.null(),
+    outputPath: z.null(),
+    filePaths: z.tuple([]),
+  }),
+])
+
+const TrackedTaskProgressSchema = z.object({
+  tasks: z.array(TaskSchema),
+  total: z.number(),
+  completed: z.number(),
+  remaining: z.number(),
+  phase: z.enum(['no-tasks', 'in-progress', 'complete']),
+  source: TrackedTaskSourceSchema,
+})
+
+const DocumentChecklistSummarySchema = z.object({
+  groups: z.array(
+    z.object({
+      artifactIds: z.array(z.string()),
+      filePath: z.string(),
+      tasks: z.array(TaskSchema),
+      total: z.number(),
+      completed: z.number(),
+      remaining: z.number(),
+    })
+  ),
+  total: z.number(),
+  completed: z.number(),
+  remaining: z.number(),
+})
+
 // =====================
 // Delta Spec Schema
 // =====================
@@ -205,13 +251,10 @@ export const ChangeSchema = z.object({
   whatChanges: z.string(),
   /** Affected specs and their changes */
   deltas: z.array(DeltaSchema),
-  /** Trackable tasks from tasks.md */
-  tasks: z.array(TaskSchema),
-  /** Task completion progress */
-  progress: z.object({
-    total: z.number(),
-    completed: z.number(),
-  }),
+  /** Formal tasks selected through the OpenSpec tracked artifact contract. */
+  trackedTaskProgress: TrackedTaskProgressSchema,
+  /** Secondary checkbox analytics across schema Markdown documents. */
+  documentChecklistSummary: DocumentChecklistSummarySchema,
   /** Optional design.md content */
   design: z.string().optional(),
   /** Delta specs from changes/{id}/specs/ directory */

@@ -25,7 +25,6 @@ import type {
   SchemaInfo,
   SchemaResolution,
   Spec,
-  SpecMeta,
   TemplatesMap,
 } from '@openspecui/core'
 import { selectRecentDashboardItems } from '@openspecui/core/dashboard-display'
@@ -33,7 +32,13 @@ import { DocumentTranslationConfigSchema } from '@openspecui/core/document-trans
 import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
 import { isOpsxGlobPattern, opsxPathMatchesPattern } from '@openspecui/core/opsx-entity'
 import { DEFAULT_BELL_SOUND_ID, DEFAULT_NOTIFICATION_SOUND_ID } from '@openspecui/core/sounds'
-import { projectTasksFromMarkdownFiles } from '@openspecui/core/task-progress'
+import {
+  specIdentityKey,
+  specRoutePath,
+  type SpecCatalog,
+  type SpecDocumentProjection,
+  type SpecIdentity,
+} from '@openspecui/core/spec-catalog'
 import type { SearchDocument } from '@openspecui/search'
 import { parse as parseYaml } from 'yaml'
 import type { ExportSnapshot } from '../ssg/types'
@@ -61,8 +66,6 @@ interface TrendEvent {
   ts: number
   value: number
 }
-
-type SnapshotArchive = ExportSnapshot['archives'][number]
 
 function createEmptyTrends(): Record<DashboardMetricKey, DashboardTrendPoint[]> {
   const trends = {} as Record<DashboardMetricKey, DashboardTrendPoint[]>
@@ -249,17 +252,6 @@ function buildStaticObjectiveTrends(
   )
 
   return trends
-}
-
-function getArchiveTaskProgress(snapshot: ExportSnapshot, archive: SnapshotArchive) {
-  if (archive.progress) return archive.progress
-  const schemaDetail = archive.entity.schemaName
-    ? (snapshot.opsx?.schemaDetails[archive.entity.schemaName] ?? null)
-    : null
-  return projectTasksFromMarkdownFiles(archive.entity.files, {
-    schemaDetail,
-    hasSchemaMetadata: Boolean(archive.entity.schemaName),
-  }).progress
 }
 
 interface GlobArtifactFile {
@@ -456,6 +448,7 @@ function buildChangeStatus(
     isComplete: artifacts.length > 0 && artifacts.every((artifact) => artifact.status === 'done'),
     applyRequires: schemaDetail.applyRequires ?? [],
     artifacts,
+    provenance: { kind: 'static' },
   }
 }
 
@@ -579,24 +572,27 @@ function snapshotChangeToChange(snapChange: ExportSnapshot['changes'][0]): Chang
     whatChanges: snapChange.whatChanges,
     design: snapChange.design,
     deltas: [], // Simplified - not used in UI directly
-    tasks: snapChange.parsedTasks,
-    progress: snapChange.progress,
-  } as Change
+    trackedTaskProgress: snapChange.trackedTaskProgress,
+    documentChecklistSummary: snapChange.documentChecklistSummary,
+  }
 }
 
-/**
- * Get all specs metadata
- */
-export async function getSpecs(): Promise<SpecMeta[]> {
+/** Get the source-aware static Spec Catalog. */
+export async function getSpecCatalog(): Promise<SpecCatalog> {
   const snapshot = await loadSnapshot()
-  if (!snapshot) return []
+  if (!snapshot) return { entries: [], observedAt: 0 }
 
-  return snapshot.specs.map((spec) => ({
-    id: spec.id,
-    name: spec.name,
-    createdAt: spec.createdAt,
-    updatedAt: spec.updatedAt,
-  }))
+  return {
+    entries: snapshot.specs.map((spec) => ({
+      identity: spec.identity,
+      source: spec.source,
+      readOnly: spec.readOnly,
+      name: spec.name,
+      summary: null,
+      updatedAt: spec.updatedAt,
+    })),
+    observedAt: Date.parse(snapshot.meta.timestamp) || 0,
+  }
 }
 
 /**
@@ -659,25 +655,28 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   const allActiveChanges = snapshot.changes.map((change) => ({
     id: change.id,
     name: change.name,
-    progress: change.progress,
+    trackedTaskProgress: change.trackedTaskProgress,
     updatedAt: change.updatedAt,
   }))
   const activeChanges = selectRecentDashboardItems(allActiveChanges)
 
   const requirements = allSpecifications.reduce((sum, spec) => sum + spec.requirements, 0)
-  const tasksTotal = allActiveChanges.reduce((sum, change) => sum + change.progress.total, 0)
+  const tasksTotal = allActiveChanges.reduce(
+    (sum, change) => sum + change.trackedTaskProgress.total,
+    0
+  )
   const tasksCompleted = allActiveChanges.reduce(
-    (sum, change) => sum + change.progress.completed,
+    (sum, change) => sum + change.trackedTaskProgress.completed,
     0
   )
   const archivedTasksCompleted = snapshot.archives.reduce(
-    (sum, archive) => sum + getArchiveTaskProgress(snapshot, archive).completed,
+    (sum, archive) => sum + archive.trackedTaskProgress.completed,
     0
   )
   const taskCompletionPercent =
     tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : null
   const inProgressChanges = allActiveChanges.filter(
-    (change) => change.progress.total > 0 && change.progress.completed < change.progress.total
+    (change) => change.trackedTaskProgress.phase === 'in-progress'
   ).length
 
   const trends = buildStaticObjectiveTrends(snapshot, trendPointLimit, rightEdgeTs)
@@ -717,28 +716,42 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   }
 }
 
-/**
- * Get a single spec by ID
- */
-export async function getSpec(id: string): Promise<Spec | null> {
+/** Get the exact compound Spec document from the static snapshot. */
+export async function getSpecDocument(identity: SpecIdentity): Promise<SpecDocumentProjection> {
   const snapshot = await loadSnapshot()
-  if (!snapshot) return null
+  if (identity.kind === 'referenced') {
+    return {
+      identity,
+      source: 'referenced',
+      readOnly: true,
+      state: 'error',
+      spec: null,
+      rawMarkdown: null,
+      upstream: null,
+      evidence: {
+        success: false,
+        stdout: '',
+        stderr: '',
+        exitCode: null,
+        diagnostics: [],
+        contractError: 'Referenced Spec content is not present in this static snapshot.',
+      },
+    }
+  }
+  const snapSpec = snapshot?.specs.find(
+    (spec) => specIdentityKey(spec.identity) === specIdentityKey(identity)
+  )
 
-  const snapSpec = snapshot.specs.find((s) => s.id === id)
-  if (!snapSpec) return null
-
-  return snapshotSpecToSpec(snapSpec)
-}
-
-/**
- * Get raw spec content (markdown)
- */
-export async function getSpecRaw(id: string): Promise<string | null> {
-  const snapshot = await loadSnapshot()
-  if (!snapshot) return null
-
-  const spec = snapshot.specs.find((s) => s.id === id)
-  return spec?.content ?? spec?.sourceContent ?? null
+  return {
+    identity,
+    source: 'owned',
+    readOnly: false,
+    state: snapSpec ? 'ready' : 'not-found',
+    spec: snapSpec ? snapshotSpecToSpec(snapSpec) : null,
+    rawMarkdown: snapSpec?.content ?? snapSpec?.sourceContent ?? null,
+    upstream: null,
+    evidence: null,
+  }
 }
 
 /**
@@ -751,7 +764,8 @@ export async function getChanges(): Promise<ChangeMeta[]> {
   return snapshot.changes.map((change) => ({
     id: change.id,
     name: change.name,
-    progress: change.progress,
+    trackedTaskProgress: change.trackedTaskProgress,
+    documentChecklistSummary: change.documentChecklistSummary,
     createdAt: change.createdAt,
     updatedAt: change.updatedAt,
   }))
@@ -835,7 +849,8 @@ export async function getArchives(): Promise<ArchiveMeta[]> {
   return snapshot.archives.map((archive) => ({
     id: archive.id,
     name: archive.name,
-    progress: getArchiveTaskProgress(snapshot, archive),
+    trackedTaskProgress: archive.trackedTaskProgress,
+    documentChecklistSummary: archive.documentChecklistSummary,
     createdAt: archive.createdAt,
     updatedAt: archive.updatedAt,
   }))
@@ -1246,12 +1261,13 @@ export async function getSearchDocuments(): Promise<SearchDocument[]> {
   const docs: SearchDocument[] = []
 
   for (const spec of snapshot.specs) {
+    const identityKey = specIdentityKey(spec.identity)
     docs.push({
-      id: `spec:${spec.id}`,
+      id: `spec:${identityKey}`,
       kind: 'spec',
       title: spec.name,
-      href: `/specs/${encodeURIComponent(spec.id)}`,
-      path: `openspec/specs/${spec.id}/spec.md`,
+      href: specRoutePath(spec.identity),
+      path: `owned:openspec/specs/${spec.id}/spec.md`,
       content: spec.content,
       updatedAt: spec.updatedAt,
     })

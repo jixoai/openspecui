@@ -1,6 +1,15 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Compose or generate the Quick Propose invocation payload.
+ * 2. Persist invocation mode and dispatch to an existing or new terminal.
+ * 3. Lock payload preparation and dispatch until Root Context is ready.
+ *
+ * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
+ */
 import { ButtonGroup } from '@/components/button-group'
 import { CodeEditor } from '@/components/code-editor'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
+import { RootActionNotice } from '@/components/root-action-notice'
 import { TerminalDispatchActions } from '@/components/terminal/terminal-dispatch-actions'
 import { navController } from '@/lib/nav-controller'
 import {
@@ -15,6 +24,7 @@ import {
   workflowDiagnosticsToText,
 } from '@/lib/opsx-workflow-invocation'
 import { trpcClient } from '@/lib/trpc'
+import { useRootActionState } from '@/lib/use-root-action-state'
 import { useConfigSubscription } from '@/lib/use-subscription'
 import { useMutation } from '@tanstack/react-query'
 import { ArrowRight, Sparkles } from 'lucide-react'
@@ -24,6 +34,7 @@ export function OpsxProposeRoute() {
   const { setConfig } = usePopAreaConfigContext()
   const { requestClose } = usePopAreaLifecycleContext()
   const { data: uiConfig } = useConfigSubscription()
+  const rootAction = useRootActionState()
   const [draft, setDraft] = useState('')
   const [mode, setMode] = useState<OpsxAgentInvocationMode>('compose')
   const [sendError, setSendError] = useState<string | null>(null)
@@ -63,6 +74,9 @@ export function OpsxProposeRoute() {
   }, [draft, mode])
 
   const preparePayload = async () => {
+    if (rootAction.disabled) {
+      throw new Error(rootAction.message)
+    }
     const result = await prepareWorkflowInvocation({
       requestedMode: mode,
       workflowInput: { action: 'propose', text: draft },
@@ -72,12 +86,16 @@ export function OpsxProposeRoute() {
               kind: 'agent-command',
               text: buildOpsxSlashCommand({ action: 'propose', text: draft }) ?? '/opsx:propose',
               mode: { requestedMode: mode, actualMode: mode, fallbackReason: null },
+              target: null,
+              evidence: null,
             }
           : {
               kind: 'agent-prompt',
               text: buildOpsxProposeComposePrompt(draft),
               format: 'markdown',
               mode: { requestedMode: mode, actualMode: mode, fallbackReason: null },
+              target: null,
+              evidence: null,
             },
     })
     const warning = workflowDiagnosticsToText(result)
@@ -109,6 +127,8 @@ export function OpsxProposeRoute() {
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 p-4">
+        <RootActionNotice state={rootAction} />
+
         <p className="text-muted-foreground text-sm">
           Enter your idea, then send it to the selected terminal.
         </p>
@@ -134,6 +154,8 @@ export function OpsxProposeRoute() {
       <div className="border-border flex flex-col gap-3 border-t px-4 py-3">
         <TerminalDispatchActions
           preparePayload={preparePayload}
+          disabled={rootAction.disabled}
+          disabledReason={rootAction.message ?? undefined}
           onDispatched={requestClose}
           onError={setSendError}
           size="sm"

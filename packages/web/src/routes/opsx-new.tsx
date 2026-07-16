@@ -1,9 +1,19 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Build one typed OpenSpec new-change command from user input.
+ * 2. Dispatch creation through a dedicated terminal session.
+ * 3. Lock preparation and dispatch until Root Context is ready.
+ *
+ * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
+ */
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
+import { RootActionNotice } from '@/components/root-action-notice'
 import { navController } from '@/lib/nav-controller'
 import { CHANGE_NAME_PATTERN, buildNewChangeArgs, quoteShellToken } from '@/lib/opsx-new-command'
 import { prepareWorkflowInvocation } from '@/lib/opsx-workflow-invocation'
 import { useTerminalContext } from '@/lib/terminal-context'
 import { useOpsxConfigBundleSubscription } from '@/lib/use-opsx'
+import { useRootActionState } from '@/lib/use-root-action-state'
 import { vtNavController } from '@/lib/view-transitions/navigation'
 import { Sparkles, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -13,6 +23,7 @@ export function OpsxNewRoute() {
   const { requestClose } = usePopAreaLifecycleContext()
   const { createDedicatedSession } = useTerminalContext()
   const { data: configBundle } = useOpsxConfigBundleSubscription()
+  const rootAction = useRootActionState()
 
   const [changeName, setChangeName] = useState('')
   const [schema, setSchema] = useState('')
@@ -38,7 +49,8 @@ export function OpsxNewRoute() {
 
   const trimmedName = changeName.trim()
   const isNameValid = CHANGE_NAME_PATTERN.test(trimmedName)
-  const canSubmit = trimmedName.length > 0 && isNameValid
+  const isFormValid = trimmedName.length > 0 && isNameValid
+  const canSubmit = isFormValid && !rootAction.disabled
 
   const args = useMemo(
     () =>
@@ -52,11 +64,11 @@ export function OpsxNewRoute() {
   )
 
   const commandPreview = useMemo(() => {
-    if (!canSubmit) {
+    if (!isFormValid) {
       return 'openspec new change <change-name>'
     }
     return ['openspec', ...args].map(quoteShellToken).join(' ')
-  }, [args, canSubmit])
+  }, [args, isFormValid])
 
   const schemaOptions = configBundle?.schemas.map((item) => item.name) ?? []
 
@@ -92,6 +104,8 @@ export function OpsxNewRoute() {
                 command: 'openspec',
                 args,
                 mode: { requestedMode: 'direct', actualMode: 'direct', fallbackReason: null },
+                target: null,
+                evidence: null,
               }),
             })
             if (result.kind !== 'cli-command') {
@@ -104,6 +118,7 @@ export function OpsxNewRoute() {
             }
 
             createDedicatedSession(result.command, result.args, {
+              cwdTarget: 'launch-project',
               closeTip: 'Press any key or close action to finish this session.',
               closeCallbackUrl,
             })
@@ -127,6 +142,8 @@ export function OpsxNewRoute() {
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+        <RootActionNotice state={rootAction} />
+
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium">Change Name</span>
           <input

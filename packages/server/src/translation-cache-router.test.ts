@@ -3,14 +3,10 @@ import { appRouter, type Context } from './router.js'
 
 function createCaller(partial: Partial<Context> = {}) {
   return appRouter.createCaller({
-    adapter: {} as Context['adapter'],
+    launchProjectAdapter: {} as Context['launchProjectAdapter'],
+    planningRootServices: {} as Context['planningRootServices'],
     configManager: {} as Context['configManager'],
-    documentService: {} as Context['documentService'],
     cliExecutor: {} as Context['cliExecutor'],
-    kernel: {} as Context['kernel'],
-    workflowInvocationService: {} as Context['workflowInvocationService'],
-    searchService: {} as Context['searchService'],
-    dashboardOverviewService: {} as Context['dashboardOverviewService'],
     projectRecoveryService: {
       getCurrent: () => ({ state: 'idle' }),
       subscribe: () => () => {},

@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Verify buffered and streaming CLI execution, runner resolution, and error behavior.
+ * 2. Preserve the launch process environment without loading project-owned environment files.
+ * 3. Verify OpenSpec lifecycle command construction and cancellation.
+ *
+ * Original request (2026-07-15): "OpenSpecUI inherits the launch environment's XDG_DATA_HOME."
+ */
 import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -116,6 +124,37 @@ describe('CliExecutor', () => {
 
         expect(result.success).toBe(true)
         expect(result.stdout).toBe(join(tempDir, 'xdg-data'))
+      } finally {
+        if (previousDataHome === undefined) {
+          delete process.env.XDG_DATA_HOME
+        } else {
+          process.env.XDG_DATA_HOME = previousDataHome
+        }
+      }
+    })
+
+    it('does not load project-owned openspec/.env into CLI children', async () => {
+      const previousDataHome = process.env.XDG_DATA_HOME
+      const inheritedDataHome = join(tempDir, 'inherited-data')
+      const projectDataHome = join(tempDir, 'project-data')
+      process.env.XDG_DATA_HOME = inheritedDataHome
+      try {
+        await writeFile(
+          join(tempDir, 'openspec', '.env'),
+          `XDG_DATA_HOME=${projectDataHome}\n`,
+          'utf8'
+        )
+        await configManager.writeConfig({ cli: { command: 'node' } })
+        clearCache()
+
+        const result = await cliExecutor.execute([
+          '-e',
+          "process.stdout.write(process.env.XDG_DATA_HOME ?? '')",
+        ])
+
+        expect(result.success).toBe(true)
+        expect(result.stdout).toBe(inheritedDataHome)
+        expect(result.stdout).not.toBe(projectDataHome)
       } finally {
         if (previousDataHome === undefined) {
           delete process.env.XDG_DATA_HOME

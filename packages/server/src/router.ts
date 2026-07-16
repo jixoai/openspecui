@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
- * 1. Register project document, OPSX, dashboard, and archive procedures.
- * 2. Register CLI, tool initialization, configuration, and Store projections.
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Register planning-root document, OPSX, dashboard, and archive procedures.
+ * 2. Register CLI, Root Context, tool initialization, configuration, and Store projections.
  * 3. Register Git, terminal, system, notification, and recovery procedures.
  * 4. Register translation runtime, model, asset, and cache procedures.
  * 5. Compose the public tRPC application router and shared procedure schemas.
@@ -14,39 +14,51 @@
 import type {
   ChangeFile,
   CliExecutor,
+  CliStreamEvent,
   ConfigManager,
   FileChangeEvent,
   GitEntriesPage,
   GitEntryFiles,
   GitEntryPatch,
-  GitEntrySelector,
+  GitRepositoryScope,
+  GitRepositoryScopeDescriptor,
+  GitRepositoryScopes,
   GitWorktreeHandoff,
   GitWorktreeOverview,
   GlobalSettingsManager,
   OpenSpecAdapter,
   OpenSpecWatcher,
-  OpsxKernel,
 } from '@openspecui/core'
 import {
   BatchTranslateInputSchema,
-  classifyStoreCliOutput,
+  classifyStoreCliResult,
   CodeEditorThemeSchema,
   DashboardConfigSchema,
   DocumentTranslationConfigUpdateSchema,
+  EnvironmentGlobalConfigValueSchema,
   getAllTools,
   getAvailableTools,
   getConfiguredTools,
   getDefaultCliCommandString,
   getDetectedProjectTools,
+  getRootContextCliSelector,
   getToolInitStates,
   getWatcherRuntimeStatus,
   GitConfigSchema,
   NotificationSettingsSchema,
   OpenSpecUIGlobalSettingsUpdateSchema,
+  OPSX_ARTIFACT_INPUT_ACTIONS,
+  OPSX_CHANGE_INPUT_ACTIONS,
+  OPSX_CORE_PROFILE_WORKFLOWS,
+  OPSX_TEXT_INPUT_ACTIONS,
   OpsxConfigSchema,
+  OwnedSpecIdentitySchema,
+  ProjectBindingUpdateSchema,
   resolveTerminalShellDefaults,
+  RUNTIME_INVALIDATION_FACETS,
   ServiceTranslationEngineIdSchema,
   sniffGlobalCli,
+  SpecIdentitySchema,
   StoreDoctorResultSchema,
   StoreListResultSchema,
   subscribeWatcherRuntimeStatus,
@@ -63,16 +75,17 @@ import {
   type ChangeStatus,
   type DashboardOverview,
   type ProjectRecoveryStatus,
+  type RuntimeInvalidationController,
+  type RuntimeInvalidationFacet,
+  type RuntimeInvalidationToken,
   type RunWorkflowInputV1,
-  type RunWorkflowResultV1,
+  type RunWorkflowResultV2,
   type SchemaDetail,
   type SchemaInfo,
   type SchemaResolution,
-  type StoreDoctorResult,
   type StoreDoctorStore,
   type StoreFeatureResult,
   type StoreListEntry,
-  type StoreListResult,
   type TemplateContentMap,
   type TemplatesMap,
   type ToolInitDelivery,
@@ -84,27 +97,26 @@ import {
   type NotificationRecord,
 } from '@openspecui/core/notifications'
 import { CustomSoundIdSchema } from '@openspecui/core/sounds'
-import { SearchQuerySchema, type SearchQuery } from '@openspecui/search'
-import { initTRPC } from '@trpc/server'
+import { SearchQuerySchema } from '@openspecui/search'
+import { initTRPC, TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
 import { z } from 'zod'
+import { CliMutationInvalidator } from './cli-mutation-invalidator.js'
 import { createCliStreamObservable } from './cli-stream-observable.js'
 import type { Ct2ModelAssetService } from './ct2-model-asset-service.js'
 import type { CustomSoundService } from './custom-sound-service.js'
 import { removeDetachedDashboardGitWorktree } from './dashboard-git-snapshot.js'
-import type { DashboardOverviewService } from './dashboard-overview-service.js'
 import {
   getDashboardGitTaskStatus,
   subscribeDashboardGitTaskStatus,
   touchDashboardGitRefreshStamp,
   type DashboardGitTaskStatus,
 } from './dashboard-overview.js'
-import type { DocumentService } from './document-service.js'
 import { resolveEntityEntryPath } from './entity-file-paths.js'
 import { buildEntityReadOptions } from './entity-read-options.js'
-import type { FilePreviewService } from './file-preview-service.js'
+import { invalidateGitPanelCache } from './git-panel-cache.js'
 import {
   buildGitWorktreeOverview,
   getCurrentWorktreeGitEntryFiles,
@@ -113,35 +125,54 @@ import {
   listCurrentWorktreeGitEntries,
   resolveGitWorktreeSwitchTarget,
 } from './git-panel-data.js'
+import {
+  resolveGitRepositoryDescriptor,
+  resolveGitRepositoryScopes,
+  selectGitRepositoryScope,
+} from './git-repository-scope.js'
 import type { LlamaModelAssetService } from './llama-model-asset-service.js'
 import type { LocalModelAssetService } from './local-model-asset-service.js'
 import type { NotificationService } from './notification-service.js'
+import { getOpenSpecMutationFacets } from './open-spec-mutation-facets.js'
+import {
+  dataScopeFromRootPreview,
+  readActiveRootConfig,
+  readEnvironmentGlobalConfig,
+  readProjectBindingConfig,
+  writeActiveRootConfig,
+  writeEnvironmentGlobalConfig,
+  writeProjectBindingConfig,
+} from './planning-config-service.js'
+import type { PlanningRootServiceResolver, PlanningRootServices } from './planning-root-service.js'
 import type { ProjectRecoveryService } from './project-recovery-service.js'
 import { reactiveKV } from './reactive-kv.js'
+import { createReactiveSubscription } from './reactive-subscription.js'
+import { createRootContextSubscription, resolveServerRootContext } from './root-context-service.js'
 import {
-  createReactiveSubscription,
-  createReactiveSubscriptionWithInput,
-} from './reactive-subscription.js'
-import type { SearchService } from './search-service.js'
+  readSpecCatalog,
+  readSpecDocument,
+  SpecCatalogIdentityNotFoundError,
+} from './spec-catalog-service.js'
+import type { StoreObservationReconciler } from './store-observation-service.js'
 import type { TranslationCacheService } from './translation-cache-service.js'
 import type { TranslationEngineService } from './translation-engine-service.js'
-import type { WorkflowInvocationService } from './workflow-invocation-service.js'
 
 export interface Context {
-  adapter: OpenSpecAdapter
+  /** Launch-project adapter; only launch-scoped operations such as init may use it. */
+  launchProjectAdapter: OpenSpecAdapter
+  /** Lazy owner of all CLI-selected planning-root filesystem services. */
+  planningRootServices: PlanningRootServiceResolver
+  /** Runtime-environment invalidation identity; projections pull their own authoritative data. */
+  runtimeInvalidation: RuntimeInvalidationController
+  /** CLI-truth reconciler for dynamic registered Store observation roots. */
+  storeObservation: StoreObservationReconciler
   configManager: ConfigManager
-  documentService: DocumentService
   cliExecutor: CliExecutor
-  kernel: OpsxKernel
-  workflowInvocationService: WorkflowInvocationService
-  searchService: SearchService
-  dashboardOverviewService: DashboardOverviewService
   projectRecoveryService: ProjectRecoveryService
   notificationService: NotificationService
   customSoundService: CustomSoundService
   globalSettingsManager: GlobalSettingsManager
   translationCacheService: TranslationCacheService
-  filePreviewService: FilePreviewService
   translationEngineService: TranslationEngineService
   localModelAssetService: LocalModelAssetService
   localCt2ModelAssetService: Ct2ModelAssetService
@@ -159,6 +190,45 @@ const t = initTRPC.context<Context>().create()
 
 export const router = t.router
 export const publicProcedure = t.procedure
+
+function resolvePlanningRoot(
+  ctx: Context,
+  options: { reactive?: boolean } = {}
+): Promise<PlanningRootServices> {
+  return options.reactive
+    ? ctx.planningRootServices.resolveReactive()
+    : ctx.planningRootServices.resolve()
+}
+
+function createPlanningRootSubscription<T>(
+  ctx: Context,
+  task: (services: PlanningRootServices) => Promise<T>
+) {
+  return createReactiveSubscription(async () =>
+    task(await resolvePlanningRoot(ctx, { reactive: true }))
+  )
+}
+
+function runOpenSpecCliMutation<T>(
+  ctx: Context,
+  args: readonly string[],
+  execute: () => Promise<T>
+): Promise<T> {
+  const facets = getOpenSpecMutationFacets(args)
+  if (!facets) return execute()
+  return new CliMutationInvalidator(ctx.runtimeInvalidation).run(facets, execute)
+}
+
+async function streamOpenSpecCliMutation(
+  ctx: Context,
+  args: readonly string[],
+  start: (onEvent: (event: CliStreamEvent) => void) => Promise<() => void> | (() => void),
+  onEvent: (event: CliStreamEvent) => void
+): Promise<() => void> {
+  const facets = getOpenSpecMutationFacets(args)
+  if (!facets) return await start(onEvent)
+  return new CliMutationInvalidator(ctx.runtimeInvalidation).stream(facets, start, onEvent)
+}
 
 export const notificationsRouter = router({
   list: publicProcedure.query(({ ctx }) => {
@@ -866,22 +936,15 @@ export const localLlamaModelsRouter = router({
     }),
 })
 
-const OPSX_CORE_PROFILE_WORKFLOWS = [
-  'propose',
-  'explore',
-  'apply',
-  'update',
-  'sync',
-  'archive',
-] as const
 const gitEntrySelectorSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('uncommitted') }),
   z.object({ type: z.literal('commit'), hash: z.string().min(1) }),
 ])
+const gitRepositoryScopeSchema = z.enum(['code', 'planning'])
 
 const workflowRequestedModeSchema = z.enum(['compose', 'command', 'direct'])
 const runWorkflowInputSchema = z.discriminatedUnion('action', [
-  z.object({ action: z.enum(['explore', 'propose']), text: z.string() }),
+  z.object({ action: z.enum(OPSX_TEXT_INPUT_ACTIONS), text: z.string() }),
   z.object({
     action: z.literal('new'),
     changeId: z.string(),
@@ -890,13 +953,13 @@ const runWorkflowInputSchema = z.discriminatedUnion('action', [
     extraArgs: z.array(z.string()).default([]),
   }),
   z.object({
-    action: z.enum(['continue', 'ff']),
+    action: z.enum(OPSX_ARTIFACT_INPUT_ACTIONS),
     changeId: z.string(),
     artifactId: z.string(),
     schema: z.string().optional(),
   }),
   z.object({
-    action: z.enum(['apply', 'update', 'archive', 'verify', 'sync']),
+    action: z.enum(OPSX_CHANGE_INPUT_ACTIONS),
     changeId: z.string(),
     schema: z.string().optional(),
     strict: z.boolean().optional(),
@@ -1021,35 +1084,6 @@ async function fetchOpsxProfileState(ctx: Context): Promise<OpsxProfileState> {
   }
 }
 
-async function resolveGlobalConfigPath(ctx: Context): Promise<string> {
-  const result = await ctx.cliExecutor.execute(['config', 'path'])
-  if (!result.success) {
-    throw new Error(result.stderr || 'Failed to resolve OpenSpec global config path.')
-  }
-  const path = result.stdout.trim()
-  if (!path) {
-    throw new Error('OpenSpec global config path is empty.')
-  }
-  return path
-}
-
-async function fetchGlobalConfigJson(ctx: Context): Promise<Record<string, unknown>> {
-  const result = await ctx.cliExecutor.execute(['config', 'list', '--json'])
-  if (!result.success) {
-    throw new Error(result.stderr || 'Failed to load OpenSpec global config.')
-  }
-  try {
-    const parsed = JSON.parse(result.stdout) as unknown
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new Error('OpenSpec global config must be a JSON object.')
-    }
-    return parsed as Record<string, unknown>
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    throw new Error(`Invalid JSON from \`openspec config list --json\`: ${message}`)
-  }
-}
-
 function ensureEditableSource(source: SchemaResolution['source'], label: string): void {
   if (source === 'package') {
     throw new Error(`${label} is read-only (package source)`)
@@ -1068,53 +1102,64 @@ function resolveEntryPath(root: string, entryPath: string): string {
 
 async function fetchOpsxStatus(
   ctx: Context,
-  input: { change?: string; schema?: string }
+  input: { change?: string; schema?: string },
+  reactive = false
 ): Promise<ChangeStatus> {
   const changeId = requireChangeId(input.change)
-  await ctx.kernel.waitForWarmup()
-  await ctx.kernel.ensureStatus(changeId, input.schema)
-  return ctx.kernel.getStatus(changeId, input.schema)
+  const { kernel } = await resolvePlanningRoot(ctx, { reactive })
+  await kernel.waitForWarmup()
+  await kernel.ensureStatus(changeId, input.schema)
+  return kernel.getStatus(changeId, input.schema)
 }
 
-async function fetchOpsxStatusList(ctx: Context): Promise<ChangeStatus[]> {
-  await ctx.kernel.waitForWarmup()
-  await ctx.kernel.ensureStatusList()
-  return ctx.kernel.getStatusList()
+async function fetchOpsxStatusList(ctx: Context, reactive = false): Promise<ChangeStatus[]> {
+  const { kernel } = await resolvePlanningRoot(ctx, { reactive })
+  await kernel.waitForWarmup()
+  await kernel.ensureStatusList()
+  return kernel.getStatusList()
 }
 
 async function fetchOpsxInstructions(
   ctx: Context,
-  input: { change?: string; artifact: string; schema?: string }
+  input: { change?: string; artifact: string; schema?: string },
+  reactive = false
 ): Promise<ArtifactInstructions> {
   const changeId = requireChangeId(input.change)
-  await ctx.kernel.waitForWarmup()
-  await ctx.kernel.ensureInstructions(changeId, input.artifact, input.schema)
-  return ctx.kernel.getInstructions(changeId, input.artifact, input.schema)
+  const { kernel } = await resolvePlanningRoot(ctx, { reactive })
+  await kernel.waitForWarmup()
+  await kernel.ensureInstructions(changeId, input.artifact, input.schema)
+  return kernel.getInstructions(changeId, input.artifact, input.schema)
 }
 
 async function fetchOpsxApplyInstructions(
   ctx: Context,
-  input: { change?: string; schema?: string }
+  input: { change?: string; schema?: string },
+  reactive = false
 ): Promise<ApplyInstructions> {
   const changeId = requireChangeId(input.change)
-  await ctx.kernel.waitForWarmup()
-  await ctx.kernel.ensureApplyInstructions(changeId, input.schema)
-  return ctx.kernel.getApplyInstructions(changeId, input.schema)
+  const { kernel } = await resolvePlanningRoot(ctx, { reactive })
+  await kernel.waitForWarmup()
+  await kernel.ensureApplyInstructions(changeId, input.schema)
+  return kernel.getApplyInstructions(changeId, input.schema)
 }
 
-async function fetchOpsxConfigBundle(ctx: Context): Promise<{
+async function fetchOpsxConfigBundle(
+  ctx: Context,
+  reactive = false
+): Promise<{
   schemas: SchemaInfo[]
   schemaDetails: Record<string, SchemaDetail | null>
   schemaResolutions: Record<string, SchemaResolution | null>
 }> {
-  await ctx.kernel.ensureSchemas()
-  const schemas = ctx.kernel.getSchemas()
+  const { kernel } = await resolvePlanningRoot(ctx, { reactive })
+  await kernel.ensureSchemas()
+  const schemas = kernel.getSchemas()
 
   for (const schema of schemas) {
-    void ctx.kernel.ensureSchemaDetail(schema.name).catch(() => {
+    void kernel.ensureSchemaDetail(schema.name).catch(() => {
       // Keep bundle responsive; errors surface from dedicated schema subscriptions/routes.
     })
-    void ctx.kernel.ensureSchemaResolution(schema.name).catch(() => {
+    void kernel.ensureSchemaResolution(schema.name).catch(() => {
       // Keep bundle responsive; errors surface from dedicated schema subscriptions/routes.
     })
   }
@@ -1122,40 +1167,52 @@ async function fetchOpsxConfigBundle(ctx: Context): Promise<{
   const schemaDetails: Record<string, SchemaDetail | null> = {}
   const schemaResolutions: Record<string, SchemaResolution | null> = {}
   for (const schema of schemas) {
-    schemaDetails[schema.name] = ctx.kernel.peekSchemaDetail(schema.name)
-    schemaResolutions[schema.name] = ctx.kernel.peekSchemaResolution(schema.name)
+    schemaDetails[schema.name] = kernel.peekSchemaDetail(schema.name)
+    schemaResolutions[schema.name] = kernel.peekSchemaResolution(schema.name)
   }
 
   return { schemas, schemaDetails, schemaResolutions }
 }
 
-async function fetchOpsxSchemaResolution(ctx: Context, name: string): Promise<SchemaResolution> {
-  await ctx.kernel.waitForWarmup()
-  await ctx.kernel.ensureSchemaResolution(name)
-  return ctx.kernel.getSchemaResolution(name)
+async function fetchOpsxSchemaResolution(
+  ctx: Context,
+  name: string,
+  reactive = false
+): Promise<SchemaResolution> {
+  const { kernel } = await resolvePlanningRoot(ctx, { reactive })
+  await kernel.waitForWarmup()
+  await kernel.ensureSchemaResolution(name)
+  return kernel.getSchemaResolution(name)
 }
 
-async function fetchOpsxTemplates(ctx: Context, schema?: string): Promise<TemplatesMap> {
-  await ctx.kernel.waitForWarmup()
-  await ctx.kernel.ensureTemplates(schema)
-  return ctx.kernel.getTemplates(schema)
+async function fetchOpsxTemplates(
+  ctx: Context,
+  schema?: string,
+  reactive = false
+): Promise<TemplatesMap> {
+  const { kernel } = await resolvePlanningRoot(ctx, { reactive })
+  await kernel.waitForWarmup()
+  await kernel.ensureTemplates(schema)
+  return kernel.getTemplates(schema)
 }
 
 async function fetchOpsxTemplateContents(
   ctx: Context,
-  schema?: string
+  schema?: string,
+  reactive = false
 ): Promise<TemplateContentMap> {
-  await ctx.kernel.waitForWarmup()
-  await ctx.kernel.ensureTemplateContents(schema)
-  return ctx.kernel.getTemplateContents(schema)
+  const { kernel } = await resolvePlanningRoot(ctx, { reactive })
+  await kernel.waitForWarmup()
+  await kernel.ensureTemplateContents(schema)
+  return kernel.getTemplateContents(schema)
 }
 
 interface SystemStatusPayload {
   projectDir: string
   watcherEnabled: boolean
-  watcherGeneration: number
-  watcherReinitializeCount: number
-  watcherLastReinitializeReason: string | null
+  watcherRootCount: number
+  watcherSubscriptionCount: number
+  watcherRoots: NonNullable<ReturnType<typeof getWatcherRuntimeStatus>>['roots']
   projectRecovery: ProjectRecoveryStatus
 }
 
@@ -1164,66 +1221,69 @@ function buildSystemStatus(ctx: Context): SystemStatusPayload {
   return {
     projectDir: ctx.projectDir,
     watcherEnabled: runtime?.initialized ?? false,
-    watcherGeneration: runtime?.generation ?? 0,
-    watcherReinitializeCount: runtime?.reinitializeCount ?? 0,
-    watcherLastReinitializeReason: runtime?.lastReinitializeReason ?? null,
+    watcherRootCount: runtime?.rootCount ?? 0,
+    watcherSubscriptionCount: runtime?.subscriptionCount ?? 0,
+    watcherRoots: runtime?.roots ?? [],
     projectRecovery: ctx.projectRecoveryService.getCurrent(),
   }
 }
 
-/**
- * Spec router - spec CRUD operations
- */
+function specCatalogSource(ctx: Context, services: PlanningRootServices) {
+  return {
+    rootContext: services.rootContext,
+    adapter: services.adapter,
+    documentService: services.documentService,
+    contracts: ctx.cliExecutor.contracts,
+  }
+}
+
+/** Source-aware Spec Catalog and document operations. */
 export const specRouter = router({
-  list: publicProcedure.query(async ({ ctx }) => {
-    return ctx.adapter.listSpecs()
+  /** Return owned and direct referenced Specs without flattening compound identity. */
+  catalog: publicProcedure.query(async ({ ctx }) => {
+    const services = await resolvePlanningRoot(ctx)
+    return readSpecCatalog(specCatalogSource(ctx, services))
   }),
 
-  listWithMeta: publicProcedure.query(async ({ ctx }) => {
-    return ctx.adapter.listSpecsWithMeta()
+  /** Return the exact owned or referenced document projection and its source evidence. */
+  document: publicProcedure.input(SpecIdentitySchema).query(async ({ ctx, input }) => {
+    const services = await resolvePlanningRoot(ctx)
+    try {
+      return await readSpecDocument(specCatalogSource(ctx, services), input)
+    } catch (error) {
+      if (error instanceof SpecCatalogIdentityNotFoundError) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: error.message })
+      }
+      throw error
+    }
   }),
 
-  get: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    return ctx.documentService.readSpec(input.id)
-  }),
-
-  getRaw: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    const result = await ctx.documentService.readSpecRaw(input.id, 'view', 'processed')
-    return result?.markdown ?? null
-  }),
-
+  /** Write an owned Spec; referenced identities are rejected by the input schema. */
   save: publicProcedure
-    .input(z.object({ id: z.string(), content: z.string() }))
+    .input(z.object({ identity: OwnedSpecIdentitySchema, content: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.adapter.writeSpec(input.id, input.content)
+      await (await resolvePlanningRoot(ctx)).adapter.writeSpec(input.identity.specId, input.content)
       return { success: true }
     }),
 
-  validate: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    return ctx.adapter.validateSpec(input.id)
+  /** Validate an owned Spec; referenced identities remain immutable CLI projections. */
+  validate: publicProcedure.input(OwnedSpecIdentitySchema).query(async ({ ctx, input }) => {
+    return (await resolvePlanningRoot(ctx)).adapter.validateSpec(input.specId)
   }),
 
-  // Reactive subscriptions
-  subscribe: publicProcedure.subscription(({ ctx }) => {
-    return createReactiveSubscription(() => ctx.adapter.listSpecsWithMeta())
+  /** Reactively rebuild the source-aware catalog after Root/Reference invalidation. */
+  subscribeCatalog: publicProcedure.subscription(({ ctx }) => {
+    return createPlanningRootSubscription(ctx, (services) =>
+      readSpecCatalog(specCatalogSource(ctx, services))
+    )
   }),
 
-  subscribeOne: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .subscription(({ ctx, input }) => {
-      return createReactiveSubscriptionWithInput((id: string) => ctx.documentService.readSpec(id))(
-        input.id
-      )
-    }),
-
-  subscribeRaw: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .subscription(({ ctx, input }) => {
-      return createReactiveSubscriptionWithInput(async (id: string) => {
-        const result = await ctx.documentService.readSpecRaw(id, 'view', 'processed')
-        return result?.markdown ?? null
-      })(input.id)
-    }),
+  /** Reactively pull the exact source document after project or Store invalidation. */
+  subscribeDocument: publicProcedure.input(SpecIdentitySchema).subscription(({ ctx, input }) => {
+    return createPlanningRootSubscription(ctx, (services) =>
+      readSpecDocument(specCatalogSource(ctx, services), input)
+    )
+  }),
 })
 
 /**
@@ -1231,38 +1291,40 @@ export const specRouter = router({
  */
 export const changeRouter = router({
   list: publicProcedure.query(async ({ ctx }) => {
-    return ctx.adapter.listChanges()
+    return (await resolvePlanningRoot(ctx)).adapter.listChanges()
   }),
 
   listWithMeta: publicProcedure.query(async ({ ctx }) => {
-    return ctx.adapter.listChangesWithMeta()
+    return (await resolvePlanningRoot(ctx)).adapter.listChangesWithMeta()
   }),
 
   listArchived: publicProcedure.query(async ({ ctx }) => {
-    return ctx.adapter.listArchivedChanges()
+    return (await resolvePlanningRoot(ctx)).adapter.listArchivedChanges()
   }),
 
   get: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    return ctx.documentService.readChange(input.id)
+    return (await resolvePlanningRoot(ctx)).documentService.readChange(input.id)
   }),
 
   getRaw: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    return ctx.adapter.readChangeRaw(input.id)
+    return (await resolvePlanningRoot(ctx)).adapter.readChangeRaw(input.id)
   }),
 
   save: publicProcedure
     .input(z.object({ id: z.string(), proposal: z.string(), tasks: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.adapter.writeChange(input.id, input.proposal, input.tasks)
+      await (
+        await resolvePlanningRoot(ctx)
+      ).adapter.writeChange(input.id, input.proposal, input.tasks)
       return { success: true }
     }),
 
   archive: publicProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
-    return ctx.adapter.archiveChange(input.id)
+    return (await resolvePlanningRoot(ctx)).adapter.archiveChange(input.id)
   }),
 
   validate: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    return ctx.adapter.validateChange(input.id)
+    return (await resolvePlanningRoot(ctx)).adapter.validateChange(input.id)
   }),
 
   toggleTask: publicProcedure
@@ -1274,7 +1336,9 @@ export const changeRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const success = await ctx.adapter.toggleTask(input.changeId, input.taskIndex, input.completed)
+      const success = await (
+        await resolvePlanningRoot(ctx)
+      ).adapter.toggleTask(input.changeId, input.taskIndex, input.completed)
       if (!success) {
         throw new Error(`Failed to toggle task ${input.taskIndex} in change ${input.changeId}`)
       }
@@ -1283,15 +1347,13 @@ export const changeRouter = router({
 
   // Reactive subscriptions
   subscribe: publicProcedure.subscription(({ ctx }) => {
-    return createReactiveSubscription(() => ctx.adapter.listChangesWithMeta())
+    return createPlanningRootSubscription(ctx, ({ adapter }) => adapter.listChangesWithMeta())
   }),
 
   subscribeFiles: publicProcedure
     .input(z.object({ id: z.string() }))
     .subscription(({ ctx, input }) => {
-      return createReactiveSubscriptionWithInput((id: string) => ctx.adapter.readChangeFiles(id))(
-        input.id
-      )
+      return createPlanningRootSubscription(ctx, ({ adapter }) => adapter.readChangeFiles(input.id))
     }),
 
   writeFile: publicProcedure
@@ -1303,8 +1365,11 @@ export const changeRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const { rootContext } = await resolvePlanningRoot(ctx)
+      const projectDir = rootContext.planningRoot?.path
+      if (!projectDir) throw new Error('Planning root is unavailable.')
       const info = resolveEntityEntryPath({
-        projectDir: ctx.projectDir,
+        projectDir,
         stage: 'change',
         changeId: input.id,
         path: input.path,
@@ -1321,8 +1386,8 @@ export const changeRouter = router({
         path: z.string(),
       })
     )
-    .query(({ ctx, input }) => {
-      return ctx.filePreviewService.prepareEntityFilePreview({
+    .query(async ({ ctx, input }) => {
+      return (await resolvePlanningRoot(ctx)).filePreviewService.prepareEntityFilePreview({
         stage: 'change',
         changeId: input.id,
         path: input.path,
@@ -1335,7 +1400,7 @@ export const changeRouter = router({
  */
 export const initRouter = router({
   init: publicProcedure.mutation(async ({ ctx }) => {
-    await ctx.adapter.init()
+    await ctx.launchProjectAdapter.init()
     return { success: true }
   }),
 })
@@ -1345,58 +1410,62 @@ export const initRouter = router({
  */
 export const archiveRouter = router({
   list: publicProcedure.query(async ({ ctx }) => {
-    return ctx.adapter.listArchivedChanges()
+    return (await resolvePlanningRoot(ctx)).adapter.listArchivedChanges()
   }),
 
   listWithMeta: publicProcedure.query(async ({ ctx }) => {
-    return ctx.adapter.listArchivedChangesWithMeta()
+    return (await resolvePlanningRoot(ctx)).adapter.listArchivedChangesWithMeta()
   }),
 
   get: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    return ctx.documentService.readEntityDetail(
+    const services = await resolvePlanningRoot(ctx)
+    return services.documentService.readEntityDetail(
       'archive',
       input.id,
       'view',
       'processed',
-      await buildEntityReadOptions(ctx, 'archive', input.id)
+      await buildEntityReadOptions(services, 'archive', input.id)
     )
   }),
 
   getRaw: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    return ctx.documentService.readEntityDetail(
+    const services = await resolvePlanningRoot(ctx)
+    return services.documentService.readEntityDetail(
       'archive',
       input.id,
       'view',
       'source',
-      await buildEntityReadOptions(ctx, 'archive', input.id)
+      await buildEntityReadOptions(services, 'archive', input.id)
     )
   }),
 
   // Reactive subscriptions
   subscribe: publicProcedure.subscription(({ ctx }) => {
-    return createReactiveSubscription(() => ctx.adapter.listArchivedChangesWithMeta())
+    return createPlanningRootSubscription(ctx, ({ adapter }) =>
+      adapter.listArchivedChangesWithMeta()
+    )
   }),
 
   subscribeOne: publicProcedure
     .input(z.object({ id: z.string() }))
     .subscription(({ ctx, input }) => {
-      return createReactiveSubscriptionWithInput(async (id: string) =>
-        ctx.documentService.readEntityDetail(
+      return createPlanningRootSubscription(ctx, async (services) =>
+        services.documentService.readEntityDetail(
           'archive',
-          id,
+          input.id,
           'view',
           'processed',
-          await buildEntityReadOptions(ctx, 'archive', id)
+          await buildEntityReadOptions(services, 'archive', input.id)
         )
-      )(input.id)
+      )
     }),
 
   subscribeFiles: publicProcedure
     .input(z.object({ id: z.string() }))
     .subscription(({ ctx, input }) => {
-      return createReactiveSubscriptionWithInput((id: string) =>
-        ctx.documentService.readArchivedChangeFiles(id, 'view', 'source')
-      )(input.id)
+      return createPlanningRootSubscription(ctx, ({ documentService }) =>
+        documentService.readArchivedChangeFiles(input.id, 'view', 'source')
+      )
     }),
 
   writeFile: publicProcedure
@@ -1408,8 +1477,11 @@ export const archiveRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const { rootContext } = await resolvePlanningRoot(ctx)
+      const projectDir = rootContext.planningRoot?.path
+      if (!projectDir) throw new Error('Planning root is unavailable.')
       const info = resolveEntityEntryPath({
-        projectDir: ctx.projectDir,
+        projectDir,
         stage: 'archive',
         changeId: input.id,
         path: input.path,
@@ -1426,8 +1498,8 @@ export const archiveRouter = router({
         path: z.string(),
       })
     )
-    .query(({ ctx, input }) => {
-      return ctx.filePreviewService.prepareEntityFilePreview({
+    .query(async ({ ctx, input }) => {
+      return (await resolvePlanningRoot(ctx)).filePreviewService.prepareEntityFilePreview({
         stage: 'archive',
         changeId: input.id,
         path: input.path,
@@ -1683,9 +1755,18 @@ export const cliRouter = router({
       })
     )
     .subscription(({ ctx, input }) => {
-      return createCliStreamObservable(async (onEvent) =>
-        ctx.cliExecutor.executeCommandStream([input.command, ...input.args], onEvent)
-      )
+      return createCliStreamObservable(async (onEvent) => {
+        if (input.command !== 'openspec') {
+          return ctx.cliExecutor.executeCommandStream([input.command, ...input.args], onEvent)
+        }
+        return streamOpenSpecCliMutation(
+          ctx,
+          input.args,
+          (mutationEvent) =>
+            ctx.cliExecutor.executeCommandStream([input.command, ...input.args], mutationEvent),
+          onEvent
+        )
+      })
     }),
 
   /** 获取可用的工具列表（available: true） */
@@ -1738,24 +1819,6 @@ export const cliRouter = router({
       })
     }),
 
-  getGlobalConfigPath: publicProcedure.query(async ({ ctx }) => {
-    const path = await resolveGlobalConfigPath(ctx)
-    return { path }
-  }),
-
-  getGlobalConfig: publicProcedure.query(async ({ ctx }) => {
-    return fetchGlobalConfigJson(ctx)
-  }),
-
-  setGlobalConfig: publicProcedure
-    .input(z.object({ config: z.record(z.string(), z.unknown()) }))
-    .mutation(async ({ ctx, input }) => {
-      const configPath = await resolveGlobalConfigPath(ctx)
-      await mkdir(dirname(configPath), { recursive: true })
-      await writeFile(configPath, `${JSON.stringify(input.config, null, 2)}\n`, 'utf8')
-      return { success: true }
-    }),
-
   /** 获取已配置的工具列表（检查配置文件是否存在） */
   getConfiguredTools: publicProcedure.query(async ({ ctx }) => {
     return getConfiguredTools(ctx.projectDir)
@@ -1778,11 +1841,13 @@ export const cliRouter = router({
         .optional()
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.cliExecutor.init({
-        tools: input?.tools,
-        profile: input?.profile,
-        force: input?.force,
-      })
+      return runOpenSpecCliMutation(ctx, ['init'], () =>
+        ctx.cliExecutor.init({
+          tools: input?.tools,
+          profile: input?.profile,
+          force: input?.force,
+        })
+      )
     }),
 
   /** 归档 change（非交互式） */
@@ -1792,15 +1857,17 @@ export const cliRouter = router({
         changeId: z.string(),
         skipSpecs: z.boolean().optional(),
         noValidate: z.boolean().optional(),
-        store: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.cliExecutor.contracts.archive(input.changeId, {
-        skipSpecs: input.skipSpecs,
-        noValidate: input.noValidate,
-        store: input.store,
-      })
+      const { rootContext } = await resolvePlanningRoot(ctx)
+      return runOpenSpecCliMutation(ctx, ['archive'], () =>
+        ctx.cliExecutor.contracts.archive(input.changeId, {
+          skipSpecs: input.skipSpecs,
+          noValidate: input.noValidate,
+          ...getRootContextCliSelector(rootContext),
+        })
+      )
     }),
 
   validate: publicProcedure
@@ -1811,40 +1878,49 @@ export const cliRouter = router({
           id: z.string().min(1),
           type: z.enum(['spec', 'change']).optional(),
           strict: z.boolean().optional(),
-          store: z.string().optional(),
         }),
         z.object({
           kind: z.literal('scope'),
           scope: z.enum(['all', 'changes', 'specs']),
           strict: z.boolean().optional(),
-          store: z.string().optional(),
         }),
       ])
     )
     .mutation(async ({ ctx, input }) => {
+      const { rootContext } = await resolvePlanningRoot(ctx)
       return ctx.cliExecutor.contracts.validate({
         target:
           input.kind === 'item'
             ? { kind: 'item', id: input.id, type: input.type }
             : { kind: 'scope', scope: input.scope },
         strict: input.strict,
-        store: input.store,
+        ...getRootContextCliSelector(rootContext),
       })
     }),
 
   /** 流式执行 validate（实时输出） */
   validateStream: publicProcedure
-    .input(z.object({ type: z.enum(['spec', 'change']).optional(), id: z.string().optional() }))
+    .input(
+      z.object({
+        type: z.enum(['spec', 'change']).optional(),
+        id: z.string().optional(),
+        strict: z.boolean().optional(),
+      })
+    )
     .subscription(({ ctx, input }) => {
-      return createCliStreamObservable((onEvent) =>
-        ctx.cliExecutor.validateStream(input.type, input.id, onEvent)
-      )
+      return createCliStreamObservable(async (onEvent) => {
+        const { rootContext } = await resolvePlanningRoot(ctx)
+        return ctx.cliExecutor.validateStream(
+          { ...input, ...getRootContextCliSelector(rootContext) },
+          onEvent
+        )
+      })
     }),
 
   execute: publicProcedure
     .input(z.object({ args: z.array(z.string()) }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.cliExecutor.execute(input.args)
+      return runOpenSpecCliMutation(ctx, input.args, () => ctx.cliExecutor.execute(input.args))
     }),
 
   /** 流式执行 init（实时输出） */
@@ -1860,12 +1936,18 @@ export const cliRouter = router({
     )
     .subscription(({ ctx, input }) => {
       return createCliStreamObservable((onEvent) =>
-        ctx.cliExecutor.initStream(
-          {
-            tools: input?.tools,
-            profile: input?.profile,
-            force: input?.force,
-          },
+        streamOpenSpecCliMutation(
+          ctx,
+          ['init'],
+          (mutationEvent) =>
+            ctx.cliExecutor.initStream(
+              {
+                tools: input?.tools,
+                profile: input?.profile,
+                force: input?.force,
+              },
+              mutationEvent
+            ),
           onEvent
         )
       )
@@ -1881,13 +1963,24 @@ export const cliRouter = router({
       })
     )
     .subscription(({ ctx, input }) => {
-      return createCliStreamObservable((onEvent) =>
-        ctx.cliExecutor.archiveStream(
-          input.changeId,
-          { skipSpecs: input.skipSpecs, noValidate: input.noValidate },
+      return createCliStreamObservable(async (onEvent) => {
+        const { rootContext } = await resolvePlanningRoot(ctx)
+        return streamOpenSpecCliMutation(
+          ctx,
+          ['archive'],
+          (mutationEvent) =>
+            ctx.cliExecutor.archiveStream(
+              input.changeId,
+              {
+                skipSpecs: input.skipSpecs,
+                noValidate: input.noValidate,
+                ...getRootContextCliSelector(rootContext),
+              },
+              mutationEvent
+            ),
           onEvent
         )
-      )
+      })
     }),
 })
 
@@ -1902,8 +1995,8 @@ export const opsxRouter = router({
         input: runWorkflowInputSchema,
       })
     )
-    .mutation(async ({ ctx, input }): Promise<RunWorkflowResultV1> => {
-      return ctx.workflowInvocationService.runWorkflow(
+    .mutation(async ({ ctx, input }): Promise<RunWorkflowResultV2> => {
+      return (await resolvePlanningRoot(ctx)).workflowInvocationService.runWorkflow(
         input.input as RunWorkflowInputV1,
         input.requestedMode as WorkflowRequestedModeV1
       )
@@ -1928,7 +2021,7 @@ export const opsxRouter = router({
       })
     )
     .subscription(({ ctx, input }) => {
-      return createReactiveSubscription(() => fetchOpsxStatus(ctx, input))
+      return createReactiveSubscription(() => fetchOpsxStatus(ctx, input, true))
     }),
 
   statusList: publicProcedure.query(async ({ ctx }): Promise<ChangeStatus[]> => {
@@ -1936,7 +2029,7 @@ export const opsxRouter = router({
   }),
 
   subscribeStatusList: publicProcedure.subscription(({ ctx }) => {
-    return createReactiveSubscription(() => fetchOpsxStatusList(ctx))
+    return createReactiveSubscription(() => fetchOpsxStatusList(ctx, true))
   }),
 
   instructions: publicProcedure
@@ -1960,7 +2053,7 @@ export const opsxRouter = router({
       })
     )
     .subscription(({ ctx, input }) => {
-      return createReactiveSubscription(() => fetchOpsxInstructions(ctx, input))
+      return createReactiveSubscription(() => fetchOpsxInstructions(ctx, input, true))
     }),
 
   applyInstructions: publicProcedure
@@ -1982,7 +2075,7 @@ export const opsxRouter = router({
       })
     )
     .subscription(({ ctx, input }) => {
-      return createReactiveSubscription(() => fetchOpsxApplyInstructions(ctx, input))
+      return createReactiveSubscription(() => fetchOpsxApplyInstructions(ctx, input, true))
     }),
 
   configBundle: publicProcedure.query(async ({ ctx }) => {
@@ -1990,7 +2083,7 @@ export const opsxRouter = router({
   }),
 
   subscribeConfigBundle: publicProcedure.subscription(({ ctx }) => {
-    return createReactiveSubscription(() => fetchOpsxConfigBundle(ctx))
+    return createReactiveSubscription(() => fetchOpsxConfigBundle(ctx, true))
   }),
 
   templates: publicProcedure
@@ -2002,7 +2095,7 @@ export const opsxRouter = router({
   subscribeTemplates: publicProcedure
     .input(z.object({ schema: z.string().optional() }).optional())
     .subscription(({ ctx, input }) => {
-      return createReactiveSubscription(() => fetchOpsxTemplates(ctx, input?.schema))
+      return createReactiveSubscription(() => fetchOpsxTemplates(ctx, input?.schema, true))
     }),
 
   templateContents: publicProcedure
@@ -2014,42 +2107,44 @@ export const opsxRouter = router({
   subscribeTemplateContents: publicProcedure
     .input(z.object({ schema: z.string().optional() }).optional())
     .subscription(({ ctx, input }) => {
-      return createReactiveSubscription(() => fetchOpsxTemplateContents(ctx, input?.schema))
+      return createReactiveSubscription(() => fetchOpsxTemplateContents(ctx, input?.schema, true))
     }),
 
   schemaFiles: publicProcedure
     .input(z.object({ name: z.string() }))
     .query(async ({ ctx, input }): Promise<ChangeFile[]> => {
-      await ctx.kernel.waitForWarmup()
-      await ctx.kernel.ensureSchemaFiles(input.name)
-      return ctx.kernel.getSchemaFiles(input.name)
+      const { kernel } = await resolvePlanningRoot(ctx)
+      await kernel.waitForWarmup()
+      await kernel.ensureSchemaFiles(input.name)
+      return kernel.getSchemaFiles(input.name)
     }),
 
   subscribeSchemaFiles: publicProcedure
     .input(z.object({ name: z.string() }))
     .subscription(({ ctx, input }) => {
-      return createReactiveSubscription(async () => {
-        await ctx.kernel.waitForWarmup()
-        await ctx.kernel.ensureSchemaFiles(input.name)
-        return ctx.kernel.getSchemaFiles(input.name)
+      return createPlanningRootSubscription(ctx, async ({ kernel }) => {
+        await kernel.waitForWarmup()
+        await kernel.ensureSchemaFiles(input.name)
+        return kernel.getSchemaFiles(input.name)
       })
     }),
 
   schemaYaml: publicProcedure
     .input(z.object({ name: z.string() }))
     .query(async ({ ctx, input }) => {
-      await ctx.kernel.waitForWarmup()
-      await ctx.kernel.ensureSchemaYaml(input.name)
-      return ctx.kernel.getSchemaYaml(input.name)
+      const { kernel } = await resolvePlanningRoot(ctx)
+      await kernel.waitForWarmup()
+      await kernel.ensureSchemaYaml(input.name)
+      return kernel.getSchemaYaml(input.name)
     }),
 
   subscribeSchemaYaml: publicProcedure
     .input(z.object({ name: z.string() }))
     .subscription(({ ctx, input }) => {
-      return createReactiveSubscription(async () => {
-        await ctx.kernel.waitForWarmup()
-        await ctx.kernel.ensureSchemaYaml(input.name)
-        return ctx.kernel.getSchemaYaml(input.name)
+      return createPlanningRootSubscription(ctx, async ({ kernel }) => {
+        await kernel.waitForWarmup()
+        await kernel.ensureSchemaYaml(input.name)
+        return kernel.getSchemaYaml(input.name)
       })
     }),
 
@@ -2136,7 +2231,7 @@ export const opsxRouter = router({
     .input(z.object({ schema: z.string(), artifactId: z.string() }))
     .subscription(({ ctx, input }) => {
       return createReactiveSubscription(async () => {
-        const templateContents = await fetchOpsxTemplateContents(ctx, input.schema)
+        const templateContents = await fetchOpsxTemplateContents(ctx, input.schema, true)
         const info = templateContents[input.artifactId]
         if (!info) {
           throw new Error(`Template not found for ${input.schema}:${input.artifactId}`)
@@ -2168,50 +2263,28 @@ export const opsxRouter = router({
       return { success: true }
     }),
 
-  projectConfig: publicProcedure.query(async ({ ctx }) => {
-    await ctx.kernel.waitForWarmup()
-    await ctx.kernel.ensureProjectConfig()
-    return ctx.kernel.getProjectConfig()
-  }),
-
-  subscribeProjectConfig: publicProcedure.subscription(({ ctx }) => {
-    return createReactiveSubscription(async () => {
-      await ctx.kernel.waitForWarmup()
-      await ctx.kernel.ensureProjectConfig()
-      return ctx.kernel.getProjectConfig()
-    })
-  }),
-
-  writeProjectConfig: publicProcedure
-    .input(z.object({ content: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const openspecDir = join(ctx.projectDir, 'openspec')
-      await mkdir(openspecDir, { recursive: true })
-      const configPath = join(openspecDir, 'config.yaml')
-      await writeFile(configPath, input.content, 'utf-8')
-      return { success: true }
-    }),
-
   listChanges: publicProcedure.query(async ({ ctx }) => {
-    await ctx.kernel.waitForWarmup()
-    await ctx.kernel.ensureChangeIds()
-    return ctx.kernel.getChangeIds()
+    const { kernel } = await resolvePlanningRoot(ctx)
+    await kernel.waitForWarmup()
+    await kernel.ensureChangeIds()
+    return kernel.getChangeIds()
   }),
 
   subscribeChanges: publicProcedure.subscription(({ ctx }) => {
-    return createReactiveSubscription(async () => {
-      await ctx.kernel.waitForWarmup()
-      await ctx.kernel.ensureChangeIds()
-      return ctx.kernel.getChangeIds()
+    return createPlanningRootSubscription(ctx, async ({ kernel }) => {
+      await kernel.waitForWarmup()
+      await kernel.ensureChangeIds()
+      return kernel.getChangeIds()
     })
   }),
 
   readArtifactOutput: publicProcedure
     .input(z.object({ changeId: z.string(), outputPath: z.string() }))
     .query(async ({ ctx, input }) => {
-      await ctx.kernel.waitForWarmup()
-      await ctx.kernel.ensureArtifactOutput(input.changeId, input.outputPath)
-      return ctx.documentService.readChangeArtifactOutput(
+      const { kernel, documentService } = await resolvePlanningRoot(ctx)
+      await kernel.waitForWarmup()
+      await kernel.ensureArtifactOutput(input.changeId, input.outputPath)
+      return documentService.readChangeArtifactOutput(
         input.changeId,
         input.outputPath,
         'view',
@@ -2222,10 +2295,10 @@ export const opsxRouter = router({
   subscribeArtifactOutput: publicProcedure
     .input(z.object({ changeId: z.string(), outputPath: z.string() }))
     .subscription(({ ctx, input }) => {
-      return createReactiveSubscription(async () => {
-        await ctx.kernel.waitForWarmup()
-        await ctx.kernel.ensureArtifactOutput(input.changeId, input.outputPath)
-        return ctx.documentService.readChangeArtifactOutput(
+      return createPlanningRootSubscription(ctx, async ({ kernel, documentService }) => {
+        await kernel.waitForWarmup()
+        await kernel.ensureArtifactOutput(input.changeId, input.outputPath)
+        return documentService.readChangeArtifactOutput(
           input.changeId,
           input.outputPath,
           'view',
@@ -2237,9 +2310,10 @@ export const opsxRouter = router({
   readGlobArtifactFiles: publicProcedure
     .input(z.object({ changeId: z.string(), outputPath: z.string() }))
     .query(async ({ ctx, input }) => {
-      await ctx.kernel.waitForWarmup()
-      await ctx.kernel.ensureGlobArtifactFiles(input.changeId, input.outputPath)
-      return ctx.documentService.readChangeGlobArtifactFiles(
+      const { kernel, documentService } = await resolvePlanningRoot(ctx)
+      await kernel.waitForWarmup()
+      await kernel.ensureGlobArtifactFiles(input.changeId, input.outputPath)
+      return documentService.readChangeGlobArtifactFiles(
         input.changeId,
         input.outputPath,
         'view',
@@ -2250,10 +2324,10 @@ export const opsxRouter = router({
   subscribeGlobArtifactFiles: publicProcedure
     .input(z.object({ changeId: z.string(), outputPath: z.string() }))
     .subscription(({ ctx, input }) => {
-      return createReactiveSubscription(async () => {
-        await ctx.kernel.waitForWarmup()
-        await ctx.kernel.ensureGlobArtifactFiles(input.changeId, input.outputPath)
-        return ctx.documentService.readChangeGlobArtifactFiles(
+      return createPlanningRootSubscription(ctx, async ({ kernel, documentService }) => {
+        await kernel.waitForWarmup()
+        await kernel.ensureGlobArtifactFiles(input.changeId, input.outputPath)
+        return documentService.readChangeGlobArtifactFiles(
           input.changeId,
           input.outputPath,
           'view',
@@ -2265,14 +2339,17 @@ export const opsxRouter = router({
   writeArtifactOutput: publicProcedure
     .input(z.object({ changeId: z.string(), outputPath: z.string(), content: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const artifactPath = join(
-        ctx.projectDir,
-        'openspec',
-        'changes',
-        input.changeId,
-        input.outputPath
-      )
-      await writeFile(artifactPath, input.content, 'utf-8')
+      const { rootContext } = await resolvePlanningRoot(ctx)
+      const projectDir = rootContext.planningRoot?.path
+      if (!projectDir) throw new Error('Planning root is unavailable.')
+      const info = resolveEntityEntryPath({
+        projectDir,
+        stage: 'change',
+        changeId: input.changeId,
+        path: input.outputPath,
+      })
+      await mkdir(dirname(info.absolutePath), { recursive: true })
+      await writeFile(info.absolutePath, input.content, 'utf-8')
       return { success: true }
     }),
 })
@@ -2321,13 +2398,13 @@ export const kvRouter = router({
  */
 export const searchRouter = router({
   query: publicProcedure.input(SearchQuerySchema).query(async ({ ctx, input }) => {
-    return ctx.searchService.query(input)
+    return (await resolvePlanningRoot(ctx)).searchService.query(input)
   }),
 
   subscribe: publicProcedure.input(SearchQuerySchema).subscription(({ ctx, input }) => {
-    return createReactiveSubscriptionWithInput((queryInput: SearchQuery) =>
-      ctx.searchService.queryReactive(queryInput)
-    )(input)
+    return createPlanningRootSubscription(ctx, ({ searchService }) =>
+      searchService.queryReactive(input)
+    )
   }),
 })
 
@@ -2372,65 +2449,83 @@ export const systemRouter = router({
  */
 export const dashboardRouter = router({
   get: publicProcedure.query(async ({ ctx }) => {
-    return ctx.dashboardOverviewService.getCurrent()
+    return (await resolvePlanningRoot(ctx)).dashboardOverviewService.getCurrent()
   }),
 
   subscribe: publicProcedure.subscription(({ ctx }) => {
     return observable<DashboardOverview>((emit) => {
-      const unsubscribe = ctx.dashboardOverviewService.subscribe(
-        (overview) => {
-          emit.next(overview)
-        },
-        {
-          emitCurrent: true,
-          onError: (error) => {
-            emit.error(error)
-          },
-        }
-      )
+      let unsubscribe: (() => void) | null = null
+      let disposed = false
+
+      void resolvePlanningRoot(ctx)
+        .then(({ dashboardOverviewService }) => {
+          if (disposed) return
+          unsubscribe = dashboardOverviewService.subscribe(
+            (overview) => {
+              emit.next(overview)
+            },
+            {
+              emitCurrent: true,
+              onError: (error) => {
+                emit.error(error)
+              },
+            }
+          )
+        })
+        .catch((error) => {
+          emit.error(error instanceof Error ? error : new Error(String(error)))
+        })
 
       return () => {
-        unsubscribe()
+        disposed = true
+        unsubscribe?.()
       }
     })
   }),
 
   refreshGitSnapshot: publicProcedure
-    .input(z.object({ reason: z.string().optional() }).optional())
+    .input(z.object({ scope: z.literal('code'), reason: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const reason = input?.reason?.trim() || 'manual-refresh'
-      await ctx.dashboardOverviewService.refresh(reason)
-      await touchDashboardGitRefreshStamp(ctx.projectDir, reason)
+      const reason = input.reason?.trim() || 'manual-refresh'
+      const codeRepository = await resolveGitScope(ctx, input.scope)
+      await (await resolvePlanningRoot(ctx)).dashboardOverviewService.refresh(reason)
+      await touchDashboardGitRefreshStamp(gitRepositoryCwd(codeRepository), reason)
       return {
         success: true,
       }
     }),
 
   removeDetachedWorktree: publicProcedure
-    .input(z.object({ path: z.string().min(1) }))
+    .input(z.object({ scope: z.literal('code'), path: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.dashboardOverviewService.getCurrent()
+      const { dashboardOverviewService } = await resolvePlanningRoot(ctx)
+      const codeRepository = await resolveGitScope(ctx, input.scope)
+      const projectDir = gitRepositoryCwd(codeRepository)
+      await dashboardOverviewService.getCurrent()
       await removeDetachedDashboardGitWorktree({
-        projectDir: ctx.projectDir,
+        projectDir,
         targetPath: input.path,
       })
-      await ctx.dashboardOverviewService.refresh('remove-detached-worktree')
-      await touchDashboardGitRefreshStamp(ctx.projectDir, 'remove-detached-worktree')
+      await dashboardOverviewService.refresh('remove-detached-worktree')
+      invalidateGitPanelCache(projectDir)
+      await touchDashboardGitRefreshStamp(projectDir, 'remove-detached-worktree')
       return {
         success: true,
       }
     }),
 
   gitTaskStatus: publicProcedure.query(async ({ ctx }) => {
-    await ctx.dashboardOverviewService.getCurrent()
+    await (await resolvePlanningRoot(ctx)).dashboardOverviewService.getCurrent()
     return getDashboardGitTaskStatus()
   }),
 
   subscribeGitTaskStatus: publicProcedure.subscription(({ ctx }) => {
     return observable<DashboardGitTaskStatus>((emit) => {
-      void ctx.dashboardOverviewService.getCurrent().catch(() => {
-        // Ignore warmup failures here; the overview query surfaces them.
-      })
+      void resolvePlanningRoot(ctx)
+        .then(({ dashboardOverviewService }) => dashboardOverviewService.getCurrent())
+        .catch(() => {
+          // Ignore warmup failures here; the overview query surfaces them.
+        })
       emit.next(getDashboardGitTaskStatus())
       const unsubscribe = subscribeDashboardGitTaskStatus((status) => {
         emit.next(status)
@@ -2443,44 +2538,87 @@ export const dashboardRouter = router({
   }),
 })
 
+async function fetchGitScopes(ctx: Context): Promise<GitRepositoryScopes> {
+  let planningRootDir: string | null = null
+  try {
+    planningRootDir = (await resolvePlanningRoot(ctx)).rootContext.planningRoot?.path ?? null
+  } catch {
+    // Code repository remains usable when the CLI-selected planning root is unavailable.
+  }
+  return resolveGitRepositoryScopes({
+    launchProjectDir: ctx.projectDir,
+    planningRootDir,
+  })
+}
+
+async function resolveGitScope(
+  ctx: Context,
+  scope: GitRepositoryScope
+): Promise<GitRepositoryScopeDescriptor> {
+  if (scope === 'code') {
+    return resolveGitRepositoryDescriptor({ scope, rootPath: ctx.projectDir })
+  }
+
+  const planningRootDir = (await resolvePlanningRoot(ctx)).rootContext.planningRoot?.path
+  if (!planningRootDir) {
+    throw new Error('Planning repository scope requires a resolved planning root.')
+  }
+  const scopes = await resolveGitRepositoryScopes({
+    launchProjectDir: ctx.projectDir,
+    planningRootDir,
+  })
+  return selectGitRepositoryScope(scopes, scope)
+}
+
+function gitRepositoryCwd(scope: GitRepositoryScopeDescriptor): string {
+  return scope.repository?.topLevel ?? scope.rootPath
+}
+
 export const gitRouter = router({
-  overview: publicProcedure.query(async ({ ctx }): Promise<GitWorktreeOverview> => {
-    return buildGitWorktreeOverview({ projectDir: ctx.projectDir })
-  }),
+  scopes: publicProcedure.query(({ ctx }): Promise<GitRepositoryScopes> => fetchGitScopes(ctx)),
+
+  overview: publicProcedure
+    .input(z.object({ scope: gitRepositoryScopeSchema }))
+    .query(async ({ ctx, input }): Promise<GitWorktreeOverview> => {
+      const repository = await resolveGitScope(ctx, input.scope)
+      return buildGitWorktreeOverview({ projectDir: gitRepositoryCwd(repository) })
+    }),
 
   listEntries: publicProcedure
     .input(
-      z
-        .object({
-          cursor: z.string().optional(),
-          limit: z.number().int().min(1).max(100).optional(),
-        })
-        .optional()
+      z.object({
+        scope: gitRepositoryScopeSchema,
+        cursor: z.string().optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+      })
     )
     .query(async ({ ctx, input }): Promise<GitEntriesPage> => {
+      const repository = await resolveGitScope(ctx, input.scope)
       return listCurrentWorktreeGitEntries({
-        projectDir: ctx.projectDir,
-        cursor: input?.cursor,
-        limit: input?.limit,
+        projectDir: gitRepositoryCwd(repository),
+        cursor: input.cursor,
+        limit: input.limit,
       })
     }),
 
   getEntryMeta: publicProcedure
-    .input(z.object({ selector: gitEntrySelectorSchema }))
+    .input(z.object({ scope: gitRepositoryScopeSchema, selector: gitEntrySelectorSchema }))
     .query(async ({ ctx, input }) => {
+      const repository = await resolveGitScope(ctx, input.scope)
       return getCurrentWorktreeGitEntryMeta({
-        projectDir: ctx.projectDir,
-        selector: input.selector as GitEntrySelector,
+        projectDir: gitRepositoryCwd(repository),
+        selector: input.selector,
       })
     }),
 
   getEntryFiles: publicProcedure
-    .input(z.object({ selector: gitEntrySelectorSchema }))
+    .input(z.object({ scope: gitRepositoryScopeSchema, selector: gitEntrySelectorSchema }))
     .query(async ({ ctx, input }): Promise<GitEntryFiles> => {
       const config = await ctx.configManager.readConfig()
+      const repository = await resolveGitScope(ctx, input.scope)
       return getCurrentWorktreeGitEntryFiles({
-        projectDir: ctx.projectDir,
-        selector: input.selector as GitEntrySelector,
+        projectDir: gitRepositoryCwd(repository),
+        selector: input.selector,
         eagerPatchLineBudget: config.git.diffEagerLineBudget,
       })
     }),
@@ -2488,27 +2626,55 @@ export const gitRouter = router({
   getEntryPatch: publicProcedure
     .input(
       z.object({
+        scope: gitRepositoryScopeSchema,
         selector: gitEntrySelectorSchema,
         fileId: z.string().min(1),
       })
     )
     .query(async ({ ctx, input }): Promise<GitEntryPatch> => {
+      const repository = await resolveGitScope(ctx, input.scope)
       return getCurrentWorktreeGitEntryPatch({
-        projectDir: ctx.projectDir,
-        selector: input.selector as GitEntrySelector,
+        projectDir: gitRepositoryCwd(repository),
+        selector: input.selector,
         fileId: input.fileId,
       })
     }),
 
+  refresh: publicProcedure
+    .input(z.object({ scope: gitRepositoryScopeSchema, reason: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const repository = await resolveGitScope(ctx, input.scope)
+      const projectDir = gitRepositoryCwd(repository)
+      const reason = input.reason?.trim() || 'manual-refresh'
+      invalidateGitPanelCache(projectDir)
+      await touchDashboardGitRefreshStamp(projectDir, reason)
+      return { success: true }
+    }),
+
+  removeDetachedWorktree: publicProcedure
+    .input(z.object({ scope: gitRepositoryScopeSchema, path: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const repository = await resolveGitScope(ctx, input.scope)
+      const projectDir = gitRepositoryCwd(repository)
+      await removeDetachedDashboardGitWorktree({
+        projectDir,
+        targetPath: input.path,
+      })
+      invalidateGitPanelCache(projectDir)
+      await touchDashboardGitRefreshStamp(projectDir, 'remove-detached-worktree')
+      return { success: true }
+    }),
+
   switchWorktree: publicProcedure
-    .input(z.object({ path: z.string().min(1) }))
+    .input(z.object({ scope: gitRepositoryScopeSchema, path: z.string().min(1) }))
     .mutation(async ({ ctx, input }): Promise<GitWorktreeHandoff> => {
       if (!ctx.gitWorktreeHandoff) {
         throw new Error('Worktree handoff is unavailable in this runtime.')
       }
 
+      const repository = await resolveGitScope(ctx, input.scope)
       const target = await resolveGitWorktreeSwitchTarget({
-        projectDir: ctx.projectDir,
+        projectDir: gitRepositoryCwd(repository),
         targetPath: input.path,
       })
 
@@ -2557,27 +2723,27 @@ async function fetchStoresList(ctx: Context): Promise<StoreFeatureResult<StoreLi
   const cliVersion = await resolveCliVersion(ctx).catch(() => undefined)
   try {
     const result = await ctx.cliExecutor.contracts.listStores()
-    const classification = classifyStoreCliOutput({
-      success: result.success,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      parse: (stdout) => StoreListResultSchema.parse(JSON.parse(stdout)),
+    const classification = classifyStoreCliResult({
+      result,
+      schema: StoreListResultSchema,
       cliVersion,
     })
-    return toStoreFeatureResult(classification, {
-      fromData: (data) => {
-        const parsed = data as StoreListResult
-        return Array.isArray(parsed.stores) ? parsed.stores : []
-      },
+    const projection = toStoreFeatureResult(classification, {
+      fromData: (data) => data.stores,
       fallback: [],
       cliVersion,
     })
+    if (projection.available) {
+      await ctx.storeObservation.reconcile(projection.stores)
+    }
+    return projection
   } catch (error) {
     // 兜底：任何未预期错误都归类为指令变更（异常二），让前端隐藏入口，绝不崩溃。
     const message = error instanceof Error ? error.message : String(error)
     return {
       available: false,
       stores: [],
+      evidence: null,
       error: { kind: 'command-unavailable', message, ...(cliVersion ? { cliVersion } : {}) },
       ...(cliVersion ? { cliVersion } : {}),
     }
@@ -2591,18 +2757,13 @@ async function fetchStoresDoctor(
   const cliVersion = await resolveCliVersion(ctx).catch(() => undefined)
   try {
     const result = await ctx.cliExecutor.contracts.doctorStores(id)
-    const classification = classifyStoreCliOutput({
-      success: result.success,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      parse: (stdout) => StoreDoctorResultSchema.parse(JSON.parse(stdout)),
+    const classification = classifyStoreCliResult({
+      result,
+      schema: StoreDoctorResultSchema,
       cliVersion,
     })
     return toStoreFeatureResult(classification, {
-      fromData: (data) => {
-        const parsed = data as StoreDoctorResult
-        return Array.isArray(parsed.stores) ? parsed.stores : []
-      },
+      fromData: (data) => data.stores,
       fallback: [],
       cliVersion,
     })
@@ -2611,6 +2772,7 @@ async function fetchStoresDoctor(
     return {
       available: false,
       stores: [],
+      evidence: null,
       error: { kind: 'command-unavailable', message, ...(cliVersion ? { cliVersion } : {}) },
       ...(cliVersion ? { cliVersion } : {}),
     }
@@ -2625,26 +2787,108 @@ export const storesRouter = router({
   doctor: publicProcedure
     .input(z.object({ id: z.string().optional() }).optional())
     .query(({ ctx, input }) => fetchStoresDoctor(ctx, input?.id)),
+})
 
-  /**
-   * 响应式订阅。registry 在 ~/.local/share/openspec（projectDir 之外，watcher 不可达），
-   * 故用轮询（间隔 5s）而非文件订阅。手动刷新通过重新订阅或 refetch 实现。
-   */
-  subscribe: publicProcedure.subscription(({ ctx }) => {
-    return observable<StoreFeatureResult<StoreListEntry[]>>((emit) => {
-      const push = () => {
-        void fetchStoresList(ctx)
-          .then((result) => emit.next(result))
-          .catch(() => {
-            // 订阅永不抛：最坏情况静默，前端保持上一次已知状态。
-          })
-      }
-      push()
-      const timer = setInterval(push, 5_000)
-      timer.unref()
-      return () => clearInterval(timer)
-    })
-  }),
+const runtimeInvalidationFacetSchema = z.enum(RUNTIME_INVALIDATION_FACETS)
+
+/** Push identity-only invalidation tokens; every client pulls its authoritative projection. */
+export const runtimeInvalidationRouter = router({
+  subscribe: publicProcedure
+    .input(z.object({ facets: z.array(runtimeInvalidationFacetSchema).min(1) }))
+    .subscription(({ ctx, input }) => {
+      return observable<RuntimeInvalidationToken[]>((emit) => {
+        const facets = input.facets as RuntimeInvalidationFacet[]
+        const push = () => emit.next(ctx.runtimeInvalidation.track(...facets))
+        push()
+        const releaseInvalidation = ctx.runtimeInvalidation.subscribe(facets, (tokens) => {
+          emit.next(tokens)
+        })
+        return () => {
+          releaseInvalidation()
+        }
+      })
+    }),
+})
+
+async function fetchProjectBindingConfig(ctx: Context) {
+  const rootPreview = await resolveServerRootContext(ctx)
+  return readProjectBindingConfig({
+    launchProjectDir: ctx.projectDir,
+    rootPreview,
+  })
+}
+
+async function fetchActiveRootConfig(ctx: Context, reactive = false) {
+  const { rootContext } = await resolvePlanningRoot(ctx, { reactive })
+  return readActiveRootConfig({
+    launchProjectDir: ctx.projectDir,
+    rootContext,
+  })
+}
+
+async function fetchEnvironmentGlobalConfig(ctx: Context) {
+  const rootPreview = await resolveServerRootContext(ctx)
+  return readEnvironmentGlobalConfig({
+    dataScope: dataScopeFromRootPreview(rootPreview),
+    cliExecutor: ctx.cliExecutor,
+  })
+}
+
+/** OpenSpec configuration surfaces separated by their physical owners. */
+export const planningConfigRouter = router({
+  projectBinding: publicProcedure.query(({ ctx }) => fetchProjectBindingConfig(ctx)),
+
+  subscribeProjectBinding: publicProcedure.subscription(({ ctx }) =>
+    createReactiveSubscription(() => fetchProjectBindingConfig(ctx))
+  ),
+
+  updateProjectBinding: publicProcedure
+    .input(ProjectBindingUpdateSchema)
+    .mutation(async ({ ctx, input }) => {
+      await writeProjectBindingConfig({ launchProjectDir: ctx.projectDir, update: input })
+      return fetchProjectBindingConfig(ctx)
+    }),
+
+  activeRoot: publicProcedure.query(({ ctx }) => fetchActiveRootConfig(ctx)),
+
+  subscribeActiveRoot: publicProcedure.subscription(({ ctx }) =>
+    createPlanningRootSubscription(ctx, ({ rootContext }) =>
+      readActiveRootConfig({ launchProjectDir: ctx.projectDir, rootContext })
+    )
+  ),
+
+  writeActiveRoot: publicProcedure
+    .input(z.object({ content: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const { rootContext } = await resolvePlanningRoot(ctx)
+      await writeActiveRootConfig({
+        launchProjectDir: ctx.projectDir,
+        rootContext,
+        content: input.content,
+      })
+      return { success: true }
+    }),
+
+  environmentGlobal: publicProcedure.query(({ ctx }) => fetchEnvironmentGlobalConfig(ctx)),
+
+  subscribeEnvironmentGlobal: publicProcedure.subscription(({ ctx }) =>
+    createReactiveSubscription(() => fetchEnvironmentGlobalConfig(ctx))
+  ),
+
+  writeEnvironmentGlobal: publicProcedure
+    .input(z.object({ config: EnvironmentGlobalConfigValueSchema }))
+    .mutation(async ({ ctx, input }) => {
+      await runOpenSpecCliMutation(ctx, ['config', 'set'], () =>
+        writeEnvironmentGlobalConfig({ cliExecutor: ctx.cliExecutor, config: input.config })
+      )
+      return { success: true }
+    }),
+})
+
+/** CLI-owned planning Root Context shared by every project-workspace surface. */
+export const rootContextRouter = router({
+  get: publicProcedure.query(({ ctx }) => resolveServerRootContext(ctx)),
+  subscribe: publicProcedure.subscription(({ ctx }) => createRootContextSubscription(ctx)),
 })
 
 /**
@@ -2659,6 +2903,7 @@ export const appRouter = router({
   init: initRouter,
   realtime: realtimeRouter,
   config: configRouter,
+  planningConfig: planningConfigRouter,
   globalSettings: globalSettingsRouter,
   translationCache: translationCacheRouter,
   translationEngines: translationEnginesRouter,
@@ -2668,6 +2913,8 @@ export const appRouter = router({
   notifications: notificationsRouter,
   sounds: soundsRouter,
   cli: cliRouter,
+  rootContext: rootContextRouter,
+  runtimeInvalidation: runtimeInvalidationRouter,
   opsx: opsxRouter,
   stores: storesRouter,
   kv: kvRouter,

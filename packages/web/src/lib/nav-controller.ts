@@ -10,6 +10,7 @@ export type TabId =
   | '/specs'
   | '/changes'
   | '/archive'
+  | '/context'
   | '/stores'
   | '/settings'
   | '/terminal'
@@ -89,6 +90,7 @@ const ALL_TABS: readonly TabId[] = [
   '/specs',
   '/changes',
   '/archive',
+  '/context',
   '/stores',
   '/settings',
   '/terminal',
@@ -99,6 +101,7 @@ const DEFAULT_MAIN_TABS: TabId[] = [
   '/specs',
   '/changes',
   '/archive',
+  '/context',
   '/stores',
   '/settings',
 ]

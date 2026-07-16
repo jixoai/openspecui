@@ -1,43 +1,85 @@
 import { describe, expect, it } from 'vitest'
 import {
+  StoreDoctorResultSchema,
   StoreListResultSchema,
-  classifyStoreCliOutput,
+  classifyStoreCliResult,
   toStoreFeatureResult,
+  type StoreCommandEvidence,
 } from './store-types.js'
 
-describe('classifyStoreCliOutput (beta fault-tolerance classification)', () => {
-  const parse = (stdout: string) => StoreListResultSchema.parse(JSON.parse(stdout))
+function evidence(options: {
+  success?: boolean
+  payload?: StoreCommandEvidence['payload']
+  stdout?: string
+  stderr?: string
+}): StoreCommandEvidence {
+  return {
+    success: options.success ?? true,
+    stdout: options.stdout ?? JSON.stringify(options.payload ?? null),
+    stderr: options.stderr ?? '',
+    exitCode: options.success === false ? 1 : 0,
+    data: null,
+    payload: options.payload ?? null,
+    diagnostics: [],
+  }
+}
 
+describe('Store beta projection schemas', () => {
+  it('accepts additive list output with omitted diagnostics', () => {
+    expect(
+      StoreListResultSchema.parse({
+        stores: [{ id: 'team', root: '/stores/team', future: true }],
+        future: 'field',
+      })
+    ).toMatchObject({ stores: [{ id: 'team', root: '/stores/team', future: true }] })
+  })
+
+  it('accepts an empty healthy Store and partial doctor facts', () => {
+    expect(
+      StoreDoctorResultSchema.parse({
+        stores: [
+          {
+            id: 'empty',
+            root: '/stores/empty',
+            openspec_root: { present: true, healthy: true, future: true },
+            metadata: { present: false },
+            git: { is_repository: null },
+          },
+        ],
+      })
+    ).toMatchObject({
+      stores: [{ id: 'empty', openspec_root: { present: true, healthy: true } }],
+    })
+  })
+})
+
+describe('classifyStoreCliResult (beta fault-tolerance classification)', () => {
   it('classifies a successful, parseable output as ok', () => {
-    const result = classifyStoreCliOutput({
-      success: true,
-      stdout: JSON.stringify({ stores: [{ id: 'team', root: '/x' }], status: [] }),
-      stderr: '',
-      parse,
+    const result = classifyStoreCliResult({
+      result: evidence({ payload: { stores: [{ id: 'team', root: '/x' }], status: [] } }),
+      schema: StoreListResultSchema,
     })
     expect(result.kind).toBe('ok')
   })
 
   it('tolerates additive CLI fields (lenient passthrough) and stays ok', () => {
-    const result = classifyStoreCliOutput({
-      success: true,
-      stdout: JSON.stringify({
-        stores: [{ id: 'team', root: '/x', extra: 'future-field' }],
-        status: [],
-        unknownTopLevel: true,
+    const result = classifyStoreCliResult({
+      result: evidence({
+        payload: {
+          stores: [{ id: 'team', root: '/x', extra: 'future-field' }],
+          status: [],
+          unknownTopLevel: true,
+        },
       }),
-      stderr: '',
-      parse,
+      schema: StoreListResultSchema,
     })
     expect(result.kind).toBe('ok')
   })
 
   it('classifies exit-0-but-unparseable output as data-incompatible (异常一) with version source', () => {
-    const result = classifyStoreCliOutput({
-      success: true,
-      stdout: '{ not valid json',
-      stderr: '',
-      parse,
+    const result = classifyStoreCliResult({
+      result: evidence({ payload: null, stdout: '{ not valid json' }),
+      schema: StoreListResultSchema,
       cliVersion: '1.5.0',
     })
     expect(result.kind).toBe('data-incompatible')
@@ -48,11 +90,9 @@ describe('classifyStoreCliOutput (beta fault-tolerance classification)', () => {
   })
 
   it('classifies non-zero exit as command-unavailable (异常二) with version source', () => {
-    const result = classifyStoreCliOutput({
-      success: false,
-      stdout: '',
-      stderr: 'error: unknown command',
-      parse,
+    const result = classifyStoreCliResult({
+      result: evidence({ success: false, stdout: '', stderr: 'error: unknown command' }),
+      schema: StoreListResultSchema,
       cliVersion: '1.4.0',
     })
     expect(result.kind).toBe('command-unavailable')
@@ -64,14 +104,10 @@ describe('classifyStoreCliOutput (beta fault-tolerance classification)', () => {
 })
 
 describe('toStoreFeatureResult', () => {
-  const parse = (stdout: string) => StoreListResultSchema.parse(JSON.parse(stdout))
-
   it('returns available=true with parsed stores for ok classification', () => {
-    const cls = classifyStoreCliOutput({
-      success: true,
-      stdout: JSON.stringify({ stores: [{ id: 'a', root: '/a' }], status: [] }),
-      stderr: '',
-      parse,
+    const cls = classifyStoreCliResult({
+      result: evidence({ payload: { stores: [{ id: 'a', root: '/a' }], status: [] } }),
+      schema: StoreListResultSchema,
     })
     const result = toStoreFeatureResult(cls, {
       fromData: (data) => StoreListResultSchema.parse(data).stores,
@@ -85,11 +121,9 @@ describe('toStoreFeatureResult', () => {
   })
 
   it('returns available=false with fallback and error for data-incompatible', () => {
-    const cls = classifyStoreCliOutput({
-      success: true,
-      stdout: 'broken',
-      stderr: '',
-      parse,
+    const cls = classifyStoreCliResult({
+      result: evidence({ payload: null, stdout: 'broken' }),
+      schema: StoreListResultSchema,
       cliVersion: '1.5.0',
     })
     const result = toStoreFeatureResult(cls, { fromData: () => [], fallback: [] })
@@ -99,11 +133,9 @@ describe('toStoreFeatureResult', () => {
   })
 
   it('returns available=false with fallback and error for command-unavailable', () => {
-    const cls = classifyStoreCliOutput({
-      success: false,
-      stdout: '',
-      stderr: 'no such command',
-      parse,
+    const cls = classifyStoreCliResult({
+      result: evidence({ success: false, stdout: '', stderr: 'no such command' }),
+      schema: StoreListResultSchema,
     })
     const result = toStoreFeatureResult(cls, { fromData: () => [], fallback: [] })
     expect(result.available).toBe(false)

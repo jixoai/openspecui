@@ -1,4 +1,4 @@
-import type { OnReadDocumentHookV1, OnRunWorkflowHookV1, OpenSpecUIHooksV1 } from '@openspecui/core'
+import type { OnReadDocumentHookV1, OnRunWorkflowHookV2, OpenSpecUIHooks } from '@openspecui/core'
 import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -7,7 +7,7 @@ export const OPENSPECUI_HOOKS_RELATIVE_PATH = 'openspec/openspecui.hooks.ts'
 
 export interface HookRuntime {
   readonly hooksPath: string
-  load(): Promise<OpenSpecUIHooksV1>
+  load(): Promise<OpenSpecUIHooks>
   onDispose(cleanup: () => void | Promise<void>): void
   dispose(): Promise<void>
 }
@@ -18,11 +18,11 @@ function isOnReadDocumentHook(value: unknown): value is OnReadDocumentHookV1 {
   return typeof value === 'function'
 }
 
-function isOnRunWorkflowHook(value: unknown): value is OnRunWorkflowHookV1 {
+function isOnRunWorkflowHook(value: unknown): value is OnRunWorkflowHookV2 {
   return typeof value === 'function'
 }
 
-function normalizeHooksModule(moduleValue: unknown): OpenSpecUIHooksV1 {
+function normalizeHooksModule(moduleValue: unknown): OpenSpecUIHooks {
   if (!moduleValue || typeof moduleValue !== 'object') {
     return {}
   }
@@ -65,14 +65,14 @@ async function pathExists(path: string): Promise<boolean> {
 
 export class ProjectHookRuntime implements HookRuntime {
   readonly hooksPath: string
-  private hooksPromise: Promise<OpenSpecUIHooksV1> | null = null
+  private hooksPromise: Promise<OpenSpecUIHooks> | null = null
   private readonly disposeCallbacks = new Set<() => void | Promise<void>>()
 
   constructor(projectDir: string) {
     this.hooksPath = join(projectDir, OPENSPECUI_HOOKS_RELATIVE_PATH)
   }
 
-  async load(): Promise<OpenSpecUIHooksV1> {
+  async load(): Promise<OpenSpecUIHooks> {
     if (this.hooksPromise) return this.hooksPromise
 
     this.hooksPromise = this.loadFresh().catch(() => ({}))
@@ -89,7 +89,7 @@ export class ProjectHookRuntime implements HookRuntime {
     await Promise.allSettled(callbacks.map((cleanup) => cleanup()))
   }
 
-  private async loadFresh(): Promise<OpenSpecUIHooksV1> {
+  private async loadFresh(): Promise<OpenSpecUIHooks> {
     if (!(await pathExists(this.hooksPath))) {
       return {}
     }

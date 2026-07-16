@@ -5,11 +5,11 @@ describe('search engine', () => {
   it('returns results sorted by score and updatedAt', () => {
     const index = buildSearchIndex([
       {
-        id: 'spec:auth',
+        id: 'spec:owned:auth',
         kind: 'spec',
         title: 'Authentication',
-        href: '/specs/auth',
-        path: 'openspec/specs/auth/spec.md',
+        href: '/specs/owned/auth',
+        path: 'owned:openspec/specs/auth/spec.md',
         content: 'Authentication requirements and login flow',
         updatedAt: 10,
       },
@@ -28,7 +28,7 @@ describe('search engine', () => {
 
     expect(hits).toHaveLength(2)
     expect(hits[0]?.documentId).toBe('change:add-auth')
-    expect(hits[1]?.documentId).toBe('spec:auth')
+    expect(hits[1]?.documentId).toBe('spec:owned:auth')
   })
 
   it('returns empty for blank queries', () => {

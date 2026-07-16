@@ -1,41 +1,47 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { GitRoute } from './git'
 
-function createDeferred<T>() {
-  let resolve!: (value: T) => void
-  let reject!: (reason?: unknown) => void
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res
-    reject = rej
-  })
-  return { promise, resolve, reject }
-}
-
 const {
+  scopesQueryMock,
   overviewQueryMock,
   listEntriesQueryMock,
   switchWorktreeMock,
-  gitTaskStatusMock,
+  refreshGitMock,
+  removeDetachedWorktreeMock,
   staticModeMock,
   navPushMock,
+  navReplaceMock,
+  routerLocation,
   navigateToServerHandoffMock,
 } = vi.hoisted(() => ({
+  scopesQueryMock: vi.fn(),
   overviewQueryMock: vi.fn(),
   listEntriesQueryMock: vi.fn(),
   switchWorktreeMock: vi.fn(),
-  gitTaskStatusMock: vi.fn(),
+  refreshGitMock: vi.fn(),
+  removeDetachedWorktreeMock: vi.fn(),
   staticModeMock: vi.fn(() => false),
   navPushMock: vi.fn(),
+  navReplaceMock: vi.fn(),
+  routerLocation: {
+    pathname: '/git',
+    searchStr: '',
+    hash: '',
+    state: null,
+  },
   navigateToServerHandoffMock: vi.fn(),
 }))
 
 vi.mock('@/lib/trpc', () => ({
   trpcClient: {
     git: {
+      scopes: {
+        query: scopesQueryMock,
+      },
       overview: {
         query: overviewQueryMock,
       },
@@ -45,9 +51,23 @@ vi.mock('@/lib/trpc', () => ({
       switchWorktree: {
         mutate: switchWorktreeMock,
       },
+      refresh: {
+        mutate: refreshGitMock,
+      },
+      removeDetachedWorktree: {
+        mutate: removeDetachedWorktreeMock,
+      },
     },
   },
 }))
+
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
+  return {
+    ...actual,
+    useLocation: () => routerLocation,
+  }
+})
 
 vi.mock('@/lib/static-mode', () => ({
   isStaticMode: staticModeMock,
@@ -60,13 +80,9 @@ vi.mock('@/lib/server-handoff', () => ({
 vi.mock('@/lib/nav-controller', () => ({
   navController: {
     push: navPushMock,
+    replace: navReplaceMock,
+    getAreaForPath: () => 'bottom',
   },
-}))
-
-vi.mock('@/lib/use-dashboard', () => ({
-  useDashboardGitTaskStatusSubscription: gitTaskStatusMock,
-  refreshDashboardGitSnapshot: vi.fn(),
-  removeDetachedDashboardWorktree: vi.fn(),
 }))
 
 vi.mock('@/components/git/git-shared', () => ({
@@ -177,18 +193,24 @@ describe('GitRoute', () => {
     otherWorktrees: [],
   }
 
-  let gitTaskStatus = {
-    running: false,
-    inFlight: 0,
-    lastStartedAt: null as number | null,
-    lastFinishedAt: 100 as number | null,
-    lastReason: null as string | null,
-    lastError: null as string | null,
-  }
-
   beforeEach(() => {
     staticModeMock.mockReturnValue(false)
-    gitTaskStatusMock.mockImplementation(() => ({ data: gitTaskStatus }))
+    routerLocation.pathname = '/git'
+    routerLocation.searchStr = ''
+    routerLocation.state = null
+    scopesQueryMock.mockResolvedValue({
+      defaultScope: 'code',
+      code: {
+        scope: 'code',
+        rootPath: '/repo',
+        repository: { topLevel: '/repo', commonDir: '/repo/.git' },
+      },
+      planning: {
+        scope: 'planning',
+        rootPath: '/planning',
+        repository: { topLevel: '/planning', commonDir: '/planning/.git' },
+      },
+    })
     overviewQueryMock.mockResolvedValue(overviewData)
     listEntriesQueryMock.mockResolvedValue({
       items: [
@@ -206,41 +228,58 @@ describe('GitRoute', () => {
     switchWorktreeMock.mockResolvedValue({
       serverUrl: 'http://127.0.0.1:3200',
     })
+    refreshGitMock.mockResolvedValue({ success: true })
+    removeDetachedWorktreeMock.mockResolvedValue({ success: true })
   })
 
   afterEach(() => {
+    cleanup()
     vi.clearAllMocks()
   })
 
-  it('keeps the previous overview visible while git cache version refreshes', async () => {
-    const secondOverview = createDeferred<typeof overviewData>()
-    let overviewCallCount = 0
-    overviewQueryMock.mockImplementation(() => {
-      overviewCallCount += 1
-      return overviewCallCount === 1 ? Promise.resolve(overviewData) : secondOverview.promise
-    })
-
-    const view = renderWithQueryClient(<GitRoute />)
+  it('uses Code repository as the explicit default for status and history', async () => {
+    renderWithQueryClient(<GitRoute />)
 
     await waitFor(() => {
       expect(screen.getByText('main against origin/main')).toBeTruthy()
     })
 
-    gitTaskStatus = {
-      ...gitTaskStatus,
-      lastFinishedAt: 200,
-    }
+    expect(overviewQueryMock).toHaveBeenCalledWith({ scope: 'code' })
+    expect(listEntriesQueryMock).toHaveBeenCalledWith({
+      scope: 'code',
+      cursor: undefined,
+      limit: 50,
+    })
+  })
 
-    view.rerender(
-      <QueryClientProvider client={view.queryClient}>
-        <GitRoute />
-      </QueryClientProvider>
+  it('preserves Planning repository scope in history requests and detail navigation', async () => {
+    routerLocation.searchStr = '?gitScope=planning'
+    renderWithQueryClient(<GitRoute />)
+
+    await waitFor(() => {
+      expect(overviewQueryMock).toHaveBeenCalledWith({ scope: 'planning' })
+    })
+    expect(listEntriesQueryMock).toHaveBeenCalledWith({
+      scope: 'planning',
+      cursor: undefined,
+      limit: 50,
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'feat: add git panel' }))
+    expect(navPushMock).toHaveBeenCalledWith(
+      'bottom',
+      '/git/commit/abc12345?gitScope=planning',
+      expect.anything()
     )
+  })
 
-    expect(screen.queryByText('Loading git panel...')).toBeNull()
-    expect(screen.getByText('main against origin/main')).toBeTruthy()
+  it('switches repository scope through URL state instead of local hidden state', async () => {
+    renderWithQueryClient(<GitRoute />)
 
-    secondOverview.resolve(overviewData)
+    const planningButton = await screen.findByRole('button', { name: 'Planning repository' })
+    fireEvent.click(planningButton)
+
+    expect(navReplaceMock).toHaveBeenCalledWith('bottom', '/git?gitScope=planning', undefined)
   })
 
   it('renders the commits list without embedding commit detail and navigates on row click', async () => {
@@ -304,7 +343,10 @@ describe('GitRoute', () => {
     fireEvent.click(switchButton)
 
     await waitFor(() => {
-      expect(switchWorktreeMock).toHaveBeenCalledWith({ path: '/repo-feature' })
+      expect(switchWorktreeMock).toHaveBeenCalledWith({
+        scope: 'code',
+        path: '/repo-feature',
+      })
     })
     await waitFor(() => {
       expect(navigateToServerHandoffMock).toHaveBeenCalledWith({
@@ -312,5 +354,38 @@ describe('GitRoute', () => {
         location: window.location,
       })
     })
+  })
+
+  it('removes a detached worktree only through the selected repository scope', async () => {
+    const confirmMock = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    overviewQueryMock.mockResolvedValueOnce({
+      ...overviewData,
+      otherWorktrees: [
+        {
+          path: '/repo-detached',
+          relativePath: '../repo-detached',
+          pathAvailable: true,
+          branchName: '(detached)',
+          detached: true,
+          isCurrent: false,
+          ahead: 0,
+          behind: 0,
+          diff: { files: 0, insertions: 0, deletions: 0 },
+          entries: [],
+        },
+      ],
+    })
+
+    renderWithQueryClient(<GitRoute />)
+    const removeButton = await screen.findByRole('button', { name: 'Remove detached worktree' })
+    fireEvent.click(removeButton)
+
+    await waitFor(() => {
+      expect(removeDetachedWorktreeMock).toHaveBeenCalledWith({
+        scope: 'code',
+        path: '/repo-detached',
+      })
+    })
+    confirmMock.mockRestore()
   })
 })

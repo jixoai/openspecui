@@ -1,7 +1,20 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Configure a command and shell before creating a terminal session.
+ * 2. Require an explicit server-resolved launch-project or planning-root cwd target.
+ * 3. Preserve advanced command fields and a preview of the rendered command line.
+ *
+ * Original request (2026-07-16): "Terminal creation controls expose the selected cwd/root identity."
+ */
 import { Dialog } from '@/components/dialog'
 import { Select, type SelectOption } from '@/components/select'
 import { useTerminalContext } from '@/lib/terminal-context'
+import {
+  getTerminalCwdTargetOption,
+  useTerminalCwdTargetState,
+} from '@/lib/use-terminal-cwd-target'
 import { useTerminalInvocationConfig } from '@/lib/use-terminal-invocation-config'
+import type { TerminalCwdTarget } from '@openspecui/core/pty-protocol'
 import {
   getTerminalCommandDefaultValues,
   getTerminalCommandParameters,
@@ -16,11 +29,13 @@ import {
 import { ChevronDown, Rocket } from 'lucide-react'
 import { useEffect, useId, useMemo, useState } from 'react'
 import { TerminalCommandForm } from './terminal-command-form'
+import { TerminalCwdTargetControl } from './terminal-cwd-target-control'
 
 interface TerminalSpawnCommandDialogProps {
   open: boolean
   command: TerminalSpawnCommand | null
   presetValues?: TerminalCommandFieldValues
+  initialCwdTarget?: TerminalCwdTarget
   onClose: () => void
   onCreated?: (sessionId: string) => void
 }
@@ -74,22 +89,26 @@ export function TerminalSpawnCommandDialog({
   open,
   command,
   presetValues,
+  initialCwdTarget = 'launch-project',
   onClose,
   onCreated,
 }: TerminalSpawnCommandDialogProps) {
   const advancedSectionId = useId()
   const { createShellSession } = useTerminalContext()
   const { shellProfiles, defaultShellProfile } = useTerminalInvocationConfig()
+  const cwdTargetState = useTerminalCwdTargetState()
   const [values, setValues] = useState<TerminalCommandFieldValues>({})
   const [shellProfileId, setShellProfileId] = useState('')
+  const [cwdTarget, setCwdTarget] = useState<TerminalCwdTarget>(initialCwdTarget)
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   useEffect(() => {
     if (!command) return
     setValues(getTerminalCommandDefaultValues(command, presetValues))
     setShellProfileId(command.shellProfileId ?? '')
+    setCwdTarget(initialCwdTarget)
     setShowAdvanced(false)
-  }, [command, presetValues])
+  }, [command, initialCwdTarget, presetValues])
 
   const selectedShell = useMemo(
     () =>
@@ -147,7 +166,9 @@ export function TerminalSpawnCommandDialog({
 
   const handleCreate = () => {
     if (!command) return
+    if (!getTerminalCwdTargetOption(cwdTargetState, cwdTarget).available) return
     const sessionId = createShellSession(selectedShell, {
+      cwdTarget,
       label: command.label,
       initialInput: `${commandLine}\n`,
     })
@@ -188,6 +209,7 @@ export function TerminalSpawnCommandDialog({
           <button
             type="button"
             onClick={handleCreate}
+            disabled={!getTerminalCwdTargetOption(cwdTargetState, cwdTarget).available}
             className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs"
           >
             <Rocket className="h-3.5 w-3.5" />
@@ -197,6 +219,16 @@ export function TerminalSpawnCommandDialog({
       }
     >
       <div className="space-y-4">
+        <div className="flex flex-col gap-1 text-xs font-medium">
+          <span>Working directory</span>
+          <TerminalCwdTargetControl
+            value={cwdTarget}
+            state={cwdTargetState}
+            onValueChange={setCwdTarget}
+            showPath
+          />
+        </div>
+
         <label className="flex flex-col gap-1 text-xs font-medium">
           Shell
           <Select

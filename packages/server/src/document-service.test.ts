@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Verify source and processed document reads remain distinct.
+ * 2. Verify document hooks preserve source content, diagnostics, and file identity.
+ * 3. Lock the unchanged document hook contract to protocol v1.
+ *
+ * Original request (2026-07-15): "Hooks receive stable project document context."
+ */
 import type { OnReadDocumentHookV1, OpenSpecAdapter } from '@openspecui/core'
 import { describe, expect, it, vi } from 'vitest'
 import { DocumentService } from './document-service.js'
@@ -122,7 +130,8 @@ describe('DocumentService', () => {
     const service = new DocumentService(
       '/project',
       adapter as OpenSpecAdapter,
-      createRuntime(async (_ctx, read) => {
+      createRuntime(async (ctx, read) => {
+        expect(ctx.version).toBe(1)
         const result = await read()
         return {
           ...result,

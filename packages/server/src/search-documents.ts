@@ -1,4 +1,10 @@
-import type { OpenSpecAdapter, OpsxEntityReadOptions, OpsxEntityStage } from '@openspecui/core'
+import type {
+  CliReferenceIndexEntry,
+  OpenSpecAdapter,
+  OpsxEntityReadOptions,
+  OpsxEntityStage,
+} from '@openspecui/core'
+import { specIdentityKey, specRoutePath } from '@openspecui/core/spec-catalog'
 import type { SearchDocument } from '@openspecui/search'
 import type { DocumentService } from './document-service.js'
 
@@ -17,26 +23,47 @@ function joinParts(parts: Array<string | undefined>): string {
 export async function collectSearchDocuments(
   adapter: OpenSpecAdapter,
   documentService?: DocumentService,
-  resolveEntityReadOptions?: EntityReadOptionsResolver
+  resolveEntityReadOptions?: EntityReadOptionsResolver,
+  references: readonly CliReferenceIndexEntry[] = []
 ): Promise<SearchDocument[]> {
   const docs: SearchDocument[] = []
 
   const specs = await adapter.listSpecsWithMeta()
   for (const spec of specs) {
+    const identity = { kind: 'owned' as const, specId: spec.id }
     const raw = documentService
       ? await documentService.readSpecRaw(spec.id, 'search', 'processed')
       : await adapter.readSpecRaw(spec.id)
     if (!raw) continue
 
     docs.push({
-      id: `spec:${spec.id}`,
+      id: `spec:${specIdentityKey(identity)}`,
       kind: 'spec',
       title: spec.name,
-      href: `/specs/${encodeURIComponent(spec.id)}`,
-      path: `openspec/specs/${spec.id}/spec.md`,
+      href: specRoutePath(identity),
+      path: `owned:openspec/specs/${spec.id}/spec.md`,
       content: typeof raw === 'string' ? raw : raw.markdown,
       updatedAt: spec.updatedAt,
     })
+  }
+
+  for (const reference of references) {
+    for (const spec of reference.specs ?? []) {
+      const identity = {
+        kind: 'referenced' as const,
+        storeId: reference.store_id,
+        specId: spec.id,
+      }
+      docs.push({
+        id: `spec:${specIdentityKey(identity)}`,
+        kind: 'spec',
+        title: spec.id,
+        href: specRoutePath(identity),
+        path: `referenced:${reference.store_id}:specs/${spec.id}`,
+        content: spec.summary,
+        updatedAt: 0,
+      })
+    }
   }
 
   const changes = await adapter.listChangesWithMeta()

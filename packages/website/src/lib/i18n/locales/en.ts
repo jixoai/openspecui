@@ -119,11 +119,11 @@ export const en = {
     onRunWorkflow: {
       name: 'onRunWorkflow',
       purpose: 'Wrap an OpenSpec workflow run without replacing the OpenSpec CLI contract.',
-      signature: 'onRunWorkflow(ctx, run): Promise<RunWorkflowResultV1>',
+      signature: 'onRunWorkflow(ctx, run): Promise<RunWorkflowResultV2>',
       when: 'Use it to choose workflow tools, inject safe environment variables, record audit output, or gate execution by project policy.',
       stableFor: ['Workflow orchestration', 'Tool selection', 'Execution audit'],
       example:
-        "import type { OnRunWorkflowHookV1 } from 'openspecui/hooks'\n\nexport const onRunWorkflow: OnRunWorkflowHookV1 = async (ctx, run) => {\n  const result = await run()\n  if (result.kind !== 'agent-prompt') return result\n\n  return {\n    ...result,\n    text: `${result.text}\\n\\nProject policy: include security impact in the final summary.`,\n  }\n}",
+        "import type { OnRunWorkflowHookV2 } from 'openspecui/hooks'\n\nexport const onRunWorkflow: OnRunWorkflowHookV2 = async (ctx, run) => {\n  const result = await run()\n  if (result.kind !== 'agent-prompt') return result\n\n  return {\n    ...result,\n    text: `${result.text}\\n\\nPlanning root: ${ctx.target.planningRoot.path}\\nProject policy: include security impact in the final summary.`,\n  }\n}",
     },
   },
   footer: {

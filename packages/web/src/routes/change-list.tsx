@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. List only active Changes from the current writable Planning root.
+ * 2. Derive workflow state only from CLI Status and formal tracked-task progress.
+ * 3. Preserve collision-safe navigation and explicit no-tasks presentation.
+ *
+ * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
+ */
 import { Badge } from '@/components/badge'
 import {
   classifyChangeWorkflowPhase,
@@ -32,7 +40,7 @@ export function ChangeList() {
       </h1>
 
       <p className="text-muted-foreground">
-        Active OPSX changes. Completed changes are moved to{' '}
+        Active OPSX changes in the current writable Planning root. Completed changes are moved to{' '}
         <VTLink to="/archive" className="text-primary hover:underline">
           Archive
         </VTLink>
@@ -48,15 +56,16 @@ export function ChangeList() {
           const phase = classifyChangeWorkflowPhase({
             hasStatus: Boolean(status),
             isComplete: status?.isComplete ?? false,
-            tasksComplete:
-              change.progress.total === 0 || change.progress.completed >= change.progress.total,
+            trackedTaskPhase: change.trackedTaskProgress.phase,
             trackedArtifactStatus: inferTrackedArtifactStatus(
               status?.artifacts.map((artifact) => artifact.status) ?? []
             ),
           })
           const taskPercent =
-            change.progress.total > 0
-              ? Math.round((change.progress.completed / change.progress.total) * 100)
+            change.trackedTaskProgress.total > 0
+              ? Math.round(
+                  (change.trackedTaskProgress.completed / change.trackedTaskProgress.total) * 100
+                )
               : 0
           const sharedDescriptor = { family: 'changes', entityId: change.id } as const
           return (
@@ -107,7 +116,7 @@ export function ChangeList() {
                       {phase.label}
                     </Badge>
                     <div className="font-medium">
-                      {change.progress.completed}/{change.progress.total}
+                      {change.trackedTaskProgress.completed}/{change.trackedTaskProgress.total}
                     </div>
                     <div className="text-muted-foreground text-xs">tasks</div>
                   </div>
@@ -123,7 +132,11 @@ export function ChangeList() {
               </div>
 
               <div className="text-muted-foreground mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span>{taskPercent}% task completion</span>
+                <span>
+                  {change.trackedTaskProgress.phase === 'no-tasks'
+                    ? 'No tracked tasks'
+                    : `${taskPercent}% task completion`}
+                </span>
                 {status ? (
                   <span className="truncate">
                     {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}

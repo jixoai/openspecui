@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Read and mutate one CLI-selected planning root through reactive filesystem APIs.
+ * 2. Project Specs, Changes, Archives, and schema-neutral entity files.
+ * 3. Keep tracked workflow tasks distinct from document checklist analytics.
+ * 4. Preserve filesystem provenance and mutation boundaries for server consumers.
+ *
+ * Original request (2026-07-15): "Split formal tracked progress, document checklist statistics, and Apply instruction progress into non-interchangeable facts."
+ */
 import { mkdir, readFile, rename, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { inferFileMime, inferFilePreviewKind, isTextLikeFile } from './file-preview.js'
@@ -12,9 +21,10 @@ import { MarkdownParser } from './parser.js'
 import { reactiveReadDir, reactiveReadFile, reactiveStat } from './reactive-fs/index.js'
 import type { Change, ChangeFile, DeltaSpec, Spec } from './schemas.js'
 import {
-  projectTasksFromMarkdownFiles,
-  type TaskProgress,
-  type TaskProjection,
+  projectTaskProjectionsFromMarkdownFiles,
+  type DocumentChecklistSummary,
+  type TaskProjections,
+  type TrackedTaskProgress,
 } from './task-progress.js'
 import { Validator, type ValidationResult } from './validator.js'
 
@@ -30,7 +40,8 @@ export interface SpecMeta {
 export interface ChangeMeta {
   id: string
   name: string
-  progress: TaskProgress
+  trackedTaskProgress: TrackedTaskProgress
+  documentChecklistSummary: DocumentChecklistSummary
   createdAt: number
   updatedAt: number
 }
@@ -39,7 +50,8 @@ export interface ChangeMeta {
 export interface ArchiveMeta {
   id: string
   name: string
-  progress: TaskProgress
+  trackedTaskProgress: TrackedTaskProgress
+  documentChecklistSummary: DocumentChecklistSummary
   createdAt: number
   updatedAt: number
 }
@@ -134,7 +146,7 @@ export class OpenSpecAdapter {
   }
 
   /**
-   * List changes with metadata (id, name, progress, and time info)
+   * List changes with metadata, separated task projections, and time info.
    * Returns every change directory, including schema-specific layouts that
    * don't use proposal.md/tasks.md.
    * Sorted by updatedAt descending (most recent first)
@@ -154,7 +166,8 @@ export class OpenSpecAdapter {
           // Legacy parser can be unavailable for custom schemas; keep the
           // change visible with objective fallback metadata.
           name: change?.name ?? id,
-          progress: taskProjection.progress,
+          trackedTaskProgress: taskProjection.trackedTaskProgress,
+          documentChecklistSummary: taskProjection.documentChecklistSummary,
           createdAt: timeInfo?.createdAt ?? 0,
           updatedAt: timeInfo?.updatedAt ?? 0,
         }
@@ -185,7 +198,8 @@ export class OpenSpecAdapter {
         return {
           id,
           name: id,
-          progress: taskProjection.progress,
+          trackedTaskProgress: taskProjection.trackedTaskProgress,
+          documentChecklistSummary: taskProjection.documentChecklistSummary,
           createdAt: timeInfo?.createdAt ?? 0,
           updatedAt: timeInfo?.updatedAt ?? 0,
         }
@@ -256,11 +270,11 @@ export class OpenSpecAdapter {
     return this.readFilesUnderRoot(archiveRoot)
   }
 
-  async readChangeTaskProjection(changeId: string): Promise<TaskProjection> {
+  async readChangeTaskProjection(changeId: string): Promise<TaskProjections> {
     return this.readEntityTaskProjection(join(this.changesDir, changeId))
   }
 
-  async readArchivedChangeTaskProjection(changeId: string): Promise<TaskProjection> {
+  async readArchivedChangeTaskProjection(changeId: string): Promise<TaskProjections> {
     return this.readEntityTaskProjection(join(this.archiveDir, changeId))
   }
 
@@ -336,7 +350,7 @@ export class OpenSpecAdapter {
     }).detail
   }
 
-  private async readEntityTaskProjection(root: string): Promise<TaskProjection> {
+  private async readEntityTaskProjection(root: string): Promise<TaskProjections> {
     const files = await this.readFilesUnderRoot(root)
     const metadataContent =
       files.find((file) => file.type === 'file' && file.path === '.openspec.yaml')?.content ?? null
@@ -345,7 +359,7 @@ export class OpenSpecAdapter {
       ? await this.readProjectSchemaDetail(metadata.schemaName)
       : null
 
-    return projectTasksFromMarkdownFiles(files, {
+    return projectTaskProjectionsFromMarkdownFiles(files, {
       schemaDetail,
       hasSchemaMetadata: Boolean(metadata.schemaName),
     })
@@ -590,8 +604,14 @@ This project uses OpenSpec for spec-driven development.
     const validChanges = changes.filter((c): c is Change => c !== null)
 
     const totalRequirements = validSpecs.reduce((sum, s) => sum + s.requirements.length, 0)
-    const totalTasks = validChanges.reduce((sum, c) => sum + c.progress.total, 0)
-    const completedTasks = validChanges.reduce((sum, c) => sum + c.progress.completed, 0)
+    const totalTasks = validChanges.reduce(
+      (sum, change) => sum + change.trackedTaskProgress.total,
+      0
+    )
+    const completedTasks = validChanges.reduce(
+      (sum, change) => sum + change.trackedTaskProgress.completed,
+      0
+    )
 
     return {
       specs: validSpecs,

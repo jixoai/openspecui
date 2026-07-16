@@ -12,11 +12,11 @@ describe('search router', () => {
     const searchService = {
       query: vi.fn().mockResolvedValue([
         {
-          documentId: 'spec:auth',
+          documentId: 'spec:owned:auth',
           kind: 'spec',
           title: 'Auth',
-          href: '/specs/auth',
-          path: 'openspec/specs/auth/spec.md',
+          href: '/specs/owned/auth',
+          path: 'owned:openspec/specs/auth/spec.md',
           score: 99,
           snippet: 'Auth snippet',
           updatedAt: 1,
@@ -25,14 +25,12 @@ describe('search router', () => {
     }
 
     const caller = appRouter.createCaller({
-      adapter: {} as never,
+      launchProjectAdapter: {} as never,
+      planningRootServices: {
+        resolve: vi.fn().mockResolvedValue({ searchService }),
+      } as never,
       configManager: {} as never,
       cliExecutor: {} as never,
-      kernel: {} as never,
-      documentService: {} as never,
-      workflowInvocationService: {} as never,
-      searchService: searchService as never,
-      dashboardOverviewService: {} as never,
       projectRecoveryService: {
         getCurrent: () => ({ state: 'idle' }),
         subscribe: () => () => {},
@@ -48,6 +46,6 @@ describe('search router', () => {
     const result = await caller.search.query({ query: 'auth', limit: 5 })
 
     expect(searchService.query).toHaveBeenCalledWith({ query: 'auth', limit: 5 })
-    expect(result[0]?.documentId).toBe('spec:auth')
+    expect(result[0]?.documentId).toBe('spec:owned:auth')
   })
 })

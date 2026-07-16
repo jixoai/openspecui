@@ -10,6 +10,7 @@ import { Tooltip } from '../tooltip'
 import { AreaNav } from './area-nav'
 import { BetaCornerMark, BetaPill } from './beta-mark'
 import { navItems, settingsItem } from './nav-items'
+import { RootContextIndicator } from './root-context-indicator'
 import { TopLayerEntryButton } from './top-layer-entry-button'
 
 const DESKTOP_SIDEBAR_COLLAPSED_STORAGE_KEY = 'openspecui:desktop-sidebar-collapsed'
@@ -82,6 +83,8 @@ export function DesktopSidebar() {
           </button>
         </Tooltip>
       </div>
+
+      <RootContextIndicator variant="sidebar" collapsed={collapsed} />
 
       <TopLayerEntryButton
         label="Search"

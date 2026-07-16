@@ -1,5 +1,14 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Render file-tree and diff detail for one selected Git entry.
+ * 2. Load eager and on-demand patches without crossing repository-scope caches.
+ * 3. Preserve scroll, routed pane, reveal, and responsive layout state.
+ *
+ * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
+ */
 import { ErrorBoundary } from '@/components/error-boundary'
 import { Tabs } from '@/components/tabs'
+import { getGitEntryPatchQueryKey } from '@/lib/git-panel'
 import { trpcClient } from '@/lib/trpc'
 import { useRoutedCarouselTabs } from '@/lib/view-transitions/tabs'
 import type {
@@ -7,6 +16,7 @@ import type {
   GitEntryFilePatch,
   GitEntryFileSummary,
   GitEntrySelector,
+  GitRepositoryScope,
 } from '@openspecui/core'
 import { useQueries } from '@tanstack/react-query'
 import { AlertCircle, Files, GitCommitHorizontal, ListTree, LoaderCircle } from 'lucide-react'
@@ -226,6 +236,7 @@ export function GitEntryDetailPanel({
   files,
   eagerFiles = [],
   projectDir,
+  repositoryScope = 'code',
   isLoading,
   error,
   showEntrySummary = true,
@@ -236,6 +247,7 @@ export function GitEntryDetailPanel({
   files: GitEntryFileSummary[]
   eagerFiles?: GitEntryFilePatch[]
   projectDir?: string | null
+  repositoryScope?: GitRepositoryScope
   isLoading: boolean
   error: Error | null
   showEntrySummary?: boolean
@@ -341,9 +353,9 @@ export function GitEntryDetailPanel({
         return patchLoader({ selector, fileId })
       }
 
-      return trpcClient.git.getEntryPatch.query({ selector, fileId })
+      return trpcClient.git.getEntryPatch.query({ scope: repositoryScope, selector, fileId })
     },
-    [patchLoader, selector]
+    [patchLoader, repositoryScope, selector]
   )
 
   useEffect(() => {
@@ -387,7 +399,9 @@ export function GitEntryDetailPanel({
 
   const patchQueries = useQueries({
     queries: requestedOrderedFileIds.map((fileId) => ({
-      queryKey: ['git', 'patch', selectorKey, fileId],
+      queryKey: selector
+        ? getGitEntryPatchQueryKey(repositoryScope, selector, fileId)
+        : ['git', repositoryScope, 'patch', 'none', fileId],
       queryFn: () => loadPatch(fileId),
       enabled: selector !== null,
       staleTime: 5 * 60 * 1000,

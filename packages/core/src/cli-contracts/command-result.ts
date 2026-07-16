@@ -10,9 +10,19 @@ import { z } from 'zod'
 import type { CliResult } from '../cli-executor.js'
 import { CliDiagnosticSchema, type CliDiagnostic } from './common.js'
 
+/** JSON value retained verbatim from one OpenSpec CLI stdout document. */
+export type CliJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | CliJsonValue[]
+  | { [key: string]: CliJsonValue }
+
+/** Complete process, raw payload, typed data, and diagnostic evidence for one CLI command. */
 export interface CliCommandResult<T> extends CliResult {
   data: T | null
-  payload: unknown | null
+  payload: CliJsonValue | null
   diagnostics: CliDiagnostic[]
   contractError?: string
 }
@@ -37,7 +47,7 @@ export function parseCliCommandResult<T>(
   result: CliResult,
   schema: z.ZodType<T>
 ): CliCommandResult<T> {
-  let payload: unknown
+  let payload: CliJsonValue
   try {
     payload = JSON.parse(result.stdout)
   } catch (error) {

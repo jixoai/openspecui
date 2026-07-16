@@ -1,16 +1,27 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Verify proposal terminal target selection and create-session dispatch.
+ * 2. Verify Root Context locks all terminal dispatch actions before payload preparation.
+ *
+ * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
+ */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OpsxProposeRoute } from './opsx-propose'
 
 const {
+  prepareWorkflowInvocationMock,
   requestCloseMock,
+  rootActionMock,
   setConfigMock,
   writeToSessionMock,
   useTerminalContextMock,
   useTerminalInvocationConfigMock,
 } = vi.hoisted(() => ({
+  prepareWorkflowInvocationMock: vi.fn(),
   requestCloseMock: vi.fn(),
+  rootActionMock: vi.fn(),
   setConfigMock: vi.fn(),
   writeToSessionMock: vi.fn(),
   useTerminalContextMock: vi.fn(),
@@ -95,6 +106,10 @@ vi.mock('@/lib/use-subscription', () => ({
   }),
 }))
 
+vi.mock('@/lib/use-root-action-state', () => ({
+  useRootActionState: () => rootActionMock(),
+}))
+
 vi.mock('@/lib/trpc', () => ({
   trpcClient: {
     config: {
@@ -106,12 +121,7 @@ vi.mock('@/lib/trpc', () => ({
 }))
 
 vi.mock('@/lib/opsx-workflow-invocation', () => ({
-  prepareWorkflowInvocation: vi.fn().mockResolvedValue({
-    kind: 'agent-prompt',
-    text: 'prepared proposal prompt',
-    format: 'markdown',
-    mode: { requestedMode: 'compose', actualMode: 'compose', fallbackReason: null },
-  }),
+  prepareWorkflowInvocation: prepareWorkflowInvocationMock,
   stringifyWorkflowInvocation: vi.fn(() => 'prepared proposal prompt'),
   workflowDiagnosticsToText: vi.fn(() => null),
 }))
@@ -127,6 +137,23 @@ describe('OpsxProposeRoute terminal target', () => {
       },
     })
     requestCloseMock.mockReset()
+    prepareWorkflowInvocationMock.mockReset().mockResolvedValue({
+      kind: 'agent-prompt',
+      text: 'prepared proposal prompt',
+      format: 'markdown',
+      mode: { requestedMode: 'compose', actualMode: 'compose', fallbackReason: null },
+      target: null,
+      evidence: null,
+    })
+    rootActionMock.mockReset().mockReturnValue({
+      status: 'ready',
+      disabled: false,
+      context: null,
+      observedAt: 1,
+      title: null,
+      message: null,
+      evidence: [],
+    })
     setConfigMock.mockReset()
     writeToSessionMock.mockReset()
     useTerminalContextMock.mockReturnValue({
@@ -192,6 +219,8 @@ describe('OpsxProposeRoute terminal target', () => {
         {
           id: 'term-1',
           displayTitle: 'dev shell',
+          cwdTarget: 'launch-project',
+          initialCwd: '/launch',
           isExited: false,
         },
       ],
@@ -209,7 +238,30 @@ describe('OpsxProposeRoute terminal target', () => {
     const shellGroup = await screen.findByRole('group', { name: 'Shell Instances' })
     const createGroup = screen.getByRole('group', { name: 'Create Shell Instance' })
 
-    expect(within(shellGroup).getByRole('option', { name: 'dev shell' })).toBeTruthy()
+    expect(within(shellGroup).getByRole('option', { name: 'dev shell · Launch' })).toBeTruthy()
     expect(within(createGroup).getByRole('option', { name: 'Create Claude' })).toBeTruthy()
+  })
+
+  it('locks terminal actions before Root Context succeeds', () => {
+    rootActionMock.mockReturnValue({
+      status: 'checking',
+      disabled: true,
+      context: null,
+      observedAt: 2,
+      title: 'Resolving planning root',
+      message: 'Root-dependent actions remain locked.',
+      evidence: [],
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <OpsxProposeRoute />
+      </QueryClientProvider>
+    )
+
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Create' })).toBeDisabled()
+    expect(prepareWorkflowInvocationMock).not.toHaveBeenCalled()
   })
 })

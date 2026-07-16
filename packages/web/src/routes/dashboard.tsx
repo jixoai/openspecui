@@ -1,4 +1,5 @@
 import { Badge } from '@/components/badge'
+import { DashboardContextSummary } from '@/components/dashboard/context-summary'
 import { DashboardMetricCard } from '@/components/dashboard/metric-card'
 import {
   getGitEntrySharedDescriptor,
@@ -45,6 +46,7 @@ import type {
   DashboardMetricKey,
   DashboardTrendKind,
 } from '@openspecui/core'
+import { specIdentityKey } from '@openspecui/core/spec-catalog'
 import {
   AlertCircle,
   Archive,
@@ -132,7 +134,7 @@ function buildWorkflowSchemaCards(
   taskCompleteChangeIds: ReadonlySet<string>
 ): Array<{
   schemaName: string
-  readyToArchive: number
+  workflowComplete: number
   steps: Array<{
     id: string
     label: string
@@ -203,7 +205,7 @@ function buildWorkflowSchemaCards(
 
       return {
         schemaName,
-        readyToArchive: schemaStatuses.filter(
+        workflowComplete: schemaStatuses.filter(
           (status) => status.isComplete && taskCompleteChangeIds.has(status.changeName)
         ).length,
         steps,
@@ -497,10 +499,7 @@ export function Dashboard() {
     () =>
       new Set(
         activeChanges
-          .filter(
-            (change) =>
-              change.progress.total === 0 || change.progress.completed >= change.progress.total
-          )
+          .filter((change) => change.trackedTaskProgress.phase === 'complete')
           .map((change) => change.id)
       ),
     [activeChanges]
@@ -626,14 +625,14 @@ export function Dashboard() {
                   <div className="min-w-0">
                     <h3 className="text-xs font-semibold">{schema.schemaName}</h3>
                   </div>
-                  {schema.readyToArchive > 0 ? (
+                  {schema.workflowComplete > 0 ? (
                     <Badge
                       tone="custom"
                       size="xs"
                       shape="box"
                       className="text-muted-foreground border"
                     >
-                      archive-ready {schema.readyToArchive}
+                      workflow-complete {schema.workflowComplete}
                     </Badge>
                   ) : null}
                 </div>
@@ -691,7 +690,7 @@ export function Dashboard() {
         <section className="min-w-0 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <h2 className="font-medium">Git Snapshot</h2>
+              <h2 className="font-medium">Code Git Snapshot</h2>
               <p className="text-muted-foreground truncate text-xs">
                 Default branch: {git.defaultBranch}
               </p>
@@ -826,18 +825,22 @@ export function Dashboard() {
       </div>
       <div className="bg-card divide-border min-w-0 divide-y">
         {overview?.specifications.map((spec) => {
-          const sharedDescriptor = { family: 'specs', entityId: spec.id } as const
+          const identity = { kind: 'owned' as const, specId: spec.id }
+          const sharedDescriptor = {
+            family: 'specs',
+            entityId: specIdentityKey(identity),
+          } as const
 
           return (
             <VTLink
               key={spec.id}
-              to="/specs/$specId"
+              to="/specs/owned/$specId"
               params={{ specId: spec.id }}
               state={(prev) => ({
                 ...prev,
                 __vtHandoff: {
                   family: 'specs',
-                  entityId: spec.id,
+                  entityId: specIdentityKey(identity),
                   title: spec.name,
                   subtitle: spec.id,
                 },
@@ -886,7 +889,7 @@ export function Dashboard() {
       </div>
       <div className="bg-card divide-border flex min-w-0 flex-1 flex-col divide-y">
         {activeChanges.map((change) => {
-          const progress = change.progress
+          const progress = change.trackedTaskProgress
           const taskPercent =
             progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0
           const status = activeStatuses.find((item) => item.changeName === change.id)
@@ -906,7 +909,7 @@ export function Dashboard() {
           const phase = classifyChangeWorkflowPhase({
             hasStatus: Boolean(status),
             isComplete: status?.isComplete ?? false,
-            tasksComplete: progress.total === 0 || progress.completed >= progress.total,
+            trackedTaskPhase: progress.phase,
             trackedArtifactStatus,
           })
 
@@ -1014,6 +1017,8 @@ export function Dashboard() {
           Start Propose
         </button>
       </div>
+
+      <DashboardContextSummary staticMode={staticMode} />
 
       <section className="space-y-2">
         <h2 className="text-sm font-medium">Historical Trends</h2>

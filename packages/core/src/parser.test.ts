@@ -321,9 +321,10 @@ We need caching to improve performance significantly for our users. This will re
       expect(change.whatChanges).toContain('Redis')
       expect(change.deltas).toHaveLength(1)
       expect(change.deltas[0].spec).toBe('api')
-      expect(change.tasks).toHaveLength(2)
-      expect(change.progress.total).toBe(2)
-      expect(change.progress.completed).toBe(1)
+      expect(change.trackedTaskProgress.tasks).toHaveLength(2)
+      expect(change.trackedTaskProgress.total).toBe(2)
+      expect(change.trackedTaskProgress.completed).toBe(1)
+      expect(change.trackedTaskProgress.phase).toBe('in-progress')
     })
 
     it('should handle change without tasks', () => {
@@ -337,9 +338,10 @@ Some changes
 `
       const change = parser.parseChange('feature', proposal)
 
-      expect(change.tasks).toHaveLength(0)
-      expect(change.progress.total).toBe(0)
-      expect(change.progress.completed).toBe(0)
+      expect(change.trackedTaskProgress.tasks).toHaveLength(0)
+      expect(change.trackedTaskProgress.total).toBe(0)
+      expect(change.trackedTaskProgress.completed).toBe(0)
+      expect(change.trackedTaskProgress.phase).toBe('no-tasks')
     })
   })
 

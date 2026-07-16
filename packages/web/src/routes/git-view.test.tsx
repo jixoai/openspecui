@@ -5,18 +5,36 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { GitCommitViewRoute, GitUncommittedViewRoute } from './git-view'
 
-const { getEntryMetaQueryMock, getEntryFilesQueryMock, staticModeMock, useParamsMock, projectDir } =
-  vi.hoisted(() => ({
-    getEntryMetaQueryMock: vi.fn(),
-    getEntryFilesQueryMock: vi.fn(),
-    staticModeMock: vi.fn(() => false),
-    useParamsMock: vi.fn(() => ({ hash: 'abc12345' })),
-    projectDir: '/Users/kzf/Dev/GitHub/jixoai-labs/agenter',
-  }))
+const {
+  scopesQueryMock,
+  getEntryMetaQueryMock,
+  getEntryFilesQueryMock,
+  staticModeMock,
+  useParamsMock,
+  routerLocation,
+  projectDir,
+} = vi.hoisted(() => ({
+  scopesQueryMock: vi.fn(),
+  getEntryMetaQueryMock: vi.fn(),
+  getEntryFilesQueryMock: vi.fn(),
+  staticModeMock: vi.fn(() => false),
+  useParamsMock: vi.fn(() => ({ hash: 'abc12345' })),
+  routerLocation: {
+    pathname: '/git/commit/abc12345',
+    search: {},
+    searchStr: '',
+    hash: '',
+    state: null,
+  },
+  projectDir: '/Users/kzf/Dev/GitHub/jixoai-labs/agenter',
+}))
 
 vi.mock('@/lib/trpc', () => ({
   trpcClient: {
     git: {
+      scopes: {
+        query: scopesQueryMock,
+      },
       getEntryMeta: {
         query: getEntryMetaQueryMock,
       },
@@ -32,22 +50,21 @@ vi.mock('@/lib/static-mode', () => ({
   getBasePath: () => '/',
 }))
 
-vi.mock('@/lib/use-server-status', () => ({
-  useServerStatus: () => ({ projectDir }),
-}))
-
 vi.mock('@/components/git/git-panel-detail', () => ({
   GitEntryDetailPanel: ({
     selector,
     projectDir,
+    repositoryScope,
   }: {
     selector: { type: string; hash?: string }
     projectDir?: string | null
+    repositoryScope?: string
   }) => (
     <div data-testid="git-entry-detail-panel">
       {selector.type}
       {selector.hash ? `:${selector.hash}` : ''}
       {projectDir ? `:${projectDir}` : ''}
+      {repositoryScope ? `:${repositoryScope}` : ''}
     </div>
   ),
 }))
@@ -66,12 +83,7 @@ vi.mock('@tanstack/react-router', () => ({
       {children}
     </a>
   ),
-  useLocation: () => ({
-    pathname: '/git/commit/abc12345',
-    search: '',
-    hash: '',
-    state: null,
-  }),
+  useLocation: () => routerLocation,
   useNavigate: () => vi.fn(),
   useParams: () => useParamsMock(),
 }))
@@ -95,6 +107,22 @@ describe('Git entry routes', () => {
   beforeEach(() => {
     staticModeMock.mockReturnValue(false)
     useParamsMock.mockReturnValue({ hash: 'abc12345' })
+    routerLocation.pathname = '/git/commit/abc12345'
+    routerLocation.searchStr = ''
+    routerLocation.state = null
+    scopesQueryMock.mockResolvedValue({
+      defaultScope: 'code',
+      code: {
+        scope: 'code',
+        rootPath: projectDir,
+        repository: { topLevel: projectDir, commonDir: `${projectDir}/.git` },
+      },
+      planning: {
+        scope: 'planning',
+        rootPath: '/tmp/planning',
+        repository: { topLevel: '/tmp/planning', commonDir: '/tmp/planning/.git' },
+      },
+    })
     getEntryMetaQueryMock.mockResolvedValue({
       type: 'commit',
       hash: 'abc12345',
@@ -126,8 +154,12 @@ describe('Git entry routes', () => {
     })
 
     expect(screen.getByTestId('git-entry-detail-panel').textContent).toContain(
-      `commit:abc12345:${projectDir}`
+      `commit:abc12345:${projectDir}:code`
     )
+    expect(getEntryMetaQueryMock).toHaveBeenCalledWith({
+      scope: 'code',
+      selector: { type: 'commit', hash: 'abc12345' },
+    })
   })
 
   it('keeps the commit title and subtitle fully wrappable instead of truncating them', async () => {
@@ -167,7 +199,7 @@ describe('Git entry routes', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('git-entry-detail-panel').textContent).toContain(
-        `uncommitted:${projectDir}`
+        `uncommitted:${projectDir}:code`
       )
     })
   })
@@ -182,6 +214,30 @@ describe('Git entry routes', () => {
       expect(detailContainer).toBeTruthy()
       expect(detailContainer?.className).not.toContain('flex-1')
       expect(detailContainer?.className).not.toContain('min-h-0')
+    })
+  })
+
+  it('preserves Planning repository scope across queries and the back link', async () => {
+    routerLocation.searchStr = '?gitScope=planning'
+    renderWithQueryClient(<GitCommitViewRoute />)
+
+    await waitFor(() => {
+      expect(getEntryMetaQueryMock).toHaveBeenCalledWith({
+        scope: 'planning',
+        selector: { type: 'commit', hash: 'abc12345' },
+      })
+    })
+    expect(getEntryFilesQueryMock).toHaveBeenCalledWith({
+      scope: 'planning',
+      selector: { type: 'commit', hash: 'abc12345' },
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: 'Back to commits' }).getAttribute('href')).toBe(
+        '/git?gitScope=planning'
+      )
+      expect(screen.getByTestId('git-entry-detail-panel').textContent).toContain(
+        'commit:abc12345:/tmp/planning:planning'
+      )
     })
   })
 })

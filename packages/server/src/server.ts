@@ -1,12 +1,12 @@
 /**
- * OpenSpecUI HTTP/WebSocket server.
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Bootstrap the HTTP/tRPC server and launch-project runtime services.
+ * 2. Delegate OpenSpec filesystem ownership to the CLI-selected planning-root manager.
+ * 3. Host notification, sound, preview-resource, and translation HTTP boundaries.
+ * 4. Host tRPC and PTY WebSocket transports with deterministic teardown.
+ * 5. Own the runtime observation environment and warm root-scoped services without blocking readiness.
  *
- * Provides tRPC endpoints for:
- * - Dashboard data and project status
- * - Spec CRUD operations
- * - Change proposal management
- * - AI-assisted operations (review, translate, suggest)
- * - Realtime file change subscriptions via WebSocket
+ * Original request (2026-07-15): "你先负责后端（内核）的开发。"
  *
  * @module server
  */
@@ -18,12 +18,14 @@ import {
   ConfigManager,
   CustomSoundHashSchema,
   GlobalSettingsManager,
-  initWatcherPool,
-  isWatcherPoolInitialized,
   NotificationPublishInputSchema,
   OpenSpecAdapter,
+  OpenSpecDataHomeObserver,
   OpenSpecWatcher,
-  OpsxKernel,
+  ReactiveObservationEnvironment,
+  resolveOpenSpecDataScope,
+  RuntimeInvalidationIndex,
+  RuntimeRootInvalidationRegistry,
 } from '@openspecui/core'
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
 import { applyWSSHandler } from '@trpc/server/adapters/ws'
@@ -55,12 +57,7 @@ import {
   getDefaultLocalCt2ModelProfileManifestPath,
 } from './ct2-model-cache-path.js'
 import { CustomSoundService } from './custom-sound-service.js'
-import { DashboardOverviewService } from './dashboard-overview-service.js'
-import { loadDashboardOverview } from './dashboard-overview.js'
-import { DocumentService } from './document-service.js'
-import { buildEntityReadOptions } from './entity-read-options.js'
 import { FilePreviewService } from './file-preview-service.js'
-import { createHookRuntime } from './hook-runtime.js'
 import { LlamaModelAssetService } from './llama-model-asset-service.js'
 import {
   getDefaultLocalLlamaModelCacheDir,
@@ -76,27 +73,22 @@ import {
   getDefaultLocalModelProfileManifestPath,
 } from './local-model-cache-path.js'
 import { NotificationService } from './notification-service.js'
+import { PlanningRootServiceManager } from './planning-root-service.js'
 import { findAvailablePort } from './port-utils.js'
 import { ProjectRecoveryService } from './project-recovery-service.js'
 import { PtyManager } from './pty-manager.js'
 import { createPtyWebSocketHandler } from './pty-websocket.js'
 import { appRouter, type Context, type GitWorktreeHandoffService } from './router.js'
-import { SearchService } from './search-service.js'
+import { StoreObservationFallbackService } from './store-observation-fallback.js'
+import { StoreObservationService } from './store-observation-service.js'
 import { createRuntimeSqliteTranslationCacheAdapter } from './translation-cache-adapter.js'
 import { getDefaultTranslationCacheDatabasePath } from './translation-cache-path.js'
 import { TranslationCacheService } from './translation-cache-service.js'
 import { TranslationEngineService } from './translation-engine-service.js'
 import { createManagedLocalBatchTranslateWorkerExecutor } from './translation-engine-worker.js'
-import { WorkflowInvocationService } from './workflow-invocation-service.js'
 
 function buildEmbeddedUiUrlForPort(port: number): string {
   return `http://localhost:${port}`
-}
-
-function initializeWatcherPoolInBackground(projectDir: string): void {
-  void initWatcherPool(projectDir).catch((err) => {
-    console.error('Watcher pool initialization failed:', err)
-  })
 }
 
 function deferBackgroundTask(task: () => void): void {
@@ -141,22 +133,46 @@ export interface ServerConfig {
 /**
  * Create an OpenSpecUI HTTP server with optional WebSocket support
  */
-export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
+export function createServer(config: ServerConfig) {
   const adapter = new OpenSpecAdapter(config.projectDir)
   const configManager = new ConfigManager(config.projectDir)
   const globalSettingsManager = new GlobalSettingsManager(config.runtimePaths?.globalSettingsPath)
   const cliExecutor = new CliExecutor(configManager, config.projectDir)
-  const kernel = config.kernel
-  const hookRuntime = createHookRuntime(config.projectDir)
-  const documentService = new DocumentService(config.projectDir, adapter, hookRuntime)
   const filePreviewService = new FilePreviewService(
     config.projectDir,
     config.previewAssetsDir ?? join(__dirname, '..', '..', 'web', 'dist')
   )
-  const workflowInvocationService = new WorkflowInvocationService({
-    projectDir: config.projectDir,
-    hookRuntime,
-    executeCli: (args) => cliExecutor.execute(args),
+  const observationEnvironment = new ReactiveObservationEnvironment()
+  const runtimeInvalidation = new RuntimeInvalidationIndex()
+  const projectInvalidation = new RuntimeRootInvalidationRegistry(runtimeInvalidation, [
+    'project',
+    'context',
+  ])
+  projectInvalidation.acquireRoot(config.projectDir)
+  const dataHomeObserver = new OpenSpecDataHomeObserver({
+    dataHomePath: resolveOpenSpecDataScope().path,
+    environment: observationEnvironment,
+    invalidation: runtimeInvalidation,
+  })
+  const storeInvalidation = new RuntimeRootInvalidationRegistry(runtimeInvalidation, [
+    'stores',
+    'context',
+  ])
+  const storeObservation = new StoreObservationService(observationEnvironment, storeInvalidation)
+  const storeObservationFallback = new StoreObservationFallbackService({
+    invalidation: runtimeInvalidation,
+    dataHomeObservation: dataHomeObserver,
+    storeObservation,
+    observationEnvironment,
+  })
+  const planningRootServices = new PlanningRootServiceManager({
+    launchProjectDir: config.projectDir,
+    previewAssetsDir: config.previewAssetsDir ?? join(__dirname, '..', '..', 'web', 'dist'),
+    configManager,
+    cliExecutor,
+    observationEnvironment,
+    projectInvalidation,
+    runtimeInvalidation,
   })
   const notificationService = new NotificationService()
   const customSoundService = new CustomSoundService()
@@ -273,26 +289,6 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
   // Create file watcher if enabled
   const watcher =
     config.enableWatcher !== false ? new OpenSpecWatcher(config.projectDir) : undefined
-  const entityReadOptionsContext = { adapter, kernel }
-  const searchService = new SearchService(
-    adapter,
-    watcher,
-    undefined,
-    documentService,
-    (stage, id) => buildEntityReadOptions(entityReadOptionsContext, stage, id)
-  )
-  const dashboardOverviewService = new DashboardOverviewService(
-    (reason) =>
-      loadDashboardOverview(
-        {
-          adapter,
-          configManager,
-          projectDir: config.projectDir,
-        },
-        reason
-      ),
-    watcher
-  )
   const projectRecoveryService = new ProjectRecoveryService({
     projectDir: config.projectDir,
     gitWorktreeHandoff: config.gitWorktreeHandoff,
@@ -376,7 +372,9 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     const hash = c.req.param('hash')
     const prefix = `/api/file-preview/${hash}/`
     const requestPath = c.req.path.startsWith(prefix) ? c.req.path.slice(prefix.length) : ''
-    const asset = filePreviewService.readPreviewRequest(hash, requestPath)
+    const asset =
+      planningRootServices.readPreviewRequest(hash, requestPath) ??
+      filePreviewService.readPreviewRequest(hash, requestPath)
     if (!asset) {
       return c.notFound()
     }
@@ -401,20 +399,17 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
       req: c.req.raw,
       router: appRouter,
       createContext: (): Context => ({
-        adapter,
+        launchProjectAdapter: adapter,
+        planningRootServices,
+        runtimeInvalidation,
+        storeObservation,
         configManager,
-        documentService,
         cliExecutor,
-        kernel,
-        workflowInvocationService,
-        searchService,
-        dashboardOverviewService,
         projectRecoveryService,
         notificationService,
         customSoundService,
         globalSettingsManager,
         translationCacheService,
-        filePreviewService,
         translationEngineService,
         localModelAssetService,
         localCt2ModelAssetService,
@@ -429,20 +424,17 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
 
   // Create context factory for WebSocket connections
   const createContext = (): Context => ({
-    adapter,
+    launchProjectAdapter: adapter,
+    planningRootServices,
+    runtimeInvalidation,
+    storeObservation,
     configManager,
-    documentService,
     cliExecutor,
-    kernel,
-    workflowInvocationService,
-    searchService,
-    dashboardOverviewService,
     projectRecoveryService,
     notificationService,
     customSoundService,
     globalSettingsManager,
     translationCacheService,
-    filePreviewService,
     translationEngineService,
     localModelAssetService,
     localCt2ModelAssetService,
@@ -454,14 +446,17 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
 
   return {
     app,
+    planningRootServices,
+    observationEnvironment,
+    runtimeInvalidation,
+    projectInvalidation,
+    dataHomeObserver,
+    storeObservation,
+    storeInvalidation,
+    storeObservationFallback,
     adapter,
     configManager,
-    documentService,
     cliExecutor,
-    kernel,
-    workflowInvocationService,
-    searchService,
-    dashboardOverviewService,
     projectRecoveryService,
     notificationService,
     customSoundService,
@@ -472,7 +467,6 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     localModelAssetService,
     localCt2ModelAssetService,
     localLlamaModelAssetService,
-    hookRuntime,
     watcher,
     createContext,
     port: config.port ?? 3100,
@@ -487,10 +481,6 @@ export async function createWebSocketServer(
   httpServer: { on: (event: string, handler: (...args: unknown[]) => void) => void },
   config: { projectDir: string }
 ) {
-  if (!isWatcherPoolInitialized()) {
-    deferBackgroundTask(() => initializeWatcherPoolInBackground(config.projectDir))
-  }
-
   // tRPC WebSocket server
   const wss = new WebSocketServer({ noServer: true })
 
@@ -506,9 +496,20 @@ export async function createWebSocketServer(
   })
 
   // PTY WebSocket server
-  const ptyManager = new PtyManager(config.projectDir)
+  const ptyManager = new PtyManager()
   const ptyWss = new WebSocketServer({ noServer: true })
-  const ptyHandler = createPtyWebSocketHandler(ptyManager, server.notificationService)
+  const ptyHandler = createPtyWebSocketHandler(ptyManager, server.notificationService, {
+    async resolveCwdTarget(cwdTarget) {
+      if (cwdTarget === 'launch-project') {
+        return { cwdTarget, cwd: config.projectDir }
+      }
+      const planningRoot = (await server.planningRootServices.resolve()).rootContext.planningRoot
+      if (!planningRoot) {
+        throw new Error('Planning root cwd is unavailable.')
+      }
+      return { cwdTarget, cwd: planningRoot.path }
+    },
+  })
   ptyWss.on('connection', ptyHandler)
 
   // Handle upgrade requests - route by URL path
@@ -538,21 +539,31 @@ export async function createWebSocketServer(
   // Start legacy file watcher if available
   server.watcher?.start()
 
+  let closePromise: Promise<void> | null = null
+
   return {
     wss,
     ptyWss,
     ptyManager,
     handler,
     close: () => {
-      handler.broadcastReconnectNotification()
-      ptyManager.closeAll()
-      ptyWss.close()
-      wss.close()
-      server.watcher?.stop()
-      server.searchService.dispose().catch(() => {})
-      server.dashboardOverviewService.dispose()
-      server.projectRecoveryService.dispose()
-      server.translationCacheService.close()
+      closePromise ??= (async () => {
+        handler.broadcastReconnectNotification()
+        ptyManager.closeAll()
+        ptyWss.close()
+        wss.close()
+        server.watcher?.stop()
+        await server.storeObservationFallback.dispose()
+        await server.planningRootServices.dispose()
+        await server.storeObservation.dispose()
+        await server.dataHomeObserver.dispose()
+        server.storeInvalidation.dispose()
+        server.projectInvalidation.dispose()
+        await server.observationEnvironment.dispose()
+        server.projectRecoveryService.dispose()
+        server.translationCacheService.close()
+      })()
+      return closePromise
     },
   }
 }
@@ -588,15 +599,20 @@ export async function startServer(
   // Find an available port
   const port = await findAvailablePort(preferredPort)
 
-  // Create kernel (warmup deferred until after server is listening)
-  const configManager = new ConfigManager(config.projectDir)
-  const cliExecutor = new CliExecutor(configManager, config.projectDir)
-  const kernel = new OpsxKernel(config.projectDir, cliExecutor)
-
-  deferBackgroundTask(() => initializeWatcherPoolInBackground(config.projectDir))
-
   // Create the server (HTTP app ready to accept requests)
-  const server = createServer({ ...config, port, kernel })
+  const server = createServer({ ...config, port })
+  let runtimeClosing = false
+
+  deferBackgroundTask(() => {
+    if (runtimeClosing) return
+    void server.observationEnvironment.acquireRoot(config.projectDir).catch((error: unknown) => {
+      console.error('Launch-project observation failed:', error)
+    })
+    void server.dataHomeObserver.start().catch((error: unknown) => {
+      console.error('OpenSpec data-home observation failed:', error)
+    })
+    server.storeObservationFallback.start()
+  })
 
   // Allow caller to configure app (e.g., add static file middleware)
   if (setupApp) {
@@ -616,17 +632,21 @@ export async function startServer(
 
   const url = `http://localhost:${port}`
 
-  // Warmup kernel in background — subscriptions will push data as it arrives
+  // Warm up the current CLI-selected planning-root services in the background.
   deferBackgroundTask(() => {
-    kernel.warmup().catch((err) => {
-      console.error('Kernel warmup failed:', err)
-    })
-    server.searchService.init().catch((err) => {
-      console.error('Search service warmup failed:', err)
-    })
-    server.dashboardOverviewService.init().catch((err) => {
-      console.error('Dashboard overview warmup failed:', err)
-    })
+    if (runtimeClosing) return
+    server.planningRootServices
+      .resolve()
+      .then(async (services) => {
+        await Promise.all([
+          services.kernel.warmup(),
+          services.searchService.init(),
+          services.dashboardOverviewService.init(),
+        ])
+      })
+      .catch((err) => {
+        console.error('Planning-root service warmup failed:', err)
+      })
   })
 
   return {
@@ -634,13 +654,11 @@ export async function startServer(
     port,
     preferredPort,
     close: async () => {
-      kernel.dispose()
-      await server.hookRuntime.dispose()
+      runtimeClosing = true
       await server.createContext().localModelAssetService.close()
       await server.createContext().localCt2ModelAssetService.close()
       await server.createContext().localLlamaModelAssetService.close()
-      server.translationCacheService.close()
-      wsServer.close()
+      await wsServer.close()
       httpServer.close()
     },
   }

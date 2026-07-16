@@ -24,6 +24,22 @@ vi.mock('@/lib/use-stores-visibility', () => ({
   useStoresVisibility: () => ({ visible: true }),
 }))
 
+vi.mock('@/lib/use-context-subscription', () => ({
+  useContextSubscription: () => ({
+    data: {
+      state: 'ready',
+      data: {
+        launchProject: { path: '/workspace/launch-app' },
+        planningRoot: { path: '/stores/planning-root', source: 'store' },
+        storeId: 'shared',
+      },
+    },
+    isLoading: false,
+    error: null,
+  }),
+  selectRootContextSnapshot: (state: { data?: unknown }) => state?.data ?? null,
+}))
+
 vi.mock('@/lib/use-nav-controller', () => ({
   useNavLayout: () => ({
     mainTabs: ['/dashboard', '/config', '/settings'],
@@ -93,6 +109,8 @@ describe('DesktopSidebar', () => {
     expect(screen.getByAltText('OpenSpec')).toBeTruthy()
     const expandedSearchButton = screen.getByRole('button', { name: 'Search' })
     expect(screen.getByText('Search')).toBeTruthy()
+    expect(screen.getByText('launch-app')).toBeTruthy()
+    expect(screen.getByText('planning-root')).toBeTruthy()
     expect(expandedSearchButton.className).toContain('justify-start')
     expect(expandedSearchButton.className).not.toContain('justify-center')
     expect(screen.getByText('Dashboard')).toBeTruthy()
@@ -102,10 +120,16 @@ describe('DesktopSidebar', () => {
 
     expect(screen.queryByAltText('OpenSpec')).toBeNull()
     expect(screen.queryByText('Search')).toBeNull()
+    expect(screen.queryByText('launch-app')).toBeNull()
     expect(screen.queryByText('Dashboard')).toBeNull()
     expect(screen.queryByText('Bottom')).toBeNull()
 
     expect(screen.getByRole('button', { name: 'Search' })).toBeTruthy()
+    expect(
+      screen.getByRole('link', {
+        name: 'Open Root Context. Launch: launch-app. Planning: planning-root.',
+      })
+    ).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Dashboard' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Git' })).toBeTruthy()
 

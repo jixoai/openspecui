@@ -12,6 +12,7 @@ const {
   opsxConfigBundleMock,
   navControllerMock,
   staticModeMock,
+  dashboardContextSummaryMock,
 } = vi.hoisted(() => ({
   dashboardOverviewMock: vi.fn(),
   dashboardGitTaskStatusMock: vi.fn(),
@@ -23,6 +24,7 @@ const {
     push: vi.fn(),
   },
   staticModeMock: vi.fn(() => true),
+  dashboardContextSummaryMock: vi.fn(),
 }))
 
 vi.mock('@/components/dashboard/metric-card', () => ({
@@ -32,6 +34,13 @@ vi.mock('@/components/dashboard/metric-card', () => ({
       <span>{value}</span>
     </div>
   ),
+}))
+
+vi.mock('@/components/dashboard/context-summary', () => ({
+  DashboardContextSummary: ({ staticMode }: { staticMode: boolean }) => {
+    dashboardContextSummaryMock({ staticMode })
+    return <div data-testid="dashboard-context-summary">{String(staticMode)}</div>
+  },
 }))
 
 vi.mock('@/lib/use-dashboard', () => ({
@@ -143,8 +152,18 @@ describe('Dashboard', () => {
         { id: 'spec-1', name: 'Spec 1', requirements: 9, updatedAt: 1 },
       ],
       activeChanges: [
-        { id: 'change-2', name: 'Change 2', progress: { total: 1, completed: 0 }, updatedAt: 2 },
-        { id: 'change-1', name: 'Change 1', progress: { total: 1, completed: 1 }, updatedAt: 1 },
+        {
+          id: 'change-2',
+          name: 'Change 2',
+          trackedTaskProgress: { total: 1, completed: 0, phase: 'in-progress' },
+          updatedAt: 2,
+        },
+        {
+          id: 'change-1',
+          name: 'Change 1',
+          trackedTaskProgress: { total: 1, completed: 1, phase: 'complete' },
+          updatedAt: 1,
+        },
       ],
       git: {
         defaultBranch: 'main',
@@ -197,6 +216,7 @@ describe('Dashboard', () => {
     opsxConfigBundleMock.mockReturnValue({ data: null })
     navControllerMock.activatePop.mockReset()
     navControllerMock.push.mockReset()
+    dashboardContextSummaryMock.mockClear()
   })
 
   afterEach(() => {
@@ -213,6 +233,14 @@ describe('Dashboard', () => {
     expect(activeChangesHeading.compareDocumentPosition(specificationsHeading)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     )
+  })
+
+  it('integrates the data-scope summary with the current static mode', () => {
+    staticModeMock.mockReturnValue(false)
+    render(<Dashboard />)
+
+    expect(screen.getByTestId('dashboard-context-summary').textContent).toBe('false')
+    expect(dashboardContextSummaryMock).toHaveBeenCalledWith({ staticMode: false })
   })
 
   it('renders specification metadata with relative time before spec id', () => {

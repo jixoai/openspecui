@@ -100,6 +100,10 @@ describe('useCliRunner', () => {
 
     expect(subscribeMock).toHaveBeenCalledTimes(1)
     expect(result.current.status).toBe('error')
+    expect(result.current.commands.list().map((command) => command.status)).toEqual([
+      'error',
+      'idle',
+    ])
 
     const { container } = render(<CliTerminal lines={result.current.lines} />)
     const terminalText = container.textContent ?? ''

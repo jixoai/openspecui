@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   isStaticModeMock,
-  specGetQueryMock,
+  specDocumentQueryMock,
   opsxStatusQueryMock,
   archiveGetQueryMock,
   gitEntryMetaQueryMock,
@@ -10,7 +10,7 @@ const {
   primeSubscriptionCacheMock,
 } = vi.hoisted(() => ({
   isStaticModeMock: vi.fn(() => false),
-  specGetQueryMock: vi.fn(),
+  specDocumentQueryMock: vi.fn(),
   opsxStatusQueryMock: vi.fn(),
   archiveGetQueryMock: vi.fn(),
   gitEntryMetaQueryMock: vi.fn(),
@@ -25,8 +25,8 @@ vi.mock('@/lib/static-mode', () => ({
 vi.mock('@/lib/trpc', () => ({
   trpcClient: {
     spec: {
-      get: {
-        query: specGetQueryMock,
+      document: {
+        query: specDocumentQueryMock,
       },
     },
     opsx: {
@@ -52,7 +52,12 @@ vi.mock('@/lib/trpc', () => ({
 
 vi.mock('@/lib/use-subscription', () => ({
   primeSubscriptionCache: primeSubscriptionCacheMock,
-  getSpecSubscriptionCacheKey: (id: string) => `spec.subscribeOne:${id}`,
+  getSpecDocumentSubscriptionCacheKey: (identity: {
+    kind: 'owned' | 'referenced'
+    specId: string
+    storeId?: string
+  }) =>
+    `spec.subscribeDocument:${identity.kind}:${identity.storeId ? `${identity.storeId}:` : ''}${identity.specId}`,
   getArchiveSubscriptionCacheKey: (id: string) => `archive.subscribeOne:${id}`,
 }))
 
@@ -85,7 +90,7 @@ describe('prepareRouteDetailViewTransition', () => {
 
   it('primes the spec subscription cache before a forward detail VT', async () => {
     const spec = { id: 'alpha', name: 'Alpha Spec' }
-    specGetQueryMock.mockResolvedValue(spec)
+    specDocumentQueryMock.mockResolvedValue(spec)
 
     await expect(
       prepareRouteDetailViewTransition({
@@ -94,12 +99,41 @@ describe('prepareRouteDetailViewTransition', () => {
           kind: 'route-detail',
           direction: 'forward',
         },
-        pathname: '/specs/alpha',
+        pathname: '/specs/owned/alpha',
       })
     ).resolves.toBe('ready')
 
-    expect(specGetQueryMock).toHaveBeenCalledWith({ id: 'alpha' })
-    expect(primeSubscriptionCacheMock).toHaveBeenCalledWith('spec.subscribeOne:alpha', spec)
+    expect(specDocumentQueryMock).toHaveBeenCalledWith({ kind: 'owned', specId: 'alpha' })
+    expect(primeSubscriptionCacheMock).toHaveBeenCalledWith(
+      'spec.subscribeDocument:owned:alpha',
+      spec
+    )
+  })
+
+  it('primes a referenced duplicate under its Store-specific cache key', async () => {
+    const document = { identity: { kind: 'referenced', storeId: 'platform-a', specId: 'alpha' } }
+    specDocumentQueryMock.mockResolvedValue(document)
+
+    await expect(
+      prepareRouteDetailViewTransition({
+        intent: {
+          area: 'main',
+          kind: 'route-detail',
+          direction: 'forward',
+        },
+        pathname: '/specs/referenced/platform-a/alpha',
+      })
+    ).resolves.toBe('ready')
+
+    expect(specDocumentQueryMock).toHaveBeenCalledWith({
+      kind: 'referenced',
+      storeId: 'platform-a',
+      specId: 'alpha',
+    })
+    expect(primeSubscriptionCacheMock).toHaveBeenCalledWith(
+      'spec.subscribeDocument:referenced:platform-a:alpha',
+      document
+    )
   })
 
   it('primes the change status subscription cache before a forward detail VT', async () => {
@@ -144,6 +178,37 @@ describe('prepareRouteDetailViewTransition', () => {
 
     expect(fetchQueryMock).toHaveBeenCalledTimes(1)
     expect(gitEntryMetaQueryMock).toHaveBeenCalledWith({
+      scope: 'code',
+      selector: { type: 'commit', hash: 'abc12345' },
+    })
+  })
+
+  it('primes Planning repository Git detail under a scope-specific cache key', async () => {
+    gitEntryMetaQueryMock.mockResolvedValue({
+      type: 'commit',
+      hash: 'abc12345',
+      title: 'feat: prepare planning vt',
+    })
+
+    await expect(
+      prepareRouteDetailViewTransition({
+        intent: {
+          area: 'bottom',
+          kind: 'route-detail',
+          direction: 'forward',
+        },
+        pathname: '/git/commit/abc12345',
+        search: '?gitScope=planning',
+      })
+    ).resolves.toBe('ready')
+
+    expect(fetchQueryMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: ['git', 'planning', 'meta', 'commit', 'abc12345'],
+      })
+    )
+    expect(gitEntryMetaQueryMock).toHaveBeenCalledWith({
+      scope: 'planning',
       selector: { type: 'commit', hash: 'abc12345' },
     })
   })
@@ -156,11 +221,11 @@ describe('prepareRouteDetailViewTransition', () => {
           kind: 'route-detail',
           direction: 'backward',
         },
-        pathname: '/specs/alpha',
+        pathname: '/specs/owned/alpha',
       })
     ).resolves.toBe('ready')
 
-    expect(specGetQueryMock).not.toHaveBeenCalled()
+    expect(specDocumentQueryMock).not.toHaveBeenCalled()
     expect(primeSubscriptionCacheMock).not.toHaveBeenCalled()
   })
 })

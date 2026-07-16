@@ -24,6 +24,9 @@ function createSnapshot(): ExportSnapshot {
     },
     specs: [
       {
+        identity: { kind: 'owned', specId: 'cli' },
+        source: 'owned',
+        readOnly: false,
         id: 'cli',
         name: 'CLI',
         content: '# CLI\n\n## Purpose\nProcessed content',
@@ -48,6 +51,14 @@ describe('static-data-provider specs', () => {
   it('serves processed spec markdown as the static detail render source', async () => {
     const provider = await import('./static-data-provider')
 
-    await expect(provider.getSpecRaw('cli')).resolves.toBe('# CLI\n\n## Purpose\nProcessed content')
+    await expect(provider.getSpecDocument({ kind: 'owned', specId: 'cli' })).resolves.toMatchObject(
+      {
+        identity: { kind: 'owned', specId: 'cli' },
+        source: 'owned',
+        readOnly: false,
+        state: 'ready',
+        rawMarkdown: '# CLI\n\n## Purpose\nProcessed content',
+      }
+    )
   })
 })

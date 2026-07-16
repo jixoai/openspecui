@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Cache Git panel projections by canonical repository cwd and selector.
+ * 2. Deduplicate concurrent loads without sharing mutable data across repository scopes.
+ * 3. Invalidate one repository's mutable cache while keeping commit detail immutable.
+ *
+ * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
+ */
 import { resolve } from 'node:path'
 
 import { getDashboardGitTaskStatus } from './dashboard-overview.js'
@@ -32,6 +40,8 @@ const gitPanelPendingCaches = {
   patch: new Map<string, PendingCacheEntry<unknown>>(),
 } as const
 
+const gitPanelRefreshVersions = new Map<string, number>()
+
 type GitPanelCacheScope = keyof typeof gitPanelCaches
 
 function buildCacheKey(projectDir: string, key: string): string {
@@ -49,12 +59,19 @@ function isImmutableCommitDetailCache(scope: GitPanelCacheScope, key: string): b
   )
 }
 
-function getCacheVersion(scope: GitPanelCacheScope, key: string): string {
+function getCacheVersion(scope: GitPanelCacheScope, projectDir: string, key: string): string {
   if (isImmutableCommitDetailCache(scope, key)) {
     return 'commit-detail:immutable'
   }
 
-  return `refresh:${getDashboardGitTaskStatus().lastFinishedAt ?? 0}`
+  const repositoryKey = resolve(projectDir)
+  return `refresh:${getDashboardGitTaskStatus().lastFinishedAt ?? 0}:${gitPanelRefreshVersions.get(repositoryKey) ?? 0}`
+}
+
+/** Invalidate mutable panel data for one selected repository without affecting another scope. */
+export function invalidateGitPanelCache(projectDir: string): void {
+  const repositoryKey = resolve(projectDir)
+  gitPanelRefreshVersions.set(repositoryKey, (gitPanelRefreshVersions.get(repositoryKey) ?? 0) + 1)
 }
 
 export async function getCachedGitPanelValue<T>(
@@ -66,7 +83,7 @@ export async function getCachedGitPanelValue<T>(
   const cache = gitPanelCaches[scope] as Map<string, CacheEntry<T>>
   const pendingCache = gitPanelPendingCaches[scope] as Map<string, PendingCacheEntry<T>>
   const cacheKey = buildCacheKey(projectDir, key)
-  const version = getCacheVersion(scope, key)
+  const version = getCacheVersion(scope, projectDir, key)
   const hit = cache.get(cacheKey)
 
   if (hit && hit.version === version) {

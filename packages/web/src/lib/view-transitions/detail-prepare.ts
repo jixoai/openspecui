@@ -1,18 +1,28 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Prime detail data before forward route View Transitions.
+ * 2. Preserve entity identity for Spec, Change, Archive, and Git detail routes.
+ * 3. Keep Git prefetch repository scope aligned with the target route URL.
+ *
+ * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
+ */
+import { getGitEntryMetaQueryKey, parseGitRepositoryScope } from '@/lib/git-panel'
 import * as StaticProvider from '@/lib/static-data-provider'
 import { isStaticMode } from '@/lib/static-mode'
 import { queryClient, trpcClient } from '@/lib/trpc'
 import { getOpsxStatusSubscriptionCacheKey } from '@/lib/use-opsx'
 import {
   getArchiveSubscriptionCacheKey,
-  getSpecSubscriptionCacheKey,
+  getSpecDocumentSubscriptionCacheKey,
   primeSubscriptionCache,
 } from '@/lib/use-subscription'
 import type { GitEntrySelector } from '@openspecui/core'
+import { specIdentityFromRoute, type SpecIdentity } from '@openspecui/core/spec-catalog'
 import { waitForPrepareTask } from './prepare-wait'
 import type { VTIntent } from './route-semantics'
 
 type DetailPrepareMatch =
-  | { kind: 'spec'; specId: string }
+  | { kind: 'spec'; identity: SpecIdentity }
   | { kind: 'change'; changeId: string }
   | { kind: 'archive'; changeId: string }
   | { kind: 'git'; selector: GitEntrySelector }
@@ -30,9 +40,25 @@ function decodePathSegment(value: string): string {
 }
 
 function matchDetailPreparePath(pathname: string): DetailPrepareMatch | null {
-  const specMatch = /^\/specs\/([^/]+)$/.exec(pathname)
-  if (specMatch) {
-    return { kind: 'spec', specId: decodePathSegment(specMatch[1] ?? '') }
+  const ownedSpecMatch = /^\/specs\/owned\/([^/]+)$/.exec(pathname)
+  if (ownedSpecMatch) {
+    return {
+      kind: 'spec',
+      identity: specIdentityFromRoute({
+        specId: decodePathSegment(ownedSpecMatch[1] ?? ''),
+      }),
+    }
+  }
+
+  const referencedSpecMatch = /^\/specs\/referenced\/([^/]+)\/([^/]+)$/.exec(pathname)
+  if (referencedSpecMatch) {
+    return {
+      kind: 'spec',
+      identity: specIdentityFromRoute({
+        storeId: decodePathSegment(referencedSpecMatch[1] ?? ''),
+        specId: decodePathSegment(referencedSpecMatch[2] ?? ''),
+      }),
+    }
   }
 
   const changeMatch = /^\/changes\/([^/]+)$/.exec(pathname)
@@ -63,11 +89,11 @@ function matchDetailPreparePath(pathname: string): DetailPrepareMatch | null {
   return null
 }
 
-async function prepareSpecDetail(specId: string): Promise<void> {
-  const spec = isStaticMode()
-    ? await StaticProvider.getSpec(specId)
-    : await trpcClient.spec.get.query({ id: specId })
-  primeSubscriptionCache(getSpecSubscriptionCacheKey(specId), spec)
+async function prepareSpecDetail(identity: SpecIdentity): Promise<void> {
+  const document = isStaticMode()
+    ? await StaticProvider.getSpecDocument(identity)
+    : await trpcClient.spec.document.query(identity)
+  primeSubscriptionCache(getSpecDocumentSubscriptionCacheKey(identity), document)
 }
 
 async function prepareChangeDetail(changeId: string): Promise<void> {
@@ -87,27 +113,22 @@ async function prepareArchiveDetail(changeId: string): Promise<void> {
   primeSubscriptionCache(getArchiveSubscriptionCacheKey(changeId), archive)
 }
 
-function getGitMetaQueryKey(selector: GitEntrySelector): readonly unknown[] {
-  return selector.type === 'commit'
-    ? ['git', 'meta', 'commit', selector.hash]
-    : ['git', 'meta', 'uncommitted']
-}
-
-async function prepareGitDetail(selector: GitEntrySelector): Promise<void> {
+async function prepareGitDetail(selector: GitEntrySelector, search: string): Promise<void> {
   if (isStaticMode()) {
     return
   }
 
+  const scope = parseGitRepositoryScope(search)
   await queryClient.fetchQuery({
-    queryKey: getGitMetaQueryKey(selector),
-    queryFn: () => trpcClient.git.getEntryMeta.query({ selector }),
+    queryKey: getGitEntryMetaQueryKey(scope, selector),
+    queryFn: () => trpcClient.git.getEntryMeta.query({ scope, selector }),
     staleTime: QUERY_STALE_TIME_MS,
   })
 }
 
-async function prepareDetailRoute(match: DetailPrepareMatch): Promise<void> {
+async function prepareDetailRoute(match: DetailPrepareMatch, search: string): Promise<void> {
   if (match.kind === 'spec') {
-    await prepareSpecDetail(match.specId)
+    await prepareSpecDetail(match.identity)
     return
   }
 
@@ -121,14 +142,16 @@ async function prepareDetailRoute(match: DetailPrepareMatch): Promise<void> {
     return
   }
 
-  await prepareGitDetail(match.selector)
+  await prepareGitDetail(match.selector, search)
 }
 
 export async function prepareRouteDetailViewTransition(options: {
   intent: VTIntent | null
   pathname: string
+  search?: string
 }): Promise<DetailPrepareOutcome> {
   const { intent, pathname } = options
+  const search = options.search ?? (typeof window === 'undefined' ? '' : window.location.search)
 
   if (!intent || intent.kind !== 'route-detail' || intent.direction !== 'forward') {
     return 'ready'
@@ -139,7 +162,7 @@ export async function prepareRouteDetailViewTransition(options: {
     return 'ready'
   }
 
-  const result = await waitForPrepareTask(() => prepareDetailRoute(match))
+  const result = await waitForPrepareTask(() => prepareDetailRoute(match, search))
   if (result.status === 'ready') {
     return 'ready'
   }

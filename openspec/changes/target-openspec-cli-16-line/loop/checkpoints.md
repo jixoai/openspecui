@@ -8,6 +8,7 @@ Orthogonal intents (created 2026-07-15 Asia/Shanghai):
 
 Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配，目前我们的进度有点落后。"
 Original request (2026-07-14): "我们最终使用openspec来管理 wayfinder 产出的文档。"
+Original request (2026-07-16): "代码已经提交，开始review。如果有问题，那么可更新change甚至可以新开change。"
 -->
 
 ## 1. Research and Planning
@@ -36,54 +37,54 @@ Original request (2026-07-14): "我们最终使用openspec来管理 wayfinder �
 
 ## 3. Root Context and Service Ownership
 
-- [ ] 3.1 Core defines one typed Root Context containing launch project, planning root, root source, Store id, CLI health, References, and data-scope diagnostics
-- [ ] 3.2 Server exposes one query/subscription contract for Root Context with full loading, stale-data, and error states
-- [ ] 3.3 Planning-root adapters and document services consume the CLI-resolved root instead of launch `projectDir`
-- [ ] 3.4 Change actions preserve `changeRoot`, Store flags, artifact paths, existing output paths, action context, References, and diagnostics
-- [ ] 3.5 Root-dependent actions remain locked until root selection succeeds and show CLI-owned failure evidence when it does not
-- [ ] 3.6 Config ownership separates launch-project binding, active-root config, and environment-global config
-- [ ] 3.7 Git exposes explicit code-repository and planning-repository scopes when they differ
-- [ ] 3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited `XDG_DATA_HOME`
-- [ ] 3.9 Agent prompts and OPSX commands use CLI-resolved paths and never reconstruct `<launch-project>/openspec`
-- [ ] 3.10 Project-owned `.env`, `StoreRoot`, registry overlay, and synthesized registry paths remain absent
-- [ ] 3.11 Tests assert actual file mutations occur only inside the selected planning root
+- [x] 3.1 Core defines one typed Root Context containing launch project, planning root, root source, Store id, CLI health, References, and data-scope diagnostics
+- [x] 3.2 Server exposes one query/subscription contract for Root Context with full loading, stale-data, and error states
+- [x] 3.3 Planning-root adapters and document services consume the CLI-resolved root instead of launch `projectDir`
+- [x] 3.4 Change actions preserve `changeRoot`, Store flags, artifact paths, existing output paths, action context, References, and diagnostics
+- [x] 3.5 Root-dependent actions remain locked until root selection succeeds and show CLI-owned failure evidence when it does not
+- [x] 3.6 Config ownership separates launch-project binding, active-root config, and environment-global config
+- [x] 3.7 Git exposes explicit code-repository and planning-repository scopes when they differ
+- [x] 3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited `XDG_DATA_HOME`
+- [x] 3.9 Agent prompts and OPSX commands use CLI-resolved paths and never reconstruct `<launch-project>/openspec`
+- [x] 3.10 Project-owned `.env`, `StoreRoot`, registry overlay, and synthesized registry paths remain absent
+- [x] 3.11 Tests assert actual file mutations occur only inside the selected planning root
 
 ## 4. Multi-Root Reactive Kernel
 
-- [ ] 4.1 Reactive observation supports a reference-counted dynamic set of roots per runtime environment
-- [ ] 4.2 Effective OpenSpec data home changes invalidate Store, Workset, schema, and Context facets
-- [ ] 4.3 Registered Store roots are added/removed from observation as registry truth changes
-- [ ] 4.4 Launch-project and connected planning-root changes invalidate their project/context facets
-- [ ] 4.5 CLI mutation terminal or indeterminate outcomes invalidate affected facets before clients pull again
-- [ ] 4.6 Push messages carry invalidation identity only; clients pull fresh CLI projections
-- [ ] 4.7 Duplicate invalidations coalesce or remain idempotent across subscribers
-- [ ] 4.8 Store polling is removed as the primary path and retained only as a bounded watcher-failure fallback
-- [ ] 4.9 Watchers and fallback timers are released after unregister, root removal, disconnect, and environment teardown
-- [ ] 4.10 Multi-client tests cover external Store edits, registry changes, concurrent operations, reconnect, and root disappearance
+- [x] 4.1 Reactive observation supports a reference-counted dynamic set of roots per runtime environment
+- [x] 4.2 Effective OpenSpec data home changes invalidate Store, Workset, schema, and Context facets
+- [x] 4.3 Registered Store roots are added/removed from observation as registry truth changes
+- [x] 4.4 Launch-project and connected planning-root changes invalidate their project/context facets
+- [x] 4.5 CLI mutation terminal or indeterminate outcomes invalidate affected facets before clients pull again
+- [x] 4.6 Push messages carry invalidation identity only; clients pull fresh CLI projections
+- [x] 4.7 Duplicate invalidations coalesce or remain idempotent across subscribers
+- [x] 4.8 Store polling is removed as the primary path and retained only as a bounded watcher-failure fallback
+- [x] 4.9 Watchers and fallback timers are released after unregister, root removal, disconnect, and environment teardown
+- [x] 4.10 Multi-client tests cover external Store edits, registry changes, concurrent operations, reconnect, and root disappearance
 
 ## 5. Task and Spec Projection Contracts
 
-- [ ] 5.1 Generic task `progress` is replaced without alias by `trackedTaskProgress`, `documentChecklistSummary`, and `applyInstructionProgress`
-- [ ] 5.2 `trackedTaskProgress` resolves only the artifact selected by `apply.tracks` and expands its output glob
-- [ ] 5.3 Tracked progress falls back to top-level `tasks.md` only when schema/artifact resolution or matched files yield no source
-- [ ] 5.4 `documentChecklistSummary` scans schema Markdown documents, groups statistics by artifact/file, and never drives workflow state
-- [ ] 5.5 `applyInstructionProgress` preserves the raw Apply result and visibly attributes divergence from tracked progress
-- [ ] 5.6 `0/0` maps to `no-tasks`, never complete; archive readiness remains a CLI validate/archive outcome
-- [ ] 5.7 Core defines compound Spec identity as `(owned, specId)` or `(referenced, storeId, specId)`
-- [ ] 5.8 Shared Spec Catalog combines owned and direct referenced Specs without flattening source or read-only state
-- [ ] 5.9 Live and static routes use `/specs/owned/<specId>` and `/specs/referenced/<storeId>/<specId>`
-- [ ] 5.10 Search records, cache keys, view-transition keys, links, and provider lookups preserve complete Spec identity
-- [ ] 5.11 Duplicate `specId` fixtures across owned and multiple Store sources navigate to the correct content
+- [x] 5.1 Generic task `progress` is replaced without alias by `trackedTaskProgress`, `documentChecklistSummary`, and `applyInstructionProgress`
+- [x] 5.2 `trackedTaskProgress` resolves only the artifact selected by `apply.tracks` and expands its output glob
+- [x] 5.3 Tracked progress falls back to top-level `tasks.md` only when schema/artifact resolution or matched files yield no source
+- [x] 5.4 `documentChecklistSummary` scans schema Markdown documents, groups statistics by artifact/file, and never drives workflow state
+- [x] 5.5 `applyInstructionProgress` preserves the raw Apply result and visibly attributes divergence from tracked progress
+- [x] 5.6 `0/0` maps to `no-tasks`, never complete; archive readiness remains a CLI validate/archive outcome
+- [x] 5.7 Core defines compound Spec identity as `(owned, specId)` or `(referenced, storeId, specId)`
+- [x] 5.8 Shared Spec Catalog combines owned and direct referenced Specs without flattening source or read-only state
+- [x] 5.9 Live and static routes use `/specs/owned/<specId>` and `/specs/referenced/<storeId>/<specId>`
+- [x] 5.10 Search records, cache keys, view-transition keys, links, and provider lookups preserve complete Spec identity
+- [x] 5.11 Duplicate `specId` fixtures across owned and multiple Store sources navigate to the correct content
 
 ## 6. Project Workspace Surfaces
 
-- [ ] 6.1 Global shell distinguishes launch project from active planning root and exposes full Root Context on demand
-- [ ] 6.2 Dashboard metrics derive from the planning root and show root source, Store id, Reference health, and separately scoped Git facts
-- [ ] 6.3 Changes lists only writable-root changes and uses formal tracked progress for workflow state
-- [ ] 6.4 Change detail preserves CLI paths/context, adds `update`, shows Reference context, and renders strict validate/archive diagnostics
-- [ ] 6.5 Specs defaults to Owned and provides a Store-grouped Referenced view with immutable entries
-- [ ] 6.6 Spec detail shows source/read-only state, disables mutation for References, and returns to the correct list scope
-- [ ] 6.7 Archive lists only writable-root archives and never retries validation bypass automatically
+- [x] 6.1 Global shell distinguishes launch project from active planning root and exposes full Root Context on demand
+- [x] 6.2 Dashboard metrics derive from the planning root and show root source, Store id, Reference health, and separately scoped Git facts
+- [x] 6.3 Changes lists only writable-root changes and uses formal tracked progress for workflow state
+- [x] 6.4 Change detail preserves CLI paths/context, adds `update`, shows Reference context, and renders strict validate/archive diagnostics
+- [x] 6.5 Specs defaults to Owned and provides a Store-grouped Referenced view with immutable entries
+- [x] 6.6 Spec detail shows source/read-only state, disables mutation for References, and returns to the correct list scope
+- [x] 6.7 Archive lists only writable-root archives and never retries validation bypass automatically
 - [ ] 6.8 Config implements Project Binding, Active Root Config, and Environment Global Config ownership sections
 - [ ] 6.9 Project Stores route is replaced by Context with root, Reference, environment, and read-only registry diagnostics
 - [ ] 6.10 Search defaults to the active root and offers an explicit Referenced Specs scope without referenced changes

@@ -1,0 +1,138 @@
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { probeHostedBackend, type HostedTabReachability } from './reachability'
+import {
+  areHostedShellStatesEqual,
+  createEmptyHostedShellState,
+  loadHostedShellState,
+  saveHostedShellState,
+  type HostedShellState,
+  type HostedShellTab,
+} from './shell-state'
+
+const SHELL_STATE_STORE_KEY = 'openspecui-app:shell'
+
+/**
+ * 持久化的 backend 连接条目（live 同步 localStorage）。
+ *
+ * 复用 shell-state.ts 的 HostedShellTab——它是「无凭据」的 backend 定位（apiBaseUrl），
+ * 与 AGENTS.md「连接持久化不带凭据」一致。凭据只在 session memory 中（本轮骨架不涉及）。
+ */
+function createShellStateStore() {
+  const listeners = new Set<() => void>()
+  // 缓存上次解析结果，保证 useSyncExternalStore 的 getSnapshot 引用稳定（避免无限渲染）。
+  let cached: HostedShellState =
+    typeof localStorage !== 'undefined'
+      ? loadHostedShellState(localStorage)
+      : createEmptyHostedShellState()
+
+  function refresh(): void {
+    const next =
+      typeof localStorage !== 'undefined'
+        ? loadHostedShellState(localStorage)
+        : createEmptyHostedShellState()
+    // 只在内容真正变化时更新缓存引用并通知（引用稳定 = 不触发多余渲染）。
+    if (!areHostedShellStatesEqual(cached, next)) {
+      cached = next
+      listeners.forEach((listener) => listener())
+    }
+  }
+
+  // 跨窗口同步：hosted-shell-sync.ts 已有机制；这里订阅 storage 事件保持本地视图新鲜。
+  if (typeof window !== 'undefined') {
+    window.addEventListener('storage', (event) => {
+      if (event.key === SHELL_STATE_STORE_KEY) refresh()
+    })
+  }
+
+  return {
+    // 惰性解析 localStorage：若内容未变则返回缓存引用（保持稳定，避免无限渲染）；
+    // 若内容变了则更新缓存并返回新引用（驱动重新渲染）。
+    getState: () => {
+      const next =
+        typeof localStorage !== 'undefined'
+          ? loadHostedShellState(localStorage)
+          : createEmptyHostedShellState()
+      if (areHostedShellStatesEqual(cached, next)) return cached
+      cached = next
+      return cached
+    },
+    subscribe(listener: () => void) {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    setState(next: HostedShellState) {
+      if (typeof localStorage !== 'undefined') {
+        saveHostedShellState(localStorage, next)
+      }
+      refresh()
+    },
+  }
+}
+
+const shellStateStore = createShellStateStore()
+
+export function useConnections() {
+  const state = useSyncExternalStore(shellStateStore.subscribe, shellStateStore.getState)
+
+  return state
+}
+
+/** 触发 shell state 变更（add/remove/reorder）的命令入口。 */
+export function useConnectionsActions() {
+  return shellStateStore
+}
+
+/** 单个 backend 的可达性（checking | online | offline）。 */
+export type ConnectionReachability = HostedTabReachability
+
+export interface ConnectionReachabilityMap {
+  [apiBaseUrl: string]: ConnectionReachability
+}
+
+/**
+ * 对所有连接条目探测可达性（复用 reachability.ts 的 /api/health 探测）。
+ *
+ * 注意：本轮骨架阶段 backend 不返回 envUri/capabilities，只返回 projectName/openspecuiVersion。
+ * TODO(kernel): 后端 health 协议落地后，从同一探测结果提取 envUri + capabilities，
+ *               并据 envUri 分组（Environment Center 使用），此处保留纯可达性职责。
+ */
+export function useConnectionReachability(tabs: HostedShellTab[]): ConnectionReachabilityMap {
+  const [reachability, setReachability] = useState<ConnectionReachabilityMap>({})
+
+  const apiBaseUrls = useMemo(() => tabs.map((tab) => tab.apiBaseUrl), [tabs])
+  const cacheKey = apiBaseUrls.join(',')
+
+  useEffect(() => {
+    let cancelled = false
+    if (apiBaseUrls.length === 0) {
+      setReachability({})
+      return
+    }
+
+    // 先全部置 checking，保证 UI 立即反映加载态。
+    setReachability((prev) => {
+      const next: ConnectionReachabilityMap = {}
+      for (const url of apiBaseUrls) next[url] = 'checking'
+      // 保留上一轮已知的非 checking 结果以减少闪烁。
+      for (const url of apiBaseUrls) {
+        if (prev[url] && prev[url] !== 'checking') next[url] = prev[url]
+      }
+      return next
+    })
+
+    void Promise.all(
+      apiBaseUrls.map(async (url) => {
+        const result = await probeHostedBackend(url)
+        if (cancelled) return
+        setReachability((prev) => ({ ...prev, [url]: result.reachability }))
+      })
+    )
+
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cacheKey])
+
+  return reachability
+}

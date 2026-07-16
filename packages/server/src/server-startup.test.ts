@@ -1,19 +1,35 @@
-import { CliExecutor, ConfigManager, OpsxKernel } from '@openspecui/core'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const coreMockState = vi.hoisted(() => ({
-  initWatcherPool: vi.fn<() => Promise<void>>(),
+  acquireObservationRoot: vi.fn<() => Promise<() => Promise<void>>>(),
+  disposeObservationEnvironment: vi.fn<() => Promise<void>>(),
+  acquireInvalidationRoot: vi.fn(() => () => {}),
+  disposeProjectInvalidation: vi.fn(),
+  startDataHomeObservation: vi.fn<() => Promise<void>>(),
+  disposeDataHomeObservation: vi.fn<() => Promise<void>>(),
 }))
 
 vi.mock('@openspecui/core', async () => {
   const actual = await vi.importActual<typeof import('@openspecui/core')>('@openspecui/core')
   return {
     ...actual,
-    initWatcherPool: coreMockState.initWatcherPool,
-    isWatcherPoolInitialized: vi.fn(() => false),
+    ReactiveObservationEnvironment: class {
+      acquireRoot = coreMockState.acquireObservationRoot
+      dispose = coreMockState.disposeObservationEnvironment
+      getRoots = () => []
+    },
+    RuntimeRootInvalidationRegistry: class {
+      acquireRoot = coreMockState.acquireInvalidationRoot
+      dispose = coreMockState.disposeProjectInvalidation
+    },
+    OpenSpecDataHomeObserver: class extends actual.RuntimeInvalidationIndex {
+      start = coreMockState.startDataHomeObservation
+      dispose = coreMockState.disposeDataHomeObservation
+      getState = () => 'active' as const
+    },
   }
 })
 
@@ -38,7 +54,10 @@ async function createProjectDir(): Promise<string> {
 
 describe('server startup runtime contract', () => {
   it('returns before background warmup tasks are allowed to start', async () => {
-    coreMockState.initWatcherPool.mockResolvedValue(undefined)
+    coreMockState.acquireObservationRoot.mockResolvedValue(async () => {})
+    coreMockState.disposeObservationEnvironment.mockResolvedValue(undefined)
+    coreMockState.startDataHomeObservation.mockResolvedValue(undefined)
+    coreMockState.disposeDataHomeObservation.mockResolvedValue(undefined)
     const projectDir = await createProjectDir()
     const port = await findAvailablePort(34_800, 100)
 
@@ -49,11 +68,20 @@ describe('server startup runtime contract', () => {
     })
     runningServers.push(started)
 
-    expect(coreMockState.initWatcherPool).not.toHaveBeenCalled()
+    expect(coreMockState.acquireObservationRoot).not.toHaveBeenCalled()
+    expect(coreMockState.startDataHomeObservation).not.toHaveBeenCalled()
+    expect(coreMockState.acquireInvalidationRoot).toHaveBeenCalledWith(projectDir)
+
+    await started.close()
+    runningServers.pop()
+    expect(coreMockState.disposeProjectInvalidation).toHaveBeenCalled()
   })
 
   it('returns a healthy HTTP runtime before watcher initialization resolves', async () => {
-    coreMockState.initWatcherPool.mockReturnValue(new Promise(() => {}))
+    coreMockState.acquireObservationRoot.mockReturnValue(new Promise(() => {}))
+    coreMockState.disposeObservationEnvironment.mockResolvedValue(undefined)
+    coreMockState.startDataHomeObservation.mockResolvedValue(undefined)
+    coreMockState.disposeDataHomeObservation.mockResolvedValue(undefined)
     const projectDir = await createProjectDir()
     const port = await findAvailablePort(34_700, 100)
 
@@ -67,11 +95,15 @@ describe('server startup runtime contract', () => {
     await expect(fetch(`${started.url}/api/health`)).resolves.toMatchObject({
       ok: true,
     })
-    expect(coreMockState.initWatcherPool).toHaveBeenCalledWith(projectDir)
+    expect(coreMockState.acquireObservationRoot).toHaveBeenCalledWith(projectDir)
+    expect(coreMockState.startDataHomeObservation).toHaveBeenCalledTimes(1)
   })
 
   it('serves prepared preview entry assets and guarded resources through the API route', async () => {
-    coreMockState.initWatcherPool.mockResolvedValue(undefined)
+    coreMockState.acquireObservationRoot.mockResolvedValue(async () => {})
+    coreMockState.disposeObservationEnvironment.mockResolvedValue(undefined)
+    coreMockState.startDataHomeObservation.mockResolvedValue(undefined)
+    coreMockState.disposeDataHomeObservation.mockResolvedValue(undefined)
     const projectDir = await createProjectDir()
     const previewAssetsDir = join(projectDir, '.preview-assets')
     await mkdir(join(projectDir, 'openspec', 'changes', 'preview-demo', 'site'), {
@@ -98,14 +130,10 @@ describe('server startup runtime contract', () => {
       'utf8'
     )
 
-    const configManager = new ConfigManager(projectDir)
-    const cliExecutor = new CliExecutor(configManager, projectDir)
-    const kernel = new OpsxKernel(projectDir, cliExecutor)
     const server = createServer({
       projectDir,
       enableWatcher: false,
       previewAssetsDir,
-      kernel,
     })
     const previewService = new FilePreviewService(projectDir, previewAssetsDir)
     const preparedHtml = previewService.prepareEntityFilePreview({
@@ -118,7 +146,7 @@ describe('server startup runtime contract', () => {
       changeId: 'preview-demo',
       path: 'docs/guide.pdf',
     })
-    const appPreviewService = server.createContext().filePreviewService
+    const appPreviewService = server.filePreviewService
     appPreviewService.prepareEntityFilePreview({
       stage: 'change',
       changeId: 'preview-demo',
@@ -142,13 +170,14 @@ describe('server startup runtime contract', () => {
     await expect(htmlEntryResponse.text()).resolves.toContain('<h1>demo</h1>')
 
     const assetResponse = await server.app.request(
-      new Request(`http://openspecui.test/api/file-preview/${preparedPdf.hash}/assets/pdf-preview.js`)
+      new Request(
+        `http://openspecui.test/api/file-preview/${preparedPdf.hash}/assets/pdf-preview.js`
+      )
     )
     expect(assetResponse.ok).toBe(true)
     await expect(assetResponse.text()).resolves.toContain(
       `/api/file-preview/${preparedPdf.hash}/assets/pdf.worker.min-demo.mjs`
     )
-
-    kernel.dispose()
+    server.projectInvalidation.dispose()
   })
 })

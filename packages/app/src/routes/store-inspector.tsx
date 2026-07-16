@@ -1,0 +1,201 @@
+import type { StoreDoctorStore } from '@openspecui/core/store-types'
+import { Search, Trash2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { EmptyView, ErrorView, LoadingView } from '../components/state-views'
+import { StatusBadge, StatusDot, type StatusVariant } from '../components/status-badge'
+import { StoreManagerShell } from '../components/store-manager-shell'
+import { StoreRemoveDialog } from '../components/store-remove-dialog'
+import { deriveHealthFromDiagnostics, type StoreHealthSummary } from '../lib/store-health'
+import { useStoreData } from '../lib/use-store-data'
+
+/** Store 健康态 → 统一 StatusVariant（语义化状态徽章共用，列表/详情复用）。 */
+function healthVariant(health: StoreHealthSummary): StatusVariant {
+  if (health.state === 'healthy') return 'healthy'
+  if (health.state === 'issue') return 'issue'
+  return 'neutral'
+}
+
+/**
+ * Store Inspector（B 视图，主交互）：selection-first master/detail。
+ *
+ * 职责（AGENTS.md）：Store 身份、doctor 证据、setup/register/unregister/remove 控件。
+ * 投影来源：`openspec store doctor [id] --json`（客观保留上游事实，不重解释为所有权/完整性结论）。
+ *
+ * TODO(kernel): stores.inspect 能力决定本视图是否渲染；stores.mutate 能力决定控件是否可操作。
+ */
+export function StoreInspectorRoute() {
+  const { inspector, isLoading, error } = useStoreData()
+  const stores = inspector?.stores ?? []
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [filter, setFilter] = useState('')
+  const [removeTarget, setRemoveTarget] = useState<StoreDoctorStore | null>(null)
+
+  const visibleStores = useMemo(() => {
+    const normalized = filter.trim().toLowerCase()
+    if (!normalized) return stores
+    return stores.filter(
+      (store) =>
+        (store.id ?? '').toLowerCase().includes(normalized) ||
+        (store.root ?? '').toLowerCase().includes(normalized)
+    )
+  }, [stores, filter])
+
+  const selected = stores.find((store) => store.id === selectedId) ?? visibleStores[0] ?? null
+
+  let body
+  if (isLoading && !inspector) {
+    body = <LoadingView label="Loading store diagnostics..." />
+  } else if (error && !inspector) {
+    body = <ErrorView message={error.message} />
+  } else if (stores.length === 0) {
+    body = (
+      <EmptyView title="No Stores registered">
+        {/* TODO(kernel): setup/register 是 stores.mutate 能力；待 backend 落地后提供操作入口。 */}
+        Registered Stores will appear here once the backend reports them via{' '}
+        <code className="bg-muted rounded px-1">openspec store doctor</code>.
+      </EmptyView>
+    )
+  } else {
+    body = (
+      <div className="grid gap-4 md:grid-cols-[280px_1fr]">
+        <aside className="border-border flex flex-col rounded-lg border">
+          <div className="border-border flex items-center gap-2 border-b p-2">
+            <Search className="text-muted-foreground h-4 w-4" />
+            <input
+              type="search"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              placeholder="Filter id or path"
+              aria-label="Filter stores"
+              className="bg-background w-full text-sm outline-none"
+            />
+            <span className="text-muted-foreground shrink-0 text-xs">{visibleStores.length}</span>
+          </div>
+          <ul className="max-h-[60vh] overflow-y-auto">
+            {visibleStores.map((store) => {
+              const isSelected = selected?.id === store.id
+              const health = deriveHealthFromDiagnostics(store.status)
+              return (
+                <li key={store.id ?? store.root}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(store.id ?? null)}
+                    aria-current={isSelected}
+                    className={`hover:bg-muted/50 flex w-full items-center justify-between gap-2 border-b px-3 py-2 text-left text-sm ${
+                      isSelected ? 'bg-muted' : ''
+                    }`}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{store.id}</span>
+                      <span className="text-muted-foreground block truncate text-xs">
+                        {store.root}
+                      </span>
+                    </span>
+                    <StatusDot variant={healthVariant(health)} ariaLabel={health.label} />
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </aside>
+
+        {selected ? (
+          <StoreInspectorDetail store={selected} onRemove={() => setRemoveTarget(selected)} />
+        ) : (
+          <EmptyView title="Select a Store to inspect" />
+        )}
+
+        {removeTarget ? (
+          <StoreRemoveDialog store={removeTarget} onClose={() => setRemoveTarget(null)} />
+        ) : null}
+      </div>
+    )
+  }
+
+  return <StoreManagerShell>{body}</StoreManagerShell>
+}
+
+function StoreInspectorDetail({
+  store,
+  onRemove,
+}: {
+  store: StoreDoctorStore
+  onRemove: () => void
+}) {
+  const health = deriveHealthFromDiagnostics(store.status)
+  return (
+    <article className="border-border space-y-4 rounded-lg border p-4">
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-muted-foreground text-xs uppercase tracking-wide">
+            Selected Store
+          </div>
+          <h2 className="truncate text-xl font-semibold">{store.id}</h2>
+          <p className="text-muted-foreground truncate text-xs" title={store.root}>
+            {store.root}
+          </p>
+        </div>
+        <StatusBadge variant={healthVariant(health)} label={health.label} />
+      </header>
+
+      <section className="space-y-2">
+        <h3 className="text-sm font-semibold">Identity and location</h3>
+        <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
+          <dt className="text-muted-foreground">Store id</dt>
+          <dd className="font-mono">{store.id ?? '—'}</dd>
+          <dt className="text-muted-foreground">Checkout root</dt>
+          <dd className="font-mono">{store.root ?? '—'}</dd>
+          <dt className="text-muted-foreground">Metadata</dt>
+          <dd className="font-mono">{store.metadata_path ?? '—'}</dd>
+          <dt className="text-muted-foreground">Git remote</dt>
+          <dd className="font-mono">{store.git?.origin_url ?? '—'}</dd>
+        </dl>
+      </section>
+
+      <section className="space-y-2">
+        <h3 className="text-sm font-semibold">Doctor checks</h3>
+        {/* 诊断客观保留上游 snake_case 事实；不重解释为所有权/完整性结论。 */}
+        <ul className="space-y-1">
+          {(store.status ?? []).map((diagnostic, index) => (
+            <li
+              key={`${diagnostic.code ?? ''}-${index}`}
+              className="border-border text-muted-foreground rounded border px-2 py-1 text-xs"
+            >
+              <span className="text-foreground">{diagnostic.message ?? diagnostic.code}</span>
+              {diagnostic.fix ? <span className="block">↳ {diagnostic.fix}</span> : null}
+            </li>
+          ))}
+          {(store.status ?? []).length === 0 ? (
+            <li className="text-muted-foreground text-xs">No diagnostics reported.</li>
+          ) : null}
+        </ul>
+      </section>
+
+      <section className="space-y-2">
+        <h3 className="text-sm font-semibold">Operation boundaries</h3>
+        <div className="flex flex-wrap gap-2">
+          {/* TODO(kernel): setup/register/unregister/remove 是 stores.mutate 能力，由 backend 执行。
+              控件可见性由能力决定；操作可应用性由 CLI 结果决定（非前端推断）。 */}
+          <button
+            type="button"
+            disabled
+            className="hover:bg-muted rounded-md border px-3 py-1.5 text-xs opacity-50"
+          >
+            Unregister (forget entry)
+          </button>
+          <button
+            type="button"
+            onClick={onRemove}
+            className="border-destructive/40 text-destructive hover:bg-destructive/10 inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-xs"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Remove files
+          </button>
+          <span className="text-muted-foreground self-center text-xs">
+            Git synchronization: manual, outside OpenSpecUI
+          </span>
+        </div>
+      </section>
+    </article>
+  )
+}

@@ -307,24 +307,6 @@ export function useOpsxApplyInstructionsSubscription(input: {
   )
 }
 
-export function useOpsxProjectConfigSubscription(): SubscriptionState<string | null> {
-  const subscribe = useCallback(
-    (callbacks: { onData: (data: string | null) => void; onError: (err: Error) => void }) =>
-      trpcClient.opsx.subscribeProjectConfig.subscribe(undefined, {
-        onData: callbacks.onData,
-        onError: callbacks.onError,
-      }),
-    []
-  )
-
-  return useSubscription<string | null>(
-    subscribe,
-    StaticProvider.getOpsxProjectConfig,
-    [],
-    'opsx.subscribeProjectConfig'
-  )
-}
-
 export function useOpsxChangeListSubscription(): SubscriptionState<string[]> {
   const subscribe = useCallback(
     (callbacks: { onData: (data: string[]) => void; onError: (err: Error) => void }) =>

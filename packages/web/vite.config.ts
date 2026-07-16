@@ -28,9 +28,11 @@ export default defineConfig(({ isSsrBuild }) => {
     '@openspecui/core/notifications': resolve(__dirname, '../core/src/notifications.ts'),
     '@openspecui/core/openspec-compat': resolve(__dirname, '../core/src/openspec-compat.ts'),
     '@openspecui/core/opsx-display-path': resolve(__dirname, '../core/src/opsx-display-path.ts'),
+    '@openspecui/core/opsx-workflows': resolve(__dirname, '../core/src/opsx-workflows.ts'),
     '@openspecui/core/opsx-entity': resolve(__dirname, '../core/src/opsx-entity.ts'),
     '@openspecui/core/opsx-schema-detail': resolve(__dirname, '../core/src/opsx-schema-detail.ts'),
     '@openspecui/core/task-progress': resolve(__dirname, '../core/src/task-progress.ts'),
+    '@openspecui/core/spec-catalog': resolve(__dirname, '../core/src/spec-catalog.ts'),
     '@openspecui/core/pty-protocol': resolve(__dirname, '../core/src/pty-protocol.ts'),
     '@openspecui/core/sounds': resolve(__dirname, '../core/src/sounds.ts'),
     '@openspecui/core/terminal-invocation': resolve(

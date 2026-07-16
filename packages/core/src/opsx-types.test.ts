@@ -43,6 +43,15 @@ describe('ApplyInstructionsSchema', () => {
       ],
       tasks: ['/repo/openspec/changes/add-example/tasks.md'],
     })
+    expect(parsed).not.toHaveProperty('progress')
+    expect(parsed.applyInstructionProgress).toMatchObject({
+      source: 'openspec-instructions-apply',
+      total: 1,
+      complete: 0,
+      remaining: 1,
+      state: 'ready',
+      divergence: null,
+    })
   })
 
   it('normalizes legacy contextFiles strings to arrays', () => {

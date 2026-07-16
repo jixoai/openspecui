@@ -8,6 +8,7 @@
  */
 import { z } from 'zod'
 
+/** Upstream diagnostic emitted in a CLI JSON status array. */
 export const CliDiagnosticSchema = z
   .object({
     severity: z.enum(['error', 'warning', 'info']),
@@ -18,8 +19,10 @@ export const CliDiagnosticSchema = z
   })
   .passthrough()
 
+/** Upstream provenance for the CLI-selected planning root. */
 export const CliRootSourceSchema = z.enum(['store', 'declared', 'nearest', 'implicit'])
 
+/** CLI-selected planning root with upstream selection provenance. */
 export const CliRootSchema = z
   .object({
     path: z.string(),
@@ -28,6 +31,7 @@ export const CliRootSchema = z
   })
   .passthrough()
 
+/** Lightweight Spec fact exposed by a direct Reference index. */
 export const CliReferenceSpecSchema = z
   .object({
     id: z.string(),
@@ -35,6 +39,7 @@ export const CliReferenceSpecSchema = z
   })
   .passthrough()
 
+/** Direct Reference entry resolved by the active planning root. */
 export const CliReferenceIndexEntrySchema = z
   .object({
     store_id: z.string(),
@@ -45,6 +50,7 @@ export const CliReferenceIndexEntrySchema = z
   })
   .passthrough()
 
+/** JSON failure payload whose truth is carried entirely by upstream diagnostics. */
 export const CliDiagnosticFailureSchema = z
   .object({
     status: z.array(CliDiagnosticSchema).min(1),

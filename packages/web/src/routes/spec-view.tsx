@@ -1,10 +1,18 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Resolve owned and referenced Spec routes through compound identity.
+ * 2. Render owned Markdown through the existing document pipeline.
+ * 3. Render referenced CLI JSON as visibly read-only evidence without synthesizing fields.
+ * 4. Preserve collision-safe View Transition identity across source-distinct documents.
+ *
+ * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
+ */
 import { MarkdownViewer } from '@/components/markdown-viewer'
 import { resolveDocumentTranslationConfig } from '@/lib/resolve-document-translation-config'
 import {
   useConfigSubscription,
   useGlobalSettingsSubscription,
-  useSpecRawSubscription,
-  useSpecSubscription,
+  useSpecDocumentSubscription,
 } from '@/lib/use-subscription'
 import { VTLink } from '@/lib/view-transitions/navigation'
 import {
@@ -13,123 +21,157 @@ import {
 } from '@/lib/view-transitions/shared-elements'
 import type { Spec } from '@openspecui/core'
 import type { DocumentTranslationConfigInput } from '@openspecui/core/document-translation'
+import {
+  specIdentityFromRoute,
+  specIdentityKey,
+  type CliShowSpecDocument,
+  type ReferencedSpecDocumentProjection,
+  type SpecIdentity,
+} from '@openspecui/core/spec-catalog'
 import { useLocation, useParams } from '@tanstack/react-router'
-import { AlertCircle, AlertTriangle, ArrowLeft, CheckCircle, FileText, Info } from 'lucide-react'
+import { ArrowLeft, FileText, LockKeyhole } from 'lucide-react'
 import { useMemo, useRef } from 'react'
 
 export function SpecView() {
-  const { specId } = useParams({ from: '/specs/$specId' })
+  const { specId, storeId } = useParams({ strict: false })
+  const identity = useMemo(
+    () => specIdentityFromRoute({ specId, ...(storeId ? { storeId } : {}) }),
+    [specId, storeId]
+  )
   const location = useLocation()
   const handoff = readSharedElementHandoffState(location.state)
-  const sharedDescriptor = useMemo(() => ({ family: 'specs', entityId: specId }) as const, [specId])
-
-  const { data: spec, isLoading } = useSpecSubscription(specId)
-  const { data: rawMarkdown, isLoading: isRawLoading } = useSpecRawSubscription(specId)
+  const { data: document, isLoading, error } = useSpecDocumentSubscription(identity)
   const { data: config } = useConfigSubscription()
   const { data: globalSettings } = useGlobalSettingsSubscription()
   const translationConfig = useMemo(
     () => resolveDocumentTranslationConfig(config?.translation, globalSettings),
     [config?.translation, globalSettings]
   )
-  // TODO: validation 暂时不支持订阅，后续可以添加
-  const validation = null as {
-    valid: boolean
-    issues: Array<{ severity: string; message: string; path?: string }>
-  } | null
 
-  if ((isLoading && !spec) || (isRawLoading && !rawMarkdown)) {
-    if (handoff) {
-      return (
-        <div className="flex min-h-0 flex-1 flex-col gap-6 p-4">
-          <div className="flex items-center gap-4">
-            <VTLink
-              to="/specs"
-              vt={{ sharedElements: sharedDescriptor }}
-              className="hover:bg-muted rounded-md p-2"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </VTLink>
-            <div {...getSharedElementBinding(sharedDescriptor, 'container')}>
-              <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
-                <FileText
-                  {...getSharedElementBinding(sharedDescriptor, 'icon')}
-                  className="h-6 w-6 shrink-0"
-                />
-                <span {...getSharedElementBinding(sharedDescriptor, 'title')}>
-                  {handoff.title ?? specId}
-                </span>
-              </h1>
-              <p className="text-muted-foreground">ID: {handoff.subtitle ?? specId}</p>
-            </div>
-          </div>
-          <div className="vt-detail-content route-loading animate-pulse rounded-lg border p-4">
-            Loading spec...
-          </div>
-        </div>
-      )
-    }
-
-    return <div className="route-loading animate-pulse">Loading spec...</div>
+  if (isLoading && !document) {
+    return <SpecLoading identity={identity} title={handoff?.title} subtitle={handoff?.subtitle} />
   }
 
-  if (!spec) {
-    return <div className="text-red-600">Spec not found</div>
+  if (error) {
+    return <div className="text-destructive p-4">{error.message}</div>
   }
 
-  return (
-    <SpecContent
-      spec={spec}
-      rawMarkdown={rawMarkdown ?? ''}
-      validation={validation}
+  if (!document || document.state === 'not-found') {
+    return <div className="text-destructive p-4">Spec not found</div>
+  }
+
+  return document.source === 'owned' ? (
+    <OwnedSpecContent
+      identity={identity}
+      spec={document.spec}
+      rawMarkdown={document.rawMarkdown ?? ''}
       translationConfig={translationConfig}
     />
+  ) : (
+    <ReferencedSpecContent document={document} />
   )
 }
 
-function SpecContent({
+function SpecLoading({
+  identity,
+  title,
+  subtitle,
+}: {
+  identity: SpecIdentity
+  title?: string
+  subtitle?: string
+}) {
+  const sharedDescriptor = { family: 'specs', entityId: specIdentityKey(identity) } as const
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-6 p-4">
+      <SpecHeader
+        identity={identity}
+        title={title ?? identity.specId}
+        subtitle={subtitle}
+        sharedDescriptor={sharedDescriptor}
+      />
+      <div className="vt-detail-content route-loading animate-pulse rounded-lg border p-4">
+        Loading spec...
+      </div>
+    </div>
+  )
+}
+
+function SpecHeader({
+  identity,
+  title,
+  subtitle,
+  sourceRef,
+  sharedDescriptor,
+}: {
+  identity: SpecIdentity
+  title: string
+  subtitle?: string
+  sourceRef?: React.RefObject<HTMLDivElement | null>
+  sharedDescriptor: { family: 'specs'; entityId: string }
+}) {
+  const sourceLabel =
+    subtitle ??
+    (identity.kind === 'owned'
+      ? `Owned · ${identity.specId}`
+      : `Referenced from ${identity.storeId} · ${identity.specId}`)
+  return (
+    <div className="flex min-w-0 items-center gap-4">
+      <VTLink
+        to="/specs"
+        state={(previous) => ({ ...previous, __specListScope: identity.kind })}
+        vt={{ source: sourceRef, sharedElements: sharedDescriptor }}
+        className="hover:bg-muted shrink-0 rounded-md p-2"
+        aria-label="Back to specifications"
+      >
+        <ArrowLeft className="h-5 w-5" />
+      </VTLink>
+      <div
+        ref={sourceRef}
+        {...getSharedElementBinding(sharedDescriptor, 'container')}
+        className="min-w-0"
+      >
+        <h1 className="font-nav flex min-w-0 items-center gap-2 text-2xl font-bold">
+          <FileText
+            {...getSharedElementBinding(sharedDescriptor, 'icon')}
+            className="h-6 w-6 shrink-0"
+          />
+          <span {...getSharedElementBinding(sharedDescriptor, 'title')} className="truncate">
+            {title}
+          </span>
+        </h1>
+        <p className="text-muted-foreground truncate">{sourceLabel}</p>
+      </div>
+    </div>
+  )
+}
+
+function OwnedSpecContent({
+  identity,
   spec,
   rawMarkdown,
-  validation,
   translationConfig,
 }: {
-  spec: Spec
+  identity: SpecIdentity
+  spec: Spec | null
   rawMarkdown: string
   translationConfig?: DocumentTranslationConfigInput
-  validation: {
-    valid: boolean
-    issues: Array<{ severity: string; message: string; path?: string }>
-  } | null
 }) {
   const headerRef = useRef<HTMLDivElement | null>(null)
-  const sharedDescriptor = useMemo(
-    () => ({ family: 'specs', entityId: spec.id }) as const,
-    [spec.id]
-  )
+  const sharedDescriptor = {
+    family: 'specs',
+    entityId: specIdentityKey(identity),
+  } as const
+  if (!spec) return <div className="text-destructive p-4">Spec not found</div>
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 p-4">
-      <div className="flex items-center gap-4">
-        <VTLink
-          to="/specs"
-          vt={{ source: headerRef, sharedElements: sharedDescriptor }}
-          className="hover:bg-muted rounded-md p-2"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </VTLink>
-        <div ref={headerRef} {...getSharedElementBinding(sharedDescriptor, 'container')}>
-          <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
-            <FileText
-              {...getSharedElementBinding(sharedDescriptor, 'icon')}
-              className="h-6 w-6 shrink-0"
-            />
-            <span {...getSharedElementBinding(sharedDescriptor, 'title')}>{spec.name}</span>
-          </h1>
-          <p className="text-muted-foreground">ID: {spec.id}</p>
-        </div>
-      </div>
-
-      {validation && <ValidationStatus validation={validation} />}
-
+      <SpecHeader
+        identity={identity}
+        title={spec.name}
+        sourceRef={headerRef}
+        sharedDescriptor={sharedDescriptor}
+      />
       <MarkdownViewer
         markdown={rawMarkdown}
         path={`specs/${spec.id}/spec.md`}
@@ -140,55 +182,83 @@ function SpecContent({
   )
 }
 
-function ValidationStatus({
-  validation,
-}: {
-  validation: {
-    valid: boolean
-    issues: Array<{ severity: string; message: string; path?: string }>
-  }
-}) {
-  const errors = validation.issues.filter((i) => i.severity === 'ERROR')
-  const warnings = validation.issues.filter((i) => i.severity === 'WARNING')
-  const infos = validation.issues.filter((i) => i.severity === 'INFO')
+function ReferencedSpecContent({ document }: { document: ReferencedSpecDocumentProjection }) {
+  const headerRef = useRef<HTMLDivElement | null>(null)
+  const sharedDescriptor = {
+    family: 'specs',
+    entityId: specIdentityKey(document.identity),
+  } as const
 
   return (
-    <div
-      className={`flex rounded-lg border p-4 ${validation.valid ? 'border-green-500 bg-green-500/10' : 'border-red-500 bg-red-500/10'}`}
-    >
-      <div className="align-content flex gap-2">
-        {validation.valid ? (
-          <CheckCircle className="h-5 w-5 text-green-500" />
-        ) : (
-          <AlertCircle className="h-5 w-5 text-red-500" />
-        )}
-        <span className={`font-medium ${validation.valid ? 'text-green-600' : 'text-red-600'}`}>
-          {validation.valid ? 'Validation Passed' : 'Validation Failed'}
-        </span>
+    <div className="flex min-h-0 flex-1 flex-col gap-6 p-4">
+      <SpecHeader
+        identity={document.identity}
+        title={document.upstream?.title ?? document.identity.specId}
+        sourceRef={headerRef}
+        sharedDescriptor={sharedDescriptor}
+      />
+      <div className="border-border bg-muted/30 flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+        <LockKeyhole className="h-4 w-4 shrink-0" aria-hidden />
+        <span>Read-only Reference projected from OpenSpec Store {document.identity.storeId}.</span>
       </div>
-
-      {validation.issues.length > 0 && (
-        <div className="space-y-1 text-sm">
-          {errors.map((issue, i) => (
-            <div key={i} className="flex items-start gap-2 text-red-600">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{issue.message}</span>
-            </div>
-          ))}
-          {warnings.map((issue, i) => (
-            <div key={i} className="flex items-start gap-2 text-yellow-600">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{issue.message}</span>
-            </div>
-          ))}
-          {infos.map((issue, i) => (
-            <div key={i} className="text-muted-foreground flex items-start gap-2">
-              <Info className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{issue.message}</span>
-            </div>
-          ))}
-        </div>
+      {document.state === 'ready' && document.upstream ? (
+        <ReferencedSpecDocument document={document.upstream} />
+      ) : (
+        <ReferencedSpecError document={document} />
       )}
+    </div>
+  )
+}
+
+function ReferencedSpecDocument({ document }: { document: CliShowSpecDocument }) {
+  return (
+    <article className="vt-detail-content min-h-0 flex-1 space-y-8 overflow-y-auto">
+      {document.overview && (
+        <section className="space-y-2">
+          <h2 className="font-nav text-xl font-semibold">Overview</h2>
+          <p className="whitespace-pre-wrap leading-7">{document.overview}</p>
+        </section>
+      )}
+      <section className="space-y-5">
+        <h2 className="font-nav text-xl font-semibold">Requirements</h2>
+        {document.requirements.map((requirement, requirementIndex) => (
+          <div
+            key={`${requirementIndex}:${requirement.text}`}
+            className="border-border space-y-4 border-l-2 pl-4"
+          >
+            <p className="whitespace-pre-wrap leading-7">{requirement.text}</p>
+            {requirement.scenarios.map((scenario, scenarioIndex) => (
+              <pre
+                key={`${scenarioIndex}:${scenario.rawText}`}
+                className="bg-muted overflow-x-auto whitespace-pre-wrap rounded-md p-3 text-sm"
+              >
+                {scenario.rawText}
+              </pre>
+            ))}
+          </div>
+        ))}
+      </section>
+    </article>
+  )
+}
+
+function ReferencedSpecError({ document }: { document: ReferencedSpecDocumentProjection }) {
+  const evidence = document.evidence
+  return (
+    <div className="border-destructive/40 bg-destructive/5 space-y-3 rounded-md border p-4">
+      <h2 className="font-medium">OpenSpec could not project this Reference Spec.</h2>
+      <div className="text-muted-foreground text-sm">
+        Exit status: {evidence.exitCode ?? 'unknown'}
+      </div>
+      {evidence.contractError && (
+        <pre className="whitespace-pre-wrap">{evidence.contractError}</pre>
+      )}
+      {evidence.stderr && <pre className="whitespace-pre-wrap">{evidence.stderr}</pre>}
+      {evidence.diagnostics.map((diagnostic, index) => (
+        <div key={`${diagnostic.code}:${index}`} className="text-sm">
+          <span className="font-medium">{diagnostic.code}</span>: {diagnostic.message}
+        </div>
+      ))}
     </div>
   )
 }

@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. List only archives projected from the current writable Planning root.
+ * 2. Preserve stable Archive detail navigation and empty/loading states.
+ *
+ * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
+ */
 import { formatRelativeTime } from '@/lib/format-time'
 import { useArchivesSubscription } from '@/lib/use-subscription'
 import { VTLink } from '@/lib/view-transitions/navigation'
@@ -26,7 +33,7 @@ export function ArchiveList() {
       </h1>
 
       <p className="text-muted-foreground">
-        Completed changes that have been archived after implementation.
+        Completed changes archived in the current writable Planning root.
       </p>
 
       <div className="border-border divide-border divide-y rounded-lg border">
@@ -78,7 +85,7 @@ export function ArchiveList() {
             <Archive className="mx-auto mb-4 h-12 w-12 opacity-50" />
             <p>No archived changes yet.</p>
             <p className="mt-2 text-sm">
-              Changes are archived after implementation using{' '}
+              Changes in this Planning root are archived using{' '}
               <code className="bg-muted rounded px-1">openspec archive</code>
             </p>
           </div>

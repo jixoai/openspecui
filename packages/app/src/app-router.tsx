@@ -1,0 +1,123 @@
+import {
+  createRootRouteWithContext,
+  createRoute,
+  createRouter,
+  redirect,
+} from '@tanstack/react-router'
+import { AppLayout } from './components/app-layout'
+import type { HostedShellLaunchRequest } from './lib/shell-state'
+import { ConnectionsRoute } from './routes/connections'
+import { ContextMatrixRoute } from './routes/context-matrix'
+import { EnvironmentRoute } from './routes/environment'
+import { SessionsRoute } from './routes/sessions'
+import { SettingsRoute } from './routes/settings'
+import { StoreInspectorRoute } from './routes/store-inspector'
+import { StoreInventoryRoute } from './routes/store-inventory'
+
+/**
+ * App 路由上下文：承载一次性启动信息（launch params / fallback / error）。
+ *
+ * 这些值在 main.tsx 解析后注入 router，供 /sessions（HostedShell）使用，保证现有 PWA 启动路径不变。
+ */
+export interface AppRouterContext {
+  initialLaunchRequest: HostedShellLaunchRequest | null
+  fallbackLaunchRequest: HostedShellLaunchRequest | null
+  initialError: string | null
+}
+
+const rootRoute = createRootRouteWithContext<AppRouterContext>()({
+  component: AppLayout,
+})
+
+const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  beforeLoad: () => {
+    // 首页重定向到 Connections（Home/Connections 是 App 的主入口）。
+    throw redirect({ to: '/connections' })
+  },
+})
+
+const connectionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/connections',
+  component: ConnectionsRoute,
+})
+
+const environmentRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/environment',
+  component: EnvironmentRoute,
+})
+
+// --- Sessions：现有 iframe 多标签 HostedShell，作为项目工作面入口 ---
+const sessionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/sessions',
+  component: SessionsRoute,
+})
+
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings',
+  component: SettingsRoute,
+})
+
+// --- 实验性 Store Manager（扁平路由，与 web 包 route-tree 模式一致） ---
+// 路由说明：/environment/stores 是 Store Manager 根，默认重定向到 Inspector（B 视图为首选）。
+const storeManagerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/environment/stores',
+  beforeLoad: () => {
+    throw redirect({ to: '/environment/stores/inspector' })
+  },
+})
+
+const storeInspectorRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/environment/stores/inspector',
+  component: StoreInspectorRoute,
+})
+
+const contextMatrixRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/environment/stores/context',
+  component: ContextMatrixRoute,
+})
+
+const storeInventoryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/environment/stores/inventory',
+  component: StoreInventoryRoute,
+})
+
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  connectionsRoute,
+  environmentRoute,
+  sessionsRoute,
+  settingsRoute,
+  storeManagerRoute,
+  storeInspectorRoute,
+  contextMatrixRoute,
+  storeInventoryRoute,
+])
+
+export function createAppRouter(context: AppRouterContext) {
+  const router = createRouter({
+    routeTree,
+    context,
+    defaultPreload: 'intent',
+  })
+
+  return router
+}
+
+// 让 TanStack Router 类型推断锁定到本模块创建的 router 实例。
+// 必须位于文件顶层（ambient module 声明要求）。
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: ReturnType<typeof createAppRouter>
+  }
+}

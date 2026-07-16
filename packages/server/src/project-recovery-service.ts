@@ -109,7 +109,11 @@ export class ProjectRecoveryService {
   }
 
   private handleWatcherRuntimeStatus(status: WatcherRuntimeStatus | null): void {
-    const residency = status?.projectResidency
+    const launchRoot = status?.roots.find(
+      (root) =>
+        root.rootPath === this.projectDir || root.rootPath === this.cachedCanonicalProjectDir
+    )
+    const residency = launchRoot?.projectResidency
     if (!residency || residency.state === 'active') {
       this.recoveryEpoch += 1
       this.setStatus({ state: 'idle' })

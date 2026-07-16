@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Validate and route PTY WebSocket lifecycle messages.
+ * 2. Resolve explicit terminal cwd targets before process creation.
+ * 3. Attach/replay session output and project terminal control metadata.
+ * 4. Publish terminal notifications without duplicating protocol fanout.
+ *
+ * Original request (2026-07-16): "3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited XDG_DATA_HOME"
+ */
 import {
   PtyClientMessageSchema,
   TerminalControlParser,
@@ -5,6 +14,7 @@ import {
   type PtyClientMessage,
   type PtyServerMessage,
   type TerminalControlEvent,
+  type TerminalCwdTarget,
 } from '@openspecui/core'
 import type { WebSocket } from 'ws'
 import type { NotificationService } from './notification-service.js'
@@ -22,6 +32,8 @@ type PtyCreatedMessage = {
   requestId: string
   sessionId: string
   platform: 'windows' | 'macos' | 'common'
+  cwdTarget: TerminalCwdTarget
+  initialCwd: string
 }
 type PtyOutgoingMessage = PtyServerMessage | PtyErrorMessage | PtyCreatedMessage
 type TerminalNotificationEvent = Extract<TerminalControlEvent, { type: 'notification' }>
@@ -66,7 +78,12 @@ function coalesceTerminalNotificationFanout(
 
 export function createPtyWebSocketHandler(
   ptyManager: PtyManager,
-  notificationService?: NotificationService
+  notificationService: NotificationService | undefined,
+  options: {
+    resolveCwdTarget: (
+      target: TerminalCwdTarget
+    ) => Promise<{ cwdTarget: TerminalCwdTarget; cwd: string }>
+  }
 ) {
   return (ws: WebSocket) => {
     // Track event listener cleanups for each attached session
@@ -175,7 +192,7 @@ export function createPtyWebSocketHandler(
       })
     }
 
-    ws.on('message', (raw) => {
+    ws.on('message', async (raw) => {
       let parsed: unknown
       try {
         parsed = JSON.parse(String(raw))
@@ -195,6 +212,7 @@ export function createPtyWebSocketHandler(
       switch (msg.type) {
         case 'create': {
           try {
+            const cwd = await options.resolveCwdTarget(msg.cwdTarget)
             const createMessage = msg as typeof msg & {
               closeTip?: string
               closeCallbackUrl?: string | Record<string, string>
@@ -204,6 +222,8 @@ export function createPtyWebSocketHandler(
               rows: msg.rows,
               command: msg.command,
               args: msg.args,
+              cwdTarget: cwd.cwdTarget,
+              cwd: cwd.cwd,
               closeTip: createMessage.closeTip,
               closeCallbackUrl: createMessage.closeCallbackUrl,
             })
@@ -213,6 +233,8 @@ export function createPtyWebSocketHandler(
               requestId: msg.requestId,
               sessionId: session.id,
               platform: session.platform,
+              cwdTarget: session.cwdTarget,
+              initialCwd: session.initialCwd,
             })
             attachToSession(session)
           } catch (err) {
@@ -275,6 +297,8 @@ export function createPtyWebSocketHandler(
               exitCode: s.exitCode,
               closeTip: s.closeTip,
               closeCallbackUrl: s.closeCallbackUrl,
+              cwdTarget: s.cwdTarget,
+              initialCwd: s.initialCwd,
             })),
           })
           break

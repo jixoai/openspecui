@@ -1,8 +1,18 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Own browser terminal renderers, input, lifecycle, and reconnect behavior.
+ * 2. Preserve explicit launch-project or planning-root cwd identity across PTY transport state.
+ * 3. Project server-owned terminal metadata into stable React snapshots.
+ * 4. Apply terminal appearance, input history, keybinding, and notification behavior.
+ *
+ * Original request (2026-07-16): "3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited XDG_DATA_HOME"
+ */
 import {
   PtyServerMessageSchema,
   type PtyClientMessage,
   type PtyPlatform,
   type PtyServerMessage,
+  type TerminalCwdTarget,
 } from '@openspecui/core/pty-protocol'
 import { DEFAULT_BELL_SOUND_ID } from '@openspecui/core/sounds'
 import type { TerminalBellSound } from '@openspecui/core/terminal-audio'
@@ -245,6 +255,8 @@ interface TerminalInstance {
   processTitle: string | null
   oscTitle: string | null
   cwd: string | null
+  cwdTarget: TerminalCwdTarget
+  initialCwd: string | null
   progress: { state: TerminalProgressState; value: number | null } | null
   promptState: TerminalPromptState | null
   isDedicated: boolean
@@ -280,6 +292,8 @@ export interface TerminalSessionSnapshot {
   processTitle: string | null
   oscTitle: string | null
   cwd: string | null
+  cwdTarget: TerminalCwdTarget
+  initialCwd: string | null
   progress: { state: TerminalProgressState; value: number | null } | null
   promptState: TerminalPromptState | null
   displayTitle: string
@@ -330,6 +344,7 @@ class TerminalController {
   private reconnectDelay = RECONNECT_DELAY
   private pendingCreates: Array<{
     requestId: string
+    cwdTarget: TerminalCwdTarget
     command?: string
     args?: string[]
     closeTip?: string
@@ -349,7 +364,8 @@ class TerminalController {
 
   // --- Session lifecycle ---
 
-  createSession(opts?: {
+  createSession(opts: {
+    cwdTarget: TerminalCwdTarget
     label?: string
     customTitle?: string | null
     command?: string
@@ -360,20 +376,22 @@ class TerminalController {
     initialInput?: string
   }): string {
     const id = `term-${++this.idCounter}`
-    const label = opts?.label ?? `Shell ${this.idCounter}`
+    const label = opts.label ?? `Shell ${this.idCounter}`
 
     const instance = this.createTerminalInstance(id, {
       label,
-      command: opts?.command,
-      args: opts?.args,
-      isDedicated: opts?.isDedicated ?? false,
-      closeTip: opts?.closeTip,
-      closeCallbackUrl: opts?.closeCallbackUrl,
-      initialInput: opts?.initialInput,
-      customTitle: opts?.customTitle ?? null,
+      command: opts.command,
+      args: opts.args,
+      isDedicated: opts.isDedicated ?? false,
+      closeTip: opts.closeTip,
+      closeCallbackUrl: opts.closeCallbackUrl,
+      initialInput: opts.initialInput,
+      customTitle: opts.customTitle ?? null,
       restored: false,
       serverSessionId: null,
       platform: DEFAULT_PTY_PLATFORM,
+      cwdTarget: opts.cwdTarget,
+      initialCwd: null,
     })
 
     this.instances.set(id, instance)
@@ -388,27 +406,29 @@ class TerminalController {
       this.wsSend({
         type: 'create',
         requestId: id,
+        cwdTarget: opts.cwdTarget,
         cols: instance.terminal.cols || 80,
         rows: instance.terminal.rows || 24,
-        command: opts?.command,
-        args: opts?.args,
-        closeTip: opts?.closeTip,
-        closeCallbackUrl: opts?.closeCallbackUrl,
+        command: opts.command,
+        args: opts.args,
+        closeTip: opts.closeTip,
+        closeCallbackUrl: opts.closeCallbackUrl,
       })
     } else {
       this.pendingCreates.push({
         requestId: id,
-        command: opts?.command,
-        args: opts?.args,
-        closeTip: opts?.closeTip,
-        closeCallbackUrl: opts?.closeCallbackUrl,
+        cwdTarget: opts.cwdTarget,
+        command: opts.command,
+        args: opts.args,
+        closeTip: opts.closeTip,
+        closeCallbackUrl: opts.closeCallbackUrl,
         cols: instance.terminal.cols || 80,
         rows: instance.terminal.rows || 24,
       })
       this.ensureWsConnected()
     }
 
-    if (opts?.initialInput) {
+    if (opts.initialInput) {
       this.scheduleInitialInput(id, opts.initialInput)
     }
 
@@ -441,6 +461,8 @@ class TerminalController {
       restored: boolean
       serverSessionId: string | null
       platform: PtyPlatform
+      cwdTarget: TerminalCwdTarget
+      initialCwd: string | null
     }
   ): TerminalInstance {
     const { terminal, fitAddon, afterOpenHook, engine } = this.createRendererTerminal()
@@ -460,6 +482,8 @@ class TerminalController {
       processTitle: null,
       oscTitle: null,
       cwd: null,
+      cwdTarget: opts.cwdTarget,
+      initialCwd: opts.initialCwd,
       progress: null,
       promptState: null,
       isDedicated: opts.isDedicated,
@@ -1255,6 +1279,8 @@ class TerminalController {
     }
     instance.serverSessionId = msg.sessionId
     instance.platform = msg.platform
+    instance.cwdTarget = msg.cwdTarget
+    instance.initialCwd = msg.initialCwd
     instance.inputPanelAddon.setPlatform(msg.platform)
     instance.isConnected = true
     this.serverToLocalSessionId.set(msg.sessionId, msg.requestId)
@@ -1408,6 +1434,8 @@ class TerminalController {
         processTitle: inst.processTitle,
         oscTitle: inst.oscTitle,
         cwd: inst.cwd,
+        cwdTarget: inst.cwdTarget,
+        initialCwd: inst.initialCwd,
         progress: inst.progress,
         promptState: inst.promptState,
         displayTitle: inst.customTitle ?? inst.oscTitle ?? inst.processTitle ?? inst.label,
@@ -1494,6 +1522,7 @@ class TerminalController {
         this.wsSend({
           type: 'create',
           requestId: pending.requestId,
+          cwdTarget: pending.cwdTarget,
           cols: pending.cols,
           rows: pending.rows,
           command: pending.command,
@@ -1632,6 +1661,8 @@ class TerminalController {
           restored: true,
           serverSessionId: serverSession.id,
           platform: serverSession.platform ?? DEFAULT_PTY_PLATFORM,
+          cwdTarget: serverSession.cwdTarget,
+          initialCwd: serverSession.initialCwd,
         })
 
         if (serverSession.isExited) {
@@ -1648,6 +1679,8 @@ class TerminalController {
       }
       instance.closeTip = serverSession.closeTip
       instance.closeCallbackUrl = serverSession.closeCallbackUrl
+      instance.cwdTarget = serverSession.cwdTarget
+      instance.initialCwd = serverSession.initialCwd
       instance.platform = serverSession.platform ?? DEFAULT_PTY_PLATFORM
       instance.inputPanelAddon.setPlatform(instance.platform)
 

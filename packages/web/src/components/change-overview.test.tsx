@@ -33,8 +33,15 @@ const change: Change = {
       description: 'Add auth requirements.',
     },
   ],
-  tasks: [],
-  progress: { total: 0, completed: 0 },
+  trackedTaskProgress: {
+    tasks: [],
+    total: 0,
+    completed: 0,
+    remaining: 0,
+    phase: 'no-tasks',
+    source: { kind: 'none', artifactId: null, outputPath: null, filePaths: [] },
+  },
+  documentChecklistSummary: { groups: [], total: 0, completed: 0, remaining: 0 },
   deltaSpecs: [{ specId: 'auth', content: deltaSpecMarkdown }],
 }
 

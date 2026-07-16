@@ -1,13 +1,13 @@
 import type {
   RunWorkflowInputV1,
-  RunWorkflowResultV1,
+  RunWorkflowResultV2,
   WorkflowRequestedModeV1,
 } from '@openspecui/core'
 import { quoteShellToken } from './opsx-new-command'
 import { isStaticMode } from './static-mode'
 import { trpcClient } from './trpc'
 
-export function stringifyWorkflowInvocation(result: RunWorkflowResultV1): string {
+export function stringifyWorkflowInvocation(result: RunWorkflowResultV2): string {
   switch (result.kind) {
     case 'agent-prompt':
     case 'agent-command':
@@ -17,7 +17,7 @@ export function stringifyWorkflowInvocation(result: RunWorkflowResultV1): string
   }
 }
 
-export function workflowDiagnosticsToText(result: RunWorkflowResultV1): string | null {
+export function workflowDiagnosticsToText(result: RunWorkflowResultV2): string | null {
   const diagnostics = result.diagnostics?.filter((item) => item.level !== 'info') ?? []
   if (diagnostics.length === 0) return null
   return diagnostics.map((item) => item.message).join('\n')
@@ -26,8 +26,8 @@ export function workflowDiagnosticsToText(result: RunWorkflowResultV1): string |
 export async function prepareWorkflowInvocation(input: {
   requestedMode: WorkflowRequestedModeV1
   workflowInput: RunWorkflowInputV1
-  staticFallback: () => RunWorkflowResultV1
-}): Promise<RunWorkflowResultV1> {
+  staticFallback: () => RunWorkflowResultV2
+}): Promise<RunWorkflowResultV2> {
   if (isStaticMode()) {
     return input.staticFallback()
   }

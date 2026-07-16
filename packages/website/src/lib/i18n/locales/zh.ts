@@ -117,11 +117,11 @@ export const zh = {
     onRunWorkflow: {
       name: 'onRunWorkflow',
       purpose: '在不替换 OpenSpec CLI 契约的前提下，包裹一次 OpenSpec 工作流运行。',
-      signature: 'onRunWorkflow(ctx, run): Promise<RunWorkflowResultV1>',
+      signature: 'onRunWorkflow(ctx, run): Promise<RunWorkflowResultV2>',
       when: '适合选择 workflow tools、注入安全环境变量、记录审计输出，或者基于项目策略拦截执行。',
       stableFor: ['工作流编排', '工具选择', '执行审计'],
       example:
-        "import type { OnRunWorkflowHookV1 } from 'openspecui/hooks'\n\nexport const onRunWorkflow: OnRunWorkflowHookV1 = async (ctx, run) => {\n  const result = await run()\n  if (result.kind !== 'agent-prompt') return result\n\n  return {\n    ...result,\n    text: `${result.text}\\n\\nProject policy: include security impact in the final summary.`,\n  }\n}",
+        "import type { OnRunWorkflowHookV2 } from 'openspecui/hooks'\n\nexport const onRunWorkflow: OnRunWorkflowHookV2 = async (ctx, run) => {\n  const result = await run()\n  if (result.kind !== 'agent-prompt') return result\n\n  return {\n    ...result,\n    text: `${result.text}\\n\\nPlanning root: ${ctx.target.planningRoot.path}\\nProject policy: include security impact in the final summary.`,\n  }\n}",
     },
   },
   footer: {

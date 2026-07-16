@@ -42,13 +42,29 @@ describe('CliExecutor OpenSpec 1.6 contracts', () => {
     ])
   })
 
+  it('preserves explicitly present empty Store and optional string arguments for CLI diagnostics', async () => {
+    await executor.contracts.listSpecs({ store: '' })
+    await executor.contracts.workflowStatus('add-auth', { store: '', schema: '' })
+    await executor.contracts.doctorStores('')
+    await executor.contracts.setupStore('shared', { path: '/stores/shared', remote: '' })
+    await executor.contracts.registerStore('/stores/existing', { id: '' })
+
+    expect(execute.mock.calls.map(([args]) => args)).toEqual([
+      ['list', '--specs', '--json', '--store', ''],
+      ['status', '--change', 'add-auth', '--json', '--schema', '', '--store', ''],
+      ['store', 'doctor', '', '--json'],
+      ['store', 'setup', 'shared', '--path', '/stores/shared', '--remote', '', '--json'],
+      ['store', 'register', '/stores/existing', '--id', '', '--json'],
+    ])
+  })
+
   it('builds workflow commands with CLI-resolved path and Reference payloads', async () => {
-    await executor.contracts.workflowStatus('add-auth', { store: 'shared' })
+    await executor.contracts.workflowStatus('add-auth', { store: 'shared', schema: 'custom' })
     await executor.contracts.artifactInstructions('add-auth', 'proposal', { store: 'shared' })
     await executor.contracts.applyInstructions('add-auth', { store: 'shared' })
 
     expect(execute.mock.calls.map(([args]) => args)).toEqual([
-      ['status', '--change', 'add-auth', '--json', '--store', 'shared'],
+      ['status', '--change', 'add-auth', '--json', '--schema', 'custom', '--store', 'shared'],
       ['instructions', 'proposal', '--change', 'add-auth', '--json', '--store', 'shared'],
       ['instructions', 'apply', '--change', 'add-auth', '--json', '--store', 'shared'],
     ])

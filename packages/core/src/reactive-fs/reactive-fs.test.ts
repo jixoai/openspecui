@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Verify reactive file, directory, existence, and stat projections.
+ * 2. Verify cache invalidation drives ReactiveContext streams.
+ * 3. Verify cached reads bind when an observation root is acquired later.
+ *
+ * Original request (2026-07-15): "操作成功底层是要推送变更的，然后让多端基于订阅拉取更新。"
+ */
 import { rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -17,15 +25,14 @@ import {
   reactiveReadFile,
   reactiveStat,
 } from './reactive-fs.js'
-import { closeAllWatchers, initWatcherPool } from './watcher-pool.js'
+import { acquireWatcherRoot, closeAllWatchers } from './watcher-pool.js'
 
 describe('ReactiveFS', () => {
   let tempDir: string
 
   beforeEach(async () => {
     tempDir = await createTempDir()
-    // Initialize watcher pool with temp directory as project root
-    await initWatcherPool(tempDir)
+    await acquireWatcherRoot(tempDir)
     clearCache()
   })
 
@@ -36,6 +43,27 @@ describe('ReactiveFS', () => {
   })
 
   describe('reactiveReadFile()', () => {
+    it('binds an existing reactive read when its observation root is acquired later', async () => {
+      clearCache()
+      await closeAllWatchers()
+      const filepath = await createTempFile(tempDir, 'late-root.txt', 'initial')
+      const context = new ReactiveContext()
+      const generator = context.stream(async () => reactiveReadFile(filepath))
+
+      const first = await generator.next()
+      expect(first.value).toBe('initial')
+
+      const releaseRoot = await acquireWatcherRoot(tempDir)
+      await writeFile(filepath, 'updated', 'utf8')
+      await waitForDebounce(300)
+
+      const second = await generator.next()
+      expect(second.value).toBe('updated')
+
+      await generator.return(undefined)
+      await releaseRoot()
+    })
+
     it('should read file content', async () => {
       const filepath = await createTempFile(tempDir, 'test.txt', 'hello world')
 

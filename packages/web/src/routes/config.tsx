@@ -1,19 +1,18 @@
 /**
- * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
- * 1. Project and environment-global OpenSpec configuration editing.
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Project Binding, Active Root, and Environment Global OpenSpec configuration editing.
  * 2. Schema discovery, inspection, creation, and file editing.
  * 3. OpenSpec profile delivery/workflow configuration and drift repair.
  * 4. Live CLI execution evidence and static-mode read-only projection.
  *
- * Compromise: these concerns share one routed Config workspace because splitting them before the
- * Root Context ownership change would duplicate coordinated tab, editor, and loading state.
- *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
+ * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  */
 import { Button } from '@/components/button'
 import { ButtonGroup } from '@/components/button-group'
 import { CliTerminal } from '@/components/cli-terminal'
 import { CodeEditor } from '@/components/code-editor'
+import { ProjectBindingSection } from '@/components/config/project-binding-section'
 import {
   ContextMenu,
   ContextMenuTargeter,
@@ -45,13 +44,17 @@ import { queryClient, trpc, trpcClient } from '@/lib/trpc'
 import { useCliRunner, type CliRunnerLine } from '@/lib/use-cli-runner'
 import {
   useOpsxConfigBundleSubscription,
-  useOpsxProjectConfigSubscription,
   useOpsxSchemaFilesSubscription,
   useOpsxTemplateContentsSubscription,
   useOpsxTemplatesSubscription,
 } from '@/lib/use-opsx'
+import {
+  useActiveRootConfigViewSubscription,
+  useEnvironmentGlobalConfigSubscription,
+} from '@/lib/use-planning-config'
 import { vtNavController } from '@/lib/view-transitions/navigation'
 import { useRoutedCarouselTabs } from '@/lib/view-transitions/tabs'
+import type { CliJsonValue } from '@openspecui/core'
 import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
@@ -63,6 +66,7 @@ import {
   FolderPlus,
   Info,
   Layers,
+  Link2,
   Loader2,
   Plus,
   RefreshCw,
@@ -75,7 +79,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { parse as parseYaml } from 'yaml'
 
-type ConfigTab = 'project-config' | 'global-config' | `schema:${string}`
+type ConfigTab = 'project-binding' | 'active-root' | 'environment-global' | `schema:${string}`
 type SchemaMode = 'read' | 'preview' | 'edit'
 type SchemaCreateMode = 'init' | 'fork'
 type ProfileEditMode = 'both' | 'delivery' | 'workflows'
@@ -125,6 +129,16 @@ function getParentPath(path: string): string | null {
 
 function isRecordObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isCliJsonValue(value: unknown): value is CliJsonValue {
+  if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) return true
+  if (Array.isArray(value)) return value.every(isCliJsonValue)
+  return isRecordObject(value) && Object.values(value).every(isCliJsonValue)
+}
+
+function isCliJsonObject(value: unknown): value is Record<string, CliJsonValue> {
+  return isRecordObject(value) && Object.values(value).every(isCliJsonValue)
 }
 
 function normalizeWorkflowList(value: unknown): string[] {
@@ -199,10 +213,8 @@ export function Config() {
   const isStatic = isStaticMode()
   const { viewportHeight: schemaViewportHeight, setViewportNode: setSchemaViewportNode } =
     useTabPanelViewportHeight()
-  const {
-    viewportHeight: projectConfigViewportHeight,
-    setViewportNode: setProjectConfigViewportNode,
-  } = useTabPanelViewportHeight()
+  const { viewportHeight: activeRootViewportHeight, setViewportNode: setActiveRootViewportNode } =
+    useTabPanelViewportHeight()
   const [schemaMode, setSchemaMode] = useState<SchemaMode>('read')
   const [schemaActionError, setSchemaActionError] = useState<string | null>(null)
   const [schemaEntryError, setSchemaEntryError] = useState<string | null>(null)
@@ -224,7 +236,12 @@ export function Config() {
   const [newSchemaMode, setNewSchemaMode] = useState<SchemaCreateMode>('init')
   const [newSchemaSource, setNewSchemaSource] = useState('spec-driven')
 
-  const { data: configYaml, isLoading: configLoading } = useOpsxProjectConfigSubscription()
+  const {
+    data: activeRootConfig,
+    isLoading: configLoading,
+    error: activeRootConfigError,
+  } = useActiveRootConfigViewSubscription()
+  const configYaml = activeRootConfig?.content
   const {
     data: configBundle,
     isLoading: schemasLoading,
@@ -233,8 +250,9 @@ export function Config() {
   const schemas = configBundle?.schemas
   const configTabIds = useMemo<ConfigTab[]>(
     () => [
-      'project-config',
-      'global-config',
+      'project-binding',
+      'active-root',
+      'environment-global',
       ...(schemas?.map((schema) => `schema:${schema.name}` as const) ?? []),
     ],
     [schemas]
@@ -247,7 +265,7 @@ export function Config() {
   } = useRoutedCarouselTabs<ConfigTab>({
     queryKey: 'configTab',
     tabs: configTabIds.map((id) => ({ id })),
-    initialTab: 'project-config',
+    initialTab: isStatic ? 'active-root' : 'project-binding',
     allowUnknownSelection: true,
   })
   const activeSchemaName = activeTab.startsWith('schema:')
@@ -308,18 +326,32 @@ export function Config() {
     enabled: !isStatic,
   })
   const {
-    data: globalConfigData,
+    data: environmentGlobalConfig,
     isLoading: isLoadingGlobalConfig,
     error: globalConfigQueryError,
-    refetch: refetchGlobalConfig,
-  } = useQuery({
-    ...trpc.cli.getGlobalConfig.queryOptions(),
-    enabled: !isStatic,
-  })
-  const { data: globalConfigPathData, refetch: refetchGlobalConfigPath } = useQuery({
-    ...trpc.cli.getGlobalConfigPath.queryOptions(),
-    enabled: !isStatic,
-  })
+    refresh: refreshEnvironmentGlobalConfig,
+  } = useEnvironmentGlobalConfigSubscription()
+  const globalConfigData = environmentGlobalConfig?.config
+  const environmentGlobalEvidenceError = useMemo(() => {
+    if (!environmentGlobalConfig) return null
+    const pathEvidence = environmentGlobalConfig.evidence.path
+    if (!pathEvidence.success) {
+      return (
+        pathEvidence.stderr ||
+        `openspec config path failed with exit status ${pathEvidence.exitCode ?? 'unknown'}.`
+      )
+    }
+    const configEvidence = environmentGlobalConfig.evidence.config
+    if (!configEvidence.success) {
+      return (
+        configEvidence.stderr ||
+        `openspec config list failed with exit status ${configEvidence.exitCode ?? 'unknown'}.`
+      )
+    }
+    return configEvidence.contractError
+      ? `OpenSpec global config contract drift: ${configEvidence.contractError}`
+      : null
+  }, [environmentGlobalConfig])
 
   const [selectedSchemaPath, setSelectedSchemaPath] = useState<string | null>(null)
   const [fileDrafts, setFileDrafts] = useState<Record<string, string>>({})
@@ -335,8 +367,8 @@ export function Config() {
     const name = activeTab.slice('schema:'.length)
     if (schemas.some((schema) => schema.name === name)) return
     const fallback = schemas[0]?.name
-    setActiveTab(fallback ? `schema:${fallback}` : 'project-config')
-  }, [activeTab, schemas])
+    setActiveTab(fallback ? `schema:${fallback}` : isStatic ? 'active-root' : 'project-binding')
+  }, [activeTab, isStatic, schemas])
 
   useEffect(() => {
     if (isConfigEditing) return
@@ -530,7 +562,7 @@ export function Config() {
 
   const saveConfigMutation = useMutation({
     mutationFn: async () => {
-      await trpcClient.opsx.writeProjectConfig.mutate({ content: configDraft })
+      await trpcClient.planningConfig.writeActiveRoot.mutate({ content: configDraft })
     },
     onSuccess: () => {
       setIsConfigEditing(false)
@@ -538,22 +570,15 @@ export function Config() {
     },
   })
   const saveGlobalConfigMutation = useMutation({
-    mutationFn: async (config: Record<string, unknown>) => {
-      await trpcClient.cli.setGlobalConfig.mutate({ config })
+    mutationFn: async (config: Record<string, CliJsonValue>) => {
+      await trpcClient.planningConfig.writeEnvironmentGlobal.mutate({ config })
     },
     onSuccess: async () => {
       setGlobalConfigDraftDirty(false)
       setGlobalConfigError(null)
-      await Promise.allSettled([
-        queryClient.invalidateQueries(trpc.cli.getGlobalConfig.queryFilter()),
-        queryClient.invalidateQueries(trpc.cli.getProfileState.queryFilter()),
-        queryClient.invalidateQueries(trpc.cli.getGlobalConfigPath.queryFilter()),
-      ])
-      await Promise.allSettled([
-        refetchGlobalConfig(),
-        refetchOpsxProfileState(),
-        refetchGlobalConfigPath(),
-      ])
+      refreshEnvironmentGlobalConfig()
+      await queryClient.invalidateQueries(trpc.cli.getProfileState.queryFilter())
+      await refetchOpsxProfileState()
     },
     onError: (error) => {
       setGlobalConfigError(error instanceof Error ? error.message : String(error))
@@ -887,30 +912,25 @@ export function Config() {
     if (isStatic) return
     setIsRefreshingGlobalConfig(true)
     try {
-      await Promise.allSettled([
-        queryClient.invalidateQueries(trpc.cli.getGlobalConfig.queryFilter()),
-        queryClient.invalidateQueries(trpc.cli.getGlobalConfigPath.queryFilter()),
-        queryClient.invalidateQueries(trpc.cli.getProfileState.queryFilter()),
-      ])
-      await Promise.allSettled([
-        refetchGlobalConfig(),
-        refetchGlobalConfigPath(),
-        refetchOpsxProfileState(),
-      ])
+      refreshEnvironmentGlobalConfig()
+      await queryClient.invalidateQueries(trpc.cli.getProfileState.queryFilter())
+      await refetchOpsxProfileState()
     } finally {
       setIsRefreshingGlobalConfig(false)
     }
-  }, [isStatic, refetchGlobalConfig, refetchGlobalConfigPath, refetchOpsxProfileState])
+  }, [isStatic, refreshEnvironmentGlobalConfig, refetchOpsxProfileState])
 
   const handleLaunchInteractiveProfile = useCallback(() => {
-    createDedicatedSession('openspec', ['config', 'profile'])
+    createDedicatedSession('openspec', ['config', 'profile'], {
+      cwdTarget: 'launch-project',
+    })
     const terminalArea = navController.getAreaForPath('/terminal')
     void vtNavController.push(terminalArea, '/terminal', null)
   }, [createDedicatedSession])
 
   const executeApplyProfile = useCallback(async () => {
-    if (!isRecordObject(globalConfigData)) return
-    const nextConfig = JSON.parse(JSON.stringify(globalConfigData)) as Record<string, unknown>
+    if (!globalConfigData) return
+    const nextConfig: Record<string, CliJsonValue> = { ...globalConfigData }
 
     if (profileEditMode === 'both' || profileEditMode === 'delivery') {
       nextConfig.delivery = profileDelivery
@@ -1012,7 +1032,7 @@ export function Config() {
       setGlobalConfigError(error instanceof Error ? error.message : String(error))
       return
     }
-    if (!isRecordObject(parsed)) {
+    if (!isCliJsonObject(parsed)) {
       setGlobalConfigError('Global config must be a JSON object.')
       return
     }
@@ -1128,6 +1148,7 @@ export function Config() {
   const canApplyProfile =
     isRecordObject(globalConfigData) &&
     !saveGlobalConfigMutation.isPending &&
+    !profileApplySaved &&
     (!profileRequiresWorkflowSelection || profileWorkflows.length > 0)
   const pendingCommandLines = useMemo(() => {
     if (pendingCommandKind === 'update') {
@@ -1662,24 +1683,51 @@ export function Config() {
     content: schemaTabContent,
   }))
 
-  const projectConfigTabContent = (
+  const projectBindingTabContent = (
+    <section
+      data-tab-scroll-root="true"
+      className="scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-auto"
+    >
+      <ProjectBindingSection isStatic={isStatic} />
+    </section>
+  )
+
+  const activeRootTabContent = (
     <section
       data-tab-scroll-root="true"
       className="scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-auto"
     >
       <div className="space-y-4 pr-1">
         <div
-          ref={setProjectConfigViewportNode}
+          ref={setActiveRootViewportNode}
           className="flex min-h-0 flex-col"
           style={
-            projectConfigViewportHeight != null
-              ? { height: `${projectConfigViewportHeight}px` }
+            activeRootViewportHeight != null
+              ? { height: `${activeRootViewportHeight}px` }
               : undefined
           }
         >
           <section className="border-border bg-card flex min-h-0 flex-1 flex-col gap-4 overflow-hidden rounded-lg border p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold">OpenSpec Project Config</h2>
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold">Active Root Config</h2>
+                {activeRootConfig?.owner ? (
+                  <p className="text-muted-foreground mt-1 break-all text-xs">
+                    Planning root: {activeRootConfig.owner.path} · {activeRootConfig.owner.source}
+                    {activeRootConfig.owner.storeId
+                      ? ` · Store ${activeRootConfig.owner.storeId}`
+                      : ''}
+                    {activeRootConfig.owner.externalToLaunchProject ? ' · external' : ''}
+                  </p>
+                ) : (
+                  <p className="text-muted-foreground mt-1 text-xs">Static Active Root snapshot</p>
+                )}
+                {activeRootConfig?.filePath ? (
+                  <p className="text-muted-foreground mt-1 break-all text-[11px]">
+                    File: {activeRootConfig.filePath}
+                  </p>
+                ) : null}
+              </div>
               {!isStatic && configYaml && !isConfigEditing && (
                 <button
                   type="button"
@@ -1695,7 +1743,8 @@ export function Config() {
                   <button
                     type="button"
                     onClick={handleConfigCancel}
-                    className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium"
+                    disabled={saveConfigMutation.isPending}
+                    className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <X className="h-3.5 w-3.5" />
                     Cancel
@@ -1703,15 +1752,21 @@ export function Config() {
                   <Button
                     size="sm"
                     onClick={() => saveConfigMutation.mutate()}
-                    disabled={saveConfigMutation.isPending}
+                    disabled={saveConfigMutation.isPending || !configDirty}
                     activity={!configDirty}
                   >
                     <Save className="h-3.5 w-3.5" />
-                    {saveConfigMutation.isPending ? 'Saving...' : configDirty ? 'Save' : 'Saved'}
+                    {saveConfigMutation.isPending ? 'Saving…' : configDirty ? 'Save' : 'Saved'}
                   </Button>
                 </div>
               )}
             </div>
+
+            {activeRootConfigError || saveConfigMutation.error ? (
+              <div role="alert" className="text-destructive rounded-md border p-4 text-sm">
+                {activeRootConfigError?.message ?? saveConfigMutation.error?.message}
+              </div>
+            ) : null}
 
             {configYaml || isConfigEditing ? (
               <CodeEditor
@@ -1720,7 +1775,7 @@ export function Config() {
                   setConfigDraft(value)
                   setConfigDirty(true)
                 }}
-                readOnly={!isConfigEditing}
+                readOnly={!isConfigEditing || saveConfigMutation.isPending}
                 filename="config.yaml"
                 className="min-h-0 flex-1"
                 editorMinHeight="0px"
@@ -1729,14 +1784,14 @@ export function Config() {
               <div className="route-loading animate-pulse">Loading config…</div>
             ) : (
               <div className="text-muted-foreground rounded-md border border-dashed p-4 text-sm">
-                <p className="mb-3">openspec/config.yaml not found.</p>
+                <p className="mb-3">No config file exists in the active Planning root.</p>
                 {!isStatic && (
                   <button
                     type="button"
                     onClick={handleConfigEdit}
                     className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium"
                   >
-                    Create config.yaml
+                    Create Active Root config
                   </button>
                 )}
               </div>
@@ -1747,18 +1802,18 @@ export function Config() {
     </section>
   )
 
-  const globalConfigTabContent = isStatic ? (
+  const environmentGlobalTabContent = isStatic ? (
     <section
       data-tab-scroll-root="true"
       className="scrollbar-thin scrollbar-track-transparent flex min-h-0 flex-1 flex-col overflow-hidden"
     >
       <section className="border-border bg-card flex min-h-0 flex-1 flex-col gap-4 overflow-hidden rounded-lg border p-4">
         <div className="flex flex-none items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold">OpenSpec Global Config</h2>
+          <h2 className="text-sm font-semibold">Environment Global Config</h2>
         </div>
         <div className="text-muted-foreground min-h-0 flex-1 overflow-auto pr-1">
           <div className="rounded-md border border-dashed p-4 text-sm">
-            Global config commands are unavailable in static export mode.
+            Environment Global Config is unavailable in static export mode.
           </div>
         </div>
       </section>
@@ -1771,13 +1826,22 @@ export function Config() {
       <section className="border-border bg-card flex min-h-0 flex-1 flex-col gap-4 overflow-hidden rounded-lg border p-4">
         <div className="flex flex-none flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-sm font-semibold">OpenSpec Global Config</h2>
+            <h2 className="text-sm font-semibold">Environment Global Config</h2>
             <div className="text-muted-foreground mt-1 text-xs">
               <span className="mr-1">Path:</span>
               <code className="bg-muted rounded px-1">
-                {globalConfigPathData?.path ?? 'Unavailable'}
+                {environmentGlobalConfig?.file.path ?? 'Unavailable'}
               </code>
             </div>
+            {environmentGlobalConfig ? (
+              <div className="text-muted-foreground mt-1 break-all text-[11px]">
+                OpenSpec data scope:{' '}
+                <code className="bg-muted rounded px-1">
+                  {environmentGlobalConfig.owner.dataScope.path}
+                </code>{' '}
+                · {environmentGlobalConfig.owner.dataScope.source}
+              </div>
+            ) : null}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -1818,9 +1882,12 @@ export function Config() {
           ]}
         />
 
-        {(globalConfigQueryError || globalConfigError) && (
-          <div className="text-destructive border-destructive/40 bg-destructive/10 rounded-md border px-3 py-2 text-xs">
-            {globalConfigQueryError?.message ?? globalConfigError}
+        {(globalConfigQueryError || globalConfigError || environmentGlobalEvidenceError) && (
+          <div
+            role="alert"
+            className="text-destructive border-destructive/40 bg-destructive/10 rounded-md border px-3 py-2 text-xs"
+          >
+            {globalConfigQueryError?.message ?? globalConfigError ?? environmentGlobalEvidenceError}
           </div>
         )}
 
@@ -1901,19 +1968,24 @@ export function Config() {
             <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
+                disabled={saveGlobalConfigMutation.isPending}
                 onClick={() => {
                   if (!isRecordObject(globalConfigData)) return
                   setGlobalConfigDraft(JSON.stringify(globalConfigData, null, 2))
                   setGlobalConfigDraftDirty(false)
                   setGlobalConfigError(null)
                 }}
-                className="border-border hover:bg-muted rounded-md border px-3 py-1.5 text-xs"
+                className="border-border hover:bg-muted rounded-md border px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Revert
               </button>
               <Button
                 size="sm"
-                disabled={saveGlobalConfigMutation.isPending || !isRecordObject(globalConfigData)}
+                disabled={
+                  saveGlobalConfigMutation.isPending ||
+                  !globalConfigDraftDirty ||
+                  !isRecordObject(globalConfigData)
+                }
                 onClick={handleSaveGlobalConfigEditor}
                 activity={!globalConfigDraftDirty && isRecordObject(globalConfigData)}
               >
@@ -2053,7 +2125,7 @@ export function Config() {
                   size="sm"
                   disabled={!canApplyProfile}
                   onClick={handleApplyProfile}
-                  activity={canApplyProfile && profileApplySaved}
+                  activity={profileApplySaved}
                 >
                   <Check className="h-3.5 w-3.5" />
                   {profileApplySaved ? 'Applied' : 'Apply'}
@@ -2079,16 +2151,22 @@ export function Config() {
 
   const tabs: Tab[] = [
     {
-      id: 'project-config',
-      label: 'Project Config',
-      icon: <FileText className="h-4 w-4" />,
-      content: projectConfigTabContent,
+      id: 'project-binding',
+      label: 'Project Binding',
+      icon: <Link2 className="h-4 w-4" />,
+      content: projectBindingTabContent,
     },
     {
-      id: 'global-config',
-      label: 'Global Config',
+      id: 'active-root',
+      label: 'Active Root',
+      icon: <FileText className="h-4 w-4" />,
+      content: activeRootTabContent,
+    },
+    {
+      id: 'environment-global',
+      label: 'Environment Global',
       icon: <SlidersHorizontal className="h-4 w-4" />,
-      content: globalConfigTabContent,
+      content: environmentGlobalTabContent,
     },
     ...schemaTabs,
   ]

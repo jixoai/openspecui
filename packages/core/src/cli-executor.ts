@@ -186,13 +186,19 @@ export class CliExecutor {
    * 流式执行 openspec validate
    */
   validateStream(
-    type: 'spec' | 'change' | undefined,
-    id: string | undefined,
+    options: {
+      type?: 'spec' | 'change'
+      id?: string
+      strict?: boolean
+      store?: string
+    },
     onEvent: (event: CliStreamEvent) => void
   ): Promise<() => void> {
     const args = ['validate']
-    if (id) args.push(id)
-    if (type) args.push('--type', type)
+    if (options.id) args.push(options.id)
+    if (options.type) args.push('--type', options.type)
+    if (options.strict) args.push('--strict')
+    if (options.store) args.push('--store', options.store)
     return this.executeStream(args, onEvent)
   }
 
@@ -361,12 +367,13 @@ export class CliExecutor {
    */
   archiveStream(
     changeId: string,
-    options: { skipSpecs?: boolean; noValidate?: boolean },
+    options: { skipSpecs?: boolean; noValidate?: boolean; store?: string },
     onEvent: (event: CliStreamEvent) => void
   ): Promise<() => void> {
     const args = ['archive', '-y', changeId]
     if (options.skipSpecs) args.push('--skip-specs')
     if (options.noValidate) args.push('--no-validate')
+    if (options.store) args.push('--store', options.store)
     return this.executeStream(args, onEvent)
   }
 

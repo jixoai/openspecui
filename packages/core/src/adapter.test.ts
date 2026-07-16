@@ -59,7 +59,7 @@ describe('OpenSpecAdapter change files', () => {
     await expect(stat(join(tempDir, 'openspec', 'AGENTS.md'))).rejects.toThrow()
   })
 
-  it('computes schema-driven change progress without requiring proposal.md', async () => {
+  it('separates tracked workflow tasks from schema-document checklists', async () => {
     const changeDir = join(tempDir, 'openspec', 'changes', 'vision-demo')
     await mkdir(join(tempDir, 'openspec', 'schemas', 'vision-driven'), { recursive: true })
     await mkdir(join(changeDir, 'plans'), { recursive: true })
@@ -86,10 +86,16 @@ apply:
     const meta = changes.find((change) => change.id === 'vision-demo')
 
     expect(meta?.name).toBe('vision-demo')
-    expect(meta?.progress).toEqual({ total: 3, completed: 2 })
+    expect(meta?.trackedTaskProgress).toMatchObject({
+      total: 2,
+      completed: 1,
+      phase: 'in-progress',
+      source: { kind: 'artifact', artifactId: 'tasks', outputPath: 'tasks.md' },
+    })
+    expect(meta?.documentChecklistSummary).toMatchObject({ total: 3, completed: 2 })
   })
 
-  it('computes archived schema task progress from matched markdown files', async () => {
+  it('keeps non-tracked archived schema checklists secondary', async () => {
     const archiveDir = join(tempDir, 'openspec', 'changes', 'archive', '2026-06-01-vision-demo')
     await mkdir(join(tempDir, 'openspec', 'schemas', 'vision-driven'), { recursive: true })
     await mkdir(join(archiveDir, 'plan'), { recursive: true })
@@ -109,6 +115,7 @@ artifacts:
     const archives = await adapter.listArchivedChangesWithMeta()
     const meta = archives.find((archive) => archive.id === '2026-06-01-vision-demo')
 
-    expect(meta?.progress).toEqual({ total: 1, completed: 1 })
+    expect(meta?.trackedTaskProgress).toMatchObject({ total: 0, completed: 0, phase: 'no-tasks' })
+    expect(meta?.documentChecklistSummary).toMatchObject({ total: 1, completed: 1 })
   })
 })

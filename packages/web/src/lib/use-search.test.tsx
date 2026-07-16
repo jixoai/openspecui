@@ -80,11 +80,11 @@ describe('useSearch static provider recovery', () => {
     initMock.mockRejectedValueOnce(new Error('init failed')).mockResolvedValueOnce(undefined)
     searchMock.mockResolvedValueOnce([
       {
-        documentId: 'spec:auth',
+        documentId: 'spec:owned:auth',
         kind: 'spec',
         title: 'Auth',
-        href: '/specs/auth',
-        path: 'openspec/specs/auth/spec.md',
+        href: '/specs/owned/auth',
+        path: 'owned:openspec/specs/auth/spec.md',
         score: 10,
         snippet: 'Auth',
         updatedAt: 1,
@@ -155,11 +155,11 @@ describe('useSearch static provider recovery', () => {
     )
     trpcQueryMock.mockResolvedValueOnce([
       {
-        documentId: 'spec:auth',
+        documentId: 'spec:owned:auth',
         kind: 'spec',
         title: 'Auth',
-        href: '/specs/auth',
-        path: 'openspec/specs/auth/spec.md',
+        href: '/specs/owned/auth',
+        path: 'owned:openspec/specs/auth/spec.md',
         score: 10,
         snippet: 'Auth',
         updatedAt: 1,
@@ -171,7 +171,7 @@ describe('useSearch static provider recovery', () => {
 
     await waitFor(() => {
       expect(result.current.error).toBeNull()
-      expect(result.current.data[0]?.documentId).toBe('spec:auth')
+      expect(result.current.data[0]?.documentId).toBe('spec:owned:auth')
     })
 
     expect(trpcSubscribeMock).toHaveBeenCalledTimes(1)

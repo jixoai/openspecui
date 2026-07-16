@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Render terminal tabs, lifecycle indicators, notifications, and panel actions.
+ * 2. Expose explicit launch-project versus planning-root creation targets.
+ * 3. Keep each tab's initial cwd identity visible across local creation and restore.
+ * 4. Host shell and configured-command creation flows without owning PTY path resolution.
+ *
+ * Original request (2026-07-16): "Terminal shows selected cwd/root identity in creation controls and tab labels."
+ */
 import { Badge, CountBadge } from '@/components/badge'
 import {
   ContextMenu,
@@ -10,8 +19,13 @@ import { useNotifications } from '@/lib/notifications/context'
 import { useTerminalContext } from '@/lib/terminal-context'
 import { terminalController } from '@/lib/terminal-controller'
 import { useNavLayout } from '@/lib/use-nav-controller'
+import {
+  getTerminalCwdTargetOption,
+  useTerminalCwdTargetState,
+} from '@/lib/use-terminal-cwd-target'
 import { useTerminalInvocationConfig } from '@/lib/use-terminal-invocation-config'
 import '@/styles/terminal-effects.css'
+import type { TerminalCwdTarget } from '@openspecui/core/pty-protocol'
 import type { TerminalSpawnCommand } from '@openspecui/core/terminal-invocation'
 import {
   ChevronDown,
@@ -35,6 +49,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
+import { TerminalCwdTargetControl } from './terminal-cwd-target-control'
 import { TerminalSpawnCommandDialog } from './terminal-spawn-command-dialog'
 import { TerminalTabs } from './terminal-tabs'
 import { XtermTerminal } from './xterm-terminal'
@@ -47,6 +62,8 @@ function EditableTabLabel({
     id: string
     serverSessionId: string | null
     displayTitle: string
+    cwdTarget: TerminalCwdTarget
+    initialCwd: string | null
     isExited: boolean
     exitCode: number | null
     outputActive: boolean
@@ -99,10 +116,20 @@ function EditableTabLabel({
       />
     </span>
   )
+  const cwdLabel = session.cwdTarget === 'planning-root' ? 'Planning' : 'Launch'
+  const cwdBadge = (
+    <span
+      className="border-border text-muted-foreground shrink-0 rounded-sm border px-1 py-0.5 text-[9px] leading-none"
+      title={`${cwdLabel}: ${session.initialCwd ?? 'resolving absolute path'}`}
+    >
+      {cwdLabel}
+    </span>
+  )
   if (editing) {
     return (
-      <span className="grid min-w-0 grid-cols-[0.75rem_minmax(0,1fr)] items-center gap-1.5">
+      <span className="grid min-w-0 grid-cols-[0.75rem_auto_minmax(0,1fr)] items-center gap-1.5">
         {statusLight}
+        {cwdBadge}
         <input
           ref={inputRef}
           value={draft}
@@ -123,10 +150,11 @@ function EditableTabLabel({
 
   return (
     <span
-      className="grid min-w-0 grid-cols-[0.75rem_minmax(0,1fr)] items-center gap-1.5"
+      className="grid min-w-0 grid-cols-[0.75rem_auto_minmax(0,1fr)] items-center gap-1.5"
       onDoubleClick={startEditing}
     >
       {statusLight}
+      {cwdBadge}
       <span className="min-w-0 truncate">{session.displayTitle}</span>
     </span>
   )
@@ -170,6 +198,9 @@ export function TerminalPanel({ className }: { className?: string }) {
   } = useTerminalContext()
   const { notifications, clearTerminalSession } = useNotifications()
   const { shellProfiles, spawnCommands, defaultShellProfile } = useTerminalInvocationConfig()
+  const cwdTargetState = useTerminalCwdTargetState()
+  const [cwdTarget, setCwdTarget] = useState<TerminalCwdTarget>('launch-project')
+  const selectedCwdTarget = getTerminalCwdTargetOption(cwdTargetState, cwdTarget)
   const [menuAnchor, setMenuAnchor] = useState<ContextMenuAnchor | null>(null)
   const [selectedSpawnCommand, setSelectedSpawnCommand] = useState<TerminalSpawnCommand | null>(
     null
@@ -265,7 +296,7 @@ export function TerminalPanel({ className }: { className?: string }) {
 
         return {
           id: session.id,
-          title: session.displayTitle,
+          title: `${session.cwdTarget === 'planning-root' ? 'Planning root' : 'Launch project'}: ${session.initialCwd ?? 'resolving'} · ${session.displayTitle}`,
           label: <EditableTabLabel session={session} onRename={handleRename} />,
           badge: unreadCount > 0 ? <TerminalUnreadBadge unreadCount={unreadCount} /> : undefined,
           unmountOnHide: true,
@@ -307,8 +338,9 @@ export function TerminalPanel({ className }: { className?: string }) {
   )
 
   const handleCreateDefaultShell = useCallback(() => {
-    createShellSession(defaultShellProfile)
-  }, [createShellSession, defaultShellProfile])
+    if (!selectedCwdTarget.available) return
+    createShellSession(defaultShellProfile, { cwdTarget })
+  }, [createShellSession, cwdTarget, defaultShellProfile, selectedCwdTarget.available])
 
   const handleOpenCreateMenu = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
     event.preventDefault()
@@ -325,8 +357,9 @@ export function TerminalPanel({ className }: { className?: string }) {
       id: `shell:${shell.id}`,
       label: shell.label,
       icon: <Terminal className="h-3.5 w-3.5" />,
+      disabled: !selectedCwdTarget.available,
       onSelect: () => {
-        createShellSession(shell)
+        createShellSession(shell, { cwdTarget })
         setMenuAnchor(null)
       },
     }))
@@ -334,6 +367,7 @@ export function TerminalPanel({ className }: { className?: string }) {
       id: `command:${command.id}`,
       label: command.label,
       icon: <Rocket className="h-3.5 w-3.5" />,
+      disabled: !selectedCwdTarget.available,
       onSelect: () => {
         setSelectedSpawnCommand(command)
         setMenuAnchor(null)
@@ -346,15 +380,20 @@ export function TerminalPanel({ className }: { className?: string }) {
         : []),
       ...commandItems,
     ]
-  }, [createShellSession, shellProfiles, spawnCommands])
+  }, [createShellSession, cwdTarget, selectedCwdTarget.available, shellProfiles, spawnCommands])
 
   const addButton = (
     <button
       type="button"
       onClick={handleCreateDefaultShell}
+      disabled={!selectedCwdTarget.available}
       className="text-terminal-foreground/72 hover:bg-terminal-foreground/10 hover:text-terminal-foreground shrink-0 rounded-md p-1.5 transition"
       aria-label="New terminal"
-      title="New terminal"
+      title={
+        selectedCwdTarget.available
+          ? 'New terminal'
+          : (selectedCwdTarget.unavailableReason ?? undefined)
+      }
     >
       <Plus className="h-3.5 w-3.5" />
     </button>
@@ -373,7 +412,13 @@ export function TerminalPanel({ className }: { className?: string }) {
   )
 
   const areaActions = (
-    <div className="ml-auto flex items-center">
+    <div className="ml-auto flex min-w-0 items-center gap-1">
+      <TerminalCwdTargetControl
+        value={cwdTarget}
+        state={cwdTargetState}
+        onValueChange={setCwdTarget}
+        className="mr-1 w-28 shrink-0 sm:w-36"
+      />
       {addButton}
       {createMenuButton}
       <button
@@ -422,8 +467,10 @@ export function TerminalPanel({ className }: { className?: string }) {
             <button
               type="button"
               onClick={handleCreateDefaultShell}
+              disabled={!selectedCwdTarget.available}
               className="bg-primary text-primary-foreground px-2 text-lg font-bold"
               aria-label="New terminal"
+              title={selectedCwdTarget.unavailableReason ?? undefined}
             >
               +
             </button>
@@ -451,6 +498,7 @@ export function TerminalPanel({ className }: { className?: string }) {
       <TerminalSpawnCommandDialog
         open={selectedSpawnCommand !== null}
         command={selectedSpawnCommand}
+        initialCwdTarget={cwdTarget}
         onClose={() => setSelectedSpawnCommand(null)}
       />
     </div>

@@ -11,7 +11,13 @@ import { describe, expect, it } from 'vitest'
 import type { CliResult } from '../cli-executor.js'
 import { parseCliCommandResult } from './command-result.js'
 import { CliDoctorSchema, CliStoreDoctorSchema } from './store.js'
-import { CliArchiveSchema, CliShowSpecSchema, CliValidateSchema } from './workflow.js'
+import {
+  CliArchiveSchema,
+  CliArtifactInstructionsSchema,
+  CliShowSpecSchema,
+  CliValidateSchema,
+  CliWorkflowStatusSchema,
+} from './workflow.js'
 
 function result(payload: unknown, overrides: Partial<CliResult> = {}): CliResult {
   return {
@@ -219,6 +225,94 @@ describe('OpenSpec CLI command contract parsing', () => {
     expect(parsed.data?.archive).toBeNull()
     expect(parsed.diagnostics[0]?.code).toBe('archive_spec_update_failed')
     expect(parsed.exitCode).toBe(1)
+  })
+
+  it('preserves the complete 1.6 workflow Status action contract', () => {
+    const parsed = parseCliCommandResult(
+      result({
+        changeName: 'add-auth',
+        schemaName: 'custom',
+        planningHome: {
+          kind: 'repo',
+          root: '/store',
+          changesDir: '/store/openspec/changes',
+          defaultSchema: 'spec-driven',
+        },
+        changeRoot: '/store/openspec/changes/add-auth',
+        artifactPaths: {
+          specs: {
+            outputPath: 'specs/**/*.md',
+            resolvedOutputPath: '/store/openspec/changes/add-auth/specs/**/*.md',
+            existingOutputPaths: ['/store/openspec/changes/add-auth/specs/auth/spec.md'],
+          },
+        },
+        isComplete: false,
+        applyRequires: ['tasks'],
+        nextSteps: ['Run openspec instructions tasks --change "add-auth" --store shared --json.'],
+        actionContext: {
+          mode: 'repo-local',
+          sourceOfTruth: 'repo',
+          planningArtifacts: ['specs', 'tasks'],
+          linkedContext: [],
+          allowedEditRoots: ['/store'],
+          requiresAffectedAreaSelection: false,
+          constraints: ['Repo-local edits only.'],
+        },
+        artifacts: [{ id: 'tasks', outputPath: 'tasks.md', status: 'ready' }],
+        root: { path: '/store', source: 'store', store_id: 'shared' },
+      }),
+      CliWorkflowStatusSchema
+    )
+
+    expect(parsed.contractError).toBeUndefined()
+    expect(parsed.data).toMatchObject({
+      changeRoot: '/store/openspec/changes/add-auth',
+      artifactPaths: {
+        specs: {
+          existingOutputPaths: ['/store/openspec/changes/add-auth/specs/auth/spec.md'],
+        },
+      },
+      actionContext: { allowedEditRoots: ['/store'] },
+      root: { source: 'store', store_id: 'shared' },
+    })
+  })
+
+  it('preserves artifact templates, rules, glob outputs, and direct References', () => {
+    const parsed = parseCliCommandResult(
+      result({
+        changeName: 'add-auth',
+        artifactId: 'specs',
+        schemaName: 'custom',
+        changeDir: '/store/openspec/changes/add-auth',
+        planningHome: {
+          kind: 'repo',
+          root: '/store',
+          changesDir: '/store/openspec/changes',
+          defaultSchema: 'spec-driven',
+        },
+        outputPath: 'specs/**/*.md',
+        resolvedOutputPath: '/store/openspec/changes/add-auth/specs/**/*.md',
+        existingOutputPaths: ['/store/openspec/changes/add-auth/specs/auth/spec.md'],
+        description: 'Delta specs.',
+        instruction: 'Update concrete files only.',
+        context: 'Security context.',
+        rules: ['Preserve scenarios.'],
+        template: '# Delta',
+        dependencies: [],
+        unlocks: [],
+        references: [{ store_id: 'platform', root: '/stores/platform', status: [] }],
+        root: { path: '/store', source: 'store', store_id: 'shared' },
+      }),
+      CliArtifactInstructionsSchema
+    )
+
+    expect(parsed.contractError).toBeUndefined()
+    expect(parsed.data).toMatchObject({
+      template: '# Delta',
+      rules: ['Preserve scenarios.'],
+      existingOutputPaths: ['/store/openspec/changes/add-auth/specs/auth/spec.md'],
+      references: [{ store_id: 'platform' }],
+    })
   })
 
   it('keeps the raw payload and reports missing required semantics as contract drift', () => {

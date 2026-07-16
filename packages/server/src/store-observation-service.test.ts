@@ -1,0 +1,139 @@
+/**
+ * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * 1. Verify successful CLI Store truth acquires, retains, replaces, and removes root leases.
+ * 2. Verify failed root observation cannot retain a stale registration lease.
+ * 3. Verify service teardown releases every Store root.
+ *
+ * Original request (2026-07-15): "Registered Store roots are added/removed from observation as registry truth changes."
+ */
+import {
+  closeAllWatchers,
+  getWatcherRuntimeStatus,
+  ReactiveObservationEnvironment,
+  type ObservationRootOwner,
+  type RuntimeRootInvalidationOwner,
+} from '@openspecui/core'
+import type { StoreListEntry } from '@openspecui/core/store-types'
+import { realpathSync } from 'node:fs'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { StoreObservationService } from './store-observation-service.js'
+
+function store(id: string, root: string): StoreListEntry {
+  return { id, root }
+}
+
+function createInvalidationOwner(): RuntimeRootInvalidationOwner {
+  return { acquireRoot: vi.fn(() => vi.fn()) }
+}
+
+const tempDirs: string[] = []
+
+afterEach(async () => {
+  await closeAllWatchers()
+  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+})
+
+describe('StoreObservationService', () => {
+  it('reconciles added, retained, moved, and removed Store roots', async () => {
+    const releases = new Map<string, ReturnType<typeof vi.fn>>()
+    const environment: ObservationRootOwner = {
+      acquireRoot: vi.fn(async (rootPath) => {
+        const release = vi.fn(async () => {})
+        releases.set(resolve(rootPath), release)
+        return release
+      }),
+    }
+    const service = new StoreObservationService(environment, createInvalidationOwner())
+
+    await service.reconcile([store('alpha', '/stores/alpha'), store('beta', '/stores/beta')])
+    expect(service.getObservedStores()).toEqual([
+      { storeId: 'alpha', rootPath: resolve('/stores/alpha') },
+      { storeId: 'beta', rootPath: resolve('/stores/beta') },
+    ])
+    expect(environment.acquireRoot).toHaveBeenCalledTimes(2)
+
+    await service.reconcile([store('alpha', '/stores/alpha'), store('beta', '/stores/beta')])
+    expect(environment.acquireRoot).toHaveBeenCalledTimes(2)
+
+    await service.reconcile([store('alpha', '/stores/alpha-v2')])
+    expect(releases.get(resolve('/stores/alpha'))).toHaveBeenCalledTimes(1)
+    expect(releases.get(resolve('/stores/beta'))).toHaveBeenCalledTimes(1)
+    expect(service.getObservedStores()).toEqual([
+      { storeId: 'alpha', rootPath: resolve('/stores/alpha-v2') },
+    ])
+
+    await service.dispose()
+    expect(releases.get(resolve('/stores/alpha-v2'))).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases the old root when a moved Store cannot acquire its new root', async () => {
+    const releaseOld = vi.fn(async () => {})
+    const environment: ObservationRootOwner = {
+      acquireRoot: vi.fn(async (rootPath) => {
+        if (rootPath.endsWith('new')) throw new Error('watcher unavailable')
+        return releaseOld
+      }),
+    }
+    const service = new StoreObservationService(environment, createInvalidationOwner())
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await service.reconcile([store('alpha', '/stores/old')])
+    await service.reconcile([store('alpha', '/stores/new')])
+
+    expect(releaseOld).toHaveBeenCalledTimes(1)
+    expect(service.getObservedStores()).toEqual([])
+    expect(service.hasObservationGaps()).toBe(true)
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.stringContaining("Store observation failed for 'alpha'"),
+      expect.any(Error)
+    )
+    consoleError.mockRestore()
+  })
+
+  it('clears an observation gap after the same CLI truth retries successfully', async () => {
+    const release = vi.fn(async () => {})
+    const environment: ObservationRootOwner = {
+      acquireRoot: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('watcher unavailable'))
+        .mockResolvedValueOnce(release),
+    }
+    const service = new StoreObservationService(environment, createInvalidationOwner())
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await service.reconcile([store('alpha', '/stores/alpha')])
+    expect(service.hasObservationGaps()).toBe(true)
+    await service.reconcile([store('alpha', '/stores/alpha')])
+    expect(service.hasObservationGaps()).toBe(false)
+
+    await service.dispose()
+    expect(release).toHaveBeenCalledTimes(1)
+    consoleError.mockRestore()
+  })
+
+  it('adds and removes physical watcher roots as registered Store truth changes', async () => {
+    const firstRoot = await mkdtemp(join(tmpdir(), 'openspecui-store-observation-a-'))
+    const secondRoot = await mkdtemp(join(tmpdir(), 'openspecui-store-observation-b-'))
+    tempDirs.push(firstRoot, secondRoot)
+    const environment = new ReactiveObservationEnvironment()
+    const service = new StoreObservationService(environment, createInvalidationOwner())
+
+    await service.reconcile([store('alpha', firstRoot)])
+    expect(getWatcherRuntimeStatus()?.roots.map((root) => root.rootPath)).toEqual([
+      realpathSync(firstRoot),
+    ])
+
+    await service.reconcile([store('beta', secondRoot)])
+    expect(getWatcherRuntimeStatus()?.roots.map((root) => root.rootPath)).toEqual([
+      realpathSync(secondRoot),
+    ])
+
+    await service.reconcile([])
+    expect(getWatcherRuntimeStatus()).toBeNull()
+    await service.dispose()
+    await environment.dispose()
+  })
+})

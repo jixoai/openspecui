@@ -9,7 +9,7 @@ import type {
   Spec,
   Task,
 } from './schemas.js'
-import { parseMarkdownTasks } from './task-progress.js'
+import { parseMarkdownTasks, projectTaskProjectionsFromMarkdownFiles } from './task-progress.js'
 
 type ParsedScenario = Requirement['scenarios'][number]
 
@@ -102,6 +102,9 @@ export class MarkdownParser {
     }
 
     const tasks = this.parseTasks(tasksContent)
+    const taskProjections = projectTaskProjectionsFromMarkdownFiles(
+      tasksContent.length > 0 ? [{ path: 'tasks.md', type: 'file', content: tasksContent }] : []
+    )
 
     const deltasFromDeltaSpecs = this.parseDeltasFromDeltaSpecs(options?.deltaSpecs)
     const deltasFromWhatChanges = this.parseDeltasFromWhatChanges(whatChanges)
@@ -115,11 +118,11 @@ export class MarkdownParser {
       why: why.trim(),
       whatChanges: whatChanges.trim(),
       deltas: finalDeltas,
-      tasks,
-      progress: {
-        total: tasks.length,
-        completed: tasks.filter((t) => t.completed).length,
+      trackedTaskProgress: {
+        ...taskProjections.trackedTaskProgress,
+        tasks,
       },
+      documentChecklistSummary: taskProjections.documentChecklistSummary,
       design: options?.design,
       deltaSpecs: options?.deltaSpecs,
     }

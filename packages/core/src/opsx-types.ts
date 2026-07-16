@@ -1,4 +1,20 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Define reactive Change Status and Instructions projections.
+ * 2. Preserve live CLI path/action provenance versus explicit static absence.
+ * 3. Attribute Apply instruction progress without replacing tracked-task truth.
+ * 4. Define schema, template, and dependency projections for OPSX surfaces.
+ *
+ * Original request (2026-07-15): "Preserve CLI-provided paths, action context, References, and diagnostics end to end."
+ */
 import { z } from 'zod'
+import { CliRootSchema } from './cli-contracts/common.js'
+import {
+  CliActionContextSchema,
+  CliArtifactPathSchema,
+  CliPlanningHomeSchema,
+} from './cli-contracts/workflow.js'
+import { createApplyInstructionProgress } from './task-progress.js'
 
 /** Check if an outputPath contains glob pattern characters */
 export function isGlobPattern(pattern: string): boolean {
@@ -21,6 +37,18 @@ export const ChangeStatusSchema = z.object({
   isComplete: z.boolean(),
   applyRequires: z.array(z.string()),
   artifacts: z.array(ArtifactStatusSchema),
+  provenance: z.discriminatedUnion('kind', [
+    z.object({
+      kind: z.literal('cli'),
+      planningHome: CliPlanningHomeSchema,
+      changeRoot: z.string(),
+      artifactPaths: z.record(CliArtifactPathSchema),
+      nextSteps: z.array(z.string()),
+      actionContext: CliActionContextSchema,
+      root: CliRootSchema,
+    }),
+    z.object({ kind: z.literal('static') }),
+  ]),
 })
 
 export type ChangeStatus = z.infer<typeof ChangeStatusSchema>
@@ -48,21 +76,29 @@ const ApplyInstructionsContextFilePathsSchema = z
 
 export const ApplyInstructionsContextFilesSchema = z.record(ApplyInstructionsContextFilePathsSchema)
 
-export const ApplyInstructionsSchema = z.object({
-  changeName: z.string(),
-  changeDir: z.string(),
-  schemaName: z.string(),
-  contextFiles: ApplyInstructionsContextFilesSchema,
-  progress: z.object({
-    total: z.number(),
-    complete: z.number(),
-    remaining: z.number(),
-  }),
-  tasks: z.array(ApplyTaskSchema),
-  state: z.enum(['blocked', 'all_done', 'ready']),
-  missingArtifacts: z.array(z.string()).optional(),
-  instruction: z.string(),
-})
+export const ApplyInstructionsSchema = z
+  .object({
+    changeName: z.string(),
+    changeDir: z.string(),
+    schemaName: z.string(),
+    contextFiles: ApplyInstructionsContextFilesSchema,
+    progress: z.object({
+      total: z.number(),
+      complete: z.number(),
+      remaining: z.number(),
+    }),
+    tasks: z.array(ApplyTaskSchema),
+    state: z.enum(['blocked', 'all_done', 'ready']),
+    missingArtifacts: z.array(z.string()).optional(),
+    instruction: z.string(),
+  })
+  .transform(({ progress, ...instructions }) => ({
+    ...instructions,
+    applyInstructionProgress: createApplyInstructionProgress({
+      ...progress,
+      state: instructions.state,
+    }),
+  }))
 
 export type ApplyInstructions = z.infer<typeof ApplyInstructionsSchema>
 

@@ -1,5 +1,6 @@
+import { RouterProvider } from '@tanstack/react-router'
 import { createRoot } from 'react-dom/client'
-import { HostedShell } from './components/hosted-shell'
+import { createAppRouter, type AppRouterContext } from './app-router'
 import './index.css'
 import {
   parseHostedLaunchParams,
@@ -31,10 +32,12 @@ void registerHostedServiceWorker().catch((error: unknown) => {
   console.warn('Failed to register hosted app service worker:', error)
 })
 
-createRoot(root).render(
-  <HostedShell
-    initialLaunchRequest={launch.request}
-    fallbackLaunchRequest={fallbackLaunchRequest}
-    initialError={launch.error}
-  />
-)
+const routerContext: AppRouterContext = {
+  initialLaunchRequest: launch.request,
+  fallbackLaunchRequest,
+  initialError: launch.error,
+}
+
+const router = createAppRouter(routerContext)
+
+createRoot(root).render(<RouterProvider router={router} />)

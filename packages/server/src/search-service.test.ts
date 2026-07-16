@@ -1,3 +1,4 @@
+import { createDocumentChecklistSummary, createTrackedTaskProgress } from '@openspecui/core'
 import type { SearchDocument, SearchHit, SearchProvider } from '@openspecui/search'
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
@@ -13,7 +14,8 @@ function createAdapterMock() {
       {
         id: 'add-auth',
         name: 'Add Auth',
-        progress: { total: 0, completed: 0 },
+        trackedTaskProgress: createTrackedTaskProgress([]),
+        documentChecklistSummary: createDocumentChecklistSummary([]),
         createdAt: 1,
         updatedAt: 20,
       },
@@ -56,11 +58,11 @@ class FakeProvider implements SearchProvider {
     this.searchCalls.push(query)
     return [
       {
-        documentId: 'spec:auth',
+        documentId: 'spec:owned:auth',
         kind: 'spec',
         title: 'Auth',
-        href: '/specs/auth',
-        path: 'openspec/specs/auth/spec.md',
+        href: '/specs/owned/auth',
+        path: 'owned:openspec/specs/auth/spec.md',
         score: 42,
         snippet: 'Auth',
         updatedAt: 10,
@@ -83,7 +85,7 @@ describe('SearchService', () => {
     expect(provider.initCalls).toHaveLength(1)
     expect(provider.initCalls[0]?.length).toBe(3)
     expect(provider.searchCalls).toEqual([{ query: 'auth' }])
-    expect(hits[0]?.documentId).toBe('spec:auth')
+    expect(hits[0]?.documentId).toBe('spec:owned:auth')
   })
 
   it('rebuilds index when watcher emits change after initialization', async () => {
@@ -149,7 +151,7 @@ describe('SearchService', () => {
 
     await service.init()
 
-    expect(provider.initCalls[0]?.find((doc) => doc.id === 'spec:auth')?.content).toBe(
+    expect(provider.initCalls[0]?.find((doc) => doc.id === 'spec:owned:auth')?.content).toBe(
       '# Enriched Auth spec'
     )
     expect(provider.initCalls[0]?.find((doc) => doc.id === 'change:add-auth')?.content).toContain(
@@ -166,6 +168,54 @@ describe('SearchService', () => {
       'processed',
       undefined
     )
+  })
+
+  it('indexes duplicate owned and referenced Spec ids with complete source identity', async () => {
+    const adapter = createAdapterMock()
+    const provider = new FakeProvider()
+    const service = new SearchService(
+      adapter as never,
+      undefined,
+      provider,
+      undefined,
+      undefined,
+      () => [
+        {
+          store_id: 'platform-a',
+          specs: [{ id: 'auth', summary: 'Platform A auth' }],
+          status: [],
+        },
+        {
+          store_id: 'platform-b',
+          specs: [{ id: 'auth', summary: 'Platform B auth' }],
+          status: [],
+        },
+      ]
+    )
+
+    await service.init()
+
+    expect(
+      provider.initCalls[0]
+        ?.filter((document) => document.kind === 'spec')
+        .map(({ id, href, path }) => ({ id, href, path }))
+    ).toEqual([
+      {
+        id: 'spec:owned:auth',
+        href: '/specs/owned/auth',
+        path: 'owned:openspec/specs/auth/spec.md',
+      },
+      {
+        id: 'spec:referenced:platform-a:auth',
+        href: '/specs/referenced/platform-a/auth',
+        path: 'referenced:platform-a:specs/auth',
+      },
+      {
+        id: 'spec:referenced:platform-b:auth',
+        href: '/specs/referenced/platform-b/auth',
+        path: 'referenced:platform-b:specs/auth',
+      },
+    ])
   })
 
   it('passes resolved schema-aware entity read options to archive search indexing', async () => {

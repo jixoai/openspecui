@@ -106,8 +106,9 @@ export interface DashboardOverview {
   activeChanges: Array<{
     id: string
     name: string
-    progress: { total: number; completed: number }
+    trackedTaskProgress: TrackedTaskProgress
     updatedAt: number
   }>
   git: DashboardGitSnapshot
 }
+import type { TrackedTaskProgress } from './task-progress.js'

@@ -1,6 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
  * 1. Project official change-scoped OPSX actions with objective applicability locks.
+ * 2. Delegate Archive applicability and diagnostics to the CLI-owned dialog.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  */
@@ -21,14 +22,20 @@ type ComposeActionId = OpsxComposeActionId
 interface ChangeCommandBarProps {
   status: ChangeStatus
   selectedArtifactId?: string
+  actionDisabled?: boolean
+  actionDisabledReason?: string
   onComposeAction: (actionId: ComposeActionId, artifactId?: string) => void
+  onArchive: () => void
   onVerify: () => void
 }
 
 export function ChangeCommandBar({
   status,
   selectedArtifactId,
+  actionDisabled = false,
+  actionDisabledReason,
   onComposeAction,
+  onArchive,
   onVerify,
 }: ChangeCommandBarProps) {
   const readyArtifact = status.artifacts.find((a) => a.status === 'ready')
@@ -84,8 +91,7 @@ export function ChangeCommandBar({
       id: 'archive',
       label: 'Archive',
       icon: Archive,
-      disabled: !status.isComplete,
-      hint: !status.isComplete ? 'complete artifacts first' : undefined,
+      disabled: false,
     },
   ]
 
@@ -97,10 +103,18 @@ export function ChangeCommandBar({
           <button
             key={btn.id}
             type="button"
-            disabled={btn.disabled}
-            onClick={() => onComposeAction(btn.id, btn.artifactId)}
+            disabled={actionDisabled || btn.disabled}
+            onClick={() =>
+              btn.id === 'archive' ? onArchive() : onComposeAction(btn.id, btn.artifactId)
+            }
             aria-label={btn.label}
-            title={btn.hint ? `${btn.label}: ${btn.hint}` : btn.label}
+            title={
+              actionDisabled && actionDisabledReason
+                ? `${btn.label}: ${actionDisabledReason}`
+                : btn.hint
+                  ? `${btn.label}: ${btn.hint}`
+                  : btn.label
+            }
             className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Icon className="h-3.5 w-3.5" />
@@ -111,9 +125,12 @@ export function ChangeCommandBar({
       <button
         type="button"
         onClick={onVerify}
+        disabled={actionDisabled}
         aria-label="Verify"
-        title="Verify"
-        className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition"
+        title={
+          actionDisabled && actionDisabledReason ? `Verify: ${actionDisabledReason}` : 'Verify'
+        }
+        className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50"
       >
         <ShieldCheck className="h-3.5 w-3.5" />
         <span className="hidden sm:inline">Verify</span>

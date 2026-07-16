@@ -1,12 +1,28 @@
+import type { Task, TrackedTaskProgress } from '@openspecui/core'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { TasksView, type Task } from './tasks-view'
+import { TasksView } from './tasks-view'
+
+function trackedTaskProgress(tasks: Task[]): TrackedTaskProgress {
+  const completed = tasks.filter((task) => task.completed).length
+  return {
+    tasks,
+    total: tasks.length,
+    completed,
+    remaining: tasks.length - completed,
+    phase:
+      tasks.length === 0 ? 'no-tasks' : completed === tasks.length ? 'complete' : 'in-progress',
+    source: {
+      kind: 'top-level-fallback',
+      artifactId: null,
+      outputPath: 'tasks.md',
+      filePaths: ['tasks.md'],
+    },
+  }
+}
 
 function renderTasks(tasks: Task[]) {
-  const completed = tasks.filter((task) => task.completed).length
-  return render(
-    <TasksView tasks={tasks} progress={{ total: tasks.length, completed }} tocBaseIndex={0} />
-  )
+  return render(<TasksView trackedTaskProgress={trackedTaskProgress(tasks)} tocBaseIndex={0} />)
 }
 
 describe('TasksView', () => {
@@ -31,13 +47,7 @@ describe('TasksView', () => {
       },
     ]
 
-    rerender(
-      <TasksView
-        tasks={updatedTasks}
-        progress={{ total: updatedTasks.length, completed: 0 }}
-        tocBaseIndex={0}
-      />
-    )
+    rerender(<TasksView trackedTaskProgress={trackedTaskProgress(updatedTasks)} tocBaseIndex={0} />)
 
     expect(screen.getByText('Updated task text')).toBeTruthy()
     expect(screen.queryByText('Initial task text')).toBeNull()

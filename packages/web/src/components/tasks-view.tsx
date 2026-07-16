@@ -1,14 +1,7 @@
 import { TocSection, type TocItem } from '@/components/toc'
+import type { Task, TrackedTaskProgress } from '@openspecui/core'
 import { CheckCircle, Circle, Loader2 } from 'lucide-react'
 import { memo, useMemo } from 'react'
-
-/** Task item structure from @openspecui/core */
-export interface Task {
-  id: string
-  text: string
-  completed: boolean
-  section?: string
-}
 
 /** Group tasks by their section */
 interface TaskGroup {
@@ -101,8 +94,7 @@ const TaskItem = memo(
 )
 
 export interface TasksViewProps {
-  tasks: Task[]
-  progress: { total: number; completed: number }
+  trackedTaskProgress: TrackedTaskProgress
   /** Callback when a task is toggled. If not provided, tasks are readonly. */
   onToggleTask?: (taskIndex: number, completed: boolean) => void
   /** Index of the task currently being toggled (for loading state) */
@@ -118,17 +110,19 @@ export interface TasksViewProps {
  * Used in both change-view (interactive) and archive-view (readonly).
  */
 export function TasksView({
-  tasks,
-  progress,
+  trackedTaskProgress,
   onToggleTask,
   togglingIndex = null,
   tocBaseIndex = 0,
   readonly = false,
 }: TasksViewProps) {
+  const { tasks } = trackedTaskProgress
   const taskGroups = useMemo(() => groupTasksBySection(tasks), [tasks])
 
   const progressPercent =
-    progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0
+    trackedTaskProgress.total > 0
+      ? Math.round((trackedTaskProgress.completed / trackedTaskProgress.total) * 100)
+      : 0
 
   // Calculate task index offset for each group (for toggle mutation)
   const getTaskIndex = (groupIndex: number, taskIndexInGroup: number): number => {
@@ -143,7 +137,7 @@ export function TasksView({
     <TocSection id="tasks" index={tocBaseIndex}>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-lg font-semibold">
-          Tasks ({progress.completed}/{progress.total})
+          Tasks ({trackedTaskProgress.completed}/{trackedTaskProgress.total})
         </h2>
         <span className="text-muted-foreground text-sm">{progressPercent}%</span>
       </div>

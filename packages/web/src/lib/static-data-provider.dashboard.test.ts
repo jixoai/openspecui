@@ -1,4 +1,8 @@
-import type { ExportSnapshot } from '@openspecui/core'
+import {
+  createDocumentChecklistSummary,
+  createTrackedTaskProgress,
+  type ExportSnapshot,
+} from '@openspecui/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const staticState = vi.hoisted(() => ({
@@ -9,6 +13,20 @@ vi.mock('./static-mode', () => ({
   getBasePath: () => '/',
   getInitialData: () => staticState.snapshot,
 }))
+
+function trackedTaskProgress(total: number, completed: number) {
+  return createTrackedTaskProgress(
+    Array.from({ length: total }, (_, index) => ({
+      id: `task-${index + 1}`,
+      text: `Task ${index + 1}`,
+      completed: index < completed,
+    }))
+  )
+}
+
+function documentChecklistSummary() {
+  return createDocumentChecklistSummary([])
+}
 
 function createSnapshot(): ExportSnapshot {
   return {
@@ -47,6 +65,9 @@ function createSnapshot(): ExportSnapshot {
     },
     specs: [
       {
+        identity: { kind: 'owned', specId: 'cli' },
+        source: 'owned',
+        readOnly: false,
         id: 'cli',
         name: 'CLI',
         content: '# CLI',
@@ -103,9 +124,9 @@ function createSnapshot(): ExportSnapshot {
         tasks: '- [ ] task',
         why: 'why',
         whatChanges: 'what',
-        parsedTasks: [],
         deltas: [],
-        progress: { total: 4, completed: 1 },
+        trackedTaskProgress: trackedTaskProgress(4, 1),
+        documentChecklistSummary: documentChecklistSummary(),
         createdAt: 1,
         updatedAt: 30,
       },
@@ -116,9 +137,9 @@ function createSnapshot(): ExportSnapshot {
         tasks: '- [x] task',
         why: 'why',
         whatChanges: 'what',
-        parsedTasks: [],
         deltas: [],
-        progress: { total: 2, completed: 2 },
+        trackedTaskProgress: trackedTaskProgress(2, 2),
+        documentChecklistSummary: documentChecklistSummary(),
         createdAt: 1,
         updatedAt: 15,
       },
@@ -142,6 +163,8 @@ function createSnapshot(): ExportSnapshot {
           ],
           diagnostics: [],
         },
+        trackedTaskProgress: trackedTaskProgress(1, 1),
+        documentChecklistSummary: documentChecklistSummary(),
         createdAt: 1,
         updatedAt: 1,
       },
@@ -205,6 +228,9 @@ describe('static-data-provider dashboard overview', () => {
     staticState.snapshot = {
       ...createSnapshot(),
       specs: Array.from({ length: 12 }, (_, index) => ({
+        identity: { kind: 'owned' as const, specId: `spec-${index}` },
+        source: 'owned' as const,
+        readOnly: false as const,
         id: `spec-${index}`,
         name: `Spec ${index}`,
         content: `# Spec ${index}`,
@@ -228,9 +254,9 @@ describe('static-data-provider dashboard overview', () => {
         tasks: '- [ ] task',
         why: 'why',
         whatChanges: 'what',
-        parsedTasks: [],
         deltas: [],
-        progress: { total: 1, completed: index % 2 },
+        trackedTaskProgress: trackedTaskProgress(1, index % 2),
+        documentChecklistSummary: documentChecklistSummary(),
         createdAt: 1,
         updatedAt: index + 1,
       })),
@@ -285,6 +311,8 @@ describe('static-data-provider dashboard overview', () => {
             ungroupedFiles: [{ path: 'summary.md', type: 'file', content: '# Archive A' }],
             diagnostics: [],
           },
+          trackedTaskProgress: trackedTaskProgress(0, 0),
+          documentChecklistSummary: documentChecklistSummary(),
           createdAt: 2_000_000_000_000,
           updatedAt: 2_000_000_000_000,
         },
@@ -300,6 +328,8 @@ describe('static-data-provider dashboard overview', () => {
             ungroupedFiles: [{ path: 'summary.md', type: 'file', content: '# Archive B' }],
             diagnostics: [],
           },
+          trackedTaskProgress: trackedTaskProgress(0, 0),
+          documentChecklistSummary: documentChecklistSummary(),
           createdAt: 2_000_000_000_000,
           updatedAt: 2_000_000_000_000,
         },

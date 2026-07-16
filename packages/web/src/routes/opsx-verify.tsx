@@ -1,11 +1,21 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Prepare and stream strict OpenSpec change validation.
+ * 2. Preserve command diagnostics and explicit rerun lifecycle.
+ * 3. Lock preparation, options, and rerun until Root Context is ready.
+ *
+ * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
+ */
 import { CliTerminal } from '@/components/cli-terminal'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
+import { RootActionNotice } from '@/components/root-action-notice'
 import { Switch } from '@/components/switch'
 import {
   prepareWorkflowInvocation,
   workflowDiagnosticsToText,
 } from '@/lib/opsx-workflow-invocation'
 import { useCliRunner } from '@/lib/use-cli-runner'
+import { useRootActionState } from '@/lib/use-root-action-state'
 import { useLocation } from '@tanstack/react-router'
 import { CheckCircle, Loader2, ShieldCheck } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -15,6 +25,7 @@ export function OpsxVerifyRoute() {
   const { setConfig } = usePopAreaConfigContext()
   const { requestClose } = usePopAreaLifecycleContext()
   const runner = useCliRunner()
+  const rootAction = useRootActionState()
   const { lines, status, commands, hasStarted, reset, cancel } = runner
   const [strict, setStrict] = useState(true)
   const [commandError, setCommandError] = useState<string | null>(null)
@@ -39,7 +50,7 @@ export function OpsxVerifyRoute() {
   }, [setConfig])
 
   useEffect(() => {
-    if (!changeId || hasStarted) return
+    if (!changeId || hasStarted || rootAction.disabled) return
     const prepareAndRun = async () => {
       setCommandError(null)
       try {
@@ -53,6 +64,8 @@ export function OpsxVerifyRoute() {
             command: 'openspec',
             args: fallbackArgs,
             mode: { requestedMode: 'direct', actualMode: 'direct', fallbackReason: null },
+            target: null,
+            evidence: null,
           }),
         })
         if (result.kind !== 'cli-command') {
@@ -67,10 +80,10 @@ export function OpsxVerifyRoute() {
       }
     }
     void prepareAndRun()
-  }, [changeId, commands, hasStarted, strict])
+  }, [changeId, commands, hasStarted, rootAction.disabled, rootAction.observedAt, strict])
 
   const rerun = () => {
-    if (!changeId) return
+    if (!changeId || rootAction.disabled) return
     reset()
   }
 
@@ -92,13 +105,15 @@ export function OpsxVerifyRoute() {
             checked={strict}
             onCheckedChange={setStrict}
             ariaLabel="Strict"
-            disabled={status === 'running'}
+            disabled={rootAction.disabled || status === 'running'}
           />
           Strict
         </label>
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-4">
+        <RootActionNotice state={rootAction} />
+
         {changeId ? (
           <p className="text-muted-foreground text-sm">
             Running validation for <code className="bg-muted rounded px-1">{changeId}</code>.
@@ -139,7 +154,7 @@ export function OpsxVerifyRoute() {
           <button
             type="button"
             onClick={rerun}
-            disabled={!changeId || status === 'running'}
+            disabled={!changeId || rootAction.disabled || status === 'running'}
             className="bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-xs disabled:opacity-50"
           >
             Re-run

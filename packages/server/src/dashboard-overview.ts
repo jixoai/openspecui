@@ -176,7 +176,7 @@ export async function loadDashboardOverview(
   const allActiveChanges = changeMetas.map((changeMeta) => ({
     id: changeMeta.id,
     name: changeMeta.name ?? changeMeta.id,
-    progress: changeMeta.progress,
+    trackedTaskProgress: changeMeta.trackedTaskProgress,
     updatedAt: changeMeta.updatedAt,
   }))
   const activeChanges = selectRecentDashboardItems(allActiveChanges)
@@ -204,19 +204,22 @@ export async function loadDashboardOverview(
   const specifications = selectRecentDashboardItems(allSpecifications)
 
   const requirements = allSpecifications.reduce((sum, spec) => sum + spec.requirements, 0)
-  const tasksTotal = allActiveChanges.reduce((sum, change) => sum + change.progress.total, 0)
+  const tasksTotal = allActiveChanges.reduce(
+    (sum, change) => sum + change.trackedTaskProgress.total,
+    0
+  )
   const tasksCompleted = allActiveChanges.reduce(
-    (sum, change) => sum + change.progress.completed,
+    (sum, change) => sum + change.trackedTaskProgress.completed,
     0
   )
   const archivedTasksCompleted = archiveMetas.reduce(
-    (sum, archive) => sum + archive.progress.completed,
+    (sum, archive) => sum + archive.trackedTaskProgress.completed,
     0
   )
   const taskCompletionPercent =
     tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : null
   const inProgressChanges = allActiveChanges.filter(
-    (change) => change.progress.total > 0 && change.progress.completed < change.progress.total
+    (change) => change.trackedTaskProgress.phase === 'in-progress'
   ).length
 
   const specificationTrendEvents = specMetas.flatMap((spec) => {

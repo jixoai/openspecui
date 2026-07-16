@@ -7,9 +7,13 @@ import type {
   OpenSpecUIConfigPresence,
   OpenSpecUIGlobalSettings,
   OpsxEntityDetail,
-  Spec,
-  SpecMeta,
 } from '@openspecui/core'
+import {
+  specIdentityKey,
+  type SpecCatalog,
+  type SpecDocumentProjection,
+  type SpecIdentity,
+} from '@openspecui/core/spec-catalog'
 import type { StoreFeatureResult, StoreListEntry } from '@openspecui/core/store-types'
 import { useEffect, useRef, useState } from 'react'
 import * as StaticProvider from './static-data-provider'
@@ -41,8 +45,8 @@ export function primeSubscriptionCache<T>(cacheKey: string, data: T): void {
   subscriptionCache.set(cacheKey, data)
 }
 
-export function getSpecSubscriptionCacheKey(id: string): string {
-  return `spec.subscribeOne:${id}`
+export function getSpecDocumentSubscriptionCacheKey(identity: SpecIdentity): string {
+  return `spec.subscribeDocument:${specIdentityKey(identity)}`
 }
 
 export function getArchiveSubscriptionCacheKey(id: string): string {
@@ -138,48 +142,32 @@ export function useSubscription<T>(
 // Spec subscriptions
 // =====================
 
-export function useSpecsSubscription(): SubscriptionState<SpecMeta[]> {
-  return useSubscription<SpecMeta[]>(
+export function useSpecsSubscription(): SubscriptionState<SpecCatalog> {
+  return useSubscription<SpecCatalog>(
     (callbacks) =>
-      trpcClient.spec.subscribe.subscribe(undefined, {
+      trpcClient.spec.subscribeCatalog.subscribe(undefined, {
         onData: callbacks.onData,
         onError: callbacks.onError,
       }),
-    StaticProvider.getSpecs,
+    StaticProvider.getSpecCatalog,
     [],
-    'spec.subscribe'
+    'spec.subscribeCatalog'
   )
 }
 
-export function useSpecSubscription(id: string): SubscriptionState<Spec | null> {
-  return useSubscription<Spec | null>(
+export function useSpecDocumentSubscription(
+  identity: SpecIdentity
+): SubscriptionState<SpecDocumentProjection> {
+  const cacheKey = getSpecDocumentSubscriptionCacheKey(identity)
+  return useSubscription<SpecDocumentProjection>(
     (callbacks) =>
-      trpcClient.spec.subscribeOne.subscribe(
-        { id },
-        {
-          onData: callbacks.onData,
-          onError: callbacks.onError,
-        }
-      ),
-    () => StaticProvider.getSpec(id),
-    [id],
-    getSpecSubscriptionCacheKey(id)
-  )
-}
-
-export function useSpecRawSubscription(id: string): SubscriptionState<string | null> {
-  return useSubscription<string | null>(
-    (callbacks) =>
-      trpcClient.spec.subscribeRaw.subscribe(
-        { id },
-        {
-          onData: callbacks.onData,
-          onError: callbacks.onError,
-        }
-      ),
-    () => StaticProvider.getSpecRaw(id),
-    [id],
-    `spec.subscribeRaw:${id}`
+      trpcClient.spec.subscribeDocument.subscribe(identity, {
+        onData: callbacks.onData,
+        onError: callbacks.onError,
+      }),
+    () => StaticProvider.getSpecDocument(identity),
+    [cacheKey],
+    cacheKey
   )
 }
 
@@ -365,18 +353,69 @@ export function useConfiguredToolsSubscription(): SubscriptionState<string[]> {
 /**
  * Stores 订阅（beta）。
  *
- * 底层由 server 端轮询 registry 并推送（registry 在 projectDir 之外，watcher 不可达），
- * 前端只消费推送结果，不感知轮询细节。无静态加载器——stores 仅 live 模式可见。
+ * Server pushes identity-only invalidation tokens; the browser pulls the authoritative CLI
+ * projection through `stores.list`. A temporary server reminder remains until checkpoint 4.8
+ * bounds watcher-failure fallback. No static loader: Stores remain a live-only projection.
  */
 export function useStoresSubscription(): SubscriptionState<StoreFeatureResult<StoreListEntry[]>> {
-  return useSubscription<StoreFeatureResult<StoreListEntry[]>>(
-    (callbacks) =>
-      trpcClient.stores.subscribe.subscribe(undefined, {
-        onData: callbacks.onData,
-        onError: callbacks.onError,
-      }),
-    undefined,
-    [],
-    'stores.subscribe'
-  )
+  const [state, setState] = useState<SubscriptionState<StoreFeatureResult<StoreListEntry[]>>>({
+    data: undefined,
+    isLoading: true,
+    error: null,
+  })
+
+  useEffect(() => {
+    if (isStaticMode()) {
+      setState({
+        data: undefined,
+        isLoading: false,
+        error: new Error('Store projections are unavailable in static mode.'),
+      })
+      return
+    }
+
+    let disposed = false
+    let requestGeneration = 0
+    const pull = async () => {
+      const generation = ++requestGeneration
+      setState((previous) => ({
+        ...previous,
+        isLoading: previous.data === undefined,
+        error: null,
+      }))
+      try {
+        const data = await trpcClient.stores.list.query()
+        if (disposed || generation !== requestGeneration) return
+        setState({ data, isLoading: false, error: null })
+      } catch (error) {
+        if (disposed || generation !== requestGeneration) return
+        setState((previous) => ({
+          ...previous,
+          isLoading: false,
+          error: error instanceof Error ? error : new Error(String(error)),
+        }))
+      }
+    }
+
+    void pull()
+    const subscription = trpcClient.runtimeInvalidation.subscribe.subscribe(
+      { facets: ['stores'] },
+      {
+        onData: () => {
+          void pull()
+        },
+        onError: (error) => {
+          if (!disposed) setState((previous) => ({ ...previous, error }))
+        },
+      }
+    )
+
+    return () => {
+      disposed = true
+      requestGeneration += 1
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  return state
 }

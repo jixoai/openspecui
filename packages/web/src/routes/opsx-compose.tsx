@@ -7,6 +7,7 @@
  */
 import { CodeEditor } from '@/components/code-editor'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
+import { RootActionNotice } from '@/components/root-action-notice'
 import { TerminalDispatchActions } from '@/components/terminal/terminal-dispatch-actions'
 import {
   resolveOpsxInvocationMode,
@@ -19,25 +20,20 @@ import {
   workflowDiagnosticsToText,
 } from '@/lib/opsx-workflow-invocation'
 import { sanitizeTerminalDispatchPayload, toErrorMessage } from '@/lib/terminal-dispatch'
+import { useRootActionState } from '@/lib/use-root-action-state'
 import { useConfigSubscription } from '@/lib/use-subscription'
+import type { WorkflowActionEvidenceV2, WorkflowInvocationTargetV2 } from '@openspecui/core'
+import { OPSX_WORKFLOW_LABELS } from '@openspecui/core/opsx-workflows'
 import { useLocation } from '@tanstack/react-router'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-
-const ACTION_LABELS = {
-  continue: 'Continue',
-  ff: 'Fast-forward',
-  apply: 'Apply',
-  update: 'Update',
-  sync: 'Sync',
-  archive: 'Archive',
-} as const
 
 export function OpsxComposeRoute() {
   const location = useLocation()
   const { setConfig } = usePopAreaConfigContext()
   const { requestClose } = usePopAreaLifecycleContext()
   const { data: uiConfig } = useConfigSubscription()
+  const rootAction = useRootActionState()
 
   const composeInput = useMemo(
     () => parseOpsxComposeLocationSearch(location.search),
@@ -56,6 +52,8 @@ export function OpsxComposeRoute() {
   const [isLoadingDraft, setIsLoadingDraft] = useState(false)
   const [draftError, setDraftError] = useState<string | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
+  const [workflowTarget, setWorkflowTarget] = useState<WorkflowInvocationTargetV2 | null>(null)
+  const [workflowEvidence, setWorkflowEvidence] = useState<WorkflowActionEvidenceV2 | null>(null)
 
   useEffect(() => {
     setConfig({
@@ -77,7 +75,18 @@ export function OpsxComposeRoute() {
     const loadPrompt = async () => {
       if (!composeInput) {
         setDraft('')
+        setWorkflowTarget(null)
+        setWorkflowEvidence(null)
         setDraftError('Invalid compose parameters.')
+        setIsLoadingDraft(false)
+        return
+      }
+
+      if (rootAction.disabled) {
+        setDraft('')
+        setWorkflowTarget(null)
+        setWorkflowEvidence(null)
+        setDraftError(null)
         setIsLoadingDraft(false)
         return
       }
@@ -85,6 +94,8 @@ export function OpsxComposeRoute() {
       setSendError(null)
       setIsLoadingDraft(true)
       setDraftError(null)
+      setWorkflowTarget(null)
+      setWorkflowEvidence(null)
 
       try {
         const result = await prepareWorkflowInvocation({
@@ -109,10 +120,14 @@ export function OpsxComposeRoute() {
               actualMode: requestedInvocationMode,
               fallbackReason: null,
             },
+            target: null,
+            evidence: null,
           }),
         })
         if (canceled) return
 
+        setWorkflowTarget(result.target)
+        setWorkflowEvidence(result.evidence)
         const sanitized = sanitizeTerminalDispatchPayload(stringifyWorkflowInvocation(result))
         setDraft(sanitized.text)
         const diagnostics = workflowDiagnosticsToText(result)
@@ -123,6 +138,7 @@ export function OpsxComposeRoute() {
         }
       } catch (error) {
         if (canceled) return
+        setWorkflowEvidence(null)
         setDraft(buildOpsxComposeFallbackPrompt(composeInput))
         setDraftError(toErrorMessage(error))
       } finally {
@@ -137,9 +153,15 @@ export function OpsxComposeRoute() {
     return () => {
       canceled = true
     }
-  }, [composeInput, invocationMode, requestedInvocationMode])
+  }, [
+    composeInput,
+    invocationMode,
+    requestedInvocationMode,
+    rootAction.disabled,
+    rootAction.observedAt,
+  ])
 
-  const actionLabel = composeInput ? ACTION_LABELS[composeInput.action] : 'Compose'
+  const actionLabel = composeInput ? OPSX_WORKFLOW_LABELS[composeInput.action] : 'Compose'
 
   const preparePayload = async () => draft
 
@@ -155,6 +177,8 @@ export function OpsxComposeRoute() {
       </div>
 
       <div className="flex max-h-full min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden p-4">
+        <RootActionNotice state={rootAction} />
+
         {invocationMode && (
           <div className="bg-muted/40 border-border rounded-md border p-2 text-xs">
             <span className="text-muted-foreground">Invocation:</span>{' '}
@@ -164,6 +188,27 @@ export function OpsxComposeRoute() {
             )}
           </div>
         )}
+
+        {workflowTarget ? (
+          <div className="border-border bg-muted/30 grid min-w-0 gap-1 rounded-md border p-2 text-xs sm:grid-cols-[auto_1fr] sm:gap-x-3">
+            <span className="text-muted-foreground">Planning root</span>
+            <span className="min-w-0 break-all font-mono">{workflowTarget.planningRoot.path}</span>
+            <span className="text-muted-foreground">Root source</span>
+            <span>
+              {workflowTarget.planningRoot.source}
+              {workflowTarget.storeId ? ` · Store ${workflowTarget.storeId}` : ''}
+            </span>
+          </div>
+        ) : null}
+
+        {workflowEvidence ? (
+          <details className="border-border bg-muted/20 max-h-40 min-w-0 overflow-auto rounded-md border p-2 text-xs">
+            <summary className="cursor-pointer font-medium">CLI evidence</summary>
+            <pre className="text-muted-foreground mt-2 whitespace-pre-wrap break-all font-mono">
+              {JSON.stringify(workflowEvidence, null, 2)}
+            </pre>
+          </details>
+        ) : null}
 
         {isLoadingDraft && (
           <div className="text-muted-foreground flex items-center gap-2 text-sm">
@@ -199,6 +244,8 @@ export function OpsxComposeRoute() {
       <div className="border-border mt-1 border-t p-4">
         <TerminalDispatchActions
           preparePayload={preparePayload}
+          disabled={rootAction.disabled}
+          disabledReason={rootAction.message ?? undefined}
           onDispatched={requestClose}
           onError={setSendError}
         />

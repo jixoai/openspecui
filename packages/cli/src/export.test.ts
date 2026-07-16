@@ -219,9 +219,9 @@ Testing purposes.
       expect(snapshot.changes[0].id).toBe('test-change')
       expect(snapshot.changes[0].proposal).toContain('Test Change')
       expect(snapshot.changes[0].tasks).toContain('Test task')
-      expect(snapshot.changes[0].parsedTasks).toHaveLength(1)
-      expect(snapshot.changes[0].parsedTasks[0].text).toContain('Test task')
-      expect(snapshot.changes[0].parsedTasks[0].completed).toBe(false)
+      expect(snapshot.changes[0].trackedTaskProgress.tasks).toHaveLength(1)
+      expect(snapshot.changes[0].trackedTaskProgress.tasks[0].text).toContain('Test task')
+      expect(snapshot.changes[0].trackedTaskProgress.tasks[0].completed).toBe(false)
     })
 
     it('should snapshot schema change task progress without proposal.md', async () => {
@@ -249,8 +249,13 @@ apply:
       const change = snapshot.changes.find((item) => item.id === 'vision-change')
 
       expect(change?.proposal).toBe('')
-      expect(change?.progress).toEqual({ total: 3, completed: 2 })
-      expect(change?.parsedTasks.map((task) => task.text)).toEqual(['Planned', 'Done', 'Todo'])
+      expect(change?.trackedTaskProgress).toMatchObject({
+        total: 2,
+        completed: 1,
+        phase: 'in-progress',
+      })
+      expect(change?.trackedTaskProgress.tasks.map((task) => task.text)).toEqual(['Done', 'Todo'])
+      expect(change?.documentChecklistSummary).toMatchObject({ total: 3, completed: 2 })
     })
 
     it('should parse change with deltas correctly', async () => {
@@ -361,7 +366,12 @@ Historical change.
       expect(archive?.entity.diagnostics.map((item) => item.message).join('\n')).toContain(
         'custom-audit'
       )
-      expect(archive?.progress).toEqual({ total: 1, completed: 1 })
+      expect(archive?.trackedTaskProgress).toMatchObject({
+        total: 0,
+        completed: 0,
+        phase: 'no-tasks',
+      })
+      expect(archive?.documentChecklistSummary).toMatchObject({ total: 1, completed: 1 })
     })
 
     it('should handle spec with multiple requirements', async () => {

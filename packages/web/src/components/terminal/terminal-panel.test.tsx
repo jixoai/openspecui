@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Verify terminal panel tabs, actions, notifications, and visibility behavior.
+ * 2. Verify cwd target selection and visible session cwd identity.
+ *
+ * Original request (2026-07-16): "Terminal shows selected cwd/root identity in creation controls and tab labels."
+ */
 import type { NotificationRecord } from '@openspecui/core/notifications'
 import { fireEvent, render } from '@testing-library/react'
 import type { ReactNode } from 'react'
@@ -19,6 +26,7 @@ const {
   createShellSessionMock,
   clearTerminalSessionMock,
   useNotificationsMock,
+  useTerminalCwdTargetStateMock,
 } = vi.hoisted(() => ({
   useTerminalContextMock: vi.fn(),
   useNavLayoutMock: vi.fn(),
@@ -32,6 +40,7 @@ const {
   createShellSessionMock: vi.fn(),
   clearTerminalSessionMock: vi.fn(async () => undefined),
   useNotificationsMock: vi.fn(),
+  useTerminalCwdTargetStateMock: vi.fn(),
 }))
 
 vi.mock('@/lib/terminal-context', () => ({
@@ -44,6 +53,14 @@ vi.mock('@/lib/use-nav-controller', () => ({
 
 vi.mock('@/lib/use-terminal-invocation-config', () => ({
   useTerminalInvocationConfig: () => useTerminalInvocationConfigMock(),
+}))
+
+vi.mock('@/lib/use-terminal-cwd-target', () => ({
+  useTerminalCwdTargetState: () => useTerminalCwdTargetStateMock(),
+  getTerminalCwdTargetOption: (
+    state: { launchProject: unknown; planningRoot: unknown },
+    target: 'launch-project' | 'planning-root'
+  ) => (target === 'planning-root' ? state.planningRoot : state.launchProject),
 }))
 
 vi.mock('@/lib/nav-controller', () => ({
@@ -144,6 +161,8 @@ describe('TerminalPanel', () => {
           id: 'shell-1',
           serverSessionId: 'pty-1',
           displayTitle: 'shell-1',
+          cwdTarget: 'launch-project',
+          initialCwd: '/launch',
           isExited: false,
           exitCode: null,
           outputActive: false,
@@ -157,6 +176,22 @@ describe('TerminalPanel', () => {
       setCustomTitle: vi.fn(),
     })
     createShellSessionMock.mockReset()
+    useTerminalCwdTargetStateMock.mockReturnValue({
+      launchProject: {
+        target: 'launch-project',
+        label: 'Launch project',
+        path: '/launch',
+        available: true,
+        unavailableReason: null,
+      },
+      planningRoot: {
+        target: 'planning-root',
+        label: 'Planning root',
+        path: '/stores/shared',
+        available: true,
+        unavailableReason: null,
+      },
+    })
     useTerminalInvocationConfigMock.mockReturnValue({
       shellProfiles: [
         {
@@ -267,7 +302,8 @@ describe('TerminalPanel', () => {
     fireEvent.click(getAllByTitle('New terminal')[0]!)
 
     expect(createShellSessionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'builtin:sh', command: '/bin/sh' })
+      expect.objectContaining({ id: 'builtin:sh', command: '/bin/sh' }),
+      { cwdTarget: 'launch-project' }
     )
   })
 
@@ -286,7 +322,20 @@ describe('TerminalPanel', () => {
     fireEvent.click(getByText('+'))
 
     expect(createShellSessionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'builtin:sh', command: '/bin/sh' })
+      expect.objectContaining({ id: 'builtin:sh', command: '/bin/sh' }),
+      { cwdTarget: 'launch-project' }
+    )
+  })
+
+  it('creates a shell at the selected current planning root', () => {
+    const { getAllByRole, getAllByTitle } = render(<TerminalPanel />)
+
+    fireEvent.click(getAllByRole('radio', { name: 'Planning' }).at(-1)!)
+    fireEvent.click(getAllByTitle('New terminal').at(-1)!)
+
+    expect(createShellSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'builtin:sh', command: '/bin/sh' }),
+      { cwdTarget: 'planning-root' }
     )
   })
 
@@ -335,6 +384,8 @@ describe('TerminalPanel', () => {
           id: 'shell-1',
           serverSessionId: 'pty-1',
           displayTitle: 'Claude Code - very long terminal title',
+          cwdTarget: 'planning-root',
+          initialCwd: '/stores/shared',
           isExited: false,
           exitCode: null,
           outputActive: false,
@@ -350,11 +401,16 @@ describe('TerminalPanel', () => {
 
     const { getByTitle } = render(<TerminalPanel />)
 
-    expect(getByTitle('Claude Code - very long terminal title')).toBeTruthy()
+    expect(
+      getByTitle('Planning root: /stores/shared · Claude Code - very long terminal title')
+    ).toBeTruthy()
+    expect(getByTitle('Planning: /stores/shared')).toBeTruthy()
     const props = tabsPropsSpy.mock.calls.at(-1)?.[0] as
       | { tabs: Array<{ id: string; title?: string }> }
       | undefined
-    expect(props?.tabs[0]?.title).toBe('Claude Code - very long terminal title')
+    expect(props?.tabs[0]?.title).toBe(
+      'Planning root: /stores/shared · Claude Code - very long terminal title'
+    )
   })
 
   it('auto-consumes focused terminal notifications after a short delay', () => {

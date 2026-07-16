@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Verify terminal controller PTY lifecycle, reconnect, rendering, input, and metadata behavior.
+ * 2. Verify explicit cwd target and initial cwd survive create queues and session restore.
+ * 3. Preserve terminal engine, theme, keybinding, and notification regression coverage.
+ *
+ * Original request (2026-07-16): "Terminal exposes explicit launch-project cwd and planning-root cwd."
+ */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 class MockFitAddon {
@@ -364,8 +372,36 @@ class MockWebSocket {
   }
 
   emitJson(payload: unknown): void {
-    this.onmessage?.({ data: JSON.stringify(payload) } as MessageEvent<string>)
+    this.onmessage?.({
+      data: JSON.stringify(withPtyProtocolDefaults(payload)),
+    } as MessageEvent<string>)
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function withPtyProtocolDefaults(payload: unknown): unknown {
+  if (!isRecord(payload)) return payload
+  if (payload.type === 'created') {
+    return {
+      cwdTarget: 'launch-project',
+      initialCwd: '/launch',
+      ...payload,
+    }
+  }
+  if (payload.type === 'list' && Array.isArray(payload.sessions)) {
+    return {
+      ...payload,
+      sessions: payload.sessions.map((session) =>
+        isRecord(session)
+          ? { cwdTarget: 'launch-project', initialCwd: '/launch', ...session }
+          : session
+      ),
+    }
+  }
+  return payload
 }
 
 class MockResizeObserver {
@@ -391,7 +427,14 @@ function getPtySocket(index: number): MockWebSocket {
 async function loadTerminalController() {
   vi.resetModules()
   const mod = await import('./terminal-controller')
-  return mod.terminalController
+  const controller = mod.terminalController
+  const createSession = controller.createSession.bind(controller)
+  Object.defineProperty(controller, 'createSession', {
+    configurable: true,
+    value: (opts: Partial<Parameters<typeof createSession>[0]> = {}) =>
+      createSession({ cwdTarget: 'launch-project', ...opts }),
+  })
+  return controller
 }
 
 describe('terminal-controller PTY behavior', () => {
@@ -446,6 +489,73 @@ describe('terminal-controller PTY behavior', () => {
     const sent = parseSent(ws)
     expect(sent.some((msg) => msg.type === 'create' && msg.requestId === localId)).toBe(true)
     expect(sent.some((msg) => msg.type === 'input' && msg.sessionId === 'pty-100')).toBe(true)
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('preserves an explicit planning-root target through queued creation', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+
+    const localId = terminalController.createSession({ cwdTarget: 'planning-root' })
+    ws.emitOpen()
+
+    expect(parseSent(ws)).toContainEqual(
+      expect.objectContaining({
+        type: 'create',
+        requestId: localId,
+        cwdTarget: 'planning-root',
+      })
+    )
+
+    ws.emitJson({
+      type: 'created',
+      requestId: localId,
+      sessionId: 'pty-planning',
+      platform: 'common',
+      cwdTarget: 'planning-root',
+      initialCwd: '/stores/shared',
+    })
+
+    expect(terminalController.getSnapshot().sessions[0]).toMatchObject({
+      cwdTarget: 'planning-root',
+      initialCwd: '/stores/shared',
+    })
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('restores cwd target and initial cwd from the server session list', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    ws.emitJson({
+      type: 'list',
+      sessions: [
+        {
+          id: 'pty-restored-planning',
+          title: 'bash',
+          command: '/bin/bash',
+          args: [],
+          platform: 'common',
+          isExited: false,
+          exitCode: null,
+          cwdTarget: 'planning-root',
+          initialCwd: '/stores/shared',
+        },
+      ],
+    })
+
+    expect(terminalController.getSnapshot().sessions[0]).toMatchObject({
+      id: 'pty-restored-planning',
+      cwdTarget: 'planning-root',
+      initialCwd: '/stores/shared',
+    })
 
     terminalController.closeAll()
     unsubscribe()

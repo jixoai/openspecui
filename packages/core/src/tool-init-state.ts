@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
  * 1. Map official OPSX workflows to generated skill and command locations.
  * 2. Project complete, missing, unexpected, and legacy tool initialization state.
  *
@@ -7,25 +7,16 @@
  */
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import {
+  OPSX_ALL_WORKFLOWS,
+  OPSX_WORKFLOW_TO_SKILL_DIR as TOOL_WORKFLOW_TO_SKILL_DIR,
+  type OpsxWorkflowId,
+} from './opsx-workflows.js'
 import { clearCache, reactiveExists } from './reactive-fs/index.js'
 import { AI_TOOLS } from './tool-config.js'
 
-export const TOOL_WORKFLOW_TO_SKILL_DIR = {
-  propose: 'openspec-propose',
-  explore: 'openspec-explore',
-  new: 'openspec-new-change',
-  continue: 'openspec-continue-change',
-  apply: 'openspec-apply-change',
-  update: 'openspec-update-change',
-  ff: 'openspec-ff-change',
-  sync: 'openspec-sync-specs',
-  archive: 'openspec-archive-change',
-  'bulk-archive': 'openspec-bulk-archive-change',
-  verify: 'openspec-verify-change',
-  onboard: 'openspec-onboard',
-} as const
-
-export type ToolWorkflowId = keyof typeof TOOL_WORKFLOW_TO_SKILL_DIR
+export { TOOL_WORKFLOW_TO_SKILL_DIR }
+export type ToolWorkflowId = OpsxWorkflowId
 export type ToolInitDelivery = 'both' | 'skills' | 'commands'
 export type ToolInitStatus = 'uninitialized' | 'partial' | 'initialized'
 
@@ -53,7 +44,7 @@ interface ArtifactEntry {
   legacyPaths?: readonly string[]
 }
 
-const ALL_TOOL_WORKFLOWS = Object.keys(TOOL_WORKFLOW_TO_SKILL_DIR) as ToolWorkflowId[]
+const ALL_TOOL_WORKFLOWS = [...OPSX_ALL_WORKFLOWS]
 
 type CommandPathResolver = (projectDir: string, workflow: ToolWorkflowId) => string
 

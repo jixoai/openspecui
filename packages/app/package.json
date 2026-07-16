@@ -17,6 +17,7 @@
     "@tailwindcss/vite": "^4.2.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
+    "@tanstack/react-router": "^1.99.0",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.4",
     "@types/react-dom": "^19.0.2",

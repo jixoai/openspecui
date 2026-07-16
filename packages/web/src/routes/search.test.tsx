@@ -116,11 +116,11 @@ describe('SearchRoute', () => {
     useSearchMock.mockReturnValue({
       data: [
         {
-          documentId: 'spec:auth',
+          documentId: 'spec:owned:auth',
           kind: 'spec',
           title: 'Auth Flow',
-          href: '/specs/auth',
-          path: 'openspec/specs/auth/spec.md',
+          href: '/specs/owned/auth',
+          path: 'owned:openspec/specs/auth/spec.md',
           score: 100,
           snippet: 'Authentication requirement',
           updatedAt: 1,

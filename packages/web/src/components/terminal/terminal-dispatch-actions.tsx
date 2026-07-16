@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Dispatch sanitized payloads to existing or newly created terminal sessions.
+ * 2. Keep Copy, Save, target selection, and Send under one external readiness lock.
+ * 3. Preserve per-action loading state and terminal foreground-process behavior.
+ *
+ * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
+ */
 import { Select, type SelectOptionGroup } from '@/components/select'
 import { useTerminalContext, type TerminalSession } from '@/lib/terminal-context'
 import { terminalController } from '@/lib/terminal-controller'
@@ -26,6 +34,8 @@ import { TerminalSpawnCommandDialog } from './terminal-spawn-command-dialog'
 
 interface TerminalDispatchActionsProps {
   preparePayload: () => Promise<string>
+  disabled?: boolean
+  disabledReason?: string
   onDispatched?: () => void
   onError?: (message: string | null) => void
   sendLabel?: string
@@ -124,6 +134,8 @@ function selectClassName(size: 'sm' | 'md'): string {
  */
 export function TerminalDispatchActions({
   preparePayload,
+  disabled = false,
+  disabledReason,
   onDispatched,
   onError,
   sendLabel = 'Send',
@@ -152,7 +164,7 @@ export function TerminalDispatchActions({
           liveSessions.length > 0
             ? liveSessions.map((session) => ({
                 value: createTerminalTarget(session.id) as ExistingTerminalTarget,
-                label: session.displayTitle,
+                label: `${session.displayTitle} · ${session.cwdTarget === 'planning-root' ? 'Planning' : 'Launch'}`,
               }))
             : [{ value: '', label: 'No shell instances available', disabled: true }],
       },
@@ -196,12 +208,19 @@ export function TerminalDispatchActions({
     })
   }, [liveSessions, preferredTarget, spawnCommands])
 
+  useEffect(() => {
+    if (disabled) setSpawnDialogOpen(false)
+  }, [disabled])
+
   const selectedSpawnCommand = useMemo(
     () => findSelectedSpawnCommand(target, spawnCommands, defaultSpawnCommand),
     [defaultSpawnCommand, spawnCommands, target]
   )
 
   const resolvePayload = async (): Promise<string> => {
+    if (disabled) {
+      throw new Error(disabledReason ?? 'This action is currently unavailable.')
+    }
     const sanitized = sanitizeTerminalDispatchPayload(await preparePayload())
     if (sanitized.text.trim().length === 0) {
       throw new Error('Prompt is empty.')
@@ -292,7 +311,8 @@ export function TerminalDispatchActions({
         <div className="order-2 flex items-center gap-2 sm:order-1">
           <button
             type="button"
-            disabled={isCopying}
+            disabled={disabled || isCopying}
+            title={disabled ? disabledReason : undefined}
             onClick={() => void handleCopy()}
             className={buttonClassName(size, copySuccess)}
           >
@@ -307,7 +327,8 @@ export function TerminalDispatchActions({
           </button>
           <button
             type="button"
-            disabled={isSavingHistory}
+            disabled={disabled || isSavingHistory}
+            title={disabled ? disabledReason : undefined}
             onClick={() => void handleSave()}
             className={buttonClassName(size, saveSuccess)}
           >
@@ -332,13 +353,15 @@ export function TerminalDispatchActions({
               groups={targetGroups}
               onValueChange={(nextTarget) => setTarget(nextTarget || null)}
               ariaLabel="Target"
+              disabled={disabled}
               data-testid={targetSelectTestId}
               className={selectClassName(size)}
             />
           </label>
           <button
             type="button"
-            disabled={isSending || target === null}
+            disabled={disabled || isSending || target === null}
+            title={disabled ? disabledReason : undefined}
             onClick={() => void handleSend()}
             className={primaryButtonClassName(size)}
           >

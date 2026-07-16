@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Adapt one CLI event stream to a terminal-safe tRPC observable.
+ * 2. Release the process even when the client detaches before asynchronous startup completes.
+ * 3. Isolate downstream emission failures from the server process.
+ *
+ * Original request (2026-07-15): "Every terminal or indeterminate outcome invalidates affected projections before they are pulled again."
+ */
 import type { CliStreamEvent } from '@openspecui/core'
 import { observable } from '@trpc/server/observable'
 
@@ -17,6 +25,7 @@ export function createCliStreamObservable(
   return observable<CliStreamEvent>((emit) => {
     let cancel: (() => void) | undefined
     let completed = false
+    let detached = false
 
     /**
      * 安全的事件处理器
@@ -52,6 +61,10 @@ export function createCliStreamObservable(
     // 启动流
     startStream(safeEventHandler)
       .then((cancelFn) => {
+        if (detached) {
+          cancelFn()
+          return
+        }
         cancel = cancelFn
       })
       .catch((err) => {
@@ -69,6 +82,7 @@ export function createCliStreamObservable(
 
     // 返回清理函数
     return () => {
+      detached = true
       completed = true
       cancel?.()
     }

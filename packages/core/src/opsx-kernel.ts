@@ -1,5 +1,20 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Maintain reactive CLI-backed schema, change, instruction, and artifact projections.
+ * 2. Share and release per-entity streams through one planning-root kernel lifecycle.
+ * 3. Keep OpenSpec configuration ownership outside the workflow projection cache.
+ * 4. Preserve typed Status/Instructions provenance with the resolved root selector.
+ *
+ * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
+ */
 import { join, matchesGlob, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
+import type { CliCommandResult, CliRootSelector } from './cli-contracts/index.js'
+import {
+  CliApplyInstructionsSuccessSchema,
+  CliArtifactInstructionsSuccessSchema,
+  CliWorkflowStatusSuccessSchema,
+} from './cli-contracts/index.js'
 import type { CliExecutor } from './cli-executor.js'
 import { inferFileMime, inferFilePreviewKind, isTextLikeFile } from './file-preview.js'
 import { toOpsxDisplayPath } from './opsx-display-path.js'
@@ -28,7 +43,12 @@ import {
   reactiveStat,
 } from './reactive-fs/reactive-fs.js'
 import { ReactiveState } from './reactive-fs/reactive-state.js'
+import type { RuntimeInvalidationReader } from './runtime-invalidation.js'
 import type { ChangeFile } from './schemas.js'
+import {
+  createApplyInstructionProgress,
+  projectTaskProjectionsFromMarkdownFiles,
+} from './task-progress.js'
 
 // Re-export TemplateContentMap so router and others can use it
 export type TemplateContentMap = Record<
@@ -242,6 +262,22 @@ async function touchArtifactOutputDeps(
   await reactiveExists(join(changeDir, normalizedOutputPath))
 }
 
+function requireCommandData<TInput, TOutput>(
+  label: string,
+  result: CliCommandResult<TInput>,
+  schema: z.ZodType<TOutput>
+): TOutput {
+  const parsed = schema.safeParse(result.data)
+  if (result.success && parsed.success) {
+    return parsed.data
+  }
+  const message =
+    result.contractError ||
+    result.stderr.trim() ||
+    result.diagnostics.map((diagnostic) => diagnostic.message).join('\n')
+  throw new Error(message || `${label} failed (exit ${result.exitCode ?? 'null'})`)
+}
+
 // ---------------------------------------------------------------------------
 // OpsxKernel
 // ---------------------------------------------------------------------------
@@ -249,6 +285,8 @@ async function touchArtifactOutputDeps(
 export class OpsxKernel {
   private readonly projectDir: string
   private readonly cliExecutor: CliExecutor
+  private readonly runtimeInvalidation: RuntimeInvalidationReader
+  private readonly rootSelector: CliRootSelector
   private readonly controller = new AbortController()
   private warmupPromise: Promise<void> | null = null
   private readonly _streamReady = new Map<string, Promise<void>>()
@@ -257,7 +295,6 @@ export class OpsxKernel {
   private _statusList = new ReactiveState<ChangeStatus[]>([])
   private _schemas = new ReactiveState<SchemaInfo[]>([])
   private _changeIds = new ReactiveState<string[]>([])
-  private _projectConfig = new ReactiveState<string | null>(null)
 
   // ---- Per-schema data ----
   private _schemaResolutions = new Map<string, ReactiveState<SchemaResolution>>()
@@ -278,9 +315,16 @@ export class OpsxKernel {
   // ---- Stream abort controllers for dynamic entities ----
   private _entityControllers = new Map<string, AbortController>()
 
-  constructor(projectDir: string, cliExecutor: CliExecutor) {
+  constructor(
+    projectDir: string,
+    cliExecutor: CliExecutor,
+    runtimeInvalidation: RuntimeInvalidationReader,
+    rootSelector: CliRootSelector
+  ) {
     this.projectDir = projectDir
     this.cliExecutor = cliExecutor
+    this.runtimeInvalidation = runtimeInvalidation
+    this.rootSelector = rootSelector
   }
 
   // =========================================================================
@@ -312,12 +356,6 @@ export class OpsxKernel {
         'global:change-ids',
         this._changeIds,
         () => this.fetchChangeIds(),
-        signal
-      ),
-      this.startStreamOnce(
-        'global:project-config',
-        this._projectConfig,
-        () => this.fetchProjectConfig(),
         signal
       ),
     ])
@@ -371,10 +409,6 @@ export class OpsxKernel {
 
   getChangeIds(): string[] {
     return this._changeIds.get()
-  }
-
-  getProjectConfig(): string | null {
-    return this._projectConfig.get()
   }
 
   getTemplates(schema?: string): TemplatesMap {
@@ -869,6 +903,7 @@ export class OpsxKernel {
   // =========================================================================
 
   private async fetchSchemas(): Promise<SchemaInfo[]> {
+    this.runtimeInvalidation.track('schemas')
     await touchOpsxProjectDeps(this.projectDir)
     const result = await this.cliExecutor.schemas()
     if (!result.success) {
@@ -888,23 +923,31 @@ export class OpsxKernel {
     })
   }
 
-  private async fetchProjectConfig(): Promise<string | null> {
-    const configPath = join(this.projectDir, 'openspec', 'config.yaml')
-    return reactiveReadFile(configPath)
-  }
-
   private async fetchStatus(changeId: string, schema?: string): Promise<ChangeStatus> {
     await touchOpsxProjectDeps(this.projectDir)
     await touchOpsxChangeDeps(this.projectDir, changeId)
 
-    const args = ['status', '--json', '--change', changeId]
-    if (schema) args.push('--schema', schema)
-
-    const result = await this.cliExecutor.execute(args)
-    if (!result.success) {
-      throw new Error(result.stderr || `openspec status failed (exit ${result.exitCode ?? 'null'})`)
-    }
-    const status = parseCliJson(result.stdout, ChangeStatusSchema, 'openspec status')
+    const result = await this.cliExecutor.contracts.workflowStatus(changeId, {
+      ...this.rootSelector,
+      ...(schema ? { schema } : {}),
+    })
+    const data = requireCommandData('openspec status', result, CliWorkflowStatusSuccessSchema)
+    const status = ChangeStatusSchema.parse({
+      changeName: data.changeName,
+      schemaName: data.schemaName,
+      isComplete: data.isComplete,
+      applyRequires: data.applyRequires,
+      artifacts: data.artifacts,
+      provenance: {
+        kind: 'cli',
+        planningHome: data.planningHome,
+        changeRoot: data.changeRoot,
+        artifactPaths: data.artifactPaths,
+        nextSteps: data.nextSteps,
+        actionContext: data.actionContext,
+        root: data.root,
+      },
+    })
     const changeRelDir = `openspec/changes/${changeId}`
     for (const artifact of status.artifacts) {
       artifact.relativePath = `${changeRelDir}/${artifact.outputPath}`
@@ -928,16 +971,16 @@ export class OpsxKernel {
     await touchOpsxProjectDeps(this.projectDir)
     await touchOpsxChangeDeps(this.projectDir, changeId)
 
-    const args = ['instructions', artifact, '--json', '--change', changeId]
-    if (schema) args.push('--schema', schema)
-
-    const result = await this.cliExecutor.execute(args)
-    if (!result.success) {
-      throw new Error(
-        result.stderr || `openspec instructions failed (exit ${result.exitCode ?? 'null'})`
-      )
-    }
-    return parseCliJson(result.stdout, ArtifactInstructionsSchema, 'openspec instructions')
+    const result = await this.cliExecutor.contracts.artifactInstructions(changeId, artifact, {
+      ...this.rootSelector,
+      ...(schema ? { schema } : {}),
+    })
+    const data = requireCommandData(
+      'openspec instructions',
+      result,
+      CliArtifactInstructionsSuccessSchema
+    )
+    return ArtifactInstructionsSchema.parse(data)
   }
 
   private async fetchApplyInstructions(
@@ -947,16 +990,33 @@ export class OpsxKernel {
     await touchOpsxProjectDeps(this.projectDir)
     await touchOpsxChangeDeps(this.projectDir, changeId)
 
-    const args = ['instructions', 'apply', '--json', '--change', changeId]
-    if (schema) args.push('--schema', schema)
+    const result = await this.cliExecutor.contracts.applyInstructions(changeId, {
+      ...this.rootSelector,
+      ...(schema ? { schema } : {}),
+    })
+    const data = requireCommandData(
+      'openspec instructions apply',
+      result,
+      CliApplyInstructionsSuccessSchema
+    )
+    const instructions = ApplyInstructionsSchema.parse(data)
+    const changeDir = join(this.projectDir, 'openspec', 'changes', changeId)
+    const [files, schemaDetail] = await Promise.all([
+      readEntriesUnderRoot(changeDir),
+      this.fetchSchemaDetail(instructions.schemaName).catch(() => null),
+    ])
+    const { trackedTaskProgress } = projectTaskProjectionsFromMarkdownFiles(files, {
+      schemaDetail,
+      hasSchemaMetadata: true,
+    })
 
-    const result = await this.cliExecutor.execute(args)
-    if (!result.success) {
-      throw new Error(
-        result.stderr || `openspec instructions apply failed (exit ${result.exitCode ?? 'null'})`
-      )
+    return {
+      ...instructions,
+      applyInstructionProgress: createApplyInstructionProgress(
+        instructions.applyInstructionProgress,
+        trackedTaskProgress
+      ),
     }
-    return parseCliJson(result.stdout, ApplyInstructionsSchema, 'openspec instructions apply')
   }
 
   private async fetchSchemaResolution(name: string): Promise<SchemaResolution> {
@@ -1088,15 +1148,6 @@ export class OpsxKernel {
       'global:change-ids',
       this._changeIds,
       () => this.fetchChangeIds(),
-      this.controller.signal
-    )
-  }
-
-  async ensureProjectConfig(): Promise<void> {
-    await this.startStreamOnce(
-      'global:project-config',
-      this._projectConfig,
-      () => this.fetchProjectConfig(),
       this.controller.signal
     )
   }

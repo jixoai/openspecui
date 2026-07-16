@@ -11,7 +11,7 @@ import {
 import * as reactiveFs from './reactive-fs/index.js'
 import { clearCache } from './reactive-fs/index.js'
 import { ReactiveContext } from './reactive-fs/reactive-context.js'
-import { closeAllWatchers, initWatcherPool } from './reactive-fs/watcher-pool.js'
+import { acquireWatcherRoot, closeAllWatchers } from './reactive-fs/watcher-pool.js'
 import { DEFAULT_BELL_SOUND_ID, DEFAULT_NOTIFICATION_SOUND_ID } from './sounds.js'
 
 describe('ConfigManager', () => {
@@ -23,7 +23,7 @@ describe('ConfigManager', () => {
     // 创建 openspec 目录
     await mkdir(join(tempDir, 'openspec'), { recursive: true })
     configManager = new ConfigManager(tempDir)
-    await initWatcherPool(tempDir)
+    await acquireWatcherRoot(tempDir)
     clearCache()
   })
 

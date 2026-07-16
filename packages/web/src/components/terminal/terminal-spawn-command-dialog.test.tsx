@@ -1,12 +1,21 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Verify configured terminal command creation and advanced-field behavior.
+ * 2. Verify explicit cwd target selection and planning-root readiness locking.
+ *
+ * Original request (2026-07-16): "Terminal creation controls expose the selected cwd/root identity."
+ */
 import { fieldsToTerminalCommandParameters } from '@openspecui/core/terminal-invocation'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalSpawnCommandDialog } from './terminal-spawn-command-dialog'
 
-const { createShellSessionMock, useTerminalInvocationConfigMock } = vi.hoisted(() => ({
-  createShellSessionMock: vi.fn(),
-  useTerminalInvocationConfigMock: vi.fn(),
-}))
+const { createShellSessionMock, useTerminalInvocationConfigMock, useTerminalCwdTargetStateMock } =
+  vi.hoisted(() => ({
+    createShellSessionMock: vi.fn(),
+    useTerminalInvocationConfigMock: vi.fn(),
+    useTerminalCwdTargetStateMock: vi.fn(),
+  }))
 
 vi.mock('@/lib/terminal-context', () => ({
   useTerminalContext: () => ({
@@ -16,6 +25,14 @@ vi.mock('@/lib/terminal-context', () => ({
 
 vi.mock('@/lib/use-terminal-invocation-config', () => ({
   useTerminalInvocationConfig: () => useTerminalInvocationConfigMock(),
+}))
+
+vi.mock('@/lib/use-terminal-cwd-target', () => ({
+  useTerminalCwdTargetState: () => useTerminalCwdTargetStateMock(),
+  getTerminalCwdTargetOption: (
+    state: { launchProject: unknown; planningRoot: unknown },
+    target: 'launch-project' | 'planning-root'
+  ) => (target === 'planning-root' ? state.planningRoot : state.launchProject),
 }))
 
 describe('TerminalSpawnCommandDialog', () => {
@@ -107,6 +124,22 @@ describe('TerminalSpawnCommandDialog', () => {
       shellProfiles: [shell],
       defaultShellProfile: shell,
     })
+    useTerminalCwdTargetStateMock.mockReturnValue({
+      launchProject: {
+        target: 'launch-project',
+        label: 'Launch project',
+        path: '/launch',
+        available: true,
+        unavailableReason: null,
+      },
+      planningRoot: {
+        target: 'planning-root',
+        label: 'Planning root',
+        path: '/stores/shared',
+        available: true,
+        unavailableReason: null,
+      },
+    })
   })
 
   afterEach(() => {
@@ -162,11 +195,56 @@ describe('TerminalSpawnCommandDialog', () => {
     expect(createShellSessionMock).toHaveBeenCalledWith(
       shell,
       expect.objectContaining({
+        cwdTarget: 'launch-project',
         label: 'Claude',
         initialInput: "claude --dangerously-skip-permissions 'run checks'\n",
       })
     )
     expect(onClose).toHaveBeenCalled()
+  })
+
+  it('creates the command in the selected planning root', () => {
+    render(<TerminalSpawnCommandDialog open command={command} onClose={() => {}} />)
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Planning' }))
+    fireEvent.click(screen.getByText('Create'))
+
+    expect(createShellSessionMock).toHaveBeenCalledWith(
+      shell,
+      expect.objectContaining({ cwdTarget: 'planning-root' })
+    )
+  })
+
+  it('keeps planning-root creation disabled until Root Context is current and ready', () => {
+    useTerminalCwdTargetStateMock.mockReturnValue({
+      launchProject: {
+        target: 'launch-project',
+        label: 'Launch project',
+        path: '/launch',
+        available: true,
+        unavailableReason: null,
+      },
+      planningRoot: {
+        target: 'planning-root',
+        label: 'Planning root',
+        path: null,
+        available: false,
+        unavailableReason: 'Planning root is refreshing.',
+      },
+    })
+
+    render(
+      <TerminalSpawnCommandDialog
+        open
+        command={command}
+        initialCwdTarget="planning-root"
+        onClose={() => {}}
+      />
+    )
+
+    expect(screen.getByRole('radio', { name: 'Planning' })).toBeDisabled()
+    fireEvent.click(screen.getByText('Create'))
+    expect(createShellSessionMock).not.toHaveBeenCalled()
   })
 
   it('does not close on outside dismiss requests', () => {

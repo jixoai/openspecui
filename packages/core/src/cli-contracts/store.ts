@@ -14,6 +14,7 @@ import {
   CliRootSchema,
 } from './common.js'
 
+/** Registered Store identity and canonical root emitted by the CLI. */
 export const CliStoreSchema = z
   .object({
     id: z.string(),
@@ -22,6 +23,7 @@ export const CliStoreSchema = z
   })
   .passthrough()
 
+/** Strict typed result of the CLI Store-list JSON command. */
 export const CliStoreListSchema = z
   .object({
     stores: z.array(CliStoreSchema),
@@ -45,6 +47,7 @@ const CliStoreGitMutationSchema = z
   })
   .passthrough()
 
+/** Strict Store setup/register mutation result. */
 export const CliStoreMutationSchema = z
   .object({
     store: CliStoreSchema.nullable(),
@@ -70,6 +73,7 @@ const CliStoreFilesCleanupSchema = z
   })
   .passthrough()
 
+/** Strict Store unregister/remove cleanup result. */
 export const CliStoreCleanupSchema = z
   .object({
     store: CliStoreSchema.nullable(),
@@ -116,6 +120,7 @@ const CliStoreGitInspectionSchema = z
   })
   .passthrough()
 
+/** Strict Doctor facts for one registered Store. */
 export const CliStoreDoctorEntrySchema = CliStoreSchema.extend({
   openspec_root: CliOpenSpecRootInspectionSchema,
   metadata: CliStoreMetadataSchema,
@@ -123,6 +128,7 @@ export const CliStoreDoctorEntrySchema = CliStoreSchema.extend({
   status: z.array(CliDiagnosticSchema),
 }).passthrough()
 
+/** Strict typed result of the CLI Store Doctor JSON command. */
 export const CliStoreDoctorSchema = z
   .object({
     stores: z.array(CliStoreDoctorEntrySchema),
@@ -144,6 +150,7 @@ const CliDoctorStoreSchema = z
   })
   .passthrough()
 
+/** Root, Store, Reference, and diagnostic result of CLI Doctor. */
 export const CliDoctorSchema = z
   .object({
     root: CliDoctorRootSchema.nullable(),
@@ -168,6 +175,7 @@ const CliContextMemberSchema = z
   })
   .passthrough()
 
+/** Root and direct referenced-Store relationship result of CLI Context. */
 export const CliContextSchema = z
   .object({
     root: CliContextRootSchema.nullable(),
@@ -176,6 +184,7 @@ export const CliContextSchema = z
   })
   .passthrough()
 
+/** Known JSON documents that a Store-family command may emit on failure. */
 export const CliStoreCommandFailureSchema = z.union([
   CliStoreMutationSchema,
   CliStoreCleanupSchema,
