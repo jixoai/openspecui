@@ -1759,3 +1759,5 @@ Checkpoint `4.9` remains open until the required full CI-equivalent suite, clean
 - `git diff --check`: pass after the final closure-artifact edit.
 
 Checkpoint transition: `57/131 -> 58/131`; re-close only `4.9`. `3.11`, `4.5`, and `6.7` remain closed. `6.8+` remains open and unstarted. Do not merge, archive, release, or begin `6.8+`; commit, push PR #207, wait for all six remote checks, then stop for independent review.
+
+Remote evidence at code/evidence commit `00067d6bf6f45395c26eb0a7ed6e02c583dac492`: PR #207 remained open with `mergeStateStatus=CLEAN`; Changeset Gate, CI Scope, Fast Gate, Browser Gate (`@openspecui/web`), Browser Gate (`xterm-input-panel`), and aggregate Browser Gate all completed successfully. The final documentation-only evidence commit must also pass the PR checks before handoff.
