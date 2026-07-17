@@ -1,11 +1,15 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Verify Project Binding presents launch/root ownership without registry inference.
  * 2. Verify Store/Reference edits submit one structured, loading-locked mutation.
+ * 3. Verify pending/failure state locks duplicate writes and retains dirty declarations.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
+ * Original request (2026-07-17): "Lock every mutation control while save is pending; preserve dirty input on failure."
  */
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProjectBindingSection } from './project-binding-section'
 
@@ -24,21 +28,6 @@ vi.mock('@/lib/trpc', () => ({
       updateProjectBinding: { mutate: updateProjectBindingMock },
     },
   },
-}))
-
-vi.mock('@tanstack/react-query', () => ({
-  useMutation: (options: {
-    mutationFn: () => Promise<unknown>
-    onSuccess?: (data: unknown) => void
-    onError?: (error: unknown) => void
-  }) => ({
-    mutate: () => {
-      void options.mutationFn().then(options.onSuccess).catch(options.onError)
-    },
-    isPending: false,
-    isSuccess: false,
-    error: null,
-  }),
 }))
 
 function bindingConfig() {
@@ -90,6 +79,23 @@ function bindingConfig() {
   }
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, reject, resolve }
+}
+
+function renderSection(node: ReactNode) {
+  const queryClient = new QueryClient({
+    defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
+  })
+  return render(<QueryClientProvider client={queryClient}>{node}</QueryClientProvider>)
+}
+
 describe('ProjectBindingSection', () => {
   beforeEach(() => {
     bindingSubscriptionMock.mockReset().mockReturnValue({
@@ -103,7 +109,7 @@ describe('ProjectBindingSection', () => {
   afterEach(() => cleanup())
 
   it('shows launch owner, declared Store/Reference, and resolved root preview', () => {
-    render(<ProjectBindingSection isStatic={false} />)
+    renderSection(<ProjectBindingSection isStatic={false} />)
 
     expect(screen.getByText(/Launch project: \/workspace\/launch-app/)).toBeTruthy()
     expect(screen.getByLabelText('Store')).toHaveValue('shared')
@@ -113,7 +119,7 @@ describe('ProjectBindingSection', () => {
   })
 
   it('submits structured Store and Reference declarations', async () => {
-    render(<ProjectBindingSection isStatic={false} />)
+    renderSection(<ProjectBindingSection isStatic={false} />)
 
     fireEvent.change(screen.getByLabelText('Store'), { target: { value: 'design-system' } })
     fireEvent.change(screen.getByLabelText('Reference Store id'), {
@@ -132,8 +138,40 @@ describe('ProjectBindingSection', () => {
     })
   })
 
+  it('locks every declaration control while one structured save is pending', async () => {
+    const pending = createDeferred<ReturnType<typeof bindingConfig>>()
+    updateProjectBindingMock.mockReturnValueOnce(pending.promise)
+    renderSection(<ProjectBindingSection isStatic={false} />)
+
+    fireEvent.change(screen.getByLabelText('Store'), { target: { value: 'design-system' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled())
+    expect(screen.getByLabelText('Store')).toBeDisabled()
+    expect(screen.getByLabelText('Reference Store id')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Remove Reference platform' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Saving…' }))
+    expect(updateProjectBindingMock).toHaveBeenCalledTimes(1)
+
+    pending.resolve(bindingConfig())
+    await waitFor(() => expect(screen.getByLabelText('Store')).toHaveValue('shared'))
+  })
+
+  it('retains dirty declarations and the mutation error after failure', async () => {
+    updateProjectBindingMock.mockRejectedValueOnce(new Error('binding write denied'))
+    renderSection(<ProjectBindingSection isStatic={false} />)
+
+    fireEvent.change(screen.getByLabelText('Store'), { target: { value: 'retained-store' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('binding write denied'))
+    expect(screen.getByLabelText('Store')).toHaveValue('retained-store')
+    expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled()
+  })
+
   it('states that static exports do not contain Project Binding', () => {
-    render(<ProjectBindingSection isStatic />)
+    renderSection(<ProjectBindingSection isStatic />)
 
     expect(screen.getByText('Project Binding is not included in this static export.')).toBeTruthy()
     expect(updateProjectBindingMock).not.toHaveBeenCalled()

@@ -167,7 +167,7 @@ Config construction directives after `f2d1ddf`:
 - [x] 6.5 Specs defaults to Owned and provides a Store-grouped Referenced view with immutable entries sourced from end-to-end pinned CLI 1.6 Reference enumeration
 - [x] 6.6 Spec detail validates returned Store and Spec provenance, shows source/read-only state, disables mutation for References, and returns to the correct list scope
 - [x] 6.7 Archive lists only writable-root archives, validates canonical Change identity before any CLI path, has one Server-owned strict mutation entry, cannot be reached through a generic CLI bypass, and tests diagnostics through that supported entry
-- [ ] 6.8 Config implements Project Binding, Active Root Config, and Environment Global Config ownership sections
+- [x] 6.8 Config implements Project Binding, Active Root Config, and Environment Global Config ownership sections
 - [ ] 6.9 Project Stores route is replaced by Context with root, Reference, environment, and read-only registry diagnostics
 - [ ] 6.10 Search defaults to the active root and offers an explicit Referenced Specs scope without referenced changes
 - [ ] 6.11 Git makes repository scope explicit for status, history, worktrees, and every mutation

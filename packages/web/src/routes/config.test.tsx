@@ -1,9 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Verify routed Config schema selection.
  * 2. Verify Project Binding, Active Root, and Environment Global ownership surfaces.
+ * 3. Prove Active Root file presence is independent from empty content.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
+ * Original request (2026-07-17): "An existing empty Active Root file remains editable."
  */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
@@ -296,9 +298,35 @@ describe('Config schema tabs', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Environment Global' }))
 
     await waitFor(() => {
-      expect(screen.getByText('/runtime/openspec/config.json')).toBeTruthy()
+      expect(screen.getByText('/runtime/openspec/config.json', { selector: 'code' })).toBeTruthy()
     })
     expect(screen.getByText('/runtime/openspec')).toBeTruthy()
     expect(screen.getByText(/xdg-data-home/)).toBeTruthy()
+  })
+
+  it('keeps an existing empty Active Root config editable instead of rendering absence', () => {
+    isStaticModeMock.mockReturnValue(false)
+    activeRootConfigMock.mockReturnValue({
+      data: {
+        content: '',
+        exists: true,
+        filePath: '/stores/shared/openspec/config.yaml',
+        owner: {
+          kind: 'planning-root',
+          path: '/stores/shared',
+          source: 'declared',
+          storeId: 'shared',
+          externalToLaunchProject: true,
+        },
+      },
+      isLoading: false,
+      error: null,
+    })
+    window.history.replaceState(null, '', '/config?configTab=active-root')
+
+    render(<Config />)
+
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeTruthy()
+    expect(screen.queryByText('No config file exists in the active Planning root.')).toBeNull()
   })
 })

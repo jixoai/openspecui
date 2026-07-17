@@ -1781,3 +1781,55 @@ f2d1ddf minus childOwner.release(child)
 Restored HEAD passes the complete Core CLI-executor file `38/38`. PR #207 is open and `CLEAN` at `f2d1ddf391cf5fd5846f1f3658a95e238a43c602`; Changeset, CI Scope, Fast, Web Browser, xterm Browser, and aggregate Browser checks all pass. The one earlier xterm timeout did not reproduce under the exact local, complete, serial, or rerun lanes, so no deterministic defect is attributed to this Core slice.
 
 Checkpoint `4.9` is accepted closed. Progress remains `58/131`; `6.8+` was not started by the correction. Do not merge, archive, or release. The next apply slice is checkpoint `6.8` only: complete and test the three ownership-specific Config sections, then stop for independent review before `6.9`.
+
+## Config Ownership Checkpoint 6.8: 2026-07-17
+
+This slice implements only the three ownership-specific Config sections. The route remains tab/schema orchestration; Schema discovery, editing, templates, and their mutations stay in `packages/web/src/routes/config.tsx`.
+
+### Red evidence at the accepted fixed point
+
+The permanent empty-file regression was first injected into an isolated worktree at `f2d1ddf` (`/private/tmp/openspecui-config-red`) without the implementation patch:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/routes/config.test.tsx -t "keeps an existing empty Active Root"
+
+FAIL src/routes/config.test.tsx > Config schema tabs > keeps an existing empty Active Root config editable instead of rendering absence
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "Edit"
+at src/routes/config.test.tsx:327:19
+available action: "Create Active Root config"
+```
+
+At `f2d1ddf`, the route used `const configYaml = activeRootConfig?.content` and tested its truthiness. Therefore `exists: true, content: ""` entered the absent-file branch. The test was then retained on the repaired branch and passes as green evidence; this is the required counterexample rather than a manually invoked downstream handler.
+
+### Ownership and mutation inventory
+
+| Facet              | Physical owner                   | Only Server mutation                                                           | Evidence                                                                                                                     |
+| ------------------ | -------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| Project Binding    | `ProjectBindingSection`          | `planningConfig.updateProjectBinding` with structured `store` and `references` | owner/root preview, structured payload, pending lock, failure draft retention, static absence tests                          |
+| Active Root        | `ActiveRootConfigSection`        | `planningConfig.writeActiveRoot` with editor content                           | `exists` is independent from content; Planning-root/source/Store/path provenance; loading/error/pending/failure/static tests |
+| Environment Global | `EnvironmentGlobalConfigSection` | `planningConfig.writeEnvironmentGlobal` with a validated JSON object           | CLI path/data-scope/raw evidence, unknown-field preservation, invalid JSON rejection, pending/error/static tests             |
+
+The Environment Global `Run update` action remains on `useCliRunner`'s typed `planning-root-update` command descriptor. No browser-authored argv or independent Store/root selector was added. Static mode renders the exported Active Root snapshot read-only, states that Project Binding is not included, and states that Environment Global is unavailable; it does not synthesize launch binding, runtime data-home, or global config facts.
+
+### Focused and full verification
+
+- Focused Web Config matrix: `pnpm --filter @openspecui/web exec vitest run --project unit src/components/config/project-binding-section.test.tsx src/components/config/active-root-config-section.test.tsx src/components/config/environment-global-config-section.test.tsx src/routes/config.test.tsx` -> `4 files, 29/29 tests passed`.
+- `pnpm format:check` -> passed.
+- `pnpm lint:ci` -> passed, 824 files, zero warnings/errors.
+- `pnpm typecheck` -> passed across all 15 runnable workspace packages.
+- `pnpm test:ci` -> passed for every workspace package (Core `47 files / 440 tests`, Server `46 files / 344 tests`, Web `115 files / 656 tests`, App `78 tests`, CLI `49 tests`; no failed project).
+- `pnpm test:browser:ci` -> xterm `60 passed / 1 skipped`; Web Storybook `12/12`.
+- Cleaned `packages/web/dist-ssg` and `packages/web/.vite`, then `pnpm --filter @openspecui/web build:ssg` -> passed. Existing `scroll-button` CSS and ineffective dynamic-import warnings remain non-fatal.
+- `git diff --check` -> passed.
+
+### Reflection gate
+
+- Physical owners are exactly `ProjectBindingSection`, `ActiveRootConfigSection`, and `EnvironmentGlobalConfigSection`; `Config` only composes their tabs and keeps Schema orchestration.
+- The only write path for each facet is respectively `planningConfig.updateProjectBinding`, `planningConfig.writeActiveRoot`, and `planningConfig.writeEnvironmentGlobal`.
+- `config.test.tsx` plus `active-root-config-section.test.tsx` prove an existing empty Active Root (`exists: true, content: ""`) renders Edit/editor state, not the absence copy. The fixed-point red run above proves the old truthiness branch failed for the intended reason.
+- Project Binding, Active Root, and Environment Global pending tests click the disabled save controls and assert one mutation call; failure tests assert the dirty Store/JSON/YAML draft remains and the error is visible. Editor/cancel/refresh/profile controls are disabled while their operation is active.
+- Static tests prove the Active Root snapshot has no live owner/path, Project Binding says it is not in static export, and Environment Global says it is unavailable; no Launch or global runtime data was invented.
+- The changed-file audit is limited to `AGENTS.md`, `i18n.zh.md`, one changeset, the Project Binding tests, the Config route/tests, and the two new focused Config components/tests. Schema code remains in the route with no behavior change; no `6.9+` file or checkbox was touched.
+
+Checkpoint transition: `58/131 -> 59/131`; close only `6.8`. `6.9`, `6.16`, and every later project/static/App surface remain open. Commit and push PR #207, wait for the six remote checks, then stop for independent review. Do not merge, archive, or release.
