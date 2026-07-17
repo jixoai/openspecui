@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Prepare and stream strict OpenSpec change validation.
  * 2. Preserve command diagnostics and explicit rerun lifecycle.
  * 3. Lock preparation, options, and rerun until Root Context is ready.
+ * 4. Queue direct validation through one typed transport without duplicate argv evidence.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
+ * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
  */
 import { CliTerminal } from '@/components/cli-terminal'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
@@ -76,12 +78,8 @@ export function OpsxVerifyRoute() {
         if (diagnostics) setCommandError(diagnostics)
         commands.replaceAll([
           {
-            command: result.command,
-            args: result.args,
-            stream: {
-              type: 'validate',
-              input: { id: changeId, type: 'change', strict },
-            },
+            type: 'validate',
+            input: { id: changeId, type: 'change', strict },
           },
         ])
         void commands.runAll()

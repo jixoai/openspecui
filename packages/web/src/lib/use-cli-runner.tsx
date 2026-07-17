@@ -3,7 +3,7 @@
  * 1. Run ordered CLI streams with stable process and loading state.
  * 2. Preserve stdout, stderr, exit, cancellation, and multiline diagnostics verbatim.
  * 3. Route root-dependent operations through dedicated Server-owned transports.
- * 4. Make every browser execution transport dedicated and exhaustively typed.
+ * 4. Derive execution and displayed command evidence from one exhaustive typed transport.
  *
  * Original request (2026-07-15): "场景丢失保护的诊断必须原样显示，不能合成重试。"
  * Original request (2026-07-17): "Remove the Web generic fallback when no production caller requires it."
@@ -30,6 +30,7 @@ export interface CommandDescriptor {
   id: string
   command: string
   args: string[]
+  effectiveCommand: string | null
   status: CommandRunStatus
   exitCode: number | null
   stream: CliStreamTransport
@@ -43,6 +44,7 @@ export interface CommandProcess {
   id: string
   command: string
   args: string[]
+  effectiveCommand: string | null
   status: CommandRunStatus
   exitCode: number | null
   done: Promise<number | null>
@@ -86,18 +88,13 @@ interface InstallGlobalCliStreamTransport {
   type: 'install-global-cli'
 }
 
-type CliStreamTransport =
+/** Sole semantic descriptor for one browser-requested CLI stream. */
+export type CliStreamTransport =
   | ArchiveStrictStreamTransport
   | InitStreamTransport
   | PlanningRootUpdateStreamTransport
   | ValidateStreamTransport
   | InstallGlobalCliStreamTransport
-
-interface CommandInput {
-  command: string
-  args?: string[]
-  stream: CliStreamTransport
-}
 
 interface UseCliRunnerOptions {
   onCreateProcess?: (process: CommandProcess) => void
@@ -120,6 +117,75 @@ function createId() {
 function asCommandText(command: string, args: string[]) {
   const argText = args.length > 0 ? ` ${args.join(' ')}` : ''
   return `${command}${argText}`
+}
+
+interface CliStreamHandlers {
+  onData(event: CliStreamEvent): void
+  onError(error: unknown): void
+}
+
+interface CliStreamPlan {
+  command: string
+  args: string[]
+  subscribe(handlers: CliStreamHandlers): { unsubscribe(): void }
+}
+
+function planCliStream(stream: CliStreamTransport): CliStreamPlan {
+  return match(stream)
+    .with({ type: 'archive-strict' }, ({ input }) => {
+      const args = ['archive', '-y', input.changeId]
+      if (input.skipSpecs) args.push('--skip-specs')
+      if (input.noValidate) args.push('--no-validate')
+      return {
+        command: 'openspec',
+        args,
+        subscribe: (handlers: CliStreamHandlers) =>
+          trpcClient.cli.archiveStrictStream.subscribe(input, handlers),
+      }
+    })
+    .with({ type: 'init' }, ({ input }) => {
+      const args = ['init']
+      if (input?.tools !== undefined) {
+        args.push('--tools', Array.isArray(input.tools) ? input.tools.join(',') : input.tools)
+      }
+      if (input?.profile) args.push('--profile', input.profile)
+      if (input?.force) args.push('--force')
+      return {
+        command: 'openspec',
+        args,
+        subscribe: (handlers: CliStreamHandlers) =>
+          trpcClient.cli.initStream.subscribe(input, handlers),
+      }
+    })
+    .with({ type: 'planning-root-update' }, ({ input }) => {
+      const args = ['update']
+      if (input?.force) args.push('--force')
+      return {
+        command: 'openspec',
+        args,
+        subscribe: (handlers: CliStreamHandlers) =>
+          trpcClient.cli.updateStream.subscribe(input, handlers),
+      }
+    })
+    .with({ type: 'validate' }, ({ input }) => {
+      const args = ['validate']
+      if (input.id) args.push(input.id)
+      if (input.type) args.push('--type', input.type)
+      if (input.strict) args.push('--strict')
+      return {
+        command: 'openspec',
+        args,
+        subscribe: (handlers: CliStreamHandlers) =>
+          trpcClient.cli.validateStream.subscribe(input, handlers),
+      }
+    })
+    .with({ type: 'install-global-cli' }, () => ({
+      command: 'npm',
+      args: ['install', '-g', '@fission-ai/openspec'],
+      subscribe: (handlers: CliStreamHandlers) =>
+        trpcClient.cli.installGlobalCliStream.subscribe(undefined, handlers),
+    }))
+    .exhaustive()
 }
 
 function deriveOverallStatus(commands: CommandDescriptor[]): OverallStatus {
@@ -202,21 +268,25 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
   )
 
   const replaceAll = useCallback(
-    (items: CommandInput[]) => {
+    (items: CliStreamTransport[]) => {
       activeSubscriptionRef.current?.unsubscribe?.()
       activeSubscriptionRef.current = null
       activeCommandIdRef.current = null
       setLogs([])
       setLastExitCode(null)
       updateCommands(() =>
-        items.map((item) => ({
-          id: createId(),
-          command: item.command,
-          args: item.args ?? [],
-          stream: item.stream,
-          status: 'idle',
-          exitCode: null,
-        }))
+        items.map((stream) => {
+          const plan = planCliStream(stream)
+          return {
+            id: createId(),
+            command: plan.command,
+            args: plan.args,
+            effectiveCommand: null,
+            stream,
+            status: 'idle',
+            exitCode: null,
+          }
+        })
       )
     },
     [updateCommands]
@@ -267,6 +337,7 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
         id: target.id,
         command: target.command,
         args: target.args,
+        effectiveCommand: target.effectiveCommand,
         status: 'loading',
         exitCode: null,
         done,
@@ -284,11 +355,15 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
       const handlers = {
         onData: (event: CliStreamEvent) => {
           if (event.type === 'command') {
+            const effectiveCommand = event.data ?? ''
             updateCommands((prev) =>
-              prev.map((c) => (c.id === target.id ? { ...c, status: 'running' } : c))
+              prev.map((c) =>
+                c.id === target.id ? { ...c, status: 'running', effectiveCommand } : c
+              )
             )
             process.status = 'running'
-            emit('data', event.data ?? '')
+            process.effectiveCommand = effectiveCommand
+            emit('data', effectiveCommand)
             return
           }
 
@@ -359,21 +434,7 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
           activeCommandIdRef.current = null
         },
       }
-      const subscription = match(target.stream)
-        .with({ type: 'archive-strict' }, ({ input }) =>
-          trpcClient.cli.archiveStrictStream.subscribe(input, handlers)
-        )
-        .with({ type: 'init' }, ({ input }) => trpcClient.cli.initStream.subscribe(input, handlers))
-        .with({ type: 'planning-root-update' }, ({ input }) =>
-          trpcClient.cli.updateStream.subscribe(input, handlers)
-        )
-        .with({ type: 'validate' }, ({ input }) =>
-          trpcClient.cli.validateStream.subscribe(input, handlers)
-        )
-        .with({ type: 'install-global-cli' }, () =>
-          trpcClient.cli.installGlobalCliStream.subscribe(undefined, handlers)
-        )
-        .exhaustive()
+      const subscription = planCliStream(target.stream).subscribe(handlers)
 
       process.status = 'running'
       activeSubscriptionRef.current = subscription
@@ -417,10 +478,8 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
             <XCircle className="h-3 w-3 text-red-400" />
           ) : null
 
-        const headerText =
-          cmd.status === 'idle'
-            ? `# ${asCommandText(cmd.command, cmd.args)}`
-            : `$ ${asCommandText(cmd.command, cmd.args)}`
+        const commandText = cmd.effectiveCommand ?? asCommandText(cmd.command, cmd.args)
+        const headerText = cmd.status === 'idle' ? `# ${commandText}` : `$ ${commandText}`
 
         const header: CliRunnerLine[] = [
           {

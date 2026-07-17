@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Project Binding, Active Root, and Environment Global OpenSpec configuration editing.
  * 2. Schema discovery, inspection, creation, and file editing.
  * 3. OpenSpec profile delivery/workflow configuration and drift repair.
- * 4. Live CLI execution evidence and static-mode read-only projection.
+ * 4. Typed Update transport evidence and static-mode read-only projection.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
+ * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
  */
 import { Button } from '@/components/button'
 import { ButtonGroup } from '@/components/button-group'
@@ -985,9 +986,7 @@ export function Config() {
         ])
         runConfigCommands([
           {
-            command: 'openspec',
-            args: ['update'],
-            stream: { type: 'planning-root-update' },
+            type: 'planning-root-update',
           },
         ])
       }
@@ -1037,9 +1036,7 @@ export function Config() {
       } else {
         runConfigCommands([
           {
-            command: 'openspec',
-            args: ['update'],
-            stream: { type: 'planning-root-update' },
+            type: 'planning-root-update',
           },
         ])
       }

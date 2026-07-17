@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Present backend, CLI, workflow delivery, terminal, notification, and appearance settings.
  * 2. Preserve OpenSpec 1.6 compatibility and tool/profile drift evidence.
  * 3. Bind network-triggered settings actions to visible loading and failure state.
- * 4. Delegate CLI installation and project mutations through Server-owned transports.
+ * 4. Delegate CLI installation and Init through single-source Server-owned transports.
  *
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
+ * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
  */
 import { Button } from '@/components/button'
 import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
@@ -89,7 +90,6 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
-  buildSettingsInitArgs,
   buildSettingsInitInput,
   canAutoInit,
   countSelectedToolActions,
@@ -517,18 +517,6 @@ export function Settings() {
     }
   }, [showInitModal, cancelInit, resetInit])
 
-  const initArgs = useMemo(
-    () =>
-      buildSettingsInitArgs({
-        mode: initToolsMode,
-        selectedToolIds: selectedTools,
-        cliSupportedToolIds: cliSupportedTools,
-        profileOverride: initProfileOverride,
-        force: initForce,
-      }),
-    [cliSupportedTools, initForce, initProfileOverride, initToolsMode, selectedTools]
-  )
-
   const initInput = useMemo(
     () =>
       buildSettingsInitInput({
@@ -545,20 +533,17 @@ export function Settings() {
     if (!showInitModal) return
     initCommands.replaceAll([
       {
-        command: 'openspec',
-        args: initArgs,
-        stream: { type: 'init', input: initInput },
+        type: 'init',
+        input: initInput,
       },
     ])
-  }, [initArgs, initCommands, initInput, showInitModal])
+  }, [initCommands, initInput, showInitModal])
 
   useEffect(() => {
     if (showInstallModal) {
       installCommands.replaceAll([
         {
-          command: 'npm',
-          args: ['install', '-g', '@fission-ai/openspec'],
-          stream: { type: 'install-global-cli' },
+          type: 'install-global-cli',
         },
       ])
       installCommands.runAll()

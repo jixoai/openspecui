@@ -3,8 +3,10 @@
  * 1. Verify ordered CLI stream execution and immediate state visibility.
  * 2. Preserve multiline failure evidence and stop the queue after nonzero exit.
  * 3. Prove every queue item selects one exhaustive dedicated Server transport.
+ * 4. Prove logical previews are derived and backend command evidence becomes authoritative.
  *
  * Original request (2026-07-15): "场景丢失保护的诊断必须原样显示，不能合成重试。"
+ * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
  */
 import { act, cleanup, render, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -85,7 +87,7 @@ describe('useCliRunner', () => {
     updateSubscribeMock.mockClear()
     validateSubscribeMock.mockClear()
     setStreamEvents([
-      { type: 'command', data: 'openspec config list --json' },
+      { type: 'command', data: 'pnpm exec openspec validate demo --type change' },
       { type: 'stdout', data: '{"profile":"core"}\n' },
       { type: 'exit', exitCode: 0 },
     ])
@@ -95,16 +97,12 @@ describe('useCliRunner', () => {
     cleanup()
   })
 
-  it('runs commands after replaceAll + runAll without requiring an extra render', async () => {
+  it('derives preview and execution from one transport without requiring an extra render', async () => {
     const { result } = renderHook(() => useCliRunner())
 
     act(() => {
       result.current.commands.replaceAll([
-        {
-          command: 'openspec',
-          args: ['config', 'list', '--json'],
-          stream: { type: 'validate', input: { id: 'demo', type: 'change' } },
-        },
+        { type: 'validate', input: { id: 'demo', type: 'change' } },
       ])
     })
 
@@ -119,6 +117,7 @@ describe('useCliRunner', () => {
       expect.objectContaining({
         command: 'openspec',
         args: ['validate', 'demo', '--type', 'change'],
+        effectiveCommand: 'pnpm exec openspec validate demo --type change',
       }),
     ])
     expect(result.current.status).toBe('success')
@@ -130,12 +129,8 @@ describe('useCliRunner', () => {
     act(() => {
       result.current.commands.replaceAll([
         {
-          command: 'openspec',
-          args: ['archive', '-y', 'add-search'],
-          stream: {
-            type: 'archive-strict',
-            input: { changeId: 'add-search', skipSpecs: false, noValidate: false },
-          },
+          type: 'archive-strict',
+          input: { changeId: 'add-search', skipSpecs: false, noValidate: false },
         },
       ])
     })
@@ -155,13 +150,7 @@ describe('useCliRunner', () => {
     const { result } = renderHook(() => useCliRunner())
 
     act(() => {
-      result.current.commands.replaceAll([
-        {
-          command: 'npm',
-          args: ['install', '-g', '@fission-ai/openspec'],
-          stream: { type: 'install-global-cli' },
-        },
-      ])
+      result.current.commands.replaceAll([{ type: 'install-global-cli' }])
     })
 
     await act(async () => {
@@ -176,9 +165,8 @@ describe('useCliRunner', () => {
     [
       'Init',
       queuedCommand({
-        command: 'openspec',
-        args: ['init', '--tools', 'claude', '--force'],
-        stream: { type: 'init', input: { tools: ['claude'], force: true } },
+        type: 'init',
+        input: { tools: ['claude'], force: true },
       }),
       initSubscribeMock,
       { tools: ['claude'], force: true },
@@ -186,9 +174,7 @@ describe('useCliRunner', () => {
     [
       'Planning-root Update',
       queuedCommand({
-        command: 'openspec',
-        args: ['update'],
-        stream: { type: 'planning-root-update' },
+        type: 'planning-root-update',
       }),
       updateSubscribeMock,
       undefined,
@@ -196,12 +182,8 @@ describe('useCliRunner', () => {
     [
       'Validate',
       queuedCommand({
-        command: 'openspec',
-        args: ['validate', 'demo', '--type', 'change', '--strict'],
-        stream: {
-          type: 'validate',
-          input: { id: 'demo', type: 'change', strict: true },
-        },
+        type: 'validate',
+        input: { id: 'demo', type: 'change', strict: true },
       }),
       validateSubscribeMock,
       { id: 'demo', type: 'change', strict: true },
@@ -240,12 +222,8 @@ describe('useCliRunner', () => {
     act(() => {
       result.current.commands.replaceAll([
         {
-          command: 'openspec',
-          args: ['archive', '-y', 'add-search'],
-          stream: {
-            type: 'archive-strict',
-            input: { changeId: 'add-search', skipSpecs: false, noValidate: false },
-          },
+          type: 'archive-strict',
+          input: { changeId: 'add-search', skipSpecs: false, noValidate: false },
         },
       ])
     })
@@ -298,12 +276,8 @@ describe('useCliRunner', () => {
     act(() => {
       result.current.commands.replaceAll([
         {
-          command: 'openspec',
-          args: ['archive', '-y', 'add-search'],
-          stream: {
-            type: 'archive-strict',
-            input: { changeId: 'add-search', skipSpecs: false, noValidate: false },
-          },
+          type: 'archive-strict',
+          input: { changeId: 'add-search', skipSpecs: false, noValidate: false },
         },
       ])
     })

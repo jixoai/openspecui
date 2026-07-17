@@ -1,9 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Verify change validation dialog lifecycle.
  * 2. Verify Root Context failure prevents command preparation and execution.
+ * 3. Verify direct validation queues only its typed transport and preserves diagnostics.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
+ * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
  */
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -147,15 +149,11 @@ describe('OpsxVerifyRoute', () => {
     })
     expect(replaceAllMock).toHaveBeenCalledWith([
       {
-        command: 'openspec',
-        args: ['validate', 'add-terminal-spawn-command', '--type', 'change', '--strict'],
-        stream: {
-          type: 'validate',
-          input: {
-            id: 'add-terminal-spawn-command',
-            type: 'change',
-            strict: true,
-          },
+        type: 'validate',
+        input: {
+          id: 'add-terminal-spawn-command',
+          type: 'change',
+          strict: true,
         },
       },
     ])

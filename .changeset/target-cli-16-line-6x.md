@@ -122,6 +122,14 @@ line, and rejects older or forward CLI lines by default.
   changes and disappearance retire obsolete watcher/invalidation leases,
   Kernel, hooks, Search, Dashboard, and preview state before callers observe a
   completed transition; final backend disposal remains idempotent.
+- Own every streamed CLI child through one settlement-aware handle. Cancellation
+  requests SIGTERM, escalates to SIGKILL after a bounded grace period, and keeps
+  the Planning-root lease until child close; backend disposal actively cancels
+  attached streams and awaits settlement without depending on client detach.
+- Make each Web CLI queue item one exhaustive typed transport that derives its
+  logical preview and subscription together, then replaces the preview with the
+  backend-emitted effective command instead of accepting caller-authored argv as
+  a second display truth.
 - Reject non-canonical filesystem-backed Spec and Change ids through one shared
   Core/Server guard before any read or mutation can escape its entity root.
   Entity-relative file and glob paths use the same boundary before OPSX queries,

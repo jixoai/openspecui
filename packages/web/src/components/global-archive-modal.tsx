@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Run one Server-owned strict-validate-then-archive stream with explicit user options.
  * 2. Keep Root Context and Store selector derivation outside the browser command payload.
  * 3. Lock execution until Root Context is ready and show failed-attempt evidence.
+ * 4. Queue Archive through one typed transport without independent command evidence.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
+ * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
  */
 import { useArchiveModal } from '@/lib/archive-modal-context'
 import { useCliRunner } from '@/lib/use-cli-runner'
@@ -60,17 +62,10 @@ export function GlobalArchiveModal() {
 
   const buildQueue = useCallback(() => {
     if (!changeId || rootAction.disabled) return []
-    const archiveArgs = ['archive', '-y', changeId]
-    if (skipSpecs) archiveArgs.push('--skip-specs')
-    if (noValidate) archiveArgs.push('--no-validate')
     return [
       {
-        command: 'openspec',
-        args: archiveArgs,
-        stream: {
-          type: 'archive-strict' as const,
-          input: { changeId, skipSpecs, noValidate },
-        },
+        type: 'archive-strict' as const,
+        input: { changeId, skipSpecs, noValidate },
       },
     ]
   }, [changeId, noValidate, rootAction.disabled, skipSpecs])
