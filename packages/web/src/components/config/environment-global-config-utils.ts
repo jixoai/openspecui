@@ -2,10 +2,12 @@
  * Orthogonal intents (created 2026-07-18 Asia/Shanghai):
  * 1. Share type-safe Environment Global JSON guards between projection and profile controls.
  * 2. Normalize CLI workflow lists without inventing unsupported profile state.
+ * 3. Resolve one effective profile workflow projection for controls and comparisons.
  *
  * Original request (2026-07-18): "Environment Global profile/drift must come from one reactive projection."
  */
-import type { CliJsonValue } from '@openspecui/core'
+import { OPSX_CORE_PROFILE_WORKFLOWS } from '@/lib/opsx-profile'
+import type { CliJsonValue, EnvironmentGlobalConfig } from '@openspecui/core'
 
 /** Return true for JSON objects used as editable OpenSpec config documents. */
 export function isRecordObject(value: unknown): value is Record<string, unknown> {
@@ -28,5 +30,17 @@ export function isCliJsonObject(value: unknown): value is Record<string, CliJson
 export function normalizeWorkflowList(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
+    : []
+}
+
+/** Resolve the effective workflow set while preserving raw config separately. */
+export function resolveEffectiveProfileWorkflows(
+  config: Record<string, CliJsonValue>,
+  profileState: EnvironmentGlobalConfig['profileState'] | null
+): string[] {
+  if (profileState?.available) return [...profileState.workflows]
+  if (config.profile === 'core') return [...OPSX_CORE_PROFILE_WORKFLOWS]
+  return Object.prototype.hasOwnProperty.call(config, 'workflows')
+    ? normalizeWorkflowList(config.workflows)
     : []
 }

@@ -8,6 +8,7 @@
  * Original request (2026-07-15): "Environment Global Config projects openspec config path plus config list --json."
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
  * Original request (2026-07-18): "Update and auto-Update must use useRootActionState."
+ * Original request (2026-07-18): "Environment Global Profile Apply remains valid when Root Context is blocked; only Update is root-owned."
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -93,8 +94,12 @@ vi.mock('@/components/code-editor', () => ({
 }))
 
 vi.mock('@/components/cli-terminal', () => ({
-  CliTerminal: ({ lines }: { lines: unknown[] }) => (
-    <div data-testid="cli-terminal">{lines.length}</div>
+  CliTerminal: ({ lines }: { lines: Array<{ text?: string }> }) => (
+    <div data-testid="cli-terminal">
+      {lines.map((line, index) => (
+        <div key={index}>{line.text ?? ''}</div>
+      ))}
+    </div>
   ),
 }))
 
@@ -540,8 +545,8 @@ describe('EnvironmentGlobalConfigSection', () => {
     expect(runAllMock).not.toHaveBeenCalled()
   })
 
-  it('rechecks the Root gate inside an already-open Update dialog handler', async () => {
-    const mutableRootAction = {
+  it('disables an already-open Update dialog after a new blocked Root Action rerender', () => {
+    const readyRootAction = {
       status: 'ready' as const,
       disabled: false,
       context: null,
@@ -550,28 +555,44 @@ describe('EnvironmentGlobalConfigSection', () => {
       message: null as string | null,
       evidence: [],
     }
-    rootActionMock.mockReturnValue(mutableRootAction)
-    renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
+    const blockedRootAction = {
+      status: 'blocked' as const,
+      disabled: true,
+      context: null,
+      observedAt: 2,
+      title: 'Planning root unavailable',
+      message: 'Root Context changed while the dialog was open.',
+      evidence: ['Doctor exit: 1'],
+    }
+    rootActionMock.mockReturnValue(readyRootAction)
+    const view = renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Profile' }))
     fireEvent.click(screen.getByRole('button', { name: 'Run update' }))
     const confirm = screen.getByRole('button', { name: 'Run command' })
     expect(confirm).toBeEnabled()
 
-    mutableRootAction.disabled = true
-    mutableRootAction.message = 'Root Context changed while the dialog was open.'
+    rootActionMock.mockReturnValue(blockedRootAction)
+    view.rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <EnvironmentGlobalConfigSection isStatic={false} />
+      </QueryClientProvider>
+    )
+
+    expect(screen.getByRole('button', { name: 'Run command' })).toBeDisabled()
+    // Bypass only the DOM disabled attribute so the real confirmation handler
+    // re-checks the newly rendered Root Action before reaching the runner.
+    confirm.removeAttribute('disabled')
     fireEvent.click(confirm)
 
-    await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent(
-        'Root Context changed while the dialog was open.'
-      )
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Root Context changed while the dialog was open.'
     )
     expect(replaceAllMock).not.toHaveBeenCalled()
     expect(runAllMock).not.toHaveBeenCalled()
   })
 
-  it('disables an open Apply dialog after a new blocked Root Action rerender', () => {
+  it('keeps an open Apply dialog writable after a new blocked Root Action rerender', async () => {
     const readyRootAction = {
       status: 'ready' as const,
       disabled: false,
@@ -606,13 +627,16 @@ describe('EnvironmentGlobalConfigSection', () => {
     )
 
     const confirm = screen.getByRole('button', { name: 'Apply profile' })
-    expect(confirm).toBeDisabled()
+    expect(confirm).toBeEnabled()
     const close = screen.getByRole('button', { name: 'Close' })
     expect(close).toBeEnabled()
     fireEvent.click(confirm)
-    expect(writeEnvironmentGlobalMock).not.toHaveBeenCalled()
+    await waitFor(() => expect(writeEnvironmentGlobalMock).toHaveBeenCalledTimes(1))
     expect(replaceAllMock).not.toHaveBeenCalled()
     expect(runAllMock).not.toHaveBeenCalled()
+    expect(screen.getByTestId('cli-terminal')).toHaveTextContent(
+      'Planning-root Update skipped: Root Context is resolving.'
+    )
     fireEvent.click(close)
     expect(screen.queryByRole('button', { name: 'Apply profile' })).toBeNull()
   })
@@ -672,7 +696,7 @@ describe('EnvironmentGlobalConfigSection', () => {
     expect(replaceAllMock).not.toHaveBeenCalled()
   })
 
-  it('blocks Apply when Root Context is unavailable', async () => {
+  it('allows blocked-root Apply to write global config and skips planning-root Update', async () => {
     rootActionMock.mockReturnValue({
       status: 'blocked',
       disabled: true,
@@ -698,13 +722,15 @@ describe('EnvironmentGlobalConfigSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Profile' }))
     fireEvent.click(screen.getByRole('button', { name: 'Propose change' }))
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(screen.getByRole('button', { name: 'Apply profile' })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: 'Apply profile' }))
 
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Apply profile' })).toBeDisabled()
-    )
-    expect(writeEnvironmentGlobalMock).not.toHaveBeenCalled()
+    await waitFor(() => expect(writeEnvironmentGlobalMock).toHaveBeenCalledTimes(1))
     expect(replaceAllMock).not.toHaveBeenCalled()
+    expect(runAllMock).not.toHaveBeenCalled()
+    expect(screen.getByTestId('cli-terminal')).toHaveTextContent(
+      'Planning-root Update skipped: Root Context failed.'
+    )
   })
 
   it('states static unavailability without exposing runtime facts or mutations', () => {

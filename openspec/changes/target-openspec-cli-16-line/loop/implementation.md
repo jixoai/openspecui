@@ -1981,26 +1981,63 @@ pnpm exec prettier --check <changed source/test files> -> passed after formattin
 
 The Active Root test rerenders with a newly returned blocked Root Action object after a real Save click and asserts the mocked `writeActiveRoot` transport is never called. The new standalone Config test uses real `@tanstack/react-query` and crosses the actual `writeSchemaFile` mutation function; it does not stub `useMutation` or call a downstream handler. The refresh hook tests retain terminal-error pending release and duplicate-refresh coalescing, while the Environment Global component test proves ready Apply plus successful refresh dispatches one `planning-root-update`.
 
-## Browser independent review after `3b69e20`: dialog readiness gap
+## Browser independent review after `3b69e20`: ownership correction for Profile Apply
 
-The independent browser walk-through used Vite `13003` plus the local backend on `3110`. Project Binding, Active Root, and Environment Global surfaces loaded; Active Root retained an enabled Cancel and disabled Save after a planning-root loss. However, after opening Profile Apply and transitioning the backend Root Context to Resolving, the visible `Apply profile` dialog confirm remained enabled even though the handler would reject via its latest Root Action ref. This violates the button-plus-handler contract. Screenshot capture was unavailable in the installed headless agent-browser, so reproducible snapshot/eval evidence is recorded instead; do not close `3.5`/`6.8` until the dialog control is gated and re-walked.
+The independent browser walk-through used Vite `13003` plus the local backend on `3110`. Project Binding, Active Root, and Environment Global surfaces loaded; Active Root retained an enabled Cancel and disabled Save after a planning-root loss. It also observed an enabled Profile Apply confirmation while Root Context entered Resolving. That observation is intentionally retained as evidence, but it is not a defect: Environment Global Apply owns runtime-environment config and must remain writable when its projection is current. The Root Action gate belongs to direct Update and the optional post-Apply auto-Update; the next worker correction must restore that ownership split and show the skipped second-operation diagnostic. Screenshot capture was unavailable in the installed headless agent-browser; snapshot/eval evidence remains reproducible.
 
 ### Remaining acceptance boundary
 
 This worker has not run the complete repository gates, clean SSG build, browser suite, or remote PR checks. Do not close `3.5` or `6.8`, merge, archive, release, or start `6.9+` until those gates and an independent review pass. Residual filesystem TOCTOU/hard-link, non-atomic Store enumeration, and watcher fallback limitations remain unchanged.
 
-## Twelfth Worker Correction: Dialog Root-Action Visibility Gate (2026-07-18)
+## Twelfth Worker Correction: Profile Apply Ownership (2026-07-18)
 
-The browser review found that an already-open Environment Global Profile Apply dialog could retain an enabled confirmation control after Root Context entered `checking`/`blocked`. The handler guard rejected the later operation in some paths, but the visible control did not communicate the current gate and could still be activated. The same dialog component serves both Profile Apply and Planning-root Update, so the confirmation control now consumes the current `rootAction.disabled` state in addition to projection, save, and command-pending locks. Close remains available for local diagnosis and draft dismissal; handler-level rechecks remain intact.
+The browser observation that motivated the prior visibility gate was reclassified at the ownership boundary. Environment Global Profile Apply writes the runtime-environment global config; it remains valid whenever the Environment Global projection is current, even if the planning Root Context is `checking` or `blocked`. The Root Action gate applies only to direct Planning-root Update and the optional second `planning-root-update` after Apply. The dialog confirmation now checks `rootAction.disabled` only for `pendingCommandKind === 'update'`; projection, save, and command-pending locks remain shared by both commands. An Apply whose auto-Update cannot run still completes the global write and emits an explicit `Planning-root Update skipped: ...` diagnostic. Close remains available for local diagnosis and draft dismissal.
 
-The component test now starts with a `ready` Root Action, opens Profile Apply, rerenders with a newly returned `checking` Root Action object, and asserts that the visible `Apply profile` control is disabled and that the real Environment Global write plus typed runner transport are not called. The former initial blocked Apply assertion now records the same no-write behavior. This is a new-object rerender, not in-place mutation of an old mock state.
+### Fixed-point red evidence
 
-Focused evidence after the correction:
+At fixed point `d7631f0`, an isolated worktree applied the new ownership tests without the production correction:
 
 ```text
 pnpm --filter @openspecui/web exec vitest run --project unit \
   src/components/config/environment-global-config-section.test.tsx
-  1 file, 21 tests passed
+  2 failed, 19 passed
+  - blocked-root Apply confirmation was disabled (`toBeEnabled` failed)
+  - Apply could not reach the global write boundary
 ```
 
-This slice does not close checkpoints `3.5` or `6.8`, does not start `6.9+`, and has not independently established the complete repository gates, clean SSG output, or browser suite after this correction.
+The failing assertion reached the actual dialog control; it was not a manually invoked runner or downstream handler. The isolated worktree was removed after the run.
+
+### Implemented correction and green evidence
+
+- Profile Apply confirmation remains enabled after a new blocked Root Action rerender and crosses the real `writeEnvironmentGlobal` transport exactly once.
+- A blocked Root Context never queues `planning-root-update`; the terminal panel reports `Planning-root Update skipped: <CLI-owned root message>`.
+- Direct Update remains disabled after a new blocked Root Action rerender and does not call the typed runner transport. The test explicitly removes only the DOM `disabled` attribute before invoking the real confirmation handler, which then re-checks the newly rendered Root Action and rejects before the runner.
+- The CLI terminal test double renders line text so the skipped-operation diagnostic is asserted as user-visible evidence.
+
+Focused evidence after the correction:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \\
+  src/components/config/project-binding-section.test.tsx \
+  src/components/config/active-root-config-section.test.tsx \
+  src/components/config/environment-global-config-section.test.tsx \
+  src/routes/config.test.tsx \
+  src/routes/config-schema-mutation.test.tsx \
+  src/lib/use-planning-config.test.tsx
+  6 files, 56 tests passed
+
+pnpm --filter @openspecui/web typecheck
+  passed
+
+pnpm exec prettier --check \
+  packages/web/src/components/config/environment-global-config-utils.ts \
+  packages/web/src/components/config/environment-global-profile-section.tsx \
+  packages/web/src/components/config/environment-global-config-section.test.tsx \
+  packages/server/src/router.ts
+  passed
+
+git diff --check
+  passed
+```
+
+This correction does not close checkpoints `3.5` or `6.8`, does not start `6.9+`, and does not claim complete repository gates, clean SSG, browser, or remote PR evidence. Residual filesystem TOCTOU/hard-link, non-atomic Store enumeration, and watcher fallback limitations remain unchanged.

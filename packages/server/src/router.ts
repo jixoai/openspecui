@@ -1,11 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Register lease-scoped planning-root document, OPSX, dashboard, and archive procedures.
- * 2. Register CLI, Root Context, tool initialization, configuration, Store, and terminal-result projections.
+ * 2. Register CLI, Root Context, tool initialization, configuration, Store, terminal-result, and typed OPSX profile/drift projections.
  * 3. Register Git, terminal, system, notification, and recovery procedures.
  * 4. Register translation runtime, model, asset, and cache procedures.
  * 5. Compose the public tRPC application router and shared procedure schemas.
- * 6. Consume the server-owned typed OPSX profile/drift projection without a duplicate parser.
  *
  * Compromise: tRPC router inference currently requires one composition module; splitting its
  * established 2,600-line registration surface is outside the OpenSpec 1.6 contract slice.

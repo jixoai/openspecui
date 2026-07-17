@@ -6,6 +6,7 @@
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-18): "Environment Global profile/drift must remain reactive and Update must use the Root action gate."
+ * Original request (2026-07-18): "Environment Global Profile Apply remains valid when Root Context is blocked; only Update is root-owned."
  */
 import { Button } from '@/components/button'
 import { ButtonGroup } from '@/components/button-group'
@@ -28,7 +29,7 @@ import { vtNavController } from '@/lib/view-transitions/navigation'
 import type { CliJsonValue, EnvironmentGlobalConfig } from '@openspecui/core'
 import { Check, Loader2, RefreshCw, TerminalSquare } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { isRecordObject, normalizeWorkflowList } from './environment-global-config-utils'
+import { isRecordObject, resolveEffectiveProfileWorkflows } from './environment-global-config-utils'
 
 type ProfileEditMode = 'both' | 'delivery' | 'workflows'
 type DeliveryMode = 'both' | 'skills' | 'commands'
@@ -97,13 +98,7 @@ export function EnvironmentGlobalProfileSection({
     setProfileDelivery(
       delivery === 'skills' || delivery === 'commands' || delivery === 'both' ? delivery : 'both'
     )
-    const effectiveWorkflows = profileState?.available
-      ? profileState.workflows
-      : Object.prototype.hasOwnProperty.call(config, 'workflows')
-        ? normalizeWorkflowList(config.workflows)
-        : config.profile === 'core'
-          ? [...OPSX_CORE_PROFILE_WORKFLOWS]
-          : []
+    const effectiveWorkflows = resolveEffectiveProfileWorkflows(config, profileState)
     setProfileWorkflows(effectiveWorkflows)
   }, [config, profileState])
 
@@ -124,16 +119,7 @@ export function EnvironmentGlobalProfileSection({
 
   const selectedWorkflowSet = useMemo(() => new Set(profileWorkflows), [profileWorkflows])
   const activeWorkflowSet = useMemo(
-    () =>
-      new Set(
-        profileState?.available
-          ? profileState.workflows
-          : Object.prototype.hasOwnProperty.call(config, 'workflows')
-            ? normalizeWorkflowList(config.workflows)
-            : config.profile === 'core'
-              ? OPSX_CORE_PROFILE_WORKFLOWS
-              : []
-      ),
+    () => new Set(resolveEffectiveProfileWorkflows(config, profileState)),
     [config, profileState]
   )
   const selectedWorkflowList = useMemo(
@@ -234,14 +220,15 @@ export function EnvironmentGlobalProfileSection({
         ])
         runConfigCommands([{ type: 'planning-root-update' }])
       } else if (autoUpdateAfterProfileChange) {
+        const updateSkipReason = projectionLockedRef.current
+          ? 'the Environment Global projection is stale or unavailable.'
+          : (currentRootAction.message ?? 'the current planning root is blocked.')
         setApplyRunnerLines((previous) => [
           ...previous,
           {
             id: createRunnerLineId(),
             kind: 'ascii',
-            text:
-              currentRootAction.message ??
-              'Planning-root Update was not started because the current root is blocked.',
+            text: `Planning-root Update skipped: ${updateSkipReason}`,
             tone: 'error',
           },
         ])
@@ -483,7 +470,7 @@ export function EnvironmentGlobalProfileSection({
                 !pendingCommandKind ||
                 projectionLocked ||
                 isSaving ||
-                rootAction.disabled
+                (pendingCommandKind === 'update' && rootAction.disabled)
               }
               onClick={() => void handleConfirmPendingCommand()}
               className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
