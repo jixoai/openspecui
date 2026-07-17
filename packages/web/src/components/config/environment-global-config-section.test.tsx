@@ -607,10 +607,14 @@ describe('EnvironmentGlobalConfigSection', () => {
 
     const confirm = screen.getByRole('button', { name: 'Apply profile' })
     expect(confirm).toBeDisabled()
+    const close = screen.getByRole('button', { name: 'Close' })
+    expect(close).toBeEnabled()
     fireEvent.click(confirm)
     expect(writeEnvironmentGlobalMock).not.toHaveBeenCalled()
     expect(replaceAllMock).not.toHaveBeenCalled()
     expect(runAllMock).not.toHaveBeenCalled()
+    fireEvent.click(close)
+    expect(screen.queryByRole('button', { name: 'Apply profile' })).toBeNull()
   })
 
   it('shows loading and no-data errors without inventing an empty config', () => {
