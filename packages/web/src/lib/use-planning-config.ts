@@ -3,8 +3,10 @@
  * 1. Project ownership-specific planning-config facets into reactive Web state.
  * 2. Keep static Active Root content available without inventing owner provenance.
  * 3. Let Environment Global consumers explicitly refresh the CLI-owned reactive projection.
+ * 4. Keep refresh pending until the replacement projection commits, then resolve awaiters.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
+ * Original request (2026-07-18): "Refresh completion must follow the committed subscription projection so Apply can safely dispatch its second operation."
  */
 import type {
   ActiveRootConfig,

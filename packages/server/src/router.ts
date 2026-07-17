@@ -5,12 +5,14 @@
  * 3. Register Git, terminal, system, notification, and recovery procedures.
  * 4. Register translation runtime, model, asset, and cache procedures.
  * 5. Compose the public tRPC application router and shared procedure schemas.
+ * 6. Consume the server-owned typed OPSX profile/drift projection without a duplicate parser.
  *
  * Compromise: tRPC router inference currently requires one composition module; splitting its
  * established 2,600-line registration surface is outside the OpenSpec 1.6 contract slice.
  *
  * Original request (2026-07-15): "你先负责后端（内核）的开发。"
  * Original request (2026-07-17): "Do not return a mutable Planning-root service capability that can outlive its admitted operation."
+ * Original request (2026-07-18): "Remove duplicated profile/drift parsing and preserve the pinned Core workflow contract."
  */
 import type {
   ChangeFile,
