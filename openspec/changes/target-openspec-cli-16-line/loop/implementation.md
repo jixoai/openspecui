@@ -2075,7 +2075,7 @@ pnpm test:browser:ci -> xterm 60 passed / 1 skipped; Web 12/12 passed
 git diff --check -> passed
 ```
 
-The clean SSG build retains only the repository's known non-fatal `scroll-button` CSS and ineffective dynamic-import warnings. This correction does not close checkpoints `3.5` or `6.8`, does not start `6.9+`, and has no remote PR verification yet. Residual filesystem TOCTOU/hard-link, non-atomic Store enumeration, and watcher fallback limitations remain unchanged.
+The clean SSG build retains only the repository's known non-fatal `scroll-button` CSS and ineffective dynamic-import warnings. PR #207 was pushed at `4a3e40a`; run `29619083708` passed Changeset Gate, CI Scope, Fast Gate, Web Browser Gate, xterm Browser Gate, and the aggregate Browser Gate. The independent review therefore closes `3.5` and `6.8` (`57/131 -> 59/131`) while leaving `6.9+` untouched. Residual filesystem TOCTOU/hard-link, non-atomic Store enumeration, and watcher fallback limitations remain unchanged.
 
 ### Browser re-walk after `e4ef2ad`
 

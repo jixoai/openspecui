@@ -134,7 +134,9 @@ Twelfth-correction review evidence after `e4ef2ad`:
 
 - The exact `67cc14f` overlay audit now records the stale Environment Global dialog failure (`toBeDisabled` received an enabled button), plus the inherited Core-default, stale-editor, retained-error, refresh-window, Apply/Update dialog, and Active Root transition failures. The `writeSchemaFile` route test passed at `67cc14f`; it is coverage of an already guarded route, not a claimed red production defect. A detached-worktree dependency-link failure prevented a claim about the refresh-hook test and is recorded as harness-only.
 - The later `d7631f0` red run isolates the visibility regression introduced by the dialog gate: blocked-root Apply was disabled, so it could not reach the global write boundary. `e4ef2ad` restores the runtime-environment ownership split and adds the real handler recheck for direct Update.
-- Local verification after `e4ef2ad` is complete: format, lint, all 15 typechecks, full unit suites, clean SSG, browser suites, and diff check pass. The branch still requires PR push and all six remote checks before `3.5`/`6.8` may close; keep `6.9+` untouched.
+- Local verification after `e4ef2ad` is complete: format, lint, all 15 typechecks, full unit suites, clean SSG, browser suites, and diff check pass. PR #207 was then pushed at `4a3e40a`; all six remote checks and aggregate Browser Gate passed. The independent review may now close only `3.5` and `6.8`; keep `6.9+` untouched.
+
+Independent review acceptance after `4a3e40a`: `3.5` and `6.8` move from open to closed, progress `57/131 -> 59/131`. This acceptance does not authorize merge, archive, release, or implementation of `6.9+`; PR #207 remains open for maintainer decision.
 
 ## 2. CLI 1.6 Contract Baseline
 
@@ -156,7 +158,7 @@ Twelfth-correction review evidence after `e4ef2ad`:
 - [x] 3.2 Server exposes one query/subscription contract for Root Context with full loading, stale-data, and error states
 - [x] 3.3 Planning-root adapters and document services consume the CLI-resolved root instead of launch `projectDir`
 - [x] 3.4 Change actions preserve `changeRoot`, Store flags, artifact paths, existing output paths, action context, References, and diagnostics
-- [ ] 3.5 Root-dependent actions remain locked until root selection succeeds and show CLI-owned failure evidence when it does not
+- [x] 3.5 Root-dependent actions remain locked until root selection succeeds and show CLI-owned failure evidence when it does not
 - [x] 3.6 Config ownership separates launch-project binding, active-root config, and environment-global config
 - [x] 3.7 Git exposes explicit code-repository and planning-repository scopes when they differ
 - [x] 3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited `XDG_DATA_HOME`
@@ -200,7 +202,7 @@ Twelfth-correction review evidence after `e4ef2ad`:
 - [x] 6.5 Specs defaults to Owned and provides a Store-grouped Referenced view with immutable entries sourced from end-to-end pinned CLI 1.6 Reference enumeration
 - [x] 6.6 Spec detail validates returned Store and Spec provenance, shows source/read-only state, disables mutation for References, and returns to the correct list scope
 - [x] 6.7 Archive lists only writable-root archives, validates canonical Change identity before any CLI path, has one Server-owned strict mutation entry, cannot be reached through a generic CLI bypass, and tests diagnostics through that supported entry
-- [ ] 6.8 Config implements Project Binding, Active Root Config, and Environment Global Config ownership sections
+- [x] 6.8 Config implements Project Binding, Active Root Config, and Environment Global Config ownership sections
 - [ ] 6.9 Project Stores route is replaced by Context with root, Reference, environment, and read-only registry diagnostics
 - [ ] 6.10 Search defaults to the active root and offers an explicit Referenced Specs scope without referenced changes
 - [ ] 6.11 Git makes repository scope explicit for status, history, worktrees, and every mutation
