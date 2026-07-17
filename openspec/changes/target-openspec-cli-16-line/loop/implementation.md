@@ -1914,4 +1914,6 @@ These are counterexamples against the named fixed point, not downstream-handler 
 
 ### Boundary and handoff
 
-The implementation directly addresses the reopened `3.5` and `6.8` contracts. Checkpoints remain open at `57/131` until an independent review accepts this evidence; only that review may move them to `59/131`. `6.9+` remains untouched. The next delivery steps are final header/diff audit, commit and push PR #207, wait for all six remote checks, append remote evidence, and stop for independent review. Do not merge, archive, release, or begin `6.9`.
+The implementation directly addresses the reopened `3.5` and `6.8` contracts. Checkpoints remain open at `57/131` until an independent review accepts this evidence; only that review may move them to `59/131`. `6.9+` remains untouched. Do not merge, archive, release, or begin `6.9`.
+
+Remote evidence at implementation commit `68995c072752f4bf1ef7d3ce479b71d41145287e`: PR #207 remained `OPEN/CLEAN`; Changeset Gate, CI Scope, Fast Gate, Browser Gate (`@openspecui/web`), Browser Gate (`xterm-input-panel`), and aggregate Browser Gate all completed successfully. This documentation-only evidence commit must pass the same six checks before handoff. Checkpoints `3.5` and `6.8` remain open for independent acceptance; progress remains `57/131`.
