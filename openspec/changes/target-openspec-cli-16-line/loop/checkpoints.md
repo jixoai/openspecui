@@ -95,6 +95,14 @@ Seventh-review construction directives after `c1571f3`:
 - Prefer a narrow internal child-owner seam that can be observed or spied through the real `CliExecutor` close handler. Do not expose test diagnostics through the public package API and do not release the Planning-root lease after a forced termination failure.
 - Reopen only `4.9` for this evidence gap. The sixth correction's Manager, Router, Strict Archive, and Web evidence remains accepted; `3.11`, `4.5`, and `6.7` remain closed, and `6.8+` remains unstarted.
 
+Config construction directives after `f2d1ddf`:
+
+- Checkpoint `3.6` already establishes the Server ownership boundary. Checkpoint `6.8` must finish the product surface without inventing a second model: Project Binding mutates only Launch `store:`/`references:`, Active Root mutates only the CLI-selected Planning-root config, and Environment Global mutates only the backend runtime's CLI-owned global config.
+- Treat config file presence and content as independent facts. An existing empty Active Root file remains editable and must never render the absent-file creation state. A transport/CLI error without data is not an empty config.
+- Keep each ownership surface in a focused Config component with its own subscription, mutation state, and direct tests. Do not expand the already four-intent `routes/config.tsx` with another ownership implementation, and do not refactor the unrelated Schema workspace.
+- Static mode may render the exported Active Root snapshot read-only. It must state that Project Binding and Environment Global are unavailable rather than synthesizing launch or runtime ownership.
+- Implement and re-close only `6.8` (`58/131 -> 59/131`). Keep Context replacement `6.9`, the shared lifecycle checkpoint `6.16`, and every later surface open for their own apply slices.
+
 ## 2. CLI 1.6 Contract Baseline
 
 - [x] 2.1 OpenSpecUI compatibility targets the CLI 1.6 line and rejects unsupported versions with accurate guidance

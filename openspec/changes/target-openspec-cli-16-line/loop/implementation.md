@@ -1761,3 +1761,23 @@ Checkpoint `4.9` remains open until the required full CI-equivalent suite, clean
 Checkpoint transition: `57/131 -> 58/131`; re-close only `4.9`. `3.11`, `4.5`, and `6.7` remain closed. `6.8+` remains open and unstarted. Do not merge, archive, release, or begin `6.8+`; commit, push PR #207, wait for all six remote checks, then stop for independent review.
 
 Remote evidence at code/evidence commit `00067d6bf6f45395c26eb0a7ed6e02c583dac492`: PR #207 remained open with `mergeStateStatus=CLEAN`; Changeset Gate, CI Scope, Fast Gate, Browser Gate (`@openspecui/web`), Browser Gate (`xterm-input-panel`), and aggregate Browser Gate all completed successfully. The final documentation-only evidence commit must also pass the PR checks before handoff.
+
+## Eighth Independent Review after `f2d1ddf`: 2026-07-17
+
+Review range: `a92647d...f2d1ddf`. Standards and Spec were reviewed independently with no findings. `CliStreamChildOwner` remains a narrow internal Core module: it is absent from the package root, published subpaths, `CliStreamHandle`, and diagnostics. The changed TypeScript files retain accurate headers and typed public comments.
+
+The mutation evidence was independently reproduced rather than accepted from the worker summary:
+
+```text
+c1571f3 minus activeChild = null
+  focused late-close test -> 1 passed | 37 skipped
+
+f2d1ddf minus childOwner.release(child)
+  focused late-close test -> 1 failed | 37 skipped
+  expected currentChild:null/releaseCount:1
+  received ChildProcess/releaseCount:0 at cli-executor.test.ts:461
+```
+
+Restored HEAD passes the complete Core CLI-executor file `38/38`. PR #207 is open and `CLEAN` at `f2d1ddf391cf5fd5846f1f3658a95e238a43c602`; Changeset, CI Scope, Fast, Web Browser, xterm Browser, and aggregate Browser checks all pass. The one earlier xterm timeout did not reproduce under the exact local, complete, serial, or rerun lanes, so no deterministic defect is attributed to this Core slice.
+
+Checkpoint `4.9` is accepted closed. Progress remains `58/131`; `6.8+` was not started by the correction. Do not merge, archive, or release. The next apply slice is checkpoint `6.8` only: complete and test the three ownership-specific Config sections, then stop for independent review before `6.9`.
