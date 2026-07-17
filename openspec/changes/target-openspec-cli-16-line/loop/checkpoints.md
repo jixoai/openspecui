@@ -71,6 +71,15 @@ Third-review construction directives after `a6e2dcd`:
 - Remove unused generic OpenSpec RPCs, or parse any genuinely required read-only argv through strict repository-standard `yargs` and prove the accepted shapes independently against pinned OpenSpec 1.6. Production-policy examples are not independent contract evidence.
 - Replace the newly introduced Schema-action and CLI-stream discriminant cascades with exhaustive `ts-pattern` or a single typed descriptor map; do not preserve duplicate action vocabularies across validation and execution.
 
+Fourth-review construction directives after `fa6604b`:
+
+- This package is approved for implementation through `openspec-apply-change`. The reviewer owns research/review/plan and the worker owns code, tests, continuous checkpoint evidence, commits, and PR delivery; returning only another plan does not execute this package.
+- Model stream cancellation as a two-phase owner contract: cancellation request, then child-process settlement. `child.kill()` returning is not settlement. Root replacement may release the lease only after `close` or a bounded, explicitly recorded indeterminate outcome; otherwise an Update or Archive process can continue mutating A after B is exposed.
+- The Manager retains idempotent cancel-and-settle handles for every active stream. Backend disposal first rejects new admission, actively cancels those streams, awaits lease release, and then retires the record. It must not wait forever for a client detach or terminal event that teardown itself prevents.
+- Add permanent counterexamples against `fa6604b`: a delayed-SIGTERM child proves replacement remains blocked between `kill()` and `close`; a never-terminal public stream plus real WebSocket shutdown proves backend close reaches zero resources without external event injection. Audit terminal, null exit, startup failure, delayed startup, unsubscribe, repeated cancel, and disposal through the same owner.
+- Make `CliStreamTransport` the sole semantic command descriptor. Derive queued/displayed command evidence from that transport or the backend-emitted effective command; independent caller-authored `command/args` cannot coexist as a second truth. A test that displays `config list` while dispatching `validate` is a counterexample, not positive coverage.
+- Re-audit intent/original-request headers for every changed TypeScript/TSX file, including tests. Production-only header coverage is insufficient. Reopen only the checkpoints directly disproven by the stream lifetime fault unless new red evidence expands scope.
+
 ## 2. CLI 1.6 Contract Baseline
 
 - [x] 2.1 OpenSpecUI compatibility targets the CLI 1.6 line and rejects unsupported versions with accurate guidance

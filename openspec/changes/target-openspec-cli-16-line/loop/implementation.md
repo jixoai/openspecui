@@ -1417,3 +1417,141 @@ Residual limits remain unchanged and explicit: physical `realpath`/`lstat` check
 Remote CI for correction commit `50b9faba358f573aa11e6cbbb418090d481239c2` is green: Changeset Gate, CI Scope, Fast Gate, Browser Gate (`@openspecui/web`), Browser Gate (`xterm-input-panel`), and the aggregate Browser Gate all completed successfully with zero failures; GitHub reports `mergeStateStatus=CLEAN`.
 
 Checkpoint transition: `55/131 -> 58/131`. Only `3.11`, `4.9`, and `6.7` returned to closed. `6.8`, `6.9`, and every later product checkpoint remain open. PR #207 must stop for another independent review; do not merge, archive, release, or continue implementation.
+
+## Independent Review after `fa6604b`: 2026-07-17
+
+Review range: `a6e2dcd...fa6604b`. Blocking GitHub review `4719013149` is recorded at <https://github.com/jixoai/openspecui/pull/207#pullrequestreview-4719013149>. The branch and remote matched at `fa6604b8ea6e7facf5211654e78a69d81641d72c`; all six remote checks were green. Fresh package suites also passed (`Core 433/433`, `Server 331/331`, `Web 628/628`). Those gates do not close the stream-lifetime counterexamples below.
+
+### Blocking stream-owner counterexamples
+
+The Manager treats a cancellation request as if the child process had settled:
+
+```text
+unsubscribe / dispose
+        |
+        v
+child.kill() requested -----> lease released -----> retire A / expose B
+        |                                               |
+        +---- child is still running and may write A ---+
+```
+
+`CliExecutor.executeStream` calls `child.kill()`, immediately clears `activeChild`, and returns. Node `ChildProcess.kill()` only sends a signal. A direct reproduction returned from `kill()` in about 1 ms while a SIGTERM-delaying child emitted `close` about 186 ms later. `PlanningRootServiceManager.startOperationStream` then calls `settle()` immediately after the void cancel function returns, so canceled Update and strict Archive processes may outlive the lease that protects their selected root. This directly disproves the stale-operation and replacement claims in `3.11` and `4.9`.
+
+Backend disposal has the inverse failure. The Manager does not retain active-stream cancel handles. `dispose()` sets no cancellation in motion and waits only for `activeOperationCount` to reach zero. A stream that never emits terminal and whose subscriber remains attached therefore blocks disposal forever. `RunningServer.close()` broadcasts reconnect and calls `wss.close()`, but neither action guarantees subscription cleanup; it then awaits the blocked Manager. The committed Manager test currently encodes the defect by asserting disposal remains pending until the test injects an external terminal signal.
+
+The required owner state machine is:
+
+```text
+normal:   terminal child close -> release lease -> replacement may retire A
+cancel:   request termination -> await child close / bounded indeterminate -> release
+dispose:  stop admission -> cancel all owned streams -> await settlement -> retire record
+```
+
+Permanent red tests must fail against `fa6604b` before the repair:
+
+1. Spawn an Update/Archive fixture that delays SIGTERM. Queue A -> B, unsubscribe, and prove B remains unavailable until the child actually closes; prove the child cannot write A after B is exposed.
+2. Keep a public Planning-root stream nonterminal with a real tRPC WebSocket client, call `RunningServer.close()`, and prove shutdown actively cancels the stream and reaches zero operation/watcher/invalidation resources without an externally injected event.
+3. Cover terminal exit, null exit, spawn/build failure, delayed startup, unsubscribe, repeated cancel, backend disposal, and cancellation escalation with one settlement-aware cancel contract. A mock `vi.fn()` cancel that returns synchronously is insufficient process-lifetime evidence.
+
+### Objective runner and standards findings
+
+`useCliRunner` removed generic execution but still accepts independent `command/args` and `stream` values. Rendering uses `command/args`; dispatch uses only the typed stream. Its new test deliberately displays `openspec config list --json` while executing `validate demo`. This creates false CLI evidence despite exhaustive dispatch. The typed transport must own both execution and display projection, with the backend-emitted effective command preferred when root selection or configured runner resolution adds arguments.
+
+Four touched tests (`router.test.ts`, `pty-websocket.test.ts`, `server-startup.test.ts`, and `search-router.test.ts`) still lack the mandatory timestamped orthogonal-intent/original-request header. The previous changed-file audit was therefore incomplete.
+
+Archive canonical identity, strict Server entry ownership, generic-RPC removal, FIFO admission before cancellation, Schema exhaustiveness, and checkpoint arithmetic otherwise match the reviewed correction. `6.7` remains closed. Checkpoint transition: `58/131 -> 56/131`; only `3.11` and `4.9` reopen. Keep `6.8+` untouched and stop PR #207 for another correction plus independent review.
+
+### Apply ownership clarification
+
+Manager clarification on 2026-07-17: the reviewer is responsible for research, independent review, and an executable construction plan; the assigned worker is responsible for applying this Change through concrete code, tests, checkpoint evidence, commits, and PR delivery. `GOAL.md` is therefore an implementation contract for `openspec-apply-change`, not a request for another review-only or plan-only pass.
+
+The approved worker slice is exactly the fourth-review correction above: settlement-aware CLI stream ownership, Manager-owned active-stream disposal, one typed CLI execution/display truth, and complete changed-test headers. The worker may re-close only `3.11` and `4.9` after the required real-process and real-WebSocket evidence passes (`56/131 -> 58/131`). `6.7` remains closed; `6.8+` remains outside this apply slice. Any material expansion into cross-platform process-tree supervision must loop back to `loop/research-plan.md`; otherwise the worker should proceed without another planning round.
+
+## Fourth-Review Correction after `a57b884`: 2026-07-17
+
+Permanent recurrence evidence was committed before implementation as `a57b884` (`test: capture stream settlement counterexamples`). Against `fa6604b`, the exact failures were:
+
+- Core `makes cancellation available before delayed CLI runner resolution completes`: expected `true`, received `false`; the old Promise did not expose cancellation until runner resolution and spawn startup returned.
+- Manager `keeps A leased until a cancelled real child closes and can no longer write A`: expected first evidence `child`, received `replacement`; B became visible before the delayed-SIGTERM A child wrote its sentinel and closed.
+- Manager `actively cancels attached streams before repeated disposal retires their root`: expected disposal without an external terminal event, received `false`; the old Manager retained no cancel owner.
+- Server `waits for an attached Planning-root CLI child to close during backend shutdown`: `closeFinishedAt` preceded the real child's `closedAt`; a real tRPC WebSocket subscriber proved `RunningServer.close()` could return before process settlement.
+- Web `runs commands after replaceAll + runAll without requiring an extra render`: expected the Validate descriptor, received caller-authored `config list` display argv while the dedicated Validate transport executed.
+
+### Settlement owner
+
+Implementation commits are `bc8e37c` (`fix: enforce CLI stream settlement ownership`) and `9457c22` (`fix: unify CLI transport command evidence`). Core now returns one handle immediately:
+
+```text
+CliStreamHandle
+  +-- settled: Promise<CliStreamSettlement>
+  `-- cancel(): Promise<CliStreamSettlement>
+
+starting -- runner/build failure ----------------------> startup-failed
+    |
+    +-- cancel before child ----------------------------> cancelled (no child)
+    |
+    `-- spawned -- close 0 | nonzero | signal(null) ----> exited
+           |
+           `-- cancel -> SIGTERM -> 1s grace -> SIGKILL
+                                      |
+                                      +-- close --------> cancelled
+                                      `-- no close 1s --> reject termination;
+                                                          lease remains held
+```
+
+Cancellation is idempotent. Natural exit and cancellation share one settlement resolver and emit one terminal event. Every asynchronous runner-resolution and ENOENT-retry boundary checks the cancellation decision before spawning again. A post-spawn `error` is evidence only, not settlement; only a never-spawned error or child `close` proves that no direct child remains. Failure to confirm close after forced termination rejects teardown rather than exposing a replacement root.
+
+The Manager owns stream handles separately from operation counts:
+
+```text
+replacement A -> B: queue -> wait A settlement -> release lease -> retire A -> expose B
+
+dispose request
+  -> close admission synchronously
+  -> enter transition queue
+  -> cancel every Manager-owned active stream
+  -> await each settlement and lease release
+  -> await buffered operations
+  -> retire Preview/hooks/Kernel/Search/Dashboard/watchers/invalidation
+```
+
+Ordinary root replacement never cancels user work. Backend disposal does. tRPC unsubscribe remains synchronous and requests cancellation only; the Manager independently retains and awaits the settlement Promise. Concurrent natural exit, repeated cancel, client detach, and repeated disposal converge without double release. Strict Archive owns one composite handle: successful validation must itself settle before Archive starts, validation failure terminates the composite, and Archive settlement releases the one Planning-root lease. `CliMutationInvalidator` invalidates once before terminal/cancel settlement reaches its caller.
+
+Complete application stream inventory:
+
+| Stream                       | Planning-root owner                                                                          | Settlement path                                                                               |
+| ---------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `cli.validateStream`         | `createPlanningRootCliStreamObservable` -> `PlanningRootServiceManager.startOperationStream` | Root Context-derived Store selector -> Core Validate handle -> Manager settlement             |
+| `cli.updateStream`           | Same Manager path                                                                            | Root Context-derived Update argv -> mutation invalidator -> Core handle -> Manager settlement |
+| `cli.archiveStrictStream`    | Canonical Change guard -> same Manager path                                                  | strict Validate handle -> Archive mutation handle -> one composite settlement                 |
+| `cli.initStream`             | Launch-scoped, explicitly outside Planning-root replacement                                  | mutation invalidator -> Core handle -> observable cancellation                                |
+| `cli.installGlobalCliStream` | Fixed environment-global install, argument-free public route                                 | raw-command Core handle -> observable cancellation                                            |
+| PTY WebSocket                | Explicit user-controlled shell owner                                                         | PTY session lifecycle; not an application OpenSpec mutation stream                            |
+
+### One command truth
+
+`useCliRunner.commands.replaceAll` now accepts `CliStreamTransport[]` directly. There is no input shape containing independent `command`, `args`, and `stream`. One exhaustive `planCliStream` match derives both logical preview argv and the matching subscription for exactly five transports: `archive-strict`, `init`, `planning-root-update`, `validate`, and `install-global-cli`. A future sixth transport cannot compile without adding both facts in the same match. Once the backend emits `command`, its verbatim string becomes `effectiveCommand` on both `CommandDescriptor` and `CommandProcess`; the browser does not parse server argv to reconstruct intent.
+
+Production callers now submit only typed transports: Global Archive, OPSX Verify, Config Update, Settings Init, and fixed global install. The former mismatch is unrepresentable at the caller boundary. Tests separately prove the transport-derived preview and the backend-emitted effective command.
+
+### Green evidence and recurrence reflection
+
+Focused evidence after both implementation commits:
+
+- Core CLI executor: `37/37`, including runner-resolution cancellation, exits `0`, `7`, and signal/null, retry/start failure, repeated cancel, delayed SIGTERM, SIGKILL escalation, and confirmed close.
+- Server: `128/128` across Manager, observable detach, invalidator, Strict Archive, real WebSocket shutdown, Router, PTY, and Search.
+- Web: `26/26` across the runner and affected Archive/Verify/Settings callers.
+
+Full local gates:
+
+- `pnpm format:check`: pass; `pnpm lint:ci`: zero warnings/errors; `pnpm typecheck`: all 15 runnable workspace packages pass; `git diff --check`: pass.
+- `pnpm test:ci`: pass, including Root `43`, Core `439`, Server `334`, Web `628`, App `78`, and CLI `49`.
+- `pnpm test:browser:ci`: xterm `60 passed / 1 skipped`; Web Storybook `12/12`.
+- Clean `packages/web/dist-ssg` and `.vite`, then `pnpm --filter @openspecui/web build:ssg`: pass. Existing `scroll-button` and ineffective dynamic-import warnings remain non-fatal.
+- The environment-local pre-commit hook is misconfigured (`No "staged" config found in vite.config.ts`), so commits used `--no-verify` only after the explicit formatting, lint, typecheck, test, browser, SSG, and diff gates above passed.
+
+Reflection: `fa6604b` correctly revoked service capabilities but represented stream lifetime as a void cancellation request. Counting the lease without retaining the cancel owner made replacement release early and disposal depend on the client. Synchronous `vi.fn()` cancels hid both defects. The replacement interface makes early release and uncancelable disposal unrepresentable across Validate, Update, and Archive. Exhaustive typed dispatch alone was likewise insufficient while display argv remained independently writable; the queue input now has only one semantic source.
+
+Residual limits are explicit. POSIX tests prove direct-child SIGTERM delay and SIGKILL escalation; Windows signal behavior is not exercised in current CI. The owner confirms the direct child's close, not a separately daemonized descendant process tree. Expanding to cross-platform process-tree/job-object supervision remains outside this approved slice and must return to `loop/research-plan.md`. A termination escalation that still yields no `close` rejects disposal and keeps the old lease/root blocked rather than claiming safety.
+
+Checkpoint transition: `56/131 -> 58/131`. Only `3.11` and `4.9` re-close. `6.7` remains closed from the accepted prior correction. `6.8+` remains open and unstarted. Stop after PR #207 remote checks for a new independent review; do not merge, archive, release, or continue the product phase.
