@@ -571,6 +571,48 @@ describe('EnvironmentGlobalConfigSection', () => {
     expect(runAllMock).not.toHaveBeenCalled()
   })
 
+  it('disables an open Apply dialog after a new blocked Root Action rerender', () => {
+    const readyRootAction = {
+      status: 'ready' as const,
+      disabled: false,
+      context: null,
+      observedAt: 1,
+      title: null,
+      message: null as string | null,
+      evidence: [],
+    }
+    const blockedRootAction = {
+      status: 'checking' as const,
+      disabled: true,
+      context: null,
+      observedAt: 2,
+      title: 'Resolving planning root',
+      message: 'Root Context is resolving.',
+      evidence: [],
+    }
+    rootActionMock.mockReturnValue(readyRootAction)
+    const view = renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Propose change' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(screen.getByRole('button', { name: 'Apply profile' })).toBeEnabled()
+
+    rootActionMock.mockReturnValue(blockedRootAction)
+    view.rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <EnvironmentGlobalConfigSection isStatic={false} />
+      </QueryClientProvider>
+    )
+
+    const confirm = screen.getByRole('button', { name: 'Apply profile' })
+    expect(confirm).toBeDisabled()
+    fireEvent.click(confirm)
+    expect(writeEnvironmentGlobalMock).not.toHaveBeenCalled()
+    expect(replaceAllMock).not.toHaveBeenCalled()
+    expect(runAllMock).not.toHaveBeenCalled()
+  })
+
   it('shows loading and no-data errors without inventing an empty config', () => {
     environmentGlobalSubscriptionMock.mockReturnValueOnce({
       data: undefined,
@@ -626,7 +668,7 @@ describe('EnvironmentGlobalConfigSection', () => {
     expect(replaceAllMock).not.toHaveBeenCalled()
   })
 
-  it('blocks Apply auto-Update when Root Context is unavailable', async () => {
+  it('blocks Apply when Root Context is unavailable', async () => {
     rootActionMock.mockReturnValue({
       status: 'blocked',
       disabled: true,
@@ -654,7 +696,10 @@ describe('EnvironmentGlobalConfigSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
     fireEvent.click(screen.getByRole('button', { name: 'Apply profile' }))
 
-    await waitFor(() => expect(writeEnvironmentGlobalMock).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Apply profile' })).toBeDisabled()
+    )
+    expect(writeEnvironmentGlobalMock).not.toHaveBeenCalled()
     expect(replaceAllMock).not.toHaveBeenCalled()
   })
 

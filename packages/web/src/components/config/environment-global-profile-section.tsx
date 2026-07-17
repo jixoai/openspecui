@@ -479,7 +479,11 @@ export function EnvironmentGlobalProfileSection({
             <button
               type="button"
               disabled={
-                isPendingCommandRunning || !pendingCommandKind || projectionLocked || isSaving
+                isPendingCommandRunning ||
+                !pendingCommandKind ||
+                projectionLocked ||
+                isSaving ||
+                rootAction.disabled
               }
               onClick={() => void handleConfirmPendingCommand()}
               className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
