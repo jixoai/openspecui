@@ -1690,3 +1690,13 @@ Focused verification after `82c7546`:
 The local pre-commit hook still fails before project checks because the environment's Vite+ configuration lacks `staged`; `82c7546` therefore used `--no-verify` only after the focused suites and `git diff --check` passed. Full project gates remain required before this documentation/checkpoint commit is pushed.
 
 Checkpoint transition: `57/131 -> 58/131`; re-close only `4.9`. `3.11`, `4.5`, and `6.7` remain closed. `6.8+` remains open and unstarted. Do not merge, archive, release, or begin `6.8+`; push only after the required local gates, then stop for independent review.
+
+## Seventh Independent Review after `c1571f3`: 2026-07-17
+
+PR #207 is open at `c1571f32dc06325ff42c9383ed334340b17b2c16`. Changeset, CI Scope, Fast, Web Browser, xterm Browser, and aggregate Browser gates are all green; the worktree and remote branch match. Those gates accept the submitted suites but do not prove the hidden Core cleanup transition below.
+
+The sixth correction closes the previously listed Manager, Strict Archive, public Validate/Update, Web owner-release, and changed-header gaps. Its red/characterization matrix is honest. No new production behavior defect is confirmed in those boundaries.
+
+One mandatory Core claim remains unproved. `keeps forced-timeout rejection immutable when the child closes late` asserts the first rejection, two signal attempts, no `exit`, and idempotent cancel. If production line `activeChild = null` is removed from the `close` handler, all of those assertions can still pass: `failTermination()` has already set `settled = true`, so both later `settle()` and `cancel()` return before exposing the retained child reference. The Manager test's `clearActiveChild` spy cannot close this gap because that listener and bookkeeping are authored inside the test rather than executed by `CliExecutor`.
+
+This is an evidence defect, not yet a confirmed production defect. Keep the work in this Change. Reopen only `4.9` and move progress `58/131 -> 57/131`; keep `3.11`, `4.5`, and `6.7` closed and leave `6.8+` unstarted. The next apply slice must first demonstrate the blind spot by mutation at `c1571f3`, then add the narrowest non-public child-owner seam or equivalent production-observable assertion. Production behavior may change only if that counterexample exposes an actual mismatch. Stop for another independent review after focused/full gates and remote CI.

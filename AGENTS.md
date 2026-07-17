@@ -38,6 +38,7 @@ MUST READ: CLAUDE.md
 - Every changed TypeScript/TSX physical file, including tests, must retain an accurate timestamped orthogonal-intent/original-request header; a production-only header audit is incomplete.
 - Review handoff law: the reviewer owns research, independent review, OpenSpec artifact corrections, and an executable `GOAL.md`; the assigned worker owns `openspec-apply-change`, implementation, tests, checkpoint updates, commits, and PR delivery. A worker Goal must request applied code and evidence, not another plan-only or review-only pass.
 - Counterexample evidence law: a test described as red evidence must be shown to fail at its named fixed point for the intended reason. Manually invoking an already-correct downstream handler, or rejecting a different lifecycle phase, is characterization evidence rather than proof that the reported production defect was captured. Record that distinction honestly in the Change.
+- Mutation-resistance evidence law: when acceptance depends on hidden lifecycle bookkeeping, prove that the test fails after removing or bypassing the exact cleanup transition. A terminal-event assertion alone is insufficient when an earlier `settled` guard can mask leaked child ownership or listeners.
 
 ## Static/SSG Guardrails
 

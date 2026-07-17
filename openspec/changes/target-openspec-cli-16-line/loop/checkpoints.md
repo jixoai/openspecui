@@ -88,6 +88,13 @@ Fifth-review construction directives after `ca72cc0`:
 - Add permanent red tests against `ca72cc0` before the fix: A -> B waiting then disposal; forced termination without close through planning-root Validate/Update, strict Archive, and global install; and Web runner terminal projection. A mocked synchronous cancel or an injected terminal event is not evidence.
 - Only checkpoint `4.9` reopens for this correction. Keep `3.11`, `4.5`, and `6.7` closed; `6.8+` remains unstarted until this code correction passes independent review.
 
+Seventh-review construction directives after `c1571f3`:
+
+- The Core late-close test must be mutation-resistant for the actual `CliExecutor` child-owner cleanup. Demonstrate that removing or bypassing the production `activeChild = null` transition fails the permanent test; a second `close` producing no `exit` is insufficient because the already-settled guard independently suppresses that event.
+- Do not use the Manager test's test-authored EventEmitter bookkeeping as proof of Core bookkeeping. Keep the two facts separate: Core owns the direct child reference/listener lifecycle; the Manager owns the rejected lease and prevents B exposure.
+- Prefer a narrow internal child-owner seam that can be observed or spied through the real `CliExecutor` close handler. Do not expose test diagnostics through the public package API and do not release the Planning-root lease after a forced termination failure.
+- Reopen only `4.9` for this evidence gap. The sixth correction's Manager, Router, Strict Archive, and Web evidence remains accepted; `3.11`, `4.5`, and `6.7` remain closed, and `6.8+` remains unstarted.
+
 ## 2. CLI 1.6 Contract Baseline
 
 - [x] 2.1 OpenSpecUI compatibility targets the CLI 1.6 line and rejects unsupported versions with accurate guidance
@@ -126,7 +133,7 @@ Fifth-review construction directives after `ca72cc0`:
 - [x] 4.6 Push messages carry invalidation identity only; clients pull fresh CLI projections
 - [x] 4.7 Duplicate invalidations coalesce or remain idempotent across subscribers
 - [x] 4.8 Store polling is removed as the primary path and retained only as a bounded watcher-failure fallback
-- [x] 4.9 Root Context replacement/removal waits for admitted old-root operations, actively retires all old capabilities/watchers/services/previews, and exposes the new root only after retirement
+- [ ] 4.9 Root Context replacement/removal waits for admitted old-root operations, actively retires all old capabilities/watchers/services/previews, and exposes the new root only after retirement
 - [x] 4.10 Multi-client tests cover external Store edits, registry changes, concurrent operations, reconnect, and root disappearance
 
 ## 5. Task and Spec Projection Contracts
