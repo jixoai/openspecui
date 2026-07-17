@@ -1,3 +1,13 @@
+/**
+ * Orthogonal intents (created 2026-07-17 Asia/Shanghai):
+ * 1. Prove PTY creation reports failures and preserves backend-resolved session facts.
+ * 2. Prove launch-project and Planning-root cwd targets are resolved only by the Server.
+ * 3. Prove terminal control sequences preserve output while driving bounded notification fanout.
+ * 4. Prove OSC and process-title precedence remains stable across updates.
+ * 5. Prove reconnect retains the terminal target-title snapshot and session identity.
+ *
+ * Original request (2026-07-16): "接下来，你来接手后续工作"
+ */
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import { createPtyWebSocketHandler as createPtyWebSocketHandlerBase } from './pty-websocket.js'

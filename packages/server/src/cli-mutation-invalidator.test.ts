@@ -1,13 +1,26 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Verify buffered success, failure, and indeterminate errors invalidate before delivery.
- * 2. Verify streamed terminal/null exits and cancellation invalidate once before observation.
+ * 2. Verify streamed terminal/null settlements and cancellation invalidate once before observation.
  *
  * Original request (2026-07-15): "Every terminal or indeterminate outcome invalidates affected projections before they are pulled again."
  */
-import { RuntimeInvalidationIndex, type CliStreamEvent } from '@openspecui/core'
+import {
+  RuntimeInvalidationIndex,
+  type CliStreamEvent,
+  type CliStreamHandle,
+  type CliStreamSettlement,
+} from '@openspecui/core'
 import { describe, expect, it, vi } from 'vitest'
 import { CliMutationInvalidator } from './cli-mutation-invalidator.js'
+
+function settledHandle(exitCode: number | null): CliStreamHandle {
+  const settlement: CliStreamSettlement = { reason: 'exited', exitCode }
+  return {
+    settled: Promise.resolve(settlement),
+    cancel: () => Promise.resolve(settlement),
+  }
+}
 
 describe('CliMutationInvalidator', () => {
   it('invalidates before returning buffered success or failure evidence', async () => {
@@ -39,11 +52,11 @@ describe('CliMutationInvalidator', () => {
     const invalidation = new RuntimeInvalidationIndex()
     const service = new CliMutationInvalidator(invalidation)
     const events: CliStreamEvent[] = []
-    const cancel = await service.stream(
+    const stream = service.stream(
       ['project', 'context'],
-      async (onEvent) => {
+      (onEvent) => {
         onEvent({ type: 'exit', exitCode })
-        return vi.fn()
+        return settledHandle(exitCode)
       },
       (event) => {
         expect(invalidation.current('project')).toBe(1)
@@ -52,7 +65,7 @@ describe('CliMutationInvalidator', () => {
     )
 
     expect(events).toEqual([{ type: 'exit', exitCode }])
-    cancel()
+    await stream.cancel()
     expect(invalidation.current('project')).toBe(1)
     expect(invalidation.current('context')).toBe(1)
   })
@@ -60,14 +73,21 @@ describe('CliMutationInvalidator', () => {
   it('invalidates once before canceling a stream without terminal evidence', async () => {
     const invalidation = new RuntimeInvalidationIndex()
     const service = new CliMutationInvalidator(invalidation)
+    const terminal = Promise.withResolvers<CliStreamSettlement>()
     const cancelProcess = vi.fn(() => {
-      expect(invalidation.current('schemas')).toBe(1)
+      terminal.resolve({ reason: 'cancelled', exitCode: null })
+      return terminal.promise
     })
-    const cancel = await service.stream(['schemas'], async () => cancelProcess, vi.fn())
+    const stream = service.stream(
+      ['schemas'],
+      () => ({ settled: terminal.promise, cancel: cancelProcess }),
+      vi.fn()
+    )
 
-    cancel()
-    cancel()
-    expect(cancelProcess).toHaveBeenCalledTimes(2)
+    const cancellation = stream.cancel()
+    expect(stream.cancel()).toBe(cancellation)
+    await cancellation
+    expect(cancelProcess).toHaveBeenCalledOnce()
     expect(invalidation.current('schemas')).toBe(1)
   })
 })

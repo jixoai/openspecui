@@ -15,6 +15,7 @@ import {
   getRootContextCliSelector,
   OpenSpecAdapter,
   OpsxKernel,
+  type CliStreamHandle,
   type ConfigManager,
   type ObservationRootOwner,
   type RootContext,
@@ -55,6 +56,7 @@ interface PlanningRootServiceRecord extends PlanningRootServices {
   projectInvalidationRelease: () => void
   rootContextRef: { current: RootContext }
   activeOperationCount: number
+  activeStreams: Set<CliStreamHandle>
   operationDrainListeners: Set<() => void>
   disposePromise: Promise<void> | null
 }
@@ -68,10 +70,7 @@ interface PlanningRootOperationLease {
 export type PlanningRootOperation<T> = (services: PlanningRootServices) => Promise<T> | T
 
 /** Stream startup admitted against one current Planning-root service record. */
-export type PlanningRootStreamOperation = (
-  services: PlanningRootServices,
-  settle: () => void
-) => Promise<() => void> | (() => void)
+export type PlanningRootStreamOperation = (services: PlanningRootServices) => CliStreamHandle
 
 /** Public operation, stream, Root Context, and preview boundary used by the Server runtime. */
 export interface PlanningRootServiceResolver {
@@ -83,8 +82,8 @@ export interface PlanningRootServiceResolver {
   runOperation<T>(operation: PlanningRootOperation<T>): Promise<T>
   /** Run one complete reactive operation while tracking current root dependencies. */
   runReactiveOperation<T>(operation: PlanningRootOperation<T>): Promise<T>
-  /** Retain one operation lease until a stream settles, fails startup, or is cancelled. */
-  startOperationStream(operation: PlanningRootStreamOperation): Promise<() => void>
+  /** Retain one operation lease until its settlement-aware stream handle confirms termination. */
+  startOperationStream(operation: PlanningRootStreamOperation): Promise<CliStreamHandle>
   /** Mutate one project Schema inside a Manager-owned operation lease. */
   mutateSchema(
     action: SchemaMutationAction
@@ -208,6 +207,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       workflowInvocationService,
       rootContextRef,
       activeOperationCount: 0,
+      activeStreams: new Set(),
       operationDrainListeners: new Set(),
       disposePromise: null,
     }
@@ -476,28 +476,38 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     }
   }
 
-  /** Retain a revocable operation capability until terminal settlement or cancellation. */
-  async startOperationStream(operation: PlanningRootStreamOperation): Promise<() => void> {
-    const { lease } = await this.acquireOperation(false)
-    const settle = () => {
-      void lease.release()
-    }
-    try {
-      const cancel = await operation(lease.services, settle)
-      let cancelled = false
-      return () => {
-        if (cancelled) return
-        cancelled = true
-        try {
-          cancel()
-        } finally {
-          settle()
+  /** Retain a revocable operation capability until the child process actually settles. */
+  startOperationStream(operation: PlanningRootStreamOperation): Promise<CliStreamHandle> {
+    return this.runTransition(async () => {
+      const record = this.requireActiveServices(await this.resolveActiveTransition(false))
+      const lease = this.createOperationLease(record)
+      try {
+        const stream = operation(lease.services)
+        let managedStream: CliStreamHandle
+        const settled = stream.settled.then(async (settlement) => {
+          await lease.release()
+          record.activeStreams.delete(managedStream)
+          return settlement
+        })
+        let cancelRequested = false
+        managedStream = {
+          settled,
+          cancel: () => {
+            if (!cancelRequested) {
+              cancelRequested = true
+              void stream.cancel().catch(() => {})
+            }
+            return settled
+          },
         }
+        record.activeStreams.add(managedStream)
+        void settled.catch(() => {})
+        return managedStream
+      } catch (error) {
+        await lease.release()
+        throw error
       }
-    } catch (error) {
-      await lease.release()
-      throw error
-    }
+    })
   }
 
   /** Run one Schema action inside the same operation-lifetime contract as every Router caller. */
@@ -520,13 +530,22 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
   }
 
   dispose(): Promise<void> {
-    this.disposePromise ??= this.runTransition(async () => {
-      if (this.disposed) return
-      this.disposed = true
+    if (this.disposePromise) return this.disposePromise
+    this.disposed = true
+    this.disposePromise = this.runTransition(async () => {
       const active = this.activeRecord
-      this.activeRecord = null
       if (active) {
+        const cancellationResults = await Promise.allSettled(
+          [...active.activeStreams].map((stream) => stream.cancel())
+        )
+        const cancellationFailures = cancellationResults.flatMap((result) =>
+          result.status === 'rejected' ? [result.reason] : []
+        )
+        if (cancellationFailures.length > 0) {
+          throw new AggregateError(cancellationFailures, 'Planning-root stream termination failed.')
+        }
         await this.waitForOperations(active)
+        this.activeRecord = null
         await this.disposeRecord(active)
       }
     })

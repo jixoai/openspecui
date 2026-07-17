@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-17 Asia/Shanghai):
+ * 1. Prove the public Search subscription remains registered.
+ * 2. Prove Search queries delegate through the Manager-owned Planning-root service.
+ *
+ * Original request (2026-07-16): "你先负责后端（内核）的开发，我让ClaudeCode先帮你吧前端相关的代码先初步做一下。"
+ */
 import { describe, expect, it, vi } from 'vitest'
 import { appRouter } from './router.js'
 

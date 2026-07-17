@@ -1,16 +1,29 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Run strict validation before archive without exposing an intermediate terminal exit.
- * 2. Keep one cancel boundary across both CLI processes and asynchronous phase changes.
+ * 2. Keep one settlement-aware cancel boundary across validation and Archive phase changes.
  * 3. Preserve validation failure and archive startup evidence as terminal stream outcomes.
  *
  * Original request (2026-07-15): "Archive readiness remains a CLI validate/archive outcome."
+ * Original request (2026-07-17): "Strict Archive owns one lease through validation and Archive settlement."
  */
-import type { CliStreamEvent } from '@openspecui/core'
+import type { CliStreamEvent, CliStreamHandle, CliStreamSettlement } from '@openspecui/core'
 
-type StartCliStream = (
-  onEvent: (event: CliStreamEvent) => void
-) => Promise<() => void> | (() => void)
+type StartCliStream = (onEvent: (event: CliStreamEvent) => void) => CliStreamHandle
+
+function createSettlementDeferred(): {
+  promise: Promise<CliStreamSettlement>
+  resolve(value: CliStreamSettlement): void
+  reject(reason?: unknown): void
+} {
+  let resolve!: (value: CliStreamSettlement) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<CliStreamSettlement>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
 
 /** Validation, Archive, cancellation, and event boundaries for one strict Archive stream. */
 export interface StrictArchiveStreamOptions {
@@ -21,61 +34,84 @@ export interface StrictArchiveStreamOptions {
 }
 
 /** Run validate then archive as one terminal stream while retaining CLI-owned evidence. */
-export async function startStrictArchiveStream(
-  options: StrictArchiveStreamOptions
-): Promise<() => void> {
-  if (options.skipValidation) {
-    return await options.startArchive(options.onEvent)
-  }
-
-  let activeCancel: (() => void) | null = null
-  let activePhase = 0
-  let cancelled = false
-
-  const installCancel = (phase: number, cancel: () => void) => {
-    if (cancelled || phase !== activePhase) {
-      cancel()
-      return
-    }
-    activeCancel = cancel
-  }
-
-  const emitArchiveStartFailure = (error: unknown) => {
-    if (cancelled) return
+export function startStrictArchiveStream(options: StrictArchiveStreamOptions): CliStreamHandle {
+  const startupFailure = (error: unknown): CliStreamHandle => {
     options.onEvent({
       type: 'stderr',
       data: error instanceof Error ? error.message : String(error),
     })
     options.onEvent({ type: 'exit', exitCode: null })
+    const settlement: CliStreamSettlement = { reason: 'startup-failed', exitCode: null }
+    return {
+      settled: Promise.resolve(settlement),
+      cancel: () => Promise.resolve(settlement),
+    }
+  }
+
+  if (options.skipValidation) {
+    try {
+      return options.startArchive(options.onEvent)
+    } catch (error) {
+      return startupFailure(error)
+    }
+  }
+
+  const composite = createSettlementDeferred()
+  let activeStream: CliStreamHandle | null = null
+  let validationSucceeded = false
+  let cancelRequested = false
+  let cancelStarted = false
+
+  const forwardSettlement = (stream: CliStreamHandle) => {
+    void stream.settled.then(composite.resolve, composite.reject)
   }
 
   const startArchive = () => {
-    const phase = ++activePhase
-    void Promise.resolve(options.startArchive(options.onEvent)).then(
-      (cancel) => installCancel(phase, cancel),
-      emitArchiveStartFailure
-    )
+    if (cancelRequested) return
+    try {
+      const archive = options.startArchive(options.onEvent)
+      activeStream = archive
+      forwardSettlement(archive)
+    } catch (error) {
+      forwardSettlement(startupFailure(error))
+    }
   }
 
-  const validatePhase = ++activePhase
-  const validateCancel = await options.startValidate((event) => {
-    if (cancelled) return
-    if (event.type !== 'exit') {
+  let validate: CliStreamHandle
+  try {
+    validate = options.startValidate((event) => {
+      if (cancelRequested) return
+      if (event.type === 'exit') {
+        validationSucceeded = event.exitCode === 0
+        if (!validationSucceeded) options.onEvent(event)
+        return
+      }
       options.onEvent(event)
-      return
-    }
-    if (event.exitCode !== 0) {
-      options.onEvent(event)
+    })
+  } catch (error) {
+    return startupFailure(error)
+  }
+  activeStream = validate
+  void validate.settled.then((settlement) => {
+    if (cancelRequested || !validationSucceeded) {
+      composite.resolve(settlement)
       return
     }
     startArchive()
-  })
-  installCancel(validatePhase, validateCancel)
+  }, composite.reject)
 
-  return () => {
-    cancelled = true
-    activePhase += 1
-    activeCancel?.()
-    activeCancel = null
+  const handle: CliStreamHandle = {
+    settled: composite.promise,
+    cancel: () => {
+      if (!cancelStarted) {
+        cancelStarted = true
+        cancelRequested = true
+        const stream = activeStream
+        if (stream) void stream.cancel().catch(composite.reject)
+      }
+      return composite.promise
+    },
   }
+  void composite.promise.catch(() => {})
+  return handle
 }

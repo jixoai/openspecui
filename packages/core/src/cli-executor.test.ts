@@ -12,7 +12,12 @@ import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanupTempDir, createTempDir } from './__tests__/test-utils.js'
-import { CliExecutor, type CliResult, type CliStreamEvent } from './cli-executor.js'
+import {
+  CliExecutor,
+  type CliResult,
+  type CliStreamEvent,
+  type CliStreamHandle,
+} from './cli-executor.js'
 import { ConfigManager } from './config.js'
 import { clearCache } from './reactive-fs/index.js'
 import { closeAllWatchers } from './reactive-fs/watcher-pool.js'
@@ -318,9 +323,10 @@ describe('CliExecutor', () => {
 
   describe('streaming root selectors', () => {
     it('preserves an explicitly empty Store selector for validate and archive', async () => {
-      const executeStreamSpy = vi
-        .spyOn(cliExecutor, 'executeStream')
-        .mockResolvedValue(() => undefined)
+      const executeStreamSpy = vi.spyOn(cliExecutor, 'executeStream').mockReturnValue({
+        settled: Promise.resolve({ reason: 'exited', exitCode: 0 }),
+        cancel: async () => ({ reason: 'exited', exitCode: 0 }),
+      } satisfies CliStreamHandle)
       const onEvent = vi.fn()
 
       await cliExecutor.validateStream({ store: '' }, onEvent)
@@ -339,19 +345,84 @@ describe('CliExecutor', () => {
     it('makes cancellation available before delayed CLI runner resolution completes', async () => {
       const runnerResolution = Promise.withResolvers<string[]>()
       vi.spyOn(configManager, 'getCliCommand').mockReturnValue(runnerResolution.promise)
-      const streamStart = Promise.resolve(
-        cliExecutor.executeStream(['-e', 'setInterval(() => {}, 1_000)'], vi.fn())
+      const onEvent = vi.fn()
+      const handle = cliExecutor.executeStream(['-e', 'setInterval(() => {}, 1_000)'], onEvent)
+      const cancellation = handle.cancel()
+      runnerResolution.resolve([process.execPath])
+
+      await expect(cancellation).resolves.toEqual({ reason: 'cancelled', exitCode: null })
+      await expect(handle.settled).resolves.toEqual({ reason: 'cancelled', exitCode: null })
+      expect(onEvent).toHaveBeenCalledOnce()
+      expect(onEvent).toHaveBeenCalledWith({ type: 'exit', exitCode: null })
+    })
+
+    it.each([0, 7] as const)('settles a natural child exit %i exactly once', async (exitCode) => {
+      await configManager.writeConfig({ cli: { command: process.execPath } })
+      clearCache()
+      const events: CliStreamEvent[] = []
+      const handle = cliExecutor.executeStream(['-e', `process.exit(${exitCode})`], (event) =>
+        events.push(event)
       )
 
-      const handleAvailableBeforeResolution = await Promise.race([
-        streamStart.then(() => true),
-        new Promise<false>((resolve) => setTimeout(() => resolve(false), 25)),
-      ])
-      runnerResolution.resolve([process.execPath])
-      const cancel = await streamStart
-      cancel()
+      await expect(handle.settled).resolves.toEqual({ reason: 'exited', exitCode })
+      await expect(handle.cancel()).resolves.toEqual({ reason: 'exited', exitCode })
+      expect(events.filter((event) => event.type === 'exit')).toEqual([{ type: 'exit', exitCode }])
+    })
 
-      expect(handleAvailableBeforeResolution).toBe(true)
+    it.skipIf(process.platform === 'win32')(
+      'settles a natural signal exit with a null exit code',
+      async () => {
+        await configManager.writeConfig({ cli: { command: process.execPath } })
+        clearCache()
+        const handle = cliExecutor.executeStream(
+          ['-e', "process.kill(process.pid, 'SIGTERM')"],
+          vi.fn()
+        )
+
+        await expect(handle.settled).resolves.toEqual({ reason: 'exited', exitCode: null })
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
+      'escalates an ignored SIGTERM to SIGKILL and waits for confirmed close',
+      async () => {
+        await configManager.writeConfig({ cli: { command: process.execPath } })
+        clearCache()
+        const ready = Promise.withResolvers<void>()
+        const handle = cliExecutor.executeStream(
+          [
+            '-e',
+            "process.on('SIGTERM', () => {}); process.stdout.write('ready\\n'); setInterval(() => {}, 1_000)",
+          ],
+          (event) => {
+            if (event.type === 'stdout' && event.data?.includes('ready')) ready.resolve()
+          }
+        )
+        await ready.promise
+
+        const cancelStartedAt = Date.now()
+        const firstCancellation = handle.cancel()
+        expect(handle.cancel()).toBe(firstCancellation)
+        await expect(firstCancellation).resolves.toEqual({ reason: 'cancelled', exitCode: null })
+        expect(Date.now() - cancelStartedAt).toBeGreaterThanOrEqual(900)
+      }
+    )
+
+    it('settles retry failure once and never retries after cancellation', async () => {
+      await configManager.writeConfig({ cli: { command: 'nonexistent_command_12345' } })
+      clearCache()
+      const events: CliStreamEvent[] = []
+      const handle = cliExecutor.executeStream(['validate'], (event) => events.push(event))
+
+      await expect(handle.settled).resolves.toEqual({
+        reason: 'startup-failed',
+        exitCode: null,
+      })
+      expect(events.filter((event) => event.type === 'exit')).toHaveLength(1)
+      await expect(handle.cancel()).resolves.toEqual({
+        reason: 'startup-failed',
+        exitCode: null,
+      })
     })
   })
 

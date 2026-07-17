@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * 1. Prove public Router queries and mutations preserve their typed owner boundaries.
+ * 2. Prove Planning-root replacement waits for buffered and settlement-aware stream operations.
+ * 3. Prove strict Archive identity, validation, diagnostics, and Store selection through its public route.
+ * 4. Prove reactive, configuration, Git, notification, and runtime procedures retain scoped behavior.
+ *
+ * Original request (2026-07-17): "Every public application mutation remains inside its Server-owned root and lifetime."
+ */
 import {
   CliExecutor,
   ConfigManager,
@@ -10,6 +19,8 @@ import {
   type CliContext,
   type CliDoctor,
   type CliStreamEvent,
+  type CliStreamHandle,
+  type CliStreamSettlement,
   type ObservationRootOwner,
   type RuntimeRootInvalidationOwner,
 } from '@openspecui/core'
@@ -29,6 +40,31 @@ import { appRouter } from '../src/router.js'
 import { FilePreviewService } from './file-preview-service.js'
 import { PlanningRootServiceManager, type PlanningRootServices } from './planning-root-service.js'
 import type { SchemaMutationAction } from './schema-mutation-service.js'
+
+function settledStreamHandle(exitCode: number | null): CliStreamHandle {
+  const settlement: CliStreamSettlement = { reason: 'exited', exitCode }
+  return {
+    settled: Promise.resolve(settlement),
+    cancel: () => Promise.resolve(settlement),
+  }
+}
+
+function controlledStreamHandle(): {
+  handle: CliStreamHandle
+  settle(exitCode: number | null): void
+} {
+  const terminal = Promise.withResolvers<CliStreamSettlement>()
+  return {
+    handle: {
+      settled: terminal.promise,
+      cancel: () => {
+        terminal.resolve({ reason: 'cancelled', exitCode: null })
+        return terminal.promise
+      },
+    },
+    settle: (exitCode) => terminal.resolve({ reason: 'exited', exitCode }),
+  }
+}
 
 function trackedTaskProgress(total: number, completed: number) {
   return createTrackedTaskProgress(
@@ -583,9 +619,7 @@ artifacts:
       resolveRootContextReactive: vi.fn().mockResolvedValue(rootContextState),
       runOperation: vi.fn(async (operation) => operation(planningRootServices)),
       runReactiveOperation: vi.fn(async (operation) => operation(planningRootServices)),
-      startOperationStream: vi.fn(async (operation) =>
-        operation(planningRootServices, () => undefined)
-      ),
+      startOperationStream: vi.fn(async (operation) => operation(planningRootServices)),
       mutateSchema: vi.fn().mockResolvedValue(null),
       readPreviewRequest: vi.fn().mockReturnValue(null),
       dispose: vi.fn().mockResolvedValue(undefined),
@@ -773,12 +807,13 @@ describe('appRouter', () => {
 
         const streamedUpdateStarted = Promise.withResolvers<string[]>()
         const streamedUpdateEvent = Promise.withResolvers<(event: CliStreamEvent) => void>()
+        const streamedUpdate = controlledStreamHandle()
         const executeStream = vi
           .spyOn(cliExecutor, 'executeStream')
-          .mockImplementationOnce(async (args, onEvent) => {
+          .mockImplementationOnce((args, onEvent) => {
             streamedUpdateStarted.resolve(args)
             streamedUpdateEvent.resolve(onEvent)
-            return vi.fn()
+            return streamedUpdate.handle
           })
         const updateStream = await caller.cli.updateStream()
         const updateCompleted = Promise.withResolvers<void>()
@@ -795,24 +830,26 @@ describe('appRouter', () => {
         ])
         expect(bExposedBeforeStreamedUpdate).toBe(false)
         ;(await streamedUpdateEvent.promise)({ type: 'exit', exitCode: null })
+        streamedUpdate.settle(null)
         await Promise.all([updateCompleted.promise, replacementB])
         expect(executeStream).toHaveBeenCalledWith(['update', rootA], expect.any(Function))
         executeStream.mockRestore()
 
         const archiveStarted = Promise.withResolvers<void>()
         const archiveEvent = Promise.withResolvers<(event: CliStreamEvent) => void>()
+        const archiveTerminal = controlledStreamHandle()
         const validateStream = vi
           .spyOn(cliExecutor, 'validateStream')
-          .mockImplementationOnce(async (_options, onEvent) => {
+          .mockImplementationOnce((_options, onEvent) => {
             onEvent({ type: 'exit', exitCode: 0 })
-            return vi.fn()
+            return settledStreamHandle(0)
           })
         const archiveStream = vi
           .spyOn(cliExecutor, 'archiveStream')
-          .mockImplementationOnce(async (_changeId, _options, onEvent) => {
+          .mockImplementationOnce((_changeId, _options, onEvent) => {
             archiveStarted.resolve()
             archiveEvent.resolve(onEvent)
-            return vi.fn()
+            return archiveTerminal.handle
           })
         const strictArchive = await caller.cli.archiveStrictStream({ changeId: 'archive-me' })
         const archiveCompleted = Promise.withResolvers<void>()
@@ -829,6 +866,7 @@ describe('appRouter', () => {
         ])
         expect(aExposedBeforeArchive).toBe(false)
         ;(await archiveEvent.promise)({ type: 'exit', exitCode: 0 })
+        archiveTerminal.settle(0)
         await Promise.all([archiveCompleted.promise, replacementAfterArchive])
         expect(validateStream).toHaveBeenCalledWith(
           { id: 'archive-me', type: 'change', strict: true },
@@ -2255,9 +2293,9 @@ apply:
       const validateStream = context.cliExecutor.validateStream as unknown as ReturnType<
         typeof vi.fn
       >
-      validateStream.mockImplementation(async (_options, onEvent) => {
+      validateStream.mockImplementation((_options, onEvent) => {
         onEvent({ type: 'exit', exitCode: 0 })
-        return () => undefined
+        return settledStreamHandle(0)
       })
       const caller = appRouter.createCaller(context)
 
@@ -2307,15 +2345,15 @@ apply:
         typeof vi.fn
       >
       const archiveStream = context.cliExecutor.archiveStream as unknown as ReturnType<typeof vi.fn>
-      validateStream.mockImplementation(async (_options, onEvent) => {
+      validateStream.mockImplementation((_options, onEvent) => {
         onEvent({ type: 'command', data: 'openspec validate add-search --strict' })
         onEvent({ type: 'exit', exitCode: 0 })
-        return () => undefined
+        return settledStreamHandle(0)
       })
-      archiveStream.mockImplementation(async (_changeId, _options, onEvent) => {
+      archiveStream.mockImplementation((_changeId, _options, onEvent) => {
         onEvent({ type: 'command', data: 'openspec archive -y add-search --no-validate' })
         onEvent({ type: 'exit', exitCode: 0 })
-        return () => undefined
+        return settledStreamHandle(0)
       })
       const stream = await appRouter.createCaller(context).cli.archiveStrictStream({
         changeId: 'add-search',
@@ -2371,13 +2409,13 @@ apply:
         const archiveStream = context.cliExecutor.archiveStream as unknown as ReturnType<
           typeof vi.fn
         >
-        validateStream.mockImplementation(async (_options, onEvent) => {
+        validateStream.mockImplementation((_options, onEvent) => {
           onEvent({ type: 'exit', exitCode: 1 })
-          return () => undefined
+          return settledStreamHandle(1)
         })
-        archiveStream.mockImplementation(async (_changeId, _options, onEvent) => {
+        archiveStream.mockImplementation((_changeId, _options, onEvent) => {
           onEvent({ type: 'exit', exitCode: 0 })
-          return () => undefined
+          return settledStreamHandle(0)
         })
 
         const stream = await appRouter.createCaller(context).cli.archiveStrictStream({
@@ -2401,10 +2439,10 @@ apply:
         typeof vi.fn
       >
       const archiveStream = context.cliExecutor.archiveStream as unknown as ReturnType<typeof vi.fn>
-      validateStream.mockImplementation(async (_options, onEvent) => {
+      validateStream.mockImplementation((_options, onEvent) => {
         onEvent({ type: 'stderr', data: 'strict validation failed' })
         onEvent({ type: 'exit', exitCode: 1 })
-        return () => undefined
+        return settledStreamHandle(1)
       })
       const stream = await appRouter.createCaller(context).cli.archiveStrictStream({
         changeId: 'add-search',
@@ -2429,9 +2467,9 @@ apply:
         typeof vi.fn
       >
       const archiveStream = context.cliExecutor.archiveStream as unknown as ReturnType<typeof vi.fn>
-      archiveStream.mockImplementation(async (_changeId, _options, onEvent) => {
+      archiveStream.mockImplementation((_changeId, _options, onEvent) => {
         onEvent({ type: 'exit', exitCode: 0 })
-        return () => undefined
+        return settledStreamHandle(0)
       })
 
       const stream = await appRouter.createCaller(context).cli.archiveStrictStream({
@@ -2583,7 +2621,7 @@ apply:
       const executeStream = context.cliExecutor.executeStream as unknown as ReturnType<typeof vi.fn>
       executeStream.mockImplementation((_args, onEvent) => {
         onEvent({ type: 'exit', exitCode: null })
-        return vi.fn()
+        return settledStreamHandle(null)
       })
       const caller = appRouter.createCaller(context)
       const stream = await caller.cli.updateStream()

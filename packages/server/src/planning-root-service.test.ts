@@ -22,6 +22,8 @@ import {
   type CliCommandResult,
   type CliContext,
   type CliDoctor,
+  type CliStreamHandle,
+  type CliStreamSettlement,
   type ObservationRootOwner,
   type RootContextResolvedState,
   type RuntimeRootInvalidationOwner,
@@ -43,6 +45,23 @@ import { SchemaMutationService } from './schema-mutation-service.js'
 import { SearchService } from './search-service.js'
 
 const tempDirs: string[] = []
+
+function createControlledStreamHandle(): {
+  handle: CliStreamHandle
+  cancel: ReturnType<typeof vi.fn>
+  settle(exitCode?: number | null): void
+} {
+  const terminal = Promise.withResolvers<CliStreamSettlement>()
+  const cancel = vi.fn(() => {
+    terminal.resolve({ reason: 'cancelled', exitCode: null })
+    return terminal.promise
+  })
+  return {
+    handle: { settled: terminal.promise, cancel },
+    cancel,
+    settle: (exitCode = 0) => terminal.resolve({ reason: 'exited', exitCode }),
+  }
+}
 
 function commandResult<T>(data: T): CliCommandResult<T> {
   return {
@@ -699,12 +718,10 @@ describe('PlanningRootServiceManager', () => {
       runtimeInvalidation: new RuntimeInvalidationIndex(),
     })
 
-    const terminal = Promise.withResolvers<void>()
-    const cancelAProcess = vi.fn()
-    const cancelA = await manager.startOperationStream(({ rootContext }, settle) => {
+    const streamA = createControlledStreamHandle()
+    const handleA = await manager.startOperationStream(({ rootContext }) => {
       expect(rootContext.planningRoot?.path).toBe(roots[0])
-      void terminal.promise.then(settle)
-      return cancelAProcess
+      return streamA.handle
     })
     selectedRoot = roots[1]!
     const replacementB = manager.resolveRootContext()
@@ -713,19 +730,19 @@ describe('PlanningRootServiceManager', () => {
       new Promise<false>((resolve) => setTimeout(() => resolve(false), 25)),
     ])
     expect(bExposedBeforeTerminal).toBe(false)
-    terminal.resolve()
+    streamA.settle()
     await expect(replacementB).resolves.toMatchObject({
       state: 'ready',
       data: { planningRoot: { path: roots[1] } },
     })
-    cancelA()
-    cancelA()
-    expect(cancelAProcess).toHaveBeenCalledOnce()
+    await handleA.cancel()
+    await handleA.cancel()
+    expect(streamA.cancel).toHaveBeenCalledOnce()
 
-    const cancelBProcess = vi.fn()
-    const cancelB = await manager.startOperationStream(({ rootContext }) => {
+    const streamB = createControlledStreamHandle()
+    const handleB = await manager.startOperationStream(({ rootContext }) => {
       expect(rootContext.planningRoot?.path).toBe(roots[1])
-      return cancelBProcess
+      return streamB.handle
     })
     selectedRoot = roots[2]!
     const replacementC = manager.resolveRootContext()
@@ -734,9 +751,10 @@ describe('PlanningRootServiceManager', () => {
       new Promise<false>((resolve) => setTimeout(() => resolve(false), 25)),
     ])
     expect(cExposedBeforeCancel).toBe(false)
-    cancelB()
-    cancelB()
-    expect(cancelBProcess).toHaveBeenCalledOnce()
+    const cancellationB = handleB.cancel()
+    expect(handleB.cancel()).toBe(cancellationB)
+    await cancellationB
+    expect(streamB.cancel).toHaveBeenCalledOnce()
     await expect(replacementC).resolves.toMatchObject({
       state: 'ready',
       data: { planningRoot: { path: roots[2] } },
@@ -779,20 +797,12 @@ describe('PlanningRootServiceManager', () => {
       data: { planningRoot: { path: roots[4] } },
     })
 
-    const terminalD = Promise.withResolvers<void>()
-    await manager.startOperationStream((_services, settle) => {
-      void terminalD.promise.then(settle)
-      return vi.fn()
-    })
+    const streamD = createControlledStreamHandle()
+    await manager.startOperationStream(() => streamD.handle)
     const disposal = manager.dispose()
-    const disposedBeforeTerminal = await Promise.race([
-      disposal.then(() => true),
-      new Promise<false>((resolve) => setTimeout(() => resolve(false), 25)),
-    ])
-    expect(disposedBeforeTerminal).toBe(false)
-    terminalD.resolve()
     await disposal
     await manager.dispose()
+    expect(streamD.cancel).toHaveBeenCalledOnce()
 
     expect(observationReleases).toHaveLength(5)
     expect(invalidationReleases).toHaveLength(5)
@@ -849,39 +859,36 @@ describe('PlanningRootServiceManager', () => {
         runtimeInvalidation: new RuntimeInvalidationIndex(),
       })
       const childReady = Promise.withResolvers<void>()
+      const childClosing = Promise.withResolvers<void>()
       const childScript = [
         "const { writeFileSync } = require('node:fs')",
         `const sentinel = ${JSON.stringify(sentinelPath)}`,
         `const closing = ${JSON.stringify(closingPath)}`,
         "process.on('SIGTERM', () => {",
         '  setTimeout(() => writeFileSync(sentinel, String(Date.now())), 80)',
-        "  setTimeout(() => { writeFileSync(closing, 'closing'); process.exit(0) }, 180)",
+        "  setTimeout(() => { writeFileSync(closing, 'closing'); process.stdout.write('closing\\n'); process.exit(0) }, 180)",
         '})',
         "process.stdout.write('ready\\n')",
         'setInterval(() => {}, 1_000)',
       ].join(';')
 
-      const cancel = await manager.startOperationStream(({ rootContext }, settle) => {
+      const stream = await manager.startOperationStream(({ rootContext }) => {
         const planningRoot = rootContext.planningRoot?.path
         expect(planningRoot).toBe(rootA)
         const rootExecutor = new CliExecutor(configManager, planningRoot!)
         return rootExecutor.executeStream(['-e', childScript], (event) => {
           if (event.type === 'stdout' && event.data?.includes('ready')) childReady.resolve()
-          if (event.type === 'exit') settle()
+          if (event.type === 'stdout' && event.data?.includes('closing')) childClosing.resolve()
         })
       })
       await childReady.promise
 
       selectedRoot = rootB
       const replacement = manager.resolveRootContext()
-      cancel()
+      void stream.cancel()
       const firstSettlement = await Promise.race([
         replacement.then(() => 'replacement' as const),
-        vi
-          .waitFor(async () => expect(await readFile(closingPath, 'utf8')).toBe('closing'), {
-            timeout: 2_000,
-          })
-          .then(() => 'child' as const),
+        childClosing.promise.then(() => 'child' as const),
       ])
       const replacementState = await replacement
       const replacementObservedAt = Date.now()
@@ -939,12 +946,8 @@ describe('PlanningRootServiceManager', () => {
       projectInvalidation: { acquireRoot: () => () => {} },
       runtimeInvalidation: new RuntimeInvalidationIndex(),
     })
-    const terminal = Promise.withResolvers<void>()
-    const cancelProcess = vi.fn(() => terminal.resolve())
-    await manager.startOperationStream((_services, settle) => {
-      void terminal.promise.then(settle)
-      return cancelProcess
-    })
+    const stream = createControlledStreamHandle()
+    await manager.startOperationStream(() => stream.handle)
 
     const firstDisposal = manager.dispose()
     expect(manager.dispose()).toBe(firstDisposal)
@@ -952,11 +955,11 @@ describe('PlanningRootServiceManager', () => {
       firstDisposal.then(() => true),
       new Promise<false>((resolve) => setTimeout(() => resolve(false), 100)),
     ])
-    if (!disposedWithoutExternalTerminal) terminal.resolve()
+    if (!disposedWithoutExternalTerminal) stream.settle()
     await firstDisposal
 
     expect(disposedWithoutExternalTerminal).toBe(true)
-    expect(cancelProcess).toHaveBeenCalledOnce()
+    expect(stream.cancel).toHaveBeenCalledOnce()
   })
 
   it('retires A before a Root Context subscription exposes B', async () => {

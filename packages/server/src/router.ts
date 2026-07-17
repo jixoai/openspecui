@@ -16,6 +16,7 @@ import type {
   ChangeFile,
   CliExecutor,
   CliStreamEvent,
+  CliStreamHandle,
   ConfigManager,
   FileChangeEvent,
   GitEntriesPage,
@@ -219,7 +220,7 @@ function createPlanningRootCliStreamObservable(
   startStream: (
     services: PlanningRootServices,
     onEvent: (event: CliStreamEvent) => void
-  ) => Promise<() => void> | (() => void)
+  ) => CliStreamHandle
 ) {
   return createCliStreamObservable((onEvent) =>
     startPlanningRootCliStream(ctx, startStream, onEvent)
@@ -231,15 +232,10 @@ function startPlanningRootCliStream(
   startStream: (
     services: PlanningRootServices,
     onEvent: (event: CliStreamEvent) => void
-  ) => Promise<() => void> | (() => void),
+  ) => CliStreamHandle,
   onEvent: (event: CliStreamEvent) => void
 ) {
-  return ctx.planningRootServices.startOperationStream((services, settle) =>
-    startStream(services, (event) => {
-      if (event.type === 'exit') settle()
-      onEvent(event)
-    })
-  )
+  return ctx.planningRootServices.startOperationStream((services) => startStream(services, onEvent))
 }
 
 async function mutatePlanningSchema(ctx: Context, action: SchemaMutationAction) {
@@ -262,14 +258,14 @@ function runOpenSpecCliMutation<T>(
   return new CliMutationInvalidator(ctx.runtimeInvalidation).run(facets, execute)
 }
 
-async function streamOpenSpecCliMutation(
+function streamOpenSpecCliMutation(
   ctx: Context,
   args: readonly string[],
-  start: (onEvent: (event: CliStreamEvent) => void) => Promise<() => void> | (() => void),
+  start: (onEvent: (event: CliStreamEvent) => void) => CliStreamHandle,
   onEvent: (event: CliStreamEvent) => void
-): Promise<() => void> {
+): CliStreamHandle {
   const facets = getOpenSpecMutationFacets(args)
-  if (!facets) return await start(onEvent)
+  if (!facets) return start(onEvent)
   return new CliMutationInvalidator(ctx.runtimeInvalidation).stream(facets, start, onEvent)
 }
 
@@ -1801,7 +1797,7 @@ export const cliRouter = router({
       data?: string
       exitCode?: number | null
     }>((emit) => {
-      const cancel = ctx.cliExecutor.executeCommandStream(
+      const stream = ctx.cliExecutor.executeCommandStream(
         ['npm', 'install', '-g', '@fission-ai/openspec'],
         (event) => {
           emit.next(event)
@@ -1812,7 +1808,7 @@ export const cliRouter = router({
       )
 
       return () => {
-        cancel()
+        void stream.cancel().catch(() => {})
       }
     })
   }),

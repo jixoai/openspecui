@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Expose the public Core package contract through one stable barrel.
  * 2. Keep filesystem, CLI, Root Context, workflow, and projection types source-distinct.
  * 3. Publish browser-safe subpath contracts without forcing browser runtimes through this root.
  *
  * Original request (2026-07-15): "用强类型合同承载 OpenSpec 1.6 的客观事实。"
+ * Original request (2026-07-17): "Root-scoped stream startup returns an owned handle, not a void cancel function."
  */
 /**
  * @openspecui/core
@@ -547,7 +548,14 @@ export {
 } from './terminal-control.js'
 
 // CLI executor for calling external openspec commands
-export { CliExecutor, type CliResult, type CliStreamEvent } from './cli-executor.js'
+export {
+  CliExecutor,
+  CliStreamTerminationError,
+  type CliResult,
+  type CliStreamEvent,
+  type CliStreamHandle,
+  type CliStreamSettlement,
+} from './cli-executor.js'
 
 export {
   createPhysicalReactiveDirectory,
