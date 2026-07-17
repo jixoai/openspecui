@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Prove public Router queries and mutations preserve their typed owner boundaries.
  * 2. Prove Planning-root replacement and public stream routes preserve rejected settlement.
  * 3. Prove strict Archive identity, validation, diagnostics, and Store selection through its public route.
@@ -7,6 +7,7 @@
  *
  * Original request (2026-07-17): "Every public application mutation remains inside its Server-owned root and lifetime."
  * Original request (2026-07-17): "Rejected Validate and Update handles converge to one public terminal error."
+ * Original request (2026-07-18): "Environment Global profile/drift must use one reactive CLI-owned projection."
  */
 import {
   CliExecutor,
@@ -2643,6 +2644,12 @@ apply:
         })
         .mockResolvedValueOnce({
           success: true,
+          stdout: '',
+          stderr: '',
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          success: true,
           stdout: '/tmp/mock-openspec-config.json\n',
           stderr: '',
           exitCode: 0,
@@ -2679,6 +2686,12 @@ apply:
         .mockResolvedValueOnce({
           success: true,
           stdout: '{"profile":"core","delivery":"both","workflows":["propose"]}',
+          stderr: '',
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          stdout: '',
           stderr: '',
           exitCode: 0,
         })

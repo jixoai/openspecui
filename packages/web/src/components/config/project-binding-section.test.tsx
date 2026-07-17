@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Verify Project Binding presents launch/root ownership without registry inference.
  * 2. Verify Store/Reference edits submit one structured, loading-locked mutation.
- * 3. Verify pending/failure state locks duplicate writes and retains dirty declarations.
+ * 3. Verify pending/failure/transport state locks writes and retains trustworthy declarations.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-17): "Lock every mutation control while save is pending; preserve dirty input on failure."
+ * Original request (2026-07-18): "Project Binding must show direct Reference Store, root, and Doctor diagnostics."
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -61,7 +62,19 @@ function bindingConfig() {
         },
         storeId: 'shared',
         cli: { available: true, version: '1.6.0' },
-        references: [],
+        references: [
+          {
+            store_id: 'platform',
+            root: '/stores/platform',
+            status: [
+              {
+                severity: 'warning',
+                code: 'reference_unresolved',
+                message: 'Reference is not registered.',
+              },
+            ],
+          },
+        ],
         contextMembers: [],
         dataScope: {
           path: '/runtime/openspec',
@@ -118,6 +131,17 @@ describe('ProjectBindingSection', () => {
     expect(screen.getByText('declared')).toBeTruthy()
   })
 
+  it('shows direct Reference Store, root, and Doctor diagnostics as observed evidence', () => {
+    renderSection(<ProjectBindingSection isStatic={false} />)
+
+    expect(screen.getByText('Observed References')).toBeTruthy()
+    expect(screen.getByText('Store: platform')).toBeTruthy()
+    expect(screen.getByText('Root: /stores/platform')).toBeTruthy()
+    expect(
+      screen.getByText('warning · reference_unresolved · Reference is not registered.')
+    ).toBeTruthy()
+  })
+
   it('submits structured Store and Reference declarations', async () => {
     renderSection(<ProjectBindingSection isStatic={false} />)
 
@@ -168,6 +192,60 @@ describe('ProjectBindingSection', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('binding write denied'))
     expect(screen.getByLabelText('Store')).toHaveValue('retained-store')
     expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled()
+  })
+
+  it('keeps the launch-owned repair path available when Root Context preview fails', () => {
+    const current = bindingConfig()
+    bindingSubscriptionMock.mockReturnValue({
+      data: {
+        ...current,
+        rootPreview: {
+          state: 'error',
+          data: null,
+          attempt: current.rootPreview.data,
+          error: { code: 'root-unresolved', message: 'Declared Store did not resolve.' },
+          observedAt: 2,
+        },
+      },
+      isLoading: false,
+      error: null,
+    })
+    renderSection(<ProjectBindingSection isStatic={false} />)
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Declared Store did not resolve.')
+    fireEvent.change(screen.getByLabelText('Store'), { target: { value: 'repair-store' } })
+    expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled()
+  })
+
+  it('does not invent an empty writable binding after subscription transport failure', () => {
+    bindingSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error('binding transport failed'),
+    })
+    renderSection(<ProjectBindingSection isStatic={false} />)
+
+    expect(screen.getByRole('alert')).toHaveTextContent('binding transport failed')
+    expect(screen.queryByLabelText('Store')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Save binding' })).toBeNull()
+    expect(updateProjectBindingMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps stale binding evidence visible but locks every declaration control', () => {
+    bindingSubscriptionMock.mockReturnValue({
+      data: bindingConfig(),
+      isLoading: false,
+      error: new Error('binding transport failed'),
+    })
+    renderSection(<ProjectBindingSection isStatic={false} />)
+
+    expect(screen.getByRole('alert')).toHaveTextContent('binding transport failed')
+    expect(screen.getByLabelText('Store')).toBeDisabled()
+    expect(screen.getByLabelText('Reference Store id')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Remove Reference platform' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Saved' })).toBeDisabled()
+    expect(updateProjectBindingMock).not.toHaveBeenCalled()
   })
 
   it('states that static exports do not contain Project Binding', () => {

@@ -1,24 +1,32 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Verify routed Config schema selection.
  * 2. Verify Project Binding, Active Root, and Environment Global ownership surfaces.
  * 3. Prove Active Root file presence is independent from empty content.
+ * 4. Prove Schema and Template mutation controls consume the shared Root gate.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-17): "An existing empty Active Root file remains editable."
+ * Original request (2026-07-18): "Schema and Template mutations must use useRootActionState."
  */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Config } from './config'
 
-const { activeRootConfigMock, configBundleMock, environmentGlobalConfigMock, isStaticModeMock } =
-  vi.hoisted(() => ({
-    activeRootConfigMock: vi.fn(),
-    configBundleMock: vi.fn(),
-    environmentGlobalConfigMock: vi.fn(),
-    isStaticModeMock: vi.fn(),
-  }))
+const {
+  activeRootConfigMock,
+  configBundleMock,
+  environmentGlobalConfigMock,
+  isStaticModeMock,
+  rootActionMock,
+} = vi.hoisted(() => ({
+  activeRootConfigMock: vi.fn(),
+  configBundleMock: vi.fn(),
+  environmentGlobalConfigMock: vi.fn(),
+  isStaticModeMock: vi.fn(),
+  rootActionMock: vi.fn(),
+}))
 
 const idleMutation = {
   mutate: vi.fn(),
@@ -28,7 +36,6 @@ const idleMutation = {
 
 vi.mock('@tanstack/react-query', () => ({
   useMutation: () => idleMutation,
-  useQuery: () => ({ data: undefined, isLoading: false, error: null, refetch: vi.fn() }),
 }))
 
 vi.mock('@/components/code-editor', () => ({
@@ -60,23 +67,6 @@ vi.mock('@/lib/terminal-context', () => ({
 }))
 
 vi.mock('@/lib/trpc', () => ({
-  queryClient: {
-    invalidateQueries: vi.fn(),
-  },
-  trpc: {
-    planningConfig: {
-      environmentGlobal: {
-        queryOptions: () => ({ queryKey: ['planningConfig.environmentGlobal'] }),
-        queryFilter: () => ({ queryKey: ['planningConfig.environmentGlobal'] }),
-      },
-    },
-    cli: {
-      getProfileState: {
-        queryOptions: () => ({ queryKey: ['cli.getProfileState'] }),
-        queryFilter: () => ({ queryKey: ['cli.getProfileState'] }),
-      },
-    },
-  },
   trpcClient: {
     planningConfig: {
       writeActiveRoot: { mutate: vi.fn() },
@@ -113,6 +103,10 @@ vi.mock('@/lib/use-planning-config', () => ({
   useProjectBindingSubscription: () => ({ data: null, isLoading: false, error: null }),
 }))
 
+vi.mock('@/lib/use-root-action-state', () => ({
+  useRootActionState: rootActionMock,
+}))
+
 vi.mock('@/lib/use-opsx', () => ({
   useOpsxConfigBundleSubscription: () => configBundleMock(),
   useOpsxSchemaFilesSubscription: () => ({ data: [], error: null }),
@@ -122,6 +116,15 @@ vi.mock('@/lib/use-opsx', () => ({
 
 describe('Config schema tabs', () => {
   beforeEach(() => {
+    rootActionMock.mockReset().mockReturnValue({
+      status: 'ready',
+      disabled: false,
+      context: null,
+      observedAt: 1,
+      title: null,
+      message: null,
+      evidence: [],
+    })
     isStaticModeMock.mockReturnValue(true)
     activeRootConfigMock.mockReturnValue({
       data: {
@@ -281,6 +284,12 @@ describe('Config schema tabs', () => {
             payload: { profile: 'core', delivery: 'both', workflows: ['propose'] },
             diagnostics: [],
           },
+          drift: {
+            success: true,
+            stdout: '',
+            stderr: '',
+            exitCode: 0,
+          },
         },
       },
       isLoading: false,
@@ -328,5 +337,143 @@ describe('Config schema tabs', () => {
 
     expect(screen.getByRole('button', { name: 'Edit' })).toBeTruthy()
     expect(screen.queryByText('No config file exists in the active Planning root.')).toBeNull()
+  })
+
+  it.each([
+    {
+      label: 'loading',
+      state: {
+        status: 'checking',
+        disabled: true,
+        context: null,
+        observedAt: 0,
+        title: 'Resolving planning root',
+        message: 'Loading Root Context.',
+        evidence: [],
+      },
+    },
+    {
+      label: 'refreshing',
+      state: {
+        status: 'checking',
+        disabled: true,
+        context: null,
+        observedAt: 1,
+        title: 'Refreshing planning root',
+        message: 'Refreshing Root Context.',
+        evidence: [],
+      },
+    },
+    {
+      label: 'transport error',
+      state: {
+        status: 'blocked',
+        disabled: true,
+        context: null,
+        observedAt: 1,
+        title: 'Root Context transport failed',
+        message: 'Root Context transport failed.',
+        evidence: [],
+      },
+    },
+    {
+      label: 'CLI error',
+      state: {
+        status: 'blocked',
+        disabled: true,
+        context: null,
+        observedAt: 1,
+        title: 'Planning root unavailable',
+        message: 'Root Context CLI failed.',
+        evidence: ['Doctor exit: 1'],
+      },
+    },
+  ])('locks Schema and Template mutations during $label', ({ state }) => {
+    isStaticModeMock.mockReturnValue(false)
+    rootActionMock.mockReturnValue(state)
+    configBundleMock.mockReturnValue({
+      data: {
+        schemas: [
+          {
+            name: 'project-schema',
+            description: 'Project schema',
+            artifacts: [],
+            source: 'project',
+          },
+        ],
+        schemaDetails: { 'project-schema': { name: 'project-schema', artifacts: [] } },
+        schemaResolutions: {
+          'project-schema': {
+            name: 'project-schema',
+            source: 'project',
+            path: '/project/openspec/schemas/project-schema',
+            shadows: [],
+          },
+        },
+      },
+      isLoading: false,
+      error: null,
+    })
+    window.history.replaceState(null, '', '/config?configTab=schema:project-schema')
+
+    render(<Config />)
+
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
+    expect(screen.getByRole(state.status === 'checking' ? 'status' : 'alert')).toHaveTextContent(
+      state.message
+    )
+  })
+
+  it('locks an already-open Schema dialog when Root Context becomes unavailable', () => {
+    isStaticModeMock.mockReturnValue(false)
+    configBundleMock.mockReturnValue({
+      data: {
+        schemas: [
+          {
+            name: 'project-schema',
+            description: 'Project schema',
+            artifacts: [],
+            source: 'project',
+          },
+        ],
+        schemaDetails: { 'project-schema': { name: 'project-schema', artifacts: [] } },
+        schemaResolutions: {
+          'project-schema': {
+            name: 'project-schema',
+            source: 'project',
+            path: '/project/openspec/schemas/project-schema',
+            shadows: [],
+          },
+        },
+      },
+      isLoading: false,
+      error: null,
+    })
+    window.history.replaceState(null, '', '/config?configTab=schema:project-schema')
+    const view = render(<Config />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    fireEvent.change(screen.getByPlaceholderText('schema-name'), {
+      target: { value: 'next-schema' },
+    })
+    expect(screen.getByRole('button', { name: 'Create' })).toBeEnabled()
+
+    rootActionMock.mockReturnValue({
+      status: 'blocked',
+      disabled: true,
+      context: null,
+      observedAt: 2,
+      title: 'Planning root unavailable',
+      message: 'Root Context CLI failed.',
+      evidence: ['Doctor exit: 1'],
+    })
+    view.rerender(<Config />)
+
+    expect(screen.getByPlaceholderText('schema-name')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Create' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    expect(idleMutation.mutate).not.toHaveBeenCalled()
   })
 })

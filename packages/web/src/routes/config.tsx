@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Compose ownership-specific Config sections with routed Schema tabs.
  * 2. Orchestrate Schema discovery, inspection, creation, and file editing.
- * 3. Preserve Schema source-specific read-only and mutation behavior.
+ * 3. Preserve Schema source-specific read-only behavior and shared Root action gating.
  * 4. Keep static/live tab selection on one route contract.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
+ * Original request (2026-07-18): "Schema and Template mutations must use useRootActionState."
  */
 import { Button } from '@/components/button'
 import { ButtonGroup } from '@/components/button-group'
@@ -29,6 +30,7 @@ import {
   type FileExplorerEntry,
 } from '@/components/file-explorer'
 import { MarkdownViewer } from '@/components/markdown-viewer'
+import { RootActionNotice } from '@/components/root-action-notice'
 import { useViewportConstrainedHeight } from '@/components/scroll-spy'
 import { Select, type SelectOption } from '@/components/select'
 import { Tabs, type Tab } from '@/components/tabs'
@@ -40,6 +42,7 @@ import {
   useOpsxTemplateContentsSubscription,
   useOpsxTemplatesSubscription,
 } from '@/lib/use-opsx'
+import { useRootActionState } from '@/lib/use-root-action-state'
 import { useRoutedCarouselTabs } from '@/lib/view-transitions/tabs'
 import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
 import { useMutation } from '@tanstack/react-query'
@@ -136,6 +139,7 @@ export function Config() {
   const [newSchemaName, setNewSchemaName] = useState('')
   const [newSchemaMode, setNewSchemaMode] = useState<SchemaCreateMode>('init')
   const [newSchemaSource, setNewSchemaSource] = useState('spec-driven')
+  const rootAction = useRootActionState()
 
   const {
     data: configBundle,
@@ -186,8 +190,16 @@ export function Config() {
   const [dirtyFiles, setDirtyFiles] = useState<Record<string, boolean>>({})
 
   const schemaCanEdit =
-    !isStatic && schemaResolution?.source !== undefined && schemaResolution.source !== 'package'
+    !isStatic &&
+    !rootAction.disabled &&
+    schemaResolution?.source !== undefined &&
+    schemaResolution.source !== 'package'
   const canManageEntries = schemaCanEdit && !isStatic
+  const requireRootActionReady = useCallback(() => {
+    if (rootAction.disabled) {
+      throw new Error(rootAction.message ?? 'Planning root is unavailable.')
+    }
+  }, [rootAction.disabled, rootAction.message])
 
   useEffect(() => {
     if (!schemas || schemas.length === 0) return
@@ -357,6 +369,7 @@ export function Config() {
 
   const saveSchemaFileMutation = useMutation({
     mutationFn: async (payload: { path: string; content: string }) => {
+      requireRootActionReady()
       if (!selectedSchema) return
       await trpcClient.opsx.writeSchemaFile.mutate({
         schema: selectedSchema,
@@ -375,6 +388,7 @@ export function Config() {
 
   const createSchemaFileMutation = useMutation({
     mutationFn: async (payload: { path: string; content: string }) => {
+      requireRootActionReady()
       if (!selectedSchema) return
       await trpcClient.opsx.createSchemaFile.mutate({
         schema: selectedSchema,
@@ -395,6 +409,7 @@ export function Config() {
 
   const createSchemaDirectoryMutation = useMutation({
     mutationFn: async (payload: { path: string }) => {
+      requireRootActionReady()
       if (!selectedSchema) return
       await trpcClient.opsx.createSchemaDirectory.mutate({
         schema: selectedSchema,
@@ -413,6 +428,7 @@ export function Config() {
 
   const deleteSchemaEntryMutation = useMutation({
     mutationFn: async (payload: { path: string }) => {
+      requireRootActionReady()
       if (!selectedSchema) return
       await trpcClient.opsx.deleteSchemaEntry.mutate({
         schema: selectedSchema,
@@ -443,6 +459,7 @@ export function Config() {
     mutationFn: async (
       input: { mode: 'init'; name: string } | { mode: 'fork'; source: string; name: string }
     ) => {
+      requireRootActionReady()
       const result =
         input.mode === 'init'
           ? await trpcClient.opsx.initSchema.mutate({ name: input.name })
@@ -462,6 +479,7 @@ export function Config() {
 
   const deleteSchemaMutation = useMutation({
     mutationFn: async () => {
+      requireRootActionReady()
       if (!selectedSchema) return
       await trpcClient.opsx.deleteSchema.mutate({ name: selectedSchema })
     },
@@ -500,10 +518,10 @@ export function Config() {
   }, [activeSchemaFile])
 
   const handleFileSave = useCallback(() => {
-    if (!activeSchemaFile) return
+    if (!activeSchemaFile || !schemaCanEdit) return
     const content = activeSchemaDraft ?? activeSchemaFile.content ?? ''
     saveSchemaFileMutation.mutate({ path: activeSchemaFile.path, content })
-  }, [activeSchemaDraft, activeSchemaFile, saveSchemaFileMutation])
+  }, [activeSchemaDraft, activeSchemaFile, saveSchemaFileMutation, schemaCanEdit])
 
   const normalizeEntryPath = useCallback((parent: string | null, name: string) => {
     const trimmed = name.trim().replace(/^\/+/, '')
@@ -524,6 +542,7 @@ export function Config() {
   )
 
   const handleConfirmCreateEntry = useCallback(() => {
+    if (!canManageEntries) return
     const trimmed = createEntryName.trim()
     if (!trimmed) {
       setSchemaEntryError('Name is required.')
@@ -550,6 +569,7 @@ export function Config() {
     createSchemaDirectoryMutation,
     createSchemaFileMutation,
     normalizeEntryPath,
+    canManageEntries,
   ])
 
   const handleOpenDeleteEntry = useCallback((entry: FileExplorerEntry) => {
@@ -559,9 +579,9 @@ export function Config() {
   }, [])
 
   const handleConfirmDeleteEntry = useCallback(() => {
-    if (!activeEntry) return
+    if (!activeEntry || !canManageEntries) return
     deleteSchemaEntryMutation.mutate({ path: activeEntry.path })
-  }, [activeEntry, deleteSchemaEntryMutation])
+  }, [activeEntry, canManageEntries, deleteSchemaEntryMutation])
 
   const handleOpenEntryInfo = useCallback((entry: FileExplorerEntry) => {
     setActiveEntry(entry)
@@ -625,13 +645,13 @@ export function Config() {
   }, [schemaEditorWrap])
 
   const handleAddSchema = useCallback(() => {
-    if (isStatic) return
+    if (!schemaCanEdit) return
     setSchemaActionError(null)
     setNewSchemaName('')
     setNewSchemaMode('init')
     setNewSchemaSource(selectedSchema ?? 'spec-driven')
     setIsAddSchemaOpen(true)
-  }, [isStatic, selectedSchema])
+  }, [schemaCanEdit, selectedSchema])
 
   const handleDeleteSchema = useCallback(() => {
     if (!selectedSchema || !schemaCanEdit) return
@@ -640,6 +660,7 @@ export function Config() {
   }, [schemaCanEdit, selectedSchema])
 
   const handleConfirmAddSchema = useCallback(() => {
+    if (!schemaCanEdit) return
     const normalizedName = newSchemaName.trim()
     if (!normalizedName) {
       setSchemaActionError('Schema name is required.')
@@ -659,15 +680,16 @@ export function Config() {
         setActiveTab(`schema:${normalizedName}`)
       },
     })
-  }, [createSchemaMutation, newSchemaMode, newSchemaName, newSchemaSource])
+  }, [createSchemaMutation, newSchemaMode, newSchemaName, newSchemaSource, schemaCanEdit])
 
   const handleConfirmDeleteSchema = useCallback(() => {
+    if (!schemaCanEdit) return
     deleteSchemaMutation.mutate(undefined, {
       onSuccess: () => {
         setIsDeleteSchemaOpen(false)
       },
     })
-  }, [deleteSchemaMutation])
+  }, [deleteSchemaMutation, schemaCanEdit])
 
   const renderFieldValue = useCallback((key: string, value: unknown) => {
     if (value === null || value === undefined) {
@@ -753,7 +775,7 @@ export function Config() {
             <button
               type="button"
               onClick={handleAddSchema}
-              disabled={isStatic || createSchemaMutation.isPending}
+              disabled={!schemaCanEdit || createSchemaMutation.isPending}
               className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -770,6 +792,8 @@ export function Config() {
             </button>
           </div>
         </div>
+
+        {!isStatic && rootAction.disabled ? <RootActionNotice state={rootAction} /> : null}
 
         {schemaActionError && <div className="text-destructive text-xs">{schemaActionError}</div>}
         {schemaEntryError && <div className="text-destructive text-xs">{schemaEntryError}</div>}
@@ -1314,7 +1338,7 @@ export function Config() {
             <button
               type="button"
               onClick={handleConfirmAddSchema}
-              disabled={!newSchemaName.trim() || createSchemaMutation.isPending}
+              disabled={!schemaCanEdit || !newSchemaName.trim() || createSchemaMutation.isPending}
               className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -1328,6 +1352,7 @@ export function Config() {
             <div className="text-xs font-medium">Schema name</div>
             <input
               value={newSchemaName}
+              disabled={!schemaCanEdit || createSchemaMutation.isPending}
               onChange={(event) => {
                 setNewSchemaName(event.target.value)
                 setSchemaActionError(null)
@@ -1343,8 +1368,8 @@ export function Config() {
               value={newSchemaMode}
               onChange={setNewSchemaMode}
               options={[
-                { value: 'init', label: 'Init' },
-                { value: 'fork', label: 'Fork' },
+                { value: 'init', label: 'Init', disabled: !schemaCanEdit },
+                { value: 'fork', label: 'Fork', disabled: !schemaCanEdit },
               ]}
             />
           </div>
@@ -1357,6 +1382,7 @@ export function Config() {
                 options={schemaSourceOptions}
                 onValueChange={setNewSchemaSource}
                 ariaLabel="Fork from"
+                disabled={!schemaCanEdit}
                 className="w-full"
               />
             </label>
@@ -1388,7 +1414,7 @@ export function Config() {
             <button
               type="button"
               onClick={handleConfirmDeleteSchema}
-              disabled={deleteSchemaMutation.isPending}
+              disabled={!schemaCanEdit || deleteSchemaMutation.isPending}
               className="bg-destructive text-destructive-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -1439,6 +1465,7 @@ export function Config() {
               type="button"
               onClick={handleConfirmCreateEntry}
               disabled={
+                !canManageEntries ||
                 !createEntryName.trim() ||
                 createSchemaFileMutation.isPending ||
                 createSchemaDirectoryMutation.isPending
@@ -1467,6 +1494,11 @@ export function Config() {
             </div>
             <input
               value={createEntryName}
+              disabled={
+                !canManageEntries ||
+                createSchemaFileMutation.isPending ||
+                createSchemaDirectoryMutation.isPending
+              }
               onChange={(event) => {
                 setCreateEntryName(event.target.value)
                 setSchemaEntryError(null)
@@ -1504,7 +1536,7 @@ export function Config() {
             <button
               type="button"
               onClick={handleConfirmDeleteEntry}
-              disabled={!activeEntry || deleteSchemaEntryMutation.isPending}
+              disabled={!canManageEntries || !activeEntry || deleteSchemaEntryMutation.isPending}
               className="bg-destructive text-destructive-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Trash2 className="h-3.5 w-3.5" />

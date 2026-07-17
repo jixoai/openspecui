@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Expose the public Core package contract through one stable barrel.
  * 2. Keep filesystem, CLI, Root Context, workflow, and projection types source-distinct.
  * 3. Publish browser-safe subpath contracts without forcing browser runtimes through this root.
  *
  * Original request (2026-07-15): "用强类型合同承载 OpenSpec 1.6 的客观事实。"
  * Original request (2026-07-17): "Root-scoped stream startup returns an owned handle, not a void cancel function."
+ * Original request (2026-07-18): "Profile/Drift must refresh with external environment config changes."
  */
 /**
  * @openspecui/core
@@ -192,6 +193,7 @@ export {
   updateProjectBindingContent,
   type ActiveRootConfig,
   type EnvironmentGlobalConfig,
+  type EnvironmentGlobalProfileState,
   type PlanningConfigDiagnostic,
   type PlanningConfigFile,
   type PlanningConfigReference,

@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
- * 1. Define distinct Project Binding, Active Root, and Environment Global config projections.
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Define distinct Project Binding, Active Root, and reactive Environment Global config projections.
  * 2. Inspect launch-project Store/Reference declarations without replacing CLI Root Context truth.
  * 3. Update only binding fields while preserving unrelated YAML fields and comments.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
+ * Original request (2026-07-18): "Profile/Drift must refresh with external environment config changes."
  */
 import { isMap, parseDocument } from 'yaml'
 import { z } from 'zod'
@@ -115,6 +116,17 @@ export interface ActiveRootConfig {
   file: PlanningConfigFile
 }
 
+/** CLI-owned profile and project-drift facts observed with environment-global config. */
+export interface EnvironmentGlobalProfileState {
+  available: boolean
+  profile: 'core' | 'custom' | null
+  delivery: 'both' | 'skills' | 'commands' | null
+  workflows: string[]
+  driftStatus: 'in-sync' | 'drift' | 'unknown'
+  warningText: string | null
+  error?: string
+}
+
 /** Environment-global configuration projection selected by the CLI. */
 export interface EnvironmentGlobalConfig {
   kind: 'environment-global'
@@ -124,9 +136,11 @@ export interface EnvironmentGlobalConfig {
   }
   file: PlanningConfigFile
   config: Record<string, CliJsonValue> | null
+  profileState: EnvironmentGlobalProfileState
   evidence: {
     path: CliResult
     config: CliCommandResult<Record<string, CliJsonValue>>
+    drift: CliResult
   }
 }
 

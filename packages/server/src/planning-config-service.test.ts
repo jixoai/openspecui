@@ -1,9 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Prove three configuration owners retain distinct roots and evidence.
  * 2. Prove binding and active-root writes never cross ownership boundaries.
+ * 3. Prove environment profile/drift and raw evidence refresh in one projection.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
+ * Original request (2026-07-18): "Profile/Drift must refresh with external environment config changes."
  */
 import { CliExecutor, ConfigManager, type RootContext } from '@openspecui/core'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -152,6 +154,12 @@ describe('planning config ownership', () => {
         stderr: '',
         exitCode: 0,
       })
+      .mockResolvedValueOnce({
+        success: true,
+        stdout: 'Global config is not applied to this project.\n',
+        stderr: '',
+        exitCode: 0,
+      })
 
     const result = await readEnvironmentGlobalConfig({
       dataScope: {
@@ -167,5 +175,8 @@ describe('planning config ownership', () => {
     expect(result.config).toEqual({ profile: 'core', workflows: ['apply'] })
     expect(result.evidence.path.exitCode).toBe(0)
     expect(result.evidence.config.stdout).toContain('"profile":"core"')
+    expect(result.profileState.profile).toBe('core')
+    expect(result.profileState.driftStatus).toBe('drift')
+    expect(result.evidence.drift.stdout).toContain('not applied')
   })
 })

@@ -103,6 +103,17 @@ Config construction directives after `f2d1ddf`:
 - Static mode may render the exported Active Root snapshot read-only. It must state that Project Binding and Environment Global are unavailable rather than synthesizing launch or runtime ownership.
 - Implement and re-close only `6.8` (`58/131 -> 59/131`). Keep Context replacement `6.9`, the shared lifecycle checkpoint `6.16`, and every later surface open for their own apply slices.
 
+Ninth-review correction directives after `731f684`:
+
+- Reopen `3.5` and `6.8`. The Config slice is a root-dependent surface, so its Active Root mutations, Schema/Template mutations retained by the route, and typed Planning-root Update must use the shared `useRootActionState` gate. Preserve stale snapshots and drafts for diagnosis, but do not expose Edit, Save, Create, Delete, or Update execution while the current Root Context is loading, refreshing, transport-failed, or CLI-error.
+- Keep Project Binding's repair path available when its Root Context preview is an OpenSpec warning/error state; that owner edits launch `store:`/`references:` and must not be confused with Active Root mutations. A subscription transport error with no current binding data is not an empty binding and must not unlock a write.
+- Do not let `EnvironmentGlobalConfigSection` read profile/drift through an independent `cli.getProfileState` query while its typed environment-global subscription reads the same CLI config. Make profile/drift part of one reactive CLI-owned projection, or add a reactive subscription with the same invalidation contract; external config edits must update every displayed facet.
+- Project Binding must render direct Doctor Reference evidence (Store id, root when present, and diagnostic severity/code/message) from `rootPreview`; do not infer health, completeness, or machine-wide coverage. Empty observed References must use the established observed-only wording.
+- When Active Root is external and has a Store identity, state the objective shared-root consequence: edits write the Store-backed planning root and are observed by other projects resolving that Store. Do not enumerate or claim all affected projects.
+- The Environment Global implementation currently carries projection, raw evidence, JSON editor, profile editor, runner/dialog, interactive terminal navigation, and static behavior in one 851-line file. Split only where it removes real divergent intent while keeping one physical Environment Global owner and one typed mutation boundary. Do not hide the reactive/profile or root-gate fix behind a cosmetic extraction.
+- Add red evidence against `731f684` for stale Root Context actions, non-ready Update/auto-Update dispatch, stale profile/drift after an external config change, missing Reference diagnostics, and missing external-Store impact wording. A test that only renders the old button or manually calls a downstream handler is not acceptance evidence.
+- Keep `6.9+` unstarted. This correction returns progress from `59/131` to `57/131`; re-close only `3.5` and `6.8` after focused tests, full gates, clean SSG, remote CI, and an independent review.
+
 ## 2. CLI 1.6 Contract Baseline
 
 - [x] 2.1 OpenSpecUI compatibility targets the CLI 1.6 line and rejects unsupported versions with accurate guidance
@@ -123,7 +134,7 @@ Config construction directives after `f2d1ddf`:
 - [x] 3.2 Server exposes one query/subscription contract for Root Context with full loading, stale-data, and error states
 - [x] 3.3 Planning-root adapters and document services consume the CLI-resolved root instead of launch `projectDir`
 - [x] 3.4 Change actions preserve `changeRoot`, Store flags, artifact paths, existing output paths, action context, References, and diagnostics
-- [x] 3.5 Root-dependent actions remain locked until root selection succeeds and show CLI-owned failure evidence when it does not
+- [ ] 3.5 Root-dependent actions remain locked until root selection succeeds and show CLI-owned failure evidence when it does not
 - [x] 3.6 Config ownership separates launch-project binding, active-root config, and environment-global config
 - [x] 3.7 Git exposes explicit code-repository and planning-repository scopes when they differ
 - [x] 3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited `XDG_DATA_HOME`
@@ -167,7 +178,7 @@ Config construction directives after `f2d1ddf`:
 - [x] 6.5 Specs defaults to Owned and provides a Store-grouped Referenced view with immutable entries sourced from end-to-end pinned CLI 1.6 Reference enumeration
 - [x] 6.6 Spec detail validates returned Store and Spec provenance, shows source/read-only state, disables mutation for References, and returns to the correct list scope
 - [x] 6.7 Archive lists only writable-root archives, validates canonical Change identity before any CLI path, has one Server-owned strict mutation entry, cannot be reached through a generic CLI bypass, and tests diagnostics through that supported entry
-- [x] 6.8 Config implements Project Binding, Active Root Config, and Environment Global Config ownership sections
+- [ ] 6.8 Config implements Project Binding, Active Root Config, and Environment Global Config ownership sections
 - [ ] 6.9 Project Stores route is replaced by Context with root, Reference, environment, and read-only registry diagnostics
 - [ ] 6.10 Search defaults to the active root and offers an explicit Referenced Specs scope without referenced changes
 - [ ] 6.11 Git makes repository scope explicit for status, history, worktrees, and every mutation

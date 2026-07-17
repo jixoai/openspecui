@@ -1833,3 +1833,85 @@ The Environment Global `Run update` action remains on `useCliRunner`'s typed `pl
 - The changed-file audit is limited to `AGENTS.md`, `i18n.zh.md`, one changeset, the Project Binding tests, the Config route/tests, and the two new focused Config components/tests. Schema code remains in the route with no behavior change; no `6.9+` file or checkbox was touched.
 
 Checkpoint transition: `58/131 -> 59/131`; close only `6.8`. `6.9`, `6.16`, and every later project/static/App surface remain open. Commit and push PR #207, wait for the six remote checks, then stop for independent review. Do not merge, archive, or release.
+
+## Ninth Independent Review after `731f684`: Config Readiness and Projection Gaps
+
+Review range: `9fb515a...731f684`. PR #207 is `OPEN/CLEAN`; the six remote checks pass. Focused Config verification reported `4 files, 29/29 tests passed`, but those tests do not establish the full acceptance contract below. `6.8` is not accepted and `3.5` is reopened for the Config surface. Progress returns from `59/131` to `57/131`. Do not merge, archive, release, or start `6.9+`.
+
+### Standards findings
+
+1. **Root readiness is bypassed (P1).** `ActiveRootConfigSection` renders Edit/Create and leaves Save and the editor shortcut usable when its subscription keeps stale data beside a refresh/transport error (`packages/web/src/components/config/active-root-config-section.tsx:105-170`). Its test explicitly requires Edit to remain present under `refresh failed` (`active-root-config-section.test.tsx:159-169`). The shared Root Context law requires stale/error states to remain visible evidence but locked for root-dependent writes. The route's retained Schema/Template mutations have the same gate obligation.
+2. **Planning-root Update is ungated (P1).** `EnvironmentGlobalConfigSection` starts `planning-root-update` from Run update and from Apply's auto-update path based only on local runner/mutation state (`environment-global-config-section.tsx:220-261,391-406,758-780`). A non-ready Root Context can therefore dispatch a root mutation. Use the shared root action gate before queuing the typed transport and test both direct Update and auto-Update.
+3. **Profile/drift projection is non-reactive (P1).** The component reads `config list --json` and `config list` through the independent `cli.getProfileState` query (`environment-global-config-section.tsx:149-155`), while the Environment Global subscription already owns the same CLI config and invalidation path. An external edit can update the JSON preview while leaving profile/drift cards stale. Fold those facts into the typed reactive projection or add a matching subscription; do not keep query/refetch as a second truth.
+4. **Environment Global has divergent intent (P2).** The new 851-line component combines environment projection/evidence, JSON editing, profile controls, CLI runner/dialog, interactive navigation, and static behavior. Split only along real ownership boundaries while retaining one Environment Global owner and typed mutation path; the split must not weaken reactive or readiness contracts.
+
+### Spec findings
+
+1. **Reference evidence is missing (P1).** The Config research contract requires Project Binding to preview direct Reference health/evidence (`wayfinder/research/app-project-surface-adaptation.md:134`). `ProjectBindingSection` only renders planning root/source/Store and declaration diagnostics (`project-binding-section.tsx:226-244`); it never renders `rootPreview.data/attempt.references` or their Doctor diagnostics. Add Store id/root plus exact severity/code/message, using observed-only language and no inferred completeness.
+2. **External Store impact is underspecified (P1).** The contract requires an external Store-backed Active Root to state that edits affect every project resolving that Store (`app-project-surface-adaptation.md:135`). `ActiveRootConfigSection` only appends `external` to a provenance line (`active-root-config-section.tsx:89-94`), and its test asserts only that label. Add an objective shared-root warning without claiming a machine-wide project list.
+
+### Required counterexamples and evidence
+
+- At fixed point `731f684`, change the stale-error expectation first and show the test failing because Edit/Save remains enabled; then repair it while preserving the stale snapshot and dirty draft as read-only evidence.
+- Add a real Root Context gate test that blocks Schema/Template mutations, Active Root writes, direct Update, and Apply auto-Update in loading, refreshing, transport-error, and CLI-error states. A mocked downstream handler call is not sufficient.
+- Simulate an external environment config invalidation and prove profile, delivery, workflow, and drift facets refresh together. Preserve raw CLI stdout/stderr/exit/diagnostics as separate facts.
+- Add Project Binding Reference diagnostics and external-Store consequence assertions. Do not use `healthy`, `all references`, `unreferenced`, or other inferred labels.
+- Re-audit every Config button and keyboard shortcut after the fix. The goal is one gate per root-dependent capability, not a denylist of the first discovered button.
+
+### Delivery boundary
+
+The next worker slice is implementation, not another plan: apply the corrections above, add focused tests and evidence, run the full repository gates plus clean SSG, update this Change continuously, commit, push PR #207, and stop for independent review. Re-close only `3.5` and `6.8` (`57/131 -> 59/131`); leave `6.9+` untouched. Residual path/race and watcher limitations remain explicitly documented.
+
+Architecture vocabulary and the Config readiness/reactivity rule were synchronized to `AGENTS.md` and `i18n.zh.md` on 2026-07-18.
+
+## Config Readiness Correction Implementation: 2026-07-18
+
+This worker slice implements the ninth-review correction at fixed point `731f684`. It does not start `6.9+`, add a second Change, or change the three Config ownership boundaries.
+
+### Fixed-point red evidence
+
+An isolated worktree at `731f684` (`/private/tmp/openspecui-config-readiness-red`) retained the review tests and compatibility stubs but omitted the production correction. The exact commands failed for the intended reasons:
+
+```text
+Active Root + Project Binding:
+  4 failed / 15 passed
+  - missing observed Reference evidence
+  - missing external shared-Store consequence
+  - stale Active Root Edit remained available beside refresh error
+  - stale Active Root Edit remained available beside transport error
+
+Environment Global:
+  3 failed / 10 passed
+  - profile/drift remained on the independent cli.getProfileState query
+  - Run update stayed enabled while Root Context was blocked
+  - Apply still queued planning-root-update while Root Context was blocked
+
+Schema route:
+  4 failed / 4 passed
+  - Edit remained available in loading, refreshing, transport-error, and CLI-error Root states
+```
+
+These are counterexamples against the named fixed point, not downstream-handler characterization. The temporary worktree was removed after the runs.
+
+### Implemented contracts
+
+- `useRootActionState` now gates Active Root Edit/Create, Save, keyboard save, editor writes, Schema/Template edit/create/delete/save, and typed Planning-root Update. Stale snapshots, failed-attempt evidence, and dirty drafts remain visible read-only. The gate is checked in controls, handlers, and mutation functions; already-open Schema dialogs also lock when Root Context changes to a blocked state.
+- Project Binding renders direct observed Reference Store id, optional root, and exact Doctor severity/code/message, with neutral empty/partial wording. Its launch-owned repair path remains available for Root Context diagnostics, while an old binding snapshot becomes read-only when the binding subscription itself is loading or transport-failed.
+- Active Root provenance states the shared Store-backed consequence when the CLI-selected root is external: edits are observed by other projects resolving that Store, without enumerating projects or claiming completeness.
+- Environment Global profile, delivery, workflows, drift, JSON preview, raw path/config/drift evidence, stdout/stderr, diagnostics, contract drift, success, and exit status now come from one reactive `readEnvironmentGlobalConfig` projection. Config no longer reads `cli.getProfileState`; Settings remains a separate later-surface consumer. Global config writes remain owned by `planningConfig.writeEnvironmentGlobal`, while the optional auto-Update portion is independently gated by Root Context.
+- Environment Global's profile/Update lifecycle moved to `environment-global-profile-section.tsx`; shared JSON/workflow helpers moved to `environment-global-config-utils.ts`. Physical ownership is now parent projection/editor (385 lines), profile/Update runner (473 lines), and utility validation (32 lines), rather than one 851-line divergent component.
+
+### Verification
+
+- Focused Config matrix: `pnpm --filter @openspecui/web exec vitest run --project unit src/components/config/project-binding-section.test.tsx src/components/config/active-root-config-section.test.tsx src/components/config/environment-global-config-section.test.tsx src/routes/config.test.tsx` -> `4 files, 42/42 tests passed`.
+- `pnpm format:check` -> 20 changed files, pass.
+- `pnpm lint:ci` -> 826 files, zero warnings/errors.
+- `pnpm typecheck` -> all 15 runnable workspace packages, pass; Website reports zero errors and warnings.
+- `pnpm test:ci` -> Root 43, Core 440, Server 344, Web 669, App 78, CLI 49, and every remaining workspace lane passed.
+- `pnpm test:browser:ci` -> xterm `60 passed / 1 skipped`; Web Storybook `12/12`.
+- Cleaned `packages/web/dist-ssg` and `.vite` with `find ... -delete`, then `pnpm --filter @openspecui/web build:ssg` -> pass. Existing `scroll-button` CSS and ineffective dynamic-import warnings remain non-fatal.
+- `git diff --check` -> pass after final documentation synchronization.
+
+### Boundary and handoff
+
+The implementation directly addresses the reopened `3.5` and `6.8` contracts. Checkpoints remain open at `57/131` until an independent review accepts this evidence; only that review may move them to `59/131`. `6.9+` remains untouched. The next delivery steps are final header/diff audit, commit and push PR #207, wait for all six remote checks, append remote evidence, and stop for independent review. Do not merge, archive, release, or begin `6.9`.

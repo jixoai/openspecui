@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Edit only launch-project Store and Reference declarations.
  * 2. Preserve Root Context preview and declaration diagnostics without treating them as registry truth.
- * 3. Bind mutation controls to loading/error/dirty lifecycle states.
+ * 3. Bind mutation controls and execution to loading/error/dirty lifecycle states.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
+ * Original request (2026-07-18): "Project Binding must show direct Reference Store, root, and Doctor diagnostics."
  */
 import { Button } from '@/components/button'
 import { trpcClient } from '@/lib/trpc'
@@ -37,6 +38,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
   const [references, setReferences] = useState<ReferenceDraft[]>([])
   const [dirty, setDirty] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const bindingLocked = isLoading || subscriptionError !== null
 
   useEffect(() => {
     if (!config || dirty) return
@@ -47,6 +49,9 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (bindingLocked) {
+        throw new Error(subscriptionError?.message ?? 'Project Binding is stale.')
+      }
       const normalizedReferences: PlanningConfigReference[] = []
       for (const reference of references) {
         const id = reference.id.trim()
@@ -113,7 +118,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
         <Button
           size="sm"
           onClick={() => saveMutation.mutate()}
-          disabled={!dirty || saveMutation.isPending}
+          disabled={!dirty || saveMutation.isPending || bindingLocked}
           activity={!dirty && saveMutation.isSuccess}
         >
           {saveMutation.isPending ? (
@@ -133,7 +138,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
           <input
             id="project-binding-store"
             value={storeId}
-            disabled={saveMutation.isPending}
+            disabled={saveMutation.isPending || bindingLocked}
             onChange={(event) => {
               setStoreId(event.target.value)
               setDirty(true)
@@ -154,7 +159,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
             </h3>
             <button
               type="button"
-              disabled={saveMutation.isPending}
+              disabled={saveMutation.isPending || bindingLocked}
               onClick={() => {
                 setReferences((current) => [
                   ...current,
@@ -178,7 +183,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
                 >
                   <input
                     value={reference.id}
-                    disabled={saveMutation.isPending}
+                    disabled={saveMutation.isPending || bindingLocked}
                     onChange={(event) => updateReference(reference.key, { id: event.target.value })}
                     aria-label="Reference Store id"
                     placeholder="Store id"
@@ -186,7 +191,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
                   />
                   <input
                     value={reference.remote ?? ''}
-                    disabled={saveMutation.isPending}
+                    disabled={saveMutation.isPending || bindingLocked}
                     onChange={(event) =>
                       updateReference(reference.key, {
                         remote: event.target.value || undefined,
@@ -198,7 +203,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
                   />
                   <button
                     type="button"
-                    disabled={saveMutation.isPending}
+                    disabled={saveMutation.isPending || bindingLocked}
                     onClick={() => {
                       setReferences((current) =>
                         current.filter((item) => item.key !== reference.key)
@@ -241,6 +246,38 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
             <span>{preview.error.message}</span>
           </div>
         ) : null}
+      </section>
+
+      <section className="border-border/70 bg-muted/20 space-y-2 rounded-md border px-3 py-2 text-xs">
+        <h3 className="font-medium">Observed References</h3>
+        {preview.context.references.length > 0 ? (
+          <div className="space-y-2">
+            {preview.context.references.map((reference) => (
+              <div
+                key={reference.store_id}
+                className="border-border/60 rounded-md border px-2 py-1.5"
+              >
+                <div className="font-medium">Store: {reference.store_id}</div>
+                {reference.root ? <div>Root: {reference.root}</div> : null}
+                {reference.status.length > 0 ? (
+                  <div className="mt-1 space-y-0.5">
+                    {reference.status.map((diagnostic) => (
+                      <div key={`${diagnostic.code}:${diagnostic.message}`}>
+                        {diagnostic.severity} · {diagnostic.code} · {diagnostic.message}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-muted-foreground mt-1">
+                    No direct Doctor diagnostics observed.
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-muted-foreground">No Referenced Stores currently observed.</div>
+        )}
       </section>
 
       {config.binding.diagnostics.length > 0 ? (

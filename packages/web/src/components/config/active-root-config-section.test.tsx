@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Verify Active Root presence, empty content, owner provenance, and static projection states.
  * 2. Verify loading/error topology without conflating transport failure and file absence.
  * 3. Verify save pending/failure locks and dirty-draft retention.
  *
  * Original request (2026-07-17): "An existing empty Active Root file remains editable."
+ * Original request (2026-07-18): "Stale or transport-error Active Root data must remain read-only."
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -12,13 +13,18 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ActiveRootConfigSection } from './active-root-config-section'
 
-const { activeRootSubscriptionMock, writeActiveRootMock } = vi.hoisted(() => ({
+const { activeRootSubscriptionMock, rootActionMock, writeActiveRootMock } = vi.hoisted(() => ({
   activeRootSubscriptionMock: vi.fn(),
+  rootActionMock: vi.fn(),
   writeActiveRootMock: vi.fn(),
 }))
 
 vi.mock('@/lib/use-planning-config', () => ({
   useActiveRootConfigViewSubscription: activeRootSubscriptionMock,
+}))
+
+vi.mock('@/lib/use-root-action-state', () => ({
+  useRootActionState: rootActionMock,
 }))
 
 vi.mock('@/lib/trpc', () => ({
@@ -86,6 +92,15 @@ function renderSection(node: ReactNode) {
 
 describe('ActiveRootConfigSection', () => {
   beforeEach(() => {
+    rootActionMock.mockReset().mockReturnValue({
+      status: 'ready',
+      disabled: false,
+      context: null,
+      observedAt: 1,
+      title: null,
+      message: null,
+      evidence: [],
+    })
     activeRootSubscriptionMock.mockReset().mockReturnValue({
       data: configView(),
       isLoading: false,
@@ -134,6 +149,11 @@ describe('ActiveRootConfigSection', () => {
       screen.getByText('Planning root: /stores/shared · declared · Store shared · external')
     ).toBeTruthy()
     expect(screen.getByText('File: /stores/shared/openspec/config.yaml')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Edits write the Store-backed planning root and are observed by other projects resolving Store shared.'
+      )
+    ).toBeTruthy()
   })
 
   it('distinguishes initial loading from absence', () => {
@@ -156,7 +176,16 @@ describe('ActiveRootConfigSection', () => {
     expect(screen.queryByText('No config file exists in the active Planning root.')).toBeNull()
   })
 
-  it('keeps existing data visible beside a refresh error', () => {
+  it('keeps stale data visible but locks the editor beside a refresh error', () => {
+    rootActionMock.mockReturnValue({
+      status: 'checking',
+      disabled: true,
+      context: null,
+      observedAt: 1,
+      title: 'Refreshing planning root',
+      message: 'Root-dependent actions remain locked while OpenSpec refreshes root selection.',
+      evidence: [],
+    })
     activeRootSubscriptionMock.mockReturnValue({
       data: configView({ content: '', exists: true }),
       isLoading: false,
@@ -164,8 +193,22 @@ describe('ActiveRootConfigSection', () => {
     })
     renderSection(<ActiveRootConfigSection isStatic={false} />)
 
-    expect(screen.getByRole('button', { name: 'Edit' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
+    expect(screen.getByLabelText('Active Root config editor')).toHaveAttribute('readonly')
     expect(screen.getByRole('alert')).toHaveTextContent('refresh failed')
+  })
+
+  it('locks stale Active Root data when its own transport fails', () => {
+    activeRootSubscriptionMock.mockReturnValue({
+      data: configView({ content: 'schema: stale\n', exists: true }),
+      isLoading: false,
+      error: new Error('active config transport failed'),
+    })
+    renderSection(<ActiveRootConfigSection isStatic={false} />)
+
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
+    expect(screen.getByLabelText('Active Root config editor')).toHaveAttribute('readonly')
+    expect(screen.getByRole('alert')).toHaveTextContent('active config transport failed')
   })
 
   it('locks the editor, save, and cancel controls while one save is pending', async () => {

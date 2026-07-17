@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (created 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Verify environment-global path, data-scope, CLI evidence, and static absence.
  * 2. Verify JSON writes preserve unknown fields and reject invalid/non-object drafts.
- * 3. Verify mutation pending/failure state and typed Planning-root Update dispatch.
+ * 3. Verify mutation pending/failure state and gated typed Planning-root Update dispatch.
+ * 4. Verify Profile/Drift refresh with the environment-global subscription.
  *
  * Original request (2026-07-15): "Environment Global Config projects openspec config path plus config list --json."
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
+ * Original request (2026-07-18): "Update and auto-Update must use useRootActionState."
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -15,13 +17,13 @@ import { EnvironmentGlobalConfigSection } from './environment-global-config-sect
 
 const {
   environmentGlobalSubscriptionMock,
-  invalidateQueriesMock,
+  rootActionMock,
   replaceAllMock,
   runAllMock,
   writeEnvironmentGlobalMock,
 } = vi.hoisted(() => ({
   environmentGlobalSubscriptionMock: vi.fn(),
-  invalidateQueriesMock: vi.fn(),
+  rootActionMock: vi.fn(),
   replaceAllMock: vi.fn(),
   runAllMock: vi.fn(),
   writeEnvironmentGlobalMock: vi.fn(),
@@ -32,23 +34,6 @@ vi.mock('@/lib/use-planning-config', () => ({
 }))
 
 vi.mock('@/lib/trpc', () => ({
-  queryClient: { invalidateQueries: invalidateQueriesMock },
-  trpc: {
-    cli: {
-      getProfileState: {
-        queryOptions: () => ({
-          queryKey: ['cli.getProfileState'],
-          queryFn: async () => ({
-            profile: 'core',
-            delivery: 'both',
-            driftStatus: 'current',
-            warningText: null,
-          }),
-        }),
-        queryFilter: () => ({ queryKey: ['cli.getProfileState'] }),
-      },
-    },
-  },
   trpcClient: {
     planningConfig: {
       writeEnvironmentGlobal: { mutate: writeEnvironmentGlobalMock },
@@ -63,6 +48,10 @@ vi.mock('@/lib/use-cli-runner', () => ({
     commands: { replaceAll: replaceAllMock, runAll: runAllMock },
     reset: vi.fn(),
   }),
+}))
+
+vi.mock('@/lib/use-root-action-state', () => ({
+  useRootActionState: rootActionMock,
 }))
 
 vi.mock('@/lib/terminal-context', () => ({
@@ -136,6 +125,14 @@ function environmentGlobalConfig() {
       content: JSON.stringify(config),
     },
     config,
+    profileState: {
+      available: true,
+      profile: 'core' as const,
+      delivery: 'both' as const,
+      workflows: ['propose', 'apply'],
+      driftStatus: 'in-sync' as const,
+      warningText: null,
+    },
     evidence: {
       path: {
         success: true,
@@ -152,6 +149,12 @@ function environmentGlobalConfig() {
         payload: config,
         diagnostics: [],
       },
+      drift: {
+        success: true,
+        stdout: '',
+        stderr: '',
+        exitCode: 0,
+      },
     },
   }
 }
@@ -165,13 +168,21 @@ function renderSection(node: ReactNode) {
 
 describe('EnvironmentGlobalConfigSection', () => {
   beforeEach(() => {
+    rootActionMock.mockReset().mockReturnValue({
+      status: 'ready',
+      disabled: false,
+      context: null,
+      observedAt: 1,
+      title: null,
+      message: null,
+      evidence: [],
+    })
     environmentGlobalSubscriptionMock.mockReset().mockReturnValue({
       data: environmentGlobalConfig(),
       isLoading: false,
       error: null,
       refresh: vi.fn(),
     })
-    invalidateQueriesMock.mockReset().mockResolvedValue(undefined)
     replaceAllMock.mockReset()
     runAllMock.mockReset().mockResolvedValue(undefined)
     writeEnvironmentGlobalMock.mockReset().mockResolvedValue(undefined)
@@ -188,6 +199,47 @@ describe('EnvironmentGlobalConfigSection', () => {
     expect(screen.getByText('CLI evidence')).toBeTruthy()
     expect(screen.getByText('futureField')).toBeTruthy()
     expect(screen.getByText('/runtime/openspec/config.json', { selector: 'dd' })).toBeTruthy()
+  })
+
+  it('refreshes profile and drift from the reactive environment projection', async () => {
+    const current = environmentGlobalConfig()
+    const queryClient = new QueryClient({
+      defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
+    })
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <EnvironmentGlobalConfigSection isStatic={false} />
+      </QueryClientProvider>
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    await waitFor(() => expect(screen.getByText('core')).toBeTruthy())
+
+    environmentGlobalSubscriptionMock.mockReturnValue({
+      data: {
+        ...current,
+        config: { ...current.config, profile: 'custom', delivery: 'skills' },
+        profileState: {
+          ...current.profileState,
+          profile: 'custom',
+          delivery: 'skills',
+          driftStatus: 'drift',
+          warningText: 'Global config is not applied to this project.',
+        },
+      },
+      isLoading: false,
+      error: null,
+      refresh: vi.fn(),
+    })
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <EnvironmentGlobalConfigSection isStatic={false} />
+      </QueryClientProvider>
+    )
+
+    expect(screen.getByText('custom')).toBeTruthy()
+    expect(screen.getAllByText('skills').length).toBeGreaterThan(0)
+    expect(screen.getByText('drift')).toBeTruthy()
+    expect(screen.getByText('Global config is not applied to this project.')).toBeTruthy()
   })
 
   it('keeps raw contract drift evidence visible beside the last projection', () => {
@@ -328,6 +380,58 @@ describe('EnvironmentGlobalConfigSection', () => {
       expect(replaceAllMock).toHaveBeenCalledWith([{ type: 'planning-root-update' }])
       expect(runAllMock).toHaveBeenCalledTimes(1)
     })
+  })
+
+  it('does not open or dispatch Run update while Root Context is not ready', () => {
+    rootActionMock.mockReturnValue({
+      status: 'blocked',
+      disabled: true,
+      context: null,
+      observedAt: 1,
+      title: 'Planning root unavailable',
+      message: 'Root Context failed.',
+      evidence: ['Doctor exit: 1'],
+    })
+    renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    const update = screen.getByRole('button', { name: 'Run update' })
+    expect(update).toBeDisabled()
+    fireEvent.click(update)
+    expect(screen.queryByRole('button', { name: 'Run command' })).toBeNull()
+    expect(replaceAllMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks Apply auto-Update when Root Context is unavailable', async () => {
+    rootActionMock.mockReturnValue({
+      status: 'blocked',
+      disabled: true,
+      context: null,
+      observedAt: 1,
+      title: 'Planning root unavailable',
+      message: 'Root Context failed.',
+      evidence: ['Doctor exit: 1'],
+    })
+    const current = environmentGlobalConfig()
+    environmentGlobalSubscriptionMock.mockReturnValue({
+      data: {
+        ...current,
+        config: { ...current.config, workflows: [] },
+        profileState: current.profileState,
+      },
+      isLoading: false,
+      error: null,
+      refresh: vi.fn(),
+    })
+    renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Propose change' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Apply profile' }))
+
+    await waitFor(() => expect(writeEnvironmentGlobalMock).toHaveBeenCalledTimes(1))
+    expect(replaceAllMock).not.toHaveBeenCalled()
   })
 
   it('states static unavailability without exposing runtime facts or mutations', () => {

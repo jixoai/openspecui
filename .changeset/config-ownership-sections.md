@@ -4,6 +4,6 @@
 
 Complete the three ownership-specific Config surfaces.
 
-- Keep Project Binding limited to launch-project Store and Reference declarations, with pending locks and dirty-draft retention after failures.
-- Make Active Root Config use explicit file presence so an existing empty config remains editable, while preserving Planning-root provenance and static read-only behavior.
-- Keep Environment Global Config environment-scoped, preserve unknown JSON fields and raw CLI evidence, and run Update only through the dedicated typed Planning-root transport.
+- Keep Project Binding limited to launch-project Store and Reference declarations while showing direct observed Reference diagnostics.
+- Make Active Root Config distinguish file presence from content, state shared Store consequences, and lock stale root mutations through the shared readiness gate.
+- Keep Environment Global Config environment-scoped, refresh profile and drift through one reactive projection, preserve raw CLI evidence, and gate typed Update execution on a ready Planning root.

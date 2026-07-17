@@ -1,17 +1,20 @@
 /**
- * Orthogonal intents (created 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Project the CLI-selected Planning-root config with exact owner and file-presence evidence.
  * 2. Own Active Root draft, mutation, loading, error, and pending-lock state.
  * 3. Preserve a read-only static snapshot without inventing live owner provenance.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-17): "An existing empty Active Root file remains editable."
+ * Original request (2026-07-18): "Stale or transport-error Active Root data must remain read-only."
  */
 import { Button } from '@/components/button'
 import { CodeEditor } from '@/components/code-editor'
+import { RootActionNotice } from '@/components/root-action-notice'
 import { useViewportConstrainedHeight } from '@/components/scroll-spy'
 import { trpcClient } from '@/lib/trpc'
 import { useActiveRootConfigViewSubscription } from '@/lib/use-planning-config'
+import { useRootActionState } from '@/lib/use-root-action-state'
 import { useMutation } from '@tanstack/react-query'
 import { Edit2, Save, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
@@ -30,6 +33,8 @@ export function ActiveRootConfigSection({ isStatic }: { isStatic: boolean }) {
     isLoading,
     error: subscriptionError,
   } = useActiveRootConfigViewSubscription()
+  const rootAction = useRootActionState()
+  const actionLocked = rootAction.disabled || subscriptionError !== null || isLoading
   const [isEditing, setIsEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [dirty, setDirty] = useState(false)
@@ -41,7 +46,12 @@ export function ActiveRootConfigSection({ isStatic }: { isStatic: boolean }) {
   }, [config, isEditing])
 
   const saveMutation = useMutation({
-    mutationFn: () => trpcClient.planningConfig.writeActiveRoot.mutate({ content: draft }),
+    mutationFn: () => {
+      if (actionLocked) {
+        throw new Error(rootAction.message ?? subscriptionError?.message ?? 'Active Root is stale.')
+      }
+      return trpcClient.planningConfig.writeActiveRoot.mutate({ content: draft })
+    },
     onSuccess: () => {
       setIsEditing(false)
       setDirty(false)
@@ -49,11 +59,11 @@ export function ActiveRootConfigSection({ isStatic }: { isStatic: boolean }) {
   })
 
   const handleEdit = useCallback(() => {
-    if (!config) return
+    if (!config || actionLocked) return
     setDraft(config.exists ? (config.content ?? '') : DEFAULT_CONFIG_TEMPLATE)
     setDirty(!config.exists)
     setIsEditing(true)
-  }, [config])
+  }, [actionLocked, config])
 
   const handleCancel = useCallback(() => {
     if (!config) return
@@ -95,6 +105,12 @@ export function ActiveRootConfigSection({ isStatic }: { isStatic: boolean }) {
             ) : (
               <p className="text-muted-foreground mt-1 text-xs">Static Active Root snapshot</p>
             )}
+            {config.owner?.externalToLaunchProject && config.owner.storeId ? (
+              <p className="text-muted-foreground mt-1 text-xs">
+                Edits write the Store-backed planning root and are observed by other projects
+                resolving Store {config.owner.storeId}.
+              </p>
+            ) : null}
             {config.filePath ? (
               <p className="text-muted-foreground mt-1 break-all text-[11px]">
                 File: {config.filePath}
@@ -102,7 +118,7 @@ export function ActiveRootConfigSection({ isStatic }: { isStatic: boolean }) {
             ) : null}
           </div>
 
-          {!isStatic && config.exists && !isEditing ? (
+          {!isStatic && !actionLocked && config.exists && !isEditing ? (
             <button
               type="button"
               onClick={handleEdit}
@@ -113,7 +129,7 @@ export function ActiveRootConfigSection({ isStatic }: { isStatic: boolean }) {
             </button>
           ) : null}
 
-          {isEditing ? (
+          {isEditing && !actionLocked ? (
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -143,6 +159,8 @@ export function ActiveRootConfigSection({ isStatic }: { isStatic: boolean }) {
           </div>
         ) : null}
 
+        {!isStatic && rootAction.disabled ? <RootActionNotice state={rootAction} /> : null}
+
         {config.exists || isEditing ? (
           <CodeEditor
             value={draft}
@@ -151,9 +169,11 @@ export function ActiveRootConfigSection({ isStatic }: { isStatic: boolean }) {
               setDirty(true)
             }}
             onSaveShortcut={() => {
-              if (isEditing && dirty && !saveMutation.isPending) saveMutation.mutate()
+              if (isEditing && dirty && !saveMutation.isPending && !actionLocked) {
+                saveMutation.mutate()
+              }
             }}
-            readOnly={!isEditing || saveMutation.isPending}
+            readOnly={!isEditing || saveMutation.isPending || actionLocked}
             filename="config.yaml"
             className="min-h-0 flex-1"
             editorMinHeight="0px"
@@ -161,7 +181,7 @@ export function ActiveRootConfigSection({ isStatic }: { isStatic: boolean }) {
         ) : (
           <div className="text-muted-foreground rounded-md border border-dashed p-4 text-sm">
             <p className="mb-3">No config file exists in the active Planning root.</p>
-            {!isStatic ? (
+            {!isStatic && !actionLocked ? (
               <button
                 type="button"
                 onClick={handleEdit}

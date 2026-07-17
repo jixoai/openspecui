@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Read launch-project binding and active-root config from physically distinct roots.
- * 2. Project environment-global config through CLI-owned path/list evidence.
+ * 2. Project environment-global config, profile, and drift through one CLI-owned reactive read.
  * 3. Mutate only the explicitly selected ownership facet and refresh reactive caches.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
+ * Original request (2026-07-18): "Profile/Drift must refresh with external environment config changes."
  */
 import {
   EnvironmentGlobalConfigValueSchema,
@@ -17,6 +18,7 @@ import {
   type CliExecutor,
   type CliJsonValue,
   type EnvironmentGlobalConfig,
+  type EnvironmentGlobalProfileState,
   type OpenSpecDataScope,
   type ProjectBindingConfig,
   type ProjectBindingUpdate,
@@ -28,6 +30,67 @@ import { dirname, join } from 'node:path'
 
 interface ReadProjectConfigFileOptions {
   rootPath: string
+}
+
+function normalizeWorkflowList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
+    : []
+}
+
+function parseConfigDrift(output: string): { drift: boolean; warningText: string | null } {
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+  const warningText =
+    lines.find((line) => /global config.+not applied.+project/i.test(line)) ??
+    lines.find((line) => /out of sync/i.test(line)) ??
+    lines.find((line) => /run\s+`?openspec\s+update`?/i.test(line)) ??
+    null
+  return { drift: warningText !== null, warningText }
+}
+
+function projectEnvironmentProfileState(
+  config: Record<string, CliJsonValue> | null,
+  configError: string | undefined,
+  driftEvidence: Awaited<ReturnType<CliExecutor['execute']>>
+): EnvironmentGlobalProfileState {
+  if (!config) {
+    return {
+      available: false,
+      profile: null,
+      delivery: null,
+      workflows: [],
+      driftStatus: 'unknown',
+      warningText: null,
+      ...(configError ? { error: configError } : {}),
+    }
+  }
+  const profile = config.profile === 'core' || config.profile === 'custom' ? config.profile : null
+  const delivery =
+    config.delivery === 'both' || config.delivery === 'skills' || config.delivery === 'commands'
+      ? config.delivery
+      : null
+  if (!driftEvidence.success) {
+    return {
+      available: true,
+      profile,
+      delivery,
+      workflows: normalizeWorkflowList(config.workflows),
+      driftStatus: 'unknown',
+      warningText: null,
+    }
+  }
+  const drift = parseConfigDrift(`${driftEvidence.stdout}\n${driftEvidence.stderr}`)
+  return {
+    available: true,
+    profile,
+    delivery,
+    workflows: normalizeWorkflowList(config.workflows),
+    driftStatus: drift.drift ? 'drift' : 'in-sync',
+    warningText: drift.warningText,
+  }
 }
 
 async function readProjectConfigFile(
@@ -92,9 +155,10 @@ export async function readEnvironmentGlobalConfig(input: {
   dataScope: OpenSpecDataScope
   cliExecutor: CliExecutor
 }): Promise<EnvironmentGlobalConfig> {
-  const [pathEvidence, configResult] = await Promise.all([
+  const [pathEvidence, configResult, driftEvidence] = await Promise.all([
     input.cliExecutor.execute(['config', 'path']),
     input.cliExecutor.execute(['config', 'list', '--json']),
+    input.cliExecutor.execute(['config', 'list']),
   ])
   const configEvidence = parseCliCommandResult(configResult, EnvironmentGlobalConfigValueSchema)
   const configPath = pathEvidence.success ? pathEvidence.stdout.trim() || null : null
@@ -110,7 +174,15 @@ export async function readEnvironmentGlobalConfig(input: {
       content,
     },
     config: configEvidence.data,
-    evidence: { path: pathEvidence, config: configEvidence },
+    profileState: projectEnvironmentProfileState(
+      configEvidence.data,
+      configEvidence.contractError ??
+        (configEvidence.success
+          ? undefined
+          : configEvidence.stderr || 'Failed to load profile config.'),
+      driftEvidence
+    ),
+    evidence: { path: pathEvidence, config: configEvidence, drift: driftEvidence },
   }
 }
 
