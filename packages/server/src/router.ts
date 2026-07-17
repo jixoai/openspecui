@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Register lease-scoped planning-root document, OPSX, dashboard, and archive procedures.
- * 2. Register CLI, Root Context, tool initialization, configuration, and Store projections.
+ * 2. Register CLI, Root Context, tool initialization, configuration, Store, and terminal-result projections.
  * 3. Register Git, terminal, system, notification, and recovery procedures.
  * 4. Register translation runtime, model, asset, and cache procedures.
  * 5. Compose the public tRPC application router and shared procedure schemas.
@@ -1792,25 +1792,12 @@ export const cliRouter = router({
 
   /** 流式执行全局安装命令 */
   installGlobalCliStream: publicProcedure.subscription(({ ctx }) => {
-    return observable<{
-      type: 'command' | 'stdout' | 'stderr' | 'exit'
-      data?: string
-      exitCode?: number | null
-    }>((emit) => {
-      const stream = ctx.cliExecutor.executeCommandStream(
+    return createCliStreamObservable((onEvent) =>
+      ctx.cliExecutor.executeCommandStream(
         ['npm', 'install', '-g', '@fission-ai/openspec'],
-        (event) => {
-          emit.next(event)
-          if (event.type === 'exit') {
-            emit.complete()
-          }
-        }
+        onEvent
       )
-
-      return () => {
-        void stream.cancel().catch(() => {})
-      }
-    })
+    )
   }),
 
   /** 获取可用的工具列表（available: true） */

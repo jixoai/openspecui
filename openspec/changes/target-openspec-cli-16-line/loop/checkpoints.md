@@ -80,6 +80,14 @@ Fourth-review construction directives after `fa6604b`:
 - Make `CliStreamTransport` the sole semantic command descriptor. Derive queued/displayed command evidence from that transport or the backend-emitted effective command; independent caller-authored `command/args` cannot coexist as a second truth. A test that displays `config list` while dispatching `validate` is a counterexample, not positive coverage.
 - Re-audit intent/original-request headers for every changed TypeScript/TSX file, including tests. Production-only header coverage is insufficient. Reopen only the checkpoints directly disproven by the stream lifetime fault unless new red evidence expands scope.
 
+Fifth-review construction directives after `ca72cc0`:
+
+- The `A -> B` transition must not wait on A's operation lease while the only cancellation path for A is queued behind that same transition. Disposal closes admission synchronously, retains the retiring record/active streams, requests cancellation outside the blocked transition lane, and then either retires A after confirmed settlement or rejects teardown in bounded time. It must never expose B after an unconfirmed child.
+- A rejected `CliStreamHandle.settled` is a terminal transport fact, not an unhandled background Promise. Planning-root streams, strict Archive, and fixed global install each deliver exactly one tRPC error to attached clients; detached clients receive no emission but still request cancellation. The Web runner must resolve `CommandProcess.done` and render `error`, never remain `running`.
+- Keep the safety decision explicit: forced termination with no direct-child `close` does not release the Planning-root lease or pretend teardown succeeded. It invalidates affected facets, emits one classified error, and causes backend close to reject rather than deadlock forever or expose a replacement root.
+- Add permanent red tests against `ca72cc0` before the fix: A -> B waiting then disposal; forced termination without close through planning-root Validate/Update, strict Archive, and global install; and Web runner terminal projection. A mocked synchronous cancel or an injected terminal event is not evidence.
+- Only checkpoint `4.9` reopens for this correction. Keep `3.11`, `4.5`, and `6.7` closed; `6.8+` remains unstarted until this code correction passes independent review.
+
 ## 2. CLI 1.6 Contract Baseline
 
 - [x] 2.1 OpenSpecUI compatibility targets the CLI 1.6 line and rejects unsupported versions with accurate guidance

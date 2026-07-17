@@ -3,6 +3,7 @@
  * 1. Adapt one CLI event stream to a terminal-safe tRPC observable.
  * 2. Request cancellation even when the client detaches before asynchronous startup completes.
  * 3. Isolate downstream emission failures from the server process.
+ * 4. Project a rejected CLI settlement as exactly one attached-client terminal error.
  *
  * Original request (2026-07-15): "Every terminal or indeterminate outcome invalidates affected projections before they are pulled again."
  * Original request (2026-07-17): "tRPC unsubscribe requests cancellation while the Manager awaits settlement."
@@ -29,6 +30,16 @@ export function createCliStreamObservable(
     let handle: CliStreamHandle | undefined
     let completed = false
     let detached = false
+
+    const emitTerminalError = (error: unknown) => {
+      if (completed || detached) return
+      completed = true
+      try {
+        emit.error(error instanceof Error ? error : new Error(String(error)))
+      } catch {
+        // 已脱离或已关闭的下游 observer 不再有终态投影面。
+      }
+    }
 
     /**
      * 安全的事件处理器
@@ -64,25 +75,19 @@ export function createCliStreamObservable(
     // 启动流
     Promise.resolve(startStream(safeEventHandler))
       .then((startedHandle) => {
+        handle = startedHandle
+        void startedHandle.settled.catch(emitTerminalError)
         if (detached) {
           void startedHandle.cancel().catch((error: unknown) => {
             console.error('[CLI Stream] Error cancelling detached stream:', error)
           })
           return
         }
-        handle = startedHandle
       })
       .catch((err) => {
         // 启动失败时发送错误
         console.error('[CLI Stream] Error starting stream:', err)
-        if (!completed) {
-          completed = true
-          try {
-            emit.error(err instanceof Error ? err : new Error(String(err)))
-          } catch {
-            // 静默处理
-          }
-        }
+        emitTerminalError(err)
       })
 
     // 返回清理函数

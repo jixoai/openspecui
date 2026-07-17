@@ -1008,6 +1008,66 @@ describe('PlanningRootServiceManager', () => {
     }
   )
 
+  it('keeps A blocked and rejects repeated disposal once when forced termination cannot confirm close', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-planning-forced-termination-'))
+    tempDirs.push(tempDir)
+    const launchProjectDir = join(tempDir, 'launch')
+    const rootA = join(tempDir, 'root-a')
+    const rootB = join(tempDir, 'root-b')
+    await Promise.all([
+      mkdir(join(launchProjectDir, 'openspec'), { recursive: true }),
+      mkdir(join(rootA, 'openspec'), { recursive: true }),
+      mkdir(join(rootB, 'openspec'), { recursive: true }),
+    ])
+
+    const configManager = new ConfigManager(launchProjectDir)
+    const cliExecutor = new CliExecutor(configManager, launchProjectDir)
+    let selectedRoot = rootA
+    vi.spyOn(cliExecutor, 'checkAvailability').mockResolvedValue({
+      available: true,
+      version: '1.6.0',
+    })
+    vi.spyOn(cliExecutor.contracts, 'doctorRoot').mockImplementation(async () =>
+      commandResult({
+        root: { path: selectedRoot, source: 'nearest', healthy: true, status: [] },
+        store: null,
+        references: [],
+        status: [],
+      })
+    )
+    vi.spyOn(cliExecutor.contracts, 'context').mockImplementation(async () =>
+      commandResult({
+        root: { path: selectedRoot, source: 'nearest', role: 'openspec_root' },
+        members: [],
+        status: [],
+      })
+    )
+    const manager = new PlanningRootServiceManager({
+      launchProjectDir,
+      previewAssetsDir: join(tempDir, 'preview-assets'),
+      configManager,
+      cliExecutor,
+      observationEnvironment: { acquireRoot: async () => async () => {} },
+      projectInvalidation: { acquireRoot: () => () => {} },
+      runtimeInvalidation: new RuntimeInvalidationIndex(),
+    })
+    const terminal = Promise.withResolvers<CliStreamSettlement>()
+    void terminal.promise.catch(() => {})
+    const cancel = vi.fn(() => terminal.promise)
+    await manager.startOperationStream(() => ({ settled: terminal.promise, cancel }))
+
+    selectedRoot = rootB
+    const replacement = manager.resolveRootContext()
+    void replacement.catch(() => {})
+    const disposal = manager.dispose()
+    expect(manager.dispose()).toBe(disposal)
+    await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce())
+    terminal.reject(new Error('forced termination did not confirm child close'))
+
+    await expect(disposal).rejects.toThrow('Planning-root stream termination failed')
+    await expect(replacement).rejects.toThrow('Planning-root service manager is disposed')
+  })
+
   it('actively cancels attached streams before repeated disposal retires their root', async () => {
     const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-planning-stream-disposal-'))
     tempDirs.push(tempDir)

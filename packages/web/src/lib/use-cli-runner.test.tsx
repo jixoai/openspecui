@@ -172,7 +172,7 @@ describe('useCliRunner', () => {
   it('settles an emitted terminal transport error instead of leaving the command running', async () => {
     installSubscribeMock.mockImplementationOnce((_input, handlers) => {
       queueMicrotask(() =>
-        handlers.onError(new Error('forced termination did not confirm child close'))
+        handlers.onError?.(new Error('forced termination did not confirm child close'))
       )
       return { unsubscribe: vi.fn() }
     })

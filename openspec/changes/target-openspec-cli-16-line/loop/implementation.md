@@ -1557,3 +1557,69 @@ Residual limits are explicit. POSIX tests prove direct-child SIGTERM delay and S
 Checkpoint transition: `56/131 -> 58/131`. Only `3.11` and `4.9` re-close. `6.7` remains closed from the accepted prior correction. `6.8+` remains open and unstarted. Stop after PR #207 remote checks for a new independent review; do not merge, archive, release, or continue the product phase.
 
 Remote CI for correction head `4da9fad192fba92baea54c3a94b878f0e6a713e1` is green. GitHub Actions run `29555628670` completed Changeset Gate, CI Scope, Fast Gate, Browser Gate (`@openspecui/web`), Browser Gate (`xterm-input-panel`), and the aggregate Browser Gate with six successful conclusions and zero failures; GitHub reports `mergeStateStatus=CLEAN`. This closes delivery of the approved correction slice only. PR #207 remains open for independent review and is not authorized for merge, archive, release, or `6.8+` implementation.
+
+## Fifth-Review Correction after `ca72cc0`: 2026-07-17
+
+The independent review found two P1 counterexamples not exercised by the green suites. The correction is an apply-change code slice, not another audit-only pass.
+
+```text
+A -> B transition:  activeRecord = null -> wait A operation lease
+dispose request:     cancel A stream queued behind that transition
+A stream:            needs dispose cancellation to settle
+
+Result at ca72cc0: the transition and backend shutdown deadlock.
+```
+
+`PlanningRootServiceManager.activate()` clears A and awaits `waitForOperations(A)` inside the transition lane. `dispose()` sets `disposed`, but calls `stream.cancel()` only in a later transition callback. The operation lease is released only after the stream's `settled` Promise resolves. Therefore an attached A stream which needs disposal cancellation cannot settle and `RunningServer.close()` waits forever. The existing disposal test covers an idle queue, not A -> B waiting followed by disposal.
+
+The second counterexample is terminal-result loss. `CliExecutor.failTermination()` rejects `CliStreamHandle.settled` when SIGTERM/SIGKILL still cannot confirm `close`. `createCliStreamObservable()` never observes that rejection after startup; `installGlobalCliStream` duplicates the omission. Attached tRPC clients receive neither `exit` nor `error`, leaving `useCliRunner` permanently `running` even though the invalidator has already recorded the affected facets. Strict Archive must propagate the same rejection through its composite handle.
+
+The safety decision is unchanged: missing direct-child `close` is not a license to release A's lease or expose B. It is a bounded termination failure. The owner must retain A as blocked, invalidate, emit exactly one terminal error to attached clients, and let backend teardown reject in bounded time. This is safer than claiming a process stopped, while also preventing an infinite shutdown wait or an indefinite client spinner.
+
+Required construction and red evidence against `ca72cc0`:
+
+1. Start A, attach a nonterminal Planning-root stream, queue A -> B, then call `dispose()` without client detach. Prove cancellation starts despite the blocked transition, B never becomes available, and disposal completes after confirmed child close with zero stream/operation/watcher/invalidation leases.
+2. Make a real or deterministic no-close termination handle reject after its bounded timeout. Prove planning-root stream observable, strict Archive, and fixed global install emit exactly one tRPC error; prove no duplicate exit/error and detached subscribers receive no late emission.
+3. Drive that rejection through `useCliRunner`. `CommandProcess.done` must resolve `null`, active subscription state must clear, and the command must render `error` rather than `running`.
+4. Preserve the previous delayed-SIGTERM replacement proof: a cancellation request does not release A before actual `close`; no process may mutate A after B is exposed.
+5. Cover repeated cancel/dispose and a late close after forced-timeout rejection. The late event may clean local process bookkeeping exactly once, but must not retroactively expose B, emit a second terminal result, or make the first teardown claim success.
+
+Required implementation boundary:
+
+- Retain a retiring record/stream collection that disposal can cancel outside a transition lane currently waiting for that record's leases. Prevent B creation once disposal begins.
+- Give every streamed route one terminal-projection owner. Resolved handles retain the existing CLI `exit`; rejected handles emit one observable error. Do not convert rejection into a synthetic successful exit or silently swallow it.
+- Keep `CliMutationInvalidator` before the externally visible terminal result for both resolution and rejection. Keep forced-no-close lease retention; do not add an unconditional `finally` release to the Manager.
+- Use the shared observable for fixed global installation where possible, or prove an equivalent single-terminal contract. Audit Strict Archive's composite rejection path.
+
+Checkpoint state changes from `58/131` to `57/131`: only `4.9` is reopened. `3.11`, `4.5`, and `6.7` remain closed. `6.8+` remains unstarted. Re-close `4.9` only after the red/green evidence above, focused and full gates, Change evidence update, PR push, remote CI, and another independent review. Do not merge, archive, release, or start the Config product phase in this correction PR.
+
+## Fifth-Review Correction Implementation: 2026-07-17
+
+Permanent red evidence was committed before this repair as `986d514` (`test: capture stream termination counterexamples`). Against `ca72cc0`, it demonstrated the blocked `A -> B` plus disposal cycle, missing error projection for a rejected settled handle, silent detached subscribers, strict Archive rejection, fixed global-install rejection, and the Web runner spinner.
+
+The correction keeps cancellation and settlement separate:
+
+```text
+dispose
+  -> close admission; retain active/retiring records
+  -> cancel their stream handles outside transitionTail
+  -> await confirmed handle settlement and operation-lease release
+  -> retire A resources
+  -> reject B creation because disposal owns the manager
+```
+
+`PlanningRootServiceManager` now keeps retiring records visible to disposal before it waits on their leases. Disposal synchronously marks the manager closed, retains A, requests cancellation outside the transition that may already be waiting on A, and only then waits for retirement. A cancellation rejection rejects the bounded teardown; it does not release A or expose B. Repeated disposal returns the same promise.
+
+`createCliStreamObservable` now has the single terminal projection for each returned handle: normal CLI `exit` remains the success terminal, while `settled` rejection sends exactly one observer error when attached. A detached observer remains silent but still requests cancellation. `installGlobalCliStream` delegates to that observable, so its result cannot diverge. Strict Archive forwards the same composite-handle rejection; `useCliRunner` therefore resolves the command, clears active subscription state, and renders `error` rather than retaining `running`.
+
+Green evidence:
+
+- Targeted Server and Web test invocations passed the complete package suites: Server `341/341`; Web `629/629`.
+- `pnpm format:check`, `pnpm lint:ci`, and `pnpm typecheck` passed with zero formatting, lint, or type errors. `git diff --check` passed.
+- `pnpm test:ci` passed: Root `43/43`, Core `439/439`, Server `341/341`, Web `629/629`, App `78/78`, and CLI `49/49`.
+- `pnpm test:browser:ci` passed: xterm `60 passed / 1 skipped`; Web Storybook `12/12`.
+- After removing `packages/web/dist-ssg` and `packages/web/.vite`, `pnpm --filter @openspecui/web build:ssg` passed. Existing `scroll-button` and ineffective dynamic-import warnings remain non-fatal.
+
+Residual boundary: direct-child `close` is the only confirmed process settlement. A forced SIGTERM/SIGKILL timeout rejects teardown, retains the old root, and emits one terminal error; it does not supervise independently daemonized descendants or prove Windows process-tree behavior. That expansion remains outside this correction and must return to `loop/research-plan.md`.
+
+Checkpoint transition: `57/131 -> 58/131`; only `4.9` re-closes. `3.11`, `4.5`, and `6.7` remain closed. `6.8+` remains open and unstarted. Commit, push PR #207, wait for remote CI, then stop for independent review. Do not merge, archive, release, or begin the Config product phase.

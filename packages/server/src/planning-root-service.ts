@@ -4,7 +4,8 @@
  * 2. Serialize replacement behind admitted operations without reconstructing root selection.
  * 3. Acquire and retire observation/invalidation leases with each active root.
  * 4. Keep reactive subscriptions bound to Root Context dependencies and current root selection.
- * 5. Revoke leased service capabilities and dispose every root resource exactly once.
+ * 5. Revoke leased service capabilities, cancel retiring streams outside blocked transitions, and
+ *    dispose every root resource exactly once.
  *
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
  * Original request (2026-07-16): "PlanningRootServiceResolver.mutateSchema(action) owns the entire mutation inside the manager transition lane."
@@ -120,6 +121,7 @@ export interface PlanningRootServiceManagerOptions {
 /** Serialized deep owner for one replaceable Planning-root service record. */
 export class PlanningRootServiceManager implements PlanningRootServiceResolver {
   private activeRecord: PlanningRootServiceRecord | null = null
+  private readonly retiringRecords = new Set<PlanningRootServiceRecord>()
   private transitionTail: Promise<void> = Promise.resolve()
   private disposePromise: Promise<void> | null = null
   private disposed = false
@@ -251,6 +253,33 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     })
   }
 
+  private async retireRecord(record: PlanningRootServiceRecord): Promise<void> {
+    this.retiringRecords.add(record)
+    await this.waitForOperations(record)
+    await this.disposeRecord(record)
+    this.retiringRecords.delete(record)
+  }
+
+  private cancelRetiringStreams(): Promise<void> {
+    const streams = new Set<CliStreamHandle>()
+    for (const record of this.retiringRecords) {
+      for (const stream of record.activeStreams) streams.add(stream)
+    }
+    const active = this.activeRecord
+    if (active) {
+      for (const stream of active.activeStreams) streams.add(stream)
+    }
+
+    return Promise.allSettled([...streams].map((stream) => stream.cancel())).then((results) => {
+      const failures = results.flatMap((result) =>
+        result.status === 'rejected' ? [result.reason] : []
+      )
+      if (failures.length > 0) {
+        throw new AggregateError(failures, 'Planning-root stream termination failed.')
+      }
+    })
+  }
+
   private createOperationLease(record: PlanningRootServiceRecord): PlanningRootOperationLease {
     record.activeOperationCount += 1
     let acceptingCalls = true
@@ -360,8 +389,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       const previous = this.activeRecord
       this.activeRecord = null
       if (previous) {
-        await this.waitForOperations(previous)
-        await this.disposeRecord(previous)
+        await this.retireRecord(previous)
       }
       return null
     }
@@ -379,9 +407,9 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
 
     this.activeRecord = null
     if (active) {
-      await this.waitForOperations(active)
-      await this.disposeRecord(active)
+      await this.retireRecord(active)
     }
+    if (this.disposed) throw new Error('Planning-root service manager is disposed.')
     const created = this.createRecord(state.data)
     this.activeRecord = created
     return created
@@ -441,7 +469,9 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     record: PlanningRootServiceRecord
   }> {
     return this.runTransition(async () => {
+      if (this.disposed) throw new Error('Planning-root service manager is disposed.')
       const record = this.requireActiveServices(await this.resolveActiveTransition(reactive))
+      if (this.disposed) throw new Error('Planning-root service manager is disposed.')
       return { lease: this.createOperationLease(record), record }
     })
   }
@@ -479,7 +509,9 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
   /** Retain a revocable operation capability until the child process actually settles. */
   startOperationStream(operation: PlanningRootStreamOperation): Promise<CliStreamHandle> {
     return this.runTransition(async () => {
+      if (this.disposed) throw new Error('Planning-root service manager is disposed.')
       const record = this.requireActiveServices(await this.resolveActiveTransition(false))
+      if (this.disposed) throw new Error('Planning-root service manager is disposed.')
       const lease = this.createOperationLease(record)
       try {
         const stream = operation(lease.services)
@@ -532,23 +564,20 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
   dispose(): Promise<void> {
     if (this.disposePromise) return this.disposePromise
     this.disposed = true
-    this.disposePromise = this.runTransition(async () => {
-      const active = this.activeRecord
-      if (active) {
-        const cancellationResults = await Promise.allSettled(
-          [...active.activeStreams].map((stream) => stream.cancel())
-        )
-        const cancellationFailures = cancellationResults.flatMap((result) =>
-          result.status === 'rejected' ? [result.reason] : []
-        )
-        if (cancellationFailures.length > 0) {
-          throw new AggregateError(cancellationFailures, 'Planning-root stream termination failed.')
-        }
-        await this.waitForOperations(active)
-        this.activeRecord = null
-        await this.disposeRecord(active)
-      }
+    const active = this.activeRecord
+    if (active) {
+      this.activeRecord = null
+      this.retiringRecords.add(active)
+    }
+    // A replacement may be waiting on A's lease in transitionTail. Cancel before queuing teardown.
+    const cancellation = this.cancelRetiringStreams()
+    void cancellation.catch(() => {})
+    const teardown = this.runTransition(async () => {
+      await cancellation
+      for (const record of this.retiringRecords) await this.retireRecord(record)
     })
+    void teardown.catch(() => {})
+    this.disposePromise = cancellation.then(() => teardown)
     return this.disposePromise
   }
 }
