@@ -4,12 +4,14 @@
  * 2. Own streaming CLI processes through cancellation request, escalation, and confirmed settlement.
  * 3. Retain established init/schema/template and human validate/archive helpers.
  * 4. Expose the physically separated OpenSpec 1.6 typed command facade.
+ * 5. Clear the Core-owned direct-child slot independently from stream settlement.
  *
  * Original request (2026-07-15): "你先负责后端（内核）的开发。"
  * Original request (2026-07-17): "A stream cancellation request is not child-process settlement."
  */
 import { type ChildProcess } from 'child_process'
 import { OpenSpecCliContractExecutor } from './cli-contracts/index.js'
+import { CliStreamChildOwner } from './cli-stream-child-owner.js'
 import { createCleanCliEnv, type ConfigManager } from './config.js'
 import { formatSpawnError, runBufferedCommand, spawnSafe } from './spawn-safe.js'
 
@@ -308,7 +310,7 @@ export class CliExecutor {
     let settled = false
     let cancelRequested = false
     let terminationStarted = false
-    let activeChild: ChildProcess | null = null
+    const childOwner = new CliStreamChildOwner()
     let activeCommand = 'CLI command'
     let terminationTimer: ReturnType<typeof setTimeout> | null = null
     let forceCloseTimer: ReturnType<typeof setTimeout> | null = null
@@ -344,14 +346,14 @@ export class CliExecutor {
         // A concurrent close/error event remains the settlement authority.
       }
       terminationTimer = setTimeout(() => {
-        if (settled || activeChild !== child) return
+        if (settled || !childOwner.owns(child)) return
         try {
           child.kill('SIGKILL')
         } catch {
           // The close event may already be queued; the bounded confirmation still applies.
         }
         forceCloseTimer = setTimeout(() => {
-          if (!settled && activeChild === child) failTermination()
+          if (!settled && childOwner.owns(child)) failTermination()
         }, STREAM_FORCE_CLOSE_TIMEOUT_MS)
       }, STREAM_TERMINATION_GRACE_MS)
     }
@@ -396,7 +398,7 @@ export class CliExecutor {
       }
 
       const child = started.child
-      activeChild = child
+      childOwner.claim(child)
       let childSpawned = false
 
       child.once('spawn', () => {
@@ -412,13 +414,13 @@ export class CliExecutor {
       })
 
       child.on('close', (exitCode: number | null) => {
-        if (activeChild !== child) return
-        activeChild = null
+        if (!childOwner.owns(child)) return
+        childOwner.release(child)
         settle({ reason: cancelRequested ? 'cancelled' : 'exited', exitCode })
       })
 
       child.on('error', (err: Error) => {
-        if (activeChild !== child) return
+        if (!childOwner.owns(child)) return
         const { code, message } = formatSpawnError(err)
 
         if (childSpawned) {
@@ -426,7 +428,7 @@ export class CliExecutor {
           return
         }
 
-        activeChild = null
+        childOwner.release(child)
 
         if (allowRetry && code === 'ENOENT' && !cancelRequested && retryRunner) {
           retryRunner()
@@ -449,7 +451,7 @@ export class CliExecutor {
       cancel: () => {
         if (cancelRequested || settled) return settlement.promise
         cancelRequested = true
-        const child = activeChild
+        const child = childOwner.currentChild
         if (child) {
           requestChildTermination(child)
         } else {

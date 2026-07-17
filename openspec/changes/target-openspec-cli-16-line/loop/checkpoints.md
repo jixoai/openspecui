@@ -133,7 +133,7 @@ Seventh-review construction directives after `c1571f3`:
 - [x] 4.6 Push messages carry invalidation identity only; clients pull fresh CLI projections
 - [x] 4.7 Duplicate invalidations coalesce or remain idempotent across subscribers
 - [x] 4.8 Store polling is removed as the primary path and retained only as a bounded watcher-failure fallback
-- [ ] 4.9 Root Context replacement/removal waits for admitted old-root operations, actively retires all old capabilities/watchers/services/previews, and exposes the new root only after retirement
+- [x] 4.9 Root Context replacement/removal waits for admitted old-root operations, actively retires all old capabilities/watchers/services/previews, and exposes the new root only after retirement
 - [x] 4.10 Multi-client tests cover external Store edits, registry changes, concurrent operations, reconnect, and root disappearance
 
 ## 5. Task and Spec Projection Contracts

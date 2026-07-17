@@ -4,10 +4,12 @@
  * 2. Preserve the launch process environment without loading project-owned environment files.
  * 3. Verify OpenSpec lifecycle command construction and cancellation.
  * 4. Prove cancellation ownership and forced-timeout settlement remain immutable through late close.
+ * 5. Prove late close clears the Core-owned direct-child slot exactly once.
  *
  * Original request (2026-07-15): "OpenSpecUI inherits the launch environment's XDG_DATA_HOME."
  * Original request (2026-07-17): "Cancellation during command resolution cannot spawn after cancellation."
  * Original request (2026-07-17): "Cover repeated cancel/dispose and a late close after forced-timeout rejection."
+ * Original request (2026-07-17): "Make late-child-close bookkeeping proof resistant to the exact missing-cleanup mutation."
  */
 import { mkdir, writeFile } from 'fs/promises'
 import { ChildProcess } from 'node:child_process'
@@ -20,6 +22,7 @@ import {
   type CliStreamEvent,
   type CliStreamHandle,
 } from './cli-executor.js'
+import { inspectCliStreamChildOwnership } from './cli-stream-child-owner.js'
 import { ConfigManager } from './config.js'
 import { clearCache } from './reactive-fs/index.js'
 import { closeAllWatchers } from './reactive-fs/watcher-pool.js'
@@ -446,11 +449,19 @@ describe('CliExecutor', () => {
         expect(kill).toHaveBeenNthCalledWith(1, 'SIGTERM')
         expect(kill).toHaveBeenNthCalledWith(2, 'SIGKILL')
         expect(events.filter((event) => event.type === 'exit')).toEqual([])
+        expect(inspectCliStreamChildOwnership(child)).toMatchObject({
+          currentChild: child,
+          releaseCount: 0,
+        })
 
         child.emit('close', 0)
         child.emit('close', 0)
         await vi.advanceTimersByTimeAsync(0)
 
+        expect(inspectCliStreamChildOwnership(child)).toEqual({
+          currentChild: null,
+          releaseCount: 1,
+        })
         await expect(handle.cancel()).rejects.toBe(firstFailure)
         expect(kill).toHaveBeenCalledTimes(2)
         expect(events.filter((event) => event.type === 'exit')).toEqual([])

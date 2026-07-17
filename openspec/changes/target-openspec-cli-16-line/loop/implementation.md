@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (created 2026-07-15 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
 1. Report implementation state without converting planning work into false code progress.
 2. Preserve approved architecture decisions as implementation constraints.
 3. Record actual divergences from the approved plan.
@@ -9,6 +9,7 @@ Orthogonal intents (created 2026-07-15 Asia/Shanghai):
 Original request (2026-07-14): "我们最终使用openspec来管理 wayfinder 产出的文档。"
 Original request (2026-07-15): "解决方案可能没你想的那么简单，这点我们后续再说。"
 Original request (2026-07-16): "代码已经提交，开始review。如果有问题，那么可更新change甚至可以新开change。"
+Original request (2026-07-17): "Make late-child-close bookkeeping proof resistant to the exact missing-cleanup mutation."
 -->
 
 ## Implementation State
@@ -1700,3 +1701,61 @@ The sixth correction closes the previously listed Manager, Strict Archive, publi
 One mandatory Core claim remains unproved. `keeps forced-timeout rejection immutable when the child closes late` asserts the first rejection, two signal attempts, no `exit`, and idempotent cancel. If production line `activeChild = null` is removed from the `close` handler, all of those assertions can still pass: `failTermination()` has already set `settled = true`, so both later `settle()` and `cancel()` return before exposing the retained child reference. The Manager test's `clearActiveChild` spy cannot close this gap because that listener and bookkeeping are authored inside the test rather than executed by `CliExecutor`.
 
 This is an evidence defect, not yet a confirmed production defect. Keep the work in this Change. Reopen only `4.9` and move progress `58/131 -> 57/131`; keep `3.11`, `4.5`, and `6.7` closed and leave `6.8+` unstarted. The next apply slice must first demonstrate the blind spot by mutation at `c1571f3`, then add the narrowest non-public child-owner seam or equivalent production-observable assertion. Production behavior may change only if that counterexample exposes an actual mismatch. Stop for another independent review after focused/full gates and remote CI.
+
+## Seventh Core Ownership Evidence Correction: 2026-07-17
+
+The original late-close test was characterization, not mutation-resistant proof. The production child slot was local state invisible after `failTermination()` had already made settlement immutable.
+
+```text
+spawned child -> CliStreamChildOwner.currentChild
+                       |
+                       +-> forced timeout: retain child, reject once
+                       `-> actual close: release child once, then settle is a no-op
+```
+
+### Required blind-spot mutation at `c1571f3`
+
+An isolated worktree was created with `git worktree add --detach /private/tmp/openspecui-seventh-c157 c1571f32dc06325ff42c9383ed334340b17b2c16`. Its `CliExecutor` close handler had only `activeChild = null` removed, then ran:
+
+```text
+pnpm --filter @openspecui/core exec vitest run src/cli-executor.test.ts -t "keeps forced-timeout rejection immutable when the child closes late"
+```
+
+Result: `Test Files 1 passed`; `Tests 1 passed | 37 skipped`. The old assertions still accepted the mutation because `settled = true` made later `settle()` and `cancel()` return before either exposed the retained child.
+
+### Permanent Core assertion and second mutation
+
+`CliStreamChildOwner` is an internal Core module, not a package-root export or `CliStreamHandle` field. `CliExecutor.executeStream` claims the spawned direct child, checks that exact slot for termination/cancel work, and releases it in the actual `close` and pre-spawn `error` transitions. Its direct-module inspection seam reads the Core-owned slot; the test does not write, clear, or simulate that bookkeeping.
+
+The strengthened `keeps forced-timeout rejection immutable when the child closes late` test executes `CliExecutor.executeStream`, reaches the forced-timeout `CliStreamTerminationError`, confirms the slot is `{ currentChild: child, releaseCount: 0 }`, emits `close` twice, then requires `{ currentChild: null, releaseCount: 1 }`. It retains the prior immutable-first-error, no-second-exit, and repeated-cancel assertions.
+
+The same deliberate mutation then removed only `childOwner.release(child)` from the production close handler and ran the same focused command. It failed at `packages/core/src/cli-executor.test.ts:461`:
+
+```text
+AssertionError: expected { ... } to deeply equal { currentChild: null, releaseCount: 1 }
+Received: currentChild: ChildProcess, releaseCount: 0
+```
+
+After restoring the cleanup transition, `pnpm --filter @openspecui/core exec vitest run src/cli-executor.test.ts` passes `38/38`.
+
+Reflection gate:
+
+- The exact prior mutation was removal of `activeChild = null` in the `c1571f3` close handler; the old test passed.
+- The exact corrected mutation is removal of `childOwner.release(child)`; the slot-empty assertion above fails.
+- The assertion observes the actual `CliStreamChildOwner` claimed by `CliExecutor`, rather than a test-authored listener or clear spy.
+- `settled` can suppress another settlement, but it cannot now mask retained Core child ownership because the test reads that slot after both late close events.
+- Public API is unchanged: no package-root export, published subpath, `CliStreamHandle` member, diagnostics field, or generic execution capability was added.
+
+Checkpoint `4.9` remains open until the required full CI-equivalent suite, clean SSG build, diff check, commit, and PR CI evidence pass. The sixth-correction labels remain unchanged: Core late-close, Strict Validate rejection, and direct Web `onError` are characterization; only the Manager/Router fixed-point tests are red evidence.
+
+### Local closure verification
+
+- `pnpm format:check`: pass.
+- `pnpm lint:ci`: pass, zero warnings and errors.
+- `pnpm typecheck`: pass across 15 runnable workspace packages.
+- `pnpm test:ci`: pass.
+- `pnpm test:browser:ci`: xterm `60 passed | 1 skipped`; Web Storybook `12 passed`.
+- Clean `packages/web/dist-ssg` and `.vite`, then `pnpm --filter @openspecui/web build:ssg`: pass. The existing `scroll-button` CSS and ineffective dynamic-import warnings remain non-fatal and outside this Core correction.
+- `git diff --check`: pass after the final closure-artifact edit.
+
+Checkpoint transition: `57/131 -> 58/131`; re-close only `4.9`. `3.11`, `4.5`, and `6.7` remain closed. `6.8+` remains open and unstarted. Do not merge, archive, release, or begin `6.8+`; commit, push PR #207, wait for all six remote checks, then stop for independent review.
