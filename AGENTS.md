@@ -18,6 +18,7 @@ Original request (2026-07-15): "你先负责后端（内核）的开发，我让
 Original request (2026-07-16): "/var/folders/tn/y_b12zxs2dldn8thmfnpy9c80000gp/T/openspecui-frontend-handoff.md 这是前端开发在发回交接文档。接下来，你来接手后续工作"
 Original request (2026-07-16): "代码已经提交，开始review。如果有问题，那么可更新change甚至可以新开change。"
 Original clarification (2026-07-17): "我会让worker开始具体的编码工作，你的责任是review+research+plan. 因此请你在GOAL.md 中明确规划具体的工作，我们的目的就是 apply change."
+Original request (2026-07-17): "你要特别谨慎反复出现的问题，你应该在任务文件中强调相关的问题，给出具体的施工建议、反思建议。"
 -->
 
 MUST READ: CLAUDE.md
@@ -36,6 +37,7 @@ MUST READ: CLAUDE.md
 - Required local checks (match CI gates): `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`, `pnpm test:browser:ci` (or a clearly scoped subset when changes are package-local and justified in PR notes).
 - Every changed TypeScript/TSX physical file, including tests, must retain an accurate timestamped orthogonal-intent/original-request header; a production-only header audit is incomplete.
 - Review handoff law: the reviewer owns research, independent review, OpenSpec artifact corrections, and an executable `GOAL.md`; the assigned worker owns `openspec-apply-change`, implementation, tests, checkpoint updates, commits, and PR delivery. A worker Goal must request applied code and evidence, not another plan-only or review-only pass.
+- Counterexample evidence law: a test described as red evidence must be shown to fail at its named fixed point for the intended reason. Manually invoking an already-correct downstream handler, or rejecting a different lifecycle phase, is characterization evidence rather than proof that the reported production defect was captured. Record that distinction honestly in the Change.
 
 ## Static/SSG Guardrails
 
