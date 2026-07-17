@@ -276,6 +276,30 @@ describe('EnvironmentGlobalConfigSection', () => {
     expect(screen.getByRole('button', { name: 'Applied' })).toBeTruthy()
   })
 
+  it('dispatches auto-Update exactly once after a successful profile refresh', async () => {
+    const refreshMock = vi.fn().mockResolvedValue(undefined)
+    const current = environmentGlobalConfig()
+    environmentGlobalSubscriptionMock.mockReturnValue({
+      data: current,
+      isLoading: false,
+      error: null,
+      refresh: refreshMock,
+      refreshPending: false,
+    })
+    renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Explore ideas' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Apply profile' }))
+
+    await waitFor(() => expect(writeEnvironmentGlobalMock).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(replaceAllMock).toHaveBeenCalledTimes(1))
+    expect(replaceAllMock).toHaveBeenCalledWith([{ type: 'planning-root-update' }])
+    expect(runAllMock).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps raw contract drift evidence visible beside the last projection', () => {
     const current = environmentGlobalConfig()
     environmentGlobalSubscriptionMock.mockReturnValue({

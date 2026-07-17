@@ -17,7 +17,7 @@ import { useActiveRootConfigViewSubscription } from '@/lib/use-planning-config'
 import { useRootActionState } from '@/lib/use-root-action-state'
 import { useMutation } from '@tanstack/react-query'
 import { Edit2, Save, X } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 const DEFAULT_CONFIG_TEMPLATE = `schema: spec-driven\n\ncontext: |\n  \n\nrules:\n  proposal:\n    - \n`
 
@@ -35,6 +35,12 @@ export function ActiveRootConfigSection({ isStatic }: { isStatic: boolean }) {
   } = useActiveRootConfigViewSubscription()
   const rootAction = useRootActionState()
   const actionLocked = rootAction.disabled || subscriptionError !== null || isLoading
+  const rootActionRef = useRef(rootAction)
+  rootActionRef.current = rootAction
+  const subscriptionErrorRef = useRef(subscriptionError)
+  subscriptionErrorRef.current = subscriptionError
+  const isLoadingRef = useRef(isLoading)
+  isLoadingRef.current = isLoading
   const [isEditing, setIsEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [dirty, setDirty] = useState(false)
@@ -47,8 +53,12 @@ export function ActiveRootConfigSection({ isStatic }: { isStatic: boolean }) {
 
   const saveMutation = useMutation({
     mutationFn: () => {
-      if (actionLocked) {
-        throw new Error(rootAction.message ?? subscriptionError?.message ?? 'Active Root is stale.')
+      const currentRootAction = rootActionRef.current
+      const currentSubscriptionError = subscriptionErrorRef.current
+      if (currentRootAction.disabled || currentSubscriptionError !== null || isLoadingRef.current) {
+        throw new Error(
+          currentRootAction.message ?? currentSubscriptionError?.message ?? 'Active Root is stale.'
+        )
       }
       return trpcClient.planningConfig.writeActiveRoot.mutate({ content: draft })
     },

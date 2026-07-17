@@ -22,12 +22,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** Resolve the effective workflow set without rewriting the raw CLI config payload. */
 export function effectiveOpsxWorkflowList(config: Readonly<Record<string, unknown>>): string[] {
-  if (Array.isArray(config.workflows)) {
+  // The pinned CLI treats Core as a named profile, not as a user-editable
+  // workflow list. Legacy/invalid raw arrays must not change its effective set.
+  if (config.profile === 'core') return [...OPSX_CORE_PROFILE_WORKFLOWS]
+  if (config.profile === 'custom' && Array.isArray(config.workflows)) {
     return config.workflows.filter(
       (workflow): workflow is string => typeof workflow === 'string' && workflow.length > 0
     )
   }
-  return config.profile === 'core' ? [...OPSX_CORE_PROFILE_WORKFLOWS] : []
+  return []
 }
 
 /** Parse `config list --json`, applying the pinned CLI's omitted-Core default. */
@@ -38,7 +41,7 @@ export function parseOpsxProfileListJson(stdout: string): ParsedOpsxProfileState
     const profile: OpsxWorkflowProfile = value.profile === 'custom' ? 'custom' : 'core'
     const delivery: OpsxWorkflowDelivery =
       value.delivery === 'skills' || value.delivery === 'commands' ? value.delivery : 'both'
-    return { profile, delivery, workflows: effectiveOpsxWorkflowList(value) }
+    return { profile, delivery, workflows: effectiveOpsxWorkflowList({ ...value, profile }) }
   } catch {
     return null
   }

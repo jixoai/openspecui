@@ -11,7 +11,7 @@ import type {
   EnvironmentGlobalConfig,
   ProjectBindingConfig,
 } from '@openspecui/core'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import * as StaticProvider from './static-data-provider'
 import { trpcClient } from './trpc'
 import { useSubscription, type SubscriptionState } from './use-subscription'
@@ -97,6 +97,7 @@ export function useEnvironmentGlobalConfigSubscription(): RefreshableSubscriptio
     promise: Promise<void>
     resolve: () => void
   } | null>(null)
+  const refreshResultRef = useRef<number | null>(null)
   const subscribe = useCallback(
     (callbacks: {
       onData: (data: EnvironmentGlobalConfig | null) => void
@@ -107,20 +108,16 @@ export function useEnvironmentGlobalConfigSubscription(): RefreshableSubscriptio
           callbacks.onData(data)
           const waiter = refreshWaiterRef.current
           if (waiter?.generation === refreshKey) {
-            refreshWaiterRef.current = null
-            refreshPendingRef.current = false
+            refreshResultRef.current = waiter.generation
             setRefreshPending(false)
-            waiter.resolve()
           }
         },
         onError: (error) => {
           callbacks.onError(error)
           const waiter = refreshWaiterRef.current
           if (waiter?.generation === refreshKey) {
-            refreshWaiterRef.current = null
-            refreshPendingRef.current = false
+            refreshResultRef.current = waiter.generation
             setRefreshPending(false)
-            waiter.resolve()
           }
         },
       }),
@@ -132,6 +129,21 @@ export function useEnvironmentGlobalConfigSubscription(): RefreshableSubscriptio
     [refreshKey],
     'planningConfig.subscribeEnvironmentGlobal'
   )
+  useEffect(() => {
+    const waiter = refreshWaiterRef.current
+    if (
+      !waiter ||
+      waiter.generation !== refreshKey ||
+      refreshResultRef.current !== waiter.generation
+    ) {
+      return
+    }
+    refreshResultRef.current = null
+    refreshWaiterRef.current = null
+    refreshPendingRef.current = false
+    // Resolve only after useSubscription's data/error state has committed.
+    waiter.resolve()
+  }, [refreshKey, refreshPending, state.data, state.error, state.isLoading])
   const refresh = useCallback(() => {
     if (refreshPendingRef.current) return refreshWaiterRef.current?.promise ?? Promise.resolve()
     const next = refreshGenerationRef.current + 1

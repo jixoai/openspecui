@@ -140,6 +140,8 @@ export function Config() {
   const [newSchemaMode, setNewSchemaMode] = useState<SchemaCreateMode>('init')
   const [newSchemaSource, setNewSchemaSource] = useState('spec-driven')
   const rootAction = useRootActionState()
+  const rootActionRef = useRef(rootAction)
+  rootActionRef.current = rootAction
 
   const {
     data: configBundle,
@@ -196,10 +198,11 @@ export function Config() {
     schemaResolution.source !== 'package'
   const canManageEntries = schemaCanEdit && !isStatic
   const requireRootActionReady = useCallback(() => {
-    if (rootAction.disabled) {
-      throw new Error(rootAction.message ?? 'Planning root is unavailable.')
+    const currentRootAction = rootActionRef.current
+    if (currentRootAction.disabled) {
+      throw new Error(currentRootAction.message ?? 'Planning root is unavailable.')
     }
-  }, [rootAction.disabled, rootAction.message])
+  }, [])
 
   useEffect(() => {
     if (!schemas || schemas.length === 0) return

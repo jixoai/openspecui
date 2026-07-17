@@ -2,7 +2,7 @@
  * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Verify Active Root presence, empty content, owner provenance, and static projection states.
  * 2. Verify loading/error topology without conflating transport failure and file absence.
- * 3. Verify save pending/failure locks and dirty-draft retention.
+ * 3. Verify save pending/failure locks, dirty-draft retention, and the real mutation boundary.
  *
  * Original request (2026-07-17): "An existing empty Active Root file remains editable."
  * Original request (2026-07-18): "Stale or transport-error Active Root data must remain read-only."
@@ -243,6 +243,51 @@ describe('ActiveRootConfigSection', () => {
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(writeActiveRootMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a queued Save at the real mutation boundary after readiness is lost', async () => {
+    const readyRootAction = {
+      status: 'ready' as const,
+      disabled: false,
+      context: null,
+      observedAt: 1,
+      title: null,
+      message: null as string | null,
+      evidence: [],
+    }
+    rootActionMock.mockReturnValue(readyRootAction)
+    const queryClient = new QueryClient({
+      defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
+    })
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <ActiveRootConfigSection isStatic={false} />
+      </QueryClientProvider>
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.change(screen.getByLabelText('Active Root config editor'), {
+      target: { value: 'schema: queued draft\n' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    // Replace the hook result before TanStack runs mutationFn. This is a real
+    // component mutation boundary, not a direct invocation of the handler.
+    rootActionMock.mockReturnValue({
+      ...readyRootAction,
+      status: 'blocked',
+      disabled: true,
+      message: 'Planning root became unavailable.',
+    })
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <ActiveRootConfigSection isStatic={false} />
+      </QueryClientProvider>
+    )
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Planning root became unavailable.')
+    )
     expect(writeActiveRootMock).not.toHaveBeenCalled()
   })
 
