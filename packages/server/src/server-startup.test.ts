@@ -1,8 +1,24 @@
-import type { CliCommandResult, CliContext, CliDoctor } from '@openspecui/core'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+/**
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * 1. Prove server startup remains non-blocking while runtime observers warm up.
+ * 2. Prove shutdown is idempotent and continues across independent owner failures.
+ * 3. Prove backend shutdown settles attached Planning-root CLI streams without client cooperation.
+ * 4. Prove preview assets remain bound to the current Planning-root lifecycle.
+ *
+ * Original request (2026-07-17): "Backend disposal actively cancels every owned stream and awaits settlement."
+ */
+import {
+  ConfigManager,
+  type CliCommandResult,
+  type CliContext,
+  type CliDoctor,
+} from '@openspecui/core'
+import { createTRPCClient, createWSClient, wsLink } from '@trpc/client'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import WebSocket from 'ws'
 
 const coreMockState = vi.hoisted(() => ({
   acquireObservationRoot: vi.fn<() => Promise<() => Promise<void>>>(),
@@ -35,10 +51,11 @@ vi.mock('@openspecui/core', async () => {
 })
 
 import { findAvailablePort } from './port-utils.js'
-import { createServer, startServer, type RunningServer } from './server.js'
+import { createServer, startServer, type AppRouter, type RunningServer } from './server.js'
 
 const tempDirs: string[] = []
 const runningServers: RunningServer[] = []
+const wsClients: Array<ReturnType<typeof createWSClient>> = []
 
 function commandResult<T>(data: T): CliCommandResult<T> {
   return {
@@ -53,6 +70,7 @@ function commandResult<T>(data: T): CliCommandResult<T> {
 }
 
 afterEach(async () => {
+  for (const client of wsClients.splice(0)) client.close()
   await Promise.all(runningServers.splice(0).map((server) => server.close()))
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
   vi.clearAllMocks()
@@ -133,6 +151,83 @@ describe('server startup runtime contract', () => {
     expect(coreMockState.disposeProjectInvalidation).toHaveBeenCalledTimes(2)
     expect(coreMockState.disposeObservationEnvironment).toHaveBeenCalledOnce()
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'waits for an attached Planning-root CLI child to close during backend shutdown',
+    async () => {
+      coreMockState.acquireObservationRoot.mockResolvedValue(async () => {})
+      coreMockState.disposeObservationEnvironment.mockResolvedValue(undefined)
+      coreMockState.startDataHomeObservation.mockResolvedValue(undefined)
+      coreMockState.disposeDataHomeObservation.mockResolvedValue(undefined)
+      const projectDir = await createProjectDir()
+      const closingPath = join(projectDir, 'validate-child-closing.txt')
+      const runnerPath = join(projectDir, 'fixture-runner.cjs')
+      const runnerSource = [
+        "const { writeFileSync } = require('node:fs')",
+        `const projectDir = ${JSON.stringify(projectDir)}`,
+        `const closingPath = ${JSON.stringify(closingPath)}`,
+        'const args = process.argv.slice(2)',
+        "if (args.includes('--version')) { process.stdout.write('1.6.0\\n'); process.exit(0) }",
+        "if (args[0] === 'doctor') { process.stdout.write(JSON.stringify({ root: { path: projectDir, source: 'nearest', healthy: true, status: [] }, store: null, references: [], status: [] })); process.exit(0) }",
+        "if (args[0] === 'context') { process.stdout.write(JSON.stringify({ root: { path: projectDir, source: 'nearest', role: 'openspec_root' }, members: [], status: [] })); process.exit(0) }",
+        "if (args[0] === 'validate') {",
+        "  process.on('SIGTERM', () => setTimeout(() => { writeFileSync(closingPath, String(Date.now())); process.exit(0) }, 180))",
+        "  process.stdout.write('validate-ready\\n')",
+        '  setInterval(() => {}, 1_000)',
+        '} else { process.exit(0) }',
+      ].join(';')
+      await writeFile(runnerPath, runnerSource, 'utf8')
+      await new ConfigManager(projectDir).writeConfig({
+        cli: { command: `${process.execPath} ${runnerPath}` },
+      })
+      const port = await findAvailablePort(34_500, 100)
+      const server = await startServer({ projectDir, port, enableWatcher: false })
+      runningServers.push(server)
+      const wsClient = createWSClient({
+        url: `ws://localhost:${server.port}/trpc`,
+        WebSocket: WebSocket as unknown as typeof globalThis.WebSocket,
+      })
+      wsClients.push(wsClient)
+      const client = createTRPCClient<AppRouter>({ links: [wsLink({ client: wsClient })] })
+      const streamStarted = Promise.withResolvers<void>()
+      const subscription = client.cli.validateStream.subscribe(
+        { id: 'demo', type: 'change' },
+        {
+          onData: (event) => {
+            if (event.type === 'stdout' && event.data?.includes('validate-ready')) {
+              streamStarted.resolve()
+            }
+          },
+          onError: () => undefined,
+        }
+      )
+      await streamStarted.promise
+
+      const closeStartedAt = Date.now()
+      const closePromise = server.close().then(() => Date.now())
+      const closedWithoutClientCooperation = await Promise.race([
+        closePromise.then(() => true),
+        new Promise<false>((resolve) => setTimeout(() => resolve(false), 500)),
+      ])
+      if (!closedWithoutClientCooperation) {
+        subscription.unsubscribe()
+        wsClient.close()
+      }
+      const closeFinishedAt = await closePromise
+      runningServers.pop()
+      await vi.waitFor(
+        async () => {
+          const closedAt = Number(await readFile(closingPath, 'utf8'))
+          expect(closedAt).toBeGreaterThanOrEqual(closeStartedAt)
+        },
+        { timeout: 2_000 }
+      )
+      const closedAt = Number(await readFile(closingPath, 'utf8'))
+
+      expect(closedWithoutClientCooperation).toBe(true)
+      expect(closeFinishedAt).toBeGreaterThanOrEqual(closedAt)
+    }
+  )
 
   it('serves prepared preview entry assets and guarded resources through the API route', async () => {
     coreMockState.acquireObservationRoot.mockResolvedValue(async () => {})

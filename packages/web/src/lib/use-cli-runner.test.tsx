@@ -115,6 +115,12 @@ describe('useCliRunner', () => {
     await waitFor(() => {
       expect(validateSubscribeMock).toHaveBeenCalledTimes(1)
     })
+    expect(result.current.commands.list()).toEqual([
+      expect.objectContaining({
+        command: 'openspec',
+        args: ['validate', 'demo', '--type', 'change'],
+      }),
+    ])
     expect(result.current.status).toBe('success')
   })
 

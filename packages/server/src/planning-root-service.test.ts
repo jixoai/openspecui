@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Prove filesystem services read and mutate only the CLI-selected planning root.
  * 2. Prove failed Root Context resolution creates no root-dependent actions.
- * 3. Prove root identity transitions retire services, leases, and preview capabilities before exposure.
+ * 3. Prove root identity transitions await child settlement before retiring services, leases, and previews.
  * 4. Prove planning roots own reactive dependencies and leave zero observation/invalidation residue.
  * 5. Prove Change/Archive lists and Dashboard metrics remain scoped to the selected planning root.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
+ * Original request (2026-07-17): "A stream cancellation request is not child-process settlement."
  */
 import {
   CliExecutor,
@@ -797,6 +798,165 @@ describe('PlanningRootServiceManager', () => {
     expect(invalidationReleases).toHaveLength(5)
     for (const release of observationReleases) expect(release).toHaveBeenCalledOnce()
     for (const release of invalidationReleases) expect(release).toHaveBeenCalledOnce()
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps A leased until a cancelled real child closes and can no longer write A',
+    async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-planning-stream-settlement-'))
+      tempDirs.push(tempDir)
+      const launchProjectDir = join(tempDir, 'launch')
+      const rootA = join(tempDir, 'root-a')
+      const rootB = join(tempDir, 'root-b')
+      const sentinelPath = join(rootA, 'post-cancel-sentinel.txt')
+      const closingPath = join(rootA, 'child-closing.txt')
+      await Promise.all([
+        mkdir(join(launchProjectDir, 'openspec'), { recursive: true }),
+        mkdir(join(rootA, 'openspec'), { recursive: true }),
+        mkdir(join(rootB, 'openspec'), { recursive: true }),
+      ])
+
+      const configManager = new ConfigManager(launchProjectDir)
+      await configManager.writeConfig({ cli: { command: process.execPath } })
+      const cliExecutor = new CliExecutor(configManager, launchProjectDir)
+      let selectedRoot = rootA
+      vi.spyOn(cliExecutor, 'checkAvailability').mockResolvedValue({
+        available: true,
+        version: '1.6.0',
+      })
+      vi.spyOn(cliExecutor.contracts, 'doctorRoot').mockImplementation(async () =>
+        commandResult({
+          root: { path: selectedRoot, source: 'nearest', healthy: true, status: [] },
+          store: null,
+          references: [],
+          status: [],
+        })
+      )
+      vi.spyOn(cliExecutor.contracts, 'context').mockImplementation(async () =>
+        commandResult({
+          root: { path: selectedRoot, source: 'nearest', role: 'openspec_root' },
+          members: [],
+          status: [],
+        })
+      )
+      const manager = new PlanningRootServiceManager({
+        launchProjectDir,
+        previewAssetsDir: join(tempDir, 'preview-assets'),
+        configManager,
+        cliExecutor,
+        observationEnvironment: { acquireRoot: async () => async () => {} },
+        projectInvalidation: { acquireRoot: () => () => {} },
+        runtimeInvalidation: new RuntimeInvalidationIndex(),
+      })
+      const childReady = Promise.withResolvers<void>()
+      const childScript = [
+        "const { writeFileSync } = require('node:fs')",
+        `const sentinel = ${JSON.stringify(sentinelPath)}`,
+        `const closing = ${JSON.stringify(closingPath)}`,
+        "process.on('SIGTERM', () => {",
+        '  setTimeout(() => writeFileSync(sentinel, String(Date.now())), 80)',
+        "  setTimeout(() => { writeFileSync(closing, 'closing'); process.exit(0) }, 180)",
+        '})',
+        "process.stdout.write('ready\\n')",
+        'setInterval(() => {}, 1_000)',
+      ].join(';')
+
+      const cancel = await manager.startOperationStream(({ rootContext }, settle) => {
+        const planningRoot = rootContext.planningRoot?.path
+        expect(planningRoot).toBe(rootA)
+        const rootExecutor = new CliExecutor(configManager, planningRoot!)
+        return rootExecutor.executeStream(['-e', childScript], (event) => {
+          if (event.type === 'stdout' && event.data?.includes('ready')) childReady.resolve()
+          if (event.type === 'exit') settle()
+        })
+      })
+      await childReady.promise
+
+      selectedRoot = rootB
+      const replacement = manager.resolveRootContext()
+      cancel()
+      const firstSettlement = await Promise.race([
+        replacement.then(() => 'replacement' as const),
+        vi
+          .waitFor(async () => expect(await readFile(closingPath, 'utf8')).toBe('closing'), {
+            timeout: 2_000,
+          })
+          .then(() => 'child' as const),
+      ])
+      const replacementState = await replacement
+      const replacementObservedAt = Date.now()
+      await vi.waitFor(async () => expect(await readFile(sentinelPath, 'utf8')).toMatch(/^\d+$/), {
+        timeout: 2_000,
+      })
+      const sentinelObservedAt = Number(await readFile(sentinelPath, 'utf8'))
+      await manager.dispose()
+
+      expect(firstSettlement).toBe('child')
+      expect(replacementState).toMatchObject({
+        state: 'ready',
+        data: { planningRoot: { path: rootB } },
+      })
+      expect(replacementObservedAt).toBeGreaterThanOrEqual(sentinelObservedAt)
+    }
+  )
+
+  it('actively cancels attached streams before repeated disposal retires their root', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-planning-stream-disposal-'))
+    tempDirs.push(tempDir)
+    const launchProjectDir = join(tempDir, 'launch')
+    const planningRoot = join(tempDir, 'planning')
+    await Promise.all([
+      mkdir(join(launchProjectDir, 'openspec'), { recursive: true }),
+      mkdir(join(planningRoot, 'openspec'), { recursive: true }),
+    ])
+    const configManager = new ConfigManager(launchProjectDir)
+    const cliExecutor = new CliExecutor(configManager, launchProjectDir)
+    vi.spyOn(cliExecutor, 'checkAvailability').mockResolvedValue({
+      available: true,
+      version: '1.6.0',
+    })
+    vi.spyOn(cliExecutor.contracts, 'doctorRoot').mockResolvedValue(
+      commandResult({
+        root: { path: planningRoot, source: 'nearest', healthy: true, status: [] },
+        store: null,
+        references: [],
+        status: [],
+      })
+    )
+    vi.spyOn(cliExecutor.contracts, 'context').mockResolvedValue(
+      commandResult({
+        root: { path: planningRoot, source: 'nearest', role: 'openspec_root' },
+        members: [],
+        status: [],
+      })
+    )
+    const manager = new PlanningRootServiceManager({
+      launchProjectDir,
+      previewAssetsDir: join(tempDir, 'preview-assets'),
+      configManager,
+      cliExecutor,
+      observationEnvironment: { acquireRoot: async () => async () => {} },
+      projectInvalidation: { acquireRoot: () => () => {} },
+      runtimeInvalidation: new RuntimeInvalidationIndex(),
+    })
+    const terminal = Promise.withResolvers<void>()
+    const cancelProcess = vi.fn(() => terminal.resolve())
+    await manager.startOperationStream((_services, settle) => {
+      void terminal.promise.then(settle)
+      return cancelProcess
+    })
+
+    const firstDisposal = manager.dispose()
+    expect(manager.dispose()).toBe(firstDisposal)
+    const disposedWithoutExternalTerminal = await Promise.race([
+      firstDisposal.then(() => true),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 100)),
+    ])
+    if (!disposedWithoutExternalTerminal) terminal.resolve()
+    await firstDisposal
+
+    expect(disposedWithoutExternalTerminal).toBe(true)
+    expect(cancelProcess).toHaveBeenCalledOnce()
   })
 
   it('retires A before a Root Context subscription exposes B', async () => {

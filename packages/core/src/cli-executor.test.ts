@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Verify buffered and streaming CLI execution, runner resolution, and error behavior.
  * 2. Preserve the launch process environment without loading project-owned environment files.
  * 3. Verify OpenSpec lifecycle command construction and cancellation.
+ * 4. Prove cancellation ownership exists before asynchronous runner resolution completes.
  *
  * Original request (2026-07-15): "OpenSpecUI inherits the launch environment's XDG_DATA_HOME."
+ * Original request (2026-07-17): "Cancellation during command resolution cannot spawn after cancellation."
  */
 import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
@@ -330,6 +332,26 @@ describe('CliExecutor', () => {
         ['archive', '-y', 'change-123', '--store', ''],
         onEvent
       )
+    })
+  })
+
+  describe('stream settlement ownership', () => {
+    it('makes cancellation available before delayed CLI runner resolution completes', async () => {
+      const runnerResolution = Promise.withResolvers<string[]>()
+      vi.spyOn(configManager, 'getCliCommand').mockReturnValue(runnerResolution.promise)
+      const streamStart = Promise.resolve(
+        cliExecutor.executeStream(['-e', 'setInterval(() => {}, 1_000)'], vi.fn())
+      )
+
+      const handleAvailableBeforeResolution = await Promise.race([
+        streamStart.then(() => true),
+        new Promise<false>((resolve) => setTimeout(() => resolve(false), 25)),
+      ])
+      runnerResolution.resolve([process.execPath])
+      const cancel = await streamStart
+      cancel()
+
+      expect(handleAvailableBeforeResolution).toBe(true)
     })
   })
 
