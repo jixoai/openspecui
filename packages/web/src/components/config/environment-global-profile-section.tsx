@@ -52,7 +52,7 @@ export interface EnvironmentGlobalProfileSectionProps {
   isSaving: boolean
   projectionLocked: boolean
   saveConfig: (config: Record<string, CliJsonValue>) => Promise<unknown>
-  onRefresh: () => void
+  onRefresh: () => Promise<void>
 }
 
 /** Render reactive profile controls and the typed Planning-root Update procedure. */
@@ -78,6 +78,12 @@ export function EnvironmentGlobalProfileSection({
   const runnerOutputRef = useRef<HTMLDivElement | null>(null)
   const { createDedicatedSession } = useTerminalContext()
   const rootAction = useRootActionState()
+  const rootActionRef = useRef(rootAction)
+  rootActionRef.current = rootAction
+  const projectionLockedRef = useRef(projectionLocked)
+  projectionLockedRef.current = projectionLocked
+  const isSavingRef = useRef(isSaving)
+  isSavingRef.current = isSaving
   const configRunner = useCliRunner()
   const {
     lines: configRunnerLines,
@@ -91,12 +97,19 @@ export function EnvironmentGlobalProfileSection({
     setProfileDelivery(
       delivery === 'skills' || delivery === 'commands' || delivery === 'both' ? delivery : 'both'
     )
-    setProfileWorkflows(normalizeWorkflowList(config.workflows))
-  }, [config])
+    const effectiveWorkflows = profileState?.available
+      ? profileState.workflows
+      : Object.prototype.hasOwnProperty.call(config, 'workflows')
+        ? normalizeWorkflowList(config.workflows)
+        : config.profile === 'core'
+          ? [...OPSX_CORE_PROFILE_WORKFLOWS]
+          : []
+    setProfileWorkflows(effectiveWorkflows)
+  }, [config, profileState])
 
   useEffect(() => {
     if (configRunnerStatus !== 'success') return
-    onRefresh()
+    void onRefresh()
   }, [configRunnerStatus, onRefresh])
 
   useEffect(() => {
@@ -111,8 +124,17 @@ export function EnvironmentGlobalProfileSection({
 
   const selectedWorkflowSet = useMemo(() => new Set(profileWorkflows), [profileWorkflows])
   const activeWorkflowSet = useMemo(
-    () => new Set(normalizeWorkflowList(config.workflows)),
-    [config.workflows]
+    () =>
+      new Set(
+        profileState?.available
+          ? profileState.workflows
+          : Object.prototype.hasOwnProperty.call(config, 'workflows')
+            ? normalizeWorkflowList(config.workflows)
+            : config.profile === 'core'
+              ? OPSX_CORE_PROFILE_WORKFLOWS
+              : []
+      ),
+    [config, profileState]
   )
   const selectedWorkflowList = useMemo(
     () => OPSX_ALL_WORKFLOWS.filter((workflow) => selectedWorkflowSet.has(workflow)),
@@ -151,11 +173,17 @@ export function EnvironmentGlobalProfileSection({
     pendingCommandKind === 'apply' ? [...applyRunnerLines, ...configRunnerLines] : configRunnerLines
 
   const runConfigCommands = (commands: Parameters<typeof configRunnerCommands.replaceAll>[0]) => {
-    if (
-      commands.some((command) => command.type === 'planning-root-update') &&
-      rootAction.disabled
-    ) {
-      setProfileError(rootAction.message)
+    if (commands.some((command) => command.type === 'planning-root-update')) {
+      const currentRootAction = rootActionRef.current
+      if (projectionLockedRef.current || isSavingRef.current || currentRootAction.disabled) {
+        setProfileError(
+          currentRootAction.message ?? 'Planning-root Update requires a current root projection.'
+        )
+        return false
+      }
+    }
+    if (projectionLockedRef.current || isSavingRef.current) {
+      setProfileError('Environment Global projection is stale or unavailable.')
       return false
     }
     setShouldScrollRunner(true)
@@ -194,7 +222,12 @@ export function EnvironmentGlobalProfileSection({
           tone: 'success',
         },
       ])
-      if (autoUpdateAfterProfileChange && !rootAction.disabled) {
+      const currentRootAction = rootActionRef.current
+      if (
+        autoUpdateAfterProfileChange &&
+        !projectionLockedRef.current &&
+        !currentRootAction.disabled
+      ) {
         setApplyRunnerLines((previous) => [
           ...previous,
           { id: createRunnerLineId(), kind: 'ascii', text: 'Starting openspec update...' },
@@ -206,7 +239,9 @@ export function EnvironmentGlobalProfileSection({
           {
             id: createRunnerLineId(),
             kind: 'ascii',
-            text: rootAction.message ?? 'Planning-root Update was not started.',
+            text:
+              currentRootAction.message ??
+              'Planning-root Update was not started because the current root is blocked.',
             tone: 'error',
           },
         ])
@@ -227,8 +262,13 @@ export function EnvironmentGlobalProfileSection({
 
   const handleConfirmPendingCommand = async () => {
     if (!pendingCommandKind) return
-    if (pendingCommandKind === 'update' && rootAction.disabled) {
-      setProfileError(rootAction.message)
+    const currentRootAction = rootActionRef.current
+    if (projectionLockedRef.current || isSavingRef.current) {
+      setProfileError('Environment Global projection is stale or unavailable.')
+      return
+    }
+    if (pendingCommandKind === 'update' && currentRootAction.disabled) {
+      setProfileError(currentRootAction.message)
       return
     }
     setIsExecutingPendingCommand(true)
@@ -438,7 +478,9 @@ export function EnvironmentGlobalProfileSection({
             </button>
             <button
               type="button"
-              disabled={isPendingCommandRunning || !pendingCommandKind}
+              disabled={
+                isPendingCommandRunning || !pendingCommandKind || projectionLocked || isSaving
+              }
               onClick={() => void handleConfirmPendingCommand()}
               className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >

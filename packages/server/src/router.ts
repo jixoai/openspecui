@@ -51,7 +51,6 @@ import {
   OpenSpecUIGlobalSettingsUpdateSchema,
   OPSX_ARTIFACT_INPUT_ACTIONS,
   OPSX_CHANGE_INPUT_ACTIONS,
-  OPSX_CORE_PROFILE_WORKFLOWS,
   OPSX_TEXT_INPUT_ACTIONS,
   OpsxConfigSchema,
   OwnedSpecIdentitySchema,
@@ -134,6 +133,12 @@ import type { LlamaModelAssetService } from './llama-model-asset-service.js'
 import type { LocalModelAssetService } from './local-model-asset-service.js'
 import type { NotificationService } from './notification-service.js'
 import { getOpenSpecMutationFacets } from './open-spec-mutation-facets.js'
+import {
+  parseOpsxConfigDrift,
+  parseOpsxProfileListJson,
+  type OpsxWorkflowDelivery,
+  type OpsxWorkflowProfile,
+} from './opsx-profile-state.js'
 import {
   dataScopeFromRootPreview,
   readActiveRootConfig,
@@ -1019,9 +1024,6 @@ const runWorkflowInputSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('onboard') }),
 ])
 
-type OpsxWorkflowProfile = 'core' | 'custom'
-type OpsxWorkflowDelivery = 'both' | 'skills' | 'commands'
-
 interface OpsxProfileState {
   available: boolean
   profile: OpsxWorkflowProfile | null
@@ -1044,48 +1046,6 @@ function requireOpsxArtifactLocation(input: { changeId: string; outputPath: stri
     changeId: requireCanonicalOpenSpecEntityId(input.changeId, 'changeId'),
     outputPath: requireOpenSpecEntityRelativePath(input.outputPath, 'outputPath'),
   }
-}
-
-function parseOpsxProfileListJson(stdout: string): {
-  profile: OpsxWorkflowProfile
-  delivery: OpsxWorkflowDelivery
-  workflows: string[]
-} | null {
-  try {
-    const parsed = JSON.parse(stdout) as {
-      profile?: unknown
-      delivery?: unknown
-      workflows?: unknown
-    }
-    const profile: OpsxWorkflowProfile = parsed.profile === 'custom' ? 'custom' : 'core'
-    const delivery: OpsxWorkflowDelivery =
-      parsed.delivery === 'skills' || parsed.delivery === 'commands' ? parsed.delivery : 'both'
-    const workflows = Array.isArray(parsed.workflows)
-      ? parsed.workflows.filter(
-          (item): item is string => typeof item === 'string' && item.length > 0
-        )
-      : profile === 'core'
-        ? [...OPSX_CORE_PROFILE_WORKFLOWS]
-        : []
-    return { profile, delivery, workflows }
-  } catch {
-    return null
-  }
-}
-
-function parseOpsxConfigDrift(output: string): { drift: boolean; warningText: string | null } {
-  const lines = output
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-
-  const warningLine =
-    lines.find((line) => /global config.+not applied.+project/i.test(line)) ??
-    lines.find((line) => /out of sync/i.test(line)) ??
-    lines.find((line) => /run\s+`?openspec\s+update`?/i.test(line)) ??
-    null
-
-  return { drift: warningLine !== null, warningText: warningLine }
 }
 
 async function fetchOpsxProfileState(ctx: Context): Promise<OpsxProfileState> {

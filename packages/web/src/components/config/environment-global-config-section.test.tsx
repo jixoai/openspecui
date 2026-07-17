@@ -71,17 +71,24 @@ vi.mock('@/components/code-editor', () => ({
     value,
     onChange,
     readOnly,
+    onSaveShortcut,
   }: {
     value: string
     onChange?: (value: string) => void
     readOnly?: boolean
+    onSaveShortcut?: () => void
   }) => (
-    <textarea
-      aria-label="Environment Global config editor"
-      value={value}
-      readOnly={readOnly}
-      onChange={(event) => onChange?.(event.target.value)}
-    />
+    <>
+      <textarea
+        aria-label="Environment Global config editor"
+        value={value}
+        readOnly={readOnly}
+        onChange={(event) => onChange?.(event.target.value)}
+      />
+      <button type="button" data-testid="environment-save-shortcut" onClick={onSaveShortcut}>
+        Trigger save shortcut
+      </button>
+    </>
   ),
 }))
 
@@ -182,6 +189,7 @@ describe('EnvironmentGlobalConfigSection', () => {
       isLoading: false,
       error: null,
       refresh: vi.fn(),
+      refreshPending: false,
     })
     replaceAllMock.mockReset()
     runAllMock.mockReset().mockResolvedValue(undefined)
@@ -240,6 +248,32 @@ describe('EnvironmentGlobalConfigSection', () => {
     expect(screen.getAllByText('skills').length).toBeGreaterThan(0)
     expect(screen.getByText('drift')).toBeTruthy()
     expect(screen.getByText('Global config is not applied to this project.')).toBeTruthy()
+  })
+
+  it('uses effective Core workflows when the raw config omits workflows', async () => {
+    const current = environmentGlobalConfig()
+    const coreWorkflows = ['propose', 'explore', 'apply', 'update', 'sync', 'archive']
+    environmentGlobalSubscriptionMock.mockReturnValue({
+      data: {
+        ...current,
+        config: { profile: 'core', delivery: 'both' },
+        profileState: {
+          ...current.profileState,
+          workflows: coreWorkflows,
+        },
+      },
+      isLoading: false,
+      error: null,
+      refresh: vi.fn(),
+      refreshPending: false,
+    })
+    renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    await waitFor(() =>
+      expect(screen.getByText(`selected: [${coreWorkflows.join(', ')}]`)).toBeTruthy()
+    )
+    expect(screen.getByRole('button', { name: 'Applied' })).toBeTruthy()
   })
 
   it('keeps raw contract drift evidence visible beside the last projection', () => {
@@ -345,6 +379,172 @@ describe('EnvironmentGlobalConfigSection', () => {
       '{"profile":"custom","futureField":"retained"}'
     )
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+  })
+
+  it('rejects stale JSON Save and keyboard shortcut at the mutation boundary', async () => {
+    const current = environmentGlobalConfig()
+    const view = renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Editor' }))
+    fireEvent.change(screen.getByLabelText('Environment Global config editor'), {
+      target: { value: '{"profile":"custom"}' },
+    })
+
+    environmentGlobalSubscriptionMock.mockReturnValue({
+      data: current,
+      isLoading: false,
+      error: new Error('global refresh failed'),
+      refresh: vi.fn(),
+      refreshPending: false,
+    })
+    view.rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <EnvironmentGlobalConfigSection isStatic={false} />
+      </QueryClientProvider>
+    )
+
+    expect(screen.getByLabelText('Environment Global config editor')).toHaveAttribute('readonly')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    fireEvent.click(screen.getByTestId('environment-save-shortcut'))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('global refresh failed')
+    )
+    expect(writeEnvironmentGlobalMock).not.toHaveBeenCalled()
+  })
+
+  it('locks a retained config snapshot when the replacement CLI evidence fails', () => {
+    const current = environmentGlobalConfig()
+    const view = renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Editor' }))
+    fireEvent.change(screen.getByLabelText('Environment Global config editor'), {
+      target: { value: '{"profile":"custom"}' },
+    })
+
+    environmentGlobalSubscriptionMock.mockReturnValue({
+      data: {
+        ...current,
+        evidence: {
+          ...current.evidence,
+          config: {
+            ...current.evidence.config,
+            success: false,
+            stderr: 'config list failed',
+            exitCode: 1,
+          },
+        },
+      },
+      isLoading: false,
+      error: null,
+      refresh: vi.fn(),
+      refreshPending: false,
+    })
+    view.rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <EnvironmentGlobalConfigSection isStatic={false} />
+      </QueryClientProvider>
+    )
+
+    expect(screen.getByRole('alert')).toHaveTextContent('config list failed')
+    expect(screen.getByLabelText('Environment Global config editor')).toHaveAttribute('readonly')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    fireEvent.click(screen.getByTestId('environment-save-shortcut'))
+    expect(writeEnvironmentGlobalMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps every write locked across the asynchronous refresh pending window', async () => {
+    const current = environmentGlobalConfig()
+    const refreshMock = vi.fn()
+    const view = renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Editor' }))
+    fireEvent.change(screen.getByLabelText('Environment Global config editor'), {
+      target: { value: '{"profile":"custom"}' },
+    })
+
+    environmentGlobalSubscriptionMock.mockReturnValue({
+      data: current,
+      isLoading: false,
+      error: null,
+      refresh: refreshMock,
+      refreshPending: true,
+    })
+    view.rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <EnvironmentGlobalConfigSection isStatic={false} />
+      </QueryClientProvider>
+    )
+
+    const refreshButton = screen.getByRole('button', { name: 'Refresh' })
+    expect(refreshButton).toBeDisabled()
+    fireEvent.click(refreshButton)
+    expect(refreshMock).not.toHaveBeenCalled()
+
+    expect(screen.getByLabelText('Environment Global config editor')).toHaveAttribute('readonly')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    fireEvent.click(screen.getByTestId('environment-save-shortcut'))
+    expect(writeEnvironmentGlobalMock).not.toHaveBeenCalled()
+  })
+
+  it('does not confirm an already-open Apply dialog after the projection becomes stale', () => {
+    const current = environmentGlobalConfig()
+    const view = renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Propose change' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(screen.getByRole('button', { name: 'Apply profile' })).toBeEnabled()
+
+    environmentGlobalSubscriptionMock.mockReturnValue({
+      data: current,
+      isLoading: false,
+      error: new Error('global projection became stale'),
+      refresh: vi.fn(),
+      refreshPending: false,
+    })
+    view.rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <EnvironmentGlobalConfigSection isStatic={false} />
+      </QueryClientProvider>
+    )
+
+    const confirm = screen.getByRole('button', { name: 'Apply profile' })
+    expect(confirm).toBeDisabled()
+    fireEvent.click(confirm)
+    expect(writeEnvironmentGlobalMock).not.toHaveBeenCalled()
+    expect(runAllMock).not.toHaveBeenCalled()
+  })
+
+  it('rechecks the Root gate inside an already-open Update dialog handler', async () => {
+    const mutableRootAction = {
+      status: 'ready' as const,
+      disabled: false,
+      context: null,
+      observedAt: 1,
+      title: null,
+      message: null as string | null,
+      evidence: [],
+    }
+    rootActionMock.mockReturnValue(mutableRootAction)
+    renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Run update' }))
+    const confirm = screen.getByRole('button', { name: 'Run command' })
+    expect(confirm).toBeEnabled()
+
+    mutableRootAction.disabled = true
+    mutableRootAction.message = 'Root Context changed while the dialog was open.'
+    fireEvent.click(confirm)
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Root Context changed while the dialog was open.'
+      )
+    )
+    expect(replaceAllMock).not.toHaveBeenCalled()
+    expect(runAllMock).not.toHaveBeenCalled()
   })
 
   it('shows loading and no-data errors without inventing an empty config', () => {

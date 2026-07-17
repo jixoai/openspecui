@@ -129,7 +129,7 @@ export function ActiveRootConfigSection({ isStatic }: { isStatic: boolean }) {
             </button>
           ) : null}
 
-          {isEditing && !actionLocked ? (
+          {isEditing ? (
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -143,7 +143,7 @@ export function ActiveRootConfigSection({ isStatic }: { isStatic: boolean }) {
               <Button
                 size="sm"
                 onClick={() => saveMutation.mutate()}
-                disabled={saveMutation.isPending || !dirty}
+                disabled={saveMutation.isPending || actionLocked || !dirty}
                 activity={!dirty}
               >
                 <Save className="h-3.5 w-3.5" />

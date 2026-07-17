@@ -11,7 +11,7 @@ import type {
   EnvironmentGlobalConfig,
   ProjectBindingConfig,
 } from '@openspecui/core'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import * as StaticProvider from './static-data-provider'
 import { trpcClient } from './trpc'
 import { useSubscription, type SubscriptionState } from './use-subscription'
@@ -26,7 +26,8 @@ export interface ActiveRootConfigView {
 
 /** Subscription state that exposes an explicit invalidation-driven refresh action. */
 export interface RefreshableSubscriptionState<T> extends SubscriptionState<T> {
-  refresh: () => void
+  refresh: () => Promise<void>
+  refreshPending: boolean
 }
 
 function toActiveRootConfigView(config: ActiveRootConfig): ActiveRootConfigView {
@@ -88,16 +89,42 @@ export function useActiveRootConfigViewSubscription(): SubscriptionState<ActiveR
 /** Subscribe to the backend runtime environment's CLI-selected global config file. */
 export function useEnvironmentGlobalConfigSubscription(): RefreshableSubscriptionState<EnvironmentGlobalConfig | null> {
   const [refreshKey, setRefreshKey] = useState(0)
+  const [refreshPending, setRefreshPending] = useState(false)
+  const refreshGenerationRef = useRef(0)
+  const refreshPendingRef = useRef(false)
+  const refreshWaiterRef = useRef<{
+    generation: number
+    promise: Promise<void>
+    resolve: () => void
+  } | null>(null)
   const subscribe = useCallback(
     (callbacks: {
       onData: (data: EnvironmentGlobalConfig | null) => void
       onError: (error: Error) => void
     }) =>
       trpcClient.planningConfig.subscribeEnvironmentGlobal.subscribe(undefined, {
-        onData: callbacks.onData,
-        onError: callbacks.onError,
+        onData: (data) => {
+          callbacks.onData(data)
+          const waiter = refreshWaiterRef.current
+          if (waiter?.generation === refreshKey) {
+            refreshWaiterRef.current = null
+            refreshPendingRef.current = false
+            setRefreshPending(false)
+            waiter.resolve()
+          }
+        },
+        onError: (error) => {
+          callbacks.onError(error)
+          const waiter = refreshWaiterRef.current
+          if (waiter?.generation === refreshKey) {
+            refreshWaiterRef.current = null
+            refreshPendingRef.current = false
+            setRefreshPending(false)
+            waiter.resolve()
+          }
+        },
       }),
-    []
+    [refreshKey]
   )
   const state = useSubscription<EnvironmentGlobalConfig | null>(
     subscribe,
@@ -105,7 +132,20 @@ export function useEnvironmentGlobalConfigSubscription(): RefreshableSubscriptio
     [refreshKey],
     'planningConfig.subscribeEnvironmentGlobal'
   )
-  const refresh = useCallback(() => setRefreshKey((current) => current + 1), [])
+  const refresh = useCallback(() => {
+    if (refreshPendingRef.current) return refreshWaiterRef.current?.promise ?? Promise.resolve()
+    const next = refreshGenerationRef.current + 1
+    refreshGenerationRef.current = next
+    let resolveWaiter!: () => void
+    const promise = new Promise<void>((resolve) => {
+      resolveWaiter = resolve
+    })
+    refreshWaiterRef.current = { generation: next, promise, resolve: resolveWaiter }
+    refreshPendingRef.current = true
+    setRefreshPending(true)
+    setRefreshKey(next)
+    return promise
+  }, [])
 
-  return { ...state, refresh }
+  return { ...state, refresh, refreshPending }
 }

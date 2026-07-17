@@ -211,6 +211,41 @@ describe('ActiveRootConfigSection', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('active config transport failed')
   })
 
+  it('keeps Cancel available when readiness is lost after editing starts', () => {
+    const view = renderSection(<ActiveRootConfigSection isStatic={false} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.change(screen.getByLabelText('Active Root config editor'), {
+      target: { value: 'schema: local draft\n' },
+    })
+
+    rootActionMock.mockReturnValue({
+      status: 'blocked',
+      disabled: true,
+      context: null,
+      observedAt: 2,
+      title: 'Planning root unavailable',
+      message: 'planning root failed',
+      evidence: [],
+    })
+    activeRootSubscriptionMock.mockReturnValue({
+      data: configView(),
+      isLoading: false,
+      error: new Error('root refresh failed'),
+    })
+    view.rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <ActiveRootConfigSection isStatic={false} />
+      </QueryClientProvider>
+    )
+
+    expect(screen.getByLabelText('Active Root config editor')).toHaveAttribute('readonly')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(writeActiveRootMock).not.toHaveBeenCalled()
+  })
+
   it('locks the editor, save, and cancel controls while one save is pending', async () => {
     const pending = createDeferred<void>()
     writeActiveRootMock.mockReturnValueOnce(pending.promise)

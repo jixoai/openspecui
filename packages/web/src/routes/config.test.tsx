@@ -18,24 +18,44 @@ const {
   activeRootConfigMock,
   configBundleMock,
   environmentGlobalConfigMock,
+  idleMutation,
+  initSchemaMutateMock,
   isStaticModeMock,
   rootActionMock,
 } = vi.hoisted(() => ({
   activeRootConfigMock: vi.fn(),
   configBundleMock: vi.fn(),
   environmentGlobalConfigMock: vi.fn(),
+  idleMutation: { mutate: vi.fn(), isPending: false, isSuccess: false },
+  initSchemaMutateMock: vi.fn(),
   isStaticModeMock: vi.fn(),
   rootActionMock: vi.fn(),
 }))
 
-const idleMutation = {
-  mutate: vi.fn(),
-  isPending: false,
-  isSuccess: false,
-}
-
 vi.mock('@tanstack/react-query', () => ({
-  useMutation: () => idleMutation,
+  useMutation: (options: {
+    mutationFn: (variables: unknown) => unknown
+    onSuccess?: (data: unknown, variables: unknown) => void
+    onError?: (error: unknown) => void
+  }) => ({
+    mutate: (variables: unknown, callbacks?: { onSuccess?: (data: unknown) => void }) => {
+      idleMutation.mutate(variables)
+      try {
+        const result = options.mutationFn(variables)
+        Promise.resolve(result).then(
+          (data) => {
+            options.onSuccess?.(data, variables)
+            callbacks?.onSuccess?.(data)
+          },
+          (error: unknown) => options.onError?.(error)
+        )
+      } catch (error) {
+        options.onError?.(error)
+      }
+    },
+    isPending: false,
+    isSuccess: false,
+  }),
 }))
 
 vi.mock('@/components/code-editor', () => ({
@@ -78,7 +98,7 @@ vi.mock('@/lib/trpc', () => ({
       deleteSchema: { mutate: vi.fn() },
       deleteSchemaEntry: { mutate: vi.fn() },
       forkSchema: { mutate: vi.fn() },
-      initSchema: { mutate: vi.fn() },
+      initSchema: { mutate: initSchemaMutateMock },
       writeSchemaFile: { mutate: vi.fn() },
     },
   },
@@ -475,5 +495,59 @@ describe('Config schema tabs', () => {
     expect(screen.getByRole('button', { name: 'Create' })).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     expect(idleMutation.mutate).not.toHaveBeenCalled()
+  })
+
+  it('rejects a Schema mutation at its real mutation function when readiness changes before submit', async () => {
+    isStaticModeMock.mockReturnValue(false)
+    const mutableRootAction = {
+      status: 'ready' as const,
+      disabled: false,
+      context: null,
+      observedAt: 1,
+      title: null,
+      message: null as string | null,
+      evidence: [],
+    }
+    rootActionMock.mockReturnValue(mutableRootAction)
+    configBundleMock.mockReturnValue({
+      data: {
+        schemas: [
+          {
+            name: 'project-schema',
+            description: 'Project schema',
+            artifacts: [],
+            source: 'project',
+          },
+        ],
+        schemaDetails: { 'project-schema': { name: 'project-schema', artifacts: [] } },
+        schemaResolutions: {
+          'project-schema': {
+            name: 'project-schema',
+            source: 'project',
+            path: '/project/openspec/schemas/project-schema',
+            shadows: [],
+          },
+        },
+      },
+      isLoading: false,
+      error: null,
+    })
+    window.history.replaceState(null, '', '/config?configTab=schema:project-schema')
+    render(<Config />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    fireEvent.change(screen.getByPlaceholderText('schema-name'), {
+      target: { value: 'next-schema' },
+    })
+    expect(screen.getByRole('button', { name: 'Create' })).toBeEnabled()
+
+    mutableRootAction.disabled = true
+    mutableRootAction.message = 'Root Context CLI failed.'
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+    await waitFor(() =>
+      expect(screen.getAllByText('Root Context CLI failed.').length).toBeGreaterThan(0)
+    )
+    expect(initSchemaMutateMock).not.toHaveBeenCalled()
   })
 })

@@ -17,7 +17,7 @@ import { useEnvironmentGlobalConfigSubscription } from '@/lib/use-planning-confi
 import type { CliJsonValue } from '@openspecui/core'
 import { useMutation } from '@tanstack/react-query'
 import { Loader2, RefreshCw, Save } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   isCliJsonObject,
   isRecordObject,
@@ -76,8 +76,39 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
     isLoading,
     error: subscriptionError,
     refresh,
+    refreshPending,
   } = useEnvironmentGlobalConfigSubscription()
   const globalConfigData = environmentGlobalConfig?.config
+  const projectionHasCliError =
+    environmentGlobalConfig?.evidence.path.success === false ||
+    environmentGlobalConfig?.evidence.config.success === false ||
+    environmentGlobalConfig?.evidence.config.contractError !== undefined
+  const projectionStateRef = useRef({
+    hasProjection:
+      environmentGlobalConfig !== undefined &&
+      environmentGlobalConfig !== null &&
+      environmentGlobalConfig.config !== null,
+    isLoading,
+    subscriptionError,
+    refreshPending,
+    projectionHasCliError,
+  })
+  projectionStateRef.current = {
+    hasProjection:
+      environmentGlobalConfig !== undefined &&
+      environmentGlobalConfig !== null &&
+      environmentGlobalConfig.config !== null,
+    isLoading,
+    subscriptionError,
+    refreshPending,
+    projectionHasCliError,
+  }
+  const projectionLocked =
+    !projectionStateRef.current.hasProjection ||
+    projectionStateRef.current.isLoading ||
+    projectionStateRef.current.subscriptionError !== null ||
+    projectionStateRef.current.refreshPending ||
+    projectionStateRef.current.projectionHasCliError
 
   useEffect(() => {
     if (!isRecordObject(globalConfigData) || globalConfigDraftDirty) return
@@ -85,19 +116,32 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
   }, [globalConfigData, globalConfigDraftDirty])
 
   const handleRefresh = useCallback(() => {
-    if (isStatic) return
+    if (isStatic || isRefreshing || refreshPending || isLoading) return
     setIsRefreshing(true)
     refresh()
-    setIsRefreshing(false)
-  }, [isStatic, refresh])
+  }, [isLoading, isRefreshing, isStatic, refresh, refreshPending])
+
+  useEffect(() => {
+    if (!refreshPending) setIsRefreshing(false)
+  }, [refreshPending])
 
   const saveMutation = useMutation({
-    mutationFn: (config: Record<string, CliJsonValue>) =>
-      trpcClient.planningConfig.writeEnvironmentGlobal.mutate({ config }),
+    mutationFn: (config: Record<string, CliJsonValue>) => {
+      const state = projectionStateRef.current
+      if (
+        !state.hasProjection ||
+        state.isLoading ||
+        state.subscriptionError !== null ||
+        state.refreshPending ||
+        state.projectionHasCliError
+      ) {
+        throw new Error('Environment Global projection is stale or unavailable.')
+      }
+      return trpcClient.planningConfig.writeEnvironmentGlobal.mutate({ config })
+    },
     onSuccess: () => {
       setGlobalConfigDraftDirty(false)
       setGlobalConfigError(null)
-      refresh()
     },
     onError: (error) => {
       setGlobalConfigError(error instanceof Error ? error.message : String(error))
@@ -105,11 +149,26 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
   })
 
   const saveConfig = useCallback(
-    (config: Record<string, CliJsonValue>) => saveMutation.mutateAsync(config),
-    [saveMutation]
+    async (config: Record<string, CliJsonValue>) => {
+      await saveMutation.mutateAsync(config)
+      await refresh()
+    },
+    [refresh, saveMutation]
   )
 
   const handleSaveEditor = useCallback(() => {
+    const state = projectionStateRef.current
+    if (
+      !state.hasProjection ||
+      state.isLoading ||
+      state.subscriptionError !== null ||
+      state.refreshPending ||
+      state.projectionHasCliError ||
+      saveMutation.isPending
+    ) {
+      setGlobalConfigError('Environment Global projection is stale or unavailable.')
+      return
+    }
     let parsed: unknown
     try {
       parsed = JSON.parse(globalConfigDraft)
@@ -122,8 +181,10 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
       return
     }
     setGlobalConfigError(null)
-    saveMutation.mutate(parsed, { onSuccess: () => setGlobalConfigTab('preview') })
-  }, [globalConfigDraft, saveMutation])
+    void saveConfig(parsed)
+      .then(() => setGlobalConfigTab('preview'))
+      .catch(() => undefined)
+  }, [globalConfigDraft, saveConfig, saveMutation.isPending])
 
   const evidenceError = useMemo(() => {
     if (!environmentGlobalConfig) return null
@@ -197,7 +258,7 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
         <button
           type="button"
           onClick={handleRefresh}
-          disabled={isRefreshing || saveMutation.isPending}
+          disabled={isRefreshing || refreshPending || isLoading || saveMutation.isPending}
           className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isRefreshing ? (
@@ -326,14 +387,16 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
           <CodeEditor
             value={globalConfigDraft}
             onChange={(value) => {
+              if (projectionLocked || saveMutation.isPending) return
               setGlobalConfigDraft(value)
               setGlobalConfigDraftDirty(true)
               setGlobalConfigError(null)
             }}
             onSaveShortcut={() => {
-              if (globalConfigDraftDirty && !saveMutation.isPending) handleSaveEditor()
+              if (globalConfigDraftDirty && !projectionLocked && !saveMutation.isPending)
+                handleSaveEditor()
             }}
-            readOnly={saveMutation.isPending}
+            readOnly={projectionLocked || saveMutation.isPending}
             filename="openspec.global.config.json"
             language="json"
             className="min-h-0 flex-1"
@@ -342,9 +405,9 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
           <div className="flex items-center justify-end gap-2">
             <button
               type="button"
-              disabled={saveMutation.isPending}
+              disabled={projectionLocked || saveMutation.isPending}
               onClick={() => {
-                if (!isRecordObject(globalConfigData)) return
+                if (projectionLocked || !isRecordObject(globalConfigData)) return
                 setGlobalConfigDraft(JSON.stringify(globalConfigData, null, 2))
                 setGlobalConfigDraftDirty(false)
                 setGlobalConfigError(null)
@@ -356,6 +419,7 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
             <Button
               size="sm"
               disabled={
+                projectionLocked ||
                 saveMutation.isPending ||
                 !globalConfigDraftDirty ||
                 !isRecordObject(globalConfigData)
@@ -373,7 +437,7 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
           config={globalConfigData}
           profileState={environmentGlobalConfig?.profileState ?? null}
           isSaving={saveMutation.isPending}
-          projectionLocked={isLoading || subscriptionError !== null}
+          projectionLocked={projectionLocked}
           saveConfig={saveConfig}
           onRefresh={refresh}
         />

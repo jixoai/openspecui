@@ -27,28 +27,10 @@ import {
 } from '@openspecui/core'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { effectiveOpsxWorkflowList, parseOpsxConfigDrift } from './opsx-profile-state.js'
 
 interface ReadProjectConfigFileOptions {
   rootPath: string
-}
-
-function normalizeWorkflowList(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
-    : []
-}
-
-function parseConfigDrift(output: string): { drift: boolean; warningText: string | null } {
-  const lines = output
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-  const warningText =
-    lines.find((line) => /global config.+not applied.+project/i.test(line)) ??
-    lines.find((line) => /out of sync/i.test(line)) ??
-    lines.find((line) => /run\s+`?openspec\s+update`?/i.test(line)) ??
-    null
-  return { drift: warningText !== null, warningText }
 }
 
 function projectEnvironmentProfileState(
@@ -77,17 +59,17 @@ function projectEnvironmentProfileState(
       available: true,
       profile,
       delivery,
-      workflows: normalizeWorkflowList(config.workflows),
+      workflows: effectiveOpsxWorkflowList(config),
       driftStatus: 'unknown',
       warningText: null,
     }
   }
-  const drift = parseConfigDrift(`${driftEvidence.stdout}\n${driftEvidence.stderr}`)
+  const drift = parseOpsxConfigDrift(`${driftEvidence.stdout}\n${driftEvidence.stderr}`)
   return {
     available: true,
     profile,
     delivery,
-    workflows: normalizeWorkflowList(config.workflows),
+    workflows: effectiveOpsxWorkflowList(config),
     driftStatus: drift.drift ? 'drift' : 'in-sync',
     warningText: drift.warningText,
   }

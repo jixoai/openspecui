@@ -179,4 +179,78 @@ describe('planning config ownership', () => {
     expect(result.profileState.driftStatus).toBe('drift')
     expect(result.evidence.drift.stdout).toContain('not applied')
   })
+
+  it('projects pinned Core workflows when the CLI omits workflows', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-environment-core-default-'))
+    tempDirs.push(tempDir)
+    const configPath = join(tempDir, 'config.json')
+    await writeFile(configPath, '{"profile":"core","delivery":"both"}\n', 'utf8')
+    const cliExecutor = new CliExecutor(new ConfigManager(tempDir), tempDir)
+    vi.spyOn(cliExecutor, 'execute')
+      .mockResolvedValueOnce({
+        success: true,
+        stdout: `${configPath}\n`,
+        stderr: '',
+        exitCode: 0,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        stdout: '{"profile":"core","delivery":"both"}',
+        stderr: '',
+        exitCode: 0,
+      })
+      .mockResolvedValueOnce({ success: true, stdout: '', stderr: '', exitCode: 0 })
+
+    const result = await readEnvironmentGlobalConfig({
+      dataScope: {
+        path: '/runtime/openspec',
+        source: 'xdg-data-home',
+        environmentVariable: 'XDG_DATA_HOME',
+      },
+      cliExecutor,
+    })
+
+    expect(result.config).toEqual({ profile: 'core', delivery: 'both' })
+    expect(result.profileState.workflows).toEqual([
+      'propose',
+      'explore',
+      'apply',
+      'update',
+      'sync',
+      'archive',
+    ])
+  })
+
+  it('keeps omitted custom workflows empty instead of applying Core defaults', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-environment-custom-'))
+    tempDirs.push(tempDir)
+    const configPath = join(tempDir, 'config.json')
+    await writeFile(configPath, '{"profile":"custom","delivery":"both"}\n', 'utf8')
+    const cliExecutor = new CliExecutor(new ConfigManager(tempDir), tempDir)
+    vi.spyOn(cliExecutor, 'execute')
+      .mockResolvedValueOnce({
+        success: true,
+        stdout: `${configPath}\n`,
+        stderr: '',
+        exitCode: 0,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        stdout: '{"profile":"custom","delivery":"both"}',
+        stderr: '',
+        exitCode: 0,
+      })
+      .mockResolvedValueOnce({ success: true, stdout: '', stderr: '', exitCode: 0 })
+
+    const result = await readEnvironmentGlobalConfig({
+      dataScope: {
+        path: '/runtime/openspec',
+        source: 'xdg-data-home',
+        environmentVariable: 'XDG_DATA_HOME',
+      },
+      cliExecutor,
+    })
+
+    expect(result.profileState.workflows).toEqual([])
+  })
 })
