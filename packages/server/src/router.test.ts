@@ -2242,6 +2242,31 @@ apply:
   })
 
   describe('cli', () => {
+    it('projects a rejected fixed global-install handle as one terminal tRPC error', async () => {
+      const context = createMockContext()
+      const terminal = Promise.withResolvers<CliStreamSettlement>()
+      void terminal.promise.catch(() => {})
+      const cancel = vi.fn(() => terminal.promise)
+      const executeCommandStream = context.cliExecutor
+        .executeCommandStream as unknown as ReturnType<typeof vi.fn>
+      executeCommandStream.mockReturnValue({ settled: terminal.promise, cancel })
+      const stream = await appRouter.createCaller(context).cli.installGlobalCliStream()
+      const errors: unknown[] = []
+      const completes = vi.fn()
+
+      const subscription = stream.subscribe({
+        complete: completes,
+        error: (error) => errors.push(error),
+      })
+      const failure = new Error('forced termination did not confirm child close')
+      terminal.reject(failure)
+
+      await vi.waitFor(() => expect(errors).toEqual([failure]), { timeout: 200 })
+      expect(completes).not.toHaveBeenCalled()
+      subscription.unsubscribe()
+      expect(cancel).toHaveBeenCalledOnce()
+    })
+
     it('derives buffered validate Store selection from Root Context', async () => {
       const context = createMockContext()
       const planning = await resolveMockPlanningRoot(context)
@@ -2381,6 +2406,41 @@ apply:
       expect(events.filter((event) => event.type === 'exit')).toEqual([
         { type: 'exit', exitCode: 0 },
       ])
+    })
+
+    it('projects a rejected strict Archive handle as one terminal tRPC error', async () => {
+      const context = createMockContext()
+      const validateStream = context.cliExecutor.validateStream as unknown as ReturnType<
+        typeof vi.fn
+      >
+      const archiveStream = context.cliExecutor.archiveStream as unknown as ReturnType<typeof vi.fn>
+      const terminal = Promise.withResolvers<CliStreamSettlement>()
+      void terminal.promise.catch(() => {})
+      validateStream.mockImplementation((_options, onEvent) => {
+        onEvent({ type: 'exit', exitCode: 0 })
+        return settledStreamHandle(0)
+      })
+      archiveStream.mockReturnValue({
+        settled: terminal.promise,
+        cancel: () => terminal.promise,
+      })
+      const stream = await appRouter.createCaller(context).cli.archiveStrictStream({
+        changeId: 'add-search',
+      })
+      const errors: unknown[] = []
+      const completes = vi.fn()
+      const subscription = stream.subscribe({
+        complete: completes,
+        error: (error) => errors.push(error),
+      })
+
+      await vi.waitFor(() => expect(archiveStream).toHaveBeenCalledOnce())
+      const failure = new Error('forced termination did not confirm child close')
+      terminal.reject(failure)
+
+      await vi.waitFor(() => expect(errors).toEqual([failure]), { timeout: 200 })
+      expect(completes).not.toHaveBeenCalled()
+      subscription.unsubscribe()
     })
 
     it.each(

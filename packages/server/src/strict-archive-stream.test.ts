@@ -120,4 +120,29 @@ describe('startStrictArchiveStream', () => {
       { type: 'exit', exitCode: null },
     ])
   })
+
+  it('forwards a forced-termination rejection from the Archive phase without a second phase', async () => {
+    const terminal = Promise.withResolvers<CliStreamSettlement>()
+    void terminal.promise.catch(() => {})
+    const startArchive = vi.fn(() => ({
+      settled: terminal.promise,
+      cancel: () => terminal.promise,
+    }))
+    const stream = startStrictArchiveStream({
+      skipValidation: false,
+      startValidate: (onEvent) => {
+        onEvent({ type: 'exit', exitCode: 0 })
+        return settledHandle(0)
+      },
+      startArchive,
+      onEvent: vi.fn(),
+    })
+
+    await vi.waitFor(() => expect(startArchive).toHaveBeenCalledOnce())
+    const failure = new Error('forced termination did not confirm child close')
+    terminal.reject(failure)
+
+    await expect(stream.settled).rejects.toBe(failure)
+    expect(startArchive).toHaveBeenCalledOnce()
+  })
 })

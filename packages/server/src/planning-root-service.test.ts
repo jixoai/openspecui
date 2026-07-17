@@ -907,6 +907,107 @@ describe('PlanningRootServiceManager', () => {
     }
   )
 
+  it.skipIf(process.platform === 'win32')(
+    'cancels retiring A outside a blocked replacement transition and never exposes B during disposal',
+    async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-planning-disposal-transition-'))
+      tempDirs.push(tempDir)
+      const launchProjectDir = join(tempDir, 'launch')
+      const rootA = join(tempDir, 'root-a')
+      const rootB = join(tempDir, 'root-b')
+      await Promise.all([
+        mkdir(join(launchProjectDir, 'openspec'), { recursive: true }),
+        mkdir(join(rootA, 'openspec'), { recursive: true }),
+        mkdir(join(rootB, 'openspec'), { recursive: true }),
+      ])
+
+      const configManager = new ConfigManager(launchProjectDir)
+      await configManager.writeConfig({ cli: { command: process.execPath } })
+      const cliExecutor = new CliExecutor(configManager, launchProjectDir)
+      let selectedRoot = rootA
+      vi.spyOn(cliExecutor, 'checkAvailability').mockResolvedValue({
+        available: true,
+        version: '1.6.0',
+      })
+      vi.spyOn(cliExecutor.contracts, 'doctorRoot').mockImplementation(async () =>
+        commandResult({
+          root: { path: selectedRoot, source: 'nearest', healthy: true, status: [] },
+          store: null,
+          references: [],
+          status: [],
+        })
+      )
+      vi.spyOn(cliExecutor.contracts, 'context').mockImplementation(async () =>
+        commandResult({
+          root: { path: selectedRoot, source: 'nearest', role: 'openspec_root' },
+          members: [],
+          status: [],
+        })
+      )
+      const observationRelease = vi.fn(async () => {})
+      const invalidationRelease = vi.fn()
+      const observationEnvironment: ObservationRootOwner = {
+        acquireRoot: vi.fn(async () => observationRelease),
+      }
+      const projectInvalidation: RuntimeRootInvalidationOwner = {
+        acquireRoot: vi.fn(() => invalidationRelease),
+      }
+      const manager = new PlanningRootServiceManager({
+        launchProjectDir,
+        previewAssetsDir: join(tempDir, 'preview-assets'),
+        configManager,
+        cliExecutor,
+        observationEnvironment,
+        projectInvalidation,
+        runtimeInvalidation: new RuntimeInvalidationIndex(),
+      })
+      const childReady = Promise.withResolvers<void>()
+      const childClosing = Promise.withResolvers<void>()
+      const childScript = [
+        "process.on('SIGTERM', () => setTimeout(() => { process.stdout.write('closing\\n'); process.exit(0) }, 80))",
+        "process.stdout.write('ready\\n')",
+        'setInterval(() => {}, 1_000)',
+      ].join(';')
+      const stream = await manager.startOperationStream(({ rootContext }) => {
+        expect(rootContext.planningRoot?.path).toBe(rootA)
+        return new CliExecutor(configManager, rootA).executeStream(['-e', childScript], (event) => {
+          if (event.type === 'stdout' && event.data?.includes('ready')) childReady.resolve()
+          if (event.type === 'stdout' && event.data?.includes('closing')) childClosing.resolve()
+        })
+      })
+      await childReady.promise
+
+      selectedRoot = rootB
+      const replacement = manager.resolveRootContext()
+      const bExposedBeforeDisposal = await Promise.race([
+        replacement.then(() => true),
+        new Promise<false>((resolve) => setTimeout(() => resolve(false), 25)),
+      ])
+      expect(bExposedBeforeDisposal).toBe(false)
+
+      const disposal = manager.dispose()
+      expect(manager.dispose()).toBe(disposal)
+      try {
+        const childClosedFromDisposal = await Promise.race([
+          childClosing.promise.then(() => true),
+          new Promise<false>((resolve) => setTimeout(() => resolve(false), 500)),
+        ])
+        expect(childClosedFromDisposal).toBe(true)
+        await expect(replacement).resolves.toMatchObject({ state: 'error' })
+        await disposal
+      } finally {
+        void stream.cancel()
+        await stream.settled.catch(() => {})
+        await disposal.catch(() => {})
+      }
+
+      expect(observationEnvironment.acquireRoot).toHaveBeenCalledTimes(1)
+      expect(projectInvalidation.acquireRoot).toHaveBeenCalledTimes(1)
+      expect(observationRelease).toHaveBeenCalledOnce()
+      expect(invalidationRelease).toHaveBeenCalledOnce()
+    }
+  )
+
   it('actively cancels attached streams before repeated disposal retires their root', async () => {
     const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-planning-stream-disposal-'))
     tempDirs.push(tempDir)

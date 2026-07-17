@@ -21,13 +21,21 @@ const {
 } = vi.hoisted(() => {
   let streamEvents: unknown[] = []
   const createSubscribeMock = () =>
-    vi.fn((_input: unknown, handlers: { onData: (event: unknown) => void }) => {
-      for (const event of streamEvents) handlers.onData(event)
-      return { unsubscribe: vi.fn() }
-    })
+    vi.fn(
+      (
+        _input: unknown,
+        handlers: { onData: (event: unknown) => void; onError?: (error: unknown) => void }
+      ) => {
+        for (const event of streamEvents) handlers.onData(event)
+        return { unsubscribe: vi.fn() }
+      }
+    )
   return {
     archiveStrictSubscribeMock: vi.fn(
-      (_input: unknown, handlers: { onData: (event: unknown) => void }) => {
+      (
+        _input: unknown,
+        handlers: { onData: (event: unknown) => void; onError?: (error: unknown) => void }
+      ) => {
         for (const event of streamEvents) handlers.onData(event)
         return { unsubscribe: vi.fn() }
       }
@@ -69,7 +77,7 @@ vi.mock('./trpc', () => ({
 }))
 
 import { CliTerminal } from '../components/cli-terminal'
-import { useCliRunner } from './use-cli-runner'
+import { type CommandProcess, useCliRunner } from './use-cli-runner'
 
 type QueuedCommandInput = Parameters<
   ReturnType<typeof useCliRunner>['commands']['replaceAll']
@@ -159,6 +167,34 @@ describe('useCliRunner', () => {
 
     expect(installSubscribeMock).toHaveBeenCalledWith(undefined, expect.any(Object))
     expect(result.current.status).toBe('success')
+  })
+
+  it('settles an emitted terminal transport error instead of leaving the command running', async () => {
+    installSubscribeMock.mockImplementationOnce((_input, handlers) => {
+      queueMicrotask(() =>
+        handlers.onError(new Error('forced termination did not confirm child close'))
+      )
+      return { unsubscribe: vi.fn() }
+    })
+    const processes: CommandProcess[] = []
+    const { result } = renderHook(() =>
+      useCliRunner({ onCreateProcess: (process) => processes.push(process) })
+    )
+
+    act(() => {
+      result.current.commands.replaceAll([{ type: 'install-global-cli' }])
+    })
+
+    await act(async () => {
+      await result.current.commands.runAll()
+    })
+
+    expect(processes).toHaveLength(1)
+    await expect(processes[0]!.done).resolves.toBeNull()
+    expect(result.current.status).toBe('error')
+    expect(result.current.commands.list()).toEqual([
+      expect.objectContaining({ status: 'error', exitCode: null }),
+    ])
   })
 
   it.each([
