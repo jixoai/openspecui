@@ -8,6 +8,7 @@
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Original request (2026-07-17): "A stream cancellation request is not child-process settlement."
+ * Original request (2026-07-17): "Prove the transition was already blocked on A before disposal began."
  */
 import {
   CliExecutor,
@@ -28,6 +29,7 @@ import {
   type RootContextResolvedState,
   type RuntimeRootInvalidationOwner,
 } from '@openspecui/core'
+import { EventEmitter } from 'node:events'
 import { realpathSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -1008,7 +1010,7 @@ describe('PlanningRootServiceManager', () => {
     }
   )
 
-  it('keeps A blocked and rejects repeated disposal once when forced termination cannot confirm close', async () => {
+  it('keeps an already-retiring A blocked after forced rejection and late close', async () => {
     const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-planning-forced-termination-'))
     tempDirs.push(tempDir)
     const launchProjectDir = join(tempDir, 'launch')
@@ -1016,9 +1018,14 @@ describe('PlanningRootServiceManager', () => {
     const rootB = join(tempDir, 'root-b')
     await Promise.all([
       mkdir(join(launchProjectDir, 'openspec'), { recursive: true }),
-      mkdir(join(rootA, 'openspec'), { recursive: true }),
+      mkdir(join(rootA, 'openspec', 'changes', 'preview-change'), { recursive: true }),
       mkdir(join(rootB, 'openspec'), { recursive: true }),
     ])
+    await writeFile(
+      join(rootA, 'openspec', 'changes', 'preview-change', 'preview.html'),
+      '<h1>Root A</h1>',
+      'utf8'
+    )
 
     const configManager = new ConfigManager(launchProjectDir)
     const cliExecutor = new CliExecutor(configManager, launchProjectDir)
@@ -1042,30 +1049,114 @@ describe('PlanningRootServiceManager', () => {
         status: [],
       })
     )
+    const releaseObservationRoot = vi.fn(async () => {})
+    const observationEnvironment: ObservationRootOwner = {
+      acquireRoot: vi.fn(async () => releaseObservationRoot),
+    }
+    const releaseProjectInvalidation = vi.fn()
+    const projectInvalidation: RuntimeRootInvalidationOwner = {
+      acquireRoot: vi.fn(() => releaseProjectInvalidation),
+    }
     const manager = new PlanningRootServiceManager({
       launchProjectDir,
       previewAssetsDir: join(tempDir, 'preview-assets'),
       configManager,
       cliExecutor,
-      observationEnvironment: { acquireRoot: async () => async () => {} },
-      projectInvalidation: { acquireRoot: () => () => {} },
+      observationEnvironment,
+      projectInvalidation,
       runtimeInvalidation: new RuntimeInvalidationIndex(),
     })
+    const retirementWaitEntered = Promise.withResolvers<void>()
+    const managerProbe = manager as unknown as {
+      waitForOperations(record: unknown): Promise<void>
+    }
+    const waitForOperations = managerProbe.waitForOperations.bind(manager)
+    vi.spyOn(managerProbe, 'waitForOperations').mockImplementation(async (record) => {
+      retirementWaitEntered.resolve()
+      await waitForOperations(record)
+    })
+    const preview = await manager.runOperation(({ filePreviewService }) =>
+      filePreviewService.prepareEntityFilePreview({
+        stage: 'change',
+        changeId: 'preview-change',
+        path: 'preview.html',
+      })
+    )
+    expect(manager.readPreviewRequest(preview.hash, 'preview.html')).not.toBeNull()
+
     const terminal = Promise.withResolvers<CliStreamSettlement>()
     void terminal.promise.catch(() => {})
-    const cancel = vi.fn(() => terminal.promise)
-    await manager.startOperationStream(() => ({ settled: terminal.promise, cancel }))
+    const child = new EventEmitter()
+    const forcedFailure = new Error('forced termination did not confirm child close')
+    let activeChild: EventEmitter | null = child
+    const clearActiveChild = vi.fn(() => {
+      activeChild = null
+    })
+    const closeChild = vi.fn(() => {
+      if (activeChild !== child) return
+      clearActiveChild()
+      terminal.resolve({ reason: 'cancelled', exitCode: null })
+    })
+    child.on('close', closeChild)
+    const requestTermination = vi.fn(() => {
+      setTimeout(() => terminal.reject(forcedFailure), 0)
+    })
+    let cancelRequested = false
+    const cancel = vi.fn(() => {
+      if (!cancelRequested) {
+        cancelRequested = true
+        requestTermination()
+      }
+      return terminal.promise
+    })
+    const stream = await manager.startOperationStream(() => ({
+      settled: terminal.promise,
+      cancel,
+    }))
 
     selectedRoot = rootB
     const replacement = manager.resolveRootContext()
     void replacement.catch(() => {})
+    await retirementWaitEntered.promise
+    expect(manager.readPreviewRequest(preview.hash, 'preview.html')).toBeNull()
+    expect(observationEnvironment.acquireRoot).toHaveBeenCalledTimes(1)
+    expect(projectInvalidation.acquireRoot).toHaveBeenCalledTimes(1)
+
     const disposal = manager.dispose()
     expect(manager.dispose()).toBe(disposal)
     await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce())
-    terminal.reject(new Error('forced termination did not confirm child close'))
 
-    await expect(disposal).rejects.toThrow('Planning-root stream termination failed')
-    await expect(replacement).rejects.toThrow('Planning-root service manager is disposed')
+    const firstFailure = await stream.settled.catch((error: unknown) => error)
+    expect(firstFailure).toBe(forcedFailure)
+    await expect(
+      Promise.race([
+        disposal,
+        new Promise<never>((_resolve, reject) =>
+          setTimeout(() => reject(new Error('disposal did not reject in bounded time')), 200)
+        ),
+      ])
+    ).rejects.toThrow('Planning-root stream termination failed')
+
+    child.emit('close')
+    child.emit('close')
+    await Promise.resolve()
+    await expect(stream.cancel()).rejects.toBe(firstFailure)
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(requestTermination).toHaveBeenCalledOnce()
+    expect(closeChild).toHaveBeenCalledTimes(2)
+    expect(clearActiveChild).toHaveBeenCalledOnce()
+    expect(activeChild).toBeNull()
+    expect(manager.readPreviewRequest(preview.hash, 'preview.html')).toBeNull()
+    expect(observationEnvironment.acquireRoot).toHaveBeenCalledTimes(1)
+    expect(projectInvalidation.acquireRoot).toHaveBeenCalledTimes(1)
+    await expect(
+      Promise.race([
+        replacement.then(() => 'replacement-settled' as const),
+        new Promise<'blocked'>((resolve) => setTimeout(() => resolve('blocked'), 25)),
+      ])
+    ).resolves.toBe('blocked')
+    expect(releaseObservationRoot).not.toHaveBeenCalled()
+    expect(releaseProjectInvalidation).not.toHaveBeenCalled()
   })
 
   it('actively cancels attached streams before repeated disposal retires their root', async () => {

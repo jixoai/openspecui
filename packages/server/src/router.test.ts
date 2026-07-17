@@ -1,11 +1,12 @@
 /**
  * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Prove public Router queries and mutations preserve their typed owner boundaries.
- * 2. Prove Planning-root replacement waits for buffered and settlement-aware stream operations.
+ * 2. Prove Planning-root replacement and public stream routes preserve rejected settlement.
  * 3. Prove strict Archive identity, validation, diagnostics, and Store selection through its public route.
  * 4. Prove reactive, configuration, Git, notification, and runtime procedures retain scoped behavior.
  *
  * Original request (2026-07-17): "Every public application mutation remains inside its Server-owned root and lifetime."
+ * Original request (2026-07-17): "Rejected Validate and Update handles converge to one public terminal error."
  */
 import {
   CliExecutor,
@@ -2265,6 +2266,81 @@ apply:
       expect(completes).not.toHaveBeenCalled()
       subscription.unsubscribe()
       expect(cancel).toHaveBeenCalledOnce()
+    })
+
+    it('projects a rejected Planning-root Validate handle as one terminal tRPC error', async () => {
+      const context = createMockContext()
+      const terminal = Promise.withResolvers<CliStreamSettlement>()
+      void terminal.promise.catch(() => {})
+      const cancel = vi.fn(() => terminal.promise)
+      const validateStream = context.cliExecutor.validateStream as unknown as ReturnType<
+        typeof vi.fn
+      >
+      validateStream.mockReturnValue({ settled: terminal.promise, cancel })
+      const stream = await appRouter.createCaller(context).cli.validateStream({
+        id: 'add-search',
+        type: 'change',
+        strict: true,
+      })
+      const events: CliStreamEvent[] = []
+      const errors: unknown[] = []
+      const completes = vi.fn()
+      const subscription = stream.subscribe({
+        next: (event) => events.push(event),
+        complete: completes,
+        error: (error) => errors.push(error),
+      })
+      await vi.waitFor(() => expect(validateStream).toHaveBeenCalledOnce())
+      const failure = new Error('forced termination did not confirm Validate child close')
+
+      terminal.reject(failure)
+
+      await vi.waitFor(() => expect(errors).toEqual([failure]), { timeout: 200 })
+      expect(events.filter((event) => event.type === 'exit')).toEqual([])
+      expect(completes).not.toHaveBeenCalled()
+      subscription.unsubscribe()
+      await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce())
+    })
+
+    it('invalidates once before projecting a rejected Planning-root Update handle', async () => {
+      const context = createMockContext()
+      const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
+      const terminal = Promise.withResolvers<CliStreamSettlement>()
+      void terminal.promise.catch(() => {})
+      const cancel = vi.fn(() => terminal.promise)
+      const executeStream = context.cliExecutor.executeStream as unknown as ReturnType<typeof vi.fn>
+      executeStream.mockReturnValue({ settled: terminal.promise, cancel })
+      const stream = await appRouter.createCaller(context).cli.updateStream()
+      const events: CliStreamEvent[] = []
+      const errors: unknown[] = []
+      const observedInvalidation: Array<{ project: number; context: number }> = []
+      const completes = vi.fn()
+      const subscription = stream.subscribe({
+        next: (event) => events.push(event),
+        complete: completes,
+        error: (error) => {
+          observedInvalidation.push({
+            project: invalidation.current('project'),
+            context: invalidation.current('context'),
+          })
+          errors.push(error)
+        },
+      })
+      await vi.waitFor(() => expect(executeStream).toHaveBeenCalledOnce())
+      const failure = new Error('forced termination did not confirm Update child close')
+
+      terminal.reject(failure)
+
+      await vi.waitFor(() => expect(errors).toEqual([failure]), { timeout: 200 })
+      expect(observedInvalidation).toEqual([{ project: 1, context: 1 }])
+      expect(invalidation.current('project')).toBe(1)
+      expect(invalidation.current('context')).toBe(1)
+      expect(events.filter((event) => event.type === 'exit')).toEqual([])
+      expect(completes).not.toHaveBeenCalled()
+      subscription.unsubscribe()
+      await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce())
+      expect(invalidation.current('project')).toBe(1)
+      expect(invalidation.current('context')).toBe(1)
     })
 
     it('derives buffered validate Store selection from Root Context', async () => {

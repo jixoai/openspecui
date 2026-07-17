@@ -3,12 +3,14 @@
  * 1. Verify buffered and streaming CLI execution, runner resolution, and error behavior.
  * 2. Preserve the launch process environment without loading project-owned environment files.
  * 3. Verify OpenSpec lifecycle command construction and cancellation.
- * 4. Prove cancellation ownership exists before asynchronous runner resolution completes.
+ * 4. Prove cancellation ownership and forced-timeout settlement remain immutable through late close.
  *
  * Original request (2026-07-15): "OpenSpecUI inherits the launch environment's XDG_DATA_HOME."
  * Original request (2026-07-17): "Cancellation during command resolution cannot spawn after cancellation."
+ * Original request (2026-07-17): "Cover repeated cancel/dispose and a late close after forced-timeout rejection."
  */
 import { mkdir, writeFile } from 'fs/promises'
+import { ChildProcess } from 'node:child_process'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanupTempDir, createTempDir } from './__tests__/test-utils.js'
@@ -21,6 +23,15 @@ import {
 import { ConfigManager } from './config.js'
 import { clearCache } from './reactive-fs/index.js'
 import { closeAllWatchers } from './reactive-fs/watcher-pool.js'
+import { spawnSafe } from './spawn-safe.js'
+
+vi.mock('./spawn-safe.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./spawn-safe.js')>()
+  return {
+    ...actual,
+    spawnSafe: vi.fn(actual.spawnSafe),
+  }
+})
 
 describe('CliExecutor', () => {
   let tempDir: string
@@ -407,6 +418,46 @@ describe('CliExecutor', () => {
         expect(Date.now() - cancelStartedAt).toBeGreaterThanOrEqual(900)
       }
     )
+
+    it('keeps forced-timeout rejection immutable when the child closes late', async () => {
+      vi.useFakeTimers()
+      const child = new ChildProcess()
+      const kill = vi.spyOn(child, 'kill').mockReturnValue(true)
+      const spawn = vi.mocked(spawnSafe)
+      spawn.mockReset()
+      spawn.mockReturnValueOnce({ ok: true, child })
+      vi.spyOn(configManager, 'getCliCommand').mockResolvedValue(['openspec'])
+      const events: CliStreamEvent[] = []
+
+      try {
+        const handle = cliExecutor.executeStream(['validate'], (event) => events.push(event))
+        await vi.advanceTimersByTimeAsync(0)
+        expect(spawn).toHaveBeenCalledOnce()
+        child.emit('spawn')
+
+        const firstCancellation = handle.cancel()
+        expect(handle.cancel()).toBe(firstCancellation)
+        await vi.advanceTimersByTimeAsync(2_000)
+
+        const firstFailure = await firstCancellation.catch((error: unknown) => error)
+        expect(firstFailure).toBeInstanceOf(Error)
+        expect(firstFailure).toMatchObject({ name: 'CliStreamTerminationError' })
+        await expect(handle.settled).rejects.toBe(firstFailure)
+        expect(kill).toHaveBeenNthCalledWith(1, 'SIGTERM')
+        expect(kill).toHaveBeenNthCalledWith(2, 'SIGKILL')
+        expect(events.filter((event) => event.type === 'exit')).toEqual([])
+
+        child.emit('close', 0)
+        child.emit('close', 0)
+        await vi.advanceTimersByTimeAsync(0)
+
+        await expect(handle.cancel()).rejects.toBe(firstFailure)
+        expect(kill).toHaveBeenCalledTimes(2)
+        expect(events.filter((event) => event.type === 'exit')).toEqual([])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
 
     it('settles retry failure once and never retries after cancellation', async () => {
       await configManager.writeConfig({ cli: { command: 'nonexistent_command_12345' } })

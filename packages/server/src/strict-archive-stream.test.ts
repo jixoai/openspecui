@@ -2,10 +2,11 @@
  * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Prove successful validation hands one terminal stream to archive.
  * 2. Prove validation failure never starts archive.
- * 3. Prove cancellation and archive-start failure settle phase ownership exactly once.
+ * 3. Prove cancellation, phase rejection, and archive-start failure settle ownership exactly once.
  *
  * Original request (2026-07-15): "Archive readiness remains a CLI validate/archive outcome."
  * Original request (2026-07-17): "Strict Archive owns one lease through validation and Archive settlement."
+ * Original request (2026-07-17): "Prove Validate rejection never starts Archive."
  */
 import type { CliStreamEvent, CliStreamHandle, CliStreamSettlement } from '@openspecui/core'
 import { describe, expect, it, vi } from 'vitest'
@@ -144,5 +145,35 @@ describe('startStrictArchiveStream', () => {
 
     await expect(stream.settled).rejects.toBe(failure)
     expect(startArchive).toHaveBeenCalledOnce()
+  })
+
+  it('keeps Archive unstarted when the Validate handle rejects settlement', async () => {
+    const terminal = Promise.withResolvers<CliStreamSettlement>()
+    void terminal.promise.catch(() => {})
+    const cancelValidate = vi.fn(() => terminal.promise)
+    const startValidate = vi.fn(() => ({
+      settled: terminal.promise,
+      cancel: cancelValidate,
+    }))
+    const startArchive = vi.fn(() => settledHandle(0))
+    const events: CliStreamEvent[] = []
+    const stream = startStrictArchiveStream({
+      skipValidation: false,
+      startValidate,
+      startArchive,
+      onEvent: (event) => events.push(event),
+    })
+    const failure = new Error('forced termination did not confirm Validate child close')
+
+    terminal.reject(failure)
+
+    await expect(stream.settled).rejects.toBe(failure)
+    const firstCancellation = stream.cancel()
+    expect(stream.cancel()).toBe(firstCancellation)
+    await expect(firstCancellation).rejects.toBe(failure)
+    expect(startValidate).toHaveBeenCalledOnce()
+    expect(cancelValidate).toHaveBeenCalledOnce()
+    expect(startArchive).not.toHaveBeenCalled()
+    expect(events.filter((event) => event.type === 'exit')).toEqual([])
   })
 })

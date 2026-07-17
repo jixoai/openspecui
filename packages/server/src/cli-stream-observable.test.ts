@@ -2,8 +2,10 @@
  * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Prove client detachment requests cancellation for streams whose handle arrives later.
  * 2. Prove delayed cancellation settles and invalidates before its outcome is observed.
+ * 3. Prove rejected settlement converges to one terminal error without an exit event.
  *
  * Original request (2026-07-15): "Every terminal or indeterminate outcome invalidates affected projections before they are pulled again."
+ * Original request (2026-07-17): "A rejected CLI settlement is one terminal transport fact."
  */
 import {
   RuntimeInvalidationIndex,

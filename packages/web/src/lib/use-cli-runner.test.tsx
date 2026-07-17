@@ -3,10 +3,11 @@
  * 1. Verify ordered CLI stream execution and immediate state visibility.
  * 2. Preserve multiline failure evidence and stop the queue after nonzero exit.
  * 3. Prove every queue item selects one exhaustive dedicated Server transport.
- * 4. Prove logical previews are derived and backend command evidence becomes authoritative.
+ * 4. Prove terminal transport rejection releases subscription ownership and command state.
  *
  * Original request (2026-07-15): "场景丢失保护的诊断必须原样显示，不能合成重试。"
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
+ * Original request (2026-07-17): "Rejected settlement must never leave the Web command running."
  */
 import { act, cleanup, render, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -169,33 +170,59 @@ describe('useCliRunner', () => {
     expect(result.current.status).toBe('success')
   })
 
-  it('settles an emitted terminal transport error instead of leaving the command running', async () => {
-    installSubscribeMock.mockImplementationOnce((_input, handlers) => {
-      queueMicrotask(() =>
-        handlers.onError?.(new Error('forced termination did not confirm child close'))
+  it.each([
+    [
+      'Strict Archive',
+      queuedCommand({ type: 'archive-strict', input: { changeId: 'demo' } }),
+      archiveStrictSubscribeMock,
+    ],
+    ['Init', queuedCommand({ type: 'init' }), initSubscribeMock],
+    ['Planning-root Update', queuedCommand({ type: 'planning-root-update' }), updateSubscribeMock],
+    [
+      'Validate',
+      queuedCommand({ type: 'validate', input: { id: 'demo', type: 'change' } }),
+      validateSubscribeMock,
+    ],
+    ['Global install', queuedCommand({ type: 'install-global-cli' }), installSubscribeMock],
+  ] as const)(
+    'settles %s transport rejection and releases its subscription owner',
+    async (_label, descriptor, subscribeMock) => {
+      const unsubscribe = vi.fn()
+      subscribeMock.mockImplementationOnce((_input, handlers) => {
+        queueMicrotask(() =>
+          handlers.onError?.(new Error('forced termination did not confirm child close'))
+        )
+        return { unsubscribe }
+      })
+      const processes: CommandProcess[] = []
+      const { result } = renderHook(() =>
+        useCliRunner({ onCreateProcess: (process) => processes.push(process) })
       )
-      return { unsubscribe: vi.fn() }
-    })
-    const processes: CommandProcess[] = []
-    const { result } = renderHook(() =>
-      useCliRunner({ onCreateProcess: (process) => processes.push(process) })
-    )
 
-    act(() => {
-      result.current.commands.replaceAll([{ type: 'install-global-cli' }])
-    })
+      act(() => {
+        result.current.commands.replaceAll([descriptor])
+      })
 
-    await act(async () => {
-      await result.current.commands.runAll()
-    })
+      await act(async () => {
+        await result.current.commands.runAll()
+      })
 
-    expect(processes).toHaveLength(1)
-    await expect(processes[0]!.done).resolves.toBeNull()
-    expect(result.current.status).toBe('error')
-    expect(result.current.commands.list()).toEqual([
-      expect.objectContaining({ status: 'error', exitCode: null }),
-    ])
-  })
+      expect(processes).toHaveLength(1)
+      await expect(processes[0]!.done).resolves.toBeNull()
+      expect(processes[0]).toMatchObject({ status: 'error', exitCode: null })
+      expect(result.current.status).toBe('error')
+      expect(result.current.commands.list()).toEqual([
+        expect.objectContaining({ status: 'error', exitCode: null }),
+      ])
+      expect(result.current.commands.list().some((command) => command.status === 'running')).toBe(
+        false
+      )
+      expect(unsubscribe).toHaveBeenCalledOnce()
+
+      act(() => result.current.cancel())
+      expect(unsubscribe).toHaveBeenCalledOnce()
+    }
+  )
 
   it.each([
     [
