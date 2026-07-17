@@ -1995,6 +1995,28 @@ The browser observation that motivated the prior visibility gate was reclassifie
 
 ### Fixed-point red evidence
 
+At the required review fixed point `67cc14f`, the stale Environment Global Apply counterexample fails before the production correction. The test file was overlaid into an isolated worktree without changing the production component:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/components/config/environment-global-config-section.test.tsx \
+  -t "does not confirm an already-open Apply dialog after the projection becomes stale"
+  1 failed, 20 skipped
+  Error: expect(element).toBeDisabled()
+  Received element is not disabled
+```
+
+This is the exact stale-dialog defect required by the tenth-review contract. The isolated worktree was removed after the run. The direct Update handler already rejected a blocked Root Action at this fixed point, so its new DOM-gate test is characterization of the visible control plus mutation resistance; it is not claimed as red evidence for a production handler defect.
+
+The broader 67cc14f audit overlaid the current counterexample tests and reported the expected failures in the inherited runtime gaps: Core-default projection, stale JSON Save/shortcut, retained-error lock, refresh-pending lock, stale Apply/Update dialogs, and the Active Root ready-to-block Cancel transition. The schema `writeSchemaFile` route test passed at this fixed point because the underlying route already rejected the exercised scenario; it is route coverage, not red evidence of a newly introduced defect. The refresh-hook test could not load in the detached worktree because its package-local dependency links were absent, so no failure is claimed for that harness-only result.
+
+```text
+67cc14f overlay matrix: 9 failed, 1 suite unresolved by detached-worktree dependency links
+  Core defaults, stale editor, retained-error, refresh window, Apply/Update dialog,
+  and Active Root transition counterexamples failed as intended.
+  config-schema-mutation.test.tsx: 1 passed (no production failure at this fixed point).
+```
+
 At fixed point `d7631f0`, an isolated worktree applied the new ownership tests without the production correction:
 
 ```text
@@ -2017,7 +2039,7 @@ The failing assertion reached the actual dialog control; it was not a manually i
 Focused evidence after the correction:
 
 ```text
-pnpm --filter @openspecui/web exec vitest run --project unit \\
+pnpm --filter @openspecui/web exec vitest run --project unit \
   src/components/config/project-binding-section.test.tsx \
   src/components/config/active-root-config-section.test.tsx \
   src/components/config/environment-global-config-section.test.tsx \
@@ -2040,4 +2062,21 @@ git diff --check
   passed
 ```
 
-This correction does not close checkpoints `3.5` or `6.8`, does not start `6.9+`, and does not claim complete repository gates, clean SSG, browser, or remote PR evidence. Residual filesystem TOCTOU/hard-link, non-atomic Store enumeration, and watcher fallback limitations remain unchanged.
+### Complete local verification after `e4ef2ad`
+
+```text
+pnpm format:check  -> passed (3 changed reviewer documents)
+pnpm lint:ci      -> 0 warnings, 0 errors (830 files)
+pnpm typecheck    -> all 15 runnable workspace packages passed
+pnpm test:ci      -> root 43, Core 440, Server 354, Web 683, App 78, CLI 49, remaining lanes passed
+rm -rf packages/web/dist-ssg packages/web/.vite
+pnpm --filter @openspecui/web build:ssg -> passed
+pnpm test:browser:ci -> xterm 60 passed / 1 skipped; Web 12/12 passed
+git diff --check -> passed
+```
+
+The clean SSG build retains only the repository's known non-fatal `scroll-button` CSS and ineffective dynamic-import warnings. This correction does not close checkpoints `3.5` or `6.8`, does not start `6.9+`, and has no remote PR verification yet. Residual filesystem TOCTOU/hard-link, non-atomic Store enumeration, and watcher fallback limitations remain unchanged.
+
+### Browser re-walk after `e4ef2ad`
+
+The isolated live browser at Vite `13022` plus backend `3122` loaded `/config?configTab=environment-global` and reached the Profile surface. The root link reported `Planning: Resolving` during initial load and then settled; the ready Profile Apply dialog opened with an enabled `Apply profile` control. The existing browser harness has no safe blocked-root fixture that can be triggered without mutating the checkout's launch-project binding, so the blocked-root Apply/Update transition was not fabricated as a new browser claim. The automated browser gate above remains the reproducible evidence; the earlier blocked-root snapshot from the pre-correction walk is retained as historical evidence, not as post-correction proof.
