@@ -1917,3 +1917,90 @@ These are counterexamples against the named fixed point, not downstream-handler 
 The implementation directly addresses the reopened `3.5` and `6.8` contracts. Checkpoints remain open at `57/131` until an independent review accepts this evidence; only that review may move them to `59/131`. `6.9+` remains untouched. Do not merge, archive, release, or begin `6.9`.
 
 Remote evidence at implementation commit `68995c072752f4bf1ef7d3ce479b71d41145287e`: PR #207 remained `OPEN/CLEAN`; Changeset Gate, CI Scope, Fast Gate, Browser Gate (`@openspecui/web`), Browser Gate (`xterm-input-panel`), and aggregate Browser Gate all completed successfully. This documentation-only evidence commit must pass the same six checks before handoff. Checkpoints `3.5` and `6.8` remain open for independent acceptance; progress remains `57/131`.
+
+## Tenth Independent Review after `67cc14f`: Remaining Config Runtime Gaps
+
+Review range: `731f684...67cc14f`. PR #207 is currently `OPEN/CLEAN` with six successful remote checks. The worker's focused Web suite is `42/42`; independently selected Core and Server planning-config tests also pass. Those results are insufficient to close the checkpoints because the following production paths remain reachable.
+
+### Standards findings
+
+1. **P1: Environment Global stale projection remains writable.** The parent JSON editor and Save/shortcut path only check `saveMutation.isPending` (`packages/web/src/components/config/environment-global-config-section.tsx:324-368`), not the subscription's `isLoading`/transport error. An already-open Profile dialog also permits Apply/Update confirmation after the projection turns stale (`environment-global-profile-section.tsx:228-242,417-451`). The backend projection is correctly retained for diagnosis, but every write must become display-only until the replacement projection is current; guard both UI and mutation functions.
+2. **P1: Refresh lock does not span the rebind.** `handleRefresh` sets `isRefreshing`, calls a `void` dependency-key refresh, then clears the flag in the same turn (`environment-global-config-section.tsx:87-92`). The actual `useSubscription` teardown/reconnect/data delivery is asynchronous, so Refresh and JSON Save can be triggered repeatedly during that window. Use the subscription lifecycle or an explicit completion signal and test the pending window.
+   The new Promise currently resolves inside the subscription callback (`use-planning-config.ts:106-124`), before React necessarily commits the replacement projection; an awaited Apply can therefore read the previous `projectionLockedRef` and incorrectly skip auto-Update. Completion must be tied to the post-render projection state, with a ready Apply success test.
+3. **P1: Effective core profile semantics are still under-specified for explicit malformed arrays.** OpenSpec's `getProfileWorkflows` returns the full core set for every `profile: core` config, not only when `workflows` is omitted (`references/openspec/src/core/profiles.ts:43-52`; `config.ts:94-102`). The new helper must therefore ignore empty/invalid raw arrays for core while preserving the raw payload; custom profiles use their explicit list or remain empty. The UI must initialize and compare its editable selection from that effective projection rather than raw `config.workflows` (`EnvironmentGlobalProfileSection:89-95,112-116`). Add explicit empty/invalid core fixtures in addition to omitted/default and custom cases.
+4. **P2: Active Root loses its local exit on a readiness transition.** When an edit is open and `actionLocked` becomes true, `active-root-config-section.tsx:132-153` unmounts both Save and Cancel. The dirty draft remains read-only but the user cannot locally cancel it. Keep Cancel visible and enabled as a non-mutating local action while Save remains locked.
+5. **Evidence weakness (P1):** The Schema route now exercises only `initSchema`; its shared `writeSchemaFile` path (also used for Template file writes) remains covered only by disabled/UI assertions. The Active Root ready -> blocked test only asserts the Save button is disabled and mutates a mock object in place; it does not invoke the real Save mutation with a newly rendered blocked state. Strengthen every test at the real component handler/mutation boundary, including Active Root dynamic transition and `writeSchemaFile`; production owners must not rely on stale captured gates. A direct downstream call, in-place state mutation, or disabled-button assertion is characterization, not the required red evidence.
+
+### Standards smell
+
+`planning-config-service.ts:41-51` now duplicates the drift regex and semantics already present in `router.ts:1076-1088`. Extract one server-owned helper or document why the two facts intentionally differ; otherwise Settings and Config can drift again.
+
+### Spec boundary
+
+The previous review's Reference evidence, objective external Store consequence, Schema/Template root gate, and reactive profile projection are present. No `6.9+` scope creep was found. Checkpoints remain `3.5` and `6.8` open at `57/131` until the corrections above are implemented and independently re-reviewed.
+
+### Next worker evidence
+
+- Show a red test at fixed point `67cc14f` for each stale editor/dialog write, refresh pending window, omitted core workflow default, and dynamic Active Root Cancel loss; then show green tests after the narrowest fix.
+- Include red/green evidence for an explicit empty/invalid core `workflows` array and for Active Root Save rejection at the real mutation boundary.
+- Include red/green evidence for the Schema/Template shared `writeSchemaFile` mutation boundary, not only `initSchema`.
+- Exercise actual mutation functions and assert no tRPC mutation/stream is called. Do not substitute `useMutation` stubs or manually invoke a downstream handler.
+- Re-check the current readiness/projection immediately before the second operation in Apply auto-Update and in already-open dialogs; a state captured before an `await` is not current authority.
+- Prove the normal ready Apply path after a successful refresh: the completion signal must be post-commit and the permitted auto-Update must dispatch exactly once.
+- Run the focused matrix, Core/Server planning-config tests, full local gates, clean SSG, and `git diff --check`; record exact output and residual limitations. Keep the PR open and stop for another independent review.
+
+## Eleventh Worker Correction: Core Semantics and Real Mutation Boundaries (2026-07-18)
+
+This worker slice addresses the remaining tenth-review runtime gaps without starting `6.9+`. Checkpoints `3.5` and `6.8` remain open at `57/131` pending independent acceptance.
+
+### Implemented corrections
+
+- `effectiveOpsxWorkflowList` now follows the pinned OpenSpec profile contract: `profile: core` always projects `propose, explore, apply, update, sync, archive`, even when the raw CLI array is omitted, empty, partial, or malformed; `profile: custom` filters its explicit list and remains empty when omitted. The parsed effective projection remains separate from the raw `config list --json` payload.
+- Active Root Save reads the current Root Action, subscription error, and loading refs inside the real React Query mutation function. Config Schema/Template mutation functions share a current Root Action ref, so a newly rendered blocked Root Context rejects queued writes before `writeActiveRoot`/`writeSchemaFile` transport.
+- Environment Global refresh completion now resolves only from a post-commit hook effect after `useSubscription` has committed replacement data or terminal error. Ready profile Apply therefore waits for successful refresh before dispatching its permitted typed Planning-root Update exactly once.
+
+### Focused green evidence
+
+```text
+pnpm --filter @openspecui/server exec vitest run \
+  src/opsx-profile-state.test.ts src/planning-config-service.test.ts src/router.test.ts
+  3 files, 101 tests passed
+
+pnpm --filter @openspecui/web exec vitest run \
+  src/components/config/active-root-config-section.test.tsx \
+  src/components/config/environment-global-config-section.test.tsx \
+  src/routes/config-schema-mutation.test.tsx \
+  src/lib/use-planning-config.test.tsx
+  4 files, 36 tests passed
+
+pnpm --filter @openspecui/server typecheck  -> passed
+pnpm --filter @openspecui/web typecheck     -> passed
+pnpm exec oxlint <changed source/test files> -> 0 warnings, 0 errors
+pnpm exec prettier --check <changed source/test files> -> passed after formatting
+```
+
+The Active Root test rerenders with a newly returned blocked Root Action object after a real Save click and asserts the mocked `writeActiveRoot` transport is never called. The new standalone Config test uses real `@tanstack/react-query` and crosses the actual `writeSchemaFile` mutation function; it does not stub `useMutation` or call a downstream handler. The refresh hook tests retain terminal-error pending release and duplicate-refresh coalescing, while the Environment Global component test proves ready Apply plus successful refresh dispatches one `planning-root-update`.
+
+## Browser independent review after `3b69e20`: dialog readiness gap
+
+The independent browser walk-through used Vite `13003` plus the local backend on `3110`. Project Binding, Active Root, and Environment Global surfaces loaded; Active Root retained an enabled Cancel and disabled Save after a planning-root loss. However, after opening Profile Apply and transitioning the backend Root Context to Resolving, the visible `Apply profile` dialog confirm remained enabled even though the handler would reject via its latest Root Action ref. This violates the button-plus-handler contract. Screenshot capture was unavailable in the installed headless agent-browser, so reproducible snapshot/eval evidence is recorded instead; do not close `3.5`/`6.8` until the dialog control is gated and re-walked.
+
+### Remaining acceptance boundary
+
+This worker has not run the complete repository gates, clean SSG build, browser suite, or remote PR checks. Do not close `3.5` or `6.8`, merge, archive, release, or start `6.9+` until those gates and an independent review pass. Residual filesystem TOCTOU/hard-link, non-atomic Store enumeration, and watcher fallback limitations remain unchanged.
+
+## Twelfth Worker Correction: Dialog Root-Action Visibility Gate (2026-07-18)
+
+The browser review found that an already-open Environment Global Profile Apply dialog could retain an enabled confirmation control after Root Context entered `checking`/`blocked`. The handler guard rejected the later operation in some paths, but the visible control did not communicate the current gate and could still be activated. The same dialog component serves both Profile Apply and Planning-root Update, so the confirmation control now consumes the current `rootAction.disabled` state in addition to projection, save, and command-pending locks. Close remains available for local diagnosis and draft dismissal; handler-level rechecks remain intact.
+
+The component test now starts with a `ready` Root Action, opens Profile Apply, rerenders with a newly returned `checking` Root Action object, and asserts that the visible `Apply profile` control is disabled and that the real Environment Global write plus typed runner transport are not called. The former initial blocked Apply assertion now records the same no-write behavior. This is a new-object rerender, not in-place mutation of an old mock state.
+
+Focused evidence after the correction:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/components/config/environment-global-config-section.test.tsx
+  1 file, 21 tests passed
+```
+
+This slice does not close checkpoints `3.5` or `6.8`, does not start `6.9+`, and has not independently established the complete repository gates, clean SSG output, or browser suite after this correction.
