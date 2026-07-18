@@ -289,6 +289,7 @@ describe('GitRepositoryBindingService', () => {
     fixture.setAvailable(false)
 
     const failedPlanningScopes = await fixture.bindings.resolveScopes({ reactive: true })
+    expect(failedPlanningScopes.planningState).toBe('failed')
     expect(failedPlanningScopes.planning).toBeNull()
     expect(failedPlanningScopes.code.bindingToken).toBe(codeToken)
     await expect(

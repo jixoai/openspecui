@@ -3,11 +3,12 @@
  * 1. Prove Dashboard planning metrics and Code Git projections render independently.
  * 2. Prove Dashboard refresh actions retain their loading and mutation boundaries.
  * 3. Prove live Code Git navigation carries the backend-issued binding token.
+ * 4. Prove Dashboard snapshots cannot be relabeled across Code binding replacements.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Dashboard Git provenance.
  */
-import type { DashboardGitWorktree } from '@openspecui/core'
+import type { DashboardGitWorktree, GitRepositoryScopes } from '@openspecui/core'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -23,6 +24,7 @@ const {
   staticModeMock,
   dashboardContextSummaryMock,
   codeBindingQueryMock,
+  gitScopesMock,
 } = vi.hoisted(() => ({
   dashboardOverviewMock: vi.fn(),
   dashboardGitTaskStatusMock: vi.fn(),
@@ -36,6 +38,7 @@ const {
   staticModeMock: vi.fn(() => true),
   dashboardContextSummaryMock: vi.fn(),
   codeBindingQueryMock: vi.fn(async () => ({ bindingToken: 'code-binding' })),
+  gitScopesMock: vi.fn(),
 }))
 
 vi.mock('@/components/dashboard/metric-card', () => ({
@@ -59,6 +62,10 @@ vi.mock('@/lib/use-dashboard', () => ({
   useDashboardGitTaskStatusSubscription: dashboardGitTaskStatusMock,
   refreshDashboardGitSnapshot: refreshDashboardGitSnapshotMock,
   removeDetachedDashboardWorktree: vi.fn(),
+}))
+
+vi.mock('@/lib/use-git-repository-scope', () => ({
+  useGitRepositoryScopes: gitScopesMock,
 }))
 
 vi.mock('@/lib/use-opsx', () => ({
@@ -187,6 +194,7 @@ describe('Dashboard', () => {
         },
       ],
       git: {
+        bindingToken: 'code-binding',
         defaultBranch: 'main',
         worktrees: [],
       },
@@ -238,6 +246,21 @@ describe('Dashboard', () => {
     navControllerMock.activatePop.mockReset()
     navControllerMock.push.mockReset()
     dashboardContextSummaryMock.mockClear()
+    gitScopesMock.mockReturnValue({
+      data: {
+        defaultScope: 'code',
+        code: {
+          scope: 'code',
+          bindingToken: 'code-binding',
+          rootPath: '/workspace/code',
+          repository: { topLevel: '/workspace/code', commonDir: '/workspace/code/.git' },
+        },
+        planningState: 'settled',
+        planning: null,
+      } satisfies GitRepositoryScopes,
+      isLoading: false,
+      error: null,
+    })
   })
 
   afterEach(() => {
@@ -346,6 +369,7 @@ describe('Dashboard', () => {
         specifications: [],
         activeChanges: [],
         git: {
+          bindingToken: 'code-binding',
           defaultBranch: 'main',
           worktrees: [
             {
@@ -496,7 +520,7 @@ describe('Dashboard', () => {
     expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledTimes(1)
   })
 
-  it('opens git snapshot entries in the bottom git panel during live mode', async () => {
+  it('opens current git snapshot entries with their own Code binding provenance', async () => {
     staticModeMock.mockReturnValue(false)
     dashboardOverviewMock.mockReturnValue({
       data: {
@@ -515,6 +539,7 @@ describe('Dashboard', () => {
         specifications: [],
         activeChanges: [],
         git: {
+          bindingToken: 'code-binding',
           defaultBranch: 'main',
           worktrees: [
             {
@@ -542,7 +567,7 @@ describe('Dashboard', () => {
 
     fireEvent.click(screen.getByText('Open me').closest('button') as HTMLButtonElement)
 
-    await waitFor(() => expect(codeBindingQueryMock).toHaveBeenCalledOnce())
+    await waitFor(() => expect(navControllerMock.push).toHaveBeenCalledTimes(1))
     expect(navControllerMock.push).toHaveBeenCalledWith(
       'bottom',
       '/git/commit/deadbeef',
@@ -555,5 +580,62 @@ describe('Dashboard', () => {
         }),
       })
     )
+    expect(codeBindingQueryMock).not.toHaveBeenCalled()
+  })
+
+  it('retires an A dashboard snapshot instead of handing it off with current Code token B', async () => {
+    staticModeMock.mockReturnValue(false)
+    let codeBindingToken = 'code-binding-a'
+    gitScopesMock.mockImplementation(() => ({
+      data: {
+        defaultScope: 'code',
+        code: {
+          scope: 'code',
+          bindingToken: codeBindingToken,
+          rootPath: '/workspace/code',
+          repository: { topLevel: '/workspace/code', commonDir: '/workspace/code/.git' },
+        },
+        planningState: 'settled',
+        planning: null,
+      } satisfies GitRepositoryScopes,
+      isLoading: false,
+      error: null,
+    }))
+    dashboardOverviewMock.mockReturnValue({
+      data: {
+        ...createOverviewData(),
+        git: {
+          bindingToken: 'code-binding-a',
+          defaultBranch: 'main',
+          worktrees: [
+            {
+              ...baseWorktree,
+              isCurrent: true,
+              entries: [
+                {
+                  type: 'commit',
+                  hash: 'deadbeef',
+                  title: 'Stale A entry',
+                  committedAt: 1_710_200_000_000,
+                  relatedChanges: [],
+                  diff: { files: 1, insertions: 4, deletions: 2 },
+                },
+              ],
+            },
+          ],
+        },
+      },
+      isLoading: false,
+      error: null,
+    })
+
+    const view = render(<Dashboard />)
+    expect(screen.getByText('Stale A entry')).toBeInTheDocument()
+
+    codeBindingToken = 'code-binding-b'
+    view.rerender(<Dashboard />)
+
+    await waitFor(() => expect(screen.queryByText('Stale A entry')).toBeNull())
+    expect(navControllerMock.push).not.toHaveBeenCalled()
   })
 })

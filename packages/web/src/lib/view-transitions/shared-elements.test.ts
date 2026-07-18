@@ -3,15 +3,18 @@
  * 1. Prove stable shared-element names and DOM collection.
  * 2. Prove navigation handoff state preserves valid presentation fields.
  * 3. Prove Git binding provenance is preserved only when nonblank.
+ * 4. Prove Git handoff validation binds origin token and canonical selector entity.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 carries Git origin tokens through VT.
  */
+import type { GitEntrySelector } from '@openspecui/core'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   collectSharedElementEntries,
   getSharedElementBinding,
   getSharedElementName,
+  readGitSharedElementHandoffState,
   readSharedElementHandoffState,
   withSharedElementHandoffState,
 } from './shared-elements'
@@ -136,6 +139,61 @@ describe('shared element handoff state', () => {
       family: 'git',
       entityId: 'abc12345',
       bindingToken: 'planning-binding-a',
+    })
+  })
+
+  it('accepts a Git handoff only when selector, entity, and origin token all match', () => {
+    const selector: GitEntrySelector = { type: 'commit', hash: 'abc12345' }
+    const state = {
+      __vtHandoff: {
+        family: 'git',
+        entityId: 'abc12345',
+        bindingToken: 'planning-binding-a',
+        title: 'Commit A',
+        subtitle: 'A subtitle',
+      },
+    }
+
+    expect(readGitSharedElementHandoffState(state, selector, 'planning-binding-a')).toEqual({
+      family: 'git',
+      entityId: 'abc12345',
+      bindingToken: 'planning-binding-a',
+      title: 'Commit A',
+      subtitle: 'A subtitle',
+    })
+  })
+
+  it.each([
+    ['wrong entity', { entityId: 'def67890', bindingToken: 'planning-binding-a' }],
+    ['blank token', { entityId: 'abc12345', bindingToken: '   ' }],
+    ['wrong token', { entityId: 'abc12345', bindingToken: 'planning-binding-b' }],
+    ['malformed entity', { entityId: '', bindingToken: 'planning-binding-a' }],
+  ])('rejects Git handoff with %s', (_reason, handoff) => {
+    const selector: GitEntrySelector = { type: 'commit', hash: 'abc12345' }
+    expect(
+      readGitSharedElementHandoffState(
+        { __vtHandoff: { family: 'git', ...handoff } },
+        selector,
+        'planning-binding-a'
+      )
+    ).toBeNull()
+  })
+
+  it('keeps non-Git handoffs valid without inventing binding provenance', () => {
+    expect(
+      readSharedElementHandoffState({
+        __vtHandoff: {
+          family: 'changes',
+          entityId: 'change-a',
+          title: 'Change A',
+        },
+      })
+    ).toEqual({
+      family: 'changes',
+      entityId: 'change-a',
+      title: 'Change A',
+      subtitle: undefined,
+      bindingToken: undefined,
     })
   })
 

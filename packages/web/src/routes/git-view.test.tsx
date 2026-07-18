@@ -2,17 +2,41 @@
  * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Prove scoped Git detail rendering, back navigation, and document flow.
  * 2. Prove mounted binding replacement retires stale detail, files, and patch content.
+ * 3. Prove Git loading handoffs match both repository binding and target entity.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
  */
-import type { GitRepositoryScopes, RootContextState } from '@openspecui/core'
+import type {
+  GitRepositoryScopeDescriptor,
+  GitRepositoryScopes,
+  RootContextState,
+} from '@openspecui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { GitCommitViewRoute, GitUncommittedViewRoute } from './git-view'
+
+type Equal<Left, Right> =
+  (<Value>() => Value extends Left ? 1 : 2) extends <Value>() => Value extends Right ? 1 : 2
+    ? true
+    : false
+type Expect<Value extends true> = Value
+type ResolvingPlanningIsNull = Expect<
+  Equal<Extract<GitRepositoryScopes, { planningState: 'resolving' }>['planning'], null>
+>
+type SettledPlanningAllowsDescriptor = Expect<
+  Equal<
+    Extract<GitRepositoryScopes, { planningState: 'settled' }>['planning'],
+    (GitRepositoryScopeDescriptor & { scope: 'planning' }) | null
+  >
+>
+const checkedScopeContract: [ResolvingPlanningIsNull, SettledPlanningAllowsDescriptor] = [
+  true,
+  true,
+]
 
 const {
   scopesQueryMock,
@@ -273,6 +297,10 @@ describe('Git entry routes', () => {
     })
   })
 
+  it('keeps the resolving scope contract explicit in the checked fixture', () => {
+    expect(checkedScopeContract).toEqual([true, true])
+  })
+
   it('keeps the commit title and subtitle fully wrappable instead of truncating them', async () => {
     getEntryMetaQueryMock.mockResolvedValue({
       type: 'commit',
@@ -374,6 +402,35 @@ describe('Git entry routes', () => {
     expect(await screen.findByText('Root A handoff title')).toBeTruthy()
     expect(screen.getByText('Root A handoff subtitle')).toBeTruthy()
     expect(screen.queryByText(/Loading Git detail for/)).toBeNull()
+  })
+
+  it('does not render an A handoff for a B selector under the same binding', async () => {
+    routerLocation.searchStr = '?gitScope=planning'
+    routerLocation.pathname = '/git/commit/def67890'
+    useParamsMock.mockReturnValue({ hash: 'def67890' })
+    routerLocation.state = {
+      __vtHandoff: {
+        family: 'git',
+        entityId: 'abc12345',
+        bindingToken: 'planning-binding-a',
+        title: 'Commit A handoff title',
+        subtitle: 'Commit A handoff subtitle',
+      },
+    }
+    const pendingDetail = new Promise<never>(() => {})
+    getEntryMetaQueryMock.mockReturnValue(pendingDetail)
+    getEntryFilesQueryMock.mockReturnValue(pendingDetail)
+
+    renderWithQueryClient(<GitCommitViewRoute />)
+
+    expect(await screen.findByText(/Loading Git detail for \/tmp\/planning/)).toBeTruthy()
+    expect(screen.queryByText('Commit A handoff title')).toBeNull()
+    expect(screen.queryByText('Commit A handoff subtitle')).toBeNull()
+    expect(getEntryMetaQueryMock).toHaveBeenCalledWith({
+      scope: 'planning',
+      expectedBindingToken: 'planning-binding-a',
+      selector: { type: 'commit', hash: 'def67890' },
+    })
   })
 
   it('does not render an A handoff after B becomes current before detail mount', async () => {

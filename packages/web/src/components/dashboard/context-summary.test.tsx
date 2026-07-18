@@ -4,6 +4,7 @@
  * 2. Preserve direct Reference diagnostics without inferred health or completeness.
  * 3. Keep Code and distinct Planning Git repositories independently visible.
  * 4. Cover static, loading, stale-error, and Git failure states.
+ * 5. Preserve explicit Planning Git identity failure instead of rendering collapse.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Git binding provenance in Dashboard fixtures.
@@ -209,5 +210,25 @@ describe('DashboardContextSummary', () => {
     setGit({ data: gitScopes(false) })
     render(<DashboardContextSummary staticMode={false} />)
     expect(screen.getByText('No distinct Planning Git repository.')).toBeTruthy()
+  })
+
+  it('does not render settled-collapse copy when Planning Git identity resolution fails', () => {
+    const base = gitScopes(false)
+    setGit({
+      data: {
+        defaultScope: base.defaultScope,
+        code: base.code,
+        planningState: 'failed',
+        planning: null,
+        planningError: { message: 'Planning Git identity resolution failed.' },
+      },
+    })
+
+    render(<DashboardContextSummary staticMode={false} />)
+
+    const gitSection = screen.getByRole('heading', { name: 'Code Git snapshot' }).parentElement
+    expect(gitSection?.textContent).toContain('Planning Git repository binding failed:')
+    expect(gitSection?.textContent).toContain('Planning Git identity resolution failed.')
+    expect(screen.queryByText('No distinct Planning Git repository.')).toBeNull()
   })
 })

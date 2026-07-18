@@ -2,6 +2,7 @@
  * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Prove detail View Transition preparation primes authoritative caches.
  * 2. Prove Git preparation includes the current repository binding token.
+ * 3. Prove Git handoff provenance matches both the target entity and repository binding.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git prefetch bindings.
@@ -247,6 +248,75 @@ describe('prepareRouteDetailViewTransition', () => {
     expect(gitCodeQueryMock).toHaveBeenCalledOnce()
     expect(fetchQueryMock).not.toHaveBeenCalled()
     expect(gitEntryMetaQueryMock).not.toHaveBeenCalled()
+  })
+
+  it('does not use an A handoff as provenance for a B selector under the same binding', async () => {
+    await expect(
+      prepareRouteDetailViewTransition({
+        intent: {
+          area: 'bottom',
+          kind: 'route-detail',
+          direction: 'forward',
+        },
+        pathname: '/git/commit/def67890',
+        state: {
+          __vtHandoff: {
+            family: 'git',
+            entityId: 'abc12345',
+            title: 'Commit A',
+            bindingToken: 'code-binding',
+          },
+        },
+      })
+    ).resolves.toBe('ready')
+
+    expect(gitCodeQueryMock).toHaveBeenCalledOnce()
+    expect(fetchQueryMock.mock.calls.map(([input]) => input?.queryKey)).not.toContainEqual([
+      'git',
+      'code',
+      'code-binding',
+      'meta',
+      'commit',
+      'abc12345',
+    ])
+    expect(gitEntryMetaQueryMock).not.toHaveBeenCalledWith({
+      scope: 'code',
+      expectedBindingToken: 'code-binding',
+      selector: { type: 'commit', hash: 'abc12345' },
+    })
+  })
+
+  it('prefetches the exact selector for a matching Git handoff', async () => {
+    gitEntryMetaQueryMock.mockResolvedValue({
+      type: 'commit',
+      hash: 'abc12345',
+      title: 'Commit A',
+    })
+
+    await expect(
+      prepareRouteDetailViewTransition({
+        intent: {
+          area: 'bottom',
+          kind: 'route-detail',
+          direction: 'forward',
+        },
+        pathname: '/git/commit/abc12345',
+        state: {
+          __vtHandoff: {
+            family: 'git',
+            entityId: 'abc12345',
+            title: 'Commit A',
+            bindingToken: 'code-binding',
+          },
+        },
+      })
+    ).resolves.toBe('ready')
+
+    expect(gitEntryMetaQueryMock).toHaveBeenCalledWith({
+      scope: 'code',
+      expectedBindingToken: 'code-binding',
+      selector: { type: 'commit', hash: 'abc12345' },
+    })
   })
 
   it('primes Planning repository Git detail under a scope-specific cache key', async () => {
