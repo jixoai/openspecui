@@ -1,12 +1,17 @@
 /**
  * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
- * 1. Verify static Spec details preserve processed and source-aware projection semantics.
- * 2. Verify static Search derives scope, path, route, and identity from compound Spec identity.
+ * 1. Verify static Spec details preserve processed Owned projection semantics.
+ * 2. Verify current legal snapshots expose only Active-root Search documents.
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  */
 import type { ExportSnapshot } from '@openspecui/core'
+import {
+  createDocumentChecklistSummary,
+  createTrackedTaskProgress,
+} from '@openspecui/core/task-progress'
+import { buildSearchIndex, searchIndex } from '@openspecui/search'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const staticState = vi.hoisted(() => ({
@@ -70,58 +75,57 @@ describe('static-data-provider specs', () => {
     )
   })
 
-  it('derives Search scope and paths from duplicate compound Spec identities', async () => {
+  it('indexes only Active-root entities and keeps Referenced Search neutral-empty', async () => {
     staticState.snapshot = {
       ...createSnapshot(),
-      specs: [
-        createSnapshot().specs[0],
+      changes: [
         {
-          identity: { kind: 'referenced', storeId: 'platform-a', specId: 'cli' },
-          source: 'referenced',
-          readOnly: true,
-          id: 'cli',
-          name: 'CLI',
-          content: '# Referenced CLI A',
-          overview: '',
-          requirements: [],
-          createdAt: 0,
-          updatedAt: 0,
+          id: 'add-cli',
+          name: 'Add CLI',
+          proposal: '# CLI proposal',
+          tasks: '- [ ] Ship CLI',
+          why: 'CLI',
+          whatChanges: 'CLI',
+          trackedTaskProgress: createTrackedTaskProgress([]),
+          documentChecklistSummary: createDocumentChecklistSummary([]),
+          deltas: [],
+          createdAt: 3,
+          updatedAt: 4,
         },
+      ],
+      archives: [
         {
-          identity: { kind: 'referenced', storeId: 'platform-b', specId: 'cli' },
-          source: 'referenced',
-          readOnly: true,
-          id: 'cli',
-          name: 'CLI',
-          content: '# Referenced CLI B',
-          overview: '',
-          requirements: [],
-          createdAt: 0,
-          updatedAt: 0,
+          id: 'old-cli',
+          name: 'Old CLI',
+          entity: {
+            stage: 'archive',
+            id: 'old-cli',
+            exists: true,
+            files: [{ path: 'summary.md', type: 'file', content: '# Archived CLI' }],
+            artifacts: [],
+            ungroupedFiles: [{ path: 'summary.md', type: 'file', content: '# Archived CLI' }],
+            diagnostics: [],
+          },
+          trackedTaskProgress: createTrackedTaskProgress([]),
+          documentChecklistSummary: createDocumentChecklistSummary([]),
+          createdAt: 5,
+          updatedAt: 6,
         },
-      ] as never,
+      ],
     }
     const provider = await import('./static-data-provider')
+    const docs = await provider.getSearchDocuments()
 
-    await expect(provider.getSearchDocuments()).resolves.toEqual([
-      expect.objectContaining({
-        id: 'spec:owned:cli',
-        scope: 'active-root',
-        href: '/specs/owned/cli',
-        path: 'owned:openspec/specs/cli/spec.md',
-      }),
-      expect.objectContaining({
-        id: 'spec:referenced:platform-a:cli',
-        scope: 'referenced-specs',
-        href: '/specs/referenced/platform-a/cli',
-        path: 'referenced:platform-a:specs/cli',
-      }),
-      expect.objectContaining({
-        id: 'spec:referenced:platform-b:cli',
-        scope: 'referenced-specs',
-        href: '/specs/referenced/platform-b/cli',
-        path: 'referenced:platform-b:specs/cli',
-      }),
+    expect(docs.map(({ id, scope }) => ({ id, scope }))).toEqual([
+      { id: 'spec:owned:cli', scope: 'active-root' },
+      { id: 'change:add-cli', scope: 'active-root' },
+      { id: 'archive:old-cli', scope: 'active-root' },
     ])
+    expect(
+      searchIndex(buildSearchIndex(docs), {
+        query: 'CLI',
+        scope: 'referenced-specs',
+      })
+    ).toEqual([])
   })
 })

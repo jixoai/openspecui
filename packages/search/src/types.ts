@@ -23,6 +23,11 @@ export interface SearchDocument {
   updatedAt: number
 }
 
+/** A project Search document whose source provenance is always explicit. */
+export interface ProjectSearchDocument extends SearchDocument {
+  scope: ProjectSearchScope
+}
+
 /** A shared Search request; project consumers may select one source scope. */
 export interface SearchQuery {
   query: string
@@ -41,6 +46,11 @@ export interface SearchHit {
   score: number
   snippet: string
   updatedAt: number
+}
+
+/** A project Search result whose source provenance is always explicit. */
+export interface ProjectSearchHit extends SearchHit {
+  scope: ProjectSearchScope
 }
 
 /** An asynchronous provider for a replaceable Search document collection. */

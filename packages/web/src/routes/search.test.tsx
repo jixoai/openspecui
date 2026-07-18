@@ -2,6 +2,7 @@
  * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Verify Search result navigation, highlighting, and pop-area lifecycle.
  * 2. Verify URL-defaulted source tabs preserve query and compound Reference navigation.
+ * 3. Verify source-correct empty, loading, and error states remain mutually exclusive.
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
@@ -68,10 +69,12 @@ describe('SearchRoute', () => {
       state: null,
     })
     useSearchMock.mockReturnValue({
+      scope: 'active-root',
       data: [
         {
           documentId: 'change:add-auth',
           kind: 'change',
+          scope: 'active-root',
           title: 'Add Auth',
           href: '/changes/add-auth',
           path: 'openspec/changes/add-auth',
@@ -100,6 +103,7 @@ describe('SearchRoute', () => {
       state: { from: 'search-test' },
     })
     useSearchMock.mockReturnValue({
+      scope: 'active-root',
       data: [],
       isLoading: false,
       error: null,
@@ -122,10 +126,12 @@ describe('SearchRoute', () => {
       state: null,
     })
     useSearchMock.mockReturnValue({
+      scope: 'active-root',
       data: [
         {
           documentId: 'spec:owned:auth',
           kind: 'spec',
+          scope: 'active-root',
           title: 'Auth Flow',
           href: '/specs/owned/auth',
           path: 'owned:openspec/specs/auth/spec.md',
@@ -151,6 +157,7 @@ describe('SearchRoute', () => {
       state: null,
     })
     useSearchMock.mockReturnValue({
+      scope: 'active-root',
       data: [],
       isLoading: false,
       error: null,
@@ -171,6 +178,7 @@ describe('SearchRoute', () => {
       state: { from: 'search-test' },
     })
     useSearchMock.mockReturnValue({
+      scope: 'active-root',
       data: [],
       isLoading: false,
       error: null,
@@ -187,12 +195,102 @@ describe('SearchRoute', () => {
     expect(useSearchMock).toHaveBeenLastCalledWith('api auth', 'referenced-specs')
   })
 
+  it('renders the Active-root empty state without a result list', () => {
+    useLocationMock.mockReturnValue({ search: '?query=missing', state: null })
+    useSearchMock.mockReturnValue({
+      scope: 'active-root',
+      data: [],
+      isLoading: false,
+      error: null,
+    })
+
+    render(<SearchRoute />)
+
+    expect(screen.getByText(/No matching results in the active Planning root/i)).toBeInTheDocument()
+    expect(screen.queryByRole('list')).not.toBeInTheDocument()
+  })
+
+  it('renders the Referenced empty state with neutral observed-only copy', () => {
+    useLocationMock.mockReturnValue({
+      search: '?query=missing&scope=referenced-specs',
+      state: null,
+    })
+    useSearchMock.mockReturnValue({
+      scope: 'referenced-specs',
+      data: [],
+      isLoading: false,
+      error: null,
+    })
+
+    render(<SearchRoute />)
+
+    expect(screen.getByText(/No matching Referenced Specs currently observed/i)).toBeInTheDocument()
+    expect(screen.queryByRole('list')).not.toBeInTheDocument()
+  })
+
+  it('renders loading without stale results or an empty-state claim', () => {
+    useLocationMock.mockReturnValue({ search: '?query=auth', state: null })
+    useSearchMock.mockReturnValue({
+      scope: 'active-root',
+      data: [
+        {
+          documentId: 'change:stale-auth',
+          kind: 'change',
+          scope: 'active-root',
+          title: 'Stale Auth',
+          href: '/changes/stale-auth',
+          path: 'openspec/changes/stale-auth',
+          score: 1,
+          snippet: 'stale',
+          updatedAt: 1,
+        },
+      ],
+      isLoading: true,
+      error: null,
+    })
+
+    render(<SearchRoute />)
+
+    expect(screen.getByText('Searching...')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Stale Auth/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/No matching results/i)).not.toBeInTheDocument()
+  })
+
+  it('renders an error without stale results or an empty-state claim', () => {
+    useLocationMock.mockReturnValue({ search: '?query=auth', state: null })
+    useSearchMock.mockReturnValue({
+      scope: 'active-root',
+      data: [
+        {
+          documentId: 'spec:owned:stale-auth',
+          kind: 'spec',
+          scope: 'active-root',
+          title: 'Stale Auth',
+          href: '/specs/owned/stale-auth',
+          path: 'owned:openspec/specs/stale-auth/spec.md',
+          score: 1,
+          snippet: 'stale',
+          updatedAt: 1,
+        },
+      ],
+      isLoading: false,
+      error: new Error('Search unavailable'),
+    })
+
+    render(<SearchRoute />)
+
+    expect(screen.getByText('Search unavailable')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Stale Auth/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/No matching results/i)).not.toBeInTheDocument()
+  })
+
   it('navigates a Store-qualified Referenced Spec and labels it read-only', () => {
     useLocationMock.mockReturnValue({
       search: '?query=auth&scope=referenced-specs',
       state: null,
     })
     useSearchMock.mockReturnValue({
+      scope: 'referenced-specs',
       data: [
         {
           documentId: 'spec:referenced:platform-a:auth',

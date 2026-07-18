@@ -15,6 +15,8 @@ export {
 } from './engine.js'
 
 export {
+  ProjectSearchDocumentSchema,
+  ProjectSearchHitSchema,
   ProjectSearchQuerySchema,
   ProjectSearchScopeSchema,
   SearchDocumentKindSchema,
@@ -23,6 +25,7 @@ export {
   SearchQuerySchema,
   SearchWorkerRequestSchema,
   SearchWorkerResponseSchema,
+  parseProjectSearchHits,
   type ProjectSearchQueryInput,
   type SearchDocumentInput,
   type SearchHitOutput,
@@ -34,6 +37,8 @@ export {
 export { WebWorkerSearchProvider } from './webworker-provider.js'
 
 export type {
+  ProjectSearchDocument,
+  ProjectSearchHit,
   ProjectSearchScope,
   SearchDocument,
   SearchDocumentKind,

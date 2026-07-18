@@ -179,7 +179,7 @@ export function SearchRoute() {
         </div>
       )}
 
-      {data.length > 0 && (
+      {!isLoading && !error && data.length > 0 && (
         <ul className="border-border divide-border min-h-0 w-full min-w-0 flex-1 divide-y overflow-y-auto rounded-md border">
           {data.map((hit) => {
             const Icon = kindIcon(hit.kind)

@@ -42,7 +42,7 @@ import {
   type SpecDocumentProjection,
   type SpecIdentity,
 } from '@openspecui/core/spec-catalog'
-import type { ProjectSearchScope, SearchDocument } from '@openspecui/search'
+import type { ProjectSearchDocument } from '@openspecui/search'
 import { parse as parseYaml } from 'yaml'
 import type { ExportSnapshot } from '../ssg/types'
 import { getBasePath, getInitialData } from './static-mode'
@@ -1274,38 +1274,22 @@ export async function getOpsxGlobArtifactFiles(
   return resolveGlobArtifactFiles(change, outputPath)
 }
 
-function getSpecSearchSource(identity: SpecIdentity): {
-  scope: ProjectSearchScope
-  path: string
-} {
-  return identity.kind === 'owned'
-    ? {
-        scope: 'active-root',
-        path: `owned:openspec/specs/${identity.specId}/spec.md`,
-      }
-    : {
-        scope: 'referenced-specs',
-        path: `referenced:${identity.storeId}:specs/${identity.specId}`,
-      }
-}
-
 /** Build the source-scoped static search index from exported entities. */
-export async function getSearchDocuments(): Promise<SearchDocument[]> {
+export async function getSearchDocuments(): Promise<ProjectSearchDocument[]> {
   const snapshot = await loadSnapshot()
   if (!snapshot) return []
 
-  const docs: SearchDocument[] = []
+  const docs: ProjectSearchDocument[] = []
 
   for (const spec of snapshot.specs) {
     const identityKey = specIdentityKey(spec.identity)
-    const source = getSpecSearchSource(spec.identity)
     docs.push({
       id: `spec:${identityKey}`,
       kind: 'spec',
-      scope: source.scope,
+      scope: 'active-root',
       title: spec.name,
       href: specRoutePath(spec.identity),
-      path: source.path,
+      path: `owned:openspec/specs/${spec.identity.specId}/spec.md`,
       content: spec.content,
       updatedAt: spec.updatedAt,
     })

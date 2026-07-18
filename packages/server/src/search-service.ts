@@ -10,8 +10,10 @@
 import type { OpenSpecAdapter, OpenSpecWatcher } from '@openspecui/core'
 import type { ReferencedSpecCatalogEntry } from '@openspecui/core/spec-catalog'
 import {
+  parseProjectSearchHits,
+  ProjectSearchDocumentSchema,
   ProjectSearchQuerySchema,
-  type SearchHit,
+  type ProjectSearchHit,
   type SearchProvider,
   type SearchQuery,
 } from '@openspecui/search'
@@ -61,17 +63,21 @@ export class SearchService {
   }
 
   /** Query the initialized index without forcing a rebuild. */
-  async query(input: SearchQuery): Promise<SearchHit[]> {
+  async query(input: SearchQuery): Promise<ProjectSearchHit[]> {
     const parsed = ProjectSearchQuerySchema.parse(input)
     await this.init()
-    return this.provider.search(parsed)
+    return parseProjectSearchHits(await this.provider.search(parsed), parsed.scope)
   }
 
   /** Rebuild an initialized index before running a reactive query. */
-  async queryReactive(input: SearchQuery): Promise<SearchHit[]> {
+  async queryReactive(input: SearchQuery): Promise<ProjectSearchHit[]> {
     const parsed = ProjectSearchQuerySchema.parse(input)
-    await this.rebuildIndex()
-    return this.provider.search(parsed)
+    if (this.initialized) {
+      await this.rebuildIndex()
+    } else {
+      await this.init()
+    }
+    return parseProjectSearchHits(await this.provider.search(parsed), parsed.scope)
   }
 
   /** Stop scheduled rebuilds and dispose the backing provider. */
@@ -101,11 +107,13 @@ export class SearchService {
     if (this.rebuildPromise) return this.rebuildPromise
 
     this.rebuildPromise = (async () => {
-      const docs = await collectSearchDocuments(
-        this.adapter,
-        this.documentService,
-        this.resolveEntityReadOptions,
-        await this.getReferencedSpecs()
+      const docs = ProjectSearchDocumentSchema.array().parse(
+        await collectSearchDocuments(
+          this.adapter,
+          this.documentService,
+          this.resolveEntityReadOptions,
+          await this.getReferencedSpecs()
+        )
       )
       if (this.initialized) {
         await this.provider.replaceAll(docs)

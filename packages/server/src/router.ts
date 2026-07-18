@@ -102,7 +102,11 @@ import {
   type NotificationRecord,
 } from '@openspecui/core/notifications'
 import { CustomSoundIdSchema } from '@openspecui/core/sounds'
-import { ProjectSearchQuerySchema } from '@openspecui/search'
+import {
+  parseProjectSearchHits,
+  ProjectSearchHitSchema,
+  ProjectSearchQuerySchema,
+} from '@openspecui/search'
 import { initTRPC, TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
 import { z } from 'zod'
@@ -2422,13 +2426,18 @@ export const kvRouter = router({
  * Search router - unified fulltext search over specs/changes/archives
  */
 export const searchRouter = router({
-  query: publicProcedure.input(ProjectSearchQuerySchema).query(async ({ ctx, input }) => {
-    return runPlanningRoot(ctx, ({ searchService }) => searchService.query(input))
-  }),
+  query: publicProcedure
+    .input(ProjectSearchQuerySchema)
+    .output(ProjectSearchHitSchema.array())
+    .query(async ({ ctx, input }) => {
+      return runPlanningRoot(ctx, async ({ searchService }) =>
+        parseProjectSearchHits(await searchService.query(input), input.scope)
+      )
+    }),
 
   subscribe: publicProcedure.input(ProjectSearchQuerySchema).subscription(({ ctx, input }) => {
-    return createPlanningRootSubscription(ctx, ({ searchService }) =>
-      searchService.queryReactive(input)
+    return createPlanningRootSubscription(ctx, async ({ searchService }) =>
+      parseProjectSearchHits(await searchService.queryReactive(input), input.scope)
     )
   }),
 })

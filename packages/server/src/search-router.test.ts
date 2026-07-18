@@ -24,6 +24,7 @@ describe('search router', () => {
         {
           documentId: 'spec:owned:auth',
           kind: 'spec',
+          scope: 'active-root',
           title: 'Auth',
           href: '/specs/owned/auth',
           path: 'owned:openspec/specs/auth/spec.md',
@@ -62,6 +63,49 @@ describe('search router', () => {
       limit: 5,
     })
     expect(result[0]?.documentId).toBe('spec:owned:auth')
+  })
+
+  it.each([
+    ['missing', undefined],
+    ['wrong', 'referenced-specs' as const],
+  ])('rejects a query result with %s scope provenance', async (_kind, scope) => {
+    const searchService = {
+      query: vi.fn().mockResolvedValue([
+        {
+          documentId: 'spec:owned:auth',
+          kind: 'spec',
+          scope,
+          title: 'Auth',
+          href: '/specs/owned/auth',
+          path: 'owned:openspec/specs/auth/spec.md',
+          score: 99,
+          snippet: 'Auth snippet',
+          updatedAt: 1,
+        },
+      ]),
+    }
+
+    const caller = appRouter.createCaller({
+      launchProjectAdapter: {} as never,
+      planningRootServices: {
+        runOperation: vi.fn(async (operation) => operation({ searchService } as never)),
+        runReactiveOperation: vi.fn(async (operation) => operation({ searchService } as never)),
+      } as never,
+      configManager: {} as never,
+      cliExecutor: {} as never,
+      projectRecoveryService: {
+        getCurrent: () => ({ state: 'idle' }),
+        subscribe: () => () => {},
+        dispose: () => {},
+      } as never,
+      notificationService: {} as never,
+      customSoundService: {} as never,
+      globalSettingsManager: {} as never,
+      translationCacheService: {} as never,
+      projectDir: '/tmp/project',
+    })
+
+    await expect(caller.search.query({ query: 'auth' })).rejects.toThrow(/scope/i)
   })
 
   it('delegates explicit Reference scope through the Search subscription', async () => {

@@ -13,7 +13,7 @@ import {
   specRoutePath,
   type ReferencedSpecCatalogEntry,
 } from '@openspecui/core/spec-catalog'
-import type { SearchDocument } from '@openspecui/search'
+import type { ProjectSearchDocument } from '@openspecui/search'
 import type { DocumentService } from './document-service.js'
 
 /** Resolve stage-specific processed-document options for one searchable entity. */
@@ -35,8 +35,8 @@ export async function collectSearchDocuments(
   documentService?: DocumentService,
   resolveEntityReadOptions?: EntityReadOptionsResolver,
   referencedSpecs: readonly ReferencedSpecCatalogEntry[] = []
-): Promise<SearchDocument[]> {
-  const docs: SearchDocument[] = []
+): Promise<ProjectSearchDocument[]> {
+  const docs: ProjectSearchDocument[] = []
 
   const specs = await adapter.listSpecsWithMeta()
   for (const spec of specs) {

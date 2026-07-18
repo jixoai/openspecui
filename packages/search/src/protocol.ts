@@ -7,6 +7,7 @@
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  */
 import { z } from 'zod'
+import type { ProjectSearchHit, ProjectSearchScope } from './types.js'
 
 export const SearchDocumentKindSchema = z.string().min(1)
 
@@ -22,6 +23,11 @@ export const SearchDocumentSchema = z.object({
   path: z.string(),
   content: z.string(),
   updatedAt: z.number(),
+})
+
+/** Runtime validator for a source-attributed project Search document. */
+export const ProjectSearchDocumentSchema = SearchDocumentSchema.extend({
+  scope: ProjectSearchScopeSchema,
 })
 
 export const SearchQuerySchema = z.object({
@@ -46,6 +52,26 @@ export const SearchHitSchema = z.object({
   snippet: z.string(),
   updatedAt: z.number(),
 })
+
+/** Runtime validator for a source-attributed project Search result. */
+export const ProjectSearchHitSchema = SearchHitSchema.extend({
+  scope: ProjectSearchScopeSchema,
+})
+
+/** Validate project hits and reject provenance that differs from the selected source. */
+export function parseProjectSearchHits(
+  input: unknown,
+  expectedScope: ProjectSearchScope
+): ProjectSearchHit[] {
+  const hits = ProjectSearchHitSchema.array().parse(input)
+  const mismatchedHit = hits.find((hit) => hit.scope !== expectedScope)
+  if (mismatchedHit) {
+    throw new Error(
+      `Project Search hit "${mismatchedHit.documentId}" has scope "${mismatchedHit.scope}"; expected "${expectedScope}".`
+    )
+  }
+  return hits
+}
 
 export const SearchWorkerRequestSchema = z.discriminatedUnion('type', [
   z.object({ id: z.string(), type: z.literal('init'), docs: z.array(SearchDocumentSchema) }),

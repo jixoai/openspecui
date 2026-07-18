@@ -1,7 +1,8 @@
 /**
  * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
- * 1. Verify live, fallback-live, and static Search transports recover and propagate requests.
- * 2. Verify source switches clear stale hits before the replacement subscription responds.
+ * 1. Verify live and static Search transports recover and propagate source-scoped requests.
+ * 2. Verify incompatible legacy backends fail closed without mixed Search fallback.
+ * 3. Verify source switches retire stale subscriptions and reject late data.
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
@@ -62,27 +63,31 @@ vi.mock('./trpc', () => ({
   },
 }))
 
-vi.mock('@openspecui/search', () => ({
-  WebWorkerSearchProvider: class MockWebWorkerSearchProvider {
-    async init(): Promise<void> {
-      return initMock()
-    }
+vi.mock('@openspecui/search', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@openspecui/search')>()
+  return {
+    ...actual,
+    WebWorkerSearchProvider: class MockWebWorkerSearchProvider {
+      async init(): Promise<void> {
+        return initMock()
+      }
 
-    async replaceAll(): Promise<void> {
-      return Promise.resolve()
-    }
+      async replaceAll(): Promise<void> {
+        return Promise.resolve()
+      }
 
-    async search(input: SearchSubscribeInput) {
-      return searchMock(input)
-    }
+      async search(input: SearchSubscribeInput) {
+        return searchMock(input)
+      }
 
-    async dispose(): Promise<void> {
-      return Promise.resolve()
-    }
-  },
-}))
+      async dispose(): Promise<void> {
+        return Promise.resolve()
+      }
+    },
+  }
+})
 
-describe('useSearch static provider recovery', () => {
+describe('useSearch', () => {
   afterEach(() => {
     modeState.staticMode = true
     vi.clearAllMocks()
@@ -168,7 +173,7 @@ describe('useSearch static provider recovery', () => {
     )
   })
 
-  it('falls back to query + realtime subscription when backend lacks search.subscribe', async () => {
+  it('fails closed without a legacy query when backend lacks search.subscribe', async () => {
     modeState.staticMode = false
 
     trpcSubscribeMock.mockImplementation(
@@ -177,49 +182,78 @@ describe('useSearch static provider recovery', () => {
         return { unsubscribe: vi.fn() }
       }
     )
-    trpcQueryMock.mockResolvedValueOnce([
-      {
-        documentId: 'spec:owned:auth',
-        kind: 'spec',
-        scope: 'active-root',
-        title: 'Auth',
-        href: '/specs/owned/auth',
-        path: 'owned:openspec/specs/auth/spec.md',
-        score: 10,
-        snippet: 'Auth',
-        updatedAt: 1,
-      },
-    ])
-
     const { useSearch } = await import('./use-search')
-    const { result } = renderHook(() => useSearch('auth'))
+    const { result, rerender } = renderHook(({ query }: { query: string }) => useSearch(query), {
+      initialProps: { query: 'auth' },
+    })
 
     await waitFor(() => {
-      expect(result.current.error).toBeNull()
-      expect(result.current.data[0]?.documentId).toBe('spec:owned:auth')
+      expect(result.current.error?.message).toMatch(/source-scoped Search/i)
     })
 
+    expect(result.current.data).toEqual([])
+    expect(result.current.isLoading).toBe(false)
     expect(trpcSubscribeMock).toHaveBeenCalledTimes(1)
-    expect(trpcQueryMock).toHaveBeenCalledWith({
-      query: 'auth',
-      scope: 'active-root',
-      limit: 50,
+    expect(trpcQueryMock).not.toHaveBeenCalled()
+    expect(realtimeSubscribeMock).not.toHaveBeenCalled()
+
+    rerender({ query: 'auth again' })
+    await waitFor(() => {
+      expect(result.current.error?.message).toMatch(/source-scoped Search/i)
     })
-    expect(realtimeSubscribeMock).toHaveBeenCalledTimes(1)
+    expect(trpcSubscribeMock).toHaveBeenCalledTimes(1)
+    expect(trpcQueryMock).not.toHaveBeenCalled()
+    expect(realtimeSubscribeMock).not.toHaveBeenCalled()
   })
 
-  it('clears prior-scope hits before the replacement subscription responds', async () => {
+  it.each([
+    ['missing', undefined],
+    ['wrong', 'active-root' as const],
+  ])('exposes a live Reference hit with %s scope provenance as an error', async (_kind, scope) => {
     modeState.staticMode = false
-    const handlersByScope = new Map<ProjectSearchScope, SearchSubscribeHandlers>()
     trpcSubscribeMock.mockImplementation(
-      (input: SearchSubscribeInput, handlers: SearchSubscribeHandlers) => {
-        handlersByScope.set(input.scope, handlers)
+      (_input: SearchSubscribeInput, handlers: SearchSubscribeHandlers) => {
+        handlers.onData([
+          {
+            documentId: 'spec:referenced:platform:auth',
+            kind: 'spec',
+            scope,
+            title: 'Auth',
+            href: '/specs/referenced/platform/auth',
+            path: 'referenced:platform:specs/auth',
+            score: 10,
+            snippet: 'Auth',
+            updatedAt: 0,
+          },
+        ])
         return { unsubscribe: vi.fn() }
       }
     )
 
     const { useSearch } = await import('./use-search')
-    const { result, rerender } = renderHook(
+    const { result } = renderHook(() => useSearch('auth', 'referenced-specs'))
+
+    await waitFor(() => {
+      expect(result.current.error?.message).toMatch(/scope/i)
+    })
+    expect(result.current.data).toEqual([])
+  })
+
+  it('clears prior-scope hits before the replacement subscription responds', async () => {
+    modeState.staticMode = false
+    const handlersByScope = new Map<ProjectSearchScope, SearchSubscribeHandlers>()
+    const unsubscribeByScope = new Map<ProjectSearchScope, ReturnType<typeof vi.fn>>()
+    trpcSubscribeMock.mockImplementation(
+      (input: SearchSubscribeInput, handlers: SearchSubscribeHandlers) => {
+        handlersByScope.set(input.scope, handlers)
+        const unsubscribe = vi.fn()
+        unsubscribeByScope.set(input.scope, unsubscribe)
+        return { unsubscribe }
+      }
+    )
+
+    const { useSearch } = await import('./use-search')
+    const { result, rerender, unmount } = renderHook(
       ({ scope }: { scope: ProjectSearchScope }) => useSearch('auth', scope),
       { initialProps: { scope: 'active-root' } }
     )
@@ -247,6 +281,7 @@ describe('useSearch static provider recovery', () => {
     expect(result.current.scope).toBe('referenced-specs')
     expect(result.current.data).toEqual([])
     expect(result.current.isLoading).toBe(true)
+    expect(unsubscribeByScope.get('active-root')).toHaveBeenCalledTimes(1)
     await waitFor(() => {
       expect(handlersByScope.has('referenced-specs')).toBe(true)
     })
@@ -282,5 +317,10 @@ describe('useSearch static provider recovery', () => {
     await waitFor(() => {
       expect(result.current.data[0]?.documentId).toBe('spec:referenced:platform:auth')
     })
+
+    expect(unsubscribeByScope.get('active-root')).toHaveBeenCalledTimes(1)
+    unmount()
+    expect(unsubscribeByScope.get('active-root')).toHaveBeenCalledTimes(1)
+    expect(unsubscribeByScope.get('referenced-specs')).toHaveBeenCalledTimes(1)
   })
 })

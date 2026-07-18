@@ -54,6 +54,19 @@ class FakeProvider implements SearchProvider {
   readonly initCalls: SearchDocument[][] = []
   readonly replaceCalls: SearchDocument[][] = []
   readonly searchCalls: SearchQuery[] = []
+  searchResults: SearchHit[] = [
+    {
+      documentId: 'spec:owned:auth',
+      kind: 'spec',
+      scope: 'active-root',
+      title: 'Auth',
+      href: '/specs/owned/auth',
+      path: 'owned:openspec/specs/auth/spec.md',
+      score: 42,
+      snippet: 'Auth',
+      updatedAt: 10,
+    },
+  ]
 
   async init(docs: SearchDocument[]): Promise<void> {
     this.initCalls.push(docs)
@@ -65,18 +78,7 @@ class FakeProvider implements SearchProvider {
 
   async search(query: SearchQuery): Promise<SearchHit[]> {
     this.searchCalls.push(query)
-    return [
-      {
-        documentId: 'spec:owned:auth',
-        kind: 'spec',
-        title: 'Auth',
-        href: '/specs/owned/auth',
-        path: 'owned:openspec/specs/auth/spec.md',
-        score: 42,
-        snippet: 'Auth',
-        updatedAt: 10,
-      },
-    ]
+    return this.searchResults
   }
 
   async dispose(): Promise<void> {}
@@ -131,6 +133,47 @@ describe('SearchService', () => {
     expect(provider.initCalls).toHaveLength(1)
     expect(provider.replaceCalls).toHaveLength(1)
     expect(provider.searchCalls).toEqual([{ query: 'auth', scope: 'active-root', limit: 5 }])
+  })
+
+  it('initializes current documents before the first reactive search', async () => {
+    const adapter = createAdapterMock()
+    const provider = new FakeProvider()
+    const lifecycle: string[] = []
+    adapter.listSpecsWithMeta.mockImplementationOnce(async () => {
+      lifecycle.push('collect')
+      return [{ id: 'auth', name: 'Auth', createdAt: 1, updatedAt: 10 }]
+    })
+    const init = provider.init.bind(provider)
+    provider.init = async (docs) => {
+      lifecycle.push('init')
+      await init(docs)
+    }
+    const search = provider.search.bind(provider)
+    provider.search = async (query) => {
+      lifecycle.push('search')
+      return search(query)
+    }
+    const service = new SearchService(adapter as never, undefined, provider)
+
+    const hits = await service.queryReactive({ query: 'auth', limit: 5 })
+
+    expect(provider.initCalls).toHaveLength(1)
+    expect(provider.replaceCalls).toHaveLength(0)
+    expect(provider.searchCalls).toEqual([{ query: 'auth', scope: 'active-root', limit: 5 }])
+    expect(hits[0]?.documentId).toBe('spec:owned:auth')
+    expect(lifecycle).toEqual(['collect', 'init', 'search'])
+  })
+
+  it.each([
+    ['missing', undefined],
+    ['wrong', 'referenced-specs' as const],
+  ])('rejects a project hit with %s scope provenance', async (_kind, scope) => {
+    const adapter = createAdapterMock()
+    const provider = new FakeProvider()
+    provider.searchResults = [{ ...provider.searchResults[0]!, scope }]
+    const service = new SearchService(adapter as never, undefined, provider)
+
+    await expect(service.query({ query: 'auth', scope: 'active-root' })).rejects.toThrow(/scope/i)
   })
 
   it('indexes processed documents when a document service is provided', async () => {
