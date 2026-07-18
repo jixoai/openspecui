@@ -75,20 +75,18 @@ export function SearchRoute() {
 
   const [inputValue, setInputValue] = useState(locationQuery)
   const [debouncedQuery, setDebouncedQuery] = useState(locationQuery)
-  const [scope, setScope] = useState<ProjectSearchScope>(locationScope)
 
   useEffect(() => {
     setInputValue(locationQuery)
     setDebouncedQuery(locationQuery)
-    setScope(locationScope)
-  }, [locationQuery, locationScope])
+  }, [locationQuery])
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(inputValue), INPUT_DEBOUNCE_MS)
     return () => clearTimeout(timer)
   }, [inputValue])
 
-  const { data, isLoading, error } = useSearch(debouncedQuery, scope)
+  const { data, isLoading, error } = useSearch(debouncedQuery, locationScope)
   const highlightTerms = useMemo(() => {
     return inputValue
       .trim()
@@ -121,19 +119,17 @@ export function SearchRoute() {
       >
         <ScopeButton
           scope="active-root"
-          current={scope}
+          current={locationScope}
           label="Active root"
           onSelect={(nextScope) => {
-            setScope(nextScope)
             navController.replace('pop', buildPopSearchHref(inputValue, nextScope), location.state)
           }}
         />
         <ScopeButton
           scope="referenced-specs"
-          current={scope}
+          current={locationScope}
           label="Referenced Specs"
           onSelect={(nextScope) => {
-            setScope(nextScope)
             navController.replace('pop', buildPopSearchHref(inputValue, nextScope), location.state)
           }}
         />
@@ -147,10 +143,10 @@ export function SearchRoute() {
           onChange={(event) => {
             const next = event.target.value
             setInputValue(next)
-            navController.replace('pop', buildPopSearchHref(next, scope), location.state)
+            navController.replace('pop', buildPopSearchHref(next, locationScope), location.state)
           }}
           placeholder={
-            scope === 'active-root'
+            locationScope === 'active-root'
               ? 'Search Owned Specs, Changes, and Archives...'
               : 'Search Referenced Specs...'
           }
@@ -173,7 +169,7 @@ export function SearchRoute() {
 
       {!isLoading && !error && inputValue.trim().length > 0 && data.length === 0 && (
         <div className="text-muted-foreground rounded-md border p-6 text-center text-sm">
-          {scope === 'active-root'
+          {locationScope === 'active-root'
             ? `No matching results in the active Planning root for “${inputValue.trim()}”.`
             : `No matching Referenced Specs currently observed for “${inputValue.trim()}”.`}
         </div>

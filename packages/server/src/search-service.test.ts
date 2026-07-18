@@ -7,66 +7,87 @@
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  */
-import { createDocumentChecklistSummary, createTrackedTaskProgress } from '@openspecui/core'
+import {
+  createDocumentChecklistSummary,
+  createTrackedTaskProgress,
+  OpenSpecAdapter,
+  OpenSpecWatcher,
+} from '@openspecui/core'
 import type { SearchDocument, SearchHit, SearchProvider, SearchQuery } from '@openspecui/search'
-import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
+import { DocumentService } from './document-service.js'
+import { createHookRuntime } from './hook-runtime.js'
 import { SearchService } from './search-service.js'
 
 function createAdapterMock() {
-  return {
-    listSpecsWithMeta: vi
-      .fn()
-      .mockResolvedValue([{ id: 'auth', name: 'Auth', createdAt: 1, updatedAt: 10 }]),
-    readSpecRaw: vi.fn().mockResolvedValue('# Auth spec'),
-    listChangesWithMeta: vi.fn().mockResolvedValue([
-      {
-        id: 'add-auth',
-        name: 'Add Auth',
-        trackedTaskProgress: createTrackedTaskProgress([]),
-        documentChecklistSummary: createDocumentChecklistSummary([]),
-        createdAt: 1,
-        updatedAt: 20,
-      },
-    ]),
-    readChangeRaw: vi.fn().mockResolvedValue({
-      proposal: 'Proposal text',
-      tasks: 'Tasks text',
-      design: 'Design text',
-      deltaSpecs: [{ specId: 'auth', content: 'Delta content' }],
-    }),
-    listArchivedChangesWithMeta: vi
-      .fn()
-      .mockResolvedValue([{ id: 'old-auth', name: 'Old Auth', createdAt: 1, updatedAt: 5 }]),
-    readEntityDetail: vi.fn().mockResolvedValue({
-      stage: 'archive',
+  const adapter = new OpenSpecAdapter('/tmp/openspecui-search-service-fixture')
+  vi.spyOn(adapter, 'listSpecsWithMeta').mockResolvedValue([
+    { id: 'auth', name: 'Auth', createdAt: 1, updatedAt: 10 },
+  ])
+  vi.spyOn(adapter, 'readSpecRaw').mockResolvedValue('# Auth spec')
+  vi.spyOn(adapter, 'listChangesWithMeta').mockResolvedValue([
+    {
+      id: 'add-auth',
+      name: 'Add Auth',
+      trackedTaskProgress: createTrackedTaskProgress([]),
+      documentChecklistSummary: createDocumentChecklistSummary([]),
+      createdAt: 1,
+      updatedAt: 20,
+    },
+  ])
+  vi.spyOn(adapter, 'readChangeRaw').mockResolvedValue({
+    proposal: 'Proposal text',
+    tasks: 'Tasks text',
+    design: 'Design text',
+    deltaSpecs: [{ specId: 'auth', content: 'Delta content' }],
+  })
+  vi.spyOn(adapter, 'listArchivedChangesWithMeta').mockResolvedValue([
+    {
       id: 'old-auth',
-      exists: true,
-      files: [{ path: 'summary.md', type: 'file', content: 'Archived summary' }],
-      artifacts: [],
-      ungroupedFiles: [{ path: 'summary.md', type: 'file', content: 'Archived summary' }],
-      diagnostics: [],
-    }),
-  }
+      name: 'Old Auth',
+      trackedTaskProgress: createTrackedTaskProgress([]),
+      documentChecklistSummary: createDocumentChecklistSummary([]),
+      createdAt: 1,
+      updatedAt: 5,
+    },
+  ])
+  vi.spyOn(adapter, 'readEntityDetail').mockResolvedValue({
+    stage: 'archive',
+    id: 'old-auth',
+    exists: true,
+    files: [{ path: 'summary.md', type: 'file', content: 'Archived summary' }],
+    artifacts: [],
+    ungroupedFiles: [{ path: 'summary.md', type: 'file', content: 'Archived summary' }],
+    diagnostics: [],
+  })
+  return adapter
 }
+
+function createDocumentServiceMock(adapter: OpenSpecAdapter) {
+  return new DocumentService(
+    '/tmp/openspecui-search-service-fixture',
+    adapter,
+    createHookRuntime('/tmp/openspecui-search-service-fixture')
+  )
+}
+
+const activeRootSearchHit = {
+  documentId: 'spec:owned:auth',
+  kind: 'spec',
+  scope: 'active-root',
+  title: 'Auth',
+  href: '/specs/owned/auth',
+  path: 'owned:openspec/specs/auth/spec.md',
+  score: 42,
+  snippet: 'Auth',
+  updatedAt: 10,
+} satisfies SearchHit
 
 class FakeProvider implements SearchProvider {
   readonly initCalls: SearchDocument[][] = []
   readonly replaceCalls: SearchDocument[][] = []
   readonly searchCalls: SearchQuery[] = []
-  searchResults: SearchHit[] = [
-    {
-      documentId: 'spec:owned:auth',
-      kind: 'spec',
-      scope: 'active-root',
-      title: 'Auth',
-      href: '/specs/owned/auth',
-      path: 'owned:openspec/specs/auth/spec.md',
-      score: 42,
-      snippet: 'Auth',
-      updatedAt: 10,
-    },
-  ]
+  searchResults: SearchHit[] = [activeRootSearchHit]
 
   async init(docs: SearchDocument[]): Promise<void> {
     this.initCalls.push(docs)
@@ -88,7 +109,7 @@ describe('SearchService', () => {
   it('initializes provider with collected documents and answers queries', async () => {
     const adapter = createAdapterMock()
     const provider = new FakeProvider()
-    const service = new SearchService(adapter as never, undefined, provider)
+    const service = new SearchService(adapter, undefined, provider)
 
     await service.init()
     const hits = await service.query({ query: 'auth' })
@@ -109,8 +130,8 @@ describe('SearchService', () => {
 
     const adapter = createAdapterMock()
     const provider = new FakeProvider()
-    const watcher = new EventEmitter()
-    const service = new SearchService(adapter as never, watcher as never, provider)
+    const watcher = new OpenSpecWatcher('/tmp/openspecui-search-service-fixture')
+    const service = new SearchService(adapter, watcher, provider)
 
     await service.init()
     watcher.emit('change', { type: 'spec' })
@@ -125,7 +146,7 @@ describe('SearchService', () => {
   it('queryReactive refreshes index before searching', async () => {
     const adapter = createAdapterMock()
     const provider = new FakeProvider()
-    const service = new SearchService(adapter as never, undefined, provider)
+    const service = new SearchService(adapter, undefined, provider)
 
     await service.init()
     await service.queryReactive({ query: 'auth', limit: 5 })
@@ -139,7 +160,7 @@ describe('SearchService', () => {
     const adapter = createAdapterMock()
     const provider = new FakeProvider()
     const lifecycle: string[] = []
-    adapter.listSpecsWithMeta.mockImplementationOnce(async () => {
+    vi.mocked(adapter.listSpecsWithMeta).mockImplementationOnce(async () => {
       lifecycle.push('collect')
       return [{ id: 'auth', name: 'Auth', createdAt: 1, updatedAt: 10 }]
     })
@@ -153,7 +174,7 @@ describe('SearchService', () => {
       lifecycle.push('search')
       return search(query)
     }
-    const service = new SearchService(adapter as never, undefined, provider)
+    const service = new SearchService(adapter, undefined, provider)
 
     const hits = await service.queryReactive({ query: 'auth', limit: 5 })
 
@@ -170,8 +191,8 @@ describe('SearchService', () => {
   ])('rejects a project hit with %s scope provenance', async (_kind, scope) => {
     const adapter = createAdapterMock()
     const provider = new FakeProvider()
-    provider.searchResults = [{ ...provider.searchResults[0]!, scope }]
-    const service = new SearchService(adapter as never, undefined, provider)
+    provider.searchResults = [{ ...activeRootSearchHit, scope }]
+    const service = new SearchService(adapter, undefined, provider)
 
     await expect(service.query({ query: 'auth', scope: 'active-root' })).rejects.toThrow(/scope/i)
   })
@@ -179,32 +200,27 @@ describe('SearchService', () => {
   it('indexes processed documents when a document service is provided', async () => {
     const adapter = createAdapterMock()
     const provider = new FakeProvider()
-    const documentService = {
-      readSpecRaw: vi.fn().mockResolvedValue({ markdown: '# Enriched Auth spec' }),
-      readChangeRaw: vi.fn().mockResolvedValue({
-        proposal: { markdown: 'Enriched proposal' },
-        tasks: { markdown: 'Enriched tasks' },
-        design: { markdown: 'Enriched design' },
-        deltaSpecs: [{ specId: 'auth', content: 'Delta content' }],
-      }),
-      readEntityDetail: vi.fn().mockResolvedValue({
-        stage: 'archive',
-        id: 'old-auth',
-        exists: true,
-        files: [{ path: 'summary.md', type: 'file', content: 'Enriched archived summary' }],
-        artifacts: [],
-        ungroupedFiles: [
-          { path: 'summary.md', type: 'file', content: 'Enriched archived summary' },
-        ],
-        diagnostics: [],
-      }),
-    }
-    const service = new SearchService(
-      adapter as never,
-      undefined,
-      provider,
-      documentService as never
-    )
+    const documentService = createDocumentServiceMock(adapter)
+    vi.spyOn(documentService, 'readSpecRaw').mockResolvedValue({
+      markdown: '# Enriched Auth spec',
+      sourceMarkdown: '# Auth spec',
+    })
+    vi.spyOn(documentService, 'readChangeRaw').mockResolvedValue({
+      proposal: { markdown: 'Enriched proposal', sourceMarkdown: 'Proposal text' },
+      tasks: { markdown: 'Enriched tasks', sourceMarkdown: 'Tasks text' },
+      design: { markdown: 'Enriched design', sourceMarkdown: 'Design text' },
+      deltaSpecs: [{ specId: 'auth', content: 'Delta content' }],
+    })
+    vi.spyOn(documentService, 'readEntityDetail').mockResolvedValue({
+      stage: 'archive',
+      id: 'old-auth',
+      exists: true,
+      files: [{ path: 'summary.md', type: 'file', content: 'Enriched archived summary' }],
+      artifacts: [],
+      ungroupedFiles: [{ path: 'summary.md', type: 'file', content: 'Enriched archived summary' }],
+      diagnostics: [],
+    })
+    const service = new SearchService(adapter, undefined, provider, documentService)
 
     await service.init()
 
@@ -230,33 +246,26 @@ describe('SearchService', () => {
   it('indexes duplicate owned and referenced Spec ids with complete source identity', async () => {
     const adapter = createAdapterMock()
     const provider = new FakeProvider()
-    const service = new SearchService(
-      adapter as never,
-      undefined,
-      provider,
-      undefined,
-      undefined,
-      () => [
-        {
-          identity: { kind: 'referenced', storeId: 'platform-a', specId: 'auth' },
-          source: 'referenced',
-          readOnly: true,
-          name: 'auth',
-          summary: null,
-          requirementCount: 1,
-          updatedAt: 0,
-        },
-        {
-          identity: { kind: 'referenced', storeId: 'platform-b', specId: 'auth' },
-          source: 'referenced',
-          readOnly: true,
-          name: 'auth',
-          summary: null,
-          requirementCount: 2,
-          updatedAt: 0,
-        },
-      ]
-    )
+    const service = new SearchService(adapter, undefined, provider, undefined, undefined, () => [
+      {
+        identity: { kind: 'referenced', storeId: 'platform-a', specId: 'auth' },
+        source: 'referenced',
+        readOnly: true,
+        name: 'auth',
+        summary: null,
+        requirementCount: 1,
+        updatedAt: 0,
+      },
+      {
+        identity: { kind: 'referenced', storeId: 'platform-b', specId: 'auth' },
+        source: 'referenced',
+        readOnly: true,
+        name: 'auth',
+        summary: null,
+        requirementCount: 2,
+        updatedAt: 0,
+      },
+    ])
 
     await service.init()
 
@@ -299,36 +308,38 @@ describe('SearchService', () => {
       },
     }
     const resolveEntityReadOptions = vi.fn().mockResolvedValue(entityReadOptions)
-    const documentService = {
-      readSpecRaw: vi.fn().mockResolvedValue({ markdown: '# Enriched Auth spec' }),
-      readChangeRaw: vi.fn().mockResolvedValue({
-        proposal: { markdown: 'Enriched proposal' },
-        tasks: { markdown: 'Enriched tasks' },
-        design: undefined,
-        deltaSpecs: [],
-      }),
-      readEntityDetail: vi.fn().mockResolvedValue({
-        stage: 'archive',
-        id: 'old-auth',
-        exists: true,
-        schemaName: 'custom-audit',
-        files: [{ path: 'summary.md', type: 'file', content: 'Schema-aware archive' }],
-        artifacts: [
-          {
-            id: 'summary',
-            outputPath: 'summary.md',
-            files: [{ path: 'summary.md', type: 'file', content: 'Schema-aware archive' }],
-          },
-        ],
-        ungroupedFiles: [],
-        diagnostics: [],
-      }),
-    }
+    const documentService = createDocumentServiceMock(adapter)
+    vi.spyOn(documentService, 'readSpecRaw').mockResolvedValue({
+      markdown: '# Enriched Auth spec',
+      sourceMarkdown: '# Auth spec',
+    })
+    vi.spyOn(documentService, 'readChangeRaw').mockResolvedValue({
+      proposal: { markdown: 'Enriched proposal', sourceMarkdown: 'Proposal text' },
+      tasks: { markdown: 'Enriched tasks', sourceMarkdown: 'Tasks text' },
+      design: undefined,
+      deltaSpecs: [],
+    })
+    vi.spyOn(documentService, 'readEntityDetail').mockResolvedValue({
+      stage: 'archive',
+      id: 'old-auth',
+      exists: true,
+      schemaName: 'custom-audit',
+      files: [{ path: 'summary.md', type: 'file', content: 'Schema-aware archive' }],
+      artifacts: [
+        {
+          id: 'summary',
+          outputPath: 'summary.md',
+          files: [{ path: 'summary.md', type: 'file', content: 'Schema-aware archive' }],
+        },
+      ],
+      ungroupedFiles: [],
+      diagnostics: [],
+    })
     const service = new SearchService(
-      adapter as never,
+      adapter,
       undefined,
       provider,
-      documentService as never,
+      documentService,
       resolveEntityReadOptions
     )
 

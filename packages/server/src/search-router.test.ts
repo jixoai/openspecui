@@ -8,56 +8,117 @@
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  */
-import { describe, expect, it, vi } from 'vitest'
+import {
+  CliContextSchema,
+  CliDoctorSchema,
+  parseCliCommandResult,
+  type CliCommandResult,
+} from '@openspecui/core'
+import type { SearchHit } from '@openspecui/search'
+import { NodeWorkerSearchProvider } from '@openspecui/search/node'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { ZodType } from 'zod'
 import { appRouter } from './router.js'
+import { SearchService } from './search-service.js'
+import { createServer } from './server.js'
+
+type ServerFixture = ReturnType<typeof createServer>
+
+const fixtures: Array<{ projectDir: string; server: ServerFixture }> = []
+
+function commandResult<T>(data: T, schema: ZodType<T>): CliCommandResult<T> {
+  return parseCliCommandResult(
+    {
+      success: true,
+      stdout: JSON.stringify(data),
+      stderr: '',
+      exitCode: 0,
+    },
+    schema
+  )
+}
+
+async function createSearchCaller() {
+  const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-search-router-'))
+  await mkdir(join(projectDir, 'openspec'), { recursive: true })
+  const server = createServer({ projectDir, enableWatcher: false })
+  fixtures.push({ projectDir, server })
+
+  vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
+    available: true,
+    version: '1.6.0',
+  })
+  vi.spyOn(server.cliExecutor.contracts, 'doctorRoot').mockResolvedValue(
+    commandResult(
+      {
+        root: { path: projectDir, source: 'nearest', healthy: true, status: [] },
+        store: null,
+        references: [],
+        status: [],
+      },
+      CliDoctorSchema
+    )
+  )
+  vi.spyOn(server.cliExecutor.contracts, 'context').mockResolvedValue(
+    commandResult(
+      {
+        root: { path: projectDir, source: 'nearest', role: 'openspec_root' },
+        members: [],
+        status: [],
+      },
+      CliContextSchema
+    )
+  )
+
+  return appRouter.createCaller(server.createContext())
+}
+
+async function disposeFixture({ projectDir, server }: (typeof fixtures)[number]) {
+  await server.storeObservationFallback.dispose()
+  await server.planningRootServices.dispose()
+  await server.storeObservation.dispose()
+  await server.dataHomeObserver.dispose()
+  server.storeInvalidation.dispose()
+  server.projectInvalidation.dispose()
+  await server.observationEnvironment.dispose()
+  server.projectRecoveryService.dispose()
+  server.translationCacheService.close()
+  await rm(projectDir, { recursive: true, force: true })
+}
+
+afterEach(async () => {
+  await Promise.all(fixtures.splice(0).map(disposeFixture))
+  vi.restoreAllMocks()
+})
+
+const activeRootHit = {
+  documentId: 'spec:owned:auth',
+  kind: 'spec',
+  scope: 'active-root',
+  title: 'Auth',
+  href: '/specs/owned/auth',
+  path: 'owned:openspec/specs/auth/spec.md',
+  score: 99,
+  snippet: 'Auth snippet',
+  updatedAt: 1,
+} satisfies SearchHit
 
 describe('search router', () => {
-  it('registers search.subscribe procedure', () => {
-    const procedures = (appRouter as unknown as { _def: { procedures: Record<string, unknown> } })
-      ._def.procedures
-    expect(procedures['search.subscribe']).toBeDefined()
+  it('registers search.subscribe procedure', async () => {
+    const caller = await createSearchCaller()
+    expect(caller.search.subscribe).toBeTypeOf('function')
   })
 
   it('delegates search query to search service', async () => {
-    const searchService = {
-      query: vi.fn().mockResolvedValue([
-        {
-          documentId: 'spec:owned:auth',
-          kind: 'spec',
-          scope: 'active-root',
-          title: 'Auth',
-          href: '/specs/owned/auth',
-          path: 'owned:openspec/specs/auth/spec.md',
-          score: 99,
-          snippet: 'Auth snippet',
-          updatedAt: 1,
-        },
-      ]),
-    }
-
-    const caller = appRouter.createCaller({
-      launchProjectAdapter: {} as never,
-      planningRootServices: {
-        runOperation: vi.fn(async (operation) => operation({ searchService } as never)),
-        runReactiveOperation: vi.fn(async (operation) => operation({ searchService } as never)),
-      } as never,
-      configManager: {} as never,
-      cliExecutor: {} as never,
-      projectRecoveryService: {
-        getCurrent: () => ({ state: 'idle' }),
-        subscribe: () => () => {},
-        dispose: () => {},
-      } as never,
-      notificationService: {} as never,
-      customSoundService: {} as never,
-      globalSettingsManager: {} as never,
-      translationCacheService: {} as never,
-      projectDir: '/tmp/project',
-    })
+    const search = vi.spyOn(SearchService.prototype, 'query').mockResolvedValue([activeRootHit])
+    const caller = await createSearchCaller()
 
     const result = await caller.search.query({ query: 'auth', limit: 5 })
 
-    expect(searchService.query).toHaveBeenCalledWith({
+    expect(search).toHaveBeenCalledWith({
       query: 'auth',
       scope: 'active-root',
       limit: 5,
@@ -69,69 +130,18 @@ describe('search router', () => {
     ['missing', undefined],
     ['wrong', 'referenced-specs' as const],
   ])('rejects a query result with %s scope provenance', async (_kind, scope) => {
-    const searchService = {
-      query: vi.fn().mockResolvedValue([
-        {
-          documentId: 'spec:owned:auth',
-          kind: 'spec',
-          scope,
-          title: 'Auth',
-          href: '/specs/owned/auth',
-          path: 'owned:openspec/specs/auth/spec.md',
-          score: 99,
-          snippet: 'Auth snippet',
-          updatedAt: 1,
-        },
-      ]),
-    }
-
-    const caller = appRouter.createCaller({
-      launchProjectAdapter: {} as never,
-      planningRootServices: {
-        runOperation: vi.fn(async (operation) => operation({ searchService } as never)),
-        runReactiveOperation: vi.fn(async (operation) => operation({ searchService } as never)),
-      } as never,
-      configManager: {} as never,
-      cliExecutor: {} as never,
-      projectRecoveryService: {
-        getCurrent: () => ({ state: 'idle' }),
-        subscribe: () => () => {},
-        dispose: () => {},
-      } as never,
-      notificationService: {} as never,
-      customSoundService: {} as never,
-      globalSettingsManager: {} as never,
-      translationCacheService: {} as never,
-      projectDir: '/tmp/project',
-    })
+    vi.spyOn(NodeWorkerSearchProvider.prototype, 'init').mockResolvedValue(undefined)
+    vi.spyOn(NodeWorkerSearchProvider.prototype, 'search').mockResolvedValue([
+      { ...activeRootHit, scope },
+    ])
+    const caller = await createSearchCaller()
 
     await expect(caller.search.query({ query: 'auth' })).rejects.toThrow(/scope/i)
   })
 
   it('delegates explicit Reference scope through the Search subscription', async () => {
-    const searchService = {
-      queryReactive: vi.fn().mockResolvedValue([]),
-    }
-
-    const caller = appRouter.createCaller({
-      launchProjectAdapter: {} as never,
-      planningRootServices: {
-        runOperation: vi.fn(async (operation) => operation({ searchService } as never)),
-        runReactiveOperation: vi.fn(async (operation) => operation({ searchService } as never)),
-      } as never,
-      configManager: {} as never,
-      cliExecutor: {} as never,
-      projectRecoveryService: {
-        getCurrent: () => ({ state: 'idle' }),
-        subscribe: () => () => {},
-        dispose: () => {},
-      } as never,
-      notificationService: {} as never,
-      customSoundService: {} as never,
-      globalSettingsManager: {} as never,
-      translationCacheService: {} as never,
-      projectDir: '/tmp/project',
-    })
+    const queryReactive = vi.spyOn(SearchService.prototype, 'queryReactive').mockResolvedValue([])
+    const caller = await createSearchCaller()
 
     const subscription = (
       await caller.search.subscribe({
@@ -146,7 +156,7 @@ describe('search router', () => {
     })
 
     await vi.waitFor(() => {
-      expect(searchService.queryReactive).toHaveBeenCalledWith({
+      expect(queryReactive).toHaveBeenCalledWith({
         query: 'auth',
         scope: 'referenced-specs',
         limit: 3,

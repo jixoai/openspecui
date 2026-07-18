@@ -15,7 +15,8 @@
   ],
   "scripts": {
     "build": "tsdown",
-    "typecheck": "tsc -p tsconfig.check.json --noEmit",
+    "typecheck": "tsc -p tsconfig.check.json --noEmit && tsc -p tsconfig.search-tests.json --noEmit",
+    "typecheck:search-tests": "tsc -p tsconfig.search-tests.json --noEmit",
     "dev": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--conditions=development\" tsx watch --include '../core/dist/**' --include '../search/dist/**' src/standalone.ts",
     "test": "vitest run",
     "test:watch": "vitest"

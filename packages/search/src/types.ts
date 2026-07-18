@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Define framework-neutral Search documents, queries, hits, indexes, and providers.
- * 2. Preserve optional project scope provenance for project-owned Search consumers.
+ * 2. Keep scope optional for generic consumers and exact for project Search documents and hits.
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.

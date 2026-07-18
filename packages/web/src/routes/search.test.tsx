@@ -2,7 +2,8 @@
  * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Verify Search result navigation, highlighting, and pop-area lifecycle.
  * 2. Verify URL-defaulted source tabs preserve query and compound Reference navigation.
- * 3. Verify source-correct empty, loading, and error states remain mutually exclusive.
+ * 3. Verify external URL transitions select their source before the first rerendered Search call.
+ * 4. Verify source-correct empty, loading, and error states remain mutually exclusive.
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
@@ -192,7 +193,53 @@ describe('SearchRoute', () => {
       '/search?query=api+auth&scope=referenced-specs',
       { from: 'search-test' }
     )
-    expect(useSearchMock).toHaveBeenLastCalledWith('api auth', 'referenced-specs')
+  })
+
+  it('uses an externally changed URL scope on the first same-mount rerender', () => {
+    let location = {
+      search: '?query=auth',
+      state: null,
+    }
+    useLocationMock.mockImplementation(() => location)
+    useSearchMock.mockImplementation((_query, scope) => ({
+      scope,
+      data:
+        scope === 'active-root'
+          ? [
+              {
+                documentId: 'change:active-auth',
+                kind: 'change',
+                scope: 'active-root',
+                title: 'Active Auth',
+                href: '/changes/active-auth',
+                path: 'openspec/changes/active-auth',
+                score: 100,
+                snippet: 'Active root result',
+                updatedAt: 1,
+              },
+            ]
+          : [],
+      isLoading: false,
+      error: null,
+    }))
+
+    const { rerender } = render(<SearchRoute />)
+
+    expect(screen.getByRole('button', { name: /Active Auth/i })).toBeInTheDocument()
+    useSearchMock.mockClear()
+    location = {
+      search: '?query=auth&scope=referenced-specs',
+      state: null,
+    }
+
+    rerender(<SearchRoute />)
+
+    expect(useSearchMock.mock.calls.map(([, scope]) => scope)).toEqual(['referenced-specs'])
+    expect(screen.getByRole('tab', { name: 'Referenced Specs' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    expect(screen.queryByRole('button', { name: /Active Auth/i })).not.toBeInTheDocument()
   })
 
   it('renders the Active-root empty state without a result list', () => {
