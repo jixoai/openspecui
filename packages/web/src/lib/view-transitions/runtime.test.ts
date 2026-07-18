@@ -1,7 +1,16 @@
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Verify View Transition shared-element naming and cleanup across async DOM commits.
+ * 2. Prove active-transition tracking installs before the first native transition.
+ *
+ * Original request (2026-07-15): "这是额外的工作还是可以和 live 版本保持尽可能的一致？"
+ * Derived requirement (2026-07-18): Static HTML pre-render must not evaluate browser-only toolkit modules.
+ */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { setTemporaryViewTransitionNamesMock } = vi.hoisted(() => ({
+const { setTemporaryViewTransitionNamesMock, trackActiveViewTransitionMock } = vi.hoisted(() => ({
   setTemporaryViewTransitionNamesMock: vi.fn(async () => {}),
+  trackActiveViewTransitionMock: vi.fn(),
 }))
 
 vi.mock('react-dom', () => ({
@@ -10,14 +19,8 @@ vi.mock('react-dom', () => ({
   },
 }))
 
-vi.mock('view-transitions-toolkit/feature-detection', () => ({
-  supports: {
-    sameDocument: true,
-  },
-}))
-
 vi.mock('view-transitions-toolkit/track-active-view-transition', () => ({
-  trackActiveViewTransition: vi.fn(),
+  trackActiveViewTransition: trackActiveViewTransitionMock,
 }))
 
 vi.mock('view-transitions-toolkit/misc', () => ({
@@ -46,6 +49,32 @@ describe('runViewTransition', () => {
     doc.activeViewTransition = null
     delete doc.startViewTransition
     setTemporaryViewTransitionNamesMock.mockClear()
+    trackActiveViewTransitionMock.mockClear()
+  })
+
+  it('installs active-transition tracking before the first native transition starts', async () => {
+    const lifecycle: string[] = []
+    trackActiveViewTransitionMock.mockImplementationOnce(() => {
+      lifecycle.push('track')
+    })
+    ;(document as TestViewTransitionDocument).startViewTransition = (update) => {
+      lifecycle.push('start')
+      update()
+      return {
+        finished: Promise.resolve(),
+      }
+    }
+
+    await runViewTransition({
+      intent: {
+        area: 'main',
+        kind: 'route-top',
+        direction: 'forward',
+      },
+      update: () => {},
+    })
+
+    expect(lifecycle).toEqual(['track', 'start'])
   })
 
   it('clears previous names before collecting the next snapshot entries', async () => {

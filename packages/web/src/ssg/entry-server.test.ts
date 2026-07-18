@@ -1,8 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * @vitest-environment node
+ *
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Prove SSG enumerates and titles Owned Specs through compound identity.
+ * 2. Prove the static server entry imports and renders without browser globals.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
+ * Derived requirement (2026-07-18): Static HTML pre-render must not evaluate browser-only toolkit modules.
  */
 import type { ExportSnapshot } from '@openspecui/core'
 import { describe, expect, it } from 'vitest'
@@ -38,4 +42,11 @@ describe('static Spec routes', () => {
     expect(getTitle('/specs/owned/auth%2Fv2', data)).toBe('Auth V2')
     expect(getRoutes(data)).not.toContain('/specs/auth%2Fv2')
   })
+
+  it('imports and renders the static server entry without browser globals', async () => {
+    expect(globalThis).not.toHaveProperty('document')
+    const { render } = await import('./entry-server')
+
+    await expect(render('/dashboard', snapshot(), '/')).resolves.toContain('Dashboard')
+  }, 20_000)
 })
