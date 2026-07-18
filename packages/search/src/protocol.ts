@@ -87,7 +87,6 @@ export const SearchWorkerResponseSchema = z.discriminatedUnion('type', [
 ])
 
 export type SearchDocumentInput = z.infer<typeof SearchDocumentSchema>
-export type ProjectSearchQueryInput = z.infer<typeof ProjectSearchQuerySchema>
 export type SearchQueryInput = z.infer<typeof SearchQuerySchema>
 export type SearchHitOutput = z.infer<typeof SearchHitSchema>
 export type SearchWorkerRequest = z.infer<typeof SearchWorkerRequestSchema>

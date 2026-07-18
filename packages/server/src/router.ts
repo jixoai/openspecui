@@ -2423,7 +2423,9 @@ export const kvRouter = router({
 })
 
 /**
- * Search router - unified fulltext search over specs/changes/archives
+ * Source-scoped project Search over Planning-root Owned Specs, Changes, and Archives by default,
+ * or direct read-only Referenced Specs when explicitly selected. Queries and subscriptions retain
+ * the exact normalized scope through their result boundary.
  */
 export const searchRouter = router({
   query: publicProcedure

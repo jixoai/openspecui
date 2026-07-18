@@ -26,7 +26,6 @@ export {
   SearchWorkerRequestSchema,
   SearchWorkerResponseSchema,
   parseProjectSearchHits,
-  type ProjectSearchQueryInput,
   type SearchDocumentInput,
   type SearchHitOutput,
   type SearchQueryInput,
