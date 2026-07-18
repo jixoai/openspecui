@@ -572,3 +572,19 @@ evidence, not a disabled-button or mocked downstream-handler characterization. C
 Focused Web tests and typecheck are green; full gates, clean SSG, pinned-CLI desktop/mobile
 acceptance, push, exact-head CI, and SHA equality remain required before closing `6.11`. Do not
 start `6.12+`, merge, archive, or release.
+
+### 6.11 GitRoute Reconnect Gate at `0d0c134`
+
+Cached scopes A are now display-only across the Git route while the replacement scope subscription
+is loading. Overview/history queries are disabled, the route stays in its loading state despite
+cached data, and Refresh, remove, switch, handoff, and pagination handlers all reject the current
+reconnect window. A current Code emission with `planningState: resolving` still clears loading and
+preserves Code-first behavior.
+
+The remount test records no overview/list calls with either A or B during the delayed window and
+then loads B after the real subscription callback. Removing both query `enabled` gates and the
+cached-data early return produces a red route assertion with `loading: false`, stale A status/history
+visible, and new A-token calls; restoring `0d0c134` returns the route lane to `15/15`.
+Combined focused Web evidence is `31/31` plus typecheck and diff-check. `6.11` remains unchecked;
+full gates, SSG, pinned desktop/mobile acceptance, push, exact-head CI, and SHA equality remain
+required. Do not start `6.12+`, merge, archive, or release.

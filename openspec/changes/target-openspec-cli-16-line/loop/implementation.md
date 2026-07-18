@@ -2653,3 +2653,34 @@ each), Web typecheck passes, and `git diff --check` passes.
 The full repository gates, clean SSG, terminating pinned-CLI desktop/mobile acceptance, push,
 exact-head CI, and local/remote/PR SHA equality remain pending. Checkpoint `6.11` remains open;
 do not start `6.12+`, merge, archive, or release.
+
+### 6.11 GitRoute Reconnect Gate at `0d0c134`
+
+The same cached-scope authority defect also affected the Git list route. With cached scopes A,
+`GitRoute` previously kept overview/history queries enabled when the replacement subscription was
+still loading, so stale A status, entries, Refresh, worktree mutations, pagination, and handoff
+could remain reachable. `0d0c134` makes `scopeReconnecting` an explicit query gate, returns the
+route loading state even when cached A exists, and guards every action (including pagination) via a
+render-updated ref for late handlers. Code-first `planningState: resolving` remains usable because
+the server's current Code emission clears subscription loading before the route renders it.
+
+The checked route fixture remounts with cached A, delays B without emitting, and proves all of the
+following before B arrives: the loading state is rendered, A status/history are absent, and the
+overview/list query call slices receive no A or B token. It then emits B and proves B overview,
+history, and planning binding are queried/rendered. The route lane is `15/15`; the combined
+Git-scope/subscription/Dashboard/route lane is `31/31`, with Web typecheck and `git diff --check`
+green.
+
+Mutation-resistance fixed point:
+
+```text
+Temporarily remove both `!scopeReconnecting` query gates and the cached-data early return.
+Command: pnpm --filter @openspecui/web exec vitest run --project unit src/routes/git.test.tsx -t "locks a cached A route while scopes reconnect"
+Result: 1 failed; received `loading: false`, stale A status/history `true`, and new overview/list calls using `code-binding`.
+Restore `0d0c134`: same test -> 1 passed; full GitRoute lane -> 15 passed.
+```
+
+This red evidence reaches the route's actual query projection and stale content, not a disabled
+button or mocked downstream handler. The full repository gates, clean SSG, terminating pinned-CLI
+desktop/mobile acceptance, push, exact-head CI, and local/remote/PR SHA equality remain pending.
+Keep `6.11` open and do not start `6.12+`, merge, archive, or release.
