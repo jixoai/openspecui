@@ -37,6 +37,8 @@ export interface GitRepositoryScopeDescriptor {
 export interface GitRepositoryScopes {
   defaultScope: 'code'
   code: GitRepositoryScopeDescriptor & { scope: 'code' }
+  /** Whether the optional Planning binding is still being resolved or is authoritative. */
+  planningState: 'resolving' | 'settled'
   /** Present only when the planning root resolves to a distinct Git repository identity. */
   planning: (GitRepositoryScopeDescriptor & { scope: 'planning' }) | null
 }

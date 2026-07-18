@@ -111,6 +111,7 @@ export class GitRepositoryBindingService implements GitRepositoryBindingResolver
       return {
         defaultScope: 'code',
         code: await this.resolveCodeScope(),
+        planningState: 'settled',
         planning: null,
       }
     }

@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Attribute Dashboard planning metrics to the active CLI-selected root.
  * 2. Show Store and direct Reference diagnostic evidence without inferred health.
- * 3. Keep the Code Git snapshot distinct from an optional Planning Git repository.
+ * 3. Keep Code Git distinct while optional Planning Git resolves or settles.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 distinguishes pending Planning Git.
  */
 import { selectRootContextSnapshot, useContextSubscription } from '@/lib/use-context-subscription'
 import { useGitRepositoryScopes } from '@/lib/use-git-repository-scope'
@@ -107,7 +108,11 @@ function LiveDashboardContextSummary() {
                   {gitScopesQuery.data.code.repository?.topLevel ??
                     gitScopesQuery.data.code.rootPath}
                 </p>
-                {gitScopesQuery.data.planning ? (
+                {gitScopesQuery.data.planningState === 'resolving' ? (
+                  <p className="text-muted-foreground text-xs">
+                    Resolving Planning Git repository...
+                  </p>
+                ) : gitScopesQuery.data.planning ? (
                   <p
                     className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs"
                     title={

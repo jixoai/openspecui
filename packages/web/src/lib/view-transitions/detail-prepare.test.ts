@@ -118,6 +118,7 @@ describe('prepareRouteDetailViewTransition', () => {
         rootPath: '/repo',
         repository: { topLevel: '/repo', commonDir: '/repo/.git' },
       },
+      planningState: 'settled',
       planning: {
         scope: 'planning',
         bindingToken: 'planning-binding',

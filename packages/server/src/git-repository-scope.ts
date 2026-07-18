@@ -121,6 +121,7 @@ export async function resolveGitRepositoryScopes(
   return {
     defaultScope: 'code',
     code: { ...code, scope: 'code' },
+    planningState: 'settled',
     planning: planning ? { ...planning, scope: 'planning' } : null,
   }
 }

@@ -27,6 +27,7 @@ const STATIC_GIT_SCOPES: GitRepositoryScopes = {
     rootPath: '',
     repository: null,
   },
+  planningState: 'settled',
   planning: null,
 }
 
@@ -72,6 +73,7 @@ export function useGitRepositoryScope(enabled = true): GitRepositoryScopeState {
     rootProjection?.state === 'ready' ? rootProjection.data.planningRoot?.path : null
   const planningReady =
     planning !== null &&
+    scopes?.planningState === 'settled' &&
     !query.isLoading &&
     query.error === null &&
     !rootContext.isLoading &&
@@ -93,9 +95,11 @@ export function useGitRepositoryScope(enabled = true): GitRepositoryScopeState {
               ? `Planning Root Context failed: ${rootProjection.error.message}`
               : rootProjection?.state === 'refreshing' || rootProjection?.state === 'loading'
                 ? 'Planning repository is locked while Root Context refreshes.'
-                : planning === null
-                  ? 'Planning root is not a distinct Git repository; using Code repository.'
-                  : 'Planning repository binding is waiting for the current Root Context.'
+                : scopes?.planningState === 'resolving'
+                  ? 'Planning repository binding is resolving.'
+                  : planning === null
+                    ? 'Planning root is not a distinct Git repository; using Code repository.'
+                    : 'Planning repository binding is waiting for the current Root Context.'
 
   return {
     requestedScope,

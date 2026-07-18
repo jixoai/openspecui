@@ -239,6 +239,7 @@ function createGitScopes(
       rootPath: '/repo',
       repository: { topLevel: '/repo', commonDir: '/repo/.git' },
     },
+    planningState: 'settled',
     planning: {
       scope: 'planning',
       bindingToken: planningBindingToken,
@@ -401,13 +402,17 @@ describe('GitRoute', () => {
 
   it('loads Code status and history from the first Code-only scope emission', async () => {
     const codeOnly = createGitScopes()
+    codeOnly.planningState = 'resolving'
     codeOnly.planning = null
     subscriptionState.currentScopes = codeOnly
-    subscriptionState.currentRoot = createRefreshingRootState('/planning')
+    subscriptionState.currentRoot = createReadyRootState('/planning')
+    routerLocation.searchStr = '?gitScope=planning'
 
     renderWithQueryClient(<GitRoute />)
 
     await screen.findByText('main against origin/main')
+    expect(screen.getByText('Planning repository binding is resolving.')).toBeTruthy()
+    expect(screen.queryByText(/not a distinct Git repository/)).toBeNull()
     expect(overviewQueryMock).toHaveBeenCalledWith({
       scope: 'code',
       expectedBindingToken: 'code-binding',

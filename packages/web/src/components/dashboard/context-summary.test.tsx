@@ -80,6 +80,7 @@ function gitScopes(planning = true): GitRepositoryScopes {
       rootPath: '/workspace/code',
       repository: { topLevel: '/repos/code', commonDir: '/repos/code/.git' },
     },
+    planningState: 'settled',
     planning: planning
       ? {
           scope: 'planning',
@@ -130,6 +131,17 @@ describe('DashboardContextSummary', () => {
     expect(screen.getByText('source: store · Store platform')).toBeTruthy()
     expect(screen.getByText('/repos/code')).toBeTruthy()
     expect(screen.getByText(/Distinct Planning repository: \/repos\/planning/)).toBeTruthy()
+  })
+
+  it('does not claim Planning is collapsed while its binding is resolving', () => {
+    const resolving = gitScopes(false)
+    resolving.planningState = 'resolving'
+    setGit({ data: resolving })
+
+    render(<DashboardContextSummary staticMode={false} />)
+
+    expect(screen.getByText('Resolving Planning Git repository...')).toBeTruthy()
+    expect(screen.queryByText('No distinct Planning Git repository.')).toBeNull()
   })
 
   it('renders raw direct Reference diagnostic counts without health or completeness claims', () => {

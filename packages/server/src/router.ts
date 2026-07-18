@@ -2612,7 +2612,7 @@ export const gitRouter = router({
         .resolveCodeScope()
         .then((code) => {
           if (!active) return
-          emit.next({ defaultScope: 'code', code, planning: null })
+          emit.next({ defaultScope: 'code', code, planningState: 'resolving', planning: null })
           planningSubscription = createReactiveSubscription(() =>
             ctx.gitRepositoryBindings.resolveScopes({ reactive: true })
           ).subscribe({

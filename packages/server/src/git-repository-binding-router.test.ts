@@ -175,8 +175,8 @@ describe('public Git repository binding Router', () => {
     )
     fixture.doctorRootMock.mockImplementationOnce(() => deferredDoctor.promise)
     const emissions: GitRepositoryScopes[] = []
-    const firstEmission = createDeferred<GitRepositoryScopes>()
     const planningEmission = createDeferred<GitRepositoryScopes>()
+    const streamErrors: unknown[] = []
     let subscription: { unsubscribe(): void } | null = null
 
     try {
@@ -185,16 +185,19 @@ describe('public Git repository binding Router', () => {
       subscription = observable.subscribe({
         next(scopes) {
           emissions.push(scopes)
-          if (emissions.length === 1) firstEmission.resolve(scopes)
           if (scopes.planning) planningEmission.resolve(scopes)
         },
         error(error) {
-          firstEmission.reject(error)
+          streamErrors.push(error)
           planningEmission.reject(error)
         },
       })
 
-      const codeOnly = await firstEmission.promise
+      await vi.waitFor(() => expect(emissions).toHaveLength(1))
+      const codeOnly = emissions[0]
+      if (!codeOnly) throw new Error('Expected the Code-first Git scope emission.')
+      expect(streamErrors).toEqual([])
+      expect(codeOnly.planningState).toBe('resolving')
       expect(codeOnly.planning).toBeNull()
       expect(codeOnly.code.rootPath).toBe(fixture.codeRoot)
       await vi.waitFor(() => expect(fixture.doctorRootMock).toHaveBeenCalledOnce())
@@ -223,6 +226,7 @@ describe('public Git repository binding Router', () => {
       deferredDoctor.resolve(readyDoctor)
       const enriched = await planningEmission.promise
       expect(enriched.code.bindingToken).toBe(token)
+      expect(enriched.planningState).toBe('settled')
       expect(enriched.planning?.rootPath).toBe(fixture.rootA)
     } finally {
       deferredDoctor.resolve(readyDoctor)
@@ -270,6 +274,7 @@ describe('public Git repository binding Router', () => {
         )
       ).resolves.toBe(fixture.rootA)
       expect(emissions).toHaveLength(1)
+      expect(emissions[0]?.planningState).toBe('resolving')
       expect(emissions[0]?.planning).toBeNull()
     } finally {
       deferredDoctor.resolve(readyDoctor)

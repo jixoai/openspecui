@@ -158,6 +158,7 @@ function createGitScopes(
       rootPath: projectDir,
       repository: { topLevel: projectDir, commonDir: `${projectDir}/.git` },
     },
+    planningState: 'settled',
     planning: {
       scope: 'planning',
       bindingToken: planningBindingToken,
