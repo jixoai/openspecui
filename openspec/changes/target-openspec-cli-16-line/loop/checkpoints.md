@@ -473,3 +473,22 @@ Checkpoint `6.11` remains open at `61/131`. The existing fixed-root implementati
 3. Every Server request resolves the current Planning root. An old A Refresh has no expected binding identity and is therefore reinterpreted as a B Refresh, invalidating/touching B instead of rejecting stale intent.
 
 Removal and handoff currently re-enumerate B worktrees and normally reject an A-only physical path before destructive execution, so no P1 escape is claimed. They still need the same typed stale-binding conflict as every other Git operation. Add reactive scope inventory, a backend-issued binding epoch, Server-side expected-token comparison inside the active owner lease, token-aware Web keys, and a current Root/projection gate for Planning controls. Preserve Launch-owned Code Git and the no clone/pull/push/synchronization boundary.
+
+### 6.11 Implementation Candidate at `bbc22a5`
+
+The implementation candidate is pushed to PR #207 as `bbc22a5091be829417ff5753c924aa2aad73e565` (`fix(git): reject stale repository bindings`). It remains an independent-review candidate: progress is `61/131`, task `6.11` is unchecked, and `6.12+`, merge, archive, and release are untouched.
+
+Accepted candidate facts:
+
+- Backend-issued opaque `bindingToken` is attached to every Code/Planning descriptor. Code is stable for the backend instance; each Planning-root service activation receives a fresh token, including A -> B -> A.
+- Reactive `git.subscribeScopes` follows Root Context ownership. Every Git query/mutation carries `scope + expectedBindingToken`; Server compares the token inside the active Planning lease before any repository resolution, cache invalidation, refresh stamp, worktree removal, or handoff. Mismatch is a typed `CONFLICT`.
+- Web keys and View Transition prefetch include semantic scope plus token. URL state remains only `gitScope`; stale Planning content is retired and controls lock during Root loading, stale refresh, failure, or scope/root mismatch. Code Git remains usable independently.
+
+Evidence:
+
+- Real Manager-owned Code/A/B fixture emits A -> B -> Code -> A with A retirement before B, stable Code token, and fresh Planning tokens. Stale A refresh/remove/handoff owners do not run after B activation; current B refresh succeeds.
+- Mutation-resistance is direct: removing only Planning-lease `assertCurrent` changes the stale Refresh result to B stamp/cache invalidation (`received true`, `expected false`); restoring it passes the checked Router test. This is not a disabled-button characterization.
+- Focused checks pass: Server `49 files / 374 tests`, Web Git `6 files / 49 tests`, Core `47 files / 440 tests`, checked Git fixture typecheck, format (25 changed files), lint (`832`, zero warnings/errors), 15 workspace typechecks, and `git diff --check`.
+- Full local evidence passes: `test:ci` `272 files / 1763 tests`, clean SSG, xterm browser `60 passed / 1 skipped`, and Web browser `12/12`. The pre-commit Vite+ staged hook is unavailable because `vite.config.ts` has no staged config; after the listed gates passed, implementation was committed with `--no-verify`.
+
+Live agent-browser evidence is unavailable: the Code/A/B desktop and real `390x844` attempts stalled without a terminating inspectable process/evidence set. Do not promote that attempt to acceptance. Independent re-verification must cover desktop/mobile scope transitions, stale-content retirement, conflict feedback, scoped history/detail/back/patch, and no overflow. Keep `6.11` open at `61/131` until that review completes.

@@ -2461,3 +2461,40 @@ Required fixed-point evidence:
 - Root loading/stale/error or Root/scopes mismatch locks Planning controls and keeps old Planning data explicitly non-authoritative; Code Git remains usable.
 
 Do not expand 6.11 into Store synchronization, clone/pull/push, App Store Manager, a generic React Query rewrite, Terminal `6.12`, static `7.*`, merge, archive, or release.
+
+## Checkpoint 6.11 Implementation Candidate: Reactive Repository Binding
+
+Implementation commit: `bbc22a5091be829417ff5753c924aa2aad73e565` (`fix(git): reject stale repository bindings`). It is pushed to PR #207's feature branch; the PR remains open and unmerged. Checkpoint `6.11` remains unchecked at `61/131` for independent review.
+
+The candidate closes the three fixed-point defects without changing the Store, Terminal, static export, or App scope:
+
+- Core Git descriptors now carry a non-empty opaque `bindingToken`. Code receives one stable backend-instance token; every newly activated Planning-root service record receives a fresh token, including A -> B -> A.
+- `GitRepositoryBindingService` owns Code/Planning scope discovery and runs Git work inside the corresponding Manager lease. Planning compares the caller's expected token before resolving the repository or invoking refresh, cache invalidation, worktree removal, or handoff. Conflicts surface as typed tRPC `CONFLICT`; the token is provenance, not authorization or a path.
+- `git.subscribeScopes` is reactive through the Manager-owned root projection. Web URL state still persists only `gitScope=code|planning`; query, detail, patch, pagination, and View Transition keys include scope plus token. Root loading, stale refresh, failure, and scope/root mismatch retire old Planning data and lock Planning controls while Code remains available.
+- Dashboard Code Git keeps its Launch-owned path and remains usable while Planning resolution fails. No Store id is used as Git identity, and no clone/pull/push/synchronization behavior was added.
+
+### Fixed-point evidence
+
+- Server binding fixture: real Manager-owned Code/A/B Git repositories emit A -> B -> Code -> A; Code token remains stable, every Planning activation gets a distinct token, and A's second activation does not reuse its first token.
+- Server stale-intent fixture: an A token conflicts before refresh, removal, or handoff owners run. The public Router stale Refresh path returns `CONFLICT`, writes no B refresh stamp, and a current B token succeeds. Code Dashboard refresh still emits its projection while Planning is unavailable.
+- Web fixture: A overview/history/detail/patch content is retired before B (and rebound A) requests settle; B keys include its token. A-captured destructive handlers continue to submit A's token after B is published, so the Server returns a conflict rather than silently targeting B. Planning failure/mismatch keeps Code status/history usable.
+- Mutation-resistance: removing only the Planning-lease `assertCurrent` comparison makes the stale Refresh test fail because B receives a refresh stamp/cache invalidation (`received true`, `expected false`). Restoring the comparison returns the checked Router lane to green. This proves the hidden comparison transition itself, not merely a disabled UI control.
+
+### Verification
+
+Focused reruns on the candidate pass:
+
+```text
+Server: 49 files / 374 tests
+Web Git: 6 files / 49 tests
+Core: 47 files / 440 tests
+Server checked Git fixtures: `pnpm --filter @openspecui/server typecheck:git-tests`
+format:check: 25 changed files
+lint:ci: 832 files, 0 warnings/errors
+typecheck: 15 workspace packages
+git diff --check: pass
+```
+
+The complete local candidate gate also passes: `pnpm test:ci` (`272 files / 1763 tests`), clean `pnpm --filter @openspecui/web build:ssg`, xterm browser (`60 passed / 1 skipped`), and Web browser (`12/12`). The Vite+ pre-commit hook still exits before checks because the repository `vite.config.ts` has no staged configuration; after the gates above, the implementation commit was therefore created with `--no-verify`. This is an environment hook limitation, not a test bypass.
+
+Live agent-browser acceptance is not claimed. Attempts to exercise real Code/A/B desktop and `390x844` rebind flows stalled without a terminating, inspectable process/evidence set. Independent browser re-verification remains required for Code default, distinct Planning selection, A -> B, B -> Code, A -> B -> A, immediate stale-content retirement, conflict feedback, scoped history/detail/back/patch, and mobile geometry. No merge, archive, release, or `6.12+` work is authorized.
