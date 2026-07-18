@@ -492,3 +492,65 @@ Evidence:
 - Full local evidence passes: `test:ci` `272 files / 1763 tests`, clean SSG, xterm browser `60 passed / 1 skipped`, and Web browser `12/12`. The pre-commit Vite+ staged hook is unavailable because `vite.config.ts` has no staged config; after the listed gates passed, implementation was committed with `--no-verify`.
 
 Live agent-browser evidence is unavailable: the Code/A/B desktop and real `390x844` attempts stalled without a terminating inspectable process/evidence set. Do not promote that attempt to acceptance. Independent re-verification must cover desktop/mobile scope transitions, stale-content retirement, conflict feedback, scoped history/detail/back/patch, and no overflow. Keep `6.11` open at `61/131` until that review completes.
+
+### 6.11 Independent Review Blockers at `62cf6f2`
+
+The candidate remains at `61/131`; `6.11` is not accepted and `6.12+` remains untouched.
+
+- **Code continuity is incomplete.** The combined scope resolver waits for the Planning-root manager before emitting Code. A pending or hung Root transition therefore blocks the Code scope subscription, Git status/history, and Dashboard Code-token helpers. Split the Launch-owned Code descriptor/token path from Planning resolution, or provide an equivalent server-owned projection that emits Code and serves Code operations before Planning settles. Prove this with a deferred manager fixture that keeps Planning unresolved while Code overview/list/history and Dashboard refresh complete.
+- **Handoff provenance is incomplete.** Git list/detail handoff state contains no origin `bindingToken`; detail captures the current token and self-validates it. Carry the origin token through the typed Git handoff and View-Transition preparation. When A is handed off and B is current, reject the handoff and do not render A title/subtitle or prefetch the selector under B. Add a same-mount A-click -> B-rebind test that fails against `bbc22a5` before asserting the corrected behavior.
+- **Browser acceptance is still missing.** Use a terminating pinned OpenSpec 1.6 fixture and record real desktop plus `390x844` evidence for Code default, distinct Planning selection, A -> B, B -> Code, A -> B -> A, stale-content retirement, conflict feedback, scoped history/detail/back/patch, and horizontal geometry. A stalled session or unit-only evidence does not close this gate.
+
+The worker must update `loop/implementation.md` with exact red/green and mutation-resistance evidence, rerun all local/SSG/browser gates, push implementation and evidence commits, wait for exact-head CI, and stop for another independent review. Do not merge, archive, release, or start `6.12`.
+
+### 6.11 Third Correction Slice at `e4809df`
+
+Worker commits `3115296` (implementation/tests) and `e4809df` (Core static-contract header) are
+recorded; evidence commit `c0a49a3` documents the slice. Progress remains `61/131`, and `6.11`
+is explicitly unchecked.
+
+- Git identity failures retain stderr/exit evidence; only explicit/canonical not-repository output
+  settles to `planning: null`. Unknown, empty, permission, ENOENT, IO, and canonicalization errors
+  remain failure evidence. Code resolves before Planning and remains usable when Planning fails.
+- Static Git uses a typed `bindingToken: null` projection and the live Git route exits before any
+  subscription, query, or mutation. Dashboard and Context Summary retire retained snapshots/data
+  during scope loading/error rather than relabeling stale A as current.
+- Git handoff and scope variants are typed and readonly; selector-derived empty identities are
+  rejected without a cast. Router fixtures use an explicit checked Planning resolver and Code token.
+
+Focused green evidence on the final local head: Server scope/binding/router `4 files / 108 tests`,
+Web Dashboard/Git/static `5 files / 45 tests`, Web handoff/detail `3 files / 36 tests`,
+Server/Core/Web typecheck, lint, format, and `git diff --check` pass. The prior same-token,
+different-entity red case at `dda056c` is fixed-point evidence; the new classifier, ready-root
+Planning failure, stale-data/error, and static no-RPC tests are explicitly characterization and
+regression evidence, not claims of old-tree red output. Full `test:ci`, clean SSG, browser gates,
+exact-head CI, and terminating pinned-CLI desktop/mobile acceptance remain pending. Do not merge,
+archive, release, or start `6.12+`.
+
+### 6.11 Correction Candidate at `dda056c`
+
+The two `62cf6f2` code blockers are corrected by `adfcfce` plus `dda056c`, but checkpoint `6.11` remains open at `61/131`:
+
+- Launch-owned Code now has an independent typed query and is emitted before Planning resolution. The partial subscription projection is explicitly `planningState: resolving`; only a completed Planning projection is `settled`, so `planning: null` is no longer overloaded as both pending and collapsed.
+- Git and Dashboard handoffs preserve their origin binding token through navigation state and View-Transition preparation. A token mismatch retires stale presentation and skips selector prefetch under the rebound repository.
+- Checked focused evidence passes: Server Git fixture typecheck, exact Server Git `3 files / 11 tests`, Web typecheck, Web unit `118 files / 715 tests`, and `git diff --check`. A package-script mis-invocation also ran the full Server suite and observed one unrelated existing local-model Xet progress timeout; it is not claimed as a Git regression or as a green full-suite run.
+
+The Code-first test fails at the fixed point when the new subscription emission is removed (`expected [] to have a length of 1 but got 0`) and passes after restoration. Real desktop/mobile acceptance, full gates, push, exact-head CI, and SHA equality remain required before independent acceptance. Keep `6.11` unchecked and do not start `6.12+`, merge, archive, or release.
+
+### 6.11 Second Independent Review at `dda056c`
+
+The post-correction local gates are green, but `6.11` remains open at `61/131`. The Standards review found one user-visible P1 and one contract-level P2 that the current tests do not cover:
+
+1. **Same-binding handoff can show the wrong entity.** `git-view.tsx` and `detail-prepare.ts` validate only `family === 'git'` and an equal non-empty `bindingToken`. They never compare the handoff `entityId` with the URL selector. A stale browser-history/navigation state for commit A attached to a detail URL for commit B under the same repository binding therefore shows A's title/subtitle in B's loading shell. Prefetch is also not guarded by complete handoff provenance. Add a fixed-point red test with the same token and different commit ids, then reject the handoff presentation and preserve URL-selector reads.
+2. **The new public types allow impossible states.** `GitRepositoryScopes` currently permits `planningState: 'resolving'` with a non-null Planning descriptor, and `getGitEntrySharedHandoff` accepts an optional token. This lets checked callers construct or omit provenance that the runtime contract requires. Encode a discriminated `resolving/planning:null | settled/planning:descriptor|null` union and a Git-specific handoff requiring a non-empty origin token; update all checked fixtures and call sites without type escapes.
+3. **Planning binding failure is presented as a settled collapse.** `GitRepositoryBindingService.resolveScopes()` catches every Planning owner/Git identity error and returns `settled + planning:null`; Web then claims there is no distinct Planning repository. Preserve an explicit failure/evidence variant or propagate a subscription error while retaining Code continuity. A ready Root plus failing canonical Git identity must never render collapse copy.
+4. **Dashboard Git snapshot provenance is non-atomic.** `DashboardGitSnapshot` carries entries without their origin Code token; click-time `git.code` attaches the current token to possibly cached A entries. Capture the Code token with the snapshot and reject/retire A data after a backend restart or reconnect exposes token B. Do not relabel A entries with B.
+
+Required mutation-resistant evidence for the next worker:
+
+- The same-token/different-entity test must fail against `dda056c` because the incorrect handoff title/subtitle is rendered (and any handoff-gated prefetch assertion must fail for the intended provenance reason). Restoring the guard must make it pass.
+- Typechecked fixtures must reject the impossible `planningState` combination and must not allow a Git handoff with an omitted token. Do not weaken production types or use `as any`, `as never`, fabricated non-null assertions, or suppression comments.
+- Keep the existing A -> B token mismatch behavior, Code-first deferred Planning behavior, Dashboard Code handoff, ordinary Git list handoff, scoped back/detail/files/patch, and View-Transition navigation intact. Do not add URL or storage token state.
+- Add ready-Root + Git-identity-failure evidence that fails against `dda056c` because the UI reports a settled collapse. Code remains usable, but Planning failure/error evidence stays explicit and Planning controls remain locked.
+- Add Dashboard snapshot A + current Code token B evidence that fails against `dda056c` because the old entry is handed off with B. The corrected UI retires or locks the stale snapshot until a B projection arrives; a matching A snapshot/token remains navigable.
+- The worker must append exact red/green evidence, focused and full gates, and residual limitations to `loop/implementation.md`; `6.11` stays unchecked until a real terminating pinned-CLI agent-browser walk-through covers desktop and `390x844` Code/A/B flows. A unit-only or stalled browser attempt is not acceptance evidence.

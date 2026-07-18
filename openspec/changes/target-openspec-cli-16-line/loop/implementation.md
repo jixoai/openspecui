@@ -2595,7 +2595,7 @@ Focused green evidence on the final local implementation head:
 
 ```text
 Server scope/binding/router: 4 files / 108 tests
-Web Dashboard/Git/static: 5 files / 44 tests
+Web Dashboard/Git/static: 5 files / 45 tests
 Web handoff/detail: 3 files / 36 tests
 Server/Core/Web typecheck: pass
 git diff --check: pass
