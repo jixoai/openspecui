@@ -428,3 +428,11 @@ Static browser evidence now covers the candidate's actual rendered output. The g
 Live browser acceptance remains explicitly partial: the example backend lacks `openspec/config.yaml|yml` and stays in `Searching...`; a minimal Root-ready fixture returns HTTP `search.query=[]` but its browser subscription is not stable. No live results, live stale/error/empty transition, live compound Reference, or live result-navigation claim is made. Target browser sessions and ports were closed.
 
 The official browser gate on `9d366dc` passed with xterm `6 files / 60 passed / 1 skipped` and Web Storybook `4 files / 12 passed`, without retries; `git diff --check` passed as well.
+
+### 6.10 Sixth Independent Review and Delivered Evidence at `998acd9`
+
+The independent Standards and Spec axes report no remaining runtime or documented-standard defect in the accepted Search contract or the narrow SSR correction. Code commit `9d366dc` fixes the proven static server import failure without changing the accepted Search source model; evidence commit `998acd9` records the red/green, local gates, browser walk-through, and limitations.
+
+At delivery, local HEAD, the remote feature branch, and PR #207 head all resolved to `998acd983ef3d2b1e829c9046292a2488a60d3b1`; the worktree was clean and the PR remained `OPEN/CLEAN`. Changeset Gate, CI Scope, Fast Gate, Web Browser Gate, xterm Browser Gate, and aggregate Browser Gate all passed for that exact head. No merge, archive, release, or `6.11+` work occurred.
+
+Keep `6.10` open at `60/131` for the next independent decision. Static desktop/mobile acceptance is complete; the recorded live fixture/subscription limitations remain objective unknowns rather than fabricated green evidence.

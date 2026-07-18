@@ -2305,6 +2305,20 @@ Live browser claims remain intentionally limited. The example backend at `:4123`
 
 The official browser gate on `9d366dc` passed with xterm `6 files / 60 passed / 1 skipped` and Web Storybook `4 files / 12 passed`, without retries. `git diff --check` also passed for the final local candidate.
 
+## Sixth Independent Review and Delivered Evidence at `998acd9`
+
+The independent Standards and Spec axes identify no remaining defect in the accepted Search contract or the narrow SSR correction. The direct fixed-point counterexample proves the production SSG failure, and the current implementation preserves active-transition tracking before the first native transition while keeping browser globals out of the static server module graph. No new Change or loopback is required.
+
+Delivery facts for PR #207:
+
+- implementation correction: `9d366dcb2696b34b299422330dc458377d517b2f`
+- reviewer evidence: `998acd983ef3d2b1e829c9046292a2488a60d3b1`
+- local HEAD, remote feature branch, and PR head all resolved to `998acd983ef3d2b1e829c9046292a2488a60d3b1`
+- PR remained `OPEN/CLEAN`; Changeset Gate, CI Scope, Fast Gate, Web Browser Gate, xterm Browser Gate, and aggregate Browser Gate all passed for that exact head
+- final worktree was clean; no merge, archive, release, or `6.11+` work occurred
+
+Checkpoint `6.10` deliberately remains open at `60/131` for the next independent decision. Static desktop/mobile acceptance is complete; live browser results retain the fixture/subscription limitations recorded above and are not silently promoted into green claims.
+
 ### Previous Browser Attempt and Un-attributed Acceptance Blockers
 
 The independent browser worker started `pnpm dev:legacy --dir ./example --port 4123` and then the root project variant, exposing Web at `http://localhost:13003` and backend at `http://localhost:4123`. It opened `/search?query=auth`; App normalized this to the Dashboard shell with a Search pop route. Desktop evidence confirms Active root is initially selected, the `auth` query is retained, and selecting Referenced Specs immediately updates the encoded pop URL, tab selection, and placeholder without losing the query.
