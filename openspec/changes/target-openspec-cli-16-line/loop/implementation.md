@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
 1. Report implementation state without converting planning work into false code progress.
 2. Preserve approved architecture decisions as implementation constraints.
 3. Record actual divergences from the approved plan.
@@ -2159,3 +2159,16 @@ The next implementation must add a typed `active-root | referenced-specs` scope 
 Web Search uses an accessible two-segment control matching the established Spec source interaction. Absence or invalid URL scope defaults to Active root; explicit `scope=referenced-specs` selects the sibling view and survives query replacement. Switching scope cannot display stale results from the prior source while loading. Referenced copy says only what is currently observed/materialized and never claims completeness. Static mode uses the same control and query semantics; static document paths must derive from each Spec identity instead of labeling every snapshot Spec as owned.
 
 Do not turn 6.10 into a SearchService ownership rewrite, Reference body-materialization policy, `7.*` export-policy implementation, Git `6.11`, App Store Manager, Workset, or general route-registry refactor. Focused evidence must cover filtering before limit, duplicate ids across owned/multiple Stores, no referenced changes/archives, live query/subscription, static indexing, scope transitions, URL state, navigation, and neutral empty/error/loading states before full gates and independent review.
+
+## Independent Review after `bc09a3f`: 6.10 Source-Isolation Gaps
+
+Review range: `10a3b42...bc09a3f`. The implementation correctly introduces `active-root | referenced-specs`, filters before scoring/limit in both the TypeScript engine and generated Node worker, marks live documents by source, defaults Server queries to Active root, preserves the explicit scope through query/subscription and URL state, clears cross-scope hits, and retains Store-qualified live navigation. It does not start Git `6.11`.
+
+Checkpoint `6.10` remains open at `60/131` for four reasons:
+
+- The compatibility fallback is unsafe. A backend without `search.subscribe` predates the scoped Search contract; its `search.query` schema strips/ignores `scope` and returns limited mixed-index results. Calling it and attributing those hits to the selected scope is fabricated provenance. Fail closed with an explicit incompatibility error and do not start the legacy query/realtime fallback.
+- The static Reference fixture is not legal current runtime data. `ExportSnapshot.specs` is still Owned-only, but the test uses `as never` to inject two References. This makes the Referenced branch in `getSearchDocuments` unreachable and duplicates live/static identity-to-path mapping before the shared `7.*` export model exists. Remove the escape, the future fixture, and the unreachable branch. Test current static truth: Owned Specs, Changes, and Archives are Active-root documents; Referenced search is empty with neutral wording.
+- The first reactive query has an initialization race. `queryReactive()` calls `rebuildIndex()` with `initialized=false`; the method returns before collecting documents and then searches an empty provider. Server warmup is a deferred background task, so it cannot guarantee initialization before a client subscribes. A direct production-class probe at `bc09a3f` records only `search`, with no `init` or `replaceAll`. Make the first reactive query initialize current Planning-root truth, then rebuild only on later reactive queries.
+- The worker Goal explicitly required SearchRoute Active-root empty, Referenced empty, loading, and error tests plus correct subscription lifecycle. Those tests are absent, and the hook test does not assert that the old subscription is unsubscribed during a scope transition.
+
+Independent checks on `bc09a3f` pass: focused Search/Server/Web tests, package typechecks, workspace format/lint/typecheck, `test:ci` (`270 files / 1727 tests`), clean SSG, xterm browser (`60 passed / 1 skipped`), Web browser (`12/12`), and `git diff --check`. These are a valid regression baseline, not acceptance of the defects above. A second independent review and live/static desktop/mobile browser walk-through remain required after correction. Merge, archive, release, `6.11`, and `7.*` remain unauthorized.

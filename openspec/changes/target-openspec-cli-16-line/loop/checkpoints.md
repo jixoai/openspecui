@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (created 2026-07-15 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
 1. Track completed research and approval gates.
 2. Sequence root, CLI, reactive, and projection implementation.
 3. Track project, static, hosted, and App product surfaces.
@@ -184,6 +184,26 @@ Approved worker boundary:
 - Keep SearchService Planning-root ownership, reactive rebuild, duplicate Spec identity, navigation/View Transitions, and existing fallback behavior intact unless the typed scope contract proves a narrower correction is required. Do not start Git `6.11`, static export policy `7.*`, App/Store Manager, or Worksets.
 
 Required evidence includes engine filtering-before-limit tests, live Server document scope and Router pass-through, static document scope, Web hook request/scope-transition tests, SearchRoute default/URL/control/empty/loading/error/navigation tests, and duplicate owned/referenced `specId` fixtures. Close only `6.10` after full local gates, clean SSG, browser suite, agent-browser live/static desktop/mobile walk-through, and independent review (`60/131 -> 61/131`).
+
+### 6.10 Independent Review Correction after `bc09a3f`
+
+Checkpoint `6.10` remains open at `60/131`. The engine, generated Node worker, Server query/subscription, Web scope switch, URL tabs, and compound live navigation pass focused tests, and the complete local format/lint/typecheck/unit/SSG/browser gates pass. That green baseline does not close the following contract defects:
+
+1. **Legacy Search fallback breaks source isolation.** When `search.subscribe` is absent, `useSearch` calls the legacy `search.query` with `scope`. The legacy input schema does not recognize that field and searches the mixed index before applying `limit`, so either selected source can display the wrong documents. Missing source-aware subscription support must fail closed; no browser filter or legacy query may claim scoped truth.
+2. **Static Reference evidence bypasses the current snapshot contract.** `static-data-provider.spec.test.ts` injects Referenced Specs with `as never`, while `ExportSnapshot.specs` permits only `OwnedSpecIdentity`, `source: 'owned'`, and `readOnly: false`. The test and production Reference branch therefore prove a future `7.*` snapshot rather than current 6.10 behavior. Delete the escape and unreachable branch. Under 6.10, legal static snapshots expose only Active-root documents; Referenced scope is a neutral empty result until the explicit 7.\* include policy materializes References.
+3. **First reactive Search can observe an empty uninitialized index.** `queryReactive()` calls `rebuildIndex()` while `initialized` is false; `rebuildIndex()` returns without collecting documents, then the provider searches its empty index. Background startup warmup is explicitly deferred and cannot authorize this ordering assumption. Initialize from current Planning-root truth before the first reactive search, without double rebuilding an already initialized provider.
+4. **Required page-state evidence is absent.** `SearchRoute` has no direct tests for Active-root empty, Referenced empty, loading, or error presentation. Static Referenced-empty behavior is not exercised from a legal snapshot, and the scope-transition test does not assert retirement of the old subscription. Add direct tests at those boundaries.
+
+Correction law:
+
+```text
+missing source-aware backend -> explicit incompatible error, zero legacy query
+legal current snapshot       -> owned/change/archive only -> Reference search []
+first reactive query         -> collect/init current index -> search
+scope A -> scope B           -> unsubscribe A -> clear A -> subscribe B
+```
+
+Do not make generic Search scope mandatory for unrelated consumers. At the project Search boundary, however, every accepted document and returned hit must retain one exact `active-root | referenced-specs` scope; do not let optional generic provenance silently become an unscoped project result. Do not start `6.11`, `7.*`, or a shared live/static Reference mapper before the real snapshot union exists.
 
 ## 2. CLI 1.6 Contract Baseline
 
