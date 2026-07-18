@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Register the canonical live project route tree around one writable planning root.
+ * 2. Register pop-layer workflows independently from project workspace tabs.
+ * 3. Keep terminal registration configurable for hosted project surfaces.
+ *
+ * Original request (2026-07-18): "replace the project WebUI Stores route with the canonical Context surface."
+ */
 import { createRoute, type AnyRootRoute, type AnyRoute } from '@tanstack/react-router'
 import { ArchiveList } from '../routes/archive-list'
 import { ArchiveView } from '../routes/archive-view'
@@ -17,7 +25,6 @@ import { SearchRoute } from '../routes/search'
 import { Settings } from '../routes/settings'
 import { SpecList } from '../routes/spec-list'
 import { SpecView } from '../routes/spec-view'
-import { StoresList } from '../routes/stores-list'
 import { TerminalPage } from '../routes/terminal'
 
 /** Create the interactive route tree (includes terminal route by default). */
@@ -66,7 +73,6 @@ export function createRouteTree(rootRoute: AnyRootRoute, opts?: { includeTermina
       path: '/archive/$changeId',
       component: ArchiveView,
     }),
-    createRoute({ getParentRoute: () => rootRoute, path: '/stores', component: StoresList }),
     createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: Settings }),
   ]
 
@@ -79,6 +85,7 @@ export function createRouteTree(rootRoute: AnyRootRoute, opts?: { includeTermina
   return rootRoute.addChildren(routes)
 }
 
+/** Create the independent pop-layer route tree. */
 export function createPopRouteTree(rootRoute: AnyRootRoute) {
   return rootRoute.addChildren([
     createRoute({

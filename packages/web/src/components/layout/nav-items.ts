@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Define the supported project navigation identity and default area for each route.
+ * 2. Derive desktop and mobile navigation from one canonical item registry.
+ * 3. Keep Context as the sole project surface for Root, Reference, and registry diagnostics.
+ *
+ * Original request (2026-07-18): "replace the project WebUI Stores route with the canonical Context surface."
+ */
 import {
   Archive,
   FileText,
@@ -8,7 +16,6 @@ import {
   Settings,
   SlidersHorizontal,
   Terminal,
-  Warehouse,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -21,10 +28,10 @@ export type AppRoute =
   | '/changes'
   | '/archive'
   | '/context'
-  | '/stores'
   | '/settings'
   | '/terminal'
 
+/** One canonical project navigation entry and its default workspace area. */
 export interface NavItem {
   to: AppRoute
   icon: LucideIcon
@@ -32,9 +39,8 @@ export interface NavItem {
   /** Which area this tab defaults to */
   defaultArea: 'main' | 'bottom'
   /**
-   * Whether this entry is a beta feature whose visibility is controlled at
-   * runtime by fault tolerance (e.g. Stores hides when its CLI command is
-   * unavailable). Non-beta entries are always visible.
+   * Whether this entry is a beta feature whose visibility may be controlled at
+   * runtime by feature-specific fault tolerance. Non-beta entries are always visible.
    */
   beta?: boolean
 }
@@ -49,7 +55,6 @@ export const allNavItems: NavItem[] = [
   { to: '/archive', icon: Archive, label: 'Archive', defaultArea: 'main' },
   // 6.9 Context 取代项目 Stores 页（root/Reference/registry 只读诊断）。
   { to: '/context', icon: Network, label: 'Context', defaultArea: 'main' },
-  { to: '/stores', icon: Warehouse, label: 'Stores', defaultArea: 'main', beta: true },
   { to: '/settings', icon: Settings, label: 'Settings', defaultArea: 'main' },
   { to: '/terminal', icon: Terminal, label: 'Terminal', defaultArea: 'bottom' },
 ]
@@ -62,4 +67,5 @@ export const navItems: NavItem[] = allNavItems.filter(
 /** Mobile tabbar items — all main + terminal */
 export const mobileNavItems: NavItem[] = allNavItems.filter((i) => i.to !== '/settings')
 
+/** Canonical Settings entry rendered separately by desktop navigation. */
 export const settingsItem: NavItem = allNavItems.find((i) => i.to === '/settings')!

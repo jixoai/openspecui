@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Verify multi-area project navigation, URL canonicalization, and hosted launch parameters.
+ * 2. Verify persisted/project layouts remain a complete partition of supported project tabs.
+ * 3. Prove retired project routes are discarded while Context remains canonical.
+ *
+ * Original request (2026-07-18): "remove /stores from ... nav-controller route sets."
+ */
 import type { RouterHistory } from '@tanstack/react-router'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -28,7 +36,6 @@ const DEFAULT_MAIN_TABS: TabId[] = [
   '/changes',
   '/archive',
   '/context',
-  '/stores',
   '/settings',
 ]
 
@@ -40,7 +47,6 @@ const ALL_TABS: TabId[] = [
   '/changes',
   '/archive',
   '/context',
-  '/stores',
   '/settings',
   '/terminal',
 ]
@@ -188,6 +194,26 @@ describe('NavController kernel lifecycle', () => {
     expect(nav.getLocation('main').pathname).toBe('/dashboard')
     expect(nav.getLocation('bottom').pathname).toBe('/')
     expect(window.location.search).toContain('_b=%2F')
+    assertPartition(nav)
+  })
+
+  it('drops a retired Stores tab from persisted layouts while retaining Context', () => {
+    localStorage.clear()
+    window.history.replaceState({}, '', '/dashboard')
+    localStorage.setItem(
+      'nav-layout',
+      JSON.stringify({
+        mainTabs: ['/stores', '/context', '/dashboard'],
+        bottomTabs: ['/terminal'],
+        updatedAt: 1,
+      })
+    )
+
+    nav = new NavController()
+
+    expect(nav.mainTabs).toContain('/context')
+    expect(nav.mainTabs as readonly string[]).not.toContain('/stores')
+    expect(nav.bottomTabs as readonly string[]).not.toContain('/stores')
     assertPartition(nav)
   })
 

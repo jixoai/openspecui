@@ -1,3 +1,14 @@
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Provide one cached subscription lifecycle for live and static project projections.
+ * 2. Bind Spec, Change, Archive, Config, Notification, and CLI projections to typed hooks.
+ * 3. Preserve cache identity for detail projections across remounts and view transitions.
+ *
+ * Original request (2026-07-18): "retire only the project Web Stores presentation and its subscription tests."
+ *
+ * Compromise: typed entity hooks remain aggregated because they share the same cache and live/static
+ * subscription primitive; splitting them now would add import churn outside checkpoint 6.9.
+ */
 import type {
   ArchiveMeta,
   ChangeFile,
@@ -14,7 +25,6 @@ import {
   type SpecDocumentProjection,
   type SpecIdentity,
 } from '@openspecui/core/spec-catalog'
-import type { StoreFeatureResult, StoreListEntry } from '@openspecui/core/store-types'
 import { useEffect, useRef, useState } from 'react'
 import * as StaticProvider from './static-data-provider'
 import { isStaticMode } from './static-mode'
@@ -344,78 +354,4 @@ export function useConfiguredToolsSubscription(): SubscriptionState<string[]> {
     [],
     'cli.subscribeConfiguredTools'
   )
-}
-
-// =====================
-// Stores subscriptions (beta)
-// =====================
-
-/**
- * Stores 订阅（beta）。
- *
- * Server pushes identity-only invalidation tokens; the browser pulls the authoritative CLI
- * projection through `stores.list`. A temporary server reminder remains until checkpoint 4.8
- * bounds watcher-failure fallback. No static loader: Stores remain a live-only projection.
- */
-export function useStoresSubscription(): SubscriptionState<StoreFeatureResult<StoreListEntry[]>> {
-  const [state, setState] = useState<SubscriptionState<StoreFeatureResult<StoreListEntry[]>>>({
-    data: undefined,
-    isLoading: true,
-    error: null,
-  })
-
-  useEffect(() => {
-    if (isStaticMode()) {
-      setState({
-        data: undefined,
-        isLoading: false,
-        error: new Error('Store projections are unavailable in static mode.'),
-      })
-      return
-    }
-
-    let disposed = false
-    let requestGeneration = 0
-    const pull = async () => {
-      const generation = ++requestGeneration
-      setState((previous) => ({
-        ...previous,
-        isLoading: previous.data === undefined,
-        error: null,
-      }))
-      try {
-        const data = await trpcClient.stores.list.query()
-        if (disposed || generation !== requestGeneration) return
-        setState({ data, isLoading: false, error: null })
-      } catch (error) {
-        if (disposed || generation !== requestGeneration) return
-        setState((previous) => ({
-          ...previous,
-          isLoading: false,
-          error: error instanceof Error ? error : new Error(String(error)),
-        }))
-      }
-    }
-
-    void pull()
-    const subscription = trpcClient.runtimeInvalidation.subscribe.subscribe(
-      { facets: ['stores'] },
-      {
-        onData: () => {
-          void pull()
-        },
-        onError: (error) => {
-          if (!disposed) setState((previous) => ({ ...previous, error }))
-        },
-      }
-    )
-
-    return () => {
-      disposed = true
-      requestGeneration += 1
-      subscription.unsubscribe()
-    }
-  }, [])
-
-  return state
 }

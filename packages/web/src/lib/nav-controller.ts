@@ -1,8 +1,21 @@
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Own main, bottom, and pop navigation as one deterministic state machine.
+ * 2. Preserve hosted URL/base-path/session semantics across area navigation.
+ * 3. Persist project-scoped tab layouts while rejecting retired route identities.
+ * 4. Synchronize local and backend layout state without changing route ownership.
+ *
+ * Original request (2026-07-18): "remove the retired project Stores route from nav-controller route sets."
+ *
+ * Compromise: URL, persistence, and area transitions stay together because one atomic state
+ * machine must normalize all three before exposing a navigation snapshot.
+ */
 import type { HistoryLocation, RouterHistory } from '@tanstack/react-router'
 import { getHealthUrl } from './api-config'
 import { getHostedScopedStorageKey } from './hosted-session'
 import { getBasePath, isStaticMode } from './static-mode'
 
+/** Supported project workspace tab route identities. */
 export type TabId =
   | '/dashboard'
   | '/config'
@@ -11,10 +24,10 @@ export type TabId =
   | '/changes'
   | '/archive'
   | '/context'
-  | '/stores'
   | '/settings'
   | '/terminal'
 
+/** Persistable partition of project tabs between the main and bottom areas. */
 export interface NavLayout {
   mainTabs: TabId[]
   bottomTabs: TabId[]
@@ -24,6 +37,7 @@ interface PersistedNavLayout extends NavLayout {
   updatedAt: number
 }
 
+/** Current multi-area navigation snapshot exposed to project consumers. */
 export interface NavState extends NavLayout {
   mainLocation: HistoryLocation
   bottomLocation: HistoryLocation
@@ -91,7 +105,6 @@ const ALL_TABS: readonly TabId[] = [
   '/changes',
   '/archive',
   '/context',
-  '/stores',
   '/settings',
   '/terminal',
 ]
@@ -102,7 +115,6 @@ const DEFAULT_MAIN_TABS: TabId[] = [
   '/changes',
   '/archive',
   '/context',
-  '/stores',
   '/settings',
 ]
 const DEFAULT_BOTTOM_TABS: TabId[] = isStaticMode() ? [] : ['/git', '/terminal']

@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Verify Context projects CLI-selected root, Store, launch, and inherited data-scope facts.
+ * 2. Verify direct Reference diagnostics remain neutral, read-only, and incomplete-by-design.
+ * 3. Verify loading, refreshing, stale-error, and command-evidence states remain observable.
+ *
+ * Original request (2026-07-18): "replace the project WebUI Stores route with the canonical Context surface."
+ */
 import type { RootContext, RootContextState } from '@openspecui/core'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -77,6 +85,43 @@ describe('ContextView', () => {
     expect(screen.getByRole('alert').textContent).toContain('boom')
   })
 
+  it('renders refreshing state while retaining the current Context projection', () => {
+    const current = rootContext()
+    setState({
+      data: {
+        state: 'refreshing',
+        data: current,
+        attempt: null,
+        error: null,
+        observedAt: current.observedAt,
+      } satisfies RootContextState,
+    })
+
+    render(<ContextView />)
+
+    expect(screen.getByText('Updating')).toBeTruthy()
+    expect(screen.getByText('/tmp/planning')).toBeTruthy()
+  })
+
+  it('retains stale Context facts beside failed-attempt evidence', () => {
+    const stale = rootContext()
+    setState({
+      data: {
+        state: 'error',
+        data: stale,
+        attempt: rootContext({ planningRoot: null, storeId: null }),
+        error: { kind: 'transport', message: 'refresh failed' },
+        observedAt: stale.observedAt,
+      } satisfies RootContextState,
+    })
+
+    render(<ContextView />)
+
+    expect(screen.getByRole('alert').textContent).toContain('refresh failed')
+    expect(screen.getByText(/Showing the last successful observation/)).toBeTruthy()
+    expect(screen.getByText('/tmp/planning')).toBeTruthy()
+  })
+
   it('uses neutral copy: "no reference currently observed", never "all references"', () => {
     setState({ data: readyState() })
     const { container } = render(<ContextView />)
@@ -97,12 +142,14 @@ describe('ContextView', () => {
     expect(text).toContain('/tmp/data/openspec')
   })
 
-  it('states registry is read-only and not project-local', () => {
+  it('states registry is read-only without Store mutations or machine-wide claims', () => {
     setState({ data: readyState() })
     const { container } = render(<ContextView />)
     const text = container.textContent ?? ''
     // 绝不暗示项目级 registry（AGENTS.md：项目无 project-local registry）。
     expect(text).toContain('does not own a project-local registry')
+    expect(text).not.toMatch(/all stores|unregistered stores|machine-wide/i)
+    expect(screen.queryByRole('button', { name: /setup|register|remove|unregister/i })).toBeNull()
   })
 
   it('renders direct Reference diagnostics without claiming completeness', () => {
