@@ -15,6 +15,7 @@ const {
   archiveGetQueryMock,
   gitEntryMetaQueryMock,
   gitScopesQueryMock,
+  gitCodeQueryMock,
   fetchQueryMock,
   primeSubscriptionCacheMock,
 } = vi.hoisted(() => ({
@@ -24,6 +25,7 @@ const {
   archiveGetQueryMock: vi.fn(),
   gitEntryMetaQueryMock: vi.fn(),
   gitScopesQueryMock: vi.fn(),
+  gitCodeQueryMock: vi.fn(),
   fetchQueryMock: vi.fn(async ({ queryFn }: { queryFn: () => Promise<unknown> }) => queryFn()),
   primeSubscriptionCacheMock: vi.fn(),
 }))
@@ -50,6 +52,9 @@ vi.mock('@/lib/trpc', () => ({
       },
     },
     git: {
+      code: {
+        query: gitCodeQueryMock,
+      },
       scopes: {
         query: gitScopesQueryMock,
       },
@@ -99,6 +104,12 @@ describe('prepareRouteDetailViewTransition', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     isStaticModeMock.mockReturnValue(false)
+    gitCodeQueryMock.mockResolvedValue({
+      scope: 'code',
+      bindingToken: 'code-binding',
+      rootPath: '/repo',
+      repository: { topLevel: '/repo', commonDir: '/repo/.git' },
+    })
     gitScopesQueryMock.mockResolvedValue({
       defaultScope: 'code',
       code: {
@@ -210,6 +221,31 @@ describe('prepareRouteDetailViewTransition', () => {
       expectedBindingToken: 'code-binding',
       selector: { type: 'commit', hash: 'abc12345' },
     })
+  })
+
+  it('does not prefetch a Git selector when the handoff token is stale', async () => {
+    await expect(
+      prepareRouteDetailViewTransition({
+        intent: {
+          area: 'bottom',
+          kind: 'route-detail',
+          direction: 'forward',
+        },
+        pathname: '/git/commit/abc12345',
+        state: {
+          __vtHandoff: {
+            family: 'git',
+            entityId: 'abc12345',
+            title: 'Root A commit',
+            bindingToken: 'planning-binding-a',
+          },
+        },
+      })
+    ).resolves.toBe('ready')
+
+    expect(gitCodeQueryMock).toHaveBeenCalledOnce()
+    expect(fetchQueryMock).not.toHaveBeenCalled()
+    expect(gitEntryMetaQueryMock).not.toHaveBeenCalled()
   })
 
   it('primes Planning repository Git detail under a scope-specific cache key', async () => {

@@ -21,6 +21,7 @@ import type { GitEntrySelector } from '@openspecui/core'
 import { specIdentityFromRoute, type SpecIdentity } from '@openspecui/core/spec-catalog'
 import { waitForPrepareTask } from './prepare-wait'
 import type { VTIntent } from './route-semantics'
+import { readSharedElementHandoffState } from './shared-elements'
 
 type DetailPrepareMatch =
   | { kind: 'spec'; identity: SpecIdentity }
@@ -114,16 +115,24 @@ async function prepareArchiveDetail(changeId: string): Promise<void> {
   primeSubscriptionCache(getArchiveSubscriptionCacheKey(changeId), archive)
 }
 
-async function prepareGitDetail(selector: GitEntrySelector, search: string): Promise<void> {
+async function prepareGitDetail(
+  selector: GitEntrySelector,
+  search: string,
+  state: unknown
+): Promise<void> {
   if (isStaticMode()) {
     return
   }
 
   const scope = parseGitRepositoryScope(search)
-  const scopes = await trpcClient.git.scopes.query()
-  const descriptor = scope === 'planning' ? scopes.planning : scopes.code
+  const handoff = readSharedElementHandoffState(state)
+  const descriptor =
+    scope === 'planning'
+      ? (await trpcClient.git.scopes.query()).planning
+      : await trpcClient.git.code.query()
   if (!descriptor) return
   const expectedBindingToken = descriptor.bindingToken
+  if (handoff?.family === 'git' && handoff.bindingToken !== expectedBindingToken) return
   await queryClient.fetchQuery({
     queryKey: getGitEntryMetaQueryKey(scope, expectedBindingToken, selector),
     queryFn: () => trpcClient.git.getEntryMeta.query({ scope, expectedBindingToken, selector }),
@@ -131,7 +140,11 @@ async function prepareGitDetail(selector: GitEntrySelector, search: string): Pro
   })
 }
 
-async function prepareDetailRoute(match: DetailPrepareMatch, search: string): Promise<void> {
+async function prepareDetailRoute(
+  match: DetailPrepareMatch,
+  search: string,
+  state: unknown
+): Promise<void> {
   if (match.kind === 'spec') {
     await prepareSpecDetail(match.identity)
     return
@@ -147,7 +160,7 @@ async function prepareDetailRoute(match: DetailPrepareMatch, search: string): Pr
     return
   }
 
-  await prepareGitDetail(match.selector, search)
+  await prepareGitDetail(match.selector, search, state)
 }
 
 /** Prefetch one binding-current detail projection before a forward route transition. */
@@ -155,8 +168,9 @@ export async function prepareRouteDetailViewTransition(options: {
   intent: VTIntent | null
   pathname: string
   search?: string
+  state?: unknown
 }): Promise<DetailPrepareOutcome> {
-  const { intent, pathname } = options
+  const { intent, pathname, state } = options
   const search = options.search ?? (typeof window === 'undefined' ? '' : window.location.search)
 
   if (!intent || intent.kind !== 'route-detail' || intent.direction !== 'forward') {
@@ -168,7 +182,7 @@ export async function prepareRouteDetailViewTransition(options: {
     return 'ready'
   }
 
-  const result = await waitForPrepareTask(() => prepareDetailRoute(match, search))
+  const result = await waitForPrepareTask(() => prepareDetailRoute(match, search, state))
   if (result.status === 'ready') {
     return 'ready'
   }

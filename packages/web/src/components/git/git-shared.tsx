@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Render shared Git entry and worktree presentation primitives.
+ * 2. Build stable Git shared-element descriptors and human-readable handoffs.
+ * 3. Carry the originating repository binding token into Git detail transitions.
+ *
+ * Original request (2026-07-16): "3.7 Git exposes explicit code/planning repository scopes"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Git handoff provenance.
+ */
 import { Badge } from '@/components/badge'
 import type { DashboardGitAutoRefreshPreset } from '@/lib/dashboard-git'
 import { getDashboardGitEntryTimestamp } from '@/lib/dashboard-git'
@@ -96,10 +105,14 @@ export function getGitEntrySharedDescriptor(
   }
 }
 
-export function getGitEntrySharedHandoff(entry: DashboardGitEntry): SharedElementHandoff {
+export function getGitEntrySharedHandoff(
+  entry: DashboardGitEntry,
+  bindingToken?: string
+): SharedElementHandoff {
   return {
     family: 'git',
     entityId: getGitEntryEntityId(entry),
+    ...(bindingToken ? { bindingToken } : {}),
     title: entry.title,
     subtitle:
       entry.type === 'commit'

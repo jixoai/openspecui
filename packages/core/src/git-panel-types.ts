@@ -111,6 +111,8 @@ export interface GitWorktreeOverview {
 }
 
 export interface GitWorktreeHandoff {
+  /** Canonical project path of the target worktree server. */
   projectDir: string
+  /** Target server URL; never contains repository binding credentials. */
   serverUrl: string
 }

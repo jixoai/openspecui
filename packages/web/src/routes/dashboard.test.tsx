@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Prove Dashboard planning metrics and Code Git projections render independently.
+ * 2. Prove Dashboard refresh actions retain their loading and mutation boundaries.
+ * 3. Prove live Code Git navigation carries the backend-issued binding token.
+ *
+ * Original request (2026-07-16): "接下来，你来接手后续工作"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Dashboard Git provenance.
+ */
 import type { DashboardGitWorktree } from '@openspecui/core'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
@@ -13,6 +22,7 @@ const {
   navControllerMock,
   staticModeMock,
   dashboardContextSummaryMock,
+  codeBindingQueryMock,
 } = vi.hoisted(() => ({
   dashboardOverviewMock: vi.fn(),
   dashboardGitTaskStatusMock: vi.fn(),
@@ -25,6 +35,7 @@ const {
   },
   staticModeMock: vi.fn(() => true),
   dashboardContextSummaryMock: vi.fn(),
+  codeBindingQueryMock: vi.fn(async () => ({ bindingToken: 'code-binding' })),
 }))
 
 vi.mock('@/components/dashboard/metric-card', () => ({
@@ -61,6 +72,16 @@ vi.mock('@/lib/nav-controller', () => ({
 
 vi.mock('@/lib/static-mode', () => ({
   isStaticMode: staticModeMock,
+}))
+
+vi.mock('@/lib/trpc', () => ({
+  trpcClient: {
+    git: {
+      code: {
+        query: codeBindingQueryMock,
+      },
+    },
+  },
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -475,7 +496,7 @@ describe('Dashboard', () => {
     expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledTimes(1)
   })
 
-  it('opens git snapshot entries in the bottom git panel during live mode', () => {
+  it('opens git snapshot entries in the bottom git panel during live mode', async () => {
     staticModeMock.mockReturnValue(false)
     dashboardOverviewMock.mockReturnValue({
       data: {
@@ -521,6 +542,7 @@ describe('Dashboard', () => {
 
     fireEvent.click(screen.getByText('Open me').closest('button') as HTMLButtonElement)
 
+    await waitFor(() => expect(codeBindingQueryMock).toHaveBeenCalledOnce())
     expect(navControllerMock.push).toHaveBeenCalledWith(
       'bottom',
       '/git/commit/deadbeef',
@@ -529,6 +551,7 @@ describe('Dashboard', () => {
           family: 'git',
           entityId: 'deadbeef',
           title: 'Open me',
+          bindingToken: 'code-binding',
         }),
       })
     )

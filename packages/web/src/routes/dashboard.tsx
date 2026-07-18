@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Render the project Dashboard and its objective planning-root projections.
+ * 2. Keep Dashboard-owned Code Git actions separate from Planning-root readiness.
+ * 3. Carry the Code Git binding token through dashboard detail handoff navigation.
+ *
+ * Original request (2026-07-16): "接下来，你来接手后续工作"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Git handoff provenance.
+ */
 import { Badge } from '@/components/badge'
 import { DashboardContextSummary } from '@/components/dashboard/context-summary'
 import { DashboardMetricCard } from '@/components/dashboard/metric-card'
@@ -27,6 +36,7 @@ import {
 import { formatRelativeTime } from '@/lib/format-time'
 import { buildGitEntryHrefFromEntry } from '@/lib/git-panel'
 import { isStaticMode } from '@/lib/static-mode'
+import { trpcClient } from '@/lib/trpc'
 import {
   refreshDashboardGitSnapshot,
   removeDetachedDashboardWorktree,
@@ -769,18 +779,28 @@ export function Dashboard() {
                         staticMode
                           ? undefined
                           : (selectedEntry, sourceElement) => {
-                              void vtNavController.push(
-                                'bottom',
-                                buildGitEntryHrefFromEntry(selectedEntry),
-                                withSharedElementHandoffState(
-                                  undefined,
-                                  getGitEntrySharedHandoff(selectedEntry)
-                                ),
-                                {
-                                  source: sourceElement,
-                                  sharedElements: getGitEntrySharedDescriptor(selectedEntry),
-                                }
-                              )
+                              void trpcClient.git.code
+                                .query()
+                                .then(({ bindingToken }) =>
+                                  vtNavController.push(
+                                    'bottom',
+                                    buildGitEntryHrefFromEntry(selectedEntry),
+                                    withSharedElementHandoffState(
+                                      undefined,
+                                      getGitEntrySharedHandoff(selectedEntry, bindingToken)
+                                    ),
+                                    {
+                                      source: sourceElement,
+                                      sharedElements: getGitEntrySharedDescriptor(selectedEntry),
+                                    }
+                                  )
+                                )
+                                .catch((error: unknown) => {
+                                  console.error(
+                                    '[Dashboard] Failed to resolve Code Git binding:',
+                                    error
+                                  )
+                                })
                             }
                       }
                     />

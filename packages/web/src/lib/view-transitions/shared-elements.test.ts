@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Prove stable shared-element names and DOM collection.
+ * 2. Prove navigation handoff state preserves valid presentation fields.
+ * 3. Prove Git binding provenance is preserved only when nonblank.
+ *
+ * Original request (2026-07-16): "接下来，你来接手后续工作"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 carries Git origin tokens through VT.
+ */
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   collectSharedElementEntries,
@@ -99,6 +108,34 @@ describe('shared element handoff state', () => {
       entityId: 'extract-layout',
       title: 'Extract layout',
       subtitle: undefined,
+    })
+  })
+
+  it('drops blank Git binding provenance instead of accepting an unusable token', () => {
+    expect(
+      readSharedElementHandoffState({
+        __vtHandoff: {
+          family: 'git',
+          entityId: 'abc12345',
+          bindingToken: '   ',
+        },
+      })
+    ).toMatchObject({ family: 'git', entityId: 'abc12345', bindingToken: undefined })
+  })
+
+  it('preserves valid Git binding provenance', () => {
+    expect(
+      readSharedElementHandoffState({
+        __vtHandoff: {
+          family: 'git',
+          entityId: 'abc12345',
+          bindingToken: 'planning-binding-a',
+        },
+      })
+    ).toMatchObject({
+      family: 'git',
+      entityId: 'abc12345',
+      bindingToken: 'planning-binding-a',
     })
   })
 

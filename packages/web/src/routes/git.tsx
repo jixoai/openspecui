@@ -551,7 +551,10 @@ export function GitRoute() {
                 void vtNavController.push(
                   'bottom',
                   buildGitEntryHrefFromEntry(selectedEntry, requestedScope, locationSearch),
-                  withSharedElementHandoffState(undefined, getGitEntrySharedHandoff(selectedEntry)),
+                  withSharedElementHandoffState(
+                    undefined,
+                    getGitEntrySharedHandoff(selectedEntry, bindingToken ?? undefined)
+                  ),
                   {
                     source: sourceElement,
                     sharedElements: getGitEntrySharedDescriptor(selectedEntry),

@@ -13,6 +13,7 @@ import {
   parseCliCommandResult,
   type CliCommandResult,
   type DashboardOverview,
+  type GitRepositoryScopes,
 } from '@openspecui/core'
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, rm, stat } from 'node:fs/promises'
@@ -25,6 +26,32 @@ import { appRouter } from './router.js'
 import { createServer } from './server.js'
 
 const runCommand = promisify(execFile)
+
+interface Deferred<T> {
+  promise: Promise<T>
+  resolve(value: T): void
+  reject(reason: unknown): void
+}
+
+function createDeferred<T>(): Deferred<T> {
+  let resolvePromise: ((value: T) => void) | undefined
+  let rejectPromise: ((reason: unknown) => void) | undefined
+  const promise = new Promise<T>((resolve, reject) => {
+    resolvePromise = resolve
+    rejectPromise = reject
+  })
+  return {
+    promise,
+    resolve(value) {
+      if (!resolvePromise) throw new Error('Deferred resolver was not initialized.')
+      resolvePromise(value)
+    },
+    reject(reason) {
+      if (!rejectPromise) throw new Error('Deferred rejecter was not initialized.')
+      rejectPromise(reason)
+    },
+  }
+}
 
 function commandResult<T>(data: T, schema: ZodType<T>): CliCommandResult<T> {
   return parseCliCommandResult(
@@ -133,6 +160,123 @@ async function createRouterFixture() {
 }
 
 describe('public Git repository binding Router', () => {
+  it('keeps public Code Git usable while the initial Planning transition is deferred', async () => {
+    const fixture = await createRouterFixture()
+    const deferredDoctor =
+      createDeferred<Awaited<ReturnType<typeof fixture.server.cliExecutor.contracts.doctorRoot>>>()
+    const readyDoctor = commandResult(
+      {
+        root: { path: fixture.rootA, source: 'nearest', healthy: true, status: [] },
+        store: null,
+        references: [],
+        status: [],
+      },
+      CliDoctorSchema
+    )
+    fixture.doctorRootMock.mockImplementationOnce(() => deferredDoctor.promise)
+    const emissions: GitRepositoryScopes[] = []
+    const firstEmission = createDeferred<GitRepositoryScopes>()
+    const planningEmission = createDeferred<GitRepositoryScopes>()
+    let subscription: { unsubscribe(): void } | null = null
+
+    try {
+      const caller = appRouter.createCaller(fixture.server.createContext())
+      const observable = await caller.git.subscribeScopes()
+      subscription = observable.subscribe({
+        next(scopes) {
+          emissions.push(scopes)
+          if (emissions.length === 1) firstEmission.resolve(scopes)
+          if (scopes.planning) planningEmission.resolve(scopes)
+        },
+        error(error) {
+          firstEmission.reject(error)
+          planningEmission.reject(error)
+        },
+      })
+
+      const codeOnly = await firstEmission.promise
+      expect(codeOnly.planning).toBeNull()
+      expect(codeOnly.code.rootPath).toBe(fixture.codeRoot)
+      await vi.waitFor(() => expect(fixture.doctorRootMock).toHaveBeenCalledOnce())
+
+      const token = codeOnly.code.bindingToken
+      const [code, overview, history, refresh] = await Promise.all([
+        caller.git.code(),
+        caller.git.overview({ scope: 'code', expectedBindingToken: token }),
+        caller.git.listEntries({
+          scope: 'code',
+          expectedBindingToken: token,
+          limit: 10,
+        }),
+        caller.dashboard.refreshGitSnapshot({
+          scope: 'code',
+          expectedBindingToken: token,
+          reason: 'deferred-planning-code-refresh',
+        }),
+      ])
+
+      expect(code.bindingToken).toBe(token)
+      expect(overview.currentWorktree?.path).toBe(code.repository?.topLevel)
+      expect(history.items).toEqual([])
+      expect(refresh).toEqual({ success: true })
+
+      deferredDoctor.resolve(readyDoctor)
+      const enriched = await planningEmission.promise
+      expect(enriched.code.bindingToken).toBe(token)
+      expect(enriched.planning?.rootPath).toBe(fixture.rootA)
+    } finally {
+      deferredDoctor.resolve(readyDoctor)
+      subscription?.unsubscribe()
+      await fixture.dispose()
+    }
+  })
+
+  it('stops subscription emission and settles the deferred Manager transition after unsubscribe', async () => {
+    const fixture = await createRouterFixture()
+    const deferredDoctor =
+      createDeferred<Awaited<ReturnType<typeof fixture.server.cliExecutor.contracts.doctorRoot>>>()
+    const readyDoctor = commandResult(
+      {
+        root: { path: fixture.rootA, source: 'nearest', healthy: true, status: [] },
+        store: null,
+        references: [],
+        status: [],
+      },
+      CliDoctorSchema
+    )
+    fixture.doctorRootMock.mockImplementationOnce(() => deferredDoctor.promise)
+    const emissions: GitRepositoryScopes[] = []
+    const firstEmission = createDeferred<void>()
+
+    try {
+      const caller = appRouter.createCaller(fixture.server.createContext())
+      const observable = await caller.git.subscribeScopes()
+      const subscription = observable.subscribe({
+        next(scopes) {
+          emissions.push(scopes)
+          firstEmission.resolve(undefined)
+        },
+        error: firstEmission.reject,
+      })
+
+      await firstEmission.promise
+      await vi.waitFor(() => expect(fixture.doctorRootMock).toHaveBeenCalledOnce())
+      subscription.unsubscribe()
+      deferredDoctor.resolve(readyDoctor)
+
+      await expect(
+        fixture.server.planningRootServices.runOperation(({ rootContext }) =>
+          Promise.resolve(rootContext.planningRoot?.path)
+        )
+      ).resolves.toBe(fixture.rootA)
+      expect(emissions).toHaveLength(1)
+      expect(emissions[0]?.planning).toBeNull()
+    } finally {
+      deferredDoctor.resolve(readyDoctor)
+      await fixture.dispose()
+    }
+  })
+
   it('rejects stale Refresh before touching the rebound Planning repository', async () => {
     const fixture = await createRouterFixture()
     const { rootB, server } = fixture

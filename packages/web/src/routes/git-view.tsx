@@ -56,11 +56,10 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
   const handoff = readSharedElementHandoffState(location.state)
   const backHref = buildGitRepositoryHref('/git', requestedScope, locationSearch)
   const bindingToken = scopeDescriptor?.bindingToken ?? null
-  const initialBindingTokenRef = useRef<string | null>(null)
-  if (bindingToken && initialBindingTokenRef.current === null) {
-    initialBindingTokenRef.current = bindingToken
-  }
-  const handoffMatchesBinding = handoff !== null && initialBindingTokenRef.current === bindingToken
+  const handoffMatchesBinding =
+    handoff?.family === 'git' &&
+    handoff.bindingToken !== undefined &&
+    handoff.bindingToken === bindingToken
   const metaQuery = useQuery({
     queryKey: getGitEntryMetaQueryKey(scope, bindingToken ?? 'unavailable', selector),
     queryFn: () => {

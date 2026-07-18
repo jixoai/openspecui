@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Coordinate route navigation with native View Transitions.
+ * 2. Preserve navigation state and shared-element descriptors across route areas.
+ * 3. Forward Git binding provenance into detail prefetch before committing navigation.
+ *
+ * Original request (2026-07-16): "接下来，你来接手后续工作"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git handoff prefetch.
+ */
 import { navController } from '@/lib/nav-controller'
 import {
   Link as RouterLink,
@@ -77,6 +86,8 @@ function resolveSource(
 async function runPreparedViewTransition(options: {
   intent: ReturnType<typeof resolveViewTransitionIntent>
   pathname: string
+  search?: string
+  state?: unknown
   update: () => void
   collectBeforeEntries?: () => Array<[HTMLElement, string]>
   collectAfterEntries?: () => Array<[HTMLElement, string]>
@@ -84,6 +95,8 @@ async function runPreparedViewTransition(options: {
   const prepareOutcome = await prepareRouteDetailViewTransition({
     intent: options.intent,
     pathname: options.pathname,
+    search: options.search,
+    state: options.state,
   })
 
   if (prepareOutcome === 'cancelled') {
@@ -113,7 +126,8 @@ export function useVTHrefNavigate() {
   return useCallback(
     ({ href, replace = false, state, vt }: NavigateByHrefOptions) => {
       const relativeHref = toRelativeHref(href)
-      const pathname = toPathname(href)
+      const targetUrl = new URL(href, window.location.origin)
+      const pathname = targetUrl.pathname
       const area = vt?.area ?? navController.getAreaForPath(pathname)
       const sourceRoot = resolveSource(vt?.source, null)
       const intent = resolveViewTransitionIntent({
@@ -125,6 +139,8 @@ export function useVTHrefNavigate() {
       return runPreparedViewTransition({
         intent,
         pathname,
+        search: targetUrl.search,
+        state,
         collectBeforeEntries: () => collectSharedElementEntries(sourceRoot, vt?.sharedElements),
         collectAfterEntries: () => collectSharedElementEntries(document, vt?.sharedElements),
         update: () => {
@@ -215,7 +231,8 @@ function runNavControllerTransition(options: {
     return Promise.resolve()
   }
 
-  const pathname = toPathname(options.href)
+  const targetUrl = new URL(options.href, window.location.origin)
+  const pathname = targetUrl.pathname
   const currentLocation = navController.getLocation(options.area)
   const sourceRoot = resolveSource(options.source, null)
   const intent = resolveViewTransitionIntent({
@@ -227,6 +244,8 @@ function runNavControllerTransition(options: {
   return runPreparedViewTransition({
     intent,
     pathname,
+    search: targetUrl.search,
+    state: options.state,
     collectBeforeEntries: () => collectSharedElementEntries(sourceRoot, options.sharedElements),
     collectAfterEntries: () => collectSharedElementEntries(document, options.sharedElements),
     update: () => {

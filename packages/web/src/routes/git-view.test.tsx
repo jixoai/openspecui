@@ -38,7 +38,7 @@ const {
     search: {},
     searchStr: '',
     hash: '',
-    state: null,
+    state: null as unknown,
   },
   projectDir: '/Users/kzf/Dev/GitHub/jixoai-labs/agenter',
   subscriptionState: {} as {
@@ -351,6 +351,52 @@ describe('Git entry routes', () => {
         'commit:abc12345:/tmp/planning:planning'
       )
     })
+  })
+
+  it('renders current-binding handoff title and subtitle while A detail is loading', async () => {
+    routerLocation.searchStr = '?gitScope=planning'
+    routerLocation.state = {
+      __vtHandoff: {
+        family: 'git',
+        entityId: 'abc12345',
+        bindingToken: 'planning-binding-a',
+        title: 'Root A handoff title',
+        subtitle: 'Root A handoff subtitle',
+      },
+    }
+    const pendingDetail = new Promise<never>(() => {})
+    getEntryMetaQueryMock.mockReturnValue(pendingDetail)
+    getEntryFilesQueryMock.mockReturnValue(pendingDetail)
+
+    renderWithQueryClient(<GitCommitViewRoute />)
+
+    expect(await screen.findByText('Root A handoff title')).toBeTruthy()
+    expect(screen.getByText('Root A handoff subtitle')).toBeTruthy()
+    expect(screen.queryByText(/Loading Git detail for/)).toBeNull()
+  })
+
+  it('does not render an A handoff after B becomes current before detail mount', async () => {
+    routerLocation.searchStr = '?gitScope=planning'
+    routerLocation.state = {
+      __vtHandoff: {
+        family: 'git',
+        entityId: 'abc12345',
+        bindingToken: 'planning-binding-a',
+        title: 'Root A handoff title',
+        subtitle: 'Root A handoff subtitle',
+      },
+    }
+    subscriptionState.currentScopes = createGitScopes('/tmp/planning-b', 'planning-binding-b')
+    subscriptionState.currentRoot = createReadyRootState('/tmp/planning-b')
+    const pendingDetail = new Promise<never>(() => {})
+    getEntryMetaQueryMock.mockReturnValue(pendingDetail)
+    getEntryFilesQueryMock.mockReturnValue(pendingDetail)
+
+    renderWithQueryClient(<GitCommitViewRoute />)
+
+    expect(await screen.findByText(/Loading Git detail for \/tmp\/planning-b/)).toBeTruthy()
+    expect(screen.queryByText('Root A handoff title')).toBeNull()
+    expect(screen.queryByText('Root A handoff subtitle')).toBeNull()
   })
 
   it('keeps the requested Planning URL while a mismatched Root uses Code data', async () => {

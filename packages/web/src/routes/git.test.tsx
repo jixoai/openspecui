@@ -150,10 +150,14 @@ vi.mock('@/components/git/git-shared', () => ({
     family: 'git',
     entityId: entry.type === 'commit' ? (entry.hash ?? 'unknown') : 'uncommitted',
   }),
-  getGitEntrySharedHandoff: (entry: { type: string; hash?: string; title: string }) => ({
+  getGitEntrySharedHandoff: (
+    entry: { type: string; hash?: string; title: string },
+    bindingToken?: string
+  ) => ({
     family: 'git',
     entityId: entry.type === 'commit' ? (entry.hash ?? 'unknown') : 'uncommitted',
     title: entry.title,
+    bindingToken,
   }),
   GitEntryRow: ({
     entry,
@@ -395,6 +399,27 @@ describe('GitRoute', () => {
     })
   })
 
+  it('loads Code status and history from the first Code-only scope emission', async () => {
+    const codeOnly = createGitScopes()
+    codeOnly.planning = null
+    subscriptionState.currentScopes = codeOnly
+    subscriptionState.currentRoot = createRefreshingRootState('/planning')
+
+    renderWithQueryClient(<GitRoute />)
+
+    await screen.findByText('main against origin/main')
+    expect(overviewQueryMock).toHaveBeenCalledWith({
+      scope: 'code',
+      expectedBindingToken: 'code-binding',
+    })
+    expect(listEntriesQueryMock).toHaveBeenCalledWith({
+      scope: 'code',
+      expectedBindingToken: 'code-binding',
+      cursor: undefined,
+      limit: 50,
+    })
+  })
+
   it('preserves Planning repository scope in history requests and detail navigation', async () => {
     routerLocation.searchStr = '?gitScope=planning'
     renderWithQueryClient(<GitRoute />)
@@ -416,7 +441,11 @@ describe('GitRoute', () => {
     expect(navPushMock).toHaveBeenCalledWith(
       'bottom',
       '/git/commit/abc12345?gitScope=planning',
-      expect.anything()
+      expect.objectContaining({
+        __vtHandoff: expect.objectContaining({
+          bindingToken: 'planning-binding-a',
+        }),
+      })
     )
   })
 
@@ -697,6 +726,7 @@ describe('GitRoute', () => {
           family: 'git',
           entityId: 'abc12345',
           title: 'feat: add git panel',
+          bindingToken: 'code-binding',
         }),
       })
     )

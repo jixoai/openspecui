@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Define shared-element descriptors and navigation handoff payloads.
+ * 2. Sanitize and validate handoff state crossing route boundaries.
+ * 3. Preserve optional source binding provenance for Git detail transitions.
+ *
+ * Original request (2026-07-16): "接下来，你来接手后续工作"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 carries Git origin tokens through VT.
+ */
 import { useMemo } from 'react'
 
 export type SharedElementSlot = 'container' | 'icon' | 'title'
@@ -13,6 +22,8 @@ export interface SharedElementHandoff {
   entityId: string
   title?: string
   subtitle?: string
+  /** Optional source binding provenance; Git handoffs require it to render detail text. */
+  bindingToken?: string
 }
 
 interface SharedElementNavigationState {
@@ -111,11 +122,16 @@ export function readSharedElementHandoffState(state: unknown): SharedElementHand
   const handoff = (state as SharedElementNavigationState).__vtHandoff
   if (typeof handoff !== 'object' || handoff == null) return null
   if (typeof handoff.family !== 'string' || typeof handoff.entityId !== 'string') return null
+  const bindingToken =
+    typeof handoff.bindingToken === 'string' && handoff.bindingToken.trim().length > 0
+      ? handoff.bindingToken
+      : undefined
 
   return {
     family: handoff.family,
     entityId: handoff.entityId,
     title: typeof handoff.title === 'string' ? handoff.title : undefined,
     subtitle: typeof handoff.subtitle === 'string' ? handoff.subtitle : undefined,
+    bindingToken,
   }
 }

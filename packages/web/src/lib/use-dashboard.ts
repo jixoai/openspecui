@@ -14,7 +14,7 @@ import { trpcClient } from './trpc'
 import { useSubscription, type SubscriptionState } from './use-subscription'
 
 async function getCodeGitBindingToken(): Promise<string> {
-  return (await trpcClient.git.scopes.query()).code.bindingToken
+  return (await trpcClient.git.code.query()).bindingToken
 }
 
 /** Subscribe to the current Planning-owned Dashboard projection. */

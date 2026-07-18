@@ -2597,14 +2597,43 @@ function gitRepositoryCwd(scope: GitRepositoryScopeDescriptor): string {
 
 /** Explicit code/planning Git repository query and mutation procedures. */
 export const gitRouter = router({
+  /** Return the stable Launch-owned Code binding without waiting for Planning resolution. */
+  code: publicProcedure.query(({ ctx }) => ctx.gitRepositoryBindings.resolveCodeScope()),
+
   /** Return the current Code/Planning repository bindings and their opaque epochs. */
   scopes: publicProcedure.query(({ ctx }): Promise<GitRepositoryScopes> => fetchGitScopes(ctx)),
 
   /** Stream the current Code/Planning repository bindings and their opaque epochs. */
   subscribeScopes: publicProcedure.subscription(({ ctx }) => {
-    return createReactiveSubscription(() =>
-      ctx.gitRepositoryBindings.resolveScopes({ reactive: true })
-    )
+    return observable<GitRepositoryScopes>((emit) => {
+      let active = true
+      let planningSubscription: { unsubscribe(): void } | null = null
+      void ctx.gitRepositoryBindings
+        .resolveCodeScope()
+        .then((code) => {
+          if (!active) return
+          emit.next({ defaultScope: 'code', code, planning: null })
+          planningSubscription = createReactiveSubscription(() =>
+            ctx.gitRepositoryBindings.resolveScopes({ reactive: true })
+          ).subscribe({
+            next(scopes) {
+              if (active) emit.next(scopes)
+            },
+            error(error) {
+              if (active) emit.error(error)
+            },
+          })
+          if (!active) planningSubscription.unsubscribe()
+        })
+        .catch((error: unknown) => {
+          if (active) emit.error(error instanceof Error ? error : new Error(String(error)))
+        })
+
+      return () => {
+        active = false
+        planningSubscription?.unsubscribe()
+      }
+    })
   }),
 
   overview: publicProcedure

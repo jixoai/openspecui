@@ -42,6 +42,8 @@ export class GitRepositoryBindingConflictError extends Error {
 
 /** Server-owned Code/Planning repository binding boundary. */
 export interface GitRepositoryBindingResolver {
+  /** Resolve the stable Launch-owned Code binding without waiting for Planning. */
+  resolveCodeScope(): Promise<GitRepositoryScopes['code']>
   /** Resolve current Code and optional distinct Planning bindings. */
   resolveScopes(options?: { reactive?: boolean }): Promise<GitRepositoryScopes>
   /** Run work only after the caller's expected binding matches the current owner. */
@@ -74,12 +76,18 @@ export class GitRepositoryBindingService implements GitRepositoryBindingResolver
     )
   }
 
-  private resolveCode(): Promise<GitRepositoryScopeDescriptor> {
-    return resolveGitRepositoryDescriptor({
+  private async resolveCode(): Promise<GitRepositoryScopes['code']> {
+    const descriptor = await resolveGitRepositoryDescriptor({
       scope: 'code',
       bindingToken: this.codeBindingToken,
       rootPath: this.options.launchProjectDir,
     })
+    return { ...descriptor, scope: 'code' }
+  }
+
+  /** Resolve the stable Launch-owned Code binding without entering the Planning lease. */
+  resolveCodeScope(): Promise<GitRepositoryScopes['code']> {
+    return this.resolveCode()
   }
 
   /** Resolve the current scope inventory through buffered or caller-reactive root ownership. */
@@ -102,7 +110,7 @@ export class GitRepositoryBindingService implements GitRepositoryBindingResolver
     } catch {
       return {
         defaultScope: 'code',
-        code: (await this.resolveCode()) as GitRepositoryScopes['code'],
+        code: await this.resolveCodeScope(),
         planning: null,
       }
     }
