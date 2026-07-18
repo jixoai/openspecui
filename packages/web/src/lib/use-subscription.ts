@@ -38,6 +38,9 @@ export interface SubscriptionState<T> {
   error: Error | null
 }
 
+/** Controls whether cached data remains authoritative while a subscription reconnects. */
+export type SubscriptionCacheRebindPolicy = 'retain' | 'loading'
+
 /** 订阅回调 */
 interface SubscriptionCallbacks<T> {
   onData: (data: T) => void
@@ -80,11 +83,16 @@ export function useSubscription<T>(
   subscribe: (callbacks: SubscriptionCallbacks<T>) => Unsubscribable,
   staticLoader?: () => Promise<T>,
   deps: unknown[] = [],
-  cacheKey?: string
+  cacheKey?: string,
+  cacheRebindPolicy: SubscriptionCacheRebindPolicy = 'retain'
 ): SubscriptionState<T> {
   const [state, setState] = useState<SubscriptionState<T>>(() => {
     if (cacheKey && subscriptionCache.has(cacheKey)) {
-      return { data: subscriptionCache.get(cacheKey) as T, isLoading: false, error: null }
+      return {
+        data: subscriptionCache.get(cacheKey) as T,
+        isLoading: cacheRebindPolicy === 'loading',
+        error: null,
+      }
     }
     return { data: undefined, isLoading: true, error: null }
   })
@@ -98,7 +106,11 @@ export function useSubscription<T>(
 
     // Use cached data if available, otherwise mark as loading
     if (cacheKey && subscriptionCache.has(cacheKey)) {
-      setState({ data: subscriptionCache.get(cacheKey) as T, isLoading: false, error: null })
+      setState({
+        data: subscriptionCache.get(cacheKey) as T,
+        isLoading: cacheRebindPolicy === 'loading',
+        error: null,
+      })
     } else {
       setState((prev) => ({ ...prev, isLoading: true, error: null }))
     }

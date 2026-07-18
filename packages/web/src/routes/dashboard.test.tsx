@@ -689,4 +689,100 @@ describe('Dashboard', () => {
     expect(screen.queryByText('Stale reconnect entry')).toBeNull()
     expect(navControllerMock.push).not.toHaveBeenCalled()
   })
+
+  it('keeps cached A display-only while Git scopes reconnect, then authorizes B', async () => {
+    staticModeMock.mockReturnValue(false)
+    const scopeA: GitRepositoryScopes = {
+      defaultScope: 'code',
+      code: {
+        scope: 'code',
+        bindingToken: 'code-binding-a',
+        rootPath: '/workspace/code-a',
+        repository: { topLevel: '/workspace/code-a', commonDir: '/workspace/code-a/.git' },
+      },
+      planningState: 'settled',
+      planning: null,
+    }
+    const scopeB: GitRepositoryScopes = {
+      ...scopeA,
+      code: {
+        ...scopeA.code,
+        bindingToken: 'code-binding-b',
+        rootPath: '/workspace/code-b',
+        repository: { topLevel: '/workspace/code-b', commonDir: '/workspace/code-b/.git' },
+      },
+    }
+    const snapshotA = {
+      ...createOverviewData(),
+      git: {
+        bindingToken: 'code-binding-a',
+        defaultBranch: 'main',
+        worktrees: [
+          {
+            ...baseWorktree,
+            isCurrent: true,
+            entries: [
+              {
+                type: 'commit' as const,
+                hash: 'reconnect-a',
+                title: 'Reconnect A entry',
+                committedAt: 1_710_200_000_000,
+                relatedChanges: [],
+                diff: { files: 1, insertions: 1, deletions: 0 },
+              },
+            ],
+          },
+        ],
+      },
+    }
+    const snapshotB = {
+      ...snapshotA,
+      git: {
+        ...snapshotA.git,
+        bindingToken: 'code-binding-b',
+        worktrees: [
+          {
+            ...baseWorktree,
+            isCurrent: true,
+            entries: [
+              {
+                type: 'commit' as const,
+                hash: 'reconnect-b',
+                title: 'Reconnect B entry',
+                committedAt: 1_710_300_000_000,
+                relatedChanges: [],
+                diff: { files: 1, insertions: 2, deletions: 0 },
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    gitScopesMock.mockReturnValue({ data: scopeA, isLoading: true, error: null })
+    dashboardOverviewMock.mockReturnValue({ data: snapshotA, isLoading: false, error: null })
+    const view = render(<Dashboard />)
+
+    expect(screen.queryByText('Reconnect A entry')).toBeNull()
+    expect(navControllerMock.push).not.toHaveBeenCalled()
+
+    gitScopesMock.mockReturnValue({ data: scopeB, isLoading: false, error: null })
+    dashboardOverviewMock.mockReturnValue({ data: snapshotB, isLoading: false, error: null })
+    view.rerender(<Dashboard />)
+
+    await waitFor(() => expect(screen.getByText('Reconnect B entry')).toBeInTheDocument())
+    expect(screen.queryByText('Reconnect A entry')).toBeNull()
+
+    fireEvent.click(screen.getByText('Reconnect B entry'))
+    expect(navControllerMock.push).toHaveBeenCalledWith(
+      'bottom',
+      '/git/commit/reconnect-b',
+      expect.objectContaining({
+        __vtHandoff: expect.objectContaining({
+          entityId: 'reconnect-b',
+          bindingToken: 'code-binding-b',
+        }),
+      })
+    )
+  })
 })

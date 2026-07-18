@@ -59,7 +59,8 @@ export function useGitRepositoryScopes(
     },
     async () => STATIC_GIT_SCOPES,
     [enabled],
-    'git.subscribeScopes'
+    'git.subscribeScopes',
+    'loading'
   )
 }
 
