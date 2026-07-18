@@ -554,3 +554,21 @@ Required mutation-resistant evidence for the next worker:
 - Add ready-Root + Git-identity-failure evidence that fails against `dda056c` because the UI reports a settled collapse. Code remains usable, but Planning failure/error evidence stays explicit and Planning controls remain locked.
 - Add Dashboard snapshot A + current Code token B evidence that fails against `dda056c` because the old entry is handed off with B. The corrected UI retires or locks the stale snapshot until a B projection arrives; a matching A snapshot/token remains navigable.
 - The worker must append exact red/green evidence, focused and full gates, and residual limitations to `loop/implementation.md`; `6.11` stays unchecked until a real terminating pinned-CLI agent-browser walk-through covers desktop and `390x844` Code/A/B flows. A unit-only or stalled browser attempt is not acceptance evidence.
+
+### 6.11 Reconnect Authority Review Slice at `49a272b`
+
+`6.11` remains unchecked at `61/131`. The reconnect correction is intentionally Git-scoped:
+`useSubscription` defaults to the prior authoritative cache behavior, while
+`useGitRepositoryScopes` opts into `loading` until `git.subscribeScopes` emits its replacement.
+Dashboard retires cached A Git snapshots and handoffs during that loading/error window and accepts
+only the matching B token after emission.
+
+Mutation-resistant evidence is direct and reproducible. With the Git hook's `'loading'` argument
+temporarily removed, the checked real-hook test fails `1/2` at `expected false to be true` for the
+cached-A `isLoading` assertion. Restoring the argument returns `2/2` green. This is boundary
+evidence, not a disabled-button or mocked downstream-handler characterization. Commits are
+`87be0fe`, `fbe82f6`, and `49a272b`; only reviewer-owned `AGENTS.md` and `i18n.zh.md` remain dirty.
+
+Focused Web tests and typecheck are green; full gates, clean SSG, pinned-CLI desktop/mobile
+acceptance, push, exact-head CI, and SHA equality remain required before closing `6.11`. Do not
+start `6.12+`, merge, archive, or release.

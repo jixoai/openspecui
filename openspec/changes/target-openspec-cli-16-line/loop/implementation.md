@@ -2612,3 +2612,44 @@ tests cover the exact explicit-vs-unknown failure boundary.
 Full local gates, exact-head CI, and the terminating pinned OpenSpec 1.6 desktop/mobile browser
 walk-through remain pending. No browser acceptance is inferred from these unit tests. Do not mark
 `6.11` complete, merge, archive, release, or start `6.12+`.
+
+### 6.11 Reconnect-Authority Correction at `49a272b`
+
+Independent review of the `3115296` slice found that `useSubscription` restored cached Git scope
+data with `isLoading: false` during a remount/reconnect. A Code scope A and matching Dashboard
+snapshot A could therefore pass token equality before the replacement scope B arrived. The first
+attempt changed the shared hook globally; that was rejected because Spec, Change, Config, and
+other cached projections must retain their existing cache semantics. The accepted correction is
+an explicit `SubscriptionCacheRebindPolicy` with `retain` as the default and `loading` enabled only
+by `useGitRepositoryScopes` for `git.subscribeScopes`.
+
+Implementation/test commits:
+
+- `87be0fe` (`fix(git): keep cached scopes non-authoritative during reconnect`) adds the opt-in
+  policy, uses it only for Git scope subscriptions, and adds Dashboard A -> reconnect -> B
+  rendering/handoff coverage.
+- `fbe82f6` (`docs(git): record reconnect cache intent`) updates the changed hook's timestamped
+  orthogonal-intent header.
+- `49a272b` (`test(git): prove reconnect cache gate owns Git scopes`) exercises the real
+  `useGitRepositoryScopes` hook: cache A is retained as data but `isLoading: true`, then callback
+  B clears loading and becomes current. The non-Git default policy is separately covered.
+
+Exact mutation-resistance evidence:
+
+```text
+Fixed point: temporarily remove the `'loading'` argument from useGitRepositoryScopes.
+Command: pnpm --filter @openspecui/web exec vitest run --project unit src/lib/use-git-repository-scope.test.ts
+Result: 1 failed / 2 tests; expected false to be true at the cached-A isLoading assertion.
+Restored: same command -> 2 passed / 2 tests.
+```
+
+The red assertion reaches the real hook/cache boundary and observes stale A authority directly;
+it does not click a disabled control or invoke a mocked downstream mutation handler. Dashboard
+coverage additionally proves cached A is absent from rendered Git snapshot/handoff while loading,
+then B is rendered and handed off with `code-binding-b`. The focused Web scope, subscription,
+Dashboard, and Git lanes pass (`30 tests` across four files; GitRoute rerun three times with `14/14`
+each), Web typecheck passes, and `git diff --check` passes.
+
+The full repository gates, clean SSG, terminating pinned-CLI desktop/mobile acceptance, push,
+exact-head CI, and local/remote/PR SHA equality remain pending. Checkpoint `6.11` remains open;
+do not start `6.12+`, merge, archive, or release.
