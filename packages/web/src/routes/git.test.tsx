@@ -152,7 +152,7 @@ vi.mock('@/components/git/git-shared', () => ({
   }),
   getGitEntrySharedHandoff: (
     entry: { type: string; hash?: string; title: string },
-    bindingToken?: string
+    bindingToken: string
   ) => ({
     family: 'git',
     entityId: entry.type === 'commit' ? (entry.hash ?? 'unknown') : 'uncommitted',
@@ -625,10 +625,12 @@ describe('GitRoute', () => {
     await screen.findByText('main against origin/main')
     expect(screen.queryByText('root-a-status against origin/main')).toBeNull()
     expect(screen.queryByText('Root A history')).toBeNull()
-    expect(overviewQueryMock).toHaveBeenLastCalledWith({
-      scope: 'code',
-      expectedBindingToken: 'code-binding',
-    })
+    await waitFor(() =>
+      expect(overviewQueryMock).toHaveBeenCalledWith({
+        scope: 'code',
+        expectedBindingToken: 'code-binding',
+      })
+    )
     expect(
       (screen.getByRole('button', { name: 'Planning repository' }) as HTMLButtonElement).disabled
     ).toBe(true)
