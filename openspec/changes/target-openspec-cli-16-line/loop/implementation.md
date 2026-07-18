@@ -2080,3 +2080,82 @@ The clean SSG build retains only the repository's known non-fatal `scroll-button
 ### Browser re-walk after `e4ef2ad`
 
 The isolated live browser at Vite `13022` plus backend `3122` loaded `/config?configTab=environment-global` and reached the Profile surface. The root link reported `Planning: Resolving` during initial load and then settled; the ready Profile Apply dialog opened with an enabled `Apply profile` control. The existing browser harness has no safe blocked-root fixture that can be triggered without mutating the checkout's launch-project binding, so the blocked-root Apply/Update transition was not fabricated as a new browser claim. The automated browser gate above remains the reproducible evidence; the earlier blocked-root snapshot from the pre-correction walk is retained as historical evidence, not as post-correction proof.
+
+## Next Apply Boundary: Checkpoint 6.9 Context Replacement
+
+At `b6f48e6`, the project WebUI already has a `/context` route backed by the shared Root Context subscription. It renders the planning root, root source, Store id, launch project, direct Reference diagnostics, inherited data scope, read-only registry wording, and expandable Doctor/Context command evidence. Live and static route trees both retain `/context`.
+
+The remaining 6.9 gap is coexistence: project navigation and the Web route tree still expose `/stores` through `StoresList` and `useStoresVisibility`, while the backend Store list/doctor procedures are also used by the experimental App Store Manager contract. The next worker must remove only the project Web Stores surface, preserve backend/App Store capabilities, add route-registration tests proving `/stores` is absent and `/context` remains reachable, and stop for independent review. No Store CRUD, Workset, project registry, or `6.10+` work is authorized in this slice.
+
+## Independent Review after `8dea750`: 6.9 Evidence and Error-Projection Gaps
+
+Review range: `b6f48e6...8dea750`. The implementation correctly removes the project Web `/stores` route, navigation identity, visibility hook, `StoresList`, and project-only Store subscription while retaining Server/Core/App Store capabilities. Route-tree tests exercise live and static registration, and no Search, Store CRUD, Workset, registry-synthesis, or `6.10+` behavior entered the diff. Checkpoint `6.9` nevertheless remains open at `59/131` because the following acceptance defects are current.
+
+### Blocking correctness findings
+
+1. **Stale error hides the failed Root Context attempt.** `selectRootContextSnapshot` deliberately returns stale `data` before `attempt`, and `ContextView` renders only that selected snapshot. The alert claims the failed attempt is retained, but its root/Store identity, Doctor and Context exit status, stderr, contract drift, and structured diagnostics are not displayed. The new test asserts only the stale planning root. Render the stale projection and failed attempt as separate, explicitly named facts; reuse the existing command-evidence renderer instead of inventing a second evidence shape.
+2. **The new test violates the typed Root Context contract.** Independent `pnpm typecheck` exits 2 at `packages/web/src/routes/context.test.tsx:113`: `RootContextError` has `code`, not `kind`. Focused Vitest passed `5 files / 48 tests` because transpilation does not type-check this object. Correct the fixture and do not report a slice type-safe until the workspace gate passes.
+
+### Delivery and evidence findings
+
+3. `.changeset/openspec-16-frontend-skeleton.md` still calls Context additive, says 6.9 remains open, and says it sits alongside Stores. Update it to the final replacement contract and name `/stores` removal.
+4. The retained changed TS/TSX headers synthesize English `Original request` text, including ellipses. This breaks the required provenance contract. Use the manager's exact 2026-07-15 quote, `"我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"`, and state checkpoint 6.9 separately as a derived requirement.
+5. `nav-items.test.ts` proves array membership but not the actual `MobileTabBar` branches. Add a component test covering live and static rendering: Context is reachable and a stale `/stores` tab id cannot render.
+
+The duplicated route universe in `nav-items.ts` and `nav-controller.ts` remains a low-priority Shotgun Surgery smell. Do not widen this correction into a route-registry refactor; record it for later architecture work because 6.9 can be proven without changing that boundary.
+
+### Independent local evidence
+
+- Focused Context/route/navigation Vitest: `5 files / 48 tests` passed.
+- `pnpm format:check`: passed against the reviewer documents.
+- `pnpm lint:ci`: `827 files`, zero warnings/errors.
+- `pnpm typecheck`: failed with the single `RootContextError.kind` contract error above.
+- `pnpm test:ci`: all workspace lanes passed; Web `116 files / 682 tests` passed.
+- Clean `pnpm --filter @openspecui/web build:ssg`: passed with only the known non-fatal CSS and dynamic-import warnings.
+- `git diff --check`: passed. Browser tests were intentionally not run after the typecheck blocker.
+
+### Required correction evidence
+
+- Demonstrate a red stale-error component assertion against fixed point `8dea750` for the missing failed-attempt root/Store/command evidence, then green after the production correction.
+- Run the focused Context/route/nav/sidebar/mobile matrix, Web typecheck, full workspace format/lint/typecheck/unit gates, clean SSG, browser suite, and `git diff --check` before requesting another review.
+- Preserve `6.10+`, merge, archive, and release as untouched. Do not treat prior PR CI at `b6f48e6` as evidence for this unpushed correction.
+
+## 6.9 Correction and Independent Acceptance after `11df4ae`
+
+The correction renders the last successful Context and current failed attempt as separately named observations. It reuses the typed Root Context and command-evidence renderer, so the attempt preserves planning root/source/Store, CLI availability, Doctor and Context exit status, stderr, contract drift, structured diagnostics, stdout, Context members, References, and data scope without reparsing or synthesizing facts. When no stale observation exists, only the failed attempt renders.
+
+The release changeset now states that Context replaces the project Stores surface. All 12 retained/new changed TS/TSX files use the exact manager quote plus a separately identified derived 6.9 requirement. A real `MobileTabBar` component test covers live and static navigation, including removal of an obsolete persisted `/stores` id.
+
+### Red/green and local evidence
+
+- At fixed point `8dea750`, the exact stale-error component test fails `1 failed / 8 skipped`: the `Last successful Context (stale)` region does not exist, and the failed attempt's root/Store/CLI/Doctor/Context evidence is unreachable.
+- At `11df4ae`, the focused Context/route/controller/nav/sidebar/mobile matrix passes `6 files / 51 tests`.
+- `pnpm format:check` passes for 15 changed files.
+- `pnpm lint:ci` passes for 828 files with zero warnings/errors.
+- `pnpm typecheck` passes across all 15 runnable workspace packages.
+- `pnpm test:ci` passes: root 43, Core 440, Server 354, Web 117 files / 685 tests, App 78, CLI 49, and all remaining lanes.
+- Fresh SSG passes after cleaning `packages/web/dist-ssg` and `.vite`; only the known non-fatal CSS and ineffective dynamic-import warnings remain.
+- `pnpm test:browser:ci` passes: xterm `60 passed / 1 skipped`, Web Storybook `12/12`.
+- `git diff --check` passes. The known repository Vite+ staged hook still has no staged config, so the worker used `--no-verify` only after the complete gates passed.
+
+### Independent re-review and browser evidence
+
+Standards and Spec re-reviews report no findings. The duplicated route universe across navigation/controller/route-tree remains a deferred smell rather than a 6.9 scope expansion.
+
+Agent-browser used isolated backend/live/static ports `3130`, `13030`, and `13031`. Live desktop and mobile `/context` show Context navigation without Stores, CLI-selected root/source, launch project, CLI 1.6.0, neutral direct-Reference copy, inherited data scope, read-only registry copy, and full evidence disclosure. Direct live `/stores` canonicalizes to Dashboard and never renders the retired page. Static desktop/mobile Context renders only the neutral pending snapshot, never live root or registry truth; mobile geometry reports `scrollWidth == clientWidth == 390`. No Store mutation control or machine-wide completeness claim was observed.
+
+Agent-browser 0.27.1 could not capture the fixed-height App root: selector screenshots report a zero-height body/root and viewport/path mode times out. No screenshot is claimed. Snapshot, text, URL, and DOM geometry evidence complete the walk-through, and every named session and temporary server was closed; ports are released.
+
+Checkpoint `6.9` therefore closes (`59/131 -> 60/131`). `6.10+`, merge, archive, and release remain untouched.
+
+## Next Apply Boundary: Checkpoint 6.10 Source-scoped Search
+
+Research after `11df4ae` confirms that root ownership itself is already correct: `PlanningRootServiceManager` owns one `SearchService` for the current CLI-selected Planning root, and live search rebuilds from that record's Adapter, DocumentService, and direct Referenced Spec Catalog entries. Compound Referenced Spec ids and routes already survive into search documents. Static search also builds from the shared snapshot.
+
+The incomplete contract is the query model. `SearchQuery` currently contains only query/limit, `SearchDocument`/`SearchHit` carry no source scope, and `SearchRoute` renders one mixed result list. `collectSearchDocuments` puts Owned Specs, direct Referenced Specs, Changes, and Archives into the same provider. Therefore the default search can return References, and there is no explicit Referenced Specs view. Filtering mixed hits in the browser would be incorrect because the search provider applies limit after global ranking.
+
+The next implementation must add a typed `active-root | referenced-specs` scope end to end. The generic search engine may keep scope optional for non-project consumers, but when a project query supplies scope it must filter indexed documents before match scoring, sorting, and limit in both the TypeScript engine and generated worker runtime. Every project document and hit must carry one exact scope. Active root indexes Owned Specs, Changes, and Archives; Referenced scope indexes only direct read-only Referenced Specs and preserves Store-compound identity.
+
+Web Search uses an accessible two-segment control matching the established Spec source interaction. Absence or invalid URL scope defaults to Active root; explicit `scope=referenced-specs` selects the sibling view and survives query replacement. Switching scope cannot display stale results from the prior source while loading. Referenced copy says only what is currently observed/materialized and never claims completeness. Static mode uses the same control and query semantics; static document paths must derive from each Spec identity instead of labeling every snapshot Spec as owned.
+
+Do not turn 6.10 into a SearchService ownership rewrite, Reference body-materialization policy, `7.*` export-policy implementation, Git `6.11`, App Store Manager, Workset, or general route-registry refactor. Focused evidence must cover filtering before limit, duplicate ids across owned/multiple Stores, no referenced changes/archives, live query/subscription, static indexing, scope transitions, URL state, navigation, and neutral empty/error/loading states before full gates and independent review.

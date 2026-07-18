@@ -138,6 +138,53 @@ Twelfth-correction review evidence after `e4ef2ad`:
 
 Independent review acceptance after `4a3e40a`: `3.5` and `6.8` move from open to closed, progress `57/131 -> 59/131`. This acceptance does not authorize merge, archive, release, or implementation of `6.9+`; PR #207 remains open for maintainer decision.
 
+## 6.9 Worker Slice: Replace Project Stores with Context
+
+Current state at `b6f48e6`: `/context` already projects Root Context, direct Reference diagnostics, data scope, and full CLI evidence in live/static route trees. The project WebUI still exposes a separate `/stores` route, Stores nav item, visibility hook, and project-only Stores subscription. This is incomplete 6.9 behavior because Context must replace the project Stores surface rather than coexist with it.
+
+Approved worker boundary:
+
+- Remove `/stores` from project Web live/static route trees, nav/controller route sets, and sidebar/mobile visibility logic. Retire the Web `StoresList` presentation only when no production caller remains.
+- Keep backend `stores.list`/`stores.doctor`, Store CLI contracts, Store observation, and App-native experimental Store Manager intact. They are environment/App capabilities, not the project Context surface.
+- Preserve Context's root, direct Reference diagnostics, environment/data-scope evidence, read-only registry wording, full command evidence, and loading/stale/error/empty states. Do not infer completeness, health, ownership, or machine-wide references.
+- Add route-registration and Context behavior evidence; do not accept tests that merely assert a hidden/disabled Stores button while `/stores` remains reachable.
+- Keep `6.10+` untouched. Close only `6.9` after focused tests, local gates, browser walk-through, and independent review (`59/131 -> 60/131`).
+
+Independent review after `8dea750` keeps `6.9` open at `59/131`:
+
+- The stale-error Context says the failed CLI attempt is retained, but renders only the last successful Root Context. The failed attempt's root, Store, Doctor/Context exit status, stderr, contract drift, and diagnostics are absent. Rendering a stale root plus explanatory copy is not evidence preservation.
+- The new stale-error fixture is not type-correct: independent `pnpm typecheck` fails at `packages/web/src/routes/context.test.tsx:113` because `RootContextError` requires `code`, not `kind`. Focused Vitest transpilation passing `48/48` cannot discharge a TypeScript contract.
+- The existing Web changeset still describes Context as additive and coexisting with Stores. Release evidence must instead state that Context replaces the project Stores surface and `/stores` is removed.
+- Navigation-array assertions do not exercise the actual `MobileTabBar` live/static branches. Add component-level evidence that Context renders and an obsolete `/stores` value cannot render in either branch.
+- All retained changed TS/TSX headers use synthesized English `Original request` lines; two contain `...`. Replace them with an exact user quote and record checkpoint 6.9 separately as a derived requirement. Header provenance is evidence, not decorative prose.
+
+The removal boundary itself is correct: Web production has no `/stores`, `StoresList`, `useStoresVisibility`, or `useStoresSubscription` caller, while Server Store procedures, Core Store contracts/observation, and App Store Manager remain. No `6.10+` scope creep was observed. Correct the evidence/UI gaps above, rerun local gates, and return for another independent review before checking `6.9`.
+
+Independent acceptance after `11df4ae` closes `6.9` (`59/131 -> 60/131`):
+
+- Standards and Spec re-reviews report no findings. Stale successful Context and the current failed attempt are now separately named and rendered; the failed attempt retains root/source/Store, CLI availability, Doctor/Context process evidence, contract drift, stderr, and diagnostics. The no-stale path renders the failed attempt exactly once.
+- The fixed-point component counterexample fails against `8dea750` because the stale/attempt regions and failed-attempt evidence are absent, then the focused matrix passes `6 files / 51 tests` at `11df4ae`. The typed `RootContextError.code` fixture passes Web and all-workspace typechecks.
+- The project Web `/stores` route, navigation identity, visibility hook, presentation, and project-only subscription are absent; `/context` remains registered live/static. Server/Core/App Store capabilities remain intact. The changeset and all 12 retained/new TS/TSX headers now match the accepted contract and provenance law.
+- Full local format, lint, 15-package typecheck, unit, clean SSG, xterm browser (`60 passed / 1 skipped`), Web Storybook (`12/12`), and diff gates pass.
+- Agent-browser confirms live desktop/mobile Context facts and neutral read-only copy, no Stores navigation or mutation controls, `/stores` canonical redirect to Dashboard, static Context pending state without live root/registry truth, and mobile `scrollWidth == clientWidth == 390`. Screenshot capture is unavailable because agent-browser 0.27.1 reports zero-height fixed-layout roots; snapshot/text/DOM evidence is retained honestly instead.
+
+This acceptance does not authorize `6.10+`, merge, archive, or release. The duplicated project-route universe remains recorded, deferred architecture debt.
+
+## 6.10 Worker Slice: Source-scoped Project Search
+
+Current state after `11df4ae`: the live SearchService is already owned by the current Planning-root service record, and both live/static search documents preserve compound Referenced Spec links. The remaining gap is source isolation: one undifferentiated index/query mixes active-root Specs, Changes, Archives, and Referenced Specs, while Search exposes no explicit scope.
+
+Approved worker boundary:
+
+- Add one typed project-search scope with exactly `active-root | referenced-specs`. Search defaults to `active-root`; only an explicit sibling control and URL state selects `referenced-specs`.
+- Carry document scope through the shared `@openspecui/search` schema/types, Node/Web worker protocol, engine, Server documents, static documents, query/subscription, hook, hits, and route. Scope filtering must occur before scoring and limit; client-side filtering of an already limited mixed result is insufficient.
+- `active-root` contains only the current Planning root's Owned Specs, Changes, and Archives. `referenced-specs` contains only direct read-only Referenced Specs with compound Store identity and never a Change or Archive.
+- Preserve live/static parity. Static Referenced scope shows only References actually materialized in the snapshot; absence uses neutral observed/available copy and never implies machine-wide completeness.
+- Scope changes must clear or correctly attribute prior results while the replacement request is loading; an active-root Change must never remain visible under the Referenced Specs control.
+- Keep SearchService Planning-root ownership, reactive rebuild, duplicate Spec identity, navigation/View Transitions, and existing fallback behavior intact unless the typed scope contract proves a narrower correction is required. Do not start Git `6.11`, static export policy `7.*`, App/Store Manager, or Worksets.
+
+Required evidence includes engine filtering-before-limit tests, live Server document scope and Router pass-through, static document scope, Web hook request/scope-transition tests, SearchRoute default/URL/control/empty/loading/error/navigation tests, and duplicate owned/referenced `specId` fixtures. Close only `6.10` after full local gates, clean SSG, browser suite, agent-browser live/static desktop/mobile walk-through, and independent review (`60/131 -> 61/131`).
+
 ## 2. CLI 1.6 Contract Baseline
 
 - [x] 2.1 OpenSpecUI compatibility targets the CLI 1.6 line and rejects unsupported versions with accurate guidance
@@ -203,7 +250,7 @@ Independent review acceptance after `4a3e40a`: `3.5` and `6.8` move from open to
 - [x] 6.6 Spec detail validates returned Store and Spec provenance, shows source/read-only state, disables mutation for References, and returns to the correct list scope
 - [x] 6.7 Archive lists only writable-root archives, validates canonical Change identity before any CLI path, has one Server-owned strict mutation entry, cannot be reached through a generic CLI bypass, and tests diagnostics through that supported entry
 - [x] 6.8 Config implements Project Binding, Active Root Config, and Environment Global Config ownership sections
-- [ ] 6.9 Project Stores route is replaced by Context with root, Reference, environment, and read-only registry diagnostics
+- [x] 6.9 Project Stores route is replaced by Context with root, Reference, environment, and read-only registry diagnostics
 - [ ] 6.10 Search defaults to the active root and offers an explicit Referenced Specs scope without referenced changes
 - [ ] 6.11 Git makes repository scope explicit for status, history, worktrees, and every mutation
 - [ ] 6.12 Terminal shows selected cwd/root identity in creation controls and tab labels
