@@ -2420,4 +2420,44 @@ Pinned live acceptance uses `/tmp/openspecui-search-browser-f72e03a.PjEI5b`, the
 
 Browser warmup overlap was not stably forced and remains covered by deterministic production-class and Router tests. Loading/error were not promoted to live claims; existing unit tests cover them. Browser sessions and fixture services were closed, ports `4132`, `13013`, and `13004` are released, and the repository has no browser-owned diff.
 
-Checkpoint `6.10` advances `60/131 -> 61/131`. This local acceptance authorizes delivery of `f72e03a`, `dd3307a`, and the reviewer evidence commit to PR #207. Do not start `6.11`, merge, archive, or release until local, remote, and PR heads are identical and exact-head checks pass.
+Checkpoint `6.10` advances `60/131 -> 61/131`. Runtime `f72e03a`, test `dd3307a`, and reviewer evidence `6d5a67a` were pushed to PR #207. Local HEAD, remote feature branch, and PR head all resolved to `6d5a67a73b93f24adce3384462e284e80a07ae9a`; the PR remained `OPEN/CLEAN`, and all six Changeset, CI Scope, Fast, Web Browser, xterm Browser, and aggregate Browser checks passed on that exact head. This closes Search and unlocks `6.11` planning only; merge, archive, and release remain forbidden.
+
+## Checkpoint 6.11 Research: Root-Rebound Git Scope Is Stale
+
+The fixed-root Git contract implemented earlier remains correct: canonical `topLevel + commonDir` identity collapses nested roots in one repository, distinct Planning repositories are optional, and every current Git route names `code | planning`. Focused existing tests pass Server `6/6` and Web `16/16`, but every fixture holds one Root for the test lifetime. They do not exercise Planning A -> Planning B, Planning B -> Code collapse, or A -> B -> A rebinding.
+
+Three P2 runtime defects remain at local baseline `dd3307a`:
+
+- Server exposes only buffered `git.scopes`; Web caches it under `['git', 'scopes']`. Root Context changes do not invalidate or push a replacement inventory, so A may remain indefinitely after the backend owns B.
+- Git overview, entries, metadata, files, patch, prefetch, and detail caches use semantic `planning` without repository binding identity. If scopes is manually refreshed to B while B data is pending, A results remain under the same keys and are displayed next to B's path. This contradicts the earlier recorded claim that repository changes do not reuse status/history placeholder content.
+- `runGitScope` resolves the current Planning root on every call. A stale A Refresh contains only `scope: planning`; after rebind it executes against B, invalidates B cache, and writes B's refresh stamp. The user action is silently reinterpreted rather than rejected.
+
+No destructive P1 is established. Worktree removal and handoff enumerate the current B inventory and require the submitted physical path to match; an A-only target normally fails with `Worktree not found` before `git worktree remove` or `ensureWorktreeServer`. That physical guard is retained, but it is not a substitute for stale-intent detection.
+
+The accepted correction shape is:
+
+```text
+Root binding A                       Root binding B
+    |                                   |
+    v                                   v
+Git scopes emission A  --push/pull--> Git scopes emission B
+    token A                             token B
+    |                                   |
+    +-> Web keys [git, planning, A]      +-> Web keys [git, planning, B]
+    +-> request expects A               +-> request expects B
+              \                         /
+               Server lease compares current token
+                    mismatch -> typed conflict
+                    match    -> Git operation
+```
+
+The token is an opaque backend-issued binding epoch, not a path, repository credential, or authorization capability. It changes whenever a new Planning-root service record is activated, including A -> B -> A. Git URLs continue to persist only the semantic scope. Each query/mutation, including retained Dashboard Code Git operations, must be audited; Code remains Launch-owned and must not become blocked by Planning-root readiness.
+
+Required fixed-point evidence:
+
+- Server subscription over real Manager-owned Code/A/B repositories emits A then B then Code-only after Root transitions, with A retirement before B exposure and a new token on each binding.
+- Web renders A, receives B, keeps B queries pending, and removes every A overview/history/detail/patch projection before labeling B. Keys and View Transition prefetch include B's token.
+- A-token Refresh after B activation returns a typed conflict and produces no B cache invalidation or refresh stamp. A-token remove and handoff also conflict before physical execution. Removing the Server token comparison must make the mutation test write B or invoke the rebound owner.
+- Root loading/stale/error or Root/scopes mismatch locks Planning controls and keeps old Planning data explicitly non-authoritative; Code Git remains usable.
+
+Do not expand 6.11 into Store synchronization, clone/pull/push, App Store Manager, a generic React Query rewrite, Terminal `6.12`, static `7.*`, merge, archive, or release.

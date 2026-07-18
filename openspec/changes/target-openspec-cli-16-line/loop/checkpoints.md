@@ -462,4 +462,14 @@ Final local evidence passes Server Search `21/21`, Search `6/6`, Web Search/SSR/
 
 A pinned OpenSpec 1.6 fixture uses submodule SHA `e1b51d1`, isolated `XDG_DATA_HOME`, declared Store `team`, and direct Reference `platform`. Before any browser subscription, a buffered query observes an external Owned Spec write. Two independent desktop/mobile clients then keep one query and converge after another external write without reopen or query change. Active results contain only Owned Spec, Change, and Archive; Referenced results contain only the Store-qualified read-only Spec. Both clients navigate to `/specs/referenced/platform/auth`; desktop and real `390x844` layouts have no horizontal overflow. Browser warmup overlap remains deterministic Router/ReactiveContext evidence, and loading/error remain unit-covered rather than fabricated live claims.
 
-Do not start `6.11` until the implementation, test, and reviewer evidence commits are pushed and PR #207 is green on the exact head. Merge, archive, and release remain forbidden.
+At delivery, local HEAD, remote feature branch, and PR #207 head all equal `6d5a67a73b93f24adce3384462e284e80a07ae9a`; the PR is `OPEN/CLEAN`, and Changeset, CI Scope, Fast, Web Browser, xterm Browser, and aggregate Browser checks all pass on that exact head. This unlocks checkpoint `6.11` planning only. Merge, archive, and release remain forbidden.
+
+### 6.11 Research: Stale Repository Binding
+
+Checkpoint `6.11` remains open at `61/131`. The existing fixed-root implementation correctly distinguishes Code from a truly distinct Planning repository and carries `code | planning` through status, history, detail, patch, refresh, removal, and handoff. It has three deterministic A -> B lifecycle defects:
+
+1. `git.scopes` is a one-shot query under fixed Web key `['git', 'scopes']`; it does not follow Root Context A -> B or B -> Code automatically.
+2. Even after scopes is manually refreshed to B, overview/history/detail/patch keys contain only `planning`. Cached A content can remain visible while the UI labels the repository path as B.
+3. Every Server request resolves the current Planning root. An old A Refresh has no expected binding identity and is therefore reinterpreted as a B Refresh, invalidating/touching B instead of rejecting stale intent.
+
+Removal and handoff currently re-enumerate B worktrees and normally reject an A-only physical path before destructive execution, so no P1 escape is claimed. They still need the same typed stale-binding conflict as every other Git operation. Add reactive scope inventory, a backend-issued binding epoch, Server-side expected-token comparison inside the active owner lease, token-aware Web keys, and a current Root/projection gate for Planning controls. Preserve Launch-owned Code Git and the no clone/pull/push/synchronization boundary.
