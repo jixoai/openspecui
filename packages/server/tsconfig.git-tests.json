@@ -3,6 +3,7 @@
   "include": [
     "src/huggingface-transformers.d.ts",
     "src/dashboard-git-snapshot.test.ts",
+    "src/dashboard-overview-service.test.ts",
     "src/git-repository-binding-router.test.ts",
     "src/git-repository-binding-service.test.ts",
     "../local-translator/src/huggingface-transformers.d.ts"
