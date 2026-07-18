@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Provide one cached subscription lifecycle for live and static project projections.
  * 2. Bind Spec, Change, Archive, Config, Notification, and CLI projections to typed hooks.
  * 3. Preserve cache identity for detail projections across remounts and view transitions.
+ * 4. Keep Git scope cache data non-authoritative until an opt-in reconnect emits a replacement.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
+ * Derived requirement (2026-07-19): Checkpoint 6.11 locks cached Git scope data during reconnect.
  *
  * Compromise: typed entity hooks remain aggregated because they share the same cache and live/static
  * subscription primitive; splitting them now would add import churn outside checkpoint 6.9.
