@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Own every root-scoped operation and project-Schema mutation for the CLI-selected Planning root.
- * 2. Serialize replacement behind admitted operations without reconstructing root selection.
+ * 2. Serialize replacement and issue fresh record provenance without reconstructing root selection.
  * 3. Acquire and retire observation/invalidation leases with each active root.
  * 4. Keep reactive subscriptions bound to Root Context dependencies and current root selection.
  * 5. Revoke leased service capabilities, cancel retiring streams outside blocked transitions, and
@@ -10,6 +10,7 @@
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
  * Original request (2026-07-16): "PlanningRootServiceResolver.mutateSchema(action) owns the entire mutation inside the manager transition lane."
  * Original request (2026-07-17): "An admitted A operation settles before A is retired and B is exposed."
+ * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
  */
 import {
   CliExecutor,
@@ -25,6 +26,7 @@ import {
   type RuntimeRootInvalidationOwner,
   type WatcherRootRelease,
 } from '@openspecui/core'
+import { randomUUID } from 'node:crypto'
 import { DashboardOverviewService } from './dashboard-overview-service.js'
 import { loadDashboardOverview } from './dashboard-overview.js'
 import { DocumentService } from './document-service.js'
@@ -39,6 +41,8 @@ import { WorkflowInvocationService } from './workflow-invocation-service.js'
 
 /** Revocable services available only while one Manager-owned Planning-root operation is active. */
 export interface PlanningRootServices {
+  /** Opaque epoch for Git operations admitted to this exact active Planning-root record. */
+  gitBindingToken: string
   rootContext: RootContext
   adapter: OpenSpecAdapter
   documentService: DocumentService
@@ -195,6 +199,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
 
     return {
       identity: this.rootIdentity(rootContext),
+      gitBindingToken: randomUUID(),
       schemaMutationService,
       rootContext,
       adapter,
@@ -318,6 +323,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       })
 
     const services: PlanningRootServices = {
+      gitBindingToken: record.gitBindingToken,
       rootContext: record.rootContext,
       adapter: guardCapability(record.adapter),
       documentService: guardCapability(record.documentService),

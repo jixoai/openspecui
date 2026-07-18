@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Bootstrap the HTTP/tRPC server and launch-project runtime services.
  * 2. Delegate OpenSpec filesystem ownership to the CLI-selected planning-root manager.
  * 3. Host notification, sound, preview-resource, and translation HTTP boundaries.
@@ -8,6 +8,7 @@
  *
  * Original request (2026-07-15): "你先负责后端（内核）的开发。"
  * Original request (2026-07-17): "Every Planning-root execution surface uses the same operation lifetime owner."
+ * Derived requirement (2026-07-19): Checkpoint 6.11 binds Git operations to backend-owned repository epochs.
  *
  * @module server
  */
@@ -58,6 +59,7 @@ import {
   getDefaultLocalCt2ModelProfileManifestPath,
 } from './ct2-model-cache-path.js'
 import { CustomSoundService } from './custom-sound-service.js'
+import { GitRepositoryBindingService } from './git-repository-binding-service.js'
 import { LlamaModelAssetService } from './llama-model-asset-service.js'
 import {
   getDefaultLocalLlamaModelCacheDir,
@@ -169,6 +171,10 @@ export function createServer(config: ServerConfig) {
     observationEnvironment,
     projectInvalidation,
     runtimeInvalidation,
+  })
+  const gitRepositoryBindings = new GitRepositoryBindingService({
+    launchProjectDir: config.projectDir,
+    planningRootServices,
   })
   const notificationService = new NotificationService()
   const customSoundService = new CustomSoundService()
@@ -395,6 +401,7 @@ export function createServer(config: ServerConfig) {
       createContext: (): Context => ({
         launchProjectAdapter: adapter,
         planningRootServices,
+        gitRepositoryBindings,
         runtimeInvalidation,
         storeObservation,
         configManager,
@@ -420,6 +427,7 @@ export function createServer(config: ServerConfig) {
   const createContext = (): Context => ({
     launchProjectAdapter: adapter,
     planningRootServices,
+    gitRepositoryBindings,
     runtimeInvalidation,
     storeObservation,
     configManager,
@@ -441,6 +449,7 @@ export function createServer(config: ServerConfig) {
   return {
     app,
     planningRootServices,
+    gitRepositoryBindings,
     observationEnvironment,
     runtimeInvalidation,
     projectInvalidation,

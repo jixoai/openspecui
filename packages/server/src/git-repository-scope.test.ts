@@ -1,9 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Prove same-repository roots collapse to Code scope.
  * 2. Prove only distinct, available planning repositories are advertised.
+ * 3. Preserve backend-issued binding tokens through repository identity resolution.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
  */
 import { describe, expect, it } from 'vitest'
 
@@ -35,11 +37,14 @@ describe('Git repository scopes', () => {
 
     const scopes = await resolveGitRepositoryScopes({
       launchProjectDir: '/repo/apps/ui',
+      codeBindingToken: 'code-token',
       planningRootDir: '/repo/planning',
+      planningBindingToken: 'planning-token',
       runGit,
     })
 
     expect(scopes.code.repository).toEqual({ topLevel: '/repo', commonDir: '/repo/.git' })
+    expect(scopes.code.bindingToken).toBe('code-token')
     expect(scopes.planning).toBeNull()
     expect(() => selectGitRepositoryScope(scopes, 'planning')).toThrow(
       'Planning repository scope is unavailable or identical to Code repository.'
@@ -54,13 +59,16 @@ describe('Git repository scopes', () => {
 
     const scopes = await resolveGitRepositoryScopes({
       launchProjectDir: '/code',
+      codeBindingToken: 'code-token',
       planningRootDir: '/planning/specs',
+      planningBindingToken: 'planning-token',
       runGit,
     })
 
     expect(scopes.defaultScope).toBe('code')
     expect(scopes.planning).toMatchObject({
       scope: 'planning',
+      bindingToken: 'planning-token',
       rootPath: '/planning/specs',
       repository: { topLevel: '/planning', commonDir: '/planning/.git' },
     })
@@ -74,7 +82,9 @@ describe('Git repository scopes', () => {
 
     const scopes = await resolveGitRepositoryScopes({
       launchProjectDir: '/code',
+      codeBindingToken: 'code-token',
       planningRootDir: '/planning',
+      planningBindingToken: 'planning-token',
       runGit,
     })
 

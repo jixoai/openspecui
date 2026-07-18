@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Prime detail data before forward route View Transitions.
  * 2. Preserve entity identity for Spec, Change, Archive, and Git detail routes.
- * 3. Keep Git prefetch repository scope aligned with the target route URL.
+ * 3. Keep Git prefetch repository binding aligned with the target route URL.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
  */
 import { getGitEntryMetaQueryKey, parseGitRepositoryScope } from '@/lib/git-panel'
 import * as StaticProvider from '@/lib/static-data-provider'
@@ -119,9 +120,13 @@ async function prepareGitDetail(selector: GitEntrySelector, search: string): Pro
   }
 
   const scope = parseGitRepositoryScope(search)
+  const scopes = await trpcClient.git.scopes.query()
+  const descriptor = scope === 'planning' ? scopes.planning : scopes.code
+  if (!descriptor) return
+  const expectedBindingToken = descriptor.bindingToken
   await queryClient.fetchQuery({
-    queryKey: getGitEntryMetaQueryKey(scope, selector),
-    queryFn: () => trpcClient.git.getEntryMeta.query({ scope, selector }),
+    queryKey: getGitEntryMetaQueryKey(scope, expectedBindingToken, selector),
+    queryFn: () => trpcClient.git.getEntryMeta.query({ scope, expectedBindingToken, selector }),
     staleTime: QUERY_STALE_TIME_MS,
   })
 }
@@ -145,6 +150,7 @@ async function prepareDetailRoute(match: DetailPrepareMatch, search: string): Pr
   await prepareGitDetail(match.selector, search)
 }
 
+/** Prefetch one binding-current detail projection before a forward route transition. */
 export async function prepareRouteDetailViewTransition(options: {
   intent: VTIntent | null
   pathname: string

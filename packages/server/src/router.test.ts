@@ -1,13 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Prove public Router queries and mutations preserve their typed owner boundaries.
  * 2. Prove Planning-root replacement and public stream routes preserve rejected settlement.
  * 3. Prove strict Archive identity, validation, diagnostics, and Store selection through its public route.
  * 4. Prove reactive, configuration, Git, notification, and runtime procedures retain scoped behavior.
+ * 5. Prove stale Git binding intent conflicts before rebound repository side effects.
  *
  * Original request (2026-07-17): "Every public application mutation remains inside its Server-owned root and lifetime."
  * Original request (2026-07-17): "Rejected Validate and Update handles converge to one public terminal error."
  * Original request (2026-07-18): "Environment Global profile/drift must use one reactive CLI-owned projection."
+ * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
  */
 import {
   CliExecutor,
@@ -36,6 +38,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DashboardOverviewService } from '../src/dashboard-overview-service.js'
 import { loadDashboardOverview } from '../src/dashboard-overview.js'
 import { resolveGitWorktreeSwitchTarget } from '../src/git-panel-data.js'
+import { GitRepositoryBindingService } from '../src/git-repository-binding-service.js'
 import { sameGitPath } from '../src/git-shared.js'
 import type { Context } from '../src/router.js'
 import { appRouter } from '../src/router.js'
@@ -591,6 +594,7 @@ artifacts:
     observedAt: 1,
   }
   const planningRootServices = {
+    gitBindingToken: 'planning-binding',
     rootContext,
     adapter: adapter as unknown as PlanningRootServices['adapter'],
     documentService: documentService as unknown as PlanningRootServices['documentService'],
@@ -613,19 +617,25 @@ artifacts:
     reconcile: vi.fn().mockResolvedValue(undefined),
     dispose: vi.fn().mockResolvedValue(undefined),
   }
+  const planningRootResolver: Context['planningRootServices'] = {
+    resolveRootContext: vi.fn().mockResolvedValue(rootContextState),
+    resolveRootContextReactive: vi.fn().mockResolvedValue(rootContextState),
+    runOperation: vi.fn(async (operation) => operation(planningRootServices)),
+    runReactiveOperation: vi.fn(async (operation) => operation(planningRootServices)),
+    startOperationStream: vi.fn(async (operation) => operation(planningRootServices)),
+    mutateSchema: vi.fn().mockResolvedValue(null),
+    readPreviewRequest: vi.fn().mockReturnValue(null),
+    dispose: vi.fn().mockResolvedValue(undefined),
+  }
+  const gitRepositoryBindings = new GitRepositoryBindingService({
+    launchProjectDir: projectDir,
+    planningRootServices: planningRootResolver,
+  })
 
   return {
     launchProjectAdapter: adapter as unknown as Context['launchProjectAdapter'],
-    planningRootServices: {
-      resolveRootContext: vi.fn().mockResolvedValue(rootContextState),
-      resolveRootContextReactive: vi.fn().mockResolvedValue(rootContextState),
-      runOperation: vi.fn(async (operation) => operation(planningRootServices)),
-      runReactiveOperation: vi.fn(async (operation) => operation(planningRootServices)),
-      startOperationStream: vi.fn(async (operation) => operation(planningRootServices)),
-      mutateSchema: vi.fn().mockResolvedValue(null),
-      readPreviewRequest: vi.fn().mockReturnValue(null),
-      dispose: vi.fn().mockResolvedValue(undefined),
-    },
+    planningRootServices: planningRootResolver,
+    gitRepositoryBindings,
     runtimeInvalidation,
     storeObservation,
     configManager: configManager as unknown as Context['configManager'],
@@ -1666,8 +1676,10 @@ apply:
       await initGitRepo(projectDir)
       const dotGitDir = await runGit(projectDir, ['rev-parse', '--git-dir'])
       const caller = createCaller(createMockAdapter(), { projectDir })
+      const expectedBindingToken = (await caller.git.scopes()).code.bindingToken
       const result = await caller.dashboard.refreshGitSnapshot({
         scope: 'code',
+        expectedBindingToken,
         reason: 'test-manual',
       })
       const stampPath = resolvePath(projectDir, dotGitDir, 'openspecui-dashboard-git-refresh.stamp')
@@ -1685,8 +1697,10 @@ apply:
       await runGit(baseRepoDir, ['worktree', 'add', projectDir, '-b', 'feature-refresh-stamp'])
 
       const caller = createCaller(createMockAdapter(), { projectDir })
+      const expectedBindingToken = (await caller.git.scopes()).code.bindingToken
       const result = await caller.dashboard.refreshGitSnapshot({
         scope: 'code',
+        expectedBindingToken,
         reason: 'worktree',
       })
       const gitDir = await runGit(projectDir, ['rev-parse', '--git-dir'])
@@ -1701,8 +1715,13 @@ apply:
     it('does not create legacy stamp file when git metadata is unavailable', async () => {
       const projectDir = await createTempProjectDir('openspecui-router-nogit-')
       const caller = createCaller(createMockAdapter(), { projectDir })
+      const expectedBindingToken = (await caller.git.scopes()).code.bindingToken
 
-      const result = await caller.dashboard.refreshGitSnapshot({ scope: 'code', reason: 'no-git' })
+      const result = await caller.dashboard.refreshGitSnapshot({
+        scope: 'code',
+        expectedBindingToken,
+        reason: 'no-git',
+      })
 
       expect(result.success).toBe(true)
       expect(
@@ -1716,8 +1735,10 @@ apply:
       dashboardGitSnapshotState.removeDetachedWorktree.mockResolvedValue(undefined)
 
       const caller = createCaller(createMockAdapter(), { projectDir })
+      const expectedBindingToken = (await caller.git.scopes()).code.bindingToken
       const result = await caller.dashboard.removeDetachedWorktree({
         scope: 'code',
+        expectedBindingToken,
         path: '/tmp/detached-worktree',
       })
 
@@ -1736,9 +1757,14 @@ apply:
       )
 
       const caller = createCaller(createMockAdapter(), { projectDir })
+      const expectedBindingToken = (await caller.git.scopes()).code.bindingToken
 
       await expect(
-        caller.dashboard.removeDetachedWorktree({ scope: 'code', path: projectDir })
+        caller.dashboard.removeDetachedWorktree({
+          scope: 'code',
+          expectedBindingToken,
+          path: projectDir,
+        })
       ).rejects.toThrow(/Only detached worktrees can be removed/)
     })
   })
@@ -1776,9 +1802,12 @@ apply:
       })
       expect(await sameGitPath(scopes.code.repository?.topLevel ?? '', repositoryDir)).toBe(true)
       expect(scopes.planning).toBeNull()
-      await expect(caller.git.overview({ scope: 'planning' })).rejects.toThrow(
-        /Planning repository scope is unavailable or identical/
-      )
+      await expect(
+        caller.git.overview({
+          scope: 'planning',
+          expectedBindingToken: planning.gitBindingToken,
+        })
+      ).rejects.toThrow(/Planning repository scope is unavailable or identical/)
     })
 
     it('keeps status, history, detail, and refresh mutations inside the selected repository', async () => {
@@ -1811,11 +1840,22 @@ apply:
       const caller = appRouter.createCaller(context)
 
       const scopes = await caller.git.scopes()
+      const planningBindingToken = scopes.planning?.bindingToken
+      if (!planningBindingToken) throw new Error('Expected Planning repository binding token.')
+      const codeBindingToken = scopes.code.bindingToken
       const [codeEntries, planningEntries, codeFiles, planningFiles] = await Promise.all([
-        caller.git.listEntries({ scope: 'code' }),
-        caller.git.listEntries({ scope: 'planning' }),
-        caller.git.getEntryFiles({ scope: 'code', selector: { type: 'uncommitted' } }),
-        caller.git.getEntryFiles({ scope: 'planning', selector: { type: 'uncommitted' } }),
+        caller.git.listEntries({ scope: 'code', expectedBindingToken: codeBindingToken }),
+        caller.git.listEntries({ scope: 'planning', expectedBindingToken: planningBindingToken }),
+        caller.git.getEntryFiles({
+          scope: 'code',
+          expectedBindingToken: codeBindingToken,
+          selector: { type: 'uncommitted' },
+        }),
+        caller.git.getEntryFiles({
+          scope: 'planning',
+          expectedBindingToken: planningBindingToken,
+          selector: { type: 'uncommitted' },
+        }),
       ])
 
       expect(scopes.planning).toMatchObject({
@@ -1832,7 +1872,11 @@ apply:
         'openspec/specs/planning-only/spec.md',
       ])
 
-      await caller.git.refresh({ scope: 'planning', reason: 'planning-scope-test' })
+      await caller.git.refresh({
+        scope: 'planning',
+        expectedBindingToken: planningBindingToken,
+        reason: 'planning-scope-test',
+      })
       const codeGitDir = await runGit(codeRepository, ['rev-parse', '--git-dir'])
       const planningGitDir = await runGit(planningRepository, ['rev-parse', '--git-dir'])
       await expect(
@@ -1845,6 +1889,64 @@ apply:
           resolvePath(codeRepository, codeGitDir, 'openspecui-dashboard-git-refresh.stamp')
         )
       ).resolves.toBe(false)
+    })
+
+    it('rejects a stale Planning refresh before the rebound repository stamp is touched', async () => {
+      const codeRepository = await createTempProjectDir('openspecui-router-git-stale-code-')
+      const rootA = await createTempProjectDir('openspecui-router-git-stale-a-')
+      const rootB = await createTempProjectDir('openspecui-router-git-stale-b-')
+      await Promise.all([initGitRepo(codeRepository), initGitRepo(rootA), initGitRepo(rootB)])
+
+      const context = createMockContext(createMockAdapter(), { projectDir: codeRepository })
+      const planning = await resolveMockPlanningRoot(context)
+      planning.rootContext = {
+        ...planning.rootContext,
+        launchProject: { path: codeRepository },
+        planningRoot: {
+          path: rootA,
+          source: 'store',
+          store_id: 'root-a',
+          healthy: true,
+          status: [],
+        },
+        storeId: 'root-a',
+      }
+      const caller = appRouter.createCaller(context)
+      const rootABinding = (await caller.git.scopes()).planning
+      if (!rootABinding) throw new Error('Expected Root A Planning repository binding.')
+
+      planning.rootContext = {
+        ...planning.rootContext,
+        planningRoot: {
+          path: rootB,
+          source: 'store',
+          store_id: 'root-b',
+          healthy: true,
+          status: [],
+        },
+        storeId: 'root-b',
+      }
+      planning.gitBindingToken = 'planning-binding-b'
+      const rootBGitDir = await runGit(rootB, ['rev-parse', '--git-dir'])
+      const rootBStamp = resolvePath(rootB, rootBGitDir, 'openspecui-dashboard-git-refresh.stamp')
+
+      await expect(
+        caller.git.refresh({
+          scope: 'planning',
+          expectedBindingToken: rootABinding.bindingToken,
+          reason: 'stale-root-a-refresh',
+        })
+      ).rejects.toMatchObject({ code: 'CONFLICT' })
+      await expect(pathExists(rootBStamp)).resolves.toBe(false)
+
+      await expect(
+        caller.git.refresh({
+          scope: 'planning',
+          expectedBindingToken: planning.gitBindingToken,
+          reason: 'current-root-b-refresh',
+        })
+      ).resolves.toEqual({ success: true })
+      await expect(pathExists(rootBStamp)).resolves.toBe(true)
     })
 
     it('returns overview, paged entries, and detail for the current worktree', async () => {
@@ -1881,8 +1983,9 @@ apply:
       ])
 
       const caller = createCaller(createMockAdapter(), { projectDir })
-      const overview = await caller.git.overview({ scope: 'code' })
-      const entries = await caller.git.listEntries({ scope: 'code' })
+      const expectedBindingToken = (await caller.git.scopes()).code.bindingToken
+      const overview = await caller.git.overview({ scope: 'code', expectedBindingToken })
+      const entries = await caller.git.listEntries({ scope: 'code', expectedBindingToken })
 
       expect(overview.defaultBranch).toBe('origin/main')
       expect(overview.currentWorktree?.branchName).toBe('feature-git-panel')
@@ -1902,6 +2005,7 @@ apply:
 
       const uncommittedMeta = await caller.git.getEntryMeta({
         scope: 'code',
+        expectedBindingToken,
         selector: { type: 'uncommitted' },
       })
       expect(uncommittedMeta).toMatchObject({
@@ -1911,6 +2015,7 @@ apply:
 
       const uncommittedFiles = await caller.git.getEntryFiles({
         scope: 'code',
+        expectedBindingToken,
         selector: { type: 'uncommitted' },
       })
       expect(uncommittedFiles.files[0]).toMatchObject({
@@ -1926,6 +2031,7 @@ apply:
 
       const uncommittedPatch = await caller.git.getEntryPatch({
         scope: 'code',
+        expectedBindingToken,
         selector: { type: 'uncommitted' },
         fileId: uncommittedFiles.files[0]!.fileId,
       })
@@ -1942,6 +2048,7 @@ apply:
 
       const commitMeta = await caller.git.getEntryMeta({
         scope: 'code',
+        expectedBindingToken,
         selector: { type: 'commit', hash: commitEntry.hash },
       })
       expect(commitMeta).toMatchObject({
@@ -1951,6 +2058,7 @@ apply:
 
       const commitFiles = await caller.git.getEntryFiles({
         scope: 'code',
+        expectedBindingToken,
         selector: { type: 'commit', hash: commitEntry.hash },
       })
       expect(commitFiles.files[0]?.path).toBe(
@@ -1962,6 +2070,7 @@ apply:
 
       const commitPatch = await caller.git.getEntryPatch({
         scope: 'code',
+        expectedBindingToken,
         selector: { type: 'commit', hash: commitEntry.hash },
         fileId: commitFiles.files[0]!.fileId,
       })
@@ -1990,13 +2099,18 @@ apply:
         },
       })
 
-      const overview = await caller.git.overview({ scope: 'code' })
+      const expectedBindingToken = (await caller.git.scopes()).code.bindingToken
+      const overview = await caller.git.overview({ scope: 'code', expectedBindingToken })
       const targetPath = overview.otherWorktrees[0]?.path
       if (!targetPath) {
         throw new Error('Expected overview to include the sibling worktree')
       }
 
-      const handoff = await caller.git.switchWorktree({ scope: 'code', path: targetPath })
+      const handoff = await caller.git.switchWorktree({
+        scope: 'code',
+        expectedBindingToken,
+        path: targetPath,
+      })
 
       expect(ensureWorktreeServer).toHaveBeenCalledWith({
         targetPath,

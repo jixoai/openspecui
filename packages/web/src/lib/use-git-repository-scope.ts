@@ -1,20 +1,34 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
- * 1. Load the backend-advertised Code and optional Planning repository scopes.
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Subscribe to backend-advertised Code and optional Planning repository bindings.
  * 2. Derive the selected scope from URL state with Code as the explicit fallback.
- * 3. Keep selected repository identity shared by Git list and detail routes.
+ * 3. Join Planning bindings to current scope projection and Root Context readiness.
+ * 4. Keep selected repository identity shared by Git list and detail routes.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
  */
 import { parseGitRepositoryScope } from '@/lib/git-panel'
 import { trpcClient } from '@/lib/trpc'
+import { useContextSubscription } from '@/lib/use-context-subscription'
+import { useSubscription, type SubscriptionState } from '@/lib/use-subscription'
 import type {
   GitRepositoryScope,
   GitRepositoryScopeDescriptor,
   GitRepositoryScopes,
 } from '@openspecui/core'
-import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
+
+const STATIC_GIT_SCOPES: GitRepositoryScopes = {
+  defaultScope: 'code',
+  code: {
+    scope: 'code',
+    bindingToken: 'static-unavailable',
+    rootPath: '',
+    repository: null,
+  },
+  planning: null,
+}
 
 /** Git repository scopes plus the current explicit user selection. */
 export interface GitRepositoryScopeState {
@@ -23,18 +37,25 @@ export interface GitRepositoryScopeState {
   descriptor: GitRepositoryScopeDescriptor | null
   scopes: GitRepositoryScopes | null
   locationSearch: string
-  query: UseQueryResult<GitRepositoryScopes, Error>
+  planningReady: boolean
+  planningMessage: string | null
+  query: SubscriptionState<GitRepositoryScopes>
 }
 
-/** Load backend-resolved Code and optional distinct Planning Git repository scopes. */
-export function useGitRepositoryScopes(enabled = true): UseQueryResult<GitRepositoryScopes, Error> {
-  return useQuery({
-    queryKey: ['git', 'scopes'],
-    queryFn: () => trpcClient.git.scopes.query(),
-    enabled,
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
-  })
+/** Subscribe to backend-resolved Code and optional distinct Planning Git repository bindings. */
+export function useGitRepositoryScopes(enabled = true): SubscriptionState<GitRepositoryScopes> {
+  return useSubscription<GitRepositoryScopes>(
+    (callbacks) => {
+      if (!enabled) return { unsubscribe() {} }
+      return trpcClient.git.subscribeScopes.subscribe(undefined, {
+        onData: callbacks.onData,
+        onError: callbacks.onError,
+      })
+    },
+    async () => STATIC_GIT_SCOPES,
+    [enabled],
+    'git.subscribeScopes'
+  )
 }
 
 /** Resolve and retain explicit code/planning Git repository scope selection. */
@@ -43,10 +64,38 @@ export function useGitRepositoryScope(enabled = true): GitRepositoryScopeState {
   const locationSearch = location.searchStr
   const requestedScope = parseGitRepositoryScope(locationSearch)
   const query = useGitRepositoryScopes(enabled)
+  const rootContext = useContextSubscription()
   const scopes = query.data ?? null
+  const planning = scopes?.planning ?? null
+  const rootProjection = rootContext.data
+  const currentPlanningPath =
+    rootProjection?.state === 'ready' ? rootProjection.data.planningRoot?.path : null
+  const planningReady =
+    planning !== null &&
+    !query.isLoading &&
+    query.error === null &&
+    !rootContext.isLoading &&
+    rootContext.error === null &&
+    currentPlanningPath === planning.rootPath
   const scope: GitRepositoryScope =
-    requestedScope === 'planning' && scopes?.planning ? 'planning' : 'code'
-  const descriptor = scope === 'planning' ? (scopes?.planning ?? null) : (scopes?.code ?? null)
+    requestedScope === 'planning' && planningReady ? 'planning' : 'code'
+  const descriptor = scope === 'planning' ? planning : (scopes?.code ?? null)
+  const planningMessage =
+    requestedScope !== 'planning' || planningReady
+      ? null
+      : query.error
+        ? `Git repository scope projection failed: ${query.error.message}`
+        : query.isLoading
+          ? 'Git repository scope projection is loading.'
+          : rootContext.error
+            ? `Planning Root Context failed: ${rootContext.error.message}`
+            : rootProjection?.state === 'error'
+              ? `Planning Root Context failed: ${rootProjection.error.message}`
+              : rootProjection?.state === 'refreshing' || rootProjection?.state === 'loading'
+                ? 'Planning repository is locked while Root Context refreshes.'
+                : planning === null
+                  ? 'Planning root is not a distinct Git repository; using Code repository.'
+                  : 'Planning repository binding is waiting for the current Root Context.'
 
   return {
     requestedScope,
@@ -54,6 +103,8 @@ export function useGitRepositoryScope(enabled = true): GitRepositoryScopeState {
     descriptor,
     scopes,
     locationSearch,
+    planningReady,
+    planningMessage,
     query,
   }
 }

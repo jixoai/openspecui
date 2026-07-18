@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Prove detail View Transition preparation primes authoritative caches.
+ * 2. Prove Git preparation includes the current repository binding token.
+ *
+ * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git prefetch bindings.
+ */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -6,6 +14,7 @@ const {
   opsxStatusQueryMock,
   archiveGetQueryMock,
   gitEntryMetaQueryMock,
+  gitScopesQueryMock,
   fetchQueryMock,
   primeSubscriptionCacheMock,
 } = vi.hoisted(() => ({
@@ -14,6 +23,7 @@ const {
   opsxStatusQueryMock: vi.fn(),
   archiveGetQueryMock: vi.fn(),
   gitEntryMetaQueryMock: vi.fn(),
+  gitScopesQueryMock: vi.fn(),
   fetchQueryMock: vi.fn(async ({ queryFn }: { queryFn: () => Promise<unknown> }) => queryFn()),
   primeSubscriptionCacheMock: vi.fn(),
 }))
@@ -40,6 +50,9 @@ vi.mock('@/lib/trpc', () => ({
       },
     },
     git: {
+      scopes: {
+        query: gitScopesQueryMock,
+      },
       getEntryMeta: {
         query: gitEntryMetaQueryMock,
       },
@@ -86,6 +99,21 @@ describe('prepareRouteDetailViewTransition', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     isStaticModeMock.mockReturnValue(false)
+    gitScopesQueryMock.mockResolvedValue({
+      defaultScope: 'code',
+      code: {
+        scope: 'code',
+        bindingToken: 'code-binding',
+        rootPath: '/repo',
+        repository: { topLevel: '/repo', commonDir: '/repo/.git' },
+      },
+      planning: {
+        scope: 'planning',
+        bindingToken: 'planning-binding',
+        rootPath: '/planning',
+        repository: { topLevel: '/planning', commonDir: '/planning/.git' },
+      },
+    })
   })
 
   it('primes the spec subscription cache before a forward detail VT', async () => {
@@ -179,6 +207,7 @@ describe('prepareRouteDetailViewTransition', () => {
     expect(fetchQueryMock).toHaveBeenCalledTimes(1)
     expect(gitEntryMetaQueryMock).toHaveBeenCalledWith({
       scope: 'code',
+      expectedBindingToken: 'code-binding',
       selector: { type: 'commit', hash: 'abc12345' },
     })
   })
@@ -204,11 +233,12 @@ describe('prepareRouteDetailViewTransition', () => {
 
     expect(fetchQueryMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        queryKey: ['git', 'planning', 'meta', 'commit', 'abc12345'],
+        queryKey: ['git', 'planning', 'planning-binding', 'meta', 'commit', 'abc12345'],
       })
     )
     expect(gitEntryMetaQueryMock).toHaveBeenCalledWith({
       scope: 'planning',
+      expectedBindingToken: 'planning-binding',
       selector: { type: 'commit', hash: 'abc12345' },
     })
   })

@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Register lease-scoped planning-root document, OPSX, dashboard, and archive procedures.
  * 2. Register CLI, Root Context, tool initialization, configuration, Store, terminal-result, and typed OPSX profile/drift projections.
- * 3. Register Git, terminal, system, notification, and recovery procedures.
+ * 3. Register binding-safe Git, terminal, system, notification, and recovery procedures.
  * 4. Register translation runtime, model, asset, and cache procedures.
  * 5. Compose the public tRPC application router and shared procedure schemas.
  *
@@ -14,6 +14,7 @@
  * Original request (2026-07-18): "Remove duplicated profile/drift parsing and preserve the pinned Core workflow contract."
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
+ * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
  */
 import type {
   ChangeFile,
@@ -132,10 +133,9 @@ import {
   resolveGitWorktreeSwitchTarget,
 } from './git-panel-data.js'
 import {
-  resolveGitRepositoryDescriptor,
-  resolveGitRepositoryScopes,
-  selectGitRepositoryScope,
-} from './git-repository-scope.js'
+  GitRepositoryBindingConflictError,
+  type GitRepositoryBindingResolver,
+} from './git-repository-binding-service.js'
 import type { LlamaModelAssetService } from './llama-model-asset-service.js'
 import type { LocalModelAssetService } from './local-model-asset-service.js'
 import type { NotificationService } from './notification-service.js'
@@ -178,6 +178,8 @@ export interface Context {
   launchProjectAdapter: OpenSpecAdapter
   /** Lazy owner of all CLI-selected planning-root filesystem services. */
   planningRootServices: PlanningRootServiceResolver
+  /** Backend-owned Code/Planning Git binding epochs and operation leases. */
+  gitRepositoryBindings: GitRepositoryBindingResolver
   /** Runtime-environment invalidation identity; projections pull their own authoritative data. */
   runtimeInvalidation: RuntimeInvalidationController
   /** CLI-truth reconciler for dynamic registered Store observation roots. */
@@ -1000,6 +1002,7 @@ const gitEntrySelectorSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('commit'), hash: z.string().min(1) }),
 ])
 const gitRepositoryScopeSchema = z.enum(['code', 'planning'])
+const gitBindingTokenSchema = z.string().min(1)
 
 const workflowRequestedModeSchema = z.enum(['compose', 'command', 'direct'])
 const runWorkflowInputSchema = z.discriminatedUnion('action', [
@@ -2497,43 +2500,42 @@ export const dashboardRouter = router({
   }),
 
   refreshGitSnapshot: publicProcedure
-    .input(z.object({ scope: z.literal('code'), reason: z.string().optional() }))
+    .input(
+      z.object({
+        scope: z.literal('code'),
+        expectedBindingToken: gitBindingTokenSchema,
+        reason: z.string().optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const reason = input.reason?.trim() || 'manual-refresh'
-      const codeRepository = await resolveGitRepositoryDescriptor({
-        scope: input.scope,
-        rootPath: ctx.projectDir,
+      return runGitScope(ctx, input, async (codeRepository) => {
+        await touchDashboardGitRefreshStamp(gitRepositoryCwd(codeRepository), reason)
+        refreshCurrentDashboardProjection(ctx, reason)
+        return { success: true }
       })
-      await runPlanningRoot(ctx, ({ dashboardOverviewService }) =>
-        dashboardOverviewService.refresh(reason)
-      )
-      await touchDashboardGitRefreshStamp(gitRepositoryCwd(codeRepository), reason)
-      return {
-        success: true,
-      }
     }),
 
   removeDetachedWorktree: publicProcedure
-    .input(z.object({ scope: z.literal('code'), path: z.string().min(1) }))
-    .mutation(async ({ ctx, input }) => {
-      const codeRepository = await resolveGitRepositoryDescriptor({
-        scope: input.scope,
-        rootPath: ctx.projectDir,
+    .input(
+      z.object({
+        scope: z.literal('code'),
+        expectedBindingToken: gitBindingTokenSchema,
+        path: z.string().min(1),
       })
-      const projectDir = gitRepositoryCwd(codeRepository)
-      await runPlanningRoot(ctx, async ({ dashboardOverviewService }) => {
-        await dashboardOverviewService.getCurrent()
+    )
+    .mutation(async ({ ctx, input }) => {
+      return runGitScope(ctx, input, async (codeRepository) => {
+        const projectDir = gitRepositoryCwd(codeRepository)
         await removeDetachedDashboardGitWorktree({
           projectDir,
           targetPath: input.path,
         })
-        await dashboardOverviewService.refresh('remove-detached-worktree')
+        invalidateGitPanelCache(projectDir)
+        await touchDashboardGitRefreshStamp(projectDir, 'remove-detached-worktree')
+        refreshCurrentDashboardProjection(ctx, 'remove-detached-worktree')
+        return { success: true }
       })
-      invalidateGitPanelCache(projectDir)
-      await touchDashboardGitRefreshStamp(projectDir, 'remove-detached-worktree')
-      return {
-        success: true,
-      }
     }),
 
   gitTaskStatus: publicProcedure.query(async ({ ctx }) => {
@@ -2562,43 +2564,31 @@ export const dashboardRouter = router({
   }),
 })
 
+function refreshCurrentDashboardProjection(ctx: Context, reason: string): void {
+  void runPlanningRoot(ctx, ({ dashboardOverviewService }) =>
+    dashboardOverviewService.refresh(reason)
+  ).catch(() => {
+    // Code Git remains independent; Root Context surfaces planning projection failures.
+  })
+}
+
 async function fetchGitScopes(ctx: Context): Promise<GitRepositoryScopes> {
-  try {
-    return await runPlanningRoot(ctx, ({ rootContext }) =>
-      resolveGitRepositoryScopes({
-        launchProjectDir: ctx.projectDir,
-        planningRootDir: rootContext.planningRoot?.path ?? null,
-      })
-    )
-  } catch {
-    // Code repository remains usable when the CLI-selected planning root is unavailable.
-    return resolveGitRepositoryScopes({
-      launchProjectDir: ctx.projectDir,
-      planningRootDir: null,
-    })
-  }
+  return ctx.gitRepositoryBindings.resolveScopes()
 }
 
 async function runGitScope<T>(
   ctx: Context,
-  scope: GitRepositoryScope,
+  binding: { scope: GitRepositoryScope; expectedBindingToken: string },
   task: (repository: GitRepositoryScopeDescriptor) => Promise<T> | T
 ): Promise<T> {
-  if (scope === 'code') {
-    return task(await resolveGitRepositoryDescriptor({ scope, rootPath: ctx.projectDir }))
-  }
-
-  return runPlanningRoot(ctx, async ({ rootContext }) => {
-    const planningRootDir = rootContext.planningRoot?.path
-    if (!planningRootDir) {
-      throw new Error('Planning repository scope requires a resolved planning root.')
+  try {
+    return await ctx.gitRepositoryBindings.run(binding, task)
+  } catch (error) {
+    if (error instanceof GitRepositoryBindingConflictError) {
+      throw new TRPCError({ code: 'CONFLICT', message: error.message, cause: error })
     }
-    const scopes = await resolveGitRepositoryScopes({
-      launchProjectDir: ctx.projectDir,
-      planningRootDir,
-    })
-    return task(selectGitRepositoryScope(scopes, scope))
-  })
+    throw error
+  }
 }
 
 function gitRepositoryCwd(scope: GitRepositoryScopeDescriptor): string {
@@ -2607,12 +2597,22 @@ function gitRepositoryCwd(scope: GitRepositoryScopeDescriptor): string {
 
 /** Explicit code/planning Git repository query and mutation procedures. */
 export const gitRouter = router({
+  /** Return the current Code/Planning repository bindings and their opaque epochs. */
   scopes: publicProcedure.query(({ ctx }): Promise<GitRepositoryScopes> => fetchGitScopes(ctx)),
 
+  /** Stream the current Code/Planning repository bindings and their opaque epochs. */
+  subscribeScopes: publicProcedure.subscription(({ ctx }) => {
+    return createReactiveSubscription(() =>
+      ctx.gitRepositoryBindings.resolveScopes({ reactive: true })
+    )
+  }),
+
   overview: publicProcedure
-    .input(z.object({ scope: gitRepositoryScopeSchema }))
+    .input(
+      z.object({ scope: gitRepositoryScopeSchema, expectedBindingToken: gitBindingTokenSchema })
+    )
     .query(async ({ ctx, input }): Promise<GitWorktreeOverview> => {
-      return runGitScope(ctx, input.scope, (repository) =>
+      return runGitScope(ctx, input, (repository) =>
         buildGitWorktreeOverview({ projectDir: gitRepositoryCwd(repository) })
       )
     }),
@@ -2621,12 +2621,13 @@ export const gitRouter = router({
     .input(
       z.object({
         scope: gitRepositoryScopeSchema,
+        expectedBindingToken: gitBindingTokenSchema,
         cursor: z.string().optional(),
         limit: z.number().int().min(1).max(100).optional(),
       })
     )
     .query(async ({ ctx, input }): Promise<GitEntriesPage> => {
-      return runGitScope(ctx, input.scope, (repository) =>
+      return runGitScope(ctx, input, (repository) =>
         listCurrentWorktreeGitEntries({
           projectDir: gitRepositoryCwd(repository),
           cursor: input.cursor,
@@ -2636,9 +2637,15 @@ export const gitRouter = router({
     }),
 
   getEntryMeta: publicProcedure
-    .input(z.object({ scope: gitRepositoryScopeSchema, selector: gitEntrySelectorSchema }))
+    .input(
+      z.object({
+        scope: gitRepositoryScopeSchema,
+        expectedBindingToken: gitBindingTokenSchema,
+        selector: gitEntrySelectorSchema,
+      })
+    )
     .query(async ({ ctx, input }) => {
-      return runGitScope(ctx, input.scope, (repository) =>
+      return runGitScope(ctx, input, (repository) =>
         getCurrentWorktreeGitEntryMeta({
           projectDir: gitRepositoryCwd(repository),
           selector: input.selector,
@@ -2647,10 +2654,16 @@ export const gitRouter = router({
     }),
 
   getEntryFiles: publicProcedure
-    .input(z.object({ scope: gitRepositoryScopeSchema, selector: gitEntrySelectorSchema }))
+    .input(
+      z.object({
+        scope: gitRepositoryScopeSchema,
+        expectedBindingToken: gitBindingTokenSchema,
+        selector: gitEntrySelectorSchema,
+      })
+    )
     .query(async ({ ctx, input }): Promise<GitEntryFiles> => {
       const config = await ctx.configManager.readConfig()
-      return runGitScope(ctx, input.scope, (repository) =>
+      return runGitScope(ctx, input, (repository) =>
         getCurrentWorktreeGitEntryFiles({
           projectDir: gitRepositoryCwd(repository),
           selector: input.selector,
@@ -2663,12 +2676,13 @@ export const gitRouter = router({
     .input(
       z.object({
         scope: gitRepositoryScopeSchema,
+        expectedBindingToken: gitBindingTokenSchema,
         selector: gitEntrySelectorSchema,
         fileId: z.string().min(1),
       })
     )
     .query(async ({ ctx, input }): Promise<GitEntryPatch> => {
-      return runGitScope(ctx, input.scope, (repository) =>
+      return runGitScope(ctx, input, (repository) =>
         getCurrentWorktreeGitEntryPatch({
           projectDir: gitRepositoryCwd(repository),
           selector: input.selector,
@@ -2678,9 +2692,15 @@ export const gitRouter = router({
     }),
 
   refresh: publicProcedure
-    .input(z.object({ scope: gitRepositoryScopeSchema, reason: z.string().optional() }))
+    .input(
+      z.object({
+        scope: gitRepositoryScopeSchema,
+        expectedBindingToken: gitBindingTokenSchema,
+        reason: z.string().optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
-      return runGitScope(ctx, input.scope, async (repository) => {
+      return runGitScope(ctx, input, async (repository) => {
         const projectDir = gitRepositoryCwd(repository)
         const reason = input.reason?.trim() || 'manual-refresh'
         invalidateGitPanelCache(projectDir)
@@ -2690,9 +2710,15 @@ export const gitRouter = router({
     }),
 
   removeDetachedWorktree: publicProcedure
-    .input(z.object({ scope: gitRepositoryScopeSchema, path: z.string().min(1) }))
+    .input(
+      z.object({
+        scope: gitRepositoryScopeSchema,
+        expectedBindingToken: gitBindingTokenSchema,
+        path: z.string().min(1),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
-      return runGitScope(ctx, input.scope, async (repository) => {
+      return runGitScope(ctx, input, async (repository) => {
         const projectDir = gitRepositoryCwd(repository)
         await removeDetachedDashboardGitWorktree({
           projectDir,
@@ -2705,13 +2731,19 @@ export const gitRouter = router({
     }),
 
   switchWorktree: publicProcedure
-    .input(z.object({ scope: gitRepositoryScopeSchema, path: z.string().min(1) }))
+    .input(
+      z.object({
+        scope: gitRepositoryScopeSchema,
+        expectedBindingToken: gitBindingTokenSchema,
+        path: z.string().min(1),
+      })
+    )
     .mutation(async ({ ctx, input }): Promise<GitWorktreeHandoff> => {
       if (!ctx.gitWorktreeHandoff) {
         throw new Error('Worktree handoff is unavailable in this runtime.')
       }
 
-      return runGitScope(ctx, input.scope, async (repository) => {
+      return runGitScope(ctx, input, async (repository) => {
         const target = await resolveGitWorktreeSwitchTarget({
           projectDir: gitRepositoryCwd(repository),
           targetPath: input.path,

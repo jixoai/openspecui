@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Make Code versus distinct Planning repository scope explicit in URL and UI.
  * 2. Render scoped status, history, worktrees, pagination, and refresh lifecycles.
  * 3. Execute worktree removal and handoff only against the selected repository.
- * 4. Preserve Git list/detail View Transition continuity without cross-scope cache reuse.
+ * 4. Preserve Git list/detail View Transition continuity without cross-binding cache reuse.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
  */
 import {
   getGitEntrySharedDescriptor,
@@ -68,27 +69,36 @@ export function GitRoute() {
     descriptor: scopeDescriptor,
     scopes,
     locationSearch,
+    planningReady,
+    planningMessage,
     query: scopesQuery,
   } = useGitRepositoryScope(!staticMode)
+  const bindingToken = scopeDescriptor?.bindingToken ?? null
   const overviewQuery = useQuery({
-    queryKey: ['git', scope, 'overview'],
-    queryFn: () => trpcClient.git.overview.query({ scope }),
-    enabled: !staticMode && scopeDescriptor !== null,
+    queryKey: ['git', scope, bindingToken, 'overview'],
+    queryFn: () => {
+      if (!bindingToken) throw new Error('Git repository binding is unavailable.')
+      return trpcClient.git.overview.query({ scope, expectedBindingToken: bindingToken })
+    },
+    enabled: !staticMode && bindingToken !== null,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
   })
   const entriesQuery = useInfiniteQuery({
-    queryKey: ['git', scope, 'entries'],
+    queryKey: ['git', scope, bindingToken, 'entries'],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
-      trpcClient.git.listEntries.query({
-        scope,
-        cursor: pageParam,
-        limit: GIT_ENTRY_PAGE_SIZE,
-      }),
+      bindingToken
+        ? trpcClient.git.listEntries.query({
+            scope,
+            expectedBindingToken: bindingToken,
+            cursor: pageParam,
+            limit: GIT_ENTRY_PAGE_SIZE,
+          })
+        : Promise.reject(new Error('Git repository binding is unavailable.')),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    enabled: !staticMode && scopeDescriptor !== null,
+    enabled: !staticMode && bindingToken !== null,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -112,7 +122,8 @@ export function GitRoute() {
   const [switchingWorktreePath, setSwitchingWorktreePath] = useState<string | null>(null)
 
   const switchWorktreeMutation = useMutation({
-    mutationFn: (path: string) => trpcClient.git.switchWorktree.mutate({ scope, path }),
+    mutationFn: (input: { scope: typeof scope; expectedBindingToken: string; path: string }) =>
+      trpcClient.git.switchWorktree.mutate(input),
   })
 
   const gitEntries = useMemo(
@@ -136,14 +147,19 @@ export function GitRoute() {
 
   const runGitRefresh = useCallback(
     (reason: string) => {
+      if (!bindingToken) return
       const requestedAt = Date.now()
       setGitRefreshRequest({ reason, requestedAt })
 
       void (async () => {
         try {
-          await trpcClient.git.refresh.mutate({ scope, reason })
+          await trpcClient.git.refresh.mutate({
+            scope,
+            expectedBindingToken: bindingToken,
+            reason,
+          })
           await queryClient.invalidateQueries({
-            queryKey: ['git', scope],
+            queryKey: ['git', scope, bindingToken],
             refetchType: 'active',
           })
         } catch (error) {
@@ -155,7 +171,7 @@ export function GitRoute() {
         }
       })()
     },
-    [queryClient, scope]
+    [bindingToken, queryClient, scope]
   )
 
   const scheduleGitAutoRefresh = useCallback(() => {
@@ -207,7 +223,7 @@ export function GitRoute() {
 
   const handleRemoveDetachedWorktree = useCallback(
     async (worktree: GitWorktreeSummary) => {
-      if (staticMode || worktree.isCurrent || !worktree.detached) {
+      if (!bindingToken || staticMode || worktree.isCurrent || !worktree.detached) {
         return
       }
 
@@ -224,8 +240,15 @@ export function GitRoute() {
 
       setRemovingWorktreePath(worktree.path)
       try {
-        await trpcClient.git.removeDetachedWorktree.mutate({ scope, path: worktree.path })
-        await queryClient.invalidateQueries({ queryKey: ['git', scope], refetchType: 'active' })
+        await trpcClient.git.removeDetachedWorktree.mutate({
+          scope,
+          expectedBindingToken: bindingToken,
+          path: worktree.path,
+        })
+        await queryClient.invalidateQueries({
+          queryKey: ['git', scope, bindingToken],
+          refetchType: 'active',
+        })
       } catch (error) {
         console.error('[GitRoute] Failed to remove detached worktree:', error)
         window.alert(error instanceof Error ? error.message : 'Failed to remove detached worktree.')
@@ -233,14 +256,19 @@ export function GitRoute() {
         setRemovingWorktreePath((current) => (current === worktree.path ? null : current))
       }
     },
-    [queryClient, scope, staticMode]
+    [bindingToken, queryClient, scope, staticMode]
   )
 
   const handleSwitchWorktree = useCallback(
     async (worktree: GitWorktreeSummary) => {
+      if (!bindingToken) return
       setSwitchingWorktreePath(worktree.path)
       try {
-        const handoff = await switchWorktreeMutation.mutateAsync(worktree.path)
+        const handoff = await switchWorktreeMutation.mutateAsync({
+          scope,
+          expectedBindingToken: bindingToken,
+          path: worktree.path,
+        })
         navigateToServerHandoff({
           handoff,
           location: window.location,
@@ -252,7 +280,7 @@ export function GitRoute() {
         setSwitchingWorktreePath((current) => (current === worktree.path ? null : current))
       }
     },
-    [switchWorktreeMutation]
+    [bindingToken, scope, switchWorktreeMutation]
   )
 
   useEffect(() => {
@@ -363,7 +391,12 @@ export function GitRoute() {
   }
 
   if (overviewQuery.isLoading && !overview) {
-    return <div className="route-loading animate-pulse">Loading git panel...</div>
+    return (
+      <div className="route-loading animate-pulse">
+        Loading Git data for{' '}
+        {scopeDescriptor?.repository?.topLevel ?? scopeDescriptor?.rootPath ?? 'repository'}...
+      </div>
+    )
   }
 
   if (overviewQuery.error && !overview) {
@@ -439,9 +472,7 @@ export function GitRoute() {
             {scopeDescriptor?.repository?.topLevel ?? scopeDescriptor?.rootPath}
           </div>
           {requestedScope === 'planning' && scope === 'code' ? (
-            <div className="text-muted-foreground mt-1 text-xs">
-              Planning root is not a distinct Git repository; using Code repository.
-            </div>
+            <div className="text-muted-foreground mt-1 text-xs">{planningMessage}</div>
           ) : null}
         </div>
 
@@ -456,7 +487,7 @@ export function GitRoute() {
                 key={nextScope}
                 type="button"
                 aria-pressed={scope === nextScope}
-                disabled={refreshBusy}
+                disabled={refreshBusy || (nextScope === 'planning' && !planningReady)}
                 onClick={() => {
                   if (scope === nextScope) return
                   const href = buildGitRepositoryHref('/git', nextScope, locationSearch)
@@ -519,7 +550,7 @@ export function GitRoute() {
               onSelect={(selectedEntry, sourceElement) => {
                 void vtNavController.push(
                   'bottom',
-                  buildGitEntryHrefFromEntry(selectedEntry, scope, locationSearch),
+                  buildGitEntryHrefFromEntry(selectedEntry, requestedScope, locationSearch),
                   withSharedElementHandoffState(undefined, getGitEntrySharedHandoff(selectedEntry)),
                   {
                     source: sourceElement,

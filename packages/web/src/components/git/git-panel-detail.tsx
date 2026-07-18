@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Render file-tree and diff detail for one selected Git entry.
- * 2. Load eager and on-demand patches without crossing repository-scope caches.
+ * 2. Load eager and on-demand patches without crossing repository-binding caches.
  * 3. Preserve scroll, routed pane, reveal, and responsive layout state.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
  */
 import { ErrorBoundary } from '@/components/error-boundary'
 import { Tabs } from '@/components/tabs'
@@ -237,6 +238,7 @@ export function GitEntryDetailPanel({
   eagerFiles = [],
   projectDir,
   repositoryScope = 'code',
+  repositoryBindingToken = 'unbound-preview',
   isLoading,
   error,
   showEntrySummary = true,
@@ -248,6 +250,7 @@ export function GitEntryDetailPanel({
   eagerFiles?: GitEntryFilePatch[]
   projectDir?: string | null
   repositoryScope?: GitRepositoryScope
+  repositoryBindingToken?: string
   isLoading: boolean
   error: Error | null
   showEntrySummary?: boolean
@@ -353,9 +356,14 @@ export function GitEntryDetailPanel({
         return patchLoader({ selector, fileId })
       }
 
-      return trpcClient.git.getEntryPatch.query({ scope: repositoryScope, selector, fileId })
+      return trpcClient.git.getEntryPatch.query({
+        scope: repositoryScope,
+        expectedBindingToken: repositoryBindingToken,
+        selector,
+        fileId,
+      })
     },
-    [patchLoader, repositoryScope, selector]
+    [patchLoader, repositoryBindingToken, repositoryScope, selector]
   )
 
   useEffect(() => {
@@ -400,8 +408,8 @@ export function GitEntryDetailPanel({
   const patchQueries = useQueries({
     queries: requestedOrderedFileIds.map((fileId) => ({
       queryKey: selector
-        ? getGitEntryPatchQueryKey(repositoryScope, selector, fileId)
-        : ['git', repositoryScope, 'patch', 'none', fileId],
+        ? getGitEntryPatchQueryKey(repositoryScope, repositoryBindingToken, selector, fileId)
+        : ['git', repositoryScope, repositoryBindingToken, 'patch', 'none', fileId],
       queryFn: () => loadPatch(fileId),
       enabled: selector !== null,
       staleTime: 5 * 60 * 1000,

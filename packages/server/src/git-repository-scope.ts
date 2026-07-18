@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Resolve objective Git repository identity from a requested project/root path.
  * 2. Expose Code and Planning scopes only when their canonical identities differ.
- * 3. Reject unavailable or collapsed scope selection before any Git command runs.
+ * 3. Preserve backend-issued binding provenance on every resolved descriptor.
+ * 4. Reject unavailable or collapsed scope selection before any Git command runs.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
  */
 import type {
   GitRepositoryIdentity,
@@ -18,13 +20,16 @@ import { canonicalGitPath, defaultRunGit, type GitRunner } from './git-shared.js
 
 interface ResolveGitRepositoryDescriptorOptions {
   scope: GitRepositoryScope
+  bindingToken: string
   rootPath: string
   runGit?: GitRunner
 }
 
 interface ResolveGitRepositoryScopesOptions {
   launchProjectDir: string
+  codeBindingToken: string
   planningRootDir: string | null
+  planningBindingToken: string | null
   runGit?: GitRunner
 }
 
@@ -52,6 +57,7 @@ export async function resolveGitRepositoryDescriptor(
   if (!topLevel || !commonDir) {
     return {
       scope: options.scope,
+      bindingToken: options.bindingToken,
       rootPath,
       repository: null,
     }
@@ -64,6 +70,7 @@ export async function resolveGitRepositoryDescriptor(
 
   return {
     scope: options.scope,
+    bindingToken: options.bindingToken,
     rootPath,
     repository: {
       topLevel: canonicalTopLevel,
@@ -91,16 +98,19 @@ export async function resolveGitRepositoryScopes(
 ): Promise<GitRepositoryScopes> {
   const codePromise = resolveGitRepositoryDescriptor({
     scope: 'code',
+    bindingToken: options.codeBindingToken,
     rootPath: options.launchProjectDir,
     runGit: options.runGit,
   })
-  const planningPromise = options.planningRootDir
-    ? resolveGitRepositoryDescriptor({
-        scope: 'planning',
-        rootPath: options.planningRootDir,
-        runGit: options.runGit,
-      })
-    : Promise.resolve(null)
+  const planningPromise =
+    options.planningRootDir && options.planningBindingToken
+      ? resolveGitRepositoryDescriptor({
+          scope: 'planning',
+          bindingToken: options.planningBindingToken,
+          rootPath: options.planningRootDir,
+          runGit: options.runGit,
+        })
+      : Promise.resolve(null)
   const [code, planningCandidate] = await Promise.all([codePromise, planningPromise])
   const planning =
     planningCandidate?.repository &&

@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Define source-safe Git entry, diff, and worktree projections.
- * 2. Define explicit code/planning repository scope and repository identity.
+ * 2. Define explicit code/planning repository scope, identity, and binding provenance.
  * 3. Keep worktree handoff facts separate from repository selection.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
  */
 import type {
   DashboardGitDiffStats,
@@ -25,6 +26,8 @@ export interface GitRepositoryIdentity {
 
 export interface GitRepositoryScopeDescriptor {
   scope: GitRepositoryScope
+  /** Opaque backend-issued binding epoch; provenance only, never authorization or a path. */
+  bindingToken: string
   /** Launch-project or planning-root path that requested this repository. */
   rootPath: string
   /** Null when the requested root does not currently resolve to a Git repository. */

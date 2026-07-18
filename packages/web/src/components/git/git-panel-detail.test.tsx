@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Prove responsive Git file-tree, patch loading, and scroll continuity.
+ * 2. Prove on-demand patch requests retain repository binding provenance.
+ *
+ * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git patch bindings.
+ */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import {
@@ -1218,6 +1226,8 @@ describe('GitEntryDetailPanel', () => {
             selector={{ type: 'commit', hash: baseEntry.hash }}
             entry={baseEntry}
             files={[baseFile]}
+            repositoryScope="planning"
+            repositoryBindingToken="planning-binding"
             isLoading={false}
             error={null}
           />
@@ -1239,6 +1249,12 @@ describe('GitEntryDetailPanel', () => {
 
     await waitFor(() => {
       expect(scrollToMock).toHaveBeenCalledTimes(1)
+    })
+    expect(getEntryPatchMock).toHaveBeenCalledWith({
+      scope: 'planning',
+      expectedBindingToken: 'planning-binding',
+      selector: { type: 'commit', hash: baseEntry.hash },
+      fileId: baseFile.fileId,
     })
 
     deferredPatch.resolve({

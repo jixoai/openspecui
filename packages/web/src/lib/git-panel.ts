@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Map Git entries to stable selectors and detail routes.
- * 2. Preserve explicit repository scope in URLs and query-cache identities.
+ * 2. Preserve explicit repository scope and binding epoch in query-cache identities.
  * 3. Preserve hosted-session state across worktree handoff URLs.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git cache bindings.
  */
 import type {
   DashboardGitEntry,
@@ -38,31 +39,37 @@ export function buildGitRepositoryHref(
   return `${pathname}${query ? `?${query}` : ''}`
 }
 
+/** Build binding-isolated metadata cache identity for one Git entry. */
 export function getGitEntryMetaQueryKey(
   scope: GitRepositoryScope,
+  bindingToken: string,
   selector: GitEntrySelector
 ): readonly unknown[] {
   return selector.type === 'commit'
-    ? ['git', scope, 'meta', 'commit', selector.hash]
-    : ['git', scope, 'meta', 'uncommitted']
+    ? ['git', scope, bindingToken, 'meta', 'commit', selector.hash]
+    : ['git', scope, bindingToken, 'meta', 'uncommitted']
 }
 
+/** Build binding-isolated file-list cache identity for one Git entry. */
 export function getGitEntryFilesQueryKey(
   scope: GitRepositoryScope,
+  bindingToken: string,
   selector: GitEntrySelector
 ): readonly unknown[] {
   return selector.type === 'commit'
-    ? ['git', scope, 'files', 'commit', selector.hash]
-    : ['git', scope, 'files', 'uncommitted']
+    ? ['git', scope, bindingToken, 'files', 'commit', selector.hash]
+    : ['git', scope, bindingToken, 'files', 'uncommitted']
 }
 
+/** Build binding-isolated patch cache identity for one Git file. */
 export function getGitEntryPatchQueryKey(
   scope: GitRepositoryScope,
+  bindingToken: string,
   selector: GitEntrySelector,
   fileId: string
 ): readonly unknown[] {
   const selectorKey = selector.type === 'commit' ? `commit:${selector.hash}` : 'uncommitted'
-  return ['git', scope, 'patch', selectorKey, fileId]
+  return ['git', scope, bindingToken, 'patch', selectorKey, fileId]
 }
 
 export function toGitEntrySelector(entry: DashboardGitEntry): GitEntrySelector {

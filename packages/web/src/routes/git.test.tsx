@@ -1,5 +1,15 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Prove Code/Planning Git route requests, controls, and navigation.
+ * 2. Prove mounted repository rebinding retires stale Planning status and history.
+ * 3. Prove every Git mutation retains the binding token captured by its render.
+ *
+ * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
+ */
+import type { GitRepositoryScopes, GitWorktreeSummary, RootContextState } from '@openspecui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,6 +17,8 @@ import { GitRoute } from './git'
 
 const {
   scopesQueryMock,
+  scopesSubscribeMock,
+  rootContextSubscribeMock,
   overviewQueryMock,
   listEntriesQueryMock,
   switchWorktreeMock,
@@ -17,8 +29,12 @@ const {
   navReplaceMock,
   routerLocation,
   navigateToServerHandoffMock,
+  subscriptionState,
+  handlerState,
 } = vi.hoisted(() => ({
   scopesQueryMock: vi.fn(),
+  scopesSubscribeMock: vi.fn(),
+  rootContextSubscribeMock: vi.fn(),
   overviewQueryMock: vi.fn(),
   listEntriesQueryMock: vi.fn(),
   switchWorktreeMock: vi.fn(),
@@ -34,6 +50,21 @@ const {
     state: null,
   },
   navigateToServerHandoffMock: vi.fn(),
+  subscriptionState: {} as {
+    currentScopes?: GitRepositoryScopes
+    currentRoot?: RootContextState
+    scopesCallbacks?: {
+      onData(data: GitRepositoryScopes): void
+      onError(error: Error): void
+    }
+    rootCallbacks?: {
+      onData(data: RootContextState): void
+      onError(error: Error): void
+    }
+  },
+  handlerState: {} as {
+    removeDetached?: (worktree: GitWorktreeSummary) => Promise<void> | void
+  },
 }))
 
 vi.mock('@/lib/trpc', () => ({
@@ -41,6 +72,9 @@ vi.mock('@/lib/trpc', () => ({
     git: {
       scopes: {
         query: scopesQueryMock,
+      },
+      subscribeScopes: {
+        subscribe: scopesSubscribeMock,
       },
       overview: {
         query: overviewQueryMock,
@@ -56,6 +90,11 @@ vi.mock('@/lib/trpc', () => ({
       },
       removeDetachedWorktree: {
         mutate: removeDetachedWorktreeMock,
+      },
+    },
+    rootContext: {
+      subscribe: {
+        subscribe: rootContextSubscribeMock,
       },
     },
   },
@@ -131,7 +170,16 @@ vi.mock('@/components/git/git-shared', () => ({
     </button>
   ),
   GitFilesBadge: ({ files }: { files: number }) => <span>{files} files</span>,
-  WorktreeRow: ({ worktree }: { worktree: { path: string } }) => <div>{worktree.path}</div>,
+  WorktreeRow: ({
+    worktree,
+    onRemoveDetachedWorktree,
+  }: {
+    worktree: GitWorktreeSummary
+    onRemoveDetachedWorktree?: (worktree: GitWorktreeSummary) => Promise<void> | void
+  }) => {
+    if (onRemoveDetachedWorktree) handlerState.removeDetached = onRemoveDetachedWorktree
+    return <div>{worktree.path}</div>
+  },
 }))
 
 vi.mock('@/components/select', () => ({
@@ -175,6 +223,82 @@ function renderWithQueryClient(children: ReactNode) {
   }
 }
 
+function createGitScopes(
+  planningRoot = '/planning',
+  planningBindingToken = 'planning-binding-a'
+): GitRepositoryScopes {
+  return {
+    defaultScope: 'code',
+    code: {
+      scope: 'code',
+      bindingToken: 'code-binding',
+      rootPath: '/repo',
+      repository: { topLevel: '/repo', commonDir: '/repo/.git' },
+    },
+    planning: {
+      scope: 'planning',
+      bindingToken: planningBindingToken,
+      rootPath: planningRoot,
+      repository: { topLevel: planningRoot, commonDir: `${planningRoot}/.git` },
+    },
+  }
+}
+
+function createReadyRootState(planningRoot: string): RootContextState {
+  const context = {
+    launchProject: { path: '/repo' },
+    planningRoot: {
+      path: planningRoot,
+      source: 'nearest' as const,
+      healthy: true,
+      status: [],
+    },
+    storeId: null,
+    cli: { available: true, version: '1.6.0' },
+    references: [],
+    contextMembers: [],
+    dataScope: {
+      path: '/tmp/openspec-data',
+      source: 'user-home-default' as const,
+      environmentVariable: null,
+    },
+    diagnostics: { root: [], doctor: [], context: [] },
+    evidence: { doctor: null, context: null },
+    observedAt: 1,
+  }
+  return {
+    state: 'ready',
+    data: context,
+    attempt: null,
+    error: null,
+    observedAt: context.observedAt,
+  }
+}
+
+function createRefreshingRootState(planningRoot: string): RootContextState {
+  const ready = createReadyRootState(planningRoot)
+  if (ready.state !== 'ready') throw new Error('Expected a ready Root Context fixture.')
+  return {
+    state: 'refreshing',
+    data: ready.data,
+    attempt: null,
+    error: null,
+    observedAt: ready.observedAt + 1,
+  }
+}
+
+function createErrorRootState(planningRoot: string): RootContextState {
+  const ready = createReadyRootState(planningRoot)
+  if (ready.state !== 'ready') throw new Error('Expected a ready Root Context fixture.')
+  return {
+    state: 'error',
+    data: ready.data,
+    attempt: ready.data,
+    error: { code: 'root-unhealthy', message: 'Planning root unavailable.' },
+    observedAt: ready.observedAt + 1,
+  }
+}
+
 describe('GitRoute', () => {
   const overviewData = {
     defaultBranch: 'origin/main',
@@ -198,19 +322,34 @@ describe('GitRoute', () => {
     routerLocation.pathname = '/git'
     routerLocation.searchStr = ''
     routerLocation.state = null
-    scopesQueryMock.mockResolvedValue({
-      defaultScope: 'code',
-      code: {
-        scope: 'code',
-        rootPath: '/repo',
-        repository: { topLevel: '/repo', commonDir: '/repo/.git' },
-      },
-      planning: {
-        scope: 'planning',
-        rootPath: '/planning',
-        repository: { topLevel: '/planning', commonDir: '/planning/.git' },
-      },
-    })
+    subscriptionState.currentScopes = createGitScopes()
+    subscriptionState.currentRoot = createReadyRootState('/planning')
+    subscriptionState.scopesCallbacks = undefined
+    subscriptionState.rootCallbacks = undefined
+    handlerState.removeDetached = undefined
+    scopesQueryMock.mockResolvedValue(subscriptionState.currentScopes)
+    scopesSubscribeMock.mockImplementation(
+      (
+        _input: undefined,
+        callbacks: { onData(data: GitRepositoryScopes): void; onError(error: Error): void }
+      ) => {
+        subscriptionState.scopesCallbacks = callbacks
+        const current = subscriptionState.currentScopes
+        if (current) callbacks.onData(current)
+        return { unsubscribe: vi.fn() }
+      }
+    )
+    rootContextSubscribeMock.mockImplementation(
+      (
+        _input: undefined,
+        callbacks: { onData(data: RootContextState): void; onError(error: Error): void }
+      ) => {
+        subscriptionState.rootCallbacks = callbacks
+        const current = subscriptionState.currentRoot
+        if (current) callbacks.onData(current)
+        return { unsubscribe: vi.fn() }
+      }
+    )
     overviewQueryMock.mockResolvedValue(overviewData)
     listEntriesQueryMock.mockResolvedValue({
       items: [
@@ -244,9 +383,13 @@ describe('GitRoute', () => {
       expect(screen.getByText('main against origin/main')).toBeTruthy()
     })
 
-    expect(overviewQueryMock).toHaveBeenCalledWith({ scope: 'code' })
+    expect(overviewQueryMock).toHaveBeenCalledWith({
+      scope: 'code',
+      expectedBindingToken: 'code-binding',
+    })
     expect(listEntriesQueryMock).toHaveBeenCalledWith({
       scope: 'code',
+      expectedBindingToken: 'code-binding',
       cursor: undefined,
       limit: 50,
     })
@@ -257,20 +400,273 @@ describe('GitRoute', () => {
     renderWithQueryClient(<GitRoute />)
 
     await waitFor(() => {
-      expect(overviewQueryMock).toHaveBeenCalledWith({ scope: 'planning' })
+      expect(overviewQueryMock).toHaveBeenCalledWith({
+        scope: 'planning',
+        expectedBindingToken: 'planning-binding-a',
+      })
     })
     expect(listEntriesQueryMock).toHaveBeenCalledWith({
       scope: 'planning',
+      expectedBindingToken: 'planning-binding-a',
       cursor: undefined,
       limit: 50,
     })
 
+    fireEvent.click(await screen.findByRole('button', { name: 'feat: add git panel' }))
+    expect(navPushMock).toHaveBeenCalledWith(
+      'bottom',
+      '/git/commit/abc12345?gitScope=planning',
+      expect.anything()
+    )
+  })
+
+  it('retires mounted Planning status and history while B and rebound A queries are pending', async () => {
+    routerLocation.searchStr = '?gitScope=planning'
+    subscriptionState.currentScopes = createGitScopes('/planning-a', 'planning-binding-a')
+    subscriptionState.currentRoot = createReadyRootState('/planning-a')
+    const pendingRepositoryQuery = new Promise<never>(() => {})
+    overviewQueryMock.mockImplementation(
+      (input: { scope: string; expectedBindingToken: string }) =>
+        input.expectedBindingToken === 'planning-binding-a'
+          ? Promise.resolve({
+              ...overviewData,
+              currentWorktree: {
+                ...overviewData.currentWorktree,
+                path: '/planning-a',
+                branchName: 'root-a-status',
+              },
+            })
+          : pendingRepositoryQuery
+    )
+    listEntriesQueryMock.mockImplementation((input: { expectedBindingToken: string }) =>
+      input.expectedBindingToken === 'planning-binding-a'
+        ? Promise.resolve({
+            items: [
+              {
+                type: 'commit',
+                hash: 'root-a-commit',
+                title: 'Root A history',
+                committedAt: 1,
+                relatedChanges: [],
+                diff: { files: 1, insertions: 1, deletions: 0 },
+              },
+            ],
+            nextCursor: null,
+          })
+        : pendingRepositoryQuery
+    )
+
+    const { queryClient } = renderWithQueryClient(<GitRoute />)
+    await screen.findByText('root-a-status against origin/main')
+    expect(screen.getByText('Root A history')).toBeTruthy()
+
+    const scopesB = createGitScopes('/planning-b', 'planning-binding-b')
+    const rootB = createReadyRootState('/planning-b')
+    await act(async () => {
+      subscriptionState.currentScopes = scopesB
+      subscriptionState.currentRoot = rootB
+      const scopesCallbacks = subscriptionState.scopesCallbacks
+      const rootCallbacks = subscriptionState.rootCallbacks
+      if (!scopesCallbacks || !rootCallbacks) throw new Error('Git subscriptions are unavailable.')
+      scopesCallbacks.onData(scopesB)
+      rootCallbacks.onData(rootB)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/Loading Git data for \/planning-b/)).toBeTruthy()
+    })
+    expect(screen.queryByText('root-a-status against origin/main')).toBeNull()
+    expect(screen.queryByText('Root A history')).toBeNull()
+    expect(
+      queryClient
+        .getQueryCache()
+        .getAll()
+        .some((query) => query.queryKey.includes('planning-binding-b'))
+    ).toBe(true)
+
+    const scopesAAgain = createGitScopes('/planning-a', 'planning-binding-a-2')
+    const rootAAgain = createReadyRootState('/planning-a')
+    await act(async () => {
+      subscriptionState.currentScopes = scopesAAgain
+      subscriptionState.currentRoot = rootAAgain
+      const scopesCallbacks = subscriptionState.scopesCallbacks
+      const rootCallbacks = subscriptionState.rootCallbacks
+      if (!scopesCallbacks || !rootCallbacks) throw new Error('Git subscriptions are unavailable.')
+      scopesCallbacks.onData(scopesAAgain)
+      rootCallbacks.onData(rootAAgain)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/Loading Git data for \/planning-a/)).toBeTruthy()
+    })
+    expect(screen.queryByText('root-a-status against origin/main')).toBeNull()
+    expect(screen.queryByText('Root A history')).toBeNull()
+    expect(
+      queryClient
+        .getQueryCache()
+        .getAll()
+        .some((query) => query.queryKey.includes('planning-binding-a-2'))
+    ).toBe(true)
+  })
+
+  it('retires stale Planning data when the scope subscription fails and keeps Code usable', async () => {
+    routerLocation.searchStr = '?gitScope=planning'
+    subscriptionState.currentScopes = createGitScopes('/planning-a', 'planning-binding-a')
+    subscriptionState.currentRoot = createReadyRootState('/planning-a')
+    overviewQueryMock.mockImplementation((input: { expectedBindingToken: string }) =>
+      Promise.resolve(
+        input.expectedBindingToken === 'planning-binding-a'
+          ? {
+              ...overviewData,
+              currentWorktree: {
+                ...overviewData.currentWorktree,
+                path: '/planning-a',
+                branchName: 'root-a-status',
+              },
+            }
+          : overviewData
+      )
+    )
+    listEntriesQueryMock.mockImplementation((input: { expectedBindingToken: string }) =>
+      Promise.resolve(
+        input.expectedBindingToken === 'planning-binding-a'
+          ? {
+              items: [
+                {
+                  type: 'commit',
+                  hash: 'root-a-commit',
+                  title: 'Root A history',
+                  committedAt: 1,
+                  relatedChanges: [],
+                  diff: { files: 1, insertions: 1, deletions: 0 },
+                },
+              ],
+              nextCursor: null,
+            }
+          : {
+              items: [
+                {
+                  type: 'commit',
+                  hash: 'abc12345',
+                  title: 'feat: add git panel',
+                  committedAt: 1,
+                  relatedChanges: [],
+                  diff: { files: 1, insertions: 3, deletions: 1 },
+                },
+              ],
+              nextCursor: null,
+            }
+      )
+    )
+
+    renderWithQueryClient(<GitRoute />)
+    await screen.findByText('root-a-status against origin/main')
+
+    await act(async () => {
+      const scopesCallbacks = subscriptionState.scopesCallbacks
+      if (!scopesCallbacks) throw new Error('Git scope subscription is unavailable.')
+      scopesCallbacks.onError(new Error('scope stream unavailable'))
+    })
+
+    await screen.findByText('Git repository scope projection failed: scope stream unavailable')
+    await screen.findByText('main against origin/main')
+    expect(screen.queryByText('root-a-status against origin/main')).toBeNull()
+    expect(screen.queryByText('Root A history')).toBeNull()
+    expect(overviewQueryMock).toHaveBeenLastCalledWith({
+      scope: 'code',
+      expectedBindingToken: 'code-binding',
+    })
+    expect(
+      (screen.getByRole('button', { name: 'Planning repository' }) as HTMLButtonElement).disabled
+    ).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'feat: add git panel' }))
     expect(navPushMock).toHaveBeenCalledWith(
       'bottom',
       '/git/commit/abc12345?gitScope=planning',
       expect.anything()
     )
+  })
+
+  it.each([
+    [
+      'refreshing',
+      createRefreshingRootState('/planning-a'),
+      'Planning repository is locked while Root Context refreshes.',
+    ],
+    [
+      'failed',
+      createErrorRootState('/planning-a'),
+      'Planning Root Context failed: Planning root unavailable.',
+    ],
+    [
+      'mismatched',
+      createReadyRootState('/planning-b'),
+      'Planning repository binding is waiting for the current Root Context.',
+    ],
+  ])(
+    'locks Planning for a %s Root projection while keeping Code current',
+    async (_, root, message) => {
+      routerLocation.searchStr = '?gitScope=planning'
+      subscriptionState.currentScopes = createGitScopes('/planning-a', 'planning-binding-a')
+      subscriptionState.currentRoot = root
+
+      renderWithQueryClient(<GitRoute />)
+
+      await screen.findByText(message)
+      await screen.findByText('main against origin/main')
+      expect(overviewQueryMock).toHaveBeenLastCalledWith({
+        scope: 'code',
+        expectedBindingToken: 'code-binding',
+      })
+      expect(
+        (screen.getByRole('button', { name: 'Planning repository' }) as HTMLButtonElement).disabled
+      ).toBe(true)
+    }
+  )
+
+  it('keeps an A-captured destructive handler bound to token A after B is published', async () => {
+    routerLocation.searchStr = '?gitScope=planning'
+    subscriptionState.currentScopes = createGitScopes('/planning-a', 'planning-binding-a')
+    subscriptionState.currentRoot = createReadyRootState('/planning-a')
+    const detachedA: GitWorktreeSummary = {
+      path: '/planning-a-detached',
+      relativePath: '../planning-a-detached',
+      pathAvailable: true,
+      branchName: '(detached)',
+      detached: true,
+      isCurrent: false,
+      ahead: 0,
+      behind: 0,
+      diff: { files: 0, insertions: 0, deletions: 0 },
+    }
+    overviewQueryMock.mockResolvedValue({
+      ...overviewData,
+      currentWorktree: { ...overviewData.currentWorktree, path: '/planning-a' },
+      otherWorktrees: [detachedA],
+    })
+    const confirmMock = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderWithQueryClient(<GitRoute />)
+    await screen.findByText('/planning-a-detached')
+    const staleRemove = handlerState.removeDetached
+    if (!staleRemove) throw new Error('Expected a captured Root A removal handler.')
+
+    const scopesB = createGitScopes('/planning-b', 'planning-binding-b')
+    const rootB = createReadyRootState('/planning-b')
+    await act(async () => {
+      const scopesCallbacks = subscriptionState.scopesCallbacks
+      const rootCallbacks = subscriptionState.rootCallbacks
+      if (!scopesCallbacks || !rootCallbacks) throw new Error('Git subscriptions are unavailable.')
+      scopesCallbacks.onData(scopesB)
+      rootCallbacks.onData(rootB)
+    })
+    await staleRemove(detachedA)
+
+    expect(removeDetachedWorktreeMock).toHaveBeenCalledWith({
+      scope: 'planning',
+      expectedBindingToken: 'planning-binding-a',
+      path: '/planning-a-detached',
+    })
+    confirmMock.mockRestore()
   })
 
   it('switches repository scope through URL state instead of local hidden state', async () => {
@@ -345,6 +741,7 @@ describe('GitRoute', () => {
     await waitFor(() => {
       expect(switchWorktreeMock).toHaveBeenCalledWith({
         scope: 'code',
+        expectedBindingToken: 'code-binding',
         path: '/repo-feature',
       })
     })
@@ -383,6 +780,7 @@ describe('GitRoute', () => {
     await waitFor(() => {
       expect(removeDetachedWorktreeMock).toHaveBeenCalledWith({
         scope: 'code',
+        expectedBindingToken: 'code-binding',
         path: '/repo-detached',
       })
     })

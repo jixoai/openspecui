@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Render commit and uncommitted detail from an explicit repository scope.
- * 2. Preserve scope across back links, metadata/files/patch queries, and cache keys.
+ * 2. Preserve scope and binding across metadata/files/patch requests and cache keys.
  * 3. Preserve shared-element handoff and long-diff document flow.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
  */
 import { GitEntryDetailPanel } from '@/components/git/git-panel-detail'
 import {
@@ -43,6 +44,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
   const staticMode = isStaticMode()
   const location = useLocation()
   const {
+    requestedScope,
     scope,
     descriptor: scopeDescriptor,
     scopes,
@@ -52,19 +54,39 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
   const headerRef = useRef<HTMLDivElement | null>(null)
   const sharedDescriptor = useMemo(() => getGitEntrySharedDescriptor(selector), [selector])
   const handoff = readSharedElementHandoffState(location.state)
-  const backHref = buildGitRepositoryHref('/git', scope, locationSearch)
+  const backHref = buildGitRepositoryHref('/git', requestedScope, locationSearch)
+  const bindingToken = scopeDescriptor?.bindingToken ?? null
+  const initialBindingTokenRef = useRef<string | null>(null)
+  if (bindingToken && initialBindingTokenRef.current === null) {
+    initialBindingTokenRef.current = bindingToken
+  }
+  const handoffMatchesBinding = handoff !== null && initialBindingTokenRef.current === bindingToken
   const metaQuery = useQuery({
-    queryKey: getGitEntryMetaQueryKey(scope, selector),
-    queryFn: () => trpcClient.git.getEntryMeta.query({ scope, selector }),
-    enabled: !staticMode && scopeDescriptor !== null,
+    queryKey: getGitEntryMetaQueryKey(scope, bindingToken ?? 'unavailable', selector),
+    queryFn: () => {
+      if (!bindingToken) throw new Error('Git repository binding is unavailable.')
+      return trpcClient.git.getEntryMeta.query({
+        scope,
+        expectedBindingToken: bindingToken,
+        selector,
+      })
+    },
+    enabled: !staticMode && bindingToken !== null,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
   })
   const filesQuery = useQuery({
-    queryKey: getGitEntryFilesQueryKey(scope, selector),
-    queryFn: () => trpcClient.git.getEntryFiles.query({ scope, selector }),
-    enabled: !staticMode && scopeDescriptor !== null,
+    queryKey: getGitEntryFilesQueryKey(scope, bindingToken ?? 'unavailable', selector),
+    queryFn: () => {
+      if (!bindingToken) throw new Error('Git repository binding is unavailable.')
+      return trpcClient.git.getEntryFiles.query({
+        scope,
+        expectedBindingToken: bindingToken,
+        selector,
+      })
+    },
+    enabled: !staticMode && bindingToken !== null,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -98,7 +120,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
   }
 
   if (metaQuery.isLoading && !entry) {
-    if (handoff) {
+    if (handoff && handoffMatchesBinding) {
       return (
         <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
           <div className="flex items-start gap-4">
@@ -139,7 +161,12 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
       )
     }
 
-    return <div className="route-loading animate-pulse">Loading commit detail...</div>
+    return (
+      <div className="route-loading animate-pulse">
+        Loading Git detail for{' '}
+        {scopeDescriptor?.repository?.topLevel ?? scopeDescriptor?.rootPath ?? 'repository'}...
+      </div>
+    )
   }
 
   if (metaQuery.error && !entry) {
@@ -226,6 +253,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
           eagerFiles={eagerFiles}
           projectDir={scopeDescriptor?.repository?.topLevel ?? scopeDescriptor?.rootPath}
           repositoryScope={scope}
+          repositoryBindingToken={bindingToken ?? 'unavailable'}
           isLoading={filesQuery.isLoading || filesQuery.isFetching}
           error={
             (filesQuery.error instanceof Error ? filesQuery.error : null) ??

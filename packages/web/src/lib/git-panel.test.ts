@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Prove Git route, selector, handoff, and binding-aware cache helpers.
+ *
+ * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git cache bindings.
+ */
 import { describe, expect, it } from 'vitest'
 import {
   buildGitEntryHref,
@@ -99,11 +106,8 @@ describe('git-panel helpers', () => {
     expect(buildGitEntryHref({ type: 'commit', hash: 'abc123' }, 'planning')).toBe(
       '/git/commit/abc123?gitScope=planning'
     )
-    expect(getGitEntryMetaQueryKey('planning', { type: 'uncommitted' })).toEqual([
-      'git',
-      'planning',
-      'meta',
-      'uncommitted',
-    ])
+    expect(
+      getGitEntryMetaQueryKey('planning', 'planning-binding', { type: 'uncommitted' })
+    ).toEqual(['git', 'planning', 'planning-binding', 'meta', 'uncommitted'])
   })
 })
