@@ -2319,6 +2319,38 @@ Delivery facts for PR #207:
 
 Checkpoint `6.10` deliberately remains open at `60/131` for the next independent decision. Static desktop/mobile acceptance is complete; live browser results retain the fixture/subscription limitations recorded above and are not silently promoted into green claims.
 
+## Seventh Independent Review after `8e7cc76`: Reactive Dependency Ownership
+
+Review range: `10a3b42...8e7cc76`. The Standards axis found no documented-standard, typed-fixture, SSR, or source-provenance defect. All 29 changed TypeScript/TSX files retain the required intent headers; the checked Search fixture lane passes without new type escapes; focused Search `6/6`, Server Search `14/14`, Web Search/SSR `27/27`, and `typecheck:search-tests` pass. Local HEAD, remote branch, and PR #207 head are equal at `8e7cc7685c7c46c738a8a93c1b9e3213b818cefd`; the six exact-head PR checks are green.
+
+The Spec/runtime axis found one P1 with two manifestations. `SearchService.init()`, `queryReactive()`, and `rebuildIndex()` share instance-level `initPromise` and `rebuildPromise`. Each tRPC subscription owns a different `ReactiveContext`, and dependency collection occurs only in the AsyncLocalStorage context that actually executes `ReactiveState.get()`. A subscription that waits for warmup or another subscription's in-flight document read receives the first Search result but registers no file dependency and then terminates. The Planning-root manager passes no legacy `OpenSpecWatcher` to SearchService, so that lost dependency has no equivalent per-subscriber wakeup path.
+
+The fixed-point production-class probe uses real `SearchService`, `ReactiveContext`, and `ReactiveState`. `ReactiveState.set()` directly models the same reactive settlement signal emitted after a physical write or watcher refresh:
+
+```text
+warmup race:
+  firstDone=false
+  endedBeforeWrite=true
+  writeChangedState=true
+  afterWriteDone=true
+
+two ReactiveContexts sharing one rebuild:
+  firstADone=false
+  firstBDone=false
+  bEndedBeforeWrite=true
+  writeChangedState=true
+  secondADone=false
+  bAfterWriteDone=true
+```
+
+This is direct red evidence: the waiting subscription gets an initial value, then is already `done` before the invalidation and cannot receive the update. The permanent test must require both A and B to remain live and emit after the same state change; removing or bypassing caller-local document collection must make it fail.
+
+The same ownership error leaves the buffered public query stale. In the controlled pinned OpenSpec 1.6 fixture, an external edit added `Reactiveproof3 marker: reactiveproof3`; after watcher settlement and with no active Search subscription, `search.query({ query: "reactiveproof3", scope: "active-root" })` still returned `[]`. A newly opened Search subscription rebuilt and observed current content. The earlier single-client live proof is valid only for the uncontended path and cannot accept multi-client convergence.
+
+The correction must split current-document collection from mutable provider work. Every public query and every reactive invocation must collect and validate current Planning-root documents in its caller context before awaiting any other context-owned in-flight work. Provider initialization/replacement/search may then be serialized as one ordered operation so each response is searched against its own collected snapshot. Warmup remains an optimization and cannot own freshness or steal subscription dependencies. Add checked warmup-race, two-context, buffered-query freshness, and public Router/multi-client evidence without weakening production contracts or using fabricated fixtures.
+
+Keep checkpoint `6.10` open at `60/131`. Do not start `6.11`, merge, archive, or release before this correction is applied, delivered, and independently reviewed.
+
 ### Previous Browser Attempt and Un-attributed Acceptance Blockers
 
 The independent browser worker started `pnpm dev:legacy --dir ./example --port 4123` and then the root project variant, exposing Web at `http://localhost:13003` and backend at `http://localhost:4123`. It opened `/search?query=auth`; App normalized this to the Dashboard shell with a Search pop route. Desktop evidence confirms Active root is initially selected, the `auth` query is retained, and selecting Referenced Specs immediately updates the encoded pop URL, tab selection, and placeholder without losing the query.

@@ -436,3 +436,13 @@ The independent Standards and Spec axes report no remaining runtime or documente
 At delivery, local HEAD, the remote feature branch, and PR #207 head all resolved to `998acd983ef3d2b1e829c9046292a2488a60d3b1`; the worktree was clean and the PR remained `OPEN/CLEAN`. Changeset Gate, CI Scope, Fast Gate, Web Browser Gate, xterm Browser Gate, and aggregate Browser Gate all passed for that exact head. No merge, archive, release, or `6.11+` work occurred.
 
 Keep `6.10` open at `60/131` for the next independent decision. Static desktop/mobile acceptance is complete; the recorded live fixture/subscription limitations remain objective unknowns rather than fabricated green evidence.
+
+### 6.10 Seventh Independent Review: Per-Subscriber Dependency Loss
+
+Checkpoint `6.10` remains open at `60/131`. Standards, typed Search fixtures, source isolation, URL authority, SSR, focused tests, exact-head CI, and uncontended live Search are green at `8e7cc76`, but one P1 reactive ownership defect remains.
+
+`SearchService` shares `initPromise` and `rebuildPromise` across background warmup and independent `ReactiveContext` subscriptions. Only the context executing the physical document reads collects dependencies. A waiter receives its first value without dependencies, its stream ends, and the next file settlement cannot wake it. Direct fixed-point red evidence proves both the warmup race and the two-subscription race; in the latter only the subscription that created the rebuild receives the next emission.
+
+The buffered `search.query` also remains warmup-cached: a controlled external Owned Spec edit was absent from the query response until a subscription rebuilt the provider. This violates current Planning-root truth even though a single uncontended live subscription passes.
+
+The next apply slice must collect current documents separately inside every query/subscription caller context, then serialize provider init/replace/search without sharing dependency-bearing reads. It must add checked warmup-race, two-context, buffered-query freshness, and public multi-client evidence whose assertions fail when caller-local collection is removed. Keep `6.11+`, merge, archive, and release untouched.
