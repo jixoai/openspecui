@@ -2498,3 +2498,117 @@ git diff --check: pass
 The complete local candidate gate also passes: `pnpm test:ci` (`272 files / 1763 tests`), clean `pnpm --filter @openspecui/web build:ssg`, xterm browser (`60 passed / 1 skipped`), and Web browser (`12/12`). The Vite+ pre-commit hook still exits before checks because the repository `vite.config.ts` has no staged configuration; after the gates above, the implementation commit was therefore created with `--no-verify`. This is an environment hook limitation, not a test bypass.
 
 Live agent-browser acceptance is not claimed. Attempts to exercise real Code/A/B desktop and `390x844` rebind flows stalled without a terminating, inspectable process/evidence set. Independent browser re-verification remains required for Code default, distinct Planning selection, A -> B, B -> Code, A -> B -> A, immediate stale-content retirement, conflict feedback, scoped history/detail/back/patch, and mobile geometry. No merge, archive, release, or `6.12+` work is authorized.
+
+### 6.11 Independent Review Findings at `62cf6f2`
+
+Checkpoint `6.11` remains open at `61/131`. The implementation and mutation-resistance evidence are not sufficient for acceptance because two fixed-point counterexamples remain:
+
+1. **Code continuity is blocked by Planning resolution.** `GitRepositoryBindingService.resolveScopes()` enters `PlanningRootServiceManager.runOperation/runReactiveOperation` before it can return the Code descriptor (`packages/server/src/git-repository-binding-service.ts:86-107`). The Web scope subscription and Dashboard Code helpers therefore wait on the Planning transition (`packages/web/src/lib/use-git-repository-scope.ts:46-57`, `packages/web/src/lib/use-dashboard.ts:16-18,82-100`). A first load or a hung Root transition cannot use Code Git even though Code is Launch-owned. Existing failure-path tests cover only a completed/failing Planning attempt, not a pending transition.
+2. **Git handoff accepts stale presentation.** `getGitEntrySharedHandoff()` carries title/subtitle but no binding token (`packages/web/src/components/git/git-shared.tsx:99-108`). The Git list captures that handoff without provenance (`packages/web/src/routes/git.tsx:550-557`), while detail initializes `initialBindingTokenRef` from whichever token is current and then compares the token to itself (`packages/web/src/routes/git-view.tsx:58-63`). If A is clicked and the scope rebinds to B before detail mounts, A's title/subtitle can render in a B loading shell. `prepareGitDetail()` similarly re-queries current scopes and may prefetch the A selector under B (`packages/web/src/lib/view-transitions/detail-prepare.ts:122-130`).
+
+Required correction evidence:
+
+```text
+Planning transition pending  -> Code descriptor/status/history/refresh still usable
+Git list observed token A    -> handoff + VT preparation carry A
+current detail token B       -> A handoff is rejected; no A presentation or B prefetch of A
+```
+
+The mandatory real desktop and `390x844` agent-browser walk-through is also still unavailable. It remains a required acceptance artifact; do not claim browser completion from unit tests or a stalled session.
+
+### 6.11 Code-Continuity and Handoff Correction at `dda056c`
+
+Implementation commits `adfcfce` and `dda056c` close the two `62cf6f2` code blockers while leaving checkpoint `6.11` open at `61/131`:
+
+- `git.code` resolves the Launch-owned Code descriptor without entering a Planning lease. `git.subscribeScopes` first emits Code with `planningState: resolving`, then starts the Manager-owned reactive Planning subscription. A resolved, collapsed, or failed Planning attempt emits an authoritative `planningState: settled`; the first Code-only emission no longer falsely claims that Planning shares the Code repository.
+- Code overview/history and Dashboard Code refresh use the stable Code token while the Doctor/Planning transition remains deferred. Unsubscribe stops later emissions without pretending that an `AbortSignal` settles the admitted Manager operation.
+- Git list and Dashboard handoffs carry their origin `bindingToken`. Detail presentation and View-Transition preparation accept handoff text/prefetch only when that token matches the current descriptor; an A handoff under B is retired before B detail reads.
+
+The direct fixed-point Code-continuity test was run after temporarily removing the Code-first subscription path and failed for the intended reason: `expected [] to have a length of 1 but got 0`. Restoring production returned it to green. The earlier stale-token and handoff tests remain mutation-resistant evidence for the exact provenance comparisons.
+
+Focused correction verification:
+
+```text
+Server checked Git fixture typecheck: pass
+Server exact Git binding/scope/router: 3 files / 11 tests pass
+Web typecheck: pass
+Web unit: 118 files / 715 tests pass
+git diff --check: pass
+```
+
+An earlier package-script invocation unintentionally ran the full Server suite because that script does not narrow Vitest with the supplied trailing paths. Git tests passed within that run; one existing local-model Xet progress test timed out. The exact `exec vitest run` Git lane above then passed `3 files / 11 tests`, so the unrelated timeout is recorded as a pre-existing flaky observation rather than attributed to this Git correction.
+
+The real desktop/mobile Code/A/B browser walk-through, full post-correction repository gates, push, exact-head CI, and local/remote/PR equality are still pending. `6.11` remains unchecked; do not start `6.12+`, merge, archive, or release.
+
+### 6.11 Second Independent Review and Next Correction Boundary at `dda056c`
+
+The local post-correction verification is complete but is not acceptance. `dda056c` is two commits ahead of the PR head `62cf6f2`; the worktree is dirty only in reviewer-owned `AGENTS.md`, `i18n.zh.md`, and the two loop artifacts. The worker reports and local reruns prove:
+
+```text
+format:check       pass
+lint:ci            833 files, 0 warnings/errors
+typecheck          15 workspace packages pass
+test:ci            Core 440/440, Server 376/376, Web 715/715, CLI 49/49, all green
+clean SSG          build:ssg pass after explicit output cleanup
+browser gate       xterm 60 passed / 1 skipped; Web 12/12
+git diff --check   pass
+```
+
+The exact Git focused lane also passes (`3 files / 11 tests` after the first correction; the full post-correction Server lane is included above). No browser acceptance, push, exact-head CI, or local/remote/PR SHA equality is claimed.
+
+Independent Standards review of `62cf6f2...dda056c` found:
+
+1. **P1 same-binding entity provenance defect.** `packages/web/src/routes/git-view.tsx:59-62` accepts a Git handoff when its family and binding token match, but ignores `handoff.entityId`. `packages/web/src/lib/view-transitions/detail-prepare.ts:128-140` likewise does not validate the handoff entity against the target selector. A same-token A handoff attached to a B detail URL can render A title/subtitle while B data loads. The current red/green evidence covers token mismatch only and cannot detect this same-binding stale presentation.
+2. **P2 public contract holes.** `packages/core/src/git-panel-types.ts:37-43` permits `planningState: 'resolving'` with a non-null Planning descriptor, and `packages/web/src/components/git/git-shared.tsx:108-121` accepts an optional `bindingToken`; `packages/web/src/routes/git.tsx:554-557` explicitly passes `bindingToken ?? undefined`. These are impossible/unsafe states under the stated contract and are not prevented by typecheck.
+3. **P2 Planning failure erasure.** `packages/server/src/git-repository-binding-service.ts:101-116` catches every Planning owner or Git identity-resolution error and returns `planningState: settled` plus `planning: null`. With a ready Root Context, `packages/web/src/lib/use-git-repository-scope.ts:98-102` and `packages/web/src/components/dashboard/context-summary.tsx:111-133` then state that Planning is not distinct. A canonical-path or runner failure is objective unknown/error evidence, not proof of repository collapse.
+4. **P2 Dashboard snapshot/token race.** `packages/core/src/dashboard-types.ts:88-91` gives Dashboard Git entries no origin `bindingToken`. `packages/web/src/routes/dashboard.tsx:782-790` queries a fresh Code token only after an entry is clicked, while `useSubscription` intentionally retains cached/stale data across error/remount. After backend binding A is replaced by B, an A entry can therefore be handed off as if observed under B. Existing tests mock the snapshot and token at one instant and do not exercise A snapshot + B token.
+
+The next apply slice must add a selector/entity-aware Git handoff guard, a discriminated `GitRepositoryScopes` state, a Git-specific handoff type with mandatory non-empty origin provenance, explicit Planning Git failure evidence, and atomic Dashboard snapshot provenance. It must prove the fixed-point same-token/different-entity, ready-Root/failing-Git, and A-snapshot/B-token red tests, retain URL-selector reads and existing token conflict behavior, and leave `6.11` unchecked until the required terminating pinned-CLI desktop/mobile walk-through is captured. No `6.12+`, merge, archive, or release work is authorized.
+
+### 6.11 Third Correction Slice at `e4809df`
+
+Implementation commit `3115296` (`fix(git): preserve binding failure and snapshot provenance`) and
+follow-up header commit `e4809df` (`docs(core): record static Git contract`) are worker-owned and
+remain unpushed pending independent review. Checkpoint `6.11` remains unchecked at `61/131`.
+
+The slice closes the remaining contract and stale-projection findings:
+
+- Git identity results now retain stderr, exit/runtime code, and an explicit failure kind. Only an
+  explicit `not-repository` result or canonical Git `not a git repository` stderr settles to a
+  null Planning repository. Permission, ENOENT, IO, unknown/no-evidence, successful-empty, and
+  canonicalization failures reject with diagnostic evidence. Code scope resolution runs before the
+  Planning lease; Code failure is not relabeled as Planning failure, while a ready-root Planning
+  failure returns `planningState: failed` with the still-usable Code descriptor.
+- `GitRepositoryScopes` variants are readonly. Static mode uses a separate typed projection whose
+  Code binding token is `null`, and the live Git route test proves static mode exits before scope
+  subscriptions, overview/history queries, or Git mutations. No static token can enter a live RPC.
+- Dashboard Git display/handoff requires current Code scope data with no loading/error state. A
+  retained A snapshot is retired while a reconnect error or loading projection is present. Context
+  Summary reports Git subscription failure/loading before retained scope data.
+- Git handoff validation derives selector identity once, rejects empty/whitespace commit and
+  uncommitted identities, and constructs the validated Git handoff without a cast. Existing
+  same-token/entity, old-token, and non-Git handoffs remain covered.
+- Router fixtures now use a checked resolver with explicit Code provenance; no public Router test
+  uses an empty Planning resolver assertion. The fixture is included in the Server source check.
+
+Focused green evidence on the final local implementation head:
+
+```text
+Server scope/binding/router: 4 files / 108 tests
+Web Dashboard/Git/static: 5 files / 44 tests
+Web handoff/detail: 3 files / 36 tests
+Server/Core/Web typecheck: pass
+git diff --check: pass
+```
+
+Counterexample classification is explicit. The earlier same-token/different-entity handoff red
+case at `dda056c` is fixed-point evidence for the selector guard. The new ready-root Planning
+runner failure, classifier/empty-output, Dashboard stale-data-plus-error, and static no-RPC tests
+are regression/characterization evidence in this slice; the injected runner test records explicit
+failure evidence and Code continuity, but a byte-for-byte old-tree red rerun is not claimed here.
+Mutation-resistance for the existing token comparison remains recorded above; the new classifier
+tests cover the exact explicit-vs-unknown failure boundary.
+
+Full local gates, exact-head CI, and the terminating pinned OpenSpec 1.6 desktop/mobile browser
+walk-through remain pending. No browser acceptance is inferred from these unit tests. Do not mark
+`6.11` complete, merge, archive, release, or start `6.12+`.
