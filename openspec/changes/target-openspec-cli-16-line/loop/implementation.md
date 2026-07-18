@@ -2202,3 +2202,118 @@ The checkpoint nevertheless remains blocked by one runtime defect and one docume
 Focused independent green evidence at `121d405` passes Search `3 files / 6 tests`, Server `2 / 14`, and Web Search/static `3 / 18`; lint passes `829` files with zero warnings/errors and all `15` workspace package typechecks pass. Test files remain excluded from TypeScript compilation by the repository tsconfig, so that typecheck is not claimed as test-fixture type safety. These gates do not accept the URL counterexample.
 
 No new Change or loopback is justified. This is a direct 6.10 source-isolation correction. Keep progress at `60/131`, do not start `6.11` or `7.*`, and stop again for independent review after the code/test/header correction.
+
+## Third Independent Review after `5204c55`: Correct Candidate, Unsafe Test Fixtures, and Undelivered Head
+
+Review ranges: the complete checkpoint is `10a3b42...5204c55`; the uncommitted URL correction applies on top of `5204c55`. Checkpoint `6.10` remains open at `60/131`.
+
+The three-file candidate correction is behaviorally correct:
+
+- `SearchRoute` derives the selected source directly from the current `location.search` during render. The tab, `useSearch` invocation, query edits, and source navigation now share that one authority; the duplicate local source state and passive source-repair effect are gone.
+- The same-mount Route test starts with an Active-root hit, changes the external URL to Referenced Specs, rerenders, and proves that every new `useSearch` call is immediately `referenced-specs`, the Referenced tab is selected, and the old hit is absent.
+- `packages/search/src/types.ts` now states the real generic-optional/project-required provenance boundary without weakening the runtime types or schemas.
+
+The fixed-point counterexample is direct rather than characterization evidence. At `121d405`, adding only the candidate Route test yields `1 failed / 10 passed`: the transition records `['active-root', 'referenced-specs']` instead of the required `['referenced-specs']`. On the current candidate, independent focused suites pass Search `3 files / 6 tests`, Server `2 / 14`, and Web Search/static `3 / 19`.
+
+### Blocking Standards finding
+
+The checkpoint's new Server evidence still fabricates owner and Adapter capabilities with type escapes:
+
+- `packages/server/src/search-router.test.ts` adds `runReactiveOperation` and two new caller fixtures through repeated `as never` values. Those assertions execute the real public Router procedure, but TypeScript does not prove that the fake Planning-root record or Context matches the current owner contract.
+- `packages/server/src/search-service.test.ts` adds first-reactive and provenance tests using `adapter as never`; the provenance fixture also reads `provider.searchResults[0]!` instead of constructing or guarding one valid typed hit.
+- `packages/server/tsconfig.check.json` excludes `**/*.test.ts`, so the normal package/workspace typecheck cannot compensate for these escapes. Green Vitest transpilation is therefore not typed evidence.
+
+This repeats the exact failure mode the Change is meant to prevent: a test can stay green while a Manager-owned or typed CLI boundary drifts. Correct the fixtures, not the production contract. Prefer a real `OpenSpecAdapter` with typed spies for SearchService tests. For Router tests, provide a reusable typed Context/Planning-root fixture that preserves the real `appRouter -> runOperation/runReactiveOperation -> SearchService` path; do not manually invoke a downstream handler. Replace the non-null assertion with an explicit valid hit fixture or guard. Do not solve test convenience by weakening `Context`, `PlanningRootServices`, `SearchService`, or project Search provenance.
+
+### Blocking delivery facts
+
+The worker report that the code was submitted is not current repository truth:
+
+```text
+local HEAD:   5204c551b17f1e5e0cdad438088dd085216e5c19
+remote/PR:    10a3b42acb50d946303f9a634a06687dab6d718b
+local ahead:  5 commits
+dirty files:  packages/search/src/types.ts
+              packages/web/src/routes/search.tsx
+              packages/web/src/routes/search.test.tsx
+```
+
+PR #207 is `OPEN/CLEAN`, but its six green checks belong only to `10a3b42`. No final-SHA CI, clean-worktree, or local-equals-remote evidence exists for checkpoint `6.10`.
+
+The current dirty candidate independently passes the complete local lane: format check; lint across `829` files with zero warnings/errors; all `15` workspace typechecks; full `test:ci` including Core `440/440`, Server `360/360`, Web `697/697`, and CLI `49/49`; a clean SSG build; xterm browser `60 passed / 1 skipped`; Web Storybook `12/12`; and `git diff --check`. The SSG build retains only the known non-fatal `scroll-button` and ineffective dynamic-import warnings. Live desktop Search shows the URL-selected Active/Referenced controls and neutral Referenced empty/loading projection; one agent-browser subscription wait later stalled the automation session, so live/static mobile history acceptance is not claimed. These local results validate the candidate behavior but cannot discharge the untyped fixture or delivery blockers.
+
+Independent `openspec validate target-openspec-cli-16-line --strict --json` exits nonzero because this active `opsx-collab-pr-loop` Change has no formal delta under `specs/`. That known artifact-shape state is separate from the `6.10` implementation finding; do not report strict Change validation as green until the planned one-way Wayfinder/loop convergence creates formal deltas.
+
+No new Change or loopback is required. The next worker must apply the Server test-fixture correction, preserve and commit the current three-file URL correction, run all checkpoint and repository gates, record exact evidence, push every local `6.10` commit, wait for CI on the resulting PR head, and stop for independent review. `6.10`, `6.11+`, merge, archive, and release remain untouched until that review.
+
+## Independent Review after `78c925c`: Runtime Accepted, Delivery Still Open
+
+Review range: `10a3b42...78c925c`.
+
+Standards review found no hard documented-standard violation. All changed TypeScript/TSX files carry timestamped orthogonal-intent/original-request headers; the Server Search tests now use a checked `tsconfig.search-tests.json` lane without new `as never`, `as any`, suppression comments, or fabricated non-null fixture assertions. The only advisory smell is small duplicate normalization/provenance parsing between `SearchService.query`/`queryReactive` and Router query/subscription; it is not a checkpoint blocker.
+
+Spec review found no new runtime Search defect. The current implementation preserves source filtering before match/score/sort/limit in the TypeScript and generated worker engines, active-root versus direct Referenced Specs projections, exact project hit provenance, fail-closed compatibility without legacy query/realtime fallback, legal static Owned-only truth with neutral Referenced Search, and render-time URL authority for same-mount A -> B transitions.
+
+The acceptance blocker is delivery, not runtime behavior:
+
+```text
+local HEAD:  78c925c
+remote/PR:   10a3b42
+ahead:       7 commits
+dirty docs:  AGENTS.md
+             i18n.zh.md
+             loop/checkpoints.md
+             loop/implementation.md
+```
+
+The six green PR checks are attached only to `10a3b42`. No final-SHA CI, clean-worktree proof, local/remote/PR equality, or final live/static desktop/mobile Search walk-through has been recorded. `6.10` therefore remains open at `60/131`; no `6.11`, `7.*`, merge, archive, or release is authorized. The known active Change artifact shape also means `openspec validate --strict` must not be reported as green until formal `specs/` deltas are converged.
+
+The next worker Goal must perform the final apply/delivery slice: preserve `78c925c` Search behavior, commit the complete reviewer evidence, run the focused and full gates plus clean SSG, perform the honest browser walk-through, push every local commit, wait for checks on the exact resulting PR SHA, and stop at the next independent review boundary.
+
+## Independent Review after `78c925c`: SSR Correction and Fixture Attribution
+
+This review keeps `6.10` open at `60/131`. The source-scoped Search code accepted at `78c925c` has no new runtime finding. The review did expose one production SSG defect and one environment-only live limitation.
+
+### Fixed-point red/green evidence
+
+- Static red at fixed point `78c925c`: adding only `packages/web/src/ssg/entry-server.test.ts` in the Node environment plus the Node-safe test setup yielded `1 failed / 1 passed`. Importing the static server reached `view-transitions-toolkit/dist/feature-detection.js:6:21` (`sameDocument: !!document.startViewTransition`) and threw `ReferenceError: document is not defined` before snapshot/routes were touched.
+- Static green on the candidate: `runtime.ts` no longer imports the browser-only feature-detection or tracker modules at top level. Tracker installation is browser-gated, dynamically loaded once, shared across concurrent callers, and awaited before the first native `startViewTransition`. The direct Node SSG render assertion now passes, proving the server module graph can import and render without browser globals.
+- `pnpm --filter @openspecui/web exec vitest run --project unit src/ssg/entry-server.test.ts src/lib/view-transitions/runtime.test.ts`: `2 files / 8 tests` passed.
+- `pnpm --filter @openspecui/web typecheck`: passed.
+- Full `pnpm test:ci` on `9d366dc`: passed with `270 files / 1741 tests` (Core `47/440`, Server `47/360`, Web `117/699`, CLI `11/49`, and all remaining workspace lanes green).
+- Clean `pnpm --filter @openspecui/web build:ssg` and `build:ssg-cli`: passed; only the known non-fatal CSS and ineffective dynamic-import warnings remain.
+- Actual SSG CLI using the generated example snapshot completed `Routes: 10` and rendered all 10 routes (11 `index.html` files including the fallback). No `document is not defined` occurred.
+
+### Live timeout attribution
+
+The previous live Search loading state is not evidence of a Search defect. The fixed-point legacy example used an unpinned `npx @fission-ai/openspec` runner and had no valid OpenSpec config. At fixed candidate `78c925c`, `pnpm dev:legacy --dir ./example --port 4123` followed by `curl --max-time 15 http://localhost:4123/trpc/rootContext.get?input=%7B%7D` produced no response and exit 28. Process sampling showed `npm exec @fission-ai/openspec doctor --json` still running at 5-15 seconds; the server logged `CLI runner resolve timed out` at `planning-root-service.ts:458`. Short `--version` probes and `doctor/context` probes likewise remained in flight. This is a runner/configuration fixture limitation, so no live result-list, stale-result retirement, or same-mounted A -> B claim is made from that run.
+
+### Remaining acceptance and delivery boundary
+
+Code commit `9d366dc` is local-only; reviewer-owned Change documents remain uncommitted. Static and live browser Search still require an honest desktop and real `390x844` mobile walk-through with a terminating pinned OpenSpec 1.6 fixture. The walk-through must record exact URLs, query/source transitions, no stale cross-source results, neutral empty/loading/error states, compound Reference navigation when data exists, and mobile geometry; unavailable fixture data must remain an explicit limitation. Local/remote/PR SHA equality and exact-SHA CI are also still absent. Keep `6.10` unchecked; do not start `6.11+`, merge, archive, or release.
+
+### Static browser evidence after `9d366dc`
+
+Using the generated static fixture at `/tmp/openspecui-ssg-render.Md31zL`:
+
+- Desktop Active-root `/dashboard?_p=%2Fsearch%3Fquery%3Dauth` rendered three real results: Owned `auth` Spec, `add-2fa` Change, and the archived session-timeout Change. The captured screenshot is `/tmp/search-static-desktop-auth.png`.
+- Switching to Referenced Specs preserved `auth`, added `scope=referenced-specs` to the encoded Search route, and showed the neutral no-match projection. Same-mounted `history.pushState` from Active to Referenced selected B immediately and did not leak A hits. A subsequent B query preserved both query and scope; an invalid scope fell back to Active root.
+- Active `zzzz-no-hit` showed the Active-root empty state. Clicking the Owned Spec navigated to `/specs/owned/auth`.
+- At a real `390x844` viewport, Active and Referenced Search plus the mobile navigation showed no horizontal overflow or overlapping content. Screenshots: `/tmp/search-static-referenced.png`, `/tmp/search-static-same-mount-B.png`, `/tmp/search-static-empty-active.png`, `/tmp/search-static-mobile-active.png`, `/tmp/search-static-mobile-referenced.png`, `/tmp/search-static-mobile-nav.png`.
+
+Live browser claims remain intentionally limited. The example backend at `:4123` stayed in `Searching...` because the candidate launch root had no `openspec/config.yaml|yml`; the minimal fixture at `:4124` returned HTTP `search.query=[]` and Root ready, but the browser subscription did not stabilize. Therefore no live Active/Referenced result, live error/empty/stale-result, live compound Reference, or live result-navigation claim is made. All browser sessions, target ports, and temporary servers were closed.
+
+The official browser gate on `9d366dc` passed with xterm `6 files / 60 passed / 1 skipped` and Web Storybook `4 files / 12 passed`, without retries. `git diff --check` also passed for the final local candidate.
+
+### Previous Browser Attempt and Un-attributed Acceptance Blockers
+
+The independent browser worker started `pnpm dev:legacy --dir ./example --port 4123` and then the root project variant, exposing Web at `http://localhost:13003` and backend at `http://localhost:4123`. It opened `/search?query=auth`; App normalized this to the Dashboard shell with a Search pop route. Desktop evidence confirms Active root is initially selected, the `auth` query is retained, and selecting Referenced Specs immediately updates the encoded pop URL, tab selection, and placeholder without losing the query.
+
+The run cannot establish full 6.10 browser acceptance:
+
+- Live Search remained at `Searching...`. `rootContext.get` timed out after five seconds while the backend repeatedly invoked OpenSpec and an `openspec instructions checkpoints --change target-openspec-cli-16-line --json` process did not settle. No Active-root result was available to prove stale-result retirement after switching scope.
+- `pnpm --filter @openspecui/web build:ssg` succeeded, but the subsequent HTML export for both the root and example projects failed during `Pre-rendering pages...` with `document is not defined`. Static Search therefore never reached a browser.
+- The current Context has no direct References, so compound Reference navigation was not exercisable.
+- The attempted mobile screenshot still used a 1280-pixel viewport; it is not mobile evidence. Empty/error state and mobile overflow were not exercised.
+
+The browser session and dev processes were closed; ports `4123` and `13003` were released. Treat the live timeout and static pre-render failure as un-attributed acceptance blockers. The next worker must reproduce with exact process/stack evidence in a controlled fixture, distinguish environment/fixture failure from a production regression, and make only a proven narrow 6.10 correction. Do not infer a Search defect from the current incomplete run.
