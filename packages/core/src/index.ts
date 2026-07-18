@@ -7,6 +7,7 @@
  * Original request (2026-07-15): "用强类型合同承载 OpenSpec 1.6 的客观事实。"
  * Original request (2026-07-17): "Root-scoped stream startup returns an owned handle, not a void cancel function."
  * Original request (2026-07-18): "Profile/Drift must refresh with external environment config changes."
+ * Derived requirement (2026-07-19): "Static Git remains unavailable and must not fabricate live binding provenance."
  */
 /**
  * @openspecui/core
