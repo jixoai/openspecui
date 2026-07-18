@@ -16,13 +16,16 @@ import type {
 } from '@openspecui/core'
 import { resolve } from 'node:path'
 
-import { canonicalGitPath, defaultRunGit, type GitRunner } from './git-shared.js'
+import { defaultRunGit, strictCanonicalGitPath, type GitRunner } from './git-shared.js'
+
+type GitPathCanonicalizer = (path: string) => Promise<string>
 
 interface ResolveGitRepositoryDescriptorOptions {
   scope: GitRepositoryScope
   bindingToken: string
   rootPath: string
   runGit?: GitRunner
+  canonicalizePath?: GitPathCanonicalizer
 }
 
 interface ResolveGitRepositoryScopesOptions {
@@ -31,6 +34,7 @@ interface ResolveGitRepositoryScopesOptions {
   planningRootDir: string | null
   planningBindingToken: string | null
   runGit?: GitRunner
+  canonicalizePath?: GitPathCanonicalizer
 }
 
 async function readGitPath(
@@ -40,7 +44,25 @@ async function readGitPath(
 ): Promise<string | null> {
   const result = await runGit(rootPath, args)
   const value = result.stdout.trim()
-  return result.ok && value ? value : null
+  if (result.ok && value) return value
+  if (!result.ok && isNotRepositoryResult(result)) return null
+
+  const evidence = [
+    result.stderr,
+    result.exitCode === undefined ? undefined : `exit ${String(result.exitCode)}`,
+  ].filter((item): item is string => item !== undefined && item.length > 0)
+  throw new Error(
+    `Git repository identity command failed (${args.join(' ')}): ${
+      evidence.join('; ') || 'no diagnostic evidence'
+    }`
+  )
+}
+
+function isNotRepositoryResult(result: Awaited<ReturnType<GitRunner>>): boolean {
+  if (result.failureKind === 'not-repository') return true
+  if (result.failureKind === 'command-failed') return false
+  if (result.stderr === undefined || result.stderr.trim().length === 0) return false
+  return /not a git repository/i.test(result.stderr) && !/permission denied/i.test(result.stderr)
 }
 
 /** Resolve canonical worktree and common-dir identity without inferring repository health. */
@@ -49,6 +71,7 @@ export async function resolveGitRepositoryDescriptor(
 ): Promise<GitRepositoryScopeDescriptor> {
   const rootPath = resolve(options.rootPath)
   const runGit = options.runGit ?? defaultRunGit
+  const canonicalizePath = options.canonicalizePath ?? strictCanonicalGitPath
   const [topLevel, commonDir] = await Promise.all([
     readGitPath(rootPath, ['rev-parse', '--show-toplevel'], runGit),
     readGitPath(rootPath, ['rev-parse', '--git-common-dir'], runGit),
@@ -64,8 +87,8 @@ export async function resolveGitRepositoryDescriptor(
   }
 
   const [canonicalTopLevel, canonicalCommonDir] = await Promise.all([
-    canonicalGitPath(resolve(rootPath, topLevel)),
-    canonicalGitPath(resolve(rootPath, commonDir)),
+    canonicalizePath(resolve(rootPath, topLevel)),
+    canonicalizePath(resolve(rootPath, commonDir)),
   ])
 
   return {
@@ -101,6 +124,7 @@ export async function resolveGitRepositoryScopes(
     bindingToken: options.codeBindingToken,
     rootPath: options.launchProjectDir,
     runGit: options.runGit,
+    canonicalizePath: options.canonicalizePath,
   })
   const planningPromise =
     options.planningRootDir && options.planningBindingToken
@@ -109,6 +133,7 @@ export async function resolveGitRepositoryScopes(
           bindingToken: options.planningBindingToken,
           rootPath: options.planningRootDir,
           runGit: options.runGit,
+          canonicalizePath: options.canonicalizePath,
         })
       : Promise.resolve(null)
   const [code, planningCandidate] = await Promise.all([codePromise, planningPromise])

@@ -34,13 +34,49 @@ export interface GitRepositoryScopeDescriptor {
   repository: GitRepositoryIdentity | null
 }
 
-export interface GitRepositoryScopes {
-  defaultScope: 'code'
-  code: GitRepositoryScopeDescriptor & { scope: 'code' }
-  /** Whether the optional Planning binding is still being resolved or is authoritative. */
-  planningState: 'resolving' | 'settled'
-  /** Present only when the planning root resolves to a distinct Git repository identity. */
-  planning: (GitRepositoryScopeDescriptor & { scope: 'planning' }) | null
+/** Static/export scope descriptor with no live backend provenance. */
+export interface StaticGitRepositoryScopeDescriptor
+  extends Omit<GitRepositoryScopeDescriptor, 'bindingToken'> {
+  bindingToken: null
+}
+
+export interface GitRepositoryScopeFailure {
+  /** Objective diagnostic retained when Planning binding resolution failed. */
+  message: string
+}
+
+interface GitRepositoryScopesBase {
+  readonly defaultScope: 'code'
+  readonly code: GitRepositoryScopeDescriptor & { readonly scope: 'code' }
+}
+
+/** Current Code/Planning Git scope projection with explicit resolution lifecycle. */
+export type GitRepositoryScopes = GitRepositoryScopesBase &
+  (
+    | {
+        /** Planning has not settled; its identity is not authoritative. */
+        readonly planningState: 'resolving'
+        readonly planning: null
+      }
+    | {
+        /** Planning resolution completed; null means it is absent or the same identity as Code. */
+        readonly planningState: 'settled'
+        readonly planning: (GitRepositoryScopeDescriptor & { readonly scope: 'planning' }) | null
+      }
+    | {
+        /** Planning resolution failed; Code remains usable but Planning is locked. */
+        readonly planningState: 'failed'
+        readonly planning: null
+        readonly planningError: GitRepositoryScopeFailure
+      }
+  )
+
+/** Static Git projection; it is intentionally ineligible for live RPC calls. */
+export interface StaticGitRepositoryScopes {
+  readonly defaultScope: 'code'
+  readonly code: StaticGitRepositoryScopeDescriptor & { readonly scope: 'code' }
+  readonly planningState: 'settled'
+  readonly planning: null
 }
 
 export type GitEntrySelector = { type: 'uncommitted' } | { type: 'commit'; hash: string }

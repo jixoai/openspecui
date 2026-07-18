@@ -24,6 +24,11 @@ export function parseGitRepositoryScope(search: string): GitRepositoryScope {
     : 'code'
 }
 
+/** Map one Git selector to the entity identity carried by handoff state. */
+export function getGitEntryEntityId(entry: DashboardGitEntry | GitEntrySelector): string {
+  return entry.type === 'commit' ? entry.hash : 'uncommitted'
+}
+
 export function buildGitRepositoryHref(
   pathname: string,
   scope: GitRepositoryScope,

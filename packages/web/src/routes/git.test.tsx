@@ -381,6 +381,21 @@ describe('GitRoute', () => {
     vi.clearAllMocks()
   })
 
+  it('does not submit live Git RPCs in static mode', async () => {
+    staticModeMock.mockReturnValue(true)
+
+    renderWithQueryClient(<GitRoute />)
+
+    expect(await screen.findByText('Git panel is only available in live mode.')).toBeTruthy()
+    expect(scopesQueryMock).not.toHaveBeenCalled()
+    expect(scopesSubscribeMock).not.toHaveBeenCalled()
+    expect(overviewQueryMock).not.toHaveBeenCalled()
+    expect(listEntriesQueryMock).not.toHaveBeenCalled()
+    expect(switchWorktreeMock).not.toHaveBeenCalled()
+    expect(refreshGitMock).not.toHaveBeenCalled()
+    expect(removeDetachedWorktreeMock).not.toHaveBeenCalled()
+  })
+
   it('uses Code repository as the explicit default for status and history', async () => {
     renderWithQueryClient(<GitRoute />)
 
@@ -401,9 +416,13 @@ describe('GitRoute', () => {
   })
 
   it('loads Code status and history from the first Code-only scope emission', async () => {
-    const codeOnly = createGitScopes()
-    codeOnly.planningState = 'resolving'
-    codeOnly.planning = null
+    const settled = createGitScopes()
+    const codeOnly: GitRepositoryScopes = {
+      defaultScope: settled.defaultScope,
+      code: settled.code,
+      planningState: 'resolving',
+      planning: null,
+    }
     subscriptionState.currentScopes = codeOnly
     subscriptionState.currentRoot = createReadyRootState('/planning')
     routerLocation.searchStr = '?gitScope=planning'

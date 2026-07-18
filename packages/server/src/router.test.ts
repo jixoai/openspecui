@@ -568,6 +568,7 @@ artifacts:
         adapter: adapter as unknown as PlanningRootServices['adapter'],
         configManager: configManager as unknown as Context['configManager'],
         projectDir,
+        codeBindingToken: 'code-binding',
       },
       reason
     )
@@ -618,6 +619,7 @@ artifacts:
     dispose: vi.fn().mockResolvedValue(undefined),
   }
   const planningRootResolver: Context['planningRootServices'] = {
+    codeBindingToken: 'code-binding',
     resolveRootContext: vi.fn().mockResolvedValue(rootContextState),
     resolveRootContextReactive: vi.fn().mockResolvedValue(rootContextState),
     runOperation: vi.fn(async (operation) => operation(planningRootServices)),

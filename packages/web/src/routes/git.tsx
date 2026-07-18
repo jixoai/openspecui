@@ -548,12 +548,13 @@ export function GitRoute() {
               key={entry.type === 'commit' ? entry.hash : `uncommitted:${entry.updatedAt ?? '0'}`}
               entry={entry}
               onSelect={(selectedEntry, sourceElement) => {
+                if (!bindingToken) return
                 void vtNavController.push(
                   'bottom',
                   buildGitEntryHrefFromEntry(selectedEntry, requestedScope, locationSearch),
                   withSharedElementHandoffState(
                     undefined,
-                    getGitEntrySharedHandoff(selectedEntry, bindingToken ?? undefined)
+                    getGitEntrySharedHandoff(selectedEntry, bindingToken)
                   ),
                   {
                     source: sourceElement,

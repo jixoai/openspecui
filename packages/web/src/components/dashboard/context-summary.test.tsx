@@ -135,8 +135,13 @@ describe('DashboardContextSummary', () => {
   })
 
   it('does not claim Planning is collapsed while its binding is resolving', () => {
-    const resolving = gitScopes(false)
-    resolving.planningState = 'resolving'
+    const settled = gitScopes(false)
+    const resolving: GitRepositoryScopes = {
+      defaultScope: settled.defaultScope,
+      code: settled.code,
+      planningState: 'resolving',
+      planning: null,
+    }
     setGit({ data: resolving })
 
     render(<DashboardContextSummary staticMode={false} />)
@@ -230,5 +235,14 @@ describe('DashboardContextSummary', () => {
     expect(gitSection?.textContent).toContain('Planning Git repository binding failed:')
     expect(gitSection?.textContent).toContain('Planning Git identity resolution failed.')
     expect(screen.queryByText('No distinct Planning Git repository.')).toBeNull()
+  })
+
+  it('surfaces a Git subscription error instead of retained stale scope data', () => {
+    setGit({ data: gitScopes(), error: new Error('Git scope subscription disconnected.') })
+
+    render(<DashboardContextSummary staticMode={false} />)
+
+    expect(screen.getByText('Git scope subscription disconnected.')).toBeInTheDocument()
+    expect(screen.queryByText('Distinct Planning repository: /repos/planning')).toBeNull()
   })
 })

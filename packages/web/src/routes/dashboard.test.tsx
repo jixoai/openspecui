@@ -638,4 +638,55 @@ describe('Dashboard', () => {
     await waitFor(() => expect(screen.queryByText('Stale A entry')).toBeNull())
     expect(navControllerMock.push).not.toHaveBeenCalled()
   })
+
+  it('retires a snapshot when the current Code scope is stale behind a reconnect error', () => {
+    staticModeMock.mockReturnValue(false)
+    gitScopesMock.mockReturnValue({
+      data: {
+        defaultScope: 'code',
+        code: {
+          scope: 'code',
+          bindingToken: 'code-binding-a',
+          rootPath: '/workspace/code',
+          repository: { topLevel: '/workspace/code', commonDir: '/workspace/code/.git' },
+        },
+        planningState: 'settled',
+        planning: null,
+      } satisfies GitRepositoryScopes,
+      isLoading: false,
+      error: new Error('Git scope subscription disconnected.'),
+    })
+    dashboardOverviewMock.mockReturnValue({
+      data: {
+        ...createOverviewData(),
+        git: {
+          bindingToken: 'code-binding-a',
+          defaultBranch: 'main',
+          worktrees: [
+            {
+              ...baseWorktree,
+              isCurrent: true,
+              entries: [
+                {
+                  type: 'commit',
+                  hash: 'deadbeef',
+                  title: 'Stale reconnect entry',
+                  committedAt: 1_710_200_000_000,
+                  relatedChanges: [],
+                  diff: { files: 1, insertions: 4, deletions: 2 },
+                },
+              ],
+            },
+          ],
+        },
+      },
+      isLoading: false,
+      error: null,
+    })
+
+    render(<Dashboard />)
+
+    expect(screen.queryByText('Stale reconnect entry')).toBeNull()
+    expect(navControllerMock.push).not.toHaveBeenCalled()
+  })
 })

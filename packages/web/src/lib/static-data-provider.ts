@@ -461,6 +461,7 @@ function buildStaticGitSnapshot(snapshot: ExportSnapshot): DashboardOverview['gi
   const recentCommits = snapshot.git?.recentCommits ?? []
   if (recentCommits.length === 0) {
     return {
+      bindingToken: null,
       defaultBranch,
       worktrees: [],
     }
@@ -486,6 +487,7 @@ function buildStaticGitSnapshot(snapshot: ExportSnapshot): DashboardOverview['gi
   )
 
   return {
+    bindingToken: null,
     defaultBranch,
     worktrees: [
       {
@@ -633,6 +635,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       specifications: [],
       activeChanges: [],
       git: {
+        bindingToken: null,
         defaultBranch: 'main',
         worktrees: [],
       },

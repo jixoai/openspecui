@@ -9,22 +9,28 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { resolveGitRepositoryScopes, selectGitRepositoryScope } from './git-repository-scope.js'
+import {
+  resolveGitRepositoryDescriptor,
+  resolveGitRepositoryScopes,
+  selectGitRepositoryScope,
+} from './git-repository-scope.js'
 import type { GitRunner } from './git-shared.js'
+
+const preserveSyntheticPath = async (path: string): Promise<string> => path
 
 function createIdentityRunner(
   identities: Record<string, { topLevel: string; commonDir: string } | null>
 ): GitRunner {
   return async (cwd, args) => {
     const identity = identities[cwd] ?? null
-    if (!identity) return { ok: false, stdout: '' }
+    if (!identity) return { ok: false, stdout: '', failureKind: 'not-repository' }
     if (args.join(' ') === 'rev-parse --show-toplevel') {
       return { ok: true, stdout: `${identity.topLevel}\n` }
     }
     if (args.join(' ') === 'rev-parse --git-common-dir') {
       return { ok: true, stdout: `${identity.commonDir}\n` }
     }
-    return { ok: false, stdout: '' }
+    return { ok: false, stdout: '', failureKind: 'not-repository' }
   }
 }
 
@@ -41,6 +47,7 @@ describe('Git repository scopes', () => {
       planningRootDir: '/repo/planning',
       planningBindingToken: 'planning-token',
       runGit,
+      canonicalizePath: preserveSyntheticPath,
     })
 
     expect(scopes.code.repository).toEqual({ topLevel: '/repo', commonDir: '/repo/.git' })
@@ -63,6 +70,7 @@ describe('Git repository scopes', () => {
       planningRootDir: '/planning/specs',
       planningBindingToken: 'planning-token',
       runGit,
+      canonicalizePath: preserveSyntheticPath,
     })
 
     expect(scopes.defaultScope).toBe('code')
@@ -86,9 +94,122 @@ describe('Git repository scopes', () => {
       planningRootDir: '/planning',
       planningBindingToken: 'planning-token',
       runGit,
+      canonicalizePath: preserveSyntheticPath,
     })
 
     expect(scopes.code.repository?.topLevel).toBe('/code')
     expect(scopes.planning).toBeNull()
+  })
+
+  it.each([
+    { label: 'permission failure', stderr: 'fatal: Permission denied', exitCode: 128 },
+    { label: 'missing executable', stderr: 'spawn git ENOENT', exitCode: 'ENOENT' },
+    { label: 'unknown failure', stderr: undefined, exitCode: undefined },
+  ])('rejects a $label Git identity failure instead of collapsing it', async (failure) => {
+    const runGit: GitRunner = async () => ({
+      ok: false,
+      stdout: '',
+      stderr: failure.stderr,
+      exitCode: failure.exitCode,
+      failureKind: 'command-failed',
+    })
+
+    await expect(
+      resolveGitRepositoryDescriptor({
+        scope: 'planning',
+        bindingToken: 'planning-token',
+        rootPath: '/planning',
+        runGit,
+        canonicalizePath: preserveSyntheticPath,
+      })
+    ).rejects.toThrow('Git repository identity command failed')
+  })
+
+  it('collapses only an explicitly classified non-repository identity result', async () => {
+    const runGit: GitRunner = async () => ({
+      ok: false,
+      stdout: '',
+      failureKind: 'not-repository',
+    })
+
+    const scopes = await resolveGitRepositoryScopes({
+      launchProjectDir: '/code',
+      codeBindingToken: 'code-token',
+      planningRootDir: '/planning',
+      planningBindingToken: 'planning-token',
+      runGit,
+      canonicalizePath: preserveSyntheticPath,
+    })
+
+    expect(scopes.planningState).toBe('settled')
+    expect(scopes.planning).toBeNull()
+  })
+
+  it('rejects an unknown empty failure without an explicit classifier', async () => {
+    const runGit: GitRunner = async () => ({ ok: false, stdout: '', stderr: '' })
+
+    await expect(
+      resolveGitRepositoryDescriptor({
+        scope: 'planning',
+        bindingToken: 'planning-token',
+        rootPath: '/planning',
+        runGit,
+        canonicalizePath: preserveSyntheticPath,
+      })
+    ).rejects.toThrow('Git repository identity command failed')
+  })
+
+  it('rejects a successful identity command with empty output', async () => {
+    const runGit: GitRunner = async () => ({ ok: true, stdout: '' })
+
+    await expect(
+      resolveGitRepositoryDescriptor({
+        scope: 'planning',
+        bindingToken: 'planning-token',
+        rootPath: '/planning',
+        runGit,
+        canonicalizePath: preserveSyntheticPath,
+      })
+    ).rejects.toThrow('Git repository identity command failed')
+  })
+
+  it('recognizes Git canonical non-repository stderr as a settled collapse', async () => {
+    const runGit: GitRunner = async () => ({
+      ok: false,
+      stdout: '',
+      stderr: 'fatal: not a git repository (or any of the parent directories): .git',
+      exitCode: 128,
+    })
+
+    const scopes = await resolveGitRepositoryScopes({
+      launchProjectDir: '/code',
+      codeBindingToken: 'code-token',
+      planningRootDir: '/planning',
+      planningBindingToken: 'planning-token',
+      runGit,
+      canonicalizePath: preserveSyntheticPath,
+    })
+
+    expect(scopes.planningState).toBe('settled')
+    expect(scopes.planning).toBeNull()
+  })
+
+  it('propagates canonical identity failures instead of using an unresolved path', async () => {
+    const runGit: GitRunner = async (_cwd, args) => {
+      if (args.includes('--show-toplevel')) return { ok: true, stdout: '/planning\n' }
+      return { ok: true, stdout: '.git\n' }
+    }
+
+    await expect(
+      resolveGitRepositoryDescriptor({
+        scope: 'planning',
+        bindingToken: 'planning-token',
+        rootPath: '/planning',
+        runGit,
+        canonicalizePath: async () => {
+          throw new Error('canonical Git path unavailable')
+        },
+      })
+    ).rejects.toThrow('canonical Git path unavailable')
   })
 })

@@ -179,6 +179,38 @@ describe('shared element handoff state', () => {
     ).toBeNull()
   })
 
+  it('rejects selector-derived empty entity ids before validating handoff state', () => {
+    expect(
+      readGitSharedElementHandoffState(
+        {
+          __vtHandoff: {
+            family: 'git',
+            entityId: '',
+            bindingToken: 'planning-binding-a',
+          },
+        },
+        { type: 'commit', hash: '   ' },
+        'planning-binding-a'
+      )
+    ).toBeNull()
+  })
+
+  it('rejects malformed uncommitted entity provenance', () => {
+    expect(
+      readGitSharedElementHandoffState(
+        {
+          __vtHandoff: {
+            family: 'git',
+            entityId: '   ',
+            bindingToken: 'planning-binding-a',
+          },
+        },
+        { type: 'uncommitted' },
+        'planning-binding-a'
+      )
+    ).toBeNull()
+  })
+
   it('keeps non-Git handoffs valid without inventing binding provenance', () => {
     expect(
       readSharedElementHandoffState({

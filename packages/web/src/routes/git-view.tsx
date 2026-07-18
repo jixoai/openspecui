@@ -25,7 +25,7 @@ import { useGitRepositoryScope } from '@/lib/use-git-repository-scope'
 import { VTLink } from '@/lib/view-transitions/navigation'
 import {
   getSharedElementBinding,
-  readSharedElementHandoffState,
+  readGitSharedElementHandoffState,
 } from '@/lib/view-transitions/shared-elements'
 import type { GitEntrySelector } from '@openspecui/core'
 import { useQuery } from '@tanstack/react-query'
@@ -53,13 +53,9 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
   } = useGitRepositoryScope(!staticMode)
   const headerRef = useRef<HTMLDivElement | null>(null)
   const sharedDescriptor = useMemo(() => getGitEntrySharedDescriptor(selector), [selector])
-  const handoff = readSharedElementHandoffState(location.state)
   const backHref = buildGitRepositoryHref('/git', requestedScope, locationSearch)
   const bindingToken = scopeDescriptor?.bindingToken ?? null
-  const handoffMatchesBinding =
-    handoff?.family === 'git' &&
-    handoff.bindingToken !== undefined &&
-    handoff.bindingToken === bindingToken
+  const handoff = readGitSharedElementHandoffState(location.state, selector, bindingToken)
   const metaQuery = useQuery({
     queryKey: getGitEntryMetaQueryKey(scope, bindingToken ?? 'unavailable', selector),
     queryFn: () => {
@@ -119,7 +115,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
   }
 
   if (metaQuery.isLoading && !entry) {
-    if (handoff && handoffMatchesBinding) {
+    if (handoff) {
       return (
         <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
           <div className="flex items-start gap-4">

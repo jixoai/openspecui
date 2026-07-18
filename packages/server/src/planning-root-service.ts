@@ -79,6 +79,8 @@ export type PlanningRootStreamOperation = (services: PlanningRootServices) => Cl
 
 /** Public operation, stream, Root Context, and preview boundary used by the Server runtime. */
 export interface PlanningRootServiceResolver {
+  /** Stable backend Code Git binding shared with Dashboard snapshot provenance. */
+  readonly codeBindingToken: string
   /** Resolve Root Context only after the matching active-record transition settles. */
   resolveRootContext(): Promise<RootContextResolvedState>
   /** Resolve and track reactive Root Context dependencies inside the same serialized transition. */
@@ -124,13 +126,16 @@ export interface PlanningRootServiceManagerOptions {
 
 /** Serialized deep owner for one replaceable Planning-root service record. */
 export class PlanningRootServiceManager implements PlanningRootServiceResolver {
+  readonly codeBindingToken: string
   private activeRecord: PlanningRootServiceRecord | null = null
   private readonly retiringRecords = new Set<PlanningRootServiceRecord>()
   private transitionTail: Promise<void> = Promise.resolve()
   private disposePromise: Promise<void> | null = null
   private disposed = false
 
-  constructor(private readonly options: PlanningRootServiceManagerOptions) {}
+  constructor(private readonly options: PlanningRootServiceManagerOptions) {
+    this.codeBindingToken = randomUUID()
+  }
 
   private createRecord(rootContext: RootContext): PlanningRootServiceRecord {
     const planningRoot = rootContext.planningRoot
@@ -174,6 +179,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
           adapter,
           configManager: this.options.configManager,
           projectDir: this.options.launchProjectDir,
+          codeBindingToken: this.codeBindingToken,
         },
         reason
       )

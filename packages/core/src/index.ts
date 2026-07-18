@@ -734,6 +734,8 @@ export {
   type GitWorktreeHandoff,
   type GitWorktreeOverview,
   type GitWorktreeSummary,
+  type StaticGitRepositoryScopeDescriptor,
+  type StaticGitRepositoryScopes,
 } from './git-panel-types.js'
 export {
   OPENSPECUI_DOCUMENT_HOOK_VERSION,

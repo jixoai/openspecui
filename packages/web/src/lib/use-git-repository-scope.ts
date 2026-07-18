@@ -16,14 +16,16 @@ import type {
   GitRepositoryScope,
   GitRepositoryScopeDescriptor,
   GitRepositoryScopes,
+  StaticGitRepositoryScopeDescriptor,
+  StaticGitRepositoryScopes,
 } from '@openspecui/core'
 import { useLocation } from '@tanstack/react-router'
 
-const STATIC_GIT_SCOPES: GitRepositoryScopes = {
+export const STATIC_GIT_SCOPES: StaticGitRepositoryScopes = {
   defaultScope: 'code',
   code: {
     scope: 'code',
-    bindingToken: 'static-unavailable',
+    bindingToken: null,
     rootPath: '',
     repository: null,
   },
@@ -35,17 +37,19 @@ const STATIC_GIT_SCOPES: GitRepositoryScopes = {
 export interface GitRepositoryScopeState {
   requestedScope: GitRepositoryScope
   scope: GitRepositoryScope
-  descriptor: GitRepositoryScopeDescriptor | null
-  scopes: GitRepositoryScopes | null
+  descriptor: GitRepositoryScopeDescriptor | StaticGitRepositoryScopeDescriptor | null
+  scopes: GitRepositoryScopes | StaticGitRepositoryScopes | null
   locationSearch: string
   planningReady: boolean
   planningMessage: string | null
-  query: SubscriptionState<GitRepositoryScopes>
+  query: SubscriptionState<GitRepositoryScopes | StaticGitRepositoryScopes>
 }
 
 /** Subscribe to backend-resolved Code and optional distinct Planning Git repository bindings. */
-export function useGitRepositoryScopes(enabled = true): SubscriptionState<GitRepositoryScopes> {
-  return useSubscription<GitRepositoryScopes>(
+export function useGitRepositoryScopes(
+  enabled = true
+): SubscriptionState<GitRepositoryScopes | StaticGitRepositoryScopes> {
+  return useSubscription<GitRepositoryScopes | StaticGitRepositoryScopes>(
     (callbacks) => {
       if (!enabled) return { unsubscribe() {} }
       return trpcClient.git.subscribeScopes.subscribe(undefined, {
@@ -97,9 +101,11 @@ export function useGitRepositoryScope(enabled = true): GitRepositoryScopeState {
                 ? 'Planning repository is locked while Root Context refreshes.'
                 : scopes?.planningState === 'resolving'
                   ? 'Planning repository binding is resolving.'
-                  : planning === null
-                    ? 'Planning root is not a distinct Git repository; using Code repository.'
-                    : 'Planning repository binding is waiting for the current Root Context.'
+                  : scopes?.planningState === 'failed'
+                    ? `Planning Git repository binding failed: ${scopes.planningError.message}`
+                    : planning === null
+                      ? 'Planning root is not a distinct Git repository; using Code repository.'
+                      : 'Planning repository binding is waiting for the current Root Context.'
 
   return {
     requestedScope,

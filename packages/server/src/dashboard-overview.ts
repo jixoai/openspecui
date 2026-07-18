@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Assemble Dashboard planning metrics and Git projections from one loader context.
+ * 2. Preserve Code Git binding provenance across live Dashboard snapshots.
+ *
+ * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 carries Code binding provenance in Dashboard snapshots.
+ */
 import {
   DASHBOARD_METRIC_KEYS,
   type ConfigManager,
@@ -21,6 +29,8 @@ export interface DashboardOverviewLoaderContext {
   adapter: OpenSpecAdapter
   configManager: ConfigManager
   projectDir: string
+  /** Stable Code binding token captured with each live Dashboard Git snapshot. */
+  codeBindingToken: string
 }
 
 export interface DashboardGitTaskStatus {
@@ -251,7 +261,9 @@ export async function loadDashboardOverview(
   try {
     const gitSnapshotPromise = buildDashboardGitSnapshot({
       projectDir: ctx.projectDir,
+      bindingToken: ctx.codeBindingToken,
     }).catch(() => ({
+      bindingToken: ctx.codeBindingToken,
       defaultBranch: 'main',
       worktrees: [],
     }))

@@ -28,6 +28,7 @@ import {
   GitRepositoryBindingConflictError,
   GitRepositoryBindingService,
 } from './git-repository-binding-service.js'
+import { defaultRunGit, type GitRunner } from './git-shared.js'
 import { PlanningRootServiceManager } from './planning-root-service.js'
 import { createReactiveSubscription } from './reactive-subscription.js'
 
@@ -44,6 +45,7 @@ interface GitBindingFixture {
   bindings: GitRepositoryBindingService
   selectRoot(root: string): void
   setAvailable(available: boolean): void
+  setGitIdentityFailure(failed: boolean): void
 }
 
 interface Deferred<T> {
@@ -117,6 +119,7 @@ async function createFixture(): Promise<GitBindingFixture> {
 
   let selectedRoot = rootA
   let available = true
+  let gitIdentityFailure = false
   const configManager = new ConfigManager(codeRoot)
   const cliExecutor = new CliExecutor(configManager, codeRoot)
   vi.spyOn(cliExecutor, 'checkAvailability').mockResolvedValue({
@@ -149,6 +152,13 @@ async function createFixture(): Promise<GitBindingFixture> {
       : failedCommandResult(CliContextSchema)
   )
 
+  const runGit: GitRunner = async (cwd, args) => {
+    if (gitIdentityFailure && cwd === selectedRoot && args[0] === 'rev-parse') {
+      throw new Error('permission denied while resolving Planning Git identity')
+    }
+    return defaultRunGit(cwd, args)
+  }
+
   const runtimeInvalidation = new RuntimeInvalidationIndex()
   const manager = new PlanningRootServiceManager({
     launchProjectDir: codeRoot,
@@ -169,12 +179,16 @@ async function createFixture(): Promise<GitBindingFixture> {
     bindings: new GitRepositoryBindingService({
       launchProjectDir: codeRoot,
       planningRootServices: manager,
+      runGit,
     }),
     selectRoot(root) {
       selectedRoot = root
     },
     setAvailable(nextAvailable) {
       available = nextAvailable
+    },
+    setGitIdentityFailure(failed) {
+      gitIdentityFailure = failed
     },
   }
   fixtures.push(fixture)
@@ -292,6 +306,28 @@ describe('GitRepositoryBindingService', () => {
     expect(failedPlanningScopes.planningState).toBe('failed')
     expect(failedPlanningScopes.planning).toBeNull()
     expect(failedPlanningScopes.code.bindingToken).toBe(codeToken)
+    await expect(
+      fixture.bindings.run(
+        { scope: 'code', expectedBindingToken: codeToken },
+        (repository) => repository.rootPath
+      )
+    ).resolves.toBe(fixture.codeRoot)
+  })
+
+  it('preserves ready-root Planning Git identity failures as explicit evidence', async () => {
+    const fixture = await createFixture()
+    const initialScopes = await fixture.bindings.resolveScopes()
+    const codeToken = initialScopes.code.bindingToken
+    fixture.setGitIdentityFailure(true)
+
+    const failedScopes = await fixture.bindings.resolveScopes({ reactive: true })
+    expect(failedScopes.planningState).toBe('failed')
+    expect(failedScopes.planning).toBeNull()
+    if (failedScopes.planningState !== 'failed') {
+      throw new Error('Expected explicit Planning Git failure evidence.')
+    }
+    expect(failedScopes.planningError.message).toContain('permission denied')
+    expect(failedScopes.code.bindingToken).toBe(codeToken)
     await expect(
       fixture.bindings.run(
         { scope: 'code', expectedBindingToken: codeToken },

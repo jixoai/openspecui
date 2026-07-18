@@ -96,7 +96,11 @@ function LiveDashboardContextSummary() {
               <Code2 className="h-3.5 w-3.5" aria-hidden />
               Code Git snapshot
             </h3>
-            {gitScopesQuery.data ? (
+            {gitScopesQuery.error ? (
+              <p className="text-destructive text-xs">{gitScopesQuery.error.message}</p>
+            ) : gitScopesQuery.isLoading ? (
+              <p className="text-muted-foreground text-xs">Resolving Git scopes...</p>
+            ) : gitScopesQuery.data ? (
               <>
                 <p
                   className="truncate text-sm"
@@ -111,6 +115,11 @@ function LiveDashboardContextSummary() {
                 {gitScopesQuery.data.planningState === 'resolving' ? (
                   <p className="text-muted-foreground text-xs">
                     Resolving Planning Git repository...
+                  </p>
+                ) : gitScopesQuery.data.planningState === 'failed' ? (
+                  <p className="text-destructive text-xs">
+                    Planning Git repository binding failed:{' '}
+                    {gitScopesQuery.data.planningError.message}
                   </p>
                 ) : gitScopesQuery.data.planning ? (
                   <p
@@ -133,8 +142,6 @@ function LiveDashboardContextSummary() {
                   </p>
                 )}
               </>
-            ) : gitScopesQuery.error ? (
-              <p className="text-destructive text-xs">{gitScopesQuery.error.message}</p>
             ) : (
               <p className="text-muted-foreground text-xs">Resolving Git scopes...</p>
             )}

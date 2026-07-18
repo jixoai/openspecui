@@ -1,5 +1,13 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Prove system status projects watcher and recovery state.
+ * 2. Keep system-router fixtures type-safe across the Planning-root resolver contract.
+ *
+ * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
+ */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from './router.js'
+import { createUnavailablePlanningRootServices } from './test-support/planning-root-services.js'
 
 vi.mock('@openspecui/core', async () => {
   const actual = await vi.importActual<typeof import('@openspecui/core')>('@openspecui/core')
@@ -17,7 +25,7 @@ const getWatcherRuntimeStatusMock = vi.mocked(getWatcherRuntimeStatus)
 function createCaller(partial: Partial<Context> = {}) {
   return appRouter.createCaller({
     launchProjectAdapter: {} as Context['launchProjectAdapter'],
-    planningRootServices: {} as Context['planningRootServices'],
+    planningRootServices: createUnavailablePlanningRootServices(),
     configManager: {} as Context['configManager'],
     cliExecutor: {} as Context['cliExecutor'],
     projectRecoveryService:

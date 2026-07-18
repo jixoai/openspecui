@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Define Dashboard metrics, trends, planning projections, and Git snapshot contracts.
+ * 2. Preserve backend-issued Code binding provenance on live Git snapshots.
+ *
+ * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 binds Dashboard snapshots to their Code token.
+ */
 export const DASHBOARD_METRIC_KEYS = [
   'specifications',
   'requirements',
@@ -86,6 +94,8 @@ export interface DashboardGitWorktree {
 }
 
 export interface DashboardGitSnapshot {
+  /** Code binding provenance; null means static data has no live backend binding. */
+  bindingToken: string | null
   defaultBranch: string
   worktrees: DashboardGitWorktree[]
 }

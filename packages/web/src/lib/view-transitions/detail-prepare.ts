@@ -21,7 +21,7 @@ import type { GitEntrySelector } from '@openspecui/core'
 import { specIdentityFromRoute, type SpecIdentity } from '@openspecui/core/spec-catalog'
 import { waitForPrepareTask } from './prepare-wait'
 import type { VTIntent } from './route-semantics'
-import { readSharedElementHandoffState } from './shared-elements'
+import { readGitSharedElementHandoffState, readSharedElementHandoffState } from './shared-elements'
 
 type DetailPrepareMatch =
   | { kind: 'spec'; identity: SpecIdentity }
@@ -125,14 +125,15 @@ async function prepareGitDetail(
   }
 
   const scope = parseGitRepositoryScope(search)
-  const handoff = readSharedElementHandoffState(state)
   const descriptor =
     scope === 'planning'
       ? (await trpcClient.git.scopes.query()).planning
       : await trpcClient.git.code.query()
   if (!descriptor) return
   const expectedBindingToken = descriptor.bindingToken
-  if (handoff?.family === 'git' && handoff.bindingToken !== expectedBindingToken) return
+  const rawHandoff = readSharedElementHandoffState(state)
+  const handoff = readGitSharedElementHandoffState(state, selector, expectedBindingToken)
+  if (rawHandoff?.family === 'git' && !handoff) return
   await queryClient.fetchQuery({
     queryKey: getGitEntryMetaQueryKey(scope, expectedBindingToken, selector),
     queryFn: () => trpcClient.git.getEntryMeta.query({ scope, expectedBindingToken, selector }),

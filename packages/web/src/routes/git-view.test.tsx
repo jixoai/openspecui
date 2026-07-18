@@ -30,7 +30,7 @@ type ResolvingPlanningIsNull = Expect<
 type SettledPlanningAllowsDescriptor = Expect<
   Equal<
     Extract<GitRepositoryScopes, { planningState: 'settled' }>['planning'],
-    (GitRepositoryScopeDescriptor & { scope: 'planning' }) | null
+    (GitRepositoryScopeDescriptor & { readonly scope: 'planning' }) | null
   >
 >
 const checkedScopeContract: [ResolvingPlanningIsNull, SettledPlanningAllowsDescriptor] = [

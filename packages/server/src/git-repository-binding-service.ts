@@ -12,12 +12,12 @@ import type {
   GitRepositoryScopeDescriptor,
   GitRepositoryScopes,
 } from '@openspecui/core'
-import { randomUUID } from 'node:crypto'
 import {
   resolveGitRepositoryDescriptor,
   resolveGitRepositoryScopes,
   selectGitRepositoryScope,
 } from './git-repository-scope.js'
+import type { GitRunner } from './git-shared.js'
 import type { PlanningRootServiceResolver } from './planning-root-service.js'
 
 /** Public input proving which backend-issued Git binding the caller observed. */
@@ -59,13 +59,17 @@ export interface GitRepositoryBindingServiceOptions {
   launchProjectDir: string
   /** Manager that leases and rotates the active CLI-resolved Planning root. */
   planningRootServices: PlanningRootServiceResolver
+  /** Optional identity runner used by checked tests to exercise failure evidence. */
+  runGit?: GitRunner
 }
 
 /** Deep owner for repository binding epochs and stale-intent rejection. */
 export class GitRepositoryBindingService implements GitRepositoryBindingResolver {
-  private readonly codeBindingToken = randomUUID()
-
   constructor(private readonly options: GitRepositoryBindingServiceOptions) {}
+
+  private get codeBindingToken(): string {
+    return this.options.planningRootServices.codeBindingToken
+  }
 
   private assertCurrent(binding: ExpectedGitRepositoryBinding, currentBindingToken: string): void {
     if (binding.expectedBindingToken === currentBindingToken) return
@@ -81,6 +85,7 @@ export class GitRepositoryBindingService implements GitRepositoryBindingResolver
       scope: 'code',
       bindingToken: this.codeBindingToken,
       rootPath: this.options.launchProjectDir,
+      runGit: this.options.runGit,
     })
     return { ...descriptor, scope: 'code' }
   }
@@ -92,6 +97,9 @@ export class GitRepositoryBindingService implements GitRepositoryBindingResolver
 
   /** Resolve the current scope inventory through buffered or caller-reactive root ownership. */
   async resolveScopes(options: { reactive?: boolean } = {}): Promise<GitRepositoryScopes> {
+    // Code identity is independent of the replaceable Planning-root lease. If it fails, propagate
+    // that Code-scoped error instead of relabeling it as a Planning failure with a fake fallback.
+    const code = await this.resolveCodeScope()
     const runPlanning = options.reactive
       ? this.options.planningRootServices.runReactiveOperation.bind(
           this.options.planningRootServices
@@ -105,14 +113,21 @@ export class GitRepositoryBindingService implements GitRepositoryBindingResolver
           codeBindingToken: this.codeBindingToken,
           planningRootDir: rootContext.planningRoot?.path ?? null,
           planningBindingToken: gitBindingToken,
+          runGit: this.options.runGit,
         })
       )
-    } catch {
+    } catch (error: unknown) {
       return {
         defaultScope: 'code',
-        code: await this.resolveCodeScope(),
-        planningState: 'settled',
+        code,
+        planningState: 'failed',
         planning: null,
+        planningError: {
+          message:
+            error instanceof Error
+              ? error.message
+              : `Planning Git repository binding failed: ${String(error)}`,
+        },
       }
     }
   }
@@ -140,6 +155,7 @@ export class GitRepositoryBindingService implements GitRepositoryBindingResolver
           codeBindingToken: this.codeBindingToken,
           planningRootDir,
           planningBindingToken: gitBindingToken,
+          runGit: this.options.runGit,
         })
         return operation(selectGitRepositoryScope(scopes, 'planning'))
       }

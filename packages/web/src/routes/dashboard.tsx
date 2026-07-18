@@ -36,13 +36,13 @@ import {
 import { formatRelativeTime } from '@/lib/format-time'
 import { buildGitEntryHrefFromEntry } from '@/lib/git-panel'
 import { isStaticMode } from '@/lib/static-mode'
-import { trpcClient } from '@/lib/trpc'
 import {
   refreshDashboardGitSnapshot,
   removeDetachedDashboardWorktree,
   useDashboardGitTaskStatusSubscription,
   useDashboardOverviewSubscription,
 } from '@/lib/use-dashboard'
+import { useGitRepositoryScopes } from '@/lib/use-git-repository-scope'
 import { useOpsxConfigBundleSubscription, useOpsxStatusListSubscription } from '@/lib/use-opsx'
 import { VTLink, vtNavController } from '@/lib/view-transitions/navigation'
 import {
@@ -256,6 +256,11 @@ function getStepPalette(stepName: string): {
 export function Dashboard() {
   const staticMode = isStaticMode()
   const { data: overview, isLoading, error } = useDashboardOverviewSubscription()
+  const {
+    data: gitScopes,
+    isLoading: gitScopesLoading,
+    error: gitScopesError,
+  } = useGitRepositoryScopes(!staticMode)
   const { data: gitTaskStatus } = useDashboardGitTaskStatusSubscription()
   const { data: statuses } = useOpsxStatusListSubscription()
   const { data: configBundle } = useOpsxConfigBundleSubscription()
@@ -560,12 +565,25 @@ export function Dashboard() {
     overview?.cardAvailability ?? createDefaultCardAvailability(summary.taskCompletionPercent)
   const trendKinds = overview?.trendKinds ?? createDefaultTrendKinds()
 
-  const git = overview?.git ?? {
-    defaultBranch: 'main',
-    worktrees: [],
-  }
-  const showGitSnapshot =
-    !staticMode || git.worktrees.some((worktree) => worktree.entries.length > 0)
+  const dashboardGit = overview?.git ?? null
+  const dashboardGitIsCurrent =
+    staticMode ||
+    (!gitScopesLoading &&
+      gitScopesError === null &&
+      gitScopes !== undefined &&
+      dashboardGit?.bindingToken !== null &&
+      dashboardGit?.bindingToken === gitScopes?.code.bindingToken)
+  const git =
+    dashboardGitIsCurrent && dashboardGit
+      ? dashboardGit
+      : {
+          bindingToken: null,
+          defaultBranch: 'main',
+          worktrees: [],
+        }
+  const showGitSnapshot = staticMode
+    ? git.worktrees.some((worktree) => worktree.entries.length > 0)
+    : dashboardGitIsCurrent
 
   const hasChanges = activeChanges.length > 0
   const currentWorktree = git.worktrees.find((worktree) => worktree.isCurrent) ?? null
@@ -779,28 +797,19 @@ export function Dashboard() {
                         staticMode
                           ? undefined
                           : (selectedEntry, sourceElement) => {
-                              void trpcClient.git.code
-                                .query()
-                                .then(({ bindingToken }) =>
-                                  vtNavController.push(
-                                    'bottom',
-                                    buildGitEntryHrefFromEntry(selectedEntry),
-                                    withSharedElementHandoffState(
-                                      undefined,
-                                      getGitEntrySharedHandoff(selectedEntry, bindingToken)
-                                    ),
-                                    {
-                                      source: sourceElement,
-                                      sharedElements: getGitEntrySharedDescriptor(selectedEntry),
-                                    }
-                                  )
-                                )
-                                .catch((error: unknown) => {
-                                  console.error(
-                                    '[Dashboard] Failed to resolve Code Git binding:',
-                                    error
-                                  )
-                                })
+                              if (git.bindingToken === null) return
+                              void vtNavController.push(
+                                'bottom',
+                                buildGitEntryHrefFromEntry(selectedEntry),
+                                withSharedElementHandoffState(
+                                  undefined,
+                                  getGitEntrySharedHandoff(selectedEntry, git.bindingToken)
+                                ),
+                                {
+                                  source: sourceElement,
+                                  sharedElements: getGitEntrySharedDescriptor(selectedEntry),
+                                }
+                              )
                             }
                       }
                     />
