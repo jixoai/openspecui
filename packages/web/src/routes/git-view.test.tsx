@@ -3,6 +3,7 @@
  * 1. Prove scoped Git detail rendering, back navigation, and document flow.
  * 2. Prove mounted binding replacement retires stale detail, files, and patch content.
  * 3. Prove Git loading handoffs match both repository binding and target entity.
+ * 4. Prove cached Git detail stays locked until a replacement scope emits.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
@@ -455,6 +456,90 @@ describe('Git entry routes', () => {
     expect(await screen.findByText(/Loading Git detail for \/tmp\/planning-b/)).toBeTruthy()
     expect(screen.queryByText('Root A handoff title')).toBeNull()
     expect(screen.queryByText('Root A handoff subtitle')).toBeNull()
+  })
+
+  it('locks cached A detail during scope reconnect, then loads B after emission', async () => {
+    routerLocation.searchStr = '?gitScope=planning'
+    routerLocation.state = {
+      __vtHandoff: {
+        family: 'git',
+        entityId: 'abc12345',
+        bindingToken: 'planning-binding-a',
+        title: 'Root A handoff title',
+        subtitle: 'Root A handoff subtitle',
+      },
+    }
+    const scopeA = createGitScopes('/tmp/planning-a', 'planning-binding-a')
+    subscriptionState.currentScopes = scopeA
+    subscriptionState.currentRoot = createReadyRootState('/tmp/planning-a')
+    getEntryMetaQueryMock.mockImplementation((input: { expectedBindingToken: string }) =>
+      Promise.resolve({
+        type: 'commit' as const,
+        hash: 'abc12345',
+        title:
+          input.expectedBindingToken === 'planning-binding-b' ? 'Root B detail' : 'Root A detail',
+        committedAt: 1,
+        relatedChanges: [],
+        diff: { files: 1, insertions: 1, deletions: 0 },
+      })
+    )
+    getEntryFilesQueryMock.mockImplementation((input: { expectedBindingToken: string }) =>
+      Promise.resolve({
+        files: [],
+        eagerFiles: [
+          {
+            patch:
+              input.expectedBindingToken === 'planning-binding-b' ? 'Root B patch' : 'Root A patch',
+          },
+        ],
+        eagerPatchLineBudget: 1000,
+        eagerPatchLineCount: 1,
+      })
+    )
+
+    const first = renderWithQueryClient(<GitCommitViewRoute />)
+    await screen.findByText('Root A detail')
+    first.unmount()
+
+    const scopeB = createGitScopes('/tmp/planning-b', 'planning-binding-b')
+    subscriptionState.currentScopes = scopeB
+    subscriptionState.currentRoot = createReadyRootState('/tmp/planning-b')
+    scopesSubscribeMock.mockImplementationOnce((_input, callbacks) => {
+      subscriptionState.scopesCallbacks = callbacks
+      return { unsubscribe: vi.fn() }
+    })
+    const metaCallsBeforeReconnect = getEntryMetaQueryMock.mock.calls.length
+    const fileCallsBeforeReconnect = getEntryFilesQueryMock.mock.calls.length
+
+    const second = renderWithQueryClient(<GitCommitViewRoute />)
+    await waitFor(() =>
+      expect({
+        loading: screen.queryByText('Loading git repository scope...') !== null,
+        metaCalls: getEntryMetaQueryMock.mock.calls.slice(metaCallsBeforeReconnect),
+        fileCalls: getEntryFilesQueryMock.mock.calls.slice(fileCallsBeforeReconnect),
+        staleHandoff: screen.queryByText('Root A handoff title') !== null,
+      }).toEqual({
+        loading: true,
+        metaCalls: [],
+        fileCalls: [],
+        staleHandoff: false,
+      })
+    )
+
+    await act(async () => {
+      const callbacks = subscriptionState.scopesCallbacks
+      if (!callbacks) throw new Error('Git scope reconnect callback is unavailable.')
+      callbacks.onData(scopeB)
+    })
+
+    await screen.findByText('Root B detail')
+    expect(getEntryMetaQueryMock).toHaveBeenCalledWith({
+      scope: 'planning',
+      expectedBindingToken: 'planning-binding-b',
+      selector: { type: 'commit', hash: 'abc12345' },
+    })
+    expect(screen.queryByText('Root A handoff title')).toBeNull()
+    second.unmount()
   })
 
   it('keeps the requested Planning URL while a mismatched Root uses Code data', async () => {

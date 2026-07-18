@@ -3,6 +3,7 @@
  * 1. Render commit and uncommitted detail from an explicit repository scope.
  * 2. Preserve scope and binding across metadata/files/patch requests and cache keys.
  * 3. Preserve shared-element handoff and long-diff document flow.
+ * 4. Keep cached Git detail non-authoritative while scope subscriptions reconnect.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
@@ -51,6 +52,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
     locationSearch,
     query: scopesQuery,
   } = useGitRepositoryScope(!staticMode)
+  const scopeReconnecting = scopesQuery.isLoading
   const headerRef = useRef<HTMLDivElement | null>(null)
   const sharedDescriptor = useMemo(() => getGitEntrySharedDescriptor(selector), [selector])
   const backHref = buildGitRepositoryHref('/git', requestedScope, locationSearch)
@@ -66,7 +68,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
         selector,
       })
     },
-    enabled: !staticMode && bindingToken !== null,
+    enabled: !staticMode && !scopeReconnecting && bindingToken !== null,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -81,7 +83,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
         selector,
       })
     },
-    enabled: !staticMode && bindingToken !== null,
+    enabled: !staticMode && !scopeReconnecting && bindingToken !== null,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -101,7 +103,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
     )
   }
 
-  if (scopesQuery.isLoading && !scopes) {
+  if (scopeReconnecting) {
     return <div className="route-loading animate-pulse">Loading git repository scope...</div>
   }
 
