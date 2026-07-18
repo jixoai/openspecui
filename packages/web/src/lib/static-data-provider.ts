@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Project one immutable export snapshot through the live provider-shaped API.
  * 2. Preserve compound Spec identity and source/read-only state in static routes and search.
  * 3. Reconstruct Dashboard, workflow, schema, template, and entity reads without a backend.
  * 4. Keep unsupported live mutations and provenance explicitly absent in static mode.
  *
  * Original request (2026-07-15): "这是额外的工作还是可以和 live 版本保持尽可能的一致？"
+ * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
+ * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  */
 
 import type {
@@ -40,7 +42,7 @@ import {
   type SpecDocumentProjection,
   type SpecIdentity,
 } from '@openspecui/core/spec-catalog'
-import type { SearchDocument } from '@openspecui/search'
+import type { ProjectSearchScope, SearchDocument } from '@openspecui/search'
 import { parse as parseYaml } from 'yaml'
 import type { ExportSnapshot } from '../ssg/types'
 import { getBasePath, getInitialData } from './static-mode'
@@ -1272,7 +1274,22 @@ export async function getOpsxGlobArtifactFiles(
   return resolveGlobArtifactFiles(change, outputPath)
 }
 
-/** Build the static search index from exported Specs, Changes, and Archives. */
+function getSpecSearchSource(identity: SpecIdentity): {
+  scope: ProjectSearchScope
+  path: string
+} {
+  return identity.kind === 'owned'
+    ? {
+        scope: 'active-root',
+        path: `owned:openspec/specs/${identity.specId}/spec.md`,
+      }
+    : {
+        scope: 'referenced-specs',
+        path: `referenced:${identity.storeId}:specs/${identity.specId}`,
+      }
+}
+
+/** Build the source-scoped static search index from exported entities. */
 export async function getSearchDocuments(): Promise<SearchDocument[]> {
   const snapshot = await loadSnapshot()
   if (!snapshot) return []
@@ -1281,12 +1298,14 @@ export async function getSearchDocuments(): Promise<SearchDocument[]> {
 
   for (const spec of snapshot.specs) {
     const identityKey = specIdentityKey(spec.identity)
+    const source = getSpecSearchSource(spec.identity)
     docs.push({
       id: `spec:${identityKey}`,
       kind: 'spec',
+      scope: source.scope,
       title: spec.name,
       href: specRoutePath(spec.identity),
-      path: `owned:openspec/specs/${spec.id}/spec.md`,
+      path: source.path,
       content: spec.content,
       updatedAt: spec.updatedAt,
     })
@@ -1296,6 +1315,7 @@ export async function getSearchDocuments(): Promise<SearchDocument[]> {
     docs.push({
       id: `change:${change.id}`,
       kind: 'change',
+      scope: 'active-root',
       title: change.name,
       href: `/changes/${encodeURIComponent(change.id)}`,
       path: `openspec/changes/${change.id}`,
@@ -1316,6 +1336,7 @@ export async function getSearchDocuments(): Promise<SearchDocument[]> {
     docs.push({
       id: `archive:${archive.id}`,
       kind: 'archive',
+      scope: 'active-root',
       title: archive.name,
       href: `/archive/${encodeURIComponent(archive.id)}`,
       path: `openspec/changes/archive/${archive.id}`,

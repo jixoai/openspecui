@@ -1,5 +1,6 @@
 ---
 '@openspecui/core': major
+'@openspecui/search': major
 '@openspecui/server': major
 '@openspecui/web': major
 openspecui: major
@@ -137,3 +138,6 @@ line, and rejects older or forward CLI lines by default.
 - Default the Spec Catalog to writable Owned entries and place direct
   Referenced Specs in a Store-grouped, visibly read-only sibling view while
   retaining compound routes for duplicate ids.
+- Scope project Search to Active root by default and expose direct Referenced
+  Specs through an explicit sibling scope. Shared engines filter source before
+  scoring and limit, while live/static routes preserve Store-qualified hits.

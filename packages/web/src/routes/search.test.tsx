@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Verify Search result navigation, highlighting, and pop-area lifecycle.
+ * 2. Verify URL-defaulted source tabs preserve query and compound Reference navigation.
+ *
+ * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
+ * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
+ */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SearchRoute } from './search'
@@ -99,7 +107,7 @@ describe('SearchRoute', () => {
 
     render(<SearchRoute />)
 
-    fireEvent.change(screen.getByPlaceholderText('Search specs, changes, archive...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search Owned Specs, Changes, and Archives...'), {
       target: { value: 'api auth' },
     })
 
@@ -135,5 +143,85 @@ describe('SearchRoute', () => {
 
     expect(screen.getAllByText('Auth').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Auth')[0]?.tagName).toBe('MARK')
+  })
+
+  it('defaults invalid source parameters to Active root', () => {
+    useLocationMock.mockReturnValue({
+      search: '?query=auth&scope=unknown',
+      state: null,
+    })
+    useSearchMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    })
+
+    render(<SearchRoute />)
+
+    expect(screen.getByRole('tab', { name: 'Active root' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    expect(useSearchMock).toHaveBeenCalledWith('auth', 'active-root')
+  })
+
+  it('preserves the query when selecting Referenced Specs', () => {
+    useLocationMock.mockReturnValue({
+      search: '?query=api+auth',
+      state: { from: 'search-test' },
+    })
+    useSearchMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    })
+
+    render(<SearchRoute />)
+    fireEvent.click(screen.getByRole('tab', { name: 'Referenced Specs' }))
+
+    expect(navControllerMock.replace).toHaveBeenCalledWith(
+      'pop',
+      '/search?query=api+auth&scope=referenced-specs',
+      { from: 'search-test' }
+    )
+    expect(useSearchMock).toHaveBeenLastCalledWith('api auth', 'referenced-specs')
+  })
+
+  it('navigates a Store-qualified Referenced Spec and labels it read-only', () => {
+    useLocationMock.mockReturnValue({
+      search: '?query=auth&scope=referenced-specs',
+      state: null,
+    })
+    useSearchMock.mockReturnValue({
+      data: [
+        {
+          documentId: 'spec:referenced:platform-a:auth',
+          kind: 'spec',
+          scope: 'referenced-specs',
+          title: 'Auth',
+          href: '/specs/referenced/platform-a/auth',
+          path: 'referenced:platform-a:specs/auth',
+          score: 100,
+          snippet: 'Authentication requirement',
+          updatedAt: 0,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    })
+    navControllerMock.getAreaForPath.mockReturnValue('main')
+
+    render(<SearchRoute />)
+    fireEvent.click(screen.getByRole('button', { name: /Auth/i }))
+
+    expect(screen.getByText(/read-only spec/i)).toBeInTheDocument()
+    expect(navControllerMock.getAreaForPath).toHaveBeenCalledWith(
+      '/specs/referenced/platform-a/auth'
+    )
+    expect(navControllerMock.push).toHaveBeenCalledWith(
+      'main',
+      '/specs/referenced/platform-a/auth',
+      null
+    )
   })
 })

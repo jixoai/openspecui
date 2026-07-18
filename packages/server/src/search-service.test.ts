@@ -1,5 +1,14 @@
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Verify Planning-root Search lifecycle, processed reads, and reactive rebuilds.
+ * 2. Verify source-scoped documents and normalized project queries reach the provider.
+ * 3. Verify duplicate Spec ids preserve Owned and Store-qualified Reference identity.
+ *
+ * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
+ * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
+ */
 import { createDocumentChecklistSummary, createTrackedTaskProgress } from '@openspecui/core'
-import type { SearchDocument, SearchHit, SearchProvider } from '@openspecui/search'
+import type { SearchDocument, SearchHit, SearchProvider, SearchQuery } from '@openspecui/search'
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import { SearchService } from './search-service.js'
@@ -44,7 +53,7 @@ function createAdapterMock() {
 class FakeProvider implements SearchProvider {
   readonly initCalls: SearchDocument[][] = []
   readonly replaceCalls: SearchDocument[][] = []
-  readonly searchCalls: Array<{ query: string; limit?: number }> = []
+  readonly searchCalls: SearchQuery[] = []
 
   async init(docs: SearchDocument[]): Promise<void> {
     this.initCalls.push(docs)
@@ -54,7 +63,7 @@ class FakeProvider implements SearchProvider {
     this.replaceCalls.push(docs)
   }
 
-  async search(query: { query: string; limit?: number }): Promise<SearchHit[]> {
+  async search(query: SearchQuery): Promise<SearchHit[]> {
     this.searchCalls.push(query)
     return [
       {
@@ -84,7 +93,12 @@ describe('SearchService', () => {
 
     expect(provider.initCalls).toHaveLength(1)
     expect(provider.initCalls[0]?.length).toBe(3)
-    expect(provider.searchCalls).toEqual([{ query: 'auth' }])
+    expect(provider.initCalls[0]?.map(({ kind, scope }) => ({ kind, scope }))).toEqual([
+      { kind: 'spec', scope: 'active-root' },
+      { kind: 'change', scope: 'active-root' },
+      { kind: 'archive', scope: 'active-root' },
+    ])
+    expect(provider.searchCalls).toEqual([{ query: 'auth', scope: 'active-root' }])
     expect(hits[0]?.documentId).toBe('spec:owned:auth')
   })
 
@@ -116,7 +130,7 @@ describe('SearchService', () => {
 
     expect(provider.initCalls).toHaveLength(1)
     expect(provider.replaceCalls).toHaveLength(1)
-    expect(provider.searchCalls).toEqual([{ query: 'auth', limit: 5 }])
+    expect(provider.searchCalls).toEqual([{ query: 'auth', scope: 'active-root', limit: 5 }])
   })
 
   it('indexes processed documents when a document service is provided', async () => {
@@ -206,20 +220,23 @@ describe('SearchService', () => {
     expect(
       provider.initCalls[0]
         ?.filter((document) => document.kind === 'spec')
-        .map(({ id, href, path }) => ({ id, href, path }))
+        .map(({ id, scope, href, path }) => ({ id, scope, href, path }))
     ).toEqual([
       {
         id: 'spec:owned:auth',
+        scope: 'active-root',
         href: '/specs/owned/auth',
         path: 'owned:openspec/specs/auth/spec.md',
       },
       {
         id: 'spec:referenced:platform-a:auth',
+        scope: 'referenced-specs',
         href: '/specs/referenced/platform-a/auth',
         path: 'referenced:platform-a:specs/auth',
       },
       {
         id: 'spec:referenced:platform-b:auth',
+        scope: 'referenced-specs',
         href: '/specs/referenced/platform-b/auth',
         path: 'referenced:platform-b:specs/auth',
       },

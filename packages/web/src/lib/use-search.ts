@@ -1,10 +1,24 @@
-import { WebWorkerSearchProvider, type SearchHit } from '@openspecui/search'
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Share one reactive Search hook across live, legacy-live, and static providers.
+ * 2. Propagate project source scope and prevent stale cross-scope result rendering.
+ *
+ * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
+ * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
+ */
+import {
+  WebWorkerSearchProvider,
+  type ProjectSearchScope,
+  type SearchHit,
+} from '@openspecui/search'
 import { useEffect, useMemo, useState } from 'react'
 import * as StaticProvider from './static-data-provider'
 import { isStaticMode } from './static-mode'
 import { trpcClient } from './trpc'
 
+/** Current Search result state attributed to exactly one project source. */
 export interface SearchState {
+  scope: ProjectSearchScope
   data: SearchHit[]
   isLoading: boolean
   error: Error | null
@@ -45,8 +59,14 @@ async function getStaticProvider(): Promise<WebWorkerSearchProvider> {
   return staticProviderInitPromise
 }
 
-export function useSearch(query: string, limit = 50): SearchState {
+/** Search one objective project source without retaining results from another source. */
+export function useSearch(
+  query: string,
+  scope: ProjectSearchScope = 'active-root',
+  limit = 50
+): SearchState {
   const [state, setState] = useState<SearchState>({
+    scope,
     data: [],
     isLoading: false,
     error: null,
@@ -58,24 +78,25 @@ export function useSearch(query: string, limit = 50): SearchState {
     let active = true
 
     if (trimmedQuery.length === 0) {
-      setState({ data: [], isLoading: false, error: null })
+      setState({ scope, data: [], isLoading: false, error: null })
       return () => {
         active = false
       }
     }
 
-    setState((prev) => ({ ...prev, isLoading: true, error: null }))
+    setState({ scope, data: [], isLoading: true, error: null })
 
     if (isStaticMode()) {
       getStaticProvider()
-        .then((provider) => provider.search({ query: trimmedQuery, limit }))
+        .then((provider) => provider.search({ query: trimmedQuery, scope, limit }))
         .then((data) => {
           if (!active) return
-          setState({ data, isLoading: false, error: null })
+          setState({ scope, data, isLoading: false, error: null })
         })
         .catch((error: unknown) => {
           if (!active) return
           setState({
+            scope,
             data: [],
             isLoading: false,
             error: error instanceof Error ? error : new Error(String(error)),
@@ -96,14 +117,15 @@ export function useSearch(query: string, limit = 50): SearchState {
     const runLegacyReactiveSearch = () => {
       const runQuery = () => {
         trpcClient.search.query
-          .query({ query: trimmedQuery, limit })
+          .query({ query: trimmedQuery, scope, limit })
           .then((data) => {
             if (!active) return
-            setState({ data, isLoading: false, error: null })
+            setState({ scope, data, isLoading: false, error: null })
           })
           .catch((error: unknown) => {
             if (!active) return
             setState({
+              scope,
               data: [],
               isLoading: false,
               error: error instanceof Error ? error : new Error(String(error)),
@@ -121,6 +143,7 @@ export function useSearch(query: string, limit = 50): SearchState {
         onError: (error) => {
           if (!active) return
           setState({
+            scope,
             data: [],
             isLoading: false,
             error,
@@ -138,12 +161,12 @@ export function useSearch(query: string, limit = 50): SearchState {
     }
 
     const subscription = trpcClient.search.subscribe.subscribe(
-      { query: trimmedQuery, limit },
+      { query: trimmedQuery, scope, limit },
       {
         onData: (data) => {
           dynamicSearchSubscribeSupported = true
           if (!active) return
-          setState({ data, isLoading: false, error: null })
+          setState({ scope, data, isLoading: false, error: null })
         },
         onError: (error) => {
           if (isMissingSearchSubscribeProcedureError(error)) {
@@ -154,6 +177,7 @@ export function useSearch(query: string, limit = 50): SearchState {
           }
           if (!active) return
           setState({
+            scope,
             data: [],
             isLoading: false,
             error,
@@ -167,7 +191,16 @@ export function useSearch(query: string, limit = 50): SearchState {
       subscription.unsubscribe()
       legacyUnsubscribe()
     }
-  }, [limit, trimmedQuery])
+  }, [limit, scope, trimmedQuery])
+
+  if (state.scope !== scope) {
+    return {
+      scope,
+      data: [],
+      isLoading: trimmedQuery.length > 0,
+      error: null,
+    }
+  }
 
   return state
 }

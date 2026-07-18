@@ -12,6 +12,8 @@
  * Original request (2026-07-15): "你先负责后端（内核）的开发。"
  * Original request (2026-07-17): "Do not return a mutable Planning-root service capability that can outlive its admitted operation."
  * Original request (2026-07-18): "Remove duplicated profile/drift parsing and preserve the pinned Core workflow contract."
+ * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
+ * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  */
 import type {
   ChangeFile,
@@ -100,7 +102,7 @@ import {
   type NotificationRecord,
 } from '@openspecui/core/notifications'
 import { CustomSoundIdSchema } from '@openspecui/core/sounds'
-import { SearchQuerySchema } from '@openspecui/search'
+import { ProjectSearchQuerySchema } from '@openspecui/search'
 import { initTRPC, TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
 import { z } from 'zod'
@@ -2420,11 +2422,11 @@ export const kvRouter = router({
  * Search router - unified fulltext search over specs/changes/archives
  */
 export const searchRouter = router({
-  query: publicProcedure.input(SearchQuerySchema).query(async ({ ctx, input }) => {
+  query: publicProcedure.input(ProjectSearchQuerySchema).query(async ({ ctx, input }) => {
     return runPlanningRoot(ctx, ({ searchService }) => searchService.query(input))
   }),
 
-  subscribe: publicProcedure.input(SearchQuerySchema).subscription(({ ctx, input }) => {
+  subscribe: publicProcedure.input(ProjectSearchQuerySchema).subscription(({ ctx, input }) => {
     return createPlanningRootSubscription(ctx, ({ searchService }) =>
       searchService.queryReactive(input)
     )

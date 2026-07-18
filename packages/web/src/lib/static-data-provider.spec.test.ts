@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Verify static Spec details preserve processed and source-aware projection semantics.
+ * 2. Verify static Search derives scope, path, route, and identity from compound Spec identity.
+ *
+ * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
+ * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
+ */
 import type { ExportSnapshot } from '@openspecui/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -60,5 +68,60 @@ describe('static-data-provider specs', () => {
         rawMarkdown: '# CLI\n\n## Purpose\nProcessed content',
       }
     )
+  })
+
+  it('derives Search scope and paths from duplicate compound Spec identities', async () => {
+    staticState.snapshot = {
+      ...createSnapshot(),
+      specs: [
+        createSnapshot().specs[0],
+        {
+          identity: { kind: 'referenced', storeId: 'platform-a', specId: 'cli' },
+          source: 'referenced',
+          readOnly: true,
+          id: 'cli',
+          name: 'CLI',
+          content: '# Referenced CLI A',
+          overview: '',
+          requirements: [],
+          createdAt: 0,
+          updatedAt: 0,
+        },
+        {
+          identity: { kind: 'referenced', storeId: 'platform-b', specId: 'cli' },
+          source: 'referenced',
+          readOnly: true,
+          id: 'cli',
+          name: 'CLI',
+          content: '# Referenced CLI B',
+          overview: '',
+          requirements: [],
+          createdAt: 0,
+          updatedAt: 0,
+        },
+      ] as never,
+    }
+    const provider = await import('./static-data-provider')
+
+    await expect(provider.getSearchDocuments()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'spec:owned:cli',
+        scope: 'active-root',
+        href: '/specs/owned/cli',
+        path: 'owned:openspec/specs/cli/spec.md',
+      }),
+      expect.objectContaining({
+        id: 'spec:referenced:platform-a:cli',
+        scope: 'referenced-specs',
+        href: '/specs/referenced/platform-a/cli',
+        path: 'referenced:platform-a:specs/cli',
+      }),
+      expect.objectContaining({
+        id: 'spec:referenced:platform-b:cli',
+        scope: 'referenced-specs',
+        href: '/specs/referenced/platform-b/cli',
+        path: 'referenced:platform-b:specs/cli',
+      }),
+    ])
   })
 })

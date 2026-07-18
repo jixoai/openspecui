@@ -47,14 +47,24 @@ describe('search engine', () => {
   it('filters by project scope before scoring and limiting results', () => {
     const index = buildSearchIndex([
       {
-        id: 'spec:owned:auth',
-        kind: 'spec',
+        id: 'change:add-auth',
+        kind: 'change',
         scope: 'active-root',
         title: 'Authentication authentication',
-        href: '/specs/owned/auth',
-        path: 'openspec/specs/auth/spec.md',
+        href: '/changes/add-auth',
+        path: 'openspec/changes/add-auth',
         content: 'authentication',
         updatedAt: 20,
+      },
+      {
+        id: 'archive:old-auth',
+        kind: 'archive',
+        scope: 'active-root',
+        title: 'Authentication authentication authentication',
+        href: '/archive/old-auth',
+        path: 'openspec/changes/archive/old-auth',
+        content: 'authentication',
+        updatedAt: 30,
       },
       {
         id: 'spec:reference:platform:auth',

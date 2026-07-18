@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Project Planning-root Specs, Changes, and Archives into search documents.
  * 2. Preserve compound identity for read-only Referenced Specs.
  * 3. Apply processed document reads without flattening entity provenance.
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
+ * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  */
 import type { OpenSpecAdapter, OpsxEntityReadOptions, OpsxEntityStage } from '@openspecui/core'
 import {
@@ -48,6 +49,7 @@ export async function collectSearchDocuments(
     docs.push({
       id: `spec:${specIdentityKey(identity)}`,
       kind: 'spec',
+      scope: 'active-root',
       title: spec.name,
       href: specRoutePath(identity),
       path: `owned:openspec/specs/${spec.id}/spec.md`,
@@ -60,6 +62,7 @@ export async function collectSearchDocuments(
     docs.push({
       id: `spec:${specIdentityKey(spec.identity)}`,
       kind: 'spec',
+      scope: 'referenced-specs',
       title: spec.name,
       href: specRoutePath(spec.identity),
       path: `referenced:${spec.identity.storeId}:specs/${spec.identity.specId}`,
@@ -78,6 +81,7 @@ export async function collectSearchDocuments(
     docs.push({
       id: `change:${change.id}`,
       kind: 'change',
+      scope: 'active-root',
       title: change.name,
       href: `/changes/${encodeURIComponent(change.id)}`,
       path: `openspec/changes/${change.id}`,
@@ -110,6 +114,7 @@ export async function collectSearchDocuments(
     docs.push({
       id: `archive:${archive.id}`,
       kind: 'archive',
+      scope: 'active-root',
       title: archive.name,
       href: `/archive/${encodeURIComponent(archive.id)}`,
       path: `openspec/changes/archive/${archive.id}`,

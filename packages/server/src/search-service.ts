@@ -1,15 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Own one Planning-root search provider and its rebuild lifecycle.
  * 2. Rebuild from processed owned documents plus direct Referenced Spec metadata.
  * 3. Dispose scheduled and worker resources with the owning Planning root.
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
+ * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  */
 import type { OpenSpecAdapter, OpenSpecWatcher } from '@openspecui/core'
 import type { ReferencedSpecCatalogEntry } from '@openspecui/core/spec-catalog'
 import {
-  SearchQuerySchema,
+  ProjectSearchQuerySchema,
   type SearchHit,
   type SearchProvider,
   type SearchQuery,
@@ -61,14 +62,14 @@ export class SearchService {
 
   /** Query the initialized index without forcing a rebuild. */
   async query(input: SearchQuery): Promise<SearchHit[]> {
-    const parsed = SearchQuerySchema.parse(input)
+    const parsed = ProjectSearchQuerySchema.parse(input)
     await this.init()
     return this.provider.search(parsed)
   }
 
   /** Rebuild an initialized index before running a reactive query. */
   async queryReactive(input: SearchQuery): Promise<SearchHit[]> {
-    const parsed = SearchQuerySchema.parse(input)
+    const parsed = ProjectSearchQuerySchema.parse(input)
     await this.rebuildIndex()
     return this.provider.search(parsed)
   }
