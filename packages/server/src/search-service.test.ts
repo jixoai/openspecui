@@ -4,10 +4,12 @@
  * 2. Verify source-scoped documents and normalized project queries reach the provider.
  * 3. Verify duplicate Spec ids preserve Owned and Store-qualified Reference identity.
  * 4. Prove each buffered/reactive caller owns current physical document dependencies.
+ * 5. Prove a failed provider operation cannot poison later queue work or disposal.
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  * Derived requirement (2026-07-19): Warmup and overlapping subscribers cannot steal Search freshness or dependencies.
+ * Derived requirement (2026-07-19): Provider queue rejection recovery needs exact mutation-resistant evidence.
  */
 import {
   clearCache,
@@ -251,6 +253,42 @@ class BlockingInitProvider extends FakeProvider {
   }
 }
 
+class FailFirstInitProvider extends FakeProvider {
+  readonly firstInitStarted = createDeferred<void>()
+  readonly releaseFirstInit = createDeferred<void>()
+  readonly lifecycle: string[] = []
+  disposeCalls = 0
+  private initCount = 0
+
+  override async init(docs: SearchDocument[]): Promise<void> {
+    this.initCount += 1
+    this.lifecycle.push(`init:start:${this.initCount}`)
+    if (this.initCount === 1) {
+      this.firstInitStarted.resolve()
+      await this.releaseFirstInit.promise
+      this.lifecycle.push('init:fail:1')
+      throw new Error('fail-first provider init')
+    }
+    await super.init(docs)
+    this.lifecycle.push(`init:end:${this.initCount}`)
+  }
+
+  override async replaceAll(docs: SearchDocument[]): Promise<void> {
+    this.lifecycle.push('replace')
+    await super.replaceAll(docs)
+  }
+
+  override async search(query: SearchQuery): Promise<SearchHit[]> {
+    this.lifecycle.push(`search:${query.query}`)
+    return super.search(query)
+  }
+
+  override async dispose(): Promise<void> {
+    this.disposeCalls += 1
+    this.lifecycle.push('dispose')
+  }
+}
+
 describe('SearchService', () => {
   it('keeps a warmup waiter subscribed through its own physical document collection', async () => {
     const { adapter } = await createPhysicalAdapter()
@@ -423,6 +461,43 @@ describe('SearchService', () => {
 
     await service.dispose()
     expect(provider.disposeCalls).toBe(1)
+  })
+
+  it('recovers queued buffered and reactive work after provider initialization rejects', async () => {
+    const { adapter } = await createPhysicalAdapter()
+    const provider = new FailFirstInitProvider()
+    const service = new SearchService(adapter, undefined, provider)
+
+    const initialization = service.init()
+    const expectedInitializationFailure = expect(initialization).rejects.toThrow(
+      'fail-first provider init'
+    )
+    await provider.firstInitStarted.promise
+    const bufferedQuery = service.query({ query: 'buffered-recovery' })
+    const reactiveQuery = service.queryReactive({ query: 'reactive-recovery' })
+    const disposal = service.dispose()
+
+    provider.releaseFirstInit.resolve()
+
+    await expectedInitializationFailure
+    await expect(bufferedQuery).resolves.toEqual([activeRootSearchHit])
+    await expect(reactiveQuery).resolves.toEqual([activeRootSearchHit])
+    await expect(disposal).resolves.toBeUndefined()
+    expect(provider.disposeCalls).toBe(1)
+    expect(provider.lifecycle).toEqual([
+      'init:start:1',
+      'init:fail:1',
+      'init:start:2',
+      'init:end:2',
+      'search:buffered-recovery',
+      'replace',
+      'search:reactive-recovery',
+      'dispose',
+    ])
+
+    await service.dispose()
+    expect(provider.disposeCalls).toBe(1)
+    await expect(service.query({ query: 'after-disposal' })).rejects.toThrow(/disposed/i)
   })
 
   it('initializes provider with collected documents and answers queries', async () => {
