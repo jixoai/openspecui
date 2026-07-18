@@ -3,6 +3,7 @@
  * 1. Prove Code/Planning Git route requests, controls, and navigation.
  * 2. Prove mounted repository rebinding retires stale Planning status and history.
  * 3. Prove every Git mutation retains the binding token captured by its render.
+ * 4. Prove cached Git scope data is non-authoritative during reconnect until B emits.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
@@ -471,6 +472,93 @@ describe('GitRoute', () => {
         }),
       })
     )
+  })
+
+  it('locks a cached A route while scopes reconnect, then loads B after emission', async () => {
+    routerLocation.searchStr = '?gitScope=planning'
+    const scopeA = createGitScopes('/planning-a', 'planning-binding-a')
+    const rootA = createReadyRootState('/planning-a')
+    subscriptionState.currentScopes = scopeA
+    subscriptionState.currentRoot = rootA
+    overviewQueryMock.mockImplementation((input: { expectedBindingToken: string }) =>
+      Promise.resolve({
+        ...overviewData,
+        currentWorktree: {
+          ...overviewData.currentWorktree,
+          path: input.expectedBindingToken === 'planning-binding-b' ? '/planning-b' : '/planning-a',
+          branchName:
+            input.expectedBindingToken === 'planning-binding-b' ? 'root-b-status' : 'root-a-status',
+        },
+      })
+    )
+    listEntriesQueryMock.mockImplementation((input: { expectedBindingToken: string }) =>
+      Promise.resolve({
+        items: [
+          {
+            type: 'commit' as const,
+            hash:
+              input.expectedBindingToken === 'planning-binding-b'
+                ? 'root-b-commit'
+                : 'root-a-commit',
+            title:
+              input.expectedBindingToken === 'planning-binding-b'
+                ? 'Root B history'
+                : 'Root A history',
+            committedAt: 1,
+            relatedChanges: [],
+            diff: { files: 1, insertions: 1, deletions: 0 },
+          },
+        ],
+        nextCursor: null,
+      })
+    )
+
+    const first = renderWithQueryClient(<GitRoute />)
+    await screen.findByText('root-a-status against origin/main')
+    expect(screen.getByText('Root A history')).toBeTruthy()
+    first.unmount()
+
+    const scopeB = createGitScopes('/planning-b', 'planning-binding-b')
+    subscriptionState.currentScopes = scopeB
+    subscriptionState.currentRoot = createReadyRootState('/planning-b')
+    scopesSubscribeMock.mockImplementationOnce((_input, callbacks) => {
+      subscriptionState.scopesCallbacks = callbacks
+      return { unsubscribe: vi.fn() }
+    })
+
+    const overviewCallsBeforeReconnect = overviewQueryMock.mock.calls.length
+    const entryCallsBeforeReconnect = listEntriesQueryMock.mock.calls.length
+    const second = renderWithQueryClient(<GitRoute />)
+    await waitFor(() =>
+      expect({
+        loading: screen.queryByText('Loading git repository scopes...') !== null,
+        overviewCalls: overviewQueryMock.mock.calls.slice(overviewCallsBeforeReconnect),
+        entryCalls: listEntriesQueryMock.mock.calls.slice(entryCallsBeforeReconnect),
+        staleStatus: screen.queryByText('root-a-status against origin/main') !== null,
+        staleHistory: screen.queryByText('Root A history') !== null,
+      }).toEqual({
+        loading: true,
+        overviewCalls: [],
+        entryCalls: [],
+        staleStatus: false,
+        staleHistory: false,
+      })
+    )
+    expect(screen.queryByRole('button', { name: 'Root A history' })).toBeNull()
+
+    await act(async () => {
+      const callbacks = subscriptionState.scopesCallbacks
+      if (!callbacks) throw new Error('Git scope reconnect callback is unavailable.')
+      callbacks.onData(scopeB)
+    })
+
+    await screen.findByText('root-b-status against origin/main')
+    expect(screen.getByText('Root B history')).toBeTruthy()
+    expect(overviewQueryMock).toHaveBeenCalledWith({
+      scope: 'planning',
+      expectedBindingToken: 'planning-binding-b',
+    })
+    second.unmount()
   })
 
   it('retires mounted Planning status and history while B and rebound A queries are pending', async () => {

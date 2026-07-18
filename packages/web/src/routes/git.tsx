@@ -74,13 +74,16 @@ export function GitRoute() {
     query: scopesQuery,
   } = useGitRepositoryScope(!staticMode)
   const bindingToken = scopeDescriptor?.bindingToken ?? null
+  const scopeReconnecting = scopesQuery.isLoading
+  const scopeReconnectingRef = useRef(scopeReconnecting)
+  scopeReconnectingRef.current = scopeReconnecting
   const overviewQuery = useQuery({
     queryKey: ['git', scope, bindingToken, 'overview'],
     queryFn: () => {
       if (!bindingToken) throw new Error('Git repository binding is unavailable.')
       return trpcClient.git.overview.query({ scope, expectedBindingToken: bindingToken })
     },
-    enabled: !staticMode && bindingToken !== null,
+    enabled: !staticMode && !scopeReconnecting && bindingToken !== null,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -98,7 +101,7 @@ export function GitRoute() {
           })
         : Promise.reject(new Error('Git repository binding is unavailable.')),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    enabled: !staticMode && bindingToken !== null,
+    enabled: !staticMode && !scopeReconnecting && bindingToken !== null,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -136,7 +139,10 @@ export function GitRoute() {
   const gitRefreshRequestRef = useRef(gitRefreshRequest)
   const refreshBusyRef = useRef(false)
   const refreshBusy =
-    gitRefreshRequest !== null || switchWorktreeMutation.isPending || removingWorktreePath !== null
+    scopeReconnecting ||
+    gitRefreshRequest !== null ||
+    switchWorktreeMutation.isPending ||
+    removingWorktreePath !== null
   const refreshReason = gitRefreshRequest?.reason ?? null
 
   const clearGitAutoRefreshTimer = useCallback(() => {
@@ -147,7 +153,7 @@ export function GitRoute() {
 
   const runGitRefresh = useCallback(
     (reason: string) => {
-      if (!bindingToken) return
+      if (!bindingToken || scopeReconnectingRef.current) return
       const requestedAt = Date.now()
       setGitRefreshRequest({ reason, requestedAt })
 
@@ -223,7 +229,13 @@ export function GitRoute() {
 
   const handleRemoveDetachedWorktree = useCallback(
     async (worktree: GitWorktreeSummary) => {
-      if (!bindingToken || staticMode || worktree.isCurrent || !worktree.detached) {
+      if (
+        !bindingToken ||
+        scopeReconnectingRef.current ||
+        staticMode ||
+        worktree.isCurrent ||
+        !worktree.detached
+      ) {
         return
       }
 
@@ -261,7 +273,7 @@ export function GitRoute() {
 
   const handleSwitchWorktree = useCallback(
     async (worktree: GitWorktreeSummary) => {
-      if (!bindingToken) return
+      if (!bindingToken || scopeReconnectingRef.current) return
       setSwitchingWorktreePath(worktree.path)
       try {
         const handoff = await switchWorktreeMutation.mutateAsync({
@@ -377,7 +389,7 @@ export function GitRoute() {
     )
   }
 
-  if (scopesQuery.isLoading && !scopes) {
+  if (scopeReconnecting) {
     return <div className="route-loading animate-pulse">Loading git repository scopes...</div>
   }
 
@@ -548,7 +560,7 @@ export function GitRoute() {
               key={entry.type === 'commit' ? entry.hash : `uncommitted:${entry.updatedAt ?? '0'}`}
               entry={entry}
               onSelect={(selectedEntry, sourceElement) => {
-                if (!bindingToken) return
+                if (!bindingToken || scopeReconnectingRef.current) return
                 void vtNavController.push(
                   'bottom',
                   buildGitEntryHrefFromEntry(selectedEntry, requestedScope, locationSearch),
@@ -574,8 +586,11 @@ export function GitRoute() {
           {entriesQuery.hasNextPage ? (
             <button
               type="button"
-              onClick={() => void entriesQuery.fetchNextPage()}
-              disabled={entriesQuery.isFetchingNextPage}
+              onClick={() => {
+                if (scopeReconnectingRef.current) return
+                void entriesQuery.fetchNextPage()
+              }}
+              disabled={scopeReconnecting || entriesQuery.isFetchingNextPage}
               className="hover:bg-muted w-full rounded-md border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-70"
             >
               {entriesQuery.isFetchingNextPage ? 'Loading more…' : 'Load older commits'}
