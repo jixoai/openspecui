@@ -205,6 +205,31 @@ scope A -> scope B           -> unsubscribe A -> clear A -> subscribe B
 
 Do not make generic Search scope mandatory for unrelated consumers. At the project Search boundary, however, every accepted document and returned hit must retain one exact `active-root | referenced-specs` scope; do not let optional generic provenance silently become an unscoped project result. Do not start `6.11`, `7.*`, or a shared live/static Reference mapper before the real snapshot union exists.
 
+### 6.10 Second Independent Review after `121d405`
+
+Checkpoint `6.10` remains open at `60/131`. The correction closes the unsafe legacy fallback, illegal future static fixture, first-reactive initialization, project-hit provenance, hook transition, and page-state gaps. Two remaining defects prevent acceptance:
+
+1. **The URL is not the first-render source authority.** `SearchRoute` derives `locationScope`, then passes a duplicated local `scope` to `useSearch` and reconciles it only in a passive effect. On browser history or another external location change from A to B, the first render still requests and can expose A before the effect selects B. The hook's mismatch guard cannot help because the Route still passes A. A direct fixed-point harness records post-navigation scope calls `['active-root', 'referenced-specs']`; the required contract is B from the first render.
+2. **The Search type header reverses the approved optionality boundary.** Generic Search documents/hits may omit scope, but project documents/hits require exact provenance. `packages/search/src/types.ts` currently says project-owned consumers preserve optional scope, contradicting its public project types, this Change, and repository law.
+
+Second-correction construction directives:
+
+```text
+external URL A -> B
+        |
+        v
+render-time URL authority -> request/render B only
+        |
+        v
+retire A subscription/hits before any B commit
+```
+
+- Remove the duplicate Route scope authority. A `useEffect` or `useLayoutEffect` that first renders/calls `useSearch` with A and repairs to B later is insufficient. User editing/debounce state may remain local, but the selected source must be derived from the current URL during render.
+- Add one same-mount Route counterexample proven red at `121d405`: start with A and A hits, externally change `location.search` to B, rerender, and prove every new `useSearch` invocation is B, B is selected immediately, and no A result survives. A final-DOM-only assertion is too weak because testing effects may hide the incorrect intermediate call.
+- Correct the `types.ts` intent header to state the exact generic-optional/project-required split. Do not weaken `ProjectSearchDocument`, `ProjectSearchHit`, their schemas, or Server/Web runtime validation.
+- Preserve all accepted first-correction behavior and its red/green evidence. Do not expand into generic route-state refactoring, keyboard/tab redesign, SearchService ownership, Reference body materialization, `6.11`, or `7.*`.
+- Keep `6.10` unchecked until focused tests, full local gates, clean SSG, browser suite, independent live/static desktop/mobile history walk-through, and another independent review pass.
+
 ## 2. CLI 1.6 Contract Baseline
 
 - [x] 2.1 OpenSpecUI compatibility targets the CLI 1.6 line and rejects unsupported versions with accurate guidance

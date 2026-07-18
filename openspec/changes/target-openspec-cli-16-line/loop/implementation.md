@@ -2172,3 +2172,33 @@ Checkpoint `6.10` remains open at `60/131` for four reasons:
 - The worker Goal explicitly required SearchRoute Active-root empty, Referenced empty, loading, and error tests plus correct subscription lifecycle. Those tests are absent, and the hook test does not assert that the old subscription is unsubscribed during a scope transition.
 
 Independent checks on `bc09a3f` pass: focused Search/Server/Web tests, package typechecks, workspace format/lint/typecheck, `test:ci` (`270 files / 1727 tests`), clean SSG, xterm browser (`60 passed / 1 skipped`), Web browser (`12/12`), and `git diff --check`. These are a valid regression baseline, not acceptance of the defects above. A second independent review and live/static desktop/mobile browser walk-through remain required after correction. Merge, archive, release, `6.11`, and `7.*` remain unauthorized.
+
+## Second Independent Review after `121d405`: URL Source Authority
+
+Review ranges: the correction is `0d23488...121d405`; the complete checkpoint remains `10a3b42...121d405`. The correction objectively satisfies the earlier review in every inspected runtime boundary:
+
+- A missing `search.subscribe` fails closed with zero legacy query or realtime subscription.
+- Legal current static snapshots produce only Active-root Owned Spec, Change, and Archive documents; Referenced Search remains neutral-empty without future `7.*` payloads or type escapes.
+- A first reactive query executes `collect -> init -> search`; later reactive queries rebuild before search without a duplicate initial replace.
+- Project documents and hits require exact scope through SearchService, Router, and Web parsing. Loading/error states cannot render retained results, and hook-level A -> B retires A once and rejects late A data.
+
+Independent fixed-point evidence against `bc09a3f` distinguishes defects from characterization:
+
+```text
+SearchService  3 red  first reactive omitted init; missing/wrong hit scope resolved
+useSearch      1 red  missing subscription did not expose source-scoped incompatibility
+SearchRoute    2 red  loading/error still rendered stale hits
+
+characterization at bc09a3f:
+empty states, old-subscription retirement/late-data rejection,
+and legal static Owned-only/Referenced-empty projection already passed
+```
+
+The checkpoint nevertheless remains blocked by one runtime defect and one documentation defect:
+
+1. `SearchRoute` parses the new URL scope but stores the actual selected scope separately and synchronizes it only from a passive effect. A same-mount external location transition A -> B at `121d405` records new `useSearch` calls `['active-root', 'referenced-specs']`. The first call can commit the old tab/request/hits; the hook cannot reject it because the Route still supplied A. The URL must become render-time scope authority, not an eventual synchronization source.
+2. `packages/search/src/types.ts` documents optional scope for project-owned consumers, reversing the real generic-optional/project-required contract. The runtime types are correct, but the mandatory intent header is not.
+
+Focused independent green evidence at `121d405` passes Search `3 files / 6 tests`, Server `2 / 14`, and Web Search/static `3 / 18`; lint passes `829` files with zero warnings/errors and all `15` workspace package typechecks pass. Test files remain excluded from TypeScript compilation by the repository tsconfig, so that typecheck is not claimed as test-fixture type safety. These gates do not accept the URL counterexample.
+
+No new Change or loopback is justified. This is a direct 6.10 source-isolation correction. Keep progress at `60/131`, do not start `6.11` or `7.*`, and stop again for independent review after the code/test/header correction.
