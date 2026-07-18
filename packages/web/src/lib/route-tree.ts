@@ -4,7 +4,8 @@
  * 2. Register pop-layer workflows independently from project workspace tabs.
  * 3. Keep terminal registration configurable for hosted project surfaces.
  *
- * Original request (2026-07-18): "replace the project WebUI Stores route with the canonical Context surface."
+ * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
+ * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
  */
 import { createRoute, type AnyRootRoute, type AnyRoute } from '@tanstack/react-router'
 import { ArchiveList } from '../routes/archive-list'

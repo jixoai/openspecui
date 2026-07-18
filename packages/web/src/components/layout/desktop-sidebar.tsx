@@ -4,7 +4,8 @@
  * 2. Preserve the Root Context and search entry points across sidebar states.
  * 3. Render static links or live draggable areas from the canonical navigation registry.
  *
- * Original request (2026-07-18): "remove the retired project Stores entry and visibility layer from the sidebar."
+ * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
+ * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
  */
 import { getHostedScopedStorageKey } from '@/lib/hosted-session'
 import { getBasePath, isStaticMode } from '@/lib/static-mode'

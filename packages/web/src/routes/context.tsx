@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
  * 1. Project one launch project's CLI-selected planning root and direct References.
- * 2. Preserve CLI diagnostics and stale/update states without inventing health conclusions.
+ * 2. Present current, stale, and failed-attempt Root Context facts without collapsing them.
  * 3. Present the inherited Store registry/data scope as read-only environment evidence.
- * 4. Expose the complete Root Context and command evidence through on-demand disclosure.
+ * 4. Expose each Root Context command-evidence envelope through on-demand disclosure.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
+ * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
  */
 import { selectRootContextSnapshot, useContextSubscription } from '@/lib/use-context-subscription'
 import type { RootContext, RootContextCommandEvidence } from '@openspecui/core'
@@ -17,6 +18,8 @@ export function ContextView() {
   const context = selectRootContextSnapshot(projection)
   const loading = (isLoading || projection?.state === 'loading') && context === null
   const projectionError = projection?.state === 'error' ? projection.error : null
+  const staleContext = projection?.state === 'error' ? projection.data : null
+  const failedAttempt = projection?.state === 'error' ? projection.attempt : null
 
   return (
     <div className="space-y-6 p-4">
@@ -58,12 +61,58 @@ export function ContextView() {
         </div>
       ) : null}
 
-      {!loading && context ? <ContextBody context={context} /> : null}
+      {!loading && staleContext && failedAttempt ? (
+        <div className="space-y-6">
+          <ContextObservation label="Last successful Context (stale)" context={staleContext} />
+          <ContextObservation
+            label="Current failed attempt"
+            context={failedAttempt}
+            rootHeading="Attempted planning root"
+            evidenceSummary="Full failed attempt evidence"
+          />
+        </div>
+      ) : !loading && failedAttempt ? (
+        <ContextObservation
+          label="Current failed attempt"
+          context={failedAttempt}
+          rootHeading="Attempted planning root"
+          evidenceSummary="Full failed attempt evidence"
+        />
+      ) : !loading && context ? (
+        <ContextBody context={context} />
+      ) : null}
     </div>
   )
 }
 
-function ContextBody({ context }: { context: RootContext }) {
+function ContextObservation({
+  context,
+  evidenceSummary,
+  label,
+  rootHeading,
+}: {
+  context: RootContext
+  evidenceSummary?: string
+  label: string
+  rootHeading?: string
+}) {
+  return (
+    <section aria-label={label} className="space-y-3">
+      <h2 className="text-muted-foreground text-xs font-semibold uppercase">{label}</h2>
+      <ContextBody context={context} evidenceSummary={evidenceSummary} rootHeading={rootHeading} />
+    </section>
+  )
+}
+
+function ContextBody({
+  context,
+  evidenceSummary = 'Full Root Context evidence',
+  rootHeading = 'Active planning root',
+}: {
+  context: RootContext
+  evidenceSummary?: string
+  rootHeading?: string
+}) {
   const planningRoot = context.planningRoot
   const diagnostics = [
     ...context.diagnostics.root,
@@ -75,7 +124,7 @@ function ContextBody({ context }: { context: RootContext }) {
     <div className="space-y-4">
       <section className="border-border grid gap-4 rounded-lg border p-4 lg:grid-cols-2">
         <div className="min-w-0 space-y-2">
-          <h2 className="text-sm font-semibold">Active planning root</h2>
+          <h2 className="text-sm font-semibold">{rootHeading}</h2>
           <p className="text-muted-foreground break-all text-sm">
             {planningRoot?.path ?? 'No planning root resolved.'}
           </p>
@@ -143,7 +192,7 @@ function ContextBody({ context }: { context: RootContext }) {
         </p>
       </section>
 
-      <RootContextEvidence context={context} />
+      <RootContextEvidence context={context} summary={evidenceSummary} />
 
       {diagnostics.length > 0 ? (
         <section className="border-border space-y-2 rounded-lg border p-4">
@@ -161,10 +210,10 @@ function ContextBody({ context }: { context: RootContext }) {
   )
 }
 
-function RootContextEvidence({ context }: { context: RootContext }) {
+function RootContextEvidence({ context, summary }: { context: RootContext; summary: string }) {
   return (
     <details className="border-border rounded-lg border p-4">
-      <summary className="cursor-pointer text-sm font-semibold">Full Root Context evidence</summary>
+      <summary className="cursor-pointer text-sm font-semibold">{summary}</summary>
       <div className="mt-4 space-y-5">
         <dl className="text-muted-foreground grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
           <dt>observed at</dt>

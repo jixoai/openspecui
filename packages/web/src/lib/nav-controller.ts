@@ -5,7 +5,8 @@
  * 3. Persist project-scoped tab layouts while rejecting retired route identities.
  * 4. Synchronize local and backend layout state without changing route ownership.
  *
- * Original request (2026-07-18): "remove the retired project Stores route from nav-controller route sets."
+ * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
+ * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
  *
  * Compromise: URL, persistence, and area transitions stay together because one atomic state
  * machine must normalize all three before exposing a navigation snapshot.

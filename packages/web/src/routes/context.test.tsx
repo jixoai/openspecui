@@ -4,10 +4,11 @@
  * 2. Verify direct Reference diagnostics remain neutral, read-only, and incomplete-by-design.
  * 3. Verify loading, refreshing, stale-error, and command-evidence states remain observable.
  *
- * Original request (2026-07-18): "replace the project WebUI Stores route with the canonical Context surface."
+ * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
+ * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
  */
 import type { RootContext, RootContextState } from '@openspecui/core'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ContextView } from './context'
 
@@ -103,14 +104,71 @@ describe('ContextView', () => {
     expect(screen.getByText('/tmp/planning')).toBeTruthy()
   })
 
-  it('retains stale Context facts beside failed-attempt evidence', () => {
+  it('renders stale Context separately from the complete failed attempt evidence', () => {
     const stale = rootContext()
+    const failedAttempt = rootContext({
+      planningRoot: {
+        path: '/tmp/attempted-root',
+        source: 'declared',
+        store_id: 'attempted-store',
+        healthy: false,
+        status: [],
+      },
+      storeId: 'attempted-store',
+      cli: {
+        available: false,
+        version: '1.6.0',
+        error: 'CLI availability failed',
+        effectiveCommand: '/usr/local/bin/openspec',
+      },
+      diagnostics: {
+        root: [
+          {
+            severity: 'error',
+            code: 'attempt_root_unhealthy',
+            message: 'Attempted root is unavailable.',
+          },
+        ],
+        doctor: [],
+        context: [],
+      },
+      evidence: {
+        doctor: {
+          success: false,
+          stdout: '{"root":null}',
+          stderr: 'attempt doctor stderr',
+          exitCode: 2,
+          diagnostics: [
+            {
+              severity: 'error',
+              code: 'attempt_doctor_failed',
+              message: 'Doctor attempt failed.',
+            },
+          ],
+          contractError: 'attempt doctor contract drift',
+        },
+        context: {
+          success: false,
+          stdout: '{"members":[]}',
+          stderr: 'attempt context stderr',
+          exitCode: 3,
+          diagnostics: [
+            {
+              severity: 'error',
+              code: 'attempt_context_failed',
+              message: 'Context attempt failed.',
+            },
+          ],
+          contractError: 'attempt context contract drift',
+        },
+      },
+    })
     setState({
       data: {
         state: 'error',
         data: stale,
-        attempt: rootContext({ planningRoot: null, storeId: null }),
-        error: { kind: 'transport', message: 'refresh failed' },
+        attempt: failedAttempt,
+        error: { code: 'resolver-failed', message: 'refresh failed' },
         observedAt: stale.observedAt,
       } satisfies RootContextState,
     })
@@ -119,7 +177,53 @@ describe('ContextView', () => {
 
     expect(screen.getByRole('alert').textContent).toContain('refresh failed')
     expect(screen.getByText(/Showing the last successful observation/)).toBeTruthy()
-    expect(screen.getByText('/tmp/planning')).toBeTruthy()
+    const staleRegion = screen.getByRole('region', { name: 'Last successful Context (stale)' })
+    expect(within(staleRegion).getByText('/tmp/planning')).toBeTruthy()
+
+    const attemptRegion = screen.getByRole('region', { name: 'Current failed attempt' })
+    const attemptText = attemptRegion.textContent ?? ''
+    expect(attemptText).toContain('/tmp/attempted-root')
+    expect(attemptText).toContain('declared')
+    expect(attemptText).toContain('attempted-store')
+    expect(attemptText).toContain('CLI availablefalse')
+    expect(attemptText).toContain('exit status2')
+    expect(attemptText).toContain('attempt doctor stderr')
+    expect(attemptText).toContain('attempt doctor contract drift')
+    expect(attemptText).toContain('attempt_doctor_failed')
+    expect(attemptText).toContain('exit status3')
+    expect(attemptText).toContain('attempt context stderr')
+    expect(attemptText).toContain('attempt context contract drift')
+    expect(attemptText).toContain('attempt_context_failed')
+    expect(attemptText).toContain('attempt_root_unhealthy')
+  })
+
+  it('renders one failed attempt as the primary Context when no stale data exists', () => {
+    const failedAttempt = rootContext({
+      planningRoot: {
+        path: '/tmp/only-attempt',
+        source: 'implicit',
+        healthy: false,
+        status: [],
+      },
+      storeId: null,
+    })
+    setState({
+      data: {
+        state: 'error',
+        data: null,
+        attempt: failedAttempt,
+        error: { code: 'root-unresolved', message: 'no writable root resolved' },
+        observedAt: failedAttempt.observedAt,
+      } satisfies RootContextState,
+    })
+
+    render(<ContextView />)
+
+    expect(screen.queryByRole('region', { name: 'Last successful Context (stale)' })).toBeNull()
+    const attemptRegions = screen.getAllByRole('region', { name: 'Current failed attempt' })
+    expect(attemptRegions).toHaveLength(1)
+    expect(within(attemptRegions[0]).getByText('/tmp/only-attempt')).toBeTruthy()
+    expect(within(attemptRegions[0]).getByText('Full failed attempt evidence')).toBeTruthy()
   })
 
   it('uses neutral copy: "no reference currently observed", never "all references"', () => {

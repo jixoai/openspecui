@@ -3,7 +3,8 @@
  * 1. Verify the desktop sidebar remains accessible in expanded and collapsed layouts.
  * 2. Verify project Context remains reachable while retired Stores entries cannot render.
  *
- * Original request (2026-07-18): "remove /stores from ... sidebar ... visibility."
+ * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
+ * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
  */
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'

@@ -4,7 +4,8 @@
  * 2. Bind Spec, Change, Archive, Config, Notification, and CLI projections to typed hooks.
  * 3. Preserve cache identity for detail projections across remounts and view transitions.
  *
- * Original request (2026-07-18): "retire only the project Web Stores presentation and its subscription tests."
+ * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
+ * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
  *
  * Compromise: typed entity hooks remain aggregated because they share the same cache and live/static
  * subscription primitive; splitting them now would add import churn outside checkpoint 6.9.

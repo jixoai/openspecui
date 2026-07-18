@@ -4,7 +4,8 @@
  * 2. Verify persisted/project layouts remain a complete partition of supported project tabs.
  * 3. Prove retired project routes are discarded while Context remains canonical.
  *
- * Original request (2026-07-18): "remove /stores from ... nav-controller route sets."
+ * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
+ * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
  */
 import type { RouterHistory } from '@tanstack/react-router'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
