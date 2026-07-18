@@ -588,3 +588,13 @@ visible, and new A-token calls; restoring `0d0c134` returns the route lane to `1
 Combined focused Web evidence is `31/31` plus typecheck and diff-check. `6.11` remains unchecked;
 full gates, SSG, pinned desktop/mobile acceptance, push, exact-head CI, and SHA equality remain
 required. Do not start `6.12+`, merge, archive, or release.
+
+### 6.11 Git Detail Reconnect Gate at `6787573`
+
+Cached A detail and handoff content are now non-authoritative while Git scopes reconnect. Meta/files
+queries are disabled and the route shows loading before A handoff text can render; B emission then
+restores B queries and detail. Removing the query gates and early return produces a red test with
+`loading: false`, A meta/files calls, and stale A detail; restoration returns the detail lane to
+`12/12`. Combined focused Web Git scope/subscription/Dashboard/list/detail evidence is `43/43` plus
+typecheck and diff-check. Checkpoint `6.11` remains unchecked; full gates, SSG, pinned desktop/mobile
+acceptance, push, exact-head CI, and SHA equality remain required.

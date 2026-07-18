@@ -2684,3 +2684,26 @@ This red evidence reaches the route's actual query projection and stale content,
 button or mocked downstream handler. The full repository gates, clean SSG, terminating pinned-CLI
 desktop/mobile acceptance, push, exact-head CI, and local/remote/PR SHA equality remain pending.
 Keep `6.11` open and do not start `6.12+`, merge, archive, or release.
+
+### 6.11 Git Detail Reconnect Gate at `6787573`
+
+The cached-scope authority boundary also applies to Git detail. `6787573` disables metadata and
+file queries while `git.subscribeScopes` is reconnecting and returns the detail route's loading
+state before handoff text can render. The remount fixture seeds A detail/handoff, delays B, proves
+no A meta/files calls and no A handoff title during the window, then emits B and verifies B detail
+queries/rendering.
+
+Mutation-resistance fixed point:
+
+```text
+Temporarily remove both `!scopeReconnecting` query gates and the cached-data early return.
+Command: pnpm --filter @openspecui/web exec vitest run --project unit src/routes/git-view.test.tsx -t "locks cached A detail during scope reconnect"
+Result: 1 failed; received `loading: false`, A meta/files calls with `code-binding`, and the cached A detail shell remained visible.
+Restore `6787573`: same test -> 1 passed; full Git detail lane -> 12 passed.
+```
+
+The red evidence reaches actual meta/files query calls and stale detail presentation, not a disabled
+control or mocked downstream handler. Combined focused Web Git scope/subscription/Dashboard/list/
+detail evidence is now `43/43`; Web typecheck and `git diff --check` pass. Full repository gates,
+clean SSG, terminating pinned-CLI desktop/mobile acceptance, push, exact-head CI, and local/remote/
+PR SHA equality remain pending. Keep `6.11` open and do not start `6.12+`, merge, archive, or release.
