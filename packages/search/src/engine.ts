@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Normalize, match, score, sort, and limit Search documents deterministically.
+ * 2. Filter project documents by source before every relevance operation.
+ *
+ * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
+ * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
+ */
 import type {
   SearchDocument,
   SearchHit,
@@ -100,11 +108,13 @@ export function searchIndex(index: SearchIndex, query: SearchQuery): SearchHit[]
   const hits: SearchHit[] = []
 
   for (const doc of index.documents) {
+    if (query.scope !== undefined && doc.scope !== query.scope) continue
     if (!isDocumentMatch(doc, terms)) continue
 
     hits.push({
       documentId: doc.id,
       kind: doc.kind,
+      ...(doc.scope === undefined ? {} : { scope: doc.scope }),
       title: doc.title,
       href: doc.href,
       path: doc.path,
