@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
 1. Report implementation state without converting planning work into false code progress.
 2. Preserve approved architecture decisions as implementation constraints.
 3. Record actual divergences from the approved plan.
@@ -10,6 +10,7 @@ Original request (2026-07-14): "我们最终使用openspec来管理 wayfinder �
 Original request (2026-07-15): "解决方案可能没你想的那么简单，这点我们后续再说。"
 Original request (2026-07-16): "代码已经提交，开始review。如果有问题，那么可更新change甚至可以新开change。"
 Original request (2026-07-17): "Make late-child-close bookkeeping proof resistant to the exact missing-cleanup mutation."
+Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
 -->
 
 ## Implementation State
@@ -2363,3 +2364,60 @@ The run cannot establish full 6.10 browser acceptance:
 - The attempted mobile screenshot still used a 1280-pixel viewport; it is not mobile evidence. Empty/error state and mobile overflow were not exercised.
 
 The browser session and dev processes were closed; ports `4123` and `13003` were released. Treat the live timeout and static pre-render failure as un-attributed acceptance blockers. The next worker must reproduce with exact process/stack evidence in a controlled fixture, distinguish environment/fixture failure from a production regression, and make only a proven narrow 6.10 correction. Do not infer a Search defect from the current incomplete run.
+
+## Eighth Independent Review after `f72e03a`: Runtime Correction Accepted, Failure Recovery Evidence Open
+
+Review range: `9f42bcea2b331efebeb0456f0d7561bac0898fde...f72e03ae3bf10a2ec1c09f6054492e2f6ac40600`. The implementation commit is local and the branch is one commit ahead of the remote PR head. Checkpoint `6.10` remains open at `60/131`.
+
+The Standards axis found no hard documented-standard violation. The three changed TypeScript files retain accurate 2026-07-19 intent headers, the Search fixtures are included by `tsconfig.search-tests.json`, and no new `as never`, `as any`, double-unknown cast, fabricated non-null state, or suppression comment appears. The real Router test crosses `createServer -> appRouter -> PlanningRootServiceManager -> SearchService` and performs a physical Owned Spec write. Duplicate local `Deferred` and Spec-markdown helpers across the two test files are a non-blocking maintenance smell, not a checkpoint defect.
+
+The Spec/runtime axis accepts the dependency-ownership correction:
+
+- `query` and `queryReactive` collect and validate current Planning-root documents separately in their own caller context.
+- Provider apply plus search runs as one serialized operation, so another caller cannot replace the provider between one caller's snapshot and search.
+- Warmup is only an independent optimization and cannot satisfy or steal a subscription's reactive dependencies.
+- Direct physical tests cover the warmup waiter, two independent `ReactiveContext` streams, buffered freshness without a subscription, atomic provider snapshots, disposal admission, watcher listener removal, and two public Router subscribers converging after one write.
+- Focused independent verification passes Server Search `20/20` and `typecheck:search-tests`.
+
+One evidence defect still blocks acceptance. The Goal requires concurrent initialization, buffered query, reactive query, and disposal to complete deterministically without an unhandled queue rejection. The new lifecycle test blocks initialization and then succeeds; it never makes `init`, `replaceAll`, or `search` reject. `SearchService.runProviderOperation` currently recovers `providerOperationTail` on both fulfillment and rejection, but removing the rejection branch leaves every new test green. A later call would then inherit the rejected tail and fail without executing its own provider operation. This is the same recurrence pattern seen in earlier lifecycle corrections: the implementation is plausible, but the test is insensitive to the exact hidden cleanup/recovery transition.
+
+Add one checked, mutation-resistant provider-failure test. Admit initialization plus buffered/reactive queries, make the first provider initialization fail deterministically, and prove the admitted later calls recover through the queue, disposal runs exactly once, and later admission is rejected. Temporarily remove the rejection recovery from `providerOperationTail`; the exact test must then fail because the later operations inherit the failed tail. Restore production and record both outputs. Do not refactor shared test helpers unless the correction actually requires it.
+
+Full repository gates, clean SSG, pinned live two-client browser convergence, buffered-before-subscription browser evidence, desktop and real `390x844` Active/Referenced acceptance, push, exact-head CI, and local/remote/PR equality remain unproved for `f72e03a`. Do not start `6.11`, merge, archive, or release.
+
+## Ninth Independent Acceptance at `dd3307a`: Checkpoint 6.10 Closed Locally
+
+The Eighth Review finding is corrected by test-only commit `dd3307ac6b5b72e89c629d59d973e0f3839be045`. `FailFirstInitProvider` admits initialization, buffered query, reactive query, and disposal, fails the first provider initialization, then proves both queued calls execute, disposal occurs once, repeated disposal is idempotent, and later admission is rejected. The fixture is covered by `tsconfig.search-tests.json` and adds no type escape or production-contract weakening.
+
+Mutation-resistance evidence is direct:
+
+```text
+normal production:  1 passed / 14 skipped
+reject recovery removed:
+  1 failed / 14 skipped
+  2 unhandled rejections
+  buffered query inherited "fail-first provider init"
+restored production: 1 passed / 14 skipped
+```
+
+`packages/server/src/search-service.ts` has no final diff. Independent focused verification passes Server Search `2 files / 21 tests` and `typecheck:search-tests`; the Search provider/engine lane passes `3 files / 6 tests`; Web Search, static, SSR, and View Transition lanes pass `5 files / 27 tests`. Format, lint across 829 files with zero warnings/errors, all 15 workspace typechecks, and `git diff --check` pass.
+
+Final repository gates on exact local head `dd3307a` pass:
+
+- `pnpm test:ci`: `270 files / 1748 tests`; Server `367`, Web `699`, Core `440`, App `78`, CLI `49`, Search `6`, and remaining workspaces pass. Only known jsdom Canvas logs remain.
+- Clean `pnpm --filter @openspecui/web build:ssg`: client `5222` modules and Server build pass. Only the known CSS `scroll-button` and ineffective `trpc.ts` dynamic-import warnings remain.
+- `pnpm test:browser:ci`: xterm `6 files / 60 passed / 1 skipped`; Web Storybook `4 files / 12 passed`.
+- Ignored SSG artifacts were restored to their entry state and no test/build process remains.
+
+Pinned live acceptance uses `/tmp/openspecui-search-browser-f72e03a.PjEI5b`, the repository submodule CLI `v1.6.0` at `e1b51d1`, and an isolated XDG data home. The launch config selects declared Store `team`; Doctor reports the direct `platform` Reference healthy. Both Stores contain an `auth` Spec.
+
+- With no browser session or Search subscription, HTTP `search.query` returns no `bufferedliveproof` hit before an external Owned Spec edit and returns only `spec:owned:auth` with that marker after the edit.
+- Independent browser sessions A (`1280x800`) and B (`390x844`) hold `dualliveproof` in Active root. One external write updates both without reopen or query change. The mobile converged screenshot was captured too early and is deliberately excluded; DOM evidence proves its eventual result.
+- Active `authentication` returns only Owned Spec, Change, and Archive. Referenced `auth` returns exactly `referenced:platform:specs/auth`, labeled read-only, with no Owned, Change, or Archive leakage.
+- Both clients navigate to `/specs/referenced/platform/auth?_b=%2F`. Mobile detail states `Referenced from platform` and remains read-only.
+- Empty, Active, Referenced, and compound-navigation states render on desktop and mobile; `scrollWidth == clientWidth` at both 1280 and 390 pixels.
+- Valid screenshots are `/tmp/search-live-f72e03a-{desktop-empty,mobile-empty,desktop-converged,desktop-active,mobile-active,desktop-referenced,mobile-referenced,desktop-reference-navigation,mobile-reference-navigation}.png`.
+
+Browser warmup overlap was not stably forced and remains covered by deterministic production-class and Router tests. Loading/error were not promoted to live claims; existing unit tests cover them. Browser sessions and fixture services were closed, ports `4132`, `13013`, and `13004` are released, and the repository has no browser-owned diff.
+
+Checkpoint `6.10` advances `60/131 -> 61/131`. This local acceptance authorizes delivery of `f72e03a`, `dd3307a`, and the reviewer evidence commit to PR #207. Do not start `6.11`, merge, archive, or release until local, remote, and PR heads are identical and exact-head checks pass.

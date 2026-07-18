@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
 1. Track completed research and approval gates.
 2. Sequence root, CLI, reactive, and projection implementation.
 3. Track project, static, hosted, and App product surfaces.
@@ -9,6 +9,7 @@ Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
 Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配，目前我们的进度有点落后。"
 Original request (2026-07-14): "我们最终使用openspec来管理 wayfinder 产出的文档。"
 Original request (2026-07-16): "代码已经提交，开始review。如果有问题，那么可更新change甚至可以新开change。"
+Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
 -->
 
 ## 1. Research and Planning
@@ -317,7 +318,7 @@ The independent browser attempt confirms the desktop source control and URL/quer
 - [x] 6.7 Archive lists only writable-root archives, validates canonical Change identity before any CLI path, has one Server-owned strict mutation entry, cannot be reached through a generic CLI bypass, and tests diagnostics through that supported entry
 - [x] 6.8 Config implements Project Binding, Active Root Config, and Environment Global Config ownership sections
 - [x] 6.9 Project Stores route is replaced by Context with root, Reference, environment, and read-only registry diagnostics
-- [ ] 6.10 Search defaults to the active root and offers an explicit Referenced Specs scope without referenced changes
+- [x] 6.10 Search defaults to the active root and offers an explicit Referenced Specs scope without referenced changes
 - [ ] 6.11 Git makes repository scope explicit for status, history, worktrees, and every mutation
 - [ ] 6.12 Terminal shows selected cwd/root identity in creation controls and tab labels
 - [ ] 6.13 Settings exposes 1.6 compatibility, workflow/tool delivery, root selection, environment, and data-scope diagnostics
@@ -446,3 +447,19 @@ Checkpoint `6.10` remains open at `60/131`. Standards, typed Search fixtures, so
 The buffered `search.query` also remains warmup-cached: a controlled external Owned Spec edit was absent from the query response until a subscription rebuilt the provider. This violates current Planning-root truth even though a single uncontended live subscription passes.
 
 The next apply slice must collect current documents separately inside every query/subscription caller context, then serialize provider init/replace/search without sharing dependency-bearing reads. It must add checked warmup-race, two-context, buffered-query freshness, and public multi-client evidence whose assertions fail when caller-local collection is removed. Keep `6.11+`, merge, archive, and release untouched.
+
+### 6.10 Eighth Independent Review: Provider Failure Recovery Evidence
+
+The `f72e03a` correction is behaviorally accepted for caller-local dependency collection, current buffered truth, provider snapshot serialization, physical two-client convergence, disposal admission, and watcher cleanup. Standards found no hard violation; Server Search `20/20` and `typecheck:search-tests` pass independently.
+
+Checkpoint `6.10` remains open at `60/131` because the provider queue's rejection recovery is not mutation-resistant. The lifecycle test exercises only delayed success. Removing the rejection branch that resets `providerOperationTail` still leaves all new tests green, even though every later query would inherit the failed tail. Add a checked fail-first provider test that proves later buffered/reactive operations recover, disposal occurs once, and post-disposal admission fails; prove the exact test fails when rejection recovery is removed. Then rerun final focused/full/browser/delivery evidence on the corrected head. Do not start `6.11+`, merge, archive, or release.
+
+### 6.10 Ninth Independent Acceptance: Reactive Search Closed
+
+Checkpoint `6.10` is complete at `61/131`. Runtime commit `f72e03a` gives every buffered/reactive caller its own current document collection and serializes provider apply plus search; test commit `dd3307a` makes the queue's rejection recovery mutation-resistant. The exact failure-recovery test passes normally, fails with `1 failed` plus two unhandled rejections when the rejection branch is removed, and passes again after byte-for-byte restoration.
+
+Final local evidence passes Server Search `21/21`, Search `6/6`, Web Search/SSR/static `27/27`, checked Search fixtures, format, lint, 15 workspace typechecks, full unit `270 files / 1748 tests`, clean SSG, xterm browser `60 passed / 1 skipped`, Web browser `12/12`, and `git diff --check`.
+
+A pinned OpenSpec 1.6 fixture uses submodule SHA `e1b51d1`, isolated `XDG_DATA_HOME`, declared Store `team`, and direct Reference `platform`. Before any browser subscription, a buffered query observes an external Owned Spec write. Two independent desktop/mobile clients then keep one query and converge after another external write without reopen or query change. Active results contain only Owned Spec, Change, and Archive; Referenced results contain only the Store-qualified read-only Spec. Both clients navigate to `/specs/referenced/platform/auth`; desktop and real `390x844` layouts have no horizontal overflow. Browser warmup overlap remains deterministic Router/ReactiveContext evidence, and loading/error remain unit-covered rather than fabricated live claims.
+
+Do not start `6.11` until the implementation, test, and reviewer evidence commits are pushed and PR #207 is green on the exact head. Merge, archive, and release remain forbidden.
