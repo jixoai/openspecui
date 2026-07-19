@@ -992,3 +992,28 @@ the next stage. Stage 0 is the current active slice. Its fixed issues are:
 Stage 0 must retain isolated `XDG_DATA_HOME`, remove cross-channel timestamp ordering claims, and run its
 focused fixture/type lanes three consecutive times. A failure stops all later stages. No Stage 1-4
 production correction is authorized until Stage 0 is reviewed.
+
+### 6.11 Stage 0 Evidence Contract Applied (2026-07-19)
+
+The cold-start fixture now resolves the direct first-party executable at
+`references/openspec/bin/openspec.js` and verifies the submodule HEAD is
+`e1b51d111ab446b54dee2d6159ac245f0339ae52`. Its disposable runner records the actual `cliPath` for every
+start/exit event, and the test asserts every traced invocation used that path. The fixture continues to
+isolate `XDG_DATA_HOME`; no production runtime code or typecheck script was changed.
+
+Raw focused evidence:
+
+```text
+pnpm --filter @openspecui/server exec vitest run src/root-context-cold-start.integration.test.ts
+  run 1: 1 file / 1 test passed (2.30s; 17:22:07)
+  run 2: 1 file / 1 test passed (2.19s; 17:22:18)
+  run 3: 1 file / 1 test passed (2.16s; 17:22:42)
+pnpm --filter @openspecui/server run typecheck:transport-tests
+  passed
+git diff --check
+  passed
+```
+
+`typecheck:git-tests` and `typecheck:transport-tests` remain separate package scripts and are reported
+separately. Stage 0 is implementation-complete and awaits independent review; `6.11` remains open at
+`61/131`, and Stage 1-4, full gates, browser acceptance, merge, archive, and release remain unauthorized.

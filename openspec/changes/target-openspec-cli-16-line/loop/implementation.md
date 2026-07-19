@@ -3545,3 +3545,27 @@ Only Stage 0 is active. It must correct the cold-start fixture to use
 type lanes must pass three consecutive runs; any failure stops the sequence. Stage 1-4 production edits
 remain forbidden until Stage 0 is committed and independently reviewed. No arbitrary sleeps, generation
 barrier, App iframe acceptance, `6.12+`, merge, archive, or release work is authorized.
+
+### 6.11 Stage 0 Evidence Contract Applied (2026-07-19)
+
+Stage 0 changed only `packages/server/src/root-context-cold-start.integration.test.ts`. `CLI_BIN` now
+resolves `references/openspec/bin/openspec.js`; the test checks the submodule HEAD against
+`e1b51d111ab446b54dee2d6159ac245f0339ae52`, and the disposable runner writes its actual `cliPath` into
+each trace event. The test asserts all traced invocations use that direct pinned path. Isolated
+`XDG_DATA_HOME` and the existing typed runner remain unchanged. No production runtime or package script
+was changed.
+
+Raw commands/results:
+
+```text
+pnpm --filter @openspecui/server exec vitest run src/root-context-cold-start.integration.test.ts
+  3 consecutive runs: 1 file / 1 test passed each (2.30s, 2.19s, 2.16s)
+pnpm --filter @openspecui/server run typecheck:transport-tests
+  passed
+git diff --check
+  passed
+```
+
+The package scripts remain explicit: `typecheck:git-tests` does not include `typecheck:transport-tests`.
+This closes the Stage 0 evidence correction only; no 6.11 task checkbox is closed and no Stage 1-4,
+full-gate, browser, merge, archive, or release claim is made.

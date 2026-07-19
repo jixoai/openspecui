@@ -27,7 +27,9 @@ import type { AppRouter, RunningServer } from './server.js'
 import { startServer } from './server.js'
 
 const execFileAsync = promisify(execFile)
-const CLI_BIN = resolve(import.meta.dirname, '../node_modules/openspec-cli-16/bin/openspec.js')
+const PINNED_OPENSPEC_COMMIT = 'e1b51d111ab446b54dee2d6159ac245f0339ae52'
+const PINNED_OPENSPEC_ROOT = resolve(import.meta.dirname, '../../../references/openspec')
+const CLI_BIN = resolve(PINNED_OPENSPEC_ROOT, 'bin/openspec.js')
 
 const temporaryDirs: string[] = []
 const runningServers: RunningServer[] = []
@@ -43,6 +45,7 @@ const RunnerTraceSchema = z.object({
   args: z.array(z.string()),
   at: z.number(),
   code: z.number().nullable().optional(),
+  cliPath: z.string(),
 })
 
 function timeoutAfter(milliseconds: number, label: string): Promise<never> {
@@ -123,12 +126,12 @@ const dataHome = ${JSON.stringify(dataHome)}
 const tracePath = ${JSON.stringify(tracePath)}
 const args = process.argv.slice(2)
 const writeTrace = (event) => fs.appendFileSync(tracePath, JSON.stringify(event) + '\\n')
-writeTrace({ phase: 'start', args, at: Date.now() })
+writeTrace({ phase: 'start', args, at: Date.now(), cliPath })
 process.env.XDG_DATA_HOME = dataHome
 process.env.OPEN_SPEC_INTERACTIVE = '0'
 process.env.OPENSPEC_TELEMETRY = '0'
 process.env.NO_COLOR = '1'
-process.on('exit', (code) => writeTrace({ phase: 'exit', args, at: Date.now(), code }))
+process.on('exit', (code) => writeTrace({ phase: 'exit', args, at: Date.now(), code, cliPath }))
 import(cliPath)
 `
   await writeFile(runnerPath, runnerSource, 'utf8')
@@ -255,6 +258,15 @@ describe('pinned OpenSpec 1.6 Root Context cold start', () => {
         .split('\n')
         .filter(Boolean)
         .map((line) => RunnerTraceSchema.parse(JSON.parse(line)))
+      const { stdout: pinnedCommit } = await execFileAsync(
+        'git',
+        ['-C', PINNED_OPENSPEC_ROOT, 'rev-parse', 'HEAD'],
+        { encoding: 'utf8' }
+      )
+      expect(pinnedCommit.trim()).toBe(PINNED_OPENSPEC_COMMIT)
+      expect(CLI_BIN).toBe(resolve(PINNED_OPENSPEC_ROOT, 'bin/openspec.js'))
+      expect(traces.length).toBeGreaterThan(0)
+      expect(traces.every((trace) => trace.cliPath === CLI_BIN)).toBe(true)
       expect(
         traces.some((trace) => trace.phase === 'start' && trace.args.includes('--version'))
       ).toBe(true)
