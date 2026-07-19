@@ -2707,3 +2707,50 @@ control or mocked downstream handler. Combined focused Web Git scope/subscriptio
 detail evidence is now `43/43`; Web typecheck and `git diff --check` pass. Full repository gates,
 clean SSG, terminating pinned-CLI desktop/mobile acceptance, push, exact-head CI, and local/remote/
 PR SHA equality remain pending. Keep `6.11` open and do not start `6.12+`, merge, archive, or release.
+
+### 6.11 Fourth Independent Review at `89e105c`
+
+The reconnect slice is real implementation progress. Local, remote, and PR heads equal `89e105c`;
+PR #207 is `OPEN/CLEAN`, and all six remote checks pass. Independent focused reruns report:
+
+```text
+Web Git scope/subscription/Dashboard/list/detail: 5 files / 43 tests
+Server scope/binding/router/snapshot:              4 files / 23 tests
+git diff --check:                                  pass
+```
+
+Those tests do not cover the production counterexamples found in review:
+
+- `onError` keeps cached A while clearing loading, and GitRoute/GitView use loading as their only
+  authority gate. tRPC 11.7.2 also exposes `onConnectionStateChange`, but the Git subscription
+  ignores real `connecting` and `pending` transport phases.
+- Dashboard refresh/removal replace snapshot A's observed token by querying current token B at
+  execution time, defeating stale-intent conflict.
+- `GitRepositoryBindingService.resolveScopes()` observes Code twice; only the second observation is
+  inside the catch that labels every failure as Planning.
+- `PlanningRootServiceResolver` owns/exposes a Launch Code token, contrary to the separated owner
+  boundary; the bootstrap must own and inject Code provenance.
+- The public classifier test is missing from the checked Server test lane, and two Git provenance
+  headers retain the prior date.
+
+These are review findings, not claimed red runs. The next worker must first add direct fixed-point
+tests, then implement the corrections and complete gates. Browser acceptance is intentionally not
+attempted on this defective head. Progress remains `61/131`; `6.11` stays unchecked and `6.12+`,
+merge, archive, and release remain forbidden.
+
+Reviewer construction guidance is intentionally concrete to prevent another adjacent-only fix:
+
+- model Git authority independently from generic `isLoading`, preserving visible error evidence
+  while cached data is locked; drive the real tRPC `onConnectionStateChange` callback;
+- require Dashboard refresh/removal helpers to receive the rendered snapshot token, including
+  delayed focus/auto callbacks, with no action-time `git.code` lookup;
+- create one Launch-scoped Code owner at Server composition, inject it into Git binding and
+  Dashboard provenance, and remove Code token ownership from the Planning resolver;
+- compare Planning against the already-resolved Code descriptor instead of invoking the combined
+  resolver that re-reads Code;
+- move decisive public-boundary scenarios into the checked Git test lane and prove mutation
+  resistance by removing the exact authority/token/owner transition.
+
+The recurrence lesson is that remount/loading evidence is not transport evidence, a current-token
+lookup is not snapshot provenance, and a stable value stored on the wrong owner still violates the
+lifetime contract. Exact event, snapshot, and owner must be named before implementation is accepted.

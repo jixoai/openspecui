@@ -598,3 +598,45 @@ restores B queries and detail. Removing the query gates and early return produce
 `12/12`. Combined focused Web Git scope/subscription/Dashboard/list/detail evidence is `43/43` plus
 typecheck and diff-check. Checkpoint `6.11` remains unchecked; full gates, SSG, pinned desktop/mobile
 acceptance, push, exact-head CI, and SHA equality remain required.
+
+### 6.11 Fourth Independent Review at `89e105c`
+
+PR #207 is `OPEN/CLEAN` at exact local/remote/PR head `89e105c`; all six remote checks pass.
+Independent reruns pass the five-file Web reconnect lane `43/43`, the four-file Server Git lane
+`23/23`, and `git diff --check`. This does not close `6.11`: pinned OpenSpec 1.6 desktop/mobile
+acceptance is absent, and review found these blockers:
+
+1. **Transport error/reconnect restores cached A authority.** `useSubscription.onError` retains A
+   with `isLoading: false`; GitRoute/GitView gate only on loading. The Git hook also ignores tRPC
+   `onConnectionStateChange`, so real `connecting | pending` phases can leave A actionable. Only a
+   replacement `onData` may authorize data; a current Code-first `planningState: resolving`
+   emission remains usable and is distinct from a whole-transport reconnect.
+2. **Dashboard actions relabel stale intent.** Refresh and detached-worktree removal query
+   `git.code` at execution time instead of carrying the token observed with snapshot A. They can
+   therefore execute as B rather than conflict, including the destructive removal path.
+3. **Code identity can be mislabeled.** `resolveScopes()` resolves Code, then calls a combined
+   resolver that resolves Code again inside the Planning `try`; failure of the second Code read is
+   returned as `planningError`. Compose Planning against the first Code descriptor.
+4. **Code token ownership is inverted.** `PlanningRootServiceResolver.codeBindingToken` makes the
+   replaceable Planning manager own Launch Code provenance. A backend/Launch owner must issue and
+   inject it into Git binding plus Dashboard projection.
+5. **Typed evidence and headers are incomplete.** `git-repository-scope.test.ts` proves the public
+   classifier but is outside Server test typecheck; audit every changed Server fixture into a
+   checked lane. `packages/core/src/index.ts` and `packages/web/src/lib/static-data-provider.ts`
+   also retain 2026-07-18 headers after 2026-07-19 changes.
+
+Add fixed-point red evidence for cached A plus transport `connecting/pending/error`, stale
+Dashboard A refresh/removal after B, and first-Code-success plus second-Code-failure. Correct the
+owner/typecheck/header gaps, rerun all gates, push exact-head evidence, and only then attempt the
+terminating pinned browser fixture. Keep `6.11` unchecked at `61/131`; do not start `6.12+`, merge,
+archive, or release.
+
+Construction boundary: represent Git transport authority separately from generic loading so a
+terminal error can stay visible without unlocking cached data. Dashboard helpers accept the
+snapshot token as a required argument and never query provenance at execution time. Server
+bootstrap creates one Launch-scoped Code owner; the Planning resolver exposes no Code token, and
+Planning comparison consumes the one already-resolved Code descriptor. The decisive transport,
+Dashboard mutation, and Code-classification tests must execute the real boundary and fail when its
+exact transition is removed. This explicit owner/event/snapshot audit is required because prior
+corrections repeatedly proved a nearby presentation state while leaving the production authority
+boundary untested.
