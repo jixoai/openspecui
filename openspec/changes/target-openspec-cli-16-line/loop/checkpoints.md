@@ -807,3 +807,33 @@ the terminating browser pass remains mandatory.
 `390x844` browser acceptance are still required. The known partial browser reconnaissance does not prove
 A -> B -> A, stale black-box conflicts, reconnect/failure, Planning identity failure, or mobile geometry.
 No `6.12+`, merge, archive, or release work is authorized.
+
+### 6.11 Stage 4 Review Stop-Loss at `6ff211c`
+
+Checkpoint `6.11` remains open at `61/131`. The accepted implementation is `73a27e4`, with staged
+evidence at `4bd1031` and the one-time browser-fixture blocker recorded at `6ff211c`.
+
+Local regression evidence remains green:
+
+```text
+pnpm test:ci -> root 43, core 440, server 391, web 754, cli 49 (all passed)
+clean SSG -> passed (existing CSS pseudo-element and dynamic-import warnings only)
+pnpm test:browser:ci -> xterm 60 passed / 1 skipped; Web 12/12
+```
+
+The pinned live browser fixture used OpenSpec CLI 1.6.0 from `references/openspec` `e1b51d1`, an
+isolated `XDG_DATA_HOME`, and disposable Code/Planning Git roots. It loaded the real Web surface and
+confirmed Code `code`, declared Planning Store `plan-a`, distinct Planning Git identity, and the pinned
+CLI version. It did not complete deterministic A -> B -> A, stale Refresh/Removal conflicts,
+reconnect/failure, Planning identity failure, or `390x844` geometry.
+
+The `stage4new` session's terminating inspection commands were bounded to 15 seconds and both hung:
+
+```text
+agent-browser --session stage4new screenshot /tmp/openspecui-6-11-stage4-blocker.png -> exit 143
+agent-browser --session stage4new get url -> exit 143
+```
+
+This is the single permitted external browser-fixture blocker. It is not production-defect evidence;
+do not retry the same stalled commands or close `6.11`. Keep `6.12+`, merge, archive, and release
+untouched until a terminating desktop/mobile browser path produces the missing evidence.
