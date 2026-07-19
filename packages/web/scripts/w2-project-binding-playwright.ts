@@ -236,11 +236,18 @@ async function cleanupBrowser(
   browser: Browser | null,
   context: BrowserContext | null
 ): Promise<void> {
+  const closeContext = context
+    ? Promise.resolve()
+        .then(() => context.close())
+        .catch(() => undefined)
+    : Promise.resolve()
+  const closeBrowser = browser
+    ? Promise.resolve()
+        .then(() => browser.close())
+        .catch(() => undefined)
+    : Promise.resolve()
   await Promise.race([
-    (async () => {
-      await context?.close()
-      await browser?.close()
-    })(),
+    Promise.all([closeContext, closeBrowser]),
     timeoutAfter(CLEANUP_TIMEOUT_MS, 'browser cleanup'),
   ]).catch(() => undefined)
 }
