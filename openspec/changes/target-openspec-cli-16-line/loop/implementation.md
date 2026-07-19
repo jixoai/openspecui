@@ -3353,3 +3353,28 @@ they cannot contaminate the evidence.
 
 Checkpoint `6.11` remains open at `61/131`; no `6.12+`, merge, archive, release, or App/Store scope is
 authorized.
+
+### 6.11 Review Amendment: Separate Mutation and Subscription Candidates (2026-07-19)
+
+The final bounded browser probe, after correcting the `localhost`/`127.0.0.1` host mismatch and
+cleaning the old backend/Vite processes, did not reproduce the earlier pending mutation. The real
+Project Binding request returned HTTP `200`; its response contained a ready `rootPreview` for the
+selected Store. However, the subsequent Dashboard remained at `source: nearest`/Launch root and the
+browser WebSocket reported `Offline`.
+
+The two observations must remain separate:
+
+```text
+candidate A: file B -> Root/ActiveRoot B -> mutation pending > 20s
+candidate B: mutation 200/rootPreview B -> Dashboard remains Launch/nearest; WS Offline
+```
+
+Candidate B cannot prove a server emission or Web projection defect while the WebSocket is offline.
+The browser worker cleaned the old `13122` backend and Vite process; no A -> B -> A or mobile
+acceptance is claimed. A direct mutation-only probe later returned in about two seconds, but it had no
+subscriptions and is characterization only.
+
+The next fixed-point test must start the real server with its watcher/invalidation path, mount typed
+Root Context and Project Binding subscriptions, capture WS open/close/error and server/client event
+sequence, and then perform the public mutation. It must distinguish candidate A from candidate B at
+the public boundary before any production change is authorized. Keep `6.11` open at `61/131`.
