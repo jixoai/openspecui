@@ -3904,3 +3904,28 @@ the repository hook is already confirmed to point at an example configuration ra
 workspace's check contract. The equivalent scoped focused, typecheck, format, lint, and diff checks above
 were run explicitly. Full repository gates and the 6.12 checkbox remain for the independent review
 boundary.
+
+### 6.12 Independent Review: Production Cwd Owner Evidence Gap (2026-07-20)
+
+Review target: `origin/feat/openspec-cli-16-contract-baseline...9658607`. Standards review found no
+P0/P1/P2. Spec review found one P1 evidence defect; current production behavior is not shown incorrect.
+
+`packages/server/src/pty-cwd-contract.test.ts` constructs its own `withCwdTarget` callback and injects it
+directly into `createPtyWebSocketHandler`. It proves that the public schema strips arbitrary `cwd`, the
+handler calls its injected owner, and the real `PtyManager` preserves the returned metadata. It does not
+execute the production composition in `server.ts` that maps Planning creation through
+`PlanningRootServiceManager.runOperation(({ rootContext }) => rootContext.planningRoot.path)`.
+
+The counterexample is concrete: changing the production Planning branch in `server.ts` to return
+`config.projectDir` leaves the new PTY contract test and the focused `24/24` Server lane green. Therefore
+the earlier description of that test as the authoritative 6.12 boundary is too strong. It is downstream
+handler/Manager characterization evidence only.
+
+Checkpoint `6.12` remains open at `62/131`. The correction must add a checked test through the actual
+production cwd owner/composition and show that the exact Planning-to-Launch mutation fails for the
+intended cwd mismatch. Prefer a real `createServer` plus `createWebSocketServer` fixture; if transport
+setup would force unrelated changes, extract the existing production owner into one internal module used
+by `server.ts` and test it with the real Planning-root manager. Do not introduce a parallel test-owned
+resolver interface, reimplement Root selection in the fixture, alter the accepted Terminal UI, or start
+6.13. Full repository gates wait until this focused correction is green. Final end-to-end browser
+walkthrough remains owner-owned and is not an agent completion claim.
