@@ -3759,3 +3759,14 @@ typed disconnect/error boundary is reproduced. Neither follow-up changes the `6.
 W2 candidate `c85ce12` did not pass independent review. Its follow-up Change now records the required
 physical/reactive launch-write owner, correlated preview/transition result, partial-error Root provenance,
 and generation-safe repair correction. The result remains isolated from Git checkpoint `6.11` and W3.
+
+### W2 Follow-up Review Evidence at `68ed1e9` (2026-07-20)
+
+The independent W2 Change now has implementation SHA `89de4df0d763e033e204c19302b43569e1cbc442` and
+evidence commit `68ed1e9`. Its bounded same-origin Project Binding fixture passed the pinned OpenSpec
+1.6 CLI, isolated `XDG_DATA_HOME`, Store A-to-B launch write, Root B/Active Root B convergence, desktop
+and mobile overflow checks, and zero browser errors. Clean SSG, all 15 workspace typechecks, complete
+unit/browser suites, lint, format, and diff checks passed. The review also corrected a bounded-browser
+cleanup P2. This closes only the W2 automated evidence package; B2.5 remains open for owner manual
+single-page/multi-tab acceptance. Parent `6.11` remains `61/131` and unchecked; no W3, `6.12+`, merge,
+archive, or release work is authorized.

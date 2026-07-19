@@ -1124,3 +1124,8 @@ boundaries; no W2/W3 implementation belongs in this checkpoint.
 Independent review of W2 candidate `c85ce12` reopened its B2.1-B2.4 tasks for physical-write ownership,
 correlated result typing, partial-error Root provenance, and generation-safe launch repair. This does not
 change `6.11` progress or authorize W3/`6.12+` work.
+
+W2 follow-up status (2026-07-20): child Change evidence commit `68ed1e9` records implementation
+`89de4df0d763e033e204c19302b43569e1cbc442`, clean SSG/full local gates, the bounded Project Binding
+single-page fixture, and the cleanup correction review. B2.5 remains open only for the owner's manual
+single-page/multi-tab acceptance. This does not close or alter parent checkpoint `6.11`.
