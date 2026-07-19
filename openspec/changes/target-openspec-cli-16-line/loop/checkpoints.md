@@ -1017,3 +1017,11 @@ git diff --check
 `typecheck:git-tests` and `typecheck:transport-tests` remain separate package scripts and are reported
 separately. Stage 0 is implementation-complete and awaits independent review; `6.11` remains open at
 `61/131`, and Stage 1-4, full gates, browser acceptance, merge, archive, and release remain unauthorized.
+
+### 6.11 Stage 0 Independent Review Accepted (2026-07-19)
+
+Stage 0 is accepted at `2c61246`. The exact submodule SHA/path, runner trace, isolated XDG scope, three
+consecutive cold-start runs, transport typecheck, Git typecheck, format, and diff-check all passed. No
+production runtime changed. Stage 1 is now the only authorized worker slice: real-time connection
+lifecycle and retired-generation behavior. Stage 2-4, full gates, and browser acceptance remain locked
+until Stage 1 receives an independent review.

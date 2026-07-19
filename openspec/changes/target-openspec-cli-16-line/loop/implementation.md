@@ -3569,3 +3569,11 @@ git diff --check
 The package scripts remain explicit: `typecheck:git-tests` does not include `typecheck:transport-tests`.
 This closes the Stage 0 evidence correction only; no 6.11 task checkbox is closed and no Stage 1-4,
 full-gate, browser, merge, archive, or release claim is made.
+
+### 6.11 Stage 0 Independent Review Accepted (2026-07-19)
+
+Stage 0 is accepted at `2c61246`. The exact submodule SHA/path, runner trace, isolated XDG scope, three
+consecutive cold-start runs, transport typecheck, Git typecheck, format, and diff-check all passed. No
+production runtime changed. Stage 1 is now the only authorized worker slice: real-time connection
+lifecycle and retired-generation behavior. Stage 2-4, full gates, and browser acceptance remain locked
+until Stage 1 receives an independent review.
