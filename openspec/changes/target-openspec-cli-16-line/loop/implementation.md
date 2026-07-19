@@ -3822,12 +3822,14 @@ form the rest of the 6.11 package. Parent progress is now `62/131`; checkpoint `
 No W3 reactive-error implementation was introduced or inferred from this acceptance. `6.12+` remains
 outside this review update and requires a new worker Goal.
 
-### 6.12 Terminal Cwd Identity Implementation at `0bbc9d0` / `5aeecda` (2026-07-20)
+### 6.12 Terminal Cwd Identity Implementation at `0bbc9d0` / `5aeecda` / `c891187` (2026-07-20)
 
 The bounded 6.12 worker slice is implemented and stops at independent review. Test commit `0bbc9d0`
 adds checked public-boundary evidence; production commit `5aeecda` exposes the selected cwd before first
-creation and keeps each tab's Server-resolved cwd visible. Checkpoint 6.12 remains unchecked, and this
-slice does not authorize W3, 6.13+, final browser acceptance, merge, archive, or release.
+creation and keeps each tab's Server-resolved cwd visible. Independent-review correction `c891187`
+removes an unnecessary PTY structural-port refactor after proving the checked contract directly covers
+the unchanged concrete handler. Checkpoint 6.12 remains unchecked, and this slice does not authorize W3,
+6.13+, final browser acceptance, merge, archive, or release.
 
 Applied contract:
 
@@ -3838,10 +3840,9 @@ Applied contract:
   `initialCwd` on a separate truncated line. Renaming changes only the title and retains cwd identity.
 - Configured-command creation shows the same selected path. A non-current Planning target remains
   disabled with its actual Root Context reason, while switching to current Launch remains available.
-- `createPtyWebSocketHandler` now depends on the exact structural Socket, Session, Manager, and
-  Notification capabilities it consumes. The public Zod protocol remains unchanged: a client `cwd`
-  property is stripped, the semantic `cwdTarget` reaches the Server, and the current Server-owned
-  resolver supplies cwd immediately before real `PtyManager` spawn.
+- The production `createPtyWebSocketHandler` remains on its existing concrete `WebSocket`, `PtyManager`,
+  and `PtySession` boundary. The public Zod protocol strips a client `cwd`; only the semantic `cwdTarget`
+  reaches the Server, whose current resolver supplies cwd immediately before real `PtyManager` spawn.
 - `typecheck:pty-tests` checks the real WebSocket plus `PtyManager` contract without `as never`,
   `as any`, fabricated non-null state, or suppression comments. The older handler suite remains a
   compatibility regression lane; the new checked contract is the authoritative 6.12 boundary.
@@ -3853,7 +3854,7 @@ post-hoc baseline 9c4a5fc, production patch removed:
   terminal-panel first Planning-session case -> 1 failed / 12 skipped
   intended reason: empty state could not find visible /launch cwd identity
 
-current commits 0bbc9d0 + 5aeecda:
+current commits 0bbc9d0 + 5aeecda + c891187:
 pnpm --filter @openspecui/web exec vitest run --project unit \
   src/components/terminal/terminal-panel.test.tsx \
   src/components/terminal/terminal-spawn-command-dialog.test.tsx \
@@ -3882,6 +3883,15 @@ pnpm exec oxlint packages/server/src/pty-websocket.ts \
   -> 0 warnings / 0 errors
 git diff --check
   -> passed
+
+independent-review correction:
+git diff --exit-code 0bbc9d0 -- packages/server/src/pty-websocket.ts
+  -> passed; production handler restored exactly to the checked-test baseline
+pnpm --filter @openspecui/server exec vitest run \
+  src/pty-cwd-contract.test.ts src/pty-manager.test.ts
+  -> 2 files / 10 tests passed after correction
+pnpm --filter @openspecui/server typecheck
+  -> all Server production and checked-test lanes passed after correction
 ```
 
 A proposed Storybook geometry fixture was removed at the stop-loss boundary. The current Storybook
@@ -3889,7 +3899,8 @@ Vitest project does not install the Tailwind Vite plugin, so `.truncate` does no
 computed overflow geometry there; expanding that shared harness is outside 6.12. Unit evidence checks
 the bounded layout contract, while final browser walkthrough remains owner-owned.
 
-Both code commits used `VITE_GIT_HOOKS=0` because the repository hook is already confirmed to point at
-an example configuration rather than this workspace's check contract. The equivalent scoped focused,
-typecheck, format, lint, and diff checks above were run explicitly. Full repository gates and the 6.12
-checkbox remain for the independent review boundary.
+The worker's production, correction, and evidence-documentation commits used `VITE_GIT_HOOKS=0` because
+the repository hook is already confirmed to point at an example configuration rather than this
+workspace's check contract. The equivalent scoped focused, typecheck, format, lint, and diff checks above
+were run explicitly. Full repository gates and the 6.12 checkbox remain for the independent review
+boundary.
