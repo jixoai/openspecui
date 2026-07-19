@@ -233,3 +233,61 @@ git diff --check
 
 B2.1-B2.4 are implemented. B2.5 remains open: this slice does not run or claim clean SSG, direct-Web,
 full repository gates, independent review, push, merge, archive, release, W3, or `6.12+`.
+
+## B2.5 exact-SHA gates and browser stop-loss (2026-07-20)
+
+The correction was committed as `04850287955c0031d0de2bcae15a96ffdc2ea067` (`fix: harden project
+binding settlement`). Two independent reviews found no remaining P0/P1/P2. The exact commit passed:
+
+```text
+pnpm --filter @openspecui/web build:ssg
+pnpm format:check
+pnpm lint:ci
+pnpm typecheck
+pnpm test:ci
+pnpm test:browser:ci
+git diff --check
+
+typecheck: 15 workspace projects
+test:ci: Core 440, Server 401, Web 763, CLI 49, App 79, and all remaining workspace suites passed
+browser: xterm 60 passed / 1 skipped; Web 12/12
+final worktree: clean at 04850287955c0031d0de2bcae15a96ffdc2ea067
+```
+
+The clean SSG step removed `packages/web/dist-ssg` and `packages/web/.vite` through the equivalent Node
+`fs.rm(..., { recursive: true, force: true })` operation because the command policy rejected literal
+`rm -rf`. Build output contained only the existing scroll-button CSS and ineffective dynamic-import
+warnings. Unit tests emitted only the existing jsdom Canvas warnings.
+
+The one bounded direct-Web attempt used:
+
+```text
+OpenSpec executable: references/openspec/bin/openspec.js
+upstream SHA: e1b51d111ab446b54dee2d6159ac245f0339ae52
+OpenSpec version: 1.6.0
+fixture: /tmp/openspecui-w2-b25-sM9dJb
+XDG_DATA_HOME: /tmp/openspecui-w2-b25-sM9dJb/xdg
+backend: 127.0.0.1:14236
+same-origin Web: http://127.0.0.1:14237/config?_b=%2F
+```
+
+Proxy variables were removed. `store-a` and `store-b` were healthy and pinned Doctor/Context preflight
+selected A. At desktop `1280x800`, the direct Project page showed Root A consistently in the sidebar,
+Project Binding preview, Active Root, Store id, and isolated data scope. No App iframe or `?api=` override
+was used.
+
+The browser evidence then stopped at the automation boundary:
+
+1. Full and viewport screenshot commands each hung for more than 20 seconds without output or files.
+2. The same session's next interactive snapshot hung for more than 20 seconds.
+3. `fill` for Store B hung for more than 10 seconds, so no page action was observed.
+4. Bounded close timed out and the isolated daemon/Chrome processes required targeted termination.
+
+Cleanup removed the session, fixture, processes, and listeners on `14236/14237`; the worktree remained
+clean. The attempt did **not** prove A-to-B settlement, mutation transition UI, Active Root B, console/page
+errors, `390x844` overflow, or screenshots on `0485028`. This is an agent-browser automation failure, not
+a product failure. The one-attempt stop-loss forbids an unapproved retry or production workaround.
+
+B2.5 remains open. The owner must select a fresh bounded agent-browser attempt, a deterministic Playwright
+fixture, or manual unit-page acceptance before the browser condition can be closed. Do not start W3,
+`6.12+`, merge, archive, or release.

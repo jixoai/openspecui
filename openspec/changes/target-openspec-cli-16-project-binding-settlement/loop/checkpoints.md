@@ -44,4 +44,12 @@ Checked red runs failed on the old union, raw writer, locked repair controls, re
 and removed pending retirement. Focused Core/Server/Web tests and typechecks pass. B2.1-B2.4 are closed;
 B2.5 remains open for the explicitly separate clean SSG, direct-Web, full-gate, and independent-review lane.
 
+Exact-SHA evidence (2026-07-20): `04850287955c0031d0de2bcae15a96ffdc2ea067` passed clean SSG,
+format, lint, all 15 workspace typechecks, the complete unit suite, xterm browser `60 passed / 1 skipped`,
+Web browser `12/12`, and two independent code reviews with no P0/P1/P2. The one bounded direct-Web
+attempt proved initial Root A on the pinned CLI and isolated data home, then the agent-browser session
+hung during screenshot/snapshot/fill and was terminated without retry. No A-to-B action, mobile geometry,
+or terminal browser state was observed on this SHA. B2.5 therefore remains open pending an owner-selected
+browser evidence path; this automation failure is not classified as a product defect.
+
 Do not start W3, `6.12+`, merge, archive, or release from this Change.
