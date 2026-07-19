@@ -52,4 +52,9 @@ hung during screenshot/snapshot/fill and was terminated without retry. No A-to-B
 or terminal browser state was observed on this SHA. B2.5 therefore remains open pending an owner-selected
 browser evidence path; this automation failure is not classified as a product defect.
 
+Owner decision (2026-07-20): use one deterministic Playwright fixture for the real W2 A-to-B flow and
+manual owner acceptance for unit-page/multi-tab behavior. Do not migrate the existing browser suite or
+retry the hung agent-browser session. The fixture must run on the exact implementation SHA with pinned
+CLI, isolated `XDG_DATA_HOME`, same-origin Project Web, desktop/mobile assertions, and cleanup.
+
 Do not start W3, `6.12+`, merge, archive, or release from this Change.

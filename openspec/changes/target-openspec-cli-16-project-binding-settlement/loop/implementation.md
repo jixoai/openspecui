@@ -291,3 +291,14 @@ a product failure. The one-attempt stop-loss forbids an unapproved retry or prod
 B2.5 remains open. The owner must select a fresh bounded agent-browser attempt, a deterministic Playwright
 fixture, or manual unit-page acceptance before the browser condition can be closed. Do not start W3,
 `6.12+`, merge, archive, or release.
+
+## B2.5 owner decision: Playwright plus manual acceptance (2026-07-20)
+
+The owner selected the normal `2 + 3` path after the agent-browser stop-loss: Sol will add one bounded,
+deterministic Playwright fixture for the real Project Binding A-to-B flow; the owner will manually accept
+the unit page and multi-tab behavior. This is deliberately narrow. It does not authorize migrating the
+existing Web browser suite, adding screenshot dependencies, retrying agent-browser, or changing W3.
+
+The fixture must preserve the pinned CLI SHA, explicit isolated `XDG_DATA_HOME`, disposable Store/root
+fixtures, same-origin Project Web, launch-write/transition/Root B/Active Root B assertions, desktop/mobile
+overflow and console checks, and cleanup. A fixture blocker stops the slice and is reported raw.
