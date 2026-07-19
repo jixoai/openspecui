@@ -2,6 +2,7 @@
  * Orthogonal intents (created 2026-07-19 Asia/Shanghai):
  * 1. Prove cached subscription data is display-only while a reconnect is pending.
  * 2. Preserve the loading gate until the replacement projection arrives.
+ * 3. Prove direct unmount retires a pending static loader before it can write cache.
  *
  * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
  */
@@ -142,6 +143,64 @@ describe('useSubscription cache rebind', () => {
     dependency = 2
     rerender()
     expect(result.current.data).toBeUndefined()
+  })
+
+  it('preserves static loader rejection as failed authority', async () => {
+    staticModeMock.mockReturnValue(true)
+    const error = new Error('static loader failed')
+    const { result } = renderHook(() =>
+      useAuthoritativeSubscription(
+        () => ({ unsubscribe: vi.fn() }),
+        () => Promise.reject(error),
+        [],
+        'static-loader-rejection-6-11'
+      )
+    )
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(result.current).toMatchObject({
+      data: undefined,
+      isLoading: false,
+      error,
+      authority: { state: 'failed', error },
+    })
+  })
+
+  it('retires a pending static loader on direct unmount before it can populate cache', async () => {
+    staticModeMock.mockReturnValue(true)
+    const cacheKey = 'static-direct-unmount-cache-6-11'
+    let resolveLoader: ((value: string) => void) | undefined
+    const loader = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveLoader = resolve
+        })
+    )
+
+    const pending = renderHook(() =>
+      useAuthoritativeSubscription(() => ({ unsubscribe: vi.fn() }), loader, [], cacheKey)
+    )
+    expect(pending.result.current.data).toBeUndefined()
+
+    pending.unmount()
+    await act(async () => {
+      resolveLoader?.('stale-after-unmount')
+      await Promise.resolve()
+    })
+
+    const reader = renderHook(() =>
+      useAuthoritativeSubscription(
+        () => ({ unsubscribe: vi.fn() }),
+        () => new Promise<string>(() => undefined),
+        [],
+        cacheKey
+      )
+    )
+    expect(reader.result.current.data).toBeUndefined()
+    reader.unmount()
   })
 
   it('keeps cached A display-only until the reconnect emits B', () => {

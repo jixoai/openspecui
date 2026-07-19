@@ -217,7 +217,16 @@ export function useAuthoritativeSubscription<T>(
     let active = true
     let terminalError: Error | null = null
     let terminal = false
+    let subscription: Unsubscribable | null = null
     const isActive = () => active && generationRef.current === generation
+    const cleanup = () => {
+      active = false
+      if (generationRef.current === generation) generationRef.current += 1
+      const currentSubscription = subscription ?? subscriptionRef.current
+      subscription = null
+      subscriptionRef.current = null
+      currentSubscription?.unsubscribe()
+    }
 
     subscriptionRef.current?.unsubscribe()
     subscriptionRef.current = null
@@ -238,7 +247,7 @@ export function useAuthoritativeSubscription<T>(
           error,
           authority: { state: 'failed', error },
         }))
-        return
+        return cleanup
       }
       staticLoader()
         .then((data) => {
@@ -256,10 +265,10 @@ export function useAuthoritativeSubscription<T>(
             authority: { state: 'failed', error },
           }))
         })
-      return
+      return cleanup
     }
 
-    const subscription = subscribe({
+    subscription = subscribe({
       onData(data) {
         if (!isActive()) return
         terminal = false
@@ -316,12 +325,7 @@ export function useAuthoritativeSubscription<T>(
       },
     })
     subscriptionRef.current = subscription
-    return () => {
-      active = false
-      if (generationRef.current === generation) generationRef.current += 1
-      subscriptionRef.current = null
-      subscription.unsubscribe()
-    }
+    return cleanup
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inStaticMode, ...deps])
 
