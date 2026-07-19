@@ -17,7 +17,8 @@ export interface LaunchGitRepositoryBinding {
 export class LaunchGitRepositoryBindingOwner implements LaunchGitRepositoryBinding {
   readonly bindingToken: string
 
-  constructor(bindingToken = randomUUID()) {
+  constructor(bindingToken?: string) {
+    bindingToken ??= randomUUID()
     if (bindingToken.trim().length === 0) {
       throw new Error('Launch Git repository binding token must be non-empty.')
     }

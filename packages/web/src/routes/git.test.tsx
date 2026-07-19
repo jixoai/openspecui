@@ -62,6 +62,8 @@ const {
         state: 'idle' | 'connecting' | 'pending'
         error: Error | null
       }): void
+      onStopped(): void
+      onComplete(): void
     }
     rootCallbacks?: {
       onData(data: RootContextState): void
@@ -349,6 +351,8 @@ describe('GitRoute', () => {
             state: 'idle' | 'connecting' | 'pending'
             error: Error | null
           }): void
+          onStopped(): void
+          onComplete(): void
         }
       ) => {
         subscriptionState.scopesCallbacks = callbacks
@@ -472,6 +476,98 @@ describe('GitRoute', () => {
       screen.queryByText('Git repository scope projection failed: transport failed')
     ).toBeNull()
     expect(removeDetachedWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('forwards Git observer stop and complete events until replacement data restores authority', async () => {
+    const scopeA = createGitScopes()
+    subscriptionState.currentScopes = scopeA
+    overviewQueryMock.mockImplementation((input: { expectedBindingToken: string }) =>
+      Promise.resolve({
+        ...overviewData,
+        currentWorktree: {
+          ...overviewData.currentWorktree,
+          branchName: `${input.expectedBindingToken}-status`,
+        },
+      })
+    )
+    listEntriesQueryMock.mockImplementation((input: { expectedBindingToken: string }) =>
+      Promise.resolve({
+        items: [
+          {
+            type: 'commit' as const,
+            hash: `${input.expectedBindingToken}-commit`,
+            title: `${input.expectedBindingToken} history`,
+            committedAt: 1,
+            relatedChanges: [],
+            diff: { files: 1, insertions: 1, deletions: 0 },
+          },
+        ],
+        nextCursor: null,
+      })
+    )
+
+    renderWithQueryClient(<GitRoute />)
+    await screen.findByText('code-binding-status against origin/main')
+    const callbacks = subscriptionState.scopesCallbacks
+    if (!callbacks) throw new Error('Git scope subscription is unavailable.')
+
+    const scopeB: GitRepositoryScopes = {
+      defaultScope: 'code',
+      code: {
+        ...scopeA.code,
+        bindingToken: 'code-binding-b',
+        rootPath: '/repo-b',
+        repository: { topLevel: '/repo-b', commonDir: '/repo-b/.git' },
+      },
+      planningState: 'resolving',
+      planning: null,
+    }
+    act(() => callbacks.onStopped())
+    await screen.findByText('Loading git repository scopes...')
+    const overviewCallsAfterStop = overviewQueryMock.mock.calls.length
+    const historyCallsAfterStop = listEntriesQueryMock.mock.calls.length
+    expect(screen.queryByText('code-binding-status against origin/main')).toBeNull()
+
+    act(() => callbacks.onData(scopeB))
+    await screen.findByText('code-binding-b-status against origin/main')
+    expect(overviewQueryMock).toHaveBeenLastCalledWith({
+      scope: 'code',
+      expectedBindingToken: 'code-binding-b',
+    })
+    expect(listEntriesQueryMock).toHaveBeenLastCalledWith({
+      scope: 'code',
+      expectedBindingToken: 'code-binding-b',
+      cursor: undefined,
+      limit: 50,
+    })
+    expect(overviewQueryMock.mock.calls.length).toBeGreaterThan(overviewCallsAfterStop)
+    expect(listEntriesQueryMock.mock.calls.length).toBeGreaterThan(historyCallsAfterStop)
+
+    const scopeC: GitRepositoryScopes = {
+      ...scopeB,
+      code: {
+        ...scopeB.code,
+        bindingToken: 'code-binding-c',
+        rootPath: '/repo-c',
+        repository: { topLevel: '/repo-c', commonDir: '/repo-c/.git' },
+      },
+    }
+    act(() => callbacks.onComplete())
+    await screen.findByText('Loading git repository scopes...')
+    expect(screen.queryByText('code-binding-b-status against origin/main')).toBeNull()
+
+    act(() => callbacks.onData(scopeC))
+    await screen.findByText('code-binding-c-status against origin/main')
+    expect(overviewQueryMock).toHaveBeenLastCalledWith({
+      scope: 'code',
+      expectedBindingToken: 'code-binding-c',
+    })
+    expect(listEntriesQueryMock).toHaveBeenLastCalledWith({
+      scope: 'code',
+      expectedBindingToken: 'code-binding-c',
+      cursor: undefined,
+      limit: 50,
+    })
   })
 
   it('does not submit live Git RPCs in static mode', async () => {

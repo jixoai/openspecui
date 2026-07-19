@@ -30,6 +30,7 @@ import {
   GitRepositoryBindingService,
 } from './git-repository-binding-service.js'
 import { defaultRunGit, type GitRunner } from './git-shared.js'
+import { LaunchGitRepositoryBindingOwner } from './launch-git-repository-binding.js'
 import { PlanningRootServiceManager } from './planning-root-service.js'
 import { createReactiveSubscription } from './reactive-subscription.js'
 
@@ -216,6 +217,12 @@ afterEach(async () => {
 })
 
 describe('GitRepositoryBindingService', () => {
+  it.each(['', '   ', '\t\n'])('rejects a blank Launch Code binding token (%j)', (token) => {
+    expect(() => new LaunchGitRepositoryBindingOwner(token)).toThrow(
+      'Launch Git repository binding token must be non-empty.'
+    )
+  })
+
   it('reactively publishes A -> B -> Code -> A with stable Code and fresh Planning tokens', async () => {
     const fixture = await createFixture()
     const observed: GitRepositoryScopes[] = []

@@ -2,6 +2,7 @@
  * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Prove responsive Git file-tree, patch loading, and scroll continuity.
  * 2. Prove on-demand patch requests retain repository binding provenance.
+ * 3. Prove a replacement Planning binding reaches the real getEntryPatch owner.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git patch bindings.
@@ -1159,7 +1160,7 @@ describe('GitEntryDetailPanel', () => {
     })
   })
 
-  it('retries wide-layout tree scrolling after patch layout changes', async () => {
+  it('retries wide-layout tree scrolling with the replacement B patch binding', async () => {
     stubWideResizeObserver()
 
     const deferredPatch = createDeferred<{
@@ -1227,7 +1228,7 @@ describe('GitEntryDetailPanel', () => {
             entry={baseEntry}
             files={[baseFile]}
             repositoryScope="planning"
-            repositoryBindingToken="planning-binding"
+            repositoryBindingToken="planning-binding-b"
             isLoading={false}
             error={null}
           />
@@ -1252,7 +1253,7 @@ describe('GitEntryDetailPanel', () => {
     })
     expect(getEntryPatchMock).toHaveBeenCalledWith({
       scope: 'planning',
-      expectedBindingToken: 'planning-binding',
+      expectedBindingToken: 'planning-binding-b',
       selector: { type: 'commit', hash: baseEntry.hash },
       fileId: baseFile.fileId,
     })

@@ -406,6 +406,26 @@ describe('public Git repository binding Router', () => {
       if (!planningB) throw new Error('Expected a distinct Planning repository for B.')
       expect(scopesB.code.bindingToken).toBe(scopesA.code.bindingToken)
       expect(planningB.bindingToken).not.toBe(planningA.bindingToken)
+
+      const dashboardB = await server.planningRootServices.runOperation(
+        ({ dashboardOverviewService }) => dashboardOverviewService.getCurrent()
+      )
+      expect(dashboardB.git.bindingToken).toBe(scopesB.code.bindingToken)
+      expect(dashboardB.git.bindingToken).toBe(scopesA.code.bindingToken)
+
+      fixture.selectRoot(fixture.rootA)
+      const scopesA2 = await server.gitRepositoryBindings.resolveScopes()
+      const planningA2 = scopesA2.planning
+      if (!planningA2) throw new Error('Expected a distinct Planning repository for A2.')
+      const dashboardA2 = await server.planningRootServices.runOperation(
+        ({ dashboardOverviewService }) => dashboardOverviewService.getCurrent()
+      )
+
+      expect(scopesA2.code.bindingToken).toBe(scopesA.code.bindingToken)
+      expect(planningA2.bindingToken).not.toBe(planningA.bindingToken)
+      expect(planningA2.bindingToken).not.toBe(planningB.bindingToken)
+      expect(dashboardA2.git.bindingToken).toBe(scopesA2.code.bindingToken)
+      expect(dashboardA2.git.bindingToken).toBe(scopesA.code.bindingToken)
     } finally {
       await fixture.dispose()
     }

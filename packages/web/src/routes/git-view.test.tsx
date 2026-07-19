@@ -538,6 +538,12 @@ describe('Git entry routes', () => {
       expectedBindingToken: 'planning-binding-b',
       selector: { type: 'commit', hash: 'abc12345' },
     })
+    expect(getEntryFilesQueryMock).toHaveBeenCalledWith({
+      scope: 'planning',
+      expectedBindingToken: 'planning-binding-b',
+      selector: { type: 'commit', hash: 'abc12345' },
+    })
+    expect(screen.getByTestId('git-entry-detail-panel').textContent).toContain('Root B patch')
     expect(screen.queryByText('Root A handoff title')).toBeNull()
     second.unmount()
   })
