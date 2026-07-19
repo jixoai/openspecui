@@ -116,6 +116,12 @@ jobs:
           (needs.ci-scope.outputs.fast_mode == 'full' || needs.ci-scope.outputs.fast_mode == 'scoped')
         run: pnpm install --frozen-lockfile
 
+      - name: Prepare pinned OpenSpec CLI
+        if: >-
+          !startsWith(github.head_ref, 'chore/release/changeversion-') &&
+          (needs.ci-scope.outputs.fast_mode == 'full' || needs.ci-scope.outputs.fast_mode == 'scoped')
+        run: node scripts/prepare-openspec-reference.mjs
+
       - name: No Fast Gate work required
         if: >-
           !startsWith(github.head_ref, 'chore/release/changeversion-') &&
