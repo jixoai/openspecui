@@ -20,6 +20,7 @@ Original request (2026-07-16): "代码已经提交，开始review。如果有问
 Original clarification (2026-07-17): "我会让worker开始具体的编码工作，你的责任是review+research+plan. 因此请你在GOAL.md 中明确规划具体的工作，我们的目的就是 apply change."
 Original request (2026-07-17): "你要特别谨慎反复出现的问题，你应该在任务文件中强调相关的问题，给出具体的施工建议、反思建议。"
 Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
+Owner direction (2026-07-19): "不要在 6.11 这个任务上徘徊了。你得把它拆开成多个独立的小问题，然后把阻塞的问题发给我，我来决策推进。"
 -->
 
 MUST READ: CLAUDE.md
@@ -81,6 +82,23 @@ MUST READ: CLAUDE.md
   5. notify manager only after the GitHub release automation succeeds
 
 ## OpenSpec 1.6 Adaptation Baseline
+
+### 6.11 execution-scope law (2026-07-19)
+
+Checkpoint 6.11 is now limited to W1 Git scope/token delivery plus W4 single-page direct-Web evidence
+and multi-tab unit coverage. The owner will perform the manual multi-tab acceptance. W2 Project Binding
+settlement and W3 WebSocket/reactive error propagation are explicitly deferred to independent follow-up
+Changes; they must not be implemented incidentally while closing 6.11. Candidate browser observations
+remain characterization/fixture evidence until a checked public-boundary red and mutation-resistance
+proof exist.
+
+- W2's agreed future contract is write-then-converge: the launch binding write returns typed
+  `rootPreview`/transition evidence, and subscriptions converge the Planning root asynchronously.
+- W3's agreed future behavior is to expose the real transport/API error rather than inventing a UI lock or
+  stale-data success state. The current split between HTTP queries/mutations and WebSocket subscriptions
+  must be tested and changed only in that follow-up contract.
+- 6.11 acceptance uses direct same-origin Project Web with the pinned CLI and isolated `XDG_DATA_HOME`;
+  the experimental App iframe is excluded.
 
 - `references/openspec` is the official upstream submodule and currently targets exact tag `v1.6.0` (`e1b51d1`).
 - The shipped line is OpenSpecUI 5.x nominally targeting OpenSpec CLI 1.5.x. Version compatibility alone is not proof of feature completeness: the 1.4 `sync` core-profile change and the 1.5 resolved-root/Stores contract must be audited as part of the 1.6 plan. The established version law is one OpenSpecUI major per OpenSpec CLI minor; the 1.6 adaptation therefore plans the next major line unless an explicit decision changes that law.

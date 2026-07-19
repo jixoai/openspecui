@@ -967,7 +967,7 @@ standalone-server probe returned `404 /git` because it targeted an API-only proc
 observations, not a W1 production red. W4 therefore remains incomplete; no A -> B -> Code/A, stale
 Refresh/Removal conflict, reconnect/error, provenance, or `390x844` acceptance claim is made.
 
-### 6.11 Resumed Staged Worker Goal (2026-07-19)
+### 6.11 Resumed Staged Worker Goal (2026-07-19; historical, superseded)
 
 The owner has now resumed implementation as four ordered stages. This section supersedes the earlier
 owner-pause execution stop, while preserving the independent package boundaries and red-evidence law:
@@ -1018,10 +1018,100 @@ git diff --check
 separately. Stage 0 is implementation-complete and awaits independent review; `6.11` remains open at
 `61/131`, and Stage 1-4, full gates, browser acceptance, merge, archive, and release remain unauthorized.
 
-### 6.11 Stage 0 Independent Review Accepted (2026-07-19)
+### 6.11 Stage 0 Independent Review Accepted (2026-07-19; historical, superseded)
 
 Stage 0 is accepted at `2c61246`. The exact submodule SHA/path, runner trace, isolated XDG scope, three
 consecutive cold-start runs, transport typecheck, Git typecheck, format, and diff-check all passed. No
-production runtime changed. Stage 1 is now the only authorized worker slice: real-time connection
-lifecycle and retired-generation behavior. Stage 2-4, full gates, and browser acceptance remain locked
-until Stage 1 receives an independent review.
+production runtime changed. At that historical point, Stage 1 was the only proposed worker slice for a
+staged run. The owner later superseded that authorization with the decomposition decision gate below.
+
+### 6.11 Current State: Decomposition Decision Gate (2026-07-19)
+
+The preceding Stage 0/Stage 1 authorization is historical and superseded by the owner's latest request
+to stop the repeated 6.11 loop, split the work, and receive the blockers for decision. No worker package
+is active. `6.11` remains open at `61/131`; no production edits, browser reruns, full gates, `6.12+`,
+merge, archive, or release work is authorized until the owner selects one package.
+
+The independent packages and their current evidence are:
+
+```text
+W1 Git scope/token delivery  -> checked implementation baseline accepted; terminating browser evidence pending
+W2 Binding settlement        -> Candidate A only; typed public-server fixed point missing
+W3 Reactive readiness        -> Candidate B only; WebSocket was Offline, so no production red
+W4 Browser harness           -> fixture/evidence package; `store-a` did not resolve in the bounded attempt
+```
+
+Delivery is also not at the review point: local `b5aea58` is six commits ahead of the PR branch at
+`28319fd`. The W1 implementation is already in the PR ancestry, but the accepted Stage 0 evidence and
+the current decision-gate documents are local until a selected package is authorized for delivery.
+
+The owner must decide:
+
+1. Close `6.11` after W1 + W4, or keep W2/W3 in this Change.
+2. Define `updateProjectBinding` as `await-full-transition` or `write-then-converge` with typed
+   preview/transition evidence.
+3. Define Offline WebSocket as an explicit locked/unavailable live state or require a non-WS fallback.
+4. Use the recommended direct same-origin Project Web, or explicitly choose the experimental App iframe.
+5. Keep W2/W3 as deltas here, or create independent follow-up Changes.
+
+Candidate A and Candidate B are not merged into one defect. A natural Root A -> Root B -> Dashboard B
+trace, an offline subscription, and a stalled browser command are characterization/fixture evidence.
+Production correction still requires a checked public-boundary red plus mutation-resistance proof. The
+next worker Goal must name exactly one selected package, fixed-point test, owner layer, and stop-loss.
+
+### 6.11 Owner Decision: W1 + W4 Active, W2/W3 Deferred (2026-07-19)
+
+The owner approved the following execution boundary after reviewing the two unresolved candidates:
+
+```text
+active:   W1 Git scope/token delivery
+active:   W4 single-page direct same-origin Project Web evidence + multi-tab unit tests
+deferred: W2 Project Binding settlement -> follow-up Change
+deferred: W3 WebSocket/reactive error propagation -> follow-up Change
+```
+
+The owner will perform manual multi-tab acceptance. The worker must provide single-page desktop and
+`390x844` browser evidence plus checked multi-tab unit coverage. W4 must use the pinned executable at
+`references/openspec/bin/openspec.js` (`e1b51d111ab446b54dee2d6159ac245f0339ae52`) and isolated
+`XDG_DATA_HOME`; the experimental App iframe is excluded. One bounded fixture attempt is allowed;
+fixture failure is recorded as a blocker and is not a production red.
+
+W2's follow-up contract is write-then-converge: Project Binding returns typed launch-write,
+`rootPreview`, and transition evidence while subscriptions converge asynchronously. W3's follow-up
+contract exposes the real transport/API error and does not invent a UI lock or stale-data success state.
+Neither contract may be implemented incidentally in 6.11. No `6.12+`, merge, archive, or release work
+is authorized by this decision.
+
+### 6.11 W1/W4 Worker Evidence at `46c17a5` (2026-07-19)
+
+The selected worker slice delivered one checked multi-tab isolation test and a terminating single-page
+direct-Web walk-through. Commit `46c17a5` changes only
+`packages/app/src/components/hosted-shell.test.tsx`; it does not change W2/W3 production behavior.
+
+Checked evidence:
+
+```text
+pnpm --filter @openspecui/app exec vitest run src/components/hosted-shell.test.tsx
+  1 file / 6 tests passed
+pnpm --filter @openspecui/app typecheck
+  passed
+pnpm format:check
+  passed (changed-file set)
+git diff --check
+  passed
+```
+
+The new test proves two persisted project tabs retain distinct backend API/session URLs, preserve both
+iframe panel nodes while switching active state, and update the App title to the selected project. The
+manual multi-tab browser acceptance remains the owner's responsibility.
+
+The bounded direct-Web evidence used pinned CLI `references/openspec/bin/openspec.js` at
+`e1b51d111ab446b54dee2d6159ac245f0339ae52`, isolated `XDG_DATA_HOME=/tmp/openspecui-w4-Lyygdr/.xdg`,
+disposable Git/OpenSpec fixture, backend `4136`, and same-origin Vite proxy `4137`. On
+`/dashboard?_b=%2Fgit`, desktop `1280x577` and mobile `390x844` both rendered the Git page; each reported
+`scrollWidth === clientWidth` and showed the Code repository/history surface. Screenshots were saved as
+`/tmp/openspecui-w4-desktop.png` and `/tmp/openspecui-w4-mobile.png`. This is single-page delivery
+evidence, not proof of manual multi-tab behavior or W2/W3 semantics.
+
+`6.11` remains open at `61/131` pending the owner's manual multi-tab acceptance and any final delivery
+decision. Do not start `6.12+`, merge, archive, or release.

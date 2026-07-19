@@ -3526,7 +3526,7 @@ standalone-server probe returned `404 /git` because it targeted an API-only proc
 observations, not a W1 production red. W4 therefore remains incomplete; no A -> B -> Code/A, stale
 Refresh/Removal conflict, reconnect/error, provenance, or `390x844` acceptance claim is made.
 
-### 6.11 Resumed Staged Worker Goal (2026-07-19)
+### 6.11 Resumed Staged Worker Goal (2026-07-19; historical, superseded)
 
 The owner has resumed implementation under a four-stage Goal. It supersedes the earlier owner-pause
 execution stop but does not merge the independent defect candidates or relax public-boundary evidence:
@@ -3570,10 +3570,175 @@ The package scripts remain explicit: `typecheck:git-tests` does not include `typ
 This closes the Stage 0 evidence correction only; no 6.11 task checkbox is closed and no Stage 1-4,
 full-gate, browser, merge, archive, or release claim is made.
 
-### 6.11 Stage 0 Independent Review Accepted (2026-07-19)
+### 6.11 Stage 0 Independent Review Accepted (2026-07-19; historical, superseded)
 
 Stage 0 is accepted at `2c61246`. The exact submodule SHA/path, runner trace, isolated XDG scope, three
 consecutive cold-start runs, transport typecheck, Git typecheck, format, and diff-check all passed. No
-production runtime changed. Stage 1 is now the only authorized worker slice: real-time connection
-lifecycle and retired-generation behavior. Stage 2-4, full gates, and browser acceptance remain locked
-until Stage 1 receives an independent review.
+production runtime changed. At that historical point, Stage 1 was the only proposed worker slice for a
+staged run. The owner later superseded that authorization with the decomposition decision gate below.
+
+### 6.11 Current State: Decomposition Decision Gate (2026-07-19)
+
+This supersedes the preceding resumed staged-worker instruction. It is retained as history that Stage 0
+was accepted, but it no longer authorizes Stage 1. The owner explicitly stopped the combined 6.11 loop and
+requested independent small problems plus decision blockers. No worker is active; `6.11` remains open at
+`61/131`.
+
+```text
+W1 Git scope/token delivery  -> implementation/test baseline accepted; W4 delivery evidence pending
+W2 Binding settlement        -> Candidate A, not a proven production defect
+W3 Reactive readiness        -> Candidate B, not a proven production defect while WS is Offline
+W4 Browser harness           -> direct same-origin pinned fixture and desktop/mobile evidence only
+```
+
+The local review point is `b5aea58`, while the PR branch remains at `28319fd` (six commits behind). W1's
+implementation is present in the PR ancestry; Stage 0's pinned-runner evidence and the current decision
+gate are not yet delivered to the PR. Do not push a new aggregate candidate before the owner selects a
+package and the worker produces its package-specific evidence.
+
+Decision blockers are deliberately separate:
+
+- **Closure boundary:** close after W1 + W4, or keep W2/W3 in this Change?
+- **Binding settlement:** await the complete Planning transition, or resolve after the launch-file write
+  with typed `rootPreview`/transition evidence and let subscriptions converge?
+- **Reactive transport:** make Offline an explicit unavailable/locked state, or require a non-WebSocket
+  fallback?
+- **Acceptance surface:** use direct same-origin Project Web (recommended), or choose experimental App
+  iframe explicitly?
+- **Change shape:** keep W2/W3 as this Change's deltas, or create follow-up Changes?
+
+Evidence boundary:
+
+- Candidate A observed launch-file B and Root/ActiveRoot B while the mutation stayed `Saving...` for a
+  bounded 20-second observation; a later mutation-only probe returned in about two seconds. No checked
+  typed server/subscription fixed point exists yet.
+- Candidate B observed HTTP 200 and a correct `rootPreview` while Dashboard remained `source: nearest`
+  and the browser WebSocket was `Offline`; this cannot prove a missing server emission or Web defect.
+- W4's bounded attempt did not resolve `store-a` and kept Root at `code/nearest`; the API-only probe's
+  `404 /git` was a fixture/process mismatch. No live A -> B -> Code/A, conflict, provenance, or mobile
+  acceptance claim is valid.
+
+The next worker must receive a new narrow Goal after the owner selects one package. Until then, do not
+change Router/manager ownership, add generation barriers or sleeps, rerun browser probes, close `6.11`,
+merge, archive, release, or start App/Store/`6.12+` work.
+
+Stage 0 evidence note: the raw command block above records the focused cold-start fixture,
+`typecheck:transport-tests`, and `git diff --check`; the independent review also reported
+`typecheck:git-tests` and `pnpm format:check` green, but those command outputs were not included in that
+historical block. Do not use the abbreviated block as a substitute for exact final-SHA evidence.
+
+### 6.11 Contract Research: W2/W3 Current Runtime Boundaries (2026-07-19)
+
+This is read-only research for the owner decision; it is not a production red and authorizes no worker.
+
+W2 currently has one synchronous public mutation contract:
+
+```text
+planningConfig.updateProjectBinding
+  -> writeProjectBindingConfig(launch project file)
+  -> fetchProjectBindingConfig(ctx)
+       -> planningRootServices.resolveRootContext()
+       -> readProjectBindingConfig(rootPreview)
+  -> return ProjectBindingConfig
+```
+
+The Router therefore waits for the serialized Planning-root transition before resolving the mutation. It
+does not return a typed transition id/state, and the existing Router fixture's
+`resolveRootContext` mock completes immediately. This explains why the bounded browser `Saving...` result
+cannot, by itself, distinguish a settlement contract defect from a fixture or transition-lifetime wait.
+
+W3 currently has two different authority paths:
+
+```text
+Server rootContext.subscribe
+  -> loading
+  -> ReactiveContext stream
+  -> refreshing(previous) / ready / stale-error
+  -> transport error terminates the stream
+
+Web useContextSubscription
+  -> generic useSubscription cache + onData/onError
+  -> Root Action gate blocks on transportError
+  -> Dashboard/context surfaces may still display cached Root Context facts
+```
+
+The server has explicit refresh/error states, but the Web Root Context hook does not expose the
+authoritative connection lifecycle used by Git scopes. Consequently, an Offline WebSocket plus a visible
+`source: nearest` Dashboard snapshot cannot prove that the server failed to emit B or that the Web
+projection mislabeled it. The owner must choose whether this cached display is an allowed read-only stale
+state with actions locked, or whether W3 requires a non-WebSocket readiness fallback before any code Goal
+is issued.
+
+### 6.11 Stage 0 Evidence Recheck after Reviewer Documentation (2026-07-19)
+
+The reviewer-only documentation update initially failed `format:check` because the new `i18n.zh.md`
+terminology rows were not formatted. The file was formatted with the repository Prettier command, then
+the complete Stage 0 evidence set was rerun on local `b5aea58`:
+
+```text
+pnpm --filter @openspecui/server exec vitest run src/root-context-cold-start.integration.test.ts
+  run 1: 1 file / 1 test passed (2.68s; 17:51:44)
+  run 2: 1 file / 1 test passed (2.34s; 17:51:47)
+  run 3: 1 file / 1 test passed (2.40s; 17:51:50)
+pnpm --filter @openspecui/server run typecheck:git-tests
+  passed
+pnpm format:check
+  4 changed files checked; all matched Prettier style
+git diff --check
+  passed
+```
+
+This closes the reviewer-documentation formatting gap only. It does not select W1-W4, push the local
+review point, authorize browser acceptance, or alter the `6.11` decision gate.
+
+### 6.11 Owner Decision Applied: Narrow Worker Package (2026-07-19)
+
+The owner resolved the decomposition gate. The active worker package is now W1 + the bounded W4
+delivery evidence only:
+
+```text
+W1 -> Git scope/token implementation and checked public-boundary regression evidence
+W4 -> direct same-origin Project Web single-page desktop/390x844 acceptance and multi-tab unit tests
+```
+
+Manual multi-tab browser acceptance belongs to the owner. The worker must not implement W2 Project
+Binding settlement or W3 WebSocket/reactive readiness in this Change. Those are follow-up Changes with
+the following settled direction: W2 uses write-then-converge with typed `rootPreview`/transition
+evidence; W3 surfaces the actual transport/API failure instead of adding an artificial UI lock or
+pretending cached data is current.
+
+The package-specific Goal is authoritative for the next worker. It requires the pinned first-party CLI,
+isolated `XDG_DATA_HOME`, direct same-origin Web, no App iframe, one bounded fixture stop-loss, checked
+multi-tab tests, and a commit plus focused evidence before review. Historical staged-worker instructions
+and the previous five-question decision gate no longer authorize work.
+
+### 6.11 W1/W4 Delivery Evidence at `46c17a5` (2026-07-19)
+
+Sol implemented the selected test-only slice in `46c17a5` (`test(app): prove project tab runtime
+isolation`). The commit contains only the App HostedShell test. The new test uses two persisted backend
+tabs and asserts independent API/session iframe URLs, active/inactive panel state, DOM retention while
+switching, and the selected project's document title. No W2 Project Binding or W3 WebSocket/reactive
+production path was changed.
+
+Main-agent recheck:
+
+```text
+pnpm --filter @openspecui/app exec vitest run src/components/hosted-shell.test.tsx
+  1 file / 6 tests passed (1.47s)
+pnpm --filter @openspecui/app typecheck
+  passed
+git diff --check
+  passed
+git show --check --oneline 46c17a5
+  passed
+```
+
+The terminating browser walk-through used the pinned first-party CLI at
+`references/openspec/bin/openspec.js` (`e1b51d111ab446b54dee2d6159ac245f0339ae52`), isolated
+`XDG_DATA_HOME=/tmp/openspecui-w4-Lyygdr/.xdg`, a disposable Git/OpenSpec fixture, backend `4136`, and
+same-origin Vite proxy `4137`. Direct Project Web `/dashboard?_b=%2Fgit` rendered Code repository and
+commit history at desktop `1280x577` and mobile `390x844`; both had equal `scrollWidth` and
+`clientWidth`. Screenshots: `/tmp/openspecui-w4-desktop.png` and `/tmp/openspecui-w4-mobile.png`.
+
+This closes the worker's single-page evidence package only. The owner still performs manual multi-tab
+acceptance, and `6.11` remains open at `61/131`; W2/W3 follow-up Changes remain untouched.
