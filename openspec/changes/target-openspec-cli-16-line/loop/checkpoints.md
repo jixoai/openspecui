@@ -319,7 +319,7 @@ The independent browser attempt confirms the desktop source control and URL/quer
 - [x] 6.8 Config implements Project Binding, Active Root Config, and Environment Global Config ownership sections
 - [x] 6.9 Project Stores route is replaced by Context with root, Reference, environment, and read-only registry diagnostics
 - [x] 6.10 Search defaults to the active root and offers an explicit Referenced Specs scope without referenced changes
-- [ ] 6.11 Git makes repository scope explicit for status, history, worktrees, and every mutation
+- [x] 6.11 Git makes repository scope explicit for status, history, worktrees, and every mutation
 - [ ] 6.12 Terminal shows selected cwd/root identity in creation controls and tab labels
 - [ ] 6.13 Settings exposes 1.6 compatibility, workflow/tool delivery, root selection, environment, and data-scope diagnostics
 - [ ] 6.14 OPSX New/Propose/Compose/Verify/Update shows and preserves its target planning root
@@ -1134,3 +1134,15 @@ W2 owner acceptance (2026-07-20): the owner confirmed the child Change's single-
 convergence and same-project multi-tab subscription convergence, including the absence of stale draft or
 false success/error state. Child B2.5 is now complete. Parent `6.11` remains open because its App
 multi-project tab acceptance is a distinct W4 boundary and is not inferred from W2.
+
+### 6.11 Owner W4 Acceptance (2026-07-20)
+
+The owner separately confirmed the parent W4 acceptance boundary: the direct project page passed and the
+App multi-tab flow passed. This is recorded as owner-run acceptance of the remaining 6.11 delivery surface,
+not as W2 evidence. Together with the accepted W1 Git scope/token implementation, checked multi-tab
+coverage, pinned-CLI direct-Web evidence, full local gates, and exact-head remote delivery, this closes
+`6.11` at `62/131`.
+
+The W2 and W3 contracts remain separate: W2 is complete and remains independently archivable; W3 reactive
+error propagation is not part of this checkpoint. `6.12+` is still frozen until a new Goal selects one
+checkpoint. Do not merge, archive, or release from this review update.

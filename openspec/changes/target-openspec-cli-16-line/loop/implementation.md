@@ -3804,3 +3804,20 @@ single-page/multi-tab acceptance.
 The owner confirmed W2's single-page Store A -> B settlement and same-project multi-tab subscription
 convergence, with no stale draft or false success/error state. This closes child B2.5 only. Parent
 `6.11` remains unchecked at `61/131`; its separate App multi-project tab acceptance remains outstanding.
+
+### 6.11 Owner W4 Acceptance (2026-07-20)
+
+The owner reported both remaining manual acceptance results as passing:
+
+```text
+single-page Project Web acceptance: passed
+App multi-tab acceptance:          passed
+```
+
+This is first-party owner evidence for W4 and is intentionally kept distinct from W2's same-project
+multi-page subscription evidence. The accepted W1 Git scope/token implementation, checked multi-tab unit
+coverage, pinned-CLI direct-Web desktop/mobile evidence, complete local gates, and exact-head CI delivery
+form the rest of the 6.11 package. Parent progress is now `62/131`; checkpoint `6.11` is closed.
+
+No W3 reactive-error implementation was introduced or inferred from this acceptance. `6.12+` remains
+outside this review update and requires a new worker Goal.
