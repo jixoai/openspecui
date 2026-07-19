@@ -3,23 +3,24 @@
  * 1. Render the project Dashboard and its objective planning-root projections.
  * 2. Keep Dashboard-owned Code Git actions separate from Planning-root readiness.
  * 3. Carry the Code Git binding token through dashboard detail handoff navigation.
+ * 4. Bind refresh and detached-worktree removal to the rendered Code snapshot generation.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
- * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Git handoff provenance.
+ * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Git handoff and action provenance.
  */
 import { Badge } from '@/components/badge'
 import { DashboardContextSummary } from '@/components/dashboard/context-summary'
+import { DashboardGitRefreshControl } from '@/components/dashboard/git-refresh-control'
 import { DashboardMetricCard } from '@/components/dashboard/metric-card'
 import {
   getGitEntrySharedDescriptor,
   getGitEntrySharedHandoff,
   GIT_WORKTREE_LINE_CLASS,
-  GitAutoRefreshPresetIcon,
   GitEntryRow,
   isHttpUrl,
   WorktreeRow,
 } from '@/components/git/git-shared'
-import { Select, type SelectOption } from '@/components/select'
+import type { SelectOption } from '@/components/select'
 import {
   classifyChangeWorkflowPhase,
   inferTrackedArtifactStatus,
@@ -64,7 +65,6 @@ import {
   FileText,
   GitBranch,
   LayoutDashboard,
-  RefreshCw,
   Sparkles,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -758,48 +758,16 @@ export function Dashboard() {
               </p>
             </div>
             {!staticMode ? (
-              <div className="border-border bg-card inline-flex overflow-hidden rounded-md border">
-                <Select
-                  value={gitAutoRefreshPreset}
-                  options={GIT_AUTO_REFRESH_OPTIONS}
-                  onValueChange={setGitAutoRefreshPreset}
-                  ariaLabel="Git auto refresh"
-                  className="text-foreground/75 hover:text-foreground border-r-current/10 bg-muted/20 relative isolate h-7 w-9 shrink-0 justify-center rounded-none border-0 border-r px-0"
-                  positionerClassName="z-50"
-                  popupClassName="min-w-[7rem]"
-                  renderTrigger={({ selectedOption }) => (
-                    <span className="relative inline-flex h-full w-full items-center justify-center overflow-hidden">
-                      <span className="bg-muted/20 pointer-events-none absolute inset-0" />
-                      {showGitRefreshProgress ? (
-                        <span
-                          className="bg-primary/30 dark:bg-primary/35 pointer-events-none absolute inset-y-0 left-0 transition-[width]"
-                          style={{ width: `${gitAutoRefreshProgress * 100}%` }}
-                        />
-                      ) : null}
-                      <span className="relative z-10 inline-flex items-center justify-center">
-                        <GitAutoRefreshPresetIcon
-                          preset={selectedOption?.value ?? gitAutoRefreshPreset}
-                        />
-                      </span>
-                    </span>
-                  )}
-                />
-                <button
-                  type="button"
-                  onClick={handleManualGitRefresh}
-                  disabled={disableRefreshButton}
-                  className={`inline-flex h-7 items-center gap-1 px-2 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
-                    animateRefreshButton
-                      ? 'text-primary bg-primary/10'
-                      : 'text-foreground/75 hover:text-foreground'
-                  }`}
-                >
-                  <RefreshCw
-                    className={`h-3.5 w-3.5 ${animateRefreshButton ? 'animate-spin' : ''}`}
-                  />
-                  Refresh
-                </button>
-              </div>
+              <DashboardGitRefreshControl
+                options={GIT_AUTO_REFRESH_OPTIONS}
+                value={gitAutoRefreshPreset}
+                onValueChange={setGitAutoRefreshPreset}
+                progress={gitAutoRefreshProgress}
+                showProgress={showGitRefreshProgress}
+                disabled={disableRefreshButton}
+                animated={animateRefreshButton}
+                onRefresh={handleManualGitRefresh}
+              />
             ) : null}
           </div>
           <div className="border-border/80 bg-card min-w-0 rounded-lg border p-3">

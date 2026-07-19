@@ -1,18 +1,21 @@
 /**
  * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Prove Dashboard planning metrics and Code Git projections render independently.
- * 2. Prove Dashboard refresh actions retain their loading and mutation boundaries.
+ * 2. Prove rendered A-to-B refresh/removal intents conflict visibly, settle, and resume on B.
  * 3. Prove live Code Git navigation carries the backend-issued binding token.
  * 4. Prove Dashboard snapshots cannot be relabeled across Code binding replacements.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Dashboard Git provenance.
  */
+import type { DashboardGitRefreshControlProps } from '@/components/dashboard/git-refresh-control'
 import type { DashboardGitWorktree, GitRepositoryScopes } from '@openspecui/core'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Dashboard, WorktreeRow } from './dashboard'
+
+type WorktreeRowProps = ComponentProps<typeof WorktreeRow>
 
 const {
   dashboardOverviewMock,
@@ -26,6 +29,8 @@ const {
   dashboardContextSummaryMock,
   codeBindingQueryMock,
   gitScopesMock,
+  dashboardGitRefreshControlRenderMock,
+  worktreeRowRenderMock,
 } = vi.hoisted(() => ({
   dashboardOverviewMock: vi.fn(),
   dashboardGitTaskStatusMock: vi.fn(),
@@ -41,7 +46,31 @@ const {
   dashboardContextSummaryMock: vi.fn(),
   codeBindingQueryMock: vi.fn(async () => ({ bindingToken: 'code-binding' })),
   gitScopesMock: vi.fn(),
+  dashboardGitRefreshControlRenderMock: vi.fn<(props: DashboardGitRefreshControlProps) => void>(),
+  worktreeRowRenderMock: vi.fn<(props: WorktreeRowProps) => void>(),
 }))
+
+vi.mock('@/components/dashboard/git-refresh-control', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/components/dashboard/git-refresh-control')>()
+  return {
+    ...actual,
+    DashboardGitRefreshControl: (props: DashboardGitRefreshControlProps) => {
+      dashboardGitRefreshControlRenderMock(props)
+      return <actual.DashboardGitRefreshControl {...props} />
+    },
+  }
+})
+
+vi.mock('@/components/git/git-shared', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/components/git/git-shared')>()
+  return {
+    ...actual,
+    WorktreeRow: (props: WorktreeRowProps) => {
+      worktreeRowRenderMock(props)
+      return <actual.WorktreeRow {...props} />
+    },
+  }
+})
 
 vi.mock('@/components/dashboard/metric-card', () => ({
   DashboardMetricCard: ({ label, value }: { label: string; value: string }) => (
@@ -126,6 +155,32 @@ vi.mock('@tanstack/react-router', () => ({
 
 describe('Dashboard', () => {
   const writeText = vi.fn<(value: string) => Promise<void>>()
+
+  class GitConflictError extends Error {
+    readonly data = { code: 'CONFLICT' } as const
+  }
+
+  function latestRefreshControl(): DashboardGitRefreshControlProps {
+    const call = dashboardGitRefreshControlRenderMock.mock.lastCall
+    if (!call) throw new Error('Dashboard refresh control was not rendered.')
+    return call[0]
+  }
+
+  function latestWorktreeRow(path: string): WorktreeRowProps {
+    const call = worktreeRowRenderMock.mock.calls.find(([props]) => props.worktree.path === path)
+    if (!call) throw new Error(`Dashboard worktree row was not rendered for ${path}.`)
+    return call[0]
+  }
+
+  function createDeferred<T>() {
+    let resolve: (value: T | PromiseLike<T>) => void = () => {}
+    let reject: (reason?: unknown) => void = () => {}
+    const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+      resolve = resolvePromise
+      reject = rejectPromise
+    })
+    return { promise, resolve, reject }
+  }
 
   function isDisabled(name: string): boolean {
     return (screen.getByRole('button', { name }) as HTMLButtonElement).disabled
@@ -262,6 +317,8 @@ describe('Dashboard', () => {
     navControllerMock.activatePop.mockReset()
     navControllerMock.push.mockReset()
     dashboardContextSummaryMock.mockClear()
+    dashboardGitRefreshControlRenderMock.mockClear()
+    worktreeRowRenderMock.mockClear()
     gitScopesMock.mockReturnValue({
       data: {
         defaultScope: 'code',
@@ -661,45 +718,59 @@ describe('Dashboard', () => {
     expect(navControllerMock.push).not.toHaveBeenCalled()
   })
 
-  it('keeps a rendered snapshot A token for its refresh callback after B publishes', async () => {
+  it('conflicts captured A Dashboard actions after B publishes, then resumes current B actions', async () => {
     staticModeMock.mockReturnValue(false)
-    let scopeToken = 'code-binding-a'
-    gitScopesMock.mockImplementation(() => ({
-      data: {
-        defaultScope: 'code',
-        code: {
-          scope: 'code',
-          bindingToken: scopeToken,
-          rootPath: '/workspace/code',
-          repository: { topLevel: '/workspace/code', commonDir: '/workspace/code/.git' },
-        },
-        planningState: 'settled',
-        planning: null,
-      } satisfies GitRepositoryScopes,
+    const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    const detachedPath = '/workspace/code/detached'
+    const detachedWorktree: DashboardGitWorktree = {
+      ...baseWorktree,
+      path: detachedPath,
+      relativePath: './detached',
+      branchName: '(detached)',
+      isCurrent: false,
+      detached: true,
+      entries: [],
+    }
+    const scopesA = {
+      defaultScope: 'code',
+      code: {
+        scope: 'code',
+        bindingToken: 'code-binding-a',
+        rootPath: '/workspace/code',
+        repository: { topLevel: '/workspace/code', commonDir: '/workspace/code/.git' },
+      },
+      planningState: 'settled',
+      planning: null,
+    } satisfies GitRepositoryScopes
+    const scopesB = {
+      ...scopesA,
+      code: { ...scopesA.code, bindingToken: 'code-binding-b' },
+    } satisfies GitRepositoryScopes
+    const snapshotA = {
+      ...createOverviewData(),
+      git: {
+        bindingToken: 'code-binding-a',
+        defaultBranch: 'main-a',
+        worktrees: [detachedWorktree],
+      },
+    }
+    const snapshotB = {
+      ...snapshotA,
+      git: {
+        bindingToken: 'code-binding-b',
+        defaultBranch: 'main-b',
+        worktrees: [{ ...detachedWorktree, branchName: '(detached B)' }],
+      },
+    }
+    gitScopesMock.mockReturnValue({
+      data: scopesA,
       isLoading: false,
       error: null,
       authority: { state: 'current' },
-    }))
-    dashboardOverviewMock.mockReturnValue({
-      data: {
-        ...createOverviewData(),
-        git: {
-          bindingToken: 'code-binding-a',
-          defaultBranch: 'main',
-          worktrees: [
-            {
-              ...baseWorktree,
-              isCurrent: false,
-              detached: true,
-              entries: [],
-            },
-          ],
-        },
-      },
-      isLoading: false,
-      error: null,
     })
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    dashboardOverviewMock.mockReturnValue({ data: snapshotA, isLoading: false, error: null })
 
     const view = render(<Dashboard />)
     await waitFor(() =>
@@ -708,15 +779,113 @@ describe('Dashboard', () => {
         'code-binding-a'
       )
     )
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled())
     refreshDashboardGitSnapshotMock.mockClear()
-    const refreshButton = screen.getByRole('button', { name: 'Refresh' })
-
-    scopeToken = 'code-binding-b'
-    fireEvent.click(refreshButton)
-
-    expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledWith('manual-button', 'code-binding-a')
+    dashboardGitRefreshControlRenderMock.mockClear()
+    worktreeRowRenderMock.mockClear()
     view.rerender(<Dashboard />)
-    expect(screen.queryByRole('button', { name: 'Remove detached worktree' })).toBeNull()
+    const refreshA = latestRefreshControl().onRefresh
+    const rowA = latestWorktreeRow(detachedPath)
+    const removeA = rowA.onRemoveDetachedWorktree
+    if (!removeA) throw new Error('Detached worktree A did not expose a removal handler.')
+
+    gitScopesMock.mockReturnValue({
+      data: scopesB,
+      isLoading: false,
+      error: null,
+      authority: { state: 'current' },
+    })
+    dashboardOverviewMock.mockReturnValue({ data: snapshotB, isLoading: false, error: null })
+    dashboardGitRefreshControlRenderMock.mockClear()
+    worktreeRowRenderMock.mockClear()
+    view.rerender(<Dashboard />)
+    await waitFor(() => expect(screen.getAllByText('Default branch: main-b')).toHaveLength(2))
+
+    const refreshADeferred = createDeferred<void>()
+    refreshDashboardGitSnapshotMock.mockImplementationOnce(() => refreshADeferred.promise)
+    act(() => refreshA())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled())
+    expect(refreshDashboardGitSnapshotMock).toHaveBeenLastCalledWith(
+      'manual-button',
+      'code-binding-a'
+    )
+    expect(screen.getAllByText('Default branch: main-b')).toHaveLength(2)
+
+    await act(async () => {
+      refreshADeferred.reject(
+        new GitConflictError('The code repository binding changed during A refresh.')
+      )
+      await refreshADeferred.promise.catch(() => {})
+    })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled())
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'CONFLICT: The code repository binding changed during A refresh.'
+    )
+
+    const removeADeferred = createDeferred<void>()
+    removeDetachedDashboardWorktreeMock.mockImplementationOnce(() => removeADeferred.promise)
+    act(() => {
+      void removeA(rowA.worktree)
+    })
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Remove detached worktree' })).toBeDisabled()
+    )
+    expect(removeDetachedDashboardWorktreeMock).toHaveBeenLastCalledWith(
+      detachedPath,
+      'code-binding-a'
+    )
+    expect(screen.getAllByText('Default branch: main-b')).toHaveLength(2)
+
+    await act(async () => {
+      removeADeferred.reject(
+        new GitConflictError('The code repository binding changed during A removal.')
+      )
+      await removeADeferred.promise.catch(() => {})
+    })
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Remove detached worktree' })).toBeEnabled()
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'CONFLICT: The code repository binding changed during A removal.'
+    )
+    expect(refreshDashboardGitSnapshotMock).not.toHaveBeenCalledWith(
+      'manual-button',
+      'code-binding-b'
+    )
+    expect(removeDetachedDashboardWorktreeMock).not.toHaveBeenCalledWith(
+      detachedPath,
+      'code-binding-b'
+    )
+
+    refreshDashboardGitSnapshotMock.mockResolvedValueOnce(undefined)
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await waitFor(() =>
+      expect(refreshDashboardGitSnapshotMock).toHaveBeenLastCalledWith(
+        'manual-button',
+        'code-binding-b'
+      )
+    )
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled())
+    expect(screen.queryByRole('alert')).toBeNull()
+
+    removeDetachedDashboardWorktreeMock.mockResolvedValueOnce(undefined)
+    fireEvent.click(screen.getByRole('button', { name: 'Remove detached worktree' }))
+    await waitFor(() =>
+      expect(removeDetachedDashboardWorktreeMock).toHaveBeenLastCalledWith(
+        detachedPath,
+        'code-binding-b'
+      )
+    )
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Remove detached worktree' })).toBeEnabled()
+    )
+    expect(screen.queryByRole('alert')).toBeNull()
+
+    expect(confirmSpy).toHaveBeenCalledTimes(2)
+    expect(alertSpy).toHaveBeenCalledTimes(1)
+    dateNowSpy.mockRestore()
+    confirmSpy.mockRestore()
+    alertSpy.mockRestore()
   })
 
   it('retires a snapshot when the current Code scope is stale behind a reconnect error', () => {
