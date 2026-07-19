@@ -10,6 +10,7 @@
  * Original request (2026-07-17): "Rejected Validate and Update handles converge to one public terminal error."
  * Original request (2026-07-18): "Environment Global profile/drift must use one reactive CLI-owned projection."
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
+ * Derived requirement (2026-07-19): Project Binding mutation exposes launch-write and convergence evidence.
  */
 import {
   CliExecutor,
@@ -1075,16 +1076,16 @@ describe('appRouter', () => {
       const active = await caller.planningConfig.activeRoot()
       await caller.planningConfig.writeActiveRoot({ content: 'schema: active\n' })
 
-      expect(binding.kind).toBe('project-binding')
-      expect(binding.owner.path).toBe(launchProject)
-      expect(binding.binding.store).toEqual({ state: 'declared', id: 'shared' })
+      expect(binding.kind).toBe('project-binding-update')
+      expect(binding.launchWrite.owner.path).toBe(launchProject)
+      expect(binding.launchWrite.binding.store).toEqual({ state: 'declared', id: 'shared' })
       expect(active.owner).toMatchObject({
         path: planningRoot,
         source: 'store',
         storeId: 'shared',
         externalToLaunchProject: true,
       })
-      expect(context.planningRootServices.resolveRootContext).toHaveBeenCalled()
+      expect(context.planningRootServices.resolveRootContext).not.toHaveBeenCalled()
       await expect(
         readFile(join(launchProject, 'openspec', 'config.yaml'), 'utf8')
       ).resolves.toMatch(/schema: launch[\s\S]*store: shared/)

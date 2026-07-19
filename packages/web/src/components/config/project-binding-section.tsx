@@ -1,16 +1,22 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Edit only launch-project Store and Reference declarations.
  * 2. Preserve Root Context preview and declaration diagnostics without treating them as registry truth.
  * 3. Bind mutation controls and execution to loading/error/dirty lifecycle states.
+ * 4. Keep launch-write preview evidence separate while Root Context subscriptions converge.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-18): "Project Binding must show direct Reference Store, root, and Doctor diagnostics."
+ * Derived requirement (2026-07-19): "A binding mutation must not relabel its returned preview as current Root Context."
  */
 import { Button } from '@/components/button'
 import { trpcClient } from '@/lib/trpc'
 import { useProjectBindingSubscription } from '@/lib/use-planning-config'
-import type { PlanningConfigReference, ProjectBindingConfig } from '@openspecui/core'
+import type {
+  PlanningConfigReference,
+  ProjectBindingConfig,
+  ProjectBindingUpdateResult,
+} from '@openspecui/core'
 import { useMutation } from '@tanstack/react-query'
 import { AlertCircle, Link2, Loader2, Plus, Save, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -31,6 +37,20 @@ function currentRootPreview(config: ProjectBindingConfig) {
     : { context: config.rootPreview.attempt, error: config.rootPreview.error }
 }
 
+function sameBinding(
+  left: ProjectBindingConfig['binding'],
+  right: ProjectBindingConfig['binding']
+) {
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
+function bindingDrafts(binding: ProjectBindingConfig['binding']) {
+  return {
+    storeId: binding.store.state === 'declared' ? binding.store.id : '',
+    references: binding.references.entries.map(createReferenceDraft),
+  }
+}
+
 /** Render and mutate launch-project Store/Reference binding independently of active-root config. */
 export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
   const { data: config, isLoading, error: subscriptionError } = useProjectBindingSubscription()
@@ -38,14 +58,33 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
   const [references, setReferences] = useState<ReferenceDraft[]>([])
   const [dirty, setDirty] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  const bindingLocked = isLoading || subscriptionError !== null
+  const [mutationEvidence, setMutationEvidence] = useState<ProjectBindingUpdateResult | null>(null)
+  const [pendingConvergence, setPendingConvergence] = useState<ProjectBindingUpdateResult | null>(
+    null
+  )
+  const bindingLocked = Boolean(
+    isLoading || subscriptionError !== null || pendingConvergence?.transition.state === 'converging'
+  )
 
   useEffect(() => {
-    if (!config || dirty) return
-    setStoreId(config.binding.store.state === 'declared' ? config.binding.store.id : '')
-    setReferences(config.binding.references.entries.map(createReferenceDraft))
+    if (!config) return
+    if (pendingConvergence) {
+      if (sameBinding(config.binding, pendingConvergence.launchWrite.binding)) {
+        const next = bindingDrafts(config.binding)
+        setStoreId(next.storeId)
+        setReferences(next.references)
+        setDirty(false)
+        setPendingConvergence(null)
+        setFormError(null)
+      }
+      return
+    }
+    if (dirty) return
+    const next = bindingDrafts(config.binding)
+    setStoreId(next.storeId)
+    setReferences(next.references)
     setFormError(null)
-  }, [config, dirty])
+  }, [config, dirty, pendingConvergence])
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -64,11 +103,14 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
         references: normalizedReferences.length > 0 ? normalizedReferences : null,
       })
     },
-    onSuccess: (nextConfig) => {
-      setStoreId(nextConfig.binding.store.state === 'declared' ? nextConfig.binding.store.id : '')
-      setReferences(nextConfig.binding.references.entries.map(createReferenceDraft))
-      setDirty(false)
-      setFormError(null)
+    onSuccess: (result) => {
+      setMutationEvidence(result)
+      if (result.transition.state === 'converging') {
+        setPendingConvergence(result)
+      } else {
+        setPendingConvergence(null)
+        setFormError(result.transition.error.message)
+      }
     },
     onError: (error) => {
       setFormError(error instanceof Error ? error.message : String(error))
@@ -80,6 +122,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
       current.map((reference) => (reference.key === key ? { ...reference, ...update } : reference))
     )
     setDirty(true)
+    setMutationEvidence(null)
     setFormError(null)
   }
 
@@ -142,6 +185,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
             onChange={(event) => {
               setStoreId(event.target.value)
               setDirty(true)
+              setMutationEvidence(null)
               setFormError(null)
             }}
             placeholder="No declared Store"
@@ -166,6 +210,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
                   createReferenceDraft({ id: '', remote: undefined }),
                 ])
                 setDirty(true)
+                setMutationEvidence(null)
               }}
               className="border-border hover:bg-muted inline-flex h-8 items-center gap-1 rounded-md border px-2 text-xs"
             >
@@ -209,6 +254,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
                         current.filter((item) => item.key !== reference.key)
                       )
                       setDirty(true)
+                      setMutationEvidence(null)
                     }}
                     aria-label={`Remove Reference ${reference.id || 'row'}`}
                     title="Remove Reference"
@@ -300,6 +346,29 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
         >
           {visibleError}
         </div>
+      ) : null}
+
+      {mutationEvidence ? (
+        <section className="border-border/70 bg-muted/20 space-y-2 rounded-md border px-3 py-2 text-xs">
+          <h3 className="font-medium">Latest binding write</h3>
+          <div>
+            Launch write complete: {mutationEvidence.launchWrite.file.path ?? 'config file'}
+          </div>
+          <div>
+            Root preview from this mutation:{' '}
+            {mutationEvidence.rootPreview.state === 'ready'
+              ? (mutationEvidence.rootPreview.data.planningRoot?.path ?? 'Not resolved')
+              : (mutationEvidence.rootPreview.attempt.planningRoot?.path ?? 'Not resolved')}
+          </div>
+          <div>
+            Transition: {mutationEvidence.transition.state}
+            {mutationEvidence.transition.state === 'preview-error'
+              ? ` · ${mutationEvidence.transition.error.message}`
+              : pendingConvergence
+                ? ' · waiting for Root Context subscription'
+                : ' · Root Context subscription matched the launch write'}
+          </div>
+        </section>
       ) : null}
     </div>
   )

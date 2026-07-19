@@ -9,6 +9,7 @@
  * Original request (2026-07-17): "Root-scoped stream startup returns an owned handle, not a void cancel function."
  * Original request (2026-07-18): "Profile/Drift must refresh with external environment config changes."
  * Derived requirement (2026-07-19): "Static Git remains unavailable and must not fabricate live binding provenance."
+ * Derived requirement (2026-07-19): "Project Binding writes return typed launch and transition evidence."
  */
 /**
  * @openspecui/core
@@ -201,9 +202,12 @@ export {
   type PlanningConfigReference,
   type ProjectBindingConfig,
   type ProjectBindingInspection,
+  type ProjectBindingLaunchWrite,
   type ProjectBindingReferences,
   type ProjectBindingStore,
+  type ProjectBindingTransition,
   type ProjectBindingUpdate,
+  type ProjectBindingUpdateResult,
 } from './planning-config.js'
 export {
   // Low-level project watcher

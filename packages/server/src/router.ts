@@ -15,6 +15,7 @@
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
+ * Derived requirement (2026-07-19): Project Binding mutation returns launch-write and convergence evidence.
  */
 import type {
   ChangeFile,
@@ -80,6 +81,8 @@ import {
   type ApplyInstructions,
   type ArtifactInstructions,
   type ChangeStatus,
+  type ProjectBindingUpdate,
+  type ProjectBindingUpdateResult,
   type ProjectRecoveryStatus,
   type RuntimeInvalidationController,
   type RuntimeInvalidationFacet,
@@ -110,6 +113,7 @@ import {
 } from '@openspecui/search'
 import { initTRPC, TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
+import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { CliMutationInvalidator } from './cli-mutation-invalidator.js'
 import { createCliStreamObservable } from './cli-stream-observable.js'
@@ -159,7 +163,7 @@ import type { PlanningRootServiceResolver, PlanningRootServices } from './planni
 import type { ProjectRecoveryService } from './project-recovery-service.js'
 import { reactiveKV } from './reactive-kv.js'
 import { createReactiveSubscription } from './reactive-subscription.js'
-import { createRootContextSubscription } from './root-context-service.js'
+import { createRootContextSubscription, resolveServerRootContext } from './root-context-service.js'
 import { parseSchemaMutationAction, type SchemaMutationAction } from './schema-mutation-service.js'
 import {
   readSpecCatalog,
@@ -2925,6 +2929,43 @@ async function fetchProjectBindingConfig(ctx: Context, reactive = false) {
   })
 }
 
+/**
+ * Write launch binding first and resolve a detached preview while subscriptions converge through
+ * the owner. The returned id is mutation-local; Root Context subscriptions do not echo it.
+ */
+async function updateProjectBindingConfig(
+  ctx: Context,
+  input: ProjectBindingUpdate
+): Promise<ProjectBindingUpdateResult> {
+  const launchWrite = await writeProjectBindingConfig({
+    launchProjectDir: ctx.projectDir,
+    update: input,
+  })
+  const rootPreview = await resolveServerRootContext({
+    projectDir: ctx.projectDir,
+    cliExecutor: ctx.cliExecutor,
+  })
+  const transitionId = randomUUID()
+  return {
+    kind: 'project-binding-update' as const,
+    launchWrite,
+    rootPreview,
+    transition:
+      rootPreview.state === 'ready'
+        ? {
+            id: transitionId,
+            state: 'converging' as const,
+            observedAt: rootPreview.observedAt,
+          }
+        : {
+            id: transitionId,
+            state: 'preview-error' as const,
+            observedAt: rootPreview.observedAt,
+            error: rootPreview.error,
+          },
+  }
+}
+
 async function fetchActiveRootConfig(ctx: Context, reactive = false) {
   return runPlanningRoot(
     ctx,
@@ -2957,10 +2998,7 @@ export const planningConfigRouter = router({
 
   updateProjectBinding: publicProcedure
     .input(ProjectBindingUpdateSchema)
-    .mutation(async ({ ctx, input }) => {
-      await writeProjectBindingConfig({ launchProjectDir: ctx.projectDir, update: input })
-      return fetchProjectBindingConfig(ctx)
-    }),
+    .mutation(({ ctx, input }) => updateProjectBindingConfig(ctx, input)),
 
   activeRoot: publicProcedure.query(({ ctx }) => fetchActiveRootConfig(ctx)),
 

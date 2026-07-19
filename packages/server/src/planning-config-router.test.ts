@@ -3,6 +3,7 @@
  * 1. Prove the typed public Project Binding mutation settles after the launch write and preview.
  * 2. Prove a retiring Planning-root lease cannot turn write-then-converge back into a full wait.
  * 3. Require explicit launch-write and asynchronous transition evidence in the public response.
+ * 4. Prove the real Root Context subscription observes B only after the A lease is released.
  *
  * Original request (2026-07-19): "同意，开始更新 openspec change，然后继续迭代推进。"
  * Derived requirement (2026-07-19): W2 uses write-then-converge and remains independent of W3 transport behavior.
@@ -18,24 +19,32 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { ZodType } from 'zod'
+import { createRootContextSubscription } from './root-context-service.js'
 import { appRouter } from './router.js'
 import { createServer } from './server.js'
 
 interface Deferred<T> {
   promise: Promise<T>
   resolve(value: T): void
+  reject(reason?: unknown): void
 }
 
 function createDeferred<T>(): Deferred<T> {
   let resolvePromise: ((value: T) => void) | undefined
-  const promise = new Promise<T>((resolve) => {
+  let rejectPromise: ((reason?: unknown) => void) | undefined
+  const promise = new Promise<T>((resolve, reject) => {
     resolvePromise = resolve
+    rejectPromise = reject
   })
   return {
     promise,
     resolve(value) {
       if (!resolvePromise) throw new Error('Deferred resolver was not initialized.')
       resolvePromise(value)
+    },
+    reject(reason) {
+      if (!rejectPromise) throw new Error('Deferred rejecter was not initialized.')
+      rejectPromise(reason)
     },
   }
 }
@@ -149,16 +158,43 @@ describe('public Project Binding Router', () => {
     const fixture = await createRouterFixture()
     const operationStarted = createDeferred<void>()
     const releaseOperation = createDeferred<void>()
+    const firstRootReady = createDeferred<void>()
+    const rootRefreshStarted = createDeferred<void>()
+    const rootBReady = createDeferred<void>()
+    const observedPlanningRoots: string[] = []
     let heldOperation: Promise<void> | null = null
     let mutation: ReturnType<
       ReturnType<typeof appRouter.createCaller>['planningConfig']['updateProjectBinding']
     > | null = null
+    let subscription: { unsubscribe(): void } | null = null
 
     try {
-      await expect(fixture.server.planningRootServices.resolveRootContext()).resolves.toMatchObject({
-        state: 'ready',
-        data: { planningRoot: { path: fixture.rootA } },
+      await expect(fixture.server.planningRootServices.resolveRootContext()).resolves.toMatchObject(
+        {
+          state: 'ready',
+          data: { planningRoot: { path: fixture.rootA } },
+        }
+      )
+      subscription = createRootContextSubscription(fixture.server.planningRootServices).subscribe({
+        next: (state) => {
+          if (state.state === 'refreshing' && state.data?.planningRoot?.path === fixture.rootA) {
+            rootRefreshStarted.resolve()
+            return
+          }
+          if (state.state !== 'ready') return
+          const path = state.data.planningRoot?.path
+          if (!path) return
+          observedPlanningRoots.push(path)
+          if (path === fixture.rootA) firstRootReady.resolve()
+          if (path === fixture.rootB) rootBReady.resolve()
+        },
+        error: (error) => {
+          firstRootReady.reject(error)
+          rootRefreshStarted.reject(error)
+          rootBReady.reject(error)
+        },
       })
+      await firstRootReady.promise
       heldOperation = fixture.server.planningRootServices.runOperation(async ({ rootContext }) => {
         expect(rootContext.planningRoot?.path).toBe(fixture.rootA)
         operationStarted.resolve()
@@ -190,10 +226,20 @@ describe('public Project Binding Router', () => {
       if (outcome.state === 'returned') {
         expectWriteThenConvergeEvidence(outcome.value, fixture)
       }
+      await rootRefreshStarted.promise
+      expect(observedPlanningRoots).not.toContain(fixture.rootB)
+
+      releaseOperation.resolve()
+      await heldOperation
+      await rootBReady.promise
+      expect(observedPlanningRoots).toContain(fixture.rootB)
+      subscription.unsubscribe()
+      subscription = null
     } finally {
       releaseOperation.resolve()
       await heldOperation
       await mutation
+      subscription?.unsubscribe()
       await fixture.dispose()
     }
   })

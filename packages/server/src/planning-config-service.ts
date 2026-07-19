@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Read launch-project binding and active-root config from physically distinct roots.
  * 2. Project environment-global config, profile, and drift through one CLI-owned reactive read.
  * 3. Mutate only the explicitly selected ownership facet and refresh reactive caches.
+ * 4. Return launch-file write evidence without waiting for Planning-root service convergence.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-18): "Profile/Drift must refresh with external environment config changes."
+ * Derived requirement (2026-07-19): "Project Binding mutation uses write-then-converge settlement."
  */
 import {
   EnvironmentGlobalConfigValueSchema,
@@ -21,6 +23,7 @@ import {
   type EnvironmentGlobalProfileState,
   type OpenSpecDataScope,
   type ProjectBindingConfig,
+  type ProjectBindingLaunchWrite,
   type ProjectBindingUpdate,
   type RootContext,
   type RootContextResolvedState,
@@ -178,10 +181,18 @@ async function writeConfigFile(path: string, content: string): Promise<void> {
 export async function writeProjectBindingConfig(input: {
   launchProjectDir: string
   update: ProjectBindingUpdate
-}): Promise<void> {
+}): Promise<ProjectBindingLaunchWrite> {
   const file = await readProjectConfigFile({ rootPath: input.launchProjectDir })
   if (!file.path) throw new Error('Launch-project config path is unavailable.')
   await writeConfigFile(file.path, updateProjectBindingContent(file.content, input.update))
+  const writtenFile = await readProjectConfigFile({ rootPath: input.launchProjectDir })
+  return {
+    state: 'write-complete',
+    owner: { kind: 'launch-project', path: input.launchProjectDir },
+    file: writtenFile,
+    binding: inspectProjectBinding(writtenFile.content),
+    completedAt: Date.now(),
+  }
 }
 
 /** Replace the active Planning-root configuration through its reactive file owner. */

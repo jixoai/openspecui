@@ -1,13 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Verify Project Binding presents launch/root ownership without registry inference.
  * 2. Verify Store/Reference edits submit one structured, loading-locked mutation.
  * 3. Verify pending/failure/transport state locks writes and retains trustworthy declarations.
+ * 4. Verify mutation preview evidence does not replace the subscribed current Root Context.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-17): "Lock every mutation control while save is pending; preserve dirty input on failure."
  * Original request (2026-07-18): "Project Binding must show direct Reference Store, root, and Doctor diagnostics."
+ * Derived requirement (2026-07-19): "A converging binding write must retain the submitted draft until subscription convergence."
  */
+import type { ProjectBindingConfig, ProjectBindingUpdateResult } from '@openspecui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
@@ -89,6 +92,71 @@ function bindingConfig() {
       error: null,
       observedAt: 1,
     },
+  } satisfies ProjectBindingConfig
+}
+
+function updatedBindingConfig() {
+  const current = bindingConfig()
+  return {
+    ...current,
+    file: {
+      ...current.file,
+      content: 'store: design-system\nreferences: [platform-next]\n',
+    },
+    binding: {
+      store: { state: 'declared' as const, id: 'design-system' },
+      references: {
+        state: 'declared' as const,
+        entries: [{ id: 'platform-next' }],
+      },
+      diagnostics: [],
+    },
+    rootPreview: {
+      ...current.rootPreview,
+      data: {
+        ...current.rootPreview.data,
+        planningRoot: {
+          ...current.rootPreview.data.planningRoot,
+          path: '/stores/design-system',
+          store_id: 'design-system',
+        },
+        storeId: 'design-system',
+        references: [],
+        observedAt: 2,
+      },
+      observedAt: 2,
+    },
+  } satisfies ProjectBindingConfig
+}
+
+function bindingUpdateResult(
+  config = bindingConfig(),
+  state: 'converging' | 'preview-error' = 'converging'
+): ProjectBindingUpdateResult {
+  const error = { code: 'root-unresolved', message: 'Declared Store did not resolve.' } as const
+  return {
+    kind: 'project-binding-update',
+    launchWrite: {
+      state: 'write-complete',
+      owner: config.owner,
+      file: config.file,
+      binding: config.binding,
+      completedAt: 1,
+    },
+    rootPreview:
+      state === 'converging'
+        ? config.rootPreview
+        : {
+            state: 'error',
+            data: null,
+            attempt: config.rootPreview.data,
+            error,
+            observedAt: 2,
+          },
+    transition:
+      state === 'converging'
+        ? { id: 'binding-transition-1', state: 'converging', observedAt: 1 }
+        : { id: 'binding-transition-1', state: 'preview-error', observedAt: 2, error },
   }
 }
 
@@ -106,7 +174,13 @@ function renderSection(node: ReactNode) {
   const queryClient = new QueryClient({
     defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
   })
-  return render(<QueryClientProvider client={queryClient}>{node}</QueryClientProvider>)
+  const rendered = render(<QueryClientProvider client={queryClient}>{node}</QueryClientProvider>)
+  return {
+    ...rendered,
+    rerender(nextNode: ReactNode) {
+      rendered.rerender(<QueryClientProvider client={queryClient}>{nextNode}</QueryClientProvider>)
+    },
+  }
 }
 
 describe('ProjectBindingSection', () => {
@@ -116,7 +190,7 @@ describe('ProjectBindingSection', () => {
       isLoading: false,
       error: null,
     })
-    updateProjectBindingMock.mockReset().mockResolvedValue(bindingConfig())
+    updateProjectBindingMock.mockReset().mockResolvedValue(bindingUpdateResult())
   })
 
   afterEach(() => cleanup())
@@ -163,7 +237,7 @@ describe('ProjectBindingSection', () => {
   })
 
   it('locks every declaration control while one structured save is pending', async () => {
-    const pending = createDeferred<ReturnType<typeof bindingConfig>>()
+    const pending = createDeferred<ReturnType<typeof bindingUpdateResult>>()
     updateProjectBindingMock.mockReturnValueOnce(pending.promise)
     renderSection(<ProjectBindingSection isStatic={false} />)
 
@@ -178,8 +252,87 @@ describe('ProjectBindingSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Saving…' }))
     expect(updateProjectBindingMock).toHaveBeenCalledTimes(1)
 
-    pending.resolve(bindingConfig())
-    await waitFor(() => expect(screen.getByLabelText('Store')).toHaveValue('shared'))
+    pending.resolve(bindingUpdateResult())
+    await waitFor(() => expect(screen.getByLabelText('Store')).toHaveValue('design-system'))
+  })
+
+  it('keeps the written draft while stale subscription A remains current during convergence', async () => {
+    updateProjectBindingMock.mockResolvedValueOnce(bindingUpdateResult(updatedBindingConfig()))
+    renderSection(<ProjectBindingSection isStatic={false} />)
+
+    fireEvent.change(screen.getByLabelText('Store'), { target: { value: 'design-system' } })
+    fireEvent.change(screen.getByLabelText('Reference Store id'), {
+      target: { value: 'platform-next' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Root preview from this mutation: /stores/design-system')
+      ).toBeTruthy()
+    })
+    expect(screen.getByText('/stores/shared')).toBeTruthy()
+    expect(screen.getByLabelText('Store')).toHaveValue('design-system')
+    expect(screen.getByLabelText('Reference Store id')).toHaveValue('platform-next')
+    expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Saved' })).toBeNull()
+    expect(
+      screen.getByText('Transition: converging · waiting for Root Context subscription')
+    ).toBeTruthy()
+  })
+
+  it('retains Store and Reference drafts when fulfilled mutation reports preview error', async () => {
+    updateProjectBindingMock.mockResolvedValueOnce(
+      bindingUpdateResult(updatedBindingConfig(), 'preview-error')
+    )
+    renderSection(<ProjectBindingSection isStatic={false} />)
+
+    fireEvent.change(screen.getByLabelText('Store'), { target: { value: 'design-system' } })
+    fireEvent.change(screen.getByLabelText('Reference Store id'), {
+      target: { value: 'platform-next' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Declared Store did not resolve.')
+    })
+    expect(screen.getByLabelText('Store')).toHaveValue('design-system')
+    expect(screen.getByLabelText('Reference Store id')).toHaveValue('platform-next')
+    expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled()
+    expect(screen.getByText('Root preview from this mutation: /stores/design-system')).toBeTruthy()
+    expect(
+      screen.getByText('Transition: preview-error · Declared Store did not resolve.')
+    ).toBeTruthy()
+  })
+
+  it('clears dirty state only after subscription B matches the completed launch write', async () => {
+    const rendered = renderSection(<ProjectBindingSection isStatic={false} />)
+    updateProjectBindingMock.mockResolvedValueOnce(bindingUpdateResult(updatedBindingConfig()))
+
+    fireEvent.change(screen.getByLabelText('Store'), { target: { value: 'design-system' } })
+    fireEvent.change(screen.getByLabelText('Reference Store id'), {
+      target: { value: 'platform-next' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled()
+    })
+
+    bindingSubscriptionMock.mockReturnValue({
+      data: updatedBindingConfig(),
+      isLoading: false,
+      error: null,
+    })
+    rendered.rerender(<ProjectBindingSection isStatic={false} />)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Saved' })).toBeDisabled())
+    expect(screen.getByLabelText('Store')).toHaveValue('design-system')
+    expect(screen.getByText('/stores/design-system')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Transition: converging · Root Context subscription matched the launch write'
+      )
+    ).toBeTruthy()
   })
 
   it('retains dirty declarations and the mutation error after failure', async () => {

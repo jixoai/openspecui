@@ -1,18 +1,20 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Define distinct Project Binding, Active Root, and reactive Environment Global config projections.
  * 2. Inspect launch-project Store/Reference declarations without replacing CLI Root Context truth.
  * 3. Update only binding fields while preserving unrelated YAML fields and comments.
+ * 4. Describe a typed launch-write result separately from asynchronous Root Context convergence.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-18): "Profile/Drift must refresh with external environment config changes."
+ * Derived requirement (2026-07-19): "Project Binding returns launch-write, root preview, and transition evidence."
  */
 import { isMap, parseDocument } from 'yaml'
 import { z } from 'zod'
 import type { CliCommandResult, CliJsonValue, CliRootSource } from './cli-contracts/index.js'
 import type { CliResult } from './cli-executor.js'
 import type { OpenSpecDataScope } from './open-spec-data-scope.js'
-import type { RootContextResolvedState } from './root-context.js'
+import type { RootContextError, RootContextResolvedState } from './root-context.js'
 
 /** Runtime schema for JSON values accepted by OpenSpec global configuration. */
 export const PlanningConfigJsonValueSchema: z.ZodType<CliJsonValue> = z.lazy(() =>
@@ -101,6 +103,38 @@ export interface ProjectBindingConfig {
   file: PlanningConfigFile
   binding: ProjectBindingInspection
   rootPreview: RootContextResolvedState
+}
+
+/** Evidence that the launch project's binding file write completed. */
+export interface ProjectBindingLaunchWrite {
+  state: 'write-complete'
+  owner: { kind: 'launch-project'; path: string }
+  file: PlanningConfigFile
+  binding: ProjectBindingInspection
+  completedAt: number
+}
+
+/** Typed preview/convergence evidence for the asynchronous Planning-root transition. */
+export type ProjectBindingTransition =
+  | {
+      id: string
+      state: 'converging'
+      observedAt: number
+    }
+  | {
+      id: string
+      /** The detached preview failed; the Manager transition has not been declared failed. */
+      state: 'preview-error'
+      observedAt: number
+      error: RootContextError
+    }
+
+/** Public mutation result: launch write is complete while Root Context converges separately. */
+export interface ProjectBindingUpdateResult {
+  kind: 'project-binding-update'
+  launchWrite: ProjectBindingLaunchWrite
+  rootPreview: RootContextResolvedState
+  transition: ProjectBindingTransition
 }
 
 /** Active Planning-root configuration and CLI-owned root provenance. */
