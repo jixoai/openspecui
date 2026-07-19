@@ -837,3 +837,27 @@ agent-browser --session stage4new get url -> exit 143
 This is the single permitted external browser-fixture blocker. It is not production-defect evidence;
 do not retry the same stalled commands or close `6.11`. Keep `6.12+`, merge, archive, and release
 untouched until a terminating desktop/mobile browser path produces the missing evidence.
+
+### 6.11 Review Decision: Project Binding Settlement Candidate (2026-07-19)
+
+The latest bounded same-origin `/config` run changes the review classification of Project Binding. With
+the direct pinned OpenSpec 1.6 fixture, isolated `XDG_DATA_HOME`, backend `13122`, and a same-origin
+Vite proxy, the real `updateProjectBinding(A -> B)` interaction showed:
+
+```text
+launch openspec/config.yaml -> store: B
+Active Root subscription -> B
+mutation response -> still pending after bounded 20s; UI remains Saving...
+```
+
+The earlier `localhost`/`127.0.0.1` CORS mismatch was a fixture error and was removed from this run.
+The remaining sequence is a narrow 6.11 red candidate, not browser acceptance and not yet a proven
+production defect. `planningConfig.updateProjectBinding` currently writes the launch file and then
+calls the full `fetchProjectBindingConfig`/Planning-root transition; existing router tests mock that
+resolver as immediate and do not cover pending retirement/lease settlement.
+
+The next worker may add only a typed public server fixed-point test for this sequence. A production fix
+requires the test to fail at the current fixed point and to fail again when the exact proposed cleanup
+or settlement transition is removed. No arbitrary sleeps, generic generation barrier, router rewrite,
+or scope expansion is authorized. Stop and clean the old backend/Vite fixture before rerunning. Keep
+`6.11` open at `61/131`; do not start `6.12+`, merge, archive, release, or App/Store work.

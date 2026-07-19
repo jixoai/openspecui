@@ -3317,3 +3317,39 @@ available. The previous screenshot/URL commands remain the one allowed external 
 scenario, screenshot, A -> B -> A convergence, conflict retry, provenance, or mobile `scrollWidth`
 evidence may be claimed. Keep `6.11` open at `61/131`; do not start `6.12+`, merge, archive, or
 release.
+
+### 6.11 Review Decision: Project Binding Mutation Settlement Candidate (2026-07-19)
+
+The bounded same-origin browser path produced a new observation that is materially different from the
+earlier stalled App/screenshot fixture. It used the direct project Web surface, a pinned OpenSpec 1.6
+fixture, isolated `XDG_DATA_HOME`, backend `13122`, and a Vite same-origin proxy (no cross-origin
+`?api=` override). The `/config` Project Binding form was driven through its real `Store` input and
+`Save binding` control.
+
+Observed bounded sequence:
+
+```text
+updateProjectBinding(A -> B)
+  -> launch openspec/config.yaml contains store: B
+  -> Active Root subscription converges to B
+  -> Project Binding mutation remains pending (`Saving...`) beyond the bounded 20s observation
+```
+
+This is not a browser acceptance result and does not yet prove a production defect. It is a 6.11 red
+candidate because the public mutation path in `packages/server/src/router.ts:2958-2963` writes the
+launch file and then synchronously calls `fetchProjectBindingConfig(ctx)`, which resolves the complete
+Planning-root transition through the shared manager queue. The existing router test at
+`packages/server/src/router.test.ts:1071` uses a mock resolver that completes immediately and cannot
+observe a pending transition or retirement lease. The browser path also initially exposed a host/CORS
+fixture error (`localhost` embedded UI requesting `127.0.0.1`); the same-origin proxy removed that
+fixture error and is the only path used for this candidate.
+
+No production code was changed from this observation. The next worker slice must add a checked public
+server fixed-point test, prove the exact pending settlement and mutation resistance, and only then
+implement the smallest owner-layer correction if the red remains. Do not add sleeps, a generic
+generation barrier, or a router rewrite based on the browser symptom alone. Stale fixture processes
+from the bounded run (backend `13122` and its Vite process) must be stopped before the next attempt so
+they cannot contaminate the evidence.
+
+Checkpoint `6.11` remains open at `61/131`; no `6.12+`, merge, archive, release, or App/Store scope is
+authorized.
