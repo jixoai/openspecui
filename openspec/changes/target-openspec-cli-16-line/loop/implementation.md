@@ -3798,3 +3798,9 @@ Scope, Fast, Web Browser, xterm Browser, and Browser aggregation on exact remote
 `51f1f7833ef2a88d6b7b4f3e90d5f782a20129d6`. This closes the CI preparation/delivery blocker only.
 Parent `6.11` remains unchecked at `61/131`, and child B2.5 remains open solely for owner manual
 single-page/multi-tab acceptance.
+
+### W2 Owner Acceptance Recorded (2026-07-20)
+
+The owner confirmed W2's single-page Store A -> B settlement and same-project multi-tab subscription
+convergence, with no stale draft or false success/error state. This closes child B2.5 only. Parent
+`6.11` remains unchecked at `61/131`; its separate App multi-project tab acceptance remains outstanding.

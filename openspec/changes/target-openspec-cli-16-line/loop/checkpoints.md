@@ -1129,3 +1129,8 @@ W2 follow-up status (2026-07-20): child Change evidence commit `68ed1e9` records
 `89de4df0d763e033e204c19302b43569e1cbc442`, clean SSG/full local gates, the bounded Project Binding
 single-page fixture, and the cleanup correction review. B2.5 remains open only for the owner's manual
 single-page/multi-tab acceptance. This does not close or alter parent checkpoint `6.11`.
+
+W2 owner acceptance (2026-07-20): the owner confirmed the child Change's single-page Store A -> B
+convergence and same-project multi-tab subscription convergence, including the absence of stale draft or
+false success/error state. Child B2.5 is now complete. Parent `6.11` remains open because its App
+multi-project tab acceptance is a distinct W4 boundary and is not inferred from W2.

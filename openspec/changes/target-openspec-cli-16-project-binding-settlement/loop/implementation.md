@@ -463,3 +463,16 @@ The implementation/evidence branch was clean and matched remote head `51f1f78` b
 Automated B2.5 evidence and independent review are now complete. B2.5 remains unchecked only for the
 owner's agreed manual single-page and multi-tab acceptance; this remote result does not substitute for
 that observation or authorize W3/`6.12+`.
+
+## B2.5 owner acceptance (2026-07-20)
+
+The owner confirmed both W2-specific manual checks against the delivered Project Web behavior:
+
+1. Single page: Store A -> Store B completed, the launch write reported `Transition: converging`, and
+   Project Binding plus Active Root converged to B.
+2. Same-project multi-tab: a second page converged through its subscription after the first page switched
+   Store, with no stale draft or false success/error state.
+
+Together with the bounded Playwright flow, clean SSG/full gates, pinned-CLI CI correction, and independent
+review above, this closes B2.5. Parent `6.11` remains a separate checkpoint; its App multi-project tab
+acceptance is not inferred from this W2 same-project test.

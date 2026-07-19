@@ -15,8 +15,9 @@ Orthogonal intents (created 2026-07-19 Asia/Shanghai):
       and mutation-resistance red tests for the exact response/settlement transition.
 - [x] B2.4 Preserve Config dirty declarations and a generation-safe launch repair path through stale,
       delayed, or failed subscription convergence.
-- [ ] B2.5 Run focused tests, typecheck, clean SSG, one bounded direct-Web flow on the corrected SHA, and
-      independent review evidence.
+- [x] B2.5 Run focused tests, typecheck, clean SSG, one bounded direct-Web flow on the corrected SHA,
+      independent review evidence, and owner acceptance of single-page plus same-project multi-tab
+      Store A -> B convergence.
 
 Evidence note (2026-07-19): B2.1-B2.2 are implemented. Independent review reopened B2.3-B2.4 because
 the first green fixture subscribed to an internal Root Context helper, selected Root B through mutable
@@ -83,3 +84,8 @@ Active-Root-A/Refreshing observation had no exact SHA or raw logs and did not re
 fixture, so it remains unverified characterization rather than a production defect.
 
 Do not start W3, `6.12+`, merge, archive, or release from this Change.
+
+Owner acceptance (2026-07-20): the owner confirmed the W2-specific manual checks: single-page Store A ->
+Store B converges with `Transition: converging`, Project Binding and Active Root show B, and a second
+same-project page converges through its subscription without stale draft or false success/error state.
+This closes B2.5. It does not close parent `6.11`'s separate App multi-project tab acceptance.
