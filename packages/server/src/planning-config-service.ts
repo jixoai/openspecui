@@ -16,6 +16,7 @@ import {
   reactiveReadFile,
   updateProjectBindingContent,
   updateReactiveFileCache,
+  writePhysicalReactiveFile,
   type ActiveRootConfig,
   type CliExecutor,
   type CliJsonValue,
@@ -184,7 +185,11 @@ export async function writeProjectBindingConfig(input: {
 }): Promise<ProjectBindingLaunchWrite> {
   const file = await readProjectConfigFile({ rootPath: input.launchProjectDir })
   if (!file.path) throw new Error('Launch-project config path is unavailable.')
-  await writeConfigFile(file.path, updateProjectBindingContent(file.content, input.update))
+  await writePhysicalReactiveFile({
+    rootPath: input.launchProjectDir,
+    relativePath: join('openspec', file.format === 'yml' ? 'config.yml' : 'config.yaml'),
+    content: updateProjectBindingContent(file.content, input.update),
+  })
   const writtenFile = await readProjectConfigFile({ rootPath: input.launchProjectDir })
   return {
     state: 'write-complete',

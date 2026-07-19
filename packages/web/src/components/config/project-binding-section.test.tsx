@@ -2,7 +2,7 @@
  * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Verify Project Binding presents launch/root ownership without registry inference.
  * 2. Verify Store/Reference edits submit one structured, loading-locked mutation.
- * 3. Verify pending/failure/transport state locks writes and retains trustworthy declarations.
+ * 3. Verify only an active write locks controls while stale/error evidence retains a repair path.
  * 4. Verify mutation preview evidence does not replace the subscribed current Root Context.
  * 5. Verify convergence requires the matching ready Root Context identity and releases on current root error.
  *
@@ -13,10 +13,19 @@
  */
 import type { ProjectBindingConfig, ProjectBindingUpdateResult } from '@openspecui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProjectBindingSection } from './project-binding-section'
+import { useProjectBindingSettlement } from './use-project-binding-settlement'
 
 const { bindingSubscriptionMock, updateProjectBindingMock } = vi.hoisted(() => ({
   bindingSubscriptionMock: vi.fn(),
@@ -135,29 +144,32 @@ function bindingUpdateResult(
   state: 'converging' | 'preview-error' = 'converging'
 ): ProjectBindingUpdateResult {
   const error = { code: 'root-unresolved', message: 'Declared Store did not resolve.' } as const
+  const launchWrite = {
+    state: 'write-complete' as const,
+    owner: config.owner,
+    file: config.file,
+    binding: config.binding,
+    completedAt: 1,
+  }
+  if (state === 'converging') {
+    return {
+      kind: 'project-binding-update',
+      launchWrite,
+      rootPreview: config.rootPreview,
+      transition: { id: 'binding-transition-1', state: 'converging', observedAt: 1 },
+    }
+  }
   return {
     kind: 'project-binding-update',
-    launchWrite: {
-      state: 'write-complete',
-      owner: config.owner,
-      file: config.file,
-      binding: config.binding,
-      completedAt: 1,
+    launchWrite,
+    rootPreview: {
+      state: 'error',
+      data: null,
+      attempt: config.rootPreview.data,
+      error,
+      observedAt: 2,
     },
-    rootPreview:
-      state === 'converging'
-        ? config.rootPreview
-        : {
-            state: 'error',
-            data: null,
-            attempt: config.rootPreview.data,
-            error,
-            observedAt: 2,
-          },
-    transition:
-      state === 'converging'
-        ? { id: 'binding-transition-1', state: 'converging', observedAt: 1 }
-        : { id: 'binding-transition-1', state: 'preview-error', observedAt: 2, error },
+    transition: { id: 'binding-transition-1', state: 'preview-error', observedAt: 2, error },
   }
 }
 
@@ -275,7 +287,9 @@ describe('ProjectBindingSection', () => {
     expect(screen.getByText('/stores/shared')).toBeTruthy()
     expect(screen.getByLabelText('Store')).toHaveValue('design-system')
     expect(screen.getByLabelText('Reference Store id')).toHaveValue('platform-next')
-    expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled()
+    expect(screen.getByLabelText('Store')).toBeEnabled()
+    expect(screen.getByLabelText('Reference Store id')).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled()
     expect(screen.queryByRole('button', { name: 'Saved' })).toBeNull()
     expect(
       screen.getByText('Transition: converging · waiting for Root Context subscription')
@@ -291,7 +305,7 @@ describe('ProjectBindingSection', () => {
       target: { value: 'platform-next' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled())
 
     bindingSubscriptionMock.mockReturnValue({
       data: {
@@ -303,7 +317,7 @@ describe('ProjectBindingSection', () => {
     })
     rendered.rerender(<ProjectBindingSection isStatic={false} />)
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled())
     expect(screen.getByLabelText('Store')).toHaveValue('design-system')
     expect(screen.getByLabelText('Reference Store id')).toHaveValue('platform-next')
     expect(screen.queryByRole('button', { name: 'Saved' })).toBeNull()
@@ -319,7 +333,7 @@ describe('ProjectBindingSection', () => {
       target: { value: 'platform-next' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled())
 
     if (updated.rootPreview.state !== 'ready') throw new Error('Expected a ready test preview.')
     bindingSubscriptionMock.mockReturnValue({
@@ -342,7 +356,7 @@ describe('ProjectBindingSection', () => {
     })
     rendered.rerender(<ProjectBindingSection isStatic={false} />)
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled())
     expect(screen.getByLabelText('Store')).toHaveValue('design-system')
     expect(screen.queryByRole('button', { name: 'Saved' })).toBeNull()
   })
@@ -357,7 +371,7 @@ describe('ProjectBindingSection', () => {
       target: { value: 'platform-next' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled())
 
     bindingSubscriptionMock.mockReturnValue({
       data: updated,
@@ -366,11 +380,70 @@ describe('ProjectBindingSection', () => {
     })
     rendered.rerender(<ProjectBindingSection isStatic={false} />)
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled())
+    await waitFor(() => expect(screen.getByLabelText('Store')).toBeEnabled())
     expect(screen.getByLabelText('Store')).toHaveValue('design-system')
     expect(screen.getByLabelText('Reference Store id')).toHaveValue('platform-next')
+    expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled()
     expect(screen.queryByRole('button', { name: 'Saved' })).toBeNull()
     expect(screen.getByText('Project Binding subscription disconnected.')).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText('Store'), { target: { value: 'repair-after-error' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
+    await waitFor(() => {
+      expect(updateProjectBindingMock).toHaveBeenLastCalledWith({
+        store: 'repair-after-error',
+        references: [{ id: 'platform-next' }],
+      })
+    })
+  })
+
+  it('retires pending B before a late B emission can clear a newer C draft', async () => {
+    const rendered = renderSection(<ProjectBindingSection isStatic={false} />)
+    updateProjectBindingMock.mockResolvedValueOnce(bindingUpdateResult(updatedBindingConfig()))
+
+    fireEvent.change(screen.getByLabelText('Store'), { target: { value: 'design-system' } })
+    fireEvent.change(screen.getByLabelText('Reference Store id'), {
+      target: { value: 'platform-next' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
+    await waitFor(() => expect(screen.getByLabelText('Store')).toBeEnabled())
+
+    fireEvent.change(screen.getByLabelText('Store'), { target: { value: 'repair-store-c' } })
+    expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled()
+
+    bindingSubscriptionMock.mockReturnValue({
+      data: updatedBindingConfig(),
+      isLoading: false,
+      error: null,
+    })
+    rendered.rerender(<ProjectBindingSection isStatic={false} />)
+
+    await waitFor(() => expect(screen.getByLabelText('Store')).toHaveValue('repair-store-c'))
+    expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'Saved' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
+    await waitFor(() => {
+      expect(updateProjectBindingMock).toHaveBeenLastCalledWith({
+        store: 'repair-store-c',
+        references: [{ id: 'platform-next' }],
+      })
+    })
+  })
+
+  it('retires pending convergence exactly when the saved draft generation is edited', () => {
+    const config = bindingConfig()
+    const { result } = renderHook(() =>
+      useProjectBindingSettlement({ config, subscriptionError: null })
+    )
+
+    act(() => result.current.mutationSucceeded(bindingUpdateResult(updatedBindingConfig())))
+    expect(result.current.pendingConvergence).not.toBeNull()
+
+    act(() => result.current.editStore('repair-store-c'))
+    expect(result.current.pendingConvergence).toBeNull()
+    expect(result.current.storeId).toBe('repair-store-c')
+    expect(result.current.dirty).toBe(true)
   })
 
   it('retains the draft and releases repair when subscription convergence reports a Root error', async () => {
@@ -382,7 +455,7 @@ describe('ProjectBindingSection', () => {
       target: { value: 'platform-next' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled())
 
     const updated = updatedBindingConfig()
     if (updated.rootPreview.state !== 'ready') throw new Error('Expected a ready test preview.')
@@ -455,7 +528,7 @@ describe('ProjectBindingSection', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled()
     })
 
     bindingSubscriptionMock.mockReturnValue({
@@ -524,7 +597,7 @@ describe('ProjectBindingSection', () => {
     expect(updateProjectBindingMock).not.toHaveBeenCalled()
   })
 
-  it('keeps stale binding evidence visible but locks every declaration control', () => {
+  it('keeps stale binding evidence visible while retaining declaration repair controls', () => {
     bindingSubscriptionMock.mockReturnValue({
       data: bindingConfig(),
       isLoading: false,
@@ -533,10 +606,10 @@ describe('ProjectBindingSection', () => {
     renderSection(<ProjectBindingSection isStatic={false} />)
 
     expect(screen.getByRole('alert')).toHaveTextContent('binding transport failed')
-    expect(screen.getByLabelText('Store')).toBeDisabled()
-    expect(screen.getByLabelText('Reference Store id')).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Remove Reference platform' })).toBeDisabled()
+    expect(screen.getByLabelText('Store')).toBeEnabled()
+    expect(screen.getByLabelText('Reference Store id')).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Remove Reference platform' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Saved' })).toBeDisabled()
     expect(updateProjectBindingMock).not.toHaveBeenCalled()
   })

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Register lease-scoped planning-root document, OPSX, dashboard, and archive procedures.
  * 2. Register CLI, Root Context, tool initialization, configuration, Store, terminal-result, and typed OPSX profile/drift projections.
  * 3. Register binding-safe Git, terminal, system, notification, and recovery procedures.
@@ -2946,23 +2946,28 @@ async function updateProjectBindingConfig(
     cliExecutor: ctx.cliExecutor,
   })
   const transitionId = randomUUID()
+  if (rootPreview.state === 'ready') {
+    return {
+      kind: 'project-binding-update',
+      launchWrite,
+      rootPreview,
+      transition: {
+        id: transitionId,
+        state: 'converging',
+        observedAt: rootPreview.observedAt,
+      },
+    }
+  }
   return {
-    kind: 'project-binding-update' as const,
+    kind: 'project-binding-update',
     launchWrite,
     rootPreview,
-    transition:
-      rootPreview.state === 'ready'
-        ? {
-            id: transitionId,
-            state: 'converging' as const,
-            observedAt: rootPreview.observedAt,
-          }
-        : {
-            id: transitionId,
-            state: 'preview-error' as const,
-            observedAt: rootPreview.observedAt,
-            error: rootPreview.error,
-          },
+    transition: {
+      id: transitionId,
+      state: 'preview-error',
+      observedAt: rootPreview.observedAt,
+      error: rootPreview.error,
+    },
   }
 }
 
@@ -2996,6 +3001,11 @@ export const planningConfigRouter = router({
     createReactiveSubscription(() => fetchProjectBindingConfig(ctx, true))
   ),
 
+  /**
+   * Persist launch-owned Store/Reference declarations, then return the completed launch write, one
+   * detached Root Context preview, and a mutation-local transition id. The Planning-root subscription
+   * remains the authority for asynchronous convergence and does not echo that mutation-local id.
+   */
   updateProjectBinding: publicProcedure
     .input(ProjectBindingUpdateSchema)
     .mutation(({ ctx, input }) => updateProjectBindingConfig(ctx, input)),

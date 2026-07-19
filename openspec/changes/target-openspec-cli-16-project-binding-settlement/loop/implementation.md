@@ -7,8 +7,8 @@ Orthogonal intents (created 2026-07-19 Asia/Shanghai):
 
 # Implementation Log
 
-Status: correction required after independent review of `c85ce12`. The owner selected
-write-then-converge on 2026-07-19.
+Status: B2.1-B2.4 implemented after independent review of `c85ce12`; B2.5 remains open. The owner
+selected write-then-converge on 2026-07-19.
 
 ## Fixed point and red evidence
 
@@ -133,3 +133,103 @@ removing/bypassing the physical owner, correlated pair, ready identity compariso
 retirement in turn. A disabled button or a green final test alone is insufficient. The bounded browser
 run against `c85ce12` is candidate characterization only; final direct-Web and clean SSG evidence must run
 on the corrected SHA.
+
+## B2.1-B2.4 correction implementation (2026-07-19)
+
+The public result is now a correlated union:
+
+```text
+write-complete + ready Root preview + converging transition
+write-complete + error Root preview + preview-error transition
+```
+
+The checked transport fixture proves both variants exist and that neither contradictory cross-pair is
+assignable. The Router constructs each branch separately and the public mutation procedure documents that
+its detached preview is evidence, while the subscription remains convergence authority.
+
+`writeProjectBindingConfig` now delegates only its launch-owned `openspec/config.yaml|yml` target to
+`writePhysicalReactiveFile`. The owner resolves the launch root physically, rejects external mutation
+through intermediate and final symlinks without changing the referenced files, settles overlapping
+file/directory/existence/stat projections, then the service rereads the settled file to create
+`launchWrite`. Environment-global and Active-root behavior were not refactored in this W2 slice.
+
+Independent review on 2026-07-20 tightened the public RPC documentation to state that the returned
+transition id is mutation-local and is not echoed by the authoritative Root Context subscription. It also
+added a successful pre-existing `config.yml` counterexample: the physical owner preserves the yml path,
+returns with a consistent reactive file/directory/existence/stat snapshot, leaves `config.yaml` absent,
+and rereads matching disk, file-format, content, Store, and Reference evidence.
+
+The partial failure fixture now writes `store-b`, lets Doctor successfully resolve Root B, and makes Context
+return a typed nonzero failure. The error attempt retains B path/source/Store, inherited data scope, parsed
+Root facts, raw Doctor/Context stdout, stderr, exit status, diagnostics, and absent contract drift. The
+transition error is asserted equal to the Root preview error.
+
+Web draft/convergence state moved to `use-project-binding-settlement.ts`. Only an in-flight HTTP mutation
+locks controls. Stale Root A, stale data scope, Root error, and subscription transport error retain the
+written draft plus a usable launch repair path. Each save records the current draft generation; any edit
+increments the generation and retires its pending result before a late older emission can settle or replace
+the newer draft.
+
+### Actual red evidence
+
+Before production correction:
+
+```text
+pnpm --filter @openspecui/server run typecheck:transport-tests
+  failed TS2322 twice: true was not assignable to false because neither correlated variant existed
+
+pnpm --filter @openspecui/server exec vitest run \
+  src/planning-config-project-binding-write.test.ts --no-file-parallelism
+  4/4 failed: cached file/dir/exists/stat remained stale; intermediate openspec and final
+  config.yaml/config.yml symlinks all resolved and wrote the external file instead of rejecting
+
+pnpm --filter @openspecui/web exec vitest run \
+  src/components/config/project-binding-section.test.tsx --no-file-parallelism
+  3 failed: stale A and retained subscription-error controls remained disabled, so C could not be edited
+```
+
+Mutation-resistance was then executed against the green implementation:
+
+```text
+# Bypass sameRootIdentity and retain binding equality only
+pnpm --filter @openspecui/web exec vitest run \
+  src/components/config/project-binding-section.test.tsx --no-file-parallelism \
+  -t 'does not settle when subscription B still carries|does not settle when Root B identity'
+  2 failed: both projections were relabeled Saved
+
+# Replace editedState pending:null with pending:state.pending
+pnpm --filter @openspecui/web exec vitest run \
+  src/components/config/project-binding-section.test.tsx --no-file-parallelism \
+  -t 'retires pending convergence exactly'
+  1 failed: expected pendingConvergence to be null, received the old B result
+```
+
+Both mutants were immediately reverted. One earlier hook-test attempt constructed a fresh config object on
+every render and exhausted the worker heap; it was discarded as a fixture error, changed to a stable input,
+and is not counted as product evidence.
+
+### Focused green evidence
+
+```text
+pnpm --filter @openspecui/core exec vitest run src/planning-config.test.ts
+  1 file / 4 tests passed
+pnpm --filter @openspecui/server exec vitest run \
+  src/planning-config-project-binding-write.test.ts src/planning-config-service.test.ts \
+  src/planning-config-router.test.ts src/router.test.ts --no-file-parallelism
+  4 files / 103 tests passed
+pnpm --filter @openspecui/web exec vitest run \
+  src/components/config/project-binding-section.test.tsx src/routes/config.test.tsx \
+  --no-file-parallelism
+  2 files / 28 tests passed
+pnpm --filter @openspecui/core typecheck
+pnpm --filter @openspecui/server typecheck
+pnpm --filter @openspecui/web typecheck
+  all passed
+pnpm format:check
+pnpm lint:ci
+git diff --check
+  passed on the final B2.1-B2.4 candidate
+```
+
+B2.1-B2.4 are implemented. B2.5 remains open: this slice does not run or claim clean SSG, direct-Web,
+full repository gates, independent review, push, merge, archive, release, W3, or `6.12+`.

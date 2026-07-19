@@ -3,8 +3,7 @@
  * 1. Edit only launch-project Store and Reference declarations.
  * 2. Preserve Root Context preview and declaration diagnostics without treating them as registry truth.
  * 3. Bind mutation controls and execution to loading/error/dirty lifecycle states.
- * 4. Keep launch-write preview evidence separate while Root Context subscriptions converge.
- * 5. Preserve subscription convergence errors without relabeling them as a successful match.
+ * 4. Render launch-write and subscription evidence owned by the generation-safe settlement hook.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-18): "Project Binding must show direct Reference Store, root, and Doctor diagnostics."
@@ -13,24 +12,10 @@
 import { Button } from '@/components/button'
 import { trpcClient } from '@/lib/trpc'
 import { useProjectBindingSubscription } from '@/lib/use-planning-config'
-import type {
-  PlanningConfigReference,
-  ProjectBindingConfig,
-  ProjectBindingUpdateResult,
-} from '@openspecui/core'
+import type { PlanningConfigReference, ProjectBindingConfig } from '@openspecui/core'
 import { useMutation } from '@tanstack/react-query'
 import { AlertCircle, Link2, Loader2, Plus, Save, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
-
-interface ReferenceDraft extends PlanningConfigReference {
-  key: number
-}
-
-let nextReferenceKey = 1
-
-function createReferenceDraft(reference: PlanningConfigReference): ReferenceDraft {
-  return { ...reference, key: nextReferenceKey++ }
-}
+import { useProjectBindingSettlement } from './use-project-binding-settlement'
 
 function currentRootPreview(config: ProjectBindingConfig) {
   return config.rootPreview.state === 'ready'
@@ -38,96 +23,22 @@ function currentRootPreview(config: ProjectBindingConfig) {
     : { context: config.rootPreview.attempt, error: config.rootPreview.error }
 }
 
-function sameBinding(
-  left: ProjectBindingConfig['binding'],
-  right: ProjectBindingConfig['binding']
-) {
-  return JSON.stringify(left) === JSON.stringify(right)
-}
-
-function sameRootIdentity(
-  left: ProjectBindingConfig['rootPreview'],
-  right: ProjectBindingConfig['rootPreview']
-) {
-  if (left.state !== 'ready' || right.state !== 'ready') return false
-  const leftRoot = left.data.planningRoot
-  const rightRoot = right.data.planningRoot
-  return (
-    (leftRoot?.path ?? null) === (rightRoot?.path ?? null) &&
-    (leftRoot?.source ?? null) === (rightRoot?.source ?? null) &&
-    (leftRoot?.store_id ?? null) === (rightRoot?.store_id ?? null) &&
-    left.data.storeId === right.data.storeId &&
-    left.data.dataScope.path === right.data.dataScope.path &&
-    left.data.dataScope.source === right.data.dataScope.source &&
-    left.data.dataScope.environmentVariable === right.data.dataScope.environmentVariable
-  )
-}
-
-function bindingDrafts(binding: ProjectBindingConfig['binding']) {
-  return {
-    storeId: binding.store.state === 'declared' ? binding.store.id : '',
-    references: binding.references.entries.map(createReferenceDraft),
-  }
-}
-
 /** Render and mutate launch-project Store/Reference binding independently of active-root config. */
 export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
   const { data: config, isLoading, error: subscriptionError } = useProjectBindingSubscription()
-  const [storeId, setStoreId] = useState('')
-  const [references, setReferences] = useState<ReferenceDraft[]>([])
-  const [dirty, setDirty] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
-  const [mutationEvidence, setMutationEvidence] = useState<ProjectBindingUpdateResult | null>(null)
-  const [pendingConvergence, setPendingConvergence] = useState<ProjectBindingUpdateResult | null>(
-    null
-  )
-  const [convergenceError, setConvergenceError] = useState<string | null>(null)
-  const bindingLocked = Boolean(
-    isLoading || subscriptionError !== null || pendingConvergence?.transition.state === 'converging'
-  )
-
-  useEffect(() => {
-    if (!config) return
-    if (pendingConvergence) {
-      if (subscriptionError) {
-        setFormError(subscriptionError.message)
-        return
-      }
-      if (
-        pendingConvergence.rootPreview.state === 'ready' &&
-        config.rootPreview.state === 'error'
-      ) {
-        setPendingConvergence(null)
-        setConvergenceError(config.rootPreview.error.message)
-        setFormError(config.rootPreview.error.message)
-        return
-      }
-      if (
-        sameBinding(config.binding, pendingConvergence.launchWrite.binding) &&
-        sameRootIdentity(config.rootPreview, pendingConvergence.rootPreview)
-      ) {
-        const next = bindingDrafts(config.binding)
-        setStoreId(next.storeId)
-        setReferences(next.references)
-        setDirty(false)
-        setPendingConvergence(null)
-        setConvergenceError(null)
-        setFormError(null)
-      }
-      return
-    }
-    if (dirty) return
-    const next = bindingDrafts(config.binding)
-    setStoreId(next.storeId)
-    setReferences(next.references)
-    setFormError(null)
-  }, [config, dirty, pendingConvergence, subscriptionError])
+  const settlement = useProjectBindingSettlement({ config, subscriptionError })
+  const {
+    convergenceError,
+    dirty,
+    formError,
+    mutationEvidence,
+    pendingConvergence,
+    references,
+    storeId,
+  } = settlement
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (bindingLocked) {
-        throw new Error(subscriptionError?.message ?? 'Project Binding is stale.')
-      }
       const normalizedReferences: PlanningConfigReference[] = []
       for (const reference of references) {
         const id = reference.id.trim()
@@ -140,31 +51,9 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
         references: normalizedReferences.length > 0 ? normalizedReferences : null,
       })
     },
-    onSuccess: (result) => {
-      setMutationEvidence(result)
-      if (result.transition.state === 'converging') {
-        setConvergenceError(null)
-        setPendingConvergence(result)
-      } else {
-        setPendingConvergence(null)
-        setConvergenceError(null)
-        setFormError(result.transition.error.message)
-      }
-    },
-    onError: (error) => {
-      setFormError(error instanceof Error ? error.message : String(error))
-    },
+    onSuccess: settlement.mutationSucceeded,
+    onError: settlement.mutationFailed,
   })
-
-  const updateReference = (key: number, update: Partial<PlanningConfigReference>) => {
-    setReferences((current) =>
-      current.map((reference) => (reference.key === key ? { ...reference, ...update } : reference))
-    )
-    setDirty(true)
-    setMutationEvidence(null)
-    setConvergenceError(null)
-    setFormError(null)
-  }
 
   if (isStatic) {
     return (
@@ -187,7 +76,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
   }
 
   const preview = currentRootPreview(config)
-  const visibleError = subscriptionError?.message ?? formError ?? saveMutation.error?.message
+  const visibleError = subscriptionError?.message ?? formError
 
   return (
     <div className="space-y-5">
@@ -201,7 +90,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
         <Button
           size="sm"
           onClick={() => saveMutation.mutate()}
-          disabled={!dirty || saveMutation.isPending || bindingLocked}
+          disabled={!dirty || saveMutation.isPending}
           activity={!dirty && saveMutation.isSuccess}
         >
           {saveMutation.isPending ? (
@@ -221,14 +110,8 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
           <input
             id="project-binding-store"
             value={storeId}
-            disabled={saveMutation.isPending || bindingLocked}
-            onChange={(event) => {
-              setStoreId(event.target.value)
-              setDirty(true)
-              setMutationEvidence(null)
-              setConvergenceError(null)
-              setFormError(null)
-            }}
+            disabled={saveMutation.isPending}
+            onChange={(event) => settlement.editStore(event.target.value)}
             placeholder="No declared Store"
             className="border-border bg-background focus-visible:ring-primary h-10 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-1"
           />
@@ -244,16 +127,8 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
             </h3>
             <button
               type="button"
-              disabled={saveMutation.isPending || bindingLocked}
-              onClick={() => {
-                setReferences((current) => [
-                  ...current,
-                  createReferenceDraft({ id: '', remote: undefined }),
-                ])
-                setDirty(true)
-                setMutationEvidence(null)
-                setConvergenceError(null)
-              }}
+              disabled={saveMutation.isPending}
+              onClick={settlement.addReference}
               className="border-border hover:bg-muted inline-flex h-8 items-center gap-1 rounded-md border px-2 text-xs"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -270,17 +145,19 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
                 >
                   <input
                     value={reference.id}
-                    disabled={saveMutation.isPending || bindingLocked}
-                    onChange={(event) => updateReference(reference.key, { id: event.target.value })}
+                    disabled={saveMutation.isPending}
+                    onChange={(event) =>
+                      settlement.editReference(reference.key, { id: event.target.value })
+                    }
                     aria-label="Reference Store id"
                     placeholder="Store id"
                     className="border-border bg-background focus-visible:ring-primary h-10 min-w-0 rounded-md border px-3 text-sm outline-none focus-visible:ring-1"
                   />
                   <input
                     value={reference.remote ?? ''}
-                    disabled={saveMutation.isPending || bindingLocked}
+                    disabled={saveMutation.isPending}
                     onChange={(event) =>
-                      updateReference(reference.key, {
+                      settlement.editReference(reference.key, {
                         remote: event.target.value || undefined,
                       })
                     }
@@ -290,15 +167,8 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
                   />
                   <button
                     type="button"
-                    disabled={saveMutation.isPending || bindingLocked}
-                    onClick={() => {
-                      setReferences((current) =>
-                        current.filter((item) => item.key !== reference.key)
-                      )
-                      setDirty(true)
-                      setMutationEvidence(null)
-                      setConvergenceError(null)
-                    }}
+                    disabled={saveMutation.isPending}
+                    onClick={() => settlement.removeReference(reference.key)}
                     aria-label={`Remove Reference ${reference.id || 'row'}`}
                     title="Remove Reference"
                     className="border-border text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-10 w-10 items-center justify-center rounded-md border"

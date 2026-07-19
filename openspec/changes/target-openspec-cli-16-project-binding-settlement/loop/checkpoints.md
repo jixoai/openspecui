@@ -7,13 +7,13 @@ Orthogonal intents (created 2026-07-19 Asia/Shanghai):
 
 # Checkpoints
 
-- [ ] B2.1 Define a correlated typed write-then-converge response with launch-write, `rootPreview`, transition state,
+- [x] B2.1 Define a correlated typed write-then-converge response with launch-write, `rootPreview`, transition state,
       root provenance, diagnostics, stdout/stderr, and exit status.
-- [ ] B2.2 Make `updateProjectBinding` return after a physically confined, reactively settled launch-file
+- [x] B2.2 Make `updateProjectBinding` return after a physically confined, reactively settled launch-file
       write and one detached preview attempt; subscriptions perform asynchronous Planning-root convergence.
-- [ ] B2.3 Add checked public Router/server, partial CLI failure, physical symlink/reactive settlement,
+- [x] B2.3 Add checked public Router/server, partial CLI failure, physical symlink/reactive settlement,
       and mutation-resistance red tests for the exact response/settlement transition.
-- [ ] B2.4 Preserve Config dirty declarations and a generation-safe launch repair path through stale,
+- [x] B2.4 Preserve Config dirty declarations and a generation-safe launch repair path through stale,
       delayed, or failed subscription convergence.
 - [ ] B2.5 Run focused tests, typecheck, clean SSG, one bounded direct-Web flow on the corrected SHA, and
       independent review evidence.
@@ -36,5 +36,12 @@ still permits contradictory preview/transition pairs; the preview-error fixture 
 the launch write bypasses the physical/reactive owner; stale/error states lock the repair controls; and a
 newer draft has no generation protection from a late older emission. B2.1-B2.4 are therefore open.
 B2.5 remains open for corrected direct-Web evidence, clean SSG, full gates, and independent review.
+
+Implementation evidence (2026-07-19): the corrected candidate models ready/converging and
+error/preview-error as one correlated union, writes launch config through the physical/reactive owner,
+preserves Root B when Context alone fails, and moves draft generation/settlement into a narrow Web hook.
+Checked red runs failed on the old union, raw writer, locked repair controls, removed Root identity check,
+and removed pending retirement. Focused Core/Server/Web tests and typechecks pass. B2.1-B2.4 are closed;
+B2.5 remains open for the explicitly separate clean SSG, direct-Web, full-gate, and independent-review lane.
 
 Do not start W3, `6.12+`, merge, archive, or release from this Change.

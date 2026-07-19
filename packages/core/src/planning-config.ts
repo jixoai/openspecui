@@ -129,13 +129,23 @@ export type ProjectBindingTransition =
       error: RootContextError
     }
 
-/** Public mutation result: launch write is complete while Root Context converges separately. */
-export interface ProjectBindingUpdateResult {
-  kind: 'project-binding-update'
-  launchWrite: ProjectBindingLaunchWrite
-  rootPreview: RootContextResolvedState
-  transition: ProjectBindingTransition
-}
+/**
+ * Public mutation result: the completed launch write carries one correlated detached preview outcome.
+ * A ready preview can only converge; an error preview can only report preview-error.
+ */
+export type ProjectBindingUpdateResult =
+  | {
+      kind: 'project-binding-update'
+      launchWrite: ProjectBindingLaunchWrite
+      rootPreview: Extract<RootContextResolvedState, { state: 'ready' }>
+      transition: Extract<ProjectBindingTransition, { state: 'converging' }>
+    }
+  | {
+      kind: 'project-binding-update'
+      launchWrite: ProjectBindingLaunchWrite
+      rootPreview: Extract<RootContextResolvedState, { state: 'error' }>
+      transition: Extract<ProjectBindingTransition, { state: 'preview-error' }>
+    }
 
 /** Active Planning-root configuration and CLI-owned root provenance. */
 export interface ActiveRootConfig {

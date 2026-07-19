@@ -26,6 +26,37 @@ import type { ZodType } from 'zod'
 import { appRouter } from './router.js'
 import { createServer } from './server.js'
 
+type ConvergingUpdateResult = Extract<
+  ProjectBindingUpdateResult,
+  { transition: { state: 'converging' } }
+>
+type PreviewErrorUpdateResult = Extract<
+  ProjectBindingUpdateResult,
+  { transition: { state: 'preview-error' } }
+>
+
+const correlatedResultTypeEvidence: {
+  convergingExists: [ConvergingUpdateResult] extends [never] ? false : true
+  convergingCanContainErrorPreview: Extract<
+    ConvergingUpdateResult['rootPreview'],
+    { state: 'error' }
+  > extends never
+    ? false
+    : true
+  previewErrorExists: [PreviewErrorUpdateResult] extends [never] ? false : true
+  previewErrorCanContainReadyPreview: Extract<
+    PreviewErrorUpdateResult['rootPreview'],
+    { state: 'ready' }
+  > extends never
+    ? false
+    : true
+} = {
+  convergingExists: true,
+  convergingCanContainErrorPreview: false,
+  previewErrorExists: true,
+  previewErrorCanContainReadyPreview: false,
+}
+
 interface Deferred<T> {
   promise: Promise<T>
   resolve(value: T): void
@@ -92,7 +123,7 @@ async function createRouterFixture() {
   await writeFile(launchConfigPath, 'store: store-a\n', 'utf8')
 
   const server = createServer({ projectDir: launchRoot, enableWatcher: false })
-  let previewError = false
+  let contextError = false
   const readSelectedRoot = async () => {
     const config = await readFile(launchConfigPath, 'utf8')
     return config.includes('store: store-b') ? rootB : rootA
@@ -102,21 +133,6 @@ async function createRouterFixture() {
     version: '1.6.0',
   })
   vi.spyOn(server.cliExecutor.contracts, 'doctorRoot').mockImplementation(async () => {
-    if (previewError) {
-      return commandFailure(
-        {
-          status: [
-            {
-              severity: 'error',
-              code: 'doctor_fixture_failed',
-              message: 'Doctor fixture failed.',
-            },
-          ],
-        },
-        CliDoctorSchema,
-        { stderr: 'doctor fixture stderr', exitCode: 17 }
-      )
-    }
     const selectedRoot = await readSelectedRoot()
     return commandResult(
       {
@@ -139,9 +155,17 @@ async function createRouterFixture() {
     )
   })
   vi.spyOn(server.cliExecutor.contracts, 'context').mockImplementation(async () => {
-    if (previewError) {
+    const selectedRoot = await readSelectedRoot()
+    if (contextError) {
       return commandFailure(
         {
+          root: {
+            path: selectedRoot,
+            source: 'declared',
+            store_id: selectedRoot === rootA ? 'store-a' : 'store-b',
+            role: 'openspec_root',
+          },
+          members: [],
           status: [
             {
               severity: 'error',
@@ -154,7 +178,6 @@ async function createRouterFixture() {
         { stderr: 'context fixture stderr', exitCode: 18 }
       )
     }
-    const selectedRoot = await readSelectedRoot()
     return commandResult(
       {
         root: {
@@ -175,8 +198,8 @@ async function createRouterFixture() {
     rootA,
     rootB,
     server,
-    setPreviewError(value: boolean) {
-      previewError = value
+    setContextError(value: boolean) {
+      contextError = value
     },
     async dispose() {
       vi.restoreAllMocks()
@@ -278,6 +301,15 @@ function expectWriteThenConvergeEvidence(
 }
 
 describe('public Project Binding Router', () => {
+  it('keeps converging and preview-error Root Context pairs correlated in checked types', () => {
+    expect(correlatedResultTypeEvidence).toEqual({
+      convergingExists: true,
+      convergingCanContainErrorPreview: false,
+      previewErrorExists: true,
+      previewErrorCanContainReadyPreview: false,
+    })
+  })
+
   it('returns launch-write and converging preview evidence before a retiring root lease settles', async () => {
     const fixture = await createRouterFixture()
     const operationStarted = createDeferred<void>()
@@ -415,7 +447,7 @@ describe('public Project Binding Router', () => {
 
   it('retains a failed detached preview envelope without losing the completed launch write', async () => {
     const fixture = await createRouterFixture()
-    fixture.setPreviewError(true)
+    fixture.setContextError(true)
     const expectedDataScope = resolveOpenSpecDataScope()
 
     try {
@@ -440,31 +472,58 @@ describe('public Project Binding Router', () => {
         },
         rootPreview: {
           state: 'error',
-          error: { code: 'doctor-contract-drift' },
+          error: { code: 'context-command-failed', message: 'context fixture stderr' },
           attempt: {
-            planningRoot: null,
-            storeId: null,
+            planningRoot: {
+              path: fixture.rootB,
+              source: 'declared',
+              store_id: 'store-b',
+              healthy: true,
+              status: [],
+            },
+            storeId: 'store-b',
             dataScope: expectedDataScope,
             evidence: {
               doctor: {
-                success: false,
-                stdout:
-                  '{"status":[{"severity":"error","code":"doctor_fixture_failed","message":"Doctor fixture failed."}]}',
-                stderr: 'doctor fixture stderr',
-                exitCode: 17,
-                diagnostics: [
-                  {
-                    severity: 'error',
-                    code: 'doctor_fixture_failed',
-                    message: 'Doctor fixture failed.',
+                success: true,
+                stdout: JSON.stringify({
+                  root: {
+                    path: fixture.rootB,
+                    source: 'declared',
+                    store_id: 'store-b',
+                    healthy: true,
+                    status: [],
                   },
-                ],
-                contractError: expect.stringContaining('root'),
+                  store: {
+                    id: 'store-b',
+                    metadata: { present: true, valid: true },
+                    status: [],
+                  },
+                  references: [],
+                  status: [],
+                }),
+                stderr: '',
+                exitCode: 0,
+                diagnostics: [],
               },
               context: {
                 success: false,
-                stdout:
-                  '{"status":[{"severity":"error","code":"context_fixture_failed","message":"Context fixture failed."}]}',
+                stdout: JSON.stringify({
+                  root: {
+                    path: fixture.rootB,
+                    source: 'declared',
+                    store_id: 'store-b',
+                    role: 'openspec_root',
+                  },
+                  members: [],
+                  status: [
+                    {
+                      severity: 'error',
+                      code: 'context_fixture_failed',
+                      message: 'Context fixture failed.',
+                    },
+                  ],
+                }),
                 stderr: 'context fixture stderr',
                 exitCode: 18,
                 diagnostics: [
@@ -474,17 +533,11 @@ describe('public Project Binding Router', () => {
                     message: 'Context fixture failed.',
                   },
                 ],
-                contractError: expect.stringContaining('root'),
               },
             },
             diagnostics: {
-              doctor: [
-                {
-                  severity: 'error',
-                  code: 'doctor_fixture_failed',
-                  message: 'Doctor fixture failed.',
-                },
-              ],
+              root: [],
+              doctor: [],
               context: [
                 {
                   severity: 'error',
@@ -499,8 +552,62 @@ describe('public Project Binding Router', () => {
           id: expect.any(String),
           state: 'preview-error',
           observedAt: expect.any(Number),
-          error: { code: 'doctor-contract-drift' },
+          error: { code: 'context-command-failed', message: 'context fixture stderr' },
         },
+      })
+      if (value.rootPreview.state !== 'error' || value.transition.state !== 'preview-error') {
+        throw new Error('Expected one correlated preview-error result.')
+      }
+      expect(value.transition.error).toEqual(value.rootPreview.error)
+      expect(value.rootPreview.attempt.evidence.doctor).toEqual({
+        success: true,
+        stdout: JSON.stringify({
+          root: {
+            path: fixture.rootB,
+            source: 'declared',
+            store_id: 'store-b',
+            healthy: true,
+            status: [],
+          },
+          store: {
+            id: 'store-b',
+            metadata: { present: true, valid: true },
+            status: [],
+          },
+          references: [],
+          status: [],
+        }),
+        stderr: '',
+        exitCode: 0,
+        diagnostics: [],
+      })
+      expect(value.rootPreview.attempt.evidence.context).toEqual({
+        success: false,
+        stdout: JSON.stringify({
+          root: {
+            path: fixture.rootB,
+            source: 'declared',
+            store_id: 'store-b',
+            role: 'openspec_root',
+          },
+          members: [],
+          status: [
+            {
+              severity: 'error',
+              code: 'context_fixture_failed',
+              message: 'Context fixture failed.',
+            },
+          ],
+        }),
+        stderr: 'context fixture stderr',
+        exitCode: 18,
+        diagnostics: [
+          {
+            severity: 'error',
+            code: 'context_fixture_failed',
+            message: 'Context fixture failed.',
+          },
+        ],
       })
     } finally {
       await fixture.dispose()
