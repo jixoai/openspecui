@@ -267,6 +267,75 @@ describe('HostedShell', () => {
     expect(screen.getByText('Loading view...')).toBeTruthy()
   })
 
+  it('keeps each project tab bound to its own iframe session and runtime when switching tabs', async () => {
+    localStorage.setItem(
+      getHostedShellStorageKey(),
+      JSON.stringify({
+        activeTabId: 'session-alpha',
+        tabs: [
+          {
+            id: 'session-alpha',
+            sessionId: 'session-alpha',
+            apiBaseUrl: 'http://localhost:3100',
+            createdAt: 1,
+          },
+          {
+            id: 'session-beta',
+            sessionId: 'session-beta',
+            apiBaseUrl: 'http://localhost:3200',
+            createdAt: 2,
+          },
+        ],
+      })
+    )
+    setSuccessfulFetch({
+      perApi: {
+        'http://localhost:3100': {
+          projectName: 'alpha',
+          openspecuiVersion: '2.0.2',
+        },
+        'http://localhost:3200': {
+          projectName: 'beta',
+          openspecuiVersion: '2.0.2',
+        },
+      },
+    })
+
+    const { container } = await renderShell(
+      <HostedShell initialLaunchRequest={null} fallbackLaunchRequest={null} initialError={null} />
+    )
+
+    await flushEffects()
+
+    const alphaFrame = container.querySelector<HTMLIFrameElement>(
+      'iframe[title="Hosted OpenSpec UI alpha"]'
+    )
+    const betaFrame = container.querySelector<HTMLIFrameElement>(
+      'iframe[title="Hosted OpenSpec UI beta"]'
+    )
+    expect(alphaFrame?.src).toContain(
+      'http://localhost:3100/dashboard?api=http%3A%2F%2Flocalhost%3A3100&session=session-alpha'
+    )
+    expect(betaFrame?.src).toContain(
+      'http://localhost:3200/dashboard?api=http%3A%2F%2Flocalhost%3A3200&session=session-beta'
+    )
+
+    const alphaPanel = alphaFrame?.closest('[data-tab-panel-state]')
+    const betaPanel = betaFrame?.closest('[data-tab-panel-state]')
+    expect(alphaPanel?.getAttribute('data-tab-panel-state')).toBe('active')
+    expect(betaPanel?.getAttribute('data-tab-panel-state')).toBe('inactive')
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /beta.*localhost:3200/i }))
+    })
+
+    expect(alphaFrame?.src).toContain('session=session-alpha')
+    expect(betaFrame?.src).toContain('session=session-beta')
+    expect(alphaPanel?.getAttribute('data-tab-panel-state')).toBe('inactive')
+    expect(betaPanel?.getAttribute('data-tab-panel-state')).toBe('active')
+    expect(document.title).toBe('beta - OpenSpec UI App')
+  })
+
   it('keeps offline tabs visible and shows retry guidance', async () => {
     setSuccessfulFetch({ online: false })
 
