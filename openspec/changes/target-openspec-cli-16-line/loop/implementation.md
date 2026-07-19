@@ -3780,3 +3780,12 @@ the older PR head, not the W2 implementation. Do not report PR CI as W2 delivery
 worker pushes the approved implementation/evidence commits and the resulting checks rerun. This is a
 delivery-state finding, not a production defect, and does not authorize merge, archive, release, W3, or
 `6.12+` work.
+
+### W2 CI Delivery Blocker: Pinned CLI Build (2026-07-20)
+
+PR head `8c55a30` reached the required remote Fast Gate, which failed only because the clean runner
+could not import generated `references/openspec/dist/cli/index.js` from the pinned v1.6.0 submodule.
+The local workspace had ignored `dist` output, so prior local green evidence was insufficient for this
+clean-checkout condition. The failure is recorded as CI/test-fixture preparation evidence, not a W2
+business defect. A bounded Sol Goal now owns explicit pinned-submodule initialization/build and the
+follow-up Fast/Browser checks; no Project Binding, W3, or `6.12+` implementation is authorized.

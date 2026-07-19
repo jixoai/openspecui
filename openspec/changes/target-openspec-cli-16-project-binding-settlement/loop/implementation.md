@@ -385,3 +385,20 @@ Only pre-existing scroll-button/dynamic-import build warnings and jsdom Canvas w
 fixture's backend/Vite listeners, child process groups, browser context, and disposable roots were all
 cleaned. This is repository and single-page evidence; B2.5 remains open for owner manual single-page and
 multi-tab acceptance and independent review. No merge, archive, release, W3, or `6.12+` work is authorized.
+
+## B2.5 CI delivery blocker: clean pinned CLI build (2026-07-20)
+
+After the reviewed commits were pushed to PR head `8c55a30`, the new Fast Gate failed in
+`root-context-cold-start.integration.test.ts` before exercising the product contract. The raw runner
+error was:
+
+```text
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module
+references/openspec/dist/cli/index.js imported from references/openspec/bin/openspec.js
+```
+
+The v1.6.0 submodule tracks `bin/openspec.js` but ignores its generated `dist`; the clean CI checkout
+does not currently build that pinned submodule. The same lane passes locally only because the workspace
+already contains ignored generated output. This is a reproducible CI/test-fixture preparation gap, not
+a Project Binding production failure. B2.5 remains open and the next worker Goal is limited to making
+the pinned CLI build explicit and deterministic, then rerunning the exact full gates on the new head.
