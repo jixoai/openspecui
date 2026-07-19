@@ -3035,3 +3035,285 @@ external browser-fixture blocker permitted by `GOAL.md`; it is not evidence of a
 does not authorize a speculative workaround or scope expansion. Keep `6.11` open at `61/131`, do not
 start `6.12+`, and stop at independent review. The focused/full local gates remain regression evidence,
 not browser acceptance.
+
+### 6.11 Independent Review: Reject Non-Red Root/Dashboard Test (2026-07-19)
+
+The dirty candidate added `commits Root Context B before Dashboard exposes planning B` to
+`packages/server/src/git-repository-binding-router.test.ts`. I ran the named test directly at the
+review fixed point `d006f58` before any production edit:
+
+```text
+pnpm exec vitest run src/git-repository-binding-router.test.ts \
+  -t 'commits Root Context B before Dashboard exposes planning B' --reporter=verbose
+1 file / 1 test passed
+events: dashboard:A, root:A, root:B, dashboard:B
+```
+
+Because the test passes unchanged on the fixed point, it is characterization of one naturally scheduled
+event order, not a counterexample for the reported browser race. It does not control the deferred
+binding/invalidation boundary, does not prove that the old implementation can expose Dashboard B before
+Root Context B, and has no mutation-resistance check for the proposed commit barrier. Do not claim this
+test as red evidence, do not close `6.11`, and do not run full gates until a checked test fails on
+`d006f58` for the intended reason, then fails again when the exact barrier transition is removed.
+
+The follow-up variant exercised `caller.planningConfig.updateProjectBinding` while both subscriptions
+were mounted, but its observed order remained `root:A, dashboard:A, root:B, dashboard:B`; a variant that
+created Dashboard after the write likewise removed the race window. Those variants were withdrawn rather
+than relabeled as red evidence. The next attempt must control only the real write/cache-to-stream
+scheduling boundary with a typed deferred, and must stop with `6.11` open if that boundary cannot produce a
+fixed-point failure without manually invoking a downstream manager operation.
+
+### 6.11 Bounded Scheduling Review and Stop-Loss (2026-07-19)
+
+The final bounded server attempts exercised the real subscription boundaries and the real
+`planningConfig.updateProjectBinding` mutation, with no production barrier or generation fix applied:
+
+- Natural scheduling with both Root Context and Dashboard subscriptions produced
+  `dashboard:A -> root:A -> root:B -> dashboard:B`.
+- The real Project Binding write with both subscriptions mounted produced
+  `root:A -> dashboard:A -> root:B -> dashboard:B`.
+- Creating the Dashboard subscription after the binding write also delivered `root:B` before
+  `dashboard:B`, so it removed rather than exposed the suspected race.
+
+All three variants passed at the fixed point and are characterization evidence only. None fails against
+the unchanged implementation for the claimed `Dashboard:B`-before-`Root:B` lifecycle, and none proves
+mutation resistance for a server-owned barrier. No server-owned barrier/generation correction is therefore
+accepted from this attempt. The worker-owned Stage 4 fixture processes were terminated; no fixture process
+remains running.
+
+This is the stop-loss boundary for speculative correction: keep checkpoint `6.11` open at `61/131`, do
+not add a server barrier without a valid checked red/green pair, and do not start `6.12+`, merge, archive,
+or release. Since the accepted focused lanes are green, delivery verification may proceed through full
+gates and the terminating browser acceptance. If bounded scheduling cannot reproduce the race without
+manually invoking a downstream manager operation, record the blocker and stop rather than expanding the
+correction surface.
+
+### 6.11 Transport/Web Boundary Audit (2026-07-19)
+
+The read-only transport audit traced the three relevant live projections to independent server
+observables:
+
+```text
+Root Context       router.ts:3008-3013 -> root-context-service.ts:75-121
+Dashboard planning router.ts:2496-2500 -> reactive-subscription.ts:31-60
+Active Changes     router.ts:1385-1387 -> its own reactive subscription
+```
+
+They share the `PlanningRootServiceManager.transitionTail` for root replacement, but do not share a
+commit/generation token. The single tRPC WebSocket handler (`server.ts:485-502`) also does not promise
+causal ordering between independent subscription operations. Root payloads carry `observedAt` but no
+cross-stream generation; Dashboard Git data carries its own binding token only. On the Web side,
+`useAuthoritativeSubscription` protects each hook against late callbacks, while
+`useContextSubscription`, `useDashboard`, and `useChangesSubscription` retain separate subscription
+state. This confirms a plausible transport/projection boundary, not a production defect by itself.
+
+The Vitest boundary review rejected all same-process variants at `d006f58`: natural scheduling, the
+real `planningConfig.updateProjectBinding` mutation with both subscriptions mounted, and creating the
+Dashboard subscription after the write all delivered `root:A -> dashboard:A -> root:B -> dashboard:B`.
+They remain characterization evidence, not red evidence. A valid next test must use the public server
+boundary with a typed `createTRPCClient<AppRouter>`, real WebSocket client(s), and the actual binding
+mutation; it must record subscription identity, observed time, root identity, and Dashboard marker
+without UI filtering or sleeps. If that harness still delivers Root B before Dashboard B, stop rather
+than inventing a generation barrier. Only a fixed-point failure plus mutation-resistance failure after
+removing the exact proposed transition authorizes a production edit.
+
+This audit leaves `6.11` open at `61/131`. No speculative production correction is authorized until that
+causal boundary is established. The current focused baseline may proceed to full gates and the required
+desktop/mobile browser acceptance; those results do not close the checkpoint without reviewer approval.
+
+### 6.11 Transport Attempt 2: Public WebSocket Characterization (2026-07-19)
+
+The bounded typed harness used the real server startup, HTTP `planningConfig.updateProjectBinding`, and
+independent tRPC WebSocket clients for Root Context and Dashboard. It was run at the unchanged fixed
+point with:
+
+```text
+pnpm --filter @openspecui/server exec vitest run \
+  src/root-dashboard-transport.integration.test.ts --reporter=verbose
+1 file / 1 test passed
+```
+
+The harness observed both Root B and Dashboard B after the public binding mutation, but did not observe
+Dashboard B before Root B. It did not contain a fixed-point failure or a mutation-resistance pair, so it
+is characterization only and cannot authorize a production generation/barrier change. A temporary
+test file was removed after the run; no broken or untracked worker file remains. A fixture CLI emitted a
+missing-schema warmup warning, but the transport assertions passed and no causal defect was inferred.
+
+### 6.11 Full Gates and Browser Acceptance Stop (2026-07-19)
+
+With the focused lanes green and no production correction applied, the worker ran the required delivery
+gates from `d006f58`:
+
+```text
+pnpm format:check       pass
+pnpm lint:ci            pass
+pnpm typecheck          pass (15 workspaces)
+pnpm test:ci            pass (Root 43, Server 391, Web 754, CLI 49; remaining workspaces pass)
+rm -rf packages/web/dist-ssg packages/web/.vite
+pnpm --filter @openspecui/web build:ssg  pass
+pnpm test:browser:ci    pass (xterm 60 passed / 1 skipped; Web 12/12)
+git diff --check        pass
+```
+
+The terminating pinned OpenSpec 1.6 browser walk-through did not produce a usable desktop/mobile UI
+session. Against the disposable fixture with isolated data scope, the first cold `rootContext.get`
+request remained unanswered through the bounded 20-second limit. A later same-process curl returned
+HTTP 200 in about 3.97 seconds with Root ready, `plan-a`, and CLI `1.6.0`, but that cache-hit response is
+not browser acceptance evidence and does not prove A -> B or mobile behavior. The fixture server and
+agent sessions were stopped; ports 4134/13003 were released and no fixture process remains. Keep
+`6.11` open at `61/131`; do not claim browser completion, merge, archive, release, or start `6.12+`.
+
+The full-gate result was independently rerun from the review worktree after conflicting worker status
+messages: every command exited zero, with only the known jsdom canvas and CSS `scroll-button` warnings.
+A separate bounded browser session could open `http://127.0.0.1:3100` and redirect to
+`/dashboard?_b=%2F`, but it did not execute the required project fixture scenarios. This route smoke
+check is not terminating browser acceptance and does not replace the cold-start transport blocker.
+
+### 6.11 Transport Attempt 1 Setup Failure (2026-07-19)
+
+A bounded browser/transport attempt created the pinned OpenSpec 1.6.0 fixture and verified the launch
+root's `doctor --json` and `context --json` for `plan-a`. The server launch command accidentally used
+`XDG=...` instead of `XDG_DATA_HOME=...`, so it inherited the global registry and failed warmup with
+`Unknown store 'plan-a'` before any browser or WebSocket client connected. The process was stopped and
+the fixture was cleaned. No transport arrival order, Root/Active-Changes mismatch, or production defect
+was observed. This is a setup failure, not causal evidence and not a reason to add a server barrier.
+
+### 6.11 Cold-Start Diagnostic Recheck (2026-07-19)
+
+The cold-start blocker was isolated to the fixture's CLI runner configuration, not the OpenSpecUI
+server or tRPC transport. A checked diagnostic fixture was added in the dirty candidate:
+
+- `packages/server/src/root-context-cold-start.integration.test.ts`
+- `packages/server/tsconfig.transport-tests.json`
+
+It uses `startServer`, an isolated `XDG_DATA_HOME`, the pinned OpenSpec 1.6.0 executable, typed HTTP
+`rootContext.get`, and an independent typed WebSocket `rootContext.subscribe`. The runner trace is
+validated with Zod rather than an unchecked JSON cast. The reviewer re-ran:
+
+```text
+pnpm --filter @openspecui/server exec vitest run \
+  src/root-context-cold-start.integration.test.ts --reporter=verbose
+1 file / 1 test passed (about 1.5s)
+pnpm --filter @openspecui/server exec tsc \
+  -p tsconfig.transport-tests.json --noEmit
+exit 0
+```
+
+The same disposable fixture with the direct pinned executable returned HTTP 200, `state=ready`,
+planning Store `plan-a`, and CLI `1.6.0` in about 1.74s. Replacing the pinned executable with
+`npx @fission-ai/openspec` returned HTTP 200 with `state=error` after about 11.8s because CLI runner
+resolution timed out during a network/registry lookup. That result is fixture/network
+misconfiguration, not a production startup defect; do not add a server timeout workaround or a
+transport generation barrier. The worker must commit the checked diagnostic fixture, rerun focused
+lanes, and run the full gates. The corrected-path browser retry is recorded below and is the final
+attempt for this slice; checkpoint `6.11` remains open at `61/131`.
+
+### 6.11 Pinned Browser Retry Stop-Loss (2026-07-19)
+
+A single retry used the corrected direct pinned executable (`references/openspec/bin/openspec.js`,
+`e1b51d1`), explicit isolated `XDG_DATA_HOME`, and the disposable fixture on backend port `4136`.
+The server listener and cold Root readiness path were available, but the real browser session could not
+complete its bounded wait for `Planning: store-b`:
+
+```text
+agent-browser --session openspec611 wait \
+  --text 'Planning: store-b' --timeout 20000
+```
+
+No desktop/mobile scenario, A -> B -> A convergence, conflict retry, or screenshot completion was
+observed. The session was stopped at the prescribed stop-loss and the fixture/server process tree was
+cleaned; no port `4136` process remains. This is a terminating browser-fixture blocker, not a causal
+transport red test and not permission to change production code. Keep `6.11` open at `61/131` and stop
+at independent review.
+
+### 6.11 Independent Focused Recheck (2026-07-19)
+
+The reviewer rechecked the dirty candidate without changing production code:
+
+```text
+Server Git boundary: 5 files / 31 tests passed
+Web Dashboard/Git boundary: 4 files / 35 tests passed
+pnpm --filter @openspecui/server exec tsc \
+  -p tsconfig.transport-tests.json --noEmit: pass
+pnpm lint:ci: pass
+pnpm format:check: pass
+git diff --check: pass
+```
+
+The Web run emitted the existing React `viewTransition`/`state` DOM warnings and the expected logged
+`CONFLICT` errors from the conflict tests; all assertions passed. These focused results authorize the
+worker to commit the diagnostic fixture and proceed to the full gates. They do not close `6.11` without
+the terminating pinned desktop/mobile browser walk-through.
+
+### 6.11 Independent Full-Gate Recheck (2026-07-19)
+
+After the cold-start fixture was added, the reviewer reran the repository gates. All completed with exit
+zero:
+
+```text
+pnpm typecheck       pass (15 workspace projects)
+pnpm test:ci         pass (Root 43, Server 392, Web 754, CLI 49; all workspace lanes pass)
+pnpm --filter @openspecui/web build:ssg  pass
+pnpm test:browser:ci pass (xterm 60 passed / 1 skipped; Web 12/12)
+pnpm format:check    pass
+pnpm lint:ci         pass (0 warnings / 0 errors)
+git diff --check     pass
+```
+
+The SSG build emitted only the existing `scroll-button` CSS and dynamic-import warnings. The unit suite
+emitted the known jsdom canvas warnings. Neither produced a failing assertion or build error. These are
+regression/gate results on the dirty candidate; the candidate still needs a worker commit and exact-head
+delivery, and `6.11` remains open because the real desktop/mobile browser acceptance is incomplete.
+
+### 6.11 Review Finding: Checked Lane Must Be Wired (2026-07-19)
+
+The manual transport lane passes, but the dirty candidate's `packages/server/package.json` still defines
+`typecheck` with only `tsconfig.check.json`, `tsconfig.search-tests.json`, and `tsconfig.git-tests.json`.
+Therefore the repository-wide `pnpm typecheck` result does not check the new cold-start integration test.
+Before committing, the worker must add `tsconfig.transport-tests.json` to the normal Server typecheck
+script or to a named script that the full gate invokes, following the existing checked-test pattern. The
+reviewer will reject a claim of full typed evidence if the lane remains manual-only.
+
+### 6.11 Review Finding: Cold-Start Timestamp Assertion Is Invalid (2026-07-19)
+
+An independent stability rerun found that the new cold-start fixture is not deterministic despite one
+passing run. The third bounded run failed at:
+
+```text
+expected wsState.observedAt >= httpState.observedAt
+received 1784447570485 >= 1784447573093
+```
+
+This is a test defect. HTTP `rootContext.get` and WebSocket `rootContext.subscribe` are independent
+observables, so their completion timestamps have no cross-transport ordering contract. The failure does
+not establish a Root/Dashboard transport race and does not authorize a generation barrier or lifecycle
+rewrite. Remove only the cross-channel timestamp comparison; retain each channel's typed ready Root
+payload, observed state sequence, and pinned CLI trace. The worker must run this focused fixture at least
+three consecutive times after the correction and record the results before any full-gate or browser claim.
+Until then the dirty candidate is not commit-ready and `6.11` remains open at `61/131`.
+
+### 6.11 Cold-Start Stability Correction and Delivery Review (2026-07-19)
+
+The worker removed only the invalid `wsState.observedAt >= httpState.observedAt` comparison. The
+typed HTTP/WS ready payload assertions, state sequence, pinned CLI trace, and checked transport lane
+remain unchanged. Independent review ran the corrected fixture three consecutive times; each run passed
+`1 file / 1 test`. The worker committed the code/test change as `1d74444`; no production logic changed.
+
+Post-commit gates all pass:
+
+```text
+pnpm typecheck       pass (15 workspaces; Server includes transport-tests)
+pnpm test:ci         pass (Root 43, Server 392, Web 754, CLI 49; remaining workspaces pass)
+pnpm --filter @openspecui/web build:ssg  pass (clean rebuild)
+pnpm test:browser:ci pass (xterm 60 passed / 1 skipped; Web 12/12)
+pnpm lint:ci         pass
+pnpm format:check    pass
+git diff --check     pass
+```
+
+The required real pinned desktop/mobile multi-project acceptance was not repeated because the corrected
+path still has the recorded `Planning: store-b` wait timeout and no new terminating fixture path was
+available. The previous screenshot/URL commands remain the one allowed external blocker. No browser
+scenario, screenshot, A -> B -> A convergence, conflict retry, provenance, or mobile `scrollWidth`
+evidence may be claimed. Keep `6.11` open at `61/131`; do not start `6.12+`, merge, archive, or
+release.
