@@ -3770,3 +3770,13 @@ unit/browser suites, lint, format, and diff checks passed. The review also corre
 cleanup P2. This closes only the W2 automated evidence package; B2.5 remains open for owner manual
 single-page/multi-tab acceptance. Parent `6.11` remains `61/131` and unchecked; no W3, `6.12+`, merge,
 archive, or release work is authorized.
+
+### W2 Delivery Review: Remote Head Mismatch (2026-07-20)
+
+The local implementation and evidence commits are present through `89de4df` and `68ed1e9`, with the
+reviewer's documentation follow-up at `ed38e7b`. A live `git ls-remote` and `gh pr view 207` check show
+the remote PR head is still `28319fd2e04a23a61040a3cb53a6ca6e0c494f72`; its green checks therefore cover
+the older PR head, not the W2 implementation. Do not report PR CI as W2 delivery evidence until the
+worker pushes the approved implementation/evidence commits and the resulting checks rerun. This is a
+delivery-state finding, not a production defect, and does not authorize merge, archive, release, W3, or
+`6.12+` work.
