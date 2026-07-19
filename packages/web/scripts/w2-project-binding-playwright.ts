@@ -38,8 +38,21 @@ interface CliRunResult {
 const children: ChildProcess[] = []
 
 function fixtureEnv(dataHome: string): NodeJS.ProcessEnv {
+  const env = { ...process.env }
+  for (const key of [
+    'HTTP_PROXY',
+    'HTTPS_PROXY',
+    'ALL_PROXY',
+    'http_proxy',
+    'https_proxy',
+    'all_proxy',
+    'NO_PROXY',
+    'no_proxy',
+  ]) {
+    delete env[key]
+  }
   return {
-    ...process.env,
+    ...env,
     XDG_DATA_HOME: dataHome,
     HOME: join(dataHome, 'home'),
     XDG_CONFIG_HOME: join(dataHome, 'config'),
