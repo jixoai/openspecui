@@ -3821,3 +3821,75 @@ form the rest of the 6.11 package. Parent progress is now `62/131`; checkpoint `
 
 No W3 reactive-error implementation was introduced or inferred from this acceptance. `6.12+` remains
 outside this review update and requires a new worker Goal.
+
+### 6.12 Terminal Cwd Identity Implementation at `0bbc9d0` / `5aeecda` (2026-07-20)
+
+The bounded 6.12 worker slice is implemented and stops at independent review. Test commit `0bbc9d0`
+adds checked public-boundary evidence; production commit `5aeecda` exposes the selected cwd before first
+creation and keeps each tab's Server-resolved cwd visible. Checkpoint 6.12 remains unchecked, and this
+slice does not authorize W3, 6.13+, final browser acceptance, merge, archive, or release.
+
+Applied contract:
+
+- Empty and active Terminal creation controls now show the selected Launch-project or Planning-root
+  path before shell creation. The empty state can select Planning for the first session and uses a
+  fixed-size icon action plus bounded, truncating path layout.
+- Restored and newly acknowledged tabs render a stable Launch/Planning badge and the Server-provided
+  `initialCwd` on a separate truncated line. Renaming changes only the title and retains cwd identity.
+- Configured-command creation shows the same selected path. A non-current Planning target remains
+  disabled with its actual Root Context reason, while switching to current Launch remains available.
+- `createPtyWebSocketHandler` now depends on the exact structural Socket, Session, Manager, and
+  Notification capabilities it consumes. The public Zod protocol remains unchanged: a client `cwd`
+  property is stripped, the semantic `cwdTarget` reaches the Server, and the current Server-owned
+  resolver supplies cwd immediately before real `PtyManager` spawn.
+- `typecheck:pty-tests` checks the real WebSocket plus `PtyManager` contract without `as never`,
+  `as any`, fabricated non-null state, or suppression comments. The older handler suite remains a
+  compatibility regression lane; the new checked contract is the authoritative 6.12 boundary.
+
+Fixed-point evidence:
+
+```text
+post-hoc baseline 9c4a5fc, production patch removed:
+  terminal-panel first Planning-session case -> 1 failed / 12 skipped
+  intended reason: empty state could not find visible /launch cwd identity
+
+current commits 0bbc9d0 + 5aeecda:
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/components/terminal/terminal-panel.test.tsx \
+  src/components/terminal/terminal-spawn-command-dialog.test.tsx \
+  src/components/terminal/terminal-tabs.test.tsx \
+  src/lib/use-terminal-cwd-target.test.ts \
+  src/lib/terminal-controller.test.ts
+  -> 5 files / 62 tests passed
+
+pnpm --filter @openspecui/server exec vitest run \
+  src/pty-cwd-contract.test.ts src/pty-manager.test.ts
+  -> 2 files / 10 tests passed
+
+pnpm --filter @openspecui/server exec vitest run \
+  src/pty-cwd-contract.test.ts src/pty-websocket.test.ts src/pty-manager.test.ts
+  -> 3 files / 24 tests passed
+
+pnpm --filter @openspecui/web typecheck
+  -> passed
+pnpm --filter @openspecui/server typecheck
+  -> production, search, Git, transport, and dedicated PTY checked lanes passed
+pnpm exec prettier --check packages/server/src/pty-websocket.ts \
+  packages/web/src/components/terminal/terminal-panel.tsx
+  -> passed
+pnpm exec oxlint packages/server/src/pty-websocket.ts \
+  packages/web/src/components/terminal/terminal-panel.tsx
+  -> 0 warnings / 0 errors
+git diff --check
+  -> passed
+```
+
+A proposed Storybook geometry fixture was removed at the stop-loss boundary. The current Storybook
+Vitest project does not install the Tailwind Vite plugin, so `.truncate` does not produce representative
+computed overflow geometry there; expanding that shared harness is outside 6.12. Unit evidence checks
+the bounded layout contract, while final browser walkthrough remains owner-owned.
+
+Both code commits used `VITE_GIT_HOOKS=0` because the repository hook is already confirmed to point at
+an example configuration rather than this workspace's check contract. The equivalent scoped focused,
+typecheck, format, lint, and diff checks above were run explicitly. Full repository gates and the 6.12
+checkbox remain for the independent review boundary.
