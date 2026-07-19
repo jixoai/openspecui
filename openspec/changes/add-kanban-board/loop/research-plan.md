@@ -28,6 +28,7 @@ Facts gathered from the codebase that constrain this change.
 - Archived changes: `useArchivesSubscription()` → `ArchiveMeta[]` (carries the date-prefixed `id` and `updatedAt`).
 - Card visuals: the change-list row markup (name, id, `formatRelativeTime`, phase `Badge`, `completed/total`, `bg-primary` progress bar) in `routes/change-list.tsx`.
 - Archive action + confirmation: the global archive modal, opened via `openArchiveModal({ changeId, changeName })` from `packages/web/src/lib/archive-modal-context.ts` (rendered by `components/global-archive-modal.tsx`). It already handles confirmation, `--skip-specs` / `--no-validate` options, the streamed `validate → archive` run, and "View Archive".
+- Apply hand-off: the change page's Apply button does not run anything itself — it navigates (`vtNavController.activatePop`) to the compose overlay via `buildOpsxComposeHref({ action: 'apply', changeId })` (`packages/web/src/lib/opsx-compose.ts`). The overlay (`routes/opsx-compose.tsx`) resolves the invocation mode (`opsx.agentInvocationMode`: compose → apply-instructions prompt, command → `/opsx:apply <id>` slash command via `opsx.runWorkflow`), lets the user edit it, then `TerminalDispatchActions` writes it into a chosen terminal session (default: the active one) — `terminalController.writeToSession`. Apply gating: the button is enabled when every `status.applyRequires` artifact is `done` (`change-command-bar.tsx`). So the board can trigger apply by reusing the exact same `activatePop(buildOpsxComposeHref(...))` call — no new invocation machinery, and the terminal is where the user watches/steers the run.
 - Time-range preset control: the `Select` component (`packages/web/src/components/select.tsx`), following the dashboard git-auto-refresh preset precedent (`routes/dashboard.tsx`).
 - Drag-and-drop: native HTML5 DnD (no library installed); copy the pattern from `components/layout/area-nav.tsx` (`onDragStart`/`onDragOver`/`onDrop`, grab handle, drop indicator).
 - Routing + nav registration: add a route in `packages/web/src/lib/route-tree.ts` and a nav item in `packages/web/src/components/layout/nav-items.ts` (mirror `/changes`).
@@ -44,7 +45,10 @@ Build a frontend-only `/board` view.
 2. **Board view (`routes/board.tsx`)** — subscribe to `useChangesSubscription()`, `useOpsxStatusListSubscription()`, and `useArchivesSubscription()`. Compute each active change's column with a pure helper `classifyBoardColumn(progress)`: `completed === 0 → 'todo'`; `0 < completed < total → 'in-progress'`; `total > 0 && completed === total → 'qa'`. Archived → `'done'`. Render four columns as bordered `bg-card` lanes.
 3. **Cards** — factor the change-list row into a reusable card: name, id, `formatRelativeTime`, task count, progress bar, and the phase `Badge` from `classifyChangeWorkflowPhase` (joined with `ChangeStatus`). Active cards link to `/changes/$id`; Done cards to `/archive/$id`.
 4. **Time-range filter (Done only)** — a `Select` with presets `7d / 30d / 90d / all`, defaulting to a bounded range. Parse each archive's date from the `YYYY-MM-DD-` prefix of `archive.id` (fallback `updatedAt`); filter client-side. No backend change.
-5. **Drag-to-archive** — make only QA-column cards draggable (native HTML5 DnD, grab handle as in `area-nav.tsx`). The only valid drop target is the Done column; on drop, call `openArchiveModal({ changeId, changeName })`. Cards in other columns are not draggable; invalid drops are rejected. Disable dragging in static/SSG mode (no CLI).
+5. **Drag actions (kind-aware)** — native HTML5 DnD (grab handle as in `area-nav.tsx`) with a module-level payload `{ kind: 'archive' | 'apply', id, name }`. Each column accepts one kind: **Done ← archive**, **In Progress ← apply**; `onDragOver` only marks a column droppable when `dragged.kind` matches, so mismatched drops are rejected.
+   - **archive**: QA cards are draggable; drop on Done → `openArchiveModal(id, name)`.
+   - **apply**: apply-ready TODO cards are draggable (a `isApplyReady(status)` helper mirroring the command bar's `applyRequires` gate); drop on In Progress → `vtNavController.activatePop(buildOpsxComposeHref({ action: 'apply', changeId: id }))` — the same overlay hand-off as the Apply button.
+   - Both drags need the live CLI/terminal, so neither is offered in static/SSG mode.
 6. **States** — loading, empty-column, and error rendering consistent with existing views; board renders read-only in static mode.
 7. **Release hygiene** — add a changeset for `@openspecui/web`; keep loop artifacts and the spec delta in sync.
 
@@ -52,23 +56,24 @@ Build a frontend-only `/board` view.
 
 ### New or Expanded Behavior
 
-- `opsx-ui-views`: a new **Change Kanban Board** view that groups active and archived changes into TODO / In Progress / QA / Done lanes derived from task progress and archive location, with a time-range filter on Done and drag-to-archive on QA cards using the existing confirmation flow.
+- `opsx-ui-views`: a new **Change Kanban Board** view that groups active and archived changes into TODO / In Progress / QA / Done lanes derived from task progress and archive location, with a time-range filter on Done. Two kind-aware drag actions: drag-to-archive on QA cards (reusing the global archive modal) and drag-to-apply on apply-ready TODO cards (reusing the apply compose overlay). Every drag maps to a real operation; none silently changes task state.
 
 ### Modified Behavior
 
-- None. Existing views, hooks, the archive modal, and the task/archive flows are unchanged; the board is additive and consumes them.
+- None. Existing views, hooks, the archive modal, the apply compose overlay, and the task/archive flows are unchanged; the board is additive and reuses them.
 
 ## Risks and Mitigations
 
 - **Column vs badge look contradictory.** A QA card (all tasks done) may still show an "In Execution" badge if the workflow isn't `isComplete`. Mitigation: treat them as distinct labelled axes (column = task progress, badge = artifact readiness); this is truthful, not contradictory.
 - **Archive date accuracy.** `updatedAt` (fs mtime) can drift from the real archive date. Mitigation: parse the date from the `id` prefix, fall back to `updatedAt` only when the prefix is absent.
 - **Static/SSG mode.** The CLI is unavailable, so archive-by-drag cannot run. Mitigation: detect static mode and render the board read-only (no drag handles, no archive action); ensure archived data still lists.
-- **Drag affordance implies more than it does.** Users may expect to drag between all columns. Mitigation: only QA cards get a visible grab handle; other cards are plainly non-draggable.
+- **Drag affordance implies more than it does.** Users may expect to drag between all columns. Mitigation: only cards with a real operation get a grab handle (QA → archive, apply-ready TODO → apply); each column accepts only its matching kind.
+- **Apply is not immediate.** Unlike archive, drag-to-apply does not move the card on drop — it opens the apply hand-off, and the card flows into In Progress only once the agent ticks a task. Mitigation: the drop opens the compose overlay (a visible review/dispatch step), so the gesture reads as "start applying", not "instantly move"; task state is never changed by the drag.
 - **Scope creep toward "synced".** Mitigation: explicitly out of scope per intake; no marker is introduced.
 
 ## Verification Strategy
 
 - **Local checks:** `format:check`, `lint:ci`, `typecheck`, `test:ci`, `test:browser:ci`.
 - **SSG guard:** `pnpm --filter @openspecui/web build:ssg` builds and the board renders read-only with no stores/CLI dependency.
-- **Acceptance checks:** with fixture changes, verify column placement for `0/0`, `0/N`, partial, and full task states; verify archived items appear in Done and respect each preset; verify a QA card dragged to Done opens the archive modal and archives only after confirmation; verify non-QA cards do not drag and invalid drops are rejected.
+- **Acceptance checks:** with fixture changes, verify column placement for `0/0`, `0/N`, partial, and full task states; verify archived items appear in Done and respect each preset; verify a QA card dragged to Done opens the archive modal and archives only after confirmation; verify an apply-ready TODO card dragged to In Progress opens the apply compose overlay while a non-apply-ready TODO card offers no apply drag; verify each column accepts only its matching drag kind and mismatched drops are rejected.
 - **Spec/loop validation:** `openspec validate add-kanban-board --strict` passes; checkpoints reflect real implementation state.

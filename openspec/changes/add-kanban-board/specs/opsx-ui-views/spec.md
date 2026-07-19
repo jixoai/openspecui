@@ -11,7 +11,7 @@ OpenSpecUI SHALL provide a Kanban board view that visualises changes across thei
 - **QA** — an active change with `total > 0 && completed === total` tasks.
 - **Done** — a change located under `changes/archive/`.
 
-The board SHALL keep the existing per-change workflow-phase badge on each card as a distinct axis from the column (column = task progress; badge = artifact readiness). The board SHALL NOT introduce a "synced but not archived" column or any new persisted change-status field. The board SHALL match the existing design language and SHALL reuse existing data subscriptions, the workflow-phase classifier, and the global archive flow.
+The board SHALL keep the existing per-change workflow-phase badge on each card as a distinct axis from the column (column = task progress; badge = artifact readiness). The board SHALL NOT introduce a "synced but not archived" column or any new persisted change-status field. The board SHALL match the existing design language and SHALL reuse existing data subscriptions, the workflow-phase classifier, the global archive flow, and the existing apply compose hand-off. Every drag on the board SHALL map to a real operation (archive or apply); a drag SHALL NEVER silently change a change's task state.
 
 #### Scenario: Group active changes into lifecycle columns
 
@@ -57,17 +57,25 @@ The board SHALL keep the existing per-change workflow-phase badge on each card a
 - **AND** the change SHALL be archived only after the user confirms in that modal
 - **AND** no archive SHALL occur from the drag gesture alone
 
-#### Scenario: Only QA cards are draggable
+#### Scenario: Drag an apply-ready TODO card to In Progress to apply
 
-- **GIVEN** the board is displayed
-- **WHEN** the user attempts to drag a card in TODO, In Progress, or Done
-- **THEN** the UI SHALL NOT initiate a transition drag for that card
-- **AND** dragging SHALL be offered only on QA cards, with Done as the only valid drop target
-- **AND** an invalid drop SHALL be rejected without changing state
+- **GIVEN** a change is in the TODO column and is apply-ready (every artifact its schema requires for apply is done)
+- **WHEN** the user drags its card onto the In Progress column
+- **THEN** the UI SHALL open the existing apply compose overlay for that change (the same hand-off as the change page's Apply button)
+- **AND** the apply SHALL run only after the user dispatches it from that overlay
+- **AND** no task state SHALL be changed by the drag gesture itself
+
+#### Scenario: Apply drag is offered only on apply-ready TODO cards
+
+- **GIVEN** a TODO change that is not apply-ready (a required apply artifact is missing)
+- **WHEN** the board renders that card
+- **THEN** the UI SHALL NOT offer an apply drag for it
+- **AND** In Progress SHALL accept only apply drags and Done SHALL accept only archive drags
+- **AND** a drop whose kind does not match the target column SHALL be rejected without changing state
 
 #### Scenario: Read-only in static mode
 
 - **GIVEN** OpenSpecUI runs in static/SSG mode (no CLI available)
 - **WHEN** the board renders
 - **THEN** the board SHALL still list active and archived changes in their columns
-- **AND** SHALL NOT offer drag-to-archive or any archive action
+- **AND** SHALL NOT offer drag-to-archive, drag-to-apply, or any archive/apply action

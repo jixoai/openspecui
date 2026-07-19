@@ -1,5 +1,6 @@
+import type { ChangeStatus } from '@openspecui/core'
 import { describe, expect, it } from 'vitest'
-import { archiveTimestamp, classifyBoardColumn } from './board'
+import { archiveTimestamp, classifyBoardColumn, isApplyReady } from './board'
 
 describe('classifyBoardColumn', () => {
   it('places a change with no tasks defined (0/0) in TODO, never QA', () => {
@@ -39,5 +40,34 @@ describe('archiveTimestamp', () => {
   it('falls back to updatedAt when the id has no date prefix', () => {
     const updatedAt = 1_700_000_000_000
     expect(archiveTimestamp(meta('some-undated-change', updatedAt))).toBe(updatedAt)
+  })
+})
+
+describe('isApplyReady', () => {
+  const status = (applyRequires: string[], doneIds: string[]): ChangeStatus =>
+    ({
+      changeName: 'x',
+      schemaName: 'spec-driven',
+      isComplete: false,
+      applyRequires,
+      artifacts: Array.from(new Set([...applyRequires, ...doneIds])).map((id) => ({
+        id,
+        outputPath: `${id}.md`,
+        status: doneIds.includes(id) ? 'done' : 'ready',
+      })),
+    }) as unknown as ChangeStatus
+
+  it('is false without a status', () => {
+    expect(isApplyReady(undefined)).toBe(false)
+  })
+
+  it('is true when every apply-required artifact is done', () => {
+    expect(isApplyReady(status(['tasks'], ['tasks']))).toBe(true)
+    expect(isApplyReady(status(['proposal', 'tasks'], ['proposal', 'tasks']))).toBe(true)
+  })
+
+  it('is false when a required artifact is not yet done', () => {
+    expect(isApplyReady(status(['tasks'], []))).toBe(false)
+    expect(isApplyReady(status(['proposal', 'tasks'], ['proposal']))).toBe(false)
   })
 })

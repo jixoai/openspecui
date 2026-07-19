@@ -22,13 +22,15 @@ Refinements agreed during exploration:
   - **Done** — change present under `changes/archive/`.
 - Keep the existing per-change workflow-phase badge on each card (a separate axis from the column: column = task progress, badge = artifact readiness / blocked).
 - Support drag-to-archive: a QA card dragged to Done opens the existing global archive modal (confirmation + `validate → archive` CLI run).
+- Support drag-to-apply: an apply-ready TODO card dragged to In Progress opens the existing apply compose overlay (the same hand-off as the change page's Apply button — it resolves the invocation mode and dispatches to a terminal session). Each column accepts only its matching drag (Done ← archive, In Progress ← apply).
 - Add a time-range filter (presets: `7d / 30d / 90d / all`) to the Done column; default to a bounded range so the archive is not shown in full.
 - Match the existing design language (Tailwind v4, Base UI primitives, monospace / neobrutalist styling, existing badge and progress-bar patterns).
 
 ## Non-Goals
 
 - **No "synced but not archived" column.** That state is not observable from the filesystem; the board will not invent or persist it.
-- **No drag-to-complete-tasks.** Dragging between TODO/In Progress/QA is not offered — those boundaries are derived from `tasks.md` checkboxes and must not be set by a gesture (it would falsify the task record).
+- **No drag-to-complete-tasks.** A drag never ticks checkboxes directly — those boundaries are derived from task state and must not be falsified by a gesture. The two drags that exist trigger real operations (archive, apply) that legitimately do the work; TODO→In Progress opens the apply hand-off, it does not mark tasks done.
+- **No drag-to-apply from In Progress or backward drags.** Apply-by-drag is offered only from apply-ready TODO cards onto In Progress (the "start applying" gesture); continuing an in-progress change uses the change page's Apply button.
 - **No un-archive** (Done → any) and no backward drags.
 - **No new persisted change status field** and no new backend "phase" concept.
 - **No changes** to task toggling, change creation, or the archive CLI flow itself — the board consumes existing procedures only.
@@ -40,8 +42,9 @@ Refinements agreed during exploration:
 - Active changes appear in exactly one of TODO / In Progress / QA per the derivation rules above; a `0 of 0` change appears in TODO.
 - Archived changes appear in Done, filtered by the selected time range (parsed from the `YYYY-MM-DD-` prefix of the archive `id`, falling back to `updatedAt`).
 - Each card shows: change name, id, relative time, task count `completed/total`, a progress bar, and the existing workflow-phase badge — reusing the current change-list row visuals.
-- Dragging a QA card onto Done opens the existing global archive modal (confirmation before any change is archived); no other drag performs a transition, and invalid drops are rejected/snap back.
-- In static/SSG mode the board renders read-only (no archive action, since the CLI is unavailable).
+- Dragging a QA card onto Done opens the existing global archive modal (confirmation before any change is archived).
+- Dragging an apply-ready TODO card onto In Progress opens the existing apply compose overlay; a non-apply-ready TODO card offers no apply drag; drops whose kind does not match the target column are rejected without changing state.
+- In static/SSG mode the board renders read-only (no archive or apply action, since the CLI/terminal is unavailable).
 - The board matches the existing design language and passes local CI-equivalent checks, the SSG build guard, and `openspec validate --strict`.
 - A changeset is included for the release-impacting package(s) changed (`@openspecui/web`).
 - Loop artifacts and the `opsx-ui-views` spec delta stay synchronized with the implementation and validate.

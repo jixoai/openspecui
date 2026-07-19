@@ -6,19 +6,29 @@ import {
   inferTrackedArtifactStatus,
 } from '@/lib/change-workflow-phase'
 import { formatDate, formatRelativeTime } from '@/lib/format-time'
+import { buildOpsxComposeHref } from '@/lib/opsx-compose'
 import { isStaticMode } from '@/lib/static-mode'
 import { useOpsxStatusListSubscription } from '@/lib/use-opsx'
 import { useArchivesSubscription, useChangesSubscription } from '@/lib/use-subscription'
 import { cn } from '@/lib/utils'
-import { VTLink } from '@/lib/view-transitions/navigation'
+import { VTLink, vtNavController } from '@/lib/view-transitions/navigation'
 import type { ArchiveMeta, ChangeMeta, ChangeStatus } from '@openspecui/core'
 import { Archive, ChevronRight, GitBranch, GripVertical, SquareKanban } from 'lucide-react'
 import { useMemo, useState, type DragEvent } from 'react'
 
 type ActiveColumnId = 'todo' | 'in-progress' | 'qa'
+type ColumnId = ActiveColumnId | 'done'
+
+/**
+ * A drag maps to a real operation, never a silent state change:
+ * - `archive`: a QA card dropped on Done opens the archive modal.
+ * - `apply`: an apply-ready TODO card dropped on In Progress opens the apply
+ *   compose overlay (the same hand-off as the change page's Apply button).
+ */
+type DragKind = 'archive' | 'apply'
 
 interface ColumnDef {
-  id: ActiveColumnId | 'done'
+  id: ColumnId
   label: string
   hint: string
   /** Tailwind background for the column accent dot. */
@@ -31,6 +41,14 @@ const COLUMNS: ColumnDef[] = [
   { id: 'qa', label: 'QA', hint: 'All tasks done', dotClass: 'bg-emerald-500' },
   { id: 'done', label: 'Done', hint: 'Archived', dotClass: 'bg-accent' },
 ]
+
+/** Which drag kind, if any, a column accepts as a drop target. */
+function acceptedDragKind(columnId: ColumnId, isLive: boolean): DragKind | null {
+  if (!isLive) return null
+  if (columnId === 'done') return 'archive'
+  if (columnId === 'in-progress') return 'apply'
+  return null
+}
 
 /**
  * Derive an active change's board column from its task progress.
@@ -46,6 +64,16 @@ export function classifyBoardColumn(progress: {
   if (progress.completed === 0) return 'todo'
   if (progress.completed >= progress.total) return 'qa'
   return 'in-progress'
+}
+
+/**
+ * A change is ready to apply when every artifact its schema requires for apply
+ * is done — the same gate the change page's Apply button uses.
+ */
+export function isApplyReady(status: ChangeStatus | undefined): boolean {
+  if (!status) return false
+  const doneIds = new Set(status.artifacts.filter((a) => a.status === 'done').map((a) => a.id))
+  return status.applyRequires.every((id) => doneIds.has(id))
 }
 
 const ARCHIVE_DATE_PREFIX = /^(\d{4})-(\d{2})-(\d{2})(?:-|$)/
@@ -79,9 +107,9 @@ const RANGE_DAYS: Record<RangePreset, number | null> = {
   all: null,
 }
 
-// Module-level drag state: the QA change currently being dragged toward Done.
-// Native HTML5 DnD, mirroring the pattern in components/layout/area-nav.tsx.
-let draggedChange: { id: string; name: string } | null = null
+// Module-level drag state: the change currently being dragged and what dropping
+// it means. Native HTML5 DnD, mirroring components/layout/area-nav.tsx.
+let dragged: { kind: DragKind; id: string; name: string } | null = null
 
 function buildStatusMap(statuses: ChangeStatus[] | undefined): Map<string, ChangeStatus> {
   return new Map((statuses ?? []).map((status) => [status.changeName, status]))
@@ -93,9 +121,11 @@ export function Board() {
   const { data: statuses } = useOpsxStatusListSubscription()
   const { openArchiveModal } = useArchiveModal()
 
-  const canArchive = !isStaticMode()
+  // Both drag actions (archive, apply) need the live CLI/terminal, so neither is
+  // offered in static mode.
+  const isLive = !isStaticMode()
   const [range, setRange] = useState<RangePreset>('30d')
-  const [dropActive, setDropActive] = useState(false)
+  const [dropActiveCol, setDropActiveCol] = useState<ColumnId | null>(null)
 
   const statusMap = useMemo(() => buildStatusMap(statuses), [statuses])
 
@@ -123,12 +153,19 @@ export function Board() {
     return <div className="route-loading animate-pulse">Loading board…</div>
   }
 
-  const handleDoneDrop = (e: DragEvent<HTMLElement>) => {
+  const handleColumnDrop = (columnId: ColumnId) => (e: DragEvent<HTMLElement>) => {
     e.preventDefault()
-    setDropActive(false)
-    const dragged = draggedChange
-    draggedChange = null
-    if (dragged) openArchiveModal(dragged.id, dragged.name)
+    setDropActiveCol(null)
+    const item = dragged
+    dragged = null
+    if (!item) return
+    if (columnId === 'done' && item.kind === 'archive') {
+      openArchiveModal(item.id, item.name)
+    } else if (columnId === 'in-progress' && item.kind === 'apply') {
+      // Same hand-off as the change page's Apply button: open the compose overlay
+      // which resolves invocation mode and dispatches to a terminal session.
+      vtNavController.activatePop(buildOpsxComposeHref({ action: 'apply', changeId: item.id }))
+    }
   }
 
   return (
@@ -139,8 +176,8 @@ export function Board() {
           Board
         </h1>
         <p className="text-muted-foreground text-sm">
-          {canArchive
-            ? 'Changes across their lifecycle. Drag a QA card onto Done to archive it.'
+          {isLive
+            ? 'Drag a ready TODO card onto In Progress to apply, or a QA card onto Done to archive.'
             : 'Changes across their lifecycle. Read-only in static mode.'}
         </p>
       </div>
@@ -150,7 +187,8 @@ export function Board() {
           const isDone = column.id === 'done'
           const activeItems: ChangeMeta[] = column.id === 'done' ? [] : grouped[column.id]
           const count = isDone ? doneItems.length : activeItems.length
-          const isDropTarget = isDone && canArchive
+          const accepts = acceptedDragKind(column.id, isLive)
+          const isDropTarget = accepts !== null
 
           return (
             <section
@@ -158,23 +196,26 @@ export function Board() {
               onDragOver={
                 isDropTarget
                   ? (e) => {
+                      if (dragged?.kind !== accepts) return
                       e.preventDefault()
                       e.dataTransfer.dropEffect = 'move'
-                      setDropActive(true)
+                      setDropActiveCol(column.id)
                     }
                   : undefined
               }
               onDragLeave={
                 isDropTarget
                   ? (e) => {
-                      if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropActive(false)
+                      if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                        setDropActiveCol((current) => (current === column.id ? null : current))
+                      }
                     }
                   : undefined
               }
-              onDrop={isDropTarget ? handleDoneDrop : undefined}
+              onDrop={isDropTarget ? handleColumnDrop(column.id) : undefined}
               className={cn(
                 'border-border bg-card flex w-72 shrink-0 flex-col rounded-lg border sm:min-w-[15rem] sm:flex-1',
-                isDropTarget && dropActive && 'border-primary ring-primary ring-1'
+                isDropTarget && dropActiveCol === column.id && 'border-primary ring-primary ring-1'
               )}
             >
               <header className="border-border flex items-center justify-between gap-2 border-b px-3 py-2">
@@ -214,14 +255,24 @@ export function Board() {
                     />
                   )
                 ) : activeItems.length > 0 ? (
-                  activeItems.map((change) => (
-                    <ActiveChangeCard
-                      key={change.id}
-                      change={change}
-                      status={statusMap.get(change.id)}
-                      draggable={column.id === 'qa' && canArchive}
-                    />
-                  ))
+                  activeItems.map((change) => {
+                    const status = statusMap.get(change.id)
+                    const dragKind: DragKind | null = !isLive
+                      ? null
+                      : column.id === 'qa'
+                        ? 'archive'
+                        : column.id === 'todo' && isApplyReady(status)
+                          ? 'apply'
+                          : null
+                    return (
+                      <ActiveChangeCard
+                        key={change.id}
+                        change={change}
+                        status={status}
+                        dragKind={dragKind}
+                      />
+                    )
+                  })
                 ) : (
                   <EmptyColumn message="Nothing here." />
                 )}
@@ -237,11 +288,11 @@ export function Board() {
 function ActiveChangeCard({
   change,
   status,
-  draggable,
+  dragKind,
 }: {
   change: ChangeMeta
   status: ChangeStatus | undefined
-  draggable: boolean
+  dragKind: DragKind | null
 }) {
   const phase = classifyChangeWorkflowPhase({
     hasStatus: Boolean(status),
@@ -256,14 +307,15 @@ function ActiveChangeCard({
     change.progress.total > 0
       ? Math.round((change.progress.completed / change.progress.total) * 100)
       : 0
+  const draggable = dragKind !== null
 
   return (
     <div
       draggable={draggable}
       onDragStart={
-        draggable
+        dragKind
           ? (e) => {
-              draggedChange = { id: change.id, name: change.name }
+              dragged = { kind: dragKind, id: change.id, name: change.name }
               e.dataTransfer.setData('text/plain', change.id)
               e.dataTransfer.effectAllowed = 'move'
             }
@@ -272,9 +324,16 @@ function ActiveChangeCard({
       onDragEnd={
         draggable
           ? () => {
-              draggedChange = null
+              dragged = null
             }
           : undefined
+      }
+      title={
+        dragKind === 'apply'
+          ? 'Drag onto In Progress to apply'
+          : dragKind === 'archive'
+            ? 'Drag onto Done to archive'
+            : undefined
       }
       className={cn(
         'border-border bg-background group relative rounded-md border p-3',
