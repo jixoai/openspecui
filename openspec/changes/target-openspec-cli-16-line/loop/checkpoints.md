@@ -876,3 +876,119 @@ Candidate A (bounded `Saving...` after B convergence) and Candidate B (HTTP 200 
 Launch/nearest with WebSocket `Offline`) must not be treated as one defect. `6.11` stays unchecked at
 `61/131`; no new worker Goal, production code, browser rerun, `6.12+`, merge, archive, or release is
 authorized until the owner selects one decision item and its acceptance boundary.
+
+### 6.11 Decomposed Work Packages and Owner Blockers (2026-07-19)
+
+The remaining work is intentionally split so an unrelated Config/transport candidate cannot keep the
+Git checkpoint in an indefinite combined review loop.
+
+| Package               | Owns                                                                                        | Current state                                                                                        | Entry condition                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| W1 Git scope contract | Code/Planning binding tokens, scope-aware Git queries/mutations, stale-intent conflicts     | Stage 1-3 implementation and checked evidence accepted; only terminating delivery acceptance remains | Owner selects direct same-origin project Web as the 6.11 harness                                |
+| W2 Binding settlement | `planningConfig.updateProjectBinding`, launch binding write, Planning transition settlement | Candidate A only; inconsistent browser timing, no accepted red server test                           | Owner chooses await-transition versus write-then-converge semantics                             |
+| W3 Reactive readiness | Root/ActiveRoot subscriptions, invalidation, WS/watcher lifecycle and Web projection        | Candidate B only; WS was Offline, so no causal defect                                                | Owner chooses WS readiness gate versus non-WS fallback, then worker captures a real event trace |
+| W4 Browser harness    | Pinned CLI fixture, isolated data home, bounded desktop/mobile evidence and cleanup         | External fixture has stalled paths; no A->B->A or mobile acceptance claim                            | Owner chooses direct Web versus experimental App iframe                                         |
+
+The owner must decide:
+
+1. Whether W1 may close 6.11 independently of W2/W3. Recommended: yes; W2/W3 are not Git scope
+   semantics and should not block the 6.11 package.
+2. Whether `updateProjectBinding` resolves after the launch binding write (with a typed `rootPreview`
+   and subscription convergence state) or awaits the full Planning transition. This is a public API
+   contract choice, not a cleanup tweak.
+3. Whether an offline WebSocket is an explicit unavailable/locked live state or requires a non-WS
+   invalidation fallback. Candidate B cannot decide this while offline.
+4. Whether the supported acceptance surface is direct same-origin Web (recommended) or experimental
+   App iframe/`?api=`.
+5. Whether W2 and W3 become separate follow-up Changes (recommended) rather than expanding the Git
+   checkpoint.
+
+Until these choices are recorded in the next worker Goal, progress stays `61/131`, `6.11` stays
+unchecked, and no implementation or browser rerun is authorized.
+
+### 6.11 Historical Recommendation: W1 Git + W4 Direct Web (superseded 2026-07-19)
+
+The following was the default recommendation before the owner pause. It is historical evidence, not an
+active worker boundary:
+
+- W1 remains the actual 6.11 package: Git Code/Planning scope, binding-token provenance, stale-intent
+  conflicts, and current-owner query/mutation behavior.
+- W4 supplies only terminating evidence through the direct same-origin Project Web surface with pinned
+  OpenSpec `e1b51d1`, isolated `XDG_DATA_HOME`, disposable Code/A/B roots, desktop, and `390x844`.
+- W2 Project Binding settlement and W3 Root/ActiveRoot reactive readiness remain deferred blockers and
+  may not be fixed incidentally inside W1.
+
+The worker enters only after focused checked Git lanes are green. It may correct production code only
+for a red public Git-boundary test and must prove mutation resistance for the exact transition. A
+natural Root/Dashboard event ordering, an offline WebSocket, or a stalled browser command is not such
+evidence. One terminating fixture blocker or three bounded failed attempts ends the slice with `6.11`
+open at `61/131`.
+
+### W1 Focused Independent Recheck at `dfa94c4` (2026-07-19)
+
+The selected W1 Git slice has no checked public-boundary red:
+
+- Server Git fixtures: 4 files / 29 passed; Router Git subset: 18 passed / 71 skipped.
+- Web Git/Dashboard: 7 files / 70 passed.
+- `@openspecui/server typecheck:git-tests` and Web typecheck pass. The separate full server `typecheck`
+  gate also includes `typecheck:transport-tests`; the focused Git lane does not.
+
+The lanes cover binding-token rotation and Code continuity, stale action conflict before rebound
+side effects, identity failure classification, observer terminal forwarding, cached-A retirement,
+current-B query/action resumption, and route/detail/files/patch provenance. This is focused regression
+evidence only. It does not close W4 desktop/mobile acceptance and does not authorize W2/W3 production
+changes. Full gates and exact-head delivery remain pending.
+
+### 6.11 Owner Pause Supersedes the Recommended Worker Boundary (2026-07-19)
+
+The preceding W1 + W4 section is a recommendation preserved for review history, not an active worker
+authorization. The owner requested independent problem boundaries and decision blockers before more work
+continues. No worker is active while the owner chooses the contract, and no browser rerun is authorized.
+
+Current evidence is separated as follows:
+
+- W1 Git scope/token behavior has no checked public-boundary red; its remaining evidence is a terminating
+  direct-Web delivery acceptance.
+- W2 Project Binding settlement is Candidate A only. It needs a typed real-server fixed point before any
+  production change.
+- W3 Root/ActiveRoot reactive readiness is Candidate B only. The observed WebSocket was Offline, so it
+  cannot prove a server emission or Web projection defect.
+- W4 is only the pinned fixture and bounded desktop/mobile harness; it does not define W2 or W3 semantics.
+
+Until a new Goal records one selected package and the owner's answers for closure boundary, Binding
+settlement, transport fallback, harness surface, and Change shape, `6.11` remains open at `61/131`.
+
+### 6.11 W4 Fixture Recheck (2026-07-19)
+
+A bounded review-only direct-Web attempt used the corrected same-origin OpenSpecUI CLI path and cleaned
+all processes afterward. The static Web surface and WebSocket opened, but the disposable `store-a` fixture
+did not resolve: Root remained `code/nearest` and a 15-second wait for Planning A timed out. An earlier
+standalone-server probe returned `404 /git` because it targeted an API-only process. These are fixture/setup
+observations, not a W1 production red. W4 therefore remains incomplete; no A -> B -> Code/A, stale
+Refresh/Removal conflict, reconnect/error, provenance, or `390x844` acceptance claim is made.
+
+### 6.11 Resumed Staged Worker Goal (2026-07-19)
+
+The owner has now resumed implementation as four ordered stages. This section supersedes the earlier
+owner-pause execution stop, while preserving the independent package boundaries and red-evidence law:
+
+```text
+Stage 0 -> correct pinned-CLI and typecheck evidence contracts
+Stage 1 -> real-time connection lifecycle and retired-generation behavior
+Stage 2 -> Dashboard Git token provenance and stale-intent conflicts
+Stage 3 -> backend owner/transition lease audit
+Stage 4 -> terminating direct-Web desktop/mobile acceptance
+```
+
+The worker must complete only the current stage, commit its code/tests/evidence, and stop for review before
+the next stage. Stage 0 is the current active slice. Its fixed issues are:
+
+- `root-context-cold-start.integration.test.ts` must execute
+  `references/openspec/bin/openspec.js` at `e1b51d1`, not the `openspec-cli-16` npm alias, when its evidence
+  is described as pinned.
+- `typecheck:git-tests` and `typecheck:transport-tests` are separate lanes; the Change must report them
+  separately or change the script wiring and prove that new contract.
+
+Stage 0 must retain isolated `XDG_DATA_HOME`, remove cross-channel timestamp ordering claims, and run its
+focused fixture/type lanes three consecutive times. A failure stops all later stages. No Stage 1-4
+production correction is authorized until Stage 0 is reviewed.
