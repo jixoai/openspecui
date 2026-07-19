@@ -1,10 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
  * 1. Validate and route PTY WebSocket lifecycle messages.
  * 2. Create planning-target terminals inside the Manager-owned root operation lifetime.
  * 3. Attach/replay session output and project terminal control metadata.
  * 4. Publish terminal notifications without duplicating protocol fanout.
- * 5. Keep transport dependencies structural so typed fixtures exercise the real handler boundary.
  *
  * Original request (2026-07-16): "3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited XDG_DATA_HOME"
  * Original request (2026-07-17): "A later root operation must not keep using an owner selected before replacement."
@@ -18,6 +17,7 @@ import {
   type TerminalControlEvent,
   type TerminalCwdTarget,
 } from '@openspecui/core'
+import type { WebSocket } from 'ws'
 import type { NotificationService } from './notification-service.js'
 import type { PtyManager, PtySession } from './pty-manager.js'
 
@@ -39,45 +39,12 @@ type PtyCreatedMessage = {
 type PtyOutgoingMessage = PtyServerMessage | PtyErrorMessage | PtyCreatedMessage
 type TerminalNotificationEvent = Extract<TerminalControlEvent, { type: 'notification' }>
 type TerminalTitleEvent = Extract<TerminalControlEvent, { type: 'title' }>
-type PtySessionPort = Pick<
-  PtySession,
-  | 'id'
-  | 'title'
-  | 'targetTitle'
-  | 'oscTitle'
-  | 'command'
-  | 'platform'
-  | 'cwdTarget'
-  | 'initialCwd'
-  | 'isExited'
-  | 'exitCode'
-  | 'write'
-  | 'resize'
-  | 'getBuffer'
-  | 'setTargetTitle'
-  | 'on'
-  | 'removeListener'
->
-type PtyManagerPort = {
-  create: (options: Parameters<PtyManager['create']>[0]) => PtySessionPort
-  get: (id: string) => PtySessionPort | undefined
-  list: PtyManager['list']
-  close: PtyManager['close']
-}
-type NotificationServicePort = Pick<NotificationService, 'publish'>
-interface PtyWebSocketPort {
-  readonly OPEN: number
-  readonly readyState: number
-  send(payload: string): void
-  on(event: 'message', listener: (raw: unknown) => void): void
-  on(event: 'close', listener: () => void): void
-}
 
-function resolveTerminalTargetTitle(session: PtySessionPort, title?: string): string {
+function resolveTerminalTargetTitle(session: PtySession, title?: string): string {
   return title?.trim() || session.targetTitle || session.title || session.command
 }
 
-function updateTerminalTargetTitle(session: PtySessionPort, event: TerminalTitleEvent): void {
+function updateTerminalTargetTitle(session: PtySession, event: TerminalTitleEvent): void {
   session.setTargetTitle(event.title, event.target)
 }
 
@@ -110,10 +77,9 @@ function coalesceTerminalNotificationFanout(
   })
 }
 
-/** Route validated PTY messages while resolving creation cwd through Server-owned target authority. */
 export function createPtyWebSocketHandler(
-  ptyManager: PtyManagerPort,
-  notificationService: NotificationServicePort | undefined,
+  ptyManager: PtyManager,
+  notificationService: NotificationService | undefined,
   options: {
     withCwdTarget: <T>(
       target: TerminalCwdTarget,
@@ -121,7 +87,7 @@ export function createPtyWebSocketHandler(
     ) => Promise<T>
   }
 ) {
-  return (ws: PtyWebSocketPort) => {
+  return (ws: WebSocket) => {
     // Track event listener cleanups for each attached session
     const cleanups = new Map<string, () => void>()
     const parsers = new Map<string, TerminalControlParser>()
@@ -135,7 +101,7 @@ export function createPtyWebSocketHandler(
       send({ type: 'error', code, message, sessionId: opts?.sessionId })
     }
 
-    const attachToSession = (session: PtySessionPort, opts?: { cols?: number; rows?: number }) => {
+    const attachToSession = (session: PtySession, opts?: { cols?: number; rows?: number }) => {
       const sessionId = session.id
 
       // If already attached, detach first
