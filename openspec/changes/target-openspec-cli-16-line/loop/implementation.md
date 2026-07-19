@@ -2954,3 +2954,58 @@ Static-loader rejection, dependency rebind, late live callbacks, terminal error 
 direct-unmount cache cases all pass. This is a staged implementation checkpoint only; Dashboard
 rendered A-to-B evidence, explicit B query/owner evidence, full gates, browser acceptance, and the
 6.11 task checkbox remain open. Do not start 6.12+, merge, archive, or release.
+
+### 6.11 Partial Browser Reconnaissance after Stage 2
+
+A reviewer browser pass against the current Stage 2 head confirmed Code-default and distinct Planning
+views, A -> B and B -> Code projection changes, real A/B history, A detail/files/patch/back navigation,
+Code/Planning token isolation, and no desktop horizontal overflow. This is reconnaissance only, not the
+terminating browser acceptance required by `6.11`.
+
+The pass did not complete deterministic A -> B -> A, stale Refresh/Removal black-box conflicts,
+reconnecting/failed transport, Planning identity failure, or real `390x844` acceptance. With multiple
+mounted clients, one Project Binding write changed the file while a client remained on `Saving...` and an
+old Root projection for an extended interval before eventual convergence. This is not yet a deterministic
+single-client defect and must not expand the correction surface without a reproducible owner/transport
+counterexample. The App `--app` launch URL also omitted `?api=` in this run; that is an App launch-flow
+observation outside checkpoint `6.11` and is not part of this correction.
+
+Execution is now explicitly staged: real-time connection authority, Dashboard snapshot-token actions,
+backend query/owner recurrence, then full gates and terminating browser acceptance. Each accepted stage
+requires a code/test commit and exact focused evidence. A red focused lane stops the stage before full
+gates; an external browser-fixture blocker is recorded once with `6.11` left open instead of triggering an
+unbounded retry or `6.12+` work.
+
+### 6.11 Stage 3 Applied at `73a27e4`
+
+Stage 3 implementation/test work is committed as `73a27e4` (`test(git): close replacement binding
+evidence`). The bounded diff adds no new product surface beyond the existing Git owner/projection seams:
+
+- The checked server composition now proves A -> B -> A2. Launch Code binding and Dashboard Code
+  provenance remain stable; Planning tokens are distinct for A, B, and A2; the replaceable Planning
+  manager exposes no Code token property. Blank Launch tokens are rejected at construction.
+- The Git-specific observer fixture forwards `onStopped` and `onComplete`; the route proves those
+  terminal events retire cached A authority and that replacement data resumes real overview/list calls
+  with exact B/C tokens. Detail route assertions cover B meta/files and replacement patch content.
+- Existing real `GitEntryDetailPanel` coverage now asserts the on-demand `getEntryPatch` owner receives
+  `scope: planning` and `expectedBindingToken: planning-binding-b`. Mutating that prop back to A makes
+  the exact assertion fail (`received planning-binding-a`), then restoring B passes.
+- The checked Server Git lane remains type-safe and intentionally limited to the five existing Git
+  boundary suites. Historical `router.test.ts` and `planning-root-service.test.ts` fixtures were not
+  forced into this lane with `as unknown as`, fabricated services, or non-null assertions.
+
+Focused Stage 3 evidence:
+
+```text
+Server Git boundary: 5 files / 31 tests passed
+pnpm --filter @openspecui/server typecheck:git-tests: pass
+Web Git + real panel: 5 files / 53 tests passed
+pnpm --filter @openspecui/web typecheck: pass
+format:check: pass
+git diff --check: pass
+```
+
+This closes the focused implementation stages only. The terminating browser fixture is still open:
+deterministic A -> B -> A, stale black-box Refresh/Removal conflict, reconnect/failure, Planning identity
+failure, and real `390x844` remain to be demonstrated. Do not mark `6.11` complete or start `6.12+` until
+full gates and the pinned browser acceptance pass.

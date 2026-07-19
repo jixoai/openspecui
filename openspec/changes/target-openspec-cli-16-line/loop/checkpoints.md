@@ -768,3 +768,42 @@ until the rendered Dashboard A-to-B conflict/removal boundary, exact B query/own
 checked Server lane, full gates, and terminating pinned desktop/mobile browser acceptance pass.
 
 Do not start 6.12+, merge, archive, or release.
+
+### 6.11 Staged Completion and Stop-Loss Boundary
+
+Checkpoint `6.11` remains the only implementation scope. Continue it in four committed stages:
+real-time connection authority, rendered Dashboard snapshot-token conflicts, checked backend query/owner
+recurrence, and terminating browser acceptance. Focused tests and checked type lanes gate each stage;
+full gates are forbidden while the current focused stage is red.
+
+Partial browser reconnaissance confirms Code default, distinct Planning, A -> B, B -> Code, real A/B
+history, A detail/files/patch/back, token isolation, and desktop width. It does not satisfy the checkpoint:
+A -> B -> A, stale Refresh/Removal conflict, reconnect/failure, Planning identity failure, and real
+`390x844` remain open. A multi-client Project Binding write was observed to converge only after an extended
+`Saving...`/old-Root interval; this is not yet deterministic evidence and does not authorize scope growth.
+If the terminating fixture is externally blocked, record the exact blocker once, leave `6.11` open, and
+stop. No `6.12+`, merge, archive, or release work is authorized.
+
+### 6.11 Stage 3 Evidence at `73a27e4`
+
+Commit `73a27e4` closes the focused backend/query-owner evidence boundary without closing checkpoint
+`6.11`. The real server composition proves Launch Code token stability and distinct Planning A/B/A2
+tokens, and rejects blank Launch tokens. The Git observer fixture forwards stop/complete terminal events;
+replacement emissions resume overview/list with exact B/C tokens. Web route/detail fixtures assert B
+meta/files and replacement patch provenance, while the existing real `GitEntryDetailPanel` test asserts
+the on-demand patch owner receives the B Planning token and fails under an A mutation.
+
+Focused results are Server Git `5 files / 31 tests`, Web Git plus panel `5 files / 53 tests`, checked
+Server Git typecheck, Web typecheck, format, and diff-check all green. The checked lane remains limited to
+the five existing Git boundary suites; unrelated historical Router/Manager fixtures were not made to pass by
+adding type escapes or fabricated services.
+
+The Dashboard A -> B test reaches the production Dashboard and action controls and captures A handlers,
+but injects B through the mocked hook projection and rerender rather than a raw tRPC callback. It is
+component-boundary evidence for the visible conflict and recovery path, not transport/browser evidence;
+the terminating browser pass remains mandatory.
+
+`6.11` remains open at `61/131`. Full local gates, clean SSG, and terminating pinned desktop plus real
+`390x844` browser acceptance are still required. The known partial browser reconnaissance does not prove
+A -> B -> A, stale black-box conflicts, reconnect/failure, Planning identity failure, or mobile geometry.
+No `6.12+`, merge, archive, or release work is authorized.
