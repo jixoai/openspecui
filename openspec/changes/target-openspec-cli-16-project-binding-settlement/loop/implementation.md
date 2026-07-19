@@ -302,3 +302,86 @@ existing Web browser suite, adding screenshot dependencies, retrying agent-brows
 The fixture must preserve the pinned CLI SHA, explicit isolated `XDG_DATA_HOME`, disposable Store/root
 fixtures, same-origin Project Web, launch-write/transition/Root B/Active Root B assertions, desktop/mobile
 overflow and console checks, and cleanup. A fixture blocker stops the slice and is reported raw.
+
+## B2.5 bounded Playwright fixture (2026-07-20)
+
+Worker delivery is split across `43ea0cd` (`test: add project binding browser fixture`) and `7ea2c8a`
+(`fix: isolate project binding fixture from proxies`). The fixture is intentionally opt-in through
+`pnpm --filter @openspecui/web test:project-binding`; it does not extend the default browser lane or
+change production/W3 behavior.
+
+The fixture uses the pinned executable and registry scope below, starts the same-origin backend and Vite
+entry directly, and refuses to start when either bounded port is already occupied:
+
+```text
+OpenSpec executable: references/openspec/bin/openspec.js
+OpenSpec upstream SHA: e1b51d111ab446b54dee2d6159ac245f0339ae52
+OpenSpec version: 1.6.0
+XDG_DATA_HOME: disposable fixture directory
+backend: 127.0.0.1:14236
+same-origin Web: 127.0.0.1:14237/config
+```
+
+The fixture removes upper- and lower-case proxy variables (including `NO_PROXY`) before any pinned CLI,
+server, Vite, or browser process starts. It creates disposable `store-a`/`store-b` roots, writes the
+launch declaration as the only A-to-B input, asserts launch-write completion, `Transition: converging`,
+Root B identity and Store id, then selects the real Active Root tab and asserts one active panel with one
+Root B evidence paragraph. Desktop `1280x800` and mobile `390x844` both assert no horizontal overflow;
+both pages report zero page/console errors. Playwright contexts use reduced motion only to make the
+semantic tab assertion deterministic; view-transition behavior remains covered by the existing browser
+suite and is outside this W2 fixture.
+
+The checked fixture command and final raw result were:
+
+```text
+pnpm --filter @openspecui/web exec tsc --noEmit --module NodeNext --moduleResolution NodeNext \
+  --target ES2022 --lib ES2022,DOM --types node scripts/w2-project-binding-playwright.ts
+  exit 0
+pnpm --filter @openspecui/web test:project-binding
+  exit 0
+  pinnedCommit=e1b51d111ab446b54dee2d6159ac245f0339ae52
+  dataHome=/private/tmp/openspecui-w2-b25-playwright-wk3Cee/xdg-data
+  desktop=1280x800 passed
+  mobile=390x844 passed
+  browserErrors=0
+pnpm format:check
+  exit 0
+git diff --check
+  exit 0
+```
+
+The fixture process groups, backend/Web listeners on `14236/14237`, browser context, and disposable
+directory were cleaned after the run. Three earlier failures were fixture calibration only: the original
+`pnpm web dev -- --host` invocation left Vite on its configured `13003` port; a direct run compared
+`/tmp` against macOS's canonical `/private/tmp` path; and the first canonical-path assertion was not
+scoped to the selected Active Root panel and hit two matching Root B nodes. None reached a production
+failure state. The final fixture uses direct process entry, canonical paths, reduced-motion semantics,
+real selected-tab/panel assertions, and bounded cleanup.
+
+The initial fixture review found one P2 in bounded cleanup: a stuck `context.close()` could prevent
+`browser.close()` from being attempted. Commit `89de4df` closes both handles concurrently, isolates each
+close error, and retains the outer five-second bound. The explicit fixture typecheck and opt-in Playwright
+run passed again on that SHA. No P0/P1/P2 remains. B2.5 remains open until the clean SSG/full-repository
+gate run on the final SHA and the owner performs the agreed manual unit-page and multi-tab acceptance.
+Do not merge, archive, release, start W3, or start `6.12+` from this Change.
+
+## Final gate evidence (2026-07-20)
+
+The final fixture SHA is `89de4df0d763e033e204c19302b43569e1cbc442`. After cleaning the generated SSG
+directories, the following exact-SHA gates all exited 0:
+
+```text
+pnpm --filter @openspecui/web build:ssg
+pnpm format:check
+pnpm lint:ci
+pnpm typecheck                 # 15 workspace projects
+pnpm test:ci
+pnpm test:browser:ci           # xterm 60 passed / 1 skipped; Web 12/12
+git diff --check
+```
+
+The clean SSG output was rebuilt after removing `packages/web/dist-ssg` and `packages/web/.vite`.
+Only pre-existing scroll-button/dynamic-import build warnings and jsdom Canvas warnings appeared. The
+fixture's backend/Vite listeners, child process groups, browser context, and disposable roots were all
+cleaned. This is repository and single-page evidence; B2.5 remains open for owner manual single-page and
+multi-tab acceptance and independent review. No merge, archive, release, W3, or `6.12+` work is authorized.

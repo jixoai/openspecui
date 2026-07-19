@@ -57,4 +57,29 @@ manual owner acceptance for unit-page/multi-tab behavior. Do not migrate the exi
 retry the hung agent-browser session. The fixture must run on the exact implementation SHA with pinned
 CLI, isolated `XDG_DATA_HOME`, same-origin Project Web, desktop/mobile assertions, and cleanup.
 
+Fixture delivery evidence (2026-07-20): `43ea0cd` added the opt-in Playwright command and `7ea2c8a`
+removed upper/lower-case proxy variables from its isolated environment. On the final fixture state, the
+explicit script typecheck and `pnpm --filter @openspecui/web test:project-binding` both exited 0. The raw
+fixture result pinned OpenSpec SHA `e1b51d111ab446b54dee2d6159ac245f0339ae52`, passed desktop `1280x800`
+and mobile `390x844`, reported `browserErrors: 0`, and left ports `14236/14237`, child processes, and
+temporary roots clean. `pnpm format:check` and `git diff --check` also exited 0. The three preceding
+failures were fixture-only startup, path canonicalization, and unscoped-tab assertion corrections; no
+production defect was inferred from them. B2.5 remains open pending clean SSG/full gates and owner manual
+single-page/multi-tab acceptance.
+
+Final gate evidence (2026-07-20, exact SHA `89de4df0d763e033e204c19302b43569e1cbc442`): clean SSG,
+`pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck` (15 workspace projects), `pnpm test:ci`,
+`pnpm test:browser:ci` (xterm 60 passed / 1 skipped; Web 12/12), and `git diff --check` all exited 0.
+The clean SSG output was rebuilt after removing `packages/web/dist-ssg` and `packages/web/.vite`.
+Only pre-existing scroll-button/dynamic-import build warnings and jsdom Canvas warnings appeared. No
+fixture process, backend/Vite listener, or temporary root remained after cleanup. B2.5 is still open only
+for the owner's manual single-page and multi-tab acceptance plus this independent review.
+
+Independent review correction (2026-07-20): the first review found a P2 in `cleanupBrowser`: a stuck
+`context.close()` could prevent `browser.close()` from being attempted. `89de4df` closes both handles
+concurrently, isolates each close error, and retains the outer five-second bound. The explicit fixture
+typecheck and opt-in Playwright run passed again on that SHA; no P0/P1/P2 remains. A separate prior
+Active-Root-A/Refreshing observation had no exact SHA or raw logs and did not reproduce on the clean
+fixture, so it remains unverified characterization rather than a production defect.
+
 Do not start W3, `6.12+`, merge, archive, or release from this Change.
