@@ -3378,3 +3378,43 @@ The next fixed-point test must start the real server with its watcher/invalidati
 Root Context and Project Binding subscriptions, capture WS open/close/error and server/client event
 sequence, and then perform the public mutation. It must distinguish candidate A from candidate B at
 the public boundary before any production change is authorized. Keep `6.11` open at `61/131`.
+
+### 6.11 Review Stop: Decomposition Pending Owner Decision (2026-07-19)
+
+The owner has stopped further 6.11 implementation after repeated local fixes and inconclusive browser
+boundaries. Worker coding and test lanes were interrupted; no production change is authorized from the
+current candidates. The Change remains at `61/131`, with `6.11` open and `6.12+` untouched.
+
+The remaining work is split into independent decisions rather than one combined lifecycle task:
+
+```text
+A. Mutation contract:
+   updateProjectBinding -> await full Planning transition?
+                      or -> settle after launch-file write and let subscriptions converge?
+
+B. Reactive transport contract:
+   Root/ActiveRoot invalidation requires ready WS + watcher?
+   or -> server must provide a non-WS fallback/explicit readiness result?
+
+C. Acceptance harness:
+   direct same-origin project Web
+   or experimental App iframe/`?api=` with corrected host identity?
+
+D. Change shape:
+   one follow-up Change
+   or three Changes for A/B/C?
+```
+
+Evidence is intentionally not merged across candidates:
+
+- Candidate A: launch file B and Root/ActiveRoot B were observed while the UI mutation remained
+  `Saving...` for a bounded 20s window; a mutation-only probe later returned in about 2s.
+- Candidate B: a later HTTP 200 mutation returned a correct `rootPreview`, but Dashboard remained at
+  `source: nearest`/Launch root while the browser WebSocket was `Offline`. This cannot prove a missing
+  server emission or Web projection update.
+- The previous `localhost`/`127.0.0.1` CORS mismatch and all old 13122/Vite probe processes were cleaned;
+  no A -> B -> A, conflict retry, provenance, or mobile acceptance is claimed.
+
+The next worker must receive a new narrow Goal after the owner selects one item. Until then, do not add
+tests, change router/manager ownership, rerun browser probes, close `6.11`, merge, archive, release, or
+start App/Store/`6.12+` work.

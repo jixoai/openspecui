@@ -861,3 +861,18 @@ requires the test to fail at the current fixed point and to fail again when the 
 or settlement transition is removed. No arbitrary sleeps, generic generation barrier, router rewrite,
 or scope expansion is authorized. Stop and clean the old backend/Vite fixture before rerunning. Keep
 `6.11` open at `61/131`; do not start `6.12+`, merge, archive, release, or App/Store work.
+
+### 6.11 Owner Decision Gate: Split Pending Blockers (2026-07-19)
+
+Further implementation is paused. The worker/test lanes were stopped after the review identified
+separate unresolved contracts:
+
+- mutation response semantics (await complete Planning transition versus settle after launch binding);
+- Root/ActiveRoot invalidation and WebSocket/watcher readiness;
+- supported acceptance surface (direct same-origin Web versus experimental App iframe);
+- one follow-up Change versus separate Changes for those contracts.
+
+Candidate A (bounded `Saving...` after B convergence) and Candidate B (HTTP 200 but Dashboard remains
+Launch/nearest with WebSocket `Offline`) must not be treated as one defect. `6.11` stays unchecked at
+`61/131`; no new worker Goal, production code, browser rerun, `6.12+`, merge, archive, or release is
+authorized until the owner selects one decision item and its acceptance boundary.
