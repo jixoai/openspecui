@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Verify terminal controller PTY lifecycle, reconnect, rendering, input, and metadata behavior.
- * 2. Verify explicit cwd target and initial cwd survive create queues and session restore.
+ * 2. Verify explicit cwd target and initial cwd survive create, restore, and custom-title rename.
  * 3. Preserve terminal engine, theme, keybinding, and notification regression coverage.
  *
  * Original request (2026-07-16): "Terminal exposes explicit launch-project cwd and planning-root cwd."
+ * Review correction (2026-07-20): "Call the real terminalController.setCustomTitle and preserve cwd identity."
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -494,7 +495,7 @@ describe('terminal-controller PTY behavior', () => {
     unsubscribe()
   })
 
-  it('preserves an explicit planning-root target through queued creation', async () => {
+  it('preserves planning-root identity through queued creation and custom-title rename', async () => {
     const terminalController = await loadTerminalController()
     const unsubscribe = terminalController.subscribe(() => {})
     const ws = getPtySocket(0)
@@ -520,6 +521,14 @@ describe('terminal-controller PTY behavior', () => {
     })
 
     expect(terminalController.getSnapshot().sessions[0]).toMatchObject({
+      cwdTarget: 'planning-root',
+      initialCwd: '/stores/shared',
+    })
+
+    terminalController.setCustomTitle(localId, 'Verification shell')
+
+    expect(terminalController.getSnapshot().sessions[0]).toMatchObject({
+      displayTitle: 'Verification shell',
       cwdTarget: 'planning-root',
       initialCwd: '/stores/shared',
     })
