@@ -4,6 +4,7 @@
  * 2. Verify Store/Reference edits submit one structured, loading-locked mutation.
  * 3. Verify pending/failure/transport state locks writes and retains trustworthy declarations.
  * 4. Verify mutation preview evidence does not replace the subscribed current Root Context.
+ * 5. Verify convergence requires the matching ready Root Context identity and releases on current root error.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-17): "Lock every mutation control while save is pending; preserve dirty input on failure."
@@ -278,6 +279,145 @@ describe('ProjectBindingSection', () => {
     expect(screen.queryByRole('button', { name: 'Saved' })).toBeNull()
     expect(
       screen.getByText('Transition: converging · waiting for Root Context subscription')
+    ).toBeTruthy()
+  })
+
+  it('does not settle when subscription B still carries the stale Root A identity', async () => {
+    const rendered = renderSection(<ProjectBindingSection isStatic={false} />)
+    updateProjectBindingMock.mockResolvedValueOnce(bindingUpdateResult(updatedBindingConfig()))
+
+    fireEvent.change(screen.getByLabelText('Store'), { target: { value: 'design-system' } })
+    fireEvent.change(screen.getByLabelText('Reference Store id'), {
+      target: { value: 'platform-next' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled())
+
+    bindingSubscriptionMock.mockReturnValue({
+      data: {
+        ...updatedBindingConfig(),
+        rootPreview: bindingConfig().rootPreview,
+      },
+      isLoading: false,
+      error: null,
+    })
+    rendered.rerender(<ProjectBindingSection isStatic={false} />)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled())
+    expect(screen.getByLabelText('Store')).toHaveValue('design-system')
+    expect(screen.getByLabelText('Reference Store id')).toHaveValue('platform-next')
+    expect(screen.queryByRole('button', { name: 'Saved' })).toBeNull()
+  })
+
+  it('does not settle when Root B identity matches but data scope provenance is stale', async () => {
+    const rendered = renderSection(<ProjectBindingSection isStatic={false} />)
+    const updated = updatedBindingConfig()
+    updateProjectBindingMock.mockResolvedValueOnce(bindingUpdateResult(updated))
+
+    fireEvent.change(screen.getByLabelText('Store'), { target: { value: 'design-system' } })
+    fireEvent.change(screen.getByLabelText('Reference Store id'), {
+      target: { value: 'platform-next' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled())
+
+    if (updated.rootPreview.state !== 'ready') throw new Error('Expected a ready test preview.')
+    bindingSubscriptionMock.mockReturnValue({
+      data: {
+        ...updated,
+        rootPreview: {
+          ...updated.rootPreview,
+          data: {
+            ...updated.rootPreview.data,
+            dataScope: {
+              path: '/runtime/other-openspec',
+              source: 'user-home-default' as const,
+              environmentVariable: null,
+            },
+          },
+        },
+      },
+      isLoading: false,
+      error: null,
+    })
+    rendered.rerender(<ProjectBindingSection isStatic={false} />)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled())
+    expect(screen.getByLabelText('Store')).toHaveValue('design-system')
+    expect(screen.queryByRole('button', { name: 'Saved' })).toBeNull()
+  })
+
+  it('does not settle retained B data while the Project Binding subscription reports an error', async () => {
+    const rendered = renderSection(<ProjectBindingSection isStatic={false} />)
+    const updated = updatedBindingConfig()
+    updateProjectBindingMock.mockResolvedValueOnce(bindingUpdateResult(updated))
+
+    fireEvent.change(screen.getByLabelText('Store'), { target: { value: 'design-system' } })
+    fireEvent.change(screen.getByLabelText('Reference Store id'), {
+      target: { value: 'platform-next' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled())
+
+    bindingSubscriptionMock.mockReturnValue({
+      data: updated,
+      isLoading: false,
+      error: new Error('Project Binding subscription disconnected.'),
+    })
+    rendered.rerender(<ProjectBindingSection isStatic={false} />)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled())
+    expect(screen.getByLabelText('Store')).toHaveValue('design-system')
+    expect(screen.getByLabelText('Reference Store id')).toHaveValue('platform-next')
+    expect(screen.queryByRole('button', { name: 'Saved' })).toBeNull()
+    expect(screen.getByText('Project Binding subscription disconnected.')).toBeTruthy()
+  })
+
+  it('retains the draft and releases repair when subscription convergence reports a Root error', async () => {
+    const rendered = renderSection(<ProjectBindingSection isStatic={false} />)
+    updateProjectBindingMock.mockResolvedValueOnce(bindingUpdateResult(updatedBindingConfig()))
+
+    fireEvent.change(screen.getByLabelText('Store'), { target: { value: 'design-system' } })
+    fireEvent.change(screen.getByLabelText('Reference Store id'), {
+      target: { value: 'platform-next' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled())
+
+    const updated = updatedBindingConfig()
+    if (updated.rootPreview.state !== 'ready') throw new Error('Expected a ready test preview.')
+    bindingSubscriptionMock.mockReturnValue({
+      data: {
+        ...updated,
+        rootPreview: {
+          state: 'error' as const,
+          data: null,
+          attempt: updated.rootPreview.data,
+          error: {
+            code: 'root-unresolved' as const,
+            message: 'Subscription Root Context failed.',
+          },
+          observedAt: 3,
+        },
+      },
+      isLoading: false,
+      error: null,
+    })
+    rendered.rerender(<ProjectBindingSection isStatic={false} />)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled())
+    expect(screen.getByLabelText('Store')).toHaveValue('design-system')
+    expect(screen.getByLabelText('Reference Store id')).toHaveValue('platform-next')
+    expect(screen.getAllByText('Subscription Root Context failed.').length).toBeGreaterThan(0)
+    expect(
+      screen.queryByText(
+        'Transition: converging · Root Context subscription matched the launch write'
+      )
+    ).toBeNull()
+    expect(
+      screen.getByText(
+        'Transition: converging · Root Context subscription error: Subscription Root Context failed.'
+      )
     ).toBeTruthy()
   })
 

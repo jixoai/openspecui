@@ -4,6 +4,7 @@
  * 2. Preserve Root Context preview and declaration diagnostics without treating them as registry truth.
  * 3. Bind mutation controls and execution to loading/error/dirty lifecycle states.
  * 4. Keep launch-write preview evidence separate while Root Context subscriptions converge.
+ * 5. Preserve subscription convergence errors without relabeling them as a successful match.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-18): "Project Binding must show direct Reference Store, root, and Doctor diagnostics."
@@ -44,6 +45,24 @@ function sameBinding(
   return JSON.stringify(left) === JSON.stringify(right)
 }
 
+function sameRootIdentity(
+  left: ProjectBindingConfig['rootPreview'],
+  right: ProjectBindingConfig['rootPreview']
+) {
+  if (left.state !== 'ready' || right.state !== 'ready') return false
+  const leftRoot = left.data.planningRoot
+  const rightRoot = right.data.planningRoot
+  return (
+    (leftRoot?.path ?? null) === (rightRoot?.path ?? null) &&
+    (leftRoot?.source ?? null) === (rightRoot?.source ?? null) &&
+    (leftRoot?.store_id ?? null) === (rightRoot?.store_id ?? null) &&
+    left.data.storeId === right.data.storeId &&
+    left.data.dataScope.path === right.data.dataScope.path &&
+    left.data.dataScope.source === right.data.dataScope.source &&
+    left.data.dataScope.environmentVariable === right.data.dataScope.environmentVariable
+  )
+}
+
 function bindingDrafts(binding: ProjectBindingConfig['binding']) {
   return {
     storeId: binding.store.state === 'declared' ? binding.store.id : '',
@@ -62,6 +81,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
   const [pendingConvergence, setPendingConvergence] = useState<ProjectBindingUpdateResult | null>(
     null
   )
+  const [convergenceError, setConvergenceError] = useState<string | null>(null)
   const bindingLocked = Boolean(
     isLoading || subscriptionError !== null || pendingConvergence?.transition.state === 'converging'
   )
@@ -69,12 +89,29 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
   useEffect(() => {
     if (!config) return
     if (pendingConvergence) {
-      if (sameBinding(config.binding, pendingConvergence.launchWrite.binding)) {
+      if (subscriptionError) {
+        setFormError(subscriptionError.message)
+        return
+      }
+      if (
+        pendingConvergence.rootPreview.state === 'ready' &&
+        config.rootPreview.state === 'error'
+      ) {
+        setPendingConvergence(null)
+        setConvergenceError(config.rootPreview.error.message)
+        setFormError(config.rootPreview.error.message)
+        return
+      }
+      if (
+        sameBinding(config.binding, pendingConvergence.launchWrite.binding) &&
+        sameRootIdentity(config.rootPreview, pendingConvergence.rootPreview)
+      ) {
         const next = bindingDrafts(config.binding)
         setStoreId(next.storeId)
         setReferences(next.references)
         setDirty(false)
         setPendingConvergence(null)
+        setConvergenceError(null)
         setFormError(null)
       }
       return
@@ -84,7 +121,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
     setStoreId(next.storeId)
     setReferences(next.references)
     setFormError(null)
-  }, [config, dirty, pendingConvergence])
+  }, [config, dirty, pendingConvergence, subscriptionError])
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -106,9 +143,11 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
     onSuccess: (result) => {
       setMutationEvidence(result)
       if (result.transition.state === 'converging') {
+        setConvergenceError(null)
         setPendingConvergence(result)
       } else {
         setPendingConvergence(null)
+        setConvergenceError(null)
         setFormError(result.transition.error.message)
       }
     },
@@ -123,6 +162,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
     )
     setDirty(true)
     setMutationEvidence(null)
+    setConvergenceError(null)
     setFormError(null)
   }
 
@@ -186,6 +226,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
               setStoreId(event.target.value)
               setDirty(true)
               setMutationEvidence(null)
+              setConvergenceError(null)
               setFormError(null)
             }}
             placeholder="No declared Store"
@@ -211,6 +252,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
                 ])
                 setDirty(true)
                 setMutationEvidence(null)
+                setConvergenceError(null)
               }}
               className="border-border hover:bg-muted inline-flex h-8 items-center gap-1 rounded-md border px-2 text-xs"
             >
@@ -255,6 +297,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
                       )
                       setDirty(true)
                       setMutationEvidence(null)
+                      setConvergenceError(null)
                     }}
                     aria-label={`Remove Reference ${reference.id || 'row'}`}
                     title="Remove Reference"
@@ -366,7 +409,9 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
               ? ` · ${mutationEvidence.transition.error.message}`
               : pendingConvergence
                 ? ' · waiting for Root Context subscription'
-                : ' · Root Context subscription matched the launch write'}
+                : convergenceError
+                  ? ` · Root Context subscription error: ${convergenceError}`
+                  : ' · Root Context subscription matched the launch write'}
           </div>
         </section>
       ) : null}

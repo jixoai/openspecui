@@ -12,14 +12,17 @@ import {
   CliContextSchema,
   CliDoctorSchema,
   parseCliCommandResult,
+  resolveOpenSpecDataScope,
   type CliCommandResult,
+  type CliResult,
+  type ProjectBindingConfig,
+  type ProjectBindingUpdateResult,
 } from '@openspecui/core'
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { ZodType } from 'zod'
-import { createRootContextSubscription } from './root-context-service.js'
 import { appRouter } from './router.js'
 import { createServer } from './server.js'
 
@@ -61,6 +64,22 @@ function commandResult<T>(data: T, schema: ZodType<T>): CliCommandResult<T> {
   )
 }
 
+function commandFailure<T>(
+  payload: Record<string, unknown>,
+  schema: ZodType<T>,
+  input: Pick<CliResult, 'stderr' | 'exitCode'>
+): CliCommandResult<T> {
+  return parseCliCommandResult(
+    {
+      success: false,
+      stdout: JSON.stringify(payload),
+      stderr: input.stderr,
+      exitCode: input.exitCode,
+    },
+    schema
+  )
+}
+
 async function createRouterFixture() {
   const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-project-binding-router-'))
   const launchRoot = join(tempDir, 'launch')
@@ -69,17 +88,45 @@ async function createRouterFixture() {
   await Promise.all(
     [launchRoot, rootA, rootB].map((root) => mkdir(join(root, 'openspec'), { recursive: true }))
   )
+  const launchConfigPath = join(launchRoot, 'openspec', 'config.yaml')
+  await writeFile(launchConfigPath, 'store: store-a\n', 'utf8')
 
   const server = createServer({ projectDir: launchRoot, enableWatcher: false })
-  let selectedRoot = rootA
+  let previewError = false
+  const readSelectedRoot = async () => {
+    const config = await readFile(launchConfigPath, 'utf8')
+    return config.includes('store: store-b') ? rootB : rootA
+  }
   vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
     available: true,
     version: '1.6.0',
   })
-  vi.spyOn(server.cliExecutor.contracts, 'doctorRoot').mockImplementation(async () =>
-    commandResult(
+  vi.spyOn(server.cliExecutor.contracts, 'doctorRoot').mockImplementation(async () => {
+    if (previewError) {
+      return commandFailure(
+        {
+          status: [
+            {
+              severity: 'error',
+              code: 'doctor_fixture_failed',
+              message: 'Doctor fixture failed.',
+            },
+          ],
+        },
+        CliDoctorSchema,
+        { stderr: 'doctor fixture stderr', exitCode: 17 }
+      )
+    }
+    const selectedRoot = await readSelectedRoot()
+    return commandResult(
       {
-        root: { path: selectedRoot, source: 'declared', healthy: true, status: [] },
+        root: {
+          path: selectedRoot,
+          source: 'declared',
+          store_id: selectedRoot === rootA ? 'store-a' : 'store-b',
+          healthy: true,
+          status: [],
+        },
         store: {
           id: selectedRoot === rootA ? 'store-a' : 'store-b',
           metadata: { present: true, valid: true },
@@ -90,25 +137,46 @@ async function createRouterFixture() {
       },
       CliDoctorSchema
     )
-  )
-  vi.spyOn(server.cliExecutor.contracts, 'context').mockImplementation(async () =>
-    commandResult(
+  })
+  vi.spyOn(server.cliExecutor.contracts, 'context').mockImplementation(async () => {
+    if (previewError) {
+      return commandFailure(
+        {
+          status: [
+            {
+              severity: 'error',
+              code: 'context_fixture_failed',
+              message: 'Context fixture failed.',
+            },
+          ],
+        },
+        CliContextSchema,
+        { stderr: 'context fixture stderr', exitCode: 18 }
+      )
+    }
+    const selectedRoot = await readSelectedRoot()
+    return commandResult(
       {
-        root: { path: selectedRoot, source: 'declared', role: 'openspec_root' },
+        root: {
+          path: selectedRoot,
+          source: 'declared',
+          store_id: selectedRoot === rootA ? 'store-a' : 'store-b',
+          role: 'openspec_root',
+        },
         members: [],
         status: [],
       },
       CliContextSchema
     )
-  )
+  })
 
   return {
     launchRoot,
     rootA,
     rootB,
     server,
-    selectRoot(root: string) {
-      selectedRoot = root
+    setPreviewError(value: boolean) {
+      previewError = value
     },
     async dispose() {
       vi.restoreAllMocks()
@@ -127,22 +195,31 @@ async function createRouterFixture() {
 }
 
 function expectWriteThenConvergeEvidence(
-  value: unknown,
+  value: ProjectBindingUpdateResult,
   input: { launchRoot: string; rootB: string }
 ): void {
+  const expectedDataScope = resolveOpenSpecDataScope()
   expect(value).toMatchObject({
     kind: 'project-binding-update',
     launchWrite: {
       state: 'write-complete',
       owner: { kind: 'launch-project', path: input.launchRoot },
-      binding: { store: { state: 'declared', id: 'store-b' } },
+      binding: {
+        store: { state: 'declared', id: 'store-b' },
+        references: {
+          state: 'declared',
+          entries: [{ id: 'platform' }],
+        },
+        diagnostics: [],
+      },
       completedAt: expect.any(Number),
     },
     rootPreview: {
       state: 'ready',
       data: {
-        planningRoot: { path: input.rootB, source: 'declared' },
+        planningRoot: { path: input.rootB, source: 'declared', store_id: 'store-b' },
         storeId: 'store-b',
+        dataScope: expectedDataScope,
       },
     },
     transition: {
@@ -151,6 +228,53 @@ function expectWriteThenConvergeEvidence(
       observedAt: expect.any(Number),
     },
   })
+  if (value.rootPreview.state !== 'ready') {
+    throw new Error('Expected a ready detached Root Context preview.')
+  }
+  expect(value.rootPreview.data.evidence.doctor).toMatchObject({
+    success: true,
+    stdout: JSON.stringify({
+      root: {
+        path: input.rootB,
+        source: 'declared',
+        store_id: 'store-b',
+        healthy: true,
+        status: [],
+      },
+      store: { id: 'store-b', metadata: { present: true, valid: true }, status: [] },
+      references: [],
+      status: [],
+    }),
+    stderr: '',
+    exitCode: 0,
+    diagnostics: [],
+  })
+  expect(value.rootPreview.data.evidence.context).toMatchObject({
+    success: true,
+    stdout: JSON.stringify({
+      root: {
+        path: input.rootB,
+        source: 'declared',
+        store_id: 'store-b',
+        role: 'openspec_root',
+      },
+      members: [],
+      status: [],
+    }),
+    stderr: '',
+    exitCode: 0,
+    diagnostics: [],
+  })
+  expect(value.rootPreview.data.planningRoot).toEqual({
+    path: input.rootB,
+    source: 'declared',
+    store_id: 'store-b',
+    healthy: true,
+    status: [],
+  })
+  expect(value.rootPreview.data.dataScope).toEqual(expectedDataScope)
+  expect(value.launchWrite.file.content).toContain('store: store-b')
+  expect(value.launchWrite.file.content).toContain('references:\n  - platform')
 }
 
 describe('public Project Binding Router', () => {
@@ -158,81 +282,109 @@ describe('public Project Binding Router', () => {
     const fixture = await createRouterFixture()
     const operationStarted = createDeferred<void>()
     const releaseOperation = createDeferred<void>()
-    const firstRootReady = createDeferred<void>()
+    const firstBinding = createDeferred<ProjectBindingConfig>()
     const rootRefreshStarted = createDeferred<void>()
-    const rootBReady = createDeferred<void>()
-    const observedPlanningRoots: string[] = []
+    const bindingBReady = createDeferred<ProjectBindingConfig>()
     let heldOperation: Promise<void> | null = null
     let mutation: ReturnType<
       ReturnType<typeof appRouter.createCaller>['planningConfig']['updateProjectBinding']
     > | null = null
     let subscription: { unsubscribe(): void } | null = null
+    let latestBinding: ProjectBindingConfig | null = null
 
     try {
-      await expect(fixture.server.planningRootServices.resolveRootContext()).resolves.toMatchObject(
-        {
-          state: 'ready',
-          data: { planningRoot: { path: fixture.rootA } },
-        }
-      )
-      subscription = createRootContextSubscription(fixture.server.planningRootServices).subscribe({
-        next: (state) => {
-          if (state.state === 'refreshing' && state.data?.planningRoot?.path === fixture.rootA) {
-            rootRefreshStarted.resolve()
-            return
+      const originalResolveRootContextReactive =
+        fixture.server.planningRootServices.resolveRootContextReactive.bind(
+          fixture.server.planningRootServices
+        )
+      let refreshExpected = false
+      vi.spyOn(
+        fixture.server.planningRootServices,
+        'resolveRootContextReactive'
+      ).mockImplementation(async () => {
+        if (refreshExpected) rootRefreshStarted.resolve()
+        return originalResolveRootContextReactive()
+      })
+      const caller = appRouter.createCaller(fixture.server.createContext())
+      const observable = await caller.planningConfig.subscribeProjectBinding()
+      subscription = observable.subscribe({
+        next: (value) => {
+          latestBinding = value
+          if (
+            value.rootPreview.state === 'ready' &&
+            value.rootPreview.data.planningRoot?.path === fixture.rootA
+          ) {
+            firstBinding.resolve(value)
           }
-          if (state.state !== 'ready') return
-          const path = state.data.planningRoot?.path
-          if (!path) return
-          observedPlanningRoots.push(path)
-          if (path === fixture.rootA) firstRootReady.resolve()
-          if (path === fixture.rootB) rootBReady.resolve()
+          if (
+            value.rootPreview.state === 'ready' &&
+            value.rootPreview.data.planningRoot?.path === fixture.rootB
+          ) {
+            bindingBReady.resolve(value)
+          }
         },
         error: (error) => {
-          firstRootReady.reject(error)
+          firstBinding.reject(error)
           rootRefreshStarted.reject(error)
-          rootBReady.reject(error)
+          bindingBReady.reject(error)
         },
       })
-      await firstRootReady.promise
+      const initialBinding = await firstBinding.promise
+      expect(initialBinding).toMatchObject({
+        kind: 'project-binding',
+        binding: { store: { state: 'declared', id: 'store-a' } },
+        rootPreview: {
+          state: 'ready',
+          data: {
+            planningRoot: { path: fixture.rootA, source: 'declared', store_id: 'store-a' },
+            storeId: 'store-a',
+          },
+        },
+      })
       heldOperation = fixture.server.planningRootServices.runOperation(async ({ rootContext }) => {
         expect(rootContext.planningRoot?.path).toBe(fixture.rootA)
         operationStarted.resolve()
         await releaseOperation.promise
       })
       await operationStarted.promise
+      refreshExpected = true
 
-      fixture.selectRoot(fixture.rootB)
-      const caller = appRouter.createCaller(fixture.server.createContext())
       mutation = caller.planningConfig.updateProjectBinding({
         store: 'store-b',
         references: [{ id: 'platform' }],
       })
 
-      await vi.waitFor(async () => {
-        await expect(
-          readFile(join(fixture.launchRoot, 'openspec', 'config.yaml'), 'utf8')
-        ).resolves.toContain('store: store-b')
-      })
-
+      await rootRefreshStarted.promise
       const outcome = await Promise.race([
         mutation.then((value) => ({ state: 'returned' as const, value })),
         new Promise<{ state: 'still-waiting' }>((resolve) =>
           setTimeout(() => resolve({ state: 'still-waiting' }), 250)
         ),
       ])
-
       expect(outcome).toMatchObject({ state: 'returned' })
       if (outcome.state === 'returned') {
         expectWriteThenConvergeEvidence(outcome.value, fixture)
       }
-      await rootRefreshStarted.promise
-      expect(observedPlanningRoots).not.toContain(fixture.rootB)
+      expect(latestBinding).toMatchObject({
+        kind: 'project-binding',
+        binding: { store: { state: 'declared', id: 'store-a' } },
+        rootPreview: { state: 'ready', data: { planningRoot: { path: fixture.rootA } } },
+      })
 
       releaseOperation.resolve()
       await heldOperation
-      await rootBReady.promise
-      expect(observedPlanningRoots).toContain(fixture.rootB)
+      const convergedBinding = await bindingBReady.promise
+      expect(convergedBinding).toMatchObject({
+        kind: 'project-binding',
+        binding: { store: { state: 'declared', id: 'store-b' } },
+        rootPreview: {
+          state: 'ready',
+          data: {
+            planningRoot: { path: fixture.rootB, source: 'declared', store_id: 'store-b' },
+            storeId: 'store-b',
+          },
+        },
+      })
       subscription.unsubscribe()
       subscription = null
     } finally {
@@ -248,12 +400,108 @@ describe('public Project Binding Router', () => {
     const fixture = await createRouterFixture()
 
     try {
-      fixture.selectRoot(fixture.rootB)
       const value = await appRouter
         .createCaller(fixture.server.createContext())
-        .planningConfig.updateProjectBinding({ store: 'store-b' })
+        .planningConfig.updateProjectBinding({
+          store: 'store-b',
+          references: [{ id: 'platform' }],
+        })
 
       expectWriteThenConvergeEvidence(value, fixture)
+    } finally {
+      await fixture.dispose()
+    }
+  })
+
+  it('retains a failed detached preview envelope without losing the completed launch write', async () => {
+    const fixture = await createRouterFixture()
+    fixture.setPreviewError(true)
+    const expectedDataScope = resolveOpenSpecDataScope()
+
+    try {
+      const value = await appRouter
+        .createCaller(fixture.server.createContext())
+        .planningConfig.updateProjectBinding({
+          store: 'store-b',
+          references: [{ id: 'platform' }],
+        })
+
+      expect(value).toMatchObject({
+        kind: 'project-binding-update',
+        launchWrite: {
+          state: 'write-complete',
+          owner: { kind: 'launch-project', path: fixture.launchRoot },
+          binding: {
+            store: { state: 'declared', id: 'store-b' },
+            references: { state: 'declared', entries: [{ id: 'platform' }] },
+            diagnostics: [],
+          },
+          completedAt: expect.any(Number),
+        },
+        rootPreview: {
+          state: 'error',
+          error: { code: 'doctor-contract-drift' },
+          attempt: {
+            planningRoot: null,
+            storeId: null,
+            dataScope: expectedDataScope,
+            evidence: {
+              doctor: {
+                success: false,
+                stdout:
+                  '{"status":[{"severity":"error","code":"doctor_fixture_failed","message":"Doctor fixture failed."}]}',
+                stderr: 'doctor fixture stderr',
+                exitCode: 17,
+                diagnostics: [
+                  {
+                    severity: 'error',
+                    code: 'doctor_fixture_failed',
+                    message: 'Doctor fixture failed.',
+                  },
+                ],
+                contractError: expect.stringContaining('root'),
+              },
+              context: {
+                success: false,
+                stdout:
+                  '{"status":[{"severity":"error","code":"context_fixture_failed","message":"Context fixture failed."}]}',
+                stderr: 'context fixture stderr',
+                exitCode: 18,
+                diagnostics: [
+                  {
+                    severity: 'error',
+                    code: 'context_fixture_failed',
+                    message: 'Context fixture failed.',
+                  },
+                ],
+                contractError: expect.stringContaining('root'),
+              },
+            },
+            diagnostics: {
+              doctor: [
+                {
+                  severity: 'error',
+                  code: 'doctor_fixture_failed',
+                  message: 'Doctor fixture failed.',
+                },
+              ],
+              context: [
+                {
+                  severity: 'error',
+                  code: 'context_fixture_failed',
+                  message: 'Context fixture failed.',
+                },
+              ],
+            },
+          },
+        },
+        transition: {
+          id: expect.any(String),
+          state: 'preview-error',
+          observedAt: expect.any(Number),
+          error: { code: 'doctor-contract-drift' },
+        },
+      })
     } finally {
       await fixture.dispose()
     }
