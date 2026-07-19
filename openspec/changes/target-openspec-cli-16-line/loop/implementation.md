@@ -2911,3 +2911,46 @@ Planning reactive call with the old combined `resolveScopes({ reactive: true })`
 `git-repository-binding-router.test.ts -t "observes Code once for one public projection"` fail because
 `resolveCodeScope` is called twice; restoring `5497730` passes. That existing implementation/test boundary
 is mutation-resistant and is not part of the next production correction.
+
+### 6.11 Stage 1 Direct-Unmount Static Loader Correction
+
+At fixed point `0d6dcca`, the maintained direct-unmount test was added without changing production code
+and failed for the intended stale-cache reason:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/lib/use-subscription.test.tsx -t "retires a pending static loader on direct unmount"
+1 failed: expected undefined, received `stale-after-unmount`
+```
+
+Commit `1838ccf` adds the narrow correction. `useAuthoritativeSubscription` now returns one shared
+cleanup from the no-loader, static-loader, and live-subscription branches. Cleanup retires the effect
+generation before clearing the subscription reference or unsubscribing, so late static settlement
+cannot write the shared cache or mounted state. The test header records direct-unmount as a distinct
+lifecycle intent.
+
+Stage 1 green evidence:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/lib/use-subscription.test.tsx
+1 file / 7 tests passed
+
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/lib/use-subscription.test.tsx src/lib/use-git-repository-scope.test.ts \
+  src/routes/git.test.tsx
+3 files / 25 tests passed
+
+pnpm --filter @openspecui/web typecheck
+pass
+pnpm format:check -- packages/web/src/lib/use-subscription.ts \
+  packages/web/src/lib/use-subscription.test.tsx
+pass
+git diff --check
+pass
+```
+
+Static-loader rejection, dependency rebind, late live callbacks, terminal error ordering, and
+direct-unmount cache cases all pass. This is a staged implementation checkpoint only; Dashboard
+rendered A-to-B evidence, explicit B query/owner evidence, full gates, browser acceptance, and the
+6.11 task checkbox remain open. Do not start 6.12+, merge, archive, or release.

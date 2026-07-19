@@ -751,3 +751,20 @@ called twice; restoring `5497730` returns it to green. Do not rewrite that accep
 These are review findings, not yet red executions. Preserve every accepted `5497730` behavior and keep the
 correction limited to the exact lifecycle/tests above. Focused green and CI cannot substitute for the direct
 counterexamples. `6.11` remains unchecked at `61/131`; `6.12+`, merge, archive, and release remain forbidden.
+
+### 6.11 Stage 1 Applied at `1838ccf`
+
+The direct-unmount static-loader counterexample is now maintained in
+`packages/web/src/lib/use-subscription.test.tsx`. Against the unchanged `0d6dcca` production
+fixed point it failed with `expected undefined, received stale-after-unmount` after a pending
+loader was resolved following direct unmount. The correction returns one generation-retiring
+cleanup from every authoritative effect branch, including static loading.
+
+Stage 1 evidence is green: the subscription file is `7/7`, the adjacent Web Git lane is `25/25`,
+Web typecheck passes, the two changed files pass format check, and `git diff --check` passes. Static
+loader rejection, dependency rebind, late live callbacks, terminal error ordering, and direct
+unmount are covered. Stage 1 is committed separately before proceeding; 6.11 remains unchecked
+until the rendered Dashboard A-to-B conflict/removal boundary, exact B query/owner recurrence,
+checked Server lane, full gates, and terminating pinned desktop/mobile browser acceptance pass.
+
+Do not start 6.12+, merge, archive, or release.
