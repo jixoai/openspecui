@@ -22,6 +22,7 @@ Original request (2026-07-17): "你要特别谨慎反复出现的问题，你应
 Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
 Owner direction (2026-07-19): "不要在 6.11 这个任务上徘徊了。你得把它拆开成多个独立的小问题，然后把阻塞的问题发给我，我来决策推进。"
 Owner execution direction (2026-07-19): "我希望你加速交付，能并行工作的，就分发subagent一起做。"
+Owner acceptance boundary (2026-07-20): "以后任何需要最终端到端的浏览器走查，就交给我来做。你最多负责到最基础的vitest+playwright的相关组件化的测试。"
 -->
 
 MUST READ: CLAUDE.md
@@ -40,6 +41,7 @@ MUST READ: CLAUDE.md
 - Required local checks (match CI gates): `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`, `pnpm test:browser:ci` (or a clearly scoped subset when changes are package-local and justified in PR notes).
 - Every changed TypeScript/TSX physical file, including tests, must retain an accurate timestamped orthogonal-intent/original-request header; a production-only header audit is incomplete.
 - Review handoff law: the reviewer owns research, independent review, OpenSpec artifact corrections, and an executable `GOAL.md`; the assigned worker owns `openspec-apply-change`, implementation, tests, checkpoint updates, commits, and PR delivery. A worker Goal must request applied code and evidence, not another plan-only or review-only pass.
+- Browser acceptance ownership law (2026-07-20): the owner performs every final end-to-end browser walkthrough and manual acceptance. Agents may build and run only focused Vitest coverage and basic component-level Playwright fixtures. Automated component/fixture results are preparation evidence, never a substitute for the owner's final walkthrough; worker Goals must stop at that boundary and report the exact automated evidence.
 - Counterexample evidence law: a test described as red evidence must be shown to fail at its named fixed point for the intended reason. Manually invoking an already-correct downstream handler, or rejecting a different lifecycle phase, is characterization evidence rather than proof that the reported production defect was captured. Record that distinction honestly in the Change.
 - Mutation-resistance evidence law: when acceptance depends on hidden lifecycle bookkeeping, prove that the test fails after removing or bypassing the exact cleanup transition. A terminal-event assertion alone is insufficient when an earlier `settled` guard can mask leaked child ownership or listeners.
 - Typed test-evidence law: a passing transpile-only test is not type-safe evidence when its file is excluded from package typecheck. Tests that prove public Router, Manager-owned service, Adapter, or typed CLI boundaries must use checked fixtures without `as never`, `as any`, non-null assertions over fabricated state, or suppression comments; place reusable fixtures in a typechecked source or add an explicit test-typecheck lane. Never weaken the production contract to make a fixture compile.
