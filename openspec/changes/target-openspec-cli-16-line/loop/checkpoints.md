@@ -686,3 +686,68 @@ focused Web lane green. Current focused evidence is Server 49 files/388 tests, W
 tests, Web and checked Server typechecks, format check, and diff check. `6.11` remains unchecked
 until full gates and terminating pinned OpenSpec 1.6 browser acceptance complete; `6.12+`, merge,
 archive, and release remain forbidden.
+
+### 6.11 Sixth Independent Review at `5497730`
+
+Local HEAD, remote feature branch, and PR #207 all equal
+`5497730d1f2e40d6347ef9ae6609b25826640f9a`; the PR is `OPEN/CLEAN` and its six remote checks pass.
+Independent focused reruns pass Web Git `5 files / 48 tests`, Server Git `3 files / 23 tests`,
+checked Server Git typecheck, and Web typecheck. These facts do not close `6.11`: three evidence and
+lifecycle boundaries remain incomplete.
+
+1. **Static-loader cleanup is missing on direct unmount.** `useAuthoritativeSubscription` returns no
+   effect cleanup from its static-loader branch. Dependency rebind increments `generationRef`, so the
+   existing test passes without proving cleanup. A direct component unmount leaves the generation active;
+   its late loader can still write the shared cache and call `setState`. Add an unmount counterexample that
+   primes a known cache key, unmounts before resolution, resolves the loader, remounts a reader, and proves
+   the cache did not change. It must fail at `5497730` for the stale-cache reason; return one cleanup from
+   every effect branch and retire the generation before any unsubscribe/settlement.
+2. **Dashboard snapshot conflict evidence does not reach the required component lifecycle.** The current
+   component test mutates a token variable and invokes only Refresh; it does not publish B through the
+   rendered scope projection, invoke captured A Refresh and destructive Removal handlers after B is
+   current, or assert a visible typed `CONFLICT`. Helper tests prove argv provenance but not UI ownership.
+   Add one rendered A -> B -> captured-A test that reaches both production handlers, proves B is untouched,
+   shows the conflict alert, settles pending state, and then proves matching B actions resume.
+3. **The declared post-B and owner recurrence evidence is still partial.** The transport test at the named
+   review boundary checks that the error disappears after Code emits but does not assert real overview/list
+   calls with B. Other rebind tests prove presentation and some queries, but the Change claims complete
+   overview/list/meta/files/patch resumption. Add explicit B-token assertions for each public query owner.
+   The composition test proves A -> B only; extend it to B -> A with a newly issued A2 Planning token while
+   the Launch Code token and Dashboard Code provenance remain stable.
+
+4. **The checked-boundary claim is too broad.** `packages/server/tsconfig.git-tests.json` checks only its
+   six explicit Git files. The changed `planning-root-service.test.ts` and `router.test.ts` remain outside
+   that lane (and the base test config excludes tests), so Manager/Router fixtures are not typechecked as
+   claimed. Add them to an explicit checked lane and remove any fabricated non-null assertions or casts in
+   the decisive fixtures.
+5. **Observer forwarding and Patch ownership are not proven at the public Web boundary.** The generic hook
+   test calls `onStopped/onComplete` directly, while Git-specific tRPC mocks omit those callbacks. Add a
+   real Git subscription observer fixture that forwards stop/complete and proves cached data remains
+   non-authoritative until replacement data. The reconnect route/detail tests cover B overview/list/meta/
+   files, but the detail panel is mocked and no real B patch query owner is asserted; add that exact patch
+   provenance assertion without weakening the panel boundary.
+6. **Launch owner validation is incomplete.** Add direct non-empty-constructor validation and a real server
+   composition assertion, in the checked lane, that the same Launch owner feeds Git and Dashboard. A stable
+   value observed through an ordinary test object is not lifetime evidence.
+
+The static-unmount defect is now executable fixed-point evidence, not only source inspection. In an isolated
+worktree at `5497730`, a one-purpose hook test started a pending static loader, directly unmounted, resolved
+it, then remounted a reader under the same cache key:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/lib/use-subscription-static-unmount.audit.test.tsx
+1 failed: expected undefined, received `stale-after-unmount`
+```
+
+The isolated audit file/worktree was removed after the run; the worker must land the equivalent checked test
+in the real suite and prove the narrow cleanup turns this exact assertion green.
+
+The existing public Router exactly-once transition is independently accepted. In an isolated worktree,
+replacing only `resolvePlanningScopes(code, { reactive: true })` with the old combined
+`resolveScopes({ reactive: true })` makes the named public Router test fail because `resolveCodeScope` is
+called twice; restoring `5497730` returns it to green. Do not rewrite that accepted boundary.
+
+These are review findings, not yet red executions. Preserve every accepted `5497730` behavior and keep the
+correction limited to the exact lifecycle/tests above. Focused green and CI cannot substitute for the direct
+counterexamples. `6.11` remains unchecked at `61/131`; `6.12+`, merge, archive, and release remain forbidden.

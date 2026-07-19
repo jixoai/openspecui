@@ -2862,3 +2862,52 @@ Web typecheck: pass. format:check: pass. git diff --check: pass.
 The red run is direct subscription-boundary mutation evidence. Terminating pinned OpenSpec 1.6
 desktop/mobile acceptance and full gates remain pending. Keep `6.11` unchecked and do not start
 `6.12+`, merge, archive, or release.
+
+### 2026-07-19 Sixth Independent Review of `5497730`
+
+The implementation commit is delivered consistently: local, remote, and PR head are
+`5497730d1f2e40d6347ef9ae6609b25826640f9a`; PR #207 is `OPEN/CLEAN`; all six remote checks pass.
+Independent local focused evidence also passes Web Git `48/48`, Server Git `23/23`, checked Server
+Git typecheck, and Web typecheck. This green baseline is accepted only as regression evidence.
+
+Review found three remaining boundaries that the existing claims do not prove:
+
+- The static branch of `useAuthoritativeSubscription` starts `staticLoader()` and returns without an
+  effect cleanup. Its dependency-rebind test passes because the next effect increments the generation,
+  not because unmount retired the loader. Direct unmount can still let the late result mutate cache/state.
+- Dashboard component coverage does not perform a rendered A -> B projection followed by captured A
+  Refresh and Removal handlers, visible typed conflict, B side-effect exclusion, and matching B recovery.
+  Direct helper tests and a token-variable mutation are adjacent characterization evidence.
+- Post-transport B evidence does not explicitly assert every claimed overview/list/meta/files/patch B-token
+  boundary, and the real composition fixture stops at A -> B rather than proving a fresh A2 token on
+  A -> B -> A with stable Launch Code/Dashboard provenance.
+- The checked Server Git lane currently contains only six explicit test files; changed Manager/Router
+  fixtures and their existing fabricated non-null assertions are outside the claimed type-safe evidence.
+- Git-specific tRPC test doubles do not forward `onStopped`/`onComplete`, and the detail panel mock prevents
+  a real B patch-query owner assertion. Launch owner non-empty construction/composition validation is also
+  absent.
+
+The next apply slice must first create direct red evidence for the static unmount cache write and then add
+the narrow cleanup. It must strengthen only the missing Dashboard/query/owner/checked-observer public-boundary
+evidence, rerun focused lanes before full gates, and complete the terminating pinned desktop/mobile walkthrough.
+Do not generalize the subscription API, rewrite unrelated Dashboard/Git behavior, start `6.12+`, merge,
+archive, or release. Checkpoint `6.11` remains `61/131` and unchecked.
+
+The independent test agent subsequently reproduced that defect at the exact fixed point in an isolated
+worktree. A pending static loader was directly unmounted, resolved, and followed by a same-key reader:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/lib/use-subscription-static-unmount.audit.test.tsx
+Result: 1 failed; expected no cached data, received `stale-after-unmount`.
+```
+
+The temporary audit worktree/file was deleted. This is mutation-resistant production evidence for the
+missing static effect cleanup; the worker must add its equivalent to the maintained test file before fixing
+the shared cleanup and recording the green result.
+
+The test agent also rechecked the accepted public Router exactly-once evidence in isolation. Replacing the
+Planning reactive call with the old combined `resolveScopes({ reactive: true })` makes
+`git-repository-binding-router.test.ts -t "observes Code once for one public projection"` fail because
+`resolveCodeScope` is called twice; restoring `5497730` passes. That existing implementation/test boundary
+is mutation-resistant and is not part of the next production correction.
