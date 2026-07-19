@@ -3009,3 +3009,29 @@ This closes the focused implementation stages only. The terminating browser fixt
 deterministic A -> B -> A, stale black-box Refresh/Removal conflict, reconnect/failure, Planning identity
 failure, and real `390x844` remain to be demonstrated. Do not mark `6.11` complete or start `6.12+` until
 full gates and the pinned browser acceptance pass.
+
+### 6.11 Stage 4 Stop-Loss: agent-browser Fixture Blocker at `4bd1031`
+
+The worker completed the required local gates and clean SSG build at the Stage 3 baseline. A separate
+live browser session against the pinned OpenSpec 1.6 CLI (`references/openspec` `e1b51d1`), isolated
+`XDG_DATA_HOME`, and disposable Code/Planning Git roots loaded the real Web surface and confirmed the
+last passing facts: Code `code`, declared Planning Store `plan-a`, distinct Planning Git identity, and
+CLI `1.6.0`. The terminating acceptance still lacks deterministic A -> B -> A, stale Refresh/Removal
+black-box conflicts, reconnect/failure, Planning identity failure, and real `390x844` geometry.
+
+The existing `stage4new` agent-browser session then hung in the inspection commands required to finish
+that walk-through. The commands were bounded to 15 seconds and terminated externally:
+
+```text
+agent-browser --session stage4new screenshot /tmp/openspecui-6-11-stage4-blocker.png
+screenshot_exit=143
+
+agent-browser --session stage4new get url
+get_url_exit=143
+```
+
+No screenshot, URL result, or completion claim was produced by that session. This is recorded as the one
+external browser-fixture blocker permitted by `GOAL.md`; it is not evidence of a production defect and
+does not authorize a speculative workaround or scope expansion. Keep `6.11` open at `61/131`, do not
+start `6.12+`, and stop at independent review. The focused/full local gates remain regression evidence,
+not browser acceptance.
