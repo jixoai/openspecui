@@ -6,6 +6,7 @@ import {
   ListTodo,
   Settings,
   SlidersHorizontal,
+  SquareKanban,
   Terminal,
   Warehouse,
   type LucideIcon,
@@ -18,6 +19,7 @@ export type AppRoute =
   | '/git'
   | '/specs'
   | '/changes'
+  | '/board'
   | '/archive'
   | '/stores'
   | '/settings'
@@ -44,6 +46,7 @@ export const allNavItems: NavItem[] = [
   { to: '/git', icon: GitBranch, label: 'Git', defaultArea: 'bottom' },
   { to: '/specs', icon: FileText, label: 'Specs', defaultArea: 'main' },
   { to: '/changes', icon: ListTodo, label: 'Changes', defaultArea: 'main' },
+  { to: '/board', icon: SquareKanban, label: 'Board', defaultArea: 'main' },
   { to: '/archive', icon: Archive, label: 'Archive', defaultArea: 'main' },
   { to: '/stores', icon: Warehouse, label: 'Stores', defaultArea: 'main', beta: true },
   { to: '/settings', icon: Settings, label: 'Settings', defaultArea: 'main' },

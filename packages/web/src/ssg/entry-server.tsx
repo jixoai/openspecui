@@ -60,6 +60,7 @@ export function getRoutes(snapshot: ExportSnapshot): string[] {
     '/dashboard',
     '/specs',
     '/changes',
+    '/board',
     '/archive',
     '/config',
     '/settings',
@@ -76,6 +77,7 @@ export function getTitle(path: string, snapshot: ExportSnapshot): string {
   if (path === '/dashboard' || path === '/') return 'Dashboard'
   if (path === '/specs') return 'Specifications'
   if (path === '/changes') return 'Active Changes'
+  if (path === '/board') return 'Board'
   if (path === '/archive') return 'Archived Changes'
   if (path === '/config') return 'Config'
   if (path === '/settings') return 'Settings'

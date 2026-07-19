@@ -1,16 +1,16 @@
 ## Implementation State
 
-Status: **Planned — not started.** Research and planning are complete and approved; the executable checklist lives in `loop/checkpoints.md` and is driven by the apply step.
+Status: **Implemented.** Frontend-only; all planned steps landed. Local CI-equivalent checks, the SSG build, and `openspec validate --strict` pass.
 
-Planned steps (frontend-only, in order):
+Completed steps:
 
-- [ ] Route + nav registration for `/board` (`route-tree.ts`, `nav-items.ts`).
-- [ ] Board view (`routes/board.tsx`) with the four lifecycle columns and the `classifyBoardColumn` derivation helper.
-- [ ] Reusable change card (name, id, relative time, task count, progress bar, workflow-phase badge).
-- [ ] Time-range filter on the Done column (presets, archive-date parsed from the `id` prefix).
-- [ ] Drag-to-archive on QA cards, opening the existing global archive modal; disabled in static mode.
-- [ ] Loading / empty / error / static-mode states.
-- [ ] Changeset for `@openspecui/web` and local CI-equivalent + SSG checks.
+- [x] Route + nav registration for `/board` (`route-tree.ts`, `route-tree-static.ts`, `nav-items.ts`, `nav-controller.ts` TabId/ALL_TABS/DEFAULT_MAIN_TABS, `ssg/entry-server.tsx` getRoutes/getTitle).
+- [x] Board view (`routes/board.tsx`) with four lifecycle columns and the exported `classifyBoardColumn` derivation helper.
+- [x] Reusable change card (name, id, relative time, task count, progress bar, workflow-phase badge) + archived card.
+- [x] Time-range filter on the Done column (`Select` presets `7d/30d/90d/all`, default `30d`; archive date parsed from the `id` prefix via exported `archiveTimestamp`, fallback `updatedAt`).
+- [x] Drag-to-archive on QA cards (native HTML5 DnD), opening the existing `GlobalArchiveModal` via `openArchiveModal(id, name)`; disabled in static mode.
+- [x] Loading / empty-column / static-mode read-only states.
+- [x] Unit tests for the two pure helpers; changeset for `@openspecui/web`; local checks + SSG build green.
 
 ## Decisions Taken
 
@@ -23,7 +23,10 @@ Planned steps (frontend-only, in order):
 
 ## Divergence Notes
 
-- None yet. (The scope already reflects one revision from exploration: the original five-column model with a "synced" column was reduced to four after confirming the synced state is undetectable.)
+- The scope already reflected one revision from exploration: the original five-column model with a "synced" column was reduced to four after confirming the synced state is undetectable.
+- **Archive modal signature.** The plan phrased the call as `openArchiveModal({ changeId, changeName })`; the actual context API is positional — `openArchiveModal(changeId, changeName)`. Used as-is; no new confirmation UI built.
+- **Extra registration points.** Registering `/board` required more than `route-tree.ts` + `nav-items.ts`: also `route-tree-static.ts` (SSG render), `nav-controller.ts` (`TabId` / `ALL_TABS` / `DEFAULT_MAIN_TABS` so it appears by default in IDE mode) with matching updates to `nav-controller.test.ts` fixtures, and `ssg/entry-server.tsx` (`getRoutes` + `getTitle`) so the page is prerendered. All within the frontend-only boundary.
+- **Minor type fix.** `column.id` (`'done' | ActiveColumnId`) did not narrow via the `isDone` alias when indexing the grouped record; derived a narrowed `activeItems` list instead. Not a design change, so no loopback to intake/research-plan.
 
 ## Loopback Triggers
 

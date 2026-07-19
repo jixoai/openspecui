@@ -1,6 +1,7 @@
 import { createRoute, type AnyRootRoute, type AnyRoute } from '@tanstack/react-router'
 import { ArchiveList } from '../routes/archive-list'
 import { ArchiveView } from '../routes/archive-view'
+import { Board } from '../routes/board'
 import { ChangeList } from '../routes/change-list'
 import { ChangeView } from '../routes/change-view'
 import { Config } from '../routes/config'
@@ -48,6 +49,7 @@ export function createRouteTree(rootRoute: AnyRootRoute, opts?: { includeTermina
       path: '/changes/$changeId',
       component: ChangeView,
     }),
+    createRoute({ getParentRoute: () => rootRoute, path: '/board', component: Board }),
     createRoute({ getParentRoute: () => rootRoute, path: '/archive', component: ArchiveList }),
     createRoute({
       getParentRoute: () => rootRoute,

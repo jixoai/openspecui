@@ -9,6 +9,7 @@ export type TabId =
   | '/git'
   | '/specs'
   | '/changes'
+  | '/board'
   | '/archive'
   | '/stores'
   | '/settings'
@@ -88,6 +89,7 @@ const ALL_TABS: readonly TabId[] = [
   '/git',
   '/specs',
   '/changes',
+  '/board',
   '/archive',
   '/stores',
   '/settings',
@@ -98,6 +100,7 @@ const DEFAULT_MAIN_TABS: TabId[] = [
   '/config',
   '/specs',
   '/changes',
+  '/board',
   '/archive',
   '/stores',
   '/settings',
