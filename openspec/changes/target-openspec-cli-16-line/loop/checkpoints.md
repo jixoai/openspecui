@@ -1115,3 +1115,12 @@ evidence, not proof of manual multi-tab behavior or W2/W3 semantics.
 
 `6.11` remains open at `61/131` pending the owner's manual multi-tab acceptance and any final delivery
 decision. Do not start `6.12+`, merge, archive, or release.
+
+The deferred work is now represented by independent Changes:
+`target-openspec-cli-16-project-binding-settlement` (W2) and
+`target-openspec-cli-16-reactive-error-propagation` (W3). Their Goals are separate worker authorization
+boundaries; no W2/W3 implementation belongs in this checkpoint.
+
+Independent review of W2 candidate `c85ce12` reopened its B2.1-B2.4 tasks for physical-write ownership,
+correlated result typing, partial-error Root provenance, and generation-safe launch repair. This does not
+change `6.11` progress or authorize W3/`6.12+` work.

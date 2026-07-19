@@ -1,0 +1,40 @@
+<!--
+Orthogonal intents (created 2026-07-19 Asia/Shanghai):
+1. Track the independent Project Binding settlement implementation.
+2. Require typed public-boundary and mutation-resistance evidence.
+3. Keep W1/W3 and downstream checkpoints out of this Change.
+-->
+
+# Checkpoints
+
+- [ ] B2.1 Define a correlated typed write-then-converge response with launch-write, `rootPreview`, transition state,
+      root provenance, diagnostics, stdout/stderr, and exit status.
+- [ ] B2.2 Make `updateProjectBinding` return after a physically confined, reactively settled launch-file
+      write and one detached preview attempt; subscriptions perform asynchronous Planning-root convergence.
+- [ ] B2.3 Add checked public Router/server, partial CLI failure, physical symlink/reactive settlement,
+      and mutation-resistance red tests for the exact response/settlement transition.
+- [ ] B2.4 Preserve Config dirty declarations and a generation-safe launch repair path through stale,
+      delayed, or failed subscription convergence.
+- [ ] B2.5 Run focused tests, typecheck, clean SSG, one bounded direct-Web flow on the corrected SHA, and
+      independent review evidence.
+
+Evidence note (2026-07-19): B2.1-B2.2 are implemented. Independent review reopened B2.3-B2.4 because
+the first green fixture subscribed to an internal Root Context helper, selected Root B through mutable
+fixture state instead of the written launch config, and under-asserted raw CLI evidence. The first Web
+candidate also treated matching declarations as convergence even when the subscribed Root Context was
+still A or had failed. The correction must use the public Project Binding subscription, derive B from
+the launch file, assert ready/error CLI evidence, and require matching ready Root identity before dirty
+state clears. The detached-preview failure variant remains `preview-error`; it must not be relabeled as
+a failed Manager transition. B2.5 remains open pending correction review, direct-Web acceptance, and
+full gates.
+
+Correction commit `c85ce12` improved B2.3-B2.4 but did not close them: the checked fixture now uses the public
+`planningConfig.subscribeProjectBinding` route, derives Root B from the written launch config, and
+asserts typed ready and preview-error CLI evidence. Web tests cover stale Root A, stale data scope,
+Root error, and retained B data with a subscription error. Independent review found that the result type
+still permits contradictory preview/transition pairs; the preview-error fixture loses Root B provenance;
+the launch write bypasses the physical/reactive owner; stale/error states lock the repair controls; and a
+newer draft has no generation protection from a late older emission. B2.1-B2.4 are therefore open.
+B2.5 remains open for corrected direct-Web evidence, clean SSG, full gates, and independent review.
+
+Do not start W3, `6.12+`, merge, archive, or release from this Change.

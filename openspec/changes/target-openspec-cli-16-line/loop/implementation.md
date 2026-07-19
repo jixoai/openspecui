@@ -3742,3 +3742,20 @@ commit history at desktop `1280x577` and mobile `390x844`; both had equal `scrol
 
 This closes the worker's single-page evidence package only. The owner still performs manual multi-tab
 acceptance, and `6.11` remains open at `61/131`; W2/W3 follow-up Changes remain untouched.
+
+### W2/W3 Follow-up Changes Scaffolded (2026-07-19)
+
+The deferred contracts now have separate OpenSpec loop directories:
+
+```text
+openspec/changes/target-openspec-cli-16-project-binding-settlement/
+openspec/changes/target-openspec-cli-16-reactive-error-propagation/
+```
+
+W2 is authorized to begin with write-then-converge evidence. W3 is authorized to begin only after its
+typed disconnect/error boundary is reproduced. Neither follow-up changes the `6.11` checkbox or permits
+`6.12+`, merge, archive, or release work in this Change.
+
+W2 candidate `c85ce12` did not pass independent review. Its follow-up Change now records the required
+physical/reactive launch-write owner, correlated preview/transition result, partial-error Root provenance,
+and generation-safe repair correction. The result remains isolated from Git checkpoint `6.11` and W3.
