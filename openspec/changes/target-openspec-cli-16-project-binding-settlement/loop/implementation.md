@@ -443,3 +443,23 @@ pnpm --filter @openspecui/server exec vitest run \
 `pnpm format:check`, `pnpm lint:ci`, and `git diff --check` also passed. This closes only the CI
 preparation blocker; B2.5 remains open for owner acceptance and independent review. Do not start W3,
 `6.12+`, merge, archive, or release from this Change.
+
+## B2.5 remote correction review (2026-07-20)
+
+Independent review found no P0/P1/P2 in `78550c0` or its evidence commit `51f1f78`. The preparation
+remains Fast-Gate-only because the Browser matrix does not execute the pinned CLI. PR run
+`29700914049` verified exact remote head `51f1f7833ef2a88d6b7b4f3e90d5f782a20129d6`:
+
+```text
+Changeset Gate                 passed
+CI Scope                       passed
+Fast Gate                      passed (4m32s)
+Browser Gate (@openspecui/web) passed (1m12s)
+Browser Gate (xterm-input-panel) passed (2m42s)
+Browser Gate aggregation       passed (4s)
+```
+
+The implementation/evidence branch was clean and matched remote head `51f1f78` before this review note.
+Automated B2.5 evidence and independent review are now complete. B2.5 remains unchecked only for the
+owner's agreed manual single-page and multi-tab acceptance; this remote result does not substitute for
+that observation or authorize W3/`6.12+`.

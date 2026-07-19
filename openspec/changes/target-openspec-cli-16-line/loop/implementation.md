@@ -3789,3 +3789,12 @@ The local workspace had ignored `dist` output, so prior local green evidence was
 clean-checkout condition. The failure is recorded as CI/test-fixture preparation evidence, not a W2
 business defect. A bounded Sol Goal now owns explicit pinned-submodule initialization/build and the
 follow-up Fast/Browser checks; no Project Binding, W3, or `6.12+` implementation is authorized.
+
+### W2 Pinned CLI Delivery Correction Accepted (2026-07-20)
+
+Commits `78550c0` and `51f1f78` made the pinned CLI preparation explicit and recorded its clean-clone
+red/green evidence. Independent review found no P0/P1/P2. PR run `29700914049` passed Changeset, CI
+Scope, Fast, Web Browser, xterm Browser, and Browser aggregation on exact remote head
+`51f1f7833ef2a88d6b7b4f3e90d5f782a20129d6`. This closes the CI preparation/delivery blocker only.
+Parent `6.11` remains unchecked at `61/131`, and child B2.5 remains open solely for owner manual
+single-page/multi-tab acceptance.
