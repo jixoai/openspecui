@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Render terminal tabs, lifecycle indicators, notifications, and panel actions.
  * 2. Expose explicit launch-project versus planning-root creation targets.
  * 3. Keep each tab's initial cwd identity visible across local creation and restore.
@@ -117,10 +117,11 @@ function EditableTabLabel({
     </span>
   )
   const cwdLabel = session.cwdTarget === 'planning-root' ? 'Planning' : 'Launch'
+  const cwdPath = session.initialCwd ?? 'Resolving cwd'
   const cwdBadge = (
     <span
       className="border-border text-muted-foreground shrink-0 rounded-sm border px-1 py-0.5 text-[9px] leading-none"
-      title={`${cwdLabel}: ${session.initialCwd ?? 'resolving absolute path'}`}
+      title={`${cwdLabel}: ${cwdPath}`}
     >
       {cwdLabel}
     </span>
@@ -130,20 +131,28 @@ function EditableTabLabel({
       <span className="grid min-w-0 grid-cols-[0.75rem_auto_minmax(0,1fr)] items-center gap-1.5">
         {statusLight}
         {cwdBadge}
-        <input
-          ref={inputRef}
-          value={draft}
-          placeholder={session.displayTitle}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') commit()
-            if (e.key === 'Escape') cancel()
-            e.stopPropagation()
-          }}
-          onClick={(e) => e.stopPropagation()}
-          className="placeholder:text-muted-foreground min-w-0 border-b border-current bg-transparent text-sm text-inherit outline-none"
-        />
+        <span className="min-w-0">
+          <input
+            ref={inputRef}
+            value={draft}
+            placeholder={session.displayTitle}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commit()
+              if (e.key === 'Escape') cancel()
+              e.stopPropagation()
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="placeholder:text-muted-foreground block w-full min-w-0 border-b border-current bg-transparent text-xs text-inherit outline-none"
+          />
+          <span
+            className="text-muted-foreground block min-w-0 truncate text-[9px] leading-tight"
+            title={cwdPath}
+          >
+            {cwdPath}
+          </span>
+        </span>
       </span>
     )
   }
@@ -155,7 +164,15 @@ function EditableTabLabel({
     >
       {statusLight}
       {cwdBadge}
-      <span className="min-w-0 truncate">{session.displayTitle}</span>
+      <span className="min-w-0">
+        <span className="block min-w-0 truncate text-xs">{session.displayTitle}</span>
+        <span
+          className="text-muted-foreground block min-w-0 truncate text-[9px] leading-tight"
+          title={cwdPath}
+        >
+          {cwdPath}
+        </span>
+      </span>
     </span>
   )
 }
@@ -417,7 +434,8 @@ export function TerminalPanel({ className }: { className?: string }) {
         value={cwdTarget}
         state={cwdTargetState}
         onValueChange={setCwdTarget}
-        className="mr-1 w-28 shrink-0 sm:w-36"
+        showPath
+        className="mr-1 w-32 shrink-0 sm:w-44"
       />
       {addButton}
       {createMenuButton}
@@ -461,22 +479,30 @@ export function TerminalPanel({ className }: { className?: string }) {
       className={`bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${className}`}
     >
       {sessions.length === 0 ? (
-        <div className="text-terminal-foreground bg-terminal flex h-full flex-wrap content-center items-center justify-center whitespace-pre p-4 text-sm">
-          <span>No terminal sessions. Click</span>
-          <span className="mx-2 flex gap-1">
-            <button
-              type="button"
-              onClick={handleCreateDefaultShell}
-              disabled={!selectedCwdTarget.available}
-              className="bg-primary text-primary-foreground px-2 text-lg font-bold"
-              aria-label="New terminal"
-              title={selectedCwdTarget.unavailableReason ?? undefined}
-            >
-              +
-            </button>
-            {createMenuButton}
-          </span>
-          <span>to create one.</span>
+        <div className="text-terminal-foreground bg-terminal flex h-full min-w-0 items-center justify-center p-4 text-sm">
+          <div className="flex w-full min-w-0 max-w-sm flex-col gap-3">
+            <TerminalCwdTargetControl
+              value={cwdTarget}
+              state={cwdTargetState}
+              onValueChange={setCwdTarget}
+              showPath
+              className="min-w-0"
+            />
+            <div className="flex min-w-0 items-center justify-center gap-2">
+              <span className="truncate">No terminal sessions.</span>
+              <button
+                type="button"
+                onClick={handleCreateDefaultShell}
+                disabled={!selectedCwdTarget.available}
+                className="bg-primary text-primary-foreground inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-sm"
+                aria-label="New terminal"
+                title={selectedCwdTarget.unavailableReason ?? undefined}
+              >
+                <Plus className="h-4 w-4" aria-hidden />
+              </button>
+              {createMenuButton}
+            </div>
+          </div>
         </div>
       ) : (
         <TerminalTabs
