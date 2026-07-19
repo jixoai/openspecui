@@ -3,6 +3,7 @@
  * 1. Prove reactive Code/Planning binding epochs across A -> B -> Code -> A.
  * 2. Prove stale Planning intent conflicts before refresh, removal, or handoff side effects.
  * 3. Prove Launch-owned Code Git remains available when Planning resolution fails.
+ * 4. Prove one scope projection observes Code identity exactly once before Planning comparison.
  *
  * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
@@ -46,6 +47,7 @@ interface GitBindingFixture {
   selectRoot(root: string): void
   setAvailable(available: boolean): void
   setGitIdentityFailure(failed: boolean): void
+  getGitIdentityCalls(): ReadonlyArray<{ cwd: string; args: readonly string[] }>
 }
 
 interface Deferred<T> {
@@ -120,6 +122,7 @@ async function createFixture(): Promise<GitBindingFixture> {
   let selectedRoot = rootA
   let available = true
   let gitIdentityFailure = false
+  const gitIdentityCalls: Array<{ cwd: string; args: readonly string[] }> = []
   const configManager = new ConfigManager(codeRoot)
   const cliExecutor = new CliExecutor(configManager, codeRoot)
   vi.spyOn(cliExecutor, 'checkAvailability').mockResolvedValue({
@@ -153,6 +156,7 @@ async function createFixture(): Promise<GitBindingFixture> {
   )
 
   const runGit: GitRunner = async (cwd, args) => {
+    gitIdentityCalls.push({ cwd, args: [...args] })
     if (gitIdentityFailure && cwd === selectedRoot && args[0] === 'rev-parse') {
       throw new Error('permission denied while resolving Planning Git identity')
     }
@@ -160,6 +164,7 @@ async function createFixture(): Promise<GitBindingFixture> {
   }
 
   const runtimeInvalidation = new RuntimeInvalidationIndex()
+  const codeBinding = { bindingToken: 'code-binding' }
   const manager = new PlanningRootServiceManager({
     launchProjectDir: codeRoot,
     previewAssetsDir: join(tempDir, 'preview-assets'),
@@ -168,6 +173,7 @@ async function createFixture(): Promise<GitBindingFixture> {
     observationEnvironment: { acquireRoot: async () => async () => {} },
     projectInvalidation: { acquireRoot: () => () => {} },
     runtimeInvalidation,
+    codeBinding,
   })
   const fixture: GitBindingFixture = {
     tempDir,
@@ -179,6 +185,7 @@ async function createFixture(): Promise<GitBindingFixture> {
     bindings: new GitRepositoryBindingService({
       launchProjectDir: codeRoot,
       planningRootServices: manager,
+      codeBinding,
       runGit,
     }),
     selectRoot(root) {
@@ -189,6 +196,9 @@ async function createFixture(): Promise<GitBindingFixture> {
     },
     setGitIdentityFailure(failed) {
       gitIdentityFailure = failed
+    },
+    getGitIdentityCalls() {
+      return gitIdentityCalls
     },
   }
   fixtures.push(fixture)
@@ -264,6 +274,18 @@ describe('GitRepositoryBindingService', () => {
     expect(observed.at(-1)?.planning?.rootPath).toBe(fixture.rootA)
 
     subscription.unsubscribe()
+  })
+
+  it('observes Code identity once before comparing the Planning candidate', async () => {
+    const fixture = await createFixture()
+
+    await fixture.bindings.resolveScopes()
+
+    const codeCalls = fixture.getGitIdentityCalls().filter((call) => call.cwd === fixture.codeRoot)
+    expect(codeCalls.map((call) => call.args.join(' '))).toEqual([
+      'rev-parse --show-toplevel',
+      'rev-parse --git-common-dir',
+    ])
   })
 
   it('rejects stale Planning refresh, removal, and handoff before their owners run', async () => {

@@ -105,12 +105,21 @@ function setContext(
 }
 
 function setGit(
-  overrides: Partial<{ data: GitRepositoryScopes; isLoading: boolean; error: Error | null }> = {}
+  overrides: Partial<{
+    data: GitRepositoryScopes
+    isLoading: boolean
+    error: Error | null
+    authority:
+      | { state: 'current' }
+      | { state: 'waiting'; reason: 'rebind' }
+      | { state: 'failed'; error: Error }
+  }> = {}
 ) {
   gitScopesMock.mockReturnValue({
     data: gitScopes(),
     isLoading: false,
     error: null,
+    authority: { state: 'current' },
     ...overrides,
   })
 }
@@ -181,7 +190,12 @@ describe('DashboardContextSummary', () => {
 
   it('shows loading, stale Root Context failure, and Git failure independently', () => {
     setContext({ data: undefined, isLoading: true })
-    setGit({ data: undefined, error: null })
+    setGit({
+      data: undefined,
+      isLoading: true,
+      error: null,
+      authority: { state: 'waiting', reason: 'rebind' },
+    })
     const view = render(<DashboardContextSummary staticMode={false} />)
     expect(screen.getByRole('status').textContent).toContain('Resolving planning root')
 
@@ -195,7 +209,8 @@ describe('DashboardContextSummary', () => {
       },
       isLoading: false,
     })
-    setGit({ data: undefined, error: new Error('Git scope lookup failed.') })
+    const gitError = new Error('Git scope lookup failed.')
+    setGit({ data: undefined, error: gitError, authority: { state: 'failed', error: gitError } })
     view.rerender(<DashboardContextSummary staticMode={false} />)
 
     expect(screen.getByRole('alert').textContent).toContain('Planning root unresolved.')
@@ -238,7 +253,8 @@ describe('DashboardContextSummary', () => {
   })
 
   it('surfaces a Git subscription error instead of retained stale scope data', () => {
-    setGit({ data: gitScopes(), error: new Error('Git scope subscription disconnected.') })
+    const gitError = new Error('Git scope subscription disconnected.')
+    setGit({ data: gitScopes(), error: gitError, authority: { state: 'failed', error: gitError } })
 
     render(<DashboardContextSummary staticMode={false} />)
 

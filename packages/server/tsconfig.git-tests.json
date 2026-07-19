@@ -6,6 +6,7 @@
     "src/dashboard-overview-service.test.ts",
     "src/git-repository-binding-router.test.ts",
     "src/git-repository-binding-service.test.ts",
+    "src/git-repository-scope.test.ts",
     "../local-translator/src/huggingface-transformers.d.ts"
   ],
   "exclude": ["node_modules", "dist"]

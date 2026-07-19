@@ -14,10 +14,11 @@ import type {
 } from '@openspecui/core'
 import {
   resolveGitRepositoryDescriptor,
-  resolveGitRepositoryScopes,
+  resolvePlanningGitRepositoryScopes,
   selectGitRepositoryScope,
 } from './git-repository-scope.js'
 import type { GitRunner } from './git-shared.js'
+import type { LaunchGitRepositoryBinding } from './launch-git-repository-binding.js'
 import type { PlanningRootServiceResolver } from './planning-root-service.js'
 
 /** Public input proving which backend-issued Git binding the caller observed. */
@@ -46,6 +47,11 @@ export interface GitRepositoryBindingResolver {
   resolveCodeScope(): Promise<GitRepositoryScopes['code']>
   /** Resolve current Code and optional distinct Planning bindings. */
   resolveScopes(options?: { reactive?: boolean }): Promise<GitRepositoryScopes>
+  /** Resolve only the replaceable Planning candidate against an already observed Code descriptor. */
+  resolvePlanningScopes(
+    code: GitRepositoryScopes['code'],
+    options?: { reactive?: boolean }
+  ): Promise<GitRepositoryScopes>
   /** Run work only after the caller's expected binding matches the current owner. */
   run<T>(
     binding: ExpectedGitRepositoryBinding,
@@ -59,6 +65,8 @@ export interface GitRepositoryBindingServiceOptions {
   launchProjectDir: string
   /** Manager that leases and rotates the active CLI-resolved Planning root. */
   planningRootServices: PlanningRootServiceResolver
+  /** Launch-scoped owner issuing stable Code provenance for this backend lifetime. */
+  codeBinding: LaunchGitRepositoryBinding
   /** Optional identity runner used by checked tests to exercise failure evidence. */
   runGit?: GitRunner
 }
@@ -66,10 +74,6 @@ export interface GitRepositoryBindingServiceOptions {
 /** Deep owner for repository binding epochs and stale-intent rejection. */
 export class GitRepositoryBindingService implements GitRepositoryBindingResolver {
   constructor(private readonly options: GitRepositoryBindingServiceOptions) {}
-
-  private get codeBindingToken(): string {
-    return this.options.planningRootServices.codeBindingToken
-  }
 
   private assertCurrent(binding: ExpectedGitRepositoryBinding, currentBindingToken: string): void {
     if (binding.expectedBindingToken === currentBindingToken) return
@@ -83,7 +87,7 @@ export class GitRepositoryBindingService implements GitRepositoryBindingResolver
   private async resolveCode(): Promise<GitRepositoryScopes['code']> {
     const descriptor = await resolveGitRepositoryDescriptor({
       scope: 'code',
-      bindingToken: this.codeBindingToken,
+      bindingToken: this.options.codeBinding.bindingToken,
       rootPath: this.options.launchProjectDir,
       runGit: this.options.runGit,
     })
@@ -100,6 +104,14 @@ export class GitRepositoryBindingService implements GitRepositoryBindingResolver
     // Code identity is independent of the replaceable Planning-root lease. If it fails, propagate
     // that Code-scoped error instead of relabeling it as a Planning failure with a fake fallback.
     const code = await this.resolveCodeScope()
+    return this.resolvePlanningScopes(code, options)
+  }
+
+  /** Resolve Planning without re-observing Launch Code for the same projection. */
+  async resolvePlanningScopes(
+    code: GitRepositoryScopes['code'],
+    options: { reactive?: boolean } = {}
+  ): Promise<GitRepositoryScopes> {
     const runPlanning = options.reactive
       ? this.options.planningRootServices.runReactiveOperation.bind(
           this.options.planningRootServices
@@ -108,9 +120,8 @@ export class GitRepositoryBindingService implements GitRepositoryBindingResolver
 
     try {
       return await runPlanning(({ rootContext, gitBindingToken }) =>
-        resolveGitRepositoryScopes({
-          launchProjectDir: this.options.launchProjectDir,
-          codeBindingToken: this.codeBindingToken,
+        resolvePlanningGitRepositoryScopes({
+          code,
           planningRootDir: rootContext.planningRoot?.path ?? null,
           planningBindingToken: gitBindingToken,
           runGit: this.options.runGit,
@@ -138,7 +149,7 @@ export class GitRepositoryBindingService implements GitRepositoryBindingResolver
     operation: (repository: GitRepositoryScopeDescriptor) => Promise<T> | T
   ): Promise<T> {
     if (binding.scope === 'code') {
-      this.assertCurrent(binding, this.codeBindingToken)
+      this.assertCurrent(binding, this.options.codeBinding.bindingToken)
       return operation(await this.resolveCode())
     }
 
@@ -150,9 +161,9 @@ export class GitRepositoryBindingService implements GitRepositoryBindingResolver
         if (!planningRootDir) {
           throw new Error('Planning repository scope requires a resolved planning root.')
         }
-        const scopes = await resolveGitRepositoryScopes({
-          launchProjectDir: this.options.launchProjectDir,
-          codeBindingToken: this.codeBindingToken,
+        const code = await this.resolveCodeScope()
+        const scopes = await resolvePlanningGitRepositoryScopes({
+          code,
           planningRootDir,
           planningBindingToken: gitBindingToken,
           runGit: this.options.runGit,

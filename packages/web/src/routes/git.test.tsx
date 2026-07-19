@@ -4,6 +4,7 @@
  * 2. Prove mounted repository rebinding retires stale Planning status and history.
  * 3. Prove every Git mutation retains the binding token captured by its render.
  * 4. Prove cached Git scope data is non-authoritative during reconnect until B emits.
+ * 5. Drive real transport connection/error callbacks through query and action owners.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
@@ -57,6 +58,10 @@ const {
     scopesCallbacks?: {
       onData(data: GitRepositoryScopes): void
       onError(error: Error): void
+      onConnectionStateChange(state: {
+        state: 'idle' | 'connecting' | 'pending'
+        error: Error | null
+      }): void
     }
     rootCallbacks?: {
       onData(data: RootContextState): void
@@ -337,7 +342,14 @@ describe('GitRoute', () => {
     scopesSubscribeMock.mockImplementation(
       (
         _input: undefined,
-        callbacks: { onData(data: GitRepositoryScopes): void; onError(error: Error): void }
+        callbacks: {
+          onData(data: GitRepositoryScopes): void
+          onError(error: Error): void
+          onConnectionStateChange(state: {
+            state: 'idle' | 'connecting' | 'pending'
+            error: Error | null
+          }): void
+        }
       ) => {
         subscriptionState.scopesCallbacks = callbacks
         const current = subscriptionState.currentScopes
@@ -380,6 +392,86 @@ describe('GitRoute', () => {
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
+  })
+
+  it('locks queries and a captured mutation owner through transport states until Code emits', async () => {
+    overviewQueryMock.mockResolvedValue({
+      ...overviewData,
+      otherWorktrees: [
+        {
+          path: '/repo-detached',
+          relativePath: '../repo-detached',
+          pathAvailable: true,
+          branchName: 'detached',
+          detached: true,
+          isCurrent: false,
+          ahead: 0,
+          behind: 0,
+          diff: { files: 0, insertions: 0, deletions: 0 },
+          entries: [],
+        },
+      ],
+    })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    renderWithQueryClient(<GitRoute />)
+    await screen.findByText('/repo-detached')
+    const capturedRemove = handlerState.removeDetached
+    if (!capturedRemove) throw new Error('Expected a rendered detached-worktree owner.')
+
+    overviewQueryMock.mockClear()
+    listEntriesQueryMock.mockClear()
+    removeDetachedWorktreeMock.mockClear()
+    const callbacks = subscriptionState.scopesCallbacks
+    if (!callbacks) throw new Error('Git scope subscription is unavailable.')
+
+    for (const state of ['connecting', 'pending'] as const) {
+      await act(async () => callbacks.onConnectionStateChange({ state, error: null }))
+      await capturedRemove({
+        path: '/repo-detached',
+        relativePath: '../repo-detached',
+        pathAvailable: true,
+        branchName: 'detached',
+        detached: true,
+        isCurrent: false,
+        ahead: 0,
+        behind: 0,
+        diff: { files: 0, insertions: 0, deletions: 0 },
+      })
+      expect(removeDetachedWorktreeMock).not.toHaveBeenCalled()
+      expect(overviewQueryMock).not.toHaveBeenCalled()
+      expect(listEntriesQueryMock).not.toHaveBeenCalled()
+    }
+
+    await act(async () => callbacks.onError(new Error('transport failed')))
+    await capturedRemove({
+      path: '/repo-detached',
+      relativePath: '../repo-detached',
+      pathAvailable: true,
+      branchName: 'detached',
+      detached: true,
+      isCurrent: false,
+      ahead: 0,
+      behind: 0,
+      diff: { files: 0, insertions: 0, deletions: 0 },
+    })
+    expect(removeDetachedWorktreeMock).not.toHaveBeenCalled()
+    expect(overviewQueryMock).not.toHaveBeenCalled()
+    expect(listEntriesQueryMock).not.toHaveBeenCalled()
+
+    await act(async () =>
+      callbacks.onData({
+        defaultScope: 'code',
+        code: createGitScopes().code,
+        planningState: 'resolving',
+        planning: null,
+      })
+    )
+    await screen.findByText('Code repository')
+    expect(
+      screen.queryByText('Git repository scope projection failed: transport failed')
+    ).toBeNull()
+    expect(removeDetachedWorktreeMock).not.toHaveBeenCalled()
   })
 
   it('does not submit live Git RPCs in static mode', async () => {
@@ -650,7 +742,7 @@ describe('GitRoute', () => {
     ).toBe(true)
   })
 
-  it('retires stale Planning data when the scope subscription fails and keeps Code usable', async () => {
+  it('retires stale Planning data and every action when the scope subscription fails', async () => {
     routerLocation.searchStr = '?gitScope=planning'
     subscriptionState.currentScopes = createGitScopes('/planning-a', 'planning-binding-a')
     subscriptionState.currentRoot = createReadyRootState('/planning-a')
@@ -710,24 +802,12 @@ describe('GitRoute', () => {
     })
 
     await screen.findByText('Git repository scope projection failed: scope stream unavailable')
-    await screen.findByText('main against origin/main')
     expect(screen.queryByText('root-a-status against origin/main')).toBeNull()
     expect(screen.queryByText('Root A history')).toBeNull()
-    await waitFor(() =>
-      expect(overviewQueryMock).toHaveBeenCalledWith({
-        scope: 'code',
-        expectedBindingToken: 'code-binding',
-      })
-    )
-    expect(
-      (screen.getByRole('button', { name: 'Planning repository' }) as HTMLButtonElement).disabled
-    ).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: 'feat: add git panel' }))
-    expect(navPushMock).toHaveBeenCalledWith(
-      'bottom',
-      '/git/commit/abc12345?gitScope=planning',
-      expect.anything()
-    )
+    expect(screen.queryByText('main against origin/main')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Planning repository' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'feat: add git panel' })).toBeNull()
+    expect(navPushMock).not.toHaveBeenCalled()
   })
 
   it.each([

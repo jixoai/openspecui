@@ -60,6 +60,7 @@ import {
 } from './ct2-model-cache-path.js'
 import { CustomSoundService } from './custom-sound-service.js'
 import { GitRepositoryBindingService } from './git-repository-binding-service.js'
+import { LaunchGitRepositoryBindingOwner } from './launch-git-repository-binding.js'
 import { LlamaModelAssetService } from './llama-model-asset-service.js'
 import {
   getDefaultLocalLlamaModelCacheDir,
@@ -163,6 +164,7 @@ export function createServer(config: ServerConfig) {
     storeObservation,
     observationEnvironment,
   })
+  const codeGitBinding = new LaunchGitRepositoryBindingOwner()
   const planningRootServices = new PlanningRootServiceManager({
     launchProjectDir: config.projectDir,
     previewAssetsDir: config.previewAssetsDir ?? join(__dirname, '..', '..', 'web', 'dist'),
@@ -171,10 +173,12 @@ export function createServer(config: ServerConfig) {
     observationEnvironment,
     projectInvalidation,
     runtimeInvalidation,
+    codeBinding: codeGitBinding,
   })
   const gitRepositoryBindings = new GitRepositoryBindingService({
     launchProjectDir: config.projectDir,
     planningRootServices,
+    codeBinding: codeGitBinding,
   })
   const notificationService = new NotificationService()
   const customSoundService = new CustomSoundService()

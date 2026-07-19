@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
  * 1. Project one immutable export snapshot through the live provider-shaped API.
  * 2. Preserve compound Spec identity and source/read-only state in static routes and search.
  * 3. Reconstruct Dashboard, workflow, schema, template, and entity reads without a backend.
  * 4. Keep unsupported live mutations and provenance explicitly absent in static mode.
+ * 5. Keep static Git snapshots ineligible for live backend binding authority.
  *
  * Original request (2026-07-15): "这是额外的工作还是可以和 live 版本保持尽可能的一致？"
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."

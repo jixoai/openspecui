@@ -40,6 +40,17 @@ export interface SubscriptionState<T> {
   error: Error | null
 }
 
+/** Explicit authority for projections whose cached data must never authorize live operations. */
+export type SubscriptionAuthority =
+  | { state: 'waiting'; reason: 'initial' | 'rebind' | 'idle' | 'connecting' | 'pending' }
+  | { state: 'current' }
+  | { state: 'failed'; error: Error }
+
+/** Subscription state whose operation authority is independent from loading presentation. */
+export interface AuthoritativeSubscriptionState<T> extends SubscriptionState<T> {
+  authority: SubscriptionAuthority
+}
+
 /** Controls whether cached data remains authoritative while a subscription reconnects. */
 export type SubscriptionCacheRebindPolicy = 'retain' | 'loading'
 
@@ -47,6 +58,19 @@ export type SubscriptionCacheRebindPolicy = 'retain' | 'loading'
 interface SubscriptionCallbacks<T> {
   onData: (data: T) => void
   onError: (err: Error) => void
+}
+
+/** Transport lifecycle projected by a typed subscription observer. */
+export interface SubscriptionConnectionState {
+  state: 'idle' | 'connecting' | 'pending'
+  error: Error | null
+}
+
+/** Callbacks for a projection that revokes authority on transport lifecycle changes. */
+export interface AuthoritativeSubscriptionCallbacks<T> extends SubscriptionCallbacks<T> {
+  onConnectionStateChange: (state: SubscriptionConnectionState) => void
+  onStopped: () => void
+  onComplete: () => void
 }
 
 /** 可取消订阅的对象 */
@@ -155,6 +179,147 @@ export function useSubscription<T>(
     subscriptionRef.current = subscription
 
     return () => {
+      subscription.unsubscribe()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inStaticMode, ...deps])
+
+  return state
+}
+
+/**
+ * Subscribe with an explicit cache/transport authority state.
+ *
+ * Cached data remains available for stale context, but only a replacement data emission makes it
+ * current. Connecting, pending, idle, and terminal error states all revoke operation authority.
+ */
+export function useAuthoritativeSubscription<T>(
+  subscribe: (callbacks: AuthoritativeSubscriptionCallbacks<T>) => Unsubscribable,
+  staticLoader?: () => Promise<T>,
+  deps: unknown[] = [],
+  cacheKey?: string
+): AuthoritativeSubscriptionState<T> {
+  const cached = cacheKey ? subscriptionCache.get(cacheKey) : undefined
+  const hasCached = cacheKey !== undefined && subscriptionCache.has(cacheKey)
+  const [state, setState] = useState<AuthoritativeSubscriptionState<T>>(() => ({
+    data: hasCached ? (cached as T) : undefined,
+    isLoading: true,
+    error: null,
+    authority: { state: 'waiting', reason: hasCached ? 'rebind' : 'initial' },
+  }))
+  const subscriptionRef = useRef<Unsubscribable | null>(null)
+  const generationRef = useRef(0)
+  const inStaticMode = isStaticMode()
+
+  useEffect(() => {
+    const generation = generationRef.current + 1
+    generationRef.current = generation
+    let active = true
+    let terminalError: Error | null = null
+    let terminal = false
+    const isActive = () => active && generationRef.current === generation
+
+    subscriptionRef.current?.unsubscribe()
+    subscriptionRef.current = null
+    const effectHasCached = cacheKey !== undefined && subscriptionCache.has(cacheKey)
+    setState({
+      data: effectHasCached ? (subscriptionCache.get(cacheKey) as T) : undefined,
+      isLoading: true,
+      error: null,
+      authority: { state: 'waiting', reason: effectHasCached ? 'rebind' : 'initial' },
+    })
+
+    if (inStaticMode) {
+      if (!staticLoader) {
+        const error = new Error('Static loader not available')
+        setState((previous) => ({
+          ...previous,
+          isLoading: false,
+          error,
+          authority: { state: 'failed', error },
+        }))
+        return
+      }
+      staticLoader()
+        .then((data) => {
+          if (!isActive()) return
+          if (cacheKey) subscriptionCache.set(cacheKey, data)
+          setState({ data, isLoading: false, error: null, authority: { state: 'current' } })
+        })
+        .catch((cause: unknown) => {
+          if (!isActive()) return
+          const error = cause instanceof Error ? cause : new Error(String(cause))
+          setState((previous) => ({
+            ...previous,
+            isLoading: false,
+            error,
+            authority: { state: 'failed', error },
+          }))
+        })
+      return
+    }
+
+    const subscription = subscribe({
+      onData(data) {
+        if (!isActive()) return
+        terminal = false
+        terminalError = null
+        if (cacheKey) subscriptionCache.set(cacheKey, data)
+        setState({ data, isLoading: false, error: null, authority: { state: 'current' } })
+      },
+      onError(error) {
+        if (!isActive()) return
+        terminalError = error
+        setState((previous) => ({
+          ...previous,
+          isLoading: false,
+          error,
+          authority: { state: 'failed', error },
+        }))
+      },
+      onConnectionStateChange(connection) {
+        if (!isActive() || terminal || terminalError) return
+        setState((previous) => ({
+          ...previous,
+          isLoading: true,
+          error: connection.error ?? terminalError,
+          authority: { state: 'waiting', reason: connection.state },
+        }))
+      },
+      onStopped() {
+        if (!isActive()) return
+        terminal = true
+        setState((previous) =>
+          terminalError
+            ? {
+                ...previous,
+                isLoading: false,
+                error: terminalError,
+                authority: { state: 'failed', error: terminalError },
+              }
+            : { ...previous, isLoading: true, authority: { state: 'waiting', reason: 'idle' } }
+        )
+      },
+      onComplete() {
+        if (!isActive()) return
+        terminal = true
+        setState((previous) =>
+          terminalError
+            ? {
+                ...previous,
+                isLoading: false,
+                error: terminalError,
+                authority: { state: 'failed', error: terminalError },
+              }
+            : { ...previous, isLoading: true, authority: { state: 'waiting', reason: 'idle' } }
+        )
+      },
+    })
+    subscriptionRef.current = subscription
+    return () => {
+      active = false
+      if (generationRef.current === generation) generationRef.current += 1
+      subscriptionRef.current = null
       subscription.unsubscribe()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

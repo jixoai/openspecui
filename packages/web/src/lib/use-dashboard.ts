@@ -13,10 +13,6 @@ import { isStaticMode } from './static-mode'
 import { trpcClient } from './trpc'
 import { useSubscription, type SubscriptionState } from './use-subscription'
 
-async function getCodeGitBindingToken(): Promise<string> {
-  return (await trpcClient.git.code.query()).bindingToken
-}
-
 /** Subscribe to the current Planning-owned Dashboard projection. */
 export function useDashboardOverviewSubscription(): SubscriptionState<DashboardOverview> {
   const subscribe = useCallback(
@@ -80,9 +76,11 @@ export function useDashboardGitTaskStatusSubscription(): SubscriptionState<Dashb
 }
 
 /** Refresh Launch-owned Code Git and request a current Dashboard projection update. */
-export async function refreshDashboardGitSnapshot(reason: string): Promise<void> {
+export async function refreshDashboardGitSnapshot(
+  reason: string,
+  expectedBindingToken: string
+): Promise<void> {
   if (isStaticMode()) return
-  const expectedBindingToken = await getCodeGitBindingToken()
   await trpcClient.dashboard.refreshGitSnapshot.mutate({
     scope: 'code',
     expectedBindingToken,
@@ -91,9 +89,11 @@ export async function refreshDashboardGitSnapshot(reason: string): Promise<void>
 }
 
 /** Remove one detached Code worktree through the current backend-issued Code binding. */
-export async function removeDetachedDashboardWorktree(path: string): Promise<void> {
+export async function removeDetachedDashboardWorktree(
+  path: string,
+  expectedBindingToken: string
+): Promise<void> {
   if (isStaticMode()) return
-  const expectedBindingToken = await getCodeGitBindingToken()
   await trpcClient.dashboard.removeDetachedWorktree.mutate({
     scope: 'code',
     expectedBindingToken,

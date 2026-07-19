@@ -2614,7 +2614,7 @@ export const gitRouter = router({
           if (!active) return
           emit.next({ defaultScope: 'code', code, planningState: 'resolving', planning: null })
           planningSubscription = createReactiveSubscription(() =>
-            ctx.gitRepositoryBindings.resolveScopes({ reactive: true })
+            ctx.gitRepositoryBindings.resolvePlanningScopes(code, { reactive: true })
           ).subscribe({
             next(scopes) {
               if (active) emit.next(scopes)

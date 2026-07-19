@@ -2754,3 +2754,111 @@ Reviewer construction guidance is intentionally concrete to prevent another adja
 The recurrence lesson is that remount/loading evidence is not transport evidence, a current-token
 lookup is not snapshot provenance, and a stable value stored on the wrong owner still violates the
 lifetime contract. Exact event, snapshot, and owner must be named before implementation is accepted.
+
+### 6.11 Fifth Independent Review of the Uncommitted Candidate at `b55267c`
+
+The review fixed point is `b55267c6ad8ad1d83f98a2a42aeef92893378354`. Local HEAD, the remote
+feature branch, and PR #207 all still point to that commit; the PR is `OPEN/CLEAN` and its six
+checks are green for that fixed point. The worker candidate is **not committed**: the worktree has
+22 modified tracked files and two untracked files (`launch-git-repository-binding.ts` and
+`use-dashboard.test.ts`). Focused reruns on the candidate pass Web `6 files / 54 tests`, Server Git
+`4 files / 34 tests`, Web typecheck, Server `typecheck:git-tests`, and `git diff --check`. These are
+not full-gate, browser, delivery, or acceptance evidence.
+
+Independent review leaves `6.11` open at `61/131` and identifies the following blockers:
+
+1. **P1: retired subscription callbacks can resurrect A.**
+   `packages/web/src/lib/use-subscription.ts:211-274` unsubscribes the prior stream but gives its
+   callbacks and static loader no active-generation guard. A late old `onData`, `onError`, or
+   connection callback can overwrite replacement state/cache and set `authority: current` for A.
+   Existing `useSearch` already uses an active guard for this lifecycle. Add a generation-scoped
+   guard for every callback and loader, then prove an A callback after B/rebind is ignored and cannot
+   rewrite the cache.
+
+2. **P1: the public scope stream still observes Code twice.**
+   `packages/server/src/router.ts:2611-2618` first calls `resolveCodeScope()` for the Code-first
+   emission, then immediately starts `createReactiveSubscription(() => resolveScopes({ reactive: true }))`;
+   `resolveScopes` calls `resolveCodeScope()` again. `createReactiveSubscription` executes its task
+   immediately, so one `subscribeScopes` projection performs two Code identity reads. Reuse the
+   first descriptor through a planning-only reactive resolver and add a route-level call-count test;
+   the service-only once test is insufficient.
+
+3. **P1: terminal observer events are not part of authority.**
+   tRPC 11.7.2 exposes `onStopped` and `onComplete` separately from
+   `onConnectionStateChange`/`onError`. `useAuthoritativeSubscription` ignores both, so a cleanly
+   stopped/completed Git stream can leave cached data `current`. It also lets a later connection
+   callback replace an `onError` diagnostic with a generic waiting state. Forward terminal callbacks,
+   make terminal failure absorbing within the active generation, and allow only replacement `onData`
+   to clear it. Add tests for stop/complete and error-to-connection ordering.
+
+4. **P1/P2: Dashboard stale conflicts are not surfaced and the real removal path is unproved.**
+   `packages/web/src/routes/dashboard.tsx:317-335` only logs refresh failures and clears the request;
+   a stale A -> B `CONFLICT` therefore has no visible diagnostic (removal alerts, refresh does not).
+   The new component test mutates a token variable without publishing B through a rendered state and
+   the detached-removal assertion was removed; `use-dashboard.test.ts` only invokes helpers directly.
+   Keep the required token capture, add a real Dashboard handler test for A snapshot -> B emission ->
+   A refresh and removal, assert B owner/cache is untouched, and render the refresh conflict visibly.
+
+5. **P1 evidence gap: replacement B is not shown to resume queries.**
+   `packages/web/src/routes/git.test.tsx:421-465` emits a Code-first replacement but only checks that
+   the error text disappears. It does not assert the real overview/list query owners resume with B.
+   Assert B-token query calls after the replacement; retain the red test that fails when the exact
+   transport authority transition is removed.
+
+6. **P2 typed-evidence and header gaps remain.**
+   `packages/server/src/planning-root-service.test.ts` is modified but excluded from every Server
+   test-typecheck lane and still has a `2026-07-17` intent header. `router.test.ts` is also modified
+   outside the checked Git lane. Add a checked owner/composition fixture (or explicitly include the
+   changed boundary tests in a typecheck lane) without `as any`, `as never`, fabricated non-null
+   state, or suppressions. Update every changed test header to `2026-07-19`.
+
+7. **P2 owner evidence is incomplete.**
+   Production composition creates one Launch owner and injects it into Git and Dashboard, but no
+   checked fixture proves owner lifetime/non-empty validation or Git/Dashboard token agreement. Add
+   that evidence at the composition/public boundary; do not infer it from a service-only token test.
+
+No browser acceptance, full post-correction gates, commit, push, exact-head CI, or local/remote/PR
+SHA equality exists for the candidate. Do not mark `6.11`, start `6.12+`, merge, archive, or release.
+The next worker Goal below is implementation work, not another review pass.
+
+### 6.11 Applied Git Authority/Owner Correction (working tree after `b55267c`)
+
+The worker applied the reviewer-owned 6.11 goal in four bounded areas:
+
+- `useAuthoritativeSubscription` now retires each effect generation before unsubscribe. Live
+  callbacks, static loader completion, terminal callbacks, and cache writes require that generation;
+  `onError` remains an absorbing diagnostic until replacement `onData`, while connecting/pending/
+  idle/complete states remain non-authoritative.
+- `git.subscribeScopes` resolves Code once, emits the Code-first descriptor, and feeds that exact
+  descriptor into the reactive Planning-only resolver. The public checked Router test asserts one
+  Code observation and descriptor identity. Launch Code ownership is supplied by the server-created
+  `LaunchGitRepositoryBindingOwner`; Planning manager records only Planning tokens. Composition tests
+  assert stable Code token, fresh A/B Planning tokens, no Planning Code token property, and Dashboard
+  snapshot token agreement.
+- Dashboard refresh/focus/auto-refresh/removal helpers receive the rendered Code snapshot token;
+  they do not query `git.code` at action time. Refresh and removal failures now render a persistent
+  `role=alert` diagnostic with typed conflict code when present. GitRoute reconnect tests assert
+  real overview/list B-token query calls after replacement emission.
+- Changed TypeScript headers were audited; `planning-root-service.test.ts` is timestamped 2026-07-19.
+  The checked Server Git lane includes the public Router binding suite, binding service, scope
+  classifier, and Dashboard snapshot coverage; no `as any`, `as never`, or suppression was added.
+
+Mutation-resistance evidence:
+
+```text
+Fixed point: temporarily remove the active-generation guard in authoritative onData.
+Command: pnpm --filter @openspecui/web test -- src/lib/use-subscription.test.tsx -t "retires every old generation callback"
+Red: 1 failed; late retired A onData changed data to `stale` and authority to `current`.
+Restored guard: the same focused test passes; full focused Web lane is 121 files / 751 tests.
+```
+
+Additional focused green evidence:
+
+```text
+Server public Git binding Router: 49 files / 388 tests; checked typecheck passes.
+Web typecheck: pass. format:check: pass. git diff --check: pass.
+```
+
+The red run is direct subscription-boundary mutation evidence. Terminating pinned OpenSpec 1.6
+desktop/mobile acceptance and full gates remain pending. Keep `6.11` unchecked and do not start
+`6.12+`, merge, archive, or release.

@@ -74,16 +74,16 @@ export function GitRoute() {
     query: scopesQuery,
   } = useGitRepositoryScope(!staticMode)
   const bindingToken = scopeDescriptor?.bindingToken ?? null
-  const scopeReconnecting = scopesQuery.isLoading
-  const scopeReconnectingRef = useRef(scopeReconnecting)
-  scopeReconnectingRef.current = scopeReconnecting
+  const scopeNonAuthoritative = scopesQuery.authority.state !== 'current'
+  const scopeNonAuthoritativeRef = useRef(scopeNonAuthoritative)
+  scopeNonAuthoritativeRef.current = scopeNonAuthoritative
   const overviewQuery = useQuery({
     queryKey: ['git', scope, bindingToken, 'overview'],
     queryFn: () => {
       if (!bindingToken) throw new Error('Git repository binding is unavailable.')
       return trpcClient.git.overview.query({ scope, expectedBindingToken: bindingToken })
     },
-    enabled: !staticMode && !scopeReconnecting && bindingToken !== null,
+    enabled: !staticMode && !scopeNonAuthoritative && bindingToken !== null,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -101,7 +101,7 @@ export function GitRoute() {
           })
         : Promise.reject(new Error('Git repository binding is unavailable.')),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    enabled: !staticMode && !scopeReconnecting && bindingToken !== null,
+    enabled: !staticMode && !scopeNonAuthoritative && bindingToken !== null,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -139,7 +139,7 @@ export function GitRoute() {
   const gitRefreshRequestRef = useRef(gitRefreshRequest)
   const refreshBusyRef = useRef(false)
   const refreshBusy =
-    scopeReconnecting ||
+    scopeNonAuthoritative ||
     gitRefreshRequest !== null ||
     switchWorktreeMutation.isPending ||
     removingWorktreePath !== null
@@ -153,7 +153,7 @@ export function GitRoute() {
 
   const runGitRefresh = useCallback(
     (reason: string) => {
-      if (!bindingToken || scopeReconnectingRef.current) return
+      if (!bindingToken || scopeNonAuthoritativeRef.current) return
       const requestedAt = Date.now()
       setGitRefreshRequest({ reason, requestedAt })
 
@@ -231,7 +231,7 @@ export function GitRoute() {
     async (worktree: GitWorktreeSummary) => {
       if (
         !bindingToken ||
-        scopeReconnectingRef.current ||
+        scopeNonAuthoritativeRef.current ||
         staticMode ||
         worktree.isCurrent ||
         !worktree.detached
@@ -273,7 +273,7 @@ export function GitRoute() {
 
   const handleSwitchWorktree = useCallback(
     async (worktree: GitWorktreeSummary) => {
-      if (!bindingToken || scopeReconnectingRef.current) return
+      if (!bindingToken || scopeNonAuthoritativeRef.current) return
       setSwitchingWorktreePath(worktree.path)
       try {
         const handoff = await switchWorktreeMutation.mutateAsync({
@@ -389,17 +389,17 @@ export function GitRoute() {
     )
   }
 
-  if (scopeReconnecting) {
-    return <div className="route-loading animate-pulse">Loading git repository scopes...</div>
-  }
-
-  if (scopesQuery.error && !scopes) {
+  if (scopesQuery.authority.state === 'failed') {
     return (
       <div className="text-destructive flex items-center gap-2 p-4">
         <AlertCircle className="h-5 w-5 shrink-0" />
-        Error loading git repository scopes: {scopesQuery.error.message}
+        Git repository scope projection failed: {scopesQuery.authority.error.message}
       </div>
     )
+  }
+
+  if (scopeNonAuthoritative) {
+    return <div className="route-loading animate-pulse">Loading git repository scopes...</div>
   }
 
   if (overviewQuery.isLoading && !overview) {
@@ -560,7 +560,7 @@ export function GitRoute() {
               key={entry.type === 'commit' ? entry.hash : `uncommitted:${entry.updatedAt ?? '0'}`}
               entry={entry}
               onSelect={(selectedEntry, sourceElement) => {
-                if (!bindingToken || scopeReconnectingRef.current) return
+                if (!bindingToken || scopeNonAuthoritativeRef.current) return
                 void vtNavController.push(
                   'bottom',
                   buildGitEntryHrefFromEntry(selectedEntry, requestedScope, locationSearch),
@@ -587,10 +587,10 @@ export function GitRoute() {
             <button
               type="button"
               onClick={() => {
-                if (scopeReconnectingRef.current) return
+                if (scopeNonAuthoritativeRef.current) return
                 void entriesQuery.fetchNextPage()
               }}
-              disabled={scopeReconnecting || entriesQuery.isFetchingNextPage}
+              disabled={scopeNonAuthoritative || entriesQuery.isFetchingNextPage}
               className="hover:bg-muted w-full rounded-md border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-70"
             >
               {entriesQuery.isFetchingNextPage ? 'Loading more…' : 'Load older commits'}

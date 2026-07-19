@@ -11,7 +11,10 @@
 import { parseGitRepositoryScope } from '@/lib/git-panel'
 import { trpcClient } from '@/lib/trpc'
 import { useContextSubscription } from '@/lib/use-context-subscription'
-import { useSubscription, type SubscriptionState } from '@/lib/use-subscription'
+import {
+  useAuthoritativeSubscription,
+  type AuthoritativeSubscriptionState,
+} from '@/lib/use-subscription'
 import type {
   GitRepositoryScope,
   GitRepositoryScopeDescriptor,
@@ -42,25 +45,31 @@ export interface GitRepositoryScopeState {
   locationSearch: string
   planningReady: boolean
   planningMessage: string | null
-  query: SubscriptionState<GitRepositoryScopes | StaticGitRepositoryScopes>
+  query: AuthoritativeSubscriptionState<GitRepositoryScopes | StaticGitRepositoryScopes>
 }
 
 /** Subscribe to backend-resolved Code and optional distinct Planning Git repository bindings. */
 export function useGitRepositoryScopes(
   enabled = true
-): SubscriptionState<GitRepositoryScopes | StaticGitRepositoryScopes> {
-  return useSubscription<GitRepositoryScopes | StaticGitRepositoryScopes>(
+): AuthoritativeSubscriptionState<GitRepositoryScopes | StaticGitRepositoryScopes> {
+  return useAuthoritativeSubscription<GitRepositoryScopes | StaticGitRepositoryScopes>(
     (callbacks) => {
       if (!enabled) return { unsubscribe() {} }
       return trpcClient.git.subscribeScopes.subscribe(undefined, {
         onData: callbacks.onData,
         onError: callbacks.onError,
+        onConnectionStateChange: (state) =>
+          callbacks.onConnectionStateChange({
+            state: state.state,
+            error: state.error,
+          }),
+        onStopped: callbacks.onStopped,
+        onComplete: callbacks.onComplete,
       })
     },
     async () => STATIC_GIT_SCOPES,
     [enabled],
-    'git.subscribeScopes',
-    'loading'
+    'git.subscribeScopes'
   )
 }
 
@@ -79,8 +88,7 @@ export function useGitRepositoryScope(enabled = true): GitRepositoryScopeState {
   const planningReady =
     planning !== null &&
     scopes?.planningState === 'settled' &&
-    !query.isLoading &&
-    query.error === null &&
+    query.authority.state === 'current' &&
     !rootContext.isLoading &&
     rootContext.error === null &&
     currentPlanningPath === planning.rootPath
@@ -92,8 +100,10 @@ export function useGitRepositoryScope(enabled = true): GitRepositoryScopeState {
       ? null
       : query.error
         ? `Git repository scope projection failed: ${query.error.message}`
-        : query.isLoading
-          ? 'Git repository scope projection is loading.'
+        : query.authority.state !== 'current'
+          ? query.authority.state === 'failed'
+            ? `Git repository scope projection failed: ${query.authority.error.message}`
+            : `Git repository scope projection is waiting for ${query.authority.reason}.`
           : rootContext.error
             ? `Planning Root Context failed: ${rootContext.error.message}`
             : rootProjection?.state === 'error'

@@ -640,3 +640,49 @@ Dashboard mutation, and Code-classification tests must execute the real boundary
 exact transition is removed. This explicit owner/event/snapshot audit is required because prior
 corrections repeatedly proved a nearby presentation state while leaving the production authority
 boundary untested.
+
+### 6.11 Fifth Review Boundary at `b55267c`
+
+The candidate layered on `b55267c` remains uncommitted in the shared worktree. Focused Web and
+Server tests and type lanes are green, but `6.11` is still unchecked at `61/131`. The candidate
+must not be promoted by the green checks on `b55267c`, and no `6.12+`, merge, archive, or release
+work is authorized.
+
+The next apply slice must close these exact boundaries:
+
+- Guard every authoritative subscription callback and static loader by an active generation;
+  retired A emissions must not overwrite B or the cache. Terminal `onError`, `onStopped`, and
+  `onComplete` must revoke authority and preserve their diagnostic until replacement `onData`.
+- Reuse the Code descriptor captured by `subscribeScopes` in the Planning reactive task. A route
+  call-count red test must fail when the first Code observation is removed from the reuse path or
+  when a second Code read is reintroduced.
+- Make Dashboard refresh conflicts visible, and test the actual rendered refresh and destructive
+  removal handlers across A snapshot -> B emission -> A callback. Direct helper tests are not enough.
+- After transport B emits, assert the real Git overview/list query boundaries resume with B; an
+  error disappearing is not query-resumption evidence.
+- Put owner lifetime, composition token agreement, and changed public-boundary fixtures in a
+  checked Server lane. Refresh all changed TypeScript headers, especially
+  `planning-root-service.test.ts`.
+- Run full local gates, clean SSG, terminating pinned OpenSpec 1.6 desktop and real `390x844`
+  browser acceptance, then commit/push and prove exact local/remote/PR SHA plus CI equality.
+
+The red tests must reach the real subscription, Router, Dashboard handler, and query owners. A
+disabled control, direct helper invocation, mocked downstream conflict, or a service-only count is
+characterization evidence, not proof of the production boundary.
+
+### 6.11 Worker Apply Evidence after `b55267c`
+
+Applied production/test corrections now retire stale subscription generations, preserve terminal
+diagnostics, reuse one Code descriptor through the public reactive Router stream, keep Launch Code
+ownership separate from replaceable Planning services, bind Dashboard actions to rendered tokens,
+and expose refresh/removal failures in a visible alert. The checked composition test proves the
+server-created Launch owner keeps Code token stable while Planning A/B tokens rotate and the
+Dashboard snapshot uses the same Code token. GitRoute replacement evidence asserts actual B-token
+overview/list query calls, not merely disappearance of an error label.
+
+The exact mutation red/green pair is recorded in `loop/implementation.md`: removing the
+authoritative `onData` generation guard yields one failing late-A test; restoring it yields the
+focused Web lane green. Current focused evidence is Server 49 files/388 tests, Web 121 files/751
+tests, Web and checked Server typechecks, format check, and diff check. `6.11` remains unchecked
+until full gates and terminating pinned OpenSpec 1.6 browser acceptance complete; `6.12+`, merge,
+archive, and release remain forbidden.

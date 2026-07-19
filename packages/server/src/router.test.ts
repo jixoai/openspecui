@@ -619,7 +619,6 @@ artifacts:
     dispose: vi.fn().mockResolvedValue(undefined),
   }
   const planningRootResolver: Context['planningRootServices'] = {
-    codeBindingToken: 'code-binding',
     resolveRootContext: vi.fn().mockResolvedValue(rootContextState),
     resolveRootContextReactive: vi.fn().mockResolvedValue(rootContextState),
     runOperation: vi.fn(async (operation) => operation(planningRootServices)),
@@ -632,6 +631,7 @@ artifacts:
   const gitRepositoryBindings = new GitRepositoryBindingService({
     launchProjectDir: projectDir,
     planningRootServices: planningRootResolver,
+    codeBinding: { bindingToken: 'code-binding' },
   })
 
   return {
@@ -742,6 +742,7 @@ describe('appRouter', () => {
         observationEnvironment,
         projectInvalidation,
         runtimeInvalidation: new RuntimeInvalidationIndex(),
+        codeBinding: { bindingToken: 'code-binding' },
       })
       const context = createMockContext(createMockAdapter(), { projectDir: launchProjectDir })
       context.planningRootServices = manager

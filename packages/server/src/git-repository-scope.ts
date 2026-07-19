@@ -37,6 +37,14 @@ interface ResolveGitRepositoryScopesOptions {
   canonicalizePath?: GitPathCanonicalizer
 }
 
+interface ResolvePlanningGitRepositoryScopesOptions {
+  code: GitRepositoryScopes['code']
+  planningRootDir: string | null
+  planningBindingToken: string | null
+  runGit?: GitRunner
+  canonicalizePath?: GitPathCanonicalizer
+}
+
 async function readGitPath(
   rootPath: string,
   args: string[],
@@ -119,33 +127,45 @@ export function isSameGitRepositoryIdentity(
 export async function resolveGitRepositoryScopes(
   options: ResolveGitRepositoryScopesOptions
 ): Promise<GitRepositoryScopes> {
-  const codePromise = resolveGitRepositoryDescriptor({
+  const code = await resolveGitRepositoryDescriptor({
     scope: 'code',
     bindingToken: options.codeBindingToken,
     rootPath: options.launchProjectDir,
     runGit: options.runGit,
     canonicalizePath: options.canonicalizePath,
   })
-  const planningPromise =
+  return resolvePlanningGitRepositoryScopes({
+    code: { ...code, scope: 'code' },
+    planningRootDir: options.planningRootDir,
+    planningBindingToken: options.planningBindingToken,
+    runGit: options.runGit,
+    canonicalizePath: options.canonicalizePath,
+  })
+}
+
+/** Compare one Planning candidate against an already observed Code repository descriptor. */
+export async function resolvePlanningGitRepositoryScopes(
+  options: ResolvePlanningGitRepositoryScopesOptions
+): Promise<GitRepositoryScopes> {
+  const planningCandidate =
     options.planningRootDir && options.planningBindingToken
-      ? resolveGitRepositoryDescriptor({
+      ? await resolveGitRepositoryDescriptor({
           scope: 'planning',
           bindingToken: options.planningBindingToken,
           rootPath: options.planningRootDir,
           runGit: options.runGit,
           canonicalizePath: options.canonicalizePath,
         })
-      : Promise.resolve(null)
-  const [code, planningCandidate] = await Promise.all([codePromise, planningPromise])
+      : null
   const planning =
     planningCandidate?.repository &&
-    !isSameGitRepositoryIdentity(code.repository, planningCandidate.repository)
+    !isSameGitRepositoryIdentity(options.code.repository, planningCandidate.repository)
       ? planningCandidate
       : null
 
   return {
     defaultScope: 'code',
-    code: { ...code, scope: 'code' },
+    code: options.code,
     planningState: 'settled',
     planning: planning ? { ...planning, scope: 'planning' } : null,
   }

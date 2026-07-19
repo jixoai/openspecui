@@ -48,11 +48,10 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
     requestedScope,
     scope,
     descriptor: scopeDescriptor,
-    scopes,
     locationSearch,
     query: scopesQuery,
   } = useGitRepositoryScope(!staticMode)
-  const scopeReconnecting = scopesQuery.isLoading
+  const scopeNonAuthoritative = scopesQuery.authority.state !== 'current'
   const headerRef = useRef<HTMLDivElement | null>(null)
   const sharedDescriptor = useMemo(() => getGitEntrySharedDescriptor(selector), [selector])
   const backHref = buildGitRepositoryHref('/git', requestedScope, locationSearch)
@@ -68,7 +67,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
         selector,
       })
     },
-    enabled: !staticMode && !scopeReconnecting && bindingToken !== null,
+    enabled: !staticMode && !scopeNonAuthoritative && bindingToken !== null,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -83,7 +82,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
         selector,
       })
     },
-    enabled: !staticMode && !scopeReconnecting && bindingToken !== null,
+    enabled: !staticMode && !scopeNonAuthoritative && bindingToken !== null,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -103,17 +102,17 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
     )
   }
 
-  if (scopeReconnecting) {
-    return <div className="route-loading animate-pulse">Loading git repository scope...</div>
-  }
-
-  if (scopesQuery.error && !scopes) {
+  if (scopesQuery.authority.state === 'failed') {
     return (
       <div className="text-destructive flex items-center gap-2 p-4 text-sm">
         <AlertCircle className="h-4 w-4 shrink-0" />
-        Error loading git repository scope: {scopesQuery.error.message}
+        Git repository scope projection failed: {scopesQuery.authority.error.message}
       </div>
     )
+  }
+
+  if (scopeNonAuthoritative) {
+    return <div className="route-loading animate-pulse">Loading git repository scope...</div>
   }
 
   if (metaQuery.isLoading && !entry) {

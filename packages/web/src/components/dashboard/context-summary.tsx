@@ -96,10 +96,12 @@ function LiveDashboardContextSummary() {
               <Code2 className="h-3.5 w-3.5" aria-hidden />
               Code Git snapshot
             </h3>
-            {gitScopesQuery.error ? (
-              <p className="text-destructive text-xs">{gitScopesQuery.error.message}</p>
-            ) : gitScopesQuery.isLoading ? (
-              <p className="text-muted-foreground text-xs">Resolving Git scopes...</p>
+            {gitScopesQuery.authority.state === 'failed' ? (
+              <p className="text-destructive text-xs">{gitScopesQuery.authority.error.message}</p>
+            ) : gitScopesQuery.authority.state !== 'current' ? (
+              <p className="text-muted-foreground text-xs">
+                Waiting for current Git scopes ({gitScopesQuery.authority.reason})...
+              </p>
             ) : gitScopesQuery.data ? (
               <>
                 <p

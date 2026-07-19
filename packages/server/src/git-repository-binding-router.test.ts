@@ -160,6 +160,36 @@ async function createRouterFixture() {
 }
 
 describe('public Git repository binding Router', () => {
+  it('observes Code once for one public projection and compares Planning to that descriptor', async () => {
+    const fixture = await createRouterFixture()
+    let subscription: { unsubscribe(): void } | null = null
+
+    try {
+      const resolveCodeScope = vi.spyOn(fixture.server.gitRepositoryBindings, 'resolveCodeScope')
+      const resolvePlanningScopes = vi.spyOn(
+        fixture.server.gitRepositoryBindings,
+        'resolvePlanningScopes'
+      )
+      const caller = appRouter.createCaller(fixture.server.createContext())
+      const observable = await caller.git.subscribeScopes()
+      const emissions: GitRepositoryScopes[] = []
+      subscription = observable.subscribe({ next: (value) => emissions.push(value) })
+
+      await vi.waitFor(() =>
+        expect(emissions.some((value) => value.planningState === 'settled')).toBe(true)
+      )
+      expect(resolveCodeScope).toHaveBeenCalledOnce()
+      expect(resolvePlanningScopes).toHaveBeenCalledOnce()
+      const codeOnly = emissions[0]
+      const planningCall = resolvePlanningScopes.mock.calls[0]
+      if (!codeOnly || !planningCall) throw new Error('Expected Code-first projection evidence.')
+      expect(planningCall[0]).toEqual(codeOnly.code)
+    } finally {
+      subscription?.unsubscribe()
+      await fixture.dispose()
+    }
+  })
+
   it('keeps public Code Git usable while the initial Planning transition is deferred', async () => {
     const fixture = await createRouterFixture()
     const deferredDoctor =
@@ -348,8 +378,35 @@ describe('public Git repository binding Router', () => {
         })
       ).resolves.toEqual({ success: true })
       await vi.waitFor(() => expect(emissions).toHaveLength(1))
+      expect(emissions[0]?.git.bindingToken).toBe(expectedBindingToken)
     } finally {
       unsubscribe()
+      await fixture.dispose()
+    }
+  })
+
+  it('keeps Launch Code ownership stable across Planning replacement in real server composition', async () => {
+    const fixture = await createRouterFixture()
+
+    try {
+      const { server } = fixture
+      const scopesA = await server.gitRepositoryBindings.resolveScopes()
+      const planningA = scopesA.planning
+      if (!planningA) throw new Error('Expected a distinct Planning repository for A.')
+
+      const dashboardA = await server.planningRootServices.runOperation(
+        ({ dashboardOverviewService }) => dashboardOverviewService.getCurrent()
+      )
+      expect(dashboardA.git.bindingToken).toBe(scopesA.code.bindingToken)
+      expect('codeBindingToken' in server.planningRootServices).toBe(false)
+
+      fixture.selectRoot(fixture.rootB)
+      const scopesB = await server.gitRepositoryBindings.resolveScopes()
+      const planningB = scopesB.planning
+      if (!planningB) throw new Error('Expected a distinct Planning repository for B.')
+      expect(scopesB.code.bindingToken).toBe(scopesA.code.bindingToken)
+      expect(planningB.bindingToken).not.toBe(planningA.bindingToken)
+    } finally {
       await fixture.dispose()
     }
   })

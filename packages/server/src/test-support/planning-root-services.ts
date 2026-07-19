@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (created 2026-07-19 Asia/Shanghai):
  * 1. Provide a type-checked Planning-root resolver for router tests that do not exercise root work.
- * 2. Keep the resolver contract explicit as it evolves, including Code binding provenance.
+ * 2. Keep the resolver contract explicit as it evolves without fabricating Launch-owned provenance.
  *
  * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
  */
@@ -20,7 +20,6 @@ function unavailable(): never {
 /** Build a checked resolver for procedures whose tests do not touch Planning-root state. */
 export function createUnavailablePlanningRootServices(): PlanningRootServiceResolver {
   return {
-    codeBindingToken: 'test-code-binding',
     resolveRootContext: async (): Promise<RootContextResolvedState> => unavailable(),
     resolveRootContextReactive: async (): Promise<RootContextResolvedState> => unavailable(),
     runOperation: async <T>(_operation: PlanningRootOperation<T>): Promise<T> => unavailable(),

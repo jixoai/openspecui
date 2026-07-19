@@ -83,6 +83,18 @@ function isAnimatedGitRefreshReason(reason: string | null): boolean {
   return reason === 'manual-button' || reason?.startsWith('auto-refresh:') === true
 }
 
+function formatGitActionError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  if (typeof error === 'object' && error !== null && 'data' in error) {
+    const data = error.data
+    if (typeof data === 'object' && data !== null && 'code' in data) {
+      const code = data.code
+      if (typeof code === 'string' && code.length > 0) return `${code}: ${message}`
+    }
+  }
+  return message
+}
+
 function createDefaultCardAvailability(
   taskCompletionPercent: number | null
 ): Record<DashboardMetricKey, DashboardCardAvailability> {
@@ -256,11 +268,7 @@ function getStepPalette(stepName: string): {
 export function Dashboard() {
   const staticMode = isStaticMode()
   const { data: overview, isLoading, error } = useDashboardOverviewSubscription()
-  const {
-    data: gitScopes,
-    isLoading: gitScopesLoading,
-    error: gitScopesError,
-  } = useGitRepositoryScopes(!staticMode)
+  const { data: gitScopes, authority: gitScopesAuthority } = useGitRepositoryScopes(!staticMode)
   const { data: gitTaskStatus } = useDashboardGitTaskStatusSubscription()
   const { data: statuses } = useOpsxStatusListSubscription()
   const { data: configBundle } = useOpsxConfigBundleSubscription()
@@ -278,6 +286,14 @@ export function Dashboard() {
     reason: string
     requestedAt: number
   } | null>(null)
+  const [gitActionError, setGitActionError] = useState<string | null>(null)
+  const dashboardGitBindingToken =
+    !staticMode &&
+    gitScopesAuthority.state === 'current' &&
+    overview?.git.bindingToken !== null &&
+    overview?.git.bindingToken === gitScopes?.code.bindingToken
+      ? (overview?.git.bindingToken ?? null)
+      : null
 
   const runPropose = useCallback(() => {
     vtNavController.activatePop('/opsx-propose')
@@ -288,8 +304,12 @@ export function Dashboard() {
   }, [])
 
   const triggerGitRefresh = useCallback(
-    async (reason: string) => refreshDashboardGitSnapshot(reason),
-    []
+    async (reason: string) => {
+      if (!dashboardGitBindingToken) return
+      setGitActionError(null)
+      await refreshDashboardGitSnapshot(reason, dashboardGitBindingToken)
+    },
+    [dashboardGitBindingToken]
   )
 
   const focusRefreshAtRef = useRef(0)
@@ -320,6 +340,7 @@ export function Dashboard() {
         })
         .catch((err) => {
           console.error('[Dashboard] Failed to refresh git snapshot:', err)
+          setGitActionError(formatGitActionError(err))
           setGitRefreshRequest((current) =>
             current?.reason === reason && current.requestedAt === requestedAt ? null : current
           )
@@ -338,6 +359,7 @@ export function Dashboard() {
         : getDashboardGitAutoRefreshReason(gitAutoRefreshPreset)
     if (
       staticMode ||
+      dashboardGitBindingToken === null ||
       intervalMs === null ||
       autoRefreshReason === null ||
       gitRefreshRequest !== null ||
@@ -359,6 +381,7 @@ export function Dashboard() {
     }, intervalMs)
   }, [
     clearGitAutoRefreshTimer,
+    dashboardGitBindingToken,
     gitAutoRefreshPreset,
     gitRefreshRequest,
     isDocumentVisible,
@@ -367,38 +390,50 @@ export function Dashboard() {
   ])
 
   const handleManualGitRefresh = useCallback(() => {
+    if (dashboardGitBindingToken === null) return
     clearGitAutoRefreshTimer()
     setGitAutoRefreshCycleStartedAt(null)
     setGitAutoRefreshNow(Date.now())
     runDashboardGitRefresh('manual-button')
-  }, [clearGitAutoRefreshTimer, runDashboardGitRefresh])
+  }, [clearGitAutoRefreshTimer, dashboardGitBindingToken, runDashboardGitRefresh])
 
-  const handleRemoveDetachedWorktree = useCallback(async (worktree: DashboardGitWorktree) => {
-    if (isStaticMode() || worktree.isCurrent || !worktree.detached || isHttpUrl(worktree.path)) {
-      return
-    }
+  const handleRemoveDetachedWorktree = useCallback(
+    async (worktree: DashboardGitWorktree) => {
+      if (
+        dashboardGitBindingToken === null ||
+        isStaticMode() ||
+        worktree.isCurrent ||
+        !worktree.detached ||
+        isHttpUrl(worktree.path)
+      ) {
+        return
+      }
 
-    const confirmed = window.confirm(
-      [
-        'Remove detached worktree?',
-        '',
-        worktree.path,
-        '',
-        'This runs git worktree remove --force.',
-      ].join('\n')
-    )
-    if (!confirmed) return
+      const confirmed = window.confirm(
+        [
+          'Remove detached worktree?',
+          '',
+          worktree.path,
+          '',
+          'This runs git worktree remove --force.',
+        ].join('\n')
+      )
+      if (!confirmed) return
 
-    setRemovingWorktreePath(worktree.path)
-    try {
-      await removeDetachedDashboardWorktree(worktree.path)
-    } catch (error) {
-      console.error('[Dashboard] Failed to remove detached worktree:', error)
-      window.alert(error instanceof Error ? error.message : 'Failed to remove detached worktree.')
-    } finally {
-      setRemovingWorktreePath((current) => (current === worktree.path ? null : current))
-    }
-  }, [])
+      setRemovingWorktreePath(worktree.path)
+      setGitActionError(null)
+      try {
+        await removeDetachedDashboardWorktree(worktree.path, dashboardGitBindingToken)
+      } catch (error) {
+        console.error('[Dashboard] Failed to remove detached worktree:', error)
+        setGitActionError(formatGitActionError(error))
+        window.alert(error instanceof Error ? error.message : 'Failed to remove detached worktree.')
+      } finally {
+        setRemovingWorktreePath((current) => (current === worktree.path ? null : current))
+      }
+    },
+    [dashboardGitBindingToken]
+  )
 
   useEffect(() => {
     gitRefreshRequestRef.current = gitRefreshRequest
@@ -568,8 +603,7 @@ export function Dashboard() {
   const dashboardGit = overview?.git ?? null
   const dashboardGitIsCurrent =
     staticMode ||
-    (!gitScopesLoading &&
-      gitScopesError === null &&
+    (gitScopesAuthority.state === 'current' &&
       gitScopes !== undefined &&
       dashboardGit?.bindingToken !== null &&
       dashboardGit?.bindingToken === gitScopes?.code.bindingToken)
@@ -600,7 +634,7 @@ export function Dashboard() {
   const showGitRefreshProgress = gitAutoRefreshIntervalMs !== null && gitRefreshRequest === null
   const animateRefreshButton =
     gitRefreshRequest !== null && isAnimatedGitRefreshReason(gitRefreshReason)
-  const disableRefreshButton = gitRefreshRequest !== null
+  const disableRefreshButton = gitRefreshRequest !== null || dashboardGitBindingToken === null
 
   const renderHistoryCards = () => (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1048,6 +1082,16 @@ export function Dashboard() {
       </div>
 
       <DashboardContextSummary staticMode={staticMode} />
+
+      {gitActionError ? (
+        <div
+          role="alert"
+          className="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-sm"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>Git action failed: {gitActionError}</span>
+        </div>
+      ) : null}
 
       <section className="space-y-2">
         <h2 className="text-sm font-medium">Historical Trends</h2>
