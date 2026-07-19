@@ -402,3 +402,44 @@ does not currently build that pinned submodule. The same lane passes locally onl
 already contains ignored generated output. This is a reproducible CI/test-fixture preparation gap, not
 a Project Binding production failure. B2.5 remains open and the next worker Goal is limited to making
 the pinned CLI build explicit and deterministic, then rerunning the exact full gates on the new head.
+
+## B2.5 pinned CLI preparation evidence (2026-07-20)
+
+The delivery correction adds `scripts/prepare-openspec-reference.mjs` and invokes it once in the Fast
+Gate after root dependencies are installed. It initializes an absent submodule, requires exact SHA
+`e1b51d111ab446b54dee2d6159ac245f0339ae52`, installs the nested package with
+`--frozen-lockfile --ignore-scripts --ignore-workspace`, explicitly builds it, and asserts
+`references/openspec/dist/cli/index.js`. The Browser Gate does not invoke this step because its xterm
+and Storybook matrix does not execute the pinned cold-start or W2 fixture.
+
+The clean-dist red probe was:
+
+```text
+node references/openspec/bin/openspec.js --version
+exit 1
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module .../references/openspec/dist/cli/index.js
+```
+
+An actual uninitialized-submodule clone at `/tmp/openspecui-clean-prep` then passed:
+
+```text
+node scripts/prepare-openspec-reference.mjs
+  submodule checked out e1b51d111ab446b54dee2d6159ac245f0339ae52
+  nested frozen install completed with pnpm v9.15.9
+  explicit OpenSpec build completed
+node references/openspec/bin/openspec.js --version
+  1.6.0
+  exit 0
+```
+
+After preparation, the checked cold-start integration test passed:
+
+```text
+pnpm --filter @openspecui/server exec vitest run \
+  src/root-context-cold-start.integration.test.ts --no-file-parallelism
+  1 file / 1 test passed
+```
+
+`pnpm format:check`, `pnpm lint:ci`, and `git diff --check` also passed. This closes only the CI
+preparation blocker; B2.5 remains open for owner acceptance and independent review. Do not start W3,
+`6.12+`, merge, archive, or release from this Change.
