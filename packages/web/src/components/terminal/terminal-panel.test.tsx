@@ -1,17 +1,30 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Verify terminal panel tabs, actions, notifications, and visibility behavior.
- * 2. Verify cwd target selection and visible session cwd identity.
+ * 2. Verify first-session and active-session cwd target selection.
+ * 3. Verify restored tab identity survives resolved paths, long titles, and renaming.
  *
  * Original request (2026-07-16): "Terminal shows selected cwd/root identity in creation controls and tab labels."
  */
 import type { NotificationRecord } from '@openspecui/core/notifications'
-import { fireEvent, render } from '@testing-library/react'
+import { fireEvent, render, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalPanel } from './terminal-panel'
 
 const noopUnsubscribe = () => {}
+
+function first<T>(items: readonly T[]): T {
+  const item = items[0]
+  if (item === undefined) throw new Error('Expected at least one item')
+  return item
+}
+
+function last<T>(items: readonly T[]): T {
+  const item = items.at(-1)
+  if (item === undefined) throw new Error('Expected at least one item')
+  return item
+}
 
 const {
   useTerminalContextMock,
@@ -299,7 +312,7 @@ describe('TerminalPanel', () => {
   it('creates the default shell when clicking the terminal add button', () => {
     const { getAllByTitle } = render(<TerminalPanel />)
 
-    fireEvent.click(getAllByTitle('New terminal')[0]!)
+    fireEvent.click(first(getAllByTitle('New terminal')))
 
     expect(createShellSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'builtin:sh', command: '/bin/sh' }),
@@ -317,9 +330,9 @@ describe('TerminalPanel', () => {
       setCustomTitle: vi.fn(),
     })
 
-    const { getByText } = render(<TerminalPanel />)
+    const { container } = render(<TerminalPanel />)
 
-    fireEvent.click(getByText('+'))
+    fireEvent.click(within(container).getByRole('button', { name: 'New terminal' }))
 
     expect(createShellSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'builtin:sh', command: '/bin/sh' }),
@@ -327,11 +340,35 @@ describe('TerminalPanel', () => {
     )
   })
 
+  it('shows the cwd identity and creates the first shell at the selected planning root', () => {
+    useTerminalContextMock.mockReturnValue({
+      sessions: [],
+      activeSessionId: null,
+      setActiveSession: vi.fn(),
+      createShellSession: createShellSessionMock,
+      closeSession: vi.fn(),
+      setCustomTitle: vi.fn(),
+    })
+
+    const { container } = render(<TerminalPanel />)
+    const panel = within(container)
+
+    expect(panel.getByText('/launch')).toBeTruthy()
+    fireEvent.click(panel.getByRole('radio', { name: 'Planning' }))
+    expect(panel.getByText('/stores/shared')).toBeTruthy()
+    fireEvent.click(panel.getByRole('button', { name: 'New terminal' }))
+
+    expect(createShellSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'builtin:sh', command: '/bin/sh' }),
+      { cwdTarget: 'planning-root' }
+    )
+  })
+
   it('creates a shell at the selected current planning root', () => {
     const { getAllByRole, getAllByTitle } = render(<TerminalPanel />)
 
-    fireEvent.click(getAllByRole('radio', { name: 'Planning' }).at(-1)!)
-    fireEvent.click(getAllByTitle('New terminal').at(-1)!)
+    fireEvent.click(last(getAllByRole('radio', { name: 'Planning' })))
+    fireEvent.click(last(getAllByTitle('New terminal')))
 
     expect(createShellSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'builtin:sh', command: '/bin/sh' }),
@@ -342,7 +379,7 @@ describe('TerminalPanel', () => {
   it('opens shell and command creation choices from the terminal options button', () => {
     const { getAllByTitle, getByText } = render(<TerminalPanel />)
 
-    fireEvent.click(getAllByTitle('New terminal options')[0]!)
+    fireEvent.click(first(getAllByTitle('New terminal options')))
 
     expect(getByText('/bin/sh')).toBeTruthy()
     expect(getByText('Claude')).toBeTruthy()
@@ -377,7 +414,8 @@ describe('TerminalPanel', () => {
     expect(getByText('2')).toBeTruthy()
   })
 
-  it('binds the full terminal title to the tab trigger title attribute', () => {
+  it('keeps restored cwd identity visible while a long terminal title is renamed', () => {
+    const setCustomTitleMock = vi.fn()
     useTerminalContextMock.mockReturnValue({
       sessions: [
         {
@@ -396,21 +434,28 @@ describe('TerminalPanel', () => {
       setActiveSession: vi.fn(),
       createShellSession: createShellSessionMock,
       closeSession: vi.fn(),
-      setCustomTitle: vi.fn(),
+      setCustomTitle: setCustomTitleMock,
     })
 
     const { getByTitle } = render(<TerminalPanel />)
+    const fullTitle = 'Planning root: /stores/shared · Claude Code - very long terminal title'
+    const tabTrigger = getByTitle(fullTitle)
+    const tab = within(tabTrigger)
 
-    expect(
-      getByTitle('Planning root: /stores/shared · Claude Code - very long terminal title')
-    ).toBeTruthy()
-    expect(getByTitle('Planning: /stores/shared')).toBeTruthy()
+    expect(tab.getByTitle('Planning: /stores/shared')).toHaveTextContent('Planning')
+    expect(tab.getByTitle('/stores/shared')).toHaveTextContent('/stores/shared')
+    fireEvent.doubleClick(tab.getByText('Claude Code - very long terminal title'))
+    const titleInput = tab.getByPlaceholderText('Claude Code - very long terminal title')
+    fireEvent.change(titleInput, { target: { value: 'Verification shell' } })
+    fireEvent.keyDown(titleInput, { key: 'Enter' })
+
+    expect(setCustomTitleMock).toHaveBeenCalledWith('shell-1', 'Verification shell')
+    expect(tab.getByTitle('Planning: /stores/shared')).toHaveTextContent('Planning')
+    expect(tab.getByTitle('/stores/shared')).toHaveTextContent('/stores/shared')
     const props = tabsPropsSpy.mock.calls.at(-1)?.[0] as
       | { tabs: Array<{ id: string; title?: string }> }
       | undefined
-    expect(props?.tabs[0]?.title).toBe(
-      'Planning root: /stores/shared · Claude Code - very long terminal title'
-    )
+    expect(props?.tabs[0]?.title).toBe(fullTitle)
   })
 
   it('auto-consumes focused terminal notifications after a short delay', () => {

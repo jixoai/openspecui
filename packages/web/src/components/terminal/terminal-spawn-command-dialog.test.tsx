@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Verify configured terminal command creation and advanced-field behavior.
- * 2. Verify explicit cwd target selection and planning-root readiness locking.
+ * 2. Verify configured commands expose resolved cwd identity and send only a cwd target.
+ * 3. Verify planning-root readiness keeps repair through the available Launch target.
  *
  * Original request (2026-07-16): "Terminal creation controls expose the selected cwd/root identity."
  */
@@ -159,10 +160,11 @@ describe('TerminalSpawnCommandDialog', () => {
     expect(getByDisplayValue('draft prompt')).toBeTruthy()
     const advancedButton = screen.getByRole('button', { name: /Advanced options/ })
     const advancedSectionId = advancedButton.getAttribute('aria-controls')
-    expect(advancedSectionId).toBeTruthy()
-    const advancedSection = document.getElementById(advancedSectionId!)
-    expect(advancedSection?.getAttribute('aria-hidden')).toBe('true')
-    expect(advancedSection?.hasAttribute('inert')).toBe(true)
+    if (!advancedSectionId) throw new Error('Expected advanced section id')
+    const advancedSection = document.getElementById(advancedSectionId)
+    if (!advancedSection) throw new Error('Expected advanced section')
+    expect(advancedSection.getAttribute('aria-hidden')).toBe('true')
+    expect(advancedSection.hasAttribute('inert')).toBe(true)
     expect(advancedButton.getAttribute('aria-expanded')).toBe('false')
     expect(screen.queryByRole('switch', { name: /Skip permissions/ })).toBeNull()
     expect(document.body.textContent).toContain("claude 'draft prompt'")
@@ -171,8 +173,8 @@ describe('TerminalSpawnCommandDialog', () => {
     fireEvent.click(advancedButton)
 
     expect(advancedButton.getAttribute('aria-expanded')).toBe('true')
-    expect(advancedSection?.getAttribute('aria-hidden')).toBe('false')
-    expect(advancedSection?.hasAttribute('inert')).toBe(false)
+    expect(advancedSection.getAttribute('aria-hidden')).toBe('false')
+    expect(advancedSection.hasAttribute('inert')).toBe(false)
     expect(screen.getByRole('switch', { name: /Skip permissions/ })).toBeTruthy()
   })
 
@@ -187,6 +189,7 @@ describe('TerminalSpawnCommandDialog', () => {
       />
     )
 
+    expect(screen.getByText('/launch')).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: /Advanced options/ }))
     fireEvent.click(screen.getByRole('switch', { name: /Skip permissions/ }))
     fireEvent.click(getByText('Create'))
@@ -206,13 +209,16 @@ describe('TerminalSpawnCommandDialog', () => {
   it('creates the command in the selected planning root', () => {
     render(<TerminalSpawnCommandDialog open command={command} onClose={() => {}} />)
 
+    expect(screen.getByText('/launch')).toBeVisible()
     fireEvent.click(screen.getByRole('radio', { name: 'Planning' }))
+    expect(screen.getByText('/stores/shared')).toBeVisible()
     fireEvent.click(screen.getByText('Create'))
 
-    expect(createShellSessionMock).toHaveBeenCalledWith(
-      shell,
-      expect.objectContaining({ cwdTarget: 'planning-root' })
-    )
+    expect(createShellSessionMock).toHaveBeenCalledWith(shell, {
+      cwdTarget: 'planning-root',
+      label: 'Claude',
+      initialInput: 'claude\n',
+    })
   })
 
   it('keeps planning-root creation disabled until Root Context is current and ready', () => {
@@ -242,9 +248,24 @@ describe('TerminalSpawnCommandDialog', () => {
       />
     )
 
-    expect(screen.getByRole('radio', { name: 'Planning' })).toBeDisabled()
-    fireEvent.click(screen.getByText('Create'))
-    expect(createShellSessionMock).not.toHaveBeenCalled()
+    const planningTarget = screen.getByRole('radio', { name: 'Planning' })
+    const launchTarget = screen.getByRole('radio', { name: 'Launch' })
+    const createButton = screen.getByRole('button', { name: 'Create' })
+
+    expect(screen.getByText('Planning root is refreshing.')).toBeVisible()
+    expect(planningTarget).toBeDisabled()
+    expect(createButton).toBeDisabled()
+    expect(launchTarget).toBeEnabled()
+    fireEvent.click(launchTarget)
+    expect(launchTarget).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText('/launch')).toBeVisible()
+    expect(createButton).toBeEnabled()
+    fireEvent.click(createButton)
+    expect(createShellSessionMock).toHaveBeenCalledWith(shell, {
+      cwdTarget: 'launch-project',
+      label: 'Claude',
+      initialInput: 'claude\n',
+    })
   })
 
   it('does not close on outside dismiss requests', () => {

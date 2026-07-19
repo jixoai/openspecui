@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.check.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": [
+    "src/pty-cwd-contract.test.ts",
+    "../local-translator/src/huggingface-transformers.d.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}
