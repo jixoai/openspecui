@@ -4,6 +4,7 @@
     "types": ["node"]
   },
   "include": [
+    "src/planning-config-router.test.ts",
     "src/root-context-cold-start.integration.test.ts",
     "../local-translator/src/huggingface-transformers.d.ts"
   ],
