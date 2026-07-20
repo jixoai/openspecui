@@ -4835,3 +4835,33 @@ generation remains dispatchable.
 No Compose, Propose, terminal component, command construction, full gate, browser fixture, SSG, push,
 or checkpoint transition is authorized in this Stage. Checkpoint `6.14` remains `64/131` until Stage 3
 and the later focused automation package are accepted.
+
+### Stage 2 accepted after real form-owner evidence (2026-07-21)
+
+Sol committed `0815a0b` (`test: prove new route form target ownership`). The test removes the shared
+`isWorkflowTargetCurrent` mock entirely, mounts the real `OpsxNewRoute` form, and preserves the existing
+production split between the disabled Create projection and the inline submit guard. It adds the
+observedAt-only refresh case without changing production code.
+
+Independent focused verification:
+
+- New route Vitest: `1 file / 5 tests passed`.
+- `pnpm --filter @openspecui/web typecheck`: passed.
+- `git diff --check`: passed.
+
+Mutation evidence:
+
+```text
+Temporarily removed only the inline prepared-target guard in `packages/web/src/routes/opsx-new.tsx`.
+The same stale Root A form-submit test failed because `createDedicatedSession` received:
+  openspec new change add-search
+  cwdTarget=planning-root
+  expectedRootGeneration=planning-a-generation
+Restoring the guard made the same real form submit show
+`Planning root changed before dispatch. Prepare this workflow again.` with zero owner calls.
+```
+
+Stage 2 is independently accepted. Checkpoint `6.14` remains open at `64/131`; Propose's real
+Dialog-to-`createShellSession` chain is the only next coding stage. No full repository gates,
+Playwright/browser fixtures, SSG, push, merge, archive, release, or owner visual acceptance is
+authorized before Stage 3 and the later focused automation package converge.
