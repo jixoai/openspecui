@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-21 Asia/Shanghai):
  * 1. Prepare and dispatch change-scoped OPSX workflow prompts or commands.
  * 2. Preserve invocation diagnostics and action identity in the compose dialog.
  * 3. Verify the Server-owned planning-root target before terminal dispatch.
  * 4. Preserve explicit operator edits while re-preparing target evidence after Root replacement.
+ * 5. Track dirty draft ownership by Root Context generation and require explicit recovery.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  */
@@ -17,6 +18,14 @@ import {
   type OpsxAgentInvocationMode,
 } from '@/lib/opsx-agent-invocation'
 import { buildOpsxComposeFallbackPrompt, parseOpsxComposeLocationSearch } from '@/lib/opsx-compose'
+import {
+  assertComposeDraftDispatchable,
+  captureComposeDraftOwnership,
+  EMPTY_COMPOSE_DRAFT_OWNERSHIP,
+  getComposeRootIdentity,
+  requiresComposeDraftRecovery,
+  type ComposeDraftOwnership,
+} from '@/lib/opsx-compose-draft'
 import {
   isWorkflowTargetCurrent,
   prepareWorkflowInvocation,
@@ -60,9 +69,13 @@ export function OpsxComposeRoute() {
   const [sendError, setSendError] = useState<string | null>(null)
   const [workflowTarget, setWorkflowTarget] = useState<WorkflowInvocationTargetV2 | null>(null)
   const [workflowEvidence, setWorkflowEvidence] = useState<WorkflowActionEvidenceV2 | null>(null)
-  const [requiresRebindRecovery, setRequiresRebindRecovery] = useState(false)
   const [latestGeneratedDraft, setLatestGeneratedDraft] = useState<string | null>(null)
-  const draftDirtyRef = useRef(false)
+  const [retryPreparationNonce, setRetryPreparationNonce] = useState(0)
+  const [draftOwnership, setDraftOwnership] = useState<ComposeDraftOwnership>(
+    EMPTY_COMPOSE_DRAFT_OWNERSHIP
+  )
+  const draftOwnershipRef = useRef(draftOwnership)
+  draftOwnershipRef.current = draftOwnership
   const draftRequestKeyRef = useRef<string | null>(null)
   const planningRoot = rootAction.context?.planningRoot
   const rootIdentityKey = useMemo(
@@ -95,6 +108,19 @@ export function OpsxComposeRoute() {
         : null,
     [composeInput, invocationMode?.actualMode, requestedInvocationMode]
   )
+  const currentRootIdentity = useMemo(
+    () => getComposeRootIdentity(rootAction.context),
+    [
+      planningRoot?.path,
+      planningRoot?.source,
+      planningRoot?.store_id,
+      rootAction.context?.generation,
+      rootAction.context?.storeId,
+    ]
+  )
+  const currentRootIdentityRef = useRef(currentRootIdentity)
+  currentRootIdentityRef.current = currentRootIdentity
+  const draftRequiresRecovery = requiresComposeDraftRecovery(draftOwnership, currentRootIdentity)
   const workflowTargetCurrent =
     !rootAction.context?.planningRoot ||
     (workflowTarget !== null && isWorkflowTargetCurrent(workflowTarget, rootAction))
@@ -117,17 +143,18 @@ export function OpsxComposeRoute() {
   useEffect(() => {
     let canceled = false
     if (draftRequestKeyRef.current !== composeRequestKey) {
-      draftDirtyRef.current = false
+      draftOwnershipRef.current = EMPTY_COMPOSE_DRAFT_OWNERSHIP
+      setDraftOwnership(EMPTY_COMPOSE_DRAFT_OWNERSHIP)
     }
     draftRequestKeyRef.current = composeRequestKey
 
     const loadPrompt = async () => {
       if (!composeInput) {
-        draftDirtyRef.current = false
+        draftOwnershipRef.current = EMPTY_COMPOSE_DRAFT_OWNERSHIP
+        setDraftOwnership(EMPTY_COMPOSE_DRAFT_OWNERSHIP)
         setDraft('')
         setWorkflowTarget(null)
         setWorkflowEvidence(null)
-        setRequiresRebindRecovery(false)
         setLatestGeneratedDraft(null)
         setDraftError('Invalid compose parameters.')
         setIsLoadingDraft(false)
@@ -135,25 +162,24 @@ export function OpsxComposeRoute() {
       }
 
       if (rootActionRef.current.disabled) {
-        draftDirtyRef.current = false
-        setDraft('')
+        if (!draftOwnershipRef.current.dirty) {
+          draftOwnershipRef.current = EMPTY_COMPOSE_DRAFT_OWNERSHIP
+          setDraftOwnership(EMPTY_COMPOSE_DRAFT_OWNERSHIP)
+          setDraft('')
+        }
         setWorkflowTarget(null)
         setWorkflowEvidence(null)
-        setRequiresRebindRecovery(false)
         setLatestGeneratedDraft(null)
         setDraftError(null)
         setIsLoadingDraft(false)
         return
       }
 
-      const isRootRebind = workflowTarget !== null
-      const shouldRequireRecovery = isRootRebind && draftDirtyRef.current
       setSendError(null)
       setIsLoadingDraft(true)
       setDraftError(null)
       setWorkflowTarget(null)
       setWorkflowEvidence(null)
-      setRequiresRebindRecovery(shouldRequireRecovery)
       setLatestGeneratedDraft(null)
 
       try {
@@ -189,10 +215,8 @@ export function OpsxComposeRoute() {
         setWorkflowEvidence(result.evidence)
         const sanitized = sanitizeTerminalDispatchPayload(stringifyWorkflowInvocation(result))
         setLatestGeneratedDraft(sanitized.text)
-        if (!draftDirtyRef.current) {
-          draftDirtyRef.current = false
+        if (!draftOwnershipRef.current.dirty) {
           setDraft(sanitized.text)
-          setRequiresRebindRecovery(false)
         }
         const diagnostics = workflowDiagnosticsToText(result)
         if (diagnostics) {
@@ -204,8 +228,7 @@ export function OpsxComposeRoute() {
         if (canceled) return
         setWorkflowEvidence(null)
         setLatestGeneratedDraft(null)
-        if (!draftDirtyRef.current) {
-          draftDirtyRef.current = false
+        if (!draftOwnershipRef.current.dirty) {
           setDraft(buildOpsxComposeFallbackPrompt(composeInput))
         }
         setDraftError(toErrorMessage(error))
@@ -221,7 +244,15 @@ export function OpsxComposeRoute() {
     return () => {
       canceled = true
     }
-  }, [composeInput, invocationMode, requestedInvocationMode, rootIdentityKey, composeRequestKey])
+  }, [
+    composeInput,
+    invocationMode,
+    requestedInvocationMode,
+    rootIdentityKey,
+    composeRequestKey,
+    retryPreparationNonce,
+    rootAction.status,
+  ])
 
   const actionLabel = composeInput ? OPSX_WORKFLOW_LABELS[composeInput.action] : 'Compose'
 
@@ -235,26 +266,34 @@ export function OpsxComposeRoute() {
     if (!workflowTargetCurrent || !isWorkflowTargetCurrent(workflowTarget, rootActionRef.current)) {
       throw new Error('Planning root changed while preparing this workflow. Refresh and retry.')
     }
-    if (requiresRebindRecovery) {
-      throw new Error(
-        'This edited prompt was prepared for another planning root. Confirm it for the current root or regenerate it before dispatch.'
-      )
-    }
+    assertComposeDraftDispatchable(draftOwnershipRef.current, currentRootIdentityRef.current)
     return draft
   }
 
   const confirmRebindPrompt = () => {
-    if (!workflowTarget || !workflowTargetCurrent) return
-    setRequiresRebindRecovery(false)
+    if (!workflowTarget || !workflowTargetCurrent || !currentRootIdentityRef.current) return
+    const confirmedOwnership: ComposeDraftOwnership = {
+      dirty: true,
+      root: currentRootIdentityRef.current,
+    }
+    draftOwnershipRef.current = confirmedOwnership
+    setDraftOwnership(confirmedOwnership)
     setDraftError(null)
   }
 
   const regenerateRebindPrompt = () => {
     if (!latestGeneratedDraft || !workflowTarget || !workflowTargetCurrent) return
-    draftDirtyRef.current = false
+    draftOwnershipRef.current = EMPTY_COMPOSE_DRAFT_OWNERSHIP
+    setDraftOwnership(EMPTY_COMPOSE_DRAFT_OWNERSHIP)
     setDraft(latestGeneratedDraft)
-    setRequiresRebindRecovery(false)
     setDraftError(null)
+  }
+
+  const retryPreparation = () => {
+    if (workflowTarget || !currentRootIdentityRef.current) return
+    setDraftError(null)
+    setLatestGeneratedDraft(null)
+    setRetryPreparationNonce((value) => value + 1)
   }
 
   return (
@@ -309,29 +348,43 @@ export function OpsxComposeRoute() {
           </div>
         )}
 
-        {requiresRebindRecovery && workflowTarget && workflowTargetCurrent && (
+        {draftRequiresRecovery && (
           <div className="border-primary/40 bg-primary/5 rounded-md border p-3 text-sm">
             <p className="font-medium">Planning root changed</p>
             <p className="text-muted-foreground mt-1">
-              Your edited prompt is preserved for inspection. Confirm it for the current planning
-              root or regenerate it before dispatching.
+              {workflowTarget && workflowTargetCurrent
+                ? 'Your edited prompt is preserved for inspection. Confirm it for the current planning root or regenerate it before dispatching.'
+                : 'Your edited prompt is preserved, but preparation for the current planning root did not complete. Retry before confirming or regenerating it.'}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={confirmRebindPrompt}
-                className="bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-xs font-medium"
+                disabled={!workflowTarget || !workflowTargetCurrent}
+                className="bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Use edited prompt for current root
               </button>
               <button
                 type="button"
                 onClick={regenerateRebindPrompt}
-                disabled={latestGeneratedDraft === null}
+                disabled={
+                  latestGeneratedDraft === null || !workflowTarget || !workflowTargetCurrent
+                }
                 className="border-border hover:bg-muted rounded-md border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Regenerate for current root
               </button>
+              {!workflowTarget && (
+                <button
+                  type="button"
+                  onClick={retryPreparation}
+                  disabled={isLoadingDraft}
+                  className="border-border hover:bg-muted rounded-md border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Retry preparation
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -341,7 +394,12 @@ export function OpsxComposeRoute() {
           <CodeEditor
             value={draft}
             onChange={(value) => {
-              draftDirtyRef.current = true
+              const nextOwnership = captureComposeDraftOwnership(
+                draftOwnershipRef.current,
+                currentRootIdentityRef.current
+              )
+              draftOwnershipRef.current = nextOwnership
+              setDraftOwnership(nextOwnership)
               setDraft(value)
             }}
             language="markdown"
@@ -357,14 +415,14 @@ export function OpsxComposeRoute() {
         <TerminalDispatchActions
           preparePayload={preparePayload}
           disabled={rootAction.disabled}
-          actionsDisabled={isLoadingDraft || !workflowTargetCurrent || requiresRebindRecovery}
+          actionsDisabled={isLoadingDraft || !workflowTargetCurrent || draftRequiresRecovery}
           requiredCwdTarget={workflowTarget ? 'planning-root' : undefined}
           expectedRootGeneration={workflowTarget?.generation}
           disabledReason={
             rootAction.message ??
             (!workflowTargetCurrent
               ? 'Planning root changed. Prepare this workflow again.'
-              : requiresRebindRecovery
+              : draftRequiresRecovery
                 ? 'Confirm the edited prompt for the current root or regenerate it before dispatch.'
                 : undefined)
           }

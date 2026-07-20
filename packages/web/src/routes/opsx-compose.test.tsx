@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-21 Asia/Shanghai):
  * 1. Verify the change workflow dialog preserves route action and invocation-mode inputs.
  * 2. Verify the shared terminal dispatch surface remains available.
  * 3. Verify server-owned planning-root and Store targets remain visible before dispatch.
  * 4. Verify failed Root Context prevents preparation and every terminal dispatch action.
- * 5. Verify same-generation refresh and Root replacement never overwrite operator edits.
+ * 5. Verify typed draft ownership, pending Root replacement, and public payload-owner recovery.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  */
+import type { RunWorkflowResultV2 } from '@openspecui/core'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OpsxComposeRoute } from './opsx-compose'
@@ -32,6 +33,7 @@ const WORKFLOW_TARGET = {
 
 const {
   addInputHistoryMock,
+  assertComposeDraftDispatchableMock,
   prepareWorkflowInvocationMock,
   rootActionMock,
   setConfigMock,
@@ -39,6 +41,7 @@ const {
   useLocationMock,
 } = vi.hoisted(() => ({
   addInputHistoryMock: vi.fn(),
+  assertComposeDraftDispatchableMock: vi.fn(),
   prepareWorkflowInvocationMock: vi.fn(),
   rootActionMock: vi.fn(),
   setConfigMock: vi.fn(),
@@ -153,13 +156,27 @@ vi.mock('@/lib/opsx-workflow-invocation', async (importOriginal) => {
   }
 })
 
+vi.mock('@/lib/opsx-compose-draft', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/opsx-compose-draft')>()
+  return {
+    ...actual,
+    assertComposeDraftDispatchable: assertComposeDraftDispatchableMock,
+  }
+})
+
 vi.mock('@tanstack/react-router', () => ({
   useLocation: () => useLocationMock(),
 }))
 
 describe('OpsxComposeRoute', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    const actual = await vi.importActual<typeof import('@/lib/opsx-compose-draft')>(
+      '@/lib/opsx-compose-draft'
+    )
     addInputHistoryMock.mockReset().mockResolvedValue(undefined)
+    assertComposeDraftDispatchableMock
+      .mockReset()
+      .mockImplementation(actual.assertComposeDraftDispatchable)
     prepareWorkflowInvocationMock.mockReset().mockResolvedValue({
       kind: 'agent-prompt',
       text: 'prepared prompt',
@@ -395,6 +412,194 @@ describe('OpsxComposeRoute', () => {
     await waitFor(() =>
       expect(addInputHistoryMock).toHaveBeenCalledWith('edited prompt for the operator')
     )
+  })
+
+  it('captures pending Root A draft ownership before B preparation resolves and proves the public Save owner guard', async () => {
+    const targetB = {
+      ...WORKFLOW_TARGET,
+      planningRoot: {
+        ...WORKFLOW_TARGET.planningRoot,
+        path: '/stores/next',
+        store_id: 'next',
+      },
+      storeId: 'next',
+      generation: 'planning-next-generation',
+      rootSelector: { store: 'next' },
+    }
+    const readyA = {
+      status: 'ready' as const,
+      disabled: false,
+      context: {
+        planningRoot: WORKFLOW_TARGET.planningRoot,
+        storeId: WORKFLOW_TARGET.storeId,
+        generation: WORKFLOW_TARGET.generation,
+        observedAt: 1,
+      },
+      observedAt: 1,
+      title: null,
+      message: null,
+      evidence: [],
+    }
+    const readyB = {
+      ...readyA,
+      context: {
+        planningRoot: targetB.planningRoot,
+        storeId: targetB.storeId,
+        generation: targetB.generation,
+        observedAt: 2,
+      },
+      observedAt: 2,
+    }
+    const deferred = <T,>() => {
+      let resolvePromise: ((value: T) => void) | null = null
+      const promise = new Promise<T>((resolve) => {
+        resolvePromise = resolve
+      })
+      return {
+        promise,
+        resolve(value: T) {
+          if (!resolvePromise) throw new Error('Deferred promise resolver is not ready.')
+          resolvePromise(value)
+        },
+      }
+    }
+    const prepareA = deferred<RunWorkflowResultV2>()
+    const prepareB = deferred<RunWorkflowResultV2>()
+    prepareWorkflowInvocationMock
+      .mockImplementationOnce(() => prepareA.promise)
+      .mockImplementationOnce(() => prepareB.promise)
+    rootActionMock.mockReturnValue(readyA)
+
+    const view = render(<OpsxComposeRoute />)
+    await waitFor(() => expect(prepareWorkflowInvocationMock).toHaveBeenCalledTimes(1))
+    fireEvent.change(screen.getByLabelText('Prompt'), {
+      target: { value: 'edited while Root A is pending' },
+    })
+
+    rootActionMock.mockReturnValue(readyB)
+    view.rerender(<OpsxComposeRoute />)
+    await waitFor(() => expect(prepareWorkflowInvocationMock).toHaveBeenCalledTimes(2))
+    expect(screen.getByLabelText('Prompt')).toHaveValue('edited while Root A is pending')
+
+    prepareA.resolve({
+      kind: 'agent-prompt',
+      text: 'stale Root A prompt',
+      format: 'markdown',
+      mode: { requestedMode: 'compose', actualMode: 'compose', fallbackReason: null },
+      target: WORKFLOW_TARGET,
+      evidence: null,
+    })
+    prepareB.resolve({
+      kind: 'agent-prompt',
+      text: 'prepared Root B prompt',
+      format: 'markdown',
+      mode: { requestedMode: 'compose', actualMode: 'compose', fallbackReason: null },
+      target: targetB,
+      evidence: null,
+    })
+
+    await waitFor(() => expect(screen.getByText('/stores/next')).toBeInTheDocument())
+    expect(screen.getByLabelText('Prompt')).toHaveValue('edited while Root A is pending')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Use edited prompt for current root' })).toBeVisible()
+
+    // Mutation red: retain the B-rendered presentation lock, but remove only the recovery assertion.
+    assertComposeDraftDispatchableMock.mockImplementation(() => undefined)
+    const mutatedSaveButton = screen.getByRole('button', { name: 'Save' })
+    if (!(mutatedSaveButton instanceof HTMLButtonElement) || !mutatedSaveButton.form) {
+      throw new Error('Expected Save to submit the public payload-owner form.')
+    }
+    fireEvent.submit(mutatedSaveButton.form)
+    await waitFor(() =>
+      expect(addInputHistoryMock).toHaveBeenCalledWith('edited while Root A is pending')
+    )
+
+    // Green correction: restore the exact assertion on the same mounted public Save event.
+    const actual = await vi.importActual<typeof import('@/lib/opsx-compose-draft')>(
+      '@/lib/opsx-compose-draft'
+    )
+    assertComposeDraftDispatchableMock.mockImplementation(actual.assertComposeDraftDispatchable)
+    const correctedSaveButton = screen.getByRole('button', { name: /^Save/ })
+    if (!(correctedSaveButton instanceof HTMLButtonElement) || !correctedSaveButton.form) {
+      throw new Error('Expected the corrected public Save form.')
+    }
+    fireEvent.submit(correctedSaveButton.form)
+    await waitFor(() =>
+      expect(screen.getByText(/prepared for another planning root/)).toBeInTheDocument()
+    )
+    expect(addInputHistoryMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a dirty draft visible and offers retry when Root B preparation fails', async () => {
+    const readyA = {
+      status: 'ready' as const,
+      disabled: false,
+      context: {
+        planningRoot: WORKFLOW_TARGET.planningRoot,
+        storeId: WORKFLOW_TARGET.storeId,
+        generation: WORKFLOW_TARGET.generation,
+        observedAt: 1,
+      },
+      observedAt: 1,
+      title: null,
+      message: null,
+      evidence: [],
+    }
+    const readyB = {
+      ...readyA,
+      context: {
+        ...readyA.context,
+        planningRoot: { ...readyA.context.planningRoot, path: '/stores/next', store_id: 'next' },
+        storeId: 'next',
+        generation: 'planning-next-generation',
+        observedAt: 2,
+      },
+      observedAt: 2,
+    }
+    const targetB = {
+      ...WORKFLOW_TARGET,
+      planningRoot: readyB.context.planningRoot,
+      storeId: readyB.context.storeId,
+      generation: readyB.context.generation,
+      observedAt: readyB.context.observedAt,
+      rootSelector: { store: 'next' },
+    }
+    prepareWorkflowInvocationMock
+      .mockResolvedValueOnce({
+        kind: 'agent-prompt',
+        text: 'prepared Root A prompt',
+        format: 'markdown',
+        mode: { requestedMode: 'compose', actualMode: 'compose', fallbackReason: null },
+        target: WORKFLOW_TARGET,
+        evidence: null,
+      })
+      .mockRejectedValueOnce(new Error('Root B preparation failed'))
+      .mockResolvedValueOnce({
+        kind: 'agent-prompt',
+        text: 'retried Root B prompt',
+        format: 'markdown',
+        mode: { requestedMode: 'compose', actualMode: 'compose', fallbackReason: null },
+        target: targetB,
+        evidence: null,
+      })
+    rootActionMock.mockReturnValue(readyA)
+
+    const view = render(<OpsxComposeRoute />)
+    await waitFor(() =>
+      expect(screen.getByLabelText('Prompt')).toHaveValue('prepared Root A prompt')
+    )
+    fireEvent.change(screen.getByLabelText('Prompt'), {
+      target: { value: 'keep this draft after failure' },
+    })
+    rootActionMock.mockReturnValue(readyB)
+    view.rerender(<OpsxComposeRoute />)
+    await waitFor(() => expect(screen.getByText('Root B preparation failed')).toBeInTheDocument())
+    expect(screen.getByLabelText('Prompt')).toHaveValue('keep this draft after failure')
+    expect(screen.getByRole('button', { name: 'Retry preparation' })).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry preparation' }))
+    await waitFor(() => expect(screen.getByText('/stores/next')).toBeInTheDocument())
+    expect(screen.getByLabelText('Prompt')).toHaveValue('keep this draft after failure')
   })
 
   it.each(['update', 'sync'] as const)(
