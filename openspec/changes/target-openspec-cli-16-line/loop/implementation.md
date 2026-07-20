@@ -4941,3 +4941,81 @@ focused test slice, but checkpoint `6.14` remains open at `64/131`. Stage 4 Terr
 component Playwright automation is the next separately authorized package. Full repository gates,
 SSG, push, merge, archive, release, and the owner's final single-page/multi-tab browser walkthrough
 remain out of scope for this entry.
+
+### Stage 4 authorization: Terra focused automation preparation (2026-07-21)
+
+Stages 1-3 have passed independent review at `680abac`, `0815a0b`, `be55bef`, and `022d3dc`. Terra
+is authorized only to execute the accepted focused unit contracts and the existing Web Storybook /
+Vitest Playwright component lane. This stage adds no workflow behavior and must not reopen any prior
+owner boundary.
+
+Required evidence:
+
+```text
+Focused unit files:
+  opsx-compose.test.tsx
+  opsx-new-route.test.tsx
+  opsx-propose.test.tsx
+  terminal-dispatch-actions.test.tsx
+  terminal-spawn-command-dialog.test.tsx
+
+Browser preparation:
+  pnpm --filter @openspecui/web test:browser:ci
+```
+
+The report must include exact counts, warnings, and any fixture/setup blocker. Existing Storybook
+component evidence is preparation only; it cannot claim OPSX route E2E, multi-tab behavior, visual
+correctness, or real backend acceptance. No fake route story, manual handler invocation, full repo
+gate, SSG build, push, merge, archive, release, or owner walkthrough is authorized. The owner still
+performs final single-page, multi-tab, visual, and end-to-end browser acceptance.
+
+### Stage 4 automation evidence: focused unit and component lanes (2026-07-21)
+
+Terra executed only the Stage 4 commands authorized above. No fixture repair, test-harness change, or
+production change was required.
+
+Focused unit evidence:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/routes/opsx-compose.test.tsx \
+  src/routes/opsx-new-route.test.tsx \
+  src/routes/opsx-propose.test.tsx \
+  src/components/terminal/terminal-dispatch-actions.test.tsx \
+  src/components/terminal/terminal-spawn-command-dialog.test.tsx
+
+Test Files  5 passed (5)
+Tests       31 passed (31)
+Duration    7.10s
+```
+
+Existing Web Storybook component evidence:
+
+```text
+pnpm --filter @openspecui/web test:browser:ci
+
+Test Files  4 passed (4)
+Tests       12 passed (12)
+Duration    4.49s
+```
+
+Both Vitest invocations printed the existing informational environment line
+`[dev-proxy] backend target => http://localhost:3100`; neither reported a warning, retry, fixture
+blocker, or failure. The browser command executed Vitest project `storybook`; it is component
+preparation evidence only and does not establish OPSX route E2E, multi-tab behavior, visual/layout
+correctness, or real-backend acceptance.
+
+Typed and diff evidence:
+
+```text
+pnpm --filter @openspecui/web typecheck
+  tsc --noEmit -> passed with no diagnostics
+
+git diff --check
+  passed with no output
+```
+
+The owner's final single-page, multi-tab, visual, and real-backend browser acceptance remains
+outstanding. Checkpoint `6.14` therefore remains open at `64/131`. Full repository gates, repository-
+wide browser shards, SSG, push, merge, archive, release, and any route-level acceptance claim remain
+outside this Stage 4 evidence entry.
