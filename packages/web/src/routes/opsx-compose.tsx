@@ -60,6 +60,8 @@ export function OpsxComposeRoute() {
   const [sendError, setSendError] = useState<string | null>(null)
   const [workflowTarget, setWorkflowTarget] = useState<WorkflowInvocationTargetV2 | null>(null)
   const [workflowEvidence, setWorkflowEvidence] = useState<WorkflowActionEvidenceV2 | null>(null)
+  const [requiresRebindRecovery, setRequiresRebindRecovery] = useState(false)
+  const [latestGeneratedDraft, setLatestGeneratedDraft] = useState<string | null>(null)
   const draftDirtyRef = useRef(false)
   const draftRequestKeyRef = useRef<string | null>(null)
   const planningRoot = rootAction.context?.planningRoot
@@ -125,6 +127,8 @@ export function OpsxComposeRoute() {
         setDraft('')
         setWorkflowTarget(null)
         setWorkflowEvidence(null)
+        setRequiresRebindRecovery(false)
+        setLatestGeneratedDraft(null)
         setDraftError('Invalid compose parameters.')
         setIsLoadingDraft(false)
         return
@@ -135,16 +139,22 @@ export function OpsxComposeRoute() {
         setDraft('')
         setWorkflowTarget(null)
         setWorkflowEvidence(null)
+        setRequiresRebindRecovery(false)
+        setLatestGeneratedDraft(null)
         setDraftError(null)
         setIsLoadingDraft(false)
         return
       }
 
+      const isRootRebind = workflowTarget !== null
+      const shouldRequireRecovery = isRootRebind && draftDirtyRef.current
       setSendError(null)
       setIsLoadingDraft(true)
       setDraftError(null)
       setWorkflowTarget(null)
       setWorkflowEvidence(null)
+      setRequiresRebindRecovery(shouldRequireRecovery)
+      setLatestGeneratedDraft(null)
 
       try {
         const result = await prepareWorkflowInvocation({
@@ -178,9 +188,11 @@ export function OpsxComposeRoute() {
         setWorkflowTarget(result.target)
         setWorkflowEvidence(result.evidence)
         const sanitized = sanitizeTerminalDispatchPayload(stringifyWorkflowInvocation(result))
+        setLatestGeneratedDraft(sanitized.text)
         if (!draftDirtyRef.current) {
           draftDirtyRef.current = false
           setDraft(sanitized.text)
+          setRequiresRebindRecovery(false)
         }
         const diagnostics = workflowDiagnosticsToText(result)
         if (diagnostics) {
@@ -191,6 +203,7 @@ export function OpsxComposeRoute() {
       } catch (error) {
         if (canceled) return
         setWorkflowEvidence(null)
+        setLatestGeneratedDraft(null)
         if (!draftDirtyRef.current) {
           draftDirtyRef.current = false
           setDraft(buildOpsxComposeFallbackPrompt(composeInput))
@@ -222,7 +235,26 @@ export function OpsxComposeRoute() {
     if (!workflowTargetCurrent || !isWorkflowTargetCurrent(workflowTarget, rootActionRef.current)) {
       throw new Error('Planning root changed while preparing this workflow. Refresh and retry.')
     }
+    if (requiresRebindRecovery) {
+      throw new Error(
+        'This edited prompt was prepared for another planning root. Confirm it for the current root or regenerate it before dispatch.'
+      )
+    }
     return draft
+  }
+
+  const confirmRebindPrompt = () => {
+    if (!workflowTarget || !workflowTargetCurrent) return
+    setRequiresRebindRecovery(false)
+    setDraftError(null)
+  }
+
+  const regenerateRebindPrompt = () => {
+    if (!latestGeneratedDraft || !workflowTarget || !workflowTargetCurrent) return
+    draftDirtyRef.current = false
+    setDraft(latestGeneratedDraft)
+    setRequiresRebindRecovery(false)
+    setDraftError(null)
   }
 
   return (
@@ -277,6 +309,33 @@ export function OpsxComposeRoute() {
           </div>
         )}
 
+        {requiresRebindRecovery && workflowTarget && workflowTargetCurrent && (
+          <div className="border-primary/40 bg-primary/5 rounded-md border p-3 text-sm">
+            <p className="font-medium">Planning root changed</p>
+            <p className="text-muted-foreground mt-1">
+              Your edited prompt is preserved for inspection. Confirm it for the current planning
+              root or regenerate it before dispatching.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={confirmRebindPrompt}
+                className="bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-xs font-medium"
+              >
+                Use edited prompt for current root
+              </button>
+              <button
+                type="button"
+                onClick={regenerateRebindPrompt}
+                disabled={latestGeneratedDraft === null}
+                className="border-border hover:bg-muted rounded-md border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Regenerate for current root
+              </button>
+            </div>
+          </div>
+        )}
+
         <label className="flex max-h-full min-h-0 min-w-0 flex-1 flex-col gap-1.5 overflow-hidden">
           <span className="text-sm font-medium">Prompt</span>
           <CodeEditor
@@ -298,14 +357,16 @@ export function OpsxComposeRoute() {
         <TerminalDispatchActions
           preparePayload={preparePayload}
           disabled={rootAction.disabled}
-          actionsDisabled={isLoadingDraft || !workflowTargetCurrent}
+          actionsDisabled={isLoadingDraft || !workflowTargetCurrent || requiresRebindRecovery}
           requiredCwdTarget={workflowTarget ? 'planning-root' : undefined}
           expectedRootGeneration={workflowTarget?.generation}
           disabledReason={
             rootAction.message ??
             (!workflowTargetCurrent
               ? 'Planning root changed. Prepare this workflow again.'
-              : undefined)
+              : requiresRebindRecovery
+                ? 'Confirm the edited prompt for the current root or regenerate it before dispatch.'
+                : undefined)
           }
           onDispatched={requestClose}
           onError={setSendError}

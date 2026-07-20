@@ -31,12 +31,14 @@ const WORKFLOW_TARGET = {
 }
 
 const {
+  addInputHistoryMock,
   prepareWorkflowInvocationMock,
   rootActionMock,
   setConfigMock,
   uiConfigMock,
   useLocationMock,
 } = vi.hoisted(() => ({
+  addInputHistoryMock: vi.fn(),
   prepareWorkflowInvocationMock: vi.fn(),
   rootActionMock: vi.fn(),
   setConfigMock: vi.fn(),
@@ -129,7 +131,7 @@ vi.mock('@/lib/use-terminal-cwd-target', () => ({
 vi.mock('@/lib/terminal-controller', () => ({
   terminalController: {
     writeToSession: vi.fn(),
-    addInputHistory: vi.fn().mockResolvedValue(undefined),
+    addInputHistory: addInputHistoryMock,
   },
 }))
 
@@ -157,6 +159,7 @@ vi.mock('@tanstack/react-router', () => ({
 
 describe('OpsxComposeRoute', () => {
   beforeEach(() => {
+    addInputHistoryMock.mockReset().mockResolvedValue(undefined)
     prepareWorkflowInvocationMock.mockReset().mockResolvedValue({
       kind: 'agent-prompt',
       text: 'prepared prompt',
@@ -310,6 +313,10 @@ describe('OpsxComposeRoute', () => {
     await waitFor(() => expect(screen.getByLabelText('Prompt')).toHaveValue('edited prompt'))
     expect(prepareWorkflowInvocationMock).toHaveBeenCalledTimes(1)
     expect(screen.getAllByText('/stores/shared').length).toBeGreaterThan(0)
+
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(addInputHistoryMock).toHaveBeenCalledWith('edited prompt'))
   })
 
   it('keeps an edited prompt while re-preparing the target after Root A to B', async () => {
@@ -378,6 +385,16 @@ describe('OpsxComposeRoute', () => {
     await waitFor(() => expect(screen.getByText('/stores/next')).toBeInTheDocument())
     expect(screen.getByLabelText('Prompt')).toHaveValue('edited prompt for the operator')
     expect(prepareWorkflowInvocationMock).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Create' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use edited prompt for current root' }))
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(addInputHistoryMock).toHaveBeenCalledWith('edited prompt for the operator')
+    )
   })
 
   it.each(['update', 'sync'] as const)(

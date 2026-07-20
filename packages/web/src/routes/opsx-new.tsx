@@ -4,6 +4,7 @@
  * 2. Dispatch creation through a dedicated terminal session.
  * 3. Lock preparation and dispatch until Root Context is ready.
  * 4. Preserve and verify the Server-owned planning-root target before dispatch.
+ * 5. Keep the public submit guard independent from the disabled-control projection.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  */
@@ -63,7 +64,8 @@ export function OpsxNewRoute() {
   const isFormValid = trimmedName.length > 0 && isNameValid
   const preparedTargetCurrent =
     !preparedCommand?.target || isWorkflowTargetCurrent(preparedCommand.target, rootAction)
-  const canSubmit = isFormValid && !rootAction.disabled && preparedTargetCurrent
+  const formSubmissionReady = isFormValid && !rootAction.disabled
+  const canSubmit = formSubmissionReady && preparedTargetCurrent
 
   const args = useMemo(
     () =>
@@ -105,7 +107,7 @@ export function OpsxNewRoute() {
       className="flex h-full min-h-0 min-w-0 flex-col"
       onSubmit={(event) => {
         event.preventDefault()
-        if (!canSubmit) return
+        if (!formSubmissionReady) return
 
         const submit = async () => {
           setSubmitError(null)

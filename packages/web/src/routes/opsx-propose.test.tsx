@@ -3,15 +3,27 @@
  * 1. Verify proposal terminal target selection and create-session dispatch.
  * 2. Verify Root Context locks all terminal dispatch actions before payload preparation.
  * 3. Verify prepared planning-root targets become stale across Root replacement.
+ * 4. Prove the public Create boundary reaches the shell owner only when the target guard is bypassed.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  */
+import type { TerminalShellProfile } from '@openspecui/core/terminal-invocation'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OpsxProposeRoute } from './opsx-propose'
 
+const TEST_SHELL = {
+  id: 'test:shell',
+  label: 'Test shell',
+  command: 'test-shell',
+  args: [],
+  source: 'builtin',
+  quoteStyle: 'posix',
+} satisfies TerminalShellProfile
+
 const {
+  createShellSessionMock,
   prepareWorkflowInvocationMock,
   requestCloseMock,
   rootActionMock,
@@ -19,7 +31,9 @@ const {
   writeToSessionMock,
   useTerminalContextMock,
   useTerminalInvocationConfigMock,
+  workflowTargetGuardMock,
 } = vi.hoisted(() => ({
+  createShellSessionMock: vi.fn(),
   prepareWorkflowInvocationMock: vi.fn(),
   requestCloseMock: vi.fn(),
   rootActionMock: vi.fn(),
@@ -27,6 +41,7 @@ const {
   writeToSessionMock: vi.fn(),
   useTerminalContextMock: vi.fn(),
   useTerminalInvocationConfigMock: vi.fn(),
+  workflowTargetGuardMock: vi.fn(),
 }))
 
 vi.mock('@/components/layout/pop-area', () => ({
@@ -79,7 +94,18 @@ vi.mock('@/components/terminal/terminal-spawn-command-dialog', () => ({
         <output>{String(presetValues?.prompt ?? '')}</output>
         <output data-testid="spawn-cwd-target">{initialCwdTarget ?? ''}</output>
         <output data-testid="spawn-root-generation">{expectedRootGeneration ?? ''}</output>
-        <button type="button" onClick={() => onCreated?.('term-created')}>
+        <button
+          type="button"
+          onClick={() => {
+            const sessionId = createShellSessionMock(TEST_SHELL, {
+              cwdTarget: initialCwdTarget ?? 'launch-project',
+              ...(expectedRootGeneration ? { expectedRootGeneration } : {}),
+              label: command?.label ?? 'unknown',
+              initialInput: `${String(presetValues?.prompt ?? '')}\n`,
+            })
+            if (sessionId) onCreated?.(sessionId)
+          }}
+        >
           Create terminal
         </button>
       </div>
@@ -100,7 +126,10 @@ vi.mock('@/lib/terminal-controller', () => ({
 }))
 
 vi.mock('@/lib/terminal-context', () => ({
-  useTerminalContext: () => useTerminalContextMock(),
+  useTerminalContext: () => ({
+    ...useTerminalContextMock(),
+    createShellSession: createShellSessionMock,
+  }),
 }))
 
 vi.mock('@/lib/use-terminal-invocation-config', () => ({
@@ -132,7 +161,11 @@ vi.mock('@/lib/opsx-workflow-invocation', async (importOriginal) => {
   return {
     ...actual,
     prepareWorkflowInvocation: prepareWorkflowInvocationMock,
-    stringifyWorkflowInvocation: vi.fn(() => 'prepared proposal prompt'),
+    isWorkflowTargetCurrent: (
+      target: Parameters<typeof actual.isWorkflowTargetCurrent>[0],
+      rootAction: Parameters<typeof actual.isWorkflowTargetCurrent>[1]
+    ) => workflowTargetGuardMock(target, rootAction),
+    stringifyWorkflowInvocation: vi.fn((result: { text: string }) => result.text),
     workflowDiagnosticsToText: vi.fn(() => null),
   }
 })
@@ -140,7 +173,10 @@ vi.mock('@/lib/opsx-workflow-invocation', async (importOriginal) => {
 describe('OpsxProposeRoute terminal target', () => {
   let queryClient: QueryClient
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    const actual = await vi.importActual<typeof import('@/lib/opsx-workflow-invocation')>(
+      '@/lib/opsx-workflow-invocation'
+    )
     queryClient = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
@@ -148,6 +184,7 @@ describe('OpsxProposeRoute terminal target', () => {
       },
     })
     requestCloseMock.mockReset()
+    createShellSessionMock.mockReset().mockReturnValue('term-created')
     prepareWorkflowInvocationMock.mockReset().mockResolvedValue({
       kind: 'agent-prompt',
       text: 'prepared proposal prompt',
@@ -166,6 +203,7 @@ describe('OpsxProposeRoute terminal target', () => {
       evidence: [],
     })
     setConfigMock.mockReset()
+    workflowTargetGuardMock.mockReset().mockImplementation(actual.isWorkflowTargetCurrent)
     writeToSessionMock.mockReset()
     useTerminalContextMock.mockReturnValue({
       sessions: [],
@@ -405,5 +443,102 @@ describe('OpsxProposeRoute terminal target', () => {
 
     expect(screen.getByRole('button', { name: /^Create$/i })).toBeDisabled()
     expect(writeToSessionMock).not.toHaveBeenCalled()
+  })
+
+  it('proves the public Create boundary rejects Root A after the exact guard is restored', async () => {
+    const target = {
+      launchProject: { path: '/launch' },
+      planningRoot: { path: '/planning-a', source: 'nearest', healthy: true, status: [] },
+      storeId: null,
+      observedAt: 1,
+      generation: 'planning-a-generation',
+      rootSelector: {},
+      references: [],
+      diagnostics: { root: [], doctor: [], context: [] },
+      rootEvidence: { doctor: null, context: null },
+    }
+    const readyA = {
+      status: 'ready' as const,
+      disabled: false,
+      context: {
+        planningRoot: target.planningRoot,
+        storeId: null,
+        observedAt: target.observedAt,
+        generation: target.generation,
+      },
+      observedAt: target.observedAt,
+      title: null,
+      message: null,
+      evidence: [],
+    }
+    rootActionMock.mockReturnValue(readyA)
+    prepareWorkflowInvocationMock.mockResolvedValue({
+      kind: 'agent-prompt',
+      text: 'prepared proposal prompt from Root A',
+      format: 'markdown',
+      mode: { requestedMode: 'compose', actualMode: 'compose', fallbackReason: null },
+      target,
+      evidence: null,
+    })
+
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <OpsxProposeRoute />
+      </QueryClientProvider>
+    )
+    fireEvent.change(
+      screen.getByPlaceholderText('e.g. add workspace kanban support for active changes'),
+      {
+        target: { value: 'idea from Root A' },
+      }
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare' }))
+    await waitFor(() => expect(screen.getByText('/planning-a')).toBeInTheDocument())
+
+    rootActionMock.mockReturnValue({
+      ...readyA,
+      context: {
+        planningRoot: { ...target.planningRoot, path: '/planning-b' },
+        storeId: null,
+        observedAt: 2,
+        generation: 'planning-b-generation',
+      },
+      observedAt: 2,
+    })
+
+    // Counterexample mutation: bypass only the target freshness guard at the public dispatch.
+    workflowTargetGuardMock.mockReturnValue(true)
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <OpsxProposeRoute />
+      </QueryClientProvider>
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^Create$/i }))
+    await waitFor(() =>
+      expect(screen.getByRole('dialog', { name: 'Create terminal' })).toBeTruthy()
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Create terminal' }))
+    expect(createShellSessionMock).toHaveBeenCalledWith(
+      TEST_SHELL,
+      expect.objectContaining({
+        cwdTarget: 'planning-root',
+        expectedRootGeneration: 'planning-a-generation',
+        initialInput: 'prepared proposal prompt from Root A\n',
+      })
+    )
+
+    // Green evidence: restore the production helper without rerendering. The same public action
+    // must now fail in preparePayload before opening another shell owner.
+    const actual = await vi.importActual<typeof import('@/lib/opsx-workflow-invocation')>(
+      '@/lib/opsx-workflow-invocation'
+    )
+    workflowTargetGuardMock.mockImplementation(actual.isWorkflowTargetCurrent)
+    fireEvent.click(screen.getByRole('button', { name: /^Create$/i }))
+    await waitFor(() =>
+      expect(
+        screen.getByText('Planning root changed before dispatch. Prepare this workflow again.')
+      ).toBeInTheDocument()
+    )
+    expect(createShellSessionMock).toHaveBeenCalledTimes(1)
   })
 })
