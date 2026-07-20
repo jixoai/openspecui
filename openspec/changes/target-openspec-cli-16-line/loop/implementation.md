@@ -4286,3 +4286,22 @@ pnpm --filter @openspecui/server test
 
 The correction is not yet a delivery claim: full repository gates must be rerun on the new commit,
 then the new remote Fast/Browser checks must pass on that exact SHA. Final browser E2E remains owner-only.
+
+### 6.13 Exact-head Remote CI Evidence (2026-07-20)
+
+The fixture correction was committed as `adf83ee2eca70c04373fa36ca8f4a65cc737ae1c` and pushed to
+PR #207. GitHub Actions run `29719845810` completed successfully for that exact head:
+
+```text
+Changeset Gate                         pass
+CI Scope                               pass
+Fast Gate                              pass (4m37s)
+Browser Gate (@openspecui/web)        pass (1m06s)
+Browser Gate (xterm-input-panel)      pass (2m37s)
+Browser Gate (aggregate)              pass
+```
+
+Terra's independent read-only audit found no P1/P2 issue. The branch and PR remain `OPEN/CLEAN`,
+with `6.13` still open at `63/131`; `6.14+`, merge, archive, and release remain out of scope. The
+automated Browser Gates are component/fixture evidence only. The owner still performs final
+product-level browser walkthrough and multi-tab acceptance.
