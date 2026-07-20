@@ -4,7 +4,7 @@
  * 2. Bind every invocation to the CLI-selected Root Context and Store selector.
  * 3. Preserve command-specific Status/Instructions evidence through hooks and clients.
  * 4. Generate Agent/CLI payloads without reconstructing planning paths.
- * 5. Return observed root generation and target evidence for stale-dispatch guards.
+ * 5. Return Manager-owned root generation and target evidence for stale-dispatch guards.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  */
@@ -238,7 +238,7 @@ function buildArchivePrompt(
 export interface WorkflowInvocationServiceOptions {
   getRootContext: () => RootContext
   /** Opaque manager-owned generation used to reject stale direct dispatch. */
-  rootGeneration?: string
+  rootGeneration: string
   hookRuntime: HookRuntime
   contracts: Pick<
     OpenSpecCliContractExecutor,
@@ -371,8 +371,7 @@ export class WorkflowInvocationService {
       planningRoot,
       storeId: rootContext.storeId,
       observedAt: rootContext.observedAt,
-      generation:
-        this.options.rootGeneration ?? rootContext.generation ?? String(rootContext.observedAt),
+      generation: this.options.rootGeneration,
       rootSelector,
       references: rootContext.references,
       diagnostics: rootContext.diagnostics,

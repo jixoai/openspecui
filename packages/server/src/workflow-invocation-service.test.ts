@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
  * 1. Lock workflow mode resolution and generated invocation payloads.
- * 2. Prove Root Context and explicit Store selectors survive every action boundary.
+ * 2. Prove Root Context, Manager generation, and explicit Store selectors survive every action boundary.
  * 3. Preserve typed Status/Instructions paths, References, and process diagnostics.
  * 4. Prove project hooks receive and retain the same target/evidence contract.
  * 5. Lock the breaking workflow hook context to protocol v2.
@@ -186,6 +186,7 @@ function createContracts(): WorkflowContracts {
 function createService(
   options: {
     root?: RootContext
+    rootGeneration?: string
     hooks?: OpenSpecUIHooks
     contracts?: WorkflowContracts
   } = {}
@@ -196,6 +197,7 @@ function createService(
     contracts,
     service: new WorkflowInvocationService({
       getRootContext: () => root,
+      rootGeneration: options.rootGeneration ?? 'test-generation',
       hookRuntime: createRuntime(options.hooks),
       contracts,
     }),
@@ -203,6 +205,14 @@ function createService(
 }
 
 describe('WorkflowInvocationService', () => {
+  it('uses the manager-owned generation rather than Root Context observation time', async () => {
+    const { service } = createService({ rootGeneration: 'manager-generation' })
+
+    await expect(
+      service.runWorkflow({ action: 'propose', text: 'add auth' }, 'compose')
+    ).resolves.toMatchObject({ target: { generation: 'manager-generation', observedAt: 1 } })
+  })
+
   it('builds root-explicit propose compose and command payloads', async () => {
     const { service } = createService()
 

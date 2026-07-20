@@ -37,15 +37,14 @@ export function workflowDiagnosticsToText(result: RunWorkflowResultV2): string |
 /** Compare one prepared target with the current ready Root Context owner. */
 export function isWorkflowTargetCurrent(
   target: WorkflowInvocationTargetV2,
-  rootAction: Pick<RootActionState, 'status' | 'context' | 'observedAt'>
+  rootAction: Pick<RootActionState, 'status'> & {
+    context: Pick<RootContext, 'planningRoot' | 'storeId' | 'generation'> | null
+  }
 ): boolean {
   const context = rootAction.context
   const planningRoot = context?.planningRoot
   if (rootAction.status !== 'ready' || !context || !planningRoot) return false
-  if (target.observedAt !== rootAction.observedAt || target.observedAt !== context.observedAt) {
-    return false
-  }
-  if (context.generation !== undefined && target.generation !== context.generation) return false
+  if (target.generation !== context.generation) return false
   return (
     target.planningRoot.path === planningRoot.path &&
     target.planningRoot.source === planningRoot.source &&

@@ -3,6 +3,7 @@
  * 1. Prepare and dispatch change-scoped OPSX workflow prompts or commands.
  * 2. Preserve invocation diagnostics and action identity in the compose dialog.
  * 3. Verify the Server-owned planning-root target before terminal dispatch.
+ * 4. Preserve explicit operator edits while re-preparing target evidence after Root replacement.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  */
@@ -59,6 +60,39 @@ export function OpsxComposeRoute() {
   const [sendError, setSendError] = useState<string | null>(null)
   const [workflowTarget, setWorkflowTarget] = useState<WorkflowInvocationTargetV2 | null>(null)
   const [workflowEvidence, setWorkflowEvidence] = useState<WorkflowActionEvidenceV2 | null>(null)
+  const draftDirtyRef = useRef(false)
+  const draftRequestKeyRef = useRef<string | null>(null)
+  const planningRoot = rootAction.context?.planningRoot
+  const rootIdentityKey = useMemo(
+    () =>
+      JSON.stringify([
+        planningRoot?.path ?? null,
+        planningRoot?.source ?? null,
+        planningRoot?.store_id ?? null,
+        rootAction.context?.storeId ?? null,
+        rootAction.context?.generation ?? null,
+      ]),
+    [
+      planningRoot?.path,
+      planningRoot?.source,
+      planningRoot?.store_id,
+      rootAction.context?.generation,
+      rootAction.context?.storeId,
+    ]
+  )
+  const composeRequestKey = useMemo(
+    () =>
+      composeInput
+        ? JSON.stringify([
+            composeInput.action,
+            composeInput.changeId,
+            composeInput.artifactId ?? null,
+            requestedInvocationMode,
+            invocationMode?.actualMode ?? null,
+          ])
+        : null,
+    [composeInput, invocationMode?.actualMode, requestedInvocationMode]
+  )
   const workflowTargetCurrent =
     !rootAction.context?.planningRoot ||
     (workflowTarget !== null && isWorkflowTargetCurrent(workflowTarget, rootAction))
@@ -80,8 +114,14 @@ export function OpsxComposeRoute() {
 
   useEffect(() => {
     let canceled = false
+    if (draftRequestKeyRef.current !== composeRequestKey) {
+      draftDirtyRef.current = false
+    }
+    draftRequestKeyRef.current = composeRequestKey
+
     const loadPrompt = async () => {
       if (!composeInput) {
+        draftDirtyRef.current = false
         setDraft('')
         setWorkflowTarget(null)
         setWorkflowEvidence(null)
@@ -90,7 +130,8 @@ export function OpsxComposeRoute() {
         return
       }
 
-      if (rootAction.disabled) {
+      if (rootActionRef.current.disabled) {
+        draftDirtyRef.current = false
         setDraft('')
         setWorkflowTarget(null)
         setWorkflowEvidence(null)
@@ -137,7 +178,10 @@ export function OpsxComposeRoute() {
         setWorkflowTarget(result.target)
         setWorkflowEvidence(result.evidence)
         const sanitized = sanitizeTerminalDispatchPayload(stringifyWorkflowInvocation(result))
-        setDraft(sanitized.text)
+        if (!draftDirtyRef.current) {
+          draftDirtyRef.current = false
+          setDraft(sanitized.text)
+        }
         const diagnostics = workflowDiagnosticsToText(result)
         if (diagnostics) {
           setDraftError(diagnostics)
@@ -147,7 +191,10 @@ export function OpsxComposeRoute() {
       } catch (error) {
         if (canceled) return
         setWorkflowEvidence(null)
-        setDraft(buildOpsxComposeFallbackPrompt(composeInput))
+        if (!draftDirtyRef.current) {
+          draftDirtyRef.current = false
+          setDraft(buildOpsxComposeFallbackPrompt(composeInput))
+        }
         setDraftError(toErrorMessage(error))
       } finally {
         if (!canceled) {
@@ -161,13 +208,7 @@ export function OpsxComposeRoute() {
     return () => {
       canceled = true
     }
-  }, [
-    composeInput,
-    invocationMode,
-    requestedInvocationMode,
-    rootAction.disabled,
-    rootAction.observedAt,
-  ])
+  }, [composeInput, invocationMode, requestedInvocationMode, rootIdentityKey, composeRequestKey])
 
   const actionLabel = composeInput ? OPSX_WORKFLOW_LABELS[composeInput.action] : 'Compose'
 
@@ -240,7 +281,10 @@ export function OpsxComposeRoute() {
           <span className="text-sm font-medium">Prompt</span>
           <CodeEditor
             value={draft}
-            onChange={setDraft}
+            onChange={(value) => {
+              draftDirtyRef.current = true
+              setDraft(value)
+            }}
             language="markdown"
             lineNumbers={false}
             lineWrapping

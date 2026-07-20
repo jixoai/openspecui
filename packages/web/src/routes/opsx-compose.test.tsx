@@ -4,10 +4,11 @@
  * 2. Verify the shared terminal dispatch surface remains available.
  * 3. Verify server-owned planning-root and Store targets remain visible before dispatch.
  * 4. Verify failed Root Context prevents preparation and every terminal dispatch action.
+ * 5. Verify same-generation refresh and Root replacement never overwrite operator edits.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  */
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OpsxComposeRoute } from './opsx-compose'
 
@@ -53,8 +54,12 @@ vi.mock('@/components/layout/pop-area', () => ({
 }))
 
 vi.mock('@/components/code-editor', () => ({
-  CodeEditor: ({ value }: { value: string }) => (
-    <textarea aria-label="Prompt" value={value} readOnly />
+  CodeEditor: ({ value, onChange }: { value: string; onChange?: (value: string) => void }) => (
+    <textarea
+      aria-label="Prompt"
+      value={value}
+      onChange={(event) => onChange?.(event.target.value)}
+    />
   ),
 }))
 
@@ -136,15 +141,15 @@ vi.mock('@/lib/use-root-action-state', () => ({
   useRootActionState: () => rootActionMock(),
 }))
 
-vi.mock('@/lib/opsx-workflow-invocation', () => ({
-  prepareWorkflowInvocation: prepareWorkflowInvocationMock,
-  isWorkflowTargetCurrent: (
-    target: { planningRoot: { path: string } },
-    rootAction: { context: { planningRoot?: { path: string } } | null }
-  ) => rootAction.context?.planningRoot?.path === target.planningRoot.path,
-  stringifyWorkflowInvocation: vi.fn((result: { text: string }) => result.text),
-  workflowDiagnosticsToText: vi.fn(() => null),
-}))
+vi.mock('@/lib/opsx-workflow-invocation', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/opsx-workflow-invocation')>()
+  return {
+    ...actual,
+    prepareWorkflowInvocation: prepareWorkflowInvocationMock,
+    stringifyWorkflowInvocation: vi.fn((result: { text: string }) => result.text),
+    workflowDiagnosticsToText: vi.fn(() => null),
+  }
+})
 
 vi.mock('@tanstack/react-router', () => ({
   useLocation: () => useLocationMock(),
@@ -268,6 +273,111 @@ describe('OpsxComposeRoute', () => {
     expect(screen.getByRole('button', { name: 'Copy' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Create' })).toBeDisabled()
+  })
+
+  it('preserves a dirty prompt across same-generation Root Context refresh', async () => {
+    const readyA = {
+      status: 'ready' as const,
+      disabled: false,
+      context: {
+        planningRoot: WORKFLOW_TARGET.planningRoot,
+        storeId: WORKFLOW_TARGET.storeId,
+        generation: WORKFLOW_TARGET.generation,
+        observedAt: 1,
+      },
+      observedAt: 1,
+      title: null,
+      message: null,
+      evidence: [],
+    }
+    rootActionMock.mockReturnValue(readyA)
+
+    const view = render(<OpsxComposeRoute />)
+    await waitFor(() => expect(screen.getByLabelText('Prompt')).toHaveValue('prepared prompt'))
+
+    fireEvent.change(screen.getByLabelText('Prompt'), {
+      target: { value: 'edited prompt' },
+    })
+    expect(screen.getByLabelText('Prompt')).toHaveValue('edited prompt')
+
+    rootActionMock.mockReturnValue({
+      ...readyA,
+      context: { ...readyA.context, observedAt: 2 },
+      observedAt: 2,
+    })
+    view.rerender(<OpsxComposeRoute />)
+
+    await waitFor(() => expect(screen.getByLabelText('Prompt')).toHaveValue('edited prompt'))
+    expect(prepareWorkflowInvocationMock).toHaveBeenCalledTimes(1)
+    expect(screen.getAllByText('/stores/shared').length).toBeGreaterThan(0)
+  })
+
+  it('keeps an edited prompt while re-preparing the target after Root A to B', async () => {
+    const targetB = {
+      ...WORKFLOW_TARGET,
+      planningRoot: {
+        ...WORKFLOW_TARGET.planningRoot,
+        path: '/stores/next',
+        store_id: 'next',
+      },
+      storeId: 'next',
+      generation: 'planning-next-generation',
+      rootSelector: { store: 'next' },
+    }
+    const readyA = {
+      status: 'ready' as const,
+      disabled: false,
+      context: {
+        planningRoot: WORKFLOW_TARGET.planningRoot,
+        storeId: WORKFLOW_TARGET.storeId,
+        generation: WORKFLOW_TARGET.generation,
+        observedAt: 1,
+      },
+      observedAt: 1,
+      title: null,
+      message: null,
+      evidence: [],
+    }
+    prepareWorkflowInvocationMock
+      .mockResolvedValueOnce({
+        kind: 'agent-prompt',
+        text: 'prepared prompt A',
+        format: 'markdown',
+        mode: { requestedMode: 'compose', actualMode: 'compose', fallbackReason: null },
+        target: WORKFLOW_TARGET,
+        evidence: null,
+      })
+      .mockResolvedValueOnce({
+        kind: 'agent-prompt',
+        text: 'prepared prompt B',
+        format: 'markdown',
+        mode: { requestedMode: 'compose', actualMode: 'compose', fallbackReason: null },
+        target: targetB,
+        evidence: null,
+      })
+    rootActionMock.mockReturnValue(readyA)
+
+    const view = render(<OpsxComposeRoute />)
+    await waitFor(() => expect(screen.getByLabelText('Prompt')).toHaveValue('prepared prompt A'))
+    fireEvent.change(screen.getByLabelText('Prompt'), {
+      target: { value: 'edited prompt for the operator' },
+    })
+
+    rootActionMock.mockReturnValue({
+      ...readyA,
+      context: {
+        planningRoot: targetB.planningRoot,
+        storeId: targetB.storeId,
+        generation: targetB.generation,
+        observedAt: 2,
+      },
+      observedAt: 2,
+    })
+    view.rerender(<OpsxComposeRoute />)
+
+    await waitFor(() => expect(screen.getByText('/stores/next')).toBeInTheDocument())
+    expect(screen.getByLabelText('Prompt')).toHaveValue('edited prompt for the operator')
+    expect(prepareWorkflowInvocationMock).toHaveBeenCalledTimes(2)
   })
 
   it.each(['update', 'sync'] as const)(

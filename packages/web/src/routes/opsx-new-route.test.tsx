@@ -28,13 +28,13 @@ vi.mock('@/lib/nav-controller', () => ({
   navController: { getAreaForPath: vi.fn(() => 'main') },
 }))
 
-vi.mock('@/lib/opsx-workflow-invocation', () => ({
-  prepareWorkflowInvocation: prepareWorkflowInvocationMock,
-  isWorkflowTargetCurrent: (
-    target: { planningRoot: { path: string } },
-    rootAction: { context: { planningRoot?: { path: string } } | null; observedAt: number }
-  ) => rootAction.context?.planningRoot?.path === target.planningRoot.path,
-}))
+vi.mock('@/lib/opsx-workflow-invocation', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/opsx-workflow-invocation')>()
+  return {
+    ...actual,
+    prepareWorkflowInvocation: prepareWorkflowInvocationMock,
+  }
+})
 
 vi.mock('@/lib/terminal-context', () => ({
   useTerminalContext: () => ({ createDedicatedSession: createDedicatedSessionMock }),
@@ -85,7 +85,7 @@ describe('OpsxNewRoute', () => {
     expect(createDedicatedSessionMock).not.toHaveBeenCalled()
   })
 
-  it('renders the prepared target before dispatch and locks an A command after Root B', async () => {
+  it('locks an A command after same-path Root B replaces its generation', async () => {
     const target = {
       launchProject: { path: '/launch' },
       planningRoot: { path: '/planning-a', source: 'nearest', healthy: true, status: [] },
@@ -133,7 +133,7 @@ describe('OpsxNewRoute', () => {
     rootActionMock.mockReturnValue({
       ...readyA,
       context: {
-        planningRoot: { ...target.planningRoot, path: '/planning-b' },
+        planningRoot: target.planningRoot,
         storeId: null,
         observedAt: 2,
         generation: 'planning-b-generation',

@@ -127,15 +127,15 @@ vi.mock('@/lib/trpc', () => ({
   },
 }))
 
-vi.mock('@/lib/opsx-workflow-invocation', () => ({
-  prepareWorkflowInvocation: prepareWorkflowInvocationMock,
-  isWorkflowTargetCurrent: (
-    target: { planningRoot: { path: string } },
-    rootAction: { context: { planningRoot?: { path: string } } | null }
-  ) => rootAction.context?.planningRoot?.path === target.planningRoot.path,
-  stringifyWorkflowInvocation: vi.fn(() => 'prepared proposal prompt'),
-  workflowDiagnosticsToText: vi.fn(() => null),
-}))
+vi.mock('@/lib/opsx-workflow-invocation', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/opsx-workflow-invocation')>()
+  return {
+    ...actual,
+    prepareWorkflowInvocation: prepareWorkflowInvocationMock,
+    stringifyWorkflowInvocation: vi.fn(() => 'prepared proposal prompt'),
+    workflowDiagnosticsToText: vi.fn(() => null),
+  }
+})
 
 describe('OpsxProposeRoute terminal target', () => {
   let queryClient: QueryClient
@@ -241,7 +241,11 @@ describe('OpsxProposeRoute terminal target', () => {
     rootActionMock.mockReturnValue({
       status: 'ready',
       disabled: false,
-      context: { planningRoot: target.planningRoot },
+      context: {
+        planningRoot: target.planningRoot,
+        storeId: target.storeId,
+        generation: target.generation,
+      },
       observedAt: 1,
       title: null,
       message: null,

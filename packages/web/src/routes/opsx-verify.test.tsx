@@ -53,14 +53,14 @@ vi.mock('@/lib/use-cli-runner', () => ({
   }),
 }))
 
-vi.mock('@/lib/opsx-workflow-invocation', () => ({
-  prepareWorkflowInvocation: prepareWorkflowInvocationMock,
-  isWorkflowTargetCurrent: (
-    target: { planningRoot: { path: string } },
-    rootAction: { context: { planningRoot?: { path: string } } | null }
-  ) => rootAction.context?.planningRoot?.path === target.planningRoot.path,
-  workflowDiagnosticsToText: workflowDiagnosticsMock,
-}))
+vi.mock('@/lib/opsx-workflow-invocation', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/opsx-workflow-invocation')>()
+  return {
+    ...actual,
+    prepareWorkflowInvocation: prepareWorkflowInvocationMock,
+    workflowDiagnosticsToText: workflowDiagnosticsMock,
+  }
+})
 
 vi.mock('@/lib/use-root-action-state', () => ({
   useRootActionState: () => rootActionMock(),
