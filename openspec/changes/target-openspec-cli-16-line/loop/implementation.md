@@ -4643,3 +4643,25 @@ The current short `GOAL.md` authorizes only Stage 1. After its focused commit is
 accepted, the main agent will replace `GOAL.md` with the short Stage 2 New Goal, then Stage 3 Propose,
 then Stage 4 Terra verification. This intentionally avoids making workers parse an accumulated audit
 archive as a construction plan.
+
+### Stage 1 independent review of `0cae34d` (2026-07-21)
+
+The Compose-specific lifecycle work is directionally correct: a deferred A preparation can be retired,
+the first dirty edit records A's typed Root identity/generation, B preparation preserves the text, a
+same-generation observation does not invalidate it, and B preparation failure exposes an explicit
+retry. The focused worker lanes passed at `2 files / 13 tests`, plus Web typecheck, changed-file format,
+and `git diff --check`.
+
+Stage 1 is not yet accepted. To make the route-level mutation reachable, `0cae34d` changed the shared
+`TerminalDispatchActions.resolvePayload` hard check from `disabled || actionsDisabled` to `disabled`
+only and turned Save into a form. That makes every caller's `actionsDisabled` loading/stale lock merely
+visual, including Propose, and is broader behavior than the Compose owner contract. The exact red test
+must not weaken the production lock it is trying to distinguish.
+
+Required correction: restore the shared `interactionDisabled` payload check and preserve the prior
+TerminalDispatchActions behavior. In the checked Compose test, render the real B-disabled projection,
+adversarially enable the already-rendered Save control only in the DOM, then mutate only the Compose
+`assertComposeDraftDispatchable` owner assertion. The red phase must reach history with A-era text; the
+green phase must reject the same public event before history. Keep the pending A -> B typed ownership
+and retry behavior. Do not run full repository gates or start Stage 2 until this focused correction is
+independently accepted.
