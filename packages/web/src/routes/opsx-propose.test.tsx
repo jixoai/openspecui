@@ -487,5 +487,4 @@ describe('OpsxProposeRoute terminal target', () => {
     expect(screen.getByRole('button', { name: /^Create$/i })).toBeDisabled()
     expect(writeToSessionMock).not.toHaveBeenCalled()
   })
-
 })

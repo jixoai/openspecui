@@ -4865,3 +4865,79 @@ Stage 2 is independently accepted. Checkpoint `6.14` remains open at `64/131`; P
 Dialog-to-`createShellSession` chain is the only next coding stage. No full repository gates,
 Playwright/browser fixtures, SSG, push, merge, archive, release, or owner visual acceptance is
 authorized before Stage 3 and the later focused automation package converge.
+
+### Stage 3 authorization: OPSX Propose real Dialog-to-shell owner chain (2026-07-21)
+
+The owner has separated the remaining Propose evidence from the already accepted Compose and New
+stages. The production boundary for this stage is the existing `createShellSession` call inside
+`TerminalSpawnCommandDialog.handleCreate`, reached through the real route and dispatch component:
+
+```text
+OpsxProposeRoute
+  -> TerminalDispatchActions Create
+  -> TerminalSpawnCommandDialog
+  -> handleCreate
+  -> createShellSession
+```
+
+The prior route test is not valid owner evidence because it mocks `TerminalSpawnCommandDialog` and
+manually invokes `createShellSessionMock` from the mock button. It also overrides one shared
+`isWorkflowTargetCurrent` helper used by both the disabled projection and dispatch guard. Those
+shortcuts are explicitly retired for this stage.
+
+The worker Goal now requires:
+
+- remove the Dialog module mock and mount the real Dialog, command form, cwd controls, and renderer;
+- use the real freshness helper and keep Root A -> B disabled behavior as characterization only;
+- prepare Root A, trigger the real route Create action, inspect the real Dialog prompt/planning path,
+  click the real Dialog Create button, and assert the external shell-session boundary receives the
+  exact shell, planning cwd, opaque Root A generation, label, and rendered initial input;
+- prove one precise mutation: replacing only the real `createShellSession(...)` owner call with a
+  no-op must make that same route-level test fail, then restore the call and rerun green.
+
+This stage is expected to be a focused test change. No shared dispatch contract, New/Compose logic,
+freshness abstraction, full gate, browser fixture, SSG build, push, merge, archive, release, or owner
+visual acceptance is authorized. The checkpoint remains open at `64/131`; Stage 4 Terra automation
+starts only after independent review accepts this real owner evidence.
+
+### Stage 3 acceptance evidence: Propose shell owner chain (`be55bef`, 2026-07-21)
+
+Sol delivered the focused test-only slice in `be55bef` (`test: exercise propose shell owner chain`).
+Production code was unchanged. The route test now mounts the real
+`TerminalSpawnCommandDialog`, uses the real `isWorkflowTargetCurrent` implementation, and reaches the
+external shell boundary through the actual owner chain:
+
+```text
+OpsxProposeRoute
+  -> TerminalDispatchActions Create
+  -> TerminalSpawnCommandDialog
+  -> handleCreate
+  -> createShellSession
+```
+
+Green evidence:
+
+- `pnpm --filter @openspecui/web exec vitest run --project unit src/routes/opsx-propose.test.tsx --maxWorkers=1` -> 6/6 passed.
+- `pnpm --filter @openspecui/web typecheck` -> passed.
+- `git diff --check` -> passed.
+- The route-level create assertion observed the prepared prompt, `/planning-a`, `cwdTarget: planning-root`,
+  `expectedRootGeneration: planning-a-generation`, `label: Claude`, the exact rendered command plus
+  trailing newline, and the normal close callback.
+- Root A -> Root B is retained as presentation/dispatch-lock characterization; it does not claim a
+  cross-subscription causal guarantee.
+
+Mutation-resistance evidence:
+
+```text
+At the same fixed point, replacing only the production owner call
+createShellSession(...) inside TerminalSpawnCommandDialog.handleCreate with
+const sessionId = null caused the route-level create test to fail:
+  expected createShellSessionMock to be called 1 time, but it was called 0 times.
+Restoring that exact owner call made the focused suite pass 6/6 again.
+```
+
+This is direct owner evidence, not a manually invoked downstream mock. Stage 3 is accepted as a
+focused test slice, but checkpoint `6.14` remains open at `64/131`. Stage 4 Terra focused Vitest/basic
+component Playwright automation is the next separately authorized package. Full repository gates,
+SSG, push, merge, archive, release, and the owner's final single-page/multi-tab browser walkthrough
+remain out of scope for this entry.
