@@ -4408,3 +4408,211 @@ and spawn cwd evidence contained only Launch, A, and B.
 These are focused preparation evidence, not final browser acceptance. The owner must still perform
 the direct same-origin multi-tab walkthrough; W2 Project Binding settlement and W3 reactive-error
 propagation remain independent follow-up Changes.
+
+### 6.14 Independent review boundary for `91719b0` (2026-07-20)
+
+Exact-head focused Server/Core/Web tests and package typechecks pass on `91719b0`, including the
+Store-selector New preview/dispatch case and Server/PTY generation guards. The candidate is not
+accepted yet:
+
+- The worktree still contains untracked `frontend.GOAL.md` files at repository root and inside this
+  Change. They are worker scratch material, not Change authority, and must be removed before
+  delivery.
+- New, Propose, and Verify route tests replace `isWorkflowTargetCurrent` with path-only mocks and
+  rely in part on disabled-control assertions. That is weaker than the Change's required
+  mutation-resistance proof: a real Root A -> Root B emission must reach the public dispatch owner,
+  and removing only the exact guard must make the wrong dispatch/runner reachable.
+- Propose's new fixture initially omitted `observedAt`/`generation` from its Root Action context;
+  the correction must use the real target identity fields so the test cannot pass only because of a
+  path-only mock.
+
+Until this focused correction is committed and reviewed, `6.14` remains open at `64/131`. The
+Server/PTY red-green evidence is transport evidence, not a substitute for the route boundary.
+Final product browser walkthrough and multi-tab acceptance remain owner-only.
+
+### 6.14 Correction `83c7151` review status (2026-07-20)
+
+The correction makes the generation contract authoritative: `observedAt` no longer invalidates a
+same-generation target, Compose preserves dirty operator text across same-generation refresh and
+Root A -> B target/evidence rebinding, all four route fixtures use the real freshness helper, and
+`WorkflowInvocationServiceOptions.rootGeneration` is required with no timestamp fallback. Focused
+Web (including the new helper and Compose cases) and Server lanes, package typechecks,
+`format:check`, `lint:ci`, and `git diff --check` pass on `83c7151`.
+
+One review item remains open before closing `6.14`: New/Propose A -> B route tests still primarily
+observe a disabled control. Add the smallest checked public-dispatch mutation proof showing that
+removing only the exact guard reaches the create/runner owner, while the restored guard rejects it.
+The Server Validate/PTY red-green evidence and the real-helper generation tests do not replace this
+route dispatch proof. No merge, archive, release, or owner-level browser acceptance is claimed.
+
+### 6.14 Dirty Compose rebind policy accepted (2026-07-20)
+
+The owner accepted the recommended correction policy: after Root A -> Root B, preserve a dirty
+Compose prompt for inspection but lock dispatch until the operator explicitly confirms the text for B
+or chooses to regenerate the B prompt. Never auto-send retained A path/Store context under B. This
+policy is now part of the 6.14 implementation contract.
+
+### 6.14 Same-generation refresh review blocker (2026-07-20)
+
+The exact candidate `91719b0` passes the recorded typecheck and focused lanes (`5 files / 116 server
+tests`, `5 files / 26 web tests`), but it is not accepted. Production
+`packages/web/src/lib/opsx-workflow-invocation.ts:isWorkflowTargetCurrent` requires the prepared
+target's `observedAt` to equal the current Root Context observation even when the planning-root
+identity and Manager generation are unchanged. The Manager intentionally refreshes `observedAt` on
+same-root reactive updates while retaining the generation:
+
+```text
+prepared target A (generation G, observedAt 1)
+same root refresh (generation G, observedAt 2)
+=> helper returns false
+```
+
+This can permanently disable OPSX New's Create path because New has no separate re-prepare control.
+Compose's effect also depends on `rootAction.observedAt` and unconditionally replaces the editable
+draft with freshly prepared text, so a same-generation refresh can erase user edits. Propose becomes
+temporarily stale until the operator manually prepares again. Existing route tests do not catch this:
+they mock `isWorkflowTargetCurrent` as a path-only comparison. Add checked same-generation coverage,
+retain the A -> B generation counterexample, and only then close 6.14. This is a review blocker, not
+owner-level browser acceptance; do not start 6.15+.
+
+The same review found two additional contract gaps. `WorkflowInvocationServiceOptions.rootGeneration`
+is optional and `createTarget` falls back to `rootContext.generation` or `String(observedAt)`, even
+though the public target generation is defined as Manager-owned opaque provenance. Production already
+constructs the service from a Manager record; the fallback weakens tests and permits a timestamp to
+masquerade as owner identity. Make the generation required at this service boundary. Also,
+`WorkflowTargetNotice` renders path/source/Store only; it omits the Goal's objective direct-Reference
+diagnostic summary. Add typed counts from the returned target without inferring health or completeness.
+
+The independent Standards review also found two contract gaps that remain in the correction pass:
+the four route fixtures mock `isWorkflowTargetCurrent` as a path-only comparison, so a same-path
+different-generation lease regression can pass; and the public
+`WorkflowInvocationServiceOptions.rootGeneration` is optional with a `RootContext.observedAt`
+fallback. The latter is not an opaque Manager-owned lease token. Keep the helper real in the
+component evidence, add same-path/different-generation coverage, and make the Server owner
+generation required with explicit checked fixtures.
+
+Correction candidate `83c7151` additionally passes the non-browser full unit lanes (`55 files / 409
+Server tests`, `124 files / 789 Web tests`) and package typechecks. The Web jsdom run emits the known
+xterm/Pixi canvas warnings; no test failed. These are regression evidence only; the A -> B dirty-draft
+policy and target Reference-summary presentation remain review decisions, so 6.14 stays open.
+
+### 6.14 Worker decomposition and Package C evidence (2026-07-21)
+
+The owner requested that the recurring 6.14 blocker be split into independently reviewable coding
+packages. The executable worker Goal now authorizes only:
+
+```text
+A  Compose dirty-prompt Root A -> B recovery and same-generation refresh safety (Sol)
+B  New/Propose real public-dispatch mutation-resistance evidence (Sol)
+C  WorkflowTargetNotice typed direct-Reference diagnostic summary (Terra, then review)
+```
+
+Package C was implemented in `c3c1c51` (`feat: show opsx reference diagnostic counts`). The notice
+aggregates only the returned target's direct Reference count and upstream status severity counts
+(`error`, `warning`, `info`, `total`); it does not infer health, completeness, or coverage and renders
+nothing for a static `target: null`. Its checked component evidence is:
+
+```text
+WorkflowTargetNotice component Vitest: 4/4 passed
+@openspecui/web typecheck: passed
+Prettier check/write, oxlint, git diff --check: passed
+```
+
+The commit is component preparation evidence only. Package A/B, exact public-dispatch red/green
+evidence, required repository gates, owner multi-tab walkthrough, merge, archive, and release remain
+open. The ordinary local commit hook could not load the repository Vite+ staged config; after the
+listed gates passed, Terra used `--no-verify` and recorded that environment limitation. This does not
+authorize bypassing any functional gate.
+
+### 6.14 Packages A/B exact-head review evidence (2026-07-21)
+
+Sol committed `f693225` (`fix: lock opsx dispatch across planning-root rebinds`) on top of
+`c3c1c51`. The commit contains only the Compose/New/Propose production and checked test files. Its
+implementation preserves a dirty Compose prompt for inspection, locks Copy/Save/Create after a true
+Root A -> B rebind, and offers explicit current-root confirmation or regeneration. Same-generation
+observation refresh does not enter that recovery state. New separates the disabled projection from its
+public form submit guard so a stale prepared command is rejected inside the submit owner. Propose
+rechecks the target in `preparePayload` immediately before terminal creation.
+
+The required route counterexamples were replayed at the exact `f693225` head, not inferred from
+disabled controls:
+
+```text
+New mutation: bypass only isWorkflowTargetCurrent, Root A prepared then Root B observed -> the
+public form submit reached createDedicatedSession with the Root A generation; restore the production
+helper without rerendering, submit the same form -> the root-changed error appeared and owner calls
+stayed at one.
+
+Propose mutation: bypass only isWorkflowTargetCurrent, Root A prepared then Root B observed -> the
+public Create action reached the shell owner with planning-root cwd, Root A generation, and the exact
+prepared prompt; restore the production helper without rerendering, click the same public action ->
+preparePayload rejected before a second shell owner call.
+```
+
+Exact-head focused verification:
+
+```text
+Web OPSX/component/helper unit: 6 files / 30 tests passed
+@openspecui/web typecheck: passed
+Core root/hooks/workflow contract: 1 file / 8 tests passed
+Server workflow/router: 2 files / 100 tests passed
+@openspecui/server typecheck:transport-tests + typecheck: passed
+format:check, lint:ci, git diff --check: passed on worker commit
+```
+
+The first local commit-hook attempt failed because the repository Vite+ staged config was unavailable;
+the worker used `--no-verify` only after the focused gates above passed. The generated `.web-sync-*`
+scratch directory was removed and is not part of the commit. This remains implementation evidence,
+not owner-level final browser acceptance. Full repository gates are the next boundary; 6.14 is still
+open until they pass and the owner performs the direct same-origin product/multi-tab walkthrough.
+
+### 6.14 independent review correction after `f693225` (2026-07-21)
+
+The exact candidate passed the remaining local preparation gates. The third complete `pnpm test:ci`
+run passed after two earlier non-deterministic timeouts had each passed an immediate exact-file rerun:
+
+```text
+pnpm format:check: passed
+pnpm lint:ci: passed
+pnpm typecheck: passed
+pnpm test:ci: passed on the third complete run
+  @openspecui/server: 55 files / 409 tests
+  @openspecui/web: 125 files / 795 tests
+pnpm test:browser:ci preparation evidence:
+  xterm: 60 passed / 1 skipped
+  Web Storybook: 12/12 passed
+clean @openspecui/web build:ssg: passed
+git diff --check: passed
+```
+
+The clean SSG build emitted the existing generated-CSS `scroll-button` warning and the existing Vite
+ineffective-dynamic-import warning; neither failed the build. These results remain automated
+preparation evidence. Per the owner's 2026-07-21 direction, the owner performs final visual,
+single-page, multi-tab, and end-to-end browser acceptance.
+
+Independent Standards and Spec reviews reject closure of 6.14 despite those green gates:
+
+```text
+D1 Propose replaces TerminalSpawnCommandDialog with a test-authored callback which manually invokes
+   createShellSession. The claimed route -> real terminal-owner evidence is characterization only.
+
+D2 New and Propose replace one shared freshness helper in both the presentation projection and the
+   dispatch guard. Their red phase therefore removes two protections, not only the exact owner guard.
+
+E1 Compose proves the A -> B presentation lock and post-confirmation Save, but does not mutate the
+   recovery assertion at the public dispatch boundary. Removing that assertion leaves the test green.
+
+E2 Compose decides rebind from workflowTarget !== null. If A preparation is pending when the operator
+   edits and B arrives, B can pair with the retained dirty text without mandatory confirmation.
+
+F1 The five changed TS/TSX headers retain the previous 2026-07-20 timestamp; New's test header also
+   omits its new public-dispatch evidence intent.
+
+S1 New lacks a route-level same-generation/new-observedAt public-submit acceptance case.
+```
+
+The earlier `f693225` statements that Propose reached the real shell owner and that New/Propose bypassed
+only the exact dispatch guard are superseded by this review. They must not be cited as completion
+evidence. `GOAL.md` now authorizes three bounded coding packages: exact New/Propose dispatch proof,
+pending Compose A -> B safety, and evidence/header hygiene. Checkpoint 6.14 remains open; do not start
+6.15, merge, archive, or release.
