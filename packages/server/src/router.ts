@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Register lease-scoped planning-root document, OPSX, dashboard, and archive procedures.
- * 2. Register CLI, Root Context, tool initialization, configuration, Store, terminal-result, and typed OPSX profile/drift projections.
+ * 2. Register CLI, Root Context, reactive launch-tool initialization, configuration, Store, and terminal-result projections.
  * 3. Register binding-safe Git, terminal, system, notification, and recovery procedures.
  * 4. Register translation runtime, model, asset, and cache procedures.
  * 5. Compose the public tRPC application router and shared procedure schemas.
@@ -97,7 +97,6 @@ import {
   type StoreListEntry,
   type TemplateContentMap,
   type TemplatesMap,
-  type ToolInitDelivery,
   type WorkflowRequestedModeV1,
 } from '@openspecui/core'
 import {
@@ -145,12 +144,6 @@ import type { LocalModelAssetService } from './local-model-asset-service.js'
 import type { NotificationService } from './notification-service.js'
 import { getOpenSpecMutationFacets } from './open-spec-mutation-facets.js'
 import {
-  parseOpsxConfigDrift,
-  parseOpsxProfileListJson,
-  type OpsxWorkflowDelivery,
-  type OpsxWorkflowProfile,
-} from './opsx-profile-state.js'
-import {
   dataScopeFromRootPreview,
   readActiveRootConfig,
   readEnvironmentGlobalConfig,
@@ -172,6 +165,7 @@ import {
 } from './spec-catalog-service.js'
 import type { StoreObservationReconciler } from './store-observation-service.js'
 import { startStrictArchiveStream } from './strict-archive-stream.js'
+import type { ToolCommandObservationService } from './tool-command-observation-service.js'
 import { setTrackedTaskCompletion } from './tracked-task-mutation.js'
 import type { TranslationCacheService } from './translation-cache-service.js'
 import type { TranslationEngineService } from './translation-engine-service.js'
@@ -188,6 +182,8 @@ export interface Context {
   runtimeInvalidation: RuntimeInvalidationController
   /** CLI-truth reconciler for dynamic registered Store observation roots. */
   storeObservation: StoreObservationReconciler
+  /** Runtime owner for environment-global tool command watcher leases. */
+  toolCommandObservation: ToolCommandObservationService
   configManager: ConfigManager
   cliExecutor: CliExecutor
   projectRecoveryService: ProjectRecoveryService
@@ -1038,16 +1034,6 @@ const runWorkflowInputSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('onboard') }),
 ])
 
-interface OpsxProfileState {
-  available: boolean
-  profile: OpsxWorkflowProfile | null
-  delivery: OpsxWorkflowDelivery | null
-  workflows: string[]
-  driftStatus: 'in-sync' | 'drift' | 'unknown'
-  warningText: string | null
-  error?: string
-}
-
 function requireChangeId(changeId: string | undefined): string {
   if (!changeId) {
     throw new Error('change is required')
@@ -1059,56 +1045,6 @@ function requireOpsxArtifactLocation(input: { changeId: string; outputPath: stri
   return {
     changeId: requireCanonicalOpenSpecEntityId(input.changeId, 'changeId'),
     outputPath: requireOpenSpecEntityRelativePath(input.outputPath, 'outputPath'),
-  }
-}
-
-async function fetchOpsxProfileState(ctx: Context): Promise<OpsxProfileState> {
-  const configListJson = await ctx.cliExecutor.execute(['config', 'list', '--json'])
-  if (!configListJson.success) {
-    return {
-      available: false,
-      profile: null,
-      delivery: null,
-      workflows: [],
-      driftStatus: 'unknown',
-      warningText: null,
-      error: configListJson.stderr || 'Failed to load profile config.',
-    }
-  }
-
-  const parsed = parseOpsxProfileListJson(configListJson.stdout)
-  if (!parsed) {
-    return {
-      available: false,
-      profile: null,
-      delivery: null,
-      workflows: [],
-      driftStatus: 'unknown',
-      warningText: null,
-      error: 'Invalid JSON from `openspec config list --json`.',
-    }
-  }
-
-  const configListText = await ctx.cliExecutor.execute(['config', 'list'])
-  if (!configListText.success) {
-    return {
-      available: true,
-      profile: parsed.profile,
-      delivery: parsed.delivery,
-      workflows: parsed.workflows,
-      driftStatus: 'unknown',
-      warningText: null,
-    }
-  }
-
-  const drift = parseOpsxConfigDrift(`${configListText.stdout}\n${configListText.stderr}`)
-  return {
-    available: true,
-    profile: parsed.profile,
-    delivery: parsed.delivery,
-    workflows: parsed.workflows,
-    driftStatus: drift.drift ? 'drift' : 'in-sync',
-    warningText: drift.warningText,
   }
 }
 
@@ -1764,12 +1700,18 @@ export const cliRouter = router({
     return sniffGlobalCli()
   }),
 
-  /** 流式执行全局安装命令 */
+  /** Stream the fixed global CLI install and invalidate Root Context on every settlement. */
   installGlobalCliStream: publicProcedure.subscription(({ ctx }) => {
     return createCliStreamObservable((onEvent) =>
-      ctx.cliExecutor.executeCommandStream(
-        ['npm', 'install', '-g', '@fission-ai/openspec'],
-        onEvent
+      new CliMutationInvalidator(ctx.runtimeInvalidation).stream(
+        ['context'],
+        (emitEvent) =>
+          ctx.cliExecutor.executeCommandStream(
+            ['npm', 'install', '-g', '@fission-ai/openspec'],
+            emitEvent
+          ),
+        onEvent,
+        () => ctx.configManager.invalidateResolvedCliRunner()
       )
     )
   }),
@@ -1796,31 +1738,33 @@ export const cliRouter = router({
     })) satisfies AIToolOption[]
   }),
 
-  getDetectedProjectTools: publicProcedure.query(async ({ ctx }) => {
-    return (await getDetectedProjectTools(ctx.projectDir)).map((tool) => ({
-      name: tool.name,
-      value: tool.value,
-      available: tool.available,
-      successLabel: tool.successLabel,
-    })) satisfies AIToolOption[]
+  /** Subscribe to launch-project tools detected through reactive filesystem reads. */
+  subscribeDetectedProjectTools: publicProcedure.subscription(({ ctx }) => {
+    return createReactiveSubscription(async () => {
+      return (await getDetectedProjectTools(ctx.projectDir)).map((tool) => ({
+        name: tool.name,
+        value: tool.value,
+        available: tool.available,
+        successLabel: tool.successLabel,
+      })) satisfies AIToolOption[]
+    })
   }),
 
-  /** 获取 OpenSpec CLI profile/workflow 配置与当前项目漂移状态 */
-  getProfileState: publicProcedure.query(async ({ ctx }) => {
-    return fetchOpsxProfileState(ctx)
-  }),
-
-  getToolInitStates: publicProcedure
+  /** Subscribe to launch skills and environment-owned commands for one delivery contract. */
+  subscribeToolInitStates: publicProcedure
     .input(
       z.object({
         delivery: z.enum(['both', 'skills', 'commands']),
         workflows: z.array(z.string()).default([]),
       })
     )
-    .query(async ({ ctx, input }) => {
-      return getToolInitStates(ctx.projectDir, {
-        delivery: input.delivery as ToolInitDelivery,
-        workflows: input.workflows,
+    .subscription(({ ctx, input }) => {
+      return createReactiveSubscription(async () => {
+        await ctx.toolCommandObservation.start()
+        return getToolInitStates(ctx.projectDir, {
+          delivery: input.delivery,
+          workflows: input.workflows,
+        })
       })
     }),
 

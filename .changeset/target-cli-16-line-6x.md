@@ -143,3 +143,6 @@ line, and rejects older or forward CLI lines by default.
   source before scoring and limit, while Store-qualified live hits preserve
   compound identity. Current static snapshots remain Owned-only, so static
   Referenced Search is neutral-empty until the explicit 7.x export policy.
+- Make Settings a read-only projection of Root Context and Environment Global
+  diagnostics, with launch-project tool detection and initialization state kept
+  current through generation-safe reactive subscriptions.

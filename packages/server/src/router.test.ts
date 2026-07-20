@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Prove public Router queries and mutations preserve their typed owner boundaries.
  * 2. Prove Planning-root replacement and public stream routes preserve rejected settlement.
  * 3. Prove strict Archive identity, validation, diagnostics, and Store selection through its public route.
@@ -2362,31 +2362,6 @@ apply:
   })
 
   describe('cli', () => {
-    it('projects a rejected fixed global-install handle as one terminal tRPC error', async () => {
-      const context = createMockContext()
-      const terminal = Promise.withResolvers<CliStreamSettlement>()
-      void terminal.promise.catch(() => {})
-      const cancel = vi.fn(() => terminal.promise)
-      const executeCommandStream = context.cliExecutor
-        .executeCommandStream as unknown as ReturnType<typeof vi.fn>
-      executeCommandStream.mockReturnValue({ settled: terminal.promise, cancel })
-      const stream = await appRouter.createCaller(context).cli.installGlobalCliStream()
-      const errors: unknown[] = []
-      const completes = vi.fn()
-
-      const subscription = stream.subscribe({
-        complete: completes,
-        error: (error) => errors.push(error),
-      })
-      const failure = new Error('forced termination did not confirm child close')
-      terminal.reject(failure)
-
-      await vi.waitFor(() => expect(errors).toEqual([failure]), { timeout: 200 })
-      expect(completes).not.toHaveBeenCalled()
-      subscription.unsubscribe()
-      expect(cancel).toHaveBeenCalledOnce()
-    })
-
     it('projects a rejected Planning-root Validate handle as one terminal tRPC error', async () => {
       const context = createMockContext()
       const terminal = Promise.withResolvers<CliStreamSettlement>()
@@ -2919,62 +2894,6 @@ apply:
       expect(invalidation.current('worksets')).toBe(1)
       expect(invalidation.current('schemas')).toBe(1)
       expect(invalidation.current('context')).toBe(1)
-    })
-
-    it('parses profile state and detects drift warning', async () => {
-      const context = createMockContext()
-      const executeMock = context.cliExecutor.execute as unknown as ReturnType<typeof vi.fn>
-      executeMock
-        .mockResolvedValueOnce({
-          success: true,
-          stdout: '{"profile":"custom","delivery":"skills","workflows":["propose","apply"]}',
-          stderr: '',
-          exitCode: 0,
-        })
-        .mockResolvedValueOnce({
-          success: true,
-          stdout:
-            'Warning: Global config is not applied to this project. Run `openspec update` to sync.\n',
-          stderr: '',
-          exitCode: 0,
-        })
-
-      const caller = appRouter.createCaller(context)
-      const state = await caller.cli.getProfileState()
-
-      expect(state.available).toBe(true)
-      expect(state.profile).toBe('custom')
-      expect(state.delivery).toBe('skills')
-      expect(state.workflows).toEqual(['propose', 'apply'])
-      expect(state.driftStatus).toBe('drift')
-      expect(state.warningText).toContain('Run `openspec update`')
-    })
-
-    it('falls back to core workflows when omitted from JSON config', async () => {
-      const context = createMockContext()
-      const executeMock = context.cliExecutor.execute as unknown as ReturnType<typeof vi.fn>
-      executeMock
-        .mockResolvedValueOnce({
-          success: true,
-          stdout: '{"profile":"core","delivery":"both"}',
-          stderr: '',
-          exitCode: 0,
-        })
-        .mockResolvedValueOnce({
-          success: true,
-          stdout: 'profile: core\ndelivery: both\n',
-          stderr: '',
-          exitCode: 0,
-        })
-
-      const caller = appRouter.createCaller(context)
-      const state = await caller.cli.getProfileState()
-
-      expect(state.available).toBe(true)
-      expect(state.profile).toBe('core')
-      expect(state.delivery).toBe('both')
-      expect(state.workflows).toEqual(['propose', 'explore', 'apply', 'update', 'sync', 'archive'])
-      expect(state.driftStatus).toBe('in-sync')
     })
   })
 

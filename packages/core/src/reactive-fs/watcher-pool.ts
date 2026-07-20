@@ -1,6 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
- * 1. Own a reference-counted dynamic set of physical watcher roots.
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * 1. Own a reference-counted dynamic set of physical watcher roots, including missing logical roots
+ *    through their nearest existing ancestor.
  * 2. Bind shared path subscriptions to the deepest active containing root.
  * 3. Rebind pending subscriptions when roots appear, disappear, or recover.
  * 4. Expose aggregate and per-root runtime status for server diagnostics.
@@ -8,7 +9,8 @@
  *
  * Original request (2026-07-15): "响应式内核要观察 data home、Store roots 和 connected project roots。"
  */
-import { isAbsolute, relative } from 'node:path'
+import { existsSync } from 'node:fs'
+import { dirname, isAbsolute, relative } from 'node:path'
 import { resolveRealPathThroughExistingAncestor } from './path-realpath.js'
 import {
   getProjectWatcher,
@@ -23,6 +25,16 @@ function getRealPath(path: string): string {
   return resolveRealPathThroughExistingAncestor(path)
 }
 
+function getExistingWatcherRoot(rootPath: string): string {
+  let currentPath = rootPath
+  while (!existsSync(currentPath)) {
+    const parentPath = dirname(currentPath)
+    if (parentPath === currentPath) return currentPath
+    currentPath = parentPath
+  }
+  return currentPath
+}
+
 function pathBelongsToRoot(path: string, rootPath: string): boolean {
   const relativePath = relative(rootPath, path)
   return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))
@@ -32,6 +44,7 @@ export type WatcherRootRelease = () => Promise<void>
 
 interface WatcherRootRecord {
   rootPath: string
+  physicalRootPath: string
   watcher: ProjectWatcher
   referenceCount: number
   ready: Promise<void>
@@ -50,6 +63,11 @@ interface PathSubscription {
 
 const watcherRoots = new Map<string, WatcherRootRecord>()
 const closingWatcherRoots = new Map<string, Promise<void>>()
+const physicalWatcherReferences = new Map<
+  string,
+  { watcher: ProjectWatcher; referenceCount: number }
+>()
+const closingPhysicalWatchers = new Map<string, Promise<void>>()
 const subscriptionCache = new Map<string, PathSubscription>()
 const debounceTimers = new Map<string, NodeJS.Timeout>()
 const watcherRuntimeStatusListeners = new Set<(status: WatcherRuntimeStatus | null) => void>()
@@ -142,9 +160,17 @@ function rebindAllSubscriptions(): void {
 }
 
 function createWatcherRoot(rootPath: string): WatcherRootRecord {
-  const watcher = getProjectWatcher(rootPath)
+  const physicalRootPath = getExistingWatcherRoot(rootPath)
+  const existingPhysical = physicalWatcherReferences.get(physicalRootPath)
+  const watcher = existingPhysical?.watcher ?? getProjectWatcher(physicalRootPath)
+  if (existingPhysical) {
+    existingPhysical.referenceCount += 1
+  } else {
+    physicalWatcherReferences.set(physicalRootPath, { watcher, referenceCount: 1 })
+  }
   const record: WatcherRootRecord = {
     rootPath,
+    physicalRootPath,
     watcher,
     referenceCount: 0,
     ready: Promise.resolve(),
@@ -177,13 +203,29 @@ async function releaseWatcherRootReference(record: WatcherRootRecord): Promise<v
   record.releaseRuntimeStatus()
   rebindAllSubscriptions()
 
+  const physical = physicalWatcherReferences.get(record.physicalRootPath)
+  if (!physical || physical.referenceCount <= 0) {
+    emitWatcherRuntimeStatus()
+    return
+  }
+  physical.referenceCount -= 1
+  if (physical.referenceCount > 0) {
+    emitWatcherRuntimeStatus()
+    return
+  }
+  physicalWatcherReferences.delete(record.physicalRootPath)
+
   const closing = record.watcher.close().finally(() => {
     if (closingWatcherRoots.get(record.rootPath) === closing) {
       closingWatcherRoots.delete(record.rootPath)
     }
+    if (closingPhysicalWatchers.get(record.physicalRootPath) === closing) {
+      closingPhysicalWatchers.delete(record.physicalRootPath)
+    }
     emitWatcherRuntimeStatus()
   })
   closingWatcherRoots.set(record.rootPath, closing)
+  closingPhysicalWatchers.set(record.physicalRootPath, closing)
   emitWatcherRuntimeStatus()
   await closing
 }
@@ -191,7 +233,11 @@ async function releaseWatcherRootReference(record: WatcherRootRecord): Promise<v
 /** Acquire one physical observation root and release it when the returned lease is no longer used. */
 export async function acquireWatcherRoot(rootPath: string): Promise<WatcherRootRelease> {
   const normalizedRoot = getRealPath(rootPath)
-  await closingWatcherRoots.get(normalizedRoot)
+  const physicalRootPath = getExistingWatcherRoot(normalizedRoot)
+  await Promise.all([
+    closingWatcherRoots.get(normalizedRoot),
+    closingPhysicalWatchers.get(physicalRootPath),
+  ])
 
   const record = watcherRoots.get(normalizedRoot) ?? createWatcherRoot(normalizedRoot)
   record.referenceCount += 1
@@ -283,11 +329,15 @@ export async function closeAllWatchers(): Promise<void> {
     record.referenceCount = 0
     record.releaseRuntimeStatus()
   }
+  const physicalWatchers = [...physicalWatcherReferences.values()].map(({ watcher }) => watcher)
+  physicalWatcherReferences.clear()
   await Promise.all([
-    ...records.map((record) => record.watcher.close()),
+    ...physicalWatchers.map((watcher) => watcher.close()),
     ...closingWatcherRoots.values(),
+    ...closingPhysicalWatchers.values(),
   ])
   closingWatcherRoots.clear()
+  closingPhysicalWatchers.clear()
   emitWatcherRuntimeStatus()
 }
 

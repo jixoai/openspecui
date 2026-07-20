@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * 1. Verify Settings preference, translation, terminal, and asset-management interactions.
+ * 2. Verify the route-level responsive ToC and static/dynamic composition boundaries.
+ * 3. Keep extracted OpenSpec diagnostics and initialization behavior in focused component tests.
+ *
+ * Original request (2026-07-20): "Split OpenSpec diagnostics/initialization out of the oversized Settings route."
+ */
 import type {
   LocalModelAssetLog,
   LocalModelAssetState,
@@ -1954,55 +1962,8 @@ vi.mock('@tanstack/react-query', () => ({
 }))
 
 function resolveQueryResultForKey(key: string) {
-  if (key === 'cli.getAllTools') {
-    return { data: [{ value: 'claude', name: 'Claude', available: true }], isLoading: false }
-  }
-  if (key === 'cli.getDetectedProjectTools') {
-    return { data: [{ value: 'claude', name: 'Claude' }], isLoading: false, refetch: vi.fn() }
-  }
-  if (key === 'cli.getProfileState') {
-    return {
-      data: {
-        available: true,
-        delivery: 'both',
-        workflows: [],
-        profile: 'core',
-        driftStatus: 'in-sync',
-        warningText: null,
-      },
-      isLoading: false,
-      refetch: vi.fn(),
-    }
-  }
-  if (key === 'cli.getToolInitStates') {
-    return {
-      data: [
-        {
-          toolId: 'claude',
-          toolName: 'Claude',
-          status: 'uninitialized',
-          hasAnyArtifacts: false,
-          expectedSkillCount: 0,
-          presentExpectedSkillCount: 0,
-          detectedSkillCount: 0,
-          expectedCommandCount: 0,
-          presentExpectedCommandCount: 0,
-          detectedCommandCount: 0,
-          missingSkillWorkflows: [],
-          missingCommandWorkflows: [],
-          unexpectedSkillWorkflows: [],
-          unexpectedCommandWorkflows: [],
-          legacyCommandWorkflows: [],
-        },
-      ],
-      refetch: vi.fn(),
-    }
-  }
   if (key === 'cli.sniffGlobalCli') {
     return { data: { hasGlobal: true, version: '1.4.1', hasUpdate: false }, isLoading: false }
-  }
-  if (key === 'cli.checkAvailability') {
-    return { data: { available: true, version: '1.4.1' }, isLoading: false, refetch: vi.fn() }
   }
   if (key === 'config.getEffectiveCliCommand') {
     return { data: 'openspec', refetch: vi.fn() }
@@ -2181,6 +2142,10 @@ vi.mock('@/components/cli-terminal', () => ({
   CliTerminal: () => <div data-testid="cli-terminal" />,
 }))
 
+vi.mock('@/components/settings/openspec-settings-section', () => ({
+  OpenSpecSettingsSections: () => <section data-testid="openspec-settings-sections" />,
+}))
+
 vi.mock('@/components/toc', () => ({
   generateTimelineScope: () => '',
   Toc: ({ className, items }: { className?: string; items: { id: string; label: string }[] }) => {
@@ -2279,24 +2244,8 @@ vi.mock('@/lib/trpc', () => ({
   trpc: {
     cli: {
       sniffGlobalCli: {
-        queryOptions: () => ({ queryKey: ['cli.getAllTools'] }),
+        queryOptions: () => ({ queryKey: ['cli.sniffGlobalCli'] }),
         queryFilter: () => ({ queryKey: ['cli.sniffGlobalCli'] }),
-      },
-      checkAvailability: {
-        queryOptions: () => ({ queryKey: ['cli.checkAvailability'] }),
-        queryFilter: () => ({ queryKey: ['cli.checkAvailability'] }),
-      },
-      getAllTools: {
-        queryOptions: () => ({ queryKey: ['cli.getAllTools'] }),
-      },
-      getDetectedProjectTools: {
-        queryOptions: () => ({ queryKey: ['cli.getDetectedProjectTools'] }),
-      },
-      getProfileState: {
-        queryOptions: () => ({ queryKey: ['cli.getProfileState'] }),
-      },
-      getToolInitStates: {
-        queryOptions: () => ({ queryKey: ['cli.getToolInitStates'] }),
       },
     },
     config: {
@@ -2576,6 +2525,7 @@ describe('Settings', () => {
     vi.useRealTimers()
   })
   beforeEach(() => {
+    staticModeMock.mockReturnValue(false)
     useConfigPresenceSubscriptionMock.mockImplementation(() => {
       const config = useConfigSubscriptionMock().data as
         | {
@@ -2670,7 +2620,8 @@ describe('Settings', () => {
     })
   })
 
-  it('renders force init as the shared Switch control', async () => {
+  it('keeps static Settings Appearance-only without mounting live OpenSpec projections', async () => {
+    staticModeMock.mockReturnValue(true)
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -2680,15 +2631,15 @@ describe('Settings', () => {
       }))
     )
     useConfigSubscriptionMock.mockReturnValue({ data: {} })
-    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
 
     render(<Settings />)
 
-    const forceSwitch = await screen.findByRole('switch', { name: 'Force non-interactive init' })
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
-
-    expect(forceSwitch).toHaveAttribute('aria-checked', 'true')
-    expect(forceSwitch.className).toContain('w-11')
+    expect(screen.getByRole('heading', { name: 'Appearance' })).toBeTruthy()
+    expect(screen.queryByTestId('openspec-settings-sections')).toBeNull()
+    expect(tocRenderMock).toHaveBeenCalledWith(
+      expect.objectContaining({ itemIds: ['settings-appearance'] })
+    )
   })
 
   it('renders translation settings and initializes browser support when enabled', async () => {

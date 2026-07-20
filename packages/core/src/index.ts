@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Expose the public Core package contract through one stable barrel.
  * 2. Keep filesystem, CLI, Root Context, workflow, and projection types source-distinct.
- * 3. Publish browser-safe subpath contracts without forcing browser runtimes through this root.
+ * 3. Publish browser-safe subpath contracts, including the external Codex command observation root,
+ *    without forcing browser runtimes through this root.
  * 4. Export the typed Git repository binding and Dashboard provenance contracts.
  *
  * Original request (2026-07-15): "用强类型合同承载 OpenSpec 1.6 的客观事实。"
@@ -10,6 +11,7 @@
  * Original request (2026-07-18): "Profile/Drift must refresh with external environment config changes."
  * Derived requirement (2026-07-19): "Static Git remains unavailable and must not fabricate live binding provenance."
  * Derived requirement (2026-07-19): "Project Binding writes return typed launch and transition evidence."
+ * Derived requirement (2026-07-20): "Environment-global Codex command observation shares Core path truth."
  */
 /**
  * @openspecui/core
@@ -692,6 +694,7 @@ export {
 // Tool initialization state detection
 export {
   TOOL_WORKFLOW_TO_SKILL_DIR,
+  getExternalCodexCommandObservationRoot,
   getToolInitStates,
   type ToolInitDelivery,
   type ToolInitState,

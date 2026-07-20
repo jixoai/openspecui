@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Verify buffered success, failure, and indeterminate errors invalidate before delivery.
  * 2. Verify streamed terminal/null settlements and cancellation invalidate once before observation.
+ * 3. Verify mutation-specific cache retirement runs once before shared facet invalidation.
  *
  * Original request (2026-07-15): "Every terminal or indeterminate outcome invalidates affected projections before they are pulled again."
  */
@@ -52,6 +53,9 @@ describe('CliMutationInvalidator', () => {
     const invalidation = new RuntimeInvalidationIndex()
     const service = new CliMutationInvalidator(invalidation)
     const events: CliStreamEvent[] = []
+    const beforeInvalidate = vi.fn(() => {
+      expect(invalidation.current('project')).toBe(0)
+    })
     const stream = service.stream(
       ['project', 'context'],
       (onEvent) => {
@@ -59,15 +63,18 @@ describe('CliMutationInvalidator', () => {
         return settledHandle(exitCode)
       },
       (event) => {
+        expect(beforeInvalidate).toHaveBeenCalledOnce()
         expect(invalidation.current('project')).toBe(1)
         events.push(event)
-      }
+      },
+      beforeInvalidate
     )
 
     expect(events).toEqual([{ type: 'exit', exitCode }])
     await stream.cancel()
     expect(invalidation.current('project')).toBe(1)
     expect(invalidation.current('context')).toBe(1)
+    expect(beforeInvalidate).toHaveBeenCalledOnce()
   })
 
   it('invalidates once before canceling a stream without terminal evidence', async () => {
@@ -78,10 +85,14 @@ describe('CliMutationInvalidator', () => {
       terminal.resolve({ reason: 'cancelled', exitCode: null })
       return terminal.promise
     })
+    const beforeInvalidate = vi.fn(() => {
+      expect(invalidation.current('schemas')).toBe(0)
+    })
     const stream = service.stream(
       ['schemas'],
       () => ({ settled: terminal.promise, cancel: cancelProcess }),
-      vi.fn()
+      vi.fn(),
+      beforeInvalidate
     )
 
     const cancellation = stream.cancel()
@@ -89,5 +100,31 @@ describe('CliMutationInvalidator', () => {
     await cancellation
     expect(cancelProcess).toHaveBeenCalledOnce()
     expect(invalidation.current('schemas')).toBe(1)
+    expect(beforeInvalidate).toHaveBeenCalledOnce()
+  })
+
+  it('retires mutation caches once before a rejected settlement is exposed', async () => {
+    const invalidation = new RuntimeInvalidationIndex()
+    const service = new CliMutationInvalidator(invalidation)
+    const terminal = Promise.withResolvers<CliStreamSettlement>()
+    void terminal.promise.catch(() => {})
+    const failure = new Error('terminal result unavailable')
+    const beforeInvalidate = vi.fn(() => {
+      expect(invalidation.current('context')).toBe(0)
+    })
+    const cancelProcess = vi.fn(() => terminal.promise)
+    const stream = service.stream(
+      ['context'],
+      () => ({ settled: terminal.promise, cancel: cancelProcess }),
+      vi.fn(),
+      beforeInvalidate
+    )
+
+    terminal.reject(failure)
+
+    await expect(stream.settled).rejects.toBe(failure)
+    expect(beforeInvalidate).toHaveBeenCalledOnce()
+    expect(invalidation.current('context')).toBe(1)
+    expect(cancelProcess).not.toHaveBeenCalled()
   })
 })

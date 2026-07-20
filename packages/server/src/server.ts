@@ -1,14 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Bootstrap the HTTP/tRPC server and launch-project runtime services.
  * 2. Delegate OpenSpec filesystem ownership to the CLI-selected planning-root manager.
  * 3. Host notification, sound, preview-resource, and translation HTTP boundaries.
  * 4. Host tRPC and PTY WebSocket transports with deterministic teardown.
- * 5. Own the runtime observation environment and warm root-scoped services without blocking readiness.
+ * 5. Own the runtime observation environment, external Codex command lease, and warm root-scoped
+ *    services without blocking readiness.
  *
  * Original request (2026-07-15): "你先负责后端（内核）的开发。"
  * Original request (2026-07-17): "Every Planning-root execution surface uses the same operation lifetime owner."
  * Derived requirement (2026-07-19): Checkpoint 6.11 binds Git operations to backend-owned repository epochs.
+ * Derived requirement (2026-07-20): Environment-global Codex command observation is Server-owned and
+ * released with the runtime environment.
  *
  * @module server
  */
@@ -19,6 +22,7 @@ import {
   CliExecutor,
   ConfigManager,
   CustomSoundHashSchema,
+  getExternalCodexCommandObservationRoot,
   GlobalSettingsManager,
   NotificationPublishInputSchema,
   OpenSpecAdapter,
@@ -84,6 +88,7 @@ import { createPtyWebSocketHandler } from './pty-websocket.js'
 import { appRouter, type Context, type GitWorktreeHandoffService } from './router.js'
 import { StoreObservationFallbackService } from './store-observation-fallback.js'
 import { StoreObservationService } from './store-observation-service.js'
+import { ToolCommandObservationService } from './tool-command-observation-service.js'
 import { createRuntimeSqliteTranslationCacheAdapter } from './translation-cache-adapter.js'
 import { getDefaultTranslationCacheDatabasePath } from './translation-cache-path.js'
 import { TranslationCacheService } from './translation-cache-service.js'
@@ -164,6 +169,10 @@ export function createServer(config: ServerConfig) {
     storeObservation,
     observationEnvironment,
   })
+  const toolCommandObservation = new ToolCommandObservationService(
+    observationEnvironment,
+    getExternalCodexCommandObservationRoot()
+  )
   const codeGitBinding = new LaunchGitRepositoryBindingOwner()
   const planningRootServices = new PlanningRootServiceManager({
     launchProjectDir: config.projectDir,
@@ -408,6 +417,7 @@ export function createServer(config: ServerConfig) {
         gitRepositoryBindings,
         runtimeInvalidation,
         storeObservation,
+        toolCommandObservation,
         configManager,
         cliExecutor,
         projectRecoveryService,
@@ -434,6 +444,7 @@ export function createServer(config: ServerConfig) {
     gitRepositoryBindings,
     runtimeInvalidation,
     storeObservation,
+    toolCommandObservation,
     configManager,
     cliExecutor,
     projectRecoveryService,
@@ -461,6 +472,7 @@ export function createServer(config: ServerConfig) {
     storeObservation,
     storeInvalidation,
     storeObservationFallback,
+    toolCommandObservation,
     adapter,
     configManager,
     cliExecutor,
@@ -578,6 +590,7 @@ export async function createWebSocketServer(
         await settleCleanupPhase(failures, [() => server.planningRootServices.dispose()])
         await settleCleanupPhase(failures, [() => server.storeObservation.dispose()])
         await settleCleanupPhase(failures, [() => server.dataHomeObserver.dispose()])
+        await settleCleanupPhase(failures, [() => server.toolCommandObservation.dispose()])
         await settleCleanupPhase(failures, [
           () => server.storeInvalidation.dispose(),
           () => server.projectInvalidation.dispose(),

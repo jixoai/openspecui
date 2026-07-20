@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Invalidate affected facets before buffered CLI mutation outcomes reach callers.
  * 2. Invalidate exactly once before a streamed settlement or startup failure is observed.
  * 3. Preserve the original CLI result, event stream, error, and cancellation behavior unchanged.
+ * 4. Allow mutation-specific cache retirement immediately before shared facet invalidation.
  *
  * Original request (2026-07-15): "操作成功底层是要推送变更的，然后让多端基于订阅拉取更新。"
  */
@@ -26,17 +27,25 @@ export class CliMutationInvalidator {
     }
   }
 
-  /** Start one mutation stream and invalidate once before exit, cancellation, or startup failure. */
+  /**
+   * Start one mutation stream and invalidate once before exit, cancellation, or startup failure.
+   * The optional cache-retirement hook runs exactly once immediately before facet invalidation.
+   */
   stream(
     facets: readonly RuntimeInvalidationFacet[],
     start: (onEvent: (event: CliStreamEvent) => void) => CliStreamHandle,
-    onEvent: (event: CliStreamEvent) => void
+    onEvent: (event: CliStreamEvent) => void,
+    beforeInvalidate?: () => void
   ): CliStreamHandle {
     let settled = false
     const settle = () => {
       if (settled) return
       settled = true
-      this.invalidation.invalidate(facets)
+      try {
+        beforeInvalidate?.()
+      } finally {
+        this.invalidation.invalidate(facets)
+      }
     }
 
     try {

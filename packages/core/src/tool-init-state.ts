@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Map official OPSX workflows to generated skill and command locations.
- * 2. Project complete, missing, unexpected, and legacy tool initialization state.
+ * 2. Project launch-local skills and physically scoped tool command initialization state.
+ * 3. Provide the runtime owner with the same external Codex command root used by command projection.
  *
  * Original request (2026-07-15): "sync、update、Oh My Pi、Trae 的完整交付链。"
  */
@@ -19,6 +20,11 @@ export { TOOL_WORKFLOW_TO_SKILL_DIR }
 export type ToolWorkflowId = OpsxWorkflowId
 export type ToolInitDelivery = 'both' | 'skills' | 'commands'
 export type ToolInitStatus = 'uninitialized' | 'partial' | 'initialized'
+
+/** Return the external runtime directory containing official Codex command prompts. */
+export function getExternalCodexCommandObservationRoot(): string {
+  return join(resolveCodexHome(), 'prompts')
+}
 
 export interface ToolInitState {
   toolId: string

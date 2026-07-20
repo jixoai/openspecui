@@ -1,4 +1,18 @@
-import { chmod, mkdir, readFile, rm, writeFile } from 'fs/promises'
+/**
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * 1. Verify persisted UI configuration defaults, presence, and writes.
+ * 2. Verify CLI runner selection, caching, invalidation, and parsing.
+ * 3. Verify reactive configuration convergence and watcher cleanup.
+ * 4. Verify terminal, notification, translation, and editor configuration contracts.
+ *
+ * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
+ * Independent review correction (2026-07-20): Global CLI installation must retire cached and
+ * in-flight runner authority.
+ *
+ * Compromise: this historical suite follows the monolithic ConfigManager surface; splitting its existing
+ * domains is outside the bounded 6.13 correction.
+ */
+import { access, chmod, mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanupTempDir, createTempDir, waitForDebounce } from './__tests__/test-utils.js'
@@ -13,6 +27,12 @@ import { clearCache } from './reactive-fs/index.js'
 import { ReactiveContext } from './reactive-fs/reactive-context.js'
 import { acquireWatcherRoot, closeAllWatchers } from './reactive-fs/watcher-pool.js'
 import { DEFAULT_BELL_SOUND_ID, DEFAULT_NOTIFICATION_SOUND_ID } from './sounds.js'
+
+async function waitForFile(filePath: string): Promise<void> {
+  await vi.waitFor(async () => {
+    await access(filePath)
+  })
+}
 
 describe('ConfigManager', () => {
   let tempDir: string
@@ -687,6 +707,131 @@ describe('ConfigManager', () => {
       } finally {
         process.env.PATH = previousPath
         process.env.SHELL = previousShell
+      }
+    })
+
+    it('does not let an invalidated in-flight runner replace its newer owner', async () => {
+      const probePath = join(tempDir, 'controlled-runner.cjs')
+      const versionPath = join(tempDir, 'runner-version.txt')
+      const startedDir = join(tempDir, 'runner-started')
+      const releaseDir = join(tempDir, 'runner-release')
+      await Promise.all([mkdir(startedDir), mkdir(releaseDir)])
+      await writeFile(
+        probePath,
+        `const { existsSync, readFileSync, watch, writeFileSync } = require('node:fs')
+const { basename, dirname, join } = require('node:path')
+const [versionPath, startedDir, releaseDir] = process.argv.slice(2)
+const version = readFileSync(versionPath, 'utf8').trim()
+const releasePath = join(releaseDir, version)
+let watcher
+const finish = () => {
+  watcher?.close()
+  process.stdout.write(version)
+}
+if (existsSync(releasePath)) {
+  finish()
+} else {
+  watcher = watch(dirname(releasePath), () => {
+    if (existsSync(releasePath) && basename(releasePath) === version) finish()
+  })
+}
+writeFileSync(join(startedDir, version), version)
+`,
+        'utf8'
+      )
+      await configManager.writeConfig({
+        cli: {
+          command: process.execPath,
+          args: [probePath, versionPath, startedDir, releaseDir],
+        },
+      })
+      await writeFile(versionPath, 'runner-a', 'utf8')
+
+      const runnerA = configManager.getResolvedCliRunner()
+      await waitForFile(join(startedDir, 'runner-a'))
+      configManager.invalidateResolvedCliRunner()
+      await writeFile(versionPath, 'runner-b', 'utf8')
+      const runnerB = configManager.getResolvedCliRunner()
+      await waitForFile(join(startedDir, 'runner-b'))
+
+      try {
+        await writeFile(join(releaseDir, 'runner-a'), '', 'utf8')
+        await expect(runnerA).resolves.toMatchObject({ version: 'runner-a' })
+        const observedAfterA = configManager.getResolvedCliRunner()
+        await writeFile(join(releaseDir, 'runner-b'), '', 'utf8')
+
+        await expect(observedAfterA).resolves.toMatchObject({ version: 'runner-b' })
+        await expect(runnerB).resolves.toMatchObject({ version: 'runner-b' })
+        await expect(configManager.getResolvedCliRunner()).resolves.toMatchObject({
+          version: 'runner-b',
+        })
+      } finally {
+        await Promise.all([
+          writeFile(join(releaseDir, 'runner-a'), '', 'utf8'),
+          writeFile(join(releaseDir, 'runner-b'), '', 'utf8'),
+        ])
+      }
+    })
+
+    it('does not repopulate the cache when an invalidated runner finishes without a replacement owner', async () => {
+      const probePath = join(tempDir, 'single-retired-runner.cjs')
+      const countPath = join(tempDir, 'runner-invocations.txt')
+      const startedDir = join(tempDir, 'single-runner-started')
+      const releaseDir = join(tempDir, 'single-runner-release')
+      await Promise.all([mkdir(startedDir), mkdir(releaseDir)])
+      await writeFile(
+        probePath,
+        `const { existsSync, readFileSync, watch, writeFileSync } = require('node:fs')
+const { basename, dirname, join } = require('node:path')
+const [countPath, startedDir, releaseDir] = process.argv.slice(2)
+const invocation = Number(readFileSync(countPath, 'utf8') || '0') + 1
+writeFileSync(countPath, String(invocation))
+const releasePath = join(releaseDir, String(invocation))
+let watcher
+const finish = () => {
+  watcher?.close()
+  process.stdout.write('runner-' + invocation)
+}
+if (existsSync(releasePath)) {
+  finish()
+} else {
+  watcher = watch(dirname(releasePath), () => {
+    if (existsSync(releasePath) && basename(releasePath) === String(invocation)) finish()
+  })
+}
+writeFileSync(join(startedDir, String(invocation)), String(invocation))
+`,
+        'utf8'
+      )
+      await configManager.writeConfig({
+        cli: {
+          command: process.execPath,
+          args: [probePath, countPath, startedDir, releaseDir],
+        },
+      })
+      await writeFile(countPath, '0', 'utf8')
+
+      const runnerA = configManager.getResolvedCliRunner()
+      await waitForFile(join(startedDir, '1'))
+      configManager.invalidateResolvedCliRunner()
+
+      try {
+        await writeFile(join(releaseDir, '1'), '', 'utf8')
+        await expect(runnerA).resolves.toMatchObject({ version: 'runner-1' })
+
+        const runnerB = configManager.getResolvedCliRunner()
+        await waitForFile(join(startedDir, '2'))
+        await writeFile(join(releaseDir, '2'), '', 'utf8')
+
+        await expect(runnerB).resolves.toMatchObject({ version: 'runner-2' })
+        await expect(configManager.getResolvedCliRunner()).resolves.toMatchObject({
+          version: 'runner-2',
+        })
+      } finally {
+        await Promise.all([
+          writeFile(join(releaseDir, '1'), '', 'utf8'),
+          writeFile(join(releaseDir, '2'), '', 'utf8'),
+        ])
       }
     })
   })

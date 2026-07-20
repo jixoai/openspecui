@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Verify path subscriptions share callbacks and release deterministically.
- * 2. Verify multiple observation roots coexist and use reference-counted leases.
+ * 2. Verify multiple observation roots, including missing logical roots sharing an existing ancestor,
+ *    coexist and use reference-counted leases.
  * 3. Verify runtime status reports the complete dynamic root set.
  *
  * Original request (2026-07-15): "响应式内核要观察 data home、Store roots 和 connected project roots。"
@@ -86,6 +87,35 @@ describe('WatcherPool', () => {
         ])
       } finally {
         await cleanupTempDir(secondRoot)
+      }
+    })
+
+    it('keeps a shared physical watcher alive while missing logical roots release independently', async () => {
+      const firstMissingRoot = join(tempDir, 'missing-root-a')
+      const secondMissingRoot = join(tempDir, 'missing-root-b')
+      const releaseFirst = await acquireWatcherRoot(firstMissingRoot)
+      const releaseSecond = await acquireWatcherRoot(secondMissingRoot)
+      const onChange = vi.fn()
+      const releasePath = acquireWatcher(secondMissingRoot, onChange, {
+        recursive: true,
+        debounceMs: 50,
+      })
+
+      try {
+        await mkdir(secondMissingRoot, { recursive: true })
+        await writeFile(join(secondMissingRoot, 'first.txt'), 'first', 'utf8')
+        await waitFor(() => onChange.mock.calls.length > 0, { timeout: 2000, interval: 50 })
+
+        await releaseFirst()
+        const changesAfterFirstRelease = onChange.mock.calls.length
+        await writeFile(join(secondMissingRoot, 'second.txt'), 'second', 'utf8')
+        await waitFor(() => onChange.mock.calls.length > changesAfterFirstRelease, {
+          timeout: 2000,
+          interval: 50,
+        })
+      } finally {
+        releasePath()
+        await releaseSecond()
       }
     })
 
