@@ -320,7 +320,7 @@ The independent browser attempt confirms the desktop source control and URL/quer
 - [x] 6.9 Project Stores route is replaced by Context with root, Reference, environment, and read-only registry diagnostics
 - [x] 6.10 Search defaults to the active root and offers an explicit Referenced Specs scope without referenced changes
 - [x] 6.11 Git makes repository scope explicit for status, history, worktrees, and every mutation
-- [ ] 6.12 Terminal shows selected cwd/root identity in creation controls and tab labels
+- [x] 6.12 Terminal shows selected cwd/root identity in creation controls and tab labels
 - [ ] 6.13 Settings exposes 1.6 compatibility, workflow/tool delivery, root selection, environment, and data-scope diagnostics
 - [ ] 6.14 OPSX New/Propose/Compose/Verify/Update shows and preserves its target planning root
 - [ ] 6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging

@@ -4023,3 +4023,22 @@ Checkpoint `6.12` remains open at `62/131` for main-agent independent acceptance
 Vitest and component-level Playwright/Storybook results are preparation evidence only; no agent-run final
 end-to-end browser walkthrough is performed or claimed. W3, `6.13+`, merge, archive, and release remain
 outside this correction.
+
+### 6.12 Independent Acceptance at `64d9aa2` (2026-07-20)
+
+The final Standards and Spec reviews found no P0/P1/P2 issue. The Standards axis retained one
+non-blocking Duplicated Code smell: the new production-owner fixture repeats a small PTY/WebSocket test
+harness from the downstream contract test. The two files currently prove different ownership boundaries,
+so extracting shared test support is deferred until a third consumer or a concrete maintenance defect
+justifies the extra module.
+
+The main-agent independently reran the exact production-composition lane (`4 files / 25 tests`) plus
+`typecheck:pty-tests` and the complete Server typecheck; all passed. The independent mutation review also
+confirmed that replacing only the production Planning cwd with Launch cwd preserves the two
+`runOperation` calls while failing the Planning A/B `initialCwd` and spawn-cwd assertions. Local HEAD,
+the remote feature branch, and PR #207 all resolved to `64d9aa2`, and the worktree was clean at review.
+
+Checkpoint `6.12` is therefore accepted at `63/131`. This closes the component/server contract only; it
+does not claim the owner's final end-to-end browser acceptance or close checkpoint `10.9`. W3 remains a
+separate Change, and `6.13` becomes the next authorized implementation checkpoint. No merge, archive, or
+release is authorized by this acceptance.
