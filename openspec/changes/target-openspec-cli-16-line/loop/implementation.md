@@ -4613,6 +4613,33 @@ S1 New lacks a route-level same-generation/new-observedAt public-submit acceptan
 
 The earlier `f693225` statements that Propose reached the real shell owner and that New/Propose bypassed
 only the exact dispatch guard are superseded by this review. They must not be cited as completion
-evidence. `GOAL.md` now authorizes three bounded coding packages: exact New/Propose dispatch proof,
-pending Compose A -> B safety, and evidence/header hygiene. Checkpoint 6.14 remains open; do not start
-6.15, merge, archive, or release.
+evidence. The first correction draft grouped three coding packages; the owner then replaced that draft
+with the independent staged delivery recorded below. Checkpoint 6.14 remains open; do not start 6.15,
+merge, archive, or release.
+
+### Owner correction: split 6.14 into independent production-owner stages (2026-07-21)
+
+The owner identified the process failure: prior tests established green fixtures before the actual
+production owner and exact mutation boundary had been fixed. The previous D/E/F bundle is retired.
+Checkpoint 6.14 is now staged as four independent deliveries; no later stage is authorized by an
+earlier stage's worker Goal:
+
+```text
+Stage 1  Compose pending A -> B dirty-draft generation ownership       Sol
+Stage 2  New real form-submit dispatch guard                          Sol
+Stage 3  Propose real Dialog -> createShellSession owner chain        Sol
+Stage 4  Terra focused Vitest + basic component Playwright verification
+         (only after Stages 1-3 each pass independent review)
+```
+
+Each Stage must name one production owner, one precise mutation red case, and one corrected green
+case. A disabled-control assertion is presentation evidence, not a dispatch proof. A test-authored
+button or manually invoked downstream handler is characterization, not production-owner evidence.
+Focused review is a hard gate: do not rerun full repository gates, browser fixtures, or SSG while the
+current Stage's owner contract is still disputed. Final visual, single-page, multi-tab, and end-to-end
+browser acceptance remains the owner's responsibility.
+
+The current short `GOAL.md` authorizes only Stage 1. After its focused commit is independently
+accepted, the main agent will replace `GOAL.md` with the short Stage 2 New Goal, then Stage 3 Propose,
+then Stage 4 Terra verification. This intentionally avoids making workers parse an accumulated audit
+archive as a construction plan.
