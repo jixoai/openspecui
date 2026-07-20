@@ -4665,3 +4665,154 @@ adversarially enable the already-rendered Save control only in the DOM, then mut
 green phase must reject the same public event before history. Keep the pending A -> B typed ownership
 and retry behavior. Do not run full repository gates or start Stage 2 until this focused correction is
 independently accepted.
+
+### Stage 1 stop-loss: Compose guard is unreachable behind the shared payload lock (2026-07-21)
+
+The requested correction was reproduced against the production composition and hit the Goal's stop-loss.
+Restoring `TerminalDispatchActions.resolvePayload` to reject `disabled || actionsDisabled` restores the
+established shared contract, but also proves that the exact mutation red requested above is impossible
+without another product-contract decision:
+
+```text
+Compose Root B recovery state
+  -> actionsDisabled = true
+  -> rendered Save is disabled
+  -> adversarial DOM enable + public click
+  -> TerminalDispatchActions interactionDisabled rejects first
+  -> Compose preparePayload is never called
+  -> assertComposeDraftDispatchable is unreachable
+```
+
+React also suppresses the disabled button's click handler until the DOM property is changed, but changing
+that property does not change the component closure: `resolvePayload` still observes
+`interactionDisabled === true`. Therefore removing only `assertComposeDraftDispatchable` cannot make the
+red phase reach `addInputHistory`. The previous form conversion and shared-lock weakening made the red
+reachable only by changing production semantics for every caller; that correction remains rejected.
+
+This leaves one owner decision before Stage 1 can continue:
+
+```text
+A (recommended)  Give Compose draft recovery a narrow caller-owned presentation lock by wrapping the
+                 unchanged TerminalDispatchActions in a native fieldset disabled only for recovery.
+                 Generic loading/stale disabled/actionsDisabled states remain hard payload locks.
+                 The mutation removes only the fieldset's DOM disabled state; the real Save handler
+                 then reaches Compose preparePayload, where the generation assertion remains the sole
+                 semantic recovery guard. This is a real production contract, not a test-only hook.
+
+B                Keep both existing hard guards and accept narrower evidence: the route proves the
+                 pending A -> B lifecycle/presentation state, while a typed direct owner test proves
+                 assertComposeDraftDispatchable mutation resistance. This does not satisfy the prior
+                 requirement that one route event reach history after removing only that assertion.
+```
+
+No full gates, browser fixtures, SSG, Stage 2, or unrelated production changes are authorized while this
+decision is open. The current worker stopped after the bounded reproduction. Final browser acceptance
+remains owner-only.
+
+### Stage 1 continuation selects the narrow Compose presentation owner (2026-07-21)
+
+The active apply continuation selects option A because it preserves the existing shared
+`TerminalDispatchActions` payload contract and changes only the ownership of the Compose-specific dirty
+draft recovery state. The executable `GOAL.md` now authorizes Sol to use an accessible native fieldset as
+that presentation owner, retain loading/stale target states in `actionsDisabled`, and prove the real Save
+chain against `assertComposeDraftDispatchable`. This is still one independently reviewed Stage 1 commit;
+the exact mutation red must fail before the restored green is accepted. Full gates and Stage 2 remain
+unauthorized.
+
+### Stage 1 review of `73e30fe`: dispatch dialog lifetime remains unproven (2026-07-21)
+
+`73e30fe` restores the shared `disabled || actionsDisabled` payload lock and makes only Compose recovery
+a fieldset presentation lock. Its real Save mutation evidence is directionally correct, but independent
+review found one unresolved lifecycle boundary before Stage 1 can be accepted:
+
+```text
+Root A dispatcher opens Create with A preset/generation
+  -> Root B arrives
+  -> B preparation resolves immediately
+  -> React may batch away the temporary loading/stale render
+  -> interactionDisabled never commits true
+  -> its passive close effect is not authoritative
+  -> the existing dialog can retain A preset while receiving B generation props
+```
+
+The production owner is now explicit: `OpsxComposeRoute` owns a terminal-dispatch instance per typed
+Root identity. A true A -> B identity change retires the A instance during reconciliation; a
+same-generation `observedAt` refresh preserves it. The focused red opens the real
+`TerminalSpawnCommandDialog` under A, immediately settles B, and removes only the reconciliation
+identity. It must then expose the retained A dialog/preset. Restoring the identity must close A before B
+becomes dispatchable, after which a new B dialog can open with only current prompt/generation evidence.
+
+The shared component test also lost its independent `disabled` hard-lock case while adding
+`actionsDisabled`; both must be retained. No New, Propose, full gates, browser fixtures, SSG, push, or
+Stage 2 work is authorized until this correction passes independent focused review. Final browser
+acceptance remains owner-only.
+
+### Stage 1 stop-loss: React suppresses the disabled listener before the hard guard (2026-07-21)
+
+Independent review requested adversarial public-event evidence for both shared
+`TerminalDispatchActions` locks. The proposed test removed only the rendered Save button's `disabled`
+attribute, but React 19 still read the committed intrinsic-button props and suppressed its `onClick`
+listener. `handleSave` and `resolvePayload` were never called, so asserting no payload/history mutation
+would be another false green.
+
+```text
+disabled/actionsDisabled = true in committed React props
+  -> test removes only the DOM attribute
+  -> React getListener observes props.disabled
+  -> onClick is suppressed
+  -> resolvePayload hard guard is unreachable
+```
+
+The stop-loss rejects both available test-manufacturing shortcuts: mutating React private node props
+would couple evidence to an implementation detail, while separating the production presentation and
+semantic locks solely for test reachability would widen this Compose-only correction. The recommended
+decision is to keep the two shared disabled cases as presentation characterization, retain
+`resolvePayload`'s `disabled || actionsDisabled` check as reviewed defense in depth, and reserve Stage 1
+mutation resistance for the reachable Compose reconciliation identity and dirty-draft assertion. If the
+owner instead requires public-event mutation resistance for the shared hard lock, that is a separate
+`TerminalDispatchActions` product-contract change. Stage 1, Stage 2, full gates, and browser fixtures
+remain paused for the owner decision.
+
+### Stage 1 accepted after owner decision and recurrence evidence (2026-07-21)
+
+The owner decision is applied: shared `TerminalDispatchActions` locks remain visible presentation
+characterization plus source-reviewed defense in depth. No React private-props mutation and no shared
+production-contract split were introduced. Stage 1's two reachable production boundaries now have
+independent mutation evidence.
+
+Implementation head: `680abac` (`fix: isolate compose recovery dispatch lock`). It contains only the
+Compose generation-owned dispatch key, the accepted fieldset presentation lock, the existing semantic
+dirty-draft guard, and their checked tests. The real `TerminalDispatchActions` and
+`TerminalSpawnCommandDialog` are mounted in the lifecycle fixture; the Dialog is not mocked and no
+downstream terminal callback is hand-authored.
+
+Mutation evidence:
+
+```text
+Reconciliation red: temporarily remove only `key={rootIdentityKey}` from
+  packages/web/src/routes/opsx-compose.tsx.
+  Root B `/stores/next` rendered and B preparation settled immediately, but the old A Dialog remained
+  in the document with the A prompt. The test failed at `dialogA not.toBeInTheDocument` (line 531).
+  Restoring the key made the same isolated test pass.
+
+Dirty-draft guard red: temporarily make only `assertComposeDraftDispatchable` return without checking
+  `requiresComposeDraftRecovery`. Keep the fieldset DOM bypass and the same real Save click.
+  The A-era text `edited while Root A is pending` reached `addInputHistory`; the test failed at its
+  no-history assertion (line 661). Restoring the assertion made the same event reject before history.
+```
+
+The focused shared-lock tests remain intentionally presentation-level. A temporary attempt to remove
+only the DOM `disabled` attribute did not reach the React 19 intrinsic-button listener because committed
+`props.disabled` still suppresses `onClick`; asserting no history in that setup would be false-green.
+This limitation and the selected boundary are recorded above and in `AGENTS.md`.
+
+Restored focused verification:
+
+- Compose + TerminalDispatchActions Vitest: `2 files / 14 tests passed`.
+- Isolated lifecycle test: `1/1 passed`; isolated mutation reds failed for the named intended reasons.
+- `pnpm --filter @openspecui/web typecheck`: passed.
+- `git diff --check`: passed.
+
+Stage 1 is independently accepted. Checkpoint `6.14` remains open at `64/131` because New and Propose
+are separate production-owner stages. No full repository gates, Playwright/browser fixtures, SSG, push,
+merge, archive, release, or owner visual acceptance is authorized before Stages 2 and 3 converge.
