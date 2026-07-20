@@ -7,6 +7,7 @@
     "src/planning-config-project-binding-write.test.ts",
     "src/planning-config-router.test.ts",
     "src/root-context-cold-start.integration.test.ts",
+    "src/tool-subscription-router.test.ts",
     "../local-translator/src/huggingface-transformers.d.ts"
   ],
   "exclude": ["node_modules", "dist"]
