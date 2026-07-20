@@ -1,12 +1,10 @@
 /**
  * Orthogonal intents (created 2026-07-21 Asia/Shanghai):
- * 1. Keep presentation-only action locks distinct from the caller-owned payload assertion.
- * 2. Preserve the hard Root readiness lock before payload preparation.
+ * 1. Prove disabled and actionsDisabled independently block payload preparation and history writes.
  *
- * Original request (2026-07-21): "public Save must reach the Compose payload owner when only the
- * visual recovery lock is adversarially bypassed."
+ * Owner correction (2026-07-21): "每项先明确一个生产 owner、一个精准红例、一个绿例。"
  */
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalDispatchActions } from './terminal-dispatch-actions'
 
@@ -85,12 +83,10 @@ vi.mock('@/lib/use-terminal-cwd-target', () => ({
   ) => (target === 'planning-root' ? state.planningRoot : state.launchProject),
 }))
 
-function submitButtonForm(name: string): void {
+function clickButton(name: string): void {
   const button = screen.getByRole('button', { name })
   if (!(button instanceof HTMLButtonElement)) throw new Error(`Expected ${name} button.`)
-  const form = button.form
-  if (!form) throw new Error(`Expected ${name} to submit a public form.`)
-  fireEvent.submit(form)
+  fireEvent.click(button)
 }
 
 describe('TerminalDispatchActions payload owner', () => {
@@ -102,32 +98,28 @@ describe('TerminalDispatchActions payload owner', () => {
     cleanup()
   })
 
-  it('lets an adversarial public Save reach the caller assertion behind a visual-only lock', async () => {
+  it('keeps actionsDisabled ahead of payload preparation and history', () => {
     const preparePayload = vi.fn().mockResolvedValue('retained prompt')
     render(<TerminalDispatchActions preparePayload={preparePayload} actionsDisabled />)
 
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
-    submitButtonForm('Save')
-
-    await waitFor(() => expect(preparePayload).toHaveBeenCalledTimes(1))
-    expect(addInputHistoryMock).toHaveBeenCalledWith('retained prompt')
+    clickButton('Save')
+    expect(preparePayload).not.toHaveBeenCalled()
+    expect(addInputHistoryMock).not.toHaveBeenCalled()
   })
 
-  it('keeps the hard Root readiness lock inside the payload owner', async () => {
+  it('keeps disabled Root readiness ahead of payload preparation and history', () => {
     const preparePayload = vi.fn().mockResolvedValue('must not dispatch')
-    const onError = vi.fn()
     render(
       <TerminalDispatchActions
         preparePayload={preparePayload}
         disabled
         disabledReason="Planning root is unavailable."
-        onError={onError}
       />
     )
 
-    submitButtonForm('Save')
-
-    await waitFor(() => expect(onError).toHaveBeenCalledWith('Planning root is unavailable.'))
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    clickButton('Save')
     expect(preparePayload).not.toHaveBeenCalled()
     expect(addInputHistoryMock).not.toHaveBeenCalled()
   })

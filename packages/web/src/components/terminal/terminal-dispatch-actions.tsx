@@ -4,7 +4,6 @@
  * 2. Keep Copy, Save, target selection, and Send under one external readiness lock.
  * 3. Preserve per-action loading state and terminal foreground-process behavior.
  * 4. Keep target selection available while dispatch actions are locked by stale targets.
- * 5. Keep visual action locking separate from the caller-owned payload assertion.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  */
@@ -232,7 +231,7 @@ export function TerminalDispatchActions({
   )
 
   const resolvePayload = async (): Promise<string> => {
-    if (disabled) {
+    if (interactionDisabled) {
       throw new Error(disabledReason ?? 'This action is currently unavailable.')
     }
     const sanitized = sanitizeTerminalDispatchPayload(await preparePayload())
@@ -339,28 +338,22 @@ export function TerminalDispatchActions({
             )}
             {copySuccess ? 'Copied' : 'Copy'}
           </button>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault()
-              void handleSave()
-            }}
+          <button
+            type="button"
+            disabled={interactionDisabled || isSavingHistory}
+            title={interactionDisabled ? disabledReason : undefined}
+            onClick={() => void handleSave()}
+            className={buttonClassName(size, saveSuccess)}
           >
-            <button
-              type="submit"
-              disabled={interactionDisabled || isSavingHistory}
-              title={interactionDisabled ? disabledReason : undefined}
-              className={buttonClassName(size, saveSuccess)}
-            >
-              {isSavingHistory ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : saveSuccess ? (
-                <Check className="h-4 w-4" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              {saveSuccess ? 'Saved' : 'Save'}
-            </button>
-          </form>
+            {isSavingHistory ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : saveSuccess ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {saveSuccess ? 'Saved' : 'Save'}
+          </button>
         </div>
 
         <div className="order-1 flex min-w-0 items-end gap-2 sm:order-2">

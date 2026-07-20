@@ -9,7 +9,7 @@
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  */
 import type { RunWorkflowResultV2 } from '@openspecui/core'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OpsxComposeRoute } from './opsx-compose'
 
@@ -31,20 +31,33 @@ const WORKFLOW_TARGET = {
   rootEvidence: { doctor: null, context: null },
 }
 
+const SHELL_PROFILE = {
+  id: 'builtin:zsh',
+  label: 'zsh',
+  command: 'zsh',
+  args: [],
+  source: 'builtin' as const,
+  quoteStyle: 'posix' as const,
+}
+
 const {
   addInputHistoryMock,
   assertComposeDraftDispatchableMock,
+  createShellSessionMock,
   prepareWorkflowInvocationMock,
   rootActionMock,
   setConfigMock,
+  terminalInvocationConfigMock,
   uiConfigMock,
   useLocationMock,
 } = vi.hoisted(() => ({
   addInputHistoryMock: vi.fn(),
   assertComposeDraftDispatchableMock: vi.fn(),
+  createShellSessionMock: vi.fn(),
   prepareWorkflowInvocationMock: vi.fn(),
   rootActionMock: vi.fn(),
   setConfigMock: vi.fn(),
+  terminalInvocationConfigMock: vi.fn(),
   uiConfigMock: vi.fn(),
   useLocationMock: vi.fn(),
 }))
@@ -72,40 +85,12 @@ vi.mock('@/lib/terminal-context', () => ({
   useTerminalContext: () => ({
     sessions: [],
     activeSessionId: null,
+    createShellSession: createShellSessionMock,
   }),
 }))
 
 vi.mock('@/lib/use-terminal-invocation-config', () => ({
-  useTerminalInvocationConfig: () => ({
-    shellProfiles: [
-      {
-        id: 'builtin:zsh',
-        label: 'zsh',
-        command: 'zsh',
-        args: [],
-        source: 'builtin',
-        quoteStyle: 'posix',
-      },
-    ],
-    defaultShellProfile: {
-      id: 'builtin:zsh',
-      label: 'zsh',
-      command: 'zsh',
-      args: [],
-      source: 'builtin',
-      quoteStyle: 'posix',
-    },
-    spawnCommands: [
-      {
-        id: 'builtin:claude',
-        label: 'Claude',
-        command: 'claude',
-        args: [],
-        fields: [],
-        source: 'builtin',
-      },
-    ],
-  }),
+  useTerminalInvocationConfig: () => terminalInvocationConfigMock(),
 }))
 
 vi.mock('@/lib/use-terminal-cwd-target', () => ({
@@ -174,6 +159,7 @@ describe('OpsxComposeRoute', () => {
       '@/lib/opsx-compose-draft'
     )
     addInputHistoryMock.mockReset().mockResolvedValue(undefined)
+    createShellSessionMock.mockReset().mockReturnValue('term-b')
     assertComposeDraftDispatchableMock
       .mockReset()
       .mockImplementation(actual.assertComposeDraftDispatchable)
@@ -186,6 +172,20 @@ describe('OpsxComposeRoute', () => {
       evidence: null,
     })
     setConfigMock.mockReset()
+    terminalInvocationConfigMock.mockReset().mockReturnValue({
+      shellProfiles: [SHELL_PROFILE],
+      defaultShellProfile: SHELL_PROFILE,
+      spawnCommands: [
+        {
+          id: 'builtin:claude',
+          label: 'Claude',
+          command: 'claude',
+          args: [],
+          fields: [],
+          source: 'builtin',
+        },
+      ],
+    })
     rootActionMock.mockReset().mockReturnValue({
       status: 'ready',
       disabled: false,
@@ -414,6 +414,145 @@ describe('OpsxComposeRoute', () => {
     )
   })
 
+  it('retires an open Root A Create dialog before exposing Root B dispatch', async () => {
+    const getComposePrompt = () =>
+      screen.getByLabelText('Prompt', { selector: 'textarea[aria-label="Prompt"]' })
+    terminalInvocationConfigMock.mockReturnValue({
+      shellProfiles: [SHELL_PROFILE],
+      defaultShellProfile: SHELL_PROFILE,
+      spawnCommands: [
+        {
+          id: 'builtin:claude',
+          label: 'Claude',
+          command: 'claude',
+          args: [
+            {
+              kind: 'field' as const,
+              fieldId: 'prompt',
+              prefix: '',
+              omitWhenEmpty: true,
+            },
+          ],
+          fields: [
+            {
+              id: 'prompt',
+              label: 'Prompt',
+              type: 'textarea' as const,
+              options: [],
+              defaultValue: '',
+              required: false,
+              advanced: false,
+            },
+          ],
+          source: 'builtin',
+        },
+      ],
+    })
+    const targetB = {
+      ...WORKFLOW_TARGET,
+      planningRoot: {
+        ...WORKFLOW_TARGET.planningRoot,
+        path: '/stores/next',
+        store_id: 'next',
+      },
+      storeId: 'next',
+      generation: 'planning-next-generation',
+      rootSelector: { store: 'next' },
+    }
+    const readyA = {
+      status: 'ready' as const,
+      disabled: false,
+      context: {
+        planningRoot: WORKFLOW_TARGET.planningRoot,
+        storeId: WORKFLOW_TARGET.storeId,
+        generation: WORKFLOW_TARGET.generation,
+        observedAt: 1,
+      },
+      observedAt: 1,
+      title: null,
+      message: null,
+      evidence: [],
+    }
+    const readyB = {
+      ...readyA,
+      context: {
+        planningRoot: targetB.planningRoot,
+        storeId: targetB.storeId,
+        generation: targetB.generation,
+        observedAt: 2,
+      },
+      observedAt: 2,
+    }
+    prepareWorkflowInvocationMock
+      .mockResolvedValueOnce({
+        kind: 'agent-prompt',
+        text: 'prepared Root A prompt',
+        format: 'markdown',
+        mode: { requestedMode: 'compose', actualMode: 'compose', fallbackReason: null },
+        target: WORKFLOW_TARGET,
+        evidence: null,
+      })
+      .mockResolvedValueOnce({
+        kind: 'agent-prompt',
+        text: 'prepared Root B prompt',
+        format: 'markdown',
+        mode: { requestedMode: 'compose', actualMode: 'compose', fallbackReason: null },
+        target: targetB,
+        evidence: null,
+      })
+    rootActionMock.mockReturnValue(readyA)
+
+    const view = render(<OpsxComposeRoute />)
+    await waitFor(() => expect(getComposePrompt()).toHaveValue('prepared Root A prompt'))
+    fireEvent.change(getComposePrompt(), {
+      target: { value: 'edited Root A prompt' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+    const dialogA = await screen.findByRole('dialog')
+    expect(await within(dialogA).findByDisplayValue('edited Root A prompt')).toBeVisible()
+
+    rootActionMock.mockReturnValue({
+      ...readyA,
+      context: { ...readyA.context, observedAt: 2 },
+      observedAt: 2,
+    })
+    view.rerender(<OpsxComposeRoute />)
+
+    expect(dialogA).toBeInTheDocument()
+    expect(dialogA).toHaveAttribute('open')
+    expect(within(dialogA).getByDisplayValue('edited Root A prompt')).toBeVisible()
+    expect(prepareWorkflowInvocationMock).toHaveBeenCalledTimes(1)
+
+    rootActionMock.mockReturnValue(readyB)
+    view.rerender(<OpsxComposeRoute />)
+
+    await waitFor(() => expect(screen.getByText('/stores/next')).toBeInTheDocument())
+    await waitFor(() => expect(dialogA).not.toBeInTheDocument())
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(getComposePrompt()).toHaveValue('edited Root A prompt')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate for current root' }))
+    expect(getComposePrompt()).toHaveValue('prepared Root B prompt')
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+    const dialogB = await screen.findByRole('dialog')
+    expect(await within(dialogB).findByDisplayValue('prepared Root B prompt')).toBeVisible()
+    expect(within(dialogB).queryByDisplayValue('edited Root A prompt')).not.toBeInTheDocument()
+    fireEvent.click(within(dialogB).getByRole('button', { name: 'Create' }))
+
+    expect(createShellSessionMock).toHaveBeenCalledTimes(1)
+    expect(createShellSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'builtin:zsh' }),
+      {
+        cwdTarget: 'planning-root',
+        expectedRootGeneration: 'planning-next-generation',
+        label: 'Claude',
+        initialInput: "claude 'prepared Root B prompt'\n",
+      }
+    )
+  })
+
   it('captures pending Root A draft ownership before B preparation resolves and proves the public Save owner guard', async () => {
     const targetB = {
       ...WORKFLOW_TARGET,
@@ -503,31 +642,26 @@ describe('OpsxComposeRoute', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Use edited prompt for current root' })).toBeVisible()
 
-    // Mutation red: retain the B-rendered presentation lock, but remove only the recovery assertion.
-    assertComposeDraftDispatchableMock.mockImplementation(() => undefined)
-    const mutatedSaveButton = screen.getByRole('button', { name: 'Save' })
-    if (!(mutatedSaveButton instanceof HTMLButtonElement) || !mutatedSaveButton.form) {
-      throw new Error('Expected Save to submit the public payload-owner form.')
+    const saveButton = screen.getByRole('button', { name: 'Save' })
+    if (!(saveButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected the existing Save button.')
     }
-    fireEvent.submit(mutatedSaveButton.form)
-    await waitFor(() =>
-      expect(addInputHistoryMock).toHaveBeenCalledWith('edited while Root A is pending')
-    )
+    const recoveryFieldset = saveButton.closest('fieldset')
+    if (!(recoveryFieldset instanceof HTMLFieldSetElement)) {
+      throw new Error('Expected the Compose-owned recovery fieldset.')
+    }
+    expect(recoveryFieldset).toBeDisabled()
 
-    // Green correction: restore the exact assertion on the same mounted public Save event.
-    const actual = await vi.importActual<typeof import('@/lib/opsx-compose-draft')>(
-      '@/lib/opsx-compose-draft'
-    )
-    assertComposeDraftDispatchableMock.mockImplementation(actual.assertComposeDraftDispatchable)
-    const correctedSaveButton = screen.getByRole('button', { name: /^Save/ })
-    if (!(correctedSaveButton instanceof HTMLButtonElement) || !correctedSaveButton.form) {
-      throw new Error('Expected the corrected public Save form.')
-    }
-    fireEvent.submit(correctedSaveButton.form)
-    await waitFor(() =>
+    // Adversarially bypass only the rendered presentation lock. The real Save owner must
+    // still reach Compose's generation assertion before history can be mutated.
+    recoveryFieldset.removeAttribute('disabled')
+    expect(saveButton).toBeEnabled()
+    fireEvent.click(saveButton)
+    await waitFor(() => {
+      expect(addInputHistoryMock).not.toHaveBeenCalled()
       expect(screen.getByText(/prepared for another planning root/)).toBeInTheDocument()
-    )
-    expect(addInputHistoryMock).toHaveBeenCalledTimes(1)
+    })
+    expect(assertComposeDraftDispatchableMock).toHaveBeenCalledTimes(1)
   })
 
   it('keeps a dirty draft visible and offers retry when Root B preparation fails', async () => {

@@ -4,8 +4,7 @@
  * 2. Distinguish same-generation observations from planning-root replacement.
  * 3. Keep dispatch recovery as a typed assertion separate from visual locking.
  *
- * Original request (2026-07-21): "Root A prepare pending -> edit -> Root B must preserve the
- * draft and require explicit confirmation or regeneration before dispatch."
+ * Owner correction (2026-07-21): "每项先明确一个生产 owner、一个精准红例、一个绿例。"
  */
 import type { RootContext } from '@openspecui/core'
 

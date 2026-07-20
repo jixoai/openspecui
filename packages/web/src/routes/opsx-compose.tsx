@@ -41,6 +41,9 @@ import { useLocation } from '@tanstack/react-router'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+const COMPOSE_DRAFT_RECOVERY_REASON =
+  'Confirm the edited prompt for the current root or regenerate it before dispatch.'
+
 export function OpsxComposeRoute() {
   const location = useLocation()
   const { setConfig } = usePopAreaConfigContext()
@@ -412,23 +415,31 @@ export function OpsxComposeRoute() {
         </label>
       </div>
       <div className="border-border mt-1 border-t p-4">
-        <TerminalDispatchActions
-          preparePayload={preparePayload}
-          disabled={rootAction.disabled}
-          actionsDisabled={isLoadingDraft || !workflowTargetCurrent || draftRequiresRecovery}
-          requiredCwdTarget={workflowTarget ? 'planning-root' : undefined}
-          expectedRootGeneration={workflowTarget?.generation}
-          disabledReason={
-            rootAction.message ??
-            (!workflowTargetCurrent
-              ? 'Planning root changed. Prepare this workflow again.'
-              : draftRequiresRecovery
-                ? 'Confirm the edited prompt for the current root or regenerate it before dispatch.'
-                : undefined)
-          }
-          onDispatched={requestClose}
-          onError={setSendError}
-        />
+        <fieldset
+          aria-label="Compose dispatch actions"
+          disabled={draftRequiresRecovery}
+          title={draftRequiresRecovery ? COMPOSE_DRAFT_RECOVERY_REASON : undefined}
+          className="m-0 min-w-0 border-0 p-0"
+        >
+          <TerminalDispatchActions
+            key={rootIdentityKey}
+            preparePayload={preparePayload}
+            disabled={rootAction.disabled}
+            actionsDisabled={isLoadingDraft || !workflowTargetCurrent}
+            requiredCwdTarget={workflowTarget ? 'planning-root' : undefined}
+            expectedRootGeneration={workflowTarget?.generation}
+            disabledReason={
+              rootAction.message ??
+              (!workflowTargetCurrent
+                ? 'Planning root changed. Prepare this workflow again.'
+                : draftRequiresRecovery
+                  ? COMPOSE_DRAFT_RECOVERY_REASON
+                  : undefined)
+            }
+            onDispatched={requestClose}
+            onError={setSendError}
+          />
+        </fieldset>
       </div>
 
       {sendError && (
