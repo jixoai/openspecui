@@ -4816,3 +4816,22 @@ Restored focused verification:
 Stage 1 is independently accepted. Checkpoint `6.14` remains open at `64/131` because New and Propose
 are separate production-owner stages. No full repository gates, Playwright/browser fixtures, SSG, push,
 merge, archive, release, or owner visual acceptance is authorized before Stages 2 and 3 converge.
+
+### Stage 2 authorization: OPSX New real form-submit owner (2026-07-21)
+
+Stage 2 is limited to the existing `OpsxNewRoute` form owner. The prior counterexample test replaced
+one `isWorkflowTargetCurrent` mock used by both the disabled projection and the dispatch guard; setting
+it to true therefore bypassed two layers and could not identify which production boundary prevented the
+stale terminal creation.
+
+The corrected evidence keeps the real freshness helper everywhere. Root A prepares the command, Root B
+changes only the generation, and the Create button remains disabled. The test then submits the real
+mounted form directly, which is a supported public event and reaches the inline guard immediately before
+`createDedicatedSession`. The mutation red removes only that inline guard block; it must leave the
+button projection, helper, prepared command, and form event unchanged and fail because A generation
+reaches the terminal owner. A separate page-level case changes only `observedAt` and proves the same
+generation remains dispatchable.
+
+No Compose, Propose, terminal component, command construction, full gate, browser fixture, SSG, push,
+or checkpoint transition is authorized in this Stage. Checkpoint `6.14` remains `64/131` until Stage 3
+and the later focused automation package are accepted.
