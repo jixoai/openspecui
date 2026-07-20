@@ -4305,3 +4305,17 @@ Terra's independent read-only audit found no P1/P2 issue. The branch and PR rema
 with `6.13` still open at `63/131`; `6.14+`, merge, archive, and release remain out of scope. The
 automated Browser Gates are component/fixture evidence only. The owner still performs final
 product-level browser walkthrough and multi-tab acceptance.
+
+### 6.13 Acceptance and 6.14 Handoff (2026-07-20)
+
+The main-agent independently reviewed the exact `d51b251` candidate after the owner reported the
+single-page and multi-tab acceptance scenarios as passing. The candidate has no remaining P1/P2 issue,
+all local and exact-head remote gates are green, and checkpoint `6.13` is now closed at `64/131`.
+This acceptance covers Settings compatibility/tool diagnostics and its checked component/transport
+boundary; it does not claim checkpoint `10.9` product-level browser acceptance.
+
+Checkpoint `6.14` is now the sole authorized implementation slice. Its worker Goal must preserve the
+CLI-selected planning-root target through OPSX New, Propose, Compose, Verify, and Update, with typed
+root/provenance evidence and no launch-directory reconstruction. W3 reactive-error propagation,
+static export, App/Store Manager, merge, archive, release, and owner-level `10.9` browser walkthrough
+remain outside this slice.
