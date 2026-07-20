@@ -4042,3 +4042,200 @@ Checkpoint `6.12` is therefore accepted at `63/131`. This closes the component/s
 does not claim the owner's final end-to-end browser acceptance or close checkpoint `10.9`. W3 remains a
 separate Change, and `6.13` becomes the next authorized implementation checkpoint. No merge, archive, or
 release is authorized by this acceptance.
+
+### 6.13 Focused Red/Green Boundary (2026-07-20)
+
+The first Settings diagnostics candidate is intentionally still open at `63/131`. Server test commit
+`979c9b0` crosses the real `appRouter.createCaller -> public subscription -> createReactiveSubscription
+-> Core reactive filesystem -> external mutation` path. Its two focused cases and explicit transport
+typecheck pass: Planning-root `.cursor`/generated command files do not enter Launch projections, while
+external Launch creation/removal re-emits detection and exact `delivery=commands` / `workflows=[update]`
+tool state. No query/refetch fallback, polling, or fabricated resolver is used.
+
+The first Web component/hook lane produced one useful red among fifteen cases. A Root Context `loading`
+projection with no CLI evidence was rendered as `CLI unavailable`. Missing evidence is pending/unknown,
+not an objective unavailable result; only explicit `cli.available=false` may carry that label. The
+corrected component/hook lane then passed all `15/15` cases.
+
+Independent review found that the first rebind assertion covered only late retired-A callbacks, not the
+cached A snapshot retained while B was loading. Before changing the hook, this exact command provided a
+real fixed-point red rather than source-inspection evidence:
+
+```bash
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/components/settings/use-settings-tool-subscriptions.test.tsx \
+  --reporter=verbose --maxWorkers=1
+```
+
+The single case failed at the new B-rebind assertion with `expected [claude-a] to be undefined`. The
+hook now starts every replacement generation as `{ data: undefined, isLoading: true, error: null }`;
+the same command passes `1/1`, and late A data/errors remain unable to overwrite the eventual B result.
+An isolated mutation deleting that cleanup transition failed the same case at the loading transition
+(`expected true`, received `false`), then restoration returned the Web component/hook lane to `15/15`
+and Web typecheck to green.
+
+Independent review also rejected two structural shortcuts before delivery: Settings cannot retain the
+old `cli.checkAvailability` status as a second visible CLI/version truth, and the fixed global installer
+must invalidate Root Context on terminal or indeterminate settlement so that removal remains reactive.
+Root/Environment diagnostics, launch-tool initialization, and thin Settings composition must remain
+separate physical modules rather than moving the old oversized route into one new oversized component.
+Checkpoint `6.13`, full gates, final owner browser acceptance, `6.14+`, merge, archive, and release remain
+open or unauthorized at this focused boundary.
+
+The global-installer Root invalidation evidence now lives beside the real public subscription fixture in
+`tool-subscription-router.test.ts`, which is included by `tsconfig.transport-tests.json`; the duplicate
+untyped Router cases were removed. The success case observes Context generation `1` inside the public
+`next(exit)` callback and again at completion. The rejected settlement observes generation `1` inside
+the public error callback. Moving `settle()` after `onEvent(exit)` in an isolated mutation made the
+success assertion fail with `expected [1]`, received `[0]`; the rejected-settlement case remained green,
+showing that its separate promise-rejection path still invalidated before error. Restoration passed the
+Server public fixture `4/4`, `typecheck:transport-tests`, and `git diff --check`.
+
+The complete focused candidate lane passes Core tool projection `15/15`, Server Router/subscription
+`90/90`, Web Settings/runner/subscription `86/86`, Web typecheck, Server typecheck, format, lint, and diff
+checks. The temporary mutation worktree is removed. Checkpoint 6.14 pre-development now has a
+Change-owned takeover authority at `../frontend.GOAL.md`: `takeover=ready`,
+`workStatus=not-started`, and `integration=blocked` while 6.13 remains unaccepted. The repository-root
+`frontend.GOAL.md` is only a forwarder and carries no independent status truth.
+
+### 6.13 Independent Review Correction (2026-07-20)
+
+The preceding focused-green conclusion is superseded. Checkpoint `6.13` remains open at `63/131` after
+independent Standards and Spec review found four implementation gaps at the candidate derived from
+`979c9b0`:
+
+1. The tool-subscription hook clears A only inside a passive effect. A B render can therefore still read
+   A data under B's delivery/workflow contract before that effect commits. The existing test observes
+   only post-effect state and does not prove render-time provenance. The correction must associate state
+   with its exact input identity and mask A on B's first render/commit while still retiring late A
+   callbacks; red and mutation evidence must observe that exact boundary.
+2. The fixed global installer invalidates the `context` facet but does not retire
+   `ConfigManager.resolvedRunner`. A previous package-runner resolution can remain authoritative after a
+   global install, and an invalidated in-flight resolution can repopulate stale cache. The correction must
+   retire runner resolution before Context invalidation and before public terminal/indeterminate
+   settlement, with cached and in-flight recurrence tests.
+3. The candidate and Goal overstate tool artifacts as Launch-only. Official OpenSpec 1.6 keeps Codex
+   commands at `${CODEX_HOME:-~/.codex}/prompts`, while Codex skills and ordinary project tool artifacts
+   remain beneath Launch. The subscription must preserve this physical scope and acquire reactive
+   observation for the environment-global Codex command root; a checked public Router test must prove
+   both create and remove convergence without relabeling it Launch-owned.
+4. The public subscription fixture passed in focused/serial runs but reproduced `1/4` failure under
+   ordinary parallel load. Its wait boundary must be derived from the reactive watcher's bounded fallback
+   cadence and prove deterministic eventual delivery without arbitrary sleeps or retry loops. Until that
+   lane is stable, the recorded `4/4` claim is conditional rather than closure evidence.
+
+The attempted 6.14 takeover mirror in `loop/checkpoints.md` was outside the 6.13 Goal and has been
+removed from the tracked candidate. Both `frontend.GOAL.md` files remain untracked owner artifacts and
+must not be edited, staged, ignored, or used to authorize 6.14 integration during this correction.
+
+No Agent final end-to-end browser walkthrough is authorized or required. Vitest and basic component-level
+Playwright/Storybook evidence remain the Agent boundary; checkpoint `10.9` is owner-only. Do not close
+`6.13`, start `6.14`, merge, archive, or release before the corrected candidate passes a new independent
+review.
+
+### 6.13 Correction Evidence (2026-07-20)
+
+The four review gaps above are now corrected in the current worktree. Checkpoint `6.13` remains open at
+`63/131`; this entry records preparation evidence only and does not authorize `6.14`, merge, archive,
+release, or owner browser acceptance.
+
+Runner ownership fixed point:
+
+```text
+normal focused:
+pnpm --filter @openspecui/core exec vitest run src/config.test.ts -t "without a replacement owner" --reporter=verbose --maxWorkers=1
+  -> 1/1 passed after restoration
+
+mutation (only the generation/owner guard replaced by an unconditional cache assignment):
+  -> exit 1; the test timed out waiting for `single-runner-started/2` with ENOENT,
+     proving the retired A result repopulated cache and no replacement process ran
+
+restoration:
+  -> 1/1 passed; the old A process completed after invalidation and a fresh B process owned cache
+```
+
+External Codex command observation fixed point:
+
+```text
+normal missing-root fixture:
+pnpm --filter @openspecui/server exec vitest run src/tool-subscription-router.test.ts \
+  -t "observes environment-global" --reporter=verbose --maxWorkers=1
+  -> 1/1 passed; `CODEX_HOME/prompts` was absent when the subscription started, then external
+     command create and removal converged while Planning `.codex/skills` remained excluded
+
+mutation (only `ToolCommandObservationService.start()` lease acquisition replaced by a resolved no-op):
+  -> exit 1 at the removal fixed point after the bounded wait:
+     `environment-global Codex command removal: expected false to be true`
+  -> create remained visible, but removal could not converge without the external lease
+
+restoration:
+  -> the same missing-root fixture passed 1/1
+```
+
+Missing-root watcher ownership is covered without aliasing lifecycle bugs. `watcher-pool` resolves a
+missing logical root to its nearest existing ancestor only for the physical `ProjectWatcher`, keeps the
+logical root as the subscription/diagnostic identity, and reference-counts the shared physical watcher.
+The checked shared-ancestor test and the full watcher-pool file pass `21/21`; releasing one missing logical
+root leaves the other observing. The public fixture also confirms external create/remove behavior through
+the real Router subscription rather than a test-only observer.
+
+Focused combined evidence after restoration:
+
+```text
+pnpm --filter @openspecui/core exec vitest run \
+  src/config.test.ts src/tool-init-state.test.ts src/tool-config.test.ts \
+  src/reactive-fs/watcher-pool.test.ts
+  -> 4 files / 89 tests passed
+
+pnpm --filter @openspecui/server exec vitest run \
+  src/tool-subscription-router.test.ts src/router.test.ts
+  -> 2 files / 91 tests passed
+
+pnpm --filter @openspecui/server typecheck:transport-tests
+pnpm --filter @openspecui/server typecheck
+  -> both passed
+```
+
+The earlier Web focused count `86/86` is superseded. The exact four-file Settings lane is `82/82` with
+Web typecheck green, as recorded by the main-agent rerun. One prior ordinary parallel Server attempt
+had a single installer-success failure under load; standalone and the two normal combined Server runs
+above are the stable evidence, and no arbitrary sleep, retry loop, or worker-concurrency change was added.
+
+Full repository gates, clean SSG rebuild, commit, push, and independent review remain pending. Final
+browser E2E remains owner-only.
+
+### 6.13 Full Gate Evidence (2026-07-20)
+
+The corrected worktree completed the required local gates. Static output directories were moved out of
+the workspace before the SSG build so the generated result was fresh; no stale `dist-ssg` or `.vite`
+artifact was used as evidence.
+
+```text
+pnpm format:check
+  -> passed; all 28 changed files use Prettier code style
+
+pnpm lint:ci
+  -> passed; 856 files, 0 warnings, 0 errors
+
+pnpm typecheck
+  -> passed; all 15 participating workspace projects, including Server transport/search/git/pty lanes
+
+pnpm test:ci
+  -> passed: root 12 files / 43 tests; Core 47 / 443; Server 55 / 407; Web 123 / 779;
+     CLI 11 / 49; all remaining participating package lanes passed
+  -> Web emitted existing jsdom canvas-not-implemented diagnostics from xterm/Pixi imports, but no test failed
+
+pnpm test:browser:ci
+  -> passed: xterm-input-panel 6 files / 60 passed / 1 skipped; Web Storybook 4 files / 12 passed
+  -> automated component/fixture evidence only; no owner browser walkthrough claimed
+
+pnpm --filter @openspecui/web build:ssg
+  -> passed after clean output preparation; existing scroll-button CSS and ineffective dynamic-import
+     warnings only
+
+git diff --check
+  -> passed
+```
+
+No commit, push, remote CI, independent acceptance, merge, archive, release, or final browser E2E is
+claimed by this evidence entry.
