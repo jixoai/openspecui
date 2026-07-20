@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-21 Asia/Shanghai):
  * 1. Verify new-change execution remains locked until Root Context succeeds.
  * 2. Verify prepared planning-root targets render before terminal creation.
  * 3. Verify Root A to B replacement locks stale Create dispatch.
  * 4. Verify Store selector arguments shown in the prepared command are the dispatched arguments.
+ * 5. Verify the real form owner rechecks prepared target generation before terminal creation.
+ * 6. Verify observedAt-only refresh preserves same-generation form dispatch.
  *
- * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
+ * Owner correction (2026-07-21): "每项先明确一个生产 owner、一个精准红例、一个绿例。"
  */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,13 +18,11 @@ const {
   prepareWorkflowInvocationMock,
   rootActionMock,
   setConfigMock,
-  workflowTargetGuardMock,
 } = vi.hoisted(() => ({
   createDedicatedSessionMock: vi.fn(),
   prepareWorkflowInvocationMock: vi.fn(),
   rootActionMock: vi.fn(),
   setConfigMock: vi.fn(),
-  workflowTargetGuardMock: vi.fn(),
 }))
 
 vi.mock('@/components/layout/pop-area', () => ({
@@ -39,10 +39,6 @@ vi.mock('@/lib/opsx-workflow-invocation', async (importOriginal) => {
   return {
     ...actual,
     prepareWorkflowInvocation: prepareWorkflowInvocationMock,
-    isWorkflowTargetCurrent: (
-      target: Parameters<typeof actual.isWorkflowTargetCurrent>[0],
-      rootAction: Parameters<typeof actual.isWorkflowTargetCurrent>[1]
-    ) => workflowTargetGuardMock(target, rootAction),
   }
 })
 
@@ -67,13 +63,9 @@ describe('OpsxNewRoute', () => {
     cleanup()
   })
 
-  beforeEach(async () => {
-    const actual = await vi.importActual<typeof import('@/lib/opsx-workflow-invocation')>(
-      '@/lib/opsx-workflow-invocation'
-    )
+  beforeEach(() => {
     createDedicatedSessionMock.mockReset()
     prepareWorkflowInvocationMock.mockReset()
-    workflowTargetGuardMock.mockReset().mockImplementation(actual.isWorkflowTargetCurrent)
     rootActionMock.mockReset().mockReturnValue({
       status: 'blocked',
       disabled: true,
@@ -160,7 +152,7 @@ describe('OpsxNewRoute', () => {
     expect(createDedicatedSessionMock).not.toHaveBeenCalled()
   })
 
-  it('proves the public Create boundary rejects Root A after the exact guard is restored', async () => {
+  it('rejects a stale Root A command through the real form owner after Root B replaces its generation', async () => {
     const target = {
       launchProject: { path: '/launch' },
       planningRoot: { path: '/planning-a', source: 'nearest', healthy: true, status: [] },
@@ -206,7 +198,7 @@ describe('OpsxNewRoute', () => {
     rootActionMock.mockReturnValue({
       ...readyA,
       context: {
-        planningRoot: { ...target.planningRoot, path: '/planning-b' },
+        planningRoot: target.planningRoot,
         storeId: null,
         observedAt: 2,
         generation: 'planning-b-generation',
@@ -214,10 +206,92 @@ describe('OpsxNewRoute', () => {
       observedAt: 2,
     })
 
-    // Counterexample mutation: bypass only the target freshness guard at the public dispatch.
-    workflowTargetGuardMock.mockReturnValue(true)
     view.rerender(<OpsxNewRoute />)
+    expect(screen.getByRole('button', { name: 'Create' })).toBeDisabled()
+
+    const form = view.container.querySelector('form')
+    expect(form).not.toBeNull()
+    if (!form) throw new Error('Expected the New route form to remain mounted.')
+    fireEvent.submit(form)
+
+    // A removed inline guard must expose the exact stale command/generation at the terminal owner.
+    expect(createDedicatedSessionMock).not.toHaveBeenCalledWith(
+      'openspec',
+      ['new', 'change', 'add-search'],
+      expect.objectContaining({
+        cwdTarget: 'planning-root',
+        expectedRootGeneration: 'planning-a-generation',
+      })
+    )
+    await waitFor(() =>
+      expect(
+        screen.getByText('Planning root changed before dispatch. Prepare this workflow again.')
+      ).toBeInTheDocument()
+    )
+    expect(createDedicatedSessionMock).not.toHaveBeenCalled()
+  })
+
+  it('dispatches the prepared command after an observedAt-only Root refresh', async () => {
+    const target = {
+      launchProject: { path: '/launch' },
+      planningRoot: { path: '/planning-a', source: 'nearest', healthy: true, status: [] },
+      storeId: null,
+      observedAt: 1,
+      generation: 'planning-a-generation',
+      rootSelector: {},
+      references: [],
+      diagnostics: { root: [], doctor: [], context: [] },
+      rootEvidence: { doctor: null, context: null },
+    }
+    const readyA = {
+      status: 'ready' as const,
+      disabled: false,
+      context: {
+        planningRoot: target.planningRoot,
+        storeId: null,
+        observedAt: target.observedAt,
+        generation: target.generation,
+      },
+      observedAt: target.observedAt,
+      title: null,
+      message: null,
+      evidence: [],
+    }
+    rootActionMock.mockReturnValue(readyA)
+    prepareWorkflowInvocationMock.mockResolvedValue({
+      kind: 'cli-command',
+      command: 'openspec',
+      args: ['new', 'change', 'add-search'],
+      mode: { requestedMode: 'direct', actualMode: 'direct', fallbackReason: null },
+      target,
+      evidence: null,
+    })
+
+    const view = render(<OpsxNewRoute />)
+    fireEvent.change(screen.getByPlaceholderText('add-search-poparea'), {
+      target: { value: 'add-search' },
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    await waitFor(() => expect(screen.getByText('/planning-a')).toBeInTheDocument())
+
+    rootActionMock.mockReturnValue({
+      ...readyA,
+      context: {
+        planningRoot: target.planningRoot,
+        storeId: null,
+        observedAt: 2,
+        generation: target.generation,
+      },
+      observedAt: 2,
+    })
+    view.rerender(<OpsxNewRoute />)
+
+    expect(screen.getByRole('button', { name: 'Create' })).toBeEnabled()
+    const form = view.container.querySelector('form')
+    expect(form).not.toBeNull()
+    if (!form) throw new Error('Expected the New route form to remain mounted.')
+    fireEvent.submit(form)
+
     await waitFor(() => expect(createDedicatedSessionMock).toHaveBeenCalledTimes(1))
     expect(createDedicatedSessionMock).toHaveBeenCalledWith(
       'openspec',
@@ -227,23 +301,6 @@ describe('OpsxNewRoute', () => {
         expectedRootGeneration: 'planning-a-generation',
       })
     )
-
-    // Green evidence: restore the production helper without rerendering; the same public submit
-    // closure must reject Root A before createDedicatedSession.
-    const actual = await vi.importActual<typeof import('@/lib/opsx-workflow-invocation')>(
-      '@/lib/opsx-workflow-invocation'
-    )
-    workflowTargetGuardMock.mockImplementation(actual.isWorkflowTargetCurrent)
-    const form = view.container.querySelector('form')
-    expect(form).not.toBeNull()
-    if (!form) throw new Error('Expected the New route form to remain mounted.')
-    fireEvent.submit(form)
-    await waitFor(() =>
-      expect(
-        screen.getByText('Planning root changed before dispatch. Prepare this workflow again.')
-      ).toBeInTheDocument()
-    )
-    expect(createDedicatedSessionMock).toHaveBeenCalledTimes(1)
   })
 
   it('renders and dispatches the Server-prepared Store selector command', async () => {
