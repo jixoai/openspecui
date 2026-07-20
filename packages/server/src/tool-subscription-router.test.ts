@@ -260,6 +260,7 @@ describe('public tool subscriptions', () => {
     const launchUpdate = join(fixture.launchRoot, '.claude', 'commands', 'opsx', 'update.md')
 
     try {
+      await mkdir(join(fixture.launchRoot, '.claude', 'commands', 'opsx'), { recursive: true })
       await writeArtifact(planningUpdate)
       const caller = appRouter.createCaller(fixture.server.createContext())
       const observable = await caller.cli.subscribeToolInitStates({

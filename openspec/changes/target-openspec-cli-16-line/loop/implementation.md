@@ -4239,3 +4239,50 @@ git diff --check
 
 No commit, push, remote CI, independent acceptance, merge, archive, release, or final browser E2E is
 claimed by this evidence entry.
+
+### 6.13 Remote Fast Gate Correction (2026-07-20)
+
+Remote Fast Gate for commit `9461046` exposed one remaining CI-only P1 in the second public tool
+subscription case. The failure was at `Launch update command creation`: the bounded four-cycle wait
+(`4 x 1,000ms`) exhausted before the expected command projection arrived. Server reported `406/407`
+tests and Browser Gate was skipped as a dependent failure. This supersedes the earlier remote-green
+claim; the local full package pass was not sufficient evidence for that remote environment.
+
+Diagnosis and narrow correction:
+
+```text
+writeArtifact() previously created `.claude/commands/opsx` and the command file in one helper.
+The subscription's missing command path uses reactiveExists fallback and invalidates/rebuilds its
+artifact cache on each emission. Under the CI timing, a parent-directory create event could arrive
+while that cache/watcher was being rebound; the subsequent file-create event was then not observed
+within the four fallback cycles.
+
+correction:
+  pre-create Launch `.claude/commands/opsx` before subscribing in the fixture;
+  keep every asserted mutation as a direct command-file create/remove.
+
+This changes only fixture topology. It does not add a production poll, sleep, retry loop, worker
+serialization change, or a manual refetch. The test still crosses the public Router subscription,
+reactive filesystem, and external file mutation boundary.
+```
+
+Focused and package-level confirmation after the correction:
+
+```text
+pnpm --filter @openspecui/server exec vitest run \
+  src/tool-subscription-router.test.ts -t "preserves commands/update" \
+  --reporter=verbose --maxWorkers=1
+  -> 1/1 passed (normal run)
+
+CI=true pnpm --filter @openspecui/server exec vitest run \
+  src/tool-subscription-router.test.ts -t "preserves commands/update" \
+  --reporter=verbose --maxWorkers=1
+  -> 1/1 passed
+
+pnpm --filter @openspecui/server test
+  -> 55 files / 407 tests passed (run 1, 52.04s)
+  -> 55 files / 407 tests passed (run 2, 53.78s)
+```
+
+The correction is not yet a delivery claim: full repository gates must be rerun on the new commit,
+then the new remote Fast/Browser checks must pass on that exact SHA. Final browser E2E remains owner-only.
