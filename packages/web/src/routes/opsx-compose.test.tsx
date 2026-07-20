@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Verify the change workflow dialog preserves route action and invocation-mode inputs.
  * 2. Verify the shared terminal dispatch surface remains available.
  * 3. Verify server-owned planning-root and Store targets remain visible before dispatch.
@@ -21,6 +21,8 @@ const WORKFLOW_TARGET = {
     status: [],
   },
   storeId: 'shared',
+  observedAt: 1,
+  generation: 'planning-shared-generation',
   rootSelector: { store: 'shared' },
   references: [],
   diagnostics: { root: [], doctor: [], context: [] },
@@ -136,6 +138,10 @@ vi.mock('@/lib/use-root-action-state', () => ({
 
 vi.mock('@/lib/opsx-workflow-invocation', () => ({
   prepareWorkflowInvocation: prepareWorkflowInvocationMock,
+  isWorkflowTargetCurrent: (
+    target: { planningRoot: { path: string } },
+    rootAction: { context: { planningRoot?: { path: string } } | null }
+  ) => rootAction.context?.planningRoot?.path === target.planningRoot.path,
   stringifyWorkflowInvocation: vi.fn((result: { text: string }) => result.text),
   workflowDiagnosticsToText: vi.fn(() => null),
 }))

@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Verify change validation dialog lifecycle.
  * 2. Verify Root Context failure prevents command preparation and execution.
  * 3. Verify direct validation queues only its typed transport and preserves diagnostics.
+ * 4. Verify prepared Root A validation is rejected after Root B replacement.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
@@ -54,6 +55,10 @@ vi.mock('@/lib/use-cli-runner', () => ({
 
 vi.mock('@/lib/opsx-workflow-invocation', () => ({
   prepareWorkflowInvocation: prepareWorkflowInvocationMock,
+  isWorkflowTargetCurrent: (
+    target: { planningRoot: { path: string } },
+    rootAction: { context: { planningRoot?: { path: string } } | null }
+  ) => rootAction.context?.planningRoot?.path === target.planningRoot.path,
   workflowDiagnosticsToText: workflowDiagnosticsMock,
 }))
 
@@ -155,8 +160,65 @@ describe('OpsxVerifyRoute', () => {
           type: 'change',
           strict: true,
         },
+        displayArgs: ['validate', 'add-terminal-spawn-command', '--type', 'change', '--strict'],
       },
     ])
     expect(screen.getByText(/MODIFIED requirement would remove existing scenarios/)).toBeTruthy()
+  })
+
+  it('rejects the prepared A target at the runner boundary after Root B replaces it', async () => {
+    const target = {
+      launchProject: { path: '/launch' },
+      planningRoot: { path: '/planning-a', source: 'nearest', healthy: true, status: [] },
+      storeId: null,
+      observedAt: 1,
+      generation: 'planning-a-generation',
+      rootSelector: {},
+      references: [],
+      diagnostics: { root: [], doctor: [], context: [] },
+      rootEvidence: { doctor: null, context: null },
+    }
+    const readyA = {
+      status: 'ready',
+      disabled: false,
+      context: {
+        planningRoot: target.planningRoot,
+        storeId: null,
+        observedAt: 1,
+        generation: target.generation,
+      },
+      observedAt: 1,
+      title: null,
+      message: null,
+      evidence: [],
+    }
+    rootActionMock.mockReturnValue(readyA)
+    prepareWorkflowInvocationMock.mockResolvedValue({
+      kind: 'cli-command',
+      command: 'openspec',
+      args: ['validate', 'add-terminal-spawn-command', '--type', 'change', '--strict'],
+      mode: { requestedMode: 'direct', actualMode: 'direct', fallbackReason: null },
+      target,
+      evidence: null,
+    })
+    let view: ReturnType<typeof render>
+    replaceAllMock.mockImplementation(() => {
+      rootActionMock.mockReturnValue({
+        ...readyA,
+        context: {
+          planningRoot: { ...target.planningRoot, path: '/planning-b' },
+          storeId: null,
+          observedAt: 2,
+          generation: 'planning-b-generation',
+        },
+        observedAt: 2,
+      })
+      view.rerender(<OpsxVerifyRoute />)
+    })
+
+    view = render(<OpsxVerifyRoute />)
+    await waitFor(() => expect(replaceAllMock).toHaveBeenCalled())
+    expect(runAllMock).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Re-run' })).toBeDisabled()
   })
 })

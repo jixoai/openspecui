@@ -4,6 +4,7 @@
  * 2. Delegate OpenSpec filesystem ownership to the CLI-selected planning-root manager.
  * 3. Host notification, sound, preview-resource, and translation HTTP boundaries.
  * 4. Host tRPC and PTY WebSocket transports with deterministic teardown.
+ *    PTY planning-root creation also verifies opaque root generation provenance.
  * 5. Own the runtime observation environment, external Codex command lease, and warm root-scoped
  *    services without blocking readiness.
  *
@@ -517,11 +518,19 @@ export async function createWebSocketServer(
   const ptyManager = new PtyManager()
   const ptyWss = new WebSocketServer({ noServer: true })
   const ptyHandler = createPtyWebSocketHandler(ptyManager, server.notificationService, {
-    async withCwdTarget(cwdTarget, task) {
+    async withCwdTarget(cwdTarget, task, expectedRootGeneration) {
       if (cwdTarget === 'launch-project') {
+        if (expectedRootGeneration) {
+          throw new Error('Planning-root generation cannot target the launch project.')
+        }
         return task({ cwdTarget, cwd: config.projectDir })
       }
-      return server.planningRootServices.runOperation(({ rootContext }) => {
+      return server.planningRootServices.runOperation(({ rootContext, gitBindingToken }) => {
+        if (expectedRootGeneration && expectedRootGeneration !== gitBindingToken) {
+          throw new Error(
+            'Planning root changed before terminal creation. Prepare the workflow again.'
+          )
+        }
         const planningRoot = rootContext.planningRoot
         if (!planningRoot) {
           throw new Error('Planning root cwd is unavailable.')

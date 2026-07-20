@@ -1835,14 +1835,30 @@ export const cliRouter = router({
         type: z.enum(['spec', 'change']).optional(),
         id: z.string().optional(),
         strict: z.boolean().optional(),
+        /** Opaque generation observed during workflow preparation. */
+        expectedRootGeneration: z.string().min(1).optional(),
       })
     )
     .subscription(({ ctx, input }) => {
-      return createPlanningRootCliStreamObservable(ctx, ({ rootContext }, onEvent) =>
-        ctx.cliExecutor.validateStream(
-          { ...input, ...getRootContextCliSelector(rootContext) },
-          onEvent
-        )
+      return createPlanningRootCliStreamObservable(
+        ctx,
+        ({ rootContext, gitBindingToken }, onEvent) => {
+          if (
+            input.expectedRootGeneration !== undefined &&
+            input.expectedRootGeneration !== gitBindingToken
+          ) {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message:
+                'Planning root changed before validation started. Prepare the workflow again.',
+            })
+          }
+          const { expectedRootGeneration: _expectedRootGeneration, ...validateInput } = input
+          return ctx.cliExecutor.validateStream(
+            { ...validateInput, ...getRootContextCliSelector(rootContext) },
+            onEvent
+          )
+        }
       )
     }),
 

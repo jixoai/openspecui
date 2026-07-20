@@ -1,11 +1,14 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Verify new-change execution remains locked until Root Context succeeds.
+ * 2. Verify prepared planning-root targets render before terminal creation.
+ * 3. Verify Root A to B replacement locks stale Create dispatch.
+ * 4. Verify Store selector arguments shown in the prepared command are the dispatched arguments.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  */
-import { fireEvent, render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OpsxNewRoute } from './opsx-new'
 
 const { createDedicatedSessionMock, prepareWorkflowInvocationMock, rootActionMock, setConfigMock } =
@@ -27,6 +30,10 @@ vi.mock('@/lib/nav-controller', () => ({
 
 vi.mock('@/lib/opsx-workflow-invocation', () => ({
   prepareWorkflowInvocation: prepareWorkflowInvocationMock,
+  isWorkflowTargetCurrent: (
+    target: { planningRoot: { path: string } },
+    rootAction: { context: { planningRoot?: { path: string } } | null; observedAt: number }
+  ) => rootAction.context?.planningRoot?.path === target.planningRoot.path,
 }))
 
 vi.mock('@/lib/terminal-context', () => ({
@@ -46,6 +53,10 @@ vi.mock('@/lib/view-transitions/navigation', () => ({
 }))
 
 describe('OpsxNewRoute', () => {
+  afterEach(() => {
+    cleanup()
+  })
+
   beforeEach(() => {
     createDedicatedSessionMock.mockReset()
     prepareWorkflowInvocationMock.mockReset()
@@ -72,5 +83,122 @@ describe('OpsxNewRoute', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Doctor exit: 1')
     expect(prepareWorkflowInvocationMock).not.toHaveBeenCalled()
     expect(createDedicatedSessionMock).not.toHaveBeenCalled()
+  })
+
+  it('renders the prepared target before dispatch and locks an A command after Root B', async () => {
+    const target = {
+      launchProject: { path: '/launch' },
+      planningRoot: { path: '/planning-a', source: 'nearest', healthy: true, status: [] },
+      storeId: null,
+      observedAt: 1,
+      generation: 'planning-a-generation',
+      rootSelector: {},
+      references: [],
+      diagnostics: { root: [], doctor: [], context: [] },
+      rootEvidence: { doctor: null, context: null },
+    }
+    const readyA = {
+      status: 'ready',
+      disabled: false,
+      context: {
+        planningRoot: target.planningRoot,
+        storeId: null,
+        observedAt: 1,
+        generation: 'planning-a-generation',
+      },
+      observedAt: 1,
+      title: null,
+      message: null,
+      evidence: [],
+    }
+    rootActionMock.mockReturnValue(readyA)
+    prepareWorkflowInvocationMock.mockResolvedValue({
+      kind: 'cli-command',
+      command: 'openspec',
+      args: ['new', 'change', 'add-search'],
+      mode: { requestedMode: 'direct', actualMode: 'direct', fallbackReason: null },
+      target,
+      evidence: null,
+    })
+
+    const view = render(<OpsxNewRoute />)
+    fireEvent.change(screen.getByPlaceholderText('add-search-poparea'), {
+      target: { value: 'add-search' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+    await waitFor(() => expect(screen.getByText('/planning-a')).toBeInTheDocument())
+    expect(createDedicatedSessionMock).not.toHaveBeenCalled()
+
+    rootActionMock.mockReturnValue({
+      ...readyA,
+      context: {
+        planningRoot: { ...target.planningRoot, path: '/planning-b' },
+        storeId: null,
+        observedAt: 2,
+        generation: 'planning-b-generation',
+      },
+      observedAt: 2,
+    })
+    view.rerender(<OpsxNewRoute />)
+
+    expect(screen.getByRole('button', { name: 'Create' })).toBeDisabled()
+    expect(createDedicatedSessionMock).not.toHaveBeenCalled()
+  })
+
+  it('renders and dispatches the Server-prepared Store selector command', async () => {
+    const target = {
+      launchProject: { path: '/launch' },
+      planningRoot: { path: '/planning-store', source: 'store', healthy: true, status: [] },
+      storeId: 'shared',
+      observedAt: 1,
+      generation: 'planning-store-generation',
+      rootSelector: { store: 'shared' },
+      references: [],
+      diagnostics: { root: [], doctor: [], context: [] },
+      rootEvidence: { doctor: null, context: null },
+    }
+    rootActionMock.mockReturnValue({
+      status: 'ready',
+      disabled: false,
+      context: {
+        planningRoot: target.planningRoot,
+        storeId: 'shared',
+        observedAt: 1,
+        generation: target.generation,
+      },
+      observedAt: 1,
+      title: null,
+      message: null,
+      evidence: [],
+    })
+    prepareWorkflowInvocationMock.mockResolvedValue({
+      kind: 'cli-command',
+      command: 'openspec',
+      args: ['new', 'change', 'add-store', '--store', 'shared'],
+      mode: { requestedMode: 'direct', actualMode: 'direct', fallbackReason: null },
+      target,
+      evidence: null,
+    })
+
+    render(<OpsxNewRoute />)
+    fireEvent.change(screen.getByPlaceholderText('add-search-poparea'), {
+      target: { value: 'add-store' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    await waitFor(() =>
+      expect(screen.getByText('openspec new change add-store --store shared')).toBeInTheDocument()
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    await waitFor(() => expect(createDedicatedSessionMock).toHaveBeenCalledTimes(1))
+    expect(createDedicatedSessionMock).toHaveBeenCalledWith(
+      'openspec',
+      ['new', 'change', 'add-store', '--store', 'shared'],
+      expect.objectContaining({
+        cwdTarget: 'planning-root',
+        expectedRootGeneration: 'planning-store-generation',
+      })
+    )
   })
 })

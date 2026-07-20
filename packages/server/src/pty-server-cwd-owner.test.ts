@@ -233,7 +233,27 @@ describe('production PTY cwd owner', () => {
       initialCwd: planningRootA,
     })
 
+    const planningAState = await server.planningRootServices.resolveRootContext()
+    if (planningAState.state !== 'ready' || !planningAState.data.generation) {
+      throw new Error('Expected Planning-root A generation evidence.')
+    }
     planningRoot = planningRootB
+
+    const staleGenerationReply = waitForMessage(client)
+    client.send(
+      JSON.stringify({
+        type: 'create',
+        requestId: 'planning-stale-terminal',
+        cwdTarget: 'planning-root',
+        expectedRootGeneration: planningAState.data.generation,
+      })
+    )
+    await expect(staleGenerationReply).resolves.toMatchObject({
+      type: 'error',
+      code: 'PTY_CREATE_FAILED',
+      sessionId: 'planning-stale-terminal',
+    })
+
     const planningBReply = waitForMessage(client)
     client.send(
       JSON.stringify({
@@ -252,6 +272,6 @@ describe('production PTY cwd owner', () => {
     expect
       .soft(spawnMock.mock.calls.map((call) => call[2].cwd))
       .toEqual([launchRoot, planningRootA, planningRootB])
-    expect(runOperation).toHaveBeenCalledTimes(2)
+    expect(runOperation).toHaveBeenCalledTimes(3)
   })
 })

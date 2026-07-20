@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Define the stable project document-read hook contract.
  * 2. Define the root-explicit OPSX workflow invocation hook v2 contract.
  * 3. Version document and workflow hooks independently after the workflow breaking change.
+ * 4. Carry observed root generation on every Server-owned workflow target.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  */
@@ -127,6 +128,10 @@ export interface WorkflowInvocationTargetV2 {
   launchProject: RootContext['launchProject']
   planningRoot: NonNullable<RootContext['planningRoot']>
   storeId: string | null
+  /** Opaque Server-owned generation for the active planning-root service lease. */
+  generation: string
+  /** Root Context observation that created this target; used to reject stale dispatch. */
+  observedAt: RootContext['observedAt']
   rootSelector: CliRootSelector
   references: RootContext['references']
   diagnostics: RootContext['diagnostics']

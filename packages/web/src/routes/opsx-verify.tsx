@@ -1,26 +1,30 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Prepare and stream strict OpenSpec change validation.
  * 2. Preserve command diagnostics and explicit rerun lifecycle.
  * 3. Lock preparation, options, and rerun until Root Context is ready.
  * 4. Queue direct validation through one typed transport without duplicate argv evidence.
+ * 5. Preserve and verify the Server-owned planning-root target before the runner starts.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
  */
 import { CliTerminal } from '@/components/cli-terminal'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
+import { WorkflowTargetNotice } from '@/components/opsx/workflow-target-notice'
 import { RootActionNotice } from '@/components/root-action-notice'
 import { Switch } from '@/components/switch'
 import {
+  isWorkflowTargetCurrent,
   prepareWorkflowInvocation,
   workflowDiagnosticsToText,
 } from '@/lib/opsx-workflow-invocation'
 import { useCliRunner } from '@/lib/use-cli-runner'
 import { useRootActionState } from '@/lib/use-root-action-state'
+import type { WorkflowActionEvidenceV2, WorkflowInvocationTargetV2 } from '@openspecui/core'
 import { useLocation } from '@tanstack/react-router'
 import { CheckCircle, Loader2, ShieldCheck } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 /** Render the root-aware OPSX verification workflow route. */
 export function OpsxVerifyRoute() {
@@ -29,9 +33,16 @@ export function OpsxVerifyRoute() {
   const { requestClose } = usePopAreaLifecycleContext()
   const runner = useCliRunner()
   const rootAction = useRootActionState()
+  const rootActionRef = useRef(rootAction)
+  rootActionRef.current = rootAction
   const { lines, status, commands, hasStarted, reset, cancel } = runner
   const [strict, setStrict] = useState(true)
   const [commandError, setCommandError] = useState<string | null>(null)
+  const [workflowTarget, setWorkflowTarget] = useState<WorkflowInvocationTargetV2 | null>(null)
+  const [workflowEvidence, setWorkflowEvidence] = useState<WorkflowActionEvidenceV2 | null>(null)
+  const workflowTargetCurrent =
+    !rootAction.context?.planningRoot ||
+    (workflowTarget !== null && isWorkflowTargetCurrent(workflowTarget, rootAction))
 
   const changeId = useMemo(() => {
     const params = new URLSearchParams(location.search)
@@ -56,6 +67,8 @@ export function OpsxVerifyRoute() {
     if (!changeId || hasStarted || rootAction.disabled) return
     const prepareAndRun = async () => {
       setCommandError(null)
+      setWorkflowTarget(null)
+      setWorkflowEvidence(null)
       try {
         const fallbackArgs = ['validate', changeId, '--type', 'change']
         if (strict) fallbackArgs.push('--strict')
@@ -74,14 +87,32 @@ export function OpsxVerifyRoute() {
         if (result.kind !== 'cli-command') {
           throw new Error('Verify workflow must return a CLI command.')
         }
+        setWorkflowTarget(result.target)
+        setWorkflowEvidence(result.evidence)
+        if (result.target && !isWorkflowTargetCurrent(result.target, rootActionRef.current)) {
+          setWorkflowTarget(null)
+          throw new Error('Planning root changed while preparing this workflow. Refresh and retry.')
+        }
         const diagnostics = workflowDiagnosticsToText(result)
         if (diagnostics) setCommandError(diagnostics)
         commands.replaceAll([
           {
             type: 'validate',
-            input: { id: changeId, type: 'change', strict },
+            input: {
+              id: changeId,
+              type: 'change',
+              strict,
+              ...(result.target?.generation
+                ? { expectedRootGeneration: result.target.generation }
+                : {}),
+            },
+            displayArgs: result.args,
           },
         ])
+        if (result.target && !isWorkflowTargetCurrent(result.target, rootActionRef.current)) {
+          setWorkflowTarget(null)
+          throw new Error('Planning root changed before validation started. Refresh and retry.')
+        }
         void commands.runAll()
       } catch (error) {
         setCommandError(error instanceof Error ? error.message : String(error))
@@ -121,6 +152,15 @@ export function OpsxVerifyRoute() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-4">
         <RootActionNotice state={rootAction} />
+        <WorkflowTargetNotice target={workflowTarget} stale={!workflowTargetCurrent} />
+        {workflowEvidence ? (
+          <details className="border-border bg-muted/20 max-h-40 overflow-auto rounded-md border p-2 text-xs">
+            <summary className="cursor-pointer font-medium">CLI evidence</summary>
+            <pre className="text-muted-foreground mt-2 whitespace-pre-wrap break-all font-mono">
+              {JSON.stringify(workflowEvidence, null, 2)}
+            </pre>
+          </details>
+        ) : null}
 
         {changeId ? (
           <p className="text-muted-foreground text-sm">
@@ -162,7 +202,9 @@ export function OpsxVerifyRoute() {
           <button
             type="button"
             onClick={rerun}
-            disabled={!changeId || rootAction.disabled || status === 'running'}
+            disabled={
+              !changeId || rootAction.disabled || !workflowTargetCurrent || status === 'running'
+            }
             className="bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-xs disabled:opacity-50"
           >
             Re-run

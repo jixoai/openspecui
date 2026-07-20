@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Verify proposal terminal target selection and create-session dispatch.
  * 2. Verify Root Context locks all terminal dispatch actions before payload preparation.
+ * 3. Verify prepared planning-root targets become stale across Root replacement.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  */
@@ -61,17 +62,23 @@ vi.mock('@/components/terminal/terminal-spawn-command-dialog', () => ({
     open,
     command,
     presetValues,
+    initialCwdTarget,
+    expectedRootGeneration,
     onCreated,
   }: {
     open: boolean
     command: { label: string } | null
     presetValues?: Record<string, string | boolean>
+    initialCwdTarget?: string
+    expectedRootGeneration?: string
     onCreated?: (sessionId: string) => void
   }) =>
     open ? (
       <div role="dialog" aria-label="Create terminal">
         <span>Create {command?.label}</span>
         <output>{String(presetValues?.prompt ?? '')}</output>
+        <output data-testid="spawn-cwd-target">{initialCwdTarget ?? ''}</output>
+        <output data-testid="spawn-root-generation">{expectedRootGeneration ?? ''}</output>
         <button type="button" onClick={() => onCreated?.('term-created')}>
           Create terminal
         </button>
@@ -122,6 +129,10 @@ vi.mock('@/lib/trpc', () => ({
 
 vi.mock('@/lib/opsx-workflow-invocation', () => ({
   prepareWorkflowInvocation: prepareWorkflowInvocationMock,
+  isWorkflowTargetCurrent: (
+    target: { planningRoot: { path: string } },
+    rootAction: { context: { planningRoot?: { path: string } } | null }
+  ) => rootAction.context?.planningRoot?.path === target.planningRoot.path,
   stringifyWorkflowInvocation: vi.fn(() => 'prepared proposal prompt'),
   workflowDiagnosticsToText: vi.fn(() => null),
 }))
@@ -197,6 +208,8 @@ describe('OpsxProposeRoute terminal target', () => {
     )
 
     expect(screen.getByTestId('opsx-propose-target-select').textContent).toContain('Create Claude')
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare' }))
+    await waitFor(() => expect(prepareWorkflowInvocationMock).toHaveBeenCalled())
     fireEvent.click(screen.getByRole('button', { name: /^Create$/i }))
 
     await waitFor(() => {
@@ -211,6 +224,67 @@ describe('OpsxProposeRoute terminal target', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create terminal' }))
 
     expect(requestCloseMock).toHaveBeenCalled()
+  })
+
+  it('binds a prepared workflow create to planning root and generation', async () => {
+    const target = {
+      launchProject: { path: '/launch' },
+      planningRoot: { path: '/planning-a', source: 'nearest', healthy: true, status: [] },
+      storeId: null,
+      observedAt: 1,
+      generation: 'planning-a-generation',
+      rootSelector: {},
+      references: [],
+      diagnostics: { root: [], doctor: [], context: [] },
+      rootEvidence: { doctor: null, context: null },
+    }
+    rootActionMock.mockReturnValue({
+      status: 'ready',
+      disabled: false,
+      context: { planningRoot: target.planningRoot },
+      observedAt: 1,
+      title: null,
+      message: null,
+      evidence: [],
+    })
+    useTerminalContextMock.mockReturnValue({
+      sessions: [
+        {
+          id: 'launch-old',
+          displayTitle: 'Old Launch shell',
+          cwdTarget: 'launch-project',
+          isExited: false,
+        },
+      ],
+      activeSessionId: 'launch-old',
+    })
+    prepareWorkflowInvocationMock.mockResolvedValue({
+      kind: 'agent-prompt',
+      text: 'prepared proposal prompt',
+      format: 'markdown',
+      mode: { requestedMode: 'compose', actualMode: 'compose', fallbackReason: null },
+      target,
+      evidence: null,
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <OpsxProposeRoute />
+      </QueryClientProvider>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare' }))
+    await waitFor(() => expect(screen.getByText('/planning-a')).toBeInTheDocument())
+    expect(screen.getByTestId('opsx-propose-target-select')).not.toHaveTextContent(
+      'Old Launch shell'
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^Create$/i }))
+    await waitFor(() =>
+      expect(screen.getByRole('dialog', { name: 'Create terminal' })).toBeTruthy()
+    )
+
+    expect(screen.getByTestId('spawn-cwd-target')).toHaveTextContent('planning-root')
+    expect(screen.getByTestId('spawn-root-generation')).toHaveTextContent('planning-a-generation')
   })
 
   it('groups existing terminal targets separately from create targets', async () => {
@@ -263,5 +337,69 @@ describe('OpsxProposeRoute terminal target', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Create' })).toBeDisabled()
     expect(prepareWorkflowInvocationMock).not.toHaveBeenCalled()
+  })
+
+  it('retires a prepared A target and locks dispatch after Root B is observed', async () => {
+    const target = {
+      launchProject: { path: '/launch' },
+      planningRoot: { path: '/planning-a', source: 'nearest', healthy: true, status: [] },
+      storeId: null,
+      observedAt: 1,
+      generation: 'planning-a-generation',
+      rootSelector: {},
+      references: [],
+      diagnostics: { root: [], doctor: [], context: [] },
+      rootEvidence: { doctor: null, context: null },
+    }
+    const readyA = {
+      status: 'ready',
+      disabled: false,
+      context: {
+        planningRoot: target.planningRoot,
+        storeId: null,
+        observedAt: 1,
+        generation: target.generation,
+      },
+      observedAt: 1,
+      title: null,
+      message: null,
+      evidence: [],
+    }
+    rootActionMock.mockReturnValue(readyA)
+    prepareWorkflowInvocationMock.mockResolvedValue({
+      kind: 'agent-prompt',
+      text: 'prepared proposal prompt',
+      format: 'markdown',
+      mode: { requestedMode: 'compose', actualMode: 'compose', fallbackReason: null },
+      target,
+      evidence: null,
+    })
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <OpsxProposeRoute />
+      </QueryClientProvider>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare' }))
+    await waitFor(() => expect(screen.getByText('/planning-a')).toBeInTheDocument())
+
+    rootActionMock.mockReturnValue({
+      ...readyA,
+      context: {
+        planningRoot: { ...target.planningRoot, path: '/planning-b' },
+        storeId: null,
+        observedAt: 2,
+        generation: 'planning-b-generation',
+      },
+      observedAt: 2,
+    })
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <OpsxProposeRoute />
+      </QueryClientProvider>
+    )
+
+    expect(screen.getByRole('button', { name: /^Create$/i })).toBeDisabled()
+    expect(writeToSessionMock).not.toHaveBeenCalled()
   })
 })

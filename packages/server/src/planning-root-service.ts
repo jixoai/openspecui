@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Own every root-scoped operation and project-Schema mutation for the CLI-selected Planning root.
- * 2. Serialize replacement and issue fresh record provenance without reconstructing root selection.
+ * 2. Serialize replacement and issue fresh record/generation provenance without reconstructing root selection.
  * 3. Acquire and retire observation/invalidation leases with each active root.
  * 4. Keep reactive subscriptions bound to Root Context dependencies and current root selection.
  * 5. Revoke leased service capabilities, cancel retiring streams outside blocked transitions, and
@@ -187,8 +187,10 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       cliExecutor: rootCliExecutor,
       kernel,
     })
+    const gitBindingToken = rootContext.generation ?? randomUUID()
     const workflowInvocationService = new WorkflowInvocationService({
       getRootContext: () => rootContextRef.current,
+      rootGeneration: gitBindingToken,
       hookRuntime,
       contracts: this.options.cliExecutor.contracts,
     })
@@ -202,7 +204,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
 
     return {
       identity: this.rootIdentity(rootContext),
-      gitBindingToken: randomUUID(),
+      gitBindingToken,
       schemaMutationService,
       rootContext,
       adapter,
@@ -409,8 +411,9 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
 
     const active = this.activeRecord
     if (active?.identity === this.rootIdentity(state.data)) {
-      active.rootContext = state.data
-      active.rootContextRef.current = state.data
+      const currentRootContext = { ...state.data, generation: active.gitBindingToken }
+      active.rootContext = currentRootContext
+      active.rootContextRef.current = currentRootContext
       return active
     }
 
@@ -419,7 +422,10 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       await this.retireRecord(active)
     }
     if (this.disposed) throw new Error('Planning-root service manager is disposed.')
-    const created = this.createRecord(state.data)
+    const created = this.createRecord({
+      ...state.data,
+      generation: state.data.generation ?? randomUUID(),
+    })
     this.activeRecord = created
     return created
   }
@@ -446,7 +452,14 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       )
     }
     try {
-      return { state, services: await this.activate(state) }
+      const services = await this.activate(state)
+      if (state.state === 'ready' && services) {
+        return {
+          state: { ...state, data: services.rootContext },
+          services,
+        }
+      }
+      return { state, services }
     } catch (error) {
       return { state: this.lifecycleErrorState(state, error), services: null }
     }

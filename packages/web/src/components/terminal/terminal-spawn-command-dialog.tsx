@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Configure a command and shell before creating a terminal session.
  * 2. Require an explicit server-resolved launch-project or planning-root cwd target.
  * 3. Preserve advanced command fields and a preview of the rendered command line.
+ * 4. Preserve prepared planning-root generation when creating a workflow-bound shell.
  *
  * Original request (2026-07-16): "Terminal creation controls expose the selected cwd/root identity."
  */
@@ -36,6 +37,8 @@ interface TerminalSpawnCommandDialogProps {
   command: TerminalSpawnCommand | null
   presetValues?: TerminalCommandFieldValues
   initialCwdTarget?: TerminalCwdTarget
+  lockedCwdTarget?: TerminalCwdTarget
+  expectedRootGeneration?: string
   onClose: () => void
   onCreated?: (sessionId: string) => void
 }
@@ -90,6 +93,8 @@ export function TerminalSpawnCommandDialog({
   command,
   presetValues,
   initialCwdTarget = 'launch-project',
+  lockedCwdTarget,
+  expectedRootGeneration,
   onClose,
   onCreated,
 }: TerminalSpawnCommandDialogProps) {
@@ -166,9 +171,14 @@ export function TerminalSpawnCommandDialog({
 
   const handleCreate = () => {
     if (!command) return
-    if (!getTerminalCwdTargetOption(cwdTargetState, cwdTarget).available) return
+    if (
+      !getTerminalCwdTargetOption(cwdTargetState, cwdTarget).available ||
+      (lockedCwdTarget !== undefined && cwdTarget !== lockedCwdTarget)
+    )
+      return
     const sessionId = createShellSession(selectedShell, {
       cwdTarget,
+      ...(expectedRootGeneration ? { expectedRootGeneration } : {}),
       label: command.label,
       initialInput: `${commandLine}\n`,
     })
@@ -225,6 +235,7 @@ export function TerminalSpawnCommandDialog({
             value={cwdTarget}
             state={cwdTargetState}
             onValueChange={setCwdTarget}
+            lockedTarget={lockedCwdTarget}
             showPath
           />
         </div>

@@ -3,6 +3,7 @@
  * 1. Verify configured terminal command creation and advanced-field behavior.
  * 2. Verify configured commands expose resolved cwd identity and send only a cwd target.
  * 3. Verify planning-root readiness keeps repair through the available Launch target.
+ * 4. Verify workflow-bound planning creation preserves its opaque generation.
  *
  * Original request (2026-07-16): "Terminal creation controls expose the selected cwd/root identity."
  */
@@ -216,6 +217,30 @@ describe('TerminalSpawnCommandDialog', () => {
 
     expect(createShellSessionMock).toHaveBeenCalledWith(shell, {
       cwdTarget: 'planning-root',
+      label: 'Claude',
+      initialInput: 'claude\n',
+    })
+  })
+
+  it('locks workflow-bound creation to planning and preserves generation', () => {
+    render(
+      <TerminalSpawnCommandDialog
+        open
+        command={command}
+        initialCwdTarget="planning-root"
+        lockedCwdTarget="planning-root"
+        expectedRootGeneration="planning-a-generation"
+        onClose={() => {}}
+      />
+    )
+
+    expect(screen.getByRole('radio', { name: 'Launch' })).toBeDisabled()
+    expect(screen.getByRole('radio', { name: 'Planning' })).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(screen.getByText('Create'))
+
+    expect(createShellSessionMock).toHaveBeenCalledWith(shell, {
+      cwdTarget: 'planning-root',
+      expectedRootGeneration: 'planning-a-generation',
       label: 'Claude',
       initialInput: 'claude\n',
     })

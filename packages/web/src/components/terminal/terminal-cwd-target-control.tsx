@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Render the explicit launch-project versus planning-root terminal cwd choice.
  * 2. Keep unavailable planning-root state visible and non-interactive.
  * 3. Show the selected server-observed path without accepting arbitrary client paths.
+ * 4. Lock the control to a Server-owned workflow target when dispatch requires it.
  *
  * Original request (2026-07-16): "Terminal shows selected cwd/root identity in creation controls."
  */
@@ -18,6 +19,7 @@ interface TerminalCwdTargetControlProps {
   state: TerminalCwdTargetState
   onValueChange: (target: TerminalCwdTarget) => void
   showPath?: boolean
+  lockedTarget?: TerminalCwdTarget
   className?: string
 }
 
@@ -29,6 +31,7 @@ export function TerminalCwdTargetControl({
   state,
   onValueChange,
   showPath = false,
+  lockedTarget,
   className,
 }: TerminalCwdTargetControlProps) {
   const selected = getTerminalCwdTargetOption(state, value)
@@ -54,7 +57,9 @@ export function TerminalCwdTargetControl({
               type="button"
               role="radio"
               aria-checked={checked}
-              disabled={!option.available}
+              disabled={
+                !option.available || (lockedTarget !== undefined && target !== lockedTarget)
+              }
               title={title}
               onClick={() => onValueChange(target)}
               className={[

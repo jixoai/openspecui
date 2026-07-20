@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Define the type-safe PTY client/server transport protocol.
  * 2. Preserve explicit launch-project or planning-root cwd identity across create/list/reconnect.
  * 3. Carry terminal output, control metadata, lifecycle, and failure messages.
+ * 4. Carry opaque planning-root generation evidence through PTY creation.
  *
  * Original request (2026-07-16): "3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited XDG_DATA_HOME"
  */
@@ -35,6 +36,8 @@ export const PtyCreateMessageSchema = z.object({
   command: z.string().min(1).optional(),
   args: z.array(z.string()).optional(),
   cwdTarget: TerminalCwdTargetSchema,
+  /** Opaque planning-root generation captured by a Server workflow preparation. */
+  expectedRootGeneration: z.string().min(1).optional(),
   closeTip: z.string().optional(),
   closeCallbackUrl: CloseCallbackUrlSchema.optional(),
 })

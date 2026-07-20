@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Prepare and dispatch change-scoped OPSX workflow prompts or commands.
  * 2. Preserve invocation diagnostics and action identity in the compose dialog.
+ * 3. Verify the Server-owned planning-root target before terminal dispatch.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  */
 import { CodeEditor } from '@/components/code-editor'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
+import { WorkflowTargetNotice } from '@/components/opsx/workflow-target-notice'
 import { RootActionNotice } from '@/components/root-action-notice'
 import { TerminalDispatchActions } from '@/components/terminal/terminal-dispatch-actions'
 import {
@@ -15,6 +17,7 @@ import {
 } from '@/lib/opsx-agent-invocation'
 import { buildOpsxComposeFallbackPrompt, parseOpsxComposeLocationSearch } from '@/lib/opsx-compose'
 import {
+  isWorkflowTargetCurrent,
   prepareWorkflowInvocation,
   stringifyWorkflowInvocation,
   workflowDiagnosticsToText,
@@ -26,7 +29,7 @@ import type { WorkflowActionEvidenceV2, WorkflowInvocationTargetV2 } from '@open
 import { OPSX_WORKFLOW_LABELS } from '@openspecui/core/opsx-workflows'
 import { useLocation } from '@tanstack/react-router'
 import { AlertCircle, Loader2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 export function OpsxComposeRoute() {
   const location = useLocation()
@@ -34,6 +37,8 @@ export function OpsxComposeRoute() {
   const { requestClose } = usePopAreaLifecycleContext()
   const { data: uiConfig } = useConfigSubscription()
   const rootAction = useRootActionState()
+  const rootActionRef = useRef(rootAction)
+  rootActionRef.current = rootAction
 
   const composeInput = useMemo(
     () => parseOpsxComposeLocationSearch(location.search),
@@ -54,6 +59,9 @@ export function OpsxComposeRoute() {
   const [sendError, setSendError] = useState<string | null>(null)
   const [workflowTarget, setWorkflowTarget] = useState<WorkflowInvocationTargetV2 | null>(null)
   const [workflowEvidence, setWorkflowEvidence] = useState<WorkflowActionEvidenceV2 | null>(null)
+  const workflowTargetCurrent =
+    !rootAction.context?.planningRoot ||
+    (workflowTarget !== null && isWorkflowTargetCurrent(workflowTarget, rootAction))
 
   useEffect(() => {
     setConfig({
@@ -163,7 +171,18 @@ export function OpsxComposeRoute() {
 
   const actionLabel = composeInput ? OPSX_WORKFLOW_LABELS[composeInput.action] : 'Compose'
 
-  const preparePayload = async () => draft
+  const preparePayload = async () => {
+    if (!workflowTarget) {
+      if (rootActionRef.current.context?.planningRoot) {
+        throw new Error('Workflow preparation has not completed. Wait and retry.')
+      }
+      return draft
+    }
+    if (!workflowTargetCurrent || !isWorkflowTargetCurrent(workflowTarget, rootActionRef.current)) {
+      throw new Error('Planning root changed while preparing this workflow. Refresh and retry.')
+    }
+    return draft
+  }
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col">
@@ -189,17 +208,7 @@ export function OpsxComposeRoute() {
           </div>
         )}
 
-        {workflowTarget ? (
-          <div className="border-border bg-muted/30 grid min-w-0 gap-1 rounded-md border p-2 text-xs sm:grid-cols-[auto_1fr] sm:gap-x-3">
-            <span className="text-muted-foreground">Planning root</span>
-            <span className="min-w-0 break-all font-mono">{workflowTarget.planningRoot.path}</span>
-            <span className="text-muted-foreground">Root source</span>
-            <span>
-              {workflowTarget.planningRoot.source}
-              {workflowTarget.storeId ? ` · Store ${workflowTarget.storeId}` : ''}
-            </span>
-          </div>
-        ) : null}
+        <WorkflowTargetNotice target={workflowTarget} stale={!workflowTargetCurrent} />
 
         {workflowEvidence ? (
           <details className="border-border bg-muted/20 max-h-40 min-w-0 overflow-auto rounded-md border p-2 text-xs">
@@ -245,7 +254,15 @@ export function OpsxComposeRoute() {
         <TerminalDispatchActions
           preparePayload={preparePayload}
           disabled={rootAction.disabled}
-          disabledReason={rootAction.message ?? undefined}
+          actionsDisabled={isLoadingDraft || !workflowTargetCurrent}
+          requiredCwdTarget={workflowTarget ? 'planning-root' : undefined}
+          expectedRootGeneration={workflowTarget?.generation}
+          disabledReason={
+            rootAction.message ??
+            (!workflowTargetCurrent
+              ? 'Planning root changed. Prepare this workflow again.'
+              : undefined)
+          }
           onDispatched={requestClose}
           onError={setSendError}
         />

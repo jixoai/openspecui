@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Dispatch sanitized payloads to existing or newly created terminal sessions.
  * 2. Keep Copy, Save, target selection, and Send under one external readiness lock.
  * 3. Preserve per-action loading state and terminal foreground-process behavior.
+ * 4. Keep target selection available while dispatch actions are locked by stale targets.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  */
@@ -24,6 +25,7 @@ import {
   type TerminalDispatchTarget,
 } from '@/lib/terminal-dispatch'
 import { useTerminalInvocationConfig } from '@/lib/use-terminal-invocation-config'
+import type { TerminalCwdTarget } from '@openspecui/core/pty-protocol'
 import type {
   TerminalCommandFieldValues,
   TerminalSpawnCommand,
@@ -35,6 +37,9 @@ import { TerminalSpawnCommandDialog } from './terminal-spawn-command-dialog'
 interface TerminalDispatchActionsProps {
   preparePayload: () => Promise<string>
   disabled?: boolean
+  actionsDisabled?: boolean
+  requiredCwdTarget?: TerminalCwdTarget
+  expectedRootGeneration?: string
   disabledReason?: string
   onDispatched?: () => void
   onError?: (message: string | null) => void
@@ -135,6 +140,9 @@ function selectClassName(size: 'sm' | 'md'): string {
 export function TerminalDispatchActions({
   preparePayload,
   disabled = false,
+  actionsDisabled = false,
+  requiredCwdTarget,
+  expectedRootGeneration,
   disabledReason,
   onDispatched,
   onError,
@@ -148,21 +156,25 @@ export function TerminalDispatchActions({
   const { spawnCommands } = useTerminalInvocationConfig()
   const liveSessions = useMemo(() => sessions.filter((session) => !session.isExited), [sessions])
   const defaultSpawnCommand = spawnCommands[0] ?? null
+  const dispatchableSessions = useMemo(
+    () => (requiredCwdTarget ? [] : liveSessions),
+    [liveSessions, requiredCwdTarget]
+  )
   const firstCreateTarget = useMemo<TerminalDispatchTarget | null>(
     () => (defaultSpawnCommand ? createSpawnTarget(defaultSpawnCommand.id) : null),
     [defaultSpawnCommand]
   )
   const preferredTarget = useMemo(
-    () => getPreferredTarget(activeSessionId, liveSessions, firstCreateTarget),
-    [activeSessionId, firstCreateTarget, liveSessions]
+    () => getPreferredTarget(activeSessionId, dispatchableSessions, firstCreateTarget),
+    [activeSessionId, dispatchableSessions, firstCreateTarget]
   )
   const targetGroups = useMemo<SelectOptionGroup<TerminalDispatchSelectValue>[]>(
     () => [
       {
         label: 'Shell Instances',
         options:
-          liveSessions.length > 0
-            ? liveSessions.map((session) => ({
+          dispatchableSessions.length > 0
+            ? dispatchableSessions.map((session) => ({
                 value: createTerminalTarget(session.id) as ExistingTerminalTarget,
                 label: `${session.displayTitle} · ${session.cwdTarget === 'planning-root' ? 'Planning' : 'Launch'}`,
               }))
@@ -179,7 +191,7 @@ export function TerminalDispatchActions({
             : [{ value: '', label: 'No spawn commands configured', disabled: true }],
       },
     ],
-    [liveSessions, spawnCommands]
+    [dispatchableSessions, spawnCommands]
   )
 
   const [target, setTarget] = useState<TerminalDispatchTarget | null>(null)
@@ -190,6 +202,7 @@ export function TerminalDispatchActions({
   const [saveSuccess, showSaveSuccess] = useEphemeralSuccess()
   const [spawnDialogOpen, setSpawnDialogOpen] = useState(false)
   const [spawnPresetValues, setSpawnPresetValues] = useState<TerminalCommandFieldValues>({})
+  const interactionDisabled = disabled || actionsDisabled
 
   useEffect(() => {
     setTarget((prev) => {
@@ -201,16 +214,16 @@ export function TerminalDispatchActions({
         return prev
       }
       const sessionId = parseTerminalTarget(prev)
-      if (sessionId && liveSessions.some((session) => session.id === sessionId)) {
+      if (sessionId && dispatchableSessions.some((session) => session.id === sessionId)) {
         return prev
       }
       return preferredTarget
     })
-  }, [liveSessions, preferredTarget, spawnCommands])
+  }, [dispatchableSessions, preferredTarget, spawnCommands])
 
   useEffect(() => {
-    if (disabled) setSpawnDialogOpen(false)
-  }, [disabled])
+    if (interactionDisabled) setSpawnDialogOpen(false)
+  }, [interactionDisabled])
 
   const selectedSpawnCommand = useMemo(
     () => findSelectedSpawnCommand(target, spawnCommands, defaultSpawnCommand),
@@ -218,7 +231,7 @@ export function TerminalDispatchActions({
   )
 
   const resolvePayload = async (): Promise<string> => {
-    if (disabled) {
+    if (interactionDisabled) {
       throw new Error(disabledReason ?? 'This action is currently unavailable.')
     }
     const sanitized = sanitizeTerminalDispatchPayload(await preparePayload())
@@ -278,7 +291,7 @@ export function TerminalDispatchActions({
         return
       }
 
-      const selectedSession = findSelectedSession(target, liveSessions)
+      const selectedSession = findSelectedSession(target, dispatchableSessions)
       if (!selectedSession) {
         throw new Error('Selected terminal session is no longer available.')
       }
@@ -311,8 +324,8 @@ export function TerminalDispatchActions({
         <div className="order-2 flex items-center gap-2 sm:order-1">
           <button
             type="button"
-            disabled={disabled || isCopying}
-            title={disabled ? disabledReason : undefined}
+            disabled={interactionDisabled || isCopying}
+            title={interactionDisabled ? disabledReason : undefined}
             onClick={() => void handleCopy()}
             className={buttonClassName(size, copySuccess)}
           >
@@ -327,8 +340,8 @@ export function TerminalDispatchActions({
           </button>
           <button
             type="button"
-            disabled={disabled || isSavingHistory}
-            title={disabled ? disabledReason : undefined}
+            disabled={interactionDisabled || isSavingHistory}
+            title={interactionDisabled ? disabledReason : undefined}
             onClick={() => void handleSave()}
             className={buttonClassName(size, saveSuccess)}
           >
@@ -360,8 +373,8 @@ export function TerminalDispatchActions({
           </label>
           <button
             type="button"
-            disabled={disabled || isSending || target === null}
-            title={disabled ? disabledReason : undefined}
+            disabled={interactionDisabled || isSending || target === null}
+            title={interactionDisabled ? disabledReason : undefined}
             onClick={() => void handleSend()}
             className={primaryButtonClassName(size)}
           >
@@ -378,6 +391,9 @@ export function TerminalDispatchActions({
         open={spawnDialogOpen}
         command={selectedSpawnCommand}
         presetValues={spawnPresetValues}
+        initialCwdTarget={requiredCwdTarget}
+        lockedCwdTarget={requiredCwdTarget}
+        expectedRootGeneration={expectedRootGeneration}
         onClose={() => setSpawnDialogOpen(false)}
         onCreated={onDispatched}
       />

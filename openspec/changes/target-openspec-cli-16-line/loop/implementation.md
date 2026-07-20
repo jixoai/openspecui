@@ -4319,3 +4319,92 @@ CLI-selected planning-root target through OPSX New, Propose, Compose, Verify, an
 root/provenance evidence and no launch-directory reconstruction. W3 reactive-error propagation,
 static export, App/Store Manager, merge, archive, release, and owner-level `10.9` browser walkthrough
 remain outside this slice.
+
+### 6.14 Candidate Review Rejection (2026-07-20)
+
+Sol's first 6.14 candidate (`422a7830ae0c6085a328eda9440328530d45750c`, with preparation commit
+`95708c2`) is rejected before implementation review. Its branch forked from the common ancestor
+`979c9b0` instead of the accepted `6.13` baseline `46599ae`, so it omits `915f8cd`, `9461046`,
+`adf83ee`, `d51b251`, and the `6.14` authorization commit. It also includes unrelated Settings
+deletions/rearrangement, an added untracked `frontend.GOAL.md`, and other stale-branch churn. The
+worker must replay only the 6.14 slice on top of `46599ae`; this candidate cannot be merged or used
+as exact-head evidence.
+
+Independent source review found these fixed implementation blockers, which remain open after the
+branch is rebased:
+
+```text
+1. OPSX New creates the dedicated terminal with cwdTarget=launch-project even when the prepared
+   planning root is external. The test asserts this wrong behavior; nearest/declared roots need an
+   explicit planning-root execution proof, and Store roots need the preserved selector.
+2. OPSX Verify prepares a target but queues an independent validate stream. Its own test describes
+   the result as correlated only by change id and strictness, not by target/generation. This is
+   characterization, not mutation-resistance evidence; a Root A -> B transition can validate B
+   after preparation A.
+3. OPSX Propose still renders a locally-built payload while dispatch prepares/uses a separate result.
+   The visible invocation and the sent prompt/command can diverge after Server mode resolution or
+   diagnostics. The displayed prepared result must be the dispatch source.
+4. OPSX Compose lets the operator edit `draft`, but dispatch ignores that edited value and sends
+   the retained result. Preserve explicit user edits or make the non-editable prepared payload
+   contract clear; do not silently regress the existing editor behavior.
+5. The preparation hook's stale guard is tested by directly calling `markStale`, but no route test
+   crosses the real Root Context A -> B callback into the public dispatch boundary. Add checked red
+   evidence that removing the exact guard allows the wrong target, then green evidence with it.
+6. Verify's prepared `workflow-status` result is currently flattened to a warning/terminal stream;
+   the typed raw stdout/stderr, exit status, diagnostics, and contract-drift facts are not retained
+   as the preparation evidence. Preserve that evidence instead of treating terminal output as a
+   replacement.
+```
+
+Until a rebased candidate proves these points with checked tests, `6.14` remains open at `64/131`.
+Terra may run focused Vitest, typecheck, and basic component-level Playwright/Storybook only after
+the rebased exact head exists. Final product-level browser walkthrough remains owner-only.
+
+### 6.14 Rebased Target/Generation Slice (2026-07-20)
+
+The implementation was replayed on the accepted `46599ae` baseline. Workflow preparation now returns
+the Server-owned planning-root target, observed timestamp, Store/source identity, typed action
+evidence, and opaque generation. New, Propose, Compose, and Verify retain that result for display and
+dispatch; stale Root A to B targets lock dispatch. New renders the prepared command/args returned by
+the Server, while workflow-bound Propose/Compose dispatch is create-only, locked to planning-root,
+and carries the prepared generation into PTY creation. Existing Launch sessions cannot receive a
+workflow-bound payload after preparation.
+
+Focused evidence:
+
+```text
+pnpm --filter @openspecui/core typecheck
+pnpm --filter @openspecui/server typecheck
+pnpm --filter @openspecui/web typecheck
+  -> all passed
+
+pnpm --filter @openspecui/server exec vitest run \
+  src/pty-server-cwd-owner.test.ts src/pty-websocket.test.ts src/pty-cwd-contract.test.ts \
+  src/router.test.ts src/workflow-invocation-service.test.ts
+  -> 5 files / 116 tests passed
+
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/components/terminal/terminal-spawn-command-dialog.test.tsx \
+  src/routes/opsx-new-route.test.tsx src/routes/opsx-propose.test.tsx \
+  src/routes/opsx-compose.test.tsx src/routes/opsx-verify.test.tsx
+  -> 5 files / 26 tests passed
+```
+
+Counterexample and mutation evidence:
+
+```text
+Server Validate: removing only the expectedRootGeneration comparison made the stale-generation
+public Router test reach CLI start and fail; restoring the comparison passed the test.
+
+Verify route: removing only the second target guard immediately before commands.runAll caused the
+Root A to B test to call runAll once; restoring it passed.
+
+PTY owner: the production WebSocket harness captured Root A's real generation, switched the CLI
+projection to Root B, and submitted A's generation. Removing only the Server PTY comparison returned
+created (and spawned a PTY) instead of PTY_CREATE_FAILED; restoring it yielded 15/15 PTY tests passed
+and spawn cwd evidence contained only Launch, A, and B.
+```
+
+These are focused preparation evidence, not final browser acceptance. The owner must still perform
+the direct same-origin multi-tab walkthrough; W2 Project Binding settlement and W3 reactive-error
+propagation remain independent follow-up Changes.

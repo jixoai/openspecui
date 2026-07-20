@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Own browser terminal renderers, input, lifecycle, and reconnect behavior.
  * 2. Preserve explicit launch-project or planning-root cwd identity across PTY transport state.
  * 3. Project server-owned terminal metadata into stable React snapshots.
  * 4. Apply terminal appearance, input history, keybinding, and notification behavior.
+ * 5. Preserve expected planning-root generation across queued and reconnecting PTY creates.
  *
  * Original request (2026-07-16): "3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited XDG_DATA_HOME"
  */
@@ -345,6 +346,7 @@ class TerminalController {
   private pendingCreates: Array<{
     requestId: string
     cwdTarget: TerminalCwdTarget
+    expectedRootGeneration?: string
     command?: string
     args?: string[]
     closeTip?: string
@@ -370,6 +372,7 @@ class TerminalController {
     customTitle?: string | null
     command?: string
     args?: string[]
+    expectedRootGeneration?: string
     isDedicated?: boolean
     closeTip?: string
     closeCallbackUrl?: string | Record<string, string>
@@ -407,6 +410,7 @@ class TerminalController {
         type: 'create',
         requestId: id,
         cwdTarget: opts.cwdTarget,
+        expectedRootGeneration: opts.expectedRootGeneration,
         cols: instance.terminal.cols || 80,
         rows: instance.terminal.rows || 24,
         command: opts.command,
@@ -418,6 +422,7 @@ class TerminalController {
       this.pendingCreates.push({
         requestId: id,
         cwdTarget: opts.cwdTarget,
+        expectedRootGeneration: opts.expectedRootGeneration,
         command: opts.command,
         args: opts.args,
         closeTip: opts.closeTip,
@@ -1523,6 +1528,7 @@ class TerminalController {
           type: 'create',
           requestId: pending.requestId,
           cwdTarget: pending.cwdTarget,
+          expectedRootGeneration: pending.expectedRootGeneration,
           cols: pending.cols,
           rows: pending.rows,
           command: pending.command,

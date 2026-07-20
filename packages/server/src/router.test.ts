@@ -2512,6 +2512,27 @@ apply:
       expect(invalidation.current('context')).toBe(0)
     })
 
+    it('rejects a stale prepared workflow generation before Validate starts', async () => {
+      const context = createMockContext()
+      const validateStream = context.cliExecutor.validateStream as unknown as ReturnType<
+        typeof vi.fn
+      >
+      const caller = appRouter.createCaller(context)
+      const validateObservable = await caller.cli.validateStream({
+        id: 'add-search',
+        type: 'change',
+        strict: true,
+        expectedRootGeneration: 'planning-binding-a',
+      })
+
+      await expect(
+        new Promise<void>((resolve, reject) => {
+          validateObservable.subscribe({ complete: resolve, error: reject })
+        })
+      ).rejects.toMatchObject({ code: 'CONFLICT' })
+      expect(validateStream).not.toHaveBeenCalled()
+    })
+
     it('exposes archive only through the strict Server-owned stream', () => {
       expect(appRouter._def.procedures).not.toHaveProperty('cli.archive')
       expect(appRouter._def.procedures).not.toHaveProperty('cli.archiveStream')

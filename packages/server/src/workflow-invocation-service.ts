@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Resolve OPSX compose/command/direct invocation modes.
  * 2. Bind every invocation to the CLI-selected Root Context and Store selector.
  * 3. Preserve command-specific Status/Instructions evidence through hooks and clients.
  * 4. Generate Agent/CLI payloads without reconstructing planning paths.
+ * 5. Return observed root generation and target evidence for stale-dispatch guards.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  */
@@ -236,6 +237,8 @@ function buildArchivePrompt(
 
 export interface WorkflowInvocationServiceOptions {
   getRootContext: () => RootContext
+  /** Opaque manager-owned generation used to reject stale direct dispatch. */
+  rootGeneration?: string
   hookRuntime: HookRuntime
   contracts: Pick<
     OpenSpecCliContractExecutor,
@@ -367,6 +370,9 @@ export class WorkflowInvocationService {
       launchProject: rootContext.launchProject,
       planningRoot,
       storeId: rootContext.storeId,
+      observedAt: rootContext.observedAt,
+      generation:
+        this.options.rootGeneration ?? rootContext.generation ?? String(rootContext.observedAt),
       rootSelector,
       references: rootContext.references,
       diagnostics: rootContext.diagnostics,

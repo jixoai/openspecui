@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Define one public Root Context for launch-project and CLI-selected planning-root facts.
  * 2. Compose CLI availability, Doctor, Context, Reference, and data-scope evidence without rewriting it.
  * 3. Represent loading, refresh, stale-data, and failed-attempt states as one type-safe contract.
  * 4. Keep root-dependent readiness tied to CLI-owned health and diagnostics.
+ * 5. Preserve opaque generation provenance for stale workflow and terminal guards.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  */
@@ -59,6 +60,8 @@ export interface RootContext {
   planningRoot: NonNullable<CliDoctor['root']> | null
   /** Effective Store identity when Doctor reports one. */
   storeId: string | null
+  /** Opaque Server-owned planning-root generation, when resolved through a manager lease. */
+  generation?: string
   cli: RootContextCliAvailability
   /** Direct one-level Reference index from CLI Doctor. */
   references: CliDoctorReferenceEntry[]

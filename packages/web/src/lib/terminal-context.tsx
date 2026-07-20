@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Expose terminal lifecycle and active-session state to React consumers.
  * 2. Require an explicit semantic cwd target for every terminal creation path.
  * 3. Synchronize terminal renderer configuration and theme state.
+ * 4. Preserve opaque planning-root generation on dedicated terminal creation.
  *
  * Original request (2026-07-16): "Terminal exposes explicit launch-project cwd and planning-root cwd."
  */
@@ -58,19 +59,26 @@ interface TerminalContextValue {
     customTitle?: string | null
     command?: string
     args?: string[]
+    expectedRootGeneration?: string
     closeTip?: string
     closeCallbackUrl?: string | Record<string, string>
     initialInput?: string
   }) => string
   createShellSession: (
     shell: TerminalShellProfile,
-    opts: { cwdTarget: TerminalCwdTarget; label?: string; initialInput?: string }
+    opts: {
+      cwdTarget: TerminalCwdTarget
+      expectedRootGeneration?: string
+      label?: string
+      initialInput?: string
+    }
   ) => string
   createDedicatedSession: (
     command: string,
     args: string[],
     opts: {
       cwdTarget: TerminalCwdTarget
+      expectedRootGeneration?: string
       closeTip?: string
       closeCallbackUrl?: string | Record<string, string>
       initialInput?: string
@@ -106,6 +114,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       customTitle?: string | null
       command?: string
       args?: string[]
+      expectedRootGeneration?: string
       closeTip?: string
       closeCallbackUrl?: string | Record<string, string>
       initialInput?: string
@@ -122,7 +131,12 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const createShellSession = useCallback(
     (
       shell: TerminalShellProfile,
-      opts: { cwdTarget: TerminalCwdTarget; label?: string; initialInput?: string }
+      opts: {
+        cwdTarget: TerminalCwdTarget
+        expectedRootGeneration?: string
+        label?: string
+        initialInput?: string
+      }
     ) => {
       if (isStatic) return ''
       const label = opts.label ?? shell.label
@@ -132,6 +146,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         command: shell.command,
         args: shell.args,
         initialInput: opts.initialInput,
+        expectedRootGeneration: opts.expectedRootGeneration,
       })
       setActiveSessionId(id)
       terminalController.setActiveSessionId(id)
@@ -146,6 +161,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       args: string[],
       opts: {
         cwdTarget: TerminalCwdTarget
+        expectedRootGeneration?: string
         closeTip?: string
         closeCallbackUrl?: string | Record<string, string>
         initialInput?: string
@@ -158,6 +174,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         label: label.length > 40 ? `${label.slice(0, 37)}...` : label,
         command,
         args,
+        expectedRootGeneration: opts.expectedRootGeneration,
         isDedicated: true,
         closeTip: opts.closeTip,
         closeCallbackUrl: opts.closeCallbackUrl,

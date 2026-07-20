@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Run ordered CLI streams with stable process and loading state.
  * 2. Preserve stdout, stderr, exit, cancellation, and multiline diagnostics verbatim.
  * 3. Route root-dependent operations through dedicated Server-owned transports.
  * 4. Derive execution and displayed command evidence from one exhaustive typed transport.
+ * 5. Carry opaque prepared-root generation into direct Verify admission.
  *
  * Original request (2026-07-15): "场景丢失保护的诊断必须原样显示，不能合成重试。"
  * Original request (2026-07-17): "Remove the Web generic fallback when no production caller requires it."
@@ -81,7 +82,11 @@ interface ValidateStreamTransport {
     type?: 'spec' | 'change'
     id?: string
     strict?: boolean
+    /** Opaque Server-issued planning-root generation checked at stream admission. */
+    expectedRootGeneration?: string
   }
+  /** Prepared Server command used for display; never sent as a selector to the Server. */
+  displayArgs?: string[]
 }
 
 interface InstallGlobalCliStreamTransport {
@@ -167,14 +172,15 @@ function planCliStream(stream: CliStreamTransport): CliStreamPlan {
           trpcClient.cli.updateStream.subscribe(input, handlers),
       }
     })
-    .with({ type: 'validate' }, ({ input }) => {
+    .with({ type: 'validate' }, (stream) => {
+      const { input } = stream
       const args = ['validate']
       if (input.id) args.push(input.id)
       if (input.type) args.push('--type', input.type)
       if (input.strict) args.push('--strict')
       return {
         command: 'openspec',
-        args,
+        args: stream.displayArgs ?? args,
         subscribe: (handlers: CliStreamHandlers) =>
           trpcClient.cli.validateStream.subscribe(input, handlers),
       }

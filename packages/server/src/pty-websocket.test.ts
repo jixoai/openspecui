@@ -7,6 +7,7 @@
  * 5. Prove reconnect retains the terminal target-title snapshot and session identity.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
+ * Derived requirement (2026-07-20): PTY create carries opaque planning-root generation evidence.
  */
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
@@ -154,7 +155,7 @@ describe('createPtyWebSocketHandler', () => {
         })
       )
     })
-    expect(withCwdTarget).toHaveBeenCalledWith('planning-root', expect.any(Function))
+    expect(withCwdTarget).toHaveBeenCalledWith('planning-root', expect.any(Function), undefined)
     expect(JSON.parse(ws.sent[0]!)).toMatchObject({
       type: 'created',
       requestId: 'term-planning',
