@@ -5186,3 +5186,23 @@ same-generation case changes only `observedAt` and dispatches once with the same
 Planning-root cwd target, and A generation. Checkpoint `6.14` remains open at `64/131`; Propose, Terra,
 Playwright, full gates, SSG, push, merge, archive, release, and owner browser acceptance remain outside
 this package.
+
+### 6.14-B and 6.14-C independent review accepted; Terra authorized (2026-07-21)
+
+Independent review of `b107a1f` confirmed that New generation evidence is physically isolated at two
+orthogonal intents, the general route test returned to four intents, the mounted form and real
+`isWorkflowTargetCurrent` remain in the chain, and no production source changed. Reviewer verification
+passed `2 files / 5 tests`, Web typecheck, and `git diff --check`. The mutation record removes only the
+inline `onSubmit` target guard and exposes A at `createDedicatedSession`, so 6.14-B is accepted.
+
+Independent review of Propose commit `be55bef` and evidence commit `022d3dc` confirmed that the route
+uses the real `TerminalDispatchActions`, `TerminalSpawnCommandDialog`, command form/renderer, and
+`handleCreate`. The external `createShellSession` mock is observed only at the owner boundary; no fake
+Dialog/button or manually invoked downstream handler remains. Reviewer verification passed `1 file /
+6 tests`, Web typecheck, and `git diff --check`. The exact mutation replaces only the owner call with a
+no-op and makes the same route test fail, so 6.14-C is accepted.
+
+Terra is now authorized to run the seven accepted focused Vitest files together, the existing Web
+component Playwright lane, Web typecheck, and `git diff --check`. This is automated preparation only.
+The owner retains final single-page, multi-tab, visual, and real-backend browser acceptance; no agent
+may close 6.14, start 6.15, or claim browser acceptance from the component lane.
