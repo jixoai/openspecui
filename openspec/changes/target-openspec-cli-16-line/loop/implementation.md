@@ -5315,3 +5315,16 @@ rerun. The existing `2647aaa` result remains `4 files / 12 tests` and remains co
 only. The owner's final single-page, multi-tab, visual, and real-backend browser acceptance is still
 outstanding. Checkpoint `6.14` stays open at `64/131`; this addendum authorizes no `6.15`, E2E/visual
 walkthrough, full gate, SSG, push, merge, archive, or release work.
+
+### 6.14-D independent review accepted; owner acceptance boundary (2026-07-21)
+
+Independent review confirms `720ab2e` changes only this Change record, the complete focused inventory
+includes New, Propose, Compose/Update, Verify, the target Reference summary, and terminal owners, and
+the branch is clean. The accepted automated evidence is `9 files / 40 tests` plus the unchanged
+Storybook component result `4 files / 12 tests`, Web typecheck, and `git diff --check`.
+
+No agent-run final browser claim is permitted. The current `GOAL.md` holds checkpoint 6.14 for the
+owner's direct same-origin Project Web acceptance of single-page OPSX flows, multi-tab isolation and
+subscription convergence, visual/layout behavior, and real backend failures. Checkpoint 6.14 remains
+open at `64/131`; no 6.15, full gate, push, merge, archive, or release work starts before the owner
+reports the result.
