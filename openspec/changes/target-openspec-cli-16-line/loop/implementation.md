@@ -5272,3 +5272,46 @@ Terra must rerun all nine focused unit files in one process and record the exact
 Playwright does not need another run unless the harness changes; its `4 files / 12 tests` result remains
 valid preparation evidence. No product change, full gate, final browser claim, checkpoint transition,
 or 6.15 work is authorized by this addendum.
+
+### 6.14-D complete focused-inventory addendum evidence (2026-07-21)
+
+Terra reran the corrected complete inventory in one Vitest process. This supersedes the seven-file
+unit count in `2647aaa` as the complete 6.14 focused-unit preparation result; the component result in
+that commit remains valid.
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/routes/opsx-compose-generation.test.tsx \
+  src/routes/opsx-compose.test.tsx \
+  src/routes/opsx-new-generation.test.tsx \
+  src/routes/opsx-new-route.test.tsx \
+  src/routes/opsx-propose.test.tsx \
+  src/routes/opsx-verify.test.tsx \
+  src/components/opsx/workflow-target-notice.test.tsx \
+  src/components/terminal/terminal-dispatch-actions.test.tsx \
+  src/components/terminal/terminal-spawn-command-dialog.test.tsx
+
+Test Files  9 passed (9)
+Tests       40 passed (40)
+Duration    10.10s
+```
+
+The command printed only the informational environment line
+`[dev-proxy] backend target => http://localhost:3100`; it reported no warning, retry, fixture blocker,
+or failure. Verify target/generation coverage and the typed WorkflowTargetNotice direct-Reference
+summary are now included in the combined focused result. Compose continues to carry the accepted
+Update action coverage; no synthetic Update route was added.
+
+```text
+pnpm --filter @openspecui/web typecheck
+  tsc --noEmit -> passed with no diagnostics
+
+git diff --check
+  passed with no output
+```
+
+No product, test, story, or harness file changed, so the Storybook/Playwright component lane was not
+rerun. The existing `2647aaa` result remains `4 files / 12 tests` and remains component preparation
+only. The owner's final single-page, multi-tab, visual, and real-backend browser acceptance is still
+outstanding. Checkpoint `6.14` stays open at `64/131`; this addendum authorizes no `6.15`, E2E/visual
+walkthrough, full gate, SSG, push, merge, archive, or release work.
