@@ -5019,3 +5019,32 @@ The owner's final single-page, multi-tab, visual, and real-backend browser accep
 outstanding. Checkpoint `6.14` therefore remains open at `64/131`. Full repository gates, repository-
 wide browser shards, SSG, push, merge, archive, release, and any route-level acceptance claim remain
 outside this Stage 4 evidence entry.
+
+### 6.14 review reset: split owner packages (2026-07-21)
+
+The owner rejected the previous 6.14 closure path as insufficient production evidence. The prior
+Compose pending test bypassed the mounted `fieldset[disabled]` before clicking Save, so it combined
+presentation and dispatch bypasses and did not prove a reachable production owner. The earlier New
+counterexample and Propose evidence are retained as history, but the checkpoint is reopened for a
+fresh package-by-package review.
+
+The revised package boundary is:
+
+```text
+6.14-A Compose  -> pending A -> B draft generation ownership
+6.14-B New      -> real form onSubmit dispatch guard
+6.14-C Propose  -> real Dialog -> createShellSession owner chain
+6.14-D Terra    -> focused Vitest + basic component Playwright preparation
+```
+
+Each package must define one production owner, one precise mutation red, and one corrected green
+case. A fake route/button, manual downstream handler call, shared mock that bypasses two guards, or
+terminal assertion that never reaches the owner is invalid evidence. Focused review is a hard gate:
+do not run full repository gates, SSG, release operations, or owner browser acceptance between
+packages. The owner still performs final single-page, multi-tab, visual, and real-backend acceptance.
+
+The current executable worker boundary is `GOAL.md` Stage 6.14-A Compose only. It requires the real
+mounted Compose route to model A preparation pending while B becomes current, B settling before late
+A, an A-owned dirty draft that remains unrelabelled, and mutation failure after removing only the
+generation/reconciliation transition. Same-generation `observedAt` refresh remains a separate green
+case. New, Propose, and Terra are deferred until the reviewer accepts this package.
