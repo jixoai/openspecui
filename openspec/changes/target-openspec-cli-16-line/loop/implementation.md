@@ -5206,3 +5206,56 @@ Terra is now authorized to run the seven accepted focused Vitest files together,
 component Playwright lane, Web typecheck, and `git diff --check`. This is automated preparation only.
 The owner retains final single-page, multi-tab, visual, and real-backend browser acceptance; no agent
 may close 6.14, start 6.15, or claim browser acceptance from the component lane.
+
+### 6.14-D Terra focused automation preparation evidence (2026-07-21)
+
+Terra executed only the Stage 4 commands authorized by `GOAL.md`. No production behavior, test
+fixture, route story, or harness required modification.
+
+Combined focused unit evidence:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/routes/opsx-compose-generation.test.tsx \
+  src/routes/opsx-compose.test.tsx \
+  src/routes/opsx-new-generation.test.tsx \
+  src/routes/opsx-new-route.test.tsx \
+  src/routes/opsx-propose.test.tsx \
+  src/components/terminal/terminal-dispatch-actions.test.tsx \
+  src/components/terminal/terminal-spawn-command-dialog.test.tsx
+
+Test Files  7 passed (7)
+Tests       32 passed (32)
+Duration    10.21s
+```
+
+Existing Web Storybook/Playwright component evidence:
+
+```text
+pnpm --filter @openspecui/web test:browser:ci
+
+Test Files  4 passed (4)
+Tests       12 passed (12)
+Duration    6.94s
+```
+
+Both Vitest commands printed the informational environment line
+`[dev-proxy] backend target => http://localhost:3100`. Neither command reported a warning, retry,
+fixture blocker, or failure. The browser command ran Vitest project `storybook`; it is basic component
+preparation evidence only. It does not prove OPSX route E2E, multi-tab behavior, visual/layout
+correctness, or real-backend behavior.
+
+Typed and diff evidence:
+
+```text
+pnpm --filter @openspecui/web typecheck
+  tsc --noEmit -> passed with no diagnostics
+
+git diff --check
+  passed with no output
+```
+
+The owner's final single-page, multi-tab, visual, and real-backend browser acceptance remains
+outstanding. Checkpoint `6.14` remains open at `64/131`. This preparation does not authorize `6.15`,
+full repository tests or browser shards, SSG, push, merge, archive, release, or an agent-run final
+browser walkthrough.
