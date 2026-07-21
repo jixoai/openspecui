@@ -5048,3 +5048,73 @@ mounted Compose route to model A preparation pending while B becomes current, B 
 A, an A-owned dirty draft that remains unrelabelled, and mutation failure after removing only the
 generation/reconciliation transition. Same-generation `observedAt` refresh remains a separate green
 case. New, Propose, and Terra are deferred until the reviewer accepts this package.
+
+### 6.14-A Compose pending-generation evidence (2026-07-21)
+
+The existing production owner was correct and required direct evidence rather than a new product
+contract. `OpsxComposeRoute` owns each preparation effect by Root identity. Root replacement runs the
+effect cleanup, marks the old request `canceled`, and the first post-await transition retires its result:
+
+```text
+Root A prepare pending
+  -> operator edits the real CodeEditor (draft captures generation A)
+  -> Root B rerender retires A and starts B
+  -> B resolves and commits target B
+  -> A resolves late
+  -> if (canceled) return prevents A from committing target/evidence
+```
+
+Focused test changes:
+
+- Added `opsx-compose-generation.test.tsx`, which mounts the real `OpsxComposeRoute`, `CodeEditor`,
+  `TerminalDispatchActions`, and `TerminalSpawnCommandDialog`. Only the typed asynchronous
+  `prepareWorkflowInvocation` boundary and unrelated external services are mocked.
+- `keeps B authoritative when pending Root A resolves after B` resolves B first and A last. It proves
+  the visible target remains `/stores/next`, the edited text remains unchanged and owned by A, recovery
+  remains visible, and no history/session dispatch occurs.
+- `preserves the real editor and dialog across same-generation observedAt refresh` proves both DOM/
+  component instances and the dirty draft survive an `observedAt`-only refresh without recovery or a
+  second preparation.
+- Removed the superseded test that deleted the real fieldset `disabled` attribute before clicking Save;
+  it combined presentation and dispatch bypasses and is no longer reported as owner evidence.
+- The new jsdom fixture supplies the missing Range geometry methods and neutralizes the visual-only
+  Markdown preview/theme extensions. `CodeEditor`, the route, dispatch components, Dialog, and draft
+  helper remain real; this is harness compatibility, not a product workaround.
+
+Exact mutation red:
+
+```text
+Temporarily removed only the first `if (canceled) return` immediately after
+`await prepareWorkflowInvocation(...)`. Catch/finally and every dispatch guard remained unchanged.
+
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/routes/opsx-compose-generation.test.tsx --maxWorkers=1 \
+  -t "keeps B authoritative when pending Root A resolves after B"
+
+1 failed / 1 skipped
+The late A result replaced WorkflowTargetNotice with:
+  /stores/shared
+  Planning root (stale, dispatch locked)
+The test failed because `/stores/next` was absent from the target notice.
+```
+
+Restored green evidence:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/routes/opsx-compose-generation.test.tsx \
+  src/routes/opsx-compose.test.tsx --maxWorkers=1
+
+Test Files  2 passed (2)
+Tests       13 passed (13)
+
+pnpm --filter @openspecui/web typecheck
+  passed with no diagnostics
+
+git diff --check
+  passed with no output
+```
+
+No production source changed in this package. Checkpoint `6.14` remains open at `64/131`; this evidence
+authorizes no New, Propose, Terra, full repository gate, Playwright, SSG, push, merge, archive, release,
+or owner browser acceptance work. Stop at the independent review boundary.
