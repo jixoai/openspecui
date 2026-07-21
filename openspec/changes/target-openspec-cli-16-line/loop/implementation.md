@@ -5118,3 +5118,19 @@ git diff --check
 No production source changed in this package. Checkpoint `6.14` remains open at `64/131`; this evidence
 authorizes no New, Propose, Terra, full repository gate, Playwright, SSG, push, merge, archive, release,
 or owner browser acceptance work. Stop at the independent review boundary.
+
+### 6.14-A independent review accepted; 6.14-B authorized (2026-07-21)
+
+Independent review of `621510d` confirmed that the package changes only Compose tests and this Change
+record. The mounted production route retains the real CodeEditor, dispatch components, and spawn
+Dialog. No DOM disabled state, draft helper, or downstream handler is bypassed. Reviewer verification
+passed `2 files / 13 tests`, Web typecheck, and `git diff --check`. The recorded mutation removes only
+the first post-await `if (canceled) return` and makes late A replace B's target, so 6.14-A is accepted.
+
+The next package is New's real form-submit owner. Existing candidate `0815a0b` already removes the
+shared freshness-helper mock, submits the mounted form while the stale button remains disabled, and
+records the single inline-guard mutation. Review found one repository-structure violation: its
+`opsx-new-route.test.tsx` header now declares six orthogonal intents, above the per-file maximum of
+five. The worker must physically extract stale-generation and same-generation evidence into a focused
+New generation test, rerun the exact mutation at the inline `onSubmit` guard, and stop. Propose and
+Terra remain unauthorized until this package passes independent review.
