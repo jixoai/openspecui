@@ -5134,3 +5134,55 @@ records the single inline-guard mutation. Review found one repository-structure 
 five. The worker must physically extract stale-generation and same-generation evidence into a focused
 New generation test, rerun the exact mutation at the inline `onSubmit` guard, and stop. Propose and
 Terra remain unauthorized until this package passes independent review.
+
+### 6.14-B New physical split and form-owner evidence (2026-07-21)
+
+The New generation contract now lives in `opsx-new-generation.test.tsx`; the general route test has
+returned to four orthogonal intents. The focused file mounts the real `OpsxNewRoute` and submits its
+real `<form onSubmit>`. It retains the production `isWorkflowTargetCurrent` implementation and mocks
+only the typed command-preparation boundary plus unrelated external services. Production source and
+product contracts are unchanged.
+
+Exact mutation red:
+
+```text
+Temporarily removed only the inline `preparedCommand.target` generation guard immediately before
+`createDedicatedSession` in `opsx-new.tsx`; the DOM disabled projection and real freshness helper
+remained unchanged.
+
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/routes/opsx-new-generation.test.tsx \
+  -t "rejects stale Root A through the real form owner after Root B replaces its generation"
+
+Test Files  1 failed (1)
+Tests       1 failed / 1 skipped (2)
+
+The assertion failed because `createDedicatedSession` received exactly:
+  command: openspec
+  args: [new, change, add-search]
+  cwdTarget: planning-root
+  expectedRootGeneration: planning-a-generation
+```
+
+The exact guard was restored unchanged. Final focused green evidence:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/routes/opsx-new-generation.test.tsx \
+  src/routes/opsx-new-route.test.tsx
+
+Test Files  2 passed (2)
+Tests       5 passed (5)
+
+pnpm --filter @openspecui/web typecheck
+  tsc --noEmit -> passed with no diagnostics
+
+git diff --check
+  passed with no output
+```
+
+The stale-generation case proves the inline form owner rejects Root A before terminal creation. The
+same-generation case changes only `observedAt` and dispatches once with the same command, arguments,
+Planning-root cwd target, and A generation. Checkpoint `6.14` remains open at `64/131`; Propose, Terra,
+Playwright, full gates, SSG, push, merge, archive, release, and owner browser acceptance remain outside
+this package.
