@@ -5259,3 +5259,16 @@ The owner's final single-page, multi-tab, visual, and real-backend browser accep
 outstanding. Checkpoint `6.14` remains open at `64/131`. This preparation does not authorize `6.15`,
 full repository tests or browser shards, SSG, push, merge, archive, release, or an agent-run final
 browser walkthrough.
+
+### 6.14-D independent review correction: focused inventory incomplete (2026-07-21)
+
+Commit `2647aaa` is valid for the seven files it ran and for the existing Storybook component lane,
+but it is not the complete 6.14 focused inventory. It omitted `opsx-verify.test.tsx`, which owns the
+Verify target/generation and A -> B runner guard, and `workflow-target-notice.test.tsx`, which owns the
+typed direct-Reference diagnostic summary. Update is already covered by the Compose `update` action
+cases; no synthetic route is required.
+
+Terra must rerun all nine focused unit files in one process and record the exact result. Component
+Playwright does not need another run unless the harness changes; its `4 files / 12 tests` result remains
+valid preparation evidence. No product change, full gate, final browser claim, checkpoint transition,
+or 6.15 work is authorized by this addendum.
