@@ -8063,19 +8063,21 @@ The next slice is a policy correction at the navigation boundary only:
 
 ```text
 identity-matching warm cache -> retain the existing prepared View Transition
-cold or pending prefetch    -> commit the route within the bounded 140ms non-blocking budget, use skip-vt,
-                               and let the destination render its own Loading state
+cold or pending prefetch    -> at 140ms clean up the wait indicator/Escape listener, commit the route with
+                               skip-vt, and let the destination render its own Loading state
 prefetch error/timeout      -> commit the route; preserve error/timing evidence without blocking navigation
 late A completion           -> fill only A's exact identity/binding cache; never relabel B
 ```
 
-Required fixed points are the real `vtNavController` coordinator and typed cache identity. The current
-2.5-second pending path must fail the cold-navigation red because route update is not issued within 140ms
-and before the held prefetch resolves. A warm cache must keep the existing View Transition path; slow/error/timeout must
-commit without inventing success or bypassing Root/Git action gates. A late A completion must not overwrite
-or relabel B. Mutation resistance removes only the non-blocking commit transition and, separately, one
-identity/binding component from the cache key; each mutation must make its named red fail. Do not weaken
-the existing cache owner or manually invoke a route handler.
+Required fixed points are the real `vtNavController` coordinator and production typed cache identity. The
+current 2.5-second pending path must fail the cold-navigation red because route update is not issued at the
+140ms deadline and before the held prefetch resolves. A preparation resolving before the deadline keeps the
+existing View Transition path; slow/error/timeout commits without inventing success or bypassing Root/Git
+action gates. Escape before the deadline cancels and cleans up; Escape after commit cannot cancel the route.
+A late A completion must not overwrite or relabel B. Mutation resistance removes only the deadline-to-
+`skip-vt` transition and, separately, one production identity/binding component from the cache key; each
+mutation must make its named red fail. Do not weaken the existing cache owner or manually invoke a route
+handler.
 
 No Server/Router, `use-subscription`, Root/Git authority, page-specific Loading, Static/SSG, notification,
 or `accelerate-live-projection-loading` behavior belongs in R. Focused evidence ends at navigation,

@@ -423,8 +423,9 @@ The independent browser attempt confirms the desktop source control and URL/quer
     `cc81b22`. The Loading/performance investigation remains in its independent Change.
   - `6.16-R` planned: cold detail prefetch currently blocks `runPreparedViewTransition` until the remote
     preparation settles or the 2.5s timeout expires. The slice must make prefetch opportunistic: warm
-    identity-matching data keeps the existing View Transition, while cold/pending/error work commits the
-    route within the bounded 140ms non-blocking budget and lets the destination own its Loading state. Cache identity,
+    preparation that settles before 140ms keeps the existing View Transition, while pending/error work at the
+    deadline commits with `skip-vt` and lets the destination own its Loading state. The wait indicator and
+    Escape listener must be retired at commit. Cache identity,
     Git binding, Root authority, and late-A provenance remain unchanged. No subscription, Server/Router,
     Static/SSG, or independent performance Change edits are authorized.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
