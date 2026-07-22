@@ -7620,3 +7620,52 @@ single shared publication-eligibility transition, then fail the named ordinary f
 published. Do not migrate a route, add a generic Updating state, change UI topology, add timing telemetry,
 or touch tRPC/Server/Router/static providers during this extraction. Parent checkpoint `6.16` remains
 unchecked.
+
+### 6.16-M implementation: shared subscription lifecycle owner (2026-07-23)
+
+`subscription-lifecycle.ts` is a Web-internal relative module, not a package/barrel export. Its per-Hook
+`SubscriptionLifecycleOwner` owns the module cache snapshot, one current generation, retirement,
+subscription attachment, and the sole `publish`/`publishData` eligibility boundary. Retiring a generation
+marks it unavailable before its transport is unsubscribed; a later callback or static settle therefore cannot
+write React state, cache, or the stale error log. `primeSubscriptionCache` remains available from
+`use-subscription.ts` at its existing public import path.
+
+All three public hooks now use that owner while retaining their distinct public transitions:
+
+```text
+useSubscription                   -> retain | loading cache-rebind policy unchanged
+useReactiveProjectionSubscription -> only recompute-started sets isUpdating
+useAuthoritativeSubscription      -> current/waiting/failed and terminal precedence unchanged
+```
+
+Direct public-Hook evidence extends the existing reactive, authoritative, and Root Context retirement
+regressions with ordinary subscriptions: live A -> B publishes B, then rejects A data/error and leaves a
+fresh reader on cached B; unmounted A cannot populate a fresh reader cache; static A resolve cannot alter B;
+and static A rejection cannot introduce B's error. No test invokes the internal lifecycle owner directly.
+
+One central mutation was run and restored: deleting only the `isCurrent()` guard in
+`SubscriptionLifecycleGeneration.publish()` made the named ordinary live A -> B fixed point fail. Its
+rendered state changed from `B`/no error to `late-A` plus `late ordinary A error`, demonstrating both stale
+state and stale-cache publication through the common owner. This is one shared-owner proof, not a set of
+independent Hook/UI mutations.
+
+Focused verification after restoration:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/lib/use-subscription.test.tsx src/lib/use-context-subscription.test.tsx
+  -> 2 files / 18 tests passed
+
+pnpm --filter @openspecui/web typecheck
+pnpm exec oxlint packages/web/src/lib/subscription-lifecycle.ts \
+  packages/web/src/lib/use-subscription.ts \
+  packages/web/src/lib/use-subscription.test.tsx --ignore-path .gitignore
+pnpm format:check
+git diff --check
+  -> passed
+```
+
+Code/test commit is `24c6f7c`. No page, generic public state shape, adapter, Router, Server, Core, static
+provider, SSG, Playwright/browser, full gate, owner browser/visual acceptance, push, merge, archive, or
+release work was changed or run. `6.16-M` is implemented and awaits independent review; parent checkpoint
+`6.16` remains unchecked.
