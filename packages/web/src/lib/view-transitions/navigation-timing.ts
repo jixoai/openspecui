@@ -1,18 +1,29 @@
 /**
- * Orthogonal intents (created 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Own bounded, process-local phase samples for prepared route navigation.
- * 2. Retire superseded attempts within one route area without coupling areas.
- * 3. Expose typed read and clear boundaries for focused evidence and future diagnostics.
+ * 2. Preserve superseded attempt history without changing latest-request provenance.
+ * 3. Expose typed sample, failure, read, and clear boundaries for focused evidence.
  *
  * Original request (2026-07-22): "整个过程中，几乎都在 Loading，切换个页面也等，做任何动作也在等，给我的感觉就是非常卡。"
+ * Independent review (2026-07-22): A discarded Router Promise cannot prove route/DOM commit, and ignored late A timing cannot describe a real late A route update.
  */
 import type { VTArea } from './route-semantics'
 
 const MAX_SAMPLE_AGE_MS = 30 * 60 * 1000
 const MAX_SAMPLE_COUNT = 256
+const MAX_ERROR_TEXT_LENGTH = 240
 
-/** Preparation result recorded before a route update can be invoked. */
+/** Preparation result recorded before the synchronous route update callback can be issued. */
 export type NavigationPrepareOutcome = 'ready' | 'cancelled' | 'skip-vt'
+
+/** Named owner of a terminal navigation failure. */
+export type NavigationFailureStage = 'prepare' | 'route-update' | 'transition'
+
+/** Bounded, non-stack error facts retained in a failed timing sample. */
+export interface NavigationTimingErrorSummary {
+  readonly name: string
+  readonly message: string
+}
 
 /** First phase of every measured navigation attempt. */
 export interface NavigationRequestedPhase {
@@ -21,7 +32,7 @@ export interface NavigationRequestedPhase {
   readonly elapsedMs: 0
 }
 
-/** Preparation phase that permits route execution. */
+/** Preparation phase that permits the synchronous route update callback. */
 export interface NavigationPreparedPhase {
   readonly kind: 'prepare-settled'
   readonly outcome: 'ready' | 'skip-vt'
@@ -29,7 +40,7 @@ export interface NavigationPreparedPhase {
   readonly elapsedMs: number
 }
 
-/** Preparation phase that ends the attempt before any route update. */
+/** Preparation phase that ends an attempt before any route update callback. */
 export interface NavigationCancelledPhase {
   readonly kind: 'prepare-settled'
   readonly outcome: 'cancelled'
@@ -37,9 +48,9 @@ export interface NavigationCancelledPhase {
   readonly elapsedMs: number
 }
 
-/** Phase recorded immediately after the real route update callback returns. */
-export interface NavigationRouteCommittedPhase {
-  readonly kind: 'route-committed'
+/** Phase recorded after the real synchronous route update callback returns. */
+export interface NavigationRouteUpdateIssuedPhase {
+  readonly kind: 'route-update-issued'
   readonly at: number
   readonly elapsedMs: number
 }
@@ -51,112 +62,332 @@ export interface NavigationTransitionSettledPhase {
   readonly elapsedMs: number
 }
 
-interface NavigationTimingSampleBase {
+interface NavigationFailedPhaseBase {
+  readonly kind: 'failed'
+  readonly error: NavigationTimingErrorSummary
+  readonly at: number
+  readonly elapsedMs: number
+}
+
+/** Terminal phase recorded when detail preparation rejects. */
+export interface NavigationPrepareFailedPhase extends NavigationFailedPhaseBase {
+  readonly stage: 'prepare'
+}
+
+/** Terminal phase recorded when the synchronous route update callback throws. */
+export interface NavigationRouteUpdateFailedPhase extends NavigationFailedPhaseBase {
+  readonly stage: 'route-update'
+}
+
+/** Terminal phase recorded when View Transition execution rejects. */
+export interface NavigationTransitionFailedPhase extends NavigationFailedPhaseBase {
+  readonly stage: 'transition'
+}
+
+/** Typed terminal failure facts retained by a failed navigation sample. */
+export type NavigationFailedPhase =
+  | NavigationPrepareFailedPhase
+  | NavigationRouteUpdateFailedPhase
+  | NavigationTransitionFailedPhase
+
+interface NavigationSampleIdentity {
   readonly attemptId: string
   readonly area: VTArea
   readonly fromPath: string
   readonly toPath: string
 }
 
+interface NavigationLatestRequestProvenance {
+  readonly latestRequest: true
+  readonly supersededByAttemptId: null
+}
+
+interface NavigationSupersededProvenance {
+  readonly latestRequest: false
+  readonly supersededByAttemptId: string
+}
+
+type NavigationRequestProvenance =
+  | NavigationLatestRequestProvenance
+  | NavigationSupersededProvenance
+
+type NavigationSampleBase = NavigationSampleIdentity & NavigationRequestProvenance
+
 /** Attempt that has not yet completed detail preparation. */
-export interface NavigationRequestedSample extends NavigationTimingSampleBase {
+export type NavigationRequestedSample = NavigationSampleBase & {
   readonly state: 'requested'
   readonly phases: readonly [NavigationRequestedPhase]
 }
 
-/** Prepared attempt that may now invoke the real route update. */
-export interface NavigationPreparedSample extends NavigationTimingSampleBase {
+/** Prepared attempt that may now invoke the real synchronous route update callback. */
+export type NavigationPreparedSample = NavigationSampleBase & {
   readonly state: 'prepared'
   readonly outcome: 'ready' | 'skip-vt'
   readonly phases: readonly [NavigationRequestedPhase, NavigationPreparedPhase]
 }
 
-/** Cancelled attempt whose type excludes route-commit and transition-settlement facts. */
-export interface NavigationCancelledSample extends NavigationTimingSampleBase {
+/** Cancelled attempt whose type excludes update, settlement, and failure-after-success phases. */
+export type NavigationCancelledSample = NavigationSampleBase & {
   readonly state: 'cancelled'
   readonly outcome: 'cancelled'
   readonly phases: readonly [NavigationRequestedPhase, NavigationCancelledPhase]
 }
 
-/** Prepared attempt whose real route update has returned. */
-export interface NavigationRouteCommittedSample extends NavigationTimingSampleBase {
-  readonly state: 'route-committed'
+/** Prepared attempt whose real synchronous update callback has returned. */
+export type NavigationRouteUpdateIssuedSample = NavigationSampleBase & {
+  readonly state: 'route-update-issued'
   readonly outcome: 'ready' | 'skip-vt'
   readonly phases: readonly [
     NavigationRequestedPhase,
     NavigationPreparedPhase,
-    NavigationRouteCommittedPhase,
+    NavigationRouteUpdateIssuedPhase,
   ]
 }
 
 /** Completed attempt whose View Transition promise has settled. */
-export interface NavigationTransitionSettledSample extends NavigationTimingSampleBase {
+export type NavigationTransitionSettledSample = NavigationSampleBase & {
   readonly state: 'transition-settled'
   readonly outcome: 'ready' | 'skip-vt'
   readonly phases: readonly [
     NavigationRequestedPhase,
     NavigationPreparedPhase,
-    NavigationRouteCommittedPhase,
+    NavigationRouteUpdateIssuedPhase,
     NavigationTransitionSettledPhase,
   ]
 }
 
-/** A causally valid local navigation sample. Cancellation cannot expose commit or settlement phases. */
+/** Failed attempt before a preparation outcome exists. */
+export type NavigationPrepareFailedSample = NavigationSampleBase & {
+  readonly state: 'failed'
+  readonly failure: NavigationPrepareFailedPhase
+  readonly phases: readonly [NavigationRequestedPhase, NavigationPrepareFailedPhase]
+}
+
+/** Failed attempt after preparation but before the update-issued fact exists. */
+export type NavigationRouteUpdateFailedSample = NavigationSampleBase & {
+  readonly state: 'failed'
+  readonly failure: NavigationRouteUpdateFailedPhase
+  readonly phases: readonly [
+    NavigationRequestedPhase,
+    NavigationPreparedPhase,
+    NavigationRouteUpdateFailedPhase,
+  ]
+}
+
+/** Failed transition before it invokes the synchronous update callback. */
+export type NavigationTransitionFailedBeforeUpdateSample = NavigationSampleBase & {
+  readonly state: 'failed'
+  readonly failure: NavigationTransitionFailedPhase
+  readonly phases: readonly [
+    NavigationRequestedPhase,
+    NavigationPreparedPhase,
+    NavigationTransitionFailedPhase,
+  ]
+}
+
+/** Failed transition after the synchronous update callback has returned. */
+export type NavigationTransitionFailedAfterUpdateSample = NavigationSampleBase & {
+  readonly state: 'failed'
+  readonly failure: NavigationTransitionFailedPhase
+  readonly phases: readonly [
+    NavigationRequestedPhase,
+    NavigationPreparedPhase,
+    NavigationRouteUpdateIssuedPhase,
+    NavigationTransitionFailedPhase,
+  ]
+}
+
+/** Terminal failed attempt. Its discriminant excludes any successful outcome. */
+export type NavigationFailedSample =
+  | NavigationPrepareFailedSample
+  | NavigationRouteUpdateFailedSample
+  | NavigationTransitionFailedBeforeUpdateSample
+  | NavigationTransitionFailedAfterUpdateSample
+
+/** Ordered phase facts retained by a navigation timing sample. */
+export type NavigationTimingPhase =
+  | NavigationRequestedPhase
+  | NavigationPreparedPhase
+  | NavigationCancelledPhase
+  | NavigationRouteUpdateIssuedPhase
+  | NavigationTransitionSettledPhase
+  | NavigationFailedPhase
+
+/** A causally valid local navigation sample with latest-request provenance. */
 export type NavigationTimingSample =
   | NavigationRequestedSample
   | NavigationPreparedSample
   | NavigationCancelledSample
-  | NavigationRouteCommittedSample
+  | NavigationRouteUpdateIssuedSample
   | NavigationTransitionSettledSample
+  | NavigationFailedSample
 
 /** Imperative recorder held only by the production navigation coordinator for one attempt. */
 export interface NavigationTimingAttempt {
   readonly attemptId: string
   recordPrepareSettled(outcome: NavigationPrepareOutcome): boolean
-  recordRouteCommitted(): boolean
+  recordRouteUpdateIssued(): boolean
   recordTransitionSettled(): boolean
+  recordPrepareFailed(error: unknown): boolean
+  recordRouteUpdateFailed(error: unknown): boolean
+  recordTransitionFailed(error: unknown): boolean
 }
 
 interface NavigationTimingStore {
   nextAttemptId: number
   samples: NavigationTimingSample[]
-  currentAttemptIds: Map<VTArea, string>
+  latestRequestAttemptIds: Map<VTArea, string>
 }
 
 const store: NavigationTimingStore = {
   nextAttemptId: 0,
   samples: [],
-  currentAttemptIds: new Map(),
-}
-
-function trimSamples(now: number): void {
-  const cutoff = now - MAX_SAMPLE_AGE_MS
-  store.samples = store.samples
-    .filter((sample) => sample.phases[0].at >= cutoff)
-    .slice(-MAX_SAMPLE_COUNT)
-}
-
-function replaceSample(attemptId: string, sample: NavigationTimingSample): void {
-  const index = store.samples.findIndex((candidate) => candidate.attemptId === attemptId)
-  if (index >= 0) {
-    store.samples[index] = sample
-  }
-}
-
-function publishSample(area: VTArea, attemptId: string, sample: NavigationTimingSample): void {
-  replaceSample(attemptId, sample)
-  store.currentAttemptIds.set(area, attemptId)
-}
-
-function isCurrentAttempt(area: VTArea, attemptId: string): boolean {
-  return store.currentAttemptIds.get(area) === attemptId
+  latestRequestAttemptIds: new Map(),
 }
 
 function now(): number {
   return performance.now()
 }
 
-/** Start one locally timed route navigation attempt and retire older attempts in the same area. */
+function trimSamples(timestamp: number): void {
+  const cutoff = timestamp - MAX_SAMPLE_AGE_MS
+  store.samples = store.samples
+    .filter((sample) => sample.phases[0]?.at >= cutoff)
+    .slice(-MAX_SAMPLE_COUNT)
+}
+
+function replaceHistoricalSample(attemptId: string, sample: NavigationTimingSample): void {
+  const index = store.samples.findIndex((candidate) => candidate.attemptId === attemptId)
+  if (index >= 0) {
+    store.samples[index] = sample
+  }
+}
+
+function getSample(attemptId: string): NavigationTimingSample | null {
+  return store.samples.find((sample) => sample.attemptId === attemptId) ?? null
+}
+
+function supersedeSample(
+  sample: NavigationTimingSample,
+  supersededByAttemptId: string
+): NavigationTimingSample {
+  if (!sample.latestRequest) return sample
+  return {
+    ...sample,
+    latestRequest: false,
+    supersededByAttemptId,
+  }
+}
+
+function createErrorSummary(error: unknown): NavigationTimingErrorSummary {
+  if (error instanceof Error) {
+    return {
+      name: error.name.slice(0, MAX_ERROR_TEXT_LENGTH) || 'Error',
+      message: error.message.slice(0, MAX_ERROR_TEXT_LENGTH) || 'Error thrown without a message.',
+    }
+  }
+
+  return {
+    name: 'NonErrorThrown',
+    message: 'A non-Error value was thrown.',
+  }
+}
+
+function recordFailure(attemptId: string, stage: NavigationFailureStage, error: unknown): boolean {
+  const sample = getSample(attemptId)
+  if (
+    !sample ||
+    sample.state === 'cancelled' ||
+    sample.state === 'transition-settled' ||
+    sample.state === 'failed'
+  ) {
+    return false
+  }
+  const at = now()
+  const errorSummary = createErrorSummary(error)
+
+  if (stage === 'prepare') {
+    if (sample.state !== 'requested') return false
+    const failure: NavigationPrepareFailedPhase = {
+      kind: 'failed',
+      stage,
+      error: errorSummary,
+      at,
+      elapsedMs: at - sample.phases[0].at,
+    }
+    const failed: NavigationPrepareFailedSample = {
+      ...sample,
+      state: 'failed',
+      failure,
+      phases: [sample.phases[0], failure],
+    }
+    replaceHistoricalSample(attemptId, failed)
+    trimSamples(at)
+    return true
+  }
+
+  if (stage === 'route-update') {
+    if (sample.state !== 'prepared') return false
+    const failure: NavigationRouteUpdateFailedPhase = {
+      kind: 'failed',
+      stage,
+      error: errorSummary,
+      at,
+      elapsedMs: at - sample.phases[0].at,
+    }
+    const failed: NavigationRouteUpdateFailedSample = {
+      ...sample,
+      state: 'failed',
+      failure,
+      phases: [sample.phases[0], sample.phases[1], failure],
+    }
+    replaceHistoricalSample(attemptId, failed)
+    trimSamples(at)
+    return true
+  }
+
+  if (sample.state === 'prepared') {
+    const failure: NavigationTransitionFailedPhase = {
+      kind: 'failed',
+      stage,
+      error: errorSummary,
+      at,
+      elapsedMs: at - sample.phases[0].at,
+    }
+    const failed: NavigationTransitionFailedBeforeUpdateSample = {
+      ...sample,
+      state: 'failed',
+      failure,
+      phases: [sample.phases[0], sample.phases[1], failure],
+    }
+    replaceHistoricalSample(attemptId, failed)
+    trimSamples(at)
+    return true
+  }
+
+  if (sample.state === 'route-update-issued') {
+    const failure: NavigationTransitionFailedPhase = {
+      kind: 'failed',
+      stage,
+      error: errorSummary,
+      at,
+      elapsedMs: at - sample.phases[0].at,
+    }
+    const failed: NavigationTransitionFailedAfterUpdateSample = {
+      ...sample,
+      state: 'failed',
+      failure,
+      phases: [sample.phases[0], sample.phases[1], sample.phases[2], failure],
+    }
+    replaceHistoricalSample(attemptId, failed)
+    trimSamples(at)
+    return true
+  }
+
+  return false
+}
+
+/** Start an attempt and make it the only latest-request identity for its route area. */
 export function startNavigationTimingAttempt(input: {
   area: VTArea
   fromPath: string
@@ -169,6 +400,15 @@ export function startNavigationTimingAttempt(input: {
   }
   const attemptId = `navigation-${store.nextAttemptId + 1}`
   store.nextAttemptId += 1
+
+  const priorLatestAttemptId = store.latestRequestAttemptIds.get(input.area)
+  if (priorLatestAttemptId) {
+    const priorLatestSample = getSample(priorLatestAttemptId)
+    if (priorLatestSample) {
+      replaceHistoricalSample(priorLatestAttemptId, supersedeSample(priorLatestSample, attemptId))
+    }
+  }
+
   const requestedPhase: NavigationRequestedPhase = {
     kind: 'requested',
     at: requestedAt,
@@ -179,91 +419,100 @@ export function startNavigationTimingAttempt(input: {
     area: input.area,
     fromPath: input.fromPath,
     toPath: input.toPath,
+    latestRequest: true,
+    supersededByAttemptId: null,
     state: 'requested',
     phases: [requestedPhase],
   }
   store.samples.push(requested)
-  store.currentAttemptIds.set(input.area, attemptId)
+  store.latestRequestAttemptIds.set(input.area, attemptId)
 
   return {
     attemptId,
     recordPrepareSettled(outcome) {
-      if (!isCurrentAttempt(input.area, attemptId)) return false
-      const current = store.samples.find((sample) => sample.attemptId === attemptId)
-      if (!current || current.state !== 'requested') return false
+      const sample = getSample(attemptId)
+      if (!sample || sample.state !== 'requested') return false
       const at = now()
       if (outcome === 'cancelled') {
         const settled: NavigationCancelledPhase = {
           kind: 'prepare-settled',
           outcome,
           at,
-          elapsedMs: at - current.phases[0].at,
+          elapsedMs: at - sample.phases[0].at,
         }
         const cancelled: NavigationCancelledSample = {
-          ...current,
+          ...sample,
           state: 'cancelled',
           outcome,
-          phases: [current.phases[0], settled],
+          phases: [sample.phases[0], settled],
         }
-        publishSample(input.area, attemptId, cancelled)
+        replaceHistoricalSample(attemptId, cancelled)
         return true
       }
+
       const settled: NavigationPreparedPhase = {
         kind: 'prepare-settled',
         outcome,
         at,
-        elapsedMs: at - current.phases[0].at,
+        elapsedMs: at - sample.phases[0].at,
       }
       const prepared: NavigationPreparedSample = {
-        ...current,
+        ...sample,
         state: 'prepared',
         outcome,
-        phases: [current.phases[0], settled],
+        phases: [sample.phases[0], settled],
       }
-      publishSample(input.area, attemptId, prepared)
+      replaceHistoricalSample(attemptId, prepared)
       return true
     },
-    recordRouteCommitted() {
-      if (!isCurrentAttempt(input.area, attemptId)) return false
-      const current = store.samples.find((sample) => sample.attemptId === attemptId)
-      if (!current || current.state !== 'prepared') return false
+    recordRouteUpdateIssued() {
+      const sample = getSample(attemptId)
+      if (!sample || sample.state !== 'prepared') return false
       const at = now()
-      const committed: NavigationRouteCommittedPhase = {
-        kind: 'route-committed',
+      const issued: NavigationRouteUpdateIssuedPhase = {
+        kind: 'route-update-issued',
         at,
-        elapsedMs: at - current.phases[0].at,
+        elapsedMs: at - sample.phases[0].at,
       }
-      const routeCommitted: NavigationRouteCommittedSample = {
-        ...current,
-        state: 'route-committed',
-        phases: [current.phases[0], current.phases[1], committed],
+      const routeUpdateIssued: NavigationRouteUpdateIssuedSample = {
+        ...sample,
+        state: 'route-update-issued',
+        phases: [sample.phases[0], sample.phases[1], issued],
       }
-      publishSample(input.area, attemptId, routeCommitted)
+      replaceHistoricalSample(attemptId, routeUpdateIssued)
       return true
     },
     recordTransitionSettled() {
-      if (!isCurrentAttempt(input.area, attemptId)) return false
-      const current = store.samples.find((sample) => sample.attemptId === attemptId)
-      if (!current || current.state !== 'route-committed') return false
+      const sample = getSample(attemptId)
+      if (!sample || sample.state !== 'route-update-issued') return false
       const at = now()
       const settled: NavigationTransitionSettledPhase = {
         kind: 'transition-settled',
         at,
-        elapsedMs: at - current.phases[0].at,
+        elapsedMs: at - sample.phases[0].at,
       }
       const transitionSettled: NavigationTransitionSettledSample = {
-        ...current,
+        ...sample,
         state: 'transition-settled',
-        phases: [current.phases[0], current.phases[1], current.phases[2], settled],
+        phases: [sample.phases[0], sample.phases[1], sample.phases[2], settled],
       }
-      publishSample(input.area, attemptId, transitionSettled)
+      replaceHistoricalSample(attemptId, transitionSettled)
       trimSamples(at)
       return true
+    },
+    recordPrepareFailed(error) {
+      return recordFailure(attemptId, 'prepare', error)
+    },
+    recordRouteUpdateFailed(error) {
+      return recordFailure(attemptId, 'route-update', error)
+    },
+    recordTransitionFailed(error) {
+      return recordFailure(attemptId, 'transition', error)
     },
   }
 }
 
-/** Read bounded recent navigation timing samples without persisting or emitting diagnostics. */
+/** Read bounded recent navigation timing samples without persistence or diagnostic emission. */
 export function readNavigationTimingSamples(
   input: { limit?: number } = {}
 ): readonly NavigationTimingSample[] {
@@ -272,17 +521,17 @@ export function readNavigationTimingSamples(
   return store.samples.slice(-limit)
 }
 
-/** Read the current sample for one independent route area. */
-export function readCurrentNavigationTimingSample(area: VTArea): NavigationTimingSample | null {
+/** Read the latest-request sample for one independent route area. */
+export function readLatestNavigationTimingSample(area: VTArea): NavigationTimingSample | null {
   trimSamples(now())
-  const attemptId = store.currentAttemptIds.get(area)
+  const attemptId = store.latestRequestAttemptIds.get(area)
   if (!attemptId) return null
-  return store.samples.find((sample) => sample.attemptId === attemptId) ?? null
+  return getSample(attemptId)
 }
 
-/** Clear process-local samples and current attempts for focused tests. */
+/** Clear process-local samples and latest-request identities for focused tests. */
 export function clearNavigationTimingSamples(): void {
   store.nextAttemptId = 0
   store.samples = []
-  store.currentAttemptIds.clear()
+  store.latestRequestAttemptIds.clear()
 }

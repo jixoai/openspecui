@@ -6185,3 +6185,69 @@ Mutation reds remove only the latest-request ownership separation and only the f
 green count and mutation output remain historical evidence, not acceptance. Checkpoint `6.16` is reopened
 at its 6.16-B correction boundary; no full gates, SSG, browser E2E, prefetch-policy, subscription, Root,
 Server, or Settings/Archive changes are authorized.
+
+### 6.16-B correction implementation: fact-named timing and superseded history (2026-07-22)
+
+The timing owner now names the synchronous observation precisely: `route-update-issued` records only that
+the wrapped `options.update(): void` callback returned. It does not await the discarded TanStack navigation
+Promise or claim Router, React, DOM, or first-data completion. The three production/test files contain no
+legacy route-completion vocabulary, verified by an exact no-match source scan.
+
+Each route area now owns only a `latestRequestAttemptId`, changed exclusively by
+`startNavigationTimingAttempt`. Starting B marks the preceding A record
+`latestRequest: false` with `supersededByAttemptId: B`; late A prepare/update/settlement callbacks continue
+to extend A's historical record, but publication never changes B's latest-request identity. `main`,
+`bottom`, and `pop` remain independent, and the existing 256-record/30-minute process-memory bound is
+unchanged.
+
+Failures now settle into discriminated `failed` samples with bounded non-stack error summaries. The
+types distinguish prepare failure, route-update failure, transition failure before update-issued, and
+transition failure after update-issued. Cancellation has its own terminal tuple and cannot contain an
+update-issued, transition-settled, or successful outcome. The coordinator records `prepare`,
+`route-update`, or `transition` failure at its owning boundary and then rethrows the original rejection.
+
+Focused real-coordinator evidence (`vtNavController`, with only preparation/runtime boundaries controlled):
+
+1. A ready attempt records exactly `requested -> prepare-settled -> route-update-issued ->
+transition-settled`; the controlled monotonic elapsed durations remain `0, 20, 40, 80`. The source scan
+   for the retired vocabulary across the three production/test files returned no matches.
+2. Holding bottom A, settling bottom B, then releasing A leaves B as latest with
+   `latestRequest: true`; A becomes `latestRequest: false`, records
+   `supersededByAttemptId: navigation-2`, and finishes its own historical update-issued/settled phases.
+   A main-area attempt remains latest independently.
+3. A runtime rejection after the wrapped update produces `failed(stage: transition)`, retains the
+   preceding update-issued phase, preserves the bounded `Error: transition rejected` summary, and rejects
+   the caller with that exact original Error. A preparation rejection independently records
+   `failed(stage: prepare)` and issues no route update.
+4. Temporarily allowing `replaceHistoricalSample` to set `latestRequestAttemptIds` made the late-A fixed
+   point fail: expected bottom B `navigation-2` but received superseded A `navigation-1`. Removing only
+   that illegal ownership write restored the green proof.
+5. Temporarily removing only `timing.recordTransitionFailed(error)` made the rejected-runtime proof fail:
+   expected terminal `failed`, received stale `route-update-issued`; the caller still rejected. Restoring
+   that exact record restored the green proof.
+
+Final focused verification:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/lib/view-transitions/navigation.test.tsx \
+  src/lib/view-transitions/detail-prepare.test.ts \
+  src/lib/view-transitions/runtime.test.ts
+  -> 3 files / 23 tests passed
+
+pnpm --filter @openspecui/web typecheck
+  -> passed
+
+pnpm exec vp lint packages/web/src/lib/view-transitions/navigation.tsx \
+  packages/web/src/lib/view-transitions/navigation-timing.ts \
+  packages/web/src/lib/view-transitions/navigation.test.tsx
+  -> 0 warnings / 0 errors
+```
+
+Changed files: `packages/web/src/lib/view-transitions/navigation.tsx`,
+`packages/web/src/lib/view-transitions/navigation-timing.ts`,
+`packages/web/src/lib/view-transitions/navigation.test.tsx`, this implementation record, and the checkpoint
+status below. Residual limitation: samples establish local coordinator timing and request provenance only;
+they establish neither router/DOM completion, cross-subscription causality, backend latency, nor a policy
+to cancel late A navigation. Checkpoint `6.16` remains unchecked and 6.16-B remains open for independent
+review. Final browser and visual acceptance remains owner-only.

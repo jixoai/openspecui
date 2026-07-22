@@ -2,11 +2,12 @@
  * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Prove View Transition navigation prepares the exact target route.
  * 2. Prove Git handoff state and target scope reach detail preparation unchanged.
- * 3. Prove prepared navigation produces causally ordered timing evidence.
+ * 3. Prove prepared navigation produces fact-named timing and failure evidence.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 carries Git origin provenance into VT.
  * Original request (2026-07-22): "整个过程中，几乎都在 Loading，切换个页面也等，做任何动作也在等，给我的感觉就是非常卡。"
+ * Independent review (2026-07-22): A discarded Router Promise cannot prove route/DOM commit, and ignored late A timing cannot describe a real late A route update.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -58,7 +59,7 @@ vi.mock('./runtime', () => ({
 import { vtNavController } from './navigation'
 import {
   clearNavigationTimingSamples,
-  readCurrentNavigationTimingSample,
+  readLatestNavigationTimingSample,
   readNavigationTimingSamples,
 } from './navigation-timing'
 
@@ -118,12 +119,14 @@ describe('vtNavController', () => {
         area: 'bottom',
         fromPath: '/git',
         toPath: '/git/commit/abc12345',
+        latestRequest: true,
+        supersededByAttemptId: null,
         state: 'transition-settled',
         outcome: 'ready',
         phases: [
           { kind: 'requested', at: 100, elapsedMs: 0 },
           { kind: 'prepare-settled', outcome: 'ready', at: 120, elapsedMs: 20 },
-          { kind: 'route-committed', at: 140, elapsedMs: 40 },
+          { kind: 'route-update-issued', at: 140, elapsedMs: 40 },
           { kind: 'transition-settled', at: 180, elapsedMs: 80 },
         ],
       },
@@ -137,7 +140,7 @@ describe('vtNavController', () => {
 
     expect(navControllerMock.push).not.toHaveBeenCalled()
     expect(runViewTransitionMock).not.toHaveBeenCalled()
-    expect(readCurrentNavigationTimingSample('bottom')).toMatchObject({
+    expect(readLatestNavigationTimingSample('bottom')).toMatchObject({
       state: 'cancelled',
       outcome: 'cancelled',
       phases: [{ kind: 'requested' }, { kind: 'prepare-settled', outcome: 'cancelled' }],
@@ -154,13 +157,13 @@ describe('vtNavController', () => {
         intent: null,
       })
     )
-    expect(readCurrentNavigationTimingSample('bottom')).toMatchObject({
+    expect(readLatestNavigationTimingSample('bottom')).toMatchObject({
       state: 'transition-settled',
       outcome: 'skip-vt',
       phases: [
         { kind: 'requested' },
         { kind: 'prepare-settled', outcome: 'skip-vt' },
-        { kind: 'route-committed' },
+        { kind: 'route-update-issued' },
         { kind: 'transition-settled' },
       ],
     })
@@ -177,26 +180,88 @@ describe('vtNavController', () => {
     await Promise.resolve()
 
     await vtNavController.push('bottom', '/git/commit/b')
-    const bottomBeforeLateA = readCurrentNavigationTimingSample('bottom')
+    const bottomBeforeLateA = readLatestNavigationTimingSample('bottom')
     await vtNavController.push('main', '/git/commit/c')
     prepareA.resolve('ready')
     await pendingA
 
-    expect(readCurrentNavigationTimingSample('bottom')).toEqual(bottomBeforeLateA)
-    expect(readCurrentNavigationTimingSample('bottom')).toMatchObject({
+    expect(readLatestNavigationTimingSample('bottom')).toEqual(bottomBeforeLateA)
+    expect(readLatestNavigationTimingSample('bottom')).toMatchObject({
       toPath: '/git/commit/b',
+      latestRequest: true,
+      supersededByAttemptId: null,
       state: 'transition-settled',
     })
-    expect(readCurrentNavigationTimingSample('main')).toMatchObject({
+    expect(readLatestNavigationTimingSample('main')).toMatchObject({
       toPath: '/git/commit/c',
+      latestRequest: true,
       state: 'transition-settled',
     })
     expect(readNavigationTimingSamples()).toContainEqual(
       expect.objectContaining({
+        attemptId: 'navigation-1',
         toPath: '/git/commit/a',
-        state: 'requested',
+        latestRequest: false,
+        supersededByAttemptId: 'navigation-2',
+        state: 'transition-settled',
+        phases: [
+          expect.objectContaining({ kind: 'requested' }),
+          expect.objectContaining({ kind: 'prepare-settled', outcome: 'ready' }),
+          expect.objectContaining({ kind: 'route-update-issued' }),
+          expect.objectContaining({ kind: 'transition-settled' }),
+        ],
       })
     )
+  })
+
+  it('records a transition failure after update-issued and rethrows the original rejection', async () => {
+    const failure = new Error('transition rejected')
+    runViewTransitionMock.mockImplementationOnce(async ({ update }: { update: () => void }) => {
+      update()
+      throw failure
+    })
+
+    await expect(vtNavController.push('bottom', '/git/commit/abc12345')).rejects.toBe(failure)
+
+    expect(readLatestNavigationTimingSample('bottom')).toMatchObject({
+      state: 'failed',
+      latestRequest: true,
+      failure: {
+        kind: 'failed',
+        stage: 'transition',
+        error: {
+          name: 'Error',
+          message: 'transition rejected',
+        },
+      },
+      phases: [
+        { kind: 'requested' },
+        { kind: 'prepare-settled', outcome: 'ready' },
+        { kind: 'route-update-issued' },
+        expect.objectContaining({ kind: 'failed', stage: 'transition' }),
+      ],
+    })
+  })
+
+  it('records a preparation failure and rethrows it without issuing an update', async () => {
+    const failure = new Error('prepare rejected')
+    prepareDetailMock.mockRejectedValueOnce(failure)
+
+    await expect(vtNavController.push('bottom', '/git/commit/abc12345')).rejects.toBe(failure)
+
+    expect(navControllerMock.push).not.toHaveBeenCalled()
+    expect(runViewTransitionMock).not.toHaveBeenCalled()
+    expect(readLatestNavigationTimingSample('bottom')).toMatchObject({
+      state: 'failed',
+      failure: expect.objectContaining({
+        kind: 'failed',
+        stage: 'prepare',
+      }),
+      phases: [
+        { kind: 'requested' },
+        expect.objectContaining({ kind: 'failed', stage: 'prepare' }),
+      ],
+    })
   })
 
   it('bounds process-local timing samples by age and count through real navigation', async () => {

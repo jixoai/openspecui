@@ -3,7 +3,7 @@
  * 1. Coordinate route navigation with native View Transitions.
  * 2. Preserve navigation state and shared-element descriptors across route areas.
  * 3. Forward Git binding provenance into detail prefetch before committing navigation.
- * 4. Record causally bounded preparation, route-commit, and transition-settlement timings.
+ * 4. Record causally bounded preparation, route-update-issued, and transition-settlement timings.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git handoff prefetch.
@@ -102,12 +102,18 @@ async function runPreparedViewTransition(options: {
     fromPath: options.fromPath,
     toPath: options.pathname,
   })
-  const prepareOutcome = await prepareRouteDetailViewTransition({
-    intent: options.intent,
-    pathname: options.pathname,
-    search: options.search,
-    state: options.state,
-  })
+  let prepareOutcome: Awaited<ReturnType<typeof prepareRouteDetailViewTransition>>
+  try {
+    prepareOutcome = await prepareRouteDetailViewTransition({
+      intent: options.intent,
+      pathname: options.pathname,
+      search: options.search,
+      state: options.state,
+    })
+  } catch (error) {
+    timing.recordPrepareFailed(error)
+    throw error
+  }
   timing.recordPrepareSettled(prepareOutcome)
 
   if (prepareOutcome === 'cancelled') {
@@ -115,26 +121,36 @@ async function runPreparedViewTransition(options: {
   }
 
   const update = () => {
-    options.update()
-    timing.recordRouteCommitted()
+    try {
+      options.update()
+    } catch (error) {
+      timing.recordRouteUpdateFailed(error)
+      throw error
+    }
+    timing.recordRouteUpdateIssued()
   }
 
-  if (prepareOutcome === 'skip-vt') {
+  try {
+    if (prepareOutcome === 'skip-vt') {
+      await runViewTransition({
+        intent: null,
+        update,
+      })
+      timing.recordTransitionSettled()
+      return
+    }
+
     await runViewTransition({
-      intent: null,
+      intent: options.intent,
+      collectBeforeEntries: options.collectBeforeEntries,
+      collectAfterEntries: options.collectAfterEntries,
       update,
     })
     timing.recordTransitionSettled()
-    return
+  } catch (error) {
+    timing.recordTransitionFailed(error)
+    throw error
   }
-
-  await runViewTransition({
-    intent: options.intent,
-    collectBeforeEntries: options.collectBeforeEntries,
-    collectAfterEntries: options.collectAfterEntries,
-    update,
-  })
-  timing.recordTransitionSettled()
 }
 
 export function useVTHrefNavigate() {
