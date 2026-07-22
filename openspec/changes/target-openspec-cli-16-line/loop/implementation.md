@@ -7450,3 +7450,12 @@ run. The code/test commit is `eb6cf78`. The repository's Vite+ commit hook could
 `vite.config.ts` has no `staged` configuration; it was bypassed with `--no-verify` only after the focused
 checks above passed. Final browser/visual acceptance remains owner-only. `6.16-K` is implemented and
 awaits independent review; parent checkpoint `6.16` remains unchecked.
+
+### 6.16-K independent review correction: static verification is mandatory (2026-07-23)
+
+The first K evidence record incorrectly treated the scoped instruction not to alter SSG behavior as authority
+to skip static verification. That conflicts with the repository Config guardrail: every Config change must
+rebuild fresh SSG output before it can be accepted. K remains implemented awaiting review. The follow-up is
+verification-only: remove stale `packages/web/dist-ssg` and `packages/web/.vite`, run
+`pnpm --filter @openspecui/web build:ssg`, record the exact result, and do not alter static provider,
+snapshot, routes, server, or product behavior. Browser/visual acceptance remains owner-only.
