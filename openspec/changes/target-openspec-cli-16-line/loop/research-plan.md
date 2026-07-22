@@ -234,6 +234,26 @@ Archive owns a separate artificial `requestAnimationFrame` gate. Its real data w
 by `isLoading && !archived`, but removing it remains the next independent package with its own resolved-data
 red and initial-no-data green. It must not be folded into the Settings commit.
 
+#### 6.16-D: remove the Archive artificial mount gate
+
+`ArchiveList` is the sole owner of this package. Its local `firstFrameLoading=true` schedules a
+`requestAnimationFrame` and unconditionally renders `Loading archived changes...` even when
+`useArchivesSubscription()` already supplies resolved data with `isLoading=false`. This frame observes no
+data-readiness fact and duplicates the real `isLoading && !archived` branch.
+
+Delete only the local state/effect and `firstFrameLoading ||` condition. Prove the real component boundary
+with synchronous SSR so effects and rAF cannot erase the fixed point: resolved Planning-root Archive data
+must render its row immediately with no Loading copy, while `data=undefined` plus `isLoading=true` must still
+render only the real Loading state. At starting head `9e41cb4`, the resolved-data test must fail for this
+gate; after removal it must pass; temporarily restoring only the gate must make the same test fail again.
+Existing eventual row, empty-state, link, and shared-element behavior remains regression evidence.
+
+Do not change `useArchivesSubscription`, its live/static provider split, Archive Server/Adapter ownership,
+strict Archive mutation, Archive detail, View Transition navigation/shared elements, route CSS, SSG, or any
+generic Loading policy. `ArchiveList` currently has no explicit error rendering and no distinct cached-data
+updating presentation; those are separate page-topology work packages. Therefore 6.16-D cannot close parent
+checkpoint 6.16.
+
 ## Capability Impact
 
 ### New or Expanded Behavior

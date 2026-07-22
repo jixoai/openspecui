@@ -333,6 +333,9 @@ The independent browser attempt confirms the desktop source control and URL/quer
   - `6.16-C` accepted: live Settings has no artificial mount gate; cached Config owns first-render writable
     drafts; Terminal drafts synchronize per upstream field value, so value-equal emissions preserve dirty
     input and a changed field converges alone. Archive remains a separate following package.
+  - `6.16-D` planned: remove only ArchiveList's artificial rAF gate; synchronous real-component evidence
+    must show resolved data immediately and preserve the initial unknown-data Loading branch. Archive error
+    and cached-updating topology remain later work, so this slice cannot close 6.16.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and
     page-topology packages have their own evidence.
 - [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns

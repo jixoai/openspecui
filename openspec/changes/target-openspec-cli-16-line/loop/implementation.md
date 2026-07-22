@@ -6560,3 +6560,25 @@ typecheck, exact two-file lint with zero warnings/errors, format check, and diff
 clean and no warning, flake, retry, or timeout occurred. No browser, SSG, or full gate ran; those are not
 acceptance claims. Parent checkpoint 6.16 remains open, and Archive's artificial gate remains an independent
 future package.
+
+### 6.16-D independent research: Archive resolved-data first render (2026-07-22)
+
+Independent source and test audits agree that this package has one production owner and no architecture
+blocker. `ArchiveList` creates `firstFrameLoading=true`, clears it through `requestAnimationFrame`, and lets
+that local flag override already-resolved subscription data. The same component separately owns the real
+unknown-data wait through `isLoading && !archived`. Live and static routes share `ArchiveList`; their data
+source split remains inside `useArchivesSubscription` and is outside this package.
+
+The existing two Archive tests use `render` plus `waitFor`, so they observe only eventual DOM after the rAF
+gate clears and pass even with the defect. The exact fixed points must cross the real component before
+effects: synchronous SSR with resolved data must already contain the Archive row and no Loading copy;
+synchronous SSR with `data=undefined` and `isLoading=true` must retain the real Loading copy. At `9e41cb4`
+the first assertion is the required red. Removing only the local state/effect/condition makes it green;
+temporarily restoring only that gate must reproduce the red.
+
+Implementation scope is limited to `archive-list.tsx`, its direct test, exact intent-header maintenance,
+and focused evidence. Preserve the existing `VTLink`, handoff and shared-element bindings, href and empty
+state assertions, provider, Server/Adapter, strict Archive, detail, CSS, and static contracts. No Playwright
+or browser walkthrough is required for this first-render topology; final visual/browser acceptance remains
+owner-only. Archive error and cached-data updating presentation remain unimplemented page-topology debt, so
+6.16-D and parent checkpoint 6.16 stay open until independent review accepts this slice.
