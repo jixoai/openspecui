@@ -7897,3 +7897,36 @@ Git binding token, Root Context authority, OPSX/Status subscription, static prov
 or final browser/visual acceptance changes. The owner browser walkthrough remains outside agent evidence.
 Focused evidence must be direct Dashboard Vitest, Web typecheck, exact lint/format, and diff checks before
 any full gate or SSG run. Parent `6.16` remains unchecked.
+
+### 6.16-O independent acceptance (2026-07-23)
+
+The Dashboard route now distinguishes the two terminal Overview topologies without changing the upstream
+subscription or any Git/root authority:
+
+```text
+no Overview + loading -> Loading dashboard...
+no Overview + error   -> error-only Dashboard alert
+retained Overview + error -> retained Dashboard content + raw error alert
+current Overview      -> current Dashboard content
+```
+
+The accepted production owner is the real `Dashboard` route's main Overview branch. The correction changes
+only the early-return condition from `if (error)` to `if (error && !overview)`, and adds the retained-data
+alert beside the existing content. The direct route tests provide a typed retained snapshot and separately
+prove the no-data error branch. Restoring the old condition makes the retained-data test fail because the
+`Active Changes` Overview marker disappears; this is mutation evidence at the production owner, not a
+disabled-button or manually invoked downstream test.
+
+Focused verification:
+
+```text
+Dashboard Vitest: 15/15
+Web typecheck: passed
+exact oxlint: passed
+exact Prettier: passed
+git diff --check: passed
+```
+
+Code/test commit: `4509a6e`. No Server/router refresh policy, Git binding, Root Context, OPSX/Status,
+static export, SSG, full gate, or agent-run browser acceptance changed or ran. The owner-reported
+single-page/multi-tab walkthrough remains the final browser boundary. Parent checkpoint `6.16` remains open.

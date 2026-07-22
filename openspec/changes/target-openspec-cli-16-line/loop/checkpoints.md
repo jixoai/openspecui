@@ -394,12 +394,13 @@ The independent browser attempt confirms the desktop source control and URL/quer
     fallback retains metadata/title/error but remains Offline. Independent Hook-to-component, type, lint,
     format, and diff review accepts code/test commits `b557c26` and `093fe0b`; parent `6.16` remains
     unchecked. This is transport-status correctness, not a generic Loading optimization.
-  - `6.16-O` planned: Dashboard's main Overview owner still returns an error-only page whenever its
-    subscription reports an error, even when `useSubscription` retains a previously successful Overview
-    snapshot. The slice must preserve that stale Overview for display, render the raw main error beside it,
-    and keep all current Code-Git binding/authority rules unchanged. Initial no-data error remains an
-    error-only state. Existing 6.11 Git stale-data characterization is not this owner and does not close
-    this package.
+  - `6.16-O` accepted: Dashboard's main Overview owner preserves a retained Overview snapshot when its
+    subscription reports a terminal error and renders the raw main error beside that content. A no-data
+    error remains error-only, with no fabricated empty/current Dashboard. Direct route-owner evidence covers
+    retained-data/error and no-data/error (`15/15` Dashboard tests); the exact `if (error)` early-return
+    mutation hides the retained Overview marker and is therefore a genuine red. Web typecheck, exact lint,
+    format, and diff checks pass for code/test commit `4509a6e`. Git binding/authority, Server/router,
+    static, and final owner browser acceptance remain outside this package. Parent `6.16` remains open.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and
