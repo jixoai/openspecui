@@ -7233,3 +7233,30 @@ Server, static provider, compound identities, View Transition handoff, Reference
 updating lifecycle, other pages, browser/Playwright, SSG, and full gates remain unchanged and were not run.
 Final browser/visual acceptance remains owner-only. `6.16-I` is implemented and awaits independent review;
 parent checkpoint `6.16` remains unchecked.
+
+### 6.16-I independent review correction: Reference error coexistence (2026-07-23)
+
+Independent review accepts the page owner and the three implemented error topologies, but rejects the
+evidence as incomplete. The page-level Catalog error and a per-Reference Store enumeration failure are
+different facts; the existing tests prove them separately but never render both in one actual `SpecList`
+state. Further, the retained-empty error test remains in Owned scope, so it does not execute either
+Referenced empty branch even though the implementation suppresses both the no-Reference and ready-Store
+empty sentences.
+
+The focused correction is tests only. Add exactly these production-component fixed points through the
+existing `useSpecsSubscription` mock:
+
+1. Referenced scope with a Catalog transport error and one `state: 'error'` Store: the page alert contains
+   `catalog failed`, the Store alert still contains its diagnostic and stderr, and no Referenced-empty claim
+   appears.
+2. Referenced scope with a Catalog transport error and no Reference sources: `No Referenced Specs...` is
+   absent.
+3. Referenced scope with a Catalog transport error and one ready zero-Spec Store: `OpenSpec reported no
+   Specs...` is absent.
+
+Mutation evidence must remove only the two Referenced `&& !error` guards and show their respective fixed
+points fail; the coexistence test must fail if the page-level alert or Store-error rendering is removed.
+Restore every mutation, rerun the direct file, Web typecheck, exact changed-file lint, format, and
+`git diff --check`. Do not modify production code, the hook, Router, Server, static provider, identities,
+diagnostics implementation, another page, SSG, browser/Playwright, or full gates. Replace the provisional
+`7/7`/three-mutation evidence above with the corrected results before the next independent review.
