@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Coordinate route navigation with native View Transitions.
  * 2. Preserve navigation state and shared-element descriptors across route areas.
  * 3. Forward Git binding provenance into detail prefetch before committing navigation.
@@ -8,7 +8,8 @@
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git handoff prefetch.
- * Original request (2026-07-22): "整个过程中，几乎都在 Loading，切换个页面也等，做任何动作也在等，给我的感觉就是非常卡。"
+ * Owner request (2026-07-23): "整个过程中，几乎都在 Loading，切换个页面也等，做任何动作也在等，给我的感觉就是非常卡。"
+ * Derived requirement (2026-07-23): Cold detail prefetch must commit without waiting beyond its bounded budget.
  */
 import { navController } from '@/lib/nav-controller'
 import {
