@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Verify change detail fallbacks and schema-driven artifact rendering.
- * 2. Verify Root Context failure locks the complete workflow toolbar.
+ * 2. Verify retained status errors alongside detail and Root Context failure locks the workflow toolbar.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
+ * Review request (2026-07-23): "代码已经提交，开始review。如果有问题，那么可更新change。"
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { createContext, type ComponentProps, type ReactNode } from 'react'
@@ -156,6 +157,58 @@ describe('ChangeView', () => {
     expect(screen.getByRole('link', { name: 'Back to Changes' }).getAttribute('href')).toBe(
       '/changes'
     )
+  })
+
+  it('keeps retained change detail visible beside a terminal status error', () => {
+    statusMock.mockReturnValue({
+      data: {
+        changeName: 'Extract Terminal View Webcomponent',
+        schemaName: 'opsx-collab-pr-loop',
+        isComplete: false,
+        applyRequires: [],
+        artifacts: [{ id: 'implementation', outputPath: 'implementation.md', status: 'ready' }],
+        provenance: { kind: 'static' },
+      },
+      isLoading: false,
+      error: new Error('status transport failed'),
+    })
+
+    render(<ChangeView />)
+
+    expect(screen.getByText('Extract Terminal View Webcomponent')).toBeTruthy()
+    expect(screen.getByText('artifact:implementation')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Update' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Verify' })).toBeEnabled()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Error loading change: status transport failed'
+    )
+  })
+
+  it('shows the existing raw error state when status is unavailable', () => {
+    statusMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error('status transport failed'),
+    })
+
+    render(<ChangeView />)
+
+    expect(screen.getByText('Error loading change: status transport failed')).toBeTruthy()
+    expect(screen.queryByText('Loading change status...')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Update' })).toBeNull()
+  })
+
+  it('keeps the initial loading state when status has not arrived', () => {
+    statusMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    })
+
+    render(<ChangeView />)
+
+    expect(screen.getByText('Loading change status...')).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('renders change artifacts, folder, and toolbar through the shared detail view', () => {
