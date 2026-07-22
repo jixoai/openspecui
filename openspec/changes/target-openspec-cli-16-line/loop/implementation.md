@@ -5908,3 +5908,55 @@ Transition prefetch, Settings/Archive mount gates, or any data ownership. Once t
 instrument phase timings before the next performance behavior change. The future packages are
 instrumentation, detail-precommit policy, and isolated route-topology work; each needs its own owner,
 slow-path red/green evidence, and stop boundary. Checkpoint `6.16` remains open.
+
+### 6.16-A implementation: Root Context cached display and current authority (2026-07-22)
+
+`useContextSubscription` now delegates to the existing `useAuthoritativeSubscription` owner rather
+than the generic retained-cache hook. It forwards the actual Root Context tRPC `onData`, `onError`,
+`onConnectionStateChange`, `onStopped`, and `onComplete` callbacks. The shared cache therefore keeps
+the last ready Root visible during a rebind, while the authoritative lifecycle makes it display-only
+until the current subscription emits a replacement Root Context.
+
+```text
+cache ready A
+  -> Root Context display: A / loading / waiting(rebind)
+  -> Root Action: checking + disabled
+  -> connecting | pending | error | stopped | complete: never ready
+  -> current onData ready B: current / Root Action ready
+
+unmount old observers
+  -> late onData A / onError: ignored by authoritative generation
+  -> remount: cached B / waiting(rebind), never stale A
+```
+
+The checked component-hook fixture mounts both unmocked `useContextSubscription` and
+`useRootActionState` against production-shaped Root Context tRPC observers. It proves cached A remains
+renderable while every root-dependent action stays locked; only a current ready B emission unlocks the
+real action gate. It also proves terminal transport evidence survives stopped/complete until B arrives,
+and late retired A callbacks cannot overwrite cached B or resurrect action authority.
+
+Mutation-resistant red/green evidence:
+
+- Temporarily restoring generic `useSubscription` for Root Context made the cached-A fixed point fail:
+  the test expected `isLoading: true` plus `authority: waiting/rebind`, but received `isLoading: false`
+  with no authority field. This is the named stale-authority regression; the Root Action would otherwise
+  observe a ready Root projection before a current emission.
+- Restoring `useAuthoritativeSubscription` and the five lifecycle forwards yields the required cached-A
+  lock, lifecycle lock, current-B unlock, and late-callback retirement behavior.
+
+Focused evidence:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/lib/use-context-subscription.test.tsx src/lib/use-root-action-state.test.ts
+  -> 2 files / 6 tests passed
+
+pnpm --filter @openspecui/web typecheck
+  -> passed
+```
+
+Changed files: `packages/web/src/lib/use-context-subscription.ts`,
+`packages/web/src/lib/use-context-subscription.test.tsx`, and this implementation record. Checkpoint
+`6.16` remains open: no generic subscription, Server, route, navigation, Settings/Archive, phase
+telemetry, or page-topology work is included. This is automated component/hook preparation only; the
+owner's final browser and visual acceptance was not run.
