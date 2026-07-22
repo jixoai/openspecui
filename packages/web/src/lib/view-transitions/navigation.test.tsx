@@ -3,6 +3,7 @@
  * 1. Prove View Transition navigation prepares the exact target route.
  * 2. Prove Git handoff state and target scope reach detail preparation unchanged.
  * 3. Prove prepared navigation produces fact-named timing and failure evidence.
+ * 4. Prove hostile Error accessors cannot replace the original navigation rejection.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 carries Git origin provenance into VT.
@@ -232,6 +233,53 @@ describe('vtNavController', () => {
         error: {
           name: 'Error',
           message: 'transition rejected',
+        },
+      },
+      phases: [
+        { kind: 'requested' },
+        { kind: 'prepare-settled', outcome: 'ready' },
+        { kind: 'route-update-issued' },
+        expect.objectContaining({ kind: 'failed', stage: 'transition' }),
+      ],
+    })
+  })
+
+  it('preserves the original transition rejection when Error details are unreadable', async () => {
+    const failure = new Error()
+    Object.defineProperties(failure, {
+      name: {
+        get() {
+          throw new Error('hostile name getter')
+        },
+      },
+      message: {
+        get() {
+          throw new Error('hostile message getter')
+        },
+      },
+    })
+    runViewTransitionMock.mockImplementationOnce(async ({ update }: { update: () => void }) => {
+      update()
+      throw failure
+    })
+
+    let rejection: unknown
+    try {
+      await vtNavController.push('bottom', '/git/commit/abc12345')
+    } catch (error) {
+      rejection = error
+    }
+
+    expect(rejection).toBe(failure)
+    expect(readLatestNavigationTimingSample('bottom')).toMatchObject({
+      state: 'failed',
+      latestRequest: true,
+      failure: {
+        kind: 'failed',
+        stage: 'transition',
+        error: {
+          name: 'Error',
+          message: 'Error details unavailable.',
         },
       },
       phases: [

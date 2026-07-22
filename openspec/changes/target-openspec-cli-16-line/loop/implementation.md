@@ -6266,3 +6266,54 @@ failed sample with fixed fallback text. Temporarily restoring the direct propert
 same fixed point red. Also remove the unused exported `NavigationTimingPhase`: every sample already owns a
 more precise phase tuple, and no diagnostics consumer needs the generic union. Keep checkpoint `6.16` and
 6.16-B open until this final correction passes independent focused review; no other behavior is authorized.
+
+### 6.16-B final correction: total failure summarization (2026-07-22)
+
+`createErrorSummary(error: unknown)` is now a total diagnostic boundary. `instanceof`, Error property
+access, string validation, whitespace normalization, and bounded truncation all execute inside guarded
+readers. A readable non-empty string is retained up to 240 characters; unreadable, non-string, or empty
+Error fields use the fixed `Error` / `Error details unavailable.` pair. Unknown values are never coerced,
+and samples retain neither the original object nor its stack.
+
+The fixed point crosses the production `vtNavController`: the controlled View Transition invokes the real
+wrapped route update and then throws an actual Error whose own `name` and `message` getters both throw. The
+test captures rejection without formatting the value and proves object identity, then proves the sample
+ends `failed(stage: transition)` after `route-update-issued` with the fixed fallback pair.
+
+Mutation and restoration evidence:
+
+1. With the new test present and the original direct `error.name.slice(...)` / `error.message.slice(...)`
+   reader unchanged, the exact test failed as `Error: hostile name getter` (`1 failed | 8 skipped`). The
+   summary read therefore replaced the observed transition rejection before terminal timing settlement.
+2. After restoring the guarded readers, the same test passed (`1 passed | 8 skipped`), returned the
+   identical hostile Error to the caller, and retained the typed terminal failure sample.
+3. Removing the unused exported `NavigationTimingPhase` left no source matches across
+   `navigation-timing.ts`, `navigation.test.tsx`, and `navigation.tsx`; the precise sample tuples remain the
+   public phase contract.
+
+Final focused verification:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/lib/view-transitions/navigation.test.tsx \
+  src/lib/view-transitions/detail-prepare.test.ts \
+  src/lib/view-transitions/runtime.test.ts
+  -> 3 files / 24 tests passed
+
+pnpm --filter @openspecui/web typecheck
+  -> passed
+
+pnpm exec vp lint packages/web/src/lib/view-transitions/navigation.tsx \
+  packages/web/src/lib/view-transitions/navigation-timing.ts \
+  packages/web/src/lib/view-transitions/navigation.test.tsx
+  -> 0 warnings / 0 errors
+
+pnpm format:check
+git diff --check
+  -> passed
+```
+
+Changed files for this correction: `packages/web/src/lib/view-transitions/navigation-timing.ts`,
+`packages/web/src/lib/view-transitions/navigation.test.tsx`, this implementation record, and
+`loop/checkpoints.md`. Checkpoint `6.16` remains unchecked; 6.16-B is implemented and awaits independent
+review. No browser end-to-end or visual acceptance was run. Those final walkthroughs remain owner-only.

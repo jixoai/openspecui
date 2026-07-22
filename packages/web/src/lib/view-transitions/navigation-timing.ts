@@ -3,6 +3,7 @@
  * 1. Own bounded, process-local phase samples for prepared route navigation.
  * 2. Preserve superseded attempt history without changing latest-request provenance.
  * 3. Expose typed sample, failure, read, and clear boundaries for focused evidence.
+ * 4. Keep failure diagnostics total so they cannot replace the observed rejection.
  *
  * Original request (2026-07-22): "整个过程中，几乎都在 Loading，切换个页面也等，做任何动作也在等，给我的感觉就是非常卡。"
  * Independent review (2026-07-22): A discarded Router Promise cannot prove route/DOM commit, and ignored late A timing cannot describe a real late A route update.
@@ -204,15 +205,6 @@ export type NavigationFailedSample =
   | NavigationTransitionFailedBeforeUpdateSample
   | NavigationTransitionFailedAfterUpdateSample
 
-/** Ordered phase facts retained by a navigation timing sample. */
-export type NavigationTimingPhase =
-  | NavigationRequestedPhase
-  | NavigationPreparedPhase
-  | NavigationCancelledPhase
-  | NavigationRouteUpdateIssuedPhase
-  | NavigationTransitionSettledPhase
-  | NavigationFailedPhase
-
 /** A causally valid local navigation sample with latest-request provenance. */
 export type NavigationTimingSample =
   | NavigationRequestedSample
@@ -279,11 +271,30 @@ function supersedeSample(
   }
 }
 
+function isErrorValue(value: unknown): value is Error {
+  try {
+    return value instanceof Error
+  } catch {
+    return false
+  }
+}
+
+function readErrorText(read: () => unknown, fallback: string): string {
+  try {
+    const value = read()
+    if (typeof value !== 'string') return fallback
+    const normalized = value.trim()
+    return normalized ? normalized.slice(0, MAX_ERROR_TEXT_LENGTH) : fallback
+  } catch {
+    return fallback
+  }
+}
+
 function createErrorSummary(error: unknown): NavigationTimingErrorSummary {
-  if (error instanceof Error) {
+  if (isErrorValue(error)) {
     return {
-      name: error.name.slice(0, MAX_ERROR_TEXT_LENGTH) || 'Error',
-      message: error.message.slice(0, MAX_ERROR_TEXT_LENGTH) || 'Error thrown without a message.',
+      name: readErrorText(() => error.name, 'Error'),
+      message: readErrorText(() => error.message, 'Error details unavailable.'),
     }
   }
 
