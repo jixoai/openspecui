@@ -105,12 +105,13 @@ describe('useContextSubscription current authority', () => {
 
     const { result } = renderHook(() => useRootContextAndActionState())
 
+    // The action owner is the fixed point: generic cached A must not authorize writes.
+    expect(result.current.action).toMatchObject({ status: 'checking', disabled: true })
     expect(result.current.context).toMatchObject({
       data: rootA,
       isLoading: true,
       authority: { state: 'waiting', reason: 'rebind' },
     })
-    expect(result.current.action).toMatchObject({ status: 'checking', disabled: true })
 
     act(() =>
       emitAll(callbacks, (callback) =>

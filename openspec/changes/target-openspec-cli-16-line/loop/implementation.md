@@ -5989,3 +5989,80 @@ Changed files: `packages/web/src/lib/use-context-subscription.ts`,
 `6.16` remains open: no generic subscription, Server, route, navigation, Settings/Archive, phase
 telemetry, or page-topology work is included. This is automated component/hook preparation only; the
 owner's final browser and visual acceptance was not run.
+
+### 6.16-A evidence correction execution: real action gate and exact callback guard (2026-07-22)
+
+The initial implementation record correctly described the production owner, but its generic-cache red
+failed first on a presentation-shape assertion and did not mutate the exact retirement guard. This
+execution corrects that evidence only. The permanent hook test now asserts the real
+`useRootActionState` fixed point before inspecting the Context presentation:
+
+```text
+primed ready A cache
+  -> useContextSubscription + useRootActionState
+  -> checking / disabled until current B
+```
+
+Temporary generic-cache red:
+
+1. Replaced only `useContextSubscription`'s `useAuthoritativeSubscription` import, state type, and
+   invocation with the existing generic `useSubscription` equivalents.
+2. Ran:
+
+   ```text
+   pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+     src/lib/use-context-subscription.test.tsx -t 'keeps cached A displayable'
+   ```
+
+3. The first material failure was the real Root Action assertion at line 109: expected
+   `status: checking, disabled: true`; received `status: ready, disabled: false`. The process reported
+   `1 failed | 1 skipped`.
+4. Restored the exact authoritative import, type, and invocation. The same focused command then passed
+   `1 passed | 1 skipped`.
+
+Temporary late-callback mutation red:
+
+1. Removed only `if (!isActive()) return` from the dynamic
+   `useAuthoritativeSubscription` `onData` callback in `use-subscription.ts`; all static, error,
+   connection, stop, and complete guards remained unchanged.
+2. Ran:
+
+   ```text
+   pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+     src/lib/use-context-subscription.test.tsx -t 'rejects late Root A callbacks'
+   ```
+
+3. The remount assertion at line 175 failed exactly as required: it expected cached Root B
+   (`/planning-b`, `observedAt: 2`) but received late Root A (`/planning-a`, `observedAt: 1`). The
+   process reported `1 failed | 1 skipped`; this proves the retired callback rewrote the shared cache.
+4. Restored the exact `onData` guard. The same focused command then passed `1 passed | 1 skipped`.
+
+Final permitted verification:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/lib/use-context-subscription.test.tsx src/lib/use-root-action-state.test.ts
+  -> 2 files / 6 tests passed
+
+pnpm --filter @openspecui/web typecheck
+  -> passed
+
+pnpm exec vp lint packages/web/src/lib/use-context-subscription.ts \
+  packages/web/src/lib/use-context-subscription.test.tsx \
+  packages/web/src/lib/use-root-action-state.ts \
+  packages/web/src/lib/use-root-action-state.test.ts
+  -> 0 warnings / 0 errors
+
+pnpm format:check
+git diff --check
+  -> passed
+```
+
+Permanent changed-file inventory: `packages/web/src/lib/use-context-subscription.test.tsx` and this
+implementation record only. `use-context-subscription.ts` and `use-subscription.ts` were restored to
+their production implementations before the final focused suite. Checkpoint `6.16` remains open. The
+remaining work is separately scoped interaction instrumentation, slow-query detail-prefetch policy, and
+isolated page-topology owners; it excludes generic subscription rewrites, Server/root-resolution work,
+routes, Settings/Archive, View Transitions, full gates, SSG, and browser E2E. Automated hook/component
+results are preparation evidence only. Final end-to-end browser and visual acceptance remains the
+owner's responsibility.
