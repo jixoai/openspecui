@@ -7524,3 +7524,56 @@ another page. Direct evidence must render real `Tabs` and assert real tab button
 empty-state echo. The three named mutations are the route-level raw alert, initial status gate, and
 error-aware empty guard. No SSG behavior changes are authorized; fresh static verification remains required
 for the eventual Config code change. Parent checkpoint `6.16` remains unchecked.
+
+### 6.16-L implementation: Config Schema catalog/tab-inventory topology (2026-07-23)
+
+`Config` now derives a catalog-initial `Loading` gate and a current-empty catalog fact from only
+`useOpsxConfigBundleSubscription()`. A mounted `data-schema-workspace-status` host sits outside dynamic
+Schema tabs, beside the fixed Config-tab workspace. It owns one raw catalog error alert, `Loading schemas...`
+for `undefined + loading + no error`, and `No schemas available.` only for `[] + no error`. The prior copies
+were removed from `schemaTabContent`, so the status no longer depends on a dynamic Schema tab that cannot
+exist for absent or empty inventory.
+
+The new direct `config-schema-catalog.test.tsx` uses the real `Tabs` component. Its selected-Schema files
+fixture is fixed at `[] + settled + no error`, so it proves catalog/tab ownership rather than reopening
+6.16-K. The five fixed points are: no-data loading; no-data terminal error; retained non-empty catalog plus
+error with its real Schema button and selected file-panel content; retained-empty catalog plus error; and
+settled empty success. Three single-boundary mutations were run and restored:
+
+1. Replacing only the route-level `schemasError &&` alert with `false` made all three error fixed points
+   fail because the alert was absent.
+2. Replacing only `schemaCatalogInitialLoading` with `false` made the no-data loading fixed point fail
+   because no `status` element existed.
+3. Removing only `schemasError === null` from the empty-catalog guard made the retained-empty error fixed
+   point fail because `No schemas available.` appeared beside the terminal error.
+
+Focused verification after restoration:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/routes/config.test.tsx src/routes/config-schema-files.test.tsx \
+  src/routes/config-schema-mutation.test.tsx src/routes/config-schema-catalog.test.tsx
+  -> 4 files / 21 tests passed
+
+pnpm --filter @openspecui/web typecheck
+pnpm exec oxlint packages/web/src/routes/config.tsx \
+  packages/web/src/routes/config-schema-catalog.test.tsx
+pnpm format:check
+git diff --check
+  -> passed
+
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/entry-client-static.test.tsx src/lib/static-data-provider.opsx.test.ts
+  -> 2 files / 10 tests passed
+
+pnpm --filter @openspecui/web build:ssg
+  -> passed from fresh generated output
+```
+
+Fresh SSG verification moved the previous `packages/web/dist-ssg` outside the repository because this
+environment rejects `rm -rf`; `.vite` was already absent. The build repeated the existing non-failing CSS
+`scroll-button` and `INEFFECTIVE_DYNAMIC_IMPORT` warnings without changing their sources. The code/test
+commit is `60fcb10`. No hook, selected-Schema file panel, templates, Preview, Root readiness/mutations,
+Router, Server, static provider, generic subscription, browser/Playwright, full-gate, or owner browser/visual
+acceptance work was changed or run. `6.16-L` is implemented and awaits independent review; parent `6.16`
+remains unchecked.
