@@ -6540,3 +6540,23 @@ Changed files: `packages/web/src/routes/settings.tsx`,
 Checkpoint `6.16` remains unchecked; 6.16-C is implemented and awaits independent review. Archive,
 generic subscriptions, Root, navigation, Server, SSG, full gates, and browser acceptance were not changed
 or run. Final browser and visual acceptance remains owner-only.
+
+### 6.16-C independent acceptance (2026-07-22)
+
+Independent review accepts `fbada63`, `e6ee1a8`, and final correction `5e168c2` as one 6.16-C slice. The
+production diff removes only the live Settings artificial mount gate, initializes already-present cached
+Config into first-render writable drafts, and synchronizes Terminal drafts by upstream field value rather
+than parsed-object identity. No static Settings, subscription owner, Archive, Root, navigation, Server, or
+browser contract entered the slice.
+
+The real Settings evidence proves four separate fixed points: live composition before passive effects,
+non-default cached values on that render, Config precedence after mount, and dirty font/scrollback
+preservation across a value-equal new Config object followed by one-field upstream convergence. Mutation
+evidence fails at the original mount gate, default initializers, controller overwrite, and whole-object
+effect respectively.
+
+Independent focused verification passed the three named tests, the complete Settings file (`60/60`), Web
+typecheck, exact two-file lint with zero warnings/errors, format check, and diff check. The worktree was
+clean and no warning, flake, retry, or timeout occurred. No browser, SSG, or full gate ran; those are not
+acceptance claims. Parent checkpoint 6.16 remains open, and Archive's artificial gate remains an independent
+future package.
