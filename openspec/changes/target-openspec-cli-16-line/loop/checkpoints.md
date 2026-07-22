@@ -426,7 +426,8 @@ The independent browser attempt confirms the desktop source control and URL/quer
     preparation that settles before 140ms keeps the existing View Transition, while pending/error work at the
     deadline commits with `skip-vt` and lets the destination own its Loading state. The wait indicator and
     Escape listener must be retired at commit. Cache identity,
-    Git binding, Root authority, and late-A provenance remain unchanged. No subscription, Server/Router,
+    Git binding, Root authority, and late-A provenance remain unchanged. Typed key/value readback must show B
+    survives late A, and production-key mutation must make that test red. No subscription, Server/Router,
     Static/SSG, or independent performance Change edits are authorized.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.

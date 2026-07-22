@@ -8074,10 +8074,10 @@ current 2.5-second pending path must fail the cold-navigation red because route 
 140ms deadline and before the held prefetch resolves. A preparation resolving before the deadline keeps the
 existing View Transition path; slow/error/timeout commits without inventing success or bypassing Root/Git
 action gates. Escape before the deadline cancels and cleans up; Escape after commit cannot cancel the route.
-A late A completion must not overwrite or relabel B. Mutation resistance removes only the deadline-to-
-`skip-vt` transition and, separately, one production identity/binding component from the cache key; each
-mutation must make its named red fail. Do not weaken the existing cache owner or manually invoke a route
-handler.
+A late A completion must not overwrite or relabel B; the test must retain typed key/value entries and read B
+after A settles. Mutation resistance removes only the deadline-to-`skip-vt` transition and, separately, one
+production identity/binding component from the cache key; each mutation must make its named red fail. Do not
+weaken the existing cache owner or manually invoke a route handler.
 
 No Server/Router, `use-subscription`, Root/Git authority, page-specific Loading, Static/SSG, notification,
 or `accelerate-live-projection-loading` behavior belongs in R. Focused evidence ends at navigation,
