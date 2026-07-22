@@ -309,10 +309,19 @@ Split delivery again:
    retains A with `isUpdating=true` on recompute-started, clears it on B/error, retires late generations,
    and renders Archive Updating beside retained rows. Static mode never claims updating.
 
-F2 implementation status (2026-07-22): implemented and awaiting independent review. The checked Router
-fixed point exercises the real Planning-root Archive endpoint; the Web event owner and ArchiveList each
-have an exact mutation red. No other subscription, static provider, or page was migrated. Parent 6.16
-remains open for its independently planned timing, prefetch, route-gate, and topology packages.
+F2 review status (2026-07-22): one page-topology correction remains. The checked Router fixed point and Web
+lifecycle owner pass independent Server `2/2`, Web `20/20`, and Core/Server/Web typechecks. However,
+`archived=[] + isUpdating=true` currently renders both Updating and the unqualified current-empty claim
+`No archived changes yet.` A retained empty snapshot is display continuity, not current Planning-root
+truth. Suppress that empty conclusion while recomputation is active, prove the exact real-component state,
+and keep F2 awaiting independent acceptance. No Router, hook, static provider, or unrelated page change is
+authorized. Parent 6.16 remains open.
+
+Before migrating a second page to projection lifecycle events, split the generic generation/cache owner
+out of `use-subscription.ts`. F2 correctly added the first opt-in lifecycle, but that 672-line aggregation
+now owns five declared intents and two generic effect/cache state machines. A third copy is forbidden; the
+next migration must consume one reviewed deep lifecycle module while preserving the accepted raw and
+authoritative subscription contracts.
 
 Do not infer cross-subscription ordering, add a runtime-invalidation side channel, or migrate Changes,
 Specs, Dashboard, Search, Git, Config, Context, Settings, OPSX, or App in either Archive tracer package.

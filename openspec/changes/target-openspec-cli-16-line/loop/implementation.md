@@ -6991,3 +6991,42 @@ acceptance remains owner-only. `6.16-F2` is implemented and awaits independent r
 The normal commit attempt failed only because the repository has no Vite+ `staged` configuration. Every
 Goal-required focused check above had already passed, so implementation commit `a18cb35` used the recorded
 `--no-verify` exception. No commit-hook pass is claimed.
+
+### 6.16-F2 independent review finding (2026-07-22)
+
+Independent standards review and main-agent review accepted the Router/hook lifecycle in `a18cb35` and its
+evidence commit `7daa3bd`. Only `archive.subscribe` uses the projection event helper; `subscribeOne`,
+`subscribeFiles`, every unrelated Router endpoint, static provider, and page retain their prior contracts.
+The checked Router fixture crosses `appRouter`, the real Server context, `PlanningRootServiceManager`, and
+the Archive Adapter. It proves initial data, blocked replacement start, replacement data, and original task
+error without a cast or fabricated Router boundary.
+
+Independent focused verification passed:
+
+```text
+Server Archive Router: 1 file / 2 tests
+Web projection hook + ArchiveList: 2 files / 20 tests
+Core, Server, Web package typechecks: passed
+```
+
+The Web generation guard executes before state and cache writes. A replacement error clears Updating while
+retaining A and the original Error. Static loading/data never enters Updating. Archive rows, hrefs,
+View-Transition handoff/shared elements, initial Loading, resolved rows, and both error topologies remain
+intact.
+
+One blocking page fixed point remains. When the retained projection is an empty array and
+`isUpdating=true`, `ArchiveList` renders both the truthful Updating status and `No archived changes yet.`
+The latter is an unqualified current-empty conclusion even though the replacement is unsettled. This
+violates F2's no-false-empty/current-success boundary. The correction is limited to the real ArchiveList
+empty branch: show no current-empty claim during Updating, retain the Updating status, and restore the
+ordinary empty copy only after `isUpdating=false`. Add a real-component red for exactly that state and prove
+removing only the new guard makes it fail. Router, Web hook, cache/generation owner, static provider, errors,
+rows, links, View Transitions, and unrelated pages remain frozen. F2 stays open for correction and another
+independent review; parent checkpoint 6.16 remains unchecked.
+
+One non-blocking architecture debt becomes a prerequisite for any later projection migration:
+`use-subscription.ts` is now 672 lines, declares five intents, and contains a second generic
+effect/generation/cache lifecycle. Current F2 lifecycle behavior is correct, so no refactor is folded into
+the retained-empty page correction. Before a second page adopts projection events, extract and review one
+deep lifecycle owner; do not create a third copy or change the accepted raw/authoritative contracts
+incidentally.
