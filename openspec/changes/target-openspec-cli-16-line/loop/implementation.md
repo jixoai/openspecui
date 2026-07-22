@@ -11,6 +11,7 @@ Original request (2026-07-15): "解决方案可能没你想的那么简单，这
 Original request (2026-07-16): "代码已经提交，开始review。如果有问题，那么可更新change甚至可以新开change。"
 Original request (2026-07-17): "Make late-child-close bookkeeping proof resistant to the exact missing-cleanup mutation."
 Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
+Owner-reported debt (2026-07-22): "整个过程中，几乎都在 Loading，切换个页面也等，做任何动作也在等，给我的感觉就是非常卡。"
 -->
 
 ## Implementation State
@@ -6066,3 +6067,32 @@ isolated page-topology owners; it excludes generic subscription rewrites, Server
 routes, Settings/Archive, View Transitions, full gates, SSG, and browser E2E. Automated hook/component
 results are preparation evidence only. Final end-to-end browser and visual acceptance remains the
 owner's responsibility.
+
+### 6.16-B independent research: measure detail navigation before changing policy (2026-07-22)
+
+Independent research found no shared interaction-performance owner. The nearest reusable implementation
+is the translation adaptive-concurrency log: a typed `globalThis` memory store with a 30-minute TTL and
+256-entry bound. It is translation-domain evidence and must not absorb navigation fields.
+
+The next implementation package therefore creates a separate bounded detail-navigation timing owner and
+wires it only at `runPreparedViewTransition`, which already coordinates every relevant phase:
+
+```text
+navigation requested
+  -> prepareRouteDetailViewTransition settles
+  -> runViewTransition invokes the real route update
+  -> runViewTransition promise settles
+```
+
+Each sample carries an attempt id, route area, source/target path, preparation outcome, and monotonic
+phase durations. Same-area navigation B retires pending A; a late A completion is discarded rather than
+being relabeled as B evidence. Focused Vitest must first demonstrate that the current production path
+emits no structured sample, then prove the complete phase record. It must additionally turn red when only
+the real-update commit recorder or only the current-attempt guard is removed, and return green after each
+restoration.
+
+This package changes measurement only. It cannot change prefetch timing/policy, route presentation,
+subscriptions, Root authority, Server resolution, Settings/Archive mount gates, Notification, logging,
+persistence, or network behavior. No cross-subscription causal claim is permitted: `observedAt`, local
+subscription timestamps, and navigation timestamps have no shared protocol sequence. Checkpoint `6.16`
+remains open, and all final browser/visual acceptance remains owner-only.

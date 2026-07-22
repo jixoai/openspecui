@@ -8,6 +8,7 @@ Orthogonal intents (created 2026-07-15 Asia/Shanghai):
 
 Original request (2026-07-15): "你直接给我一份合理的，符合openspec团队设计哲学与预期的效果。"
 Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
+Owner-reported debt (2026-07-22): "整个过程中，几乎都在 Loading，切换个页面也等，做任何动作也在等，给我的感觉就是非常卡。"
 -->
 
 ## Research Findings
@@ -173,6 +174,33 @@ After that focused correction, do the following packages independently and in th
 No package may globally suppress Loading, unlock a root mutation from stale data, turn a root error into
 success, or conflate presentation continuity with current operation authority. The owner performs final
 visual/browser acceptance; agent evidence ends at focused Vitest and component-level fixtures.
+
+#### 6.16-B: detail-navigation phase timing
+
+The next package measures only the existing detail-navigation coordinator. `runPreparedViewTransition`
+is the sole production boundary that observes the request, detail preparation outcome, real route update,
+and View Transition settlement without inventing cross-owner ordering.
+
+```text
+requested(area, from, to, attempt)
+  -> prepare-settled(ready | cancelled | skip-vt)
+  -> route-committed
+  -> transition-settled
+```
+
+Store a typed, bounded, process-memory sample with monotonic phase durations. Reuse the existing local
+bounded-log discipline, but create a navigation-specific owner; do not add navigation fields to the
+translation log. A newer attempt in the same route area retires the old attempt, and late A callbacks must
+not alter or become current B evidence. The record is diagnostic evidence only: no persistence, network
+upload, Notification, console output, settings surface, or user-facing analytics belongs in this package.
+
+Focused evidence starts through the real `VTLink`/navigation coordinator with a controlled slow prepare.
+It proves the four ordered phases and their durations, then proves A pending -> B settled -> late A cannot
+rewrite B. Removing only the real-update `route-committed` record must make the named phase assertion red;
+removing only the current-attempt guard must make the late-A assertion red. Keep `140ms`/`2500ms`, prefetch
+policy, subscriptions, Root authority, Server behavior, Settings/Archive gates, and page Loading unchanged.
+Checkpoint `6.16` stays open. Subscription-first-data and Root-ready timing require separate packages
+because the current protocol supplies no navigation correlation token.
 
 ## Capability Impact
 
