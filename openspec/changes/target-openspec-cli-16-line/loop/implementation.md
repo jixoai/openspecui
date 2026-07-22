@@ -7252,7 +7252,7 @@ existing `useSpecsSubscription` mock:
 2. Referenced scope with a Catalog transport error and no Reference sources: `No Referenced Specs...` is
    absent.
 3. Referenced scope with a Catalog transport error and one ready zero-Spec Store: `OpenSpec reported no
-   Specs...` is absent.
+Specs...` is absent.
 
 Mutation evidence must remove only the two Referenced `&& !error` guards and show their respective fixed
 points fail; the coexistence test must fail if the page-level alert or Store-error rendering is removed.
@@ -7260,3 +7260,39 @@ Restore every mutation, rerun the direct file, Web typecheck, exact changed-file
 `git diff --check`. Do not modify production code, the hook, Router, Server, static provider, identities,
 diagnostics implementation, another page, SSG, browser/Playwright, or full gates. Replace the provisional
 `7/7`/three-mutation evidence above with the corrected results before the next independent review.
+
+### 6.16-I correction implementation: Referenced error coexistence (2026-07-23)
+
+This evidence supersedes the provisional `7/7`/three-mutation summary above. The correction changes only
+`spec-list.test.tsx`; `SpecList` and every other production owner remain at the accepted implementation.
+Three actual component fixed points enter the Referenced scope through the existing
+`useSpecsSubscription` seam: a Catalog transport error coexists with a `state: 'error'` Store and keeps
+both raw alert facts, no Reference sources do not claim `No Referenced Specs...`, and a ready zero-Spec
+Store does not claim `OpenSpec reported no Specs...` while that same Catalog error is active. The
+coexistence test names both independent evidence sources, including `reference_root_unhealthy` and upstream
+stderr, so the page alert is not allowed to overwrite or silently absorb Store diagnostics.
+
+The four correction mutations each failed their named real-component fixed point. Removing only
+`&& !error` from the no-Reference guard returned `No Referenced Specs currently observed.` (`1 failed / 9
+skipped`). Removing only `&& !error` from the ready-Store guard returned `OpenSpec reported no Specs for
+this Store.` (`1 failed / 9 skipped`). Replacing only the retained-Catalog page `{errorAlert}` with `null`
+made the coexistence test fail because `catalog failed` was absent (`1 failed / 9 skipped`). Changing only
+the Store `source.state === 'error'` diagnostic branch made that same test fail because
+`reference_root_unhealthy` was absent (`1 failed / 9 skipped`). Each mutation was restored before the next
+run; `git diff -- packages/web/src/routes/spec-list.tsx` is empty.
+
+Corrected focused verification:
+
+```text
+SpecList: 1 file / 10 tests passed
+Web package typecheck: passed
+Exact two-file lint: passed with 0 warnings / 0 errors
+pnpm format:check: passed
+git diff --check: passed
+```
+
+Only the direct test and matching Change evidence are changed in this correction. The Catalog hook, SpecList
+production owner, Router, Server, static provider, compound identities, VTLink/handoff, Reference diagnostic
+implementation, other pages, SSG, browser/Playwright, and full gates remain unchanged and were not run.
+Final browser/visual acceptance remains owner-only. `6.16-I` is implemented and awaits independent review;
+parent checkpoint `6.16` remains unchecked.

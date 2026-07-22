@@ -352,11 +352,10 @@ The independent browser attempt confirms the desktop source control and URL/quer
   - `6.16-H` accepted: Context terminal transport/projection error suppresses only the unresolved Loading
     presentation while preserving the raw alert and every Root Context authority/evidence contract.
     Independent Context `11/11` and Web typecheck pass.
-  - `6.16-I` reopened for focused evidence correction: SpecList consumes its existing transport error;
-    no-Catalog failure suppresses Catalog controls/empty claims and retained Catalog rows/links remain
-    visible. Independent review found that Reference Store diagnostics, no-Reference empty, and ready-Store
-    empty suppression were not exercised under the same Catalog transport-error state. Add only those
-    component fixed points and their named mutation evidence before accepting this package.
+  - `6.16-I` implemented awaiting independent review: direct Referenced-scope component evidence proves
+    Catalog and Store alerts coexist, while no-Reference and ready-Store empty claims remain suppressed
+    during Catalog transport error. Four named mutations prove both Referenced empty guards and both alert
+    owners; the accepted production owner remains unchanged.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and
