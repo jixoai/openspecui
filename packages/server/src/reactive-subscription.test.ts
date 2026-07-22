@@ -3,7 +3,8 @@
  * 1. Prove completed projections preserve their data event.
  * 2. Prove initial reactive data emits without a lifecycle start.
  * 3. Prove recompute start precedes a blocked replacement result.
- * 4. Prove unsubscribe aborts without a false recompute start.
+ * 4. Prove unsubscribe retires the reactive owner before later invalidation.
+ * 5. Prove task rejection emits one original error without data or completion.
  *
  * Original request (2026-07-22): "整个过程中，几乎都在 Loading。"
  */
@@ -38,6 +39,14 @@ function createDeferred(): Deferred {
       rejectPromise(reason)
     },
   }
+}
+
+async function settleReactivePromiseChain(): Promise<void> {
+  // Settle abort/change -> Promise.race -> generator -> observable runner continuations.
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
 }
 
 describe('createReactiveProjectionSubscription', () => {
@@ -118,13 +127,15 @@ describe('createReactiveProjectionSubscription', () => {
     }
   })
 
-  it('does not emit recompute start after unsubscribe aborts the stream', async () => {
+  it('retires the reactive owner before a later invalidation', async () => {
     const state = new ReactiveState('A')
     const initialDataEmitted = createDeferred()
     const errors: unknown[] = []
     const events: ReactiveProjectionSubscriptionEvent<string>[] = []
+    let taskRuns = 0
 
     const subscription = createReactiveProjectionSubscription(async () => {
+      taskRuns += 1
       return state.get()
     }).subscribe({
       next(event) {
@@ -141,11 +152,51 @@ describe('createReactiveProjectionSubscription', () => {
 
     await initialDataEmitted.promise
     expect(events).toEqual([{ type: 'data', data: 'A' }])
+    expect(state.subscriberCount).toBe(1)
+    expect(taskRuns).toBe(1)
 
     subscription.unsubscribe()
+    await settleReactivePromiseChain()
+    const afterUnsubscribe = {
+      subscriberCount: state.subscriberCount,
+      taskRuns,
+    }
     state.set('B')
+    await settleReactivePromiseChain()
 
-    expect(events).toEqual([{ type: 'data', data: 'A' }])
+    expect({ afterUnsubscribe, subscriberCount: state.subscriberCount, taskRuns, events }).toEqual({
+      afterUnsubscribe: { subscriberCount: 0, taskRuns: 1 },
+      subscriberCount: 0,
+      taskRuns: 1,
+      events: [{ type: 'data', data: 'A' }],
+    })
     expect(errors).toEqual([])
+  })
+
+  it('emits the original task rejection without data or completion', async () => {
+    const taskRejected = createDeferred()
+    const rejection = new Error('projection failed')
+    const errors: unknown[] = []
+    const events: ReactiveProjectionSubscriptionEvent<string>[] = []
+    let completionCount = 0
+
+    createReactiveProjectionSubscription<string>(async () => {
+      taskRejected.resolve()
+      throw rejection
+    }).subscribe({
+      next: (event) => events.push(event),
+      error: (error) => errors.push(error),
+      complete: () => {
+        completionCount += 1
+      },
+    })
+
+    await taskRejected.promise
+    await settleReactivePromiseChain()
+
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toBe(rejection)
+    expect(events).toEqual([])
+    expect(completionCount).toBe(0)
   })
 })

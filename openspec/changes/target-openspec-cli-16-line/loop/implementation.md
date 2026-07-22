@@ -6851,3 +6851,65 @@ Three evidence gaps remain:
 Correct only these items. Keep the accepted observer placement, event union/data mapping, raw helpers, and
 all Router/Web/static behavior unchanged. Run the complete focused files, both checked package typechecks,
 exact lint/format/diff, update F1 as corrected/awaiting review, and commit. Parent 6.16 and F2 remain open.
+
+### 6.16-F1 correction implementation: owner retirement, typed Core tests, and rejection (2026-07-22)
+
+The Server unsubscribe fixed point now observes the underlying owner rather than only subscriber delivery.
+After `data(A)`, `ReactiveState.subscriberCount` is one and the task has one run. The test unsubscribes,
+settles the deterministic abort/race/generator/runner Promise chain without timers, snapshots zero
+subscribers and one task run, invalidates B, settles the same chain again, then proves the owner remains
+retired: zero subscribers, one task run, and exactly `data(A)`.
+
+The Core package now has `tsconfig.reactive-context-tests.json`, whose only test entry is
+`src/reactive-fs/reactive-context.test.ts`; the normal Core `typecheck` script runs this lane after the
+production lane. Its first checked execution exposed six strict generic errors from comparing private
+`Set<ReactiveState<unknown>>` dependencies with narrower states. The direct test now asserts the public
+`ReactiveState.subscriberCount` fact instead, with no cast, suppression, fabricated state, production
+contract weakening, or unrelated legacy-test expansion. Focused behavior remains `24/24`.
+
+The Server rejection fixed point resolves a task-side deferred immediately before throwing one concrete
+Error, settles the deterministic Promise chain, and proves exactly one error with the original object
+identity, no data, and no completion. The new projection helper passes the caught `unknown` directly to the
+observable error boundary; only its unnecessary `as Error` assertion was removed. The accepted raw helper
+retains its original body and assertion.
+
+Correction red and mutation-resistance evidence:
+
+1. Removing only the projection helper cleanup's `controller.abort()` made the owner test fail immediately
+   (`1 failed | 3 skipped`). After unsubscribe it retained `subscriberCount=1`; after B it retained one
+   subscriber, entered the task a second time, and leaked `recompute-started,data(B)` instead of remaining at
+   zero subscribers, one run, and `data(A)`. Restoring only `controller.abort()` returned the file green.
+2. Suppressing only the projection helper's `emit.error(err)` made the rejection test fail immediately
+   (`1 failed | 3 skipped`) with `expected errors length 1, received 0`. The task-side deferred prevented a
+   timeout; the data and completion branches remained empty. Restoring the mapping returned the file green.
+
+Final focused verification:
+
+```text
+pnpm --filter @openspecui/core exec vitest run --maxWorkers=1 \
+  src/reactive-fs/reactive-context.test.ts
+  -> 1 file / 24 tests passed
+
+pnpm --filter @openspecui/server exec vitest run --maxWorkers=1 \
+  src/reactive-subscription.test.ts
+  -> 1 file / 4 tests passed
+
+pnpm --filter @openspecui/core typecheck
+  -> production plus the narrow reactive-context checked-test lane passed
+
+pnpm --filter @openspecui/server typecheck
+  -> production plus all existing checked-test lanes passed
+
+pnpm exec vp lint <exact changed TypeScript files>
+pnpm format:check
+git diff --check
+  -> passed
+```
+
+The accepted Core observer placement, Core/Server payloads, event union/data mapping, coalescing, raw helper,
+and public exports are unchanged. Router, Web/useSubscription, Archive UI, static providers, runtime
+invalidation, transport state, SSG, browser, and full gates were not changed or run. `6.16-F1` is corrected
+and awaits independent review; `6.16-F2` remains pending and parent checkpoint `6.16` remains unchecked.
+
+The repository still has no Vite+ `staged` configuration. After every Goal-required focused check passed,
+the correction commit used the recorded `--no-verify` exception. No commit-hook pass is claimed.

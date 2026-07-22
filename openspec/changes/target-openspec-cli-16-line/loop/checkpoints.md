@@ -340,9 +340,9 @@ The independent browser attempt confirms the desktop source control and URL/quer
     without false empty or current-success claims; retained rows and hrefs remain visible. Archive updating
     remains blocked on a shared production subscription signal; a component-only `data + isLoading=true`
     mock is not acceptance evidence.
-  - `6.16-F1` correction required: recompute/data ordering is accepted, but Server unsubscribe must prove
-    dependency retirement and fail when `controller.abort()` is removed; the Core observer test must enter
-    an explicit checked-test lane, and Server task rejection must have direct error/no-complete evidence.
+  - `6.16-F1` corrected and awaiting independent review: Server unsubscribe proves dependency-owner
+    retirement and fails when its exact `controller.abort()` transition is removed; the Core observer test
+    is in a narrow checked-test lane; Server rejection preserves one original error without data or complete.
     No Router or Web consumer migrated in this package.
   - `6.16-F2` remains pending F1 acceptance: migrate only Archive through the typed event helper and project
     retained data as Updating; static and unrelated subscriptions remain unchanged.

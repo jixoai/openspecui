@@ -82,7 +82,7 @@ export function createReactiveProjectionSubscription<T>(task: () => Promise<T>) 
         emit.complete()
       } catch (err) {
         if (!controller.signal.aborted) {
-          emit.error(err as Error)
+          emit.error(err)
         }
       }
     })()

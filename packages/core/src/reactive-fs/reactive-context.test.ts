@@ -276,7 +276,7 @@ describe('ReactiveContext', () => {
       state2.set('B')
       // state2 已经不在依赖中，不应该触发
       // 注意：这里需要验证 state2 的订阅者中不包含 context
-      expect(context['dependencies'].has(state2)).toBe(false)
+      expect(state2.subscriberCount).toBe(0)
     })
 
     it('should handle concurrent state changes', async () => {
@@ -321,7 +321,7 @@ describe('ReactiveContext', () => {
       await context.runOnce(async () => state.get())
 
       // 验证依赖被追踪
-      expect(context['dependencies'].has(state)).toBe(true)
+      expect(state.subscriberCount).toBe(1)
     })
 
     it('should not re-execute on change', async () => {
@@ -437,8 +437,7 @@ describe('ReactiveContext', () => {
       expect(innerValue).toBe('value')
 
       // 两个 context 都应该追踪了 state
-      expect(outerContext['dependencies'].has(state)).toBe(true)
-      expect(innerContext['dependencies'].has(state)).toBe(true)
+      expect(state.subscriberCount).toBe(2)
     })
 
     it('should handle async task with multiple awaits', async () => {
@@ -457,8 +456,8 @@ describe('ReactiveContext', () => {
       expect(result.value).toBe('a-b')
 
       // 两个状态都应该被追踪
-      expect(context['dependencies'].has(state1)).toBe(true)
-      expect(context['dependencies'].has(state2)).toBe(true)
+      expect(state1.subscriberCount).toBe(1)
+      expect(state2.subscriberCount).toBe(1)
     })
 
     it('should handle error in task', async () => {
