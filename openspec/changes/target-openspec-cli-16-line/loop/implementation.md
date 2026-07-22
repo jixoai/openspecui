@@ -7578,6 +7578,21 @@ Router, Server, static provider, generic subscription, browser/Playwright, full-
 acceptance work was changed or run. `6.16-L` is implemented and awaits independent review; parent `6.16`
 remains unchecked.
 
+### 6.16-L independent acceptance (2026-07-23)
+
+Independent Spec review finds the status host derives only the contracted `configBundle` facts, sits outside
+dynamic Schema tabs, retains selected Schema content beside an error, and leaves selected-file ownership and
+static/provider contracts untouched. Its real-Tabs tests cover all five required catalog states; all three
+named mutations fail their intended fixed point.
+
+Independent verification passes focused Config `4 files / 21 tests`, Web typecheck, exact lint/Prettier,
+diff checks, and static `2 files / 10 tests`. Fresh-clean SSG was obtained without deletion: ignored
+`packages/web/dist-ssg` was moved to `/tmp/openspecui-6.16-L-ssg.cgJPav/dist-ssg`, the repository output
+path was confirmed absent, and `pnpm --filter @openspecui/web build:ssg` regenerated client/server output.
+The existing LightningCSS `scroll-button` and Rollup `INEFFECTIVE_DYNAMIC_IMPORT` warnings remain non-fatal
+and outside this slice. No browser/Playwright or owner visual acceptance ran. `6.16-L` is accepted; parent
+checkpoint `6.16` remains unchecked.
+
 ### 6.16-M research: shared subscription lifecycle owner (2026-07-23)
 
 `useReactiveProjectionSubscription` and `useAuthoritativeSubscription` independently reimplement effect

@@ -368,13 +368,14 @@ The independent browser attempt confirms the desktop source control and URL/quer
     separately. Independent direct Config, adjacent Config, Web typecheck, static tests, and a clean SSG
     build pass. Preview, `configBundle`, templates, template contents, Root gating, mutations, Router, and
     static behavior remain outside this package.
-  - `6.16-L` implemented, awaiting independent review: Config Schema catalog/tab-inventory topology consumes
+  - `6.16-L` accepted: Config Schema catalog/tab-inventory topology consumes
     only `configBundle` Schema inventory availability. Its mounted status host survives an absent or empty
     dynamic Schema tab inventory, so initial loading, terminal absent/empty errors, retained non-empty errors,
     and settled empty success remain distinguishable. Real-Tabs direct evidence covers all five states; three
     named mutations prove the route alert, initial gate, and error-aware empty guard separately. Existing
-    selected-Schema file panels remain K-owned and out of scope. Code/test commit `60fcb10`; parent `6.16`
-    remains open.
+    selected-Schema file panels remain K-owned and out of scope. Independent focused/static tests, Web
+    typecheck, exact lint/format, diff, and a fresh-clean SSG build accept code/test commit `60fcb10`;
+    parent `6.16` remains open.
   - `6.16-M` accepted: Web-internal lifecycle ownership centralizes
     cached snapshots, effect-generation identity, retirement, subscription cleanup, and static-loader/live
     publication eligibility across ordinary, reactive, and authoritative hooks. Direct ordinary live A -> B,
