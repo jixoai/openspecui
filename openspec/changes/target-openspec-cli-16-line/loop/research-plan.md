@@ -139,6 +139,41 @@ Approval state: the manager approved each architecture boundary through the Wayf
 4. After every merged slice, update `loop/implementation.md` and `loop/checkpoints.md`. Any architecture or scope divergence returns to Intake/Research Plan before more code.
 5. Finalize only after cross-slice acceptance, archive verification, and protected-branch delivery gates pass.
 
+### 6.16 execution split: interaction latency without authority regression (2026-07-22)
+
+The owner's pervasive-Loading report is real, but it is not one backend latency claim. The current
+implementation combines four independent facts into similar visual waiting states:
+
+```text
+route first visit         -> independent subscription has no cache -> content data unknown
+Root cached remount       -> cached display exists, but no replacement stream has proved it current
+detail forward navigation -> View Transition waits for a prefetch query before route commit
+Root refresh              -> manager resolves Doctor/Context -> root writes must stay locked
+artificial route gate     -> Settings/Archive add one client-only frame with no network dependency
+```
+
+The first production package is a safety correction, not a visual optimization: Root Context must use
+the existing authoritative-subscription lifecycle so cached A can remain visible while `isLoading` stays
+true and root-dependent actions stay locked until current B emits. It must propagate real tRPC
+`connecting`, `pending`, `stopped`, `complete`, and error callbacks. This closes the gap where the
+generic retained cache can otherwise make a cached `ready` Root Context appear write-authoritative during
+remount/reconnect.
+
+After that focused correction, do the following packages independently and in this order:
+
+1. Instrument navigation click, subscription-first-data, Root-ready, and detail-prefetch phases. Do not
+   infer server latency from a visual spinner or use sleeps as evidence.
+2. Change the detail View Transition prefetch policy only with a slow-query red case. Route commit may be
+   decoupled from prefetch, but Git binding tokens and compound Spec identity cannot be dropped or
+   relabeled by a late prefetch.
+3. Remove the Settings/Archive client-only one-frame gates as isolated route slices, then audit list and
+   Config topology one owner at a time. Initial no-data, empty, stale/updating, current, and error must
+   stay distinguishable.
+
+No package may globally suppress Loading, unlock a root mutation from stale data, turn a root error into
+success, or conflate presentation continuity with current operation authority. The owner performs final
+visual/browser acceptance; agent evidence ends at focused Vitest and component-level fixtures.
+
 ## Capability Impact
 
 ### New or Expanded Behavior

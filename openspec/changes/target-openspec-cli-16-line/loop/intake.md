@@ -25,6 +25,8 @@ Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一�
 
 > "理论上是要的，你觉得呢，工作难度大不大？这是额外的工作还是可以和 live 版本保持尽可能的一致？"
 
+> "整个过程中，几乎都在 Loading，切换个页面也等，做任何动作也在等， 一直都在Loading，给我的感觉就是非常卡。"
+
 ## Objective Scope
 
 This loop targets the OpenSpecUI 6.x adaptation for OpenSpec CLI 1.6 while auditing incomplete 1.4 and 1.5 contracts rather than treating version compatibility as feature completeness.

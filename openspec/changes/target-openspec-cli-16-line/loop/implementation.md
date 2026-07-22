@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
 1. Report implementation state without converting planning work into false code progress.
 2. Preserve approved architecture decisions as implementation constraints.
 3. Record actual divergences from the approved plan.
@@ -5845,3 +5845,66 @@ The component evidence is automated preparation only; no agent-run end-to-end br
 acceptance is claimed. Checkpoint `6.15` is closed at `66/131`. The recorded interaction-latency debt
 remains in `6.16`; no Loading or route-performance behavior changed in this checkpoint. Do not start
 `6.16`, run full gates/SSG, push, merge, archive, or release as part of this closure.
+
+### 6.16 research correction: Loading is a topology, not one wait (2026-07-22)
+
+The owner confirmed the prior basic walkthroughs and reported a serious experience defect: page switches
+and ordinary actions repeatedly present as Loading. The final small status-bar correction is already
+committed in `067783a`; independent focused review reran the real transport -> `useServerStatus` ->
+`StatusIndicator` path and found no remaining issue. The worktree is clean, so no empty follow-up commit
+is appropriate for that fix.
+
+The Loading investigation finds five separate owners. There is no measurement proving that the CLI,
+Server, or reactive filesystem is the single dominant source of elapsed time.
+
+```text
+ordinary list first visit
+  useSubscription cache miss
+    -> new route subscription
+    -> data absent + isLoading
+    -> Dashboard/Changes/Specs/Context/Schemas/Git full-page Loading
+
+cached Root Context remount/reconnect
+  generic retained cache reports isLoading=false
+    -> stale ready Root may look current before this subscription emits B   [safety defect]
+
+detail navigation
+  navigation awaits prepareRouteDetailViewTransition
+    -> query/prefetch before route commit
+    -> 140 ms visible delay and 2.5 s bounded wait
+
+root dependency update
+  Root stream emits refreshing before Doctor/Context re-resolution
+    -> root write authority is correctly revoked
+    -> stale display may remain useful, but must not authorize writes
+
+Settings / Archive mount
+  local first-frame gate
+    -> Loading even when no network or subscription result is required
+```
+
+The immediate 6.16 work package is deliberately narrow: `useContextSubscription` must move from the
+generic retained-cache path to the already-proven authoritative subscription lifecycle. Its production
+truth is:
+
+```text
+cached ready A + remount/reconnect
+  -> A remains renderable as stale context
+  -> isLoading/authority=waiting
+  -> useRootActionState locks every root-dependent mutation
+  -> current Root Context emission B
+  -> authority=current; B alone may unlock writes
+```
+
+Focused red evidence must mount the real Root Context hook with a primed `ready A` cache and a held
+production-shaped tRPC subscription, then observe the real root-action gate. It must fail after
+restoring generic `useSubscription` or removing the authoritative rebind transition. Green evidence must
+also prove `connecting`, `pending`, terminal error, `stopped`/`complete`, and late A callbacks cannot
+unlock cached data; a current B emission is the only recovery. The static fallback stays explicitly
+available and does not fabricate a live backend authority.
+
+This is not authorization to change generic route Loading, root-refresh locks, Manager timing, View
+Transition prefetch, Settings/Archive mount gates, or any data ownership. Once this package is accepted,
+instrument phase timings before the next performance behavior change. The future packages are
+instrumentation, detail-precommit policy, and isolated route-topology work; each needs its own owner,
+slow-path red/green evidence, and stop boundary. Checkpoint `6.16` remains open.

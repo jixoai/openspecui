@@ -327,6 +327,9 @@ The independent browser attempt confirms the desktop source control and URL/quer
 - [x] 6.14 OPSX New/Propose/Compose/Verify/Update shows and preserves its target planning root
 - [x] 6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging
 - [ ] 6.16 Every network-triggering control binds loading/disabled state and every page covers empty/loading/loaded/updating/error topologies
+  - In progress as independently reviewable packages. First: Root Context cached-display/current-authority
+    correction. It remains a write-safety boundary; do not close 6.16 until telemetry, detail-navigation,
+    artificial route-gate, and page-topology packages have their own evidence.
 - [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns
 
 ## 7. Static Export Parity and Privacy
