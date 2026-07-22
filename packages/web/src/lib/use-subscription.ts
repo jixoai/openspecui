@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
- * 1. Provide one cached subscription lifecycle for live and static project projections.
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * 1. Consume one internal cached subscription lifecycle for live and static project projections.
  * 2. Bind Spec, Change, Archive, Config, Notification, and CLI projections to typed hooks.
  * 3. Preserve cache identity for detail projections across remounts and view transitions.
  * 4. Keep Git scope cache data non-authoritative until an opt-in reconnect emits a replacement.
@@ -33,7 +33,10 @@ import {
 import { useEffect, useRef, useState } from 'react'
 import * as StaticProvider from './static-data-provider'
 import { isStaticMode } from './static-mode'
+import { SubscriptionLifecycleOwner } from './subscription-lifecycle'
 import { trpcClient } from './trpc'
+
+export { primeSubscriptionCache } from './subscription-lifecycle'
 
 /** 订阅状态 */
 export interface SubscriptionState<T> {
@@ -93,13 +96,6 @@ interface Unsubscribable {
   unsubscribe: () => void
 }
 
-/** Module-level cache: stores last received value per subscription key for instant re-mount */
-const subscriptionCache = new Map<string, unknown>()
-
-export function primeSubscriptionCache<T>(cacheKey: string, data: T): void {
-  subscriptionCache.set(cacheKey, data)
-}
-
 export function getSpecDocumentSubscriptionCacheKey(identity: SpecIdentity): string {
   return `spec.subscribeDocument:${specIdentityKey(identity)}`
 }
@@ -127,10 +123,15 @@ export function useSubscription<T>(
   cacheKey?: string,
   cacheRebindPolicy: SubscriptionCacheRebindPolicy = 'retain'
 ): SubscriptionState<T> {
+  const lifecycleOwnerRef = useRef<SubscriptionLifecycleOwner | null>(null)
+  if (lifecycleOwnerRef.current === null) {
+    lifecycleOwnerRef.current = new SubscriptionLifecycleOwner()
+  }
+  const initialSnapshot = lifecycleOwnerRef.current.snapshot<T>(cacheKey)
   const [state, setState] = useState<SubscriptionState<T>>(() => {
-    if (cacheKey && subscriptionCache.has(cacheKey)) {
+    if (initialSnapshot.hasCached) {
       return {
-        data: subscriptionCache.get(cacheKey) as T,
+        data: initialSnapshot.data,
         isLoading: cacheRebindPolicy === 'loading',
         error: null,
       }
@@ -138,17 +139,17 @@ export function useSubscription<T>(
     return { data: undefined, isLoading: true, error: null }
   })
 
-  const subscriptionRef = useRef<Unsubscribable | null>(null)
   const inStaticMode = isStaticMode()
 
   useEffect(() => {
-    // 清理之前的订阅
-    subscriptionRef.current?.unsubscribe()
+    const generation = lifecycleOwnerRef.current?.begin()
+    if (!generation) return
 
     // Use cached data if available, otherwise mark as loading
-    if (cacheKey && subscriptionCache.has(cacheKey)) {
+    const snapshot = generation.snapshot<T>(cacheKey)
+    if (snapshot.hasCached) {
       setState({
-        data: subscriptionCache.get(cacheKey) as T,
+        data: snapshot.data,
         isLoading: cacheRebindPolicy === 'loading',
         error: null,
       })
@@ -161,41 +162,47 @@ export function useSubscription<T>(
       if (staticLoader) {
         staticLoader()
           .then((data) => {
-            if (cacheKey) subscriptionCache.set(cacheKey, data)
-            setState({ data, isLoading: false, error: null })
+            generation.publishData(cacheKey, data, () => {
+              setState({ data, isLoading: false, error: null })
+            })
           })
-          .catch((error) => {
-            console.error('Static data loading error:', error)
-            setState((prev) => ({ ...prev, isLoading: false, error }))
+          .catch((cause: unknown) => {
+            const error = cause instanceof Error ? cause : new Error(String(cause))
+            generation.publish(() => {
+              console.error('Static data loading error:', error)
+              setState((prev) => ({ ...prev, isLoading: false, error }))
+            })
           })
       } else {
         console.warn('No static loader provided for subscription in static mode')
-        setState((prev) => ({
-          ...prev,
-          isLoading: false,
-          error: new Error('Static loader not available'),
-        }))
+        generation.publish(() => {
+          setState((prev) => ({
+            ...prev,
+            isLoading: false,
+            error: new Error('Static loader not available'),
+          }))
+        })
       }
-      return
+      return () => generation.retire()
     }
 
     // 动态模式：创建 WebSocket 订阅
     const subscription = subscribe({
       onData: (data) => {
-        if (cacheKey) subscriptionCache.set(cacheKey, data)
-        setState({ data, isLoading: false, error: null })
+        generation.publishData(cacheKey, data, () => {
+          setState({ data, isLoading: false, error: null })
+        })
       },
       onError: (error) => {
-        console.error('Subscription error:', error)
-        setState((prev) => ({ ...prev, isLoading: false, error }))
+        generation.publish(() => {
+          console.error('Subscription error:', error)
+          setState((prev) => ({ ...prev, isLoading: false, error }))
+        })
       },
     })
+    generation.attach(subscription)
 
-    subscriptionRef.current = subscription
-
-    return () => {
-      subscription.unsubscribe()
-    }
+    return () => generation.retire()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inStaticMode, ...deps])
 
@@ -214,61 +221,86 @@ export function useReactiveProjectionSubscription<T>(
   deps: unknown[] = [],
   cacheKey?: string
 ): ReactiveProjectionSubscriptionState<T> {
-  const hasCached = cacheKey !== undefined && subscriptionCache.has(cacheKey)
+  const lifecycleOwnerRef = useRef<SubscriptionLifecycleOwner | null>(null)
+  if (lifecycleOwnerRef.current === null) {
+    lifecycleOwnerRef.current = new SubscriptionLifecycleOwner()
+  }
+  const initialSnapshot = lifecycleOwnerRef.current.snapshot<T>(cacheKey)
   const [state, setState] = useState<ReactiveProjectionSubscriptionState<T>>(() => ({
-    data: hasCached ? (subscriptionCache.get(cacheKey) as T) : undefined,
-    isLoading: !hasCached,
+    data: initialSnapshot.data,
+    isLoading: !initialSnapshot.hasCached,
     isUpdating: false,
     error: null,
   }))
-  const subscriptionRef = useRef<Unsubscribable | null>(null)
-  const generationRef = useRef(0)
   const inStaticMode = isStaticMode()
 
   useEffect(() => {
-    const generation = generationRef.current + 1
-    generationRef.current = generation
-    let active = true
-    let subscription: Unsubscribable | null = null
-    const isActive = () => active && generationRef.current === generation
-    const cleanup = () => {
-      active = false
-      if (generationRef.current === generation) generationRef.current += 1
-      const currentSubscription = subscription ?? subscriptionRef.current
-      subscription = null
-      subscriptionRef.current = null
-      currentSubscription?.unsubscribe()
-    }
-
-    subscriptionRef.current?.unsubscribe()
-    subscriptionRef.current = null
-    const effectHasCached = cacheKey !== undefined && subscriptionCache.has(cacheKey)
+    const generation = lifecycleOwnerRef.current?.begin()
+    if (!generation) return
+    const snapshot = generation.snapshot<T>(cacheKey)
     setState({
-      data: effectHasCached ? (subscriptionCache.get(cacheKey) as T) : undefined,
-      isLoading: !effectHasCached,
+      data: snapshot.data,
+      isLoading: !snapshot.hasCached,
       isUpdating: false,
       error: null,
     })
 
     if (inStaticMode) {
       if (!staticLoader) {
-        setState({
-          data: effectHasCached ? (subscriptionCache.get(cacheKey) as T) : undefined,
-          isLoading: false,
-          isUpdating: false,
-          error: new Error('Static loader not available'),
+        generation.publish(() => {
+          setState({
+            data: snapshot.data,
+            isLoading: false,
+            isUpdating: false,
+            error: new Error('Static loader not available'),
+          })
         })
-        return cleanup
+        return () => generation.retire()
       }
       staticLoader()
         .then((data) => {
-          if (!isActive()) return
-          if (cacheKey) subscriptionCache.set(cacheKey, data)
-          setState({ data, isLoading: false, isUpdating: false, error: null })
+          generation.publishData(cacheKey, data, () => {
+            setState({ data, isLoading: false, isUpdating: false, error: null })
+          })
         })
         .catch((cause: unknown) => {
-          if (!isActive()) return
           const error = cause instanceof Error ? cause : new Error(String(cause))
+          generation.publish(() => {
+            setState((previous) => ({
+              ...previous,
+              isLoading: false,
+              isUpdating: false,
+              error,
+            }))
+          })
+        })
+      return () => generation.retire()
+    }
+
+    const subscription = subscribe({
+      onEvent(event) {
+        if (event.type === 'recompute-started') {
+          generation.publish(() => {
+            setState((previous) => ({
+              ...previous,
+              isLoading: false,
+              isUpdating: true,
+              error: null,
+            }))
+          })
+          return
+        }
+        generation.publishData(cacheKey, event.data, () => {
+          setState({
+            data: event.data,
+            isLoading: false,
+            isUpdating: false,
+            error: null,
+          })
+        })
+      },
+      onError(error) {
+        generation.publish(() => {
           setState((previous) => ({
             ...previous,
             isLoading: false,
@@ -276,41 +308,10 @@ export function useReactiveProjectionSubscription<T>(
             error,
           }))
         })
-      return cleanup
-    }
-
-    subscription = subscribe({
-      onEvent(event) {
-        if (!isActive()) return
-        if (event.type === 'recompute-started') {
-          setState((previous) => ({
-            ...previous,
-            isLoading: false,
-            isUpdating: true,
-            error: null,
-          }))
-          return
-        }
-        if (cacheKey) subscriptionCache.set(cacheKey, event.data)
-        setState({
-          data: event.data,
-          isLoading: false,
-          isUpdating: false,
-          error: null,
-        })
-      },
-      onError(error) {
-        if (!isActive()) return
-        setState((previous) => ({
-          ...previous,
-          isLoading: false,
-          isUpdating: false,
-          error,
-        }))
       },
     })
-    subscriptionRef.current = subscription
-    return cleanup
+    generation.attach(subscription)
+    return () => generation.retire()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inStaticMode, ...deps])
 
@@ -329,65 +330,36 @@ export function useAuthoritativeSubscription<T>(
   deps: unknown[] = [],
   cacheKey?: string
 ): AuthoritativeSubscriptionState<T> {
-  const cached = cacheKey ? subscriptionCache.get(cacheKey) : undefined
-  const hasCached = cacheKey !== undefined && subscriptionCache.has(cacheKey)
+  const lifecycleOwnerRef = useRef<SubscriptionLifecycleOwner | null>(null)
+  if (lifecycleOwnerRef.current === null) {
+    lifecycleOwnerRef.current = new SubscriptionLifecycleOwner()
+  }
+  const initialSnapshot = lifecycleOwnerRef.current.snapshot<T>(cacheKey)
   const [state, setState] = useState<AuthoritativeSubscriptionState<T>>(() => ({
-    data: hasCached ? (cached as T) : undefined,
+    data: initialSnapshot.data,
     isLoading: true,
     error: null,
-    authority: { state: 'waiting', reason: hasCached ? 'rebind' : 'initial' },
+    authority: { state: 'waiting', reason: initialSnapshot.hasCached ? 'rebind' : 'initial' },
   }))
-  const subscriptionRef = useRef<Unsubscribable | null>(null)
-  const generationRef = useRef(0)
   const inStaticMode = isStaticMode()
 
   useEffect(() => {
-    const generation = generationRef.current + 1
-    generationRef.current = generation
-    let active = true
+    const generation = lifecycleOwnerRef.current?.begin()
+    if (!generation) return
     let terminalError: Error | null = null
     let terminal = false
-    let subscription: Unsubscribable | null = null
-    const isActive = () => active && generationRef.current === generation
-    const cleanup = () => {
-      active = false
-      if (generationRef.current === generation) generationRef.current += 1
-      const currentSubscription = subscription ?? subscriptionRef.current
-      subscription = null
-      subscriptionRef.current = null
-      currentSubscription?.unsubscribe()
-    }
-
-    subscriptionRef.current?.unsubscribe()
-    subscriptionRef.current = null
-    const effectHasCached = cacheKey !== undefined && subscriptionCache.has(cacheKey)
+    const snapshot = generation.snapshot<T>(cacheKey)
     setState({
-      data: effectHasCached ? (subscriptionCache.get(cacheKey) as T) : undefined,
+      data: snapshot.data,
       isLoading: true,
       error: null,
-      authority: { state: 'waiting', reason: effectHasCached ? 'rebind' : 'initial' },
+      authority: { state: 'waiting', reason: snapshot.hasCached ? 'rebind' : 'initial' },
     })
 
     if (inStaticMode) {
       if (!staticLoader) {
         const error = new Error('Static loader not available')
-        setState((previous) => ({
-          ...previous,
-          isLoading: false,
-          error,
-          authority: { state: 'failed', error },
-        }))
-        return cleanup
-      }
-      staticLoader()
-        .then((data) => {
-          if (!isActive()) return
-          if (cacheKey) subscriptionCache.set(cacheKey, data)
-          setState({ data, isLoading: false, error: null, authority: { state: 'current' } })
-        })
-        .catch((cause: unknown) => {
-          if (!isActive()) return
-          const error = cause instanceof Error ? cause : new Error(String(cause))
+        generation.publish(() => {
           setState((previous) => ({
             ...previous,
             isLoading: false,
@@ -395,67 +367,91 @@ export function useAuthoritativeSubscription<T>(
             authority: { state: 'failed', error },
           }))
         })
-      return cleanup
+        return () => generation.retire()
+      }
+      staticLoader()
+        .then((data) => {
+          generation.publishData(cacheKey, data, () => {
+            setState({ data, isLoading: false, error: null, authority: { state: 'current' } })
+          })
+        })
+        .catch((cause: unknown) => {
+          const error = cause instanceof Error ? cause : new Error(String(cause))
+          generation.publish(() => {
+            setState((previous) => ({
+              ...previous,
+              isLoading: false,
+              error,
+              authority: { state: 'failed', error },
+            }))
+          })
+        })
+      return () => generation.retire()
     }
 
-    subscription = subscribe({
+    const subscription = subscribe({
       onData(data) {
-        if (!isActive()) return
-        terminal = false
-        terminalError = null
-        if (cacheKey) subscriptionCache.set(cacheKey, data)
-        setState({ data, isLoading: false, error: null, authority: { state: 'current' } })
+        generation.publishData(cacheKey, data, () => {
+          terminal = false
+          terminalError = null
+          setState({ data, isLoading: false, error: null, authority: { state: 'current' } })
+        })
       },
       onError(error) {
-        if (!isActive()) return
-        terminalError = error
-        setState((previous) => ({
-          ...previous,
-          isLoading: false,
-          error,
-          authority: { state: 'failed', error },
-        }))
+        generation.publish(() => {
+          terminalError = error
+          setState((previous) => ({
+            ...previous,
+            isLoading: false,
+            error,
+            authority: { state: 'failed', error },
+          }))
+        })
       },
       onConnectionStateChange(connection) {
-        if (!isActive() || terminal || terminalError) return
-        setState((previous) => ({
-          ...previous,
-          isLoading: true,
-          error: connection.error ?? terminalError,
-          authority: { state: 'waiting', reason: connection.state },
-        }))
+        if (terminal || terminalError) return
+        generation.publish(() => {
+          setState((previous) => ({
+            ...previous,
+            isLoading: true,
+            error: connection.error ?? terminalError,
+            authority: { state: 'waiting', reason: connection.state },
+          }))
+        })
       },
       onStopped() {
-        if (!isActive()) return
-        terminal = true
-        setState((previous) =>
-          terminalError
-            ? {
-                ...previous,
-                isLoading: false,
-                error: terminalError,
-                authority: { state: 'failed', error: terminalError },
-              }
-            : { ...previous, isLoading: true, authority: { state: 'waiting', reason: 'idle' } }
-        )
+        generation.publish(() => {
+          terminal = true
+          setState((previous) =>
+            terminalError
+              ? {
+                  ...previous,
+                  isLoading: false,
+                  error: terminalError,
+                  authority: { state: 'failed', error: terminalError },
+                }
+              : { ...previous, isLoading: true, authority: { state: 'waiting', reason: 'idle' } }
+          )
+        })
       },
       onComplete() {
-        if (!isActive()) return
-        terminal = true
-        setState((previous) =>
-          terminalError
-            ? {
-                ...previous,
-                isLoading: false,
-                error: terminalError,
-                authority: { state: 'failed', error: terminalError },
-              }
-            : { ...previous, isLoading: true, authority: { state: 'waiting', reason: 'idle' } }
-        )
+        generation.publish(() => {
+          terminal = true
+          setState((previous) =>
+            terminalError
+              ? {
+                  ...previous,
+                  isLoading: false,
+                  error: terminalError,
+                  authority: { state: 'failed', error: terminalError },
+                }
+              : { ...previous, isLoading: true, authority: { state: 'waiting', reason: 'idle' } }
+          )
+        })
       },
     })
-    subscriptionRef.current = subscription
-    return cleanup
+    generation.attach(subscription)
+    return () => generation.retire()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inStaticMode, ...deps])
 

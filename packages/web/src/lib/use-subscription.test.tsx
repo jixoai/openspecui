@@ -1,10 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Prove cached subscription data is display-only while a reconnect is pending.
  * 2. Preserve the loading gate until the replacement projection arrives.
  * 3. Prove direct unmount retires a pending static loader before it can write cache.
  * 4. Prove Archive projection recompute events retain data without impersonating transport loading.
- * 5. Prove retired live/static projection generations cannot mutate state or cache.
+ * 5. Prove the shared lifecycle owner retires ordinary, reactive, and authoritative generations.
  *
  * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
  * Owner report (2026-07-22): "整个过程中，几乎都在 Loading。"
@@ -23,6 +23,11 @@ const { staticModeMock } = vi.hoisted(() => ({ staticModeMock: vi.fn(() => false
 
 type StringProjectionCallbacks = {
   onEvent(event: ReactiveProjectionEvent<string>): void
+  onError(error: Error): void
+}
+
+type StringSubscriptionCallbacks = {
+  onData(data: string): void
   onError(error: Error): void
 }
 
@@ -264,6 +269,150 @@ describe('useSubscription cache rebind', () => {
     )
 
     expect(result.current).toMatchObject({ data: 'A', isLoading: false, error: null })
+  })
+
+  it('rejects late ordinary A live data and errors after B begins without publishing stale cache', () => {
+    const callbacks: StringSubscriptionCallbacks[] = []
+    const subscriptions = new Map<number, ReturnType<typeof vi.fn>>()
+    const subscribe = vi.fn((next: StringSubscriptionCallbacks) => {
+      callbacks.push(next)
+      const unsubscribe = vi.fn()
+      subscriptions.set(callbacks.length - 1, unsubscribe)
+      return { unsubscribe }
+    })
+    const cacheKey = 'ordinary-live-generation-6-16-m'
+    let dependency = 0
+    const mounted = renderHook(() =>
+      useSubscription((next) => subscribe(next), undefined, [dependency], cacheKey)
+    )
+
+    act(() => callbacks[0]?.onData('A'))
+    expect(mounted.result.current).toMatchObject({ data: 'A', isLoading: false, error: null })
+
+    dependency = 1
+    mounted.rerender()
+    act(() => callbacks[1]?.onData('B'))
+    const lateError = new Error('late ordinary A error')
+    act(() => {
+      callbacks[0]?.onData('late-A')
+      callbacks[0]?.onError(lateError)
+    })
+    expect(mounted.result.current).toMatchObject({ data: 'B', isLoading: false, error: null })
+    expect(subscriptions.get(0)).toHaveBeenCalledOnce()
+
+    mounted.unmount()
+    const reader = renderHook(() =>
+      useSubscription(() => ({ unsubscribe: vi.fn() }), undefined, [], cacheKey)
+    )
+    expect(reader.result.current).toMatchObject({ data: 'B', isLoading: false, error: null })
+    reader.unmount()
+  })
+
+  it('keeps a late ordinary live callback after unmount out of a fresh reader cache', () => {
+    const callbacks: StringSubscriptionCallbacks[] = []
+    const cacheKey = 'ordinary-live-unmount-cache-6-16-m'
+    const mounted = renderHook(() =>
+      useSubscription(
+        (next) => {
+          callbacks.push(next)
+          return { unsubscribe: vi.fn() }
+        },
+        undefined,
+        [],
+        cacheKey
+      )
+    )
+
+    mounted.unmount()
+    act(() => {
+      callbacks[0]?.onData('late-after-unmount')
+      callbacks[0]?.onError(new Error('late-after-unmount'))
+    })
+
+    const reader = renderHook(() =>
+      useSubscription(() => ({ unsubscribe: vi.fn() }), undefined, [], cacheKey)
+    )
+    expect(reader.result.current).toEqual({ data: undefined, isLoading: true, error: null })
+    reader.unmount()
+  })
+
+  it('retires an ordinary static A loader before its resolve can publish into B', async () => {
+    staticModeMock.mockReturnValue(true)
+    type Deferred = {
+      resolve(data: string): void
+    }
+    const loaders: Deferred[] = []
+    const loader = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          loaders.push({ resolve })
+        })
+    )
+    const cacheKey = 'ordinary-static-generation-6-16-m'
+    let dependency = 0
+    const mounted = renderHook(() =>
+      useSubscription(() => ({ unsubscribe: vi.fn() }), loader, [dependency], cacheKey)
+    )
+
+    dependency = 1
+    mounted.rerender()
+    await act(async () => {
+      loaders[0]?.resolve('late-A')
+      await Promise.resolve()
+    })
+    expect(mounted.result.current).toEqual({ data: undefined, isLoading: true, error: null })
+
+    await act(async () => {
+      loaders[1]?.resolve('B')
+      await Promise.resolve()
+    })
+    expect(mounted.result.current).toEqual({ data: 'B', isLoading: false, error: null })
+
+    mounted.unmount()
+    const reader = renderHook(() =>
+      useSubscription(
+        () => ({ unsubscribe: vi.fn() }),
+        () => new Promise<string>(() => undefined),
+        [],
+        cacheKey
+      )
+    )
+    expect(reader.result.current).toEqual({ data: 'B', isLoading: false, error: null })
+    reader.unmount()
+  })
+
+  it('retires an ordinary static A rejection before it can publish an error into B', async () => {
+    staticModeMock.mockReturnValue(true)
+    type Deferred = {
+      resolve(data: string): void
+      reject(error: Error): void
+    }
+    const loaders: Deferred[] = []
+    const loader = vi.fn(
+      () =>
+        new Promise<string>((resolve, reject) => {
+          loaders.push({ resolve, reject })
+        })
+    )
+    let dependency = 0
+    const { result, rerender } = renderHook(() =>
+      useSubscription(() => ({ unsubscribe: vi.fn() }), loader, [dependency])
+    )
+
+    dependency = 1
+    rerender()
+    const lateError = new Error('late static A rejection')
+    await act(async () => {
+      loaders[0]?.reject(lateError)
+      await Promise.resolve()
+    })
+    expect(result.current).toEqual({ data: undefined, isLoading: true, error: null })
+
+    await act(async () => {
+      loaders[1]?.resolve('B')
+      await Promise.resolve()
+    })
+    expect(result.current).toEqual({ data: 'B', isLoading: false, error: null })
   })
 })
 
