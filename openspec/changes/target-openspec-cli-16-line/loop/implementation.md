@@ -7379,3 +7379,32 @@ and were not run. The code/test commit is `eadf7cd`. The repository's Vite+ comm
 because root `vite.config.ts` has no `staged` configuration; it was bypassed with `--no-verify` only after
 the focused checks above passed. Final browser/visual acceptance remains owner-only. `6.16-J` is
 implemented and awaits independent review; parent checkpoint `6.16` remains unchecked.
+
+### 6.16-J independent acceptance and 6.16-K research (2026-07-23)
+
+Independent review accepts `eadf7cd` and `1b0adc7`. The production diff consumes only the existing
+main Changes subscription error. It neither changes the accepted 6.16-G Status subscription nor creates a
+new generic lifecycle state. Direct tests reach the real `ChangeList` subscription seam with terminal
+`isLoading: false` errors. The named alert, terminal list-frame, and retained-empty guards each have
+separate mutation resistance. Independent rerun passes ChangeList `11/11` and Web typecheck; the existing
+focused lint, format, and diff-check record remains applicable. Parent checkpoint `6.16` remains unchecked.
+
+The next false-conclusion owner is narrower than the Config route: `Config` consumes four independent
+projections, `configBundle`, `schemaFiles`, templates, and template contents. 6.16-K is limited to the
+Read/Edit file panel's `useOpsxSchemaFilesSubscription(selectedSchema)` result. It must establish only:
+
+```text
+schemaFiles = undefined, isLoading = true,  error = null  -> Loading schema files...; no FileExplorer empty claim
+schemaFiles = undefined, isLoading = false, error = E     -> raw alert; no Loading or FileExplorer empty claim
+schemaFiles = non-empty,               error = E           -> raw alert beside retained tree/editor
+schemaFiles = [],                      error = E           -> raw alert; no false empty claim
+schemaFiles = [], isLoading = false,   error = null         -> existing empty success behavior
+```
+
+The current `config.test.tsx` replaces `FileExplorer` with an `emptyState` echo and therefore cannot prove
+the production empty branches. K requires a direct Config fixture with the real FileExplorer, or an equally
+direct fixture which reaches its actual empty branches. Its red/green evidence must separately remove the
+raw error presentation, the initial loading gate, and the error-aware empty guard. It cannot alter Preview,
+`configBundle`, templates, template contents, Root readiness, mutations, Router, Server, static provider,
+or another page. No full gate, SSG, browser/Playwright, push, merge, archive, or release is authorized;
+owner browser/visual acceptance remains outside the package.

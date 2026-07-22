@@ -356,10 +356,16 @@ The independent browser attempt confirms the desktop source control and URL/quer
     while no-Reference and ready-Store empty claims remain suppressed during Catalog transport error. Four
     named mutations prove both Referenced empty guards and both alert owners; the production owner is
     unchanged. Independent SpecList `10/10` and Web typecheck pass.
-  - `6.16-J` implemented, awaiting independent review: ChangeList exposes its main terminal error without
-    false Loading, blank, or active-empty conclusions; retained rows/progress/links/current Status evidence
-    remain visible. Three named mutations prove its main alert, error-aware list frame, and active-empty
-    guard independently. This remains independent of the accepted 6.16-G Status subprojection.
+  - `6.16-J` accepted: ChangeList exposes its main terminal error without false Loading, blank, or
+    active-empty conclusions; retained rows/progress/links/current Status evidence remain visible. Three
+    named mutations prove its main alert, error-aware list frame, and active-empty guard independently.
+    This remains independent of the accepted 6.16-G Status subprojection. Independent ChangeList `11/11`
+    and Web typecheck pass.
+  - `6.16-K` planned: Config Schema Read/Edit file-panel topology consumes only the independent
+    `schemaFiles` projection. Initial no-data loading, terminal no-data error, retained non-empty error,
+    retained-empty error, and current empty success require direct FileExplorer-path evidence. Preview,
+    `configBundle`, templates, template contents, Root gating, mutations, Router, and static behavior are
+    outside this package.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and
