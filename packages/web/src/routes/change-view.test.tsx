@@ -6,6 +6,8 @@
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Review request (2026-07-23): "代码已经提交，开始review。如果有问题，那么可更新change。"
  */
+import type { RootActionState } from '@/lib/use-root-action-state'
+import type { ChangeStatus } from '@openspecui/core'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { createContext, type ComponentProps, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,6 +18,37 @@ const applyInstructionsMock = vi.hoisted(() => vi.fn())
 const changeFilesMock = vi.hoisted(() => vi.fn())
 const rootActionMock = vi.hoisted(() => vi.fn())
 const openArchiveModalMock = vi.hoisted(() => vi.fn())
+
+const rootActionFailureCases: Array<Extract<RootActionState, { status: 'blocked' | 'checking' }>> =
+  [
+    {
+      status: 'blocked',
+      disabled: true,
+      context: null,
+      observedAt: 2,
+      title: 'Planning root unavailable',
+      message: 'Root selection failed.',
+      evidence: ['Doctor exit: 1'],
+    },
+    {
+      status: 'checking',
+      disabled: true,
+      context: null,
+      observedAt: 3,
+      title: 'Checking planning root',
+      message: 'Refreshing root selection.',
+      evidence: [],
+    },
+  ]
+
+const retainedChangeStatus = {
+  changeName: 'Extract Terminal View Webcomponent',
+  schemaName: 'opsx-collab-pr-loop',
+  isComplete: false,
+  applyRequires: [],
+  artifacts: [{ id: 'implementation', outputPath: 'implementation.md', status: 'ready' }],
+  provenance: { kind: 'static' },
+} satisfies ChangeStatus
 
 vi.mock('@/lib/use-opsx', () => ({
   useOpsxApplyInstructionsSubscription: applyInstructionsMock,
@@ -159,16 +192,9 @@ describe('ChangeView', () => {
     )
   })
 
-  it('keeps retained change detail visible beside a terminal status error', () => {
+  it('keeps retained change detail visible beside a subscription error', () => {
     statusMock.mockReturnValue({
-      data: {
-        changeName: 'Extract Terminal View Webcomponent',
-        schemaName: 'opsx-collab-pr-loop',
-        isComplete: false,
-        applyRequires: [],
-        artifacts: [{ id: 'implementation', outputPath: 'implementation.md', status: 'ready' }],
-        provenance: { kind: 'static' },
-      },
+      data: retainedChangeStatus,
       isLoading: false,
       error: new Error('status transport failed'),
     })
@@ -183,6 +209,37 @@ describe('ChangeView', () => {
       'Error loading change: status transport failed'
     )
   })
+
+  it.each(rootActionFailureCases)(
+    'keeps retained detail and error evidence while Root Context is $status',
+    (rootAction) => {
+      rootActionMock.mockReturnValue(rootAction)
+      statusMock.mockReturnValue({
+        data: retainedChangeStatus,
+        isLoading: false,
+        error: new Error('status transport failed'),
+      })
+
+      render(<ChangeView />)
+
+      expect(screen.getByText('Extract Terminal View Webcomponent')).toBeTruthy()
+      expect(screen.getByText('artifact:implementation')).toBeTruthy()
+      const alerts = screen.getAllByRole('alert')
+      expect(alerts.some((alert) => alert.textContent?.includes('status transport failed'))).toBe(
+        true
+      )
+      if (rootAction.status === 'checking') {
+        expect(screen.getByRole('status')).toHaveTextContent(rootAction.message)
+      } else {
+        expect(
+          alerts.some((alert) => alert.textContent?.includes(rootAction.evidence.join('\n')))
+        ).toBe(true)
+      }
+      for (const name of ['Update', 'Archive', 'Verify']) {
+        expect(screen.getByRole('button', { name })).toBeDisabled()
+      }
+    }
+  )
 
   it('shows the existing raw error state when status is unavailable', () => {
     statusMock.mockReturnValue({
