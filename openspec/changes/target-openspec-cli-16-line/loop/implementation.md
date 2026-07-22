@@ -7577,3 +7577,46 @@ commit is `60fcb10`. No hook, selected-Schema file panel, templates, Preview, Ro
 Router, Server, static provider, generic subscription, browser/Playwright, full-gate, or owner browser/visual
 acceptance work was changed or run. `6.16-L` is implemented and awaits independent review; parent `6.16`
 remains unchecked.
+
+### 6.16-M research: shared subscription lifecycle owner (2026-07-23)
+
+`useReactiveProjectionSubscription` and `useAuthoritativeSubscription` independently reimplement effect
+generation, active callback checks, subscription retirement, cache reads/writes, and static-loader
+publication. Ordinary `useSubscription` still owns its own cache/effect path and has no generation check:
+a callback or static loader that arrives after dependency A has been replaced by B can publish state and
+cache after its owner was retired. The next package is a lifecycle-core extraction, not another page-level
+Loading change.
+
+Independent read-only audit used an isolated temporary Vitest fixture against the real exported hook. Current
+ordinary behavior fails all three named red cases: late live A changes rendered state after B begins, late
+live A after unmount pollutes the cache observed by a fresh reader, and late static A resolution changes the
+replacement state. `unsubscribe()` alone is therefore not retirement proof. Existing reactive and
+authoritative tests already prove their active-generation paths; M must add the missing ordinary red/green
+proof while retaining those regression contracts and `use-context-subscription` retirement coverage.
+
+```text
+generation A begins -> cache snapshot A / subscribe or load A
+dependency changes  -> retire A / start B from current cache snapshot
+late A data/error   -> no state write / no cache write
+late A static settle -> no state write / no cache write
+B data              -> current public state contract only
+```
+
+There is one production owner: the shared internal Web subscription lifecycle. It must own cached-snapshot
+access, effect generation, subscription cleanup, and publication eligibility. The three existing public
+hooks retain their distinct state laws:
+
+```text
+ordinary       -> existing `retain | loading` cache-rebind policy; no synthetic Updating
+reactive       -> only typed `recompute-started` owns `isUpdating`
+authoritative  -> current/waiting/failed transport authority and terminal precedence stay unchanged
+```
+
+The required direct red/green evidence begins at ordinary live A -> B and ordinary static A -> B: after B
+starts, late A data, error, resolve, or rejection cannot alter B's rendered state or the cache observed by a
+fresh reader. Existing reactive and authoritative retirement tests remain regression contracts; they do not
+substitute for proving the previously unguarded ordinary path. Mutation evidence must remove or bypass the
+single shared publication-eligibility transition, then fail the named ordinary fixed point because late A
+published. Do not migrate a route, add a generic Updating state, change UI topology, add timing telemetry,
+or touch tRPC/Server/Router/static providers during this extraction. Parent checkpoint `6.16` remains
+unchecked.

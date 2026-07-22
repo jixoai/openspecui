@@ -375,6 +375,11 @@ The independent browser attempt confirms the desktop source control and URL/quer
     named mutations prove the route alert, initial gate, and error-aware empty guard separately. Existing
     selected-Schema file panels remain K-owned and out of scope. Code/test commit `60fcb10`; parent `6.16`
     remains open.
+  - `6.16-M` planned: extract the shared Web subscription lifecycle owner before another page adopts
+    lifecycle behavior. The internal owner must make cached snapshots, effect-generation identity,
+    subscription cleanup, and static-loader publication one physical contract across ordinary, reactive, and
+    authoritative hooks. It must close ordinary-hook late A -> B/cache publication without changing the
+    existing ordinary rebind policy, reactive Updating contract, or authoritative gate.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and
