@@ -323,9 +323,39 @@ now owns five declared intents and two generic effect/cache state machines. A th
 next migration must consume one reviewed deep lifecycle module while preserving the accepted raw and
 authoritative subscription contracts.
 
+F2 final acceptance (2026-07-22): correction commit `d732240` is independently accepted. A retained empty
+Archive snapshot now renders only Updating; settled empty still renders the ordinary Planning-root empty
+copy. Independent Web focused evidence passes `21/21` and Web typecheck passes. Parent 6.16 remains open.
+
 Do not infer cross-subscription ordering, add a runtime-invalidation side channel, or migrate Changes,
 Specs, Dashboard, Search, Git, Config, Context, Settings, OPSX, or App in either Archive tracer package.
 Parent 6.16 remains open after F1 and F2.
+
+#### 6.16-G: terminate ChangeList's false workflow-status Loading
+
+`ChangeList` owns two independent projections: Change metadata/tracked-task progress and CLI workflow
+Status. It currently consumes only `statuses.data`; every Change without a matching Status renders
+`Loading workflow status...` forever, even after the Status subscription has failed or a current Status
+array has settled without that Change. This is a concrete contributor to the owner's report that pages show
+content but remain visually stuck in Loading.
+
+Keep Change rows and tracked-task truth visible. Consume the existing Status subscription lifecycle with
+this exact terminal topology:
+
+```text
+statuses undefined + isLoading       -> Loading workflow status
+matching current Status              -> artifact/schema evidence
+current Status array, no match       -> Workflow status unavailable
+terminal Status error                -> raw visible error + no Loading
+```
+
+The production owner is only `ChangeList`; do not change `useOpsxStatusListSubscription`, Router, Server,
+static provider, tracked-task classification, View Transitions, New/Propose controls, or migrate Status to
+projection lifecycle events. Add a real-component red with one retained Change plus
+`data=undefined,isLoading=false,error=Error('status failed')`: the row and raw error remain visible and
+Loading is absent. Add the current-array/no-match terminal case. Existing initial-loading and matching
+Status tests remain green. Removing only the terminal classification/alert must make the named evidence
+red. This package cannot close parent 6.16.
 
 ## Capability Impact
 

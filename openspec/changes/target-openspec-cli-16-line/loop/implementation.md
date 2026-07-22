@@ -7064,3 +7064,23 @@ other pages, SSG, browser, and full gates remain unchanged and were not run. The
 `AGENTS.md` and `i18n.zh.md` retained-empty contract remains intact at `8a79e22`. Final browser/visual
 acceptance remains owner-only. `6.16-F2` is corrected and awaits independent review; parent checkpoint
 `6.16` remains unchecked.
+
+### 6.16-F2 independent acceptance and 6.16-G research (2026-07-22)
+
+Independent review accepts correction commit `d732240`. The exact retained-empty state renders Updating
+without either resolved-empty sentence; the existing settled-empty test still renders the ordinary copy,
+and no-data/retained error behavior remains intact. Independent Web focused Vitest passes `21/21`, Web
+typecheck passes, changed-file diff is clean, and the worktree is clean. Browser, SSG, and full gates remain
+outside this slice. F2 is accepted; parent 6.16 remains unchecked.
+
+The next bounded user-visible cause of false Loading is `ChangeList`'s workflow Status subprojection.
+Change rows already contain valid tracked-task progress, but the component ignores Status `isLoading/error`
+and labels every unmatched Status as `Loading workflow status...`. Consequently a terminal subscription
+error or a current list with no matching Change looks like endless work rather than failure/absence.
+
+6.16-G changes only the page owner and direct test. Initial no-data loading retains the existing copy; a
+matching current Status retains artifact/schema evidence; a current list without a match renders
+`Workflow status unavailable`; a terminal error shows the raw error, preserves Change rows, and never keeps
+the Loading copy. No Router/hook/static/update-signal, tracked-progress, action, or navigation change is
+authorized. F2's subscription deep-module prerequisite remains dormant because G does not migrate another
+projection to lifecycle events.

@@ -343,9 +343,11 @@ The independent browser attempt confirms the desktop source control and URL/quer
   - `6.16-F1` accepted: raw streams remain unchanged; opt-in Core/Server lifecycle ordering has deferred
     start-before-data, coalescing, abort owner-retirement, rejection/no-complete, and checked-test evidence.
     No Router or Web consumer migrated in this package.
-  - `6.16-F2` corrected and awaiting independent review: only Archive uses the typed event helper;
-    retained `[]` during Updating now renders only the Updating fact, while the ordinary current-empty copy
-    remains available after settlement. The exact empty-branch guard has direct mutation evidence.
+  - `6.16-F2` accepted: only Archive uses the typed event helper; retained `[]` during Updating renders only
+    the Updating fact, while the ordinary current-empty copy remains available after settlement. The exact
+    empty-branch guard has direct mutation evidence; independent Web focused tests pass `21/21`.
+  - `6.16-G` planned: ChangeList workflow Status must terminate initial Loading into matched evidence,
+    explicit unavailable, or raw error without hiding the already-renderable Change rows.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and
