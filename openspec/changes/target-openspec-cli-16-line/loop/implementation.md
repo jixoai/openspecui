@@ -7669,3 +7669,38 @@ Code/test commit is `24c6f7c`. No page, generic public state shape, adapter, Rou
 provider, SSG, Playwright/browser, full gate, owner browser/visual acceptance, push, merge, archive, or
 release work was changed or run. `6.16-M` is implemented and awaits independent review; parent checkpoint
 `6.16` remains unchecked.
+
+### 6.16-M correction: ordinary empty cache-key compatibility (2026-07-23)
+
+Independent review found a narrow ordinary-hook contract drift: before the lifecycle extraction,
+`useSubscription` used truthiness checks for every cache read/write, so `cacheKey === ''` meant no cache.
+The shared lifecycle cache correctly treats every string key as addressable, but passing `''` into it changed
+the ordinary public behavior. This is an ordinary input-normalization concern, not a reason to weaken or
+special-case the shared lifecycle owner.
+
+`useSubscription` now normalizes its `cacheKey` once with the historical truthiness rule and passes that
+normalized value to initial/effect snapshots and live/static data publication. A direct exported-Hook test
+primes `''`, proves the ordinary initial state is still `undefined`/Loading, delivers current live data, then
+remounts and proves neither the pre-primed nor current value is reused. Reactive and authoritative hooks
+retain their existing cache-key semantics unchanged.
+
+Focused correction verification:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/lib/use-subscription.test.tsx src/lib/use-context-subscription.test.tsx
+  -> 2 files / 19 tests passed
+
+pnpm --filter @openspecui/web typecheck
+pnpm exec oxlint packages/web/src/lib/subscription-lifecycle.ts \
+  packages/web/src/lib/use-subscription.ts \
+  packages/web/src/lib/use-subscription.test.tsx --ignore-path .gitignore
+pnpm format:check
+git diff --check
+  -> passed
+```
+
+Correction code/test commit is `141493c`. No public API/export, shared owner, reactive/authoritative
+semantics, page, adapter, Router, Server, Core, static provider, SSG, Playwright/browser, full-gate, owner
+browser/visual acceptance, push, merge, archive, or release work changed or ran. `6.16-M` remains awaiting
+independent review and parent checkpoint `6.16` remains unchecked.

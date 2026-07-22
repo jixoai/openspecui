@@ -381,7 +381,9 @@ The independent browser attempt confirms the desktop source control and URL/quer
     unmount/fresh-reader, static resolve/reject, existing reactive/authoritative, and Root Context retirement
     tests pass; a single mutation of the shared `publish` current-generation guard makes the ordinary live
     fixed point fail by restoring stale state/cache publication. Ordinary rebind policy, reactive Updating,
-    and authoritative gates are unchanged. Code/test commit `24c6f7c`; parent `6.16` remains open.
+    and authoritative gates are unchanged. Independent review additionally restored the ordinary historical
+    empty-string cache-key behavior through input normalization, without changing the shared owner or the
+    special-hook cache semantics. Code/test commits `24c6f7c` and `141493c`; parent `6.16` remains open.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and
