@@ -6317,3 +6317,35 @@ Changed files for this correction: `packages/web/src/lib/view-transitions/naviga
 `packages/web/src/lib/view-transitions/navigation.test.tsx`, this implementation record, and
 `loop/checkpoints.md`. Checkpoint `6.16` remains unchecked; 6.16-B is implemented and awaits independent
 review. No browser end-to-end or visual acceptance was run. Those final walkthroughs remain owner-only.
+
+### 6.16-B independent acceptance and 6.16-C Settings research (2026-07-22)
+
+Independent review at `098e2ed` accepts 6.16-B. The three-file focused Vitest lane passed `24/24`, Web
+typecheck passed, exact lint reported zero warnings/errors, format and diff checks passed, and exact source
+scans found neither `NavigationTimingPhase` nor `route-committed`. Review confirmed that
+`route-update-issued` does not claim Router/DOM completion, superseded A history cannot reclaim B's latest
+request identity, and total error summarization preserves the original rejection. No browser, SSG, or full
+gate ran; final visual acceptance remains owner-only.
+
+The next production owner is the local first-frame branch in `packages/web/src/routes/settings.tsx`:
+
+```text
+mount Settings
+  -> local loading = true
+  -> return Loading settings...
+  -> passive effect sets false
+  -> render immediately available Settings composition
+```
+
+This branch consumes no network, subscription, Router, View Transition, or data-readiness fact. It is an
+artificial mount gate, not a valid loading topology. 6.16-C removes only that branch and adds a fixed-point
+test that renders the real live `Settings` component before effects, sees the Settings composition
+immediately, and never sees `Loading settings...`. Restoring only the local gate must make the test red.
+Existing OpenSpec tool-subscription generation gates, static Appearance-only composition, and all real
+owned loading/updating/error states stay unchanged.
+
+Independent read-only research found a similar but separate Archive owner:
+`ArchiveList` delays every first render through `requestAnimationFrame`, while its real no-data wait already
+uses `isLoading && !archived`. That gate will be handled only after Settings as its own package with one
+resolved-data red and one initial-no-data green. No generic subscription, Archive adapter/server, SSG,
+View Transition runtime, route CSS, or browser acceptance is authorized in 6.16-C.

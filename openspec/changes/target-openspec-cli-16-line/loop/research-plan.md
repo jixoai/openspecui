@@ -211,6 +211,23 @@ the pre-existing late-A route update must not be silently hidden: label A supers
 prepare/update/settlement against A, and keep B as the latest request. A rejected prepare/update/transition
 must end in a typed failed state rather than remain indefinitely prepared or update-issued.
 
+#### 6.16-C: remove the live Settings artificial mount gate
+
+The live `Settings` route currently creates a local `loading=true`, clears it in a passive effect, and
+returns `Loading settings...` before that effect. This state observes no network, subscription, Router,
+View Transition, or Settings-data readiness fact. It is an artificial mount gate that hides preferences
+and the real Settings composition for one client frame on every mount.
+
+Remove only this local state/effect/early return. The fixed point renders the real `Settings` component
+before effects and proves the Settings composition is already present while `Loading settings...` is
+absent. Temporarily restoring only the local gate must make that exact test red. Do not change
+`use-settings-tool-subscriptions`, `SettingsStatic`, static Appearance-only behavior, subscription data
+flow, or any real loading/updating/error topology.
+
+Archive owns a separate artificial `requestAnimationFrame` gate. Its real data wait is already represented
+by `isLoading && !archived`, but removing it remains the next independent package with its own resolved-data
+red and initial-no-data green. It must not be folded into the Settings commit.
+
 ## Capability Impact
 
 ### New or Expanded Behavior

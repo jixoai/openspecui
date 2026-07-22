@@ -328,9 +328,10 @@ The independent browser attempt confirms the desktop source control and URL/quer
 - [x] 6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging
 - [ ] 6.16 Every network-triggering control binds loading/disabled state and every page covers empty/loading/loaded/updating/error topologies
   - `6.16-A` accepted: Root Context cached-display/current-authority correction and exact lifecycle reds.
-  - `6.16-B` final correction implemented, awaiting independent review: error summarization is total,
-    preserves hostile runtime Error rejection identity with fixed fallback evidence, and no longer exports
-    the unused generic phase union.
+  - `6.16-B` accepted: bounded detail-navigation phase timing names only observed facts, preserves
+    superseded-request history, and keeps hostile runtime failures total without replacing rejection.
+  - `6.16-C` next: remove only the live Settings artificial first-frame mount gate while preserving real
+    Settings subscription and static composition states. Archive remains a separate following package.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and
     page-topology packages have their own evidence.
 - [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns
