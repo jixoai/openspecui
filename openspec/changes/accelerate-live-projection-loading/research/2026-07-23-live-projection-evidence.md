@@ -142,3 +142,63 @@ The source establishes the following facts:
 The production timing and source structure together support a multi-cause diagnosis. They do not prove
 that any single command is always the slowest on every project; implementation must add phase tracing
 before selecting cache TTLs, hash scopes, or worker concurrency.
+
+## Current Serial Recheck
+
+The original snapshot above is retained as the first controlled baseline. A serial recheck was run on
+2026-07-23 05:08:29 +08:00 after the Change itself was added to the workspace. This is a new input state,
+not a replacement of the historical sample:
+
+```text
+HEAD:     e131b68 (feat/openspec-cli-16-contract-baseline)
+input:    2 Git worktrees, 13 Specs, 4 active Changes, 53 archived Changes
+execution: explicit --dir commands below, run serially
+```
+
+```bash
+NODE_OPTIONS="--conditions=development" pnpm --filter @openspecui/server exec tsx \
+  bench/live-projection-loading.bench.ts -- \
+  --dir /Users/kzf/Dev/GitHub/jixoai-labs/openspecui --scenario dashboard --timeout 30000
+
+NODE_OPTIONS="--conditions=development" pnpm --filter @openspecui/server exec tsx \
+  bench/live-projection-loading.bench.ts -- \
+  --dir /Users/kzf/Dev/GitHub/jixoai-labs/openspecui --scenario changes --timeout 30000
+
+NODE_OPTIONS="--conditions=development" pnpm --filter @openspecui/server exec tsx \
+  bench/live-projection-loading.bench.ts -- \
+  --dir /Users/kzf/Dev/GitHub/jixoai-labs/openspecui --scenario status --timeout 30000
+
+NODE_OPTIONS="--conditions=development" pnpm --filter @openspecui/server exec tsx \
+  bench/dashboard-phase-latency.bench.ts -- \
+  --dir /Users/kzf/Dev/GitHub/jixoai-labs/openspecui
+
+NODE_OPTIONS="--conditions=development" pnpm --filter @openspecui/server exec tsx \
+  bench/opsx-warmup-latency.bench.ts -- \
+  --dir /Users/kzf/Dev/GitHub/jixoai-labs/openspecui --timeout 30000
+
+NODE_OPTIONS="--conditions=development" pnpm --filter @openspecui/server exec tsx \
+  bench/planning-root-acquire-latency.bench.ts -- \
+  --dir /Users/kzf/Dev/GitHub/jixoai-labs/openspecui --attempts 3
+```
+
+| Serial scenario or phase        |                    Current sample |
+| ------------------------------- | --------------------------------: |
+| Dashboard cold first payload    |                        7,402.14ms |
+| Dashboard reload on same Server |                        4,355.41ms |
+| Changes first payload           |                       15,160.98ms |
+| OPSX Status List first payload  |                       13,499.61ms |
+| Dashboard loader                |                        1,281.81ms |
+| Dashboard Git snapshot          |                          334.22ms |
+| Dashboard service init          |                          924.45ms |
+| Dashboard service getCurrent    |                            0.08ms |
+| Dashboard service refresh       |                          849.44ms |
+| OPSX Kernel warmup              |                        8,693.72ms |
+| Root acquisition 1 / 2 / 3      | 11,866.94 / 5,860.20 / 5,421.35ms |
+
+All six serial benchmark commands exited `0` and returned the expected current cardinalities. The current
+numbers vary substantially from the first baseline because the active-Change inventory changed from three to
+four, process/filesystem cache state changed, and Root acquisition is sensitive to the current CLI/runtime
+state. The causal relationship remains stable: direct leaf work and the cached Dashboard snapshot are much
+faster than production first payloads, while repeated Root acquisition, full OPSX warmup, and aggregate
+subscription orchestration remain on the critical path. These samples are evidence for phase instrumentation
+and work sharing, not an absolute latency SLO.

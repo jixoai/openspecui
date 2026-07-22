@@ -62,6 +62,10 @@ Original request (2026-07-23): "请你深入调查，给出一份持有客观证
   production import graph but exits on pre-existing Server diagnostics (`@huggingface/transformers` resolution,
   existing Router/translation contracts, and related source errors); no diagnostic points at a benchmark file.
   The package Server typecheck has the same unrelated failures. This Change does not widen into repairing them.
+- A serial recheck on current `e131b68` is recorded in the evidence report. It observes four active Changes and
+  confirms Dashboard `7.40s` cold / `4.36s` reload, Changes `15.16s`, Status `13.50s`, direct Dashboard loader
+  `1.28s`, cached `getCurrent()` `0.08ms`, and Kernel warmup `8.69s`. The earlier three-Change baseline remains
+  historical evidence; both samples point to the same server-side orchestration and repeated Root/Warmup path.
 
 ## Loopback Triggers
 
