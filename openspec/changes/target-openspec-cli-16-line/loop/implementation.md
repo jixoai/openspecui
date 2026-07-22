@@ -6467,3 +6467,22 @@ Changed files: `packages/web/src/routes/settings.tsx`,
 Checkpoint `6.16` remains unchecked; 6.16-C is implemented and awaits independent review. Archive,
 generic subscriptions, Root, navigation, SSG, full gates, and browser acceptance were not changed or run.
 Final browser and visual acceptance remains owner-only.
+
+### 6.16-C second independent review correction: equal Config emissions must preserve dirty drafts (2026-07-22)
+
+Commit `e6ee1a8` fixes first-render Config precedence and the mount-time controller overwrite, but is not
+accepted. Its single Terminal effect depends on the full `config.terminal` object and unconditionally sets
+all eleven local drafts. Reactive Config reads parse a fresh object after any `.openspecui.json` write, so
+an unrelated Settings save or value-equal emission can clear an unsaved Terminal edit even though no
+Terminal field changed. The resolver prefers persisted Config, so controller live-preview state does not
+protect that draft.
+
+The correction must synchronize per upstream field value. A real component test edits Terminal font size
+and scrollback, rerenders with a newly allocated but value-equal Config/Terminal object, and proves the dirty
+values remain. It then changes one upstream Terminal field and proves only that corresponding draft
+converges. Restoring the whole-object effect must make the value-equal case red. Keep the first-render SSR
+and post-mount controller-overwrite fixed points.
+
+Do not weaken this to an object memoization assumption: Core parsing is allowed to allocate fresh objects.
+Keep 6.16-C and parent 6.16 open until the field-value lifecycle passes independent review. Archive,
+generic subscriptions, Root, navigation, SSG, and browser behavior remain outside this correction.

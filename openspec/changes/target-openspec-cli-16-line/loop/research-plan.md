@@ -224,7 +224,9 @@ absent. When the Config subscription already supplies cached non-default values,
 draft synchronized by passive effects must also initialize from that Config on the same render. A visible
 default draft plus an enabled Save control is not first-frame continuity. Temporarily restoring only the
 local gate, or resetting cached draft initialization to defaults, must make the corresponding exact test
-red. Do not change
+red. Later Config synchronization must compare the upstream field values rather than the enclosing parsed
+object identity: a value-equal new Config object preserves dirty local input, while a changed Terminal
+field updates only its matching draft. Do not change
 `use-settings-tool-subscriptions`, `SettingsStatic`, static Appearance-only behavior, subscription data
 flow, or any real loading/updating/error topology.
 
