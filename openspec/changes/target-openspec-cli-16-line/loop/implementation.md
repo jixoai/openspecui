@@ -6415,3 +6415,55 @@ Also update both changed TSX headers from 2026-07-20 to 2026-07-22 and remove th
 terminal re-sync is captured by the deleted loading transition. Keep 6.16-C and parent 6.16 open until this
 correction passes independent review. Do not restore a full-page gate or change subscription, static,
 Archive, Server, Root, navigation, SSG, or browser behavior.
+
+### 6.16-C correction implementation: cached Config owns writable drafts (2026-07-22)
+
+The live Settings subscription now runs before writable draft initialization. Already-present Config owns
+the first render for theme/editor, Execute Path, Hosted App, Terminal, Dashboard, and Git drafts; browser
+or controller values remain field-level fallbacks when Config does not provide a value. The existing
+effects still own later Config emissions.
+
+Terminal initialization and later synchronization now share one file-local pure
+`resolveTerminalDraft(configTerminal, controllerFallback)` rule. Its single effect replaces the prior
+mount-only controller overwrite plus six separate Config effects, so font, family, cursor, scrollback,
+theme, renderer, bell, and volume have one precedence owner. The two changed TSX headers now carry the
+2026-07-22 timestamp, and the deleted loading-transition comment is gone.
+
+Fixed-point and mutation evidence:
+
+1. With the final non-default cached-Config SSR test present and the original default initializers still in
+   place, the exact test failed (`1 failed | 57 skipped`): the expected active `dark` theme button was
+   absent before effects. The same fixed point reads actual input values for
+   `custom-openspec --profile strict`, the Hosted App URL, Terminal font/family/scrollback, Dashboard `240`,
+   and Git `6400`; it also retains the live-only OpenSpec marker and rejects `Loading settings...`.
+2. After Config-backed initializers were restored, the SSR fixed point passed. Together with the ordinary
+   mount test, the focused pair passed (`2 passed | 57 skipped`).
+3. Temporarily changing only the later Terminal effect to restore controller `fontSize` and `scrollback`
+   made the ordinary mount test fail (`1 failed | 58 skipped`) because `Font Size: 19px` disappeared after
+   passive effects. Restoring the shared resolver kept both `Font Size: 19px` and
+   `Scrollback Lines: 24,000` after mount.
+
+Final focused verification:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/routes/settings.test.tsx
+  -> 1 file / 59 tests passed
+
+pnpm --filter @openspecui/web typecheck
+  -> passed
+
+pnpm exec vp lint packages/web/src/routes/settings.tsx \
+  packages/web/src/routes/settings.test.tsx
+  -> 0 warnings / 0 errors
+
+pnpm format:check
+git diff --check
+  -> passed
+```
+
+Changed files: `packages/web/src/routes/settings.tsx`,
+`packages/web/src/routes/settings.test.tsx`, this implementation record, and `loop/checkpoints.md`.
+Checkpoint `6.16` remains unchecked; 6.16-C is implemented and awaits independent review. Archive,
+generic subscriptions, Root, navigation, SSG, full gates, and browser acceptance were not changed or run.
+Final browser and visual acceptance remains owner-only.

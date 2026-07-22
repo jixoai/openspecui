@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Verify Settings preference, translation, terminal, and asset-management interactions.
  * 2. Verify the route-level responsive ToC and static/dynamic composition boundaries.
  * 3. Keep extracted OpenSpec diagnostics and initialization behavior in focused component tests.
  * 4. Prove live Settings composition is present before passive effects can run.
+ * 5. Prove cached Terminal drafts survive the mount synchronization effect.
  *
  * Original request (2026-07-20): "Split OpenSpec diagnostics/initialization out of the oversized Settings route."
  * Owner report (2026-07-22): "几乎都在 Loading，切换个页面也等，做任何动作也在等。"
@@ -2624,15 +2625,89 @@ describe('Settings', () => {
   })
 
   it('renders the live Settings composition before passive effects', () => {
-    useConfigSubscriptionMock.mockReturnValue({ data: {} })
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        theme: 'dark',
+        codeEditor: { theme: 'monokai' },
+        cli: { command: 'custom-openspec', args: ['--profile', 'strict'] },
+        appBaseUrl: 'https://app.example.test/workbench',
+        terminal: {
+          fontSize: 19,
+          fontFamily: 'Config Mono',
+          cursorBlink: false,
+          cursorStyle: 'bar',
+          scrollback: 24_000,
+          useTheme: 'dark',
+          lightTheme: 'solarized-light',
+          darkTheme: 'nord',
+          rendererEngine: 'xterm',
+          bellSound: 'silent',
+          bellVolume: 0.35,
+        },
+        dashboard: { trendPointLimit: 240 },
+        git: { diffEagerLineBudget: 6_400 },
+      },
+    })
     useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
 
     const markup = renderToStaticMarkup(<Settings />)
+    const root = document.createElement('div')
+    root.innerHTML = markup
+    const readInputValue = (labelText: string): string => {
+      const label = Array.from(root.querySelectorAll('label')).find(
+        (candidate) => candidate.textContent?.trim() === labelText
+      )
+      const input = label?.parentElement?.querySelector('input')
+      if (!(input instanceof HTMLInputElement)) {
+        throw new Error(`Input for ${labelText} was not rendered.`)
+      }
+      return input.value
+    }
 
     expect(markup).toContain('>Settings</h1>')
     expect(markup).toContain('>Appearance</h2>')
     expect(markup).toContain('data-testid="openspec-settings-sections"')
     expect(markup).not.toContain('Loading settings...')
+    expect(
+      Array.from(root.querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === 'Dark' && button.ariaPressed === 'true'
+      )
+    ).toBeTruthy()
+    expect(root.querySelector('button[aria-label="Code Editor Theme"]')?.textContent).toContain(
+      'Monokai'
+    )
+    expect(readInputValue('Execute Path')).toBe('custom-openspec --profile strict')
+    expect(readInputValue('Base URL')).toBe('https://app.example.test/workbench')
+    expect(readInputValue('Font Size: 19px')).toBe('19')
+    expect(readInputValue('Font Family')).toBe('Config Mono')
+    expect(readInputValue('Scrollback Lines: 24,000')).toBe('24000')
+    expect(readInputValue('Trend Point Limit')).toBe('240')
+    expect(readInputValue('Eager Patch Line Budget')).toBe('6400')
+  })
+
+  it('preserves cached Terminal drafts after mount effects', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        terminal: {
+          fontSize: 19,
+          scrollback: 24_000,
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    expect(screen.getByText('Font Size: 19px')).toBeTruthy()
+    expect(screen.getByText('Scrollback Lines: 24,000')).toBeTruthy()
   })
 
   it('keeps static Settings Appearance-only without mounting live OpenSpec projections', async () => {

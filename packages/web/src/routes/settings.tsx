@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Present backend, CLI execution, terminal, notification, and appearance settings.
  * 2. Compose the extracted OpenSpec diagnostics and initialization owner.
  * 3. Bind network-triggered settings actions to visible loading and failure state.
@@ -43,8 +43,6 @@ import {
   type TerminalRendererEngine,
 } from '@/lib/terminal-controller'
 import {
-  isTerminalThemeId,
-  isTerminalThemeMode,
   TERMINAL_THEME_MODE_VALUES,
   TERMINAL_THEME_OPTIONS,
   type TerminalThemeId,
@@ -55,6 +53,7 @@ import { queryClient, trpc, trpcClient } from '@/lib/trpc'
 import { useCliRunner } from '@/lib/use-cli-runner'
 import { useServerStatus } from '@/lib/use-server-status'
 import { useConfigSubscription } from '@/lib/use-subscription'
+import type { OpenSpecUIConfig } from '@openspecui/core'
 import { OFFICIAL_APP_BASE_URL } from '@openspecui/core/hosted-app'
 import { NotificationSoundSchema } from '@openspecui/core/notifications'
 import {
@@ -62,7 +61,7 @@ import {
   DEFAULT_NOTIFICATION_SOUND_ID,
   type SoundId,
 } from '@openspecui/core/sounds'
-import { TerminalBellSoundSchema, type TerminalBellSound } from '@openspecui/core/terminal-audio'
+import type { TerminalBellSound } from '@openspecui/core/terminal-audio'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   ArrowUp,
@@ -105,6 +104,26 @@ const DEFAULT_TERMINAL_RENDERER_ENGINE: TerminalRendererEngine = 'xterm'
 const DEFAULT_TERMINAL_BELL_VOLUME = 1
 const DEFAULT_DASHBOARD_TREND_POINT_LIMIT = 100
 const DEFAULT_GIT_DIFF_EAGER_LINE_BUDGET = 1000
+
+function resolveTerminalDraft(
+  config: OpenSpecUIConfig['terminal'] | undefined,
+  controllerFallback: ReturnType<typeof terminalController.getConfig>
+) {
+  return {
+    fontSize: config?.fontSize ?? controllerFallback.fontSize,
+    fontFamily: config?.fontFamily ?? controllerFallback.fontFamily,
+    cursorBlink: config?.cursorBlink ?? controllerFallback.cursorBlink,
+    cursorStyle: config?.cursorStyle ?? controllerFallback.cursorStyle,
+    scrollback: config?.scrollback ?? controllerFallback.scrollback,
+    useTheme: config?.useTheme ?? controllerFallback.useTheme,
+    lightTheme: config?.lightTheme ?? controllerFallback.lightTheme,
+    darkTheme: config?.darkTheme ?? controllerFallback.darkTheme,
+    rendererEngine: config?.rendererEngine ?? controllerFallback.rendererEngine,
+    bellSound: config?.bellSound ?? controllerFallback.bellSound,
+    bellVolume: config?.bellVolume ?? controllerFallback.bellVolume,
+  }
+}
+
 const THEME_OPTIONS = [
   {
     value: 'light',
@@ -264,11 +283,20 @@ function FontFamilyEditor({
 
 /** Render the project-backend Settings workspace. */
 export function Settings() {
-  const [theme, setTheme] = useState<Theme>(getStoredTheme)
-  const [codeEditorTheme, setCodeEditorTheme] = useState<CodeEditorTheme>(DEFAULT_CODE_EDITOR_THEME)
+  // 订阅配置；已缓存的 Config 必须成为 writable draft 的首帧 authority。
+  const { data: config } = useConfigSubscription()
+  const configuredCodeEditorTheme = config?.codeEditor?.theme
+  const [theme, setTheme] = useState<Theme>(() => config?.theme ?? getStoredTheme())
+  const [codeEditorTheme, setCodeEditorTheme] = useState<CodeEditorTheme>(() =>
+    configuredCodeEditorTheme && isCodeEditorTheme(configuredCodeEditorTheme)
+      ? configuredCodeEditorTheme
+      : DEFAULT_CODE_EDITOR_THEME
+  )
   const [apiUrl, setApiUrl] = useState(getApiBaseUrl() || '')
-  const [appBaseUrl, setAppBaseUrl] = useState('')
-  const [cliCommand, setCliCommand] = useState('')
+  const [appBaseUrl, setAppBaseUrl] = useState(() => config?.appBaseUrl ?? '')
+  const [cliCommand, setCliCommand] = useState(() =>
+    config?.cli?.command ? formatExecutePath(config.cli.command, config.cli.args ?? []) : ''
+  )
   const [showInstallModal, setShowInstallModal] = useState(false)
   const installRunner = useCliRunner()
 
@@ -289,9 +317,6 @@ export function Settings() {
   // In static mode, only show appearance settings
   const inStaticMode = isStaticMode()
   const visibleTocItems = inStaticMode ? SETTINGS_TOC_ITEMS.slice(0, 1) : SETTINGS_TOC_ITEMS
-
-  // 订阅配置
-  const { data: config } = useConfigSubscription()
 
   // 嗅探全局 CLI（每次进入 settings 页面都会重新嗅探）
   // Skip in static mode
@@ -395,24 +420,45 @@ export function Settings() {
       trpcClient.config.update.mutate({ opsx: { agentInvocationMode } }),
   })
 
-  // Terminal config — seed local state from controller's current config
+  // Terminal controller state is the fallback only when Config has no corresponding value.
   const initialConfig = useMemo(() => terminalController.getConfig(), [])
+  const initialTerminalDraft = resolveTerminalDraft(config?.terminal, initialConfig)
+  const configuredDashboardTrendPointLimit = config?.dashboard?.trendPointLimit
+  const configuredGitDiffEagerLineBudget = config?.git?.diffEagerLineBudget
 
-  const [termFontSize, setTermFontSize] = useState(initialConfig.fontSize)
-  const [termFontFamily, setTermFontFamily] = useState(initialConfig.fontFamily)
-  const [termCursorBlink, setTermCursorBlink] = useState(initialConfig.cursorBlink)
+  const [termFontSize, setTermFontSize] = useState(initialTerminalDraft.fontSize)
+  const [termFontFamily, setTermFontFamily] = useState(initialTerminalDraft.fontFamily)
+  const [termCursorBlink, setTermCursorBlink] = useState(initialTerminalDraft.cursorBlink)
   const [termCursorStyle, setTermCursorStyle] = useState<TerminalCursorStyle>(
-    initialConfig.cursorStyle
+    initialTerminalDraft.cursorStyle
   )
-  const [termScrollback, setTermScrollback] = useState(initialConfig.scrollback)
-  const [termUseTheme, setTermUseTheme] = useState<TerminalThemeMode>(initialConfig.useTheme)
-  const [termLightTheme, setTermLightTheme] = useState<TerminalThemeId>(initialConfig.lightTheme)
-  const [termDarkTheme, setTermDarkTheme] = useState<TerminalThemeId>(initialConfig.darkTheme)
-  const [termRendererEngine, setTermRendererEngine] = useState<string>(initialConfig.rendererEngine)
-  const [termBellSound, setTermBellSound] = useState<TerminalBellSound>(initialConfig.bellSound)
-  const [termBellVolume, setTermBellVolume] = useState(initialConfig.bellVolume)
-  const [dashboardTrendPointLimit, setDashboardTrendPointLimit] = useState(100)
-  const [gitDiffEagerLineBudget, setGitDiffEagerLineBudget] = useState(1000)
+  const [termScrollback, setTermScrollback] = useState(initialTerminalDraft.scrollback)
+  const [termUseTheme, setTermUseTheme] = useState<TerminalThemeMode>(initialTerminalDraft.useTheme)
+  const [termLightTheme, setTermLightTheme] = useState<TerminalThemeId>(
+    initialTerminalDraft.lightTheme
+  )
+  const [termDarkTheme, setTermDarkTheme] = useState<TerminalThemeId>(
+    initialTerminalDraft.darkTheme
+  )
+  const [termRendererEngine, setTermRendererEngine] = useState<string>(
+    initialTerminalDraft.rendererEngine
+  )
+  const [termBellSound, setTermBellSound] = useState<TerminalBellSound>(
+    initialTerminalDraft.bellSound
+  )
+  const [termBellVolume, setTermBellVolume] = useState(initialTerminalDraft.bellVolume)
+  const [dashboardTrendPointLimit, setDashboardTrendPointLimit] = useState(() =>
+    typeof configuredDashboardTrendPointLimit === 'number' &&
+    Number.isFinite(configuredDashboardTrendPointLimit)
+      ? configuredDashboardTrendPointLimit
+      : DEFAULT_DASHBOARD_TREND_POINT_LIMIT
+  )
+  const [gitDiffEagerLineBudget, setGitDiffEagerLineBudget] = useState(() =>
+    typeof configuredGitDiffEagerLineBudget === 'number' &&
+    Number.isFinite(configuredGitDiffEagerLineBudget)
+      ? configuredGitDiffEagerLineBudget
+      : DEFAULT_GIT_DIFF_EAGER_LINE_BUDGET
+  )
   const [termRendererError, setTermRendererError] = useState<string | null>(null)
   const codeEditorThemeOptions = CODE_EDITOR_THEME_OPTIONS satisfies SelectOption<CodeEditorTheme>[]
   const terminalThemeOptions = TERMINAL_THEME_OPTIONS satisfies SelectOption<TerminalThemeId>[]
@@ -435,63 +481,21 @@ export function Settings() {
     return engine
   }, [])
 
-  // Re-sync local state when controller config changes
-  useEffect(
-    () => {
-      const current = terminalController.getConfig()
-      setTermFontSize(current.fontSize)
-      setTermFontFamily(current.fontFamily)
-      setTermCursorBlink(current.cursorBlink)
-      setTermCursorStyle(current.cursorStyle)
-      setTermScrollback(current.scrollback)
-      setTermUseTheme(current.useTheme)
-      setTermLightTheme(current.lightTheme)
-      setTermDarkTheme(current.darkTheme)
-      setTermRendererEngine(current.rendererEngine)
-      setTermBellSound(current.bellSound)
-      setTermBellVolume(current.bellVolume)
-    },
-    [
-      /* re-run when entering settings page — captured by loading state transition */
-    ]
-  )
-
+  // Re-sync later Config changes while retaining controller state as the absent-field fallback.
   useEffect(() => {
-    const nextUseTheme = config?.terminal?.useTheme
-    if (nextUseTheme && isTerminalThemeMode(nextUseTheme)) {
-      setTermUseTheme(nextUseTheme)
-    }
-  }, [config?.terminal?.useTheme])
-  useEffect(() => {
-    const nextLightTheme = config?.terminal?.lightTheme
-    if (nextLightTheme && isTerminalThemeId(nextLightTheme)) {
-      setTermLightTheme(nextLightTheme)
-    }
-  }, [config?.terminal?.lightTheme])
-  useEffect(() => {
-    const nextDarkTheme = config?.terminal?.darkTheme
-    if (nextDarkTheme && isTerminalThemeId(nextDarkTheme)) {
-      setTermDarkTheme(nextDarkTheme)
-    }
-  }, [config?.terminal?.darkTheme])
-  useEffect(() => {
-    const nextRenderer = config?.terminal?.rendererEngine
-    if (typeof nextRenderer === 'string' && nextRenderer.length > 0) {
-      setTermRendererEngine(nextRenderer)
-    }
-  }, [config?.terminal?.rendererEngine])
-  useEffect(() => {
-    const result = TerminalBellSoundSchema.safeParse(config?.terminal?.bellSound)
-    if (result.success) {
-      setTermBellSound(result.data)
-    }
-  }, [config?.terminal?.bellSound])
-  useEffect(() => {
-    const nextVolume = config?.terminal?.bellVolume
-    if (typeof nextVolume === 'number' && Number.isFinite(nextVolume)) {
-      setTermBellVolume(nextVolume)
-    }
-  }, [config?.terminal?.bellVolume])
+    const next = resolveTerminalDraft(config?.terminal, terminalController.getConfig())
+    setTermFontSize(next.fontSize)
+    setTermFontFamily(next.fontFamily)
+    setTermCursorBlink(next.cursorBlink)
+    setTermCursorStyle(next.cursorStyle)
+    setTermScrollback(next.scrollback)
+    setTermUseTheme(next.useTheme)
+    setTermLightTheme(next.lightTheme)
+    setTermDarkTheme(next.darkTheme)
+    setTermRendererEngine(next.rendererEngine)
+    setTermBellSound(next.bellSound)
+    setTermBellVolume(next.bellVolume)
+  }, [config?.terminal])
 
   // Apply immediately on local state change (live preview)
   const applyTerminalConfig = useCallback(

@@ -330,10 +330,9 @@ The independent browser attempt confirms the desktop source control and URL/quer
   - `6.16-A` accepted: Root Context cached-display/current-authority correction and exact lifecycle reds.
   - `6.16-B` accepted: bounded detail-navigation phase timing names only observed facts, preserves
     superseded-request history, and keeps hostile runtime failures total without replacing rejection.
-  - `6.16-C` correction required: live Settings composition renders before passive effects, but cached
-    non-default Config can still expose default writable drafts until effects synchronize. Initialize
-    first-render drafts from present Config, correct changed-file timestamps, and retire stale loading-copy
-    commentary. Archive remains a separate following package.
+  - `6.16-C` correction implemented, awaiting independent review: cached Config owns first-render writable
+    drafts and the shared Terminal draft resolver preserves that authority through later effects. Changed
+    TSX timestamps and terminal commentary are current. Archive remains a separate following package.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and
     page-topology packages have their own evidence.
 - [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns
