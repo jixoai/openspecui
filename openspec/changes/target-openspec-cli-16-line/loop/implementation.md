@@ -7124,3 +7124,19 @@ subscription deep-module prerequisite remain unchanged. Browser, SSG, and full g
 reviewer-owned `AGENTS.md` and `i18n.zh.md` contract remains intact at `3f9117e`. Final browser/visual
 acceptance remains owner-only. `6.16-G` is implemented and awaits independent review; parent checkpoint
 `6.16` remains unchecked.
+
+### 6.16-G independent acceptance and 6.16-H research (2026-07-23)
+
+Independent review accepts commit `e8aa3da`. The single page-level Status alert preserves the original
+Error text without duplicating announcements per Change. Existing rows, tracked-task facts, progress,
+workflow badge, links, and matching artifact/schema evidence remain intact. Only real initial no-data
+Status loading renders Loading; terminal error and current no-match render unavailable. Independent
+ChangeList focused Vitest passes `7/7`, Web typecheck passes, the commit diff is clean, and 6.16 remains
+unchecked.
+
+The next isolated false-Loading state is in `ContextView`. A typed Root projection may still carry
+`state=loading` when the authoritative Web subscription reports a terminal transport error. The current
+boolean renders both Loading and the error alert. 6.16-H gives terminal error presentation priority while
+leaving authoritative cache/current-operation authority, Root Context selection, refreshing/stale data,
+failed CLI attempts, and all mutation locks unchanged. The exact component fixed point combines the typed
+loading projection with `Error('socket closed')`; no protocol or hook work is authorized.

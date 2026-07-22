@@ -357,6 +357,31 @@ Loading is absent. Add the current-array/no-match terminal case. Existing initia
 Status tests remain green. Removing only the terminal classification/alert must make the named evidence
 red. This package cannot close parent 6.16.
 
+G final acceptance (2026-07-22): commit `e8aa3da` is independently accepted. One page-level raw Status
+alert owns subscription failure; every retained Change row remains visible and terminates as unavailable.
+Initial loading, current no-match, and matched evidence are distinct. Independent ChangeList `7/7` and Web
+typecheck pass. Parent 6.16 remains open.
+
+#### 6.16-H: make Context transport error terminal over Loading (2026-07-23)
+
+`ContextView` currently derives Loading from either Web state or `projection.state === 'loading'` before it
+considers the terminal transport error. If a retained/no-data loading projection is present when the
+WebSocket fails, the page renders both `Loading context...` and the raw error. The error is terminal for
+this transport attempt; simultaneous Loading is a false ongoing-work claim and also keeps every Context
+body branch gated.
+
+Change only `ContextView` presentation priority. With no error, preserve current initial Loading and the
+accepted `refreshing -> Updating + retained Context` behavior. With a transport or projection error, Loading
+must be false before composition, so the existing alert and stale/failed-attempt evidence own the state.
+Do not change `useContextSubscription`, authoritative cache/authority, connection callbacks, Root Context
+types, Server, Router, static behavior, or any mutation gate.
+
+The exact real-component red supplies a typed `RootContextState` loading value plus
+`isLoading=false,error=Error('socket closed')`; it must render one alert with the raw error and no
+`Loading context...`. Existing pure Loading, refreshing, stale error, and evidence tests remain green.
+Removing only terminal-error precedence from the Loading expression must make the named test red. H cannot
+close parent 6.16.
+
 ## Capability Impact
 
 ### New or Expanded Behavior
