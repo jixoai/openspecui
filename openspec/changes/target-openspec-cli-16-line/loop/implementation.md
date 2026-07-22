@@ -5758,3 +5758,90 @@ recorded contributors are first-visit subscription cold starts, route prefetch b
 commit, serialized Manager Doctor/Context/kernel preparation, and temporary mutation-authority
 revocation during Root refresh. No timing measurement yet identifies a dominant cause, so 6.15 must not
 modify these paths.
+
+### 6.15 test-seam correction: late Root Context observers (2026-07-22)
+
+The intended bridge cannot trust ordinary observable teardown as its stale-event boundary. A tRPC
+observable source can retain an observer and call `next` after unsubscribe, and a reactive resolution
+already awaiting when its abort signal fires can still complete. The production bridge must therefore
+guard every event with its own subscription epoch and retired Manager generation/identity set.
+
+```text
+ready A(gen-A) -> ready B(gen-B) -> old observer next(ready A/gen-A)
+                                      -> bridge guard -> drop
+
+ready B(gen-B) -> later ready A(gen-C)
+                 -> generation differs -> publish legitimate replacement
+```
+
+Focused evidence must drive the held observer through the real bridge instead of invoking
+`NotificationService.publish`. A second checked integration fixture creates two independent Servers:
+A's Root transition reaches only A's service, B remains empty, and A's post-close late observer cannot
+publish into either service. The existing `NotificationProvider` test, rather than a hand-written panel
+context stub, proves the actual `href.open('/context')` action and current-record read. This test seam
+is required for 6.15 closure; no new final browser or visual test is implied.
+
+### 6.15 implementation and independent-review closure (2026-07-22)
+
+`createServer` creates one local `NotificationService` and one inactive Root Context bridge; the running
+Server starts that bridge and its WebSocket shutdown disposes it before the Planning-root manager. The
+bridge uses the existing typed Root Context stream, baselines its first terminal state, and publishes
+only typed `root-context` records for an unavailable transition, recovery, or a changed resolved
+Planning root. The existing Web NotificationProvider resolves its `/context` action and marks only the
+current record read.
+
+```text
+resolved identity = planningRoot.path + planningRoot.source + effective storeId
+generation        = stale-event provenance only
+dataScope          = Context diagnostics only
+
+ready A(gen-1, data A) -> ready A(gen-2, data B) -> no record
+late error A(gen-1)                               -> retired-generation guard -> drop
+
+ready A -> ready B -> dispose -> held B error
+                                  -> retired subscription epoch -> drop
+```
+
+Independent review initially rejected an identity that included generation/data scope and an epoch
+guard masked by a separate `disposed` condition. The corrected bridge silently updates and retires its
+prior generation when the resolved identity is unchanged; event handling now has no `disposed` shortcut,
+so the subscription epoch itself is the disposal boundary.
+
+Mutation-resistant red/green evidence:
+
+- Removing current-generation retirement made same-root generation/data-scope refresh followed by late
+  old-generation error fail its `[]` expectation with one `Planning root unavailable` record.
+- Removing the epoch comparison made `ready A -> ready B -> dispose -> held late B error` fail its
+  expected `[Planning root changed]` list with `[Planning root unavailable, Planning root changed]`.
+- Removing the retired-generation rejection made `ready A -> ready B -> late error A` add an unwanted
+  `Planning root unavailable`; removing cross-generation retirement made `error A -> ready B -> late
+ready A` add an unwanted `Planning root changed`. Restoring each exact transition returns green.
+
+Independent focused evidence after the correction:
+
+```text
+pnpm --filter @openspecui/core exec vitest run src/notifications.test.ts
+  -> 1 file / 13 tests passed
+
+pnpm --filter @openspecui/server exec vitest run --maxWorkers=1 \
+  src/notification-service.test.ts src/root-context-notification-bridge.test.ts \
+  src/server-startup.test.ts
+  -> 3 files / 16 tests passed; no teardown timeout or unhandled close error
+
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/lib/notifications/context.test.tsx src/components/notifications/notifications-panel.test.tsx
+  -> 2 files / 10 tests passed
+
+pnpm --filter @openspecui/core typecheck
+pnpm --filter @openspecui/server typecheck
+pnpm --filter @openspecui/web typecheck
+  -> passed
+
+exact changed-file lint, format check, and git diff --check
+  -> passed with zero warnings/errors
+```
+
+The component evidence is automated preparation only; no agent-run end-to-end browser or visual
+acceptance is claimed. Checkpoint `6.15` is closed at `66/131`. The recorded interaction-latency debt
+remains in `6.16`; no Loading or route-performance behavior changed in this checkpoint. Do not start
+`6.16`, run full gates/SSG, push, merge, archive, or release as part of this closure.

@@ -1,19 +1,24 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Prove server startup remains non-blocking while runtime observers warm up.
  * 2. Prove shutdown is idempotent and continues across independent owner failures.
  * 3. Prove backend shutdown settles attached Planning-root CLI streams without client cooperation.
  * 4. Prove preview assets remain bound to the current Planning-root lifecycle.
+ * 5. Prove Root Context health records stay Server-local and retire with the running Server lifecycle.
  *
  * Original request (2026-07-17): "Backend disposal actively cancels every owned stream and awaits settlement."
+ * Original checkpoint (2026-07-16): "6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging."
  */
 import {
   ConfigManager,
   type CliCommandResult,
   type CliContext,
   type CliDoctor,
+  type RootContext,
+  type RootContextState,
 } from '@openspecui/core'
 import { createTRPCClient, createWSClient, wsLink } from '@trpc/client'
+import { observable, type Observer } from '@trpc/server/observable'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -50,6 +55,7 @@ vi.mock('@openspecui/core', async () => {
   }
 })
 
+import type { NotificationService } from './notification-service.js'
 import { findAvailablePort } from './port-utils.js'
 import { createServer, startServer, type AppRouter, type RunningServer } from './server.js'
 
@@ -64,9 +70,70 @@ function commandResult<T>(data: T): CliCommandResult<T> {
     stderr: '',
     exitCode: 0,
     data,
-    payload: data,
+    payload: null,
     diagnostics: [],
   }
+}
+
+function createRootContext(path: string, generation: string, observedAt: number): RootContext {
+  return {
+    launchProject: { path: '/launch' },
+    planningRoot: { path, source: 'nearest', healthy: true, status: [] },
+    storeId: null,
+    generation,
+    cli: { available: true, version: '1.6.0' },
+    references: [],
+    contextMembers: [],
+    dataScope: {
+      path: '/data/openspec',
+      source: 'xdg-data-home',
+      environmentVariable: 'XDG_DATA_HOME',
+    },
+    diagnostics: { root: [], doctor: [], context: [] },
+    evidence: { doctor: null, context: null },
+    observedAt,
+  }
+}
+
+function readyRootContext(path: string, generation: string, observedAt: number): RootContextState {
+  return {
+    state: 'ready',
+    data: createRootContext(path, generation, observedAt),
+    attempt: null,
+    error: null,
+    observedAt,
+  }
+}
+
+function failedRootContext(path: string, generation: string, observedAt: number): RootContextState {
+  return {
+    state: 'error',
+    data: null,
+    attempt: createRootContext(path, generation, observedAt),
+    error: { code: 'root-unhealthy', message: 'Fixture failure.' },
+    observedAt,
+  }
+}
+
+function createControlledRootContextObservable() {
+  let observer: Observer<RootContextState, unknown> | null = null
+  return {
+    source: observable<RootContextState>((next) => {
+      observer = next
+      return () => undefined
+    }),
+    emit(state: RootContextState): void {
+      observer?.next(state)
+    },
+    emitLate(state: RootContextState): void {
+      observer?.next(state)
+    },
+  }
+}
+
+function removeRunningServer(server: RunningServer): void {
+  const index = runningServers.indexOf(server)
+  if (index >= 0) runningServers.splice(index, 1)
 }
 
 afterEach(async () => {
@@ -152,6 +219,82 @@ describe('server startup runtime contract', () => {
     expect(coreMockState.disposeObservationEnvironment).toHaveBeenCalledOnce()
   })
 
+  it('keeps Root Context health records Server-local and retires held observers during running-server close', async () => {
+    coreMockState.acquireObservationRoot.mockResolvedValue(async () => {})
+    coreMockState.disposeObservationEnvironment.mockResolvedValue(undefined)
+    coreMockState.startDataHomeObservation.mockResolvedValue(undefined)
+    coreMockState.disposeDataHomeObservation.mockResolvedValue(undefined)
+    vi.useFakeTimers()
+    const [projectA, projectB] = await Promise.all([createProjectDir(), createProjectDir()])
+    const [portA, portB] = await Promise.all([
+      findAvailablePort(34_400, 100),
+      findAvailablePort(34_200, 100),
+    ])
+    const sourceA = createControlledRootContextObservable()
+    const sourceB = createControlledRootContextObservable()
+    const notificationServices: {
+      a: NotificationService | null
+      b: NotificationService | null
+    } = { a: null, b: null }
+    let serverA: RunningServer | null = null
+    let serverB: RunningServer | null = null
+    try {
+      serverA = await startServer({
+        projectDir: projectA,
+        port: portA,
+        enableWatcher: false,
+        rootContextNotificationSource: (_manager, notificationService) => {
+          notificationServices.a = notificationService
+          return sourceA.source
+        },
+      })
+      serverB = await startServer({
+        projectDir: projectB,
+        port: portB,
+        enableWatcher: false,
+        rootContextNotificationSource: (_manager, notificationService) => {
+          notificationServices.b = notificationService
+          return sourceB.source
+        },
+      })
+      runningServers.push(serverA, serverB)
+
+      const notificationServiceA = notificationServices.a
+      const notificationServiceB = notificationServices.b
+      if (!notificationServiceA || !notificationServiceB) {
+        throw new Error('Expected each running Server to create its own NotificationService.')
+      }
+
+      sourceA.emit(readyRootContext('/planning-a', 'generation-a', 1))
+      sourceB.emit(readyRootContext('/planning-b', 'generation-b', 1))
+      sourceA.emit(failedRootContext('/planning-a', 'generation-a', 2))
+
+      expect(notificationServiceA.list()).toHaveLength(1)
+      expect(notificationServiceB.list()).toEqual([])
+
+      await serverA.close()
+      removeRunningServer(serverA)
+      serverA = null
+      sourceA.emitLate(failedRootContext('/planning-a', 'generation-a', 3))
+      expect(notificationServiceA.list()).toHaveLength(1)
+      expect(notificationServiceB.list()).toEqual([])
+
+      await serverB.close()
+      removeRunningServer(serverB)
+      serverB = null
+    } finally {
+      if (serverA) {
+        await serverA.close()
+        removeRunningServer(serverA)
+      }
+      if (serverB) {
+        await serverB.close()
+        removeRunningServer(serverB)
+      }
+      vi.useRealTimers()
+    }
+  })
+
   it.skipIf(process.platform === 'win32')(
     'waits for an attached Planning-root CLI child to close during backend shutdown',
     async () => {
@@ -189,19 +332,22 @@ describe('server startup runtime contract', () => {
       })
       wsClients.push(wsClient)
       const client = createTRPCClient<AppRouter>({ links: [wsLink({ client: wsClient })] })
-      const streamStarted = Promise.withResolvers<void>()
+      let resolveStreamStarted: (() => void) | null = null
+      const streamStarted = new Promise<void>((resolve) => {
+        resolveStreamStarted = resolve
+      })
       const subscription = client.cli.validateStream.subscribe(
         { id: 'demo', type: 'change' },
         {
           onData: (event) => {
             if (event.type === 'stdout' && event.data?.includes('validate-ready')) {
-              streamStarted.resolve()
+              resolveStreamStarted?.()
             }
           },
           onError: () => undefined,
         }
       )
-      await streamStarted.promise
+      await streamStarted
 
       const closeStartedAt = Date.now()
       const closePromise = server.close().then(() => Date.now())

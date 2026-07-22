@@ -6,6 +6,8 @@
   "include": [
     "src/planning-config-project-binding-write.test.ts",
     "src/planning-config-router.test.ts",
+    "src/root-context-notification-bridge.test.ts",
+    "src/server-startup.test.ts",
     "src/root-context-cold-start.integration.test.ts",
     "src/tool-subscription-router.test.ts",
     "../local-translator/src/huggingface-transformers.d.ts"

@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * 1. Define typed notification records, sources, actions, groups, and aggregates.
+ * 2. Preserve terminal-control parsing as a typed notification input boundary.
+ * 3. Project root-context health records into one stable group without backend identity.
+ *
+ * Original checkpoint (2026-07-16): "6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging."
+ */
 import { z } from 'zod'
 import {
   DEFAULT_NOTIFICATION_SOUND_ID,
@@ -46,6 +54,9 @@ export const NotificationSourceSchema = z.discriminatedUnion('type', [
     type: z.literal('hooks-plugin'),
     pluginId: z.string().min(1),
     title: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('root-context'),
   }),
   z.object({
     type: z.literal('custom'),
@@ -117,6 +128,7 @@ export function getNotificationGroupKey(notification: {
   if (source.type === 'terminal') return `terminal:${source.sessionId}`
   if (source.type === 'openspec-change') return `openspec-change:${source.changeId}`
   if (source.type === 'hooks-plugin') return `hooks-plugin:${source.pluginId}`
+  if (source.type === 'root-context') return 'root-context'
   return `custom:${source.groupId}`
 }
 
@@ -124,6 +136,7 @@ export function getNotificationGroupLabel(source: NotificationSource): string {
   if (source.type === 'terminal') return source.title?.trim() || `Terminal ${source.sessionId}`
   if (source.type === 'openspec-change') return source.title?.trim() || `Change ${source.changeId}`
   if (source.type === 'hooks-plugin') return source.title?.trim() || `Plugin ${source.pluginId}`
+  if (source.type === 'root-context') return 'Root Context'
   return source.title?.trim() || source.groupId
 }
 

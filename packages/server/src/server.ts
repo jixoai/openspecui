@@ -2,7 +2,7 @@
  * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Bootstrap the HTTP/tRPC server and launch-project runtime services.
  * 2. Delegate OpenSpec filesystem ownership to the CLI-selected planning-root manager.
- * 3. Host notification, sound, preview-resource, and translation HTTP boundaries.
+ * 3. Host Server-local terminal/Root Context notifications, sound, preview-resource, and translation HTTP boundaries.
  * 4. Host tRPC and PTY WebSocket transports with deterministic teardown.
  *    PTY planning-root creation and workflow input verify opaque Root generation provenance.
  * 5. Own the runtime observation environment, external Codex command lease, and warm root-scoped
@@ -14,6 +14,7 @@
  * Derived requirement (2026-07-20): Environment-global Codex command observation is Server-owned and
  * released with the runtime environment.
  * Owner-reported defect (2026-07-21): Pre-created Agent terminals are absent from Compose Send.
+ * Derived requirement (2026-07-22): Checkpoint 6.15 publishes Root Context health only through this Server instance.
  *
  * @module server
  */
@@ -34,9 +35,11 @@ import {
   resolveOpenSpecDataScope,
   RuntimeInvalidationIndex,
   RuntimeRootInvalidationRegistry,
+  type RootContextState,
 } from '@openspecui/core'
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
 import { applyWSSHandler } from '@trpc/server/adapters/ws'
+import type { Observable } from '@trpc/server/observable'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { readFileSync } from 'node:fs'
@@ -87,6 +90,8 @@ import { findAvailablePort } from './port-utils.js'
 import { ProjectRecoveryService } from './project-recovery-service.js'
 import { PtyManager } from './pty-manager.js'
 import { createPtyWebSocketHandler } from './pty-websocket.js'
+import { createRootContextNotificationBridge } from './root-context-notification-bridge.js'
+import { createRootContextSubscription } from './root-context-service.js'
 import { appRouter, type Context, type GitWorktreeHandoffService } from './router.js'
 import { StoreObservationFallbackService } from './store-observation-fallback.js'
 import { StoreObservationService } from './store-observation-service.js'
@@ -121,6 +126,11 @@ export interface ServerConfig {
   previewAssetsDir?: string
   /** Optional worktree handoff provider for runtimes that can spawn sibling instances */
   gitWorktreeHandoff?: GitWorktreeHandoffService
+  /** Test-only typed Root Context source override for asserting Server-local notification ownership. */
+  rootContextNotificationSource?: (
+    planningRootServices: PlanningRootServiceManager,
+    notificationService: NotificationService
+  ) => Observable<RootContextState, unknown>
   /** Optional path overrides for isolated runtimes and tests */
   runtimePaths?: {
     globalSettingsPath?: string
@@ -192,6 +202,12 @@ export function createServer(config: ServerConfig) {
     codeBinding: codeGitBinding,
   })
   const notificationService = new NotificationService()
+  const rootContextNotificationBridge = createRootContextNotificationBridge({
+    notificationService,
+    rootContext:
+      config.rootContextNotificationSource?.(planningRootServices, notificationService) ??
+      createRootContextSubscription(planningRootServices),
+  })
   const customSoundService = new CustomSoundService()
   const translationCacheDatabasePath =
     config.runtimePaths?.translationCacheDatabasePath ?? getDefaultTranslationCacheDatabasePath()
@@ -480,6 +496,7 @@ export function createServer(config: ServerConfig) {
     cliExecutor,
     projectRecoveryService,
     notificationService,
+    rootContextNotificationBridge,
     customSoundService,
     globalSettingsManager,
     translationCacheService,
@@ -597,6 +614,7 @@ export async function createWebSocketServer(
           () => server.watcher?.stop(),
         ])
         await settleCleanupPhase(failures, [() => server.storeObservationFallback.dispose()])
+        await settleCleanupPhase(failures, [() => server.rootContextNotificationBridge.dispose()])
         await settleCleanupPhase(failures, [() => server.planningRootServices.dispose()])
         await settleCleanupPhase(failures, [() => server.storeObservation.dispose()])
         await settleCleanupPhase(failures, [() => server.dataHomeObserver.dispose()])
@@ -652,6 +670,7 @@ export async function startServer(
 
   // Create the server (HTTP app ready to accept requests)
   const server = createServer({ ...config, port })
+  server.rootContextNotificationBridge.start()
   let runtimeClosing = false
 
   deferBackgroundTask(() => {

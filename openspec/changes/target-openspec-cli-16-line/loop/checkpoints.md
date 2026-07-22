@@ -325,7 +325,7 @@ The independent browser attempt confirms the desktop source control and URL/quer
 - [x] 6.12 Terminal shows selected cwd/root identity in creation controls and tab labels
 - [x] 6.13 Settings exposes 1.6 compatibility, workflow/tool delivery, root selection, environment, and data-scope diagnostics
 - [x] 6.14 OPSX New/Propose/Compose/Verify/Update shows and preserves its target planning root
-- [ ] 6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging
+- [x] 6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging
 - [ ] 6.16 Every network-triggering control binds loading/disabled state and every page covers empty/loading/loaded/updating/error topologies
 - [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns
 
