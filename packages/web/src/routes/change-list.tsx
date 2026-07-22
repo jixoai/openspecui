@@ -6,6 +6,8 @@
  * 4. Keep the advanced New Change command reachable from the page header.
  * 5. Surface main Change-subscription failure without false list or empty truth.
  *
+ * Original request (2026-07-23): "List mutations and route changes preserve physical continuity through existing motion/View Transition patterns."
+ *
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
  * Original request (2026-07-21): "Changes页面的右上角没有 New,你要不要快速补一个"
  */
@@ -19,8 +21,10 @@ import { useOpsxStatusListSubscription } from '@/lib/use-opsx'
 import { useChangesSubscription } from '@/lib/use-subscription'
 import { VTLink, vtNavController } from '@/lib/view-transitions/navigation'
 import { getSharedElementBinding } from '@/lib/view-transitions/shared-elements'
+import { useChangeListContinuity } from '@/routes/change-list-continuity'
 import type { ChangeStatus } from '@openspecui/core'
 import { AlertCircle, ChevronRight, GitBranch, Plus, Sparkles } from 'lucide-react'
+import { useRef } from 'react'
 
 function buildStatusMap(statuses: ChangeStatus[] | undefined): Map<string, ChangeStatus> {
   return new Map((statuses ?? []).map((status) => [status.changeName, status]))
@@ -28,11 +32,13 @@ function buildStatusMap(statuses: ChangeStatus[] | undefined): Map<string, Chang
 
 export function ChangeList() {
   const { data: changes, isLoading, error: changesError } = useChangesSubscription()
+  const listRef = useRef<HTMLDivElement>(null)
   const {
     data: statuses,
     isLoading: isStatusLoading,
     error: statusError,
   } = useOpsxStatusListSubscription()
+  const displayedChanges = useChangeListContinuity(changes, listRef)
   const statusMap = buildStatusMap(statuses)
 
   const hasCurrentEmptyChanges = changes?.length === 0 && !changesError
@@ -89,8 +95,12 @@ export function ChangeList() {
       ) : null}
 
       {showChangesFrame ? (
-        <div className="border-border divide-border divide-y rounded-lg border">
-          {changes?.map((change) => {
+        <div
+          ref={listRef}
+          data-change-list-continuity
+          className="border-border divide-border divide-y rounded-lg border"
+        >
+          {displayedChanges?.map((change) => {
             const status = statusMap.get(change.id)
             const doneArtifacts =
               status?.artifacts.filter((artifact) => artifact.status === 'done').length ?? 0
