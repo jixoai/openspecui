@@ -271,6 +271,37 @@ describe('useSubscription cache rebind', () => {
     expect(result.current).toMatchObject({ data: 'A', isLoading: false, error: null })
   })
 
+  it('preserves an empty ordinary cache key as uncached across remounts', () => {
+    const callbacks: StringSubscriptionCallbacks[] = []
+    primeSubscriptionCache('', 'primed-empty-key')
+    const mounted = renderHook(() =>
+      useSubscription(
+        (next) => {
+          callbacks.push(next)
+          return { unsubscribe: vi.fn() }
+        },
+        undefined,
+        [],
+        ''
+      )
+    )
+
+    expect(mounted.result.current).toEqual({ data: undefined, isLoading: true, error: null })
+    act(() => callbacks[0]?.onData('current-but-uncached'))
+    expect(mounted.result.current).toEqual({
+      data: 'current-but-uncached',
+      isLoading: false,
+      error: null,
+    })
+    mounted.unmount()
+
+    const reader = renderHook(() =>
+      useSubscription(() => ({ unsubscribe: vi.fn() }), undefined, [], '')
+    )
+    expect(reader.result.current).toEqual({ data: undefined, isLoading: true, error: null })
+    reader.unmount()
+  })
+
   it('rejects late ordinary A live data and errors after B begins without publishing stale cache', () => {
     const callbacks: StringSubscriptionCallbacks[] = []
     const subscriptions = new Map<number, ReturnType<typeof vi.fn>>()

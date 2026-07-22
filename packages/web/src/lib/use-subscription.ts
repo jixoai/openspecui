@@ -123,11 +123,12 @@ export function useSubscription<T>(
   cacheKey?: string,
   cacheRebindPolicy: SubscriptionCacheRebindPolicy = 'retain'
 ): SubscriptionState<T> {
+  const ordinaryCacheKey = cacheKey || undefined
   const lifecycleOwnerRef = useRef<SubscriptionLifecycleOwner | null>(null)
   if (lifecycleOwnerRef.current === null) {
     lifecycleOwnerRef.current = new SubscriptionLifecycleOwner()
   }
-  const initialSnapshot = lifecycleOwnerRef.current.snapshot<T>(cacheKey)
+  const initialSnapshot = lifecycleOwnerRef.current.snapshot<T>(ordinaryCacheKey)
   const [state, setState] = useState<SubscriptionState<T>>(() => {
     if (initialSnapshot.hasCached) {
       return {
@@ -146,7 +147,7 @@ export function useSubscription<T>(
     if (!generation) return
 
     // Use cached data if available, otherwise mark as loading
-    const snapshot = generation.snapshot<T>(cacheKey)
+    const snapshot = generation.snapshot<T>(ordinaryCacheKey)
     if (snapshot.hasCached) {
       setState({
         data: snapshot.data,
@@ -162,7 +163,7 @@ export function useSubscription<T>(
       if (staticLoader) {
         staticLoader()
           .then((data) => {
-            generation.publishData(cacheKey, data, () => {
+            generation.publishData(ordinaryCacheKey, data, () => {
               setState({ data, isLoading: false, error: null })
             })
           })
@@ -189,7 +190,7 @@ export function useSubscription<T>(
     // 动态模式：创建 WebSocket 订阅
     const subscription = subscribe({
       onData: (data) => {
-        generation.publishData(cacheKey, data, () => {
+        generation.publishData(ordinaryCacheKey, data, () => {
           setState({ data, isLoading: false, error: null })
         })
       },
