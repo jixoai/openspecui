@@ -7296,3 +7296,36 @@ production owner, Router, Server, static provider, compound identities, VTLink/h
 implementation, other pages, SSG, browser/Playwright, and full gates remain unchanged and were not run.
 Final browser/visual acceptance remains owner-only. `6.16-I` is implemented and awaits independent review;
 parent checkpoint `6.16` remains unchecked.
+
+### 6.16-I independent acceptance and 6.16-J research (2026-07-23)
+
+Independent review accepts `6aab5c8`, `a77a941`, `46a25d1`, and `5a389c9`. The direct production-owner
+tests now prove all three Catalog error topologies plus coexistence with a per-Reference Store diagnostic.
+The Referenced no-source and ready-empty Store guards each have a direct fixed point and named mutation
+resistance; the correction changed only the test and evidence, not `SpecList` production behavior.
+Independent focused Vitest passes `10/10`, Web typecheck passes, and the correction diff is clean. I is
+accepted; parent checkpoint `6.16` remains unchecked.
+
+The next isolated false conclusion is `ChangeList`'s *main* Change subscription. The page currently ignores
+`useChangesSubscription().error`: terminal no-data failure renders a bordered blank list frame, while a
+retained empty Change list claims `No active changes.` despite failed freshness. This is separate from the
+accepted 6.16-G OPSX Status subprojection. 6.16-J consumes only the existing main
+`{data,isLoading,error}` facts at `ChangeList`.
+
+```text
+no Changes + initial loading      -> existing Loading changes...
+no Changes + terminal error       -> raw main-subscription alert; no Loading, empty claim, or list frame
+current [] + no error             -> existing No active changes and list frame
+retained non-empty + error        -> raw main alert + retained rows/progress/links/current Status evidence
+retained [] + error               -> raw main alert; no No active changes claim or empty list frame
+Status loading/error/no-match     -> unchanged 6.16-G contract
+```
+
+The bounded implementation may add one main-subscription alert, an error-aware list-frame gate, and gate
+only the active-Changes empty conclusion. It must not change `useChangesSubscription`, the Status
+subscription/phase classifier, tracked workflow truth, New/Propose commands, Router, Server, `VTLink`/
+handoff, Updating lifecycle, static provider, or another page. Direct component fixed points must cross the
+existing main subscription mock. Mutation resistance must remove the main alert, the terminal-error
+list-frame gate, and the active-empty guard separately. Do not invent an `isLoading: true` terminal-error
+state: generic subscription `onError` already settles `isLoading` false. No browser/Playwright, SSG, full
+gates, push, merge, archive, or release are authorized.
