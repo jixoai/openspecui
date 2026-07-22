@@ -4,7 +4,7 @@
  * 2. Orchestrate Schema discovery, inspection, creation, and file editing.
  * 3. Preserve Schema source-specific read-only behavior and shared Root action gating.
  * 4. Keep static/live tab selection on one route contract.
- * 5. Represent the independent Schema-files projection without false empty conclusions.
+ * 5. Represent independent Schema catalog and selected-file projections without false empty conclusions.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
@@ -151,6 +151,9 @@ export function Config() {
     error: schemasError,
   } = useOpsxConfigBundleSubscription()
   const schemas = configBundle?.schemas
+  const schemaCatalogInitialLoading =
+    schemas === undefined && schemasLoading && schemasError === null
+  const hasCurrentEmptySchemaCatalog = schemas?.length === 0 && schemasError === null
   const configTabIds = useMemo<ConfigTab[]>(
     () => [
       'project-binding',
@@ -809,23 +812,11 @@ export function Config() {
 
         {schemaActionError && <div className="text-destructive text-xs">{schemaActionError}</div>}
         {schemaEntryError && <div className="text-destructive text-xs">{schemaEntryError}</div>}
-        {schemasError && (
-          <div className="text-destructive text-sm">
-            Failed to load schemas: {schemasError.message}
-          </div>
-        )}
-
         <div
           ref={setSchemaViewportNode}
           className="flex min-h-0 flex-col"
           style={schemaViewportHeight != null ? { height: `${schemaViewportHeight}px` } : undefined}
         >
-          {schemasLoading && (!schemas || schemas.length === 0) && (
-            <div className="text-muted-foreground mb-3 text-sm">Loading schemas…</div>
-          )}
-          {schemas && schemas.length === 0 && (
-            <div className="text-muted-foreground mb-3 text-sm">No schemas available.</div>
-          )}
           {selectedSchemaInfo ? (
             schemaMode === 'preview' ? (
               <MarkdownViewer
@@ -1641,6 +1632,21 @@ export function Config() {
         onTabChange={onConfigTabChange}
         className="min-h-0 flex-1 gap-4"
       />
+      <div data-schema-workspace-status="true" className="shrink-0">
+        {schemasError && (
+          <div role="alert" className="text-destructive text-sm">
+            Failed to load schemas: {schemasError.message}
+          </div>
+        )}
+        {schemaCatalogInitialLoading && (
+          <div role="status" className="text-muted-foreground text-sm">
+            Loading schemas...
+          </div>
+        )}
+        {hasCurrentEmptySchemaCatalog && (
+          <div className="text-muted-foreground text-sm">No schemas available.</div>
+        )}
+      </div>
     </div>
   )
 }
