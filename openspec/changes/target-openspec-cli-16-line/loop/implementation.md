@@ -6349,3 +6349,49 @@ Independent read-only research found a similar but separate Archive owner:
 uses `isLoading && !archived`. That gate will be handled only after Settings as its own package with one
 resolved-data red and one initial-no-data green. No generic subscription, Archive adapter/server, SSG,
 View Transition runtime, route CSS, or browser acceptance is authorized in 6.16-C.
+
+### 6.16-C implementation: Settings first-frame continuity (2026-07-22)
+
+The live `Settings` composition no longer creates a local `loading = true` state, flips it in a passive
+effect, and replaces the first render with `Loading settings...`. That branch owned no network,
+subscription, or data-readiness fact. All other local state/effects and every real loading, updating,
+error, subscription, and static composition owner remain unchanged.
+
+The fixed point uses `renderToStaticMarkup(<Settings />)`, which executes the production live Settings
+render without running passive effects. It requires the `Settings` and `Appearance` headings plus the
+live-only mocked `OpenSpecSettingsSections` marker, then rejects any `Loading settings...` output. The
+live-only marker prevents the static Appearance composition from satisfying the proof.
+
+Mutation and restoration evidence:
+
+1. Temporarily restoring only the removed local `useState(true) -> useEffect(false) -> Loading settings`
+   branch made the final exact test fail (`1 failed | 57 skipped`): expected the Settings heading but
+   received only `<div class="route-loading animate-pulse">Loading settings...</div>`. The live-only
+   OpenSpec section was therefore also absent before passive effects.
+2. Removing that exact branch again made the same final test pass (`1 passed | 57 skipped`), with the live
+   OpenSpec section present and the artificial loading copy absent.
+
+Final focused verification:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/routes/settings.test.tsx
+  -> 1 file / 58 tests passed
+
+pnpm --filter @openspecui/web typecheck
+  -> passed
+
+pnpm exec vp lint packages/web/src/routes/settings.tsx \
+  packages/web/src/routes/settings.test.tsx
+  -> 0 warnings / 0 errors
+
+pnpm format:check
+git diff --check
+  -> passed
+```
+
+Changed files: `packages/web/src/routes/settings.tsx`,
+`packages/web/src/routes/settings.test.tsx`, this implementation record, and `loop/checkpoints.md`.
+Checkpoint `6.16` remains unchecked; 6.16-C is implemented and awaits independent review. Archive,
+subscription owners, Root, navigation, SSG, and browser acceptance were not changed or run. Final browser
+and visual acceptance remains owner-only.

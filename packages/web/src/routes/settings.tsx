@@ -4,9 +4,11 @@
  * 2. Compose the extracted OpenSpec diagnostics and initialization owner.
  * 3. Bind network-triggered settings actions to visible loading and failure state.
  * 4. Delegate CLI installation and Init through single-source Server-owned transports.
+ * 5. Render immediately available live Settings composition without an artificial mount gate.
  *
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
+ * Owner report (2026-07-22): "几乎都在 Loading，切换个页面也等，做任何动作也在等。"
  */
 import { Button } from '@/components/button'
 import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
@@ -664,14 +666,6 @@ export function Settings() {
     }
     window.location.href = currentUrl.toString()
   }
-  const [loading, setLoading] = useState(true)
-  useEffect(() => {
-    setLoading(false)
-  }, [])
-  if (loading) {
-    return <div className="route-loading animate-pulse">Loading settings...</div>
-  }
-
   return (
     <div
       className="@container-[size] scrollbar-thin scrollbar-track-transparent h-full min-h-0 overflow-y-auto scroll-smooth"

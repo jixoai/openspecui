@@ -3,8 +3,10 @@
  * 1. Verify Settings preference, translation, terminal, and asset-management interactions.
  * 2. Verify the route-level responsive ToC and static/dynamic composition boundaries.
  * 3. Keep extracted OpenSpec diagnostics and initialization behavior in focused component tests.
+ * 4. Prove live Settings composition is present before passive effects can run.
  *
  * Original request (2026-07-20): "Split OpenSpec diagnostics/initialization out of the oversized Settings route."
+ * Owner report (2026-07-22): "几乎都在 Loading，切换个页面也等，做任何动作也在等。"
  */
 import type {
   LocalModelAssetLog,
@@ -20,6 +22,7 @@ import {
 } from '@openspecui/core/translator'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useSyncExternalStore, type ReactNode } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Settings } from './settings'
 
@@ -2618,6 +2621,18 @@ describe('Settings', () => {
       isLoading: false,
       error: null,
     })
+  })
+
+  it('renders the live Settings composition before passive effects', () => {
+    useConfigSubscriptionMock.mockReturnValue({ data: {} })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    const markup = renderToStaticMarkup(<Settings />)
+
+    expect(markup).toContain('>Settings</h1>')
+    expect(markup).toContain('>Appearance</h2>')
+    expect(markup).toContain('data-testid="openspec-settings-sections"')
+    expect(markup).not.toContain('Loading settings...')
   })
 
   it('keeps static Settings Appearance-only without mounting live OpenSpec projections', async () => {
