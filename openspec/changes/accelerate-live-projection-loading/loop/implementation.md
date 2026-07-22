@@ -17,7 +17,7 @@ Original request (2026-07-23): "请你深入调查，给出一份持有客观证
 - The measured problem is a server-side projection critical path, not a browser spinner problem: same-Server
   Dashboard reload is about 8.84s while an already-cached Dashboard snapshot reads in about 0.12ms; OPSX
   Status waits on a full Kernel warmup even though Status does not require its low-priority artifacts.
-- The approved execution order is P1 observation/resource scheduling, P2 Root Context current-snapshot gateway,
+- The proposed execution order is P1 observation/resource scheduling, P2 Root Context current-snapshot gateway,
   P3 Dashboard regions, P4 Changes batch stream, P5 OPSX demand planning, P6 measured hash/Worker additions,
   then P7 focused regression and owner acceptance. Each phase remains an independently reviewable slice.
 - This artifact is planning evidence only. The worker must not claim a phase complete until its checkpoint has
@@ -55,10 +55,13 @@ Original request (2026-07-23): "请你深入调查，给出一份持有客观证
   or WebSocket contract change discovered during implementation must be recorded as a new scoped decision or
   looped back before code work continues.
 - `pnpm exec openspec status --change accelerate-live-projection-loading --json` reports all four declared loop
-  artifacts complete and `applyRequires: ["checkpoints"]`. The generic strict validator still exits non-zero
-  because this repository's `opsx-collab-pr-loop` Changes intentionally have no `specs/` delta; the same known
-  artifact-shape failure is recorded by the existing active 1.6 Changes. This is not reported as strict validation
-  green, and no formal delta is invented in this planning-only slice.
+  artifacts complete and `applyRequires: ["checkpoints"]`. The formal `specs/live-projection-work/spec.md`
+  delta is present, so `pnpm exec openspec validate accelerate-live-projection-loading --type change --strict --json`
+  passes. This validates the Change artifacts only; it does not claim runtime implementation.
+- `pnpm format:check` passes. The explicit TypeScript check over all five benchmark entrypoints reaches the
+  production import graph but exits on pre-existing Server diagnostics (`@huggingface/transformers` resolution,
+  existing Router/translation contracts, and related source errors); no diagnostic points at a benchmark file.
+  The package Server typecheck has the same unrelated failures. This Change does not widen into repairing them.
 
 ## Loopback Triggers
 
