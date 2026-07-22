@@ -6395,3 +6395,23 @@ Changed files: `packages/web/src/routes/settings.tsx`,
 Checkpoint `6.16` remains unchecked; 6.16-C is implemented and awaits independent review. Archive,
 subscription owners, Root, navigation, SSG, and browser acceptance were not changed or run. Final browser
 and visual acceptance remains owner-only.
+
+### 6.16-C independent review correction: first-render drafts must match cached Config (2026-07-22)
+
+Commit `fbada63` correctly removes only the live Settings artificial gate, and its synchronous SSR fixed
+point proves the live-only composition renders without passive effects. It is not yet accepted because the
+same gate previously masked a second first-frame fact: Config may already be present from the subscription
+cache while writable local drafts still initialize to local defaults and synchronize only in passive
+effects. Execute Path, Hosted App, theme/editor preferences, terminal preferences, Dashboard limit, and
+Git patch budget can therefore render stale values; Save controls are already reachable on that frame.
+
+The correction must initialize every effect-synchronized writable draft from present Config on the first
+render, with controller/browser defaults only when Config is absent. Existing effects continue to own
+later subscription changes. Extend the effect-free SSR fixed point with non-default cached Config values
+and assert representative writable inputs/labels before effects. Temporarily resetting only those initial
+drafts to defaults must make the final test red; a headings-only test is insufficient.
+
+Also update both changed TSX headers from 2026-07-20 to 2026-07-22 and remove the stale comment claiming a
+terminal re-sync is captured by the deleted loading transition. Keep 6.16-C and parent 6.16 open until this
+correction passes independent review. Do not restore a full-page gate or change subscription, static,
+Archive, Server, Root, navigation, SSG, or browser behavior.

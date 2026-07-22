@@ -220,7 +220,11 @@ and the real Settings composition for one client frame on every mount.
 
 Remove only this local state/effect/early return. The fixed point renders the real `Settings` component
 before effects and proves the Settings composition is already present while `Loading settings...` is
-absent. Temporarily restoring only the local gate must make that exact test red. Do not change
+absent. When the Config subscription already supplies cached non-default values, every writable local
+draft synchronized by passive effects must also initialize from that Config on the same render. A visible
+default draft plus an enabled Save control is not first-frame continuity. Temporarily restoring only the
+local gate, or resetting cached draft initialization to defaults, must make the corresponding exact test
+red. Do not change
 `use-settings-tool-subscriptions`, `SettingsStatic`, static Appearance-only behavior, subscription data
 flow, or any real loading/updating/error topology.
 
