@@ -1,14 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Compose ownership-specific Config sections with routed Schema tabs.
  * 2. Orchestrate Schema discovery, inspection, creation, and file editing.
  * 3. Preserve Schema source-specific read-only behavior and shared Root action gating.
  * 4. Keep static/live tab selection on one route contract.
+ * 5. Represent the independent Schema-files projection without false empty conclusions.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
  * Original request (2026-07-18): "Schema and Template mutations must use useRootActionState."
+ * Owner-reported debt (2026-07-22): "整个过程中，几乎都在 Loading。"
  */
 import { Button } from '@/components/button'
 import { ButtonGroup } from '@/components/button-group'
@@ -182,8 +184,11 @@ export function Config() {
   const schemaResolution = selectedSchema
     ? (configBundle?.schemaResolutions[selectedSchema] ?? null)
     : null
-  const { data: schemaFiles, error: schemaFilesError } =
-    useOpsxSchemaFilesSubscription(selectedSchema)
+  const {
+    data: schemaFiles,
+    isLoading: schemaFilesLoading,
+    error: schemaFilesError,
+  } = useOpsxSchemaFilesSubscription(selectedSchema)
   const { data: templates } = useOpsxTemplatesSubscription(selectedSchema)
   const { data: templateContents } = useOpsxTemplateContentsSubscription(selectedSchema)
 
@@ -248,6 +253,10 @@ export function Config() {
   }, [schemaFiles, selectedSchemaPath])
 
   const schemaEntries = useMemo(() => (schemaFiles ?? []) as FileExplorerEntry[], [schemaFiles])
+  const schemaFilesInitialLoading =
+    schemaFiles === undefined && schemaFilesLoading && schemaFilesError === null
+  const shouldRenderSchemaFileExplorer =
+    !schemaFilesInitialLoading && (!schemaFilesError || schemaEntries.length > 0)
 
   const activeSchemaFile = useMemo(() => {
     if (!schemaEntries.length || !selectedSchemaPath) return null
@@ -1055,180 +1064,186 @@ export function Config() {
                 className="flex min-h-0 flex-1 flex-col gap-4"
               >
                 {schemaFilesError && (
-                  <div className="text-destructive text-xs">
+                  <div role="alert" className="text-destructive text-xs">
                     Failed to load schema files: {schemaFilesError.message}
                   </div>
                 )}
-                <div className="min-h-0 flex-1">
-                  <FileExplorer
-                    entries={schemaEntries}
-                    selectedPath={selectedSchemaPath}
-                    onSelect={setSelectedSchemaPath}
-                    breadcrumbRoot={schemaRootLabel}
-                    headerLabel={
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span className="uppercase tracking-wide">Files</span>
-                        <span
-                          className="text-muted-foreground/80 truncate text-[10px] normal-case"
-                          title={schemaRootLabel}
-                        >
-                          {schemaRootLabel}
-                        </span>
-                      </span>
-                    }
-                    headerActions={
-                      headerMenuItems.length > 0 ? (
-                        <ContextMenuTargeter>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              setFileMenuAnchor(null)
-                              setViewMenuAnchor(null)
-                              setHeaderMenuAnchor({
-                                type: 'target',
-                                element: event.currentTarget,
-                                placement: 'bottom-end',
-                              })
-                            }}
-                            className="hover:bg-muted rounded-md p-1"
-                            aria-label="Schema menu"
+                {schemaFilesInitialLoading ? (
+                  <div role="status" className="text-muted-foreground text-sm">
+                    Loading schema files...
+                  </div>
+                ) : shouldRenderSchemaFileExplorer ? (
+                  <div className="min-h-0 flex-1">
+                    <FileExplorer
+                      entries={schemaEntries}
+                      selectedPath={selectedSchemaPath}
+                      onSelect={setSelectedSchemaPath}
+                      breadcrumbRoot={schemaRootLabel}
+                      headerLabel={
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="uppercase tracking-wide">Files</span>
+                          <span
+                            className="text-muted-foreground/80 truncate text-[10px] normal-case"
+                            title={schemaRootLabel}
                           >
-                            <EllipsisVertical className="h-4 w-4" />
-                          </button>
-                        </ContextMenuTargeter>
-                      ) : undefined
-                    }
-                    entryActions={(entry) => {
-                      const propertiesAction = {
-                        id: 'properties',
-                        label: 'Properties',
-                        icon: <Info className="h-3.5 w-3.5" />,
-                        onSelect: () => handleOpenEntryInfo(entry),
+                            {schemaRootLabel}
+                          </span>
+                        </span>
                       }
-
-                      if (schemaMode !== 'edit' || !canManageEntries) {
-                        return [propertiesAction]
+                      headerActions={
+                        headerMenuItems.length > 0 ? (
+                          <ContextMenuTargeter>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                setFileMenuAnchor(null)
+                                setViewMenuAnchor(null)
+                                setHeaderMenuAnchor({
+                                  type: 'target',
+                                  element: event.currentTarget,
+                                  placement: 'bottom-end',
+                                })
+                              }}
+                              className="hover:bg-muted rounded-md p-1"
+                              aria-label="Schema menu"
+                            >
+                              <EllipsisVertical className="h-4 w-4" />
+                            </button>
+                          </ContextMenuTargeter>
+                        ) : undefined
                       }
+                      entryActions={(entry) => {
+                        const propertiesAction = {
+                          id: 'properties',
+                          label: 'Properties',
+                          icon: <Info className="h-3.5 w-3.5" />,
+                          onSelect: () => handleOpenEntryInfo(entry),
+                        }
 
-                      const parent =
-                        entry.type === 'directory' ? entry.path : getParentPath(entry.path)
-                      const isDirectory = entry.type === 'directory'
-                      return [
-                        {
-                          id: 'new-file',
-                          label: isDirectory ? 'New file inside' : 'New sibling file',
-                          icon: <FilePlus className="h-3.5 w-3.5" />,
-                          onSelect: () => handleOpenCreateEntry('file', parent),
-                        },
-                        {
-                          id: 'new-folder',
-                          label: isDirectory ? 'New folder inside' : 'New sibling folder',
-                          icon: <FolderPlus className="h-3.5 w-3.5" />,
-                          onSelect: () => handleOpenCreateEntry('directory', parent),
-                        },
-                        propertiesAction,
-                        {
-                          id: 'delete',
-                          label: 'Delete',
-                          icon: <Trash2 className="h-3.5 w-3.5" />,
-                          tone: 'destructive',
-                          onSelect: () => handleOpenDeleteEntry(entry),
-                        },
-                      ]
-                    }}
-                    emptyState={<span>No files found for this schema.</span>}
-                    renderEditor={(activeFile) =>
-                      activeFile ? (
-                        <div className="flex min-h-0 flex-1 flex-col">
-                          {schemaMode === 'edit' && (
-                            <div className="border-border/50 flex items-center justify-between border-b px-3 py-2 text-xs">
-                              <div className="flex items-center gap-2">
-                                <ContextMenuTargeter>
+                        if (schemaMode !== 'edit' || !canManageEntries) {
+                          return [propertiesAction]
+                        }
+
+                        const parent =
+                          entry.type === 'directory' ? entry.path : getParentPath(entry.path)
+                        const isDirectory = entry.type === 'directory'
+                        return [
+                          {
+                            id: 'new-file',
+                            label: isDirectory ? 'New file inside' : 'New sibling file',
+                            icon: <FilePlus className="h-3.5 w-3.5" />,
+                            onSelect: () => handleOpenCreateEntry('file', parent),
+                          },
+                          {
+                            id: 'new-folder',
+                            label: isDirectory ? 'New folder inside' : 'New sibling folder',
+                            icon: <FolderPlus className="h-3.5 w-3.5" />,
+                            onSelect: () => handleOpenCreateEntry('directory', parent),
+                          },
+                          propertiesAction,
+                          {
+                            id: 'delete',
+                            label: 'Delete',
+                            icon: <Trash2 className="h-3.5 w-3.5" />,
+                            tone: 'destructive',
+                            onSelect: () => handleOpenDeleteEntry(entry),
+                          },
+                        ]
+                      }}
+                      emptyState={<span>No files found for this schema.</span>}
+                      renderEditor={(activeFile) =>
+                        activeFile ? (
+                          <div className="flex min-h-0 flex-1 flex-col">
+                            {schemaMode === 'edit' && (
+                              <div className="border-border/50 flex items-center justify-between border-b px-3 py-2 text-xs">
+                                <div className="flex items-center gap-2">
+                                  <ContextMenuTargeter>
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        setHeaderMenuAnchor(null)
+                                        setViewMenuAnchor(null)
+                                        setFileMenuAnchor({
+                                          type: 'target',
+                                          element: event.currentTarget,
+                                          placement: 'bottom-start',
+                                        })
+                                      }}
+                                      className="hover:bg-muted rounded-md px-2 py-1 text-xs font-semibold"
+                                    >
+                                      File
+                                    </button>
+                                  </ContextMenuTargeter>
+                                  <ContextMenuTargeter>
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        setHeaderMenuAnchor(null)
+                                        setFileMenuAnchor(null)
+                                        setViewMenuAnchor({
+                                          type: 'target',
+                                          element: event.currentTarget,
+                                          placement: 'bottom-start',
+                                        })
+                                      }}
+                                      className="hover:bg-muted rounded-md px-2 py-1 text-xs font-semibold"
+                                    >
+                                      View
+                                    </button>
+                                  </ContextMenuTargeter>
+                                </div>
+                                <div className="flex items-center gap-2">
                                   <button
                                     type="button"
-                                    onClick={(event) => {
-                                      setHeaderMenuAnchor(null)
-                                      setViewMenuAnchor(null)
-                                      setFileMenuAnchor({
-                                        type: 'target',
-                                        element: event.currentTarget,
-                                        placement: 'bottom-start',
-                                      })
-                                    }}
-                                    className="hover:bg-muted rounded-md px-2 py-1 text-xs font-semibold"
+                                    onClick={handleFileCancel}
+                                    className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium"
                                   >
-                                    File
+                                    <X className="h-3.5 w-3.5" />
+                                    Cancel
                                   </button>
-                                </ContextMenuTargeter>
-                                <ContextMenuTargeter>
-                                  <button
-                                    type="button"
-                                    onClick={(event) => {
-                                      setHeaderMenuAnchor(null)
-                                      setFileMenuAnchor(null)
-                                      setViewMenuAnchor({
-                                        type: 'target',
-                                        element: event.currentTarget,
-                                        placement: 'bottom-start',
-                                      })
-                                    }}
-                                    className="hover:bg-muted rounded-md px-2 py-1 text-xs font-semibold"
+                                  <Button
+                                    size="sm"
+                                    onClick={handleFileSave}
+                                    disabled={saveSchemaFileMutation.isPending || !schemaCanEdit}
+                                    activity={!activeSchemaDirty && schemaCanEdit}
                                   >
-                                    View
-                                  </button>
-                                </ContextMenuTargeter>
+                                    <Save className="h-3.5 w-3.5" />
+                                    {saveSchemaFileMutation.isPending
+                                      ? 'Saving...'
+                                      : activeSchemaDirty
+                                        ? 'Save'
+                                        : 'Saved'}
+                                  </Button>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={handleFileCancel}
-                                  className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium"
-                                >
-                                  <X className="h-3.5 w-3.5" />
-                                  Cancel
-                                </button>
-                                <Button
-                                  size="sm"
-                                  onClick={handleFileSave}
-                                  disabled={saveSchemaFileMutation.isPending || !schemaCanEdit}
-                                  activity={!activeSchemaDirty && schemaCanEdit}
-                                >
-                                  <Save className="h-3.5 w-3.5" />
-                                  {saveSchemaFileMutation.isPending
-                                    ? 'Saving...'
-                                    : activeSchemaDirty
-                                      ? 'Save'
-                                      : 'Saved'}
-                                </Button>
+                            )}
+                            <FileExplorerCodeEditor
+                              file={activeFile}
+                              value={
+                                schemaMode === 'edit'
+                                  ? (activeSchemaDraft ?? activeFile.content ?? '')
+                                  : (activeFile.content ?? '')
+                              }
+                              readOnly={schemaMode !== 'edit' || !schemaCanEdit}
+                              onChange={schemaMode === 'edit' ? handleFileChange : undefined}
+                              lineWrapping={schemaEditorWrap}
+                              editorMinHeight="0px"
+                            />
+                            {schemaResolution?.source === 'package' && (
+                              <div className="text-muted-foreground border-border/50 border-t px-3 py-2 text-xs">
+                                Package-provided schemas are read-only.
                               </div>
-                            </div>
-                          )}
-                          <FileExplorerCodeEditor
-                            file={activeFile}
-                            value={
-                              schemaMode === 'edit'
-                                ? (activeSchemaDraft ?? activeFile.content ?? '')
-                                : (activeFile.content ?? '')
-                            }
-                            readOnly={schemaMode !== 'edit' || !schemaCanEdit}
-                            onChange={schemaMode === 'edit' ? handleFileChange : undefined}
-                            lineWrapping={schemaEditorWrap}
-                            editorMinHeight="0px"
-                          />
-                          {schemaResolution?.source === 'package' && (
-                            <div className="text-muted-foreground border-border/50 border-t px-3 py-2 text-xs">
-                              Package-provided schemas are read-only.
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="text-muted-foreground flex h-full items-center justify-center">
-                          Select a file to view
-                        </div>
-                      )
-                    }
-                  />
-                </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-muted-foreground flex h-full items-center justify-center">
+                            Select a file to view
+                          </div>
+                        )
+                      }
+                    />
+                  </div>
+                ) : null}
                 <ContextMenu
                   open={!!headerMenuAnchor}
                   items={headerMenuItems}
