@@ -7855,3 +7855,45 @@ as metadata/title/error-only, never Live. No agent-run browser or visual accepta
 `pnpm format:check` remains unavailable as a full-worktree gate because the worktree contains untracked,
 non-worker `packages/server/bench/*.bench.ts` files that fail formatting; the correction did not modify,
 stage, delete, or rely on them. `6.16-N` is accepted; parent checkpoint `6.16` remains unchecked.
+
+### 6.16-O research: Dashboard retained Overview with terminal error (2026-07-23)
+
+The registered live and static route trees use `packages/web/src/routes/dashboard.tsx`; the legacy
+`packages/web/src/routes/schemas.tsx` is not registered and is excluded. Dashboard's main Overview
+subscription is a real independent owner at `useDashboardOverviewSubscription()`.
+
+Current route topology:
+
+```text
+Overview: no data + loading       -> Loading dashboard...
+Overview: any error               -> error-only early return
+Overview: retained data + error   -> same error-only early return (retained data hidden)
+Overview: current data             -> Dashboard content
+```
+
+The shared subscription deliberately retains the last successful data when an active subscription
+reports a terminal error. Existing 6.11 Git tests describe Dashboard stale-data-plus-error only as
+characterization of the Git binding slice; no direct Dashboard Overview route test proves that this
+production early return preserves retained content. This is therefore a separate 6.16 page-topology
+owner, not a Git, Root Context, or generic subscription change.
+
+Production owner: `packages/web/src/routes/dashboard.tsx`, the main Overview loading/error branch.
+
+Precise fixed points for the worker:
+
+1. Red at the current head: a checked Dashboard route fixture returns a real Overview snapshot plus
+   `error: new Error('dashboard overview failed')` and `isLoading: false`; it must fail because the
+   current route omits a stable Overview marker (for example Active Changes) and renders only the error.
+2. Green after the correction: the same retained snapshot renders its stable Dashboard content and the
+   raw error alert together. A no-data error still renders the error state without a fabricated empty or
+   current Dashboard.
+3. Mutation resistance: temporarily restore only the exact `if (error)` early-return condition (or
+   bypass the `!overview` distinction) and rerun the retained-data fixed point; it must fail by hiding
+   the Overview marker. Do not mutate a mock after render, click a disabled control, or manually invoke a
+   downstream handler.
+
+Scope is intentionally narrow: no Dashboard server/router refresh policy, Projection Work protocol,
+Git binding token, Root Context authority, OPSX/Status subscription, static provider, navigation, SSG,
+or final browser/visual acceptance changes. The owner browser walkthrough remains outside agent evidence.
+Focused evidence must be direct Dashboard Vitest, Web typecheck, exact lint/format, and diff checks before
+any full gate or SSG run. Parent `6.16` remains unchecked.
