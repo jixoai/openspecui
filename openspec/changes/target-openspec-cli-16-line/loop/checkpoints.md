@@ -413,6 +413,14 @@ The independent browser attempt confirms the desktop source control and URL/quer
     alert beside retained detail/toolbar content, preserve no-data/loading/missing states, and leave Root
     Action authority and shared OpsxEntityDetailView unchanged. ArchiveView, GitView, and detail-prefetch
     remain separate; the performance Change is not folded in.
+  - `6.16-Q` accepted: ChangeView shows one route-owned raw Status subscription error alert beside retained
+    detail, artifacts, Apply/tracked evidence, and RootAction controls. No-data error, initial loading, and
+    missing Change branches remain unchanged. Typed direct route-owner evidence covers retained ready state,
+    retained `blocked` state, retained `checking` state, and the three terminal regressions (`10/10`);
+    `Update`, `Archive`, and `Verify` remain disabled in both non-ready rows. Removing the route alert made
+    the three retained alert assertions fail; restoring the old `error && !status` path made the three
+    retained detail assertions fail. Web typecheck, exact lint, format, and diff checks pass for
+    `cc81b22`. The Loading/performance investigation remains in its independent Change.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and

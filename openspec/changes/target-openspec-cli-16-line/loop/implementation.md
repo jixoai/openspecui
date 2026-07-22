@@ -8007,3 +8007,33 @@ and raw alert; a no-data error, initial loading, and missing Change regression r
 the alert must fail the raw-error assertion. Restoring the old `!status`-only route behavior must fail the
 retained-error assertion. No OpsxEntityDetailView, use-opsx, Server/Router, Root/Git, Archive/Git detail,
 navigation/prefetch, static, SSG, or performance Change edits are authorized. Parent `6.16` remains open.
+
+### 6.16-Q independent acceptance (2026-07-23)
+
+The accepted ChangeView topology is:
+
+```text
+Status absent + loading       -> Loading change status...
+Status absent + missing/error  -> existing not-found/raw error state
+retained Status + error       -> detail/artifacts/toolbar + one raw role=alert
+current Status                 -> existing detail/artifacts/toolbar
+```
+
+`2bd58af` and `cc81b22` keep the shared `OpsxEntityDetailView` contract unchanged. ChangeView's own Status-backed
+toolbar owns the retained-error alert, while the existing `errorMessage` path still handles no-data errors.
+RootAction readiness, artifact identity, Apply/tracked evidence, and missing-Change handling are unchanged.
+
+The typed real-route tests prove retained detail and artifact content plus the raw subscription error in
+`ready`, `blocked`, and `checking` Root Action states. In both non-ready states the RootAction notice remains
+visible and `Update`, `Archive`, and `Verify` are disabled, so retained Status cannot become write authority.
+The no-data error, initial loading, and missing-Change regressions remain green. Removing only the route
+alert produced three failures at the retained raw-alert assertions; restoring the old `error && !status`
+path produced three failures at the retained artifact assertions before the detail view could render.
+Focused Vitest `10/10`, Web typecheck, exact oxlint, Prettier, `pnpm format:check`, and `git diff --check`
+pass. No shared component, Server/Router, Root/Git, Archive/Git detail, prefetch, SSG, full gate, or
+browser/visual acceptance ran. Parent `6.16` remains open.
+
+The owner's report that navigation and ordinary actions feel almost continuously Loading is recorded as a
+separate observation. It is not evidence for a Q defect and must not be addressed by hiding Loading states,
+weakening Root Action locks, or changing the shared subscription owner. The independent
+`accelerate-live-projection-loading` Change owns phase instrumentation and any systemic correction.
