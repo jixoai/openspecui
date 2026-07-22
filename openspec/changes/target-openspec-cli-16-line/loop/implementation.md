@@ -8037,3 +8037,47 @@ The owner's report that navigation and ordinary actions feel almost continuously
 separate observation. It is not evidence for a Q defect and must not be addressed by hiding Loading states,
 weakening Root Action locks, or changing the shared subscription owner. The independent
 `accelerate-live-projection-loading` Change owns phase instrumentation and any systemic correction.
+
+### 6.16-R research: cold detail prefetch is a navigation gate (2026-07-23)
+
+The accepted 6.16-B timing owner measures the coordinator but deliberately leaves the prefetch policy
+unchanged. The current production path is:
+
+```text
+VTLink / vtNavController
+  -> runPreparedViewTransition
+       -> await prepareRouteDetailViewTransition
+            -> waitForPrepareTask
+                 -> 140 ms wait-indicator delay
+                 -> 2.5 s timeout
+       -> only then issue the route update
+```
+
+`detail-prepare.ts` performs remote or CLI-backed Spec, Change, Archive, and Git preparation even on a cold
+cache. `waitForPrepareTask` returns `skip-vt` after timeout, but the route remains blocked until that timeout;
+the destination's own Loading state cannot appear during that period. This is a concrete contributor to the
+owner's "切换个页面也等" observation, but it is not evidence for changing subscription, Root, or page Loading
+contracts.
+
+The next slice is a policy correction at the navigation boundary only:
+
+```text
+identity-matching warm cache -> retain the existing prepared View Transition
+cold or pending prefetch    -> commit the route within a bounded non-blocking budget, use skip-vt,
+                               and let the destination render its own Loading state
+prefetch error/timeout      -> commit the route; preserve error/timing evidence without blocking navigation
+late A completion           -> fill only A's exact identity/binding cache; never relabel B
+```
+
+Required fixed points are the real `vtNavController` coordinator and typed cache identity. The current
+2.5-second pending path must fail the cold-navigation red because route update is not issued before the
+held prefetch resolves. A warm cache must keep the existing View Transition path; slow/error/timeout must
+commit without inventing success or bypassing Root/Git action gates. A late A completion must not overwrite
+or relabel B. Mutation resistance removes only the non-blocking commit transition and, separately, one
+identity/binding component from the cache key; each mutation must make its named red fail. Do not weaken
+the existing cache owner or manually invoke a route handler.
+
+No Server/Router, `use-subscription`, Root/Git authority, page-specific Loading, Static/SSG, notification,
+or `accelerate-live-projection-loading` behavior belongs in R. Focused evidence ends at navigation,
+detail-prepare, and prepare-wait Vitest plus Web typecheck, exact lint/Prettier, and diff checks. Final
+browser/visual acceptance remains owner-only; parent `6.16` remains open.

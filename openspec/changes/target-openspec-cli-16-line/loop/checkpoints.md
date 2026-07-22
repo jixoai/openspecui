@@ -421,9 +421,15 @@ The independent browser attempt confirms the desktop source control and URL/quer
     the three retained alert assertions fail; restoring the old `error && !status` path made the three
     retained detail assertions fail. Web typecheck, exact lint, format, and diff checks pass for
     `cc81b22`. The Loading/performance investigation remains in its independent Change.
+  - `6.16-R` planned: cold detail prefetch currently blocks `runPreparedViewTransition` until the remote
+    preparation settles or the 2.5s timeout expires. The slice must make prefetch opportunistic: warm
+    identity-matching data keeps the existing View Transition, while cold/pending/error work commits the
+    route within a bounded non-blocking budget and lets the destination own its Loading state. Cache identity,
+    Git binding, Root authority, and late-A provenance remain unchanged. No subscription, Server/Router,
+    Static/SSG, or independent performance Change edits are authorized.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.
-  - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and
+  - Keep 6.16 open until subscription/Root timing, 6.16-R detail-prefetch policy, artificial route-gate, and
     page-topology packages have their own evidence.
 - [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns
 
