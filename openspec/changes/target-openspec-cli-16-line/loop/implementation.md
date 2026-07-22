@@ -7190,3 +7190,42 @@ only the existing `{data,isLoading,error}` state. No-data error renders a raw al
 empty copy. Retained non-empty data renders alert plus the existing compound rows/links. Transport error
 suppresses source-empty claims but does not replace Catalog-internal Reference Store diagnostics. No hook,
 protocol, static provider, compound identity, Updating, Router, or Server work is authorized.
+
+### 6.16-I implementation: SpecList transport-error topology (2026-07-23)
+
+`SpecList` now consumes the existing Catalog subscription `error` at its page owner. Initial no-Catalog
+loading remains the sole `Loading specs...` case. A no-Catalog transport error renders only the normal page
+heading and one raw error alert, with no source selector or source-empty conclusion. Retained Catalog data
+keeps its existing compound rows, `VTLink` targets, source grouping, and per-Store diagnostics beside that
+single alert. Any active transport error suppresses the owned, Referenced, and ready-Store empty sentences;
+it does not replace the existing per-Reference Store error display.
+
+The production boundary was fixed before the presentation change with direct `SpecList` tests through the
+existing `useSpecsSubscription` mock. The no-Catalog terminal-error and retained Owned Catalog cases failed
+at the current fixed point (`2 failed / 4 passed`): neither state had an accessible alert; no-data also
+rendered the Catalog tabs and Owned-empty sentence. A retained empty Catalog error case now separately
+proves that Catalog presence does not authorize a source-empty conclusion.
+
+Mutation resistance independently removed each production guard. Changing only the no-Catalog error branch
+from `if (!catalog && error)` to `if (!catalog && !error)` made the named no-Catalog test fail `1/1` with
+six skipped because the real tablist returned. Replacing only the retained-Catalog `{errorAlert}` with
+`null` made the retained-row test fail `1/1` with six skipped because the page alert disappeared while its
+row/link remained. Removing only `!error` from the Owned empty branch made the retained-empty test fail
+`1/1` with six skipped because `No Owned Specs found...` returned. Restoring only those three guards
+returned the full direct file to `7/7` green. The existing no-error
+`{data: undefined, isLoading: false, error: null}` fallback is deliberately unchanged: this package owns
+only terminal error presentation, and the shared hook normally yields no data only for initial loading or
+error.
+
+Focused verification:
+
+```text
+SpecList: 1 file / 7 tests passed
+Mutation: 3 named tests failed as expected with 6 skipped each
+```
+
+Only `spec-list.tsx`, its direct test, and matching Change evidence are changed. The Catalog hook, Router,
+Server, static provider, compound identities, View Transition handoff, Reference provenance/diagnostics,
+updating lifecycle, other pages, browser/Playwright, SSG, and full gates remain unchanged and were not run.
+Final browser/visual acceptance remains owner-only. `6.16-I` is implemented and awaits independent review;
+parent checkpoint `6.16` remains unchecked.

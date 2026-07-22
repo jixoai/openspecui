@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Default the project Spec Catalog to writable Owned Specs.
  * 2. Group direct read-only Referenced Specs by Store identity.
  * 3. Preserve compound routes and collision-safe View Transition identity.
  * 4. Keep empty states source-specific without completeness claims.
+ * 5. Surface transport failure without hiding retained Catalog truth or claiming source emptiness.
  *
  * Original request (2026-07-15): "Specs defaults to Owned and provides a Store-grouped Referenced view with immutable entries."
  */
@@ -13,7 +14,7 @@ import { VTLink } from '@/lib/view-transitions/navigation'
 import { getSharedElementBinding } from '@/lib/view-transitions/shared-elements'
 import { specIdentityKey, type SpecCatalogEntry } from '@openspecui/core/spec-catalog'
 import { useLocation } from '@tanstack/react-router'
-import { ChevronRight, FileText, LockKeyhole } from 'lucide-react'
+import { AlertCircle, ChevronRight, FileText, LockKeyhole } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 type SpecScope = 'owned' | 'referenced'
@@ -28,7 +29,7 @@ function readSpecListScopeState(state: unknown): SpecScope {
 /** Render the owned-default and Store-grouped referenced Spec Catalog views. */
 export function SpecList() {
   const location = useLocation()
-  const { data: catalog, isLoading } = useSpecsSubscription()
+  const { data: catalog, isLoading, error } = useSpecsSubscription()
   const [scope, setScope] = useState<SpecScope>(() => readSpecListScopeState(location.state))
   const owned = useMemo(
     () => catalog?.entries.filter((entry) => entry.identity.kind === 'owned') ?? [],
@@ -47,9 +48,33 @@ export function SpecList() {
       .sort((left, right) => left.source.storeId.localeCompare(right.source.storeId))
   }, [catalog])
   const referencedCount = referencedByStore.reduce((total, { specs }) => total + specs.length, 0)
+  const errorAlert = error ? (
+    <div
+      role="alert"
+      className="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-sm"
+    >
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+      <div>
+        <p className="font-medium">Spec Catalog subscription failed.</p>
+        <p className="break-words">{error.message}</p>
+      </div>
+    </div>
+  ) : null
 
-  if (isLoading && !catalog) {
+  if (isLoading && !catalog && !error) {
     return <div className="route-loading animate-pulse">Loading specs...</div>
+  }
+
+  if (!catalog && error) {
+    return (
+      <div className="space-y-6 p-4">
+        <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
+          <FileText className="h-6 w-6 shrink-0" />
+          Specifications
+        </h1>
+        {errorAlert}
+      </div>
+    )
   }
 
   return (
@@ -58,6 +83,8 @@ export function SpecList() {
         <FileText className="h-6 w-6 shrink-0" />
         Specifications
       </h1>
+
+      {errorAlert}
 
       <div
         role="tablist"
@@ -85,7 +112,7 @@ export function SpecList() {
           {owned.map((spec) => (
             <SpecCatalogRow key={specIdentityKey(spec.identity)} spec={spec} />
           ))}
-          {owned.length === 0 ? (
+          {owned.length === 0 && !error ? (
             <div className="text-muted-foreground p-4 text-center">
               No Owned Specs found in the current Planning root.
             </div>
@@ -135,7 +162,7 @@ export function SpecList() {
                   {specs.map((spec) => (
                     <SpecCatalogRow key={specIdentityKey(spec.identity)} spec={spec} />
                   ))}
-                  {specs.length === 0 ? (
+                  {specs.length === 0 && !error ? (
                     <div className="text-muted-foreground px-4 py-3 text-sm">
                       OpenSpec reported no Specs for this Store.
                     </div>
@@ -144,7 +171,7 @@ export function SpecList() {
               )}
             </section>
           ))}
-          {referencedByStore.length === 0 ? (
+          {referencedByStore.length === 0 && !error ? (
             <div className="text-muted-foreground p-4 text-center">
               No Referenced Specs currently observed.
             </div>

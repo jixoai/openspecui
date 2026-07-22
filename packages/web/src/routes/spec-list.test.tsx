@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Prove duplicate Catalog ids navigate through source-distinct compound links.
  * 2. Prove Owned is the default and Referenced entries group by Store.
  * 3. Prove Referenced groups remain visibly read-only with a neutral empty state.
+ * 4. Distinguish transport errors from source-empty truth with and without retained Catalog data.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
  */
@@ -145,6 +146,76 @@ describe('SpecList', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Referenced 0' }))
     expect(screen.getByText('No Referenced Specs currently observed.')).toBeTruthy()
     expect(document.body.textContent).not.toMatch(/all references|unreferenced/i)
+  })
+
+  it('renders a terminal Catalog error without source controls or empty claims', () => {
+    useSpecsSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error('catalog failed'),
+    })
+
+    render(<SpecList />)
+
+    const alerts = screen.getAllByRole('alert')
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0].textContent).toContain('catalog failed')
+    expect(screen.queryByText('Loading specs...')).toBeNull()
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.queryByText('No Owned Specs found in the current Planning root.')).toBeNull()
+    expect(screen.queryByText('No Referenced Specs currently observed.')).toBeNull()
+  })
+
+  it('keeps retained Catalog rows and links visible beside a transport error', () => {
+    useSpecsSubscriptionMock.mockReturnValue({
+      data: {
+        observedAt: 1,
+        entries: [
+          {
+            identity: { kind: 'owned', specId: 'auth' },
+            source: 'owned',
+            readOnly: false,
+            name: 'Owned Auth',
+            summary: null,
+            updatedAt: 1,
+          },
+        ],
+        referenceSources: [],
+      },
+      isLoading: false,
+      error: new Error('catalog failed'),
+    })
+
+    render(<SpecList />)
+
+    const alerts = screen.getAllByRole('alert')
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0].textContent).toContain('catalog failed')
+    expect(screen.getByRole('link', { name: /Owned Auth/ }).getAttribute('href')).toBe(
+      '/specs/owned/auth'
+    )
+    expect(screen.queryByText('Loading specs...')).toBeNull()
+    expect(screen.queryByText('No Owned Specs found in the current Planning root.')).toBeNull()
+    expect(screen.queryByText('No Referenced Specs currently observed.')).toBeNull()
+  })
+
+  it('does not classify an empty retained Catalog as source-empty during a transport error', () => {
+    useSpecsSubscriptionMock.mockReturnValue({
+      data: {
+        observedAt: 1,
+        entries: [],
+        referenceSources: [],
+      },
+      isLoading: false,
+      error: new Error('catalog failed'),
+    })
+
+    render(<SpecList />)
+
+    expect(screen.getByRole('alert').textContent).toContain('catalog failed')
+    expect(screen.queryByText('Loading specs...')).toBeNull()
+    expect(screen.queryByText('No Owned Specs found in the current Planning root.')).toBeNull()
+    expect(screen.queryByText('No Referenced Specs currently observed.')).toBeNull()
   })
 
   it('restores the Referenced list scope after returning from a referenced detail', () => {
