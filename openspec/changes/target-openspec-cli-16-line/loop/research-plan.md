@@ -437,6 +437,28 @@ marker and raw error are owned by this route. Do not modify generic subscription
 Adapter, compound identity, Root/Git authority, Markdown/translation, navigation/prefetch, static export, or
 the independent live-projection performance Change. Final browser/visual acceptance remains owner-only.
 
+#### 6.16-Q: project ChangeView Status transport errors without hiding retained detail (2026-07-23)
+
+`ChangeView` passes `errorMessage` to the shared detail component only when no Status exists. A retained
+Status plus a terminal `useOpsxStatusSubscription` error therefore renders the detail as if it were current
+and drops the raw transport evidence. The shared `OpsxEntityDetailView` is used by multiple pages and is not
+the owner for this slice; ChangeView can own the alert beside its existing toolbar without changing the
+shared component.
+
+```text
+no Status + loading/root checking -> Loading change status...
+no Status + missing error         -> existing not-found copy
+no Status + other error           -> existing raw error state
+retained Status + error           -> existing detail/controls + ChangeView raw alert
+current Status                    -> existing detail/controls
+```
+
+Production owner: the ChangeView route and its Status-backed toolbar. The retained Status is display-only;
+Root Action remains the sole mutation authority. Fixed evidence must cross the real ChangeView owner and
+preserve artifact tabs, Apply/tracked evidence, and action controls while exposing one raw alert. Do not
+modify OpsxEntityDetailView, use-opsx, Server/Router, Root/Git, ArchiveView, GitView, navigation/prefetch,
+static export, or the independent performance Change. Final browser/visual acceptance remains owner-only.
+
 ## Capability Impact
 
 ### New or Expanded Behavior

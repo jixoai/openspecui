@@ -408,6 +408,11 @@ The independent browser attempt confirms the desktop source control and URL/quer
     Owned detail marker, and removing only the retained alert hides the raw error. Web typecheck, exact lint,
     format, and diff checks pass for code/test commit `8c71645`. Compound identity, read-only semantics,
     Root/Git authority, static/navigation, and final owner browser acceptance remain outside this package.
+  - `6.16-Q` planned: ChangeView currently drops the raw Status subscription error whenever a retained
+    Status exists because its `errorMessage` is gated by `!status`. The slice must show one route-owned raw
+    alert beside retained detail/toolbar content, preserve no-data/loading/missing states, and leave Root
+    Action authority and shared OpsxEntityDetailView unchanged. ArchiveView, GitView, and detail-prefetch
+    remain separate; the performance Change is not folded in.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and

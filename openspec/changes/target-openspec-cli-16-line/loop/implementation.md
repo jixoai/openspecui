@@ -7984,3 +7984,26 @@ fixed-point reds were recorded at the exact owner: restoring `if (error)` hid th
 removing only the retained alert made the raw-error assertion fail. No generic hook, Server/Adapter, Root/Git,
 static, SSG, detail-prefetch, full gate, or browser/visual acceptance was run. Focused Vitest `6/6`, Web
 typecheck, exact oxlint, Prettier, `pnpm format:check`, and `git diff --check` all pass. Parent `6.16` remains open.
+
+### 6.16-Q research: ChangeView retained Status with terminal error (2026-07-23)
+
+`ChangeView` consumes the main OPSX Status subscription through `useOpsxStatusSubscription`. The existing
+route sends `errorMessage` to `OpsxEntityDetailView` only when `!status`, so a retained Status plus a
+terminal error produces this incorrect topology:
+
+```text
+Status absent + loading       -> Loading change status...
+Status absent + error         -> raw error/not-found state
+retained Status + error       -> normal detail/toolbar, raw error lost
+current Status                -> normal detail/toolbar
+```
+
+The approved owner is ChangeView's own toolbar. Add one raw alert there when `status && error`; keep the
+existing `errorMessage` path for no-data errors. This preserves artifact tabs, tracked/apply evidence, and
+Root Action's current disabled/ready authority without changing the shared detail component.
+
+Required red/green evidence is a real ChangeView retained-status fixture with the detail marker, toolbar,
+and raw alert; a no-data error, initial loading, and missing Change regression remain green. Removing only
+the alert must fail the raw-error assertion. Restoring the old `!status`-only route behavior must fail the
+retained-error assertion. No OpsxEntityDetailView, use-opsx, Server/Router, Root/Git, Archive/Git detail,
+navigation/prefetch, static, SSG, or performance Change edits are authorized. Parent `6.16` remains open.
