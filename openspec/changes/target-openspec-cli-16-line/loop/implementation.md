@@ -6829,3 +6829,25 @@ parent checkpoint `6.16` remains unchecked.
 The normal commit attempt failed only because the repository has no Vite+ `staged` configuration. Every
 Goal-required focused check above had already passed, so the implementation commit used `--no-verify` under
 the recorded exception. No commit-hook pass is claimed.
+
+### 6.16-F1 independent review correction: retirement and checked evidence (2026-07-22)
+
+F1 is not accepted. Independent execution passed Core `24/24` and Server `3/3`; five repeated runs passed
+Core `120/120` and Server `15/15` with no warning, skip, retry, or observed flake. Router/Web remain
+unchanged. The recompute-start-before-blocked-B, coalescing, completed-data, and Core abort behavior are
+accepted.
+
+Three evidence gaps remain:
+
+1. The Server unsubscribe test calls `unsubscribe`, invalidates B, and immediately inspects events. It does
+   not settle the generator microtasks or prove the second task stayed retired. Remove `controller.abort()`
+   and B may enter after the assertion. Prove `ReactiveState.subscriberCount` transitions `1 -> 0`, record
+   task runs/entries after deterministic Promise settlement, and mutation-test that exact cleanup removal.
+2. Core `tsconfig.json` excludes every `*.test.ts`; the new public observer tests are transpile-only. Add the
+   narrow reactive test to an explicit Core checked-test lane and include that lane in Core typecheck.
+3. The new Server helper's task-rejection branch lacks direct error/no-complete evidence. Add it and remove
+   the unnecessary `err as Error` assertion; the observable error boundary accepts `unknown`.
+
+Correct only these items. Keep the accepted observer placement, event union/data mapping, raw helpers, and
+all Router/Web/static behavior unchanged. Run the complete focused files, both checked package typechecks,
+exact lint/format/diff, update F1 as corrected/awaiting review, and commit. Parent 6.16 and F2 remain open.
