@@ -6987,3 +6987,7 @@ git diff --check
 No browser, Playwright, SSG, full gate, push, merge, archive, or release was run. Final browser/visual
 acceptance remains owner-only. `6.16-F2` is implemented and awaits independent review; parent checkpoint
 `6.16` remains unchecked.
+
+The normal commit attempt failed only because the repository has no Vite+ `staged` configuration. Every
+Goal-required focused check above had already passed, so implementation commit `a18cb35` used the recorded
+`--no-verify` exception. No commit-hook pass is claimed.
