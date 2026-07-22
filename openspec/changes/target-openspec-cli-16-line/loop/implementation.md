@@ -6162,3 +6162,26 @@ these are local navigation timings only; they establish neither cross-subscripti
 latency. Checkpoint `6.16` remains open for separately approved subscription/Root timing,
 detail-prefetch policy, artificial route-gate, and page-topology packages. No browser end-to-end or visual
 acceptance was run; that final acceptance remains owner-only.
+
+### 6.16-B independent review correction: timing evidence must name observed facts (2026-07-22)
+
+The first implementation commit `2683412` passes its focused tests but is not accepted as 6.16-B evidence.
+Standards and Spec review found three production-contract mismatches:
+
+1. `route-committed` is recorded after `options.update(): void` returns, while the VTLink path discards the
+   TanStack `navigate()` Promise. The observer sees neither Router completion nor React/DOM commit. Rename
+   the fact and every test/artifact to `route-update-issued`; do not change navigation waiting behavior.
+2. Starting B prevents late A from changing the timing store, but A still performs the pre-existing route
+   update. History misleadingly leaves A as `requested` while B is called current. Replace current-location
+   language with latest-request provenance, mark A superseded when B starts, and continue recording late A
+   phases against A without letting it mutate or reclaim B.
+3. A rejected prepare/update/transition leaves no terminal settlement. Add a typed `failed` terminal with
+   the exact failed stage and preserve rejection to the caller; do not convert it to success.
+
+Focused correction evidence must cross the real `vtNavController` coordinator. Prove the synchronous
+update is named only update-issued, A pending -> B settled -> late A leaves B latest while A becomes a
+superseded settled history record, and a rejected runtime creates a failed terminal then still rejects.
+Mutation reds remove only the latest-request ownership separation and only the failure record. The earlier
+green count and mutation output remain historical evidence, not acceptance. Checkpoint `6.16` is reopened
+at its 6.16-B correction boundary; no full gates, SSG, browser E2E, prefetch-policy, subscription, Root,
+Server, or Settings/Archive changes are authorized.

@@ -184,23 +184,32 @@ and View Transition settlement without inventing cross-owner ordering.
 ```text
 requested(area, from, to, attempt)
   -> prepare-settled(ready | cancelled | skip-vt)
-  -> route-committed
-  -> transition-settled
+  -> route-update-issued
+  -> transition-settled | failed(stage)
 ```
 
 Store a typed, bounded, process-memory sample with monotonic phase durations. Reuse the existing local
 bounded-log discipline, but create a navigation-specific owner; do not add navigation fields to the
-translation log. A newer attempt in the same route area retires the old attempt, and late A callbacks must
-not alter or become current B evidence. The record is diagnostic evidence only: no persistence, network
+translation log. A newer attempt in the same route area supersedes the old request. Late A effects remain
+attributed to A in history, but cannot alter B or reclaim latest-request evidence. The record is diagnostic evidence only: no persistence, network
 upload, Notification, console output, settings surface, or user-facing analytics belongs in this package.
 
 Focused evidence starts through the real `VTLink`/navigation coordinator with a controlled slow prepare.
-It proves the four ordered phases and their durations, then proves A pending -> B settled -> late A cannot
-rewrite B. Removing only the real-update `route-committed` record must make the named phase assertion red;
-removing only the current-attempt guard must make the late-A assertion red. Keep `140ms`/`2500ms`, prefetch
+It proves the four ordered phases and their durations, then proves A pending -> B settled -> late A records
+its own superseded effect without rewriting B. Removing only the real-update-issued record must make the
+named phase assertion red; restoring phase publication as latest-request ownership must make the late-A
+assertion red. Keep `140ms`/`2500ms`, prefetch
 policy, subscriptions, Root authority, Server behavior, Settings/Archive gates, and page Loading unchanged.
 Checkpoint `6.16` stays open. Subscription-first-data and Root-ready timing require separate packages
 because the current protocol supplies no navigation correlation token.
+
+Independent review correction: TanStack `navigate()` returns a Promise that resolves when navigation is
+complete, but the current production callback deliberately discards it. The synchronous callback boundary
+therefore proves only `route-update-issued`, never Router or DOM commit. Do not await that Promise inside
+this measurement-only package because doing so would change View Transition/navigation policy. Likewise,
+the pre-existing late-A route update must not be silently hidden: label A superseded, record its later
+prepare/update/settlement against A, and keep B as the latest request. A rejected prepare/update/transition
+must end in a typed failed state rather than remain indefinitely prepared or update-issued.
 
 ## Capability Impact
 

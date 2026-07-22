@@ -328,8 +328,8 @@ The independent browser attempt confirms the desktop source control and URL/quer
 - [x] 6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging
 - [ ] 6.16 Every network-triggering control binds loading/disabled state and every page covers empty/loading/loaded/updating/error topologies
   - `6.16-A` accepted: Root Context cached-display/current-authority correction and exact lifecycle reds.
-  - `6.16-B` completed: bounded detail-navigation phase timing at the production coordinator, without
-    changing prefetch policy or claiming cross-owner causality.
+  - `6.16-B` correction open: rename false route-commit evidence, preserve superseded late effects without
+    reclaiming latest-request identity, and add typed failure settlement before accepting timing evidence.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and
     page-topology packages have their own evidence.
 - [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns
