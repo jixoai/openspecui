@@ -4,7 +4,7 @@
  * 2. Verify the route-level responsive ToC and static/dynamic composition boundaries.
  * 3. Keep extracted OpenSpec diagnostics and initialization behavior in focused component tests.
  * 4. Prove live Settings composition is present before passive effects can run.
- * 5. Prove cached Terminal drafts survive the mount synchronization effect.
+ * 5. Prove Terminal drafts synchronize by upstream field value without losing dirty edits.
  *
  * Original request (2026-07-20): "Split OpenSpec diagnostics/initialization out of the oversized Settings route."
  * Owner report (2026-07-22): "几乎都在 Loading，切换个页面也等，做任何动作也在等。"
@@ -2708,6 +2708,56 @@ describe('Settings', () => {
 
     expect(screen.getByText('Font Size: 19px')).toBeTruthy()
     expect(screen.getByText('Scrollback Lines: 24,000')).toBeTruthy()
+  })
+
+  it('preserves dirty Terminal fields across value-equal Config emissions', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    let terminal = {
+      fontSize: 19,
+      scrollback: 24_000,
+    }
+    useConfigSubscriptionMock.mockImplementation(() => ({ data: { terminal } }))
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    const { rerender } = render(<Settings />)
+    const readRangeInput = (labelText: string): HTMLInputElement => {
+      const label = screen.getByText(labelText)
+      const input = label.parentElement?.querySelector('input[type="range"]')
+      if (!(input instanceof HTMLInputElement)) {
+        throw new Error(`Range input for ${labelText} was not rendered.`)
+      }
+      return input
+    }
+    const fontSizeInput = readRangeInput('Font Size: 19px')
+    const scrollbackInput = readRangeInput('Scrollback Lines: 24,000')
+
+    fireEvent.change(fontSizeInput, { target: { value: '23' } })
+    fireEvent.change(scrollbackInput, { target: { value: '31000' } })
+    expect(fontSizeInput.value).toBe('23')
+    expect(scrollbackInput.value).toBe('31000')
+
+    terminal = {
+      fontSize: 19,
+      scrollback: 24_000,
+    }
+    rerender(<Settings />)
+    expect(fontSizeInput.value).toBe('23')
+    expect(scrollbackInput.value).toBe('31000')
+
+    terminal = {
+      fontSize: 21,
+      scrollback: 24_000,
+    }
+    rerender(<Settings />)
+    expect(fontSizeInput.value).toBe('21')
+    expect(scrollbackInput.value).toBe('31000')
   })
 
   it('keeps static Settings Appearance-only without mounting live OpenSpec projections', async () => {

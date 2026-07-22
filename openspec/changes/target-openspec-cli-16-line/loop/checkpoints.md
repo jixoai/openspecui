@@ -330,9 +330,10 @@ The independent browser attempt confirms the desktop source control and URL/quer
   - `6.16-A` accepted: Root Context cached-display/current-authority correction and exact lifecycle reds.
   - `6.16-B` accepted: bounded detail-navigation phase timing names only observed facts, preserves
     superseded-request history, and keeps hostile runtime failures total without replacing rejection.
-  - `6.16-C` second correction required: cached Config owns first-render drafts, but the later Terminal
-    effect keys on parsed-object identity and clears dirty input on a value-equal emission. Synchronize each
-    draft only when its upstream field value changes. Archive remains a separate following package.
+  - `6.16-C` second correction implemented, awaiting independent review: Terminal drafts now synchronize
+    per upstream field value. A newly allocated value-equal Config preserves dirty font/scrollback input,
+    while a changed upstream field converges without resetting the other dirty draft. Archive remains a
+    separate following package.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and
     page-topology packages have their own evidence.
 - [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns

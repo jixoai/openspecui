@@ -4,7 +4,7 @@
  * 2. Compose the extracted OpenSpec diagnostics and initialization owner.
  * 3. Bind network-triggered settings actions to visible loading and failure state.
  * 4. Delegate CLI installation and Init through single-source Server-owned transports.
- * 5. Render immediately available live Settings composition without an artificial mount gate.
+ * 5. Preserve first-frame and dirty Terminal drafts through field-value Config synchronization.
  *
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
@@ -83,7 +83,16 @@ import {
   Unlink2,
   XCircle,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type Dispatch,
+  type SetStateAction,
+} from 'react'
 import { SettingsTranslationPanel } from './settings-translation-panel'
 
 function formatExecutePath(command: string, args: readonly string[] = []): string {
@@ -122,6 +131,16 @@ function resolveTerminalDraft(
     bellSound: config?.bellSound ?? controllerFallback.bellSound,
     bellVolume: config?.bellVolume ?? controllerFallback.bellVolume,
   }
+}
+
+function useFieldValueDraft<T>(upstreamValue: T): [T, Dispatch<SetStateAction<T>>] {
+  const [draft, setDraft] = useState(upstreamValue)
+
+  useEffect(() => {
+    setDraft(upstreamValue)
+  }, [upstreamValue])
+
+  return [draft, setDraft]
 }
 
 const THEME_OPTIONS = [
@@ -421,32 +440,30 @@ export function Settings() {
   })
 
   // Terminal controller state is the fallback only when Config has no corresponding value.
-  const initialConfig = useMemo(() => terminalController.getConfig(), [])
-  const initialTerminalDraft = resolveTerminalDraft(config?.terminal, initialConfig)
+  const terminalUpstreamValues = resolveTerminalDraft(
+    config?.terminal,
+    terminalController.getConfig()
+  )
   const configuredDashboardTrendPointLimit = config?.dashboard?.trendPointLimit
   const configuredGitDiffEagerLineBudget = config?.git?.diffEagerLineBudget
 
-  const [termFontSize, setTermFontSize] = useState(initialTerminalDraft.fontSize)
-  const [termFontFamily, setTermFontFamily] = useState(initialTerminalDraft.fontFamily)
-  const [termCursorBlink, setTermCursorBlink] = useState(initialTerminalDraft.cursorBlink)
-  const [termCursorStyle, setTermCursorStyle] = useState<TerminalCursorStyle>(
-    initialTerminalDraft.cursorStyle
+  const [termFontSize, setTermFontSize] = useFieldValueDraft(terminalUpstreamValues.fontSize)
+  const [termFontFamily, setTermFontFamily] = useFieldValueDraft(terminalUpstreamValues.fontFamily)
+  const [termCursorBlink, setTermCursorBlink] = useFieldValueDraft(
+    terminalUpstreamValues.cursorBlink
   )
-  const [termScrollback, setTermScrollback] = useState(initialTerminalDraft.scrollback)
-  const [termUseTheme, setTermUseTheme] = useState<TerminalThemeMode>(initialTerminalDraft.useTheme)
-  const [termLightTheme, setTermLightTheme] = useState<TerminalThemeId>(
-    initialTerminalDraft.lightTheme
+  const [termCursorStyle, setTermCursorStyle] = useFieldValueDraft(
+    terminalUpstreamValues.cursorStyle
   )
-  const [termDarkTheme, setTermDarkTheme] = useState<TerminalThemeId>(
-    initialTerminalDraft.darkTheme
+  const [termScrollback, setTermScrollback] = useFieldValueDraft(terminalUpstreamValues.scrollback)
+  const [termUseTheme, setTermUseTheme] = useFieldValueDraft(terminalUpstreamValues.useTheme)
+  const [termLightTheme, setTermLightTheme] = useFieldValueDraft(terminalUpstreamValues.lightTheme)
+  const [termDarkTheme, setTermDarkTheme] = useFieldValueDraft(terminalUpstreamValues.darkTheme)
+  const [termRendererEngine, setTermRendererEngine] = useFieldValueDraft<string>(
+    terminalUpstreamValues.rendererEngine
   )
-  const [termRendererEngine, setTermRendererEngine] = useState<string>(
-    initialTerminalDraft.rendererEngine
-  )
-  const [termBellSound, setTermBellSound] = useState<TerminalBellSound>(
-    initialTerminalDraft.bellSound
-  )
-  const [termBellVolume, setTermBellVolume] = useState(initialTerminalDraft.bellVolume)
+  const [termBellSound, setTermBellSound] = useFieldValueDraft(terminalUpstreamValues.bellSound)
+  const [termBellVolume, setTermBellVolume] = useFieldValueDraft(terminalUpstreamValues.bellVolume)
   const [dashboardTrendPointLimit, setDashboardTrendPointLimit] = useState(() =>
     typeof configuredDashboardTrendPointLimit === 'number' &&
     Number.isFinite(configuredDashboardTrendPointLimit)
@@ -480,22 +497,6 @@ export function Settings() {
     engine.init()
     return engine
   }, [])
-
-  // Re-sync later Config changes while retaining controller state as the absent-field fallback.
-  useEffect(() => {
-    const next = resolveTerminalDraft(config?.terminal, terminalController.getConfig())
-    setTermFontSize(next.fontSize)
-    setTermFontFamily(next.fontFamily)
-    setTermCursorBlink(next.cursorBlink)
-    setTermCursorStyle(next.cursorStyle)
-    setTermScrollback(next.scrollback)
-    setTermUseTheme(next.useTheme)
-    setTermLightTheme(next.lightTheme)
-    setTermDarkTheme(next.darkTheme)
-    setTermRendererEngine(next.rendererEngine)
-    setTermBellSound(next.bellSound)
-    setTermBellVolume(next.bellVolume)
-  }, [config?.terminal])
 
   // Apply immediately on local state change (live preview)
   const applyTerminalConfig = useCallback(

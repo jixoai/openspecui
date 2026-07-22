@@ -6486,3 +6486,57 @@ and post-mount controller-overwrite fixed points.
 Do not weaken this to an object memoization assumption: Core parsing is allowed to allocate fresh objects.
 Keep 6.16-C and parent 6.16 open until the field-value lifecycle passes independent review. Archive,
 generic subscriptions, Root, navigation, SSG, and browser behavior remain outside this correction.
+
+### 6.16-C second correction implementation: field-value draft synchronization (2026-07-22)
+
+Terminal synchronization now uses one file-local typed `useFieldValueDraft` owner per resolved field.
+Each draft initializes from the cached Config-backed `resolveTerminalDraft` value and synchronizes only
+when that field's primitive/string upstream value changes. A fresh parsed `config.terminal` object with
+equal field values therefore cannot clear unsaved input. The renderer draft retains its intentional
+`string` width so the existing invalid-value projection remains type-safe.
+
+The real `Settings` fixed point starts from Config font size `19` and scrollback `24000`, edits the actual
+range inputs to `23` and `31000`, and rerenders with a newly allocated but value-equal Config/Terminal
+object. Both dirty drafts remain. A following emission changes only upstream font size to `21`; font size
+converges to `21` while the dirty scrollback remains `31000`.
+
+Red and mutation-resistance evidence:
+
+1. At starting HEAD `bef28cf`, whose production Settings owner is the whole-object effect introduced by
+   `e6ee1a8`, the new exact test failed (`1 failed | 59 skipped`): after the value-equal rerender it expected
+   font `23` and received persisted font `19`.
+2. With field-value ownership installed, the three exact first-render, post-mount, and dirty-emission tests
+   passed (`3 passed | 57 skipped`).
+3. Temporarily restoring the `e6ee1a8` whole-object effect on top of the field owners made the same exact
+   dirty-emission test fail again (`1 failed | 59 skipped`, expected `23`, received `19`). Removing only
+   that mutation restored the exact lane to green.
+
+Final focused verification:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/routes/settings.test.tsx -t \
+  "renders the live Settings composition before passive effects|preserves cached Terminal drafts after mount effects|preserves dirty Terminal fields across value-equal Config emissions"
+  -> 1 file / 3 tests passed / 57 skipped
+
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/routes/settings.test.tsx
+  -> 1 file / 60 tests passed
+
+pnpm --filter @openspecui/web typecheck
+  -> passed
+
+pnpm exec vp lint packages/web/src/routes/settings.tsx \
+  packages/web/src/routes/settings.test.tsx
+  -> 0 warnings / 0 errors
+
+pnpm format:check
+git diff --check
+  -> passed
+```
+
+Changed files: `packages/web/src/routes/settings.tsx`,
+`packages/web/src/routes/settings.test.tsx`, this implementation record, and `loop/checkpoints.md`.
+Checkpoint `6.16` remains unchecked; 6.16-C is implemented and awaits independent review. Archive,
+generic subscriptions, Root, navigation, Server, SSG, full gates, and browser acceptance were not changed
+or run. Final browser and visual acceptance remains owner-only.
