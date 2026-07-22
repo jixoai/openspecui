@@ -84,7 +84,7 @@ const TEST_COMMAND = {
 
 const {
   addInputHistoryMock,
-  createShellSessionMock,
+  createDedicatedSessionMock,
   prepareWorkflowInvocationMock,
   rootActionMock,
   setConfigMock,
@@ -92,7 +92,7 @@ const {
   useLocationMock,
 } = vi.hoisted(() => ({
   addInputHistoryMock: vi.fn(),
-  createShellSessionMock: vi.fn(),
+  createDedicatedSessionMock: vi.fn(),
   prepareWorkflowInvocationMock: vi.fn(),
   rootActionMock: vi.fn(),
   setConfigMock: vi.fn(),
@@ -132,7 +132,7 @@ vi.mock('@/lib/terminal-context', () => ({
   useTerminalContext: () => ({
     sessions: [],
     activeSessionId: null,
-    createShellSession: createShellSessionMock,
+    createDedicatedSession: createDedicatedSessionMock,
   }),
 }))
 
@@ -286,7 +286,7 @@ describe('OpsxComposeRoute generation ownership', () => {
 
   beforeEach(() => {
     addInputHistoryMock.mockReset().mockResolvedValue(undefined)
-    createShellSessionMock.mockReset().mockReturnValue('term-created')
+    createDedicatedSessionMock.mockReset().mockReturnValue('term-created')
     prepareWorkflowInvocationMock.mockReset()
     rootActionMock.mockReset().mockReturnValue(readyRoot(ROOT_A_TARGET))
     setConfigMock.mockReset()
@@ -359,7 +359,7 @@ describe('OpsxComposeRoute generation ownership', () => {
     expect(editor.state.doc.toString()).toBe('edited while Root A is pending')
     expect(screen.getByRole('button', { name: 'Use edited prompt for current root' })).toBeVisible()
     expect(addInputHistoryMock).not.toHaveBeenCalled()
-    expect(createShellSessionMock).not.toHaveBeenCalled()
+    expect(createDedicatedSessionMock).not.toHaveBeenCalled()
   })
 
   it('preserves the real editor and dialog across same-generation observedAt refresh', async () => {

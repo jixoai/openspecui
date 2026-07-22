@@ -1,28 +1,48 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
- * 1. Verify configured terminal command creation and advanced-field behavior.
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * 1. Verify argv and shell-line terminal command creation plus advanced-field behavior.
  * 2. Verify configured commands expose resolved cwd identity and send only a cwd target.
  * 3. Verify planning-root readiness keeps repair through the available Launch target.
- * 4. Verify workflow-bound planning creation preserves its opaque generation.
+ * 4. Verify workflow-bound creation opens Terminal and activates the new session.
  *
  * Original request (2026-07-16): "Terminal creation controls expose the selected cwd/root identity."
+ * Owner-reported defect (2026-07-22): Creating Codex/Claude/Gemini must open Terminal when hidden.
  */
 import { fieldsToTerminalCommandParameters } from '@openspecui/core/terminal-invocation'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalSpawnCommandDialog } from './terminal-spawn-command-dialog'
 
-const { createShellSessionMock, useTerminalInvocationConfigMock, useTerminalCwdTargetStateMock } =
-  vi.hoisted(() => ({
-    createShellSessionMock: vi.fn(),
-    useTerminalInvocationConfigMock: vi.fn(),
-    useTerminalCwdTargetStateMock: vi.fn(),
-  }))
+const {
+  createDedicatedSessionMock,
+  getAreaForPathMock,
+  getLocationMock,
+  useTerminalInvocationConfigMock,
+  useTerminalCwdTargetStateMock,
+  vtActivateBottomMock,
+  vtPushMock,
+} = vi.hoisted(() => ({
+  createDedicatedSessionMock: vi.fn(),
+  getAreaForPathMock: vi.fn(),
+  getLocationMock: vi.fn(),
+  useTerminalInvocationConfigMock: vi.fn(),
+  useTerminalCwdTargetStateMock: vi.fn(),
+  vtActivateBottomMock: vi.fn(),
+  vtPushMock: vi.fn(),
+}))
 
 vi.mock('@/lib/terminal-context', () => ({
   useTerminalContext: () => ({
-    createShellSession: createShellSessionMock,
+    createDedicatedSession: createDedicatedSessionMock,
   }),
+}))
+
+vi.mock('@/lib/nav-controller', () => ({
+  navController: { getAreaForPath: getAreaForPathMock, getLocation: getLocationMock },
+}))
+
+vi.mock('@/lib/view-transitions/navigation', () => ({
+  vtNavController: { activateBottom: vtActivateBottomMock, push: vtPushMock },
 }))
 
 vi.mock('@/lib/use-terminal-invocation-config', () => ({
@@ -120,8 +140,12 @@ describe('TerminalSpawnCommandDialog', () => {
   }
 
   beforeEach(() => {
-    createShellSessionMock.mockReset()
-    createShellSessionMock.mockReturnValue('term-1')
+    createDedicatedSessionMock.mockReset()
+    createDedicatedSessionMock.mockReturnValue('term-1')
+    getAreaForPathMock.mockReset().mockReturnValue('bottom')
+    getLocationMock.mockReset().mockReturnValue({ pathname: '/' })
+    vtActivateBottomMock.mockReset().mockResolvedValue(undefined)
+    vtPushMock.mockReset().mockResolvedValue(undefined)
     useTerminalInvocationConfigMock.mockReturnValue({
       shellProfiles: [shell],
       defaultShellProfile: shell,
@@ -179,7 +203,7 @@ describe('TerminalSpawnCommandDialog', () => {
     expect(screen.getByRole('switch', { name: /Skip permissions/ })).toBeTruthy()
   })
 
-  it('creates one shell session with rendered initial input', () => {
+  it('spawns argv commands directly without typing a long command line into a shell PTY', () => {
     const onClose = vi.fn()
     const { getByText } = render(
       <TerminalSpawnCommandDialog
@@ -195,16 +219,89 @@ describe('TerminalSpawnCommandDialog', () => {
     fireEvent.click(screen.getByRole('switch', { name: /Skip permissions/ }))
     fireEvent.click(getByText('Create'))
 
-    expect(createShellSessionMock).toHaveBeenCalledTimes(1)
-    expect(createShellSessionMock).toHaveBeenCalledWith(
-      shell,
+    expect(createDedicatedSessionMock).toHaveBeenCalledTimes(1)
+    expect(createDedicatedSessionMock).toHaveBeenCalledWith(
+      'claude',
+      ['--dangerously-skip-permissions', 'run checks'],
       expect.objectContaining({
         cwdTarget: 'launch-project',
         label: 'Claude',
-        initialInput: "claude --dangerously-skip-permissions 'run checks'\n",
       })
     )
     expect(onClose).toHaveBeenCalled()
+  })
+
+  it('executes shell-line builders through the selected shell instead of PTY input', () => {
+    const shellLineCommand = {
+      ...command,
+      id: 'custom:shell-line',
+      label: 'Shell task',
+      command: 'echo',
+      args: [],
+      fields: [],
+      parameters: undefined,
+      builder: { kind: 'shellLine' as const, template: 'echo ready' },
+      source: 'custom' as const,
+    }
+    render(<TerminalSpawnCommandDialog open command={shellLineCommand} onClose={() => undefined} />)
+
+    fireEvent.click(screen.getByText('Create'))
+
+    expect(createDedicatedSessionMock).toHaveBeenCalledWith('/bin/sh', ['-lc', 'echo ready'], {
+      cwdTarget: 'launch-project',
+      label: 'Shell task',
+    })
+  })
+
+  it('opens Terminal in its current area for the created Agent session', () => {
+    render(
+      <TerminalSpawnCommandDialog
+        open
+        command={command}
+        presetValues={{ prompt: 'continue the change' }}
+        onClose={() => {}}
+      />
+    )
+
+    fireEvent.click(screen.getByText('Create'))
+
+    expect(getAreaForPathMock).toHaveBeenCalledWith('/terminal')
+    expect(vtActivateBottomMock).toHaveBeenCalledWith('/terminal')
+  })
+
+  it('expands the bottom Terminal even when its route was already selected', () => {
+    getLocationMock.mockReturnValue({ pathname: '/terminal' })
+    render(
+      <TerminalSpawnCommandDialog
+        open
+        command={command}
+        presetValues={{ prompt: 'continue the change' }}
+        onClose={() => {}}
+      />
+    )
+
+    fireEvent.click(screen.getByText('Create'))
+
+    expect(createDedicatedSessionMock).toHaveBeenCalledTimes(1)
+    expect(vtActivateBottomMock).toHaveBeenCalledWith('/terminal')
+    expect(vtPushMock).not.toHaveBeenCalled()
+  })
+
+  it('pushes Terminal when the route belongs to the main area', () => {
+    getAreaForPathMock.mockReturnValue('main')
+    render(
+      <TerminalSpawnCommandDialog
+        open
+        command={command}
+        presetValues={{ prompt: 'continue the change' }}
+        onClose={() => {}}
+      />
+    )
+
+    fireEvent.click(screen.getByText('Create'))
+
+    expect(vtPushMock).toHaveBeenCalledWith('main', '/terminal', null)
+    expect(vtActivateBottomMock).not.toHaveBeenCalled()
   })
 
   it('creates the command in the selected planning root', () => {
@@ -215,10 +312,9 @@ describe('TerminalSpawnCommandDialog', () => {
     expect(screen.getByText('/stores/shared')).toBeVisible()
     fireEvent.click(screen.getByText('Create'))
 
-    expect(createShellSessionMock).toHaveBeenCalledWith(shell, {
+    expect(createDedicatedSessionMock).toHaveBeenCalledWith('claude', [], {
       cwdTarget: 'planning-root',
       label: 'Claude',
-      initialInput: 'claude\n',
     })
   })
 
@@ -238,11 +334,10 @@ describe('TerminalSpawnCommandDialog', () => {
     expect(screen.getByRole('radio', { name: 'Planning' })).toHaveAttribute('aria-checked', 'true')
     fireEvent.click(screen.getByText('Create'))
 
-    expect(createShellSessionMock).toHaveBeenCalledWith(shell, {
+    expect(createDedicatedSessionMock).toHaveBeenCalledWith('claude', [], {
       cwdTarget: 'planning-root',
       expectedRootGeneration: 'planning-a-generation',
       label: 'Claude',
-      initialInput: 'claude\n',
     })
   })
 
@@ -286,10 +381,9 @@ describe('TerminalSpawnCommandDialog', () => {
     expect(screen.getByText('/launch')).toBeVisible()
     expect(createButton).toBeEnabled()
     fireEvent.click(createButton)
-    expect(createShellSessionMock).toHaveBeenCalledWith(shell, {
+    expect(createDedicatedSessionMock).toHaveBeenCalledWith('claude', [], {
       cwdTarget: 'launch-project',
       label: 'Claude',
-      initialInput: 'claude\n',
     })
   })
 

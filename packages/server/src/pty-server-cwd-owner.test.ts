@@ -1,9 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Prove production Server composition resolves Launch and current Planning cwd at PTY spawn.
+ * 2. Prove workflow input revalidates Root generation for both Launch Agents and Planning PTYs.
  *
  * Original request (2026-07-16): "3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited XDG_DATA_HOME"
  * Review correction (2026-07-20): production cwd evidence must cross createWebSocketServer and PlanningRootServiceManager.runOperation.
+ * Owner-reported defect (2026-07-21): Pre-created Agent terminals are absent from Compose Send.
+ * Owner clarification (2026-07-22): A visible interactive PTY disappears after prompt generation.
  */
 import type { IEvent, IPty } from '@lydell/node-pty'
 import {
@@ -14,17 +17,19 @@ import {
   type CliCommandResult,
   type PtyServerMessage,
 } from '@openspecui/core'
+import { closeSync, openSync } from 'node:fs'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
-import { tmpdir } from 'node:os'
+import { devNull, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import WebSocket, { type RawData } from 'ws'
 import type { ZodType } from 'zod'
 import { createServer as createApplicationServer, createWebSocketServer } from './server.js'
 
-const { spawnMock } = vi.hoisted(() => ({
+const { spawnMock, writeMock } = vi.hoisted(() => ({
   spawnMock: vi.fn<typeof import('@lydell/node-pty').spawn>(),
+  writeMock: vi.fn(),
 }))
 
 vi.mock('@lydell/node-pty', () => ({
@@ -37,6 +42,12 @@ interface ProductionSocketHarness {
   runtime: Awaited<ReturnType<typeof createWebSocketServer>>
   tempDir: string
 }
+
+interface MockPtyWithFd extends IPty {
+  readonly fd: number
+}
+
+const mockPtyFd = openSync(devNull, 'w')
 
 function commandResult<T>(data: T, schema: ZodType<T>): CliCommandResult<T> {
   return parseCliCommandResult(
@@ -54,8 +65,9 @@ function createPtyEvent<T>(): IEvent<T> {
   return () => ({ dispose: () => {} })
 }
 
-function createMockPty(): IPty {
+function createMockPty(): MockPtyWithFd {
   return {
+    fd: mockPtyFd,
     pid: 42,
     cols: 80,
     rows: 24,
@@ -65,7 +77,7 @@ function createMockPty(): IPty {
     onExit: createPtyEvent<{ exitCode: number; signal?: number }>(),
     resize: () => {},
     clear: () => {},
-    write: () => {},
+    write: writeMock,
     kill: () => {},
     pause: () => {},
     resume: () => {},
@@ -125,8 +137,11 @@ async function disposeProductionSocketHarness(harness: ProductionSocketHarness):
 describe('production PTY cwd owner', () => {
   const harnesses: ProductionSocketHarness[] = []
 
+  afterAll(() => closeSync(mockPtyFd))
+
   beforeEach(() => {
     spawnMock.mockReset()
+    writeMock.mockReset()
     spawnMock.mockImplementation(() => createMockPty())
   })
 
@@ -211,11 +226,13 @@ describe('production PTY cwd owner', () => {
     client.send(
       JSON.stringify({ type: 'create', requestId: 'launch-terminal', cwdTarget: 'launch-project' })
     )
-    await expect(launchReply).resolves.toMatchObject({
+    const launchCreated = await launchReply
+    expect(launchCreated).toMatchObject({
       type: 'created',
       requestId: 'launch-terminal',
       cwdTarget: 'launch-project',
       initialCwd: launchRoot,
+      rootGeneration: null,
     })
 
     const planningAReply = waitForMessage(client)
@@ -226,18 +243,84 @@ describe('production PTY cwd owner', () => {
         cwdTarget: 'planning-root',
       })
     )
-    expect.soft(await planningAReply).toMatchObject({
+    const planningACreated = await planningAReply
+    expect.soft(planningACreated).toMatchObject({
       type: 'created',
       requestId: 'planning-a-terminal',
       cwdTarget: 'planning-root',
       initialCwd: planningRootA,
     })
-
-    const planningAState = await server.planningRootServices.resolveRootContext()
-    if (planningAState.state !== 'ready' || !planningAState.data.generation) {
-      throw new Error('Expected Planning-root A generation evidence.')
+    if (
+      planningACreated.type !== 'created' ||
+      typeof planningACreated.rootGeneration !== 'string'
+    ) {
+      throw new Error('Expected Server-stamped Planning-root A generation evidence.')
     }
+
+    if (launchCreated.type !== 'created') {
+      throw new Error('Expected Launch Agent terminal creation.')
+    }
+    const launchInputReply = waitForMessage(client)
+    client.send(
+      JSON.stringify({
+        type: 'workflow-input',
+        requestId: 'workflow-input-launch',
+        sessionId: launchCreated.sessionId,
+        expectedRootGeneration: planningACreated.rootGeneration,
+        data: 'launch agent accepts planning prompt\n',
+      })
+    )
+    await expect(launchInputReply).resolves.toMatchObject({
+      type: 'workflow-input-accepted',
+      requestId: 'workflow-input-launch',
+      sessionId: launchCreated.sessionId,
+    })
+    if (process.platform === 'win32') {
+      expect(writeMock).toHaveBeenCalledWith('launch agent accepts planning prompt\n')
+    } else {
+      expect(writeMock).not.toHaveBeenCalled()
+    }
+
+    const acceptedInputReply = waitForMessage(client)
+    client.send(
+      JSON.stringify({
+        type: 'workflow-input',
+        requestId: 'workflow-input-a',
+        sessionId: planningACreated.sessionId,
+        expectedRootGeneration: planningACreated.rootGeneration,
+        data: 'apply accepted\n',
+      })
+    )
+    await expect(acceptedInputReply).resolves.toMatchObject({
+      type: 'workflow-input-accepted',
+      requestId: 'workflow-input-a',
+      sessionId: planningACreated.sessionId,
+    })
+    if (process.platform === 'win32') {
+      expect(writeMock).toHaveBeenCalledWith('apply accepted\n')
+    } else {
+      expect(writeMock).not.toHaveBeenCalled()
+    }
+
     planningRoot = planningRootB
+
+    const staleInputReply = waitForMessage(client)
+    client.send(
+      JSON.stringify({
+        type: 'workflow-input',
+        requestId: 'workflow-input-stale',
+        sessionId: planningACreated.sessionId,
+        expectedRootGeneration: planningACreated.rootGeneration,
+        data: 'must not run\n',
+      })
+    )
+    await expect(staleInputReply).resolves.toMatchObject({
+      type: 'workflow-input-rejected',
+      requestId: 'workflow-input-stale',
+      sessionId: planningACreated.sessionId,
+      message: 'Planning root changed before terminal operation. Prepare the workflow again.',
+    })
+    expect(writeMock).toHaveBeenCalledTimes(process.platform === 'win32' ? 2 : 0)
 
     const staleGenerationReply = waitForMessage(client)
     client.send(
@@ -245,7 +328,7 @@ describe('production PTY cwd owner', () => {
         type: 'create',
         requestId: 'planning-stale-terminal',
         cwdTarget: 'planning-root',
-        expectedRootGeneration: planningAState.data.generation,
+        expectedRootGeneration: planningACreated.rootGeneration,
       })
     )
     await expect(staleGenerationReply).resolves.toMatchObject({
@@ -262,16 +345,21 @@ describe('production PTY cwd owner', () => {
         cwdTarget: 'planning-root',
       })
     )
-    expect.soft(await planningBReply).toMatchObject({
+    const planningBCreated = await planningBReply
+    expect.soft(planningBCreated).toMatchObject({
       type: 'created',
       requestId: 'planning-b-terminal',
       cwdTarget: 'planning-root',
       initialCwd: planningRootB,
     })
+    if (planningBCreated.type !== 'created') {
+      throw new Error('Expected Planning-root B terminal creation.')
+    }
+    expect(planningBCreated.rootGeneration).not.toBe(planningACreated.rootGeneration)
 
     expect
       .soft(spawnMock.mock.calls.map((call) => call[2].cwd))
       .toEqual([launchRoot, planningRootA, planningRootB])
-    expect(runOperation).toHaveBeenCalledTimes(3)
+    expect(runOperation).toHaveBeenCalledTimes(6)
   })
 })

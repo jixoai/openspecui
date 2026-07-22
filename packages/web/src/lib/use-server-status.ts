@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * 1. Project current Server metadata from the reactive system subscription.
+ * 2. Derive Live authority from the current WebSocket lifecycle and system emission.
+ * 3. Preserve reconnect countdown and explicit manual recovery behavior.
+ *
+ * Owner-reported defect (2026-07-22): Killing the backend leaves the bottom status bar green and Live.
+ */
 import type { ProjectRecoveryStatus } from '@openspecui/core'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { isStaticMode } from './static-mode'
@@ -34,6 +42,7 @@ export function useServerStatus(): ServerStatus {
   // 用于追踪重连倒计时
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const disconnectTimeRef = useRef<number | null>(null)
+  const wsStateRef = useRef<ServerStatus['wsState']>('idle')
 
   // 开始重连倒计时
   const startReconnectCountdown = useCallback(() => {
@@ -96,8 +105,12 @@ export function useServerStatus(): ServerStatus {
     // 订阅 wsClient 的连接状态
     const subscription = wsClient.connectionState.subscribe({
       next: (state) => {
+        const previousWsState = wsStateRef.current
+        wsStateRef.current = state.state
         setStatus((prev) => ({
           ...prev,
+          connected:
+            state.state === 'pending' && previousWsState === 'pending' ? prev.connected : false,
           wsState: state.state,
         }))
 
@@ -136,15 +149,16 @@ export function useServerStatus(): ServerStatus {
       onData: (data) => {
         const projectDir = data.projectDir
         const dirName = projectDir.split('/').pop() || projectDir
+        const connected = wsStateRef.current === 'pending'
 
         setStatus((prev) => ({
           ...prev,
-          connected: true,
+          connected,
           projectDir,
           dirName,
           watcherEnabled: data.watcherEnabled,
           projectRecovery: data.projectRecovery,
-          error: null,
+          error: connected ? null : prev.error,
         }))
 
         document.title = `${dirName} - OpenSpec UI`

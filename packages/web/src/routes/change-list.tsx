@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. List only active Changes from the current writable Planning root.
  * 2. Derive workflow state only from CLI Status and formal tracked-task progress.
  * 3. Preserve collision-safe navigation and explicit no-tasks presentation.
+ * 4. Keep the advanced New Change command reachable from the page header.
  *
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
+ * Original request (2026-07-21): "Changes页面的右上角没有 New,你要不要快速补一个"
  */
 import { Badge } from '@/components/badge'
 import {
@@ -17,7 +19,7 @@ import { useChangesSubscription } from '@/lib/use-subscription'
 import { VTLink, vtNavController } from '@/lib/view-transitions/navigation'
 import { getSharedElementBinding } from '@/lib/view-transitions/shared-elements'
 import type { ChangeStatus } from '@openspecui/core'
-import { ChevronRight, GitBranch, Sparkles } from 'lucide-react'
+import { ChevronRight, GitBranch, Plus, Sparkles } from 'lucide-react'
 
 function buildStatusMap(statuses: ChangeStatus[] | undefined): Map<string, ChangeStatus> {
   return new Map((statuses ?? []).map((status) => [status.changeName, status]))
@@ -34,10 +36,21 @@ export function ChangeList() {
 
   return (
     <div className="space-y-6 p-4">
-      <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
-        <GitBranch className="h-6 w-6 shrink-0" />
-        Changes
-      </h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
+          <GitBranch className="h-6 w-6 shrink-0" />
+          Changes
+        </h1>
+        <button
+          type="button"
+          onClick={() => vtNavController.activatePop('/opsx-new')}
+          className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium hover:opacity-90"
+          title="Create a new OPSX change"
+        >
+          <Plus className="h-4 w-4" />
+          New
+        </button>
+      </div>
 
       <p className="text-muted-foreground">
         Active OPSX changes in the current writable Planning root. Completed changes are moved to{' '}

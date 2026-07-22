@@ -1,13 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-07-21 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Dispatch sanitized payloads to existing or newly created terminal sessions.
  * 2. Keep Copy, Save, target selection, and Send under one external readiness lock.
  * 3. Preserve per-action loading state and terminal foreground-process behavior.
- * 4. Keep target selection available while dispatch actions are locked by stale targets.
+ * 4. Reuse Launch Agents or Planning terminals from the workflow's current Root generation.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
+ * Owner-reported defect (2026-07-21): Pre-created Codex/Gemini terminals are absent from Compose Send.
+ * Owner clarification (2026-07-22): Successful Create and Send must activate and reveal Terminal.
  */
 import { Select, type SelectOptionGroup } from '@/components/select'
+import { revealTerminalSession } from '@/lib/reveal-terminal-session'
 import { useTerminalContext, type TerminalSession } from '@/lib/terminal-context'
 import { terminalController } from '@/lib/terminal-controller'
 import {
@@ -152,14 +155,18 @@ export function TerminalDispatchActions({
   className,
   targetSelectTestId = 'terminal-dispatch-target-select',
 }: TerminalDispatchActionsProps) {
-  const { sessions, activeSessionId } = useTerminalContext()
+  const { sessions, activeSessionId, setActiveSession } = useTerminalContext()
   const { spawnCommands } = useTerminalInvocationConfig()
   const liveSessions = useMemo(() => sessions.filter((session) => !session.isExited), [sessions])
   const defaultSpawnCommand = spawnCommands[0] ?? null
-  const dispatchableSessions = useMemo(
-    () => (requiredCwdTarget ? [] : liveSessions),
-    [liveSessions, requiredCwdTarget]
-  )
+  const dispatchableSessions = useMemo(() => {
+    if (!requiredCwdTarget) return liveSessions
+    if (requiredCwdTarget !== 'planning-root' || !expectedRootGeneration) return []
+    return liveSessions.filter(
+      (session) =>
+        session.cwdTarget === 'launch-project' || session.rootGeneration === expectedRootGeneration
+    )
+  }, [expectedRootGeneration, liveSessions, requiredCwdTarget])
   const firstCreateTarget = useMemo<TerminalDispatchTarget | null>(
     () => (defaultSpawnCommand ? createSpawnTarget(defaultSpawnCommand.id) : null),
     [defaultSpawnCommand]
@@ -295,16 +302,24 @@ export function TerminalDispatchActions({
       if (!selectedSession) {
         throw new Error('Selected terminal session is no longer available.')
       }
-      const wrote = terminalController.writeToSession(
-        selectedSession.id,
-        buildTerminalSendPayload(
-          payload,
-          isLikelyShellForegroundProcess(selectedSession.processTitle)
-        )
+      const terminalPayload = buildTerminalSendPayload(
+        payload,
+        isLikelyShellForegroundProcess(selectedSession.processTitle)
       )
-      if (!wrote) {
+      if (requiredCwdTarget === 'planning-root') {
+        if (!expectedRootGeneration) {
+          throw new Error('Planning root generation is unavailable. Prepare the workflow again.')
+        }
+        await terminalController.writeWorkflowToSession(
+          selectedSession.id,
+          terminalPayload,
+          expectedRootGeneration
+        )
+      } else if (!terminalController.writeToSession(selectedSession.id, terminalPayload)) {
         throw new Error('Terminal session is not ready. Wait a moment and retry.')
       }
+      setActiveSession(selectedSession.id)
+      revealTerminalSession(selectedSession.id)
       onDispatched?.()
     } catch (error) {
       handleError(error)

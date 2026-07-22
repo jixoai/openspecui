@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-21 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Verify the change workflow dialog preserves route action and invocation-mode inputs.
  * 2. Verify the shared terminal dispatch surface remains available.
  * 3. Verify server-owned planning-root and Store targets remain visible before dispatch.
@@ -41,7 +41,7 @@ const SHELL_PROFILE = {
 
 const {
   addInputHistoryMock,
-  createShellSessionMock,
+  createDedicatedSessionMock,
   prepareWorkflowInvocationMock,
   rootActionMock,
   setConfigMock,
@@ -50,7 +50,7 @@ const {
   useLocationMock,
 } = vi.hoisted(() => ({
   addInputHistoryMock: vi.fn(),
-  createShellSessionMock: vi.fn(),
+  createDedicatedSessionMock: vi.fn(),
   prepareWorkflowInvocationMock: vi.fn(),
   rootActionMock: vi.fn(),
   setConfigMock: vi.fn(),
@@ -82,7 +82,7 @@ vi.mock('@/lib/terminal-context', () => ({
   useTerminalContext: () => ({
     sessions: [],
     activeSessionId: null,
-    createShellSession: createShellSessionMock,
+    createDedicatedSession: createDedicatedSessionMock,
   }),
 }))
 
@@ -120,6 +120,10 @@ vi.mock('@/lib/terminal-controller', () => ({
   },
 }))
 
+vi.mock('@/lib/reveal-terminal-session', () => ({
+  revealTerminalSession: vi.fn(),
+}))
+
 vi.mock('@/lib/use-subscription', () => ({
   useConfigSubscription: () => uiConfigMock(),
 }))
@@ -145,7 +149,7 @@ vi.mock('@tanstack/react-router', () => ({
 describe('OpsxComposeRoute', () => {
   beforeEach(() => {
     addInputHistoryMock.mockReset().mockResolvedValue(undefined)
-    createShellSessionMock.mockReset().mockReturnValue('term-b')
+    createDedicatedSessionMock.mockReset().mockReturnValue('term-b')
     prepareWorkflowInvocationMock.mockReset().mockResolvedValue({
       kind: 'agent-prompt',
       text: 'prepared prompt',
@@ -165,6 +169,13 @@ describe('OpsxComposeRoute', () => {
           command: 'claude',
           args: [],
           fields: [],
+          builder: {
+            kind: 'argv',
+            parts: [
+              { kind: 'literal', value: 'claude' },
+              { kind: 'field', fieldId: 'prompt', prefix: '', omitWhenEmpty: true },
+            ],
+          },
           source: 'builtin',
         },
       ],
@@ -524,16 +535,12 @@ describe('OpsxComposeRoute', () => {
     expect(within(dialogB).queryByDisplayValue('edited Root A prompt')).not.toBeInTheDocument()
     fireEvent.click(within(dialogB).getByRole('button', { name: 'Create' }))
 
-    expect(createShellSessionMock).toHaveBeenCalledTimes(1)
-    expect(createShellSessionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'builtin:zsh' }),
-      {
-        cwdTarget: 'planning-root',
-        expectedRootGeneration: 'planning-next-generation',
-        label: 'Claude',
-        initialInput: "claude 'prepared Root B prompt'\n",
-      }
-    )
+    expect(createDedicatedSessionMock).toHaveBeenCalledTimes(1)
+    expect(createDedicatedSessionMock).toHaveBeenCalledWith('claude', ['prepared Root B prompt'], {
+      cwdTarget: 'planning-root',
+      expectedRootGeneration: 'planning-next-generation',
+      label: 'Claude',
+    })
   })
 
   it('keeps a dirty draft visible and offers retry when Root B preparation fails', async () => {

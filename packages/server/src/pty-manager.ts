@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
- * 1. Own PTY session process, buffer, title, and lifecycle state.
- * 2. Spawn each session at an explicitly resolved launch-project or planning-root cwd.
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * 1. Own PTY session process, ordered input, buffer, title, and lifecycle state.
+ * 2. Spawn each session at an explicitly resolved launch-project or planning-root cwd and retain its immutable Root generation.
  * 3. Preserve the inherited backend environment, including XDG_DATA_HOME, across cwd targets.
  * 4. List and close server-owned sessions for reconnect and teardown.
  *
  * Original request (2026-07-16): "3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited XDG_DATA_HOME"
+ * Owner-reported defect (2026-07-21): Pre-created Agent terminals are absent from Compose Send.
+ * Owner-reported defect (2026-07-22): Starting Claude can freeze the Server and prevent page refresh.
  */
 import * as pty from '@lydell/node-pty'
 import {
@@ -15,6 +17,7 @@ import {
   type TerminalTitleTarget,
 } from '@openspecui/core'
 import { EventEmitter } from 'events'
+import { PtyInputWriter } from './pty-input-writer.js'
 
 const DEFAULT_SCROLLBACK = 1000
 const DEFAULT_MAX_BUFFER_BYTES = 2 * 1024 * 1024
@@ -46,6 +49,8 @@ export interface PtySessionInfo {
   createdAt: number
   cwdTarget: TerminalCwdTarget
   initialCwd: string
+  /** Immutable Server-stamped generation for a Planning terminal; Launch terminals carry null. */
+  rootGeneration: string | null
 }
 
 /** Build the PTY environment without project-owned overlays or target-specific mutation. */
@@ -108,7 +113,9 @@ export class PtySession extends EventEmitter {
   readonly createdAt: number
   readonly cwdTarget: TerminalCwdTarget
   readonly initialCwd: string
+  readonly rootGeneration: string | null
   private process: pty.IPty
+  private inputWriter: PtyInputWriter
   private titleInterval: ReturnType<typeof setInterval> | null = null
   private lastTitle = ''
   private lastOscIconTitle = ''
@@ -131,6 +138,7 @@ export class PtySession extends EventEmitter {
       closeCallbackUrl?: string | Record<string, string>
       cwd: string
       cwdTarget: TerminalCwdTarget
+      rootGeneration: string | null
       scrollback?: number
       maxBufferBytes?: number
       platform: PtyPlatform
@@ -152,6 +160,7 @@ export class PtySession extends EventEmitter {
     this.closeCallbackUrl = opts.closeCallbackUrl
     this.cwdTarget = opts.cwdTarget
     this.initialCwd = opts.cwd
+    this.rootGeneration = opts.rootGeneration
     this.maxBufferLines = opts.scrollback ?? DEFAULT_SCROLLBACK
     this.maxBufferBytes = opts.maxBufferBytes ?? DEFAULT_MAX_BUFFER_BYTES
 
@@ -162,6 +171,7 @@ export class PtySession extends EventEmitter {
       cwd: opts.cwd,
       env: resolvePtySpawnEnvironment(process.env),
     })
+    this.inputWriter = new PtyInputWriter(this.process, { platform: this.platform })
 
     this.process.onData((data) => {
       this.appendBuffer(data)
@@ -169,6 +179,7 @@ export class PtySession extends EventEmitter {
     })
 
     this.process.onExit(({ exitCode }) => {
+      this.inputWriter.close()
       if (this.titleInterval) {
         clearInterval(this.titleInterval)
         this.titleInterval = null
@@ -240,10 +251,8 @@ export class PtySession extends EventEmitter {
     return this.buffer.join('')
   }
 
-  write(data: string): void {
-    if (!this.isExited) {
-      this.process.write(data)
-    }
+  write(data: string): boolean {
+    return !this.isExited && this.inputWriter.write(data)
   }
 
   resize(cols: number, rows: number): void {
@@ -253,6 +262,7 @@ export class PtySession extends EventEmitter {
   }
 
   close(): void {
+    this.inputWriter.close()
     if (this.titleInterval) {
       clearInterval(this.titleInterval)
       this.titleInterval = null
@@ -279,6 +289,7 @@ export class PtySession extends EventEmitter {
       createdAt: this.createdAt,
       cwdTarget: this.cwdTarget,
       initialCwd: this.initialCwd,
+      rootGeneration: this.rootGeneration,
     }
   }
 }
@@ -308,6 +319,7 @@ export class PtyManager {
     closeCallbackUrl?: string | Record<string, string>
     cwdTarget: TerminalCwdTarget
     cwd: string
+    rootGeneration: string | null
     scrollback?: number
     maxBufferBytes?: number
   }): PtySession {
@@ -321,6 +333,7 @@ export class PtyManager {
       closeCallbackUrl: opts.closeCallbackUrl,
       cwd: opts.cwd,
       cwdTarget: opts.cwdTarget,
+      rootGeneration: opts.rootGeneration,
       scrollback: opts.scrollback,
       maxBufferBytes: opts.maxBufferBytes,
       platform: this.platform,
@@ -346,8 +359,8 @@ export class PtyManager {
     return result
   }
 
-  write(id: string, data: string): void {
-    this.sessions.get(id)?.write(data)
+  write(id: string, data: string): boolean {
+    return this.sessions.get(id)?.write(data) ?? false
   }
 
   resize(id: string, cols: number, rows: number): void {

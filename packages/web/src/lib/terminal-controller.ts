@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
- * 1. Own browser terminal renderers, input, lifecycle, and reconnect behavior.
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * 1. Own browser terminal renderers, input, lifecycle, reconnect, and bounded output activity.
  * 2. Preserve explicit launch-project or planning-root cwd identity across PTY transport state.
  * 3. Project server-owned terminal metadata into stable React snapshots.
  * 4. Apply terminal appearance, input history, keybinding, and notification behavior.
- * 5. Preserve expected planning-root generation across queued and reconnecting PTY creates.
+ * 5. Preserve Root generation across PTY creates and acknowledge guarded workflow input.
  *
  * Original request (2026-07-16): "3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited XDG_DATA_HOME"
+ * Owner-reported defect (2026-07-21): Starting an Agent terminal can freeze the whole page.
+ * Owner-reported defect (2026-07-21): Pre-created Agent terminals are absent from Compose Send.
  */
 import {
   PtyServerMessageSchema,
@@ -258,6 +260,7 @@ interface TerminalInstance {
   cwd: string | null
   cwdTarget: TerminalCwdTarget
   initialCwd: string | null
+  rootGeneration: string | null
   progress: { state: TerminalProgressState; value: number | null } | null
   promptState: TerminalPromptState | null
   isDedicated: boolean
@@ -295,6 +298,7 @@ export interface TerminalSessionSnapshot {
   cwd: string | null
   cwdTarget: TerminalCwdTarget
   initialCwd: string | null
+  rootGeneration: string | null
   progress: { state: TerminalProgressState; value: number | null } | null
   promptState: TerminalPromptState | null
   displayTitle: string
@@ -355,6 +359,11 @@ class TerminalController {
     rows: number
   }> = []
   private pendingCloseSessionIds = new Set<string>()
+  private pendingWorkflowInputs = new Map<
+    string,
+    { resolve: () => void; reject: (error: Error) => void }
+  >()
+  private workflowInputRequestCounter = 0
   private serverToLocalSessionId = new Map<string, string>()
   private hasDiscoveredSessions = false
   private inputPanelDefaultLayout: InputPanelLayout = 'floating'
@@ -395,6 +404,7 @@ class TerminalController {
       platform: DEFAULT_PTY_PLATFORM,
       cwdTarget: opts.cwdTarget,
       initialCwd: null,
+      rootGeneration: null,
     })
 
     this.instances.set(id, instance)
@@ -468,6 +478,7 @@ class TerminalController {
       platform: PtyPlatform
       cwdTarget: TerminalCwdTarget
       initialCwd: string | null
+      rootGeneration: string | null
     }
   ): TerminalInstance {
     const { terminal, fitAddon, afterOpenHook, engine } = this.createRendererTerminal()
@@ -489,6 +500,7 @@ class TerminalController {
       cwd: null,
       cwdTarget: opts.cwdTarget,
       initialCwd: opts.initialCwd,
+      rootGeneration: opts.rootGeneration,
       progress: null,
       promptState: null,
       isDedicated: opts.isDedicated,
@@ -1196,6 +1208,29 @@ class TerminalController {
     return this.wsSend({ type: 'input', sessionId, data })
   }
 
+  /** Send one workflow payload only after the Server revalidates terminal and Root provenance. */
+  writeWorkflowToSession(id: string, data: string, expectedRootGeneration: string): Promise<void> {
+    const sessionId = this.resolveServerSessionId(id)
+    if (!sessionId) return Promise.reject(new Error('Terminal session is not ready.'))
+
+    const requestId = `workflow-input-${++this.workflowInputRequestCounter}`
+    return new Promise<void>((resolve, reject) => {
+      this.pendingWorkflowInputs.set(requestId, { resolve, reject })
+      if (
+        !this.wsSend({
+          type: 'workflow-input',
+          requestId,
+          sessionId,
+          expectedRootGeneration,
+          data,
+        })
+      ) {
+        this.pendingWorkflowInputs.delete(requestId)
+        reject(new Error('Terminal connection is unavailable.'))
+      }
+    })
+  }
+
   openInputPanel(localSessionId?: string): boolean {
     const candidates: Array<TerminalInstance | undefined> = [
       localSessionId ? this.instances.get(localSessionId) : undefined,
@@ -1286,6 +1321,7 @@ class TerminalController {
     instance.platform = msg.platform
     instance.cwdTarget = msg.cwdTarget
     instance.initialCwd = msg.initialCwd
+    instance.rootGeneration = msg.rootGeneration
     instance.inputPanelAddon.setPlatform(msg.platform)
     instance.isConnected = true
     this.serverToLocalSessionId.set(msg.sessionId, msg.requestId)
@@ -1296,8 +1332,10 @@ class TerminalController {
     const instance = this.getInstanceByServerSessionId(msg.sessionId)
     if (!instance) return
     this.writeTerminalOutput(instance, msg.data)
+    const wasOutputActive =
+      instance.lastOutputTime > 0 && Date.now() - instance.lastOutputTime < OUTPUT_IDLE_THRESHOLD
     instance.lastOutputTime = Date.now()
-    this.notify()
+    if (!wasOutputActive) this.notify()
     if (instance.outputIdleTimer) clearTimeout(instance.outputIdleTimer)
     instance.outputIdleTimer = setTimeout(() => {
       instance.outputIdleTimer = null
@@ -1441,6 +1479,7 @@ class TerminalController {
         cwd: inst.cwd,
         cwdTarget: inst.cwdTarget,
         initialCwd: inst.initialCwd,
+        rootGeneration: inst.rootGeneration,
         progress: inst.progress,
         promptState: inst.promptState,
         displayTitle: inst.customTitle ?? inst.oscTitle ?? inst.processTitle ?? inst.label,
@@ -1571,6 +1610,10 @@ class TerminalController {
     ws.onclose = () => {
       this.wsConnected = false
       this.ws = null
+      for (const pending of this.pendingWorkflowInputs.values()) {
+        pending.reject(new Error('Terminal connection closed before workflow input was accepted.'))
+      }
+      this.pendingWorkflowInputs.clear()
 
       // Don't mark sessions as exited on disconnect — attempt reconnect
       this.notify()
@@ -1598,6 +1641,20 @@ class TerminalController {
       }
       case 'created': {
         this.handleCreatedResponse(msg)
+        break
+      }
+      case 'workflow-input-accepted': {
+        const pending = this.pendingWorkflowInputs.get(msg.requestId)
+        if (!pending) break
+        this.pendingWorkflowInputs.delete(msg.requestId)
+        pending.resolve()
+        break
+      }
+      case 'workflow-input-rejected': {
+        const pending = this.pendingWorkflowInputs.get(msg.requestId)
+        if (!pending) break
+        this.pendingWorkflowInputs.delete(msg.requestId)
+        pending.reject(new Error(msg.message))
         break
       }
       case 'buffer': {
@@ -1669,6 +1726,7 @@ class TerminalController {
           platform: serverSession.platform ?? DEFAULT_PTY_PLATFORM,
           cwdTarget: serverSession.cwdTarget,
           initialCwd: serverSession.initialCwd,
+          rootGeneration: serverSession.rootGeneration,
         })
 
         if (serverSession.isExited) {
@@ -1687,6 +1745,7 @@ class TerminalController {
       instance.closeCallbackUrl = serverSession.closeCallbackUrl
       instance.cwdTarget = serverSession.cwdTarget
       instance.initialCwd = serverSession.initialCwd
+      instance.rootGeneration = serverSession.rootGeneration
       instance.platform = serverSession.platform ?? DEFAULT_PTY_PLATFORM
       instance.inputPanelAddon.setPlatform(instance.platform)
 

@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Define the type-safe PTY client/server transport protocol.
  * 2. Preserve explicit launch-project or planning-root cwd identity across create/list/reconnect.
  * 3. Carry terminal output, control metadata, lifecycle, and failure messages.
- * 4. Carry opaque planning-root generation evidence through PTY creation.
+ * 4. Carry opaque planning-root generation evidence through PTY creation and guarded workflow input.
  *
  * Original request (2026-07-16): "3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited XDG_DATA_HOME"
+ * Owner-reported defect (2026-07-21): Same-generation Agent terminals are unavailable to Send.
  */
 import { z } from 'zod'
 
@@ -26,6 +27,7 @@ const PtySessionInfoSchema = z.object({
   closeCallbackUrl: CloseCallbackUrlSchema.optional(),
   cwdTarget: TerminalCwdTargetSchema,
   initialCwd: z.string().min(1),
+  rootGeneration: z.string().min(1).nullable(),
 })
 
 export const PtyCreateMessageSchema = z.object({
@@ -45,6 +47,15 @@ export const PtyCreateMessageSchema = z.object({
 export const PtyInputMessageSchema = z.object({
   type: z.literal('input'),
   sessionId: z.string().min(1),
+  data: z.string(),
+})
+
+/** A workflow payload whose terminal and current Planning-root generation require Server approval. */
+export const PtyWorkflowInputMessageSchema = z.object({
+  type: z.literal('workflow-input'),
+  requestId: z.string().min(1),
+  sessionId: z.string().min(1),
+  expectedRootGeneration: z.string().min(1),
   data: z.string(),
 })
 
@@ -74,6 +85,7 @@ export const PtyListMessageSchema = z.object({
 export const PtyClientMessageSchema = z.discriminatedUnion('type', [
   PtyCreateMessageSchema,
   PtyInputMessageSchema,
+  PtyWorkflowInputMessageSchema,
   PtyResizeMessageSchema,
   PtyCloseMessageSchema,
   PtyAttachMessageSchema,
@@ -87,6 +99,22 @@ export const PtyCreatedResponseSchema = z.object({
   platform: PtyPlatformSchema,
   cwdTarget: TerminalCwdTargetSchema,
   initialCwd: z.string().min(1),
+  rootGeneration: z.string().min(1).nullable(),
+})
+
+/** Confirms that guarded workflow input reached the Server-owned PTY session. */
+export const PtyWorkflowInputAcceptedResponseSchema = z.object({
+  type: z.literal('workflow-input-accepted'),
+  requestId: z.string().min(1),
+  sessionId: z.string().min(1),
+})
+
+/** Rejects guarded workflow input before PTY write while preserving the Server-owned reason. */
+export const PtyWorkflowInputRejectedResponseSchema = z.object({
+  type: z.literal('workflow-input-rejected'),
+  requestId: z.string().min(1),
+  sessionId: z.string().min(1),
+  message: z.string().min(1),
 })
 
 export const PtyOutputResponseSchema = z.object({
@@ -166,6 +194,8 @@ export const PtyErrorResponseSchema = z.object({
 
 export const PtyServerMessageSchema = z.discriminatedUnion('type', [
   PtyCreatedResponseSchema,
+  PtyWorkflowInputAcceptedResponseSchema,
+  PtyWorkflowInputRejectedResponseSchema,
   PtyOutputResponseSchema,
   PtyExitResponseSchema,
   PtyTitleResponseSchema,

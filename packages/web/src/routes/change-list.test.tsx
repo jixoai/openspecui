@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Prove Changes render formal tracked-task progress before Status arrives.
  * 2. Prove no-tasks and incomplete tasks cannot become workflow-complete.
  * 3. Prove completed tracked tasks and CLI Status converge on workflow completion.
+ * 4. Prove the page-level New command remains available with active Changes.
  *
  * Original request (2026-07-15): "0/0 means no-tasks, never complete."
+ * Original request (2026-07-21): "Changes页面的右上角没有 New,你要不要快速补一个"
  */
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChangeList } from './change-list'
@@ -56,6 +58,26 @@ describe('ChangeList', () => {
   })
 
   afterEach(() => cleanup())
+
+  it('opens the advanced New Change form from the page header with active Changes', () => {
+    useChangesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: 'existing-change',
+          name: 'existing-change',
+          trackedTaskProgress: { total: 1, completed: 0, phase: 'in-progress' },
+          updatedAt: Date.now(),
+        },
+      ],
+      isLoading: false,
+    })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({ data: undefined })
+
+    render(<ChangeList />)
+    fireEvent.click(screen.getByRole('button', { name: 'New' }))
+
+    expect(navControllerMock.activatePop).toHaveBeenCalledWith('/opsx-new')
+  })
 
   it('renders task progress immediately even when opsx status is still loading', () => {
     useChangesSubscriptionMock.mockReturnValue({

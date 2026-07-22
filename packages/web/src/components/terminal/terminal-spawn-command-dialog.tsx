@@ -1,14 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Configure a command and shell before creating a terminal session.
  * 2. Require an explicit server-resolved launch-project or planning-root cwd target.
  * 3. Preserve advanced command fields and a preview of the rendered command line.
- * 4. Preserve prepared planning-root generation when creating a workflow-bound shell.
+ * 4. Reveal and activate each successfully created Agent terminal.
  *
  * Original request (2026-07-16): "Terminal creation controls expose the selected cwd/root identity."
+ * Owner-reported defect (2026-07-22): Creating Codex/Claude/Gemini must open Terminal when hidden.
  */
 import { Dialog } from '@/components/dialog'
 import { Select, type SelectOption } from '@/components/select'
+import { revealTerminalSession } from '@/lib/reveal-terminal-session'
 import { useTerminalContext } from '@/lib/terminal-context'
 import {
   getTerminalCwdTargetOption,
@@ -19,6 +21,7 @@ import type { TerminalCwdTarget } from '@openspecui/core/pty-protocol'
 import {
   getTerminalCommandDefaultValues,
   getTerminalCommandParameters,
+  renderTerminalSpawnCommand,
   renderTerminalSpawnCommandLine,
   type TerminalCommandFieldValues,
   type TerminalCommandJsonSchema,
@@ -88,6 +91,19 @@ function hasAdvancedFields(parameters: TerminalCommandParameters): boolean {
   return Object.values(parameters.uiSchema).some(isAdvancedField)
 }
 
+function resolveShellLineInvocation(
+  shell: TerminalShellProfile,
+  commandLine: string
+): { command: string; args: string[] } {
+  const executeArgs =
+    shell.quoteStyle === 'cmd'
+      ? ['/d', '/s', '/c', commandLine]
+      : shell.quoteStyle === 'powershell'
+        ? ['-Command', commandLine]
+        : ['-lc', commandLine]
+  return { command: shell.command, args: [...shell.args, ...executeArgs] }
+}
+
 export function TerminalSpawnCommandDialog({
   open,
   command,
@@ -99,7 +115,7 @@ export function TerminalSpawnCommandDialog({
   onCreated,
 }: TerminalSpawnCommandDialogProps) {
   const advancedSectionId = useId()
-  const { createShellSession } = useTerminalContext()
+  const { createDedicatedSession } = useTerminalContext()
   const { shellProfiles, defaultShellProfile } = useTerminalInvocationConfig()
   const cwdTargetState = useTerminalCwdTargetState()
   const [values, setValues] = useState<TerminalCommandFieldValues>({})
@@ -176,13 +192,19 @@ export function TerminalSpawnCommandDialog({
       (lockedCwdTarget !== undefined && cwdTarget !== lockedCwdTarget)
     )
       return
-    const sessionId = createShellSession(selectedShell, {
+    const renderedCommand = renderTerminalSpawnCommand({ command, values })
+    const invocation =
+      renderedCommand.kind === 'argv'
+        ? { command: renderedCommand.argv[0] ?? '', args: renderedCommand.argv.slice(1) }
+        : resolveShellLineInvocation(selectedShell, renderedCommand.commandLine)
+    if (!invocation.command) return
+    const sessionId = createDedicatedSession(invocation.command, invocation.args, {
       cwdTarget,
       ...(expectedRootGeneration ? { expectedRootGeneration } : {}),
       label: command.label,
-      initialInput: `${commandLine}\n`,
     })
     if (!sessionId) return
+    revealTerminalSession(sessionId)
     onCreated?.(sessionId)
     onClose()
   }

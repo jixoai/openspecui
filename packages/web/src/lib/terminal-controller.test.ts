@@ -1,11 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Verify terminal controller PTY lifecycle, reconnect, rendering, input, and metadata behavior.
  * 2. Verify explicit cwd target and initial cwd survive create, restore, and custom-title rename.
  * 3. Preserve terminal engine, theme, keybinding, and notification regression coverage.
+ * 4. Prove PTY output bursts do not trigger one global React notification per chunk.
+ * 5. Prove workflow input resolves only after Server acknowledgement and rejects on conflict/disconnect.
  *
  * Original request (2026-07-16): "Terminal exposes explicit launch-project cwd and planning-root cwd."
  * Review correction (2026-07-20): "Call the real terminalController.setCustomTitle and preserve cwd identity."
+ * Owner-reported defect (2026-07-21): Starting an Agent terminal can freeze the whole page.
+ * Owner-reported defect (2026-07-21): Pre-created Agent terminals are absent from Compose Send.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -386,20 +390,27 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function withPtyProtocolDefaults(payload: unknown): unknown {
   if (!isRecord(payload)) return payload
   if (payload.type === 'created') {
+    const cwdTarget = payload.cwdTarget === 'planning-root' ? 'planning-root' : 'launch-project'
     return {
-      cwdTarget: 'launch-project',
+      cwdTarget,
       initialCwd: '/launch',
+      rootGeneration: cwdTarget === 'planning-root' ? 'test-planning-generation' : null,
       ...payload,
     }
   }
   if (payload.type === 'list' && Array.isArray(payload.sessions)) {
     return {
       ...payload,
-      sessions: payload.sessions.map((session) =>
-        isRecord(session)
-          ? { cwdTarget: 'launch-project', initialCwd: '/launch', ...session }
-          : session
-      ),
+      sessions: payload.sessions.map((session) => {
+        if (!isRecord(session)) return session
+        const cwdTarget = session.cwdTarget === 'planning-root' ? 'planning-root' : 'launch-project'
+        return {
+          cwdTarget,
+          initialCwd: '/launch',
+          rootGeneration: cwdTarget === 'planning-root' ? 'test-planning-generation' : null,
+          ...session,
+        }
+      }),
     }
   }
   return payload
@@ -495,6 +506,104 @@ describe('terminal-controller PTY behavior', () => {
     unsubscribe()
   })
 
+  it('settles guarded workflow input only from the matching Server reply or connection close', async () => {
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession({
+      cwdTarget: 'planning-root',
+      expectedRootGeneration: 'root-generation-a',
+    })
+    ws.emitJson({
+      type: 'created',
+      requestId: localId,
+      sessionId: 'pty-workflow',
+      platform: 'common',
+      cwdTarget: 'planning-root',
+      initialCwd: '/planning-a',
+      rootGeneration: 'root-generation-a',
+    })
+
+    const accepted = terminalController.writeWorkflowToSession(
+      localId,
+      'apply accepted\n',
+      'root-generation-a'
+    )
+    const acceptedMessage = parseSent(ws).find(
+      (message) => message.type === 'workflow-input' && message.data === 'apply accepted\n'
+    )
+    expect(acceptedMessage).toMatchObject({
+      sessionId: 'pty-workflow',
+      expectedRootGeneration: 'root-generation-a',
+    })
+    const acceptedRequestId = acceptedMessage?.requestId
+    if (typeof acceptedRequestId !== 'string') throw new Error('Expected workflow request id.')
+    const acceptedExpectation = expect(accepted).resolves.toBeUndefined()
+    ws.emitJson({
+      type: 'workflow-input-accepted',
+      requestId: acceptedRequestId,
+      sessionId: 'pty-workflow',
+    })
+    await acceptedExpectation
+
+    const rejected = terminalController.writeWorkflowToSession(
+      localId,
+      'apply stale\n',
+      'root-generation-a'
+    )
+    const rejectedMessage = parseSent(ws).findLast((message) => message.type === 'workflow-input')
+    const rejectedRequestId = rejectedMessage?.requestId
+    if (typeof rejectedRequestId !== 'string')
+      throw new Error('Expected rejected workflow request id.')
+    const rejectedExpectation = expect(rejected).rejects.toThrow('Planning root changed.')
+    ws.emitJson({
+      type: 'workflow-input-rejected',
+      requestId: rejectedRequestId,
+      sessionId: 'pty-workflow',
+      message: 'Planning root changed.',
+    })
+    await rejectedExpectation
+
+    const disconnected = terminalController.writeWorkflowToSession(
+      localId,
+      'apply disconnected\n',
+      'root-generation-a'
+    )
+    const disconnectedExpectation = expect(disconnected).rejects.toThrow(
+      'Terminal connection closed before workflow input was accepted.'
+    )
+    ws.close()
+    await disconnectedExpectation
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('coalesces output activity notifications across one sustained PTY burst', async () => {
+    const terminalController = await loadTerminalController()
+    const listener = vi.fn()
+    const unsubscribe = terminalController.subscribe(listener)
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    const localId = terminalController.createSession()
+    ws.emitJson({ type: 'created', requestId: localId, sessionId: 'pty-burst', platform: 'common' })
+    listener.mockClear()
+
+    for (let index = 0; index < 100; index += 1) {
+      ws.emitJson({ type: 'output', sessionId: 'pty-burst', data: `chunk-${index}` })
+    }
+
+    expect(listener).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(1500)
+    expect(listener).toHaveBeenCalledTimes(2)
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
   it('preserves planning-root identity through queued creation and custom-title rename', async () => {
     const terminalController = await loadTerminalController()
     const unsubscribe = terminalController.subscribe(() => {})
@@ -523,6 +632,7 @@ describe('terminal-controller PTY behavior', () => {
     expect(terminalController.getSnapshot().sessions[0]).toMatchObject({
       cwdTarget: 'planning-root',
       initialCwd: '/stores/shared',
+      rootGeneration: 'test-planning-generation',
     })
 
     terminalController.setCustomTitle(localId, 'Verification shell')
@@ -531,6 +641,7 @@ describe('terminal-controller PTY behavior', () => {
       displayTitle: 'Verification shell',
       cwdTarget: 'planning-root',
       initialCwd: '/stores/shared',
+      rootGeneration: 'test-planning-generation',
     })
 
     terminalController.closeAll()

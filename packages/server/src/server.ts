@@ -1,10 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Bootstrap the HTTP/tRPC server and launch-project runtime services.
  * 2. Delegate OpenSpec filesystem ownership to the CLI-selected planning-root manager.
  * 3. Host notification, sound, preview-resource, and translation HTTP boundaries.
  * 4. Host tRPC and PTY WebSocket transports with deterministic teardown.
- *    PTY planning-root creation also verifies opaque root generation provenance.
+ *    PTY planning-root creation and workflow input verify opaque Root generation provenance.
  * 5. Own the runtime observation environment, external Codex command lease, and warm root-scoped
  *    services without blocking readiness.
  *
@@ -13,6 +13,7 @@
  * Derived requirement (2026-07-19): Checkpoint 6.11 binds Git operations to backend-owned repository epochs.
  * Derived requirement (2026-07-20): Environment-global Codex command observation is Server-owned and
  * released with the runtime environment.
+ * Owner-reported defect (2026-07-21): Pre-created Agent terminals are absent from Compose Send.
  *
  * @module server
  */
@@ -523,19 +524,19 @@ export async function createWebSocketServer(
         if (expectedRootGeneration) {
           throw new Error('Planning-root generation cannot target the launch project.')
         }
-        return task({ cwdTarget, cwd: config.projectDir })
+        return task({ cwdTarget, cwd: config.projectDir, rootGeneration: null })
       }
       return server.planningRootServices.runOperation(({ rootContext, gitBindingToken }) => {
         if (expectedRootGeneration && expectedRootGeneration !== gitBindingToken) {
           throw new Error(
-            'Planning root changed before terminal creation. Prepare the workflow again.'
+            'Planning root changed before terminal operation. Prepare the workflow again.'
           )
         }
         const planningRoot = rootContext.planningRoot
         if (!planningRoot) {
           throw new Error('Planning root cwd is unavailable.')
         }
-        return task({ cwdTarget, cwd: planningRoot.path })
+        return task({ cwdTarget, cwd: planningRoot.path, rootGeneration: gitBindingToken })
       })
     },
   })

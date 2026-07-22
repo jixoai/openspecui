@@ -1,13 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Validate and route PTY WebSocket lifecycle messages.
  * 2. Create planning-target terminals inside the Manager-owned root operation lifetime.
- * 3. Attach/replay session output and project terminal control metadata.
+ * 3. Attach/replay terminal output through a bounded, event-loop-fair batch owner.
  * 4. Publish terminal notifications without duplicating protocol fanout.
  * 5. Forward opaque planning-root generation evidence to the Server cwd owner.
  *
  * Original request (2026-07-16): "3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited XDG_DATA_HOME"
  * Original request (2026-07-17): "A later root operation must not keep using an owner selected before replacement."
+ * Owner-reported defect (2026-07-21): Starting an Agent terminal can starve the Server and page.
+ * Owner-reported defect (2026-07-21): Pre-created Agent terminals are absent from Compose Send.
  */
 import {
   PtyClientMessageSchema,
@@ -21,6 +23,8 @@ import {
 import type { WebSocket } from 'ws'
 import type { NotificationService } from './notification-service.js'
 import type { PtyManager, PtySession } from './pty-manager.js'
+import { PtyOutputBatcher } from './pty-output-batcher.js'
+import { limitPtyReplayBuffer, PtySocketSender } from './pty-socket-sender.js'
 
 type PtyErrorCode = 'INVALID_JSON' | 'INVALID_MESSAGE' | 'SESSION_NOT_FOUND' | 'PTY_CREATE_FAILED'
 type PtyErrorMessage = {
@@ -29,15 +33,7 @@ type PtyErrorMessage = {
   message: string
   sessionId?: string
 }
-type PtyCreatedMessage = {
-  type: 'created'
-  requestId: string
-  sessionId: string
-  platform: 'windows' | 'macos' | 'common'
-  cwdTarget: TerminalCwdTarget
-  initialCwd: string
-}
-type PtyOutgoingMessage = PtyServerMessage | PtyErrorMessage | PtyCreatedMessage
+type PtyOutgoingMessage = PtyServerMessage | PtyErrorMessage
 type TerminalNotificationEvent = Extract<TerminalControlEvent, { type: 'notification' }>
 type TerminalTitleEvent = Extract<TerminalControlEvent, { type: 'title' }>
 
@@ -84,7 +80,11 @@ export function createPtyWebSocketHandler(
   options: {
     withCwdTarget: <T>(
       target: TerminalCwdTarget,
-      task: (cwd: { cwdTarget: TerminalCwdTarget; cwd: string }) => Promise<T> | T,
+      task: (cwd: {
+        cwdTarget: TerminalCwdTarget
+        cwd: string
+        rootGeneration: string | null
+      }) => Promise<T> | T,
       expectedRootGeneration?: string
     ) => Promise<T>
   }
@@ -94,11 +94,8 @@ export function createPtyWebSocketHandler(
     const cleanups = new Map<string, () => void>()
     const parsers = new Map<string, TerminalControlParser>()
 
-    const send = (msg: PtyOutgoingMessage) => {
-      if (ws.readyState === ws.OPEN) {
-        ws.send(JSON.stringify(msg))
-      }
-    }
+    const sender = new PtySocketSender(ws)
+    const send = (msg: PtyOutgoingMessage) => sender.send(msg)
     const sendError = (code: PtyErrorCode, message: string, opts?: { sessionId?: string }) => {
       send({ type: 'error', code, message, sessionId: opts?.sessionId })
     }
@@ -115,7 +112,7 @@ export function createPtyWebSocketHandler(
       }
 
       // Set up event listeners
-      const onData = (data: string) => {
+      const processOutputBatch = (data: string) => {
         const parser = parsers.get(sessionId) ?? new TerminalControlParser()
         parsers.set(sessionId, parser)
         const parsed = parser.push(data)
@@ -175,8 +172,12 @@ export function createPtyWebSocketHandler(
           send({ type: 'output', sessionId, data: parsed.output })
         }
       }
+      const outputBatcher = new PtyOutputBatcher(processOutputBatch, () => sender.terminate())
+      const onData = (data: string) => {
+        outputBatcher.enqueue(data)
+      }
       const onExit = (exitCode: number) => {
-        send({ type: 'exit', sessionId, exitCode })
+        outputBatcher.afterFlush(() => send({ type: 'exit', sessionId, exitCode }))
       }
       const onTitle = (title: string) => {
         send({ type: 'process-title', sessionId, title })
@@ -191,6 +192,7 @@ export function createPtyWebSocketHandler(
         session.removeListener('data', onData)
         session.removeListener('exit', onExit)
         session.removeListener('title', onTitle)
+        outputBatcher.close()
         parsers.delete(sessionId)
         cleanups.delete(sessionId)
       })
@@ -230,6 +232,7 @@ export function createPtyWebSocketHandler(
                   args: msg.args,
                   cwdTarget: cwd.cwdTarget,
                   cwd: cwd.cwd,
+                  rootGeneration: cwd.rootGeneration,
                   closeTip: createMessage.closeTip,
                   closeCallbackUrl: createMessage.closeCallbackUrl,
                 })
@@ -241,6 +244,7 @@ export function createPtyWebSocketHandler(
                   platform: session.platform,
                   cwdTarget: session.cwdTarget,
                   initialCwd: session.initialCwd,
+                  rootGeneration: session.rootGeneration,
                 })
                 attachToSession(session)
               },
@@ -269,7 +273,7 @@ export function createPtyWebSocketHandler(
           // Replay buffer
           const buffer = session.getBuffer()
           if (buffer) {
-            send({ type: 'buffer', sessionId: session.id, data: buffer })
+            send({ type: 'buffer', sessionId: session.id, data: limitPtyReplayBuffer(buffer) })
           }
 
           // Send current title
@@ -308,6 +312,7 @@ export function createPtyWebSocketHandler(
               closeCallbackUrl: s.closeCallbackUrl,
               cwdTarget: s.cwdTarget,
               initialCwd: s.initialCwd,
+              rootGeneration: s.rootGeneration,
             })),
           })
           break
@@ -322,6 +327,57 @@ export function createPtyWebSocketHandler(
             break
           }
           session.write(msg.data)
+          break
+        }
+
+        case 'workflow-input': {
+          const session = ptyManager.get(msg.sessionId)
+          if (!session) {
+            send({
+              type: 'workflow-input-rejected',
+              requestId: msg.requestId,
+              sessionId: msg.sessionId,
+              message: `Session not found: ${msg.sessionId}`,
+            })
+            break
+          }
+
+          try {
+            await options.withCwdTarget(
+              'planning-root',
+              ({ rootGeneration }) => {
+                if (
+                  rootGeneration === null ||
+                  ptyManager.get(msg.sessionId) !== session ||
+                  (session.cwdTarget === 'planning-root' &&
+                    session.rootGeneration !== rootGeneration) ||
+                  rootGeneration !== msg.expectedRootGeneration
+                ) {
+                  throw new Error(
+                    'Selected terminal is unavailable or stale. Choose a Launch terminal or a current Planning terminal.'
+                  )
+                }
+                if (session.write(msg.data) === false) {
+                  throw new Error(
+                    'Terminal input is backpressured or closed. Wait for the terminal to settle and retry.'
+                  )
+                }
+              },
+              msg.expectedRootGeneration
+            )
+            send({
+              type: 'workflow-input-accepted',
+              requestId: msg.requestId,
+              sessionId: msg.sessionId,
+            })
+          } catch (error) {
+            send({
+              type: 'workflow-input-rejected',
+              requestId: msg.requestId,
+              sessionId: msg.sessionId,
+              message: error instanceof Error ? error.message : String(error),
+            })
+          }
           break
         }
 

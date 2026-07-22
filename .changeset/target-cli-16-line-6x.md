@@ -48,7 +48,18 @@ line, and rejects older or forward CLI lines by default.
   facts, so nested roots in one worktree do not create a false second scope.
 - Require every terminal creation to select Launch Project or current Planning
   Root, resolve absolute cwd only on the backend, preserve cwd identity across
-  reconnect/restore, and inherit the same backend environment for both targets.
+  reconnect/restore, inherit the same backend environment for both targets, and
+  reveal a successfully created Agent session in the area that owns Terminal.
+- Bound each PTY WebSocket client's output backlog and reconnect replay without
+  terminating the Server-owned process, and coalesce browser output-activity
+  projection updates so Agent output cannot starve the backend or React shell.
+- Spawn configured Agents directly from their executable and argument vector,
+  and route Unix PTY input through an ordered, byte-bounded asynchronous file
+  descriptor writer so canonical-line backpressure cannot starve the Server;
+  Windows retains the native ConPTY writer.
+- Stamp Planning terminals with immutable Root generation provenance, keep Launch
+  Agent PTYs valid Send targets, and route both through acknowledged,
+  Server-revalidated workflow input.
 - Preserve the launch process OpenSpec data scope without project `.env`,
   `StoreRoot`, synthesized registry, registry overlay, or project configuration
   fields that could redirect `XDG_DATA_HOME`.

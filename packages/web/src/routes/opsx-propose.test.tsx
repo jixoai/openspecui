@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-21 Asia/Shanghai):
- * 1. Verify the real Propose Create -> TerminalSpawnCommandDialog -> shell owner chain.
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * 1. Verify the real Propose Create -> TerminalSpawnCommandDialog -> dedicated argv owner chain.
  * 2. Verify Root Context locks all terminal dispatch actions before payload preparation.
  * 3. Verify prepared planning-root targets become stale across Root replacement.
- * 4. Verify typed shell, command, cwd, prompt, and generation evidence at the shell owner.
+ * 4. Verify typed command, cwd, prompt, and generation evidence at the process owner.
  *
  * Original request (2026-07-21): "Propose: only traverse the real TerminalSpawnCommandDialog -> createShellSession chain."
  * Owner correction (2026-07-21): "Each item must have one production owner, one precise red case, and one green case."
+ * Owner clarification (2026-07-22): Existing Launch Agent terminals remain valid workflow Send targets.
  */
 import type {
   TerminalShellProfile,
@@ -53,7 +54,7 @@ const TEST_COMMAND = {
 } satisfies TerminalSpawnCommand
 
 const {
-  createShellSessionMock,
+  createDedicatedSessionMock,
   prepareWorkflowInvocationMock,
   requestCloseMock,
   rootActionMock,
@@ -63,7 +64,7 @@ const {
   useTerminalInvocationConfigMock,
   useTerminalCwdTargetStateMock,
 } = vi.hoisted(() => ({
-  createShellSessionMock: vi.fn(),
+  createDedicatedSessionMock: vi.fn(),
   prepareWorkflowInvocationMock: vi.fn(),
   requestCloseMock: vi.fn(),
   rootActionMock: vi.fn(),
@@ -118,8 +119,12 @@ vi.mock('@/lib/terminal-controller', () => ({
 vi.mock('@/lib/terminal-context', () => ({
   useTerminalContext: () => ({
     ...useTerminalContextMock(),
-    createShellSession: createShellSessionMock,
+    createDedicatedSession: createDedicatedSessionMock,
   }),
+}))
+
+vi.mock('@/lib/reveal-terminal-session', () => ({
+  revealTerminalSession: vi.fn(),
 }))
 
 vi.mock('@/lib/use-terminal-invocation-config', () => ({
@@ -175,7 +180,7 @@ describe('OpsxProposeRoute terminal target', () => {
       },
     })
     requestCloseMock.mockReset()
-    createShellSessionMock.mockReset().mockReturnValue('term-created')
+    createDedicatedSessionMock.mockReset().mockReturnValue('term-created')
     prepareWorkflowInvocationMock.mockReset().mockResolvedValue({
       kind: 'agent-prompt',
       text: 'prepared proposal prompt',
@@ -290,13 +295,16 @@ describe('OpsxProposeRoute terminal target', () => {
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
 
-    expect(createShellSessionMock).toHaveBeenCalledTimes(1)
-    expect(createShellSessionMock).toHaveBeenCalledWith(TEST_SHELL, {
-      cwdTarget: 'planning-root',
-      expectedRootGeneration: 'planning-a-generation',
-      label: 'Claude',
-      initialInput: "claude 'prepared proposal prompt'\n",
-    })
+    expect(createDedicatedSessionMock).toHaveBeenCalledTimes(1)
+    expect(createDedicatedSessionMock).toHaveBeenCalledWith(
+      'claude',
+      ['prepared proposal prompt'],
+      {
+        cwdTarget: 'planning-root',
+        expectedRootGeneration: 'planning-a-generation',
+        label: 'Claude',
+      }
+    )
     expect(requestCloseMock).toHaveBeenCalledTimes(1)
   })
 
@@ -353,9 +361,13 @@ describe('OpsxProposeRoute terminal target', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Prepare' }))
     await waitFor(() => expect(screen.getAllByText('/planning-a').length).toBeGreaterThan(0))
-    expect(screen.getByTestId('opsx-propose-target-select')).not.toHaveTextContent(
-      'Old Launch shell'
+    expect(screen.getByTestId('opsx-propose-target-select')).toHaveTextContent(
+      'Old Launch shell · Launch'
     )
+    fireEvent.click(screen.getByRole('combobox', { name: 'Target' }))
+    const createOption = await screen.findByRole('option', { name: 'Create Claude' })
+    fireEvent.mouseMove(createOption)
+    fireEvent.click(createOption)
     fireEvent.click(screen.getByRole('button', { name: /^Create$/i }))
     const dialog = await screen.findByRole('dialog', { name: 'Create Claude' })
 
@@ -363,12 +375,15 @@ describe('OpsxProposeRoute terminal target', () => {
     expect(within(dialog).getByText('/planning-a')).toBeVisible()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
 
-    expect(createShellSessionMock).toHaveBeenCalledWith(TEST_SHELL, {
-      cwdTarget: 'planning-root',
-      expectedRootGeneration: 'planning-a-generation',
-      label: 'Claude',
-      initialInput: "claude 'prepared proposal prompt'\n",
-    })
+    expect(createDedicatedSessionMock).toHaveBeenCalledWith(
+      'claude',
+      ['prepared proposal prompt'],
+      {
+        cwdTarget: 'planning-root',
+        expectedRootGeneration: 'planning-a-generation',
+        label: 'Claude',
+      }
+    )
     expect(requestCloseMock).toHaveBeenCalledTimes(1)
   })
 
