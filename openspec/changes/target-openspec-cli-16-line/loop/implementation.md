@@ -7714,3 +7714,43 @@ the prior uncached ordinary behavior without weakening the shared owner or chang
 authoritative hooks' existing semantics. Final independent focused verification passes `2 files / 19 tests`,
 Web typecheck, exact three-file lint, format, and diff checks. No browser/Playwright, SSG, full gate, or
 owner browser/visual acceptance ran. `6.16-M` is accepted; parent checkpoint `6.16` remains unchecked.
+
+### 6.16-N research: status Live requires current system-emission provenance (2026-07-23)
+
+The prior status-bar repair in `067783a` correctly retires `connected` when WebSocket state leaves
+`pending`, but its `system.subscribe` callback establishes `Live` from only the current state value:
+
+```text
+A pending + system emission A -> Live
+A reconnecting               -> Offline
+B pending                    -> Offline, awaiting B system emission
+late system emission A        -> current code sees pending -> incorrectly Live
+```
+
+The defect is not visual styling or a generic Loading state. `useServerStatus` owns a two-source truth:
+WebSocket lifecycle plus the Server `system` projection. A system emission has no exposed wire generation,
+so the Hook must create and retire a local subscription generation around transport reconnect. Retained
+project metadata remains display-only during reconnect; only an emission admitted to B's active
+subscription generation may establish `connected: true`.
+
+```text
+transport A pending -> begin system generation A
+system A data       -> Live
+transport leaves A  -> retire/unsubscribe A -> Offline
+transport B pending -> begin system generation B -> Offline
+late A data/error   -> ignored: no state, title, error, or Live mutation
+current B data      -> Live
+```
+
+This package has exactly one production owner: `useServerStatus`'s transport-to-system generation
+boundary. It may adjust `StatusIndicator` tests only to cross the real Hook-to-visible-icon path. Do not
+change tRPC client protocol, server procedures, Root/Planning generations, page Loading topology, terminal
+transport, Static behavior, reconnect-delay policy, or project metadata presentation. `6.14` stays closed;
+this is a later correction to the status projection evidence, and `6.16` remains unchecked.
+
+Required evidence is one typed Hook fixed point and one real `StatusIndicator` fixed point that retain an
+old callback reference across `A pending -> A data -> connecting -> B pending`, deliver late A data, prove
+`Offline/Unlink2` survives, then deliver B data and prove `Live/Link2`. A test that merely emits new B data
+does not prove retirement. Temporarily bypassing the exact active-generation callback guard must make the
+late-A fixed point fail; record the result as lifecycle evidence. Final browser and visual acceptance remain
+owner-only.

@@ -385,6 +385,11 @@ The independent browser attempt confirms the desktop source control and URL/quer
     empty-string cache-key behavior through input normalization, without changing the shared owner or the
     special-hook cache semantics. Independent focused Vitest passes `19/19` with typecheck, exact lint,
     format, and diff checks. Code/test commits `24c6f7c` and `141493c`; parent `6.16` remains open.
+  - `6.16-N` planned: the status-bar repair in `067783a` must bind a `system.subscribe` emission to the
+    current WebSocket connection generation. `pending` alone is not current-emission provenance: after A
+    disconnects and B reaches `pending`, a late A callback must not restore green `Live`. Direct Hook and
+    real StatusIndicator evidence, including a mutation of the exact generation guard, are required before
+    any acceptance. This is transport-status correctness, not a generic Loading optimization.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and
