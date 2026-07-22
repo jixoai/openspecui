@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Render the project Dashboard and its objective planning-root projections.
  * 2. Keep Dashboard-owned Code Git actions separate from Planning-root readiness.
  * 3. Carry the Code Git binding token through dashboard detail handoff navigation.
  * 4. Bind refresh and detached-worktree removal to the rendered Code snapshot generation.
+ * 5. Retain a stable Overview snapshot beside terminal subscription error evidence.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Git handoff and action provenance.
@@ -575,9 +576,9 @@ export function Dashboard() {
     return <div className="route-loading animate-pulse">Loading dashboard...</div>
   }
 
-  if (error) {
+  if (error && !overview) {
     return (
-      <div className="text-destructive flex items-center gap-2">
+      <div role="alert" className="text-destructive flex items-center gap-2">
         <AlertCircle className="h-5 w-5" />
         Error loading dashboard: {error.message}
       </div>
@@ -1050,6 +1051,16 @@ export function Dashboard() {
       </div>
 
       <DashboardContextSummary staticMode={staticMode} />
+
+      {error ? (
+        <div
+          role="alert"
+          className="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-sm"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>Error loading dashboard: {error.message}</span>
+        </div>
+      ) : null}
 
       {gitActionError ? (
         <div

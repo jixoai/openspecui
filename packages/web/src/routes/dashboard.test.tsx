@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Prove Dashboard planning metrics and Code Git projections render independently.
  * 2. Prove rendered A-to-B refresh/removal intents conflict visibly, settle, and resume on B.
  * 3. Prove live Code Git navigation carries the backend-issued binding token.
  * 4. Prove Dashboard snapshots cannot be relabeled across Code binding replacements.
+ * 5. Prove retained Overview content remains visible beside terminal error evidence.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Dashboard Git provenance.
@@ -350,6 +351,36 @@ describe('Dashboard', () => {
     expect(activeChangesHeading.compareDocumentPosition(specificationsHeading)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     )
+  })
+
+  it('retains the stable Overview content alongside a terminal subscription error', () => {
+    dashboardOverviewMock.mockReturnValue({
+      data: createOverviewData(),
+      isLoading: false,
+      error: new Error('dashboard overview failed'),
+    })
+
+    render(<Dashboard />)
+
+    expect(screen.getByRole('heading', { name: 'Active Changes' })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Error loading dashboard: dashboard overview failed'
+    )
+  })
+
+  it('renders only the error state when no Overview data is available', () => {
+    dashboardOverviewMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error('dashboard overview unavailable'),
+    })
+
+    render(<Dashboard />)
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Error loading dashboard: dashboard overview unavailable'
+    )
+    expect(screen.queryByRole('heading', { name: 'Active Changes' })).not.toBeInTheDocument()
   })
 
   it('integrates the data-scope summary with the current static mode', () => {
