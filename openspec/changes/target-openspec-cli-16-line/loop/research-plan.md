@@ -254,6 +254,29 @@ generic Loading policy. `ArchiveList` currently has no explicit error rendering 
 updating presentation; those are separate page-topology work packages. Therefore 6.16-D cannot close parent
 checkpoint 6.16.
 
+#### 6.16-E: project real Archive error states; defer updating signal ownership
+
+Archive error topology is reachable today. Generic `useSubscription` preserves previous data on
+`onError`, so Archive can receive either no data plus an error or retained rows plus an error. ArchiveList
+currently ignores `error`: the first case renders a blank list frame and the second silently presents stale
+rows as current success.
+
+Add one visible alert inside the real Archive page composition. With no data, show the raw transport error
+without Loading, rows, blank list frame, or `No archived changes yet`; with retained data, show the same
+error beside the retained rows and preserve their hrefs. Synchronous real-component SSR fixed points must
+prove both states. Temporarily removing only the alert projection must make both named assertions red; a
+row-only assertion is not error evidence.
+
+Do not add an `Updating` badge in this package. `useArchivesSubscription` calls generic `useSubscription`
+with the default `retain` cache policy and only `onData/onError`; cache rebind therefore supplies
+`data + isLoading=false`, and reactive recomputation/reconnect publishes no updating lifecycle callback.
+A mocked `data + isLoading=true` is not a production fixed point. Shared projection updating requires its
+own subscription-owner contract and must be implemented before any list claims that topology.
+
+Preserve the accepted unknown-data Loading, immediate resolved render, empty state, rows, View Transition
+handoff/shared elements, live/static provider, Server/Adapter, strict Archive mutation, and detail route.
+6.16-E cannot close parent 6.16.
+
 ## Capability Impact
 
 ### New or Expanded Behavior

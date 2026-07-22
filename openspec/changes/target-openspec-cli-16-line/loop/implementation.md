@@ -6650,3 +6650,25 @@ coverage and are not mislabeled as first-frame evidence.
 No Playwright, browser walkthrough, SSG, or full gate ran or is required to accept this presentation-only
 first-render package. Final browser and visual acceptance remains owner-only. 6.16-D is accepted. Parent
 checkpoint 6.16 remains open for Archive error/cached-updating and other independently owned page topology.
+
+### 6.16-E independent research: Archive errors are reachable; updating is not (2026-07-22)
+
+ArchiveList ignores the `error` field from `useArchivesSubscription`. Generic `useSubscription.onError`
+retains previous data and sets `isLoading=false`, so two production states are reachable: no-data error and
+retained-data error. The former currently renders the Archive heading plus a blank bordered frame; the
+latter renders stale rows with no failure evidence. Both violate objective projection.
+
+The next implementation owns only those real error states. A synchronous real-ArchiveList fixed point with
+`data=undefined` and a transport error must render an alert with the raw message and no Loading, empty-state
+claim, row, or blank list frame. A second fixed point with one retained row plus the same error must render
+the alert and preserve that row and href without an empty claim. Removing only the alert projection must
+make the named message/role assertions red while the retained-row assertion stays green.
+
+Independent source audit rejects a component-only cached-updating test. `useArchivesSubscription` omits the
+fifth `useSubscription` argument and therefore uses `cacheRebindPolicy='retain'`; cached initialization and
+effect rebind both pair data with `isLoading=false`. Its callbacks expose only `onData/onError`, so reactive
+recompute and WebSocket reconnect publish no updating signal. A mocked `data + isLoading=true` is a type-
+legal but production-unreachable state. Updating requires a later shared-subscription lifecycle package.
+
+Do not change generic subscriptions, providers, Archive Server/Adapter/strict mutation/detail, View
+Transition, CSS, SSG, browser, or full gates. Parent 6.16 stays open.
