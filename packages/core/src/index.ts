@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Expose the public Core package contract through one stable barrel.
  * 2. Keep filesystem, CLI, Root Context, workflow, and projection types source-distinct.
  * 3. Publish browser-safe subpath contracts, including the external Codex command observation root,
@@ -244,6 +244,7 @@ export {
   type ProjectWatcherReinitializeReason,
   type ProjectWatcherRuntimeStatus,
   type ProjectWatcherRuntimeStatusListener,
+  type ReactiveContextStreamObserver,
   type ReactiveStateOptions,
   type WatchEvent,
   type WatchEventType,

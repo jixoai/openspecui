@@ -6768,3 +6768,64 @@ the replacement task is deferred, then `data(B)`. Removing the lifecycle mapping
 data mapping must fail separate assertions. Tests use deferred ownership, never sleeps. F1 changes no Router,
 Web, static provider, UI, cache policy, transport lifecycle, browser, SSG, or full gates. Parent 6.16 stays
 open and F2 remains unauthorized until independent F1 acceptance.
+
+### 6.16-F1 implementation: opt-in recompute lifecycle kernel (2026-07-22)
+
+`ReactiveContext.stream<T>()` retains its raw `AsyncGenerator<T>` output and every existing two-argument
+call. Its optional typed observer now receives exactly one `onRecomputeStarted()` after a dependency wake
+and abort exclusion, before the replacement task executes. The initial task emits no lifecycle callback;
+coalesced dependency writes still produce one callback per actual rerun; abort-after-A produces no false
+start. The observer type is exported through both reactive-fs and the Core package root.
+
+Server preserves `createReactiveSubscription<T>` without payload or lifecycle changes. The parallel
+`createReactiveProjectionSubscription<T>` exports only the discriminated payload union
+`{type:'recompute-started'} | {type:'data',data:T}` and completes when a non-reactive Core stream naturally
+exhausts. No Router endpoint consumes it yet. Its deferred fixed point observes `data(A)`, then
+`recompute-started` while the B task is blocked, then `data(B)` after release. A separate naturally completed
+projection proves the data mapping without depending on the lifecycle assertion. The new Server test is in
+the existing transport test typecheck lane rather than remaining transpile-only.
+
+Red and mutation-resistance evidence:
+
+1. With the third typed Core parameter present but the callback intentionally absent, the complete Core file
+   failed `1/24` at the pre-release assertion (`expected onRecomputeStarted 1 time, received 0`); the other
+   23 tests passed.
+2. Moving the Core callback after the awaited replacement task, while still suppressing it for the initial
+   task, again failed `1/24` at the same pre-release ordering assertion with the other 23 tests green.
+3. Removing only the Server lifecycle `emit.next` and running the blocked-replacement fixed point failed
+   immediately (`1 failed | 2 skipped`): received only `data(A)` instead of `data(A), recompute-started`.
+4. Removing only the Server completed-data `emit.next` and running the naturally completed fixed point failed
+   immediately (`1 failed | 2 skipped`): received `[]` instead of `data(A)`. Completion still resolved, so
+   this red did not rely on a timeout or the lifecycle event.
+
+Final focused verification:
+
+```text
+pnpm --filter @openspecui/core exec vitest run --maxWorkers=1 \
+  src/reactive-fs/reactive-context.test.ts
+  -> 1 file / 24 tests passed
+
+pnpm --filter @openspecui/server exec vitest run --maxWorkers=1 \
+  src/reactive-subscription.test.ts
+  -> 1 file / 3 tests passed
+
+pnpm --filter @openspecui/core typecheck
+pnpm --filter @openspecui/server typecheck
+  -> passed; Server includes the checked transport-test lane
+
+pnpm exec vp lint <all six changed TypeScript files>
+pnpm format:check
+git diff --check
+  -> passed
+```
+
+Changed implementation/test contract files are Core `reactive-context.ts`, its direct test, both Core barrel
+exports, Server `reactive-subscription.ts`, its direct test, and the existing Server transport-test config.
+This package did not change Router, Web/useSubscription, Archive UI, static providers, runtime invalidation,
+transport lifecycle, Settings, Root, SSG, Playwright/browser, or full gates. Final browser/visual acceptance
+remains owner-only. `6.16-F1` is implemented and awaits independent review; `6.16-F2` remains pending and
+parent checkpoint `6.16` remains unchecked.
+
+The normal commit attempt failed only because the repository has no Vite+ `staged` configuration. Every
+Goal-required focused check above had already passed, so the implementation commit used `--no-verify` under
+the recorded exception. No commit-hook pass is claimed.

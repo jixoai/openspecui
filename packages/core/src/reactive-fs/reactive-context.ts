@@ -1,4 +1,18 @@
+/**
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * 1. Collect reactive dependencies for asynchronous projections.
+ * 2. Coalesce dependency changes into replacement task executions.
+ * 3. Expose opt-in recompute lifecycle without changing yielded data.
+ *
+ * Original request (2026-07-22): "整个过程中，几乎都在 Loading。"
+ */
 import { contextStorage, type ReactiveState } from './reactive-state.js'
+
+/** 观察依赖驱动的替换任务生命周期，不改变流的数据输出。 */
+export interface ReactiveContextStreamObserver {
+  /** 依赖唤醒且排除取消后、替换任务执行前调用一次。 */
+  onRecomputeStarted(): void
+}
 
 /** PromiseWithResolvers polyfill for ES2022 */
 interface PromiseWithResolvers<T> {
@@ -59,8 +73,13 @@ export class ReactiveContext {
    *
    * @param task 要执行的异步任务
    * @param signal 用于取消的 AbortSignal
+   * @param observer 可选的依赖重算生命周期观察器
    */
-  async *stream<T>(task: () => Promise<T>, signal?: AbortSignal): AsyncGenerator<T> {
+  async *stream<T>(
+    task: () => Promise<T>,
+    signal?: AbortSignal,
+    observer?: ReactiveContextStreamObserver
+  ): AsyncGenerator<T> {
     try {
       while (!signal?.aborted && !this.destroyed) {
         // 清理上一轮的依赖
@@ -90,6 +109,8 @@ export class ReactiveContext {
         if (signal?.aborted) {
           break
         }
+
+        observer?.onRecomputeStarted()
       }
     } finally {
       this.destroy()

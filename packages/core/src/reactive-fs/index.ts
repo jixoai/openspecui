@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Expose reactive file, directory, existence, and stat projections.
  * 2. Expose dynamic reference-counted observation-root ownership.
  * 3. Expose immediate settlement for application-owned filesystem mutations.
+ * 4. Expose optional dependency-recompute lifecycle observation.
  *
  * Original request (2026-07-15): "操作成功底层是要推送变更的，然后让多端基于订阅拉取更新。"
  */
@@ -48,7 +49,7 @@ export {
   type ObservationEnvironmentRoot,
   type ObservationRootOwner,
 } from './observation-environment.js'
-export { ReactiveContext } from './reactive-context.js'
+export { ReactiveContext, type ReactiveContextStreamObserver } from './reactive-context.js'
 export { ReactiveState, contextStorage, type ReactiveStateOptions } from './reactive-state.js'
 
 // 响应式文件操作
