@@ -385,13 +385,14 @@ The independent browser attempt confirms the desktop source control and URL/quer
     empty-string cache-key behavior through input normalization, without changing the shared owner or the
     special-hook cache semantics. Independent focused Vitest passes `19/19` with typecheck, exact lint,
     format, and diff checks. Code/test commits `24c6f7c` and `141493c`; parent `6.16` remains open.
-  - `6.16-N` implemented, awaiting independent review: the status-bar repair in `067783a` now binds a
+  - `6.16-N` accepted: the status-bar repair in `067783a` now binds a
     `system.subscribe` emission to the current local WebSocket/System generation. Leaving A `pending`
     retires/unsubscribes A; B `pending` stays Offline until B data arrives, and late A data/error cannot
     write state, metadata, error, title, or green `Live`. Direct Hook and real StatusIndicator evidence
     cover the exact lifecycle plus a mutation of the active-generation guard. The legacy no-WS System
-    fallback retains metadata/title/error but remains Offline. Code/test commit `b557c26`; parent `6.16`
-    remains unchecked. This is transport-status correctness, not a generic Loading optimization.
+    fallback retains metadata/title/error but remains Offline. Independent Hook-to-component, type, lint,
+    format, and diff review accepts code/test commits `b557c26` and `093fe0b`; parent `6.16` remains
+    unchecked. This is transport-status correctness, not a generic Loading optimization.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and

@@ -7807,3 +7807,36 @@ pnpm format:check
 Code/test commit: `b557c26`. No Server, tRPC protocol, Root/Planning generation, route/Loading behavior,
 SSG, browser/Playwright, full gate, final owner browser/visual acceptance, push, merge, archive, or release
 work changed or ran. `6.16-N` awaits independent review; parent checkpoint `6.16` remains unchecked.
+
+### 6.16-N independent acceptance (2026-07-23)
+
+Independent Standards and Spec review initially found two defects: the System callback was not proven
+current across reconnect, and all three changed TS/TSX intent headers retained an obsolete 2026-07-22
+timestamp. The production correction and direct evidence in `b557c26` close the first; header-only commit
+`093fe0b` closes the second. The accepted owner path is:
+
+```text
+A pending/data -> Live
+A connecting   -> retire A -> Offline
+B pending      -> subscribe B -> Offline
+late A data/error -> no state, metadata, error, title, or icon mutation
+B data          -> Live
+```
+
+Independent focused verification reran the real Hook and `StatusIndicator` path:
+
+```text
+Vitest: 2 files / 4 tests passed
+Web typecheck: passed
+exact oxlint: passed
+exact Prettier: passed
+git diff --check: passed
+```
+
+The recorded one-guard mutation genuinely fails both late-A fixed points by restoring stale metadata and
+green `Live`; restoration returns the path to green. The legacy no-WS fallback is independently preserved
+as metadata/title/error-only, never Live. No agent-run browser or visual acceptance is claimed.
+
+`pnpm format:check` remains unavailable as a full-worktree gate because the worktree contains untracked,
+non-worker `packages/server/bench/*.bench.ts` files that fail formatting; the correction did not modify,
+stage, delete, or rely on them. `6.16-N` is accepted; parent checkpoint `6.16` remains unchecked.
