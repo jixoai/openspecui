@@ -335,11 +335,11 @@ The independent browser attempt confirms the desktop source control and URL/quer
     input and a changed field converges alone. Archive remains a separate following package.
   - `6.16-D` accepted: ArchiveList no longer adds an artificial rAF gate; synchronous real-component
     evidence renders resolved data immediately and preserves the initial unknown-data Loading branch.
-    Archive error and cached-updating topology remain later work, so this slice cannot close 6.16.
-  - `6.16-E` implemented, awaiting independent review: real no-data and retained-data Archive transport
-    errors render raw alert evidence without false empty or current-success claims; retained rows and hrefs
-    remain visible. Archive updating remains blocked on a shared production subscription signal; a
-    component-only `data + isLoading=true` mock is not acceptance evidence.
+    Error projection is accepted separately in 6.16-E; updating still requires shared lifecycle work.
+  - `6.16-E` accepted: real no-data and retained-data Archive transport errors render raw alert evidence
+    without false empty or current-success claims; retained rows and hrefs remain visible. Archive updating
+    remains blocked on a shared production subscription signal; a component-only `data + isLoading=true`
+    mock is not acceptance evidence.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and
     page-topology packages have their own evidence.
 - [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns

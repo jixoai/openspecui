@@ -6727,3 +6727,21 @@ Final browser and visual acceptance remains owner-only.
 
 The implementation commit uses `--no-verify` only after every Goal-required focused check passes because
 the repository records the missing root Vite+ `staged` configuration. No commit-hook pass is claimed.
+
+### 6.16-E independent acceptance (2026-07-22)
+
+Independent code review found no issue in `6c79017`. Its apparent `183+/58-` size is not production scope
+expansion: Change evidence contributes 59 lines, the two error fixed points contribute 53, and the
+ArchiveList production file is net +16 lines after its existing list block is indented under one data-aware
+conditional. `VTLink`, handoff, shared-element bindings, href, and ordinary empty/loading behavior remain
+unchanged. The alert uses `role=alert`; its icon is presentation-only.
+
+Independent focused execution passed the complete ArchiveList file (`6/6`) in `1.15s` with zero skipped,
+warning, retry, failure, or flake. No-data error shows the raw message without Loading, false empty copy, row,
+or blank list frame. Retained-data error keeps the row and exact href beside the same failure evidence; an
+empty retained array cannot claim that the Planning root is empty. The production-unreachable Updating
+state was not added.
+
+No browser, SSG, or full gate ran or is claimed. Final browser and visual acceptance remains owner-only.
+6.16-E is accepted. Parent checkpoint 6.16 remains open for a production subscription-updating signal and
+the remaining independently owned page topologies.
