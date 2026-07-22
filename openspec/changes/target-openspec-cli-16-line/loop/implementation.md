@@ -8073,8 +8073,8 @@ late A completion                        -> fill only A's exact identity/binding
 Required fixed points are the real `vtNavController` coordinator and production typed cache identity. The
 current 2.5-second pending path must fail the cold-navigation red because route update is not issued at the
 140ms deadline and before the held prefetch resolves. A preparation resolving before the deadline keeps the
-existing View Transition path; slow/error/timeout commits without inventing success or bypassing Root/Git
-action gates. Escape before the deadline cancels and cleans up; Escape after commit cannot cancel the route.
+existing View Transition path; slow/rejected/deadline work commits without inventing success or bypassing
+Root/Git action gates. Escape before the deadline cancels and cleans up; Escape after commit cannot cancel the route.
 A late A completion must not overwrite or relabel B; the test must retain typed key/value entries and read B
 after A settles. Mutation resistance removes only the deadline-to-`skip-vt` transition and, separately, one
 production identity/binding component from the cache key; each mutation must make its named red fail. Do not
