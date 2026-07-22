@@ -382,6 +382,39 @@ The exact real-component red supplies a typed `RootContextState` loading value p
 Removing only terminal-error precedence from the Loading expression must make the named test red. H cannot
 close parent 6.16.
 
+H final acceptance (2026-07-23): commit `5c0ee93` is independently accepted. The mixed typed-loading plus
+transport-error state renders one raw alert and no Loading; pure Loading, refreshing data, stale Context,
+failed-attempt, and CLI evidence remain green. Independent Context `11/11` and Web typecheck pass. Parent
+6.16 remains open.
+
+#### 6.16-I: project Spec Catalog transport errors without false empty truth (2026-07-23)
+
+`SpecList` currently discards the generic subscription `error`. With no Catalog, a terminal failure falls
+through to the normal Owned tab and claims `No Owned Specs found in the current Planning root.` With a
+retained Catalog, the page silently renders old rows as current success. Catalog transport failure is also
+different from the per-Reference Store diagnostics already carried inside a successfully returned Catalog.
+
+Change only `SpecList` presentation:
+
+```text
+no Catalog + loading        -> existing Loading
+no Catalog + error          -> raw page error; no tabs/source-empty claims
+current empty Catalog       -> existing source-specific empty states
+retained non-empty + error  -> raw page error + retained rows/links
+retained empty + error      -> raw page error; no source-empty claims
+```
+
+Add two real-component fixed points. First, `data=undefined,isLoading=false,error=Error('catalog failed')`
+must show the raw alert while Loading, tablist, and both source-empty copies are absent. Second, a retained
+Catalog containing one Owned entry plus the same error must show alert, name, and compound link together,
+without Loading or empty copy. Removing only no-data error presentation or the retained-error alert/empty
+guard must make the named evidence red.
+
+Do not change `useSpecsSubscription`, Router, Server, static provider, compound identities, `VTLink`,
+Referenced Store diagnostics, scope restoration, or migrate Specs to projection lifecycle events. Static
+loader failures naturally consume the same error presentation, but no SSG/browser work belongs in I. This
+package cannot close parent 6.16.
+
 ## Capability Impact
 
 ### New or Expanded Behavior

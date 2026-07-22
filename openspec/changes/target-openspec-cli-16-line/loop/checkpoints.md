@@ -349,9 +349,11 @@ The independent browser attempt confirms the desktop source control and URL/quer
   - `6.16-G` accepted: ChangeList keeps rows/tracked progress visible, limits Loading to initial no-data
     Status, renders settled no-match as unavailable, and reports one page-level raw Status error while every
     row terminates as unavailable. Independent ChangeList `7/7` and Web typecheck pass.
-  - `6.16-H` implemented and awaiting independent review: Context terminal transport/projection error now
-    suppresses only the unresolved Loading presentation while preserving the raw alert and every Root
-    Context authority/evidence contract.
+  - `6.16-H` accepted: Context terminal transport/projection error suppresses only the unresolved Loading
+    presentation while preserving the raw alert and every Root Context authority/evidence contract.
+    Independent Context `11/11` and Web typecheck pass.
+  - `6.16-I` planned: SpecList transport failure must render raw error without false source-empty truth and
+    must retain source-distinct rows/links when prior Catalog data exists.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and

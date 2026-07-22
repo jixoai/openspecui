@@ -7175,3 +7175,18 @@ callbacks, Root mutation gates, static behavior, other pages, and projection lif
 Browser, SSG, and full gates were not run. The reviewer-owned `AGENTS.md` and `i18n.zh.md` contract remains
 intact at `178ca6f`. Final browser/visual acceptance remains owner-only. `6.16-H` is implemented and awaits
 independent review; parent checkpoint `6.16` remains unchecked.
+
+### 6.16-H independent acceptance and 6.16-I research (2026-07-23)
+
+Independent review accepts commit `5c0ee93`. Transport or typed projection error terminates only the local
+Loading presentation and leaves the existing single raw alert, refreshing retained Context, stale Context,
+failed attempt, full CLI evidence, authoritative cache/current-operation authority, and Root mutation gates
+unchanged. Independent Context focused Vitest passes `11/11`, Web typecheck passes, and the commit diff is
+clean. H is accepted; parent 6.16 remains unchecked.
+
+The next page-level false conclusion is `SpecList`. Its subscription error is ignored, so terminal failure
+without data becomes an Owned-empty claim, while failure with retained data is invisible. 6.16-I consumes
+only the existing `{data,isLoading,error}` state. No-data error renders a raw alert without Catalog tabs or
+empty copy. Retained non-empty data renders alert plus the existing compound rows/links. Transport error
+suppresses source-empty claims but does not replace Catalog-internal Reference Store diagnostics. No hook,
+protocol, static provider, compound identity, Updating, Router, or Server work is authorized.
