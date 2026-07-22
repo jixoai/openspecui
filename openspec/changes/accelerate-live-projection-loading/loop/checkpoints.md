@@ -1,0 +1,45 @@
+<!--
+Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+1. Gate the live-projection performance Change with independently reviewable work packages.
+2. Preserve measurable latency, provenance, currentness, and authority requirements at every package boundary.
+3. Keep final browser acceptance with the owner and prevent this Change from absorbing the active 1.6 correctness work.
+
+Original request (2026-07-23): "请你深入调查，给出一份持有客观证据的调查报告，并给出‘系统性的解决方案’，并将它整理成 openspec change。"
+-->
+
+## 1. Research And Contract
+
+- [x] 1.1 Capture the observed Dashboard, Changes, refresh, and pervasive-Loading symptoms without attributing a cause from UI copy alone.
+- [x] 1.2 Record pinned-CLI, isolated-data-scope, controlled-input, first-payload, and phase-timing evidence in `research/2026-07-23-live-projection-evidence.md`.
+- [x] 1.3 Define the Server-owned Projection Work protocol, complete identity, freshness/authority boundary, lifecycle events, and bounded resource classes.
+- [x] 1.4 Record independent production owners, red/green/mutation-resistance requirements, and stop conditions for Root Context, Dashboard, Changes, and OPSX.
+- [x] 1.5 Add the `live-projection-work` delta specification; strict Change validation must parse it.
+- [ ] 1.6 Obtain owner approval for the measured implementation order before production code begins.
+
+## 2. Shared Projection Work
+
+- [ ] 2.1 Add bounded phase tracing at the subscription-to-projection boundary without creating user analytics or a second fact source.
+- [ ] 2.2 Implement same-identity single-flight work, current/stale display snapshots, explicit invalidation, cancellation, and generation retirement.
+- [ ] 2.3 Prove two same-identity subscribers share one owner work, while late Root/Store/Git A cannot publish into B.
+- [ ] 2.4 Define and enforce measured foreground/background concurrency and memory budgets before adding broad warmup.
+
+## 3. Root And Page Projections
+
+- [ ] 3.1 Make a current Root Context snapshot reusable within one generation without weakening Root action readiness after refresh, failure, reconnect, or retirement.
+- [ ] 3.2 Split Dashboard Summary, Git, trends, and workflow facts so a slow leaf cannot delay the first stable Summary.
+- [ ] 3.3 Stream Changes inventory and bounded row batches with honest progress; retain completed rows through later slow rows or terminal errors.
+- [ ] 3.4 Make OPSX Status demand-driven and independent from full Kernel warmup while preserving typed CLI evidence.
+- [ ] 3.5 Prove every package through its named production owner, exact red and green fixed points, and an unmasked mutation-resistance result.
+
+## 4. Conditional Optimizations
+
+- [ ] 4.1 Measure content-fingerprint cost and hit rate before adding a bounded pure-projection cache.
+- [ ] 4.2 Add persistence only for revalidatable, non-sensitive data with complete identity/versioning and bounded eviction.
+- [ ] 4.3 Move only measured CPU-bound, cancelable work to a bounded Worker pool; keep CLI, Git, and reactive filesystem I/O in their resource classes.
+
+## 5. Verification And Delivery
+
+- [ ] 5.1 Re-run the controlled benchmark and record before/after phase distributions and event order for every implemented package.
+- [ ] 5.2 Run checked focused Vitest, affected component-level Playwright fixtures, format, lint, typecheck, and scoped SSG evidence where applicable.
+- [ ] 5.3 Keep the owner-only final Dashboard and Changes browser/visual walkthrough separate from automated preparation evidence.
+- [ ] 5.4 Deliver implementation and matching checkpoint evidence in independently reviewable commits; do not merge, archive, or release until the owner approves.
