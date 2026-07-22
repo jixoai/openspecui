@@ -6251,3 +6251,18 @@ status below. Residual limitation: samples establish local coordinator timing an
 they establish neither router/DOM completion, cross-subscription causality, backend latency, nor a policy
 to cancel late A navigation. Checkpoint `6.16` remains unchecked and 6.16-B remains open for independent
 review. Final browser and visual acceptance remains owner-only.
+
+### 6.16-B second independent review: diagnostics cannot replace the original failure (2026-07-22)
+
+The semantic correction in `9ae6891` resolves route-update naming, superseded history, latest-request
+ownership, and typed terminal states. Independent review found one remaining runtime-safety blocker:
+`createErrorSummary(error: unknown)` assumes `Error.name` and `Error.message` are strings with safe
+getters. JavaScript permits non-string values and throwing accessors, so `.slice()` or property access can
+throw inside `record*Failed` and replace the original rejection that the coordinator must rethrow.
+
+Make summary extraction a total, never-throwing boundary. A real `vtNavController` failure whose Error has
+throwing `name`/`message` accessors must still reject with the identical original object and leave a typed
+failed sample with fixed fallback text. Temporarily restoring the direct property access must make that
+same fixed point red. Also remove the unused exported `NavigationTimingPhase`: every sample already owns a
+more precise phase tuple, and no diagnostics consumer needs the generic union. Keep checkpoint `6.16` and
+6.16-B open until this final correction passes independent focused review; no other behavior is authorized.
