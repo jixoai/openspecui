@@ -5328,3 +5328,402 @@ owner's direct same-origin Project Web acceptance of single-page OPSX flows, mul
 subscription convergence, visual/layout behavior, and real backend failures. Checkpoint 6.14 remains
 open at `64/131`; no 6.15, full gate, push, merge, archive, or release work starts before the owner
 reports the result.
+
+### 6.14 owner acceptance correction: persistent Changes New entry (2026-07-21)
+
+The owner's direct walkthrough found that the Changes page exposed `/opsx-new` only inside its empty
+state. Once an active Change existed, the page had no persistent New command, so the documented New
+acceptance path was not reachable from the expected page header.
+
+`ChangeList` now renders a page-level `New` command beside the Changes heading and opens the existing
+real `/opsx-new` PopArea through `vtNavController`. The empty-state Propose and advanced-New links remain
+unchanged. A direct route test renders an existing Change, clicks the header command, and proves the
+production navigation owner receives `/opsx-new`.
+
+Focused evidence:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/routes/change-list.test.tsx
+
+Test Files  1 passed (1)
+Tests       5 passed (5)
+
+pnpm --filter @openspecui/web typecheck
+  tsc --noEmit -> passed with no diagnostics
+
+pnpm exec prettier --check \
+  packages/web/src/routes/change-list.tsx \
+  packages/web/src/routes/change-list.test.tsx
+  -> passed
+
+git diff --check
+  -> passed with no output
+```
+
+This is a bounded owner-acceptance correction covered by the existing OpenSpec 1.6 Web changeset; it
+does not close checkpoint `6.14`, authorize `6.15`, or replace the owner's resumed browser walkthrough.
+
+### 6.14 owner acceptance blockers: PTY starvation and existing-terminal provenance (2026-07-21)
+
+The resumed owner walkthrough found two independent production defects after Compose opened the real
+terminal dispatch surface:
+
+1. Creating a Codex/Claude terminal could make the whole backend and page unresponsive. On the
+   acceptance backend at `3102`, the Server process sustained about 95% CPU, bounded HTTP probes timed
+   out, and the PTY WebSocket accumulated large send/receive backlogs. The PTY fanout called
+   `WebSocket.send` without any per-client backpressure, while the browser notified every React
+   subscriber once per output chunk.
+2. A pre-created Codex/Gemini terminal never appeared under Send. The shared dispatch component
+   deliberately replaced all existing sessions with `[]` whenever a workflow required a cwd target.
+   Filtering by cwd target alone would be unsafe because a Planning terminal created under Root A
+   could then receive Root B workflow input.
+
+The exact pre-fix red evidence was:
+
+```text
+pty-websocket.test slow-client case
+  expected terminate 1 time, got 0
+
+terminal-controller.test output burst case
+  expected listener 1 time, got 100
+
+terminal-dispatch-actions.test same-generation reuse case
+  unable to find "Current Codex · Planning"; only Create remained
+
+pty-cwd-contract.test guarded workflow input case
+  created reply omitted rootGeneration; workflow-input parsed as INVALID_MESSAGE
+```
+
+The correction keeps one coherent production boundary:
+
+```text
+Planning owner lease
+  -> stamp immutable rootGeneration on PTY create
+  -> preserve it through create/list/reconnect
+  -> Web lists Launch Agents plus same-generation Planning terminals
+  -> workflow-input(request generation, terminal id)
+  -> Server re-resolves current Planning owner
+  -> compare request generation + Planning terminal generation when applicable
+  -> write once and acknowledge | reject before write
+```
+
+Each PTY WebSocket now has a 256 KiB queued-output bound and reconnect replay is limited to the newest
+128 KiB. Crossing the bound terminates only that socket; the Server-owned PTY process survives for
+list/attach recovery. The browser still writes every output chunk to the renderer, but invalidates the
+React snapshot only when output becomes active and once when it becomes idle.
+
+Existing workflow terminal reuse is not inferred from `cwdTarget` alone. `PtySession` stores a
+Server-stamped Root generation (`null` for Launch), and Compose exposes live Launch sessions plus only
+Planning sessions whose generation equals the prepared workflow target. Send uses acknowledged
+`workflow-input`; the production Server test proves a Launch Agent accepts a prompt with current
+Planning evidence, while Planning A input reaches PTY once and Root A -> B causes the same terminal to
+reject stale input without a second PTY write. Ordinary interactive keyboard input remains on the
+existing unguarded `input` protocol.
+
+Focused post-fix evidence:
+
+```text
+pnpm --filter @openspecui/server exec vitest run \
+  src/pty-websocket.test.ts src/pty-cwd-contract.test.ts src/pty-server-cwd-owner.test.ts
+  -> 3 files / 20 tests passed
+
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/lib/terminal-controller.test.ts \
+  src/components/terminal/terminal-dispatch-actions.test.tsx \
+  src/components/terminal/terminal-spawn-command-dialog.test.tsx \
+  src/routes/opsx-compose.test.tsx \
+  src/routes/opsx-compose-generation.test.tsx \
+  src/routes/opsx-propose.test.tsx \
+  src/routes/opsx-verify.test.tsx \
+  src/routes/change-list.test.tsx
+  -> 8 files / 78 tests passed
+
+pnpm --filter @openspecui/core typecheck
+pnpm --filter @openspecui/server typecheck
+pnpm --filter @openspecui/web typecheck
+  -> all passed
+```
+
+This fixes the two owner-reported blockers but does not claim the real browser result. Checkpoint
+`6.14` remains open at `64/131`; the owner resumes the direct single-page/multi-tab walkthrough. No
+`6.15`, full gate, SSG, push, merge, archive, or release work is authorized by this correction.
+
+### 6.14 owner acceptance correction: Create reveal and target continuity (2026-07-22)
+
+The owner clarified the remaining browser contract after the focused correction: creating Codex,
+Claude, or Gemini must reveal the Terminal route even when the current area is elsewhere. The existing
+`createShellSession` owner still activates the new local session; `revealTerminalSession` only resolves
+the area that owns `/terminal` and pushes that route when it is hidden, so it does not duplicate session
+state or force a second activation.
+
+The target contract is now explicit:
+
+```text
+workflow target while loading  -> no current Planning generation yet
+workflow target when ready     -> Launch Agent targets remain visible
+                                 Planning targets require exact generation
+Send                         -> Server owner lease + request generation check
+                              -> Launch accepted | Planning matching session accepted
+                              -> stale/missing/disconnected rejected, no retry
+Create                       -> createShellSession activates session
+                              -> revealTerminalSession opens its owning area
+```
+
+Focused evidence was rerun after this correction:
+
+```text
+Server: 3 files / 22 tests passed
+Web:    8 files / 80 tests passed
+Core, Server, Web typecheck: passed
+git diff --check: passed
+```
+
+The owner now performs the remaining direct browser acceptance: Changes header New, Compose
+Loading -> Ready target continuity, pre-created Launch/Planning Agent Send, Create-to-Terminal
+reveal, output-storm responsiveness including refresh, Root A -> B stale Planning rejection, New,
+Propose, Compose/Update, Verify, References, multi-tab, error, and visual checks. This is preparation
+evidence only; 6.14 remains open at `64/131`, with no 6.15, full gates, SSG, push, merge, archive, or
+release work authorized before the owner's result.
+
+### 6.14 definitive Claude freeze diagnosis and PTY input correction (2026-07-22)
+
+The owner reported that Create Claude still froze the entire application, including HTTP refresh.
+Debugger evidence identifies the input boundary as the deterministic cause and supersedes the earlier
+output-starvation diagnosis for this specific freeze. Output batching and slow-client isolation remain
+valid independent protections, but they cannot repair this input-side loop.
+
+```text
+TerminalSpawnCommandDialog
+  -> createShellSession(/bin/zsh)
+  -> browser initialInput: "claude '<about 4.6 KiB prompt>'\n"
+  -> PtySession.process.write(one long line)
+  -> @lydell/node-pty UnixTerminal._socket.write
+  -> macOS PTY still has ICANON enabled; MAX_CANON/MAX_INPUT = 1024
+  -> PTY queue reaches 1022 bytes; native write(fd=31) returns errno 35 / EAGAIN
+  -> tty stream repeatedly re-enters write on the Node main thread
+  -> HTTP, WebSocket, route refresh, and shutdown handling are starved
+```
+
+The frozen acceptance Server PID `3366` stayed near 97% CPU and
+`curl --max-time 2 http://127.0.0.1:3102/api/health` timed out, while comparison backends responded in
+milliseconds. Main-thread sampling remained in `StreamBase::WriteString -> uv_write -> write`; LLDB
+captured fd `31` as `/dev/ptmx`, a 3640-byte remaining write from the OPSX prompt, and `EAGAIN=35`.
+Killing the child shell could not recover the already spinning Server. After terminating the frozen
+fixture and restarting the corrected source with the fixture's isolated `XDG_DATA_HOME`, the same
+`3102/api/health` returned HTTP 200 in about 5 ms.
+
+The corrected ownership is:
+
+```text
+Create Agent
+  -> renderTerminalSpawnCommand
+  -> createDedicatedSession(executable, argv, cwd/generation/label)
+  -> PTY Server create
+  -> node-pty spawn(executable, argv)
+     no shell command injection; prompt crosses exec argv
+
+Send / interactive input
+  -> PTY Server session owner
+  -> one ordered PtyInputWriter per session
+  -> Unix node:fs.write(fd) callback
+     partial write -> advance
+     EAGAIN/EWOULDBLOCK/EINTR -> yield + bounded retry
+     queue bound/closed -> reject workflow Send
+     exit/close -> retire queue and retry timer
+  -> Windows -> existing ConPTY write path
+```
+
+`TerminalSpawnCommandDialog` still shows the selected-shell-quoted preview, but argv builders now
+spawn their executable directly. Custom `shellLine` builders explicitly start the selected shell with
+its execution switch instead of typing the line into a fresh interactive prompt. The dedicated Session
+accepts the configured Agent label, retains cwd/generation provenance, and remains the active-session
+owner.
+
+Terminal reveal is also corrected as a separate UI owner. Create activates the new dedicated Session;
+Send activates its selected existing Session after Server acknowledgement. Both call the shared reveal
+operation. When `/terminal` belongs to the bottom area, reveal always calls
+`activateBottom('/terminal')`, even if the stored bottom route already equals `/terminal`, because a
+selected bottom route can still be collapsed.
+
+Focused red/green evidence:
+
+```text
+Pre-fix:
+  terminal-spawn-command-dialog.test
+    -> expected createDedicatedSession(argv); production called createShellSession(initialInput)
+  terminal-dispatch-actions.test
+    -> expected target activation/reveal after Send; production called neither
+  pty-input-writer.test
+    -> module/owner absent
+
+Post-fix:
+  Server PTY: 4 files / 25 tests passed
+    pty-input-writer, pty-websocket, pty-cwd-contract, pty-server-cwd-owner
+  Web 6.14: 8 files / 82 tests passed
+    terminal controller/dispatch/dialog, Compose/Generation, Propose, Verify, Changes
+  Server typecheck: passed, including checked PTY tests
+  Web typecheck: passed
+  focused lint: 0 warnings / 0 errors
+  git diff --check: passed
+
+  production macOS PTY probe, twice:
+    create /bin/sh through /ws/pty
+    immediately send 4662-byte line through ordinary input
+    request the same 3102 Server /api/health with 1s bound
+    -> HTTP 200 in 38 ms and 23 ms
+    -> close each temporary PTY
+```
+
+This correction does not claim the real Claude or final browser result. The restarted acceptance
+fixture is available at `http://localhost:3102` with its isolated Store registry restored. The owner
+continues the real single-page, multi-tab, visual, and backend walkthrough. Checkpoint `6.14` remains
+open at `64/131`; do not start `6.15`, full gates, SSG, push, merge, archive, or release.
+
+### 6.14 owner acceptance result and final correction boundary (2026-07-22)
+
+The owner completed the direct browser walkthrough and accepted the single-page and multi-tab result.
+Two observed transitions differ from the earlier expectation that a Dialog would close, but their
+production outcome is correct and is now the accepted contract:
+
+```text
+touch current Planning config
+  -> open Dialog remains mounted
+  -> Dialog shows Refreshing planning root
+  -> same Planning root settles
+  -> current draft/target remains valid
+
+change Launch store: accept-a -> accept-b
+  -> open Dialog remains mounted
+  -> Dialog shows Refreshing planning root
+  -> Root B settles
+  -> generated Prompt carries Root B target/evidence
+```
+
+Automatic Dialog close is not required. The correctness boundary is that stale A cannot dispatch and
+the final target/prompt converges to current Root B. This owner evidence completes the manual
+single-page and multi-tab portion; it does not erase independent code-review blockers.
+
+One remaining visible defect is precise: after the backend is killed, route/API surfaces show the real
+connection error, but the bottom status indicator retains green `Live`. Independent review traces the
+cause to `useServerStatus`: tRPC WebSocket `connecting` with an error starts the reconnect countdown but
+does not retire the prior `connected: true`; `StatusIndicator` then objectively renders the stale fact.
+The transport status owner must project reconnect/closed as disconnected and prove the existing
+`Offline` icon/style branch through the real hook-to-component boundary.
+
+Independent Standards review also rejects the dirty candidate at two production-evidence boundaries:
+
+```text
+Unix PtyInputWriter
+  fd available     -> bounded asynchronous fd writer
+  fd unavailable   -> currently falls back to IPty.write        [rejected]
+  required         -> fail closed; Windows alone may use IPty.write
+
+PTY lifecycle evidence
+  pty-websocket.test.ts / pty-input-writer.test.ts
+  -> currently excluded from every Server tsc test lane
+  -> websocket fixtures use as never and unchecked JSON.parse
+  required: checked fixtures + explicit pty test-typecheck inventory
+```
+
+Checkpoint `6.14` therefore remains open at `64/131` until these three focused corrections pass
+independent review and local focused evidence. No 6.15, full gate, SSG, push, merge, archive, or release
+is authorized yet.
+
+### Interaction-latency investigation debt (2026-07-22)
+
+The owner reports that the accepted workflow still feels persistently slow because page switches and
+ordinary actions repeatedly expose Loading. This is a serious product-experience issue but is lower
+priority than closing the current correction. Current code supports several concrete contributors;
+there is not yet timing evidence that assigns one dominant cause:
+
+```text
+first route visit
+  -> route component mounts a separate subscription
+  -> no module cache entry yet
+  -> full-page Loading until first emission
+
+detail navigation
+  -> prepareRouteDetailViewTransition
+  -> query/prefetch before navigation commit
+  -> visible wait after 140 ms; bounded only at 2.5 s
+
+Planning subscription / action
+  -> serialized PlanningRootServiceManager transition
+  -> openspec doctor/context resolution
+  -> reactive owner read
+  -> OPSX kernel warmup + CLI-backed ensure* when required
+
+root dependency change
+  -> Root stream emits refreshing immediately
+  -> mutation authority is revoked during re-resolution
+  -> same identity may settle without a real root replacement
+```
+
+This explains why the system is correct but feels blocked: authority acquisition, data preparation, and
+navigation presentation currently share the same visible waiting experience. A later focused
+performance slice must add phase timings before changing behavior, distinguish stale-display continuity
+from mutation authority, audit route prefetch policy, and avoid weakening Root/generation correctness.
+Do not opportunistically optimize this debt while closing 6.14.
+
+### 6.14 post-fix independent review closure (2026-07-22)
+
+Independent Spec and Standards review rejected the first accepted candidate until its evidence crossed
+the production owners and its transport bounds matched their documented units. The final correction
+closes those gaps without changing the owner's accepted Dialog convergence behavior:
+
+```text
+tRPC WebSocket pending + current system emission
+  -> Live
+connecting | idle | replacement pending without a current emission
+  -> retained project metadata is display-only
+  -> Offline + Unlink2 + reconnect affordance
+
+Unix PTY input
+  fd available   -> ordered asynchronous fd writes, byte-bound queue, yielded retry
+  fd unavailable -> reject without IPty.write
+Windows PTY input
+  -> native ConPTY writer
+
+PTY output attachment
+  -> UTF-8 byte-bound pending queue and batches
+  -> Unicode-safe replay tail
+  -> slow or unserializable socket payload fails closed
+```
+
+The status-bar component test now renders the real `StatusIndicator` and `useServerStatus`, mocks only
+the transport, and drives `pending -> system emission -> connecting`; it proves the visible
+`Live/Link2 -> Offline/Unlink2` transition. PTY input, output, WebSocket handler, cwd, and production
+Server-owner evidence are all included in `tsconfig.pty-tests.json`; the rewritten handler fixture uses
+real typed `PtyManager`, `PtySession`, WebSocket, IPty, and `PtyServerMessageSchema` boundaries without
+`as never`, `as any`, fabricated non-null state, or unchecked protocol payloads.
+
+Final focused evidence after review correction:
+
+```text
+pnpm --filter @openspecui/server typecheck:pty-tests
+  -> passed
+
+pnpm --filter @openspecui/server exec vitest run \
+  src/pty-input-writer.test.ts src/pty-output-transport.test.ts \
+  src/pty-websocket.test.ts src/pty-cwd-contract.test.ts src/pty-server-cwd-owner.test.ts
+  -> 5 files / 29 tests passed
+
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/lib/use-server-status.test.tsx src/components/layout/status-bar.test.tsx
+  -> 2 files / 3 tests passed
+
+pnpm --filter @openspecui/server typecheck
+pnpm --filter @openspecui/web typecheck
+  -> passed
+
+focused format/lint and git diff --check
+  -> passed with zero warnings/errors
+```
+
+The owner already accepted the direct single-page and multi-tab walkthrough. Automatic Dialog close is
+not required: same-root refresh preserves the valid target, and Launch Store A -> B convergence keeps
+the Dialog mounted while the final prompt adopts Root B evidence. Checkpoint `6.14` is therefore closed
+at `65/131`. The separately recorded pervasive-Loading experience debt remains open for a later timed
+investigation and does not authorize speculative optimization here. No `6.15`, full repository gate,
+SSG, push, merge, archive, or release work is included in this closure.

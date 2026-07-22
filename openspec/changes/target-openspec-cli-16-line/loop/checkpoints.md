@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
 1. Track completed research and approval gates.
 2. Sequence root, CLI, reactive, and projection implementation.
 3. Track project, static, hosted, and App product surfaces.
@@ -10,6 +10,8 @@ Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始
 Original request (2026-07-14): "我们最终使用openspec来管理 wayfinder 产出的文档。"
 Original request (2026-07-16): "代码已经提交，开始review。如果有问题，那么可更新change甚至可以新开change。"
 Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
+Owner acceptance (2026-07-22): "单页：通过；多标签：通过。"
+Owner-reported debt (2026-07-22): "整个过程中，几乎都在 Loading，切换个页面也等，做任何动作也在等。"
 -->
 
 ## 1. Research and Planning
@@ -322,7 +324,7 @@ The independent browser attempt confirms the desktop source control and URL/quer
 - [x] 6.11 Git makes repository scope explicit for status, history, worktrees, and every mutation
 - [x] 6.12 Terminal shows selected cwd/root identity in creation controls and tab labels
 - [x] 6.13 Settings exposes 1.6 compatibility, workflow/tool delivery, root selection, environment, and data-scope diagnostics
-- [ ] 6.14 OPSX New/Propose/Compose/Verify/Update shows and preserves its target planning root
+- [x] 6.14 OPSX New/Propose/Compose/Verify/Update shows and preserves its target planning root
 - [ ] 6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging
 - [ ] 6.16 Every network-triggering control binds loading/disabled state and every page covers empty/loading/loaded/updating/error topologies
 - [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns
