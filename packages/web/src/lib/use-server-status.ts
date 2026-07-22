@@ -43,6 +43,9 @@ export function useServerStatus(): ServerStatus {
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const disconnectTimeRef = useRef<number | null>(null)
   const wsStateRef = useRef<ServerStatus['wsState']>('idle')
+  const systemGenerationRef = useRef(0)
+  const activeSystemGenerationRef = useRef<number | null>(null)
+  const systemSubscriptionRef = useRef<{ unsubscribe: () => void } | null>(null)
 
   // 开始重连倒计时
   const startReconnectCountdown = useCallback(() => {
@@ -90,7 +93,7 @@ export function useServerStatus(): ServerStatus {
     setStatus((prev) => ({ ...prev, reconnectCountdown: null }))
   }, [])
 
-  // 监听 WebSocket 连接状态
+  // WebSocket lifecycle owns admission to the system projection. A reconnect gets a new local generation.
   useEffect(() => {
     // Skip WebSocket monitoring in static mode
     if (isStaticMode()) {
@@ -98,21 +101,81 @@ export function useServerStatus(): ServerStatus {
     }
 
     const wsClient = getOrCreateWsClientInstance()
-    if (!wsClient) {
-      return
+
+    const retireSystemSubscription = () => {
+      activeSystemGenerationRef.current = null
+      systemGenerationRef.current += 1
+      systemSubscriptionRef.current?.unsubscribe()
+      systemSubscriptionRef.current = null
     }
 
-    // 订阅 wsClient 的连接状态
+    const beginSystemSubscription = () => {
+      const generation = systemGenerationRef.current + 1
+      systemGenerationRef.current = generation
+      activeSystemGenerationRef.current = generation
+      const isCurrentGeneration = () => activeSystemGenerationRef.current === generation
+
+      systemSubscriptionRef.current = trpcClient.system.subscribe.subscribe(undefined, {
+        onData: (data) => {
+          if (!isCurrentGeneration()) {
+            return
+          }
+
+          const projectDir = data.projectDir
+          const dirName = projectDir.split('/').pop() || projectDir
+          const connected = wsStateRef.current === 'pending'
+
+          setStatus((prev) => ({
+            ...prev,
+            connected,
+            projectDir,
+            dirName,
+            watcherEnabled: data.watcherEnabled,
+            projectRecovery: data.projectRecovery,
+            error: connected ? null : prev.error,
+          }))
+
+          document.title = `${dirName} - OpenSpec UI`
+        },
+        onError: (error) => {
+          if (!isCurrentGeneration()) {
+            return
+          }
+
+          setStatus((prev) => ({
+            ...prev,
+            connected: false,
+            error: error.message,
+          }))
+          document.title = 'OpenSpec UI (Disconnected)'
+        },
+      })
+    }
+
+    if (!wsClient) {
+      beginSystemSubscription()
+      return retireSystemSubscription
+    }
+
     const subscription = wsClient.connectionState.subscribe({
       next: (state) => {
         const previousWsState = wsStateRef.current
         wsStateRef.current = state.state
+
+        if (state.state !== 'pending') {
+          retireSystemSubscription()
+        }
+
         setStatus((prev) => ({
           ...prev,
           connected:
             state.state === 'pending' && previousWsState === 'pending' ? prev.connected : false,
           wsState: state.state,
         }))
+
+        if (state.state === 'pending' && previousWsState !== 'pending') {
+          beginSystemSubscription()
+        }
 
         // 当进入 connecting 状态且有 error 时，说明正在重连
         if (state.state === 'connecting' && state.error) {
@@ -125,11 +188,12 @@ export function useServerStatus(): ServerStatus {
 
     return () => {
       subscription.unsubscribe()
+      retireSystemSubscription()
       stopReconnectCountdown()
     }
   }, [startReconnectCountdown, stopReconnectCountdown])
 
-  // 系统状态订阅（WS-first）
+  // Static exports have no live transport or system subscription.
   useEffect(() => {
     if (isStaticMode()) {
       setStatus((prev) => ({
@@ -142,39 +206,7 @@ export function useServerStatus(): ServerStatus {
         error: null,
       }))
       document.title = 'OpenSpec UI (Static)'
-      return
-    }
-
-    const subscription = trpcClient.system.subscribe.subscribe(undefined, {
-      onData: (data) => {
-        const projectDir = data.projectDir
-        const dirName = projectDir.split('/').pop() || projectDir
-        const connected = wsStateRef.current === 'pending'
-
-        setStatus((prev) => ({
-          ...prev,
-          connected,
-          projectDir,
-          dirName,
-          watcherEnabled: data.watcherEnabled,
-          projectRecovery: data.projectRecovery,
-          error: connected ? null : prev.error,
-        }))
-
-        document.title = `${dirName} - OpenSpec UI`
-      },
-      onError: (error) => {
-        setStatus((prev) => ({
-          ...prev,
-          connected: false,
-          error: error.message,
-        }))
-        document.title = 'OpenSpec UI (Disconnected)'
-      },
-    })
-
-    return () => {
-      subscription.unsubscribe()
+      return undefined
     }
   }, [])
 

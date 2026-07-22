@@ -29,9 +29,16 @@ type SystemHandlers = {
   onError: (error: Error) => void
 }
 
+type SystemSubscription = {
+  unsubscribe: () => void
+}
+
 const observerRef = vi.hoisted<{ observer: ConnectionObserver | null }>(() => ({ observer: null }))
-const systemHandlersRef = vi.hoisted<{ handlers: SystemHandlers | null }>(() => ({
-  handlers: null,
+const systemHandlersRef = vi.hoisted<{ handlers: SystemHandlers[] }>(() => ({
+  handlers: [],
+}))
+const systemSubscriptionsRef = vi.hoisted<{ subscriptions: SystemSubscription[] }>(() => ({
+  subscriptions: [],
 }))
 const getOrCreateWsClientInstanceMock = vi.hoisted(() => vi.fn())
 const systemSubscribeMock = vi.hoisted(() => vi.fn())
@@ -81,7 +88,8 @@ vi.mock('lucide-react', async (importOriginal) => {
 describe('DesktopStatusBar', () => {
   afterEach(() => {
     observerRef.observer = null
-    systemHandlersRef.handlers = null
+    systemHandlersRef.handlers = []
+    systemSubscriptionsRef.subscriptions = []
     vi.clearAllMocks()
     cleanup()
   })
@@ -96,8 +104,10 @@ describe('DesktopStatusBar', () => {
       },
     })
     systemSubscribeMock.mockImplementation((_input: undefined, handlers: SystemHandlers) => {
-      systemHandlersRef.handlers = handlers
-      return { unsubscribe: vi.fn() }
+      systemHandlersRef.handlers.push(handlers)
+      const subscription = { unsubscribe: vi.fn() }
+      systemSubscriptionsRef.subscriptions.push(subscription)
+      return subscription
     })
   }
 
@@ -125,7 +135,7 @@ describe('DesktopStatusBar', () => {
 
     act(() => {
       observerRef.observer?.next({ state: 'pending' })
-      systemHandlersRef.handlers?.onData({
+      systemHandlersRef.handlers[0]?.onData({
         projectDir: '/Users/kzf/Dev/GitHub/jixoai-labs/openspecui',
         watcherEnabled: true,
         projectRecovery: idleRecovery,
@@ -135,19 +145,52 @@ describe('DesktopStatusBar', () => {
     return waitFor(() => {
       expect(screen.getByText('Live')).toHaveClass('text-green-600')
       expect(screen.getByTestId('live-link-icon')).toHaveClass('text-green-500')
-    }).then(() => {
-      act(() => {
-        observerRef.observer?.next({
-          state: 'connecting',
-          error: new Error('backend closed'),
+    })
+      .then(() => {
+        act(() => {
+          observerRef.observer?.next({
+            state: 'connecting',
+            error: new Error('backend closed'),
+          })
+        })
+
+        return waitFor(() => {
+          expect(screen.getByText('Offline')).toHaveClass('text-red-600')
+          expect(screen.queryByTestId('live-link-icon')).toBeNull()
+          expect(screen.getByTestId('offline-unlink-icon')).toHaveClass('text-red-500')
+          expect(systemSubscriptionsRef.subscriptions[0]?.unsubscribe).toHaveBeenCalledTimes(1)
         })
       })
+      .then(() => {
+        act(() => {
+          observerRef.observer?.next({ state: 'pending' })
+          systemHandlersRef.handlers[0]?.onData({
+            projectDir: '/tmp/late-a',
+            watcherEnabled: true,
+            projectRecovery: idleRecovery,
+          })
+        })
 
-      return waitFor(() => {
-        expect(screen.getByText('Offline')).toHaveClass('text-red-600')
-        expect(screen.queryByTestId('live-link-icon')).toBeNull()
-        expect(screen.getByTestId('offline-unlink-icon')).toHaveClass('text-red-500')
+        return waitFor(() => {
+          expect(screen.getByText('Offline')).toHaveClass('text-red-600')
+          expect(screen.queryByTestId('live-link-icon')).toBeNull()
+          expect(screen.getByTestId('offline-unlink-icon')).toHaveClass('text-red-500')
+          expect(systemHandlersRef.handlers).toHaveLength(2)
+        })
       })
-    })
+      .then(() => {
+        act(() => {
+          systemHandlersRef.handlers[1]?.onData({
+            projectDir: '/tmp/current-b',
+            watcherEnabled: true,
+            projectRecovery: idleRecovery,
+          })
+        })
+
+        return waitFor(() => {
+          expect(screen.getByText('Live')).toHaveClass('text-green-600')
+          expect(screen.getByTestId('live-link-icon')).toHaveClass('text-green-500')
+        })
+      })
   })
 })

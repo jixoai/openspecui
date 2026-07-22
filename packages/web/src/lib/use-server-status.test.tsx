@@ -27,12 +27,19 @@ type SystemHandlers = {
   onError: (error: Error) => void
 }
 
+type SystemSubscription = {
+  unsubscribe: () => void
+}
+
 const idleRecovery: ProjectRecoveryStatus = { state: 'idle' }
 
 const modeState = vi.hoisted(() => ({ staticMode: false }))
 const observerRef = vi.hoisted<{ observer: ConnectionObserver | null }>(() => ({ observer: null }))
-const systemHandlersRef = vi.hoisted<{ handlers: SystemHandlers | null }>(() => ({
-  handlers: null,
+const systemHandlersRef = vi.hoisted<{ handlers: SystemHandlers[] }>(() => ({
+  handlers: [],
+}))
+const systemSubscriptionsRef = vi.hoisted<{ subscriptions: SystemSubscription[] }>(() => ({
+  subscriptions: [],
 }))
 const getOrCreateWsClientInstanceMock = vi.hoisted(() => vi.fn())
 const systemSubscribeMock = vi.hoisted(() => vi.fn())
@@ -57,7 +64,9 @@ describe('useServerStatus', () => {
   afterEach(() => {
     modeState.staticMode = false
     observerRef.observer = null
-    systemHandlersRef.handlers = null
+    systemHandlersRef.handlers = []
+    systemSubscriptionsRef.subscriptions = []
+    document.title = ''
     vi.clearAllMocks()
   })
 
@@ -72,8 +81,10 @@ describe('useServerStatus', () => {
     })
 
     systemSubscribeMock.mockImplementation((_input: undefined, handlers: SystemHandlers) => {
-      systemHandlersRef.handlers = handlers
-      return { unsubscribe: vi.fn() }
+      systemHandlersRef.handlers.push(handlers)
+      const subscription = { unsubscribe: vi.fn() }
+      systemSubscriptionsRef.subscriptions.push(subscription)
+      return subscription
     })
 
     const { useServerStatus } = await import('./use-server-status')
@@ -81,7 +92,7 @@ describe('useServerStatus', () => {
 
     act(() => {
       observerRef.observer?.next({ state: 'pending' })
-      systemHandlersRef.handlers?.onData({
+      systemHandlersRef.handlers[0]?.onData({
         projectDir: '/tmp/opsx-project',
         watcherEnabled: true,
         projectRecovery: idleRecovery,
@@ -117,18 +128,41 @@ describe('useServerStatus', () => {
     await waitFor(() => {
       expect(result.current.wsState).toBe('pending')
       expect(result.current.connected).toBe(false)
+      expect(systemSubscriptionsRef.subscriptions[0]?.unsubscribe).toHaveBeenCalledTimes(1)
+      expect(systemHandlersRef.handlers).toHaveLength(2)
     })
 
     act(() => {
-      systemHandlersRef.handlers?.onData({
+      systemHandlersRef.handlers[0]?.onData({
+        projectDir: '/tmp/late-a',
+        watcherEnabled: true,
+        projectRecovery: idleRecovery,
+      })
+      systemHandlersRef.handlers[0]?.onError(new Error('late A error'))
+    })
+
+    await waitFor(() => {
+      expect(result.current).toMatchObject({
+        connected: false,
         projectDir: '/tmp/opsx-project',
+        error: null,
+      })
+      expect(document.title).toBe('opsx-project - OpenSpec UI')
+    })
+
+    act(() => {
+      systemHandlersRef.handlers[1]?.onData({
+        projectDir: '/tmp/opsx-project-b',
         watcherEnabled: true,
         projectRecovery: idleRecovery,
       })
     })
 
     await waitFor(() => {
-      expect(result.current.connected).toBe(true)
+      expect(result.current).toMatchObject({
+        connected: true,
+        projectDir: '/tmp/opsx-project-b',
+      })
     })
 
     act(() => {
@@ -141,5 +175,46 @@ describe('useServerStatus', () => {
     })
 
     unmount()
+  })
+
+  it('preserves the existing system-subscription fallback when no WebSocket client exists', async () => {
+    getOrCreateWsClientInstanceMock.mockReturnValue(null)
+    systemSubscribeMock.mockImplementation((_input: undefined, handlers: SystemHandlers) => {
+      systemHandlersRef.handlers.push(handlers)
+      return { unsubscribe: vi.fn() }
+    })
+
+    const { useServerStatus } = await import('./use-server-status')
+    const { result } = renderHook(() => useServerStatus())
+
+    act(() => {
+      systemHandlersRef.handlers[0]?.onData({
+        projectDir: '/tmp/http-fallback',
+        watcherEnabled: false,
+        projectRecovery: idleRecovery,
+      })
+    })
+
+    await waitFor(() => {
+      expect(result.current).toMatchObject({
+        connected: false,
+        projectDir: '/tmp/http-fallback',
+        watcherEnabled: false,
+      })
+      expect(document.title).toBe('http-fallback - OpenSpec UI')
+    })
+
+    act(() => {
+      systemHandlersRef.handlers[0]?.onError(new Error('fallback error'))
+    })
+
+    await waitFor(() => {
+      expect(result.current).toMatchObject({
+        connected: false,
+        error: 'fallback error',
+        projectDir: '/tmp/http-fallback',
+      })
+      expect(document.title).toBe('OpenSpec UI (Disconnected)')
+    })
   })
 })
