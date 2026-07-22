@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Verify Context projects CLI-selected root, Store, launch, and inherited data-scope facts.
  * 2. Verify direct Reference diagnostics remain neutral, read-only, and incomplete-by-design.
- * 3. Verify loading, refreshing, stale-error, and command-evidence states remain observable.
+ * 3. Verify loading, refreshing, terminal-error, stale-error, and command-evidence states stay distinct.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
@@ -84,6 +84,27 @@ describe('ContextView', () => {
     setState({ error: new Error('boom'), data: undefined })
     render(<ContextView />)
     expect(screen.getByRole('alert').textContent).toContain('boom')
+  })
+
+  it('renders terminal transport error instead of unresolved projection Loading', () => {
+    setState({
+      data: {
+        state: 'loading',
+        data: null,
+        attempt: null,
+        error: null,
+        observedAt: 0,
+      } satisfies RootContextState,
+      isLoading: false,
+      error: new Error('socket closed'),
+    })
+
+    render(<ContextView />)
+
+    const alerts = screen.getAllByRole('alert')
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0].textContent).toContain('socket closed')
+    expect(screen.queryByText('Loading context...')).toBeNull()
   })
 
   it('renders refreshing state while retaining the current Context projection', () => {

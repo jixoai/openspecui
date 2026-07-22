@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Project one launch project's CLI-selected planning root and direct References.
- * 2. Present current, stale, and failed-attempt Root Context facts without collapsing them.
+ * 2. Present current, stale, terminal-error, and failed-attempt facts without collapsing them.
  * 3. Present the inherited Store registry/data scope as read-only environment evidence.
  * 4. Expose each Root Context command-evidence envelope through on-demand disclosure.
  *
@@ -16,8 +16,12 @@ import { AlertCircle, FileText, Network, RefreshCw } from 'lucide-react'
 export function ContextView() {
   const { data: projection, isLoading, error: transportError } = useContextSubscription()
   const context = selectRootContextSnapshot(projection)
-  const loading = (isLoading || projection?.state === 'loading') && context === null
   const projectionError = projection?.state === 'error' ? projection.error : null
+  const loading =
+    !transportError &&
+    !projectionError &&
+    (isLoading || projection?.state === 'loading') &&
+    context === null
   const staleContext = projection?.state === 'error' ? projection.data : null
   const failedAttempt = projection?.state === 'error' ? projection.attempt : null
 

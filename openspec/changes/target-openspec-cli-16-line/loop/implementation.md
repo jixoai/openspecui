@@ -7140,3 +7140,38 @@ boolean renders both Loading and the error alert. 6.16-H gives terminal error pr
 leaving authoritative cache/current-operation authority, Root Context selection, refreshing/stale data,
 failed CLI attempts, and all mutation locks unchanged. The exact component fixed point combines the typed
 loading projection with `Error('socket closed')`; no protocol or hook work is authorized.
+
+### 6.16-H implementation: Context terminal-error presentation priority (2026-07-23)
+
+`ContextView` changes only its local `loading` expression. A transport or Root projection error now makes
+that presentation false before composition; the existing single alert renders the raw error. With no error,
+outer initial loading and a typed `state=loading` projection retain the existing Loading copy. Refreshing
+still renders Updating with retained Context, and stale Context plus failed-attempt/raw CLI evidence keeps
+its prior branches and authority semantics.
+
+The real-component fixed point supplies the typed loading projection
+`{state:'loading',data:null,attempt:null,error:null,observedAt:0}` with outer `isLoading=false` and
+`Error('socket closed')`. Before production changed, the complete Context file failed only this new test
+(`1 failed / 10 passed`): exactly one alert already contained `socket closed`, but `Loading context...` was
+also present.
+
+Mutation resistance removed only the new transport/projection error precedence conditions from the final
+`loading` expression. The named mixed-state test failed `1/1` with ten skipped because Loading returned
+beside the unchanged alert. Restoring only those conditions returned the complete file to `11/11` green.
+
+Focused verification:
+
+```text
+ContextView: 1 file / 11 tests passed
+Web package typecheck: passed
+Exact two-file lint: passed with 0 warnings / 0 errors
+pnpm format:check: passed
+git diff --check: passed
+```
+
+Only `context.tsx`, its direct test, and matching Change evidence are changed. The Context/authoritative
+subscription hooks, Root Context types/selection, Router, Server, cache/current authority, connection
+callbacks, Root mutation gates, static behavior, other pages, and projection lifecycle remain unchanged.
+Browser, SSG, and full gates were not run. The reviewer-owned `AGENTS.md` and `i18n.zh.md` contract remains
+intact at `178ca6f`. Final browser/visual acceptance remains owner-only. `6.16-H` is implemented and awaits
+independent review; parent checkpoint `6.16` remains unchecked.
