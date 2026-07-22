@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Register lease-scoped planning-root document, OPSX, dashboard, and archive procedures.
  * 2. Register CLI, Root Context, reactive launch-tool initialization, configuration, Store, and terminal-result projections.
  * 3. Register binding-safe Git, terminal, system, notification, and recovery procedures.
@@ -16,6 +16,7 @@
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
  * Derived requirement (2026-07-19): Project Binding mutation returns launch-write and convergence evidence.
+ * Derived requirement (2026-07-22): Archive retains its current rows while a reactive replacement is running.
  */
 import type {
   ChangeFile,
@@ -155,7 +156,10 @@ import {
 import type { PlanningRootServiceResolver, PlanningRootServices } from './planning-root-service.js'
 import type { ProjectRecoveryService } from './project-recovery-service.js'
 import { reactiveKV } from './reactive-kv.js'
-import { createReactiveSubscription } from './reactive-subscription.js'
+import {
+  createReactiveProjectionSubscription,
+  createReactiveSubscription,
+} from './reactive-subscription.js'
 import { createRootContextSubscription, resolveServerRootContext } from './root-context-service.js'
 import { parseSchemaMutationAction, type SchemaMutationAction } from './schema-mutation-service.js'
 import {
@@ -227,6 +231,13 @@ function createPlanningRootSubscription<T>(
   task: (services: PlanningRootServices) => Promise<T>
 ) {
   return createReactiveSubscription(() => runPlanningRoot(ctx, task, { reactive: true }))
+}
+
+function createPlanningRootProjectionSubscription<T>(
+  ctx: Context,
+  task: (services: PlanningRootServices) => Promise<T>
+) {
+  return createReactiveProjectionSubscription(() => runPlanningRoot(ctx, task, { reactive: true }))
 }
 
 function createPlanningRootCliStreamObservable(
@@ -1413,7 +1424,7 @@ export const archiveRouter = router({
 
   // Reactive subscriptions
   subscribe: publicProcedure.subscription(({ ctx }) => {
-    return createPlanningRootSubscription(ctx, ({ adapter }) =>
+    return createPlanningRootProjectionSubscription(ctx, ({ adapter }) =>
       adapter.listArchivedChangesWithMeta()
     )
   }),

@@ -4,6 +4,7 @@
  * 2. Verify the Planning-root empty state does not imply environment-wide completeness.
  * 3. Prove resolved and unknown Archive data render their real first-frame topology before effects.
  * 4. Prove no-data and retained-data transport errors remain visible without false success claims.
+ * 5. Prove retained live rows expose recompute Updating while static rows never do.
  *
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
  * Owner report (2026-07-22): "整个过程中，几乎都在 Loading。"
@@ -136,6 +137,58 @@ describe('ArchiveList', () => {
     expect(markup).not.toContain('No archived changes yet.')
     expect(alert).not.toBeNull()
     expect(alert?.textContent).toContain('Archive reconnect failed.')
+  })
+
+  it('renders Updating beside retained rows during a live recompute', () => {
+    useArchivesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: '2026-07-22-updating',
+          name: 'Updating archive',
+          trackedTaskProgress: { total: 1, completed: 1, phase: 'complete' },
+          documentChecklistSummary: { total: 1, completed: 1, groups: [] },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      isLoading: false,
+      isUpdating: true,
+      error: null,
+    })
+
+    render(<ArchiveList />)
+
+    expect(screen.getByRole('status').textContent).toContain('Updating')
+    expect(screen.getByText('Updating archive')).toBeTruthy()
+    expect(screen.getByRole('link', { name: /Updating archive/i }).getAttribute('href')).toBe(
+      '/archive/2026-07-22-updating'
+    )
+    expect(screen.queryByText('Loading archived changes...')).toBeNull()
+    expect(screen.queryByText('No archived changes yet.')).toBeNull()
+  })
+
+  it('does not render Updating for a resolved static projection', () => {
+    useArchivesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: '2026-07-22-static',
+          name: 'Static archive',
+          trackedTaskProgress: { total: 1, completed: 1, phase: 'complete' },
+          documentChecklistSummary: { total: 1, completed: 1, groups: [] },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      isLoading: false,
+      isUpdating: false,
+      error: null,
+    })
+
+    render(<ArchiveList />)
+
+    expect(screen.getByText('Static archive')).toBeTruthy()
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.queryByText('Updating')).toBeNull()
   })
 
   it('renders only rows supplied by the writable Planning-root subscription', async () => {

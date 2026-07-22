@@ -4,6 +4,7 @@
  * 2. Preserve stable Archive detail navigation and empty/loading states.
  * 3. Render resolved Archive data immediately without an artificial first-frame gate.
  * 4. Surface transport errors while retaining stale rows without false empty claims.
+ * 5. Project real dependency-driven recomputation beside retained Archive data.
  *
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
  * Owner report (2026-07-22): "整个过程中，几乎都在 Loading。"
@@ -12,10 +13,10 @@ import { formatRelativeTime } from '@/lib/format-time'
 import { useArchivesSubscription } from '@/lib/use-subscription'
 import { VTLink } from '@/lib/view-transitions/navigation'
 import { getSharedElementBinding } from '@/lib/view-transitions/shared-elements'
-import { AlertCircle, Archive, ChevronRight } from 'lucide-react'
+import { AlertCircle, Archive, ChevronRight, RefreshCw } from 'lucide-react'
 
 export function ArchiveList() {
-  const { data: archived, isLoading, error } = useArchivesSubscription()
+  const { data: archived, isLoading, isUpdating, error } = useArchivesSubscription()
 
   if (isLoading && !archived && !error) {
     return <div className="route-loading animate-pulse">Loading archived changes...</div>
@@ -42,6 +43,17 @@ export function ArchiveList() {
             <p className="font-medium">Archive subscription failed.</p>
             <p className="break-words">{error.message}</p>
           </div>
+        </div>
+      ) : null}
+
+      {isUpdating && archived ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="text-muted-foreground flex items-center gap-2 text-sm"
+        >
+          <RefreshCw className="h-4 w-4 animate-spin" aria-hidden />
+          <span>Updating</span>
         </div>
       ) : null}
 

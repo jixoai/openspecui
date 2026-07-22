@@ -1,20 +1,30 @@
 /**
- * Orthogonal intents (created 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Prove cached subscription data is display-only while a reconnect is pending.
  * 2. Preserve the loading gate until the replacement projection arrives.
  * 3. Prove direct unmount retires a pending static loader before it can write cache.
+ * 4. Prove Archive projection recompute events retain data without impersonating transport loading.
+ * 5. Prove retired live/static projection generations cannot mutate state or cache.
  *
  * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
+ * Owner report (2026-07-22): "整个过程中，几乎都在 Loading。"
  */
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   primeSubscriptionCache,
+  type ReactiveProjectionEvent,
   useAuthoritativeSubscription,
+  useReactiveProjectionSubscription,
   useSubscription,
 } from './use-subscription'
 
 const { staticModeMock } = vi.hoisted(() => ({ staticModeMock: vi.fn(() => false) }))
+
+type StringProjectionCallbacks = {
+  onEvent(event: ReactiveProjectionEvent<string>): void
+  onError(error: Error): void
+}
 
 vi.mock('./static-mode', () => ({
   isStaticMode: staticModeMock,
@@ -254,5 +264,204 @@ describe('useSubscription cache rebind', () => {
     )
 
     expect(result.current).toMatchObject({ data: 'A', isLoading: false, error: null })
+  })
+})
+
+describe('useReactiveProjectionSubscription', () => {
+  beforeEach(() => {
+    staticModeMock.mockReturnValue(false)
+  })
+
+  it('distinguishes initial loading from a retained-data recompute', () => {
+    let callbacks: StringProjectionCallbacks | undefined
+    const subscribe = vi.fn((next: StringProjectionCallbacks) => {
+      callbacks = next
+      return { unsubscribe: vi.fn() }
+    })
+
+    const { result } = renderHook(() =>
+      useReactiveProjectionSubscription((next) => subscribe(next))
+    )
+
+    expect(result.current).toEqual({
+      data: undefined,
+      isLoading: true,
+      isUpdating: false,
+      error: null,
+    })
+
+    act(() => callbacks?.onEvent({ type: 'data', data: 'A' }))
+    expect(result.current).toEqual({
+      data: 'A',
+      isLoading: false,
+      isUpdating: false,
+      error: null,
+    })
+
+    act(() => callbacks?.onEvent({ type: 'recompute-started' }))
+    expect(result.current).toEqual({
+      data: 'A',
+      isLoading: false,
+      isUpdating: true,
+      error: null,
+    })
+
+    act(() => callbacks?.onEvent({ type: 'data', data: 'B' }))
+    expect(result.current).toEqual({
+      data: 'B',
+      isLoading: false,
+      isUpdating: false,
+      error: null,
+    })
+  })
+
+  it('retains A and the original task error after a failed recompute', () => {
+    let callbacks: StringProjectionCallbacks | undefined
+    const subscribe = vi.fn((next: StringProjectionCallbacks) => {
+      callbacks = next
+      return { unsubscribe: vi.fn() }
+    })
+    const { result } = renderHook(() =>
+      useReactiveProjectionSubscription((next) => subscribe(next))
+    )
+    const error = new Error('replacement failed')
+
+    act(() => callbacks?.onEvent({ type: 'data', data: 'A' }))
+    act(() => callbacks?.onEvent({ type: 'recompute-started' }))
+    act(() => callbacks?.onError(error))
+
+    expect(result.current).toEqual({
+      data: 'A',
+      isLoading: false,
+      isUpdating: false,
+      error,
+    })
+  })
+
+  it('retires old callbacks before they can mutate state or cache', () => {
+    const callbacks: StringProjectionCallbacks[] = []
+    const subscribe = vi.fn((next: StringProjectionCallbacks) => {
+      callbacks.push(next)
+      return { unsubscribe: vi.fn() }
+    })
+    const cacheKey = 'reactive-projection-generation-test'
+    let dependency = 0
+    const { result, rerender } = renderHook(() =>
+      useReactiveProjectionSubscription(
+        (next) => subscribe(next),
+        undefined,
+        [dependency],
+        cacheKey
+      )
+    )
+
+    act(() => callbacks[0]?.onEvent({ type: 'data', data: 'A' }))
+    dependency = 1
+    rerender()
+    expect(result.current).toEqual({
+      data: 'A',
+      isLoading: false,
+      isUpdating: false,
+      error: null,
+    })
+
+    act(() => {
+      callbacks[0]?.onEvent({ type: 'recompute-started' })
+      callbacks[0]?.onEvent({ type: 'data', data: 'stale' })
+      callbacks[0]?.onError(new Error('late error'))
+    })
+    expect(result.current).toEqual({
+      data: 'A',
+      isLoading: false,
+      isUpdating: false,
+      error: null,
+    })
+
+    dependency = 2
+    rerender()
+    expect(result.current.data).toBe('A')
+
+    act(() => callbacks[2]?.onEvent({ type: 'data', data: 'B' }))
+    expect(result.current).toEqual({
+      data: 'B',
+      isLoading: false,
+      isUpdating: false,
+      error: null,
+    })
+  })
+
+  it('never projects static loading or data as a recompute', async () => {
+    staticModeMock.mockReturnValue(true)
+    let resolveLoader: ((value: string) => void) | undefined
+    const loader = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveLoader = resolve
+        })
+    )
+    const { result } = renderHook(() =>
+      useReactiveProjectionSubscription(() => ({ unsubscribe: vi.fn() }), loader)
+    )
+
+    expect(result.current).toMatchObject({ isLoading: true, isUpdating: false })
+    await act(async () => {
+      resolveLoader?.('static')
+      await Promise.resolve()
+    })
+    expect(result.current).toEqual({
+      data: 'static',
+      isLoading: false,
+      isUpdating: false,
+      error: null,
+    })
+  })
+
+  it('retires a static projection generation before it can mutate state or cache', async () => {
+    staticModeMock.mockReturnValue(true)
+    const loaders: Array<(value: string) => void> = []
+    const loader = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          loaders.push(resolve)
+        })
+    )
+    const cacheKey = 'reactive-projection-static-generation-test'
+    let dependency = 0
+    const { result, rerender } = renderHook(() =>
+      useReactiveProjectionSubscription(
+        () => ({ unsubscribe: vi.fn() }),
+        loader,
+        [dependency],
+        cacheKey
+      )
+    )
+
+    dependency = 1
+    rerender()
+    await act(async () => {
+      loaders[0]?.('stale')
+      await Promise.resolve()
+    })
+    expect(result.current).toEqual({
+      data: undefined,
+      isLoading: true,
+      isUpdating: false,
+      error: null,
+    })
+
+    dependency = 2
+    rerender()
+    expect(result.current.data).toBeUndefined()
+
+    await act(async () => {
+      loaders[2]?.('current')
+      await Promise.resolve()
+    })
+    expect(result.current).toEqual({
+      data: 'current',
+      isLoading: false,
+      isUpdating: false,
+      error: null,
+    })
   })
 })

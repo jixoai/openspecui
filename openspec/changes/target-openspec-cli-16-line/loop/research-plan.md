@@ -309,6 +309,11 @@ Split delivery again:
    retains A with `isUpdating=true` on recompute-started, clears it on B/error, retires late generations,
    and renders Archive Updating beside retained rows. Static mode never claims updating.
 
+F2 implementation status (2026-07-22): implemented and awaiting independent review. The checked Router
+fixed point exercises the real Planning-root Archive endpoint; the Web event owner and ArchiveList each
+have an exact mutation red. No other subscription, static provider, or page was migrated. Parent 6.16
+remains open for its independently planned timing, prefetch, route-gate, and topology packages.
+
 Do not infer cross-subscription ordering, add a runtime-invalidation side channel, or migrate Changes,
 Specs, Dashboard, Search, Git, Config, Context, Settings, OPSX, or App in either Archive tracer package.
 Parent 6.16 remains open after F1 and F2.

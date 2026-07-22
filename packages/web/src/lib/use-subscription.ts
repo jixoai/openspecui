@@ -1,13 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Provide one cached subscription lifecycle for live and static project projections.
  * 2. Bind Spec, Change, Archive, Config, Notification, and CLI projections to typed hooks.
  * 3. Preserve cache identity for detail projections across remounts and view transitions.
  * 4. Keep Git scope cache data non-authoritative until an opt-in reconnect emits a replacement.
+ * 5. Expose Archive recompute lifecycle without relabeling transport loading as projection work.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
  * Derived requirement (2026-07-19): Checkpoint 6.11 locks cached Git scope data during reconnect.
+ * Owner report (2026-07-22): "整个过程中，几乎都在 Loading。"
  *
  * Compromise: typed entity hooks remain aggregated because they share the same cache and live/static
  * subscription primitive; splitting them now would add import churn outside checkpoint 6.9.
@@ -40,6 +42,14 @@ export interface SubscriptionState<T> {
   error: Error | null
 }
 
+/** Opt-in subscription payload matching the Server recompute projection contract. */
+export type ReactiveProjectionEvent<T> = { type: 'recompute-started' } | { type: 'data'; data: T }
+
+/** Subscription state that distinguishes initial loading from dependency-driven recomputation. */
+export interface ReactiveProjectionSubscriptionState<T> extends SubscriptionState<T> {
+  isUpdating: boolean
+}
+
 /** Explicit authority for projections whose cached data must never authorize live operations. */
 export type SubscriptionAuthority =
   | { state: 'waiting'; reason: 'initial' | 'rebind' | 'idle' | 'connecting' | 'pending' }
@@ -57,6 +67,11 @@ export type SubscriptionCacheRebindPolicy = 'retain' | 'loading'
 /** 订阅回调 */
 interface SubscriptionCallbacks<T> {
   onData: (data: T) => void
+  onError: (err: Error) => void
+}
+
+interface ReactiveProjectionSubscriptionCallbacks<T> {
+  onEvent: (event: ReactiveProjectionEvent<T>) => void
   onError: (err: Error) => void
 }
 
@@ -181,6 +196,121 @@ export function useSubscription<T>(
     return () => {
       subscription.unsubscribe()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inStaticMode, ...deps])
+
+  return state
+}
+
+/**
+ * Subscribe to an opt-in reactive projection lifecycle.
+ *
+ * Only `recompute-started` enters Updating. Initial/static loading and transport lifecycle are separate
+ * facts. Each effect generation owns its callbacks and cache writes, so retired work cannot publish.
+ */
+export function useReactiveProjectionSubscription<T>(
+  subscribe: (callbacks: ReactiveProjectionSubscriptionCallbacks<T>) => Unsubscribable,
+  staticLoader?: () => Promise<T>,
+  deps: unknown[] = [],
+  cacheKey?: string
+): ReactiveProjectionSubscriptionState<T> {
+  const hasCached = cacheKey !== undefined && subscriptionCache.has(cacheKey)
+  const [state, setState] = useState<ReactiveProjectionSubscriptionState<T>>(() => ({
+    data: hasCached ? (subscriptionCache.get(cacheKey) as T) : undefined,
+    isLoading: !hasCached,
+    isUpdating: false,
+    error: null,
+  }))
+  const subscriptionRef = useRef<Unsubscribable | null>(null)
+  const generationRef = useRef(0)
+  const inStaticMode = isStaticMode()
+
+  useEffect(() => {
+    const generation = generationRef.current + 1
+    generationRef.current = generation
+    let active = true
+    let subscription: Unsubscribable | null = null
+    const isActive = () => active && generationRef.current === generation
+    const cleanup = () => {
+      active = false
+      if (generationRef.current === generation) generationRef.current += 1
+      const currentSubscription = subscription ?? subscriptionRef.current
+      subscription = null
+      subscriptionRef.current = null
+      currentSubscription?.unsubscribe()
+    }
+
+    subscriptionRef.current?.unsubscribe()
+    subscriptionRef.current = null
+    const effectHasCached = cacheKey !== undefined && subscriptionCache.has(cacheKey)
+    setState({
+      data: effectHasCached ? (subscriptionCache.get(cacheKey) as T) : undefined,
+      isLoading: !effectHasCached,
+      isUpdating: false,
+      error: null,
+    })
+
+    if (inStaticMode) {
+      if (!staticLoader) {
+        setState({
+          data: effectHasCached ? (subscriptionCache.get(cacheKey) as T) : undefined,
+          isLoading: false,
+          isUpdating: false,
+          error: new Error('Static loader not available'),
+        })
+        return cleanup
+      }
+      staticLoader()
+        .then((data) => {
+          if (!isActive()) return
+          if (cacheKey) subscriptionCache.set(cacheKey, data)
+          setState({ data, isLoading: false, isUpdating: false, error: null })
+        })
+        .catch((cause: unknown) => {
+          if (!isActive()) return
+          const error = cause instanceof Error ? cause : new Error(String(cause))
+          setState((previous) => ({
+            ...previous,
+            isLoading: false,
+            isUpdating: false,
+            error,
+          }))
+        })
+      return cleanup
+    }
+
+    subscription = subscribe({
+      onEvent(event) {
+        if (!isActive()) return
+        if (event.type === 'recompute-started') {
+          setState((previous) => ({
+            ...previous,
+            isLoading: false,
+            isUpdating: true,
+            error: null,
+          }))
+          return
+        }
+        if (cacheKey) subscriptionCache.set(cacheKey, event.data)
+        setState({
+          data: event.data,
+          isLoading: false,
+          isUpdating: false,
+          error: null,
+        })
+      },
+      onError(error) {
+        if (!isActive()) return
+        setState((previous) => ({
+          ...previous,
+          isLoading: false,
+          isUpdating: false,
+          error,
+        }))
+      },
+    })
+    subscriptionRef.current = subscription
+    return cleanup
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inStaticMode, ...deps])
 
@@ -402,11 +532,12 @@ export function useChangeFilesSubscription(id: string): SubscriptionState<Change
 // Archive subscriptions
 // =====================
 
-export function useArchivesSubscription(): SubscriptionState<ArchiveMeta[]> {
-  return useSubscription<ArchiveMeta[]>(
+/** Subscribe to Archive rows with explicit dependency-driven recompute state in live mode. */
+export function useArchivesSubscription(): ReactiveProjectionSubscriptionState<ArchiveMeta[]> {
+  return useReactiveProjectionSubscription<ArchiveMeta[]>(
     (callbacks) =>
       trpcClient.archive.subscribe.subscribe(undefined, {
-        onData: callbacks.onData,
+        onData: callbacks.onEvent,
         onError: callbacks.onError,
       }),
     StaticProvider.getArchives,

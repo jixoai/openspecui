@@ -6929,3 +6929,61 @@ removing only `emit.error` fails immediately. The accepted Core observer placeme
 coalescing, and abort semantics are unchanged.
 
 F1 is accepted. F2 is now authorized as the only next package; parent checkpoint 6.16 remains unchecked.
+
+### 6.16-F2 implementation: Archive retained-data Updating projection (2026-07-22)
+
+Only `archive.subscribe` now crosses a Planning-root-preserving
+`createReactiveProjectionSubscription` owner. `archive.subscribeOne`, `archive.subscribeFiles`, and every
+other Router subscription retain the raw payload contract. A new transport-checked Router fixture invokes
+the real `appRouter` endpoint with a real `PlanningRootServiceManager` and `ReactiveState` dependency. It
+proves initial `data(A)` has no start event, replacement start arrives while B is blocked, B replaces A,
+and a replacement rejection follows `recompute-started` with the original Error identity.
+
+Web adds one opt-in typed projection hook. Initial no-data is Loading; `recompute-started` retains cached A
+and sets only `isUpdating`; B replaces A and clears Updating/error; rejection retains A, clears Updating,
+and preserves the original error. Effect generations own live callbacks, static loaders, and cache writes,
+so retired live/static callbacks cannot publish. The local exact event union is checked against
+`trpcClient.archive.subscribe` inference rather than exporting the Server helper type through the package
+root. Static Archive loading/data never reports Updating.
+
+`ArchiveList` renders a polite `Updating` status beside the retained projection while preserving rows,
+hrefs, `VTLink`, handoff/shared elements, initial Loading, resolved, empty, and retained/no-data error
+topologies. No Changes, Specs, Dashboard, Search, Git, Config, Context, Settings, OPSX, App, static provider,
+generic transport, runtime invalidation, or Core F1 behavior changed.
+
+Exact owner mutation evidence:
+
+1. Reverting only `archive.subscribe` from the projection helper to raw
+   `createPlanningRootSubscription` made both checked Router cases fail in 36ms with
+   `Archive Router must emit reactive projection events`; restoring the endpoint returned `2/2` green.
+2. Suppressing only the Web `recompute-started` unwrap made the named hook test fail with
+   `expected isUpdating true, received false` (`1 failed | 10 skipped`); restoring it returned the focused
+   hook file green.
+3. Removing only the ArchiveList Updating status JSX made the named component test fail because
+   `role=status` was absent (`1 failed | 7 skipped`); restoring it returned the component file green.
+
+Final focused verification:
+
+```text
+pnpm --filter @openspecui/server exec vitest run --maxWorkers=1 \
+  src/archive-router-subscription.test.ts
+  -> 1 file / 2 tests passed
+
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/lib/use-subscription.test.tsx src/routes/archive-list.test.tsx
+  -> 2 files / 20 tests passed
+
+pnpm --filter @openspecui/core typecheck
+pnpm --filter @openspecui/server typecheck
+pnpm --filter @openspecui/web typecheck
+  -> passed; Server includes the checked transport-test lane
+
+pnpm exec vp lint <exact six changed TypeScript/TSX files>
+pnpm format:check
+git diff --check
+  -> passed
+```
+
+No browser, Playwright, SSG, full gate, push, merge, archive, or release was run. Final browser/visual
+acceptance remains owner-only. `6.16-F2` is implemented and awaits independent review; parent checkpoint
+`6.16` remains unchecked.
