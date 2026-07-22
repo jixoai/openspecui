@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Preserve the shared top-layer notification entry contract.
  * 2. Project connected and disconnected Server status through distinct text, color, and icons.
  *

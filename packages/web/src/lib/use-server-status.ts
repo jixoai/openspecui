@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Project current Server metadata from the reactive system subscription.
  * 2. Derive Live authority from the current WebSocket lifecycle and system emission.
  * 3. Preserve reconnect countdown and explicit manual recovery behavior.

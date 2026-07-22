@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Prove one current system emission can establish live Server metadata.
  * 2. Prove reconnecting transport lifecycle retires stale connected truth.
  *
