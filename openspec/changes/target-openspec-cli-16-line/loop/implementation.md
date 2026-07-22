@@ -5727,3 +5727,34 @@ the Dialog mounted while the final prompt adopts Root B evidence. Checkpoint `6.
 at `65/131`. The separately recorded pervasive-Loading experience debt remains open for a later timed
 investigation and does not authorize speculative optimization here. No `6.15`, full repository gate,
 SSG, push, merge, archive, or release work is included in this closure.
+
+### 6.15 research boundary: project-backend Root Context health notifications (2026-07-22)
+
+Research confirms that the current `NotificationService` is an in-memory instance constructed once by
+`createServer`; its HTTP endpoint, tRPC Router, terminal publisher, and subscriptions all receive that
+same instance. It therefore already has the required project-backend record boundary. There is no App
+record merger to modify in this checkpoint.
+
+```text
+current state
+  PlanningRootServiceManager -- no notification bridge --> NotificationService (per Server)
+  terminal PTY output ----------------------------------> NotificationService (per Server)
+
+6.15 target
+  PlanningRootServiceManager --> Root Context health bridge --> NotificationService (same Server)
+  Server A records                                    !=  Server B records
+```
+
+The next implementation slice adds only a typed `root-context` notification source, a Server-owned
+bridge from settled Root Context transitions, and the existing `/context` action projection. The bridge
+baselines its first terminal result; only error, recovery, and current Planning-root identity changes
+publish records. `loading`/`refreshing`, same-identity refreshes, repeated equal failures, Reference
+warnings, raw CLI evidence, and any late A callback are explicitly non-events. The worker Goal requires
+checked counterexamples for stale callback retirement and two independent backend services before it
+may close `6.15`.
+
+The owner-reported pervasive-Loading debt remains a separate, lower-priority performance Change. Its
+recorded contributors are first-visit subscription cold starts, route prefetch before View Transition
+commit, serialized Manager Doctor/Context/kernel preparation, and temporary mutation-authority
+revocation during Root refresh. No timing measurement yet identifies a dominant cause, so 6.15 must not
+modify these paths.
