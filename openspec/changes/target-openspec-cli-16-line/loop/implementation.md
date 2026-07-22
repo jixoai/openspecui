@@ -7222,6 +7222,10 @@ Focused verification:
 ```text
 SpecList: 1 file / 7 tests passed
 Mutation: 3 named tests failed as expected with 6 skipped each
+Web package typecheck: passed
+Exact two-file lint: passed with 0 warnings / 0 errors
+pnpm format:check: passed
+git diff --check: passed
 ```
 
 Only `spec-list.tsx`, its direct test, and matching Change evidence are changed. The Catalog hook, Router,
