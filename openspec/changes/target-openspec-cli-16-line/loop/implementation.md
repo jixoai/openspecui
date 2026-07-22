@@ -7499,3 +7499,28 @@ not a K production defect.
 No Preview, `configBundle`, templates, template contents, Root authority/mutations, Router, Server, static
 provider, generic subscriptions, browser/Playwright, or final owner browser/visual acceptance changed.
 Parent checkpoint `6.16` remains unchecked.
+
+### 6.16-L research: Config Schema catalog/tab-inventory topology (2026-07-23)
+
+`Config` consumes `useOpsxConfigBundleSubscription()` to construct Schema tabs, but its only
+`Loading schemas...`, `Failed to load schemas...`, and `No schemas available.` presentation currently lives
+inside `schemaTabContent`. When the inventory is absent or empty, `schemaTabs` is empty and the real `Tabs`
+component cannot mount that content. This is not K's selected-Schema file-panel defect: it silently loses
+the Schema workspace state before a Schema file projection can become relevant.
+
+```text
+bundle undefined + loading       -> fixed Config owner tabs + Schema-workspace Loading; no Schema tab/empty claim
+bundle undefined + terminal E    -> fixed tabs + raw alert; no Loading/Schema tab/empty claim
+bundle non-empty + terminal E    -> raw alert + retained Schema tabs/current Schema content
+bundle [] + terminal E           -> raw alert; no Loading/Schema tab/empty claim
+bundle [] + no error             -> fixed tabs + current No schemas available. state
+```
+
+6.16-L has one production owner: Config's Schema catalog/tab-inventory consumption. It may introduce a
+Schema-workspace status host outside individual Schema tabs; it must preserve Project Binding, Active Root,
+and Environment Global tabs. It cannot modify `useOpsxConfigBundleSubscription`, K's `schemaFiles` owner,
+templates, Preview, Root readiness/mutations, Router, Server, static provider, generic subscriptions, or
+another page. Direct evidence must render real `Tabs` and assert real tab buttons/panels, not a mocked
+empty-state echo. The three named mutations are the route-level raw alert, initial status gate, and
+error-aware empty guard. No SSG behavior changes are authorized; fresh static verification remains required
+for the eventual Config code change. Parent checkpoint `6.16` remains unchecked.

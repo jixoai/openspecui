@@ -368,6 +368,10 @@ The independent browser attempt confirms the desktop source control and URL/quer
     separately. Independent direct Config, adjacent Config, Web typecheck, static tests, and a clean SSG
     build pass. Preview, `configBundle`, templates, template contents, Root gating, mutations, Router, and
     static behavior remain outside this package.
+  - `6.16-L` planned: Config Schema catalog/tab-inventory topology consumes only `configBundle` Schema
+    inventory availability. Its status host must survive an absent or empty Schema tab inventory so that
+    initial loading, terminal absent/empty errors, retained non-empty errors, and settled empty success are
+    distinguishable. Existing selected-Schema file panels remain K-owned and out of scope.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and
