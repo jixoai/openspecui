@@ -4,6 +4,7 @@
  * 2. Preserve navigation state and shared-element descriptors across route areas.
  * 3. Forward Git binding provenance into detail prefetch before committing navigation.
  * 4. Record causally bounded preparation, route-update-issued, and transition-settlement timings.
+ * 5. Commit cold detail routes after the preparation budget and use skip-vt.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git handoff prefetch.

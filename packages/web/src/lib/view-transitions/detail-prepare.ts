@@ -3,6 +3,7 @@
  * 1. Prime detail data before forward route View Transitions.
  * 2. Preserve entity identity for Spec, Change, Archive, and Git detail routes.
  * 3. Keep Git prefetch repository binding aligned with the target route URL.
+ * 4. Make cold detail preparation opportunistic within the route commit budget.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
@@ -31,6 +32,8 @@ type DetailPrepareMatch =
 
 type DetailPrepareOutcome = 'ready' | 'cancelled' | 'skip-vt'
 
+const DETAIL_PREPARE_COMMIT_BUDGET_MS = 140
+const DETAIL_PREPARE_INDICATOR_DELAY_MS = DETAIL_PREPARE_COMMIT_BUDGET_MS + 1
 const QUERY_STALE_TIME_MS = 5 * 60 * 1000
 
 function decodePathSegment(value: string): string {
@@ -183,7 +186,16 @@ export async function prepareRouteDetailViewTransition(options: {
     return 'ready'
   }
 
-  const result = await waitForPrepareTask(() => prepareDetailRoute(match, search, state))
+  // Detail preparation is an optimization. A cold request must not hold the route
+  // until the full remote timeout; the destination owns its loading projection.
+  const reportPrepareError = (error: unknown) => {
+    console.error('[VT] Failed to prepare route-detail transition:', error)
+  }
+  const result = await waitForPrepareTask(() => prepareDetailRoute(match, search, state), {
+    deadlineMs: DETAIL_PREPARE_COMMIT_BUDGET_MS,
+    indicatorDelayMs: DETAIL_PREPARE_INDICATOR_DELAY_MS,
+    onLateError: reportPrepareError,
+  })
   if (result.status === 'ready') {
     return 'ready'
   }
@@ -193,7 +205,7 @@ export async function prepareRouteDetailViewTransition(options: {
   }
 
   if (result.status === 'error') {
-    console.error('[VT] Failed to prepare route-detail transition:', result.error)
+    reportPrepareError(result.error)
   }
 
   return 'skip-vt'
