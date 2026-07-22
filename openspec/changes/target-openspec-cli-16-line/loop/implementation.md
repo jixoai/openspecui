@@ -5909,6 +5909,35 @@ instrument phase timings before the next performance behavior change. The future
 instrumentation, detail-precommit policy, and isolated route-topology work; each needs its own owner,
 slow-path red/green evidence, and stop boundary. Checkpoint `6.16` remains open.
 
+### 6.16-A independent review correction: prove Root action and late-callback fixed points (2026-07-22)
+
+Independent review accepts the production direction but rejects the candidate's evidence as incomplete.
+The typed Root Context hook forwards all five lifecycle callbacks and its focused gates are green, yet
+two required red facts were not actually demonstrated:
+
+```text
+generic useSubscription restoration
+  current candidate: first fails on missing authority/isLoading shape
+  missing: named Root Action proof that cached ready A becomes ready too early
+
+late A callback after unmount
+  current candidate: green proves A does not overwrite cached B
+  missing: exact onData active/generation-retirement guard removed -> same remount assertion red
+```
+
+The second item is hidden lifecycle bookkeeping. Per the mutation-resistance law, a green terminal state
+is not enough; the test must fail when the exact `useAuthoritativeSubscription` `onData` active/generation
+guard (or its cleanup generation retirement transition) is bypassed. The expected failure is concrete:
+late A writes cache A after unmount, so the next mount no longer observes cached B and must fail its
+`data: B` / checking-gate assertion.
+
+The evidence-only correction must preserve production behavior. First order the generic-cache red test
+so its real `useRootActionState` expectation (`checking`/disabled) fails against generic cached `ready A`
+before it asserts the missing authority field. Then temporarily remove only the exact late-`onData`
+retirement guard, run the late-A test, record its named cache/action failure, restore the guard, rerun
+green, and append exact command output. Do not close 6.16, run broad gates, or change any Loading
+presentation while correcting this evidence.
+
 ### 6.16-A implementation: Root Context cached display and current authority (2026-07-22)
 
 `useContextSubscription` now delegates to the existing `useAuthoritativeSubscription` owner rather
