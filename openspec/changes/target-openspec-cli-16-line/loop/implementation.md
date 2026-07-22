@@ -7084,3 +7084,43 @@ matching current Status retains artifact/schema evidence; a current list without
 the Loading copy. No Router/hook/static/update-signal, tracked-progress, action, or navigation change is
 authorized. F2's subscription deep-module prerequisite remains dormant because G does not migrate another
 projection to lifecycle events.
+
+### 6.16-G implementation: terminate ChangeList workflow Status (2026-07-22)
+
+`ChangeList` now consumes the existing Status subscription's `data`, `isLoading`, and `error` facts without
+changing the hook or protocol. Only `statuses === undefined` plus current Status loading renders
+`Loading workflow status...`. A matching current Status preserves its artifact/schema evidence. A settled
+array without a match renders `Workflow status unavailable`.
+
+Status failure is owned once by the page, not copied into every Change row. One page-level `role=alert`
+renders the raw transport message; each rendered row terminates its Status subprojection as unavailable
+while preserving its name, tracked-task count, completion bar/copy, link, and workflow badge. This avoids
+duplicated live-region announcements when several Changes share one failed Status subscription.
+
+The initial real-component red added terminal error and settled no-match states before changing production.
+The complete file failed only those two cases (`2 failed / 5 passed`): the error case had no alert and still
+rendered Loading, while the no-match case lacked unavailable and still rendered Loading. Existing initial
+loading, matched artifact/schema evidence, tracked-task semantics, and New command remained green.
+
+Mutation resistance removed only `role=alert` from the final page-level error container. The named terminal
+error test failed `1/1` with six skipped because no accessible alert existed; the raw error text, retained
+row/progress, row-level unavailable, and absence of Loading remained present. Restoring only that role
+returned the complete file to `7/7` green.
+
+Focused verification:
+
+```text
+ChangeList: 1 file / 7 tests passed
+Web package typecheck: passed
+Exact two-file lint: passed with 0 warnings / 0 errors
+pnpm format:check: passed
+git diff --check: passed
+```
+
+Only `change-list.tsx`, its direct test, and matching Change evidence are changed. The OPSX Status hook,
+Router, Server, static provider, main Change subscription error topology, tracked-task/workflow
+classification, View Transitions, New/Propose controls, other pages, projection Updating lifecycle, and the
+subscription deep-module prerequisite remain unchanged. Browser, SSG, and full gates were not run. The
+reviewer-owned `AGENTS.md` and `i18n.zh.md` contract remains intact at `3f9117e`. Final browser/visual
+acceptance remains owner-only. `6.16-G` is implemented and awaits independent review; parent checkpoint
+`6.16` remains unchecked.

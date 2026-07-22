@@ -1,9 +1,10 @@
 /**
  * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
- * 1. Prove Changes render formal tracked-task progress before Status arrives.
+ * 1. Prove Changes retain formal tracked-task progress across Status lifecycle states.
  * 2. Prove no-tasks and incomplete tasks cannot become workflow-complete.
  * 3. Prove completed tracked tasks and CLI Status converge on workflow completion.
  * 4. Prove the page-level New command remains available with active Changes.
+ * 5. Prove Status loading, unavailable, and terminal error remain distinct.
  *
  * Original request (2026-07-15): "0/0 means no-tasks, never complete."
  * Original request (2026-07-21): "Changes页面的右上角没有 New,你要不要快速补一个"
@@ -71,7 +72,11 @@ describe('ChangeList', () => {
       ],
       isLoading: false,
     })
-    useOpsxStatusListSubscriptionMock.mockReturnValue({ data: undefined })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    })
 
     render(<ChangeList />)
     fireEvent.click(screen.getByRole('button', { name: 'New' }))
@@ -91,7 +96,11 @@ describe('ChangeList', () => {
       ],
       isLoading: false,
     })
-    useOpsxStatusListSubscriptionMock.mockReturnValue({ data: undefined })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    })
 
     const { container } = render(<ChangeList />)
 
@@ -100,6 +109,58 @@ describe('ChangeList', () => {
     expect(screen.getByText('0% task completion')).toBeTruthy()
     expect(screen.getByText('Loading workflow status…')).toBeTruthy()
     expect(container.querySelector('[style="width: 0%;"]')).toBeTruthy()
+  })
+
+  it('renders a terminal workflow Status error without hiding Change progress', () => {
+    useChangesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: 'status-error-change',
+          name: 'status-error-change',
+          trackedTaskProgress: { total: 4, completed: 1, phase: 'in-progress' },
+          updatedAt: Date.now(),
+        },
+      ],
+      isLoading: false,
+    })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error('status failed'),
+    })
+
+    render(<ChangeList />)
+
+    expect(screen.getByText('status-error-change')).toBeTruthy()
+    expect(screen.getByText('1/4')).toBeTruthy()
+    expect(screen.getByText('25% task completion')).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toContain('status failed')
+    expect(screen.getByText('Workflow status unavailable')).toBeTruthy()
+    expect(screen.queryByText('Loading workflow status…')).toBeNull()
+  })
+
+  it('renders unavailable when the current Status list has no matching Change', () => {
+    useChangesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: 'status-unavailable-change',
+          name: 'status-unavailable-change',
+          trackedTaskProgress: { total: 3, completed: 2, phase: 'in-progress' },
+          updatedAt: Date.now(),
+        },
+      ],
+      isLoading: false,
+    })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    })
+
+    render(<ChangeList />)
+
+    expect(screen.getByText('Workflow status unavailable')).toBeTruthy()
+    expect(screen.queryByText('Loading workflow status…')).toBeNull()
   })
 
   it('does not label artifact-complete but task-incomplete changes as complete', () => {

@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. List only active Changes from the current writable Planning root.
- * 2. Derive workflow state only from CLI Status and formal tracked-task progress.
+ * 2. Derive workflow state and terminal evidence from CLI Status and formal tracked-task progress.
  * 3. Preserve collision-safe navigation and explicit no-tasks presentation.
  * 4. Keep the advanced New Change command reachable from the page header.
  *
@@ -19,7 +19,7 @@ import { useChangesSubscription } from '@/lib/use-subscription'
 import { VTLink, vtNavController } from '@/lib/view-transitions/navigation'
 import { getSharedElementBinding } from '@/lib/view-transitions/shared-elements'
 import type { ChangeStatus } from '@openspecui/core'
-import { ChevronRight, GitBranch, Plus, Sparkles } from 'lucide-react'
+import { AlertCircle, ChevronRight, GitBranch, Plus, Sparkles } from 'lucide-react'
 
 function buildStatusMap(statuses: ChangeStatus[] | undefined): Map<string, ChangeStatus> {
   return new Map((statuses ?? []).map((status) => [status.changeName, status]))
@@ -27,7 +27,11 @@ function buildStatusMap(statuses: ChangeStatus[] | undefined): Map<string, Chang
 
 export function ChangeList() {
   const { data: changes, isLoading } = useChangesSubscription()
-  const { data: statuses } = useOpsxStatusListSubscription()
+  const {
+    data: statuses,
+    isLoading: isStatusLoading,
+    error: statusError,
+  } = useOpsxStatusListSubscription()
   const statusMap = buildStatusMap(statuses)
 
   if (isLoading && !changes) {
@@ -59,6 +63,16 @@ export function ChangeList() {
         </VTLink>
         .
       </p>
+
+      {statusError ? (
+        <div
+          role="alert"
+          className="border-destructive/40 bg-destructive/10 text-destructive flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
+        >
+          <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
+          <span className="break-words">{statusError.message}</span>
+        </div>
+      ) : null}
 
       <div className="border-border divide-border divide-y rounded-lg border">
         {changes?.map((change) => {
@@ -150,12 +164,14 @@ export function ChangeList() {
                     ? 'No tracked tasks'
                     : `${taskPercent}% task completion`}
                 </span>
-                {status ? (
+                {!statusError && status ? (
                   <span className="truncate">
                     {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
                   </span>
-                ) : (
+                ) : !statusError && statuses === undefined && isStatusLoading ? (
                   <span>Loading workflow status…</span>
+                ) : (
+                  <span>Workflow status unavailable</span>
                 )}
               </div>
             </VTLink>
