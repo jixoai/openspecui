@@ -8115,3 +8115,45 @@ Prettier, and `git diff --check` pass. No broad test gate, SSG, agent browser, P
 walkthrough was run. The owner's separate `accelerate-live-projection-loading` investigation remains open;
 this local route-gate correction does not claim to solve global live-projection latency. Parent `6.16`
 remains open.
+
+### 6.17-A research: ChangeList reactive row-removal continuity (2026-07-23)
+
+Checkpoint 6.17 is too broad to implement as one animation rewrite. The current Web lists have stable React
+keys and shared-element descriptors for route navigation, but subscription emissions directly re-render list
+rows. There is no list-animation dependency (`motion/react`, `framer-motion`, `auto-animate`, or
+`react-transition-group`) in the Web package. The existing View Transition runtime is the repository's only
+approved motion model; adding a new animation framework to one list would create a divergent paradigm.
+
+The smallest real product chain is `ChangeList`: it is the only list where a live active-row projection can
+lose a row after archive completion and where a remaining row links into a detail View Transition. SpecList is
+read-only Catalog presentation, ArchiveList is primarily the receiving archive projection, and Git lists carry
+binding/lifecycle complexity. They remain later independent slices.
+
+6.17-A production owner:
+
+```text
+useChangesSubscription emission
+        -> ChangeList active-row projection / local continuity owner
+        -> id-keyed Change row + existing shared descriptor
+        -> real VTLink -> runPreparedViewTransition
+```
+
+Required fixed points:
+
+```text
+initial [A, B]                 -> immediate render, no invented transition
+[A, B] -> [B]                 -> one physical list transition; A exits, B identity survives
+[A, B] -> [B, A]              -> both id-keyed rows survive reorder without relabelling
+click B                        -> changes:B handoff and one route update to /changes/b
+native VT unavailable          -> immediate stable-id update, no fake success/animation claim
+```
+
+Existing `change-list.test.tsx` mocks `VTLink` as a bare anchor, so it proves only static href/DOM output.
+It cannot prove the production continuity owner or the real handoff/coordinator boundary. The new tests must
+cross the actual `ChangeList -> VTLink -> navigation` path while only mocking the lowest transport/runtime
+edges needed for deterministic Vitest. Browser pixels remain owner-only evidence.
+
+Do not touch Archive mutation, Server/Router, `use-subscription`, shared `VTLink`, Root/Git authority,
+SpecList, ArchiveList, Git list projections, static export, or the independent
+`accelerate-live-projection-loading` Change. Parent checkpoint 6.17 remains open until 6.17-A has red/green
+and mutation-resistance evidence; later list families need their own research.

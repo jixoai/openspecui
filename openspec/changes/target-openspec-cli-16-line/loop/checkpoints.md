@@ -433,6 +433,11 @@ The independent browser attempt confirms the desktop source control and URL/quer
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.
   - Keep 6.16 open until subscription/Root timing, the artificial route-gate, and remaining page-topology
     packages have their own evidence.
+  - `6.17-A` planned: decompose physical list continuity by owner, beginning with the active ChangeList
+    projection. Its contract is reactive `[A, B] -> [B]` removal and `[A, B] -> [B, A]` reorder with stable
+    `change.id` identity, one local native/View Transition owner, and real ChangeList-to-detail handoff
+    evidence. SpecList, ArchiveList, Git lists, shared subscriptions, and new animation dependencies remain
+    separate. Final browser acceptance remains owner-only.
 - [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns
 
 ## 7. Static Export Parity and Privacy
