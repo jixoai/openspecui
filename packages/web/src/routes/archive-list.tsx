@@ -102,7 +102,7 @@ export function ArchiveList() {
               </VTLink>
             )
           })}
-          {archived.length === 0 && (
+          {archived.length === 0 && !isUpdating && (
             <div className="text-muted-foreground p-8 text-center">
               <Archive className="mx-auto mb-4 h-12 w-12 opacity-50" />
               <p>No archived changes yet.</p>

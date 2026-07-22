@@ -7030,3 +7030,37 @@ effect/generation/cache lifecycle. Current F2 lifecycle behavior is correct, so 
 the retained-empty page correction. Before a second page adopts projection events, extract and review one
 deep lifecycle owner; do not create a third copy or change the accepted raw/authoritative contracts
 incidentally.
+
+### 6.16-F2 retained-empty correction implementation (2026-07-22)
+
+`ArchiveList` now treats current-empty as a settled conclusion. The existing empty branch renders only when
+`archived.length === 0` and `isUpdating === false`; a retained empty snapshot during recomputation keeps the
+existing `Updating` status but does not claim `No archived changes yet.` or show its ordinary explanatory
+copy. Once replacement truth settles empty, the original copy renders unchanged.
+
+The real-component fixed point sets `data=[]`, `isLoading=false`, `isUpdating=true`, and `error=null`. Before
+the production guard it failed exactly because `No archived changes yet.` was present; the other eight
+ArchiveList tests passed. After the guard, the complete file passed `9/9` and the existing resolved-empty
+test still proves the ordinary Planning-root empty copy.
+
+Mutation resistance removed only `!isUpdating` from the production empty branch. The named test failed
+`1/1` with eight skipped because `No archived changes yet.` returned; restoring only that guard returned the
+complete ArchiveList file to `9/9` green.
+
+Focused verification:
+
+```text
+ArchiveList: 1 file / 9 tests passed
+Web projection hook: 1 file / 12 tests passed
+Web package typecheck: passed
+Exact changed-file lint: passed with 0 warnings / 0 errors
+pnpm format:check: passed
+git diff --check: passed
+```
+
+The correction changes only the ArchiveList empty conclusion and its direct test. Router, reactive helpers,
+the Web projection hook, cache/generation behavior, errors, rows, hrefs, View Transitions, static provider,
+other pages, SSG, browser, and full gates remain unchanged and were not run. The reviewer-owned
+`AGENTS.md` and `i18n.zh.md` retained-empty contract remains intact at `8a79e22`. Final browser/visual
+acceptance remains owner-only. `6.16-F2` is corrected and awaits independent review; parent checkpoint
+`6.16` remains unchecked.

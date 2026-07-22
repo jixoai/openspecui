@@ -4,7 +4,7 @@
  * 2. Verify the Planning-root empty state does not imply environment-wide completeness.
  * 3. Prove resolved and unknown Archive data render their real first-frame topology before effects.
  * 4. Prove no-data and retained-data transport errors remain visible without false success claims.
- * 5. Prove retained live rows expose recompute Updating while static rows never do.
+ * 5. Prove retained rows and empty snapshots expose Updating without false settled claims.
  *
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
  * Owner report (2026-07-22): "整个过程中，几乎都在 Loading。"
@@ -165,6 +165,21 @@ describe('ArchiveList', () => {
     )
     expect(screen.queryByText('Loading archived changes...')).toBeNull()
     expect(screen.queryByText('No archived changes yet.')).toBeNull()
+  })
+
+  it('does not claim a retained empty snapshot is settled during a live recompute', () => {
+    useArchivesSubscriptionMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isUpdating: true,
+      error: null,
+    })
+
+    render(<ArchiveList />)
+
+    expect(screen.getByRole('status').textContent).toContain('Updating')
+    expect(screen.queryByText('No archived changes yet.')).toBeNull()
+    expect(screen.queryByText(/Changes in this Planning root are archived/i)).toBeNull()
   })
 
   it('does not render Updating for a resolved static projection', () => {
