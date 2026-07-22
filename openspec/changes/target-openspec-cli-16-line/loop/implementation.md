@@ -7459,3 +7459,24 @@ rebuild fresh SSG output before it can be accepted. K remains implemented awaiti
 verification-only: remove stale `packages/web/dist-ssg` and `packages/web/.vite`, run
 `pnpm --filter @openspecui/web build:ssg`, record the exact result, and do not alter static provider,
 snapshot, routes, server, or product behavior. Browser/visual acceptance remains owner-only.
+
+### 6.16-K static verification follow-up (2026-07-23)
+
+Verification started from a clean worktree. The existing `packages/web/dist-ssg` was moved outside the
+repository to a temporary isolation directory because this execution environment rejects `rm -rf`; the
+repository-local `packages/web/.vite` did not exist. The required build therefore started without either
+stale generated directory in its output path.
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/entry-client-static.test.tsx src/lib/static-data-provider.opsx.test.ts
+  -> 2 files / 10 tests passed
+
+pnpm --filter @openspecui/web build:ssg
+  -> passed from fresh generated artifacts
+```
+
+The successful build emitted non-failing generated-CSS `scroll-button` pseudo-element warnings and the
+existing `INEFFECTIVE_DYNAMIC_IMPORT` warning for `src/lib/trpc.ts`; this verification-only follow-up does
+not alter either warning source. No SSG/provider/snapshot, route, Server, or production code changed.
+`6.16-K` remains implemented awaiting independent review, and parent checkpoint `6.16` remains unchecked.
