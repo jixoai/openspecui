@@ -7704,3 +7704,13 @@ Correction code/test commit is `141493c`. No public API/export, shared owner, re
 semantics, page, adapter, Router, Server, Core, static provider, SSG, Playwright/browser, full-gate, owner
 browser/visual acceptance, push, merge, archive, or release work changed or ran. `6.16-M` remains awaiting
 independent review and parent checkpoint `6.16` remains unchecked.
+
+### 6.16-M independent acceptance (2026-07-23)
+
+Independent review accepts the lifecycle extraction `24c6f7c`, its ordinary empty-key compatibility
+correction `141493c`, and their evidence commits. The review found and closed the only public-contract
+drift: `useSubscription('')` now normalizes its cache key before snapshot and publication, exactly restoring
+the prior uncached ordinary behavior without weakening the shared owner or changing the reactive and
+authoritative hooks' existing semantics. Final independent focused verification passes `2 files / 19 tests`,
+Web typecheck, exact three-file lint, format, and diff checks. No browser/Playwright, SSG, full gate, or
+owner browser/visual acceptance ran. `6.16-M` is accepted; parent checkpoint `6.16` remains unchecked.
