@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Coordinate route navigation with native View Transitions.
  * 2. Preserve navigation state and shared-element descriptors across route areas.
  * 3. Forward Git binding provenance into detail prefetch before committing navigation.
+ * 4. Record causally bounded preparation, route-commit, and transition-settlement timings.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git handoff prefetch.
+ * Original request (2026-07-22): "整个过程中，几乎都在 Loading，切换个页面也等，做任何动作也在等，给我的感觉就是非常卡。"
  */
 import { navController } from '@/lib/nav-controller'
 import {
@@ -16,6 +18,7 @@ import {
 } from '@tanstack/react-router'
 import { forwardRef, useCallback, type MouseEvent, type RefObject } from 'react'
 import { prepareRouteDetailViewTransition } from './detail-prepare'
+import { startNavigationTimingAttempt } from './navigation-timing'
 import { resolveViewTransitionIntent, type VTArea } from './route-semantics'
 import { runViewTransition } from './runtime'
 import { collectSharedElementEntries, type SharedElementDescriptor } from './shared-elements'
@@ -85,6 +88,8 @@ function resolveSource(
 
 async function runPreparedViewTransition(options: {
   intent: ReturnType<typeof resolveViewTransitionIntent>
+  area: VTArea
+  fromPath: string
   pathname: string
   search?: string
   state?: unknown
@@ -92,22 +97,34 @@ async function runPreparedViewTransition(options: {
   collectBeforeEntries?: () => Array<[HTMLElement, string]>
   collectAfterEntries?: () => Array<[HTMLElement, string]>
 }): Promise<void> {
+  const timing = startNavigationTimingAttempt({
+    area: options.area,
+    fromPath: options.fromPath,
+    toPath: options.pathname,
+  })
   const prepareOutcome = await prepareRouteDetailViewTransition({
     intent: options.intent,
     pathname: options.pathname,
     search: options.search,
     state: options.state,
   })
+  timing.recordPrepareSettled(prepareOutcome)
 
   if (prepareOutcome === 'cancelled') {
     return
   }
 
+  const update = () => {
+    options.update()
+    timing.recordRouteCommitted()
+  }
+
   if (prepareOutcome === 'skip-vt') {
     await runViewTransition({
       intent: null,
-      update: options.update,
+      update,
     })
+    timing.recordTransitionSettled()
     return
   }
 
@@ -115,8 +132,9 @@ async function runPreparedViewTransition(options: {
     intent: options.intent,
     collectBeforeEntries: options.collectBeforeEntries,
     collectAfterEntries: options.collectAfterEntries,
-    update: options.update,
+    update,
   })
+  timing.recordTransitionSettled()
 }
 
 export function useVTHrefNavigate() {
@@ -138,6 +156,8 @@ export function useVTHrefNavigate() {
 
       return runPreparedViewTransition({
         intent,
+        area,
+        fromPath: location.pathname,
         pathname,
         search: targetUrl.search,
         state,
@@ -243,6 +263,8 @@ function runNavControllerTransition(options: {
 
   return runPreparedViewTransition({
     intent,
+    area: options.area,
+    fromPath: currentLocation.pathname,
     pathname,
     search: targetUrl.search,
     state: options.state,

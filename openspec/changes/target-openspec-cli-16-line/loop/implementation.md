@@ -6096,3 +6096,69 @@ subscriptions, Root authority, Server resolution, Settings/Archive mount gates, 
 persistence, or network behavior. No cross-subscription causal claim is permitted: `observedAt`, local
 subscription timestamps, and navigation timestamps have no shared protocol sequence. Checkpoint `6.16`
 remains open, and all final browser/visual acceptance remains owner-only.
+
+### 6.16-B implementation: bounded detail-navigation phase timing (2026-07-22)
+
+`navigation-timing.ts` now owns a process-memory-only log of at most 256 samples retained for at most
+30 minutes. Its discriminated public sample union makes a cancelled attempt end at
+`prepare-settled(cancelled)`: it cannot contain route-commit or transition-settlement phases. The owner
+uses `performance.now()` for monotonic local phase timings, has typed read/current/clear APIs, and keeps
+attempt identity independent per `main`, `bottom`, and `pop` route area.
+
+`runPreparedViewTransition` is the sole production writer. It creates the attempt before detail
+preparation, records the preparation outcome, records `route-committed` only after the real wrapped
+`update` returns, then records `transition-settled` only after `runViewTransition` resolves. A newer
+same-area attempt becomes current; every late phase callback from an older attempt is ignored. The
+coordinator still invokes its pre-existing route update for a late prepare result: this package changes
+diagnostic ownership only and deliberately does not change prefetch or navigation policy.
+
+The fixed-point evidence uses the real `vtNavController` coordinator with mocked preparation/runtime
+boundaries, never direct owner phase calls:
+
+1. Before coordinator wiring, the exact navigation test failed with `expected [] to deeply equal [...]`
+   after a real detail navigation (`1 failed | 1 passed`). This proves the former production path emitted
+   no structured sample.
+2. With wiring restored, controlled `performance.now()` values prove one `ready` attempt records exactly
+   `requested(100) -> prepare-settled(120) -> route-committed(140) -> transition-settled(180)` with
+   monotonic elapsed durations `0, 20, 40, 80`. `cancelled` records exactly two phases and calls neither
+   the route update nor `runViewTransition`; `skip-vt` continues through the real wrapped update and
+   settlement with its own outcome.
+3. Holding bottom-area A, settling bottom-area B, then releasing A leaves B current and unchanged; a
+   main-area attempt settles independently. The bounded path proves 257 real navigations retain only the
+   newest 256, and an advance beyond 30 minutes leaves only the new sample.
+4. Removing only `timing.recordRouteCommitted()` from the wrapper made the ordered-phase test fail with
+   the sample stuck in `prepared` and both `route-committed` and `transition-settled` absent
+   (`1 failed | 4 skipped`). Restoring that exact line returned the test green.
+5. Replacing only the timing owner's `isCurrentAttempt` guard with `return true` made the late-A test
+   fail: expected bottom `navigation-2` for `/git/commit/b`, received late A `navigation-1` for
+   `/git/commit/a` (`1 failed | 4 skipped`). Restoring the guard returned the test green.
+
+Final focused verification, after both mutations were restored:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/lib/view-transitions/navigation.test.tsx \
+  src/lib/view-transitions/detail-prepare.test.ts \
+  src/lib/view-transitions/runtime.test.ts
+  -> 3 files / 21 tests passed
+
+pnpm --filter @openspecui/web typecheck
+  -> passed
+
+pnpm exec vp lint packages/web/src/lib/view-transitions/navigation.tsx \
+  packages/web/src/lib/view-transitions/navigation-timing.ts \
+  packages/web/src/lib/view-transitions/navigation.test.tsx
+  -> 0 warnings / 0 errors
+
+pnpm format:check
+git diff --check
+  -> passed before this record append
+```
+
+Changed files: `packages/web/src/lib/view-transitions/navigation.tsx`,
+`packages/web/src/lib/view-transitions/navigation-timing.ts`,
+`packages/web/src/lib/view-transitions/navigation.test.tsx`, and this record. Residual limitation:
+these are local navigation timings only; they establish neither cross-subscription causality nor backend
+latency. Checkpoint `6.16` remains open for separately approved subscription/Root timing,
+detail-prefetch policy, artificial route-gate, and page-topology packages. No browser end-to-end or visual
+acceptance was run; that final acceptance remains owner-only.
