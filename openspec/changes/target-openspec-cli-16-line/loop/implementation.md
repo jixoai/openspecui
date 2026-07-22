@@ -6582,3 +6582,54 @@ state assertions, provider, Server/Adapter, strict Archive, detail, CSS, and sta
 or browser walkthrough is required for this first-render topology; final visual/browser acceptance remains
 owner-only. Archive error and cached-data updating presentation remain unimplemented page-topology debt, so
 6.16-D and parent checkpoint 6.16 stay open until independent review accepts this slice.
+
+### 6.16-D implementation: Archive first-render continuity (2026-07-22)
+
+`ArchiveList` no longer creates `firstFrameLoading`, schedules a `requestAnimationFrame`, or lets that
+local flag override resolved Archive data. The retained `isLoading && !archived` condition remains the
+sole unknown-data wait. Subscription ownership, Archive rows, empty state, `VTLink`, handoff state, and
+shared-element bindings are unchanged.
+
+Two synchronous `renderToStaticMarkup(<ArchiveList />)` fixed points cross the real component before
+effects can run. Resolved Planning-root data must contain its row and href without Loading copy. An
+undefined data projection with `isLoading=true` must still contain `Loading archived changes...` and no
+resolved Archive composition.
+
+Red and mutation-resistance evidence:
+
+1. Starting implementation HEAD `8dab746` has no Archive production/test diff from requested fixed point
+   `9e41cb4`. With the resolved-data fixed point added and the original rAF gate intact, the exact test
+   failed (`1 failed | 3 skipped`): it expected `Resolved archive` but received only the Loading element.
+2. Removing only the artificial gate made both synchronous topology tests pass (`2 passed | 2 skipped`).
+3. Temporarily restoring only `firstFrameLoading`, its rAF effect/cleanup, and its condition made the same
+   resolved-data test fail again (`1 failed | 3 skipped`) with the identical Loading-only markup. Removing
+   that mutation restored the complete ArchiveList file to green.
+
+Final focused verification:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/routes/archive-list.test.tsx
+  -> 1 file / 4 tests passed
+
+pnpm --filter @openspecui/web typecheck
+  -> passed
+
+pnpm exec vp lint packages/web/src/routes/archive-list.tsx \
+  packages/web/src/routes/archive-list.test.tsx
+  -> 0 warnings / 0 errors
+
+pnpm format:check
+git diff --check
+  -> passed
+```
+
+Changed files: `packages/web/src/routes/archive-list.tsx`,
+`packages/web/src/routes/archive-list.test.tsx`, this implementation record, and `loop/checkpoints.md`.
+Checkpoint `6.16` remains unchecked; 6.16-D is implemented and awaits independent review. Archive error
+and cached-data updating presentation, generic subscriptions, providers, Server/Adapter, strict mutation,
+Archive detail, View Transition runtime/CSS, Settings, Root, SSG, full gates, and browser acceptance were
+not changed or run. Final browser and visual acceptance remains owner-only.
+
+The implementation commit used `--no-verify` only after every Goal-required focused check passed because
+the repository records the missing root Vite+ `staged` configuration. No commit-hook pass is claimed.

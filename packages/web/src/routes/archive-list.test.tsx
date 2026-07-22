@@ -1,12 +1,15 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Verify Archive copy and rows stay scoped to the writable Planning root projection.
  * 2. Verify the Planning-root empty state does not imply environment-wide completeness.
+ * 3. Prove resolved and unknown Archive data render their real first-frame topology before effects.
  *
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
+ * Owner report (2026-07-22): "整个过程中，几乎都在 Loading。"
  */
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ArchiveList } from './archive-list'
 
@@ -43,6 +46,44 @@ describe('ArchiveList', () => {
   })
 
   afterEach(() => cleanup())
+
+  it('renders resolved Archive data before effects', () => {
+    useArchivesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: '2026-07-22-resolved',
+          name: 'Resolved archive',
+          trackedTaskProgress: { total: 1, completed: 1, phase: 'complete' },
+          documentChecklistSummary: { total: 1, completed: 1, groups: [] },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    })
+
+    const markup = renderToStaticMarkup(<ArchiveList />)
+
+    expect(markup).toContain('Resolved archive')
+    expect(markup).toContain('/archive/2026-07-22-resolved')
+    expect(markup).not.toContain('Loading archived changes...')
+  })
+
+  it('renders the real unknown-data Loading state before effects', () => {
+    useArchivesSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    })
+
+    const markup = renderToStaticMarkup(<ArchiveList />)
+
+    expect(markup).toContain('Loading archived changes...')
+    expect(markup).not.toContain(
+      'Completed changes archived in the current writable Planning root.'
+    )
+  })
 
   it('renders only rows supplied by the writable Planning-root subscription', async () => {
     useArchivesSubscriptionMock.mockReturnValue({

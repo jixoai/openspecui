@@ -1,27 +1,22 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. List only archives projected from the current writable Planning root.
  * 2. Preserve stable Archive detail navigation and empty/loading states.
+ * 3. Render resolved Archive data immediately without an artificial first-frame gate.
  *
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
+ * Owner report (2026-07-22): "整个过程中，几乎都在 Loading。"
  */
 import { formatRelativeTime } from '@/lib/format-time'
 import { useArchivesSubscription } from '@/lib/use-subscription'
 import { VTLink } from '@/lib/view-transitions/navigation'
 import { getSharedElementBinding } from '@/lib/view-transitions/shared-elements'
 import { Archive, ChevronRight } from 'lucide-react'
-import { useEffect, useState } from 'react'
 
 export function ArchiveList() {
   const { data: archived, isLoading } = useArchivesSubscription()
 
-  const [firstFrameLoading, setFirstFrameLoading] = useState(true)
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setFirstFrameLoading(false))
-    return () => cancelAnimationFrame(id)
-  }, [])
-
-  if (firstFrameLoading || (isLoading && !archived)) {
+  if (isLoading && !archived) {
     return <div className="route-loading animate-pulse">Loading archived changes...</div>
   }
 
