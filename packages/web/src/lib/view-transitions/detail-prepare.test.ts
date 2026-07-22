@@ -473,38 +473,18 @@ describe('prepareRouteDetailViewTransition', () => {
     await expect(pendingA).resolves.toBe('ready')
 
     const selector = { type: 'commit' as const, hash: 'abc12345' }
-    expect(fetchQueryMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        queryKey: getGitEntryMetaQueryKey('code', 'binding-a', selector),
-      })
-    )
-    expect(fetchQueryMock.mock.calls.map(([input]) => input?.queryKey)).toContainEqual([
-      'git',
-      'code',
-      'binding-a',
-      'meta',
-      'commit',
-      'abc12345',
-    ])
-    expect(
-      fetchQueryCache.get(JSON.stringify(getGitEntryMetaQueryKey('code', 'binding-a', selector)))
-    ).toEqual({ hash: 'abc12345', title: 'Commit A' })
-    expect(fetchQueryMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        queryKey: getGitEntryMetaQueryKey('code', 'binding-b', selector),
-      })
-    )
-    expect(fetchQueryMock.mock.calls.map(([input]) => input?.queryKey)).toContainEqual([
-      'git',
-      'code',
-      'binding-b',
-      'meta',
-      'commit',
-      'abc12345',
-    ])
-    expect(
-      fetchQueryCache.get(JSON.stringify(getGitEntryMetaQueryKey('code', 'binding-b', selector)))
-    ).toEqual({ hash: 'abc12345', title: 'Commit B' })
+    const bindingAKey = getGitEntryMetaQueryKey('code', 'binding-a', selector)
+    const bindingBKey = getGitEntryMetaQueryKey('code', 'binding-b', selector)
+    expect(fetchQueryCache.get(JSON.stringify(bindingBKey))).toEqual({
+      hash: 'abc12345',
+      title: 'Commit B',
+    })
+    expect(fetchQueryCache.get(JSON.stringify(bindingAKey))).toEqual({
+      hash: 'abc12345',
+      title: 'Commit A',
+    })
+    expect(fetchQueryMock).toHaveBeenCalledWith(expect.objectContaining({ queryKey: bindingAKey }))
+    expect(fetchQueryMock).toHaveBeenCalledWith(expect.objectContaining({ queryKey: bindingBKey }))
   })
 
   it('skips preparation for backward detail transitions', async () => {
