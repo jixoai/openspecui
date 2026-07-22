@@ -401,11 +401,13 @@ The independent browser attempt confirms the desktop source control and URL/quer
     mutation hides the retained Overview marker and is therefore a genuine red. Web typecheck, exact lint,
     format, and diff checks pass for code/test commit `4509a6e`. Git binding/authority, Server/router,
     static, and final owner browser acceptance remain outside this package. Parent `6.16` remains open.
-  - `6.16-P` planned: SpecView's main document owner still returns an error-only detail whenever its
-    subscription reports an error, even when the retained document is valid display continuity. The slice
-    must preserve retained Owned and Referenced content, show the raw error alongside it, keep no-data error
-    error-only, and leave compound identity, read-only Reference semantics, and all mutation authority
-    unchanged. This is independent from detail-prefetch policy and the live-projection performance Change.
+  - `6.16-P` accepted: SpecView preserves retained Owned and Referenced detail content beside a terminal
+    document-subscription error, while no-data/error remains raw error-only and initial Loading retains its
+    existing precedence. Direct real-`SpecView` evidence covers loading, retained Owned error, retained
+    Referenced read-only error, and no-data error (`6/6`); restoring the unconditional error guard hides the
+    Owned detail marker, and removing only the retained alert hides the raw error. Web typecheck, exact lint,
+    format, and diff checks pass for code/test commit `8c71645`. Compound identity, read-only semantics,
+    Root/Git authority, static/navigation, and final owner browser acceptance remain outside this package.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and

@@ -7961,3 +7961,26 @@ No `use-subscription`, Server/Adapter/Router, compound identity, Root/Git author
 static provider, navigation View Transition/prefetch, SSG, or performance Change edits are authorized.
 Focused evidence ends at SpecView Vitest, Web typecheck, exact lint/format, and diff checks. Parent `6.16`
 remains open and final browser/visual acceptance remains owner-only.
+
+### 6.16-P independent acceptance (2026-07-23)
+
+The accepted route topology is:
+
+```text
+document absent + loading -> SpecLoading / Loading spec...
+document absent + error   -> raw role=alert; no Spec not found claim
+retained Owned + error    -> Owned header/Markdown + raw role=alert
+retained Referenced + error -> read-only Store detail + raw role=alert
+current document          -> existing source-specific detail
+```
+
+`8c71645` changes only the SpecView presentation owner. It keeps the initial
+`isLoading && !document` branch first, treats a missing/not-found document with an error as error-only,
+and passes the transport error into the existing Owned/Referenced detail composition when a document is
+retained. Compound identity, Reference read-only presentation, translation, and navigation are unchanged.
+
+The direct route tests use typed Owned and Referenced projections and the real `SpecView` component. The
+fixed-point reds were recorded at the exact owner: restoring `if (error)` hid the Owned heading/Markdown;
+removing only the retained alert made the raw-error assertion fail. No generic hook, Server/Adapter, Root/Git,
+static, SSG, detail-prefetch, full gate, or browser/visual acceptance was run. Focused Vitest `6/6`, Web
+typecheck, exact oxlint, Prettier, `pnpm format:check`, and `git diff --check` all pass. Parent `6.16` remains open.
