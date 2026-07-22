@@ -421,18 +421,18 @@ The independent browser attempt confirms the desktop source control and URL/quer
     the three retained alert assertions fail; restoring the old `error && !status` path made the three
     retained detail assertions fail. Web typecheck, exact lint, format, and diff checks pass for
     `cc81b22`. The Loading/performance investigation remains in its independent Change.
-  - `6.16-R` planned: cold detail prefetch currently blocks `runPreparedViewTransition` until the remote
-    preparation settles or the 2.5s timeout expires. The slice must make prefetch opportunistic: warm
-    preparation that settles before 140ms keeps the existing View Transition, while pending/error work at the
-    deadline commits with `skip-vt` and lets the destination own its Loading state. The wait indicator and
-    Escape listener must be retired at commit. Cache identity,
-    Git binding, Root authority, and late-A provenance remain unchanged. Typed key/value readback must show B
-    survives late A, and production-key mutation must make that test red. No subscription, Server/Router,
-    Static/SSG, or independent performance Change edits are authorized.
+  - `6.16-R` accepted: `9f4ed1d` gives the route-detail preparation path a 140ms commit deadline. A
+    preparation that settles ready before the deadline retains the View Transition; a pending deadline retires
+    the indicator/Escape listener, commits `skip-vt`, and leaves destination Loading ownership unchanged.
+    `619b51b` adds typed Change/Git key/value A/B readback. For a same-selector Git B followed by late A,
+    B remains `Commit B` under the production binding-aware key. Removing only the deadline leaves zero route
+    updates at 140ms; removing only the key's `bindingToken` makes B read late A's `Commit A`. Focused
+    navigation/detail-prepare/prepare-wait Vitest passes `26/26` with Web typecheck, exact lint/Prettier, and
+    diff checks. No browser/visual acceptance ran; parent `6.16` remains open.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.
-  - Keep 6.16 open until subscription/Root timing, 6.16-R detail-prefetch policy, artificial route-gate, and
-    page-topology packages have their own evidence.
+  - Keep 6.16 open until subscription/Root timing, the artificial route-gate, and remaining page-topology
+    packages have their own evidence.
 - [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns
 
 ## 7. Static Export Parity and Privacy

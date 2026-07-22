@@ -8062,11 +8062,12 @@ contracts.
 The next slice is a policy correction at the navigation boundary only:
 
 ```text
-identity-matching warm cache -> retain the existing prepared View Transition
-cold or pending prefetch    -> at 140ms clean up the wait indicator/Escape listener, commit the route with
-                               skip-vt, and let the destination render its own Loading state
-prefetch error/timeout      -> commit the route; preserve error/timing evidence without blocking navigation
-late A completion           -> fill only A's exact identity/binding cache; never relabel B
+preparation settles ready before 140ms -> retain the existing prepared View Transition
+preparation is pending at 140ms         -> clean up the wait indicator/Escape listener, commit the route
+                                           with skip-vt, and let the destination render its own Loading state
+prefetch rejection/deadline              -> commit the route; preserve error/timing evidence without blocking
+                                           navigation
+late A completion                        -> fill only A's exact identity/binding cache; never relabel B
 ```
 
 Required fixed points are the real `vtNavController` coordinator and production typed cache identity. The
@@ -8083,3 +8084,34 @@ No Server/Router, `use-subscription`, Root/Git authority, page-specific Loading,
 or `accelerate-live-projection-loading` behavior belongs in R. Focused evidence ends at navigation,
 detail-prepare, and prepare-wait Vitest plus Web typecheck, exact lint/Prettier, and diff checks. Final
 browser/visual acceptance remains owner-only; parent `6.16` remains open.
+
+### 6.16-R independent acceptance: bounded prefetch is not a route gate (2026-07-23)
+
+`9f4ed1d` gives detail preparation an explicit 140ms route-commit deadline. A completion before that
+deadline retains the existing View Transition. A pending deadline retires the wait indicator and Escape
+listener, commits through `skip-vt`, and leaves destination Loading ownership unchanged. Rejection before
+the deadline and rejection after a deadline both remain diagnostics; late rejection is consumed so it cannot
+become an unhandled Promise rejection. The shared generic wait keeps its 2.5-second default for callers
+without a deadline; this route path does not wait for it.
+
+`619b51b` upgrades the existing typed cache fixture to real key/value readback. Change A/B values remain
+separate by their production OPSX identity keys. For Git, B resolves before A for the same selector but a
+different binding; reading B after late A still returns `Commit B`. The real coordinator fixture crosses
+`vtNavController -> detail-prepare -> prepare-wait`: it proves no push at 139ms and a `skip-vt` route update
+at 140ms, preserves ready preparation's View Transition, commits immediate/late failures without false
+success, and proves Escape only cancels before the deadline.
+
+Mutation resistance was independently run and restored:
+
+1. Removing only the route's `deadlineMs` parameter leaves the held cold fixture with zero
+   `navController.push` calls at 140ms (`navigation-detail-prepare.test.ts:126`).
+2. Removing only `bindingToken` from production `getGitEntryMetaQueryKey` makes the same-selector B cache
+   readback receive late A's `Commit A`, not `Commit B` (`detail-prepare.test.ts:478`). A separate existing
+   Planning-key assertion also fails under this mutation, but the typed value-overwrite fixed point itself is
+   reached and red.
+
+Focused navigation/detail-prepare/prepare-wait Vitest passes `26/26`. Web typecheck, exact oxlint, exact
+Prettier, and `git diff --check` pass. No broad test gate, SSG, agent browser, Playwright, or owner visual
+walkthrough was run. The owner's separate `accelerate-live-projection-loading` investigation remains open;
+this local route-gate correction does not claim to solve global live-projection latency. Parent `6.16`
+remains open.
