@@ -356,9 +356,10 @@ The independent browser attempt confirms the desktop source control and URL/quer
     while no-Reference and ready-Store empty claims remain suppressed during Catalog transport error. Four
     named mutations prove both Referenced empty guards and both alert owners; the production owner is
     unchanged. Independent SpecList `10/10` and Web typecheck pass.
-  - `6.16-J` planned: ChangeList must expose its main Change-subscription terminal error without false
-    Loading, blank, or active-empty conclusions; retained rows stay visible. This is independent of the
-    accepted 6.16-G Status subprojection and may not change it.
+  - `6.16-J` implemented, awaiting independent review: ChangeList exposes its main terminal error without
+    false Loading, blank, or active-empty conclusions; retained rows/progress/links/current Status evidence
+    remain visible. Three named mutations prove its main alert, error-aware list frame, and active-empty
+    guard independently. This remains independent of the accepted 6.16-G Status subprojection.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and

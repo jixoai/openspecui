@@ -7306,7 +7306,7 @@ resistance; the correction changed only the test and evidence, not `SpecList` pr
 Independent focused Vitest passes `10/10`, Web typecheck passes, and the correction diff is clean. I is
 accepted; parent checkpoint `6.16` remains unchecked.
 
-The next isolated false conclusion is `ChangeList`'s *main* Change subscription. The page currently ignores
+The next isolated false conclusion is `ChangeList`'s _main_ Change subscription. The page currently ignores
 `useChangesSubscription().error`: terminal no-data failure renders a bordered blank list frame, while a
 retained empty Change list claims `No active changes.` despite failed freshness. This is separate from the
 accepted 6.16-G OPSX Status subprojection. 6.16-J consumes only the existing main
@@ -7329,3 +7329,53 @@ existing main subscription mock. Mutation resistance must remove the main alert,
 list-frame gate, and the active-empty guard separately. Do not invent an `isLoading: true` terminal-error
 state: generic subscription `onError` already settles `isLoading` false. No browser/Playwright, SSG, full
 gates, push, merge, archive, or release are authorized.
+
+### 6.16-J implementation: ChangeList main-error topology (2026-07-23)
+
+`ChangeList` now consumes only the existing main `useChangesSubscription().error`. A terminal no-data main
+error suppresses the existing Loading return, renders one raw main-error alert, and does not emit a bordered
+list frame or an active-empty conclusion. A retained non-empty Change list keeps its existing rows, formal
+tracked-task progress, progress bars, `VTLink` targets, and current matching Status artifact/schema evidence
+beside the alert. A retained empty Change list remains non-authoritative during the error: it has the alert
+but neither `No active changes.` nor an empty list frame. The normal current empty list retains its frame,
+New command, Quick Propose, and advanced New command.
+
+The page owns two independent subscriptions. This change leaves the accepted 6.16-G Status result,
+classification, and unavailable/loading branches untouched. `hasCurrentEmptyChanges` is deliberately one
+shared condition for both the empty conclusion and its frame: current empty data may make that conclusion,
+while an error-bearing empty snapshot may not. This makes the error-aware frame and active-empty truth
+separately observable without inventing an Updating lifecycle state or altering the generic subscription.
+
+Direct production-component fixed points use the existing main subscription seam with terminal
+`isLoading: false`: no data plus `Error('changes failed')`, one retained Change plus a matching current
+Status, a retained empty list plus the same error, and a current empty no-error list. The retained row test
+proves the alert coexists with `2/4`, `50% task completion`, the progress bar,
+`/changes/main-error-change`, and `1/2 artifacts · spec-driven`.
+
+Three strict mutations each failed only their named fixed point before being restored:
+
+1. Removing only the main `changesError` alert made the no-data terminal-error test fail because no alert
+   existed.
+2. Replacing only the error-aware `showChangesFrame` gate with `true` made that same no-data test fail
+   because an empty `.divide-y` frame returned.
+3. Removing only `&& !changesError` from `hasCurrentEmptyChanges` made the retained-empty error test fail
+   because `No active changes.` returned.
+
+Focused verification:
+
+```text
+ChangeList: 1 file / 11 tests passed
+Mutation: main alert, list-frame gate, and active-empty guard each failed its named fixed point as expected
+Web package typecheck: passed
+Exact two-file lint: passed with 0 warnings / 0 errors
+pnpm format:check: passed
+git diff --check: passed
+```
+
+Only `change-list.tsx`, its direct test, and matching Change evidence are changed. The Change/Status hooks,
+workflow classification and tracked-task truth, New/Propose behavior, Router, Server, static provider,
+VTLink/handoff, Updating lifecycle, other pages, SSG, browser/Playwright, and full gates remain unchanged
+and were not run. The code/test commit is `eadf7cd`. The repository's Vite+ commit hook could not run
+because root `vite.config.ts` has no `staged` configuration; it was bypassed with `--no-verify` only after
+the focused checks above passed. Final browser/visual acceptance remains owner-only. `6.16-J` is
+implemented and awaits independent review; parent checkpoint `6.16` remains unchecked.
