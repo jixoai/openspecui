@@ -6633,3 +6633,20 @@ not changed or run. Final browser and visual acceptance remains owner-only.
 
 The implementation commit used `--no-verify` only after every Goal-required focused check passed because
 the repository records the missing root Vite+ `staged` configuration. No commit-hook pass is claimed.
+
+### 6.16-D independent acceptance (2026-07-22)
+
+Independent code review found no issue in `606257c`. The production diff removes only ArchiveList's local
+rAF gate and preserves `isLoading && !archived`, `VTLink`, handoff, shared-element bindings, Archive rows,
+and empty state. Both changed TS/TSX files retain current three-intent headers with the owner report and no
+type escape.
+
+Independent focused execution passed the complete ArchiveList test file (`4/4`) in `1.12s` with no console
+warning, failure, retry, or flake. The resolved-data SSR fixed point crosses the real component before
+effects and requires the row, real href, and absence of Loading; the unknown-data fixed point uses the same
+boundary and preserves the real Loading branch. Existing `render + waitFor` tests remain eventual row/empty
+coverage and are not mislabeled as first-frame evidence.
+
+No Playwright, browser walkthrough, SSG, or full gate ran or is required to accept this presentation-only
+first-render package. Final browser and visual acceptance remains owner-only. 6.16-D is accepted. Parent
+checkpoint 6.16 remains open for Archive error/cached-updating and other independently owned page topology.
