@@ -424,7 +424,7 @@ The independent browser attempt confirms the desktop source control and URL/quer
   - `6.16-R` planned: cold detail prefetch currently blocks `runPreparedViewTransition` until the remote
     preparation settles or the 2.5s timeout expires. The slice must make prefetch opportunistic: warm
     identity-matching data keeps the existing View Transition, while cold/pending/error work commits the
-    route within a bounded non-blocking budget and lets the destination own its Loading state. Cache identity,
+    route within the bounded 140ms non-blocking budget and lets the destination own its Loading state. Cache identity,
     Git binding, Root authority, and late-A provenance remain unchanged. No subscription, Server/Router,
     Static/SSG, or independent performance Change edits are authorized.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache

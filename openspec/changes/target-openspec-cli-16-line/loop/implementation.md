@@ -8063,15 +8063,15 @@ The next slice is a policy correction at the navigation boundary only:
 
 ```text
 identity-matching warm cache -> retain the existing prepared View Transition
-cold or pending prefetch    -> commit the route within a bounded non-blocking budget, use skip-vt,
+cold or pending prefetch    -> commit the route within the bounded 140ms non-blocking budget, use skip-vt,
                                and let the destination render its own Loading state
 prefetch error/timeout      -> commit the route; preserve error/timing evidence without blocking navigation
 late A completion           -> fill only A's exact identity/binding cache; never relabel B
 ```
 
 Required fixed points are the real `vtNavController` coordinator and typed cache identity. The current
-2.5-second pending path must fail the cold-navigation red because route update is not issued before the
-held prefetch resolves. A warm cache must keep the existing View Transition path; slow/error/timeout must
+2.5-second pending path must fail the cold-navigation red because route update is not issued within 140ms
+and before the held prefetch resolves. A warm cache must keep the existing View Transition path; slow/error/timeout must
 commit without inventing success or bypassing Root/Git action gates. A late A completion must not overwrite
 or relabel B. Mutation resistance removes only the non-blocking commit transition and, separately, one
 identity/binding component from the cache key; each mutation must make its named red fail. Do not weaken
