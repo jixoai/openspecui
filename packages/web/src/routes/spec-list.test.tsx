@@ -218,6 +218,92 @@ describe('SpecList', () => {
     expect(screen.queryByText('No Referenced Specs currently observed.')).toBeNull()
   })
 
+  it('keeps Catalog and Reference Store errors visible together in the Referenced scope', () => {
+    locationState.current = { __specListScope: 'referenced' }
+    useSpecsSubscriptionMock.mockReturnValue({
+      data: {
+        observedAt: 1,
+        entries: [],
+        referenceSources: [
+          {
+            storeId: 'broken',
+            state: 'error',
+            diagnostics: [
+              {
+                severity: 'warning',
+                code: 'reference_root_unhealthy',
+                message: 'Store root is unhealthy.',
+              },
+            ],
+            evidence: {
+              success: false,
+              stdout: '{}',
+              stderr: 'Store is unavailable.',
+              exitCode: 1,
+              diagnostics: [],
+            },
+          },
+        ],
+      },
+      isLoading: false,
+      error: new Error('catalog failed'),
+    })
+
+    render(<SpecList />)
+
+    const alerts = screen.getAllByRole('alert')
+    const alertText = alerts.map((alert) => alert.textContent).join('\n')
+    expect(alertText).toContain('catalog failed')
+    expect(alertText).toContain('reference_root_unhealthy')
+    expect(alertText).toContain('Store is unavailable.')
+    expect(alerts).toHaveLength(2)
+    expect(screen.queryByText('No Referenced Specs currently observed.')).toBeNull()
+  })
+
+  it('does not classify no Reference sources as empty during a Catalog transport error', () => {
+    locationState.current = { __specListScope: 'referenced' }
+    useSpecsSubscriptionMock.mockReturnValue({
+      data: {
+        observedAt: 1,
+        entries: [],
+        referenceSources: [],
+      },
+      isLoading: false,
+      error: new Error('catalog failed'),
+    })
+
+    render(<SpecList />)
+
+    expect(screen.getByRole('alert').textContent).toContain('catalog failed')
+    expect(screen.queryByText('No Referenced Specs currently observed.')).toBeNull()
+  })
+
+  it('does not classify a ready empty Reference Store as empty during a Catalog transport error', () => {
+    locationState.current = { __specListScope: 'referenced' }
+    useSpecsSubscriptionMock.mockReturnValue({
+      data: {
+        observedAt: 1,
+        entries: [],
+        referenceSources: [
+          {
+            storeId: 'platform-a',
+            state: 'ready',
+            diagnostics: [],
+            evidence: { success: true, stdout: '{}', stderr: '', exitCode: 0, diagnostics: [] },
+          },
+        ],
+      },
+      isLoading: false,
+      error: new Error('catalog failed'),
+    })
+
+    render(<SpecList />)
+
+    expect(screen.getByRole('alert').textContent).toContain('catalog failed')
+    expect(screen.getByRole('heading', { name: 'platform-a' })).toBeTruthy()
+    expect(screen.queryByText('OpenSpec reported no Specs for this Store.')).toBeNull()
+  })
+
   it('restores the Referenced list scope after returning from a referenced detail', () => {
     locationState.current = { __specListScope: 'referenced' }
     setCatalog(
