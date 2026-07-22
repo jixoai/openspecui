@@ -8019,7 +8019,7 @@ retained Status + error       -> detail/artifacts/toolbar + one raw role=alert
 current Status                 -> existing detail/artifacts/toolbar
 ```
 
-`2bd58af` and `cc81b22` keep the shared `OpsxEntityDetailView` contract unchanged. ChangeView's own Status-backed
+`f1e4d75` and `cc81b22` keep the shared `OpsxEntityDetailView` contract unchanged. ChangeView's own Status-backed
 toolbar owns the retained-error alert, while the existing `errorMessage` path still handles no-data errors.
 RootAction readiness, artifact identity, Apply/tracked evidence, and missing-Change handling are unchanged.
 
