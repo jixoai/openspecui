@@ -277,6 +277,42 @@ Preserve the accepted unknown-data Loading, immediate resolved render, empty sta
 handoff/shared elements, live/static provider, Server/Adapter, strict Archive mutation, and detail route.
 6.16-E cannot close parent 6.16.
 
+#### 6.16-F: establish an opt-in reactive recompute lifecycle
+
+The shared generic subscription stack currently exposes only completed data and terminal error. Core
+`ReactiveContext.notifyChange()` wakes the stream, and `stream()` runs the replacement task before yielding
+the next value. Server `createReactiveSubscription<T>` therefore cannot tell Web that a specific projection
+has begun recomputing. Runtime-facet invalidation and WebSocket `connecting/pending` are independent facts
+and cannot fill this gap.
+
+Do not replace every existing subscription payload with an event union. Preserve Core `stream<T>()` and
+Server `createReactiveSubscription<T>` for existing consumers. Add an opt-in lifecycle path with exact
+semantics:
+
+```text
+initial task -> data(A)                  # no recompute event
+dependency wake + not aborted
+             -> recompute-started
+             -> replacement task waits/runs
+             -> data(B)
+```
+
+Split delivery again:
+
+1. `6.16-F1` adds an optional Core recompute observer and a parallel Server
+   `createReactiveProjectionSubscription<T>` event helper. The Core observer fires once per actual rerun
+   after wake/abort handling and before `contextStorage.run(task)`. Existing raw-data helpers and every
+   Router endpoint remain unchanged. Deferred tests prove start occurs while B is still blocked; moving the
+   callback after task completion or deleting data emission must fail different assertions. Abort emits no
+   false start.
+2. `6.16-F2` migrates only Archive Router/Web to that accepted helper. Web keeps initial Loading separate,
+   retains A with `isUpdating=true` on recompute-started, clears it on B/error, retires late generations,
+   and renders Archive Updating beside retained rows. Static mode never claims updating.
+
+Do not infer cross-subscription ordering, add a runtime-invalidation side channel, or migrate Changes,
+Specs, Dashboard, Search, Git, Config, Context, Settings, OPSX, or App in either Archive tracer package.
+Parent 6.16 remains open after F1 and F2.
+
 ## Capability Impact
 
 ### New or Expanded Behavior

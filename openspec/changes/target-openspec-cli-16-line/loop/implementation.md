@@ -6745,3 +6745,26 @@ state was not added.
 No browser, SSG, or full gate ran or is claimed. Final browser and visual acceptance remains owner-only.
 6.16-E is accepted. Parent checkpoint 6.16 remains open for a production subscription-updating signal and
 the remaining independently owned page topologies.
+
+### 6.16-F1 independent research: observe real recompute start without protocol blast radius (2026-07-22)
+
+Current evidence proves only `invalidation -> eventual next data`. Core ReactiveContext has the sole causal
+boundary: after its dependency wait resolves and abort is excluded, but before the next
+`contextStorage.run(task)`. Runtime invalidation can be coalesced without a specific subscription consuming
+it, and WebSocket connection state describes transport only. Neither can be relabeled recompute start.
+
+Changing existing `createReactiveSubscription<T>` to an event union would alter many Router subscriptions
+and consumers at once. F1 instead preserves `ReactiveContext.stream<T>()` and the raw Server helper, adds an
+optional Core lifecycle observer, and introduces parallel typed
+`createReactiveProjectionSubscription<T>`. No Router uses the new helper in F1; Archive adoption is F2.
+
+Core fixed points: initial A emits no lifecycle start. Arm the second generator pull, invalidate, block the
+second task after entry, and prove `recompute-started` already occurred while B has not yielded; release and
+prove B. Aborting after A emits no false start. Moving the callback after the task must fail the pre-release
+ordering assertion; deleting it must fail start while B can remain green.
+
+Server fixed points consume the public helper observable: `data(A)`, invalidation, `recompute-started` while
+the replacement task is deferred, then `data(B)`. Removing the lifecycle mapping and removing the completed
+data mapping must fail separate assertions. Tests use deferred ownership, never sleeps. F1 changes no Router,
+Web, static provider, UI, cache policy, transport lifecycle, browser, SSG, or full gates. Parent 6.16 stays
+open and F2 remains unauthorized until independent F1 acceptance.
