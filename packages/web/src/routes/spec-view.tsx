@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Resolve owned and referenced Spec routes through compound identity.
  * 2. Render owned Markdown through the existing document pipeline.
  * 3. Render referenced CLI JSON as visibly read-only evidence without synthesizing fields.
  * 4. Preserve collision-safe View Transition identity across source-distinct documents.
+ * 5. Retain successful detail content beside terminal document subscription errors.
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  */
@@ -52,8 +53,8 @@ export function SpecView() {
     return <SpecLoading identity={identity} title={handoff?.title} subtitle={handoff?.subtitle} />
   }
 
-  if (error) {
-    return <div className="text-destructive p-4">{error.message}</div>
+  if (error && (!document || document.state === 'not-found')) {
+    return <SpecTransportErrorAlert message={error.message} />
   }
 
   if (!document || document.state === 'not-found') {
@@ -66,9 +67,21 @@ export function SpecView() {
       spec={document.spec}
       rawMarkdown={document.rawMarkdown ?? ''}
       translationConfig={translationConfig}
+      errorMessage={error?.message}
     />
   ) : (
-    <ReferencedSpecContent document={document} />
+    <ReferencedSpecContent document={document} errorMessage={error?.message} />
+  )
+}
+
+function SpecTransportErrorAlert({ message }: { message: string }) {
+  return (
+    <div
+      role="alert"
+      className="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2 rounded-md border p-4"
+    >
+      <span>Error loading spec: {message}</span>
+    </div>
   )
 }
 
@@ -151,11 +164,13 @@ function OwnedSpecContent({
   spec,
   rawMarkdown,
   translationConfig,
+  errorMessage,
 }: {
   identity: SpecIdentity
   spec: Spec | null
   rawMarkdown: string
   translationConfig?: DocumentTranslationConfigInput
+  errorMessage?: string
 }) {
   const headerRef = useRef<HTMLDivElement | null>(null)
   const sharedDescriptor = {
@@ -166,6 +181,7 @@ function OwnedSpecContent({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 p-4">
+      {errorMessage ? <SpecTransportErrorAlert message={errorMessage} /> : null}
       <SpecHeader
         identity={identity}
         title={spec.name}
@@ -182,7 +198,13 @@ function OwnedSpecContent({
   )
 }
 
-function ReferencedSpecContent({ document }: { document: ReferencedSpecDocumentProjection }) {
+function ReferencedSpecContent({
+  document,
+  errorMessage,
+}: {
+  document: ReferencedSpecDocumentProjection
+  errorMessage?: string
+}) {
   const headerRef = useRef<HTMLDivElement | null>(null)
   const sharedDescriptor = {
     family: 'specs',
@@ -191,6 +213,7 @@ function ReferencedSpecContent({ document }: { document: ReferencedSpecDocumentP
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 p-4">
+      {errorMessage ? <SpecTransportErrorAlert message={errorMessage} /> : null}
       <SpecHeader
         identity={document.identity}
         title={document.upstream?.title ?? document.identity.specId}

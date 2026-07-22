@@ -1,9 +1,14 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Prove Owned routes render local Markdown and Reference routes render exact read-only CLI data.
+ * 2. Prove initial loading, retained-document errors, and no-data errors at the real SpecView owner.
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  */
+import type {
+  ReferencedSpecDocumentProjection,
+  SpecDocumentProjection,
+} from '@openspecui/core/spec-catalog'
 import { cleanup, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -61,6 +66,51 @@ vi.mock('@/lib/view-transitions/navigation', () => ({
 }))
 
 describe('SpecView', () => {
+  function ownedReadyDocument(): Extract<SpecDocumentProjection, { source: 'owned' }> {
+    return {
+      identity: { kind: 'owned', specId: 'auth' },
+      source: 'owned',
+      readOnly: false,
+      state: 'ready',
+      spec: { id: 'auth', name: 'Owned Auth', overview: '', requirements: [] },
+      rawMarkdown: '# Owned Auth',
+      upstream: null,
+      evidence: null,
+    }
+  }
+
+  function referencedReadyDocument(): ReferencedSpecDocumentProjection {
+    return {
+      identity: { kind: 'referenced', storeId: 'platform-b', specId: 'auth' },
+      source: 'referenced',
+      readOnly: true,
+      state: 'ready',
+      spec: null,
+      rawMarkdown: null,
+      upstream: {
+        id: 'auth',
+        title: 'Platform B Auth',
+        overview: 'Platform B overview',
+        requirementCount: 1,
+        requirements: [
+          {
+            text: 'The platform SHALL authenticate.',
+            scenarios: [{ rawText: 'WHEN used\nTHEN authenticated' }],
+          },
+        ],
+        metadata: { version: '1.0.0', format: 'openspec' },
+        root: { path: '/stores/platform-b', source: 'store', store_id: 'platform-b' },
+      },
+      evidence: {
+        success: true,
+        stdout: '{}',
+        stderr: '',
+        exitCode: 0,
+        diagnostics: [],
+      },
+    }
+  }
+
   beforeEach(() => {
     locationState.current = null
     paramsState.current = { specId: 'auth' }
@@ -71,16 +121,7 @@ describe('SpecView', () => {
 
   it('renders an owned route through its local Markdown projection', () => {
     useSpecDocumentSubscriptionMock.mockReturnValue({
-      data: {
-        identity: { kind: 'owned', specId: 'auth' },
-        source: 'owned',
-        readOnly: false,
-        state: 'ready',
-        spec: { id: 'auth', name: 'Owned Auth', overview: '', requirements: [] },
-        rawMarkdown: '# Owned Auth',
-        upstream: null,
-        evidence: null,
-      },
+      data: ownedReadyDocument(),
       isLoading: false,
       error: null,
     })
@@ -103,38 +144,74 @@ describe('SpecView', () => {
     )
   })
 
+  it('retains owned detail content beside a terminal subscription error', () => {
+    useSpecDocumentSubscriptionMock.mockReturnValue({
+      data: ownedReadyDocument(),
+      isLoading: false,
+      error: new Error('spec transport failed'),
+    })
+
+    render(<SpecView />)
+
+    expect(screen.getByRole('heading', { name: 'Owned Auth' })).toBeInTheDocument()
+    expect(screen.getByTestId('markdown')).toHaveTextContent('# Owned Auth')
+    expect(screen.getByRole('alert')).toHaveTextContent('Error loading spec: spec transport failed')
+  })
+
+  it('keeps Referenced detail read-only beside a terminal subscription error', () => {
+    paramsState.current = { storeId: 'platform-b', specId: 'auth' }
+    useSpecDocumentSubscriptionMock.mockReturnValue({
+      data: referencedReadyDocument(),
+      isLoading: false,
+      error: new Error('referenced spec transport failed'),
+    })
+
+    render(<SpecView />)
+
+    expect(screen.getByRole('heading', { name: 'Platform B Auth' })).toBeInTheDocument()
+    expect(
+      screen.getByText(/Read-only Reference projected from OpenSpec Store platform-b/)
+    ).toBeInTheDocument()
+    expect(screen.getByText('The platform SHALL authenticate.')).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Error loading spec: referenced spec transport failed'
+    )
+    expect(markdownViewerMock).not.toHaveBeenCalled()
+  })
+
+  it('renders the initial loading state before a Spec document exists', () => {
+    useSpecDocumentSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    })
+
+    render(<SpecView />)
+
+    expect(screen.getByText('Loading spec...')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('renders only the raw error when no Spec document exists', () => {
+    useSpecDocumentSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error('spec document unavailable'),
+    })
+
+    render(<SpecView />)
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Error loading spec: spec document unavailable'
+    )
+    expect(screen.queryByText('Spec not found')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('markdown')).not.toBeInTheDocument()
+  })
+
   it('renders the exact referenced Store projection as read-only CLI evidence', () => {
     paramsState.current = { storeId: 'platform-b', specId: 'auth' }
     useSpecDocumentSubscriptionMock.mockReturnValue({
-      data: {
-        identity: { kind: 'referenced', storeId: 'platform-b', specId: 'auth' },
-        source: 'referenced',
-        readOnly: true,
-        state: 'ready',
-        spec: null,
-        rawMarkdown: null,
-        upstream: {
-          id: 'auth',
-          title: 'Platform B Auth',
-          overview: 'Platform B overview',
-          requirementCount: 1,
-          requirements: [
-            {
-              text: 'The platform SHALL authenticate.',
-              scenarios: [{ rawText: 'WHEN used\nTHEN authenticated' }],
-            },
-          ],
-          metadata: { version: '1.0.0', format: 'openspec' },
-          root: { path: '/stores/platform-b', source: 'store', store_id: 'platform-b' },
-        },
-        evidence: {
-          success: true,
-          stdout: '{}',
-          stderr: '',
-          exitCode: 0,
-          diagnostics: [],
-        },
-      },
+      data: referencedReadyDocument(),
       isLoading: false,
       error: null,
     })
