@@ -6672,3 +6672,58 @@ legal but production-unreachable state. Updating requires a later shared-subscri
 
 Do not change generic subscriptions, providers, Archive Server/Adapter/strict mutation/detail, View
 Transition, CSS, SSG, browser, or full gates. Parent 6.16 stays open.
+
+### 6.16-E implementation: Archive error topology (2026-07-22)
+
+`ArchiveList` now consumes the existing subscription `error` fact and renders one visible `role=alert`
+with the raw `Error.message`. A no-data error bypasses Loading and renders the Archive composition plus
+the alert without a list frame or empty claim. A retained-data error renders the same alert alongside the
+retained rows and their exact hrefs; an error paired with an empty retained array also cannot produce a
+false current empty-state claim.
+
+The accepted unknown-data Loading, resolved-data first render, ordinary empty state, `VTLink`, handoff,
+and shared-element bindings remain unchanged. No Updating state was added: Archive still has no production
+subscription signal that can own that claim. The direct test mock now consumes `state` and `vt` rather
+than leaking non-DOM Link props onto its anchor, so synchronous retained-row SSR evidence is warning-free.
+
+Red and mutation-resistance evidence:
+
+1. Starting implementation HEAD `3ac0f74` has no Archive production/test diff from requested fixed point
+   `eaff734`. With both synchronous error fixed points added and production still ignoring `error`, the
+   exact lane failed (`2 failed | 4 skipped`): each real ArchiveList markup had no `[role=alert]`.
+2. Projecting the alert and preserving data-aware frame ownership made both exact error tests pass
+   (`2 passed | 4 skipped`).
+3. Temporarily removing only the alert JSX made both tests fail again (`2 failed | 4 skipped`) at the
+   alert-presence assertion. A separate retained-data mutation run ordered the stale row, exact href, and
+   no-empty assertions before the alert assertion; it failed only at missing alert (`1 failed | 5 skipped`),
+   proving the retained row remained green while error evidence was removed. Restoring only the alert made
+   the complete file green.
+
+Final focused verification:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/routes/archive-list.test.tsx
+  -> 1 file / 6 tests passed
+
+pnpm --filter @openspecui/web typecheck
+  -> passed
+
+pnpm exec vp lint packages/web/src/routes/archive-list.tsx \
+  packages/web/src/routes/archive-list.test.tsx
+  -> 0 warnings / 0 errors
+
+pnpm format:check
+git diff --check
+  -> passed
+```
+
+Changed files: `packages/web/src/routes/archive-list.tsx`,
+`packages/web/src/routes/archive-list.test.tsx`, this implementation record, and `loop/checkpoints.md`.
+Checkpoint `6.16` remains unchecked; 6.16-E is implemented and awaits independent review. Updating,
+generic subscriptions/cache policy, providers, Server/Adapter/strict mutation, Archive detail, View
+Transition runtime/CSS, Settings, Root, SSG, full gates, and browser acceptance were not changed or run.
+Final browser and visual acceptance remains owner-only.
+
+The implementation commit uses `--no-verify` only after every Goal-required focused check passes because
+the repository records the missing root Vite+ `staged` configuration. No commit-hook pass is claimed.

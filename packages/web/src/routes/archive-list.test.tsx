@@ -3,6 +3,7 @@
  * 1. Verify Archive copy and rows stay scoped to the writable Planning root projection.
  * 2. Verify the Planning-root empty state does not imply environment-wide completeness.
  * 3. Prove resolved and unknown Archive data render their real first-frame topology before effects.
+ * 4. Prove no-data and retained-data transport errors remain visible without false success claims.
  *
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
  * Owner report (2026-07-22): "整个过程中，几乎都在 Loading。"
@@ -23,11 +24,15 @@ vi.mock('@/lib/view-transitions/navigation', () => ({
   VTLink: ({
     to,
     params,
+    state: _state,
+    vt: _vt,
     children,
     ...props
   }: {
     to: string
     params?: { changeId?: string }
+    state?: unknown
+    vt?: unknown
     children?: ReactNode
   } & Omit<ComponentProps<'a'>, 'href'>) => (
     <a href={to.replace('$changeId', params?.changeId ?? '')} {...props}>
@@ -83,6 +88,54 @@ describe('ArchiveList', () => {
     expect(markup).not.toContain(
       'Completed changes archived in the current writable Planning root.'
     )
+  })
+
+  it('renders a no-data Archive error without a blank list frame', () => {
+    useArchivesSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error('Archive subscription disconnected.'),
+    })
+
+    const markup = renderToStaticMarkup(<ArchiveList />)
+    const root = document.createElement('div')
+    root.innerHTML = markup
+    const alert = root.querySelector('[role="alert"]')
+
+    expect(alert).not.toBeNull()
+    expect(alert?.textContent).toContain('Archive subscription disconnected.')
+    expect(markup).not.toContain('Loading archived changes...')
+    expect(markup).not.toContain('No archived changes yet.')
+    expect(root.querySelector('a')).toBeNull()
+    expect(root.querySelector('.divide-y')).toBeNull()
+  })
+
+  it('renders a retained-data Archive error beside the stale row', () => {
+    useArchivesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: '2026-07-22-retained',
+          name: 'Retained archive',
+          trackedTaskProgress: { total: 1, completed: 1, phase: 'complete' },
+          documentChecklistSummary: { total: 1, completed: 1, groups: [] },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      isLoading: false,
+      error: new Error('Archive reconnect failed.'),
+    })
+
+    const markup = renderToStaticMarkup(<ArchiveList />)
+    const root = document.createElement('div')
+    root.innerHTML = markup
+    const alert = root.querySelector('[role="alert"]')
+
+    expect(markup).toContain('Retained archive')
+    expect(markup).toContain('/archive/2026-07-22-retained')
+    expect(markup).not.toContain('No archived changes yet.')
+    expect(alert).not.toBeNull()
+    expect(alert?.textContent).toContain('Archive reconnect failed.')
   })
 
   it('renders only rows supplied by the writable Planning-root subscription', async () => {
