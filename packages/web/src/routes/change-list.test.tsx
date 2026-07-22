@@ -1,10 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
- * 1. Prove Changes retain formal tracked-task progress across Status lifecycle states.
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * 1. Prove Changes retain formal tracked-task progress across current, loading, unavailable, and failed Status states.
  * 2. Prove no-tasks and incomplete tasks cannot become workflow-complete.
  * 3. Prove completed tracked tasks and CLI Status converge on workflow completion.
  * 4. Prove the page-level New command remains available with active Changes.
- * 5. Prove Status loading, unavailable, and terminal error remain distinct.
+ * 5. Distinguish main Change-subscription terminal errors from Loading and empty-list truth.
  *
  * Original request (2026-07-15): "0/0 means no-tasks, never complete."
  * Original request (2026-07-21): "Changes页面的右上角没有 New,你要不要快速补一个"
@@ -28,8 +28,32 @@ vi.mock('@/lib/use-opsx', () => ({
   useOpsxStatusListSubscription: useOpsxStatusListSubscriptionMock,
 }))
 
-vi.mock('@/lib/nav-controller', () => ({
-  navController: navControllerMock,
+vi.mock('@/lib/view-transitions/navigation', () => ({
+  VTLink: ({
+    to,
+    params,
+    children,
+    state: _state,
+    vt: _vt,
+    ...props
+  }: {
+    to: string
+    params?: Record<string, string>
+    children?: ReactNode
+    state?: unknown
+    vt?: unknown
+  } & Omit<ComponentProps<'a'>, 'href'>) => {
+    const href = Object.entries(params ?? {}).reduce(
+      (path, [name, value]) => path.replace(`$${name}`, encodeURIComponent(value)),
+      to
+    )
+    return (
+      <a href={href} {...props}>
+        {children}
+      </a>
+    )
+  },
+  vtNavController: navControllerMock,
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -161,6 +185,112 @@ describe('ChangeList', () => {
 
     expect(screen.getByText('Workflow status unavailable')).toBeTruthy()
     expect(screen.queryByText('Loading workflow status…')).toBeNull()
+  })
+
+  it('renders a terminal main Change error without an empty list frame', () => {
+    useChangesSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error('changes failed'),
+    })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    })
+
+    const { container } = render(<ChangeList />)
+
+    expect(screen.getByRole('heading', { name: 'Changes' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'New' })).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toContain('changes failed')
+    expect(screen.queryByText('Loading changes...')).toBeNull()
+    expect(screen.queryByText('No active changes.')).toBeNull()
+    expect(container.querySelector('.divide-y')).toBeNull()
+  })
+
+  it('keeps retained Changes and current Status evidence visible beside a main error', () => {
+    useChangesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: 'main-error-change',
+          name: 'Main Error Change',
+          trackedTaskProgress: { total: 4, completed: 2, phase: 'in-progress' },
+          updatedAt: Date.now(),
+        },
+      ],
+      isLoading: false,
+      error: new Error('changes failed'),
+    })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          changeName: 'main-error-change',
+          schemaName: 'spec-driven',
+          isComplete: false,
+          applyRequires: ['tasks'],
+          artifacts: [
+            { id: 'proposal', status: 'done' },
+            { id: 'tasks', status: 'in-progress' },
+          ],
+        },
+      ],
+      isLoading: false,
+      error: null,
+    })
+
+    const { container } = render(<ChangeList />)
+
+    expect(screen.getByRole('alert').textContent).toContain('changes failed')
+    expect(screen.getByText('Main Error Change')).toBeTruthy()
+    expect(screen.getByText('2/4')).toBeTruthy()
+    expect(screen.getByText('50% task completion')).toBeTruthy()
+    expect(container.querySelector('[style="width: 50%;"]')).toBeTruthy()
+    expect(container.querySelector('a[href="/changes/main-error-change"]')).toBeTruthy()
+    expect(screen.getByText('1/2 artifacts · spec-driven')).toBeTruthy()
+    expect(screen.queryByText('Loading changes...')).toBeNull()
+    expect(screen.queryByText('No active changes.')).toBeNull()
+  })
+
+  it('does not classify an empty retained Change list as active-empty during a main error', () => {
+    useChangesSubscriptionMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: new Error('changes failed'),
+    })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    })
+
+    const { container } = render(<ChangeList />)
+
+    expect(screen.getByRole('alert').textContent).toContain('changes failed')
+    expect(screen.queryByText('Loading changes...')).toBeNull()
+    expect(screen.queryByText('No active changes.')).toBeNull()
+    expect(container.querySelector('.divide-y')).toBeNull()
+  })
+
+  it('keeps the current empty Change list, Header New, and Propose commands available', () => {
+    useChangesSubscriptionMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    })
+
+    const { container } = render(<ChangeList />)
+
+    expect(screen.getByText('No active changes.')).toBeTruthy()
+    expect(container.querySelector('.divide-y')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'New' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Start Propose' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Open advanced /opsx:new form' })).toBeTruthy()
   })
 
   it('does not label artifact-complete but task-incomplete changes as complete', () => {
