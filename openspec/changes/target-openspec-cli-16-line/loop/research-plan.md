@@ -415,6 +415,28 @@ Referenced Store diagnostics, scope restoration, or migrate Specs to projection 
 loader failures naturally consume the same error presentation, but no SSG/browser work belongs in I. This
 package cannot close parent 6.16.
 
+#### 6.16-P: project Spec detail transport errors without hiding retained documents (2026-07-23)
+
+`SpecView` is the next independent page owner after the accepted Dashboard slice. Its live and static route
+trees both mount `packages/web/src/routes/spec-view.tsx`, and `useSpecDocumentSubscription()` uses the
+ordinary retained-data subscription. The current route has an unconditional `if (error)` return, so a
+successful Owned or Referenced document is hidden when the replacement transport attempt fails.
+
+```text
+no document + loading       -> Loading spec...
+no document + error         -> raw Spec error; no not-found/current claim
+retained Owned + error      -> Owned detail + raw error
+retained Referenced + error -> read-only Reference detail + raw error
+current document            -> existing detail presentation
+```
+
+Production owner: the main `SpecView` loading/error branch only. Green evidence must cross the real route
+component and preserve both source projections; a no-data error must not fabricate a missing Spec. Mutation
+resistance removes only the unconditional error guard and the retained alert separately, proving the detail
+marker and raw error are owned by this route. Do not modify generic subscription semantics, Spec Server/
+Adapter, compound identity, Root/Git authority, Markdown/translation, navigation/prefetch, static export, or
+the independent live-projection performance Change. Final browser/visual acceptance remains owner-only.
+
 ## Capability Impact
 
 ### New or Expanded Behavior

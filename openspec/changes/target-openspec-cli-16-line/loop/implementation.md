@@ -7930,3 +7930,34 @@ git diff --check: passed
 Code/test commit: `4509a6e`. No Server/router refresh policy, Git binding, Root Context, OPSX/Status,
 static export, SSG, full gate, or agent-run browser acceptance changed or ran. The owner-reported
 single-page/multi-tab walkthrough remains the final browser boundary. Parent checkpoint `6.16` remains open.
+
+### 6.16-P research: SpecView retained document with terminal error (2026-07-23)
+
+The live and static route trees both mount `packages/web/src/routes/spec-view.tsx`. Its main document
+projection comes from `useSpecDocumentSubscription()`, which uses the ordinary retained-data subscription.
+The current route has this topology:
+
+```text
+document absent + loading -> SpecLoading / Loading spec...
+document absent + error   -> raw error-only div
+retained document + error -> same raw error-only div (detail hidden)
+current document           -> Owned Markdown or Referenced read-only detail
+```
+
+This is a page presentation defect at one production owner, not a generic subscription or source-identity
+defect. Retained Owned and Referenced documents remain useful display continuity, but they are not current
+Root/Git authority and must not unlock or relabel any mutation. The no-data error branch must remain error-only
+without synthesizing `Spec not found` or a current document claim.
+
+Approved worker boundary:
+
+1. Narrow only the main error early return so it applies when no document exists.
+2. Render one raw Spec error alert beside retained Owned or Referenced detail content.
+3. Add direct real-`SpecView` tests for retained Owned, retained Referenced read-only, and no-data error.
+4. Temporarily restore the unconditional error guard to prove the retained detail marker fails; separately
+   remove the retained alert to prove the raw-error assertion fails.
+
+No `use-subscription`, Server/Adapter/Router, compound identity, Root/Git authority, Markdown/translation,
+static provider, navigation View Transition/prefetch, SSG, or performance Change edits are authorized.
+Focused evidence ends at SpecView Vitest, Web typecheck, exact lint/format, and diff checks. Parent `6.16`
+remains open and final browser/visual acceptance remains owner-only.
