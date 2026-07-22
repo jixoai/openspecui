@@ -7480,3 +7480,22 @@ The successful build emitted non-failing generated-CSS `scroll-button` pseudo-el
 existing `INEFFECTIVE_DYNAMIC_IMPORT` warning for `src/lib/trpc.ts`; this verification-only follow-up does
 not alter either warning source. No SSG/provider/snapshot, route, Server, or production code changed.
 `6.16-K` remains implemented awaiting independent review, and parent checkpoint `6.16` remains unchecked.
+
+### 6.16-K independent acceptance (2026-07-23)
+
+Independent Spec and Standards reviews accept `eb6cf78` and `641af3d`. The initial Standards finding that
+SSG had not been rebuilt is corrected by `089ec04` and `1bfc4fe`: direct static tests pass `2 files / 10
+tests`, and `pnpm --filter @openspecui/web build:ssg` succeeds from fresh generated output. The build's
+existing non-failing `scroll-button` CSS and `INEFFECTIVE_DYNAMIC_IMPORT` warnings are recorded but do not
+originate in this package.
+
+The production diff remains limited to `Config`'s `schemaFiles` consumption. Real-FileExplorer fixture
+tests prove both distinct empty branches, retained file selection beside an error, and the five specified
+facts. Independent direct K tests pass `5/5`; adjacent Config tests pass `11/11`; independent Web typecheck
+and exact lint pass. The direct `vitest` command is intentional: the package `test -- <files>` form can run
+unrelated unit fixtures because its extra delimiter is not a file filter. This is test-invocation evidence,
+not a K production defect.
+
+No Preview, `configBundle`, templates, template contents, Root authority/mutations, Router, Server, static
+provider, generic subscriptions, browser/Playwright, or final owner browser/visual acceptance changed.
+Parent checkpoint `6.16` remains unchecked.

@@ -361,12 +361,13 @@ The independent browser attempt confirms the desktop source control and URL/quer
     named mutations prove its main alert, error-aware list frame, and active-empty guard independently.
     This remains independent of the accepted 6.16-G Status subprojection. Independent ChangeList `11/11`
     and Web typecheck pass.
-  - `6.16-K` implemented awaiting independent review: Config Schema Read/Edit file-panel topology consumes
-    only the independent `schemaFiles` projection. Direct real-FileExplorer evidence covers initial
-    no-data loading, terminal absent-data error, retained non-empty error with selection, retained-empty
-    error, and current empty success. Three named mutations prove the raw alert, initial-loading gate, and
-    error-aware empty guard separately. Preview, `configBundle`, templates, template contents, Root gating,
-    mutations, Router, and static behavior remain outside this package.
+  - `6.16-K` accepted: Config Schema Read/Edit file-panel topology consumes only the independent
+    `schemaFiles` projection. Direct real-FileExplorer evidence covers initial no-data loading, terminal
+    absent-data error, retained non-empty error with selection, retained-empty error, and current empty
+    success. Three named mutations prove the raw alert, initial-loading gate, and error-aware empty guard
+    separately. Independent direct Config, adjacent Config, Web typecheck, static tests, and a clean SSG
+    build pass. Preview, `configBundle`, templates, template contents, Root gating, mutations, Router, and
+    static behavior remain outside this package.
   - Before another page adopts projection lifecycle events, extract the duplicated generic generation/cache
     owner from the 672-line `use-subscription.ts`; do not add a third subscription state machine.
   - Keep 6.16 open until subscription/Root timing, detail-prefetch policy, artificial route-gate, and
