@@ -6913,3 +6913,19 @@ and awaits independent review; `6.16-F2` remains pending and parent checkpoint `
 
 The repository still has no Vite+ `staged` configuration. After every Goal-required focused check passed,
 the correction commit used the recorded `--no-verify` exception. No commit-hook pass is claimed.
+
+### 6.16-F1 independent acceptance (2026-07-22)
+
+Independent Terra and standards review found no new issue in `89a4a34`. Core and Server focused lanes each
+passed five repeated runs: Core `120/120`, Server `20/20`, with no warning, skip, retry, or observed flake.
+Core `24/24` and Server `4/4` pass directly; both package typechecks pass, with Core's narrow checked test
+lane and Server's transport lane executed by default. Lint, format, and diff checks pass; the worktree is
+clean and Router/Web have no diff.
+
+The corrected Server retirement test proves subscriber count `1 -> 0`, task runs remain `1`, and later B
+invalidation produces no lifecycle/data event. Removing only `controller.abort()` fails the owner/task/event
+assertions. The rejection test preserves one original Error identity, zero data, and zero completion;
+removing only `emit.error` fails immediately. The accepted Core observer placement, event union, raw helper,
+coalescing, and abort semantics are unchanged.
+
+F1 is accepted. F2 is now authorized as the only next package; parent checkpoint 6.16 remains unchecked.
