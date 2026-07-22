@@ -7754,3 +7754,56 @@ old callback reference across `A pending -> A data -> connecting -> B pending`, 
 does not prove retirement. Temporarily bypassing the exact active-generation callback guard must make the
 late-A fixed point fail; record the result as lifecycle evidence. Final browser and visual acceptance remain
 owner-only.
+
+### 6.16-N implementation: current-generation Server status (2026-07-23)
+
+`useServerStatus` now creates a local System-subscription generation only when WebSocket transport enters
+`pending`, then retires and unsubscribes it whenever transport leaves `pending`. A System callback writes
+state, project metadata, error, or document title only while its local generation is active.
+
+```text
+A pending -> system A data -> Live
+connecting -> retire/unsubscribe A -> Offline; retained A metadata display-only
+B pending -> begin B -> Offline
+late A data/error -> ignored
+B data -> Live
+```
+
+The historical no-WS-client System fallback remains subscribed so its metadata, title, and error projection
+are not lost. It remains Offline because `Live` still requires WebSocket `pending`; this preserves the prior
+`connected = wsStateRef.current === 'pending'` behavior.
+
+Direct Hook and real `StatusIndicator` evidence retain A and B handlers. They prove A pending/data,
+connecting, B pending, late A data (and Hook-level late A error), retained `Offline`/`Unlink2`, then current
+B data and `Live`/`Link2`. The direct Hook also proves the no-WS fallback preserves metadata/title/error while
+remaining Offline.
+
+Mutation resistance: replacing only the `isCurrentGeneration()` data-publication guard with a no-op made
+both named late-A fixed points fail. The Hook received `connected: true`, `/tmp/late-a`, and a stale title;
+the real status component rendered `Live` rather than `Offline`. Restoring the guard made both pass.
+
+Focused verification after restoration:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=1 \
+  src/lib/use-server-status.test.tsx src/components/layout/status-bar.test.tsx
+  -> 2 files / 4 tests passed
+
+pnpm --filter @openspecui/web typecheck
+pnpm exec oxlint packages/web/src/lib/use-server-status.ts \
+  packages/web/src/lib/use-server-status.test.tsx \
+  packages/web/src/components/layout/status-bar.test.tsx --ignore-path .gitignore
+pnpm exec prettier --check packages/web/src/lib/use-server-status.ts \
+  packages/web/src/lib/use-server-status.test.tsx \
+  packages/web/src/components/layout/status-bar.test.tsx
+git diff --check
+  -> passed
+
+pnpm format:check
+  -> blocked only by pre-existing untracked
+     packages/server/bench/live-projection-loading.bench.ts; untouched
+```
+
+Code/test commit: `b557c26`. No Server, tRPC protocol, Root/Planning generation, route/Loading behavior,
+SSG, browser/Playwright, full gate, final owner browser/visual acceptance, push, merge, archive, or release
+work changed or ran. `6.16-N` awaits independent review; parent checkpoint `6.16` remains unchecked.
