@@ -2,7 +2,7 @@
  * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Default the project Spec Catalog to writable Owned Specs.
  * 2. Group direct read-only Referenced Specs by Store identity.
- * 3. Preserve compound routes and collision-safe View Transition identity.
+ * 3. Preserve compound routes, collision-safe View Transition identity, and local row continuity.
  * 4. Keep empty states source-specific without completeness claims.
  * 5. Surface transport failure without hiding retained Catalog truth or claiming source emptiness.
  *
@@ -12,10 +12,11 @@ import { formatRelativeTime } from '@/lib/format-time'
 import { useSpecsSubscription } from '@/lib/use-subscription'
 import { VTLink } from '@/lib/view-transitions/navigation'
 import { getSharedElementBinding } from '@/lib/view-transitions/shared-elements'
+import { useSpecListContinuity } from '@/routes/spec-list-continuity'
 import { specIdentityKey, type SpecCatalogEntry } from '@openspecui/core/spec-catalog'
 import { useLocation } from '@tanstack/react-router'
 import { AlertCircle, ChevronRight, FileText, LockKeyhole } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 type SpecScope = 'owned' | 'referenced'
 
@@ -48,6 +49,20 @@ export function SpecList() {
       .sort((left, right) => left.source.storeId.localeCompare(right.source.storeId))
   }, [catalog])
   const referencedCount = referencedByStore.reduce((total, { specs }) => total + specs.length, 0)
+  const listRef = useRef<HTMLDivElement>(null)
+  const scopeEntries = useMemo(
+    () => (scope === 'owned' ? owned : referencedByStore.flatMap(({ specs }) => specs)),
+    [owned, referencedByStore, scope]
+  )
+  const displayedSpecs = useSpecListContinuity(scopeEntries, scope, listRef)
+  const displayedOwned = displayedSpecs?.filter((spec) => spec.identity.kind === 'owned') ?? []
+  const displayedReferencedByStore = referencedByStore.map(({ source }) => ({
+    source,
+    specs:
+      displayedSpecs?.filter(
+        (spec) => spec.identity.kind === 'referenced' && spec.identity.storeId === source.storeId
+      ) ?? [],
+  }))
   const errorAlert = error ? (
     <div
       role="alert"
@@ -108,19 +123,27 @@ export function SpecList() {
       </div>
 
       {scope === 'owned' ? (
-        <div className="border-border divide-border divide-y rounded-lg border">
-          {owned.map((spec) => (
+        <div
+          ref={listRef}
+          data-spec-list-continuity
+          className="border-border divide-border divide-y rounded-lg border"
+        >
+          {displayedOwned.map((spec) => (
             <SpecCatalogRow key={specIdentityKey(spec.identity)} spec={spec} />
           ))}
-          {owned.length === 0 && !error ? (
+          {displayedOwned.length === 0 && !error ? (
             <div className="text-muted-foreground p-4 text-center">
               No Owned Specs found in the current Planning root.
             </div>
           ) : null}
         </div>
       ) : (
-        <div className="border-border divide-border divide-y rounded-lg border">
-          {referencedByStore.map(({ source, specs }) => (
+        <div
+          ref={listRef}
+          data-spec-list-continuity
+          className="border-border divide-border divide-y rounded-lg border"
+        >
+          {displayedReferencedByStore.map(({ source, specs }) => (
             <section
               key={source.storeId}
               aria-labelledby={`reference-store-${encodeURIComponent(source.storeId)}`}
