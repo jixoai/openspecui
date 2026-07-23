@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Register lease-scoped planning-root document, OPSX, regional Dashboard, and archive procedures.
  * 2. Register CLI, Root Context, reactive launch-tool initialization, configuration, Store, and terminal-result projections.
  * 3. Register binding-safe Git, terminal, system, notification, and recovery procedures.
@@ -18,6 +18,7 @@
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
  * Derived requirement (2026-07-19): Project Binding mutation returns launch-write and convergence evidence.
  * Derived requirement (2026-07-22): Archive retains its current rows while a reactive replacement is running.
+ * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
 import type {
   ChangeFile,
@@ -92,6 +93,7 @@ import {
   type ApplyInstructions,
   type ArtifactInstructions,
   type ChangeStatus,
+  type EnvUri,
   type ProjectBindingUpdate,
   type ProjectBindingUpdateResult,
   type ProjectRecoveryStatus,
@@ -178,12 +180,8 @@ import {
   readSpecDocument,
   SpecCatalogIdentityNotFoundError,
 } from './spec-catalog-service.js'
+import { StoreMutationService, type StartStoreMutationInput } from './store-mutation-service.js'
 import type { StoreObservationReconciler } from './store-observation-service.js'
-import {
-  StoreMutationService,
-  storeMutationEnvUri,
-  type StartStoreMutationInput,
-} from './store-mutation-service.js'
 import { startStrictArchiveStream } from './strict-archive-stream.js'
 import type { ToolCommandObservationService } from './tool-command-observation-service.js'
 import { setTrackedTaskCompletion } from './tracked-task-mutation.js'
@@ -218,6 +216,8 @@ export interface Context {
   gitWorktreeHandoff?: GitWorktreeHandoffService
   watcher?: OpenSpecWatcher
   projectDir: string
+  /** Opaque environment identity issued once by this Server instance. */
+  envUri: EnvUri
 }
 
 /** Launch-scoped handoff owner used to start a backend for one Git worktree. */
@@ -3219,11 +3219,14 @@ export const storesRouter = router({
         let result
         if (input.kind === 'setup') {
           if (!input.path) throw new Error('setup requires a path.')
-          result = await ctx.cliExecutor.contracts.setupStore(input.storeId ?? input.id ?? 'store', {
-            path: input.path,
-            initGit: input.initGit,
-            remote: input.remote,
-          })
+          result = await ctx.cliExecutor.contracts.setupStore(
+            input.storeId ?? input.id ?? 'store',
+            {
+              path: input.path,
+              initGit: input.initGit,
+              remote: input.remote,
+            }
+          )
         } else if (input.kind === 'register') {
           if (!input.path) throw new Error('register requires a path.')
           result = await ctx.cliExecutor.contracts.registerStore(input.path, {
@@ -3248,7 +3251,7 @@ export const storesRouter = router({
       }
       const mutation = await service.start({
         requestId: input.requestId,
-        envUri: storeMutationEnvUri(`openspecui-env://1/${ctx.projectDir}`),
+        envUri: ctx.envUri,
         kind: input.kind,
         storeId: input.storeId ?? input.id,
         run,

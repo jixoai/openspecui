@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Bootstrap the HTTP/tRPC server and launch-project runtime services.
  * 2. Delegate OpenSpec filesystem ownership to the CLI-selected planning-root manager.
  * 3. Host Server-local terminal/Root Context notifications, sound, preview-resource, and translation HTTP boundaries.
@@ -16,6 +16,7 @@
  * Owner-reported defect (2026-07-21): Pre-created Agent terminals are absent from Compose Send.
  * Derived requirement (2026-07-22): Checkpoint 6.15 publishes Root Context health only through this Server instance.
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  *
  * @module server
  */
@@ -41,8 +42,9 @@ import {
   type EnvUri,
   type RootContextState,
 } from '@openspecui/core'
+import { TRPCError } from '@trpc/server'
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
-import { applyWSSHandler } from '@trpc/server/adapters/ws'
+import { applyWSSHandler, type CreateWSSContextFnOptions } from '@trpc/server/adapters/ws'
 import type { Observable } from '@trpc/server/observable'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
@@ -65,6 +67,7 @@ function getServerPackageVersion(): string {
 const SERVER_PACKAGE_VERSION = getServerPackageVersion()
 
 import {
+  checkWebSocketConnectionParams,
   createAccessGate,
   createAccessGateMiddleware,
   extractBearerCredential,
@@ -106,6 +109,10 @@ import { createPtyWebSocketHandler } from './pty-websocket.js'
 import { createRootContextNotificationBridge } from './root-context-notification-bridge.js'
 import { createRootContextSubscription } from './root-context-service.js'
 import { appRouter, type Context, type GitWorktreeHandoffService } from './router.js'
+import {
+  resolveDefaultServerHostIdentity,
+  type ServerHostIdentityProvider,
+} from './server-host-identity.js'
 import { StoreObservationFallbackService } from './store-observation-fallback.js'
 import { StoreObservationService } from './store-observation-service.js'
 import { ToolCommandObservationService } from './tool-command-observation-service.js'
@@ -141,6 +148,8 @@ export interface ServerConfig {
    * unguarded dev workflow is unchanged.
    */
   accessGate?: AccessGateCredential | null
+  /** Backend host identity provider; injectable for deterministic hosted-environment tests. */
+  hostIdentityProvider?: ServerHostIdentityProvider
   /** Directory containing built preview entry assets */
   previewAssetsDir?: string
   /** Optional worktree handoff provider for runtimes that can spawn sibling instances */
@@ -179,10 +188,9 @@ export function createServer(config: ServerConfig) {
     loopback: true,
   })
   // Opaque runtime-environment identity for the hosted protocol (host identity + effective data home).
-  const envUri: EnvUri = computeEnvUri({
-    hostIdentity: `host:${config.projectDir}`,
-    dataHome: resolveOpenSpecDataScope().path,
-  })
+  const dataScope = resolveOpenSpecDataScope()
+  const hostIdentity = (config.hostIdentityProvider ?? resolveDefaultServerHostIdentity)()
+  const envUri: EnvUri = computeEnvUri({ hostIdentity, dataHome: dataScope.path })
   const adapter = new OpenSpecAdapter(config.projectDir)
   const configManager = new ConfigManager(config.projectDir)
   const globalSettingsManager = new GlobalSettingsManager(config.runtimePaths?.globalSettingsPath)
@@ -195,7 +203,7 @@ export function createServer(config: ServerConfig) {
   ])
   projectInvalidation.acquireRoot(config.projectDir)
   const dataHomeObserver = new OpenSpecDataHomeObserver({
-    dataHomePath: resolveOpenSpecDataScope().path,
+    dataHomePath: dataScope.path,
     environment: observationEnvironment,
     invalidation: runtimeInvalidation,
   })
@@ -389,7 +397,7 @@ export function createServer(config: ServerConfig) {
         // 1.6 hosted-protocol additions.
         apiBaseUrl: `http://localhost:${config.port ?? 3100}`,
         cliVersion: null,
-        envUri: envUri as string,
+        envUri,
         rootSummary: null,
         accessGateEnabled: accessGate !== null,
       })
@@ -493,34 +501,52 @@ export function createServer(config: ServerConfig) {
         gitWorktreeHandoff: config.gitWorktreeHandoff,
         watcher,
         projectDir: config.projectDir,
+        envUri,
       }),
     })
     return response
   })
 
   // Create context factory for WebSocket connections
-  const createContext = (): Context => ({
-    launchProjectAdapter: adapter,
-    planningRootServices,
-    gitRepositoryBindings,
-    runtimeInvalidation,
-    storeObservation,
-    toolCommandObservation,
-    configManager,
-    cliExecutor,
-    projectRecoveryService,
-    notificationService,
-    customSoundService,
-    globalSettingsManager,
-    translationCacheService,
-    translationEngineService,
-    localModelAssetService,
-    localCt2ModelAssetService,
-    localLlamaModelAssetService,
-    gitWorktreeHandoff: config.gitWorktreeHandoff,
-    watcher,
-    projectDir: config.projectDir,
-  })
+  const createContext = (options?: CreateWSSContextFnOptions): Context => {
+    if (options && accessGate) {
+      const connectionParamsFailure = checkWebSocketConnectionParams(
+        accessGate,
+        options.info.connectionParams
+      )
+      const authorization = options.req.headers.authorization
+      const authorizationHeader = Array.isArray(authorization)
+        ? (authorization[0] ?? null)
+        : (authorization ?? null)
+      const headerOutcome = accessGate.check(extractBearerCredential(authorizationHeader))
+      if (connectionParamsFailure !== null && !headerOutcome.ok) {
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: connectionParamsFailure })
+      }
+    }
+    return {
+      launchProjectAdapter: adapter,
+      planningRootServices,
+      gitRepositoryBindings,
+      runtimeInvalidation,
+      storeObservation,
+      toolCommandObservation,
+      configManager,
+      cliExecutor,
+      projectRecoveryService,
+      notificationService,
+      customSoundService,
+      globalSettingsManager,
+      translationCacheService,
+      translationEngineService,
+      localModelAssetService,
+      localCt2ModelAssetService,
+      localLlamaModelAssetService,
+      gitWorktreeHandoff: config.gitWorktreeHandoff,
+      watcher,
+      projectDir: config.projectDir,
+      envUri,
+    }
+  }
 
   return {
     app,

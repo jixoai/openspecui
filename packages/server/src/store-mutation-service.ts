@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Own backend Store mutation lifecycle: accepted -> running -> succeeded | failed | indeterminate.
  * 2. Deduplicate mutation starts within one backend process by client request id.
  * 3. Preserve terminal CLI evidence; report unrecoverable loss as indeterminate, never as failure.
  *
  * Original request (2026-07-15): "Store 变更是 backend-owned 操作，生命周期：accepted -> running -> succeeded | failed。"
  * Section 8.7/8.8: mutation lifecycle + request-id deduplication.
+ * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  *
  * Invariants (AGENTS.md):
  *  - Client disconnect only detaches observation; it does not kill the CLI.
@@ -15,7 +16,6 @@
  *  - Each terminal or indeterminate outcome invalidates affected projections before they are pulled again.
  */
 import {
-  asEnvUri,
   isTerminalMutationStatus,
   type EnvUri,
   type StoreMutation,
@@ -157,9 +157,4 @@ export class StoreMutationService {
       }
     }
   }
-}
-
-/** Construct an EnvUri-typed envUri for the mutation service from a backend-issued string. */
-export function storeMutationEnvUri(envUri: string): EnvUri {
-  return asEnvUri(envUri)
 }

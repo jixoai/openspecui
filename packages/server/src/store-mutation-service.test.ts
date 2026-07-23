@@ -1,17 +1,18 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Prove Store mutation lifecycle: accepted -> running -> succeeded | failed | indeterminate.
  * 2. Prove request-id deduplication does not start a duplicate.
  * 3. Prove indeterminate loss is never fabricated as failure/cancellation.
  *
  * Original request (2026-07-15): "Store 变更是 backend-owned 操作。"
  * Section 8.7/8.8 unit coverage.
+ * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
 import { asEnvUri } from '@openspecui/core'
 import { describe, expect, it } from 'vitest'
-import { StoreMutationService, storeMutationEnvUri } from './store-mutation-service.js'
+import { StoreMutationService } from './store-mutation-service.js'
 
-const envUri = storeMutationEnvUri('openspecui-env://1/abc')
+const envUri = asEnvUri('openspecui-env://1/abc')
 
 function result(exitStatus: number | null) {
   return { exitStatus, stdout: 'out', stderr: 'err' }
@@ -85,10 +86,5 @@ describe('StoreMutationService', () => {
     const indeterminate = service.markIndeterminate('r5', 'lost during disconnect')
     expect(indeterminate?.status).toBe('indeterminate')
     expect(service.list().find((m) => m.requestId === 'r5')?.status).toBe('indeterminate')
-  })
-
-  it('storeMutationEnvUri brands the backend-issued string', () => {
-    const branded = storeMutationEnvUri('openspecui-env://1/xyz')
-    expect(branded).toBe(asEnvUri('openspecui-env://1/xyz'))
   })
 })
