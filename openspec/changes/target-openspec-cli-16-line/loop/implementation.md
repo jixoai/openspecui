@@ -8396,3 +8396,30 @@ The repository pre-commit hook could not run because the local `vite.config.ts` 
 the code commit therefore used `--no-verify` after the focused checks above. No browser walkthrough,
 SSG, broad gate, push, merge, archive, or release was performed; final browser/visual acceptance remains
 owner-only. Parallel dirty `accelerate-live-projection-loading` and Server files were not staged.
+
+### 6.17-B independent review correction after `77814cc` (2026-07-23)
+
+The Archive-local production owner, generation retirement, stable id keys, empty-state settlement, and real
+`ArchiveList -> VTLink -> prepareRouteDetailViewTransition -> Router` chain are accepted. Focused Vitest
+independently passed `16/16`, Web typecheck passed, and the code diff is limited to the four authorized Web
+files. A read-only agent-browser smoke also confirmed the current local bundle contains the Archive continuity
+module and renders the Archive route and detail links; it is preparation evidence, not visual or multi-tab
+acceptance.
+
+One navigation-evidence gap remains. The fixture claims one `archive.subscribeOne:b` cache prime, but its
+`toHaveBeenCalledWith` assertion proves only that the expected call occurred at least once. A duplicate prime
+would still pass while contradicting the stated contract.
+
+Correction boundary:
+
+```text
+real Archive detail preparation
+  -> primeSubscriptionCache(archive.subscribeOne:b, preparedArchive)
+  -> exactly one observed call
+```
+
+Change only the Archive navigation assertion to require exact-once arguments. Temporarily duplicate only the
+real Archive preparation prime, run the same navigation fixture, and require a cardinality red; then restore
+`detail-prepare.ts` exactly. Record the exact mutation command/output and restored green commands with actual
+paths. No final ArchiveList, continuity, subscription/cache, shared-navigation, Server, static, SSG, or loading
+performance behavior change is authorized. Parent checkpoint `6.17` remains open.

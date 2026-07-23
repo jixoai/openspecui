@@ -447,6 +447,11 @@ The independent browser attempt confirms the desktop source control and URL/quer
     sole authority for loading, error, and updating. It must prove real Archive detail navigation and keep
     both generation and id-key mutation evidence separate. No Server, subscription, Archive mutation, or
     independent Loading-performance work belongs in this package; parent checkpoint `6.17` remains open.
+  - `6.17-B` correction after `77814cc`: the real Archive navigation path and arguments are accepted, but
+    `toHaveBeenCalledWith` does not prove the claimed single cache prime. Require exact-once cardinality and
+    show the same fixture red under one temporary duplicate prime in the real Archive preparation path. The
+    production mutation must be restored; this correction does not authorize ArchiveList/runtime changes or
+    close parent checkpoint `6.17`.
 - [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns
 
 ## 7. Static Export Parity and Privacy
