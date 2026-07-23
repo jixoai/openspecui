@@ -642,8 +642,8 @@ The independent browser attempt confirms the desktop source control and URL/quer
     controls); connection-retention/degradation need owner browser walkthrough.
 - [ ] 10.9 Real-browser acceptance passes on desktop and mobile for project, static, and experimental App workflows
   - Owner-only gate; no automated browser acceptance is claimed.
-- [ ] 10.10 `pnpm --filter @openspecui/web build:ssg` passes from clean static artifacts
-  - Verified green once during Section 7 Slice 3; needs a final clean rebuild at delivery.
+- [x] 10.10 `pnpm --filter @openspecui/web build:ssg` passes from clean static artifacts
+  - Verified green from clean artifacts (`rm -rf dist-ssg .vite && build:ssg`) at delivery.
 - [ ] 10.11 `pnpm format:check` passes
   - Blocked: one pre-existing unrelated file (`openspec/specs/live-projection-work/spec.md`) from the parallel
     loading-change archive is unformatted; not introduced by this Change.
