@@ -7,11 +7,12 @@
  */
 import type { StoreDoctorStore } from '@openspecui/core/store-types'
 import { Search, Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { EmptyView, ErrorView, LoadingView } from '../components/state-views'
 import { StatusBadge, StatusDot, type StatusVariant } from '../components/status-badge'
 import { StoreManagerShell } from '../components/store-manager-shell'
 import { StoreRemoveDialog } from '../components/store-remove-dialog'
+import { mutateBackendStore } from '../lib/backend-client'
 import { deriveHealthFromDiagnostics, type StoreHealthSummary } from '../lib/store-health'
 import { useActiveBackend } from '../lib/use-active-backend'
 import { useStoreData } from '../lib/use-store-data'
@@ -56,6 +57,24 @@ export function StoreInspectorRoute() {
 
   const selected = stores.find((store) => store.id === selectedId) ?? visibleStores[0] ?? null
 
+  const runMutation = useCallback(
+    async (
+      kind: 'setup' | 'register' | 'unregister',
+      input: Record<string, unknown>
+    ): Promise<void> => {
+      if (!active?.apiBaseUrl) return
+      const requestId = `${kind}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
+      await mutateBackendStore(
+        { apiBaseUrl: active.apiBaseUrl, credential: active.credential },
+        { requestId, kind, ...input }
+      )
+      setRefreshNonce((n) => n + 1)
+    },
+    [active]
+  )
+
+  const [mutationError, setMutationError] = useState<string | null>(null)
+
   let body
   if (isLoading && !inspector) {
     body = <LoadingView label="Loading store diagnostics..." />
@@ -64,9 +83,25 @@ export function StoreInspectorRoute() {
   } else if (stores.length === 0) {
     body = (
       <EmptyView title="No Stores registered">
-        {/* TODO(kernel): setup/register 是 stores.mutate 能力；待 backend 落地后提供操作入口。 */}
-        Registered Stores will appear here once the backend reports them via{' '}
-        <code className="bg-muted rounded px-1">openspec store doctor</code>.
+        <div className="space-y-3">
+          <p>
+            Registered Stores will appear here once the backend reports them via{' '}
+            <code className="bg-muted rounded px-1">openspec store doctor</code>.
+          </p>
+          <StoreSetupRegisterForm
+            disabled={!active?.apiBaseUrl}
+            onSubmit={(kind, input) => {
+              runMutation(kind, input).catch((err: unknown) => {
+                setMutationError(err instanceof Error ? err.message : String(err))
+              })
+            }}
+          />
+          {mutationError ? (
+            <p className="border-destructive/40 text-destructive bg-destructive/5 rounded-md border px-3 py-2 text-xs">
+              {mutationError}
+            </p>
+          ) : null}
+        </div>
       </EmptyView>
     )
   } else {
@@ -114,7 +149,16 @@ export function StoreInspectorRoute() {
         </aside>
 
         {selected ? (
-          <StoreInspectorDetail store={selected} onRemove={() => setRemoveTarget(selected)} />
+          <StoreInspectorDetail
+            store={selected}
+            onRemove={() => setRemoveTarget(selected)}
+            onUnregister={() => {
+              if (!selected?.id) return
+              runMutation('unregister', { storeId: selected.id }).catch((err: unknown) => {
+                setMutationError(err instanceof Error ? err.message : String(err))
+              })
+            }}
+          />
         ) : (
           <EmptyView title="Select a Store to inspect" />
         )}
@@ -139,9 +183,11 @@ export function StoreInspectorRoute() {
 function StoreInspectorDetail({
   store,
   onRemove,
+  onUnregister,
 }: {
   store: StoreDoctorStore
   onRemove: () => void
+  onUnregister: () => void
 }) {
   const health = deriveHealthFromDiagnostics(store.status)
   return (
@@ -195,12 +241,11 @@ function StoreInspectorDetail({
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">Operation boundaries</h3>
         <div className="flex flex-wrap gap-2">
-          {/* TODO(kernel): setup/register/unregister/remove 是 stores.mutate 能力，由 backend 执行。
-              控件可见性由能力决定；操作可应用性由 CLI 结果决定（非前端推断）。 */}
+          {/* unregister/remove are stores.mutate operations; the backend owns the CLI lifecycle. */}
           <button
             type="button"
-            disabled
-            className="hover:bg-muted rounded-md border px-3 py-1.5 text-xs opacity-50"
+            onClick={onUnregister}
+            className="hover:bg-muted rounded-md border px-3 py-1.5 text-xs"
           >
             Unregister (forget entry)
           </button>
@@ -218,5 +263,84 @@ function StoreInspectorDetail({
         </div>
       </section>
     </article>
+  )
+}
+
+/** Compact setup/register form for the empty-state. Both are stores.mutate operations (backend-owned). */
+function StoreSetupRegisterForm({
+  disabled,
+  onSubmit,
+}: {
+  disabled: boolean
+  onSubmit: (kind: 'setup' | 'register', input: Record<string, unknown>) => void
+}) {
+  const [kind, setKind] = useState<'setup' | 'register'>('register')
+  const [id, setId] = useState('')
+  const [path, setPath] = useState('')
+  const [remote, setRemote] = useState('')
+
+  const submit = () => {
+    if (!path.trim()) return
+    if (kind === 'setup') {
+      onSubmit('setup', {
+        storeId: id.trim() || undefined,
+        path: path.trim(),
+        remote: remote.trim() || undefined,
+      })
+    } else {
+      onSubmit('register', { path: path.trim(), id: id.trim() || undefined })
+    }
+  }
+
+  return (
+    <div className="border-border space-y-2 rounded-md border p-3 text-left">
+      <div className="flex gap-2 text-xs">
+        <button
+          type="button"
+          onClick={() => setKind('register')}
+          className={`rounded-md border px-2 py-1 ${kind === 'register' ? 'bg-primary text-primary-foreground' : ''}`}
+        >
+          Register existing
+        </button>
+        <button
+          type="button"
+          onClick={() => setKind('setup')}
+          className={`rounded-md border px-2 py-1 ${kind === 'setup' ? 'bg-primary text-primary-foreground' : ''}`}
+        >
+          Setup new
+        </button>
+      </div>
+      <input
+        type="text"
+        placeholder="Store id (optional override)"
+        value={id}
+        onChange={(e) => setId(e.target.value)}
+        className="border-border bg-background w-full rounded border px-2 py-1 text-xs"
+      />
+      <input
+        type="text"
+        placeholder="Path to Store root"
+        value={path}
+        onChange={(e) => setPath(e.target.value)}
+        className="border-border bg-background w-full rounded border px-2 py-1 text-xs"
+      />
+      {kind === 'setup' ? (
+        <input
+          type="text"
+          placeholder="Git remote (optional)"
+          value={remote}
+          onChange={(e) => setRemote(e.target.value)}
+          className="border-border bg-background w-full rounded border px-2 py-1 text-xs"
+        />
+      ) : null}
+      <button
+        type="button"
+        disabled={disabled || !path.trim()}
+        onClick={submit}
+        className="bg-primary text-primary-foreground w-full rounded-md px-3 py-1.5 text-xs disabled:opacity-50"
+      >
+        {kind === 'setup' ? 'Setup Store' : 'Register Store'}
+      </button>
+    </div>
   )
 }

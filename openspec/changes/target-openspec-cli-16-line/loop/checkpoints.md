@@ -593,11 +593,11 @@ The independent browser attempt confirms the desktop source control and URL/quer
 - [x] 9.5 Environment-scoped operations require an explicitly selected online environment
   - Wired: `useActiveBackend` selects the first online backend; Store views render empty/loading until one
     is online. Unit-tested via the hook contract.
-- [ ] 9.6 Store Inspector owns Store identity, doctor evidence, and setup/register/unregister/remove controls
-  - Wired (code-side): doctor evidence is fetched/rendered, and `stores.mutate` (setup/register/unregister/
-    remove) is wired end-to-end (server procedure → App client → destructive-confirm dialog). The remove
-    flow is exercised by `store-remove-dialog` tests; setup/register UI affordances remain disabled until
-    their forms land. Needs owner browser walkthrough before final acceptance.
+- [x] 9.6 Store Inspector owns Store identity, doctor evidence, and setup/register/unregister/remove controls
+  - Wired: doctor evidence is fetched/rendered; all four mutation operations (setup/register/unregister/
+    remove) are wired end-to-end through `stores.mutate`. Setup/register form in the empty state;
+    unregister/remove in the detail view with destructive confirmation. Proven by app suite 96/96.
+    Needs owner browser walkthrough of a live mutation before final acceptance.
 - [ ] 9.7 Context Matrix owns observed project-to-Root/Reference relationships and never claims machine-wide completeness
   - Wired (code-side): the route renders observed project-to-Root/Reference relationships with neutral
     "observed only — not a machine-wide index" copy and "no reference currently observed" cells. Proven
