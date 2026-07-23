@@ -2,7 +2,7 @@
  * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. List only active Changes from the current writable Planning root.
  * 2. Derive workflow state and terminal evidence from CLI Status and formal tracked-task progress.
- * 3. Preserve collision-safe navigation and explicit no-tasks presentation.
+ * 3. Preserve ChangeList row continuity together with collision-safe detail navigation and explicit no-tasks presentation.
  * 4. Keep the advanced New Change command reachable from the page header.
  * 5. Surface main Change-subscription failure without false list or empty truth.
  *

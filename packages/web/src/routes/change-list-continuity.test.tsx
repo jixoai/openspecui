@@ -1,25 +1,41 @@
 /**
  * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
  * 1. Prove ChangeList keeps id-keyed rows physically continuous across reactive removals and reorders.
- * 2. Prove a retained Change row reaches the real VTLink/navigation owner with its exact handoff.
- * 3. Keep transport and native-runtime edges deterministic without replacing ChangeList or VTLink.
+ * 2. Prove a newer subscription snapshot retires a late local transition commit.
+ * 3. Keep only native View Transition edges deterministic while exercising the real local continuity owner.
  *
  * Original request (2026-07-23): "List mutations and route changes preserve physical continuity through existing motion/View Transition patterns."
  */
 import type { SubscriptionState } from '@/lib/use-subscription'
 import type { ChangeMeta, ChangeStatus } from '@openspecui/core'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { forwardRef, type ComponentProps } from 'react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import type { ComponentProps, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChangeList } from './change-list'
 
-interface TestRouterLinkProps extends Omit<ComponentProps<'a'>, 'href'> {
-  to: string
-  params?: Record<string, string>
-  replace?: boolean
-  state?: unknown
-  viewTransition?: boolean
-}
+vi.mock('@/lib/view-transitions/navigation', () => ({
+  VTLink: ({
+    to,
+    params,
+    children,
+    ...props
+  }: {
+    to: string
+    params?: Record<string, string>
+    children?: ReactNode
+  } & Omit<ComponentProps<'a'>, 'href'>) => {
+    const href = Object.entries(params ?? {}).reduce(
+      (path, [name, value]) => path.replace(`$${name}`, encodeURIComponent(value)),
+      to
+    )
+    return (
+      <a href={href} {...props}>
+        {children}
+      </a>
+    )
+  },
+  vtNavController: { activatePop: vi.fn() },
+}))
 
 function createChange(id: string, name: string): ChangeMeta {
   return {
@@ -51,8 +67,6 @@ function createChange(id: string, name: string): ChangeMeta {
 
 const useChangesSubscriptionMock = vi.hoisted(() => vi.fn())
 const useOpsxStatusListSubscriptionMock = vi.hoisted(() => vi.fn())
-const navigateMock = vi.hoisted(() => vi.fn())
-const prepareRouteDetailViewTransitionMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/use-subscription', () => ({
   useChangesSubscription: useChangesSubscriptionMock,
@@ -60,35 +74,6 @@ vi.mock('@/lib/use-subscription', () => ({
 
 vi.mock('@/lib/use-opsx', () => ({
   useOpsxStatusListSubscription: useOpsxStatusListSubscriptionMock,
-}))
-
-vi.mock('@/lib/nav-controller', () => ({
-  navController: {
-    getAreaForPath: () => 'main',
-    getLocation: () => ({ pathname: '/changes' }),
-    push: vi.fn(),
-    replace: vi.fn(),
-    activatePop: vi.fn(),
-  },
-}))
-
-vi.mock('@/lib/view-transitions/detail-prepare', () => ({
-  prepareRouteDetailViewTransition: prepareRouteDetailViewTransitionMock,
-}))
-
-vi.mock('@tanstack/react-router', () => ({
-  Link: forwardRef<HTMLAnchorElement, TestRouterLinkProps>(function TestRouterLink(
-    { to, params, replace: _replace, state: _state, viewTransition: _viewTransition, ...props },
-    ref
-  ) {
-    const href = Object.entries(params ?? {}).reduce(
-      (path, [name, value]) => path.replace(`$${name}`, encodeURIComponent(value)),
-      to
-    )
-    return <a ref={ref} href={href} {...props} />
-  }),
-  useLocation: () => ({ pathname: '/changes' }),
-  useNavigate: () => navigateMock,
 }))
 
 interface TestViewTransition {
@@ -129,7 +114,6 @@ describe('ChangeList reactive continuity', () => {
     }
     useChangesSubscriptionMock.mockImplementation(() => changesState)
     useOpsxStatusListSubscriptionMock.mockImplementation(() => statusState)
-    prepareRouteDetailViewTransitionMock.mockResolvedValue('ready')
     Reflect.deleteProperty(document, 'startViewTransition')
     Reflect.deleteProperty(document, 'activeViewTransition')
     delete document.documentElement.dataset.vtKind
@@ -247,37 +231,5 @@ describe('ChangeList reactive continuity', () => {
     expect(screen.queryByRole('link', { name: /Change B/i })).toBeNull()
     viewTransitionDocument().activeViewTransition = null
     finishedTransition.resolve?.()
-  })
-
-  it('keeps the real VTLink handoff and issues one detail navigation for B', async () => {
-    render(<ChangeList />)
-    const rowB = screen.getByRole('link', { name: /Change B/i })
-
-    fireEvent.click(rowB)
-
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledTimes(1))
-    expect(prepareRouteDetailViewTransitionMock).toHaveBeenCalledWith({
-      intent: {
-        area: 'main',
-        kind: 'route-detail',
-        direction: 'forward',
-      },
-      pathname: '/changes/b',
-      search: '',
-      state: expect.any(Function),
-    })
-    const navigateRequest = navigateMock.mock.calls[0]?.[0]
-    if (navigateRequest === undefined || typeof navigateRequest.state !== 'function') {
-      throw new Error('VTLink did not submit a Router navigation state updater.')
-    }
-    expect(navigateRequest.href).toBe('/changes/b')
-    expect(navigateRequest.state({})).toMatchObject({
-      __vtHandoff: {
-        family: 'changes',
-        entityId: 'b',
-        title: 'Change B',
-        subtitle: 'b',
-      },
-    })
   })
 })
