@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (created 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Own the final selected-tab and observation-generation check for every App-native Store mutation.
- * 2. Dispatch accepted inputs through the locator-scoped backend client.
+ * 2. Recheck full tab identity and generation against one observation owner snapshot.
+ * 3. Dispatch accepted inputs through the locator-scoped backend client.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
@@ -48,7 +49,9 @@ export function useStoreMutationDispatcher(): StoreMutationDispatcher {
       if (
         !observationOwner.isCurrentAuthority({
           tabId: authority.tabId,
+          sessionId: authority.sessionId,
           apiBaseUrl: authority.apiBaseUrl,
+          tabCreatedAt: authority.tabCreatedAt,
           generation: authority.observationGeneration,
         })
       ) {

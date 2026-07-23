@@ -3,6 +3,7 @@
  * 1. Project observed project-to-Root and Reference relationships by environment.
  * 2. Avoid machine-wide completeness claims.
  * 3. Preserve each source's Root lifecycle, typed failure, and direct Reference provenance.
+ * 4. Keep retained Root evidence on its original generation, environment, and observation time.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  */
@@ -10,7 +11,7 @@ import { Columns3 } from 'lucide-react'
 import { EmptyView, ErrorView, LoadingView } from '../components/state-views'
 import { StoreManagerShell } from '../components/store-manager-shell'
 import { useConnectionObservations } from '../lib/connection-observation'
-import { useEnvironmentObservation } from '../lib/use-environment'
+import { projectRootObservation, useEnvironmentObservation } from '../lib/use-environment'
 import type { ProjectContextObservation } from '../types/root-context'
 
 /**
@@ -43,22 +44,10 @@ export function ContextMatrixRoute() {
         ]
       : []
   )
-  const rootContextObservations = connectionObservations.flatMap((observation) =>
-    observation.health
-      ? [
-          {
-            tabId: observation.tabId,
-            generation: observation.generation,
-            apiBaseUrl: observation.apiBaseUrl,
-            health: observation.health,
-            rootContext: observation.rootContext,
-            rootStatus: observation.rootStatus,
-            rootError: observation.rootError,
-            stale: observation.stale,
-          },
-        ]
-      : []
-  )
+  const rootContextObservations = connectionObservations.flatMap((observation) => {
+    const projected = projectRootObservation(observation)
+    return projected ? [projected] : []
+  })
   const derived = useEnvironmentObservation(observations, rootContextObservations)
   const projectContexts = derived.projectContexts
   const isLoading =

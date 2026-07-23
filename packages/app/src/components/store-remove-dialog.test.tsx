@@ -54,6 +54,8 @@ const AUTHORITY: StoreActionAuthority = {
   observationGeneration: 7,
 }
 
+const rejectRemove = async (): Promise<null> => null
+
 async function renderAt(element: ReactElement): Promise<{ container: HTMLDivElement; root: Root }> {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -92,7 +94,11 @@ describe('StoreRemoveDialog', () => {
   })
 
   it('names environment, host, Store, and checkout path for explicit confirmation', async () => {
-    await renderAt(wrapInRouter(<StoreRemoveDialog store={STORE} onClose={() => {}} />))
+    await renderAt(
+      wrapInRouter(
+        <StoreRemoveDialog store={STORE} removeStore={rejectRemove} onClose={() => {}} />
+      )
+    )
     const text = document.body.textContent ?? ''
     // 9.9：破坏性操作必须命名 environment/host/Store/checkout path。
     expect(text).toContain('Environment')
@@ -102,7 +108,17 @@ describe('StoreRemoveDialog', () => {
   })
 
   it('disables remove until the Store id is typed correctly', async () => {
-    await renderAt(wrapInRouter(<StoreRemoveDialog store={STORE} onClose={() => {}} />))
+    await renderAt(
+      wrapInRouter(
+        <StoreRemoveDialog
+          store={STORE}
+          authority={AUTHORITY}
+          authorityCurrent
+          removeStore={rejectRemove}
+          onClose={() => {}}
+        />
+      )
+    )
     const removeButton = screen.getByRole('button', { name: 'Remove Store' })
     expect(removeButton.hasAttribute('disabled')).toBe(true)
 
@@ -156,7 +172,14 @@ describe('StoreRemoveDialog', () => {
 
   it('renders an actionable message when its captured authority is retired', async () => {
     await renderAt(
-      wrapInRouter(<StoreRemoveDialog store={STORE} authority={AUTHORITY} onClose={() => {}} />)
+      wrapInRouter(
+        <StoreRemoveDialog
+          store={STORE}
+          authority={AUTHORITY}
+          removeStore={rejectRemove}
+          onClose={() => {}}
+        />
+      )
     )
     expect(document.body.textContent).toContain(
       'The environment refreshed after this dialog opened. Close and reopen it before removing files.'

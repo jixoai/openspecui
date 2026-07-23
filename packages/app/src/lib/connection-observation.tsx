@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (created 2026-07-24 Asia/Shanghai):
- * 1. Own health and Root Context observation for every retained backend locator.
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Own health and Root Context observation for every retained backend tab identity.
  * 2. Retire late results when a locator is removed, replaced, or refreshed.
- * 3. Separate all-source observation from exact active-tab mutation authority.
- * 4. Share one runtime owner across Hosted Shell and App-native environment routes.
+ * 3. Correlate mutation authority with the full tab identity and observation generation.
+ * 4. Keep retained Root evidence bound to the generation, health, and time that produced it.
+ * 5. Share one runtime owner across Hosted Shell and App-native environment routes.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
@@ -31,19 +32,35 @@ const REFRESH_INTERVAL_MS = 15_000
 /** Exact authority captured by an environment-scoped action. */
 export interface ConnectionObservationAuthority {
   tabId: string
+  sessionId: string
   apiBaseUrl: string
+  tabCreatedAt: number
   generation: number
+}
+
+/** Immutable provenance for the last committed Root/Reference evidence. */
+export interface ConnectionRootEvidence {
+  tabId: string
+  sessionId: string
+  apiBaseUrl: string
+  tabCreatedAt: number
+  generation: number
+  health: HostedBackendHealthResponse
+  rootContext: RootContextState
+  observedAt: number
 }
 
 /** Current or retained evidence for one credential-free backend locator. */
 export interface ConnectionObservation {
   tabId: string
+  sessionId: string
   apiBaseUrl: string
+  tabCreatedAt: number
   generation: number
   reachability: HostedTabReachability
   health: HostedBackendHealthResponse | null
   healthError: string | null
-  rootContext: RootContextState | null
+  rootEvidence: ConnectionRootEvidence | null
   rootStatus: RootObservationStatus
   rootError: RootObservationError | null
   /** True only after this generation's compatible health probe succeeds. */
@@ -88,12 +105,14 @@ function createInitialObservation(
 ): ConnectionObservation {
   return {
     tabId: tab.id,
+    sessionId: tab.sessionId,
     apiBaseUrl: tab.apiBaseUrl,
+    tabCreatedAt: tab.createdAt,
     generation,
     reachability: 'checking',
     health: null,
     healthError: null,
-    rootContext: null,
+    rootEvidence: null,
     rootStatus: 'idle',
     rootError: null,
     current: false,
@@ -131,8 +150,18 @@ export function createConnectionObservationOwner(
     listeners.forEach((listener) => listener())
   }
 
-  const isCurrentGeneration = (tabId: string, generation: number): boolean =>
-    retainedTabs.has(tabId) && observations.get(tabId)?.generation === generation
+  const isCurrentGeneration = (tabId: string, generation: number): boolean => {
+    const tab = retainedTabs.get(tabId)
+    const observation = observations.get(tabId)
+    return Boolean(
+      tab &&
+        observation &&
+        observation.generation === generation &&
+        observation.sessionId === tab.sessionId &&
+        observation.apiBaseUrl === tab.apiBaseUrl &&
+        observation.tabCreatedAt === tab.createdAt
+    )
+  }
 
   const update = (
     tabId: string,
@@ -155,12 +184,15 @@ export function createConnectionObservationOwner(
     observations.set(tabId, {
       ...(previous ?? createInitialObservation(tab, generation, dependencies.now())),
       tabId: tab.id,
+      sessionId: tab.sessionId,
       apiBaseUrl: tab.apiBaseUrl,
+      tabCreatedAt: tab.createdAt,
       generation,
       reachability: 'checking',
+      health: null,
       healthError: null,
       current: false,
-      stale: Boolean(previous?.health || previous?.rootContext),
+      stale: Boolean(previous?.rootEvidence),
       observedAt: dependencies.now(),
     })
     publish()
@@ -172,22 +204,23 @@ export function createConnectionObservationOwner(
         reachability: probe.reachability,
         healthError: probe.errorMessage,
         current: false,
-        stale: Boolean(current.health || current.rootContext),
+        stale: Boolean(current.rootEvidence),
         observedAt: dependencies.now(),
       }))
       return
     }
+    const health = probe.health
 
     if (
       !update(tabId, generation, (current) => ({
         ...current,
         reachability: 'online',
-        health: probe.health,
+        health,
         healthError: null,
         rootStatus: 'loading',
         rootError: null,
         current: true,
-        stale: Boolean(current.rootContext),
+        stale: Boolean(current.rootEvidence),
         observedAt: dependencies.now(),
       }))
     ) {
@@ -198,10 +231,22 @@ export function createConnectionObservationOwner(
       const rootContext = await dependencies.fetchRootContext(tab.apiBaseUrl)
       update(tabId, generation, (current) => ({
         ...current,
-        rootContext:
-          !rootContext || rootContext.state === 'loading' || rootContext.data === null
-            ? current.rootContext
-            : rootContext,
+        rootEvidence:
+          rootContext &&
+          rootContext.state !== 'loading' &&
+          rootContext.data !== null &&
+          (rootContext.state === 'ready' || current.rootEvidence === null)
+            ? {
+                tabId: tab.id,
+                sessionId: tab.sessionId,
+                apiBaseUrl: tab.apiBaseUrl,
+                tabCreatedAt: tab.createdAt,
+                generation,
+                health,
+                rootContext,
+                observedAt: rootContext.observedAt,
+              }
+            : current.rootEvidence,
         rootStatus: rootContext?.state ?? 'error',
         rootError:
           rootContext?.state === 'error'
@@ -213,11 +258,7 @@ export function createConnectionObservationOwner(
             : rootContext
               ? null
               : { source: 'transport', message: 'Root Context response is unavailable.' },
-        stale:
-          !rootContext ||
-          rootContext.state === 'loading' ||
-          rootContext.state === 'refreshing' ||
-          rootContext.state === 'error',
+        stale: rootContext?.state !== 'ready',
         observedAt: dependencies.now(),
       }))
     } catch (error) {
@@ -228,7 +269,7 @@ export function createConnectionObservationOwner(
           source: 'transport',
           message: error instanceof Error ? error.message : String(error),
         },
-        stale: Boolean(current.rootContext),
+        stale: Boolean(current.rootEvidence),
         observedAt: dependencies.now(),
       }))
     }
@@ -270,9 +311,16 @@ export function createConnectionObservationOwner(
     },
     isCurrentAuthority(authority) {
       const observation = observations.get(authority.tabId)
+      const tab = retainedTabs.get(authority.tabId)
       return Boolean(
         observation &&
+          tab &&
+          tab.sessionId === authority.sessionId &&
+          tab.apiBaseUrl === authority.apiBaseUrl &&
+          tab.createdAt === authority.tabCreatedAt &&
+          observation.sessionId === authority.sessionId &&
           observation.apiBaseUrl === authority.apiBaseUrl &&
+          observation.tabCreatedAt === authority.tabCreatedAt &&
           observation.generation === authority.generation &&
           observation.current &&
           observation.reachability === 'online' &&

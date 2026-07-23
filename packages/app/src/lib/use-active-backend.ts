@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
- * 1. Derive Store authority from the exact persisted active tab and observation generation.
+ * 1. Derive Store authority from one atomically correlated full tab identity and generation.
  * 2. Refuse offline, stale, incompatible, or missing selections without first-online fallback.
  * 3. Capture exact tab identity and generation for synchronous Store dispatch revalidation.
  * 4. Carry selected backend health and Root Context from the shared observation owner.
@@ -48,7 +48,9 @@ export function resolveActiveBackendAuthority({
 }: ResolveActiveBackendAuthorityOptions): ActiveBackend | null {
   if (
     observation.tabId !== selectedTab.id ||
+    observation.sessionId !== selectedTab.sessionId ||
     observation.apiBaseUrl !== selectedTab.apiBaseUrl ||
+    observation.tabCreatedAt !== selectedTab.createdAt ||
     !observation.current ||
     observation.reachability !== 'online' ||
     !observation.health
@@ -58,12 +60,15 @@ export function resolveActiveBackendAuthority({
 
   return {
     tabId: observation.tabId,
-    sessionId: selectedTab.sessionId,
+    sessionId: observation.sessionId,
     apiBaseUrl: observation.apiBaseUrl,
-    tabCreatedAt: selectedTab.createdAt,
+    tabCreatedAt: observation.tabCreatedAt,
     observationGeneration: observation.generation,
     health: observation.health,
-    rootContext: observation.rootContext,
+    rootContext:
+      observation.rootEvidence?.generation === observation.generation
+        ? observation.rootEvidence.rootContext
+        : null,
   }
 }
 

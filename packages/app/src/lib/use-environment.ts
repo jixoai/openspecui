@@ -3,6 +3,7 @@
  * 1. Build observed runtime environments from backend-issued health (opaque envUri + capabilities).
  * 2. Gate Store views through objective hosted-protocol capabilities.
  * 3. Preserve grouped connected projects and source-labelled Root/Reference evidence.
+ * 4. Project retained evidence from its original generation, health source, and observation time.
  *
  * Original request (2026-07-15): "前端缺少的东西你可以通过注释补充。"
  * Migration (2026-07-23): wired to the backend health response (envUri/capabilities now emitted).
@@ -21,6 +22,7 @@ import type {
   RootObservationError,
   RootObservationStatus,
 } from '../types/root-context'
+import type { ConnectionObservation } from './connection-observation'
 import { normalizeHostedApiBaseUrl } from './shell-state'
 
 export interface EnvironmentObservation {
@@ -93,9 +95,31 @@ export function deriveEnvironments(observations: OnlineBackendObservation[]): Ho
 /** One backend's Root Context used to derive its project Context observation. */
 export interface BackendRootContextObservation extends OnlineBackendObservation {
   rootContext: RootContextState | null
+  observedAt: number
   rootStatus?: RootObservationStatus
   rootError?: RootObservationError | null
   stale?: boolean
+}
+
+/** Preserve committed Root evidence provenance while a replacement observation remains pending. */
+export function projectRootObservation(
+  observation: ConnectionObservation
+): BackendRootContextObservation | null {
+  const evidence = observation.rootEvidence
+  const health = evidence?.health ?? observation.health
+  if (!health) return null
+  return {
+    tabId: evidence?.tabId ?? observation.tabId,
+    generation: evidence?.generation ?? observation.generation,
+    apiBaseUrl: evidence?.apiBaseUrl ?? observation.apiBaseUrl,
+    health,
+    rootContext: evidence?.rootContext ?? null,
+    rootStatus: observation.rootStatus,
+    rootError: observation.rootError,
+    stale:
+      observation.stale || (evidence !== null && evidence.generation !== observation.generation),
+    observedAt: evidence?.observedAt ?? observation.observedAt,
+  }
 }
 
 /** Map a CLI Doctor reference diagnostic severity to a neutral Reference state. */
@@ -165,7 +189,7 @@ export function deriveProjectContexts(
       rootError: rootError ?? undefined,
       references,
       diagnostics: data?.diagnostics.root,
-      observedAt: Date.now(),
+      observedAt: observation.observedAt,
       stale:
         observation.stale === true ||
         root?.state === 'refreshing' ||

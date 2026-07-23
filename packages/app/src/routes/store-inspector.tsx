@@ -3,7 +3,8 @@
  * 1. Make Store Doctor evidence the primary Store Manager interaction.
  * 2. Reserve backend-owned mutation controls without inferring applicability.
  * 3. Keep Access Gate credentials outside route/component props.
- * 4. Bind form/dialog intent to its origin tab generation and revalidate it at dispatch.
+ * 4. Bind form/dialog intent to its full origin identity and revalidate it at dispatch.
+ * 5. Keep authority retirement user-visible without exposing internal generations in the DOM.
  *
  * Original request (2026-07-15): "Store Manager uses the Store Inspector as its primary interaction."
  */
@@ -14,7 +15,6 @@ import { EmptyView, ErrorView, LoadingView } from '../components/state-views'
 import { StatusBadge, StatusDot, type StatusVariant } from '../components/status-badge'
 import { StoreManagerShell } from '../components/store-manager-shell'
 import { StoreRemoveDialog } from '../components/store-remove-dialog'
-import { useConnectionObservations } from '../lib/connection-observation'
 import {
   isSameStoreActionAuthority,
   useStoreMutationDispatcher,
@@ -41,7 +41,6 @@ function healthVariant(health: StoreHealthSummary): StatusVariant {
  */
 export function StoreInspectorRoute() {
   const { active } = useActiveBackend()
-  const { observations: connectionObservations } = useConnectionObservations()
   const [refreshNonce, setRefreshNonce] = useState(0)
   const { inspector, isLoading, error } = useStoreData({
     apiBaseUrl: active?.apiBaseUrl,
@@ -84,14 +83,6 @@ export function StoreInspectorRoute() {
   )
 
   const [mutationError, setMutationError] = useState<string | null>(null)
-  const removeTargetLatestObservation = removeTarget
-    ? connectionObservations.find(
-        (observation) =>
-          observation.tabId === removeTarget.authority.tabId &&
-          observation.apiBaseUrl === removeTarget.authority.apiBaseUrl
-      )
-    : undefined
-
   let body
   if (isLoading && !inspector) {
     body = <LoadingView label="Loading store diagnostics..." />
@@ -190,33 +181,22 @@ export function StoreInspectorRoute() {
         )}
 
         {removeTarget ? (
-          <div
-            data-testid="remove-authority-evidence"
-            data-authority-state={
-              isSameStoreActionAuthority(removeTarget.authority, active) ? 'current' : 'retired'
+          <StoreRemoveDialog
+            store={removeTarget.store}
+            envUri={removeTarget.envUri}
+            authority={removeTarget.authority}
+            authorityCurrent={isSameStoreActionAuthority(removeTarget.authority, active)}
+            removeStore={(authority, requestId, storeId) =>
+              dispatchStoreMutation(authority, {
+                requestId,
+                kind: 'remove',
+                storeId,
+                confirmDelete: true,
+              })
             }
-            data-origin-tab-id={removeTarget.authority.tabId}
-            data-origin-generation={removeTarget.authority.observationGeneration}
-            data-latest-tab-id={removeTargetLatestObservation?.tabId}
-            data-latest-generation={removeTargetLatestObservation?.generation}
-          >
-            <StoreRemoveDialog
-              store={removeTarget.store}
-              envUri={removeTarget.envUri}
-              authority={removeTarget.authority}
-              authorityCurrent={isSameStoreActionAuthority(removeTarget.authority, active)}
-              removeStore={(authority, requestId, storeId) =>
-                dispatchStoreMutation(authority, {
-                  requestId,
-                  kind: 'remove',
-                  storeId,
-                  confirmDelete: true,
-                })
-              }
-              onRemoved={() => setRefreshNonce((n) => n + 1)}
-              onClose={() => setRemoveTarget(null)}
-            />
-          </div>
+            onRemoved={() => setRefreshNonce((n) => n + 1)}
+            onClose={() => setRemoveTarget(null)}
+          />
         ) : null}
       </div>
     )
@@ -348,7 +328,14 @@ function StoreSetupRegisterForm({
   }
 
   return (
-    <div className="border-border space-y-2 rounded-md border p-3 text-left">
+    <form
+      aria-label="Store setup or registration"
+      className="border-border space-y-2 rounded-md border p-3 text-left"
+      onSubmit={(event) => {
+        event.preventDefault()
+        submit()
+      }}
+    >
       <div className="flex gap-2 text-xs">
         <button
           type="button"
@@ -404,13 +391,12 @@ function StoreSetupRegisterForm({
         </p>
       ) : null}
       <button
-        type="button"
+        type="submit"
         disabled={disabled || !path.trim()}
-        onClick={submit}
         className="bg-primary text-primary-foreground w-full rounded-md px-3 py-1.5 text-xs disabled:opacity-50"
       >
         {kind === 'setup' ? 'Setup Store' : 'Register Store'}
       </button>
-    </div>
+    </form>
   )
 }

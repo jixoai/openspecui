@@ -2,7 +2,8 @@
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Confirm destructive Store removal with explicit environment and checkout identity.
  * 2. Submit through the route-owned Store mutation boundary without browser-side deletion.
- * 3. Keep the dialog bound to the tab/generation that opened it.
+ * 3. Keep the dialog bound to the full tab identity/generation that opened it.
+ * 4. Lock destructive presentation when authority retires while retaining the dispatcher guard.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  */
@@ -12,6 +13,8 @@ import { AlertTriangle, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BackendStoreMutationRecord } from '../lib/backend-client'
 import type { StoreActionAuthority } from '../lib/store-action'
+
+const REMOVE_STORE_FORM_ID = 'remove-store-form'
 
 /**
  * Store Remove 确认对话框（9.9）。
@@ -44,7 +47,7 @@ export function StoreRemoveDialog({
   /** Whether the captured origin still equals the route's current authority. */
   authorityCurrent?: boolean
   /** Route-owned mutation operation; it performs the final production authority check. */
-  removeStore?: (
+  removeStore: (
     authority: StoreActionAuthority | null,
     requestId: string,
     storeId: string
@@ -57,7 +60,8 @@ export function StoreRemoveDialog({
   const [error, setError] = useState<string | null>(null)
   const expected = store.id ?? ''
   const confirmRef = useRef<HTMLInputElement>(null)
-  const canSubmit = confirmText === expected && expected.length > 0 && !submitting
+  const hasConfirmation = confirmText === expected && expected.length > 0 && !submitting
+  const canSubmit = hasConfirmation && Boolean(authority) && authorityCurrent
 
   useEffect(() => {
     // Dialog 打开后聚焦确认输入，便于键盘操作。
@@ -67,16 +71,11 @@ export function StoreRemoveDialog({
 
   const submit = useCallback(() => {
     const storeId = store.id
-    if (!canSubmit || !storeId) return
+    if (!hasConfirmation || !storeId) return
     setSubmitting(true)
     setError(null)
     const requestId = `remove:${storeId}:${Date.now()}`
-    const operation = removeStore?.(authority ?? null, requestId, storeId)
-    if (!operation) {
-      setSubmitting(false)
-      return
-    }
-    operation
+    removeStore(authority ?? null, requestId, storeId)
       .then((mutation) => {
         if (!mutation) {
           setSubmitting(false)
@@ -101,7 +100,7 @@ export function StoreRemoveDialog({
         setError(err instanceof Error ? err.message : String(err))
         setSubmitting(false)
       })
-  }, [canSubmit, authority, removeStore, store.id, onRemoved, onClose, store])
+  }, [hasConfirmation, authority, removeStore, store.id, onRemoved, onClose, store])
 
   return (
     <Dialog
@@ -125,8 +124,8 @@ export function StoreRemoveDialog({
             Cancel
           </button>
           <button
-            type="button"
-            onClick={submit}
+            type="submit"
+            form={REMOVE_STORE_FORM_ID}
             disabled={!canSubmit}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-50"
           >
@@ -136,7 +135,15 @@ export function StoreRemoveDialog({
         </>
       }
     >
-      <div className="space-y-4">
+      <form
+        id={REMOVE_STORE_FORM_ID}
+        aria-label="Remove Store files"
+        className="space-y-4"
+        onSubmit={(event) => {
+          event.preventDefault()
+          submit()
+        }}
+      >
         <p className="text-muted-foreground text-sm">
           This deletes the Store checkout on the backend host. The mutation is backend-owned and
           survives disconnects.
@@ -184,7 +191,7 @@ export function StoreRemoveDialog({
             className="border-border bg-background focus:border-primary w-full rounded-md border px-3 py-2 text-sm outline-none"
           />
         </div>
-      </div>
+      </form>
     </Dialog>
   )
 }

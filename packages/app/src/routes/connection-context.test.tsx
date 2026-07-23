@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (created 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Prove selected Store actions cross the real route owner without first-online fallback.
  * 2. Prove exact selected-tab and generation retirement at the real Store action owner.
  * 3. Prove grouped projects and two-source Root/Reference provenance remain visible.
  * 4. Preserve checked two-backend hosted fixtures and locator-scoped credentials.
+ * 5. Cross real Register/Remove forms without disabled-DOM mutation or test-only instrumentation.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
@@ -250,12 +251,35 @@ describe('App connection selection and observation routes', () => {
 
     const path = await screen.findByPlaceholderText('Path to Store root')
     fireEvent.change(path, { target: { value: '/tmp/store-b' } })
-    const submit = screen.getByRole<HTMLButtonElement>('button', { name: 'Register Store' })
-    await waitFor(() => expect(submit.disabled).toBe(true))
+    await waitFor(() =>
+      expect(
+        screen.getByRole<HTMLButtonElement>('button', { name: 'Register Store' }).disabled
+      ).toBe(true)
+    )
+    fireEvent.submit(screen.getByRole('form', { name: 'Store setup or registration' }))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mutations).toEqual([])
+    await unmount(rendered)
+  })
 
-    // Cross only the presentation lock; the production route action guard must still reject dispatch.
-    submit.disabled = false
-    fireEvent.click(submit)
+  it('rejects a Register draft after same-id and same-locator tab replacement before effects run', async () => {
+    const mutations: string[] = []
+    vi.stubGlobal('fetch', createBackendFetch(mutations))
+    const rendered = await renderRoute('/environment/stores/inspector')
+
+    const path = await screen.findByPlaceholderText('Path to Store root')
+    fireEvent.change(path, { target: { value: '/tmp/store-b' } })
+    const replacement: HostedShellState = {
+      activeTabId: 'tab-b',
+      tabs: [
+        { id: 'tab-a', sessionId: 'session-a', apiBaseUrl: API_A, createdAt: 1 },
+        { id: 'tab-b', sessionId: 'replacement-session', apiBaseUrl: API_B, createdAt: 3 },
+      ],
+    }
+
+    localStorage.setItem(getHostedShellStorageKey(), JSON.stringify(replacement))
+    fireEvent.submit(screen.getByRole('form', { name: 'Store setup or registration' }))
+
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(mutations).toEqual([])
     await unmount(rendered)
@@ -313,45 +337,52 @@ describe('App connection selection and observation routes', () => {
     const rendered = await renderRoute('/environment/stores/inspector')
 
     fireEvent.click(await screen.findByRole('button', { name: 'Remove files' }))
-    const confirmation = await screen.findByLabelText('Type the Store id to confirm')
-    const authorityEvidence = screen.getByTestId('remove-authority-evidence')
-    const originGeneration = authorityEvidence.dataset.originGeneration
-    expect(originGeneration).toBeDefined()
-    expect(authorityEvidence.dataset.authorityState).toBe('current')
+    await screen.findByLabelText('Type the Store id to confirm')
 
     await act(async () => {
       window.dispatchEvent(new Event('focus'))
     })
     await waitFor(() => {
-      const latestEvidence = screen.getByTestId('remove-authority-evidence')
       expect(
         requests.filter((request) => request.url.includes(`${API_B}/trpc/rootContext.get`)).length
       ).toBeGreaterThanOrEqual(2)
-      expect(latestEvidence.dataset.authorityState).toBe('retired')
-      expect(latestEvidence.dataset.latestTabId).toBe('tab-b')
-      expect(latestEvidence.dataset.latestGeneration).toBeDefined()
-      expect(latestEvidence.dataset.latestGeneration).not.toBe(originGeneration)
+      expect(
+        screen.getByText(
+          'The environment refreshed after this dialog opened. Close and reopen it before removing files.'
+        )
+      ).toBeTruthy()
       expect(screen.getByText('env:b')).toBeTruthy()
       expect(screen.queryByText('env:b-refreshed')).toBeNull()
     })
     expect(getConnectionsSnapshot().activeTabId).toBe('tab-b')
-    await act(async () => {
-      await Promise.resolve()
-    })
-    expect(confirmation.isConnected).toBe(false)
     const currentConfirmation = screen.getByLabelText('Type the Store id to confirm')
     await act(async () => {
       fireEvent.change(currentConfirmation, { target: { value: 'design-system' } })
     })
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Remove Store' }).disabled).toBe(
-      false
+      true
     )
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Remove Store' }))
+      fireEvent.submit(screen.getByRole('form', { name: 'Remove Store files' }))
     })
 
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(mutations).toEqual([])
+    await unmount(rendered)
+  })
+
+  it('dispatches a confirmed Remove dialog through the selected B mutation owner', async () => {
+    const mutations: string[] = []
+    vi.stubGlobal('fetch', createBackendFetch(mutations, { stores: [STORE] }))
+    const rendered = await renderRoute('/environment/stores/inspector')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove files' }))
+    fireEvent.change(await screen.findByLabelText('Type the Store id to confirm'), {
+      target: { value: 'design-system' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Store' }))
+
+    await waitFor(() => expect(mutations).toEqual([API_B]))
     await unmount(rendered)
   })
 
