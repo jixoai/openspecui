@@ -8613,15 +8613,57 @@ git diff --check
 -> passed
 ```
 
-Mutation resistance was run independently and restored after each red run:
+Mutation resistance was run independently and restored after each red run. The exact fixed-point commands
+and outcomes were:
 
 1. Removed only the generation equality check inside the native transition `update` callback. The
-   `retires a late Owned transition when a newer Owned Catalog snapshot has committed` test failed because
-   the obsolete callback restored `Owned B` instead of current `Owned C`. The guard was restored exactly;
-   the focused continuity file returned to 6/6.
-2. Replaced only the Referenced row's `specIdentityKey(spec.identity)` key with an index key (and added the
-   map index solely for this mutation). The same-Store reorder test failed through positional href/shared
-   identity reuse (`Referenced A` received the `store-a/b` row). The compound key was restored exactly.
+   in `packages/web/src/routes/spec-list-continuity.ts`:
+
+   ```text
+   apply_patch: delete only
+     if (generationRef.current !== generation) return
+   from the native update callback, leaving the queueMicrotask guard intact.
+
+   pnpm --filter @openspecui/web exec vitest run --project unit \
+     src/routes/spec-list-continuity.test.tsx -t "late Owned" --reporter=verbose
+   -> failed as intended: `Owned C` was absent after invoking the deferred A callback;
+      the obsolete callback restored `Owned B`.
+   ```
+
+   Restoration used the inverse patch at the same callback site:
+
+   ```text
+   apply_patch: restore
+     if (generationRef.current !== generation) return
+   in packages/web/src/routes/spec-list-continuity.ts
+   ```
+
+   The continuity lane then returned to `6/6`.
+
+2. Replaced only the Referenced row key in `packages/web/src/routes/spec-list.tsx`:
+
+   ```text
+   apply_patch: change
+     specs.map((spec) => <SpecCatalogRow key={specIdentityKey(spec.identity)} ... />)
+   to
+     specs.map((spec, index) => <SpecCatalogRow key={index} ... />)
+
+   pnpm --filter @openspecui/web exec vitest run --project unit \
+     src/routes/spec-list-continuity.test.tsx -t "same-Store" --reporter=verbose
+   -> failed as intended: positional DOM reuse relabeled the row; `Referenced A` received
+      the `store-a/b` href and shared-element identity.
+   ```
+
+   Restoration removed the temporary `index` parameter and restored the exact core key:
+
+   ```text
+   apply_patch: restore
+     specs.map((spec) => <SpecCatalogRow key={specIdentityKey(spec.identity)} ... />)
+   in packages/web/src/routes/spec-list.tsx
+   ```
+
+   The final focused lane restored `3 files, 18 tests passed`; typecheck, Prettier, oxlint, and
+   `git diff --check` remained green.
 
 The scope-switch test uses the real tab click and is rendered under React StrictMode; the late Owned callback
 cannot restore Owned rows after Referenced becomes current. This is preparation evidence only. The owner still
