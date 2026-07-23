@@ -19,7 +19,7 @@ import { DocumentService, createHookRuntime } from '@openspecui/server'
 import { execFile, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import pkg from '../package.json' with { type: 'json' }
@@ -589,8 +589,19 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
     const snapshot: ExportSnapshot = {
       meta: {
         timestamp: new Date().toISOString(),
+        observedAt: Date.now(),
         version: pkg.version,
-        projectDir,
+        // Display-safe project label: derive a readable name without retaining an absolute path.
+        // The launch `projectDir` absolute location is intentionally not serialized into the snapshot.
+        projectName: basename(projectDir) || 'project',
+        // Root provenance is populated by the root-aware export path (Section 7.2); the legacy
+        // `generateSnapshot(projectDir)` entrypoint preserves owned-only, nearest-root behavior.
+        root: {
+          planningRootPath: null,
+          rootSource: 'nearest',
+          storeId: null,
+        },
+        referencePolicy: { kind: 'none' },
       },
       dashboard: {
         specsCount: specs.length,

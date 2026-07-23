@@ -40,6 +40,7 @@ import {
   specIdentityKey,
   specRoutePath,
   type SpecCatalog,
+  type SpecCatalogEntry,
   type SpecDocumentProjection,
   type SpecIdentity,
 } from '@openspecui/core/spec-catalog'
@@ -588,17 +589,47 @@ export async function getSpecCatalog(): Promise<SpecCatalog> {
   const snapshot = await loadSnapshot()
   if (!snapshot) return { entries: [], referenceSources: [], observedAt: 0 }
 
+  const entries: SpecCatalogEntry[] = snapshot.specs.map((spec) =>
+    spec.identity.kind === 'owned'
+      ? {
+          identity: spec.identity,
+          source: 'owned',
+          readOnly: false,
+          name: spec.name,
+          summary: null,
+          updatedAt: spec.updatedAt,
+        }
+      : {
+          identity: spec.identity,
+          source: 'referenced',
+          readOnly: true,
+          name: spec.name,
+          summary: null,
+          // Static snapshot carries the parsed body, so requirementCount is not a list-time fact here;
+          // the Referenced catalog entry requires the field but the body detail owns the count.
+          requirementCount: spec.requirements.length,
+          updatedAt: 0,
+        }
+  )
+
   return {
-    entries: snapshot.specs.map((spec) => ({
-      identity: spec.identity,
-      source: spec.source,
-      readOnly: spec.readOnly,
-      name: spec.name,
-      summary: null,
-      updatedAt: spec.updatedAt,
-    })),
-    referenceSources: [],
-    observedAt: Date.parse(snapshot.meta.timestamp) || 0,
+    entries,
+    referenceSources:
+      snapshot.meta.referencePolicy?.kind === 'include'
+        ? snapshot.meta.referencePolicy.referenceSources.map((source) => ({
+            storeId: source.storeId,
+            state: source.state,
+            diagnostics: [],
+            evidence: {
+              success: source.state === 'ready',
+              stdout: '',
+              stderr: '',
+              exitCode: source.state === 'ready' ? 0 : 1,
+              diagnostics: [],
+            },
+          }))
+        : [],
+    observedAt: snapshot.meta.observedAt || Date.parse(snapshot.meta.timestamp) || 0,
   }
 }
 
@@ -1034,7 +1065,6 @@ export async function getOpsxSchemaResolution(name?: string): Promise<SchemaReso
       resolution.displayPath ??
       toOpsxDisplayPath(resolution.path, {
         source: resolution.source,
-        projectDir: snapshot?.meta.projectDir,
       }),
     shadows: resolution.shadows.map((shadow) => ({
       ...shadow,
@@ -1042,7 +1072,6 @@ export async function getOpsxSchemaResolution(name?: string): Promise<SchemaReso
         shadow.displayPath ??
         toOpsxDisplayPath(shadow.path, {
           source: shadow.source,
-          projectDir: snapshot?.meta.projectDir,
         }),
     })),
   }
@@ -1065,7 +1094,6 @@ export async function getOpsxTemplates(schema?: string): Promise<TemplatesMap | 
             template.displayPath ??
             toOpsxDisplayPath(template.path, {
               source: template.source,
-              projectDir: snapshot.meta.projectDir,
             }),
         },
       ])
@@ -1082,7 +1110,6 @@ export async function getOpsxTemplates(schema?: string): Promise<TemplatesMap | 
           template.displayPath ??
           toOpsxDisplayPath(template.path, {
             source: template.source,
-            projectDir: snapshot.meta.projectDir,
           }),
       },
     ])
@@ -1196,7 +1223,6 @@ export async function getOpsxTemplateContents(schema?: string): Promise<Record<
             template.displayPath ??
             toOpsxDisplayPath(template.path, {
               source: template.source,
-              projectDir: snapshot.meta.projectDir,
             }),
           source: template.source,
         },

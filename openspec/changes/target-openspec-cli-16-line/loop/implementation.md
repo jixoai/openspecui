@@ -8944,3 +8944,51 @@ Audit of every recorded sub-slice against current source:
 Decision: parents `6.16` and `6.17` are checked in `loop/checkpoints.md`. No fabricated browser conclusion
 is made — only the owner's final browser/visual/mobile/multi-tab walkthrough remains as the closing gate,
 and automated evidence stops at focused Vitest and component-level fixtures.
+
+### Section 7 Slice 1: ExportSnapshot type upgrade + publication redaction (2026-07-23)
+
+First slice of Section 7 (Static Export Parity and Privacy), covering 7.1 (snapshot provenance/compound
+identity/policy) and 7.8 (publication redaction).
+
+Changed contracts:
+
+- `packages/core/src/export-types.ts`: `meta` now carries `observedAt`, `projectName` (display label, no
+  path), `root: ExportRootProvenance` (planningRootPath/rootSource/storeId), and
+  `referencePolicy: ExportReferencePolicy` (`none | omit | include`). The absolute `meta.projectDir` is
+  removed. `specs[].identity` widened from `OwnedSpecIdentity` to the compound `SpecIdentity` union;
+  `source` widened to `'owned' | 'referenced'`; `readOnly` to `boolean`; referenced specs carry `storeId`.
+- `packages/core/src/snapshot-redaction.ts` (new): `redactSnapshotForPublication(snapshot)` is the single
+  publication boundary. It strips absolute planning-root paths, redacts OPSX schema/template/shadow paths
+  to display-safe relative tails (preserving `displayPath`), clears `git.repositoryUrl` unless the policy
+  is explicitly `include`, and best-effort redacts absolute tokens in `changeMetadata` YAML.
+  `snapshotHasAbsolutePath(snapshot)` is the privacy invariant checker. Both exported from
+  `@openspecui/core`.
+- `packages/cli/src/export.ts`: writes the new `meta` (observedAt/projectName/root/referencePolicy=none);
+  the root-aware `--references` materialization lands in Slice 2.
+- `packages/web/src/lib/static-data-provider.ts`: `getSpecCatalog()` branches owned/referenced entries and
+  hydrates `referenceSources` from the include policy; dead `meta.projectDir` reads removed so
+  `toOpsxDisplayPath` falls back to its safe path-tail.
+
+Focused green + mutation evidence:
+
+```text
+pnpm --filter @openspecui/core exec vitest run src/snapshot-redaction.test.ts --reporter verbose
+-> 1 file / 5 tests passed
+
+Mutation: redactSnapshotForPublication -> passthrough (return clone without redaction)
+  pnpm ... vitest run src/snapshot-redaction.test.ts -t "no absolute filesystem path"
+  -> failed as intended: snapshotHasAbsolutePath remained true (absolute paths survived).
+Restoration returned 5/5 green.
+
+pnpm --filter @openspecui/core typecheck -> passed
+pnpm --filter @openspecui/web typecheck -> passed
+tsc --noEmit (cli) -> passed
+pnpm exec prettier --check <changed files> -> All matched files use Prettier code style
+```
+
+Scope boundary: the legacy `generateSnapshot(projectDir)` entrypoint still produces owned-only, nearest-root
+snapshots (`referencePolicy: none`, `root.planningRootPath: null`). Slice 2 adds real CLI root resolution,
+the `--references=include|omit` flag, direct Reference list/show materialization, atomic failure, and wires
+`redactSnapshotForPublication` into the publish path. Slice 3 migrates the static provider/SSG enumeration
+to compound referenced routes. No SSG rebuild, parity tests, or changeset are claimed in Slice 1; this
+slice keeps the whole workspace type-safe so later slices build on a compiling baseline.

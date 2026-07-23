@@ -733,7 +733,8 @@ export {
   type DashboardTrendsProjection,
   type DashboardTriColorTrendPoint,
 } from './dashboard-types.js'
-export { type ExportSnapshot } from './export-types.js'
+export { type ExportSnapshot, type ExportReferencePolicy, type ExportRootProvenance, type ExportRootSource } from './export-types.js'
+export { redactSnapshotForPublication, snapshotHasAbsolutePath } from './snapshot-redaction.js'
 export {
   type GitEntriesPage,
   type GitEntryCursor,

@@ -4,8 +4,40 @@
 import type { OpenSpecUIConfig } from './config.js'
 import type { OpsxEntityDetail } from './opsx-entity.js'
 import type { SchemaDetail, SchemaInfo, SchemaResolution, TemplatesMap } from './opsx-types.js'
-import type { OwnedSpecIdentity } from './spec-catalog.js'
+import type { SpecIdentity } from './spec-catalog.js'
 import type { DocumentChecklistSummary, TrackedTaskProgress } from './task-progress.js'
+
+/** Source from which the CLI resolved the exported writable planning root. */
+export type ExportRootSource = 'nearest' | 'declared' | 'store' | 'implicit'
+
+/** Root provenance captured by CLI selection instead of an assumed launch projectDir. */
+export interface ExportRootProvenance {
+  /** Display-safe planning-root path; absolute paths are redacted before publication. */
+  planningRootPath: string | null
+  /** How the CLI resolved the planning root. */
+  rootSource: ExportRootSource
+  /** Effective Store id when the writable root was selected through an explicit Store. */
+  storeId: string | null
+}
+
+/**
+ * Reference export policy recorded on the snapshot.
+ *
+ * - `none`: no effective References were observed; owned-only export.
+ * - `omit`: References were observed but intentionally excluded; only an aggregate count is retained.
+ * - `include`: direct Reference Specs were materialized; per-Store provenance is retained.
+ */
+export type ExportReferencePolicy =
+  | { kind: 'none' }
+  | { kind: 'omit'; referenceSourceCount: number }
+  | {
+      kind: 'include'
+      referenceSources: Array<{
+        storeId: string
+        state: 'ready' | 'error'
+        specCount: number
+      }>
+    }
 
 /**
  * Complete snapshot of an OpenSpec project for static export
@@ -14,8 +46,18 @@ export interface ExportSnapshot {
   /** Snapshot metadata */
   meta: {
     timestamp: string
+    /** Monotonic observation time of the CLI-resolved snapshot. */
+    observedAt: number
     version: string
-    projectDir: string
+    /**
+     * Display-safe project label. Absolute project paths are intentionally NOT retained; publication
+     * redaction strips machine-sensitive locations and this field carries only a human-readable name.
+     */
+    projectName: string
+    /** CLI-resolved writable planning-root provenance (not an absolute launch path). */
+    root?: ExportRootProvenance
+    /** Reference export policy observed and applied during this snapshot. */
+    referencePolicy?: ExportReferencePolicy
   }
   /** Dashboard summary data */
   dashboard: {
@@ -42,12 +84,16 @@ export interface ExportSnapshot {
   }
   /** OpenSpecUI runtime config captured during export */
   config?: OpenSpecUIConfig
-  /** All specs with parsed content */
+  /** All specs with parsed content (compound identity is source-aware). */
   specs: Array<{
-    /** Compound identity remains source-aware even before Reference export is enabled. */
-    identity: OwnedSpecIdentity
-    source: 'owned'
-    readOnly: false
+    /** Compound identity: owned specs use `(owned, specId)`; referenced specs use `(referenced, storeId, specId)`. */
+    identity: SpecIdentity
+    /** Whether this Spec came from the writable root (`owned`) or a read-only direct Reference (`referenced`). */
+    source: 'owned' | 'referenced'
+    /** Referenced Specs are read-only; owned Specs are writable. */
+    readOnly: boolean
+    /** Store id that owns this Spec when `source === 'referenced'`; absent for owned Specs. */
+    storeId?: string
     id: string
     name: string
     /** Processed markdown shown by default in static OpenSpecUI. */
@@ -129,6 +175,7 @@ export interface ExportSnapshot {
         string,
         {
           content: string | null
+          /** Display-safe relative path; absolute paths are redacted before publication. */
           path: string
           displayPath?: string
           source: 'project' | 'user' | 'package'
