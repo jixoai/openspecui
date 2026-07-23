@@ -438,6 +438,10 @@ The independent browser attempt confirms the desktop source control and URL/quer
     `change.id` identity, one local native/View Transition owner, and real ChangeList-to-detail handoff
     evidence. SpecList, ArchiveList, Git lists, shared subscriptions, and new animation dependencies remain
     separate. Final browser acceptance remains owner-only.
+  - `6.17-A` correction after `102c382`: the local row-continuity owner is in scope and may remain, but the
+    navigation fixture must cross the real `VTLink` preparation/coordinator boundary and the accepted
+    mutation runs must be recorded in the Change. Keep this correction limited to the active ChangeList
+    projection; it does not start another list family or close parent checkpoint `6.17`.
 - [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns
 
 ## 7. Static Export Parity and Privacy

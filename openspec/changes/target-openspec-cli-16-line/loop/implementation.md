@@ -8214,15 +8214,43 @@ The real preparation also calls `opsx.status.query({ change: "b" })` once and pr
 not merely a mock navigate call. The continuity-only tests retain their small Link replacement because they
 render outside a RouterProvider; that replacement is no longer used as navigation evidence.
 
-Both requested single-boundary mutations were run and restored:
+Both requested single-boundary mutations were run and restored. Each command ran after exactly the named
+source replacement and before restoring that replacement:
 
 1. Removing only the `transitionGenerationRef.current === generation` guard inside the local transition
-   update made `change-list-continuity.test.tsx` fail its late-A fixed point: after `[A, B] -> [B]`, then
-   `[C]`, manually settling the retired A transition reintroduced obsolete B and the assertion for current C
-   failed. The generation guard was restored.
-2. Replacing only `key={change.id}` with an index key made the same focused file fail two identity fixed
-   points: `[A, B] -> [B]` remounted B after A removal, and `[A, B] -> [B, A]` reused the old B DOM node for
-   A. The id key was restored; no other continuity guard was changed.
+   update, leaving the rest of `packages/web/src/routes/change-list-continuity.ts` unchanged:
+
+   ```text
+   pnpm --filter @openspecui/web exec vitest run --project unit \
+     src/routes/change-list-continuity.test.tsx
+     -> 1 failed / 2 passed
+     -> retires a late A transition commit when a newer snapshot has already committed
+     -> Unable to find an accessible element with the role "link" and name /Change C/i
+   ```
+
+   The named fixed point reached `[A, B] -> [B] -> [C]`; manually settling the retired A transition
+   reintroduced obsolete B, so current C was absent. The generation guard was restored before the next
+   mutation.
+
+2. Replacing only `key={change.id}` with an index key in `packages/web/src/routes/change-list.tsx`, leaving
+   the generation guard intact:
+
+   ```text
+   pnpm --filter @openspecui/web exec vitest run --project unit \
+     src/routes/change-list-continuity.test.tsx
+     -> 2 failed / 1 passed
+     -> [A, B] -> [B]: the surviving B link was not the original B DOM node
+     -> [A, B] -> [B, A]: current A was the old B DOM node, with its href and shared descriptor relabelled
+   ```
+
+   This is React's positional-node reuse, not an unproven animation failure: after deletion, B is rendered
+   through A's old index-0 node; after reorder, A is rendered through B's old index-1 node. The id key was
+   restored before verification; no other continuity guard was changed.
+
+After both runs, `packages/web/src/routes/change-list.tsx` and
+`packages/web/src/routes/change-list-continuity.ts` exactly matched `HEAD=88ed394`; `git diff --` over those
+two paths was empty. The Change record and checkpoint correction remained the only 6.17-A uncommitted
+artifacts at that point.
 
 Restored focused verification:
 
