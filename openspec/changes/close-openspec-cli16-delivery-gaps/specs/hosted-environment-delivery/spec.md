@@ -42,16 +42,20 @@ pass-through.
 The App SHALL retain backend locators without credentials and hold any launch credential only in session
 memory associated with its normalized API locator. A protected reachable backend that returns 401 or 403
 SHALL be represented as `authentication-required`, not `offline`, current, or unsupported. Environment-
-scoped operations SHALL require an explicitly selected current online backend and SHALL NOT fall back to
-the first online connection. The App SHALL observe Root Context only for currently connected,
-protocol-compatible backend entries and SHALL remain an observed-only, non-machine-wide projection.
+scoped operations SHALL require an explicitly selected current online tab observation from the same
+generation and SHALL NOT fall back to the first online connection or a same-locator retired tab. The App
+SHALL observe Root Context only for currently connected, protocol-compatible backend entries, preserve
+typed source-labelled errors and Reference provenance, and remain an observed-only, non-machine-wide
+projection.
 
 #### Scenario: Launch credential reaches only its intended backend
 
 - **GIVEN** an App launch URL supplies an API locator and credential fragment
 - **WHEN** the App consumes and strips the fragment
 - **THEN** it SHALL associate the credential only with that normalized locator in session memory
-- **AND** health, HTTP RPC, and WebSocket traffic to that locator SHALL send it
+- **AND** Direct Web or the matching App iframe SHALL consume and remove the fragment before rendering
+- **AND** the static Project Web shell MAY load without data authority while protected HTTP RPC, WebSocket,
+  PTY, file, and notification traffic SHALL supply the same credential from one in-memory owner
 - **AND** persisted tabs, URL query state, logs, and other backend locators SHALL NOT receive it
 
 #### Scenario: Two online connections require an explicit operation target
@@ -60,7 +64,9 @@ protocol-compatible backend entries and SHALL remain an observed-only, non-machi
 - **WHEN** B is selected for an environment-scoped Store operation
 - **THEN** the operation SHALL target B even when A appears first in connection order
 - **AND** without a selected current online backend the operation SHALL remain unavailable
-- **AND** Context Matrix SHALL group only the observed current Root/Reference facts from connected backends
+- **AND** replacing B with another tab or generation at the same locator SHALL retire the prior authority
+- **AND** Context Matrix SHALL group only observed current Root/Reference facts and retain source-labelled
+  loading/error evidence from connected backends
 
 ### Requirement: Observable Backend-Owned Store Mutation Lifecycle
 

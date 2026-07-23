@@ -13,8 +13,8 @@ Original request (2026-07-19): "不要在 6.11 这个任务上徘徊了。你得
 
 ### Pre-apply baseline
 
-As of 2026-07-23 Asia/Shanghai, this Change contains planning artifacts only. It has not changed
-production, test, CSS, static-export, or dependency source. Review baseline is `24c313c...HEAD`.
+At its 2026-07-23 baseline, this Change contained planning artifacts only. Later P1/P2 candidates are
+recorded below; review baseline remains `24c313c...HEAD`.
 
 The prior `target-openspec-cli-16-line` Change remains active at `109/131`, frozen as an evidence source;
 it is neither merged nor archived. Its 22 unchecked delivery obligations are not checked here by assertion.
@@ -38,7 +38,7 @@ No P1 checkbox is closed by this orchestration decision. Full gates, P2+, PR upd
 release, and manager-owned browser walkthroughs remain forbidden until focused P1 review accepts the
 actual candidate.
 
-### P1 accepted candidate: 2026-07-24 Asia/Shanghai
+### P1 initially accepted candidate, browser delivery later reopened: 2026-07-24 Asia/Shanghai
 
 Production commits:
 
@@ -87,8 +87,9 @@ Independent reviewer verification:
 
 Four Terra worker launches failed at the local model gateway with `503 Service Unavailable` before the
 worker could inspect or edit the repository. The main reviewer therefore performed the equivalent focused
-rerun and source review. This execution deviation does not weaken the named public-boundary evidence and
-does not claim final browser acceptance. Checkpoints `2.1`--`2.8` are accepted; P2 begins under a new Goal.
+rerun and source review. Those results accept Server admission, identity, and App-native credential scope
+only. The later product-chain review below reopens complete P1 acceptance; it is not final browser
+acceptance and P3/P4 remain forbidden.
 
 Residual facts retained for later packages:
 
@@ -102,8 +103,8 @@ Residual facts retained for later packages:
 
 | Order | Package | State | Production owner | Required focused proof before next package |
 | --- | --- | --- | --- | --- |
-| 1 | P1 Hosted identity + Gate | Accepted 2026-07-24 | Core hosted contract; Server bootstrap and tRPC WS context; App launch credential handoff | Real guarded HTTP/WS fixtures prove missing/invalid/reconnect rejection before router execution; exact same host/data-home URI equality; Store mutation receives issued URI. |
-| 2 | P2 Connection selection + Context Matrix | Ready | App credential registry, reachability, selected environment, Environment Center / Context Matrix | Two-backend fixture proves per-locator credential isolation, `authentication-required`, explicit selection, all-online observed Context aggregation. |
+| 1 | P1 Hosted identity + Gate | Partial; browser delivery correction open | Core hosted contract; Server bootstrap and tRPC WS context; CLI/App/Web credential handoff | Existing Server admission/identity proof plus real gated Direct/App Project Web HTTP RPC, subscription, and PTY proof. |
+| 2 | P2 Connection selection + Context Matrix | Candidate rejected; correction open | App credential registry, reachability, selected tab generation, Environment Center / Context Matrix | Exact tab/generation action guard plus source-labelled Root error and two-source Reference provenance. |
 | 3 | P3 Store mutation ledger | Not started | Server StoreMutationService/router; App operation subscription and Inspector | Delayed real CLI fixture observes accepted then running before terminal; denied pre-start call creates no mutation; removing transition publication fails. |
 | 4 | P4 Typed/static/reactive repair | Not started | Core schemas; App decoder; static provider; Server reactive Git stamp; affected tests | Malformed envelope cannot become current; static has no fabricated live evidence; removing physical/reactive settlement fails; all changed TS/TSX headers/types are valid. |
 | 5 | P5 Delivery recovery + acceptance | Blocked on P1--P4 and independent loading regression | Loading-change owner; reviewer; manager | Exact server emission failures are green in their own Change, then one complete local gate run and manager walkthrough ledger. |
@@ -157,12 +158,14 @@ named pre-fix red case -> review accepts cause -> implementation
    identity, but the App and router never construct the URI or parse it for display.
 5. The manager owns every final visual/end-to-end walkthrough. Agents may supply only focused Vitest and
    basic component/fixture Playwright preparation evidence.
-6. The reviewer will not close the original Change merely to shrink context. Its migration is an evidence
-   reconciliation performed only after the new Change's proof and gates are complete.
+6. The original Change may be archived as an explicitly partial/superseded record after its 22 unchecked
+   items are mapped and the manager confirms. Transfer never marks them complete; this corrective Change
+   remains responsible for its own proof, gates, walkthrough, merge, and later archive.
 
 ## Divergence Notes
 
-- No implementation has started and no divergence from `research-plan.md` exists.
+- P1/P2 implementation candidates now exist. Their independently confirmed gaps are recorded below and
+  are reopened rather than hidden as residual risk.
 - `refine-live-projection-experience` is a concurrently created separate Change. This Change must not
   modify its files or reclassify its regression as fixed without its own focused result.
 - The prior scoped server command was intentionally terminated after it reproduced the documented
@@ -190,3 +193,54 @@ conditions appears:
    exact failing assertion, or expanding into the independent UI-experience/Kanban scope.
 6. A required owner walkthrough reveals a behavior that contradicts the written fixed points rather than
    merely a missing test or implementation defect.
+
+### P1/P2 independent correction review: 2026-07-24 Asia/Shanghai
+
+Review baseline:
+
+- P1 production: `56cead6`, `801c819`.
+- P2 candidate: `1c014b1` (`1b7e1ad..1c014b1`). Later `ca1db28` and `652c1fd` belong to the independent
+  loading/visual Change and are preserved but do not prove P1/P2.
+- P2 worker evidence: App 23 files / 107 tests and App typecheck passed. The independent Terra worker
+  returned `503 Service Unavailable` before producing a repository result.
+
+Accepted facts:
+
+- Server rejects missing/invalid guarded tRPC WS credentials before router Context and preserves valid,
+  reconnect, PTY-first-message, HTTP-header, and unguarded cases.
+- Server issues one `envUri` from host identity plus effective data home and Store mutation consumes it.
+- App-native health/HTTP requests use locator-scoped runtime credentials and classify 401/403 as
+  `authentication-required`.
+- P2 introduces a shared all-tab observation owner, explicit `activeTabId`, selected Store dispatch, and
+  removed/re-added generation retirement.
+
+Rejected completion claims and exact reasons:
+
+1. **CLI/App Project Web credential delivery is absent.** CLI builds Direct/App launch URLs without the
+   resolved credential. The App iframe URL carries only `api` and `session`; whole-backend middleware gates
+   `/` before Project Web JavaScript can load. This invalidates complete P1 acceptance.
+2. **Project Web transport supply is absent.** Its tRPC HTTP link has no Authorization supplier, tRPC WS has
+   no `connectionParams`, and PTY sends `list` before auth. Raw protected fetch/resource paths have no one
+   audited owner. Server rejection tests prove the gate, not that the product can use it.
+3. **Selected authority is locator-only.** P2 collapses tabs by normalized URL and joins selection by URL,
+   so a duplicate/replaced same-locator tab may inherit prior `current` authority. The existing test covers
+   remove -> empty -> re-add, not the same-locator real Store action fixed point.
+4. **Root error evidence is dropped.** A typed Root error becomes `rootStatus: error` with null detail, then
+   Context Matrix renders every non-ready state as `stale`. Existing route evidence asserts only two project
+   names and proves neither distinct Reference provenance nor error truth.
+5. **Observation ownership has two writers.** AppLayout's Provider observes persisted shell state while
+   HostedShell separately writes local shell tabs into the same owner. This is a structural risk; eliminate
+   it if the exact-generation correction can do so without expanding into unrelated shell redesign.
+
+Correction packages:
+
+```text
+P1-B1 CLI -> Direct/App fragment -> matching iframe bootstrap
+P1-B2 public static shell -> one Web memory credential owner -> HTTP/WS/PTY/raw protected paths
+P2-C  exact selected tab + observation generation -> real Store action
+P2-D  source-labelled Root error + exact two-source Reference/group provenance
+```
+
+Each package needs one real fixed-point red, green, and removal/bypass mutation result. P1-B and P2-C/D
+may be implemented in parallel because their production files are independent; focused review must accept
+all four before any P3/P4 work or broad workspace gate.

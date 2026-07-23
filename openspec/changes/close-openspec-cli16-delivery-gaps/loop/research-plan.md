@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
 1. Record verified review findings at the hosted protocol, App projection, static, and delivery boundaries.
 2. Split correction into independently reviewable production-owner packages.
 3. Preserve the old Change and independent loading Change as separate sources of truth.
@@ -33,6 +33,20 @@ Original request (2026-07-21): "每项先明确一个生产 owner、一个精准
 | Static and reactive truth | `static-data-provider.ts:617-630` synthesizes CLI success/exit/stdout evidence from static policy. `dashboard-git-projection.ts:96,111-112` uses native read/write filesystem calls for a reactive refresh input. | Static variants carry no live CLI evidence; reuse the shared mapping. Git refresh write settles via the physical/reactive writer and reactive observation. |
 | Evidence hygiene | `access-gate.test.ts:22-30` uses `as any`; 12 changed TS/TSX files lack required headers. | Use checked HTTP/WS fixtures and add exact timestamped headers to every changed source/test file. |
 
+### P1/P2 independent correction review (2026-07-24)
+
+The first P1/P2 candidates prove Server admission and App-native requests, but they do not prove the
+advertised gated Project Web product chain. The following are independent fixed points and must not be
+closed by one broad App test:
+
+| Fixed point | Current production evidence | Review decision |
+| --- | --- | --- |
+| CLI to browser credential | `packages/cli/src/cli.ts:143-148` builds Direct/App browser URLs from only the Server URL; `startServer()` resolves and prints the gate credential internally but `RunningServer` exposes no launch credential. | Reopen P1 browser delivery. The generated/manual credential must reach the exact Direct/App launch fragment without query, storage, or log persistence. |
+| App to Project Web bootstrap | `packages/core/src/hosted-app.ts:161-169` and `packages/app/src/lib/shell-state.ts:243-248` put only `api` and `session` in the iframe URL. `packages/server/src/server.ts:385-386` gates static navigation before the shell can load. | Make static shell admission physically distinct from protected data authority, then bootstrap only the matching iframe from a fragment that Project Web consumes and removes. |
+| Project Web transports | `packages/web/src/lib/trpc.ts:38-100` supplies neither HTTP Authorization nor WS `connectionParams`; `terminal-controller.ts:1548-1562` sends `list` before PTY auth; several raw fetch/resource paths have no shared credential owner. | One Web in-memory owner must supply every protected HTTP/tRPC WS/PTY/raw resource path. Real gated transport fixtures and mutation-resistance are required. |
+| Selected authority provenance | `connection-observation.tsx:213-245` collapses retained tabs by normalized locator; `use-active-backend.ts:43-49` joins by URL without exact `tabId`/generation. Duplicate/replaced same-locator tabs can inherit retired authority. | P2 remains open. Bind selected authority to exact tab identity plus current generation and prove the real Store action fails if that guard is removed. |
+| Root/Reference error truth | `connection-observation.tsx:181-195` records typed Root error as `rootStatus: error` while dropping its message; `context-matrix.tsx:46-59` renders every non-ready Root as `stale`. Existing route tests assert only project names. | Preserve source-labelled typed errors and exact Reference provenance. Add two-source evidence; a stale label cannot replace error evidence. |
+
 The owner interview produced no unresolved product decision: the existing contract already fixes neutrality,
 no permissions model, `envUri` semantics, backend-owned mutations, push-then-pull reactivity, and
 owner-only final browser acceptance. The implementation may choose the concrete server host-identity
@@ -51,14 +65,18 @@ a new client-side identifier.
 2. Require the existing tRPC `connectionParams` handshake for gated browser WebSockets. tRPC's installed
    adapter calls `createContext({ info.connectionParams })` before procedures, so the gate belongs there;
    HTTP headers remain valid for non-browser clients.
-3. Bind an auto-launch credential to one normalized `apiBaseUrl` in session memory. Health probing, HTTP
-   RPC, and tRPC WS use only that entry's credential. `401/403` becomes `authentication-required`, not
-   `offline`; the credential itself never enters URL, persisted tabs, logs, or another backend's request.
+3. Deliver the resolved gate credential into a Direct/App launch fragment, then bind it to one normalized
+   `apiBaseUrl` in session memory. The App passes it only to the matching iframe bootstrap; Project Web
+   consumes and strips it before rendering.
+4. Keep the static Project Web shell loadable without data authority. All protected HTTP RPC, tRPC WS,
+   PTY, file, notification, and raw resource paths consume one Web credential owner. `401/403` becomes
+   `authentication-required`; no credential enters URL query, persisted tabs, logs, or another locator.
 
-**Red / green / mutation resistance:** a raw WS with no connection params reaches a subscription before
-the fix; it must fail after the gate is present. Removing the context check must make that same test fail.
-Two Server projects with same host/data home must produce equal opaque URI, and changing either equality
-input must not. A Store mutation must report that exact issued URI.
+**Red / green / mutation resistance:** the accepted Server-side admission proof remains necessary but is
+not sufficient. A real gated Direct/App Project Web must load its shell and reach one HTTP RPC, one
+subscription, and one PTY operation. Missing/invalid credentials remain rejected. Removing each transport
+supplier or iframe-locator binding must make the corresponding fixture fail. Two Server projects with
+same host/data home still produce equal opaque URI, and Store mutation uses that exact issued URI.
 
 ### P2: App connection and Context projection
 
@@ -66,16 +84,17 @@ input must not. A Store mutation must report that exact issued URI.
 
 1. Retain backend locations without credentials, but keep a session-only credential map keyed by normalized
    `apiBaseUrl`.
-2. Promote selected tab/environment to a current App fact. Environment-scoped views and mutations render
-   a non-authoritative blocked state until their selected backend is online and protocol-compatible.
+2. Promote selected tab/environment to an exact `tabId` plus current observation-generation fact.
+   Environment-scoped views and mutations remain non-authoritative until that same tab generation is
+   online and protocol-compatible; a duplicate/replaced same-locator tab cannot inherit authority.
 3. Independently probe every connected backend, then collect current Root Contexts for all online,
-   credential-matched entries. The Context Matrix groups only these observed facts and retains no
-   machine-wide completeness claim.
+   credential-matched entries. Preserve typed Root errors and exact per-source Reference provenance. The
+   Context Matrix groups only these observed facts and retains no machine-wide completeness claim.
 
 **Red / green / mutation resistance:** with two online tabs, an unselected first tab must not receive a
-mutation or credential intended for B. Removing the selection guard must fail the real action-owner test.
-A gated tab with its matched fragment credential must become online; the same tab without it must be
-`authentication-required`, not offline.
+mutation or credential intended for B. Replacing B at the same locator must retire the old generation.
+Removing the exact tab/generation guard must fail the real action-owner test. A two-source fixture must
+distinguish Root error from stale/loading and render both sources' Reference provenance.
 
 ### P3: Observable Store mutation lifecycle
 
@@ -119,11 +138,12 @@ Change's reviewer for gate evidence and tracker reconciliation; manager for fina
 
 1. Do not repair the independent loading Change incidentally. Require its focused regression proof and
 passing affected server tests before P1--P4 broad gates run.
-2. After P1--P4 are independently accepted, run the full local gates once, update PR evidence, and
-reconcile the 22 old tracker entries only with explicit completed-proof links.
-3. The manager then performs the real end-to-end walkthroughs recorded below. Only after that may strict
-OpenSpec verification, merge approval, old/new archive consideration, and optional release sequencing
-begin.
+2. Reconcile the 22 old tracker entries by exact proof link or explicit transfer. After manager
+confirmation, strict validation may archive the old Change as partial/superseded without changing its
+unchecked facts; it has no delta specs to sync. This is history management, not a completion claim.
+3. After P1--P4 are independently accepted, run the full local gates once and update PR evidence. The
+manager then performs the real end-to-end walkthroughs. Only after that may this corrective Change verify,
+merge, archive, and enter optional release sequencing.
 
 ## Capability Impact
 
@@ -154,6 +174,9 @@ begin.
 | Host identity implementation regresses multi-project grouping. | Make identity injectable in server tests; forbid projectDir/port/PID inputs and test its equality law explicitly. |
 | A lifecycle stream becomes a competing client Store database. | The stream is an operation ledger only; Store inventory/doctor/context remain push-invalidation then typed pull projections. |
 | Auto-launch credential leaks to another configured backend. | Associate it with one normalized locator; test two backend URLs and assert only the matched request carries Authorization. |
+| Public shell admission is mistaken for data authorization. | Exempt only immutable shell entry assets; keep every data/file/RPC/WS/PTY/notification boundary gated and prove missing credentials cannot reach them. |
+| Browser transport repair covers tRPC but leaves a raw fetch/resource bypass. | Inventory every Web network path first and route protected traffic through one credential supplier; record any deliberately public asset path explicitly. |
+| Same-locator tab replacement inherits old authority. | Join on exact tab identity plus observation generation and make the real Store action mutation test fail when either check is removed. |
 | Loading-change regression is misattributed or silently masked. | Run its exact failing tests before and after its own correction; record stdout and do not weaken timeouts/assertions to pass. |
 | Owner walkthrough waits on unrelated visual work. | Record only required behavioral checks here; visual/loading redesign remains in `refine-live-projection-experience`. |
 

@@ -57,9 +57,10 @@ The Change owns the following fixed points:
 - one owner-per-fixed-point implementation sequence and a final manual walkthrough ledger owned by the
   manager.
 
-`target-openspec-cli-16-line` remains frozen and unarchived. This Change carries its remaining 8.x--11.x
-delivery obligations by reference; after proof is complete, its tracker may be reconciled with explicit
-links. `accelerate-live-projection-loading` / `refine-live-projection-experience` remain separate work:
+`target-openspec-cli-16-line` remains frozen until its 22 unchecked items are mapped by proof or explicit
+transfer. With manager confirmation it may then be archived as an honestly partial/superseded record;
+unchecked items and warnings remain unchanged and the archive is not a completion claim.
+`accelerate-live-projection-loading` / `refine-live-projection-experience` remain separate work:
 their known server emission regression is a hard delivery blocker but is not silently folded into this
 Change's implementation scope.
 
@@ -73,8 +74,8 @@ Change's implementation scope.
   performance optimization in this Change.
 - Do not claim user-facing desktop, mobile, multi-tab, static, WebSocket, or mutation walkthrough
   acceptance from Vitest, component Playwright, Storybook, source inspection, or CI alone.
-- Do not archive the old Change, merge the branch, release packages, or mark an unchecked old task
-  complete merely because a replacement task list exists.
+- Do not archive the old Change before its transfer ledger and manager confirmation; do not merge the
+  branch, release packages, or mark an unchecked old task complete merely because a replacement exists.
 
 ## Acceptance Boundary
 
@@ -88,5 +89,5 @@ It is implementation-complete only when all of the following are true:
   `pnpm test:browser:ci`, and fresh static SSG checks pass on the candidate;
 - the loading-change regression is independently repaired and no longer blocks those gates;
 - the manager records the final real-browser walkthroughs in this Change; and
-- the old Change's migrated entries are reconciled honestly, then both Changes follow strict
-  verify/archive and protected-branch delivery rules.
+- the old Change's migrated entries are reconciled honestly and may use the documented partial archive;
+  this corrective Change still follows complete verify/archive and protected-branch delivery rules.

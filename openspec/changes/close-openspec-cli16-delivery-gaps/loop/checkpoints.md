@@ -35,16 +35,20 @@ Focused reviewer acceptance is a hard predecessor of the next package and every 
 - [x] 2.4 Authenticate `info.connectionParams` in tRPC context before any guarded procedure/subscription; preserve unguarded pass-through and non-browser Authorization-header behavior.
 - [x] 2.5 Prove valid, missing, invalid, and reconnecting WS/HTTP/PTY credentials at production boundaries; remove the context gate and show the same protected WS case fails.
 - [x] 2.6 Bind a consumed launch credential to the parsed launch API locator before URL stripping; no locator means no arbitrary tab assignment.
-- [x] 2.7 Extend reachability with `authentication-required`; prove matching credentials reach health/HTTP/WS and unmatched/missing credentials do not leak, persist, or become `offline`.
-- [x] 2.8 Obtain focused reviewer acceptance for P1 before P2/P3/P4 or broad gates.
+- [x] 2.7 Extend App-native reachability and HTTP clients with `authentication-required` and exact locator-scoped credentials; this evidence does not claim that an embedded Project Web can load or authenticate its own transports.
+- [ ] 2.8 Deliver the exact generated/manual Access Gate credential from CLI launch into both Direct Web and App launch fragments, and from the App's locator owner into only the matching Project Web iframe bootstrap.
+- [ ] 2.9 Separate the loadable static Project Web shell from protected backend data surfaces so gated navigation can start without granting API, file, tRPC, WebSocket, PTY, or notification access.
+- [ ] 2.10 Make Project Web consume and strip its credential before rendering, then supply it from one in-memory owner to tRPC HTTP, tRPC WS connection params, PTY auth-first, and every raw protected fetch/resource path without persistence or cross-locator leakage.
+- [ ] 2.11 Prove a real gated Direct/App Project Web fixture reaches one protected HTTP RPC, subscription, and PTY operation; missing/invalid credentials stay rejected, and removing each real transport supplier makes its named fixture fail.
+- [ ] 2.12 Obtain focused reviewer acceptance for the complete P1 browser delivery chain before P2/P3/P4 or broad gates.
 
 ## 3. P2 App Connection and Context Projection
 
-- [ ] 3.1 Add explicit selected tab/environment state without persisting credentials; no environment-scoped read/mutation may fall back to the first online backend.
-- [ ] 3.2 Make per-API-locator session credentials available only to that connection's health, HTTP, and WS clients; prove two backend URLs never receive each other's Authorization header.
-- [ ] 3.3 Collect health and Root Context from every currently online, protocol-compatible connection, retaining stale/error/credential truth per source.
-- [ ] 3.4 Make Environment Center and Context Matrix group only observed backend-issued `envUri`, Store, Root, and Reference facts; retain the explicit non-machine-wide-completeness boundary.
-- [ ] 3.5 Prove a selected B action cannot dispatch to online A, and that removing the selection guard turns the same real owner fixture red.
+- [ ] 3.1 Bind selected environment authority to the exact selected `tabId` and its current observation generation, not only a matching normalized locator; no duplicate/replaced tab may inherit another tab generation's authority.
+- [ ] 3.2 Keep App-native per-locator credentials isolated across health and hosted HTTP clients; Project Web transport delivery is owned and accepted separately by 2.8--2.12.
+- [ ] 3.3 Collect health and Root Context from every retained, protocol-compatible connection while preserving source-labelled loading, typed Root error diagnostics, stale evidence, and credential state.
+- [ ] 3.4 Make Environment Center and Context Matrix group only observed backend-issued `envUri`, Store, Root, and exact Reference provenance; retain the explicit non-machine-wide-completeness boundary and grouped connected-project evidence.
+- [ ] 3.5 Prove a selected B action cannot dispatch using A or a retired same-locator B generation; removing the exact `tabId`/generation guard must turn the same real action-owner fixture red.
 - [ ] 3.6 Obtain focused reviewer acceptance for P2 before P3/P4 or broad gates.
 
 ## 4. P3 Observable Store Mutation Ledger
@@ -86,6 +90,6 @@ Focused reviewer acceptance is a hard predecessor of the next package and every 
 ## 7. Old Change Reconciliation and Delivery
 
 - [ ] 7.1 Map each remaining `target-openspec-cli-16-line` item (8.6, 8.14; 9.1--9.3, 9.7--9.10, 9.13; 10.8--10.11, 10.14--10.15; 11.3--11.9) to exact P1--P5 evidence or retain it openly unresolved.
-- [ ] 7.2 Update the old tracker/implementation notes only after its linked proof exists; never mark a task done merely because it migrated to this Change.
-- [ ] 7.3 Run strict OpenSpec verification for both Changes after all tasks/evidence are complete. Archive neither while a task, gate, walkthrough, PR, or merge requirement is outstanding.
-- [ ] 7.4 Merge only through protected-branch approval after current PR checks and the manager walkthrough pass. Ask about release only after merge; follow changeversion/release automation only if explicitly approved.
+- [ ] 7.2 Write an explicit supersession ledger into the old tracker/implementation notes. Keep transferred or abandoned items unchecked unless linked proof actually completes them.
+- [ ] 7.3 Strictly validate both Changes, then archive `target-openspec-cli-16-line` as an explicitly partial/superseded Change after manager confirmation. It has no delta specs to sync; archive warnings and `109/131` history remain part of the record and never imply completion.
+- [ ] 7.4 Verify and archive this corrective Change only after its own code, focused/full gates, manager walkthrough, protected merge, and reconciliation are complete. Ask about release only after merge; follow changeversion/release automation only if explicitly approved.
