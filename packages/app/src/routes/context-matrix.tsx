@@ -8,6 +8,7 @@
 import { Columns3 } from 'lucide-react'
 import { EmptyView, ErrorView, LoadingView } from '../components/state-views'
 import { StoreManagerShell } from '../components/store-manager-shell'
+import { useActiveBackend } from '../lib/use-active-backend'
 import { useEnvironmentObservation } from '../lib/use-environment'
 import type { ProjectContextObservation } from '../types/root-context'
 
@@ -24,7 +25,23 @@ import type { ProjectContextObservation } from '../types/root-context'
  *               按 envUri × storeId join。
  */
 export function ContextMatrixRoute() {
-  const { projectContexts, isLoading, error } = useEnvironmentObservation()
+  const { active } = useActiveBackend()
+  const observations = active?.health
+    ? [{ apiBaseUrl: active.apiBaseUrl, health: active.health }]
+    : []
+  const rootContextObservations = active?.health
+    ? [
+        {
+          apiBaseUrl: active.apiBaseUrl,
+          health: active.health,
+          rootContext: active.rootContext,
+        },
+      ]
+    : []
+  const { projectContexts, isLoading, error } = useEnvironmentObservation(
+    observations,
+    rootContextObservations
+  )
 
   let body
   if (isLoading && projectContexts.length === 0) {

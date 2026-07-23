@@ -12,6 +12,7 @@
  *  - Hosted 封套可加 provenance，但不替换或重解释上游 payload 事实。
  *  - App 是 observed-only 投影；不做 Store Git clone/pull/push/sync，不做文件系统扫描。
  */
+import type { RootContextState } from '@openspecui/core'
 import type { StoreDoctorResult, StoreListResult } from '@openspecui/core/store-types'
 
 /** Minimal REST shapes returned by the backend Store feature envelope. */
@@ -108,4 +109,20 @@ export async function fetchBackendStoreInspector(
     }
   }
   return data as BackendStoreDoctorEnvelope
+}
+
+/** Fetch the project Root Context (`openspec context --json` joined with Doctor) for the Context Matrix. */
+export async function fetchBackendRootContext(
+  options: BackendClientOptions
+): Promise<RootContextState | null> {
+  const fetchImpl = options.fetchImpl ?? fetch
+  const response = await fetchImpl(`${normalizeBaseUrl(options.apiBaseUrl)}/trpc/rootContext.get`, {
+    cache: 'no-store',
+    headers: { accept: 'application/json', ...authHeaders(options.credential) },
+  })
+  if (!response.ok) return null
+  const envelope = (await response.json()) as { result?: { data?: unknown } }
+  const data = envelope.result?.data
+  if (!data || typeof data !== 'object') return null
+  return data as RootContextState
 }

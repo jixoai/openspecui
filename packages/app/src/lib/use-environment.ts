@@ -6,7 +6,12 @@
  * Original request (2026-07-15): "前端缺少的东西你可以通过注释补充。"
  * Migration (2026-07-23): wired to the backend health response (envUri/capabilities now emitted).
  */
-import { asEnvUri, type HostedBackendHealthResponse, type StoreCapability } from '@openspecui/core'
+import {
+  asEnvUri,
+  type HostedBackendHealthResponse,
+  type RootContextState,
+  type StoreCapability,
+} from '@openspecui/core'
 import type { StoreCapabilitySet } from '../types/capabilities'
 import type { HostedEnvironment, ProjectContextObservation } from '../types/root-context'
 
@@ -60,13 +65,80 @@ export function deriveEnvironments(observations: OnlineBackendObservation[]): Ho
   return [...byEnvUri.values()]
 }
 
+/** One backend's Root Context used to derive its project Context observation. */
+export interface BackendRootContextObservation extends OnlineBackendObservation {
+  rootContext: RootContextState | null
+}
+
+/** Map a CLI Doctor reference diagnostic severity to a neutral Reference state. */
+function referenceStateFor(diagnostics: { severity: string }[]): {
+  state: ProjectContextObservation['references'][number]['state']
+  note?: string
+} {
+  const hasError = diagnostics.some((d) => d.severity === 'error')
+  if (hasError) {
+    const notes = diagnostics
+      .map((d) => ('message' in d && typeof d.message === 'string' ? d.message : ''))
+      .filter(Boolean)
+    return { state: 'unhealthy', note: notes.join('; ') || undefined }
+  }
+  return { state: 'healthy' }
+}
+
+/**
+ * Derive observed project Context observations from online backends' Root Contexts. Observed-only:
+ * never claims machine-wide completeness. An offline backend is unknown unless a stale snapshot is shown.
+ */
+export function deriveProjectContexts(
+  observations: BackendRootContextObservation[]
+): ProjectContextObservation[] {
+  const contexts: ProjectContextObservation[] = []
+  for (const observation of observations) {
+    const envUriValue = observation.health.envUri
+    if (!envUriValue) continue
+    const root = observation.rootContext
+    const ready = root?.state === 'ready' && root.data ? true : false
+    const data = ready
+      ? (
+          root as {
+            data: {
+              planningRoot?: { source?: string; store_id?: string } | null
+              storeId?: string | null
+              references?: { store_id: string; status?: { severity: string; message?: string }[] }[]
+            }
+          }
+        ).data
+      : null
+    const references = (data?.references ?? []).map((reference) => {
+      const state = referenceStateFor(reference.status ?? [])
+      return {
+        storeId: reference.store_id,
+        state: state.state,
+        note: state.note,
+      }
+    })
+    contexts.push({
+      envUri: asEnvUri(envUriValue),
+      apiBaseUrl: observation.apiBaseUrl,
+      projectName: observation.health.projectName,
+      planningRoot: undefined,
+      rootSource: data?.planningRoot?.source as ProjectContextObservation['rootSource'] | undefined,
+      storeId: data?.storeId ?? data?.planningRoot?.store_id ?? undefined,
+      references,
+      observedAt: Date.now(),
+    })
+  }
+  return contexts
+}
+
 /** Read the current backend-issued environment observation. With no online backends, returns empty. */
 export function useEnvironmentObservation(
-  observations: OnlineBackendObservation[] = []
+  observations: OnlineBackendObservation[] = [],
+  rootContextObservations: BackendRootContextObservation[] = []
 ): EnvironmentObservation {
   return {
     environments: deriveEnvironments(observations),
-    projectContexts: [],
+    projectContexts: deriveProjectContexts(rootContextObservations),
     isLoading: false,
     error: null,
   }

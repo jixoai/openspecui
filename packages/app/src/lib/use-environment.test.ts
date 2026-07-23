@@ -8,7 +8,11 @@
  */
 import type { HostedBackendHealthResponse } from '@openspecui/core'
 import { describe, expect, it } from 'vitest'
-import { canRenderStoreInspector, deriveEnvironments } from './use-environment'
+import {
+  canRenderStoreInspector,
+  deriveEnvironments,
+  deriveProjectContexts,
+} from './use-environment'
 
 function health(envUri: string | undefined, capabilities?: string[]): HostedBackendHealthResponse {
   return {
@@ -65,5 +69,49 @@ describe('canRenderStoreInspector', () => {
     expect(canRenderStoreInspector(['stores.inspect'])).toBe(true)
     expect(canRenderStoreInspector(['stores.mutate'])).toBe(false)
     expect(canRenderStoreInspector(undefined)).toBe(false)
+  })
+})
+
+describe('deriveProjectContexts', () => {
+  it('projects observed references from a ready Root Context without claiming completeness', () => {
+    const rootContext = {
+      state: 'ready',
+      data: {
+        planningRoot: { source: 'store', store_id: 'owned' },
+        storeId: 'owned',
+        references: [
+          { store_id: 'team', status: [] },
+          {
+            store_id: 'broken',
+            status: [{ severity: 'error', code: 'x', message: 'unresolved' }],
+          },
+        ],
+      },
+    }
+    const contexts = deriveProjectContexts([
+      {
+        apiBaseUrl: 'http://localhost:3100',
+        health: health('openspecui-env://1/aaa', ['contexts.inspect']),
+        rootContext,
+      },
+    ])
+    expect(contexts).toHaveLength(1)
+    const ctx = contexts[0]!
+    expect(ctx.storeId).toBe('owned')
+    expect(ctx.references).toEqual([
+      { storeId: 'team', state: 'healthy', note: undefined },
+      { storeId: 'broken', state: 'unhealthy', note: 'unresolved' },
+    ])
+  })
+
+  it('skips backends without an envUri and never claims machine-wide completeness', () => {
+    const contexts = deriveProjectContexts([
+      {
+        apiBaseUrl: 'http://localhost:3100',
+        health: health(undefined, []),
+        rootContext: null,
+      },
+    ])
+    expect(contexts).toEqual([])
   })
 })

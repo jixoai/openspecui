@@ -543,9 +543,10 @@ The independent browser attempt confirms the desktop source control and URL/quer
 - [x] 8.4 Capability vocabulary is limited to `stores.inspect`, `stores.mutate`, and `contexts.inspect` and carries no permission meaning
 - [x] 8.5 Inventory, Inspector, and project Context envelopes preserve upstream Store list/doctor/context facts and provenance
 - [ ] 8.6 Context Matrix joins only currently observed online project contexts by `envUri` and Store id
-  - Partial: App derives environments by envUri, but the Context Matrix route (`context-matrix.tsx`) is
-    still a skeleton; per-project `openspec context --json` Context observations are not yet fetched or
-    joined. Needs the project-Context fetch + join and a browser walkthrough.
+  - Wired (code-side): `deriveProjectContexts` joins each online backend's Root Context references by
+    envUri × storeId; the Context Matrix route consumes it. `use-environment` 6/6 unit tests prove the
+    join + neutral "observed references" copy. Still needs owner browser walkthrough across multiple
+    online backends before final acceptance.
 - [x] 8.7 Store mutation lifecycle is `accepted -> running -> succeeded | failed`, with lost terminal truth reported as `indeterminate`
 - [x] 8.8 Request ids deduplicate starts within one backend process; V1 exposes no Cancel and no automatic retry
 - [x] 8.9 `--auth` generates a high-entropy Bearer credential and prints the complete Authorization header
@@ -594,8 +595,9 @@ The independent browser attempt confirms the desktop source control and URL/quer
     setup/register/unregister/remove controls are still disabled no-ops pending the `stores.mutate`
     backend RPC + App mutation wiring; needs that + owner walkthrough.
 - [ ] 9.7 Context Matrix owns observed project-to-Root/Reference relationships and never claims machine-wide completeness
-  - Skeleton route only; project-Context fetch/join not implemented (depends on 8.6). Needs implementation
-    + owner walkthrough.
+  - Wired (code-side): the route renders observed project-to-Root/Reference relationships with neutral
+    "observed only — not a machine-wide index" copy and "no reference currently observed" cells. Proven
+    via `deriveProjectContexts` unit tests. Needs owner browser walkthrough before final acceptance.
 - [ ] 9.8 Inventory provides dense wide-screen registry scanning without becoming the only navigation model
   - Skeleton route exists; Inventory data is fetched via `useStoreData` but the wide-screen scanning UX
     needs owner walkthrough.

@@ -115,7 +115,7 @@ function ConnectionRow({
   onRemove,
 }: {
   tab: HostedShellTab
-  reachability: 'checking' | 'online' | 'offline' | undefined
+  reachability: 'checking' | 'online' | 'offline' | 'unsupported' | undefined
   onRemove: () => void
 }) {
   return (
@@ -154,7 +154,7 @@ function getHostLabel(tab: HostedShellTab): string {
 
 /** 把后端可达性映射成统一 StatusDot variant（语义化状态徽章共用）。 */
 function reachabilityToVariant(
-  reachability: 'checking' | 'online' | 'offline' | undefined
+  reachability: 'checking' | 'online' | 'offline' | 'unsupported' | undefined
 ): 'healthy' | 'neutral' | 'pending' {
   if (reachability === 'online') return 'healthy'
   if (reachability === 'offline') return 'neutral'
@@ -164,7 +164,7 @@ function reachabilityToVariant(
 function ReachabilityBadge({
   reachability,
 }: {
-  reachability: 'checking' | 'online' | 'offline' | undefined
+  reachability: 'checking' | 'online' | 'offline' | 'unsupported' | undefined
 }) {
   const label =
     reachability === 'online'
