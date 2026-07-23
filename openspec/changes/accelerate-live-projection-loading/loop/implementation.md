@@ -197,3 +197,11 @@ src/projection-work/registry.test.ts src/projection-work/runtime.test.ts src/pro
   unit lane also reported jsdom canvas support warnings; both commands exited successfully.
 - This is automated preparation evidence only. The owner still performs the final Dashboard and Changes browser
   walkthrough; this Change is neither merged, archived, nor released here.
+
+## Delivery Record (2026-07-23 Asia/Shanghai)
+
+- `95bc2b9 feat: accelerate live projection loading` is the independently reviewable implementation commit. It
+  contains the bounded Projection Work owners, Root snapshot gateway, Dashboard regions, progressive Changes,
+  demand-driven OPSX, benchmarks, tests, package changeset, and the matching 5.2 verification record.
+- The following docs-only checkpoint commit closes 5.4. Neither commit merges, archives, releases, pushes, or
+  substitutes automated preparation evidence for the owner's final browser walkthrough.

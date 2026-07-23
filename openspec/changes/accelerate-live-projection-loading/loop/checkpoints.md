@@ -43,7 +43,9 @@ Original request (2026-07-23): "请你深入调查，给出一份持有客观证
 - [x] 5.1 Re-run the controlled benchmark and record before/after phase distributions and event order for every implemented package.
 - [x] 5.2 Run checked focused Vitest, affected component-level Playwright fixtures, format, lint, typecheck, and scoped SSG evidence where applicable. `pnpm test:ci`, `pnpm test:browser:ci`, format, lint, typecheck, SSG, and strict Change validation passed on 2026-07-23 Asia/Shanghai; Dashboard/Changes final browser acceptance remains owner-only.
 - [x] 5.3 Keep the owner-only final Dashboard and Changes browser/visual walkthrough separate from automated preparation evidence.
-- [ ] 5.4 Deliver implementation and matching checkpoint evidence in independently reviewable commits; do not merge, archive, or release until the owner approves.
+- [x] 5.4 Deliver implementation and matching checkpoint evidence in independently reviewable commits. Implementation
+      is `95bc2b9 feat: accelerate live projection loading`; this docs-only checkpoint record is the separate
+      delivery evidence. Do not merge, archive, or release until the owner approves.
 
 ## 6. Per-Package Evidence Contracts
 
