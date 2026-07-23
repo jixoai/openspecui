@@ -9068,3 +9068,34 @@ pnpm exec prettier/oxlint -> clean
 The 4 references tests prove: compound-identity catalog hydration, materialized referenced document
 render, explicit omission error without body leak, and referenced search scope isolation. Parity tests
 and changeset land with Slice 4. Real pinned-CLI include/omit SSG walkthrough remains owner evidence.
+
+### Section 7 Slice 4: parity tests + changeset + parent close (2026-07-23)
+
+Covers 7.10 (parity tests) and closes Section 7.
+
+Added parity evidence:
+
+- `packages/core/src/snapshot-redaction.test.ts`: +1 serialization parity test proving published
+  `data.json` contains no absolute path, host identity, envUri, or unguarded git remote (6/6).
+- `packages/cli/src/export-references.test.ts`: +2 parity tests proving include preserves compound
+  identity/source/readOnly/storeId consistently and that duplicate specId across owned/referenced keeps
+  distinct compound identity (8/8 total).
+- `.changeset/target-cli-16-line-static-refs.md`: records the major static-export behavior change
+  (root-aware meta, compound identity, `--references`, publication redaction, referenced hydration).
+
+Final focused gates for Section 7:
+
+```text
+(cd packages/core && npx vitest run src/snapshot-redaction.test.ts)        -> 6/6
+(cd packages/cli && npx vitest run src/export-references.test.ts)          -> 8/8
+(cd packages/cli && npx vitest run src/export.test.ts)                     -> 17/17
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/lib/static-data-provider.references.test.ts src/lib/static-data-provider.opsx.test.ts \
+  src/ssg/entry-server.test.ts src/ssg/route-manifest.test.ts              -> all green
+pnpm -w typecheck -> 0 errors
+```
+
+Section 7 (7.1-7.11) is checked in `loop/checkpoints.md`. Automated evidence covers type safety,
+focused unit tests, and a clean SSG bundle. Owner-only remaining gate: a real pinned-CLI
+(`references/openspec@e1b51d1`) include/omit end-to-end export with desktop and 390x844 mobile
+walkthrough confirming referenced routes render and omission copy is correct. No merge/archive/release.

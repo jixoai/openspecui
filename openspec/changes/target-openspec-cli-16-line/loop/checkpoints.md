@@ -508,17 +508,27 @@ The independent browser attempt confirms the desktop source control and URL/quer
 
 ## 7. Static Export Parity and Privacy
 
-- [ ] 7.1 `ExportSnapshot` carries Root provenance, compound Spec identity, source/read-only state, observation time, and Reference policy state
-- [ ] 7.2 Snapshot generation resolves the active planning root through CLI instead of assuming `OpenSpecAdapter(projectDir)` is root truth
-- [ ] 7.3 Export CLI parses `--references=include|omit` with yargs and requires a choice when effective References exist
-- [ ] 7.4 Include enumerates direct Reference Specs through `list --specs --store --json` and materializes bodies through `show --type spec --store --json`
-- [ ] 7.5 Include never follows transitive References or serializes referenced changes, archives, config, Git, registry, or unrelated Stores
-- [ ] 7.6 Any Reference resolution/list/show failure exits nonzero before a new partial snapshot/site is published
-- [ ] 7.7 Omit exports owned Specs and a visible omission state without unpublished Store ids or Spec metadata
-- [ ] 7.8 Snapshot serialization removes absolute project/Store paths, data-home/registry paths, remotes, `envUri`, host identity, and path-bearing raw diagnostics
-- [ ] 7.9 Static provider, search, dashboard, detail caches, and SSG enumeration hydrate the shared Spec Catalog contract
-- [ ] 7.10 Live/static parity tests cover Owned, Referenced, duplicate ids, include, omit, missing policy, failure atomicity, and redaction
-- [ ] 7.11 Fresh SSG output renders compound routes correctly after cleaning stale artifacts
+- [x] 7.1 `ExportSnapshot` carries Root provenance, compound Spec identity, source/read-only state, observation time, and Reference policy state
+- [x] 7.2 Snapshot generation resolves the active planning root through CLI instead of assuming `OpenSpecAdapter(projectDir)` is root truth
+- [x] 7.3 Export CLI parses `--references=include|omit` with yargs and requires a choice when effective References exist
+- [x] 7.4 Include enumerates direct Reference Specs through `list --specs --store --json` and materializes bodies through `show --type spec --store --json`
+- [x] 7.5 Include never follows transitive References or serializes referenced changes, archives, config, Git, registry, or unrelated Stores
+- [x] 7.6 Any Reference resolution/list/show failure exits nonzero before a new partial snapshot/site is published
+- [x] 7.7 Omit exports owned Specs and a visible omission state without unpublished Store ids or Spec metadata
+- [x] 7.8 Snapshot serialization removes absolute project/Store paths, data-home/registry paths, remotes, `envUri`, host identity, and path-bearing raw diagnostics
+- [x] 7.9 Static provider, search, dashboard, detail caches, and SSG enumeration hydrate the shared Spec Catalog contract
+- [x] 7.10 Live/static parity tests cover Owned, Referenced, duplicate ids, include, omit, missing policy, failure atomicity, and redaction
+- [x] 7.11 Fresh SSG output renders compound routes correctly after cleaning stale artifacts
+
+  Section 7 closed 2026-07-23 across four slices (`3e9f12f`, `480b7e8`, `713ea47`, plus this parity
+  slice). `ExportSnapshot` is root-aware and privacy-safe; `--references include|omit` materializes or
+  omits direct Reference Specs through official CLI list/show with atomic failure; publication redaction
+  strips absolute paths/host identity and gates the Git remote behind include; the static
+  provider/search/SSG hydrate compound referenced routes. Parity evidence: core `snapshot-redaction`
+  6/6 (incl. forbidden-value serialization), CLI `export-references` 8/8 (materialization, atomic fail,
+  omit, route-collision identity), CLI `export` 17/17 regression, web `static-data-provider.references`
+  4/4 + opsx 8/8 + ssg entry/route-manifest, and a clean `build:ssg`. Real pinned-CLI include/omit SSG
+  desktop/mobile walkthrough remains owner-only evidence; automated coverage stops at focused Vitest.
 
 ## 8. Hosted Environment and Access Protocol
 

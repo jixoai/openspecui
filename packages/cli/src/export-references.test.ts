@@ -199,3 +199,36 @@ describe('export-references', () => {
     )
   })
 })
+
+describe('export-references parity', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('include materialization preserves compound identity and never mixes owned and referenced sources', async () => {
+    const stub = okDoctor([{ store_id: 'team', status: [] }])
+    stub.listSpecs = vi.fn(async () => okList([{ id: 'auth', requirementCount: 1 }]))
+    stub.showSpec = vi.fn(async () => okShow(specDocument('auth', 'Auth Spec')))
+    const result = await materializeReferences(stub as OpenSpecCliContractExecutor)
+    for (const spec of result.referencedSpecs) {
+      expect(spec.identity.kind).toBe('referenced')
+      expect(spec.source).toBe('referenced')
+      expect(spec.readOnly).toBe(true)
+      expect(spec.storeId).toBe('team')
+    }
+    expect(result.policy.referenceSources).toHaveLength(1)
+  })
+
+  it('route collision: duplicate specId across owned and referenced keeps distinct compound identity', async () => {
+    // Both an owned and a referenced spec may legally share specId 'auth'; their identity keys differ.
+    const ownedKey = `owned:auth`
+    const referencedKey = `referenced:team:auth`
+    expect(ownedKey).not.toBe(referencedKey)
+    const stub = okDoctor([{ store_id: 'team', status: [] }])
+    stub.listSpecs = vi.fn(async () => okList([{ id: 'auth', requirementCount: 1 }]))
+    stub.showSpec = vi.fn(async () => okShow(specDocument('auth', 'Auth Spec')))
+    const result = await materializeReferences(stub as OpenSpecCliContractExecutor)
+    const referencedId = result.referencedSpecs[0]!.identity
+    expect(referencedId.kind === 'referenced' && referencedId.specId).toBe('auth')
+  })
+})

@@ -145,3 +145,38 @@ describe('redactSnapshotForPublication', () => {
     expect(snapshot.meta.root?.planningRootPath).toBe('/private/tmp/openspecui/project')
   })
 })
+
+describe('publication parity (Section 7.8/7.10)', () => {
+  it('serialized published data.json contains no forbidden absolute paths, envUri, or remote host', () => {
+    const snapshot = baselineSnapshot({
+      git: {
+        defaultBranch: 'main',
+        repositoryUrl: 'https://github.com/owner/repo',
+        latestCommitTs: null,
+        recentCommits: [],
+      },
+      opsx: {
+        schemas: [],
+        schemaDetails: {},
+        schemaResolutions: {
+          default: {
+            name: 'default',
+            source: 'project',
+            path: '/private/tmp/openspecui/project/openspec/schemas/default',
+            shadows: [],
+          },
+        },
+        templates: {},
+        changeMetadata: {},
+      },
+    })
+    const published = JSON.stringify(redactSnapshotForPublication(snapshot))
+    // No absolute filesystem path, no host identity, no envUri, no registry/data-home path.
+    expect(published).not.toMatch(/\/private\/tmp/)
+    expect(published).not.toMatch(/\/Users\//)
+    expect(published).not.toMatch(/[A-Za-z]:\\/)
+    expect(published).not.toContain('envUri')
+    // Git remote is cleared because policy is not include.
+    expect(published).not.toContain('github.com/owner/repo')
+  })
+})
