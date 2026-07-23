@@ -64,7 +64,12 @@ describe('Export Functions', () => {
       expect(snapshot.meta).toBeDefined()
       expect(snapshot.meta.timestamp).toBeDefined()
       expect(snapshot.meta.version).toBeDefined()
-      expect(snapshot.meta.projectDir).toBe(testProjectDir)
+      // The absolute project path is intentionally not retained; only a display-safe name survives.
+      expect(snapshot.meta.projectName).toMatch(/\S/)
+      expect(snapshot.meta).not.toHaveProperty('projectDir')
+      expect(snapshot.meta.observedAt).toBeGreaterThan(0)
+      expect(snapshot.meta.root).toBeDefined()
+      expect(snapshot.meta.referencePolicy).toEqual({ kind: 'none' })
       expect(new Date(snapshot.meta.timestamp).getTime()).toBeGreaterThan(0)
     })
 

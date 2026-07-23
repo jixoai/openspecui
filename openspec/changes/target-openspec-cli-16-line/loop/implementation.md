@@ -8992,3 +8992,40 @@ the `--references=include|omit` flag, direct Reference list/show materialization
 `redactSnapshotForPublication` into the publish path. Slice 3 migrates the static provider/SSG enumeration
 to compound referenced routes. No SSG rebuild, parity tests, or changeset are claimed in Slice 1; this
 slice keeps the whole workspace type-safe so later slices build on a compiling baseline.
+
+### Section 7 Slice 2: CLI --references flag + direct Reference materialization + atomic fail (2026-07-23)
+
+Covers 7.2 (CLI root resolution), 7.3 (`--references=include|omit` + mandatory policy), 7.4 (direct
+list/show materialization), 7.5 (no transitivity), 7.6 (atomic failure), 7.7 (omit without leaks).
+
+Changed contracts:
+
+- `packages/cli/src/export-references.ts` (new): `materializeReferences(contracts)` enumerates direct
+  References from `doctor --json`, lists each Store via `list --specs --store --json`, and shows each
+  body via `show <id> --type spec --store --json`. Any doctor/list/show failure or reference-level
+  diagnostic error throws before any body is published (atomic). Never walks transitive References or
+  serializes referenced changes/archives/config/Git/registry. `resolveOmitPolicy` records the observed
+  source count without bodies; `hasEffectiveReferences` gates the mandatory-policy requirement.
+- `packages/cli/src/export.ts`: `generateSnapshot(projectDir, options?)` resolves root provenance via
+  `context --json` (path/source/store_id), enforces the mandatory `--references` policy when References
+  exist, merges materialized referenced Specs (compound identity), and runs `redactSnapshotForPublication`
+  before returning. `ExportOptions`/`GenerateSnapshotOptions` add `references`; `exportJson`/`exportHtml`
+  thread it through.
+- `packages/cli/src/cli.ts`: yargs adds `--references <include|omit>` (choices); passed to `exportStaticSite`.
+
+Focused evidence:
+
+```text
+npx vitest run src/export-references.test.ts src/export.test.ts (packages/cli)
+-> 2 files / 23 tests passed (16 export regression incl. updated meta assertions + 6 references unit)
+```
+
+The 6 references unit tests use a typed fake `OpenSpecCliContractExecutor` and prove: full materialization
+with exact list/show calls, atomic failure on unresolved reference diagnostic, atomic failure on listSpecs
+failure (showSpec never called), atomic failure on showSpec failure, omit policy source-count, and
+reference-presence detection.
+
+Full workspace typecheck (15 packages), Prettier, oxlint (0 warnings/errors) all pass. SSG rebuild,
+parity tests, and changeset land with Slice 3/4. The legacy no-CLI fixture still exercises owned-only
+snapshots (`referencePolicy: none`); a real pinned-CLI include/omit end-to-end run is owner walkthrough
+evidence.

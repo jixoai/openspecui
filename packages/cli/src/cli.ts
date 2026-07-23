@@ -5,8 +5,8 @@ import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import yargs from 'yargs'
-import type { ExportFormat } from './export.js'
 import { getCliArgs } from './argv.js'
+import type { ExportFormat } from './export.js'
 import { exportStaticSite } from './export.js'
 import { buildHostedAppLaunchUrl, resolveEffectiveHostedAppBaseUrl } from './hosted-app.js'
 import { startServer } from './index.js'
@@ -219,6 +219,13 @@ async function main(): Promise<void> {
             describe: 'Host for the preview server (used with --open)',
             type: 'string',
           })
+          .option('references', {
+            describe:
+              'Direct Reference export policy. Required when effective References exist: ' +
+              "'include' materializes direct Reference Specs (complete-or-fail), 'omit' excludes them",
+            type: 'string',
+            choices: ['include', 'omit'] as const,
+          })
       },
       async (argv) => {
         const projectDir = resolve(originalCwd, argv.dir || '.')
@@ -236,6 +243,7 @@ async function main(): Promise<void> {
             open: shouldOpen,
             previewPort,
             previewHost: argv['preview-host'],
+            references: argv.references as 'include' | 'omit' | undefined,
           })
 
           if (!shouldOpen) {
