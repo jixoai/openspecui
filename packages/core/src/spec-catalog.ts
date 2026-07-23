@@ -108,10 +108,18 @@ export interface ReferencedSpecDocumentProjection {
   source: 'referenced'
   readOnly: true
   state: 'ready' | 'error'
-  spec: null
-  rawMarkdown: null
+  /**
+   * Live mode never parses a referenced Spec body; static mode materializes it through
+   * `--references include` and exposes the parsed body here as a ready projection.
+   */
+  spec: Spec | null
+  /**
+   * Live mode never returns referenced raw markdown; static mode exposes the materialized
+   * source when the snapshot carried the referenced Spec body.
+   */
+  rawMarkdown: string | null
   upstream: CliShowSpecDocument | null
-  evidence: SpecCommandEvidence
+  evidence: SpecCommandEvidence | null
 }
 
 /** Source-aware owned/referenced Spec document projection union. */

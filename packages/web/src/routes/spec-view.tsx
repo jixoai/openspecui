@@ -267,6 +267,13 @@ function ReferencedSpecDocument({ document }: { document: CliShowSpecDocument })
 
 function ReferencedSpecError({ document }: { document: ReferencedSpecDocumentProjection }) {
   const evidence = document.evidence
+  if (!evidence) {
+    return (
+      <div className="border-destructive/40 bg-destructive/5 space-y-3 rounded-md border p-4">
+        <h2 className="font-medium">OpenSpec could not project this Reference Spec.</h2>
+      </div>
+    )
+  }
   return (
     <div className="border-destructive/40 bg-destructive/5 space-y-3 rounded-md border p-4">
       <h2 className="font-medium">OpenSpec could not project this Reference Spec.</h2>

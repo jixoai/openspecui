@@ -45,6 +45,18 @@ export function getTitle(path: string, snapshot: ExportSnapshot): string {
     )
   }
 
+  const referencedSpecMatch = path.match(/^\/specs\/referenced\/([^/]+)\/([^/]+)$/)
+  if (referencedSpecMatch) {
+    const identity = specIdentityFromRoute({
+      storeId: decodeURIComponent(referencedSpecMatch[1] ?? ''),
+      specId: decodeURIComponent(referencedSpecMatch[2] ?? ''),
+    })
+    return (
+      snapshot.specs.find((spec) => specIdentityKey(spec.identity) === specIdentityKey(identity))
+        ?.name || 'Referenced Spec'
+    )
+  }
+
   const changeMatch = path.match(/^\/changes\/(.+)$/)
   if (changeMatch)
     return snapshot.changes.find((change) => change.id === changeMatch[1])?.name || 'Change'

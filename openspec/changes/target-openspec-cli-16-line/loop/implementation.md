@@ -9029,3 +9029,42 @@ Full workspace typecheck (15 packages), Prettier, oxlint (0 warnings/errors) all
 parity tests, and changeset land with Slice 3/4. The legacy no-CLI fixture still exercises owned-only
 snapshots (`referencePolicy: none`); a real pinned-CLI include/omit end-to-end run is owner walkthrough
 evidence.
+
+### Section 7 Slice 3: shared static provider/search/detail/route + clean SSG (2026-07-23)
+
+Covers 7.9 (static provider/search/detail/SSG hydrate shared Spec Catalog) and 7.11 (fresh SSG
+compound routes).
+
+Changed contracts:
+
+- `packages/core/src/spec-catalog.ts`: `ReferencedSpecDocumentProjection.spec` widened to `Spec | null`
+  and `rawMarkdown` to `string | null` (static mode materializes the referenced body; live mode stays
+  upstream-only). `evidence` widened to nullable so a static ready referenced document has no CLI evidence.
+- `packages/web/src/lib/static-data-provider.ts`:
+  - `getSpecDocument` returns a ready referenced document when the snapshot carried the materialized body;
+    only absent referenced Specs report an error, and the copy distinguishes `omit` ("omitted") from
+    `none` ("not present") without leaking Store ids.
+  - `getSearchDocuments` scopes referenced Specs to `'referenced-specs'` (source isolation) with a
+    `referenced:<storeId>:<specId>` path; owned Specs remain `'active-root'`.
+- `packages/web/src/ssg/route-manifest.ts`: `getTitle` resolves referenced Spec titles
+  (`/specs/referenced/<storeId>/<specId>`); `getRoutes` already enumerated them via `specRoutePath`.
+- `packages/web/src/routes/spec-view.tsx`: `ReferencedSpecError` guards nullable evidence.
+
+Focused evidence:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/lib/static-data-provider.references.test.ts src/lib/static-data-provider.opsx.test.ts \
+  src/ssg/entry-server.test.ts src/ssg/route-manifest.test.ts src/entry-client-static.test.tsx
+-> 4 references + 8 opsx + 2 ssg-entry + route-manifest + static-client: all green
+
+rm -rf packages/web/dist-ssg packages/web/.vite && pnpm --filter @openspecui/web build:ssg
+-> SSG server bundle built (clean artifacts)
+
+pnpm -w typecheck (15 packages) -> 0 errors
+pnpm exec prettier/oxlint -> clean
+```
+
+The 4 references tests prove: compound-identity catalog hydration, materialized referenced document
+render, explicit omission error without body leak, and referenced search scope isolation. Parity tests
+and changeset land with Slice 4. Real pinned-CLI include/omit SSG walkthrough remains owner evidence.

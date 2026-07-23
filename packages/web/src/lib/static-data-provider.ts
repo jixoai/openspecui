@@ -758,7 +758,28 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
 /** Get the exact compound Spec document from the static snapshot. */
 export async function getSpecDocument(identity: SpecIdentity): Promise<SpecDocumentProjection> {
   const snapshot = await loadSnapshot()
-  if (identity.kind === 'referenced') {
+  const snapSpec = snapshot?.specs.find(
+    (spec) => specIdentityKey(spec.identity) === specIdentityKey(identity)
+  )
+
+  if (identity.kind === 'owned') {
+    return {
+      identity,
+      source: 'owned',
+      readOnly: false,
+      state: snapSpec ? 'ready' : 'not-found',
+      spec: snapSpec ? snapshotSpecToSpec(snapSpec) : null,
+      rawMarkdown: snapSpec?.content ?? snapSpec?.sourceContent ?? null,
+      upstream: null,
+      evidence: null,
+    }
+  }
+
+  // Referenced Spec: only present when the snapshot was exported with --references include.
+  if (!snapSpec) {
+    const omitted =
+      snapshot?.meta.referencePolicy?.kind === 'omit' ||
+      snapshot?.meta.referencePolicy?.kind === 'none'
     return {
       identity,
       source: 'referenced',
@@ -773,21 +794,20 @@ export async function getSpecDocument(identity: SpecIdentity): Promise<SpecDocum
         stderr: '',
         exitCode: null,
         diagnostics: [],
-        contractError: 'Referenced Spec content is not present in this static snapshot.',
+        contractError: omitted
+          ? 'Referenced Spec content was omitted from this static snapshot.'
+          : 'Referenced Spec content is not present in this static snapshot.',
       },
     }
   }
-  const snapSpec = snapshot?.specs.find(
-    (spec) => specIdentityKey(spec.identity) === specIdentityKey(identity)
-  )
 
   return {
     identity,
-    source: 'owned',
-    readOnly: false,
-    state: snapSpec ? 'ready' : 'not-found',
-    spec: snapSpec ? snapshotSpecToSpec(snapSpec) : null,
-    rawMarkdown: snapSpec?.content ?? snapSpec?.sourceContent ?? null,
+    source: 'referenced',
+    readOnly: true,
+    state: 'ready',
+    spec: snapshotSpecToSpec(snapSpec),
+    rawMarkdown: snapSpec.content ?? snapSpec.sourceContent ?? null,
     upstream: null,
     evidence: null,
   }
@@ -1313,13 +1333,17 @@ export async function getSearchDocuments(): Promise<ProjectSearchDocument[]> {
 
   for (const spec of snapshot.specs) {
     const identityKey = specIdentityKey(spec.identity)
+    const isReferenced = spec.identity.kind === 'referenced'
     docs.push({
       id: `spec:${identityKey}`,
       kind: 'spec',
-      scope: 'active-root',
+      // Source isolation: referenced Specs appear only in the Referenced search scope.
+      scope: isReferenced ? 'referenced-specs' : 'active-root',
       title: spec.name,
       href: specRoutePath(spec.identity),
-      path: `owned:openspec/specs/${spec.identity.specId}/spec.md`,
+      path: isReferenced
+        ? `referenced:${spec.identity.kind === 'referenced' ? spec.identity.storeId : ''}:${spec.identity.specId}/spec.md`
+        : `owned:openspec/specs/${spec.identity.specId}/spec.md`,
       content: spec.content,
       updatedAt: spec.updatedAt,
     })
