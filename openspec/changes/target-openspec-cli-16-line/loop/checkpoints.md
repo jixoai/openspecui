@@ -452,6 +452,16 @@ The independent browser attempt confirms the desktop source control and URL/quer
     show the same fixture red under one temporary duplicate prime in the real Archive preparation path. The
     production mutation must be restored; this correction does not authorize ArchiveList/runtime changes or
     close parent checkpoint `6.17`.
+  - `6.17-B` accepted after `a2f1925` and `9d696b7`: ArchiveList row continuity, late-callback retirement,
+    id-key preservation, real detail handoff, exact `archive.subscribeOne:b` cache-prime cardinality, and
+    duplicate-prime mutation resistance are independently evidenced. Parent `6.17` remains open; no final
+    browser or multi-tab acceptance is claimed.
+  - `6.17-C` planned: SpecList is the next independent list owner. It must preserve compound Spec identity
+    for Owned and same-Store Referenced row removal/reorder, retire late callbacks, and make a scope switch
+    retire the previous scope immediately. Navigation evidence must cross the real Spec `VTLink`, detail
+    preparation, and Router path for both source-distinct routes. Do not widen this slice into the shared
+    subscription owner, Catalog/Server, static export, detail page, Git, Archive, or the loading-performance
+    Change; parent `6.17` remains open.
 - [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns
 
 ## 7. Static Export Parity and Privacy

@@ -8507,3 +8507,68 @@ the environment-level missing `staged` configuration in `vite.config.ts`; focuse
 commit. The evidence update is intentionally a separate docs commit. `6.17` remains open and unchecked;
 no Archive runtime, Server, subscription/cache implementation, shared navigation, static/SSG, loading
 performance, browser walkthrough, push, merge, archive, or release work was performed.
+
+### 6.17-B accepted and 6.17-C research (2026-07-23)
+
+The independent review accepts `6.17-B` at `a2f1925` plus `9d696b7`. The production ArchiveList owner,
+generation retirement, stable identity keys, real Router handoff, exact cache-prime cardinality, and the
+temporary duplicate-prime red run are all recorded above. The parent checkpoint remains open and the owner
+still owns final visual, browser, and multi-tab acceptance.
+
+The next bounded list family is SpecList. Its Catalog is source-aware and its row identity is compound:
+Owned rows use `owned:<specId>`, while Referenced rows use `referenced:<storeId>:<specId>`. A bare Spec id
+cannot be used as a React key, shared-element id, cache key, or route identity. The production chain for the
+next slice is:
+
+```text
+useSpecsSubscription Catalog
+          |
+          v
+SpecList current scope projection (Owned | Referenced)
+          |
+          v
+local display snapshot / native View Transition owner
+          |
+          v
+id-keyed SpecCatalogRow + compound shared descriptor
+          |
+          v
+real VTLink -> detail-prepare -> Router -> source-distinct detail route
+```
+
+The slice must keep these facts separate:
+
+```text
+Catalog emission mutation       -> one local row transition, latest generation wins
+same identity, new metadata     -> update text without list transition
+Owned <-> Referenced tab switch -> immediate commit; retire old scope callback
+Owned row click                 -> /specs/owned/:specId
+Referenced row click            -> /specs/referenced/:storeId/:specId
+```
+
+The existing `spec-list.test.tsx` replaces `VTLink` with an anchor. That is acceptable for static grouping
+and error topology only; it is not navigation evidence. The new navigation fixture must retain the real
+`SpecList`, `VTLink`, `prepareRouteDetailViewTransition`, and navigation coordinator, and mock only the
+lowest deterministic `spec.document` query/cache-prime and native transition edges. It must assert one
+source-correct route update, the exact compound handoff, one document query, and one matching
+`spec.subscribeDocument:<compound identity>` cache prime for both an Owned and a Referenced target.
+
+Required mutation-resistance evidence is independent:
+
+1. Remove only the local generation equality check. A pending A transition followed by current C, then the
+   real deferred A callback, must leave C visible and A/B obsolete rows absent. The named test must fail at
+   the removed guard and pass after exact restoration.
+2. Replace only the compound `specIdentityKey(spec.identity)` React key with an index key in the relevant
+   row map. A same-Store Referenced removal/reorder test must show positional DOM/href/shared-identity reuse
+   and fail. Restore the compound key before any commit.
+3. While an Owned transition is pending, switch to Referenced. The old callback must not restore Owned rows;
+   this is a scope-generation fixed point, not a button or tab assertion. If the implementation cannot prove
+   this without a second lifecycle state machine, stop and report the design blocker instead of weakening the
+   test.
+
+No Spec Catalog, Server, subscription/cache, shared navigation, SpecView, static/SSG, Git, Archive, or
+`accelerate-live-projection-loading` production behavior is authorized by this slice. Do not add a motion
+dependency or extract a generic subscription lifecycle owner. Run only the SpecList-focused Vitest lane,
+the real Spec navigation fixture, Web typecheck, exact format/lint, and `git diff --check`; do not run broad
+gates, SSG, agent-browser, push, merge, archive, release, or final browser acceptance. If any parallel dirty
+file conflicts, preserve it and report the path and decision point.
