@@ -45,6 +45,12 @@ interface SelectRootActionStateInput {
   isLoading: boolean
   transportError: Error | null
   staticMode: boolean
+  /**
+   * Operation authority is the source of truth for mutation gating. A `waiting` authority keeps root actions
+   * locked even when cached Root Context data is displayable during a transport reconnect/rebind; this is
+   * independent from the boolean `isLoading` UI signal (a reconnect over cached data is no longer initial-loading).
+   */
+  authorityState: 'current' | 'waiting' | 'failed'
 }
 
 function appendCommandEvidence(
@@ -106,7 +112,15 @@ export function selectRootActionState(input: SelectRootActionStateInput): RootAc
   }
 
   const projection = input.projection
-  if (!projection || projection.state === 'loading' || input.isLoading) {
+  // Root actions stay locked while the projection is unresolved OR while operation authority is not current.
+  // A transport reconnect over cached data no longer flips isLoading (it is display-only revalidation), so the
+  // authority state — not isLoading — is the reconnect/rebind lock. isLoading still covers the true first load.
+  if (
+    !projection ||
+    projection.state === 'loading' ||
+    input.isLoading ||
+    input.authorityState !== 'current'
+  ) {
     return {
       status: 'checking',
       disabled: true,
@@ -161,5 +175,6 @@ export function useRootActionState(): RootActionState {
     isLoading: subscription.isLoading,
     transportError: subscription.error,
     staticMode: isStaticMode(),
+    authorityState: subscription.authority.state,
   })
 }

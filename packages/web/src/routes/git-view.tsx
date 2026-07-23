@@ -15,6 +15,7 @@ import {
   getGitEntrySharedDescriptor,
   GitFilesBadge,
 } from '@/components/git/git-shared'
+import { RealtimeSkeletonInventory } from '@/components/realtime'
 import {
   buildGitRepositoryHref,
   getGitEntryFilesQueryKey,
@@ -112,7 +113,13 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
   }
 
   if (scopeNonAuthoritative) {
-    return <div className="route-loading animate-pulse">Loading git repository scope...</div>
+    // Authority gate stays a hard block (cached scope data is not current during reconnect); visual skeleton only.
+    return (
+      <div className="space-y-4 p-4" aria-busy="true" data-testid="git-detail-loading">
+        <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">Git</h1>
+        <RealtimeSkeletonInventory count={4} />
+      </div>
+    )
   }
 
   if (metaQuery.isLoading && !entry) {
@@ -150,17 +157,20 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
               </p>
             </div>
           </div>
-          <div className="vt-detail-content route-loading animate-pulse rounded-lg border p-4">
-            Loading commit detail...
+          <div
+            className="vt-detail-content flex flex-col gap-3 rounded-lg border p-4"
+            aria-busy="true"
+          >
+            <RealtimeSkeletonInventory count={6} />
           </div>
         </div>
       )
     }
 
     return (
-      <div className="route-loading animate-pulse">
-        Loading Git detail for{' '}
-        {scopeDescriptor?.repository?.topLevel ?? scopeDescriptor?.rootPath ?? 'repository'}...
+      <div className="space-y-4 p-4" aria-busy="true" data-testid="git-detail-loading">
+        <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">Git</h1>
+        <RealtimeSkeletonInventory count={4} />
       </div>
     )
   }

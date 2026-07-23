@@ -8,6 +8,7 @@
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
  */
+import { RealtimeSkeletonInventory } from '@/components/realtime'
 import { selectRootContextSnapshot, useContextSubscription } from '@/lib/use-context-subscription'
 import type { RootContext, RootContextCommandEvidence } from '@openspecui/core'
 import { AlertCircle, FileText, Network, RefreshCw } from 'lucide-react'
@@ -45,7 +46,7 @@ export function ContextView() {
         this project backend.
       </p>
 
-      {loading ? <div className="route-loading animate-pulse">Loading context...</div> : null}
+      {loading ? <RealtimeSkeletonInventory count={3} /> : null}
 
       {transportError || projectionError ? (
         <div

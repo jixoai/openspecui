@@ -74,10 +74,12 @@ describe('ContextView', () => {
   })
   afterEach(() => cleanup())
 
-  it('renders loading state while context resolves', () => {
+  it('renders loading state while context resolves as a visual skeleton', () => {
     setState({ isLoading: true, data: undefined })
-    render(<ContextView />)
-    expect(screen.getByText('Loading context...')).toBeTruthy()
+    const { container } = render(<ContextView />)
+    // The initial-loading topology is now a visual skeleton (luminance language) rather than routine copy.
+    expect(container.querySelector('.rt-skeleton')).not.toBeNull()
+    expect(screen.queryByText('Loading context...')).toBeNull()
   })
 
   it('renders error state with message', () => {

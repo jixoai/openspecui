@@ -8,6 +8,7 @@
  *
  * Original request (2026-07-15): "Specs defaults to Owned and provides a Store-grouped Referenced view with immutable entries."
  */
+import { RealtimeSkeletonInventory } from '@/components/realtime'
 import { formatRelativeTime } from '@/lib/format-time'
 import { useSpecsSubscription } from '@/lib/use-subscription'
 import { VTLink } from '@/lib/view-transitions/navigation'
@@ -77,7 +78,16 @@ export function SpecList() {
   ) : null
 
   if (isLoading && !catalog && !error) {
-    return <div className="route-loading animate-pulse">Loading specs...</div>
+    // Preserve page chrome and render a stable skeleton body rather than a full-tree barrier.
+    return (
+      <div className="space-y-6 p-4">
+        <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
+          <FileText className="h-6 w-6 shrink-0" />
+          Specifications
+        </h1>
+        <RealtimeSkeletonInventory count={5} />
+      </div>
+    )
   }
 
   if (!catalog && error) {

@@ -186,9 +186,11 @@ describe('SpecView', () => {
       error: null,
     })
 
-    render(<SpecView />)
+    const { container } = render(<SpecView />)
 
-    expect(screen.getByText('Loading spec...')).toBeInTheDocument()
+    // The spec-loading body is now a visual skeleton rather than routine "Loading spec..." copy.
+    expect(container.querySelector('.rt-skeleton')).not.toBeNull()
+    expect(screen.queryByText('Loading spec...')).not.toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 

@@ -13,6 +13,7 @@
  * Original request (2026-07-21): "Changes页面的右上角没有 New,你要不要快速补一个"
  */
 import { Badge } from '@/components/badge'
+import { RealtimeProgress, RealtimeSkeletonInventory } from '@/components/realtime'
 import {
   classifyChangeWorkflowPhase,
   inferTrackedArtifactStatus,
@@ -51,9 +52,34 @@ export function ChangeList() {
 
   const hasCurrentEmptyChanges = changes?.length === 0 && !changesError && !isUpdating
   const showChangesFrame = (changes?.length ?? 0) > 0 || hasCurrentEmptyChanges
+  const isInitialLoading = isLoading && !changes && !changesError
 
-  if (isLoading && !changes && !changesError) {
-    return <div className="route-loading animate-pulse">Loading changes...</div>
+  if (isInitialLoading) {
+    // Preserve page chrome (header/nav) and render a stable skeleton body rather than a full-tree
+    // route-loading barrier, so the surrounding layout and navigation do not flash on first load.
+    return (
+      <div className="space-y-6 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
+            <GitBranch className="h-6 w-6 shrink-0" />
+            Changes
+          </h1>
+          <button
+            type="button"
+            onClick={() => vtNavController.activatePop('/opsx-new')}
+            className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium hover:opacity-90"
+            title="Create a new OPSX change"
+          >
+            <Plus className="h-4 w-4" />
+            New
+          </button>
+        </div>
+        {progress && !changesError ? (
+          <RealtimeProgress progress={progress} className="max-w-sm" />
+        ) : null}
+        <RealtimeSkeletonInventory count={5} />
+      </div>
+    )
   }
 
   return (

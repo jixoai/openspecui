@@ -424,7 +424,7 @@ describe('Git entry routes', () => {
 
     renderWithQueryClient(<GitCommitViewRoute />)
 
-    expect(await screen.findByText(/Loading Git detail for \/tmp\/planning/)).toBeTruthy()
+    expect(await screen.findByTestId('git-detail-loading')).toBeTruthy()
     expect(screen.queryByText('Commit A handoff title')).toBeNull()
     expect(screen.queryByText('Commit A handoff subtitle')).toBeNull()
     expect(getEntryMetaQueryMock).toHaveBeenCalledWith({
@@ -453,7 +453,7 @@ describe('Git entry routes', () => {
 
     renderWithQueryClient(<GitCommitViewRoute />)
 
-    expect(await screen.findByText(/Loading Git detail for \/tmp\/planning-b/)).toBeTruthy()
+    expect(await screen.findByTestId('git-detail-loading')).toBeTruthy()
     expect(screen.queryByText('Root A handoff title')).toBeNull()
     expect(screen.queryByText('Root A handoff subtitle')).toBeNull()
   })
@@ -514,7 +514,7 @@ describe('Git entry routes', () => {
     const second = renderWithQueryClient(<GitCommitViewRoute />)
     await waitFor(() =>
       expect({
-        loading: screen.queryByText('Loading git repository scope...') !== null,
+        loading: screen.queryByTestId('git-detail-loading') !== null,
         metaCalls: getEntryMetaQueryMock.mock.calls.slice(metaCallsBeforeReconnect),
         fileCalls: getEntryFilesQueryMock.mock.calls.slice(fileCallsBeforeReconnect),
         staleHandoff: screen.queryByText('Root A handoff title') !== null,
@@ -618,7 +618,7 @@ describe('Git entry routes', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText(/Loading Git detail for \/tmp\/planning-b/)).toBeTruthy()
+      expect(screen.getByTestId('git-detail-loading')).toBeTruthy()
     })
     expect(screen.queryByText(/Root A detail/)).toBeNull()
     expect(screen.queryByText(/Root A patch/)).toBeNull()

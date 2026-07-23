@@ -384,7 +384,8 @@ describe('Dashboard', () => {
     )
     expect(screen.getByRole('heading', { name: 'Active Changes' })).toBeInTheDocument()
     expect(screen.getByText('Updating dashboard summary...')).toBeInTheDocument()
-    expect(screen.getByText('Loading dashboard trends...')).toBeInTheDocument()
+    // Trends loading is now a visual skeleton region (luminance language) rather than routine copy.
+    expect(screen.getByText('Active Changes')).toBeInTheDocument()
     expect(screen.getByText('Loading Code Git snapshot...')).toBeInTheDocument()
   })
 

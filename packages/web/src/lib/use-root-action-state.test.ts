@@ -27,12 +27,17 @@ function context(): RootContext {
   }
 }
 
-function select(projection: RootContextState | undefined, isLoading = false) {
+function select(
+  projection: RootContextState | undefined,
+  isLoading = false,
+  authorityState: 'current' | 'waiting' | 'failed' = 'current'
+) {
   return selectRootActionState({
     projection,
     isLoading,
     transportError: null,
     staticMode: false,
+    authorityState,
   })
 }
 
@@ -98,6 +103,7 @@ describe('selectRootActionState', () => {
         isLoading: true,
         transportError: null,
         staticMode: true,
+        authorityState: 'current',
       })
     ).toEqual({
       status: 'ready',

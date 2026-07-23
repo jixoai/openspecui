@@ -473,7 +473,11 @@ export function useAuthoritativeSubscription<T>(
         generation.publish(() => {
           setState((previous) => ({
             ...previous,
-            isLoading: true,
+            // A transport reconnect over already-readable content must not relabel it as initial-loading
+            // (the pervasive-Loading root cause). Retained data stays readable/copyable; only authority is
+            // revoked so current-dependent mutations stay locked until a matching current payload commits.
+            // When no readable content exists yet, the initial-loading surface must remain visible.
+            isLoading: previous.data === undefined,
             error: connection.error ?? terminalError,
             authority: { state: 'waiting', reason: connection.state },
           }))
@@ -490,7 +494,11 @@ export function useAuthoritativeSubscription<T>(
                   error: terminalError,
                   authority: { state: 'failed', error: terminalError },
                 }
-              : { ...previous, isLoading: true, authority: { state: 'waiting', reason: 'idle' } }
+              : {
+                  ...previous,
+                  isLoading: previous.data === undefined,
+                  authority: { state: 'waiting', reason: 'idle' },
+                }
           )
         })
       },
@@ -505,7 +513,11 @@ export function useAuthoritativeSubscription<T>(
                   error: terminalError,
                   authority: { state: 'failed', error: terminalError },
                 }
-              : { ...previous, isLoading: true, authority: { state: 'waiting', reason: 'idle' } }
+              : {
+                  ...previous,
+                  isLoading: previous.data === undefined,
+                  authority: { state: 'waiting', reason: 'idle' },
+                }
           )
         })
       },

@@ -9,6 +9,7 @@
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
  * Owner report (2026-07-22): "整个过程中，几乎都在 Loading。"
  */
+import { RealtimeSkeletonInventory } from '@/components/realtime'
 import { formatRelativeTime } from '@/lib/format-time'
 import { useArchivesSubscription } from '@/lib/use-subscription'
 import { VTLink } from '@/lib/view-transitions/navigation'
@@ -23,7 +24,16 @@ export function ArchiveList() {
   const displayedArchives = useArchiveListContinuity(archived, listRef)
 
   if (isLoading && !archived && !error) {
-    return <div className="route-loading animate-pulse">Loading archived changes...</div>
+    // Preserve page chrome and render a stable skeleton body rather than a full-tree barrier.
+    return (
+      <div className="space-y-6 p-4">
+        <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
+          <Archive className="h-6 w-6 shrink-0" />
+          Archive
+        </h1>
+        <RealtimeSkeletonInventory count={5} />
+      </div>
+    )
   }
 
   return (

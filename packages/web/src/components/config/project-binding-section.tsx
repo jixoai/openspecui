@@ -10,6 +10,7 @@
  * Derived requirement (2026-07-19): "A binding mutation must not relabel its returned preview as current Root Context."
  */
 import { Button } from '@/components/button'
+import { RealtimeSkeletonInventory } from '@/components/realtime'
 import { trpcClient } from '@/lib/trpc'
 import { useProjectBindingSubscription } from '@/lib/use-planning-config'
 import type { PlanningConfigReference, ProjectBindingConfig } from '@openspecui/core'
@@ -64,7 +65,11 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
   }
 
   if (isLoading && !config) {
-    return <div className="route-loading animate-pulse">Loading Project Binding…</div>
+    return (
+      <div className="space-y-4" aria-busy="true">
+        <RealtimeSkeletonInventory count={4} />
+      </div>
+    )
   }
 
   if (!config) {

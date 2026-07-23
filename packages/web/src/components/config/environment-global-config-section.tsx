@@ -12,6 +12,7 @@ import { Button } from '@/components/button'
 import { ButtonGroup } from '@/components/button-group'
 import { CodeEditor } from '@/components/code-editor'
 import { EnvironmentGlobalProfileSection } from '@/components/config/environment-global-profile-section'
+import { RealtimeSkeletonInventory } from '@/components/realtime'
 import { trpcClient } from '@/lib/trpc'
 import { useEnvironmentGlobalConfigSubscription } from '@/lib/use-planning-config'
 import type { CliJsonValue } from '@openspecui/core'
@@ -331,7 +332,9 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
 
       {globalConfigTab === 'preview' ? (
         isLoading && !environmentGlobalConfig ? (
-          <div className="route-loading animate-pulse">Loading Environment Global config...</div>
+          <div className="space-y-4" aria-busy="true">
+            <RealtimeSkeletonInventory count={4} />
+          </div>
         ) : isRecordObject(globalConfigData) ? (
           <div className="min-h-0 flex-1 space-y-3 overflow-auto pr-1">
             <div className="grid gap-2 sm:grid-cols-2">

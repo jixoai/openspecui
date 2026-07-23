@@ -158,9 +158,10 @@ describe('ActiveRootConfigSection', () => {
 
   it('distinguishes initial loading from absence', () => {
     activeRootSubscriptionMock.mockReturnValue({ data: undefined, isLoading: true, error: null })
-    renderSection(<ActiveRootConfigSection isStatic={false} />)
+    const { container } = renderSection(<ActiveRootConfigSection isStatic={false} />)
 
-    expect(screen.getByText('Loading Active Root config...')).toBeTruthy()
+    // Initial-loading is now a visual skeleton rather than routine loading copy.
+    expect(container.querySelector('.rt-skeleton')).not.toBeNull()
     expect(screen.queryByText('No config file exists in the active Planning root.')).toBeNull()
   })
 

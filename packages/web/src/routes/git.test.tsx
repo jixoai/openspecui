@@ -523,7 +523,9 @@ describe('GitRoute', () => {
       planning: null,
     }
     act(() => callbacks.onStopped())
-    await screen.findByText('Loading git repository scopes...')
+    // The scope-authority gate still blocks (cached scope data is not current during reconnect); the wait is
+    // now a visual skeleton region rather than routine loading copy.
+    await screen.findByTestId('git-loading-region')
     const overviewCallsAfterStop = overviewQueryMock.mock.calls.length
     const historyCallsAfterStop = listEntriesQueryMock.mock.calls.length
     expect(screen.queryByText('code-binding-status against origin/main')).toBeNull()
@@ -553,7 +555,7 @@ describe('GitRoute', () => {
       },
     }
     act(() => callbacks.onComplete())
-    await screen.findByText('Loading git repository scopes...')
+    await screen.findByTestId('git-loading-region')
     expect(screen.queryByText('code-binding-b-status against origin/main')).toBeNull()
 
     act(() => callbacks.onData(scopeC))
@@ -719,7 +721,7 @@ describe('GitRoute', () => {
     const second = renderWithQueryClient(<GitRoute />)
     await waitFor(() =>
       expect({
-        loading: screen.queryByText('Loading git repository scopes...') !== null,
+        loading: screen.queryByTestId('git-loading-region') !== null,
         overviewCalls: overviewQueryMock.mock.calls.slice(overviewCallsBeforeReconnect),
         entryCalls: listEntriesQueryMock.mock.calls.slice(entryCallsBeforeReconnect),
         staleStatus: screen.queryByText('root-a-status against origin/main') !== null,
@@ -802,7 +804,8 @@ describe('GitRoute', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText(/Loading Git data for \/planning-b/)).toBeTruthy()
+      // The overview gate blocks (Planning scope loading) as a visual skeleton region.
+      expect(screen.getByTestId('git-loading-region')).toBeTruthy()
     })
     expect(screen.queryByText('root-a-status against origin/main')).toBeNull()
     expect(screen.queryByText('Root A history')).toBeNull()
@@ -826,7 +829,7 @@ describe('GitRoute', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText(/Loading Git data for \/planning-a/)).toBeTruthy()
+      expect(screen.getByTestId('git-loading-region')).toBeTruthy()
     })
     expect(screen.queryByText('root-a-status against origin/main')).toBeNull()
     expect(screen.queryByText('Root A history')).toBeNull()

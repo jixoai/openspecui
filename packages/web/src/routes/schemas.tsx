@@ -1,3 +1,4 @@
+import { RealtimeSkeletonInventory } from '@/components/realtime'
 import { useOpsxConfigBundleSubscription } from '@/lib/use-opsx'
 import { Layers } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -21,7 +22,16 @@ export function Schemas() {
   const detail = selected ? (configBundle?.schemaDetails[selected] ?? null) : null
 
   if (isLoading && !schemas) {
-    return <div className="route-loading animate-pulse">Loading schemas...</div>
+    // Preserve page chrome and render a stable skeleton body rather than a full-tree barrier.
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-6">
+        <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
+          <Layers className="h-6 w-6 shrink-0" />
+          Schemas
+        </h1>
+        <RealtimeSkeletonInventory count={5} />
+      </div>
+    )
   }
 
   if (error) {

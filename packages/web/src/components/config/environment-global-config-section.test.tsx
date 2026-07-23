@@ -648,8 +648,10 @@ describe('EnvironmentGlobalConfigSection', () => {
       error: null,
       refresh: vi.fn(),
     })
-    const { unmount } = renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
-    expect(screen.getByText('Loading Environment Global config...')).toBeTruthy()
+    const { unmount, container } = renderSection(
+      <EnvironmentGlobalConfigSection isStatic={false} />
+    )
+    expect(container.querySelector('.rt-skeleton')).not.toBeNull()
     unmount()
 
     environmentGlobalSubscriptionMock.mockReturnValueOnce({

@@ -76,7 +76,7 @@ describe('ArchiveList', () => {
     expect(markup).not.toContain('Loading archived changes...')
   })
 
-  it('renders the real unknown-data Loading state before effects', () => {
+  it('renders the real unknown-data Loading state before effects as a stable skeleton', () => {
     useArchivesSubscriptionMock.mockReturnValue({
       data: undefined,
       isLoading: true,
@@ -85,10 +85,11 @@ describe('ArchiveList', () => {
 
     const markup = renderToStaticMarkup(<ArchiveList />)
 
-    expect(markup).toContain('Loading archived changes...')
-    expect(markup).not.toContain(
-      'Completed changes archived in the current writable Planning root.'
-    )
+    // The initial-loading topology is now a visual skeleton (luminance language) rather than routine
+    // "Loading..." copy, while page chrome (the header) stays mounted so navigation does not flash.
+    expect(markup).toContain('Archive')
+    expect(markup).toContain('rt-skeleton')
+    expect(markup).not.toContain('Loading archived changes...')
   })
 
   it('renders a no-data Archive error without a blank list frame', () => {

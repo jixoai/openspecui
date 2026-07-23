@@ -8,12 +8,13 @@
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  */
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
+import { RealtimeSkeletonInventory } from '@/components/realtime'
 import { navController } from '@/lib/nav-controller'
 import { useSearch } from '@/lib/use-search'
 import { vtNavController } from '@/lib/view-transitions/navigation'
 import type { ProjectSearchScope } from '@openspecui/search'
 import { useLocation } from '@tanstack/react-router'
-import { Archive, FileText, GitBranch, Loader2, LockKeyhole, Search } from 'lucide-react'
+import { Archive, FileText, GitBranch, LockKeyhole, Search } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
 const INPUT_DEBOUNCE_MS = 150
@@ -155,9 +156,9 @@ export function SearchRoute() {
       </div>
 
       {isLoading && (
-        <div className="text-muted-foreground flex items-center gap-2 text-sm">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Searching...
+        // Demand-driven search: a local skeleton result region replaces the routine "Searching..." copy.
+        <div aria-busy="true">
+          <RealtimeSkeletonInventory count={4} />
         </div>
       )}
 

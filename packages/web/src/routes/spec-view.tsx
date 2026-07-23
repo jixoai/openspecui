@@ -9,6 +9,7 @@
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  */
 import { MarkdownViewer } from '@/components/markdown-viewer'
+import { RealtimeSkeletonInventory } from '@/components/realtime'
 import { resolveDocumentTranslationConfig } from '@/lib/resolve-document-translation-config'
 import {
   useConfigSubscription,
@@ -103,8 +104,8 @@ function SpecLoading({
         subtitle={subtitle}
         sharedDescriptor={sharedDescriptor}
       />
-      <div className="vt-detail-content route-loading animate-pulse rounded-lg border p-4">
-        Loading spec...
+      <div className="vt-detail-content flex flex-col gap-3 rounded-lg border p-4" aria-busy="true">
+        <RealtimeSkeletonInventory count={6} />
       </div>
     </div>
   )

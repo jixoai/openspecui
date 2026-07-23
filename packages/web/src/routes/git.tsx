@@ -16,6 +16,7 @@ import {
   WorktreeRow,
 } from '@/components/git/git-shared'
 import { WorktreeCard } from '@/components/git/git-worktree-card'
+import { RealtimeSkeletonInventory } from '@/components/realtime'
 import { Select, type SelectOption } from '@/components/select'
 import { Tooltip } from '@/components/tooltip'
 import {
@@ -411,14 +412,31 @@ export function GitRoute() {
   }
 
   if (scopeNonAuthoritative) {
-    return <div className="route-loading animate-pulse">Loading git repository scopes...</div>
+    // The authority gate stays a hard block (cached scope data is not made current during reconnect per the
+    // Git repository-rebind law); only the wait presentation becomes a visual skeleton.
+    return (
+      <div
+        className="space-y-4 p-4"
+        aria-busy="true"
+        data-git-loading="scopes"
+        data-testid="git-loading-region"
+      >
+        <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">Git</h1>
+        <RealtimeSkeletonInventory count={4} />
+      </div>
+    )
   }
 
   if (overviewQuery.isLoading && !overview) {
     return (
-      <div className="route-loading animate-pulse">
-        Loading Git data for{' '}
-        {scopeDescriptor?.repository?.topLevel ?? scopeDescriptor?.rootPath ?? 'repository'}...
+      <div
+        className="space-y-4 p-4"
+        aria-busy="true"
+        data-git-loading="overview"
+        data-testid="git-loading-region"
+      >
+        <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">Git</h1>
+        <RealtimeSkeletonInventory count={4} />
       </div>
     )
   }

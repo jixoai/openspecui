@@ -296,9 +296,10 @@ describe('SearchRoute', () => {
       error: null,
     })
 
-    render(<SearchRoute />)
+    const { container } = render(<SearchRoute />)
 
-    expect(screen.getByText('Searching...')).toBeInTheDocument()
+    // The search-loading state is now a local visual skeleton region rather than routine "Searching..." copy.
+    expect(container.querySelector('.rt-skeleton')).not.toBeNull()
     expect(screen.queryByRole('button', { name: /Stale Auth/i })).not.toBeInTheDocument()
     expect(screen.queryByText(/No matching results/i)).not.toBeInTheDocument()
   })

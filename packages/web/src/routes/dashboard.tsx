@@ -22,6 +22,7 @@ import {
   isHttpUrl,
   WorktreeRow,
 } from '@/components/git/git-shared'
+import { RealtimeSkeletonCard, RealtimeSkeletonInventory } from '@/components/realtime'
 import type { SelectOption } from '@/components/select'
 import {
   classifyChangeWorkflowPhase,
@@ -611,7 +612,24 @@ export function Dashboard() {
   }, [configBundle])
 
   if (summaryIsLoading && !summaryProjection) {
-    return <div className="route-loading animate-pulse">Loading dashboard summary...</div>
+    // Preserve page chrome (header/nav) and render a stable skeleton body rather than a full-tree barrier,
+    // so the surrounding layout and navigation do not flash on the first dashboard visit.
+    return (
+      <div className="min-w-0 space-y-6 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
+            <LayoutDashboard className="h-6 w-6 shrink-0" />
+            Dashboard
+          </h1>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {Array.from({ length: 6 }, (_, index) => (
+            <RealtimeSkeletonCard key={index} />
+          ))}
+        </div>
+        <RealtimeSkeletonInventory count={3} />
+      </div>
+    )
   }
 
   if (summaryError && !summaryProjection) {
@@ -678,8 +696,10 @@ export function Dashboard() {
   const renderHistoryCards = () => (
     <div className="space-y-2">
       {trendsIsLoading && !trendsProjection ? (
-        <div className="text-muted-foreground text-xs" role="status">
-          Loading dashboard trends...
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-busy="true">
+          {Array.from({ length: 2 }, (_, index) => (
+            <RealtimeSkeletonCard key={index} />
+          ))}
         </div>
       ) : trendsIsUpdating ? (
         <div className="text-muted-foreground text-xs" role="status">
