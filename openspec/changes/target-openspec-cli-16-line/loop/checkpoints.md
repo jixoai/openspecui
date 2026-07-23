@@ -442,6 +442,11 @@ The independent browser attempt confirms the desktop source control and URL/quer
     navigation fixture must cross the real `VTLink` preparation/coordinator boundary and the accepted
     mutation runs must be recorded in the Change. Keep this correction limited to the active ChangeList
     projection; it does not start another list family or close parent checkpoint `6.17`.
+  - `6.17-B` planned: ArchiveList is a distinct receiving projection. Its local owner may animate a
+    root-correct Archive snapshot addition/reorder and retire late callbacks, while the subscription remains
+    sole authority for loading, error, and updating. It must prove real Archive detail navigation and keep
+    both generation and id-key mutation evidence separate. No Server, subscription, Archive mutation, or
+    independent Loading-performance work belongs in this package; parent checkpoint `6.17` remains open.
 - [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns
 
 ## 7. Static Export Parity and Privacy

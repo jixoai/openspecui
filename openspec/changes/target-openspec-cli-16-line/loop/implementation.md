@@ -8266,3 +8266,52 @@ pnpm --filter @openspecui/web exec vitest run --project unit \
 This slice does not claim to solve the independent global Loading-latency investigation. No Server/Router
 production code, shared `VTLink`, subscription owner, SSG, broad gate, browser walkthrough, merge, archive,
 or release was performed here; final visual and end-to-end acceptance remains with the owner.
+
+### 6.17-B research: ArchiveList reactive row-addition continuity (2026-07-23)
+
+ArchiveList is not a second ChangeList. It receives the current writable Planning-root Archive projection:
+the reactive Server subscription may first emit a recomputation signal, while the Web subscription retains
+cached rows and exposes that recomputation as `isUpdating`. The list itself is therefore the sole new owner
+for physical row presentation; it cannot become an alternative Archive/cache/root authority.
+
+```text
+root-correct archive.subscribe emission
+  -> useArchivesSubscription() retained/current projection
+  -> ArchiveList local display snapshot / native View Transition owner
+  -> id-keyed Archive VTLink + archive shared descriptor
+  -> prepareRouteDetailViewTransition -> coordinator -> /archive/:id
+```
+
+The primary Archive mutation is addition: a successful archive action or an external update commonly changes
+`[B]` to newest-first `[A, B]`. This package also covers reorder and late local callbacks, but does not infer
+that it owns Archive deletion, CLI mutation success, or subscription settlement.
+
+Required fixed points:
+
+```text
+initial [B]                       -> immediate render, no invented transition
+[B] -> [A, B]                    -> one local native transition; B DOM identity survives
+[A, B] -> [B, A]                 -> A/B DOM, href, and archive shared identities survive
+same [A, B] ids, changed metadata -> current text updates without a local list transition
+pending A callback, then [C]      -> C remains displayed after retired A callback runs
+click B                            -> real Archive VTLink route preparation and one /archive/b update
+native unavailable/rejected       -> immediate current snapshot, no fake animation state
+```
+
+`archive-list.tsx` already has id keys and real Archive handoff state, but its current test replaces VTLink
+with an anchor and has no local display-transition owner. New focused tests must preserve the real
+`ArchiveList -> VTLink -> prepareRouteDetailViewTransition -> coordinator` chain, mocking only deterministic
+transport/static/native-runtime edges. The component-only fixture may mock Link only where no Router exists;
+it is not navigation evidence.
+
+The implementation may add one Archive-local helper instead of widening the ChangeList helper into a generic
+subscription state machine. This is an intentional temporary duplication of a small lifecycle owner: Archive
+addition/empty/updating topology can diverge from active Change removal. Do not extract until a later review
+proves a shared owner would preserve both contracts.
+
+Two independent mutation runs are mandatory and must be recorded with command, named red result, and restored
+source state: removing only the Archive generation guard must let a late A callback replace current C; replacing
+only `key={change.id}` with an index key must fail addition/reorder DOM identity through positional reuse.
+The two mutations cannot be combined. The parent 6.17 checkpoint remains open; no Archive CLI/RPC, Server,
+subscription lifecycle, shared navigation, static export, or `accelerate-live-projection-loading` modification
+is authorized by this package. Final browser/visual and multi-tab acceptance remains owner-only.
