@@ -9361,3 +9361,53 @@ The 25 unchecked items fall into three honest categories:
 
 No merge, archive, or release was performed. The candidate is ready for owner walkthrough and return to
 the original reviewer for independent review.
+
+### Pre-existing server regression root-cause analysis (2026-07-23)
+
+Investigation of the 9 pre-existing server test failures (7 remaining after the tool-subscription fix in
+`b17ae9d`). These are **not introduced by this Change** — confirmed present at `6635e6a` (before Section 8
+server work) and caused by the parallel `accelerate-live-projection-loading` change (`95bc2b9`).
+
+#### Root cause (stack trace confirmed)
+
+```text
+Test fixture creates temp dirs / writes files
+  → watcher-pool.ts:118  setTimeout(debounceMs)
+  → runtime-root-invalidation.ts:51  callback()
+  → runtime-invalidation.ts:80  invalidate(['context'])   ← async, fires after test setup
+```
+
+The `accelerate-live-projection-loading` change (`95bc2b9`) introduced a **Root Context snapshot replay
+cache** in `planning-root-service.ts`:
+
+```text
+旧代码: runtimeInvalidation.track('project', 'context')
+新代码: runtimeInvalidation.track('project', 'stores', 'context')  ← added 'stores'
+        + currentRootContextSnapshot cache + invalidationKey match gate
+```
+
+The watcher-pool debounce timer fires asynchronously after fixture setup, advancing the `context`
+invalidation generation. This interacts with the new snapshot cache's `invalidationKey` matching logic,
+which can prevent fresh reactive emissions from reaching subscriptions.
+
+#### Two failure patterns
+
+| Pattern | Tests | Symptom | Fixable in this Change? |
+|---|---|---|---|
+| Baseline-relative assertion | `tool-subscription-router` (2) | `expect(current('context')).toBe(0)` fails because async invalidation advanced it to 1 during setup | **Fixed** (`b17ae9d`): capture baseline generation, assert relative advancement |
+| Reactive emission not reaching subscriber | `git-repository-binding-router` (5), `router` git (2) | `expect(emissions).toHaveLength(1)` → `[]`; or `Test timed out in 5000ms` | **No** — requires understanding the snapshot cache's `invalidationKey` gate interaction with `projection-work/registry.ts` (494 lines of new code in the loading change) |
+
+#### Why not fixed here
+
+The emission-not-reaching-subscriber failures involve the loading change's `currentRootContextSnapshot`
+cache + `projection-work` kernel (`packages/server/src/projection-work/registry.ts`, 494 lines). Modifying
+the cache logic or the projection-work kernel risks breaking the loading change's own performance
+optimization goal (the cache exists to avoid redundant Root Context re-resolution). This requires the
+loading change owner's design intent knowledge.
+
+#### Recommendation
+
+Open an independent issue against `accelerate-live-projection-loading` for the 7 emission/timing failures.
+Until resolved, `10.14` (`pnpm test:ci`) and `11.3` (local checks before PR) remain blocked. This Change's
+own work (Sections 6-9) is not affected: core 465/465, web 928/928, app 96/96, and the
+`tool-subscription-router` 5/5 are green.
