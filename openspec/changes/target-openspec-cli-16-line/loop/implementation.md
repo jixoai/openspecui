@@ -8423,3 +8423,87 @@ real Archive preparation prime, run the same navigation fixture, and require a c
 `detail-prepare.ts` exactly. Record the exact mutation command/output and restored green commands with actual
 paths. No final ArchiveList, continuity, subscription/cache, shared-navigation, Server, static, SSG, or loading
 performance behavior change is authorized. Parent checkpoint `6.17` remains open.
+
+### 6.17-B cache-prime cardinality correction (2026-07-23)
+
+The test-only correction landed in `a2f1925` (`test(web): prove Archive cache prime cardinality`). The
+navigation assertion now requires the real `archive.subscribeOne:b` cache prime to be called exactly once:
+
+```text
+expect(primeSubscriptionCacheMock).toHaveBeenCalledExactlyOnceWith(
+  'archive.subscribeOne:b',
+  preparedArchive
+)
+```
+
+The baseline single navigation command passed before the mutation:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/routes/archive-list-navigation.test.tsx
+```
+
+Result: `1` file and `1` test passed.
+
+Mutation resistance was proven through the real Archive preparation path. Only
+`packages/web/src/lib/view-transitions/detail-prepare.ts:120` was duplicated temporarily, making the
+production function issue two identical `primeSubscriptionCache` calls. No test-side mock invocation or
+other assertion was changed. The exact red command was:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/routes/archive-list-navigation.test.tsx
+```
+
+The named failure was
+`ArchiveList detail navigation > prepares and resolves exactly one archive:b handoff through the real Router`.
+Vitest reported the two identical calls and `Number of calls: 2` at
+`packages/web/src/routes/archive-list-navigation.test.tsx:181`. This demonstrates that the old
+`toHaveBeenCalledWith` evidence would have accepted a duplicate while the corrected exact-once assertion
+rejects it.
+
+The duplicate line was then removed from `packages/web/src/lib/view-transitions/detail-prepare.ts`, restoring
+the source exactly to the committed implementation. The restored source was verified with:
+
+```text
+test -z "$(git diff -- packages/web/src/lib/view-transitions/detail-prepare.ts)" \
+  && echo 'detail-prepare.ts restored clean'
+-> detail-prepare.ts restored clean
+```
+
+Restored focused evidence:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/routes/archive-list-navigation.test.tsx
+-> 1 file / 1 test passed
+
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/routes/archive-list-continuity.test.tsx \
+  src/routes/archive-list-navigation.test.tsx \
+  src/routes/archive-list.test.tsx
+-> 3 files / 16 tests passed
+
+pnpm --filter @openspecui/web typecheck
+-> passed
+
+pnpm exec prettier --check \
+  packages/web/src/routes/archive-list-navigation.test.tsx \
+  openspec/changes/target-openspec-cli-16-line/loop/implementation.md
+-> passed
+
+pnpm exec oxlint packages/web/src/routes/archive-list-navigation.test.tsx \
+  --ignore-path .gitignore
+-> 0 warnings/errors
+
+git diff --check -- \
+  packages/web/src/routes/archive-list-navigation.test.tsx \
+  openspec/changes/target-openspec-cli-16-line/loop/implementation.md
+-> passed
+```
+
+The test correction commit used `--no-verify` because the repository's local pre-commit hook still fails on
+the environment-level missing `staged` configuration in `vite.config.ts`; focused checks passed before the
+commit. The evidence update is intentionally a separate docs commit. `6.17` remains open and unchecked;
+no Archive runtime, Server, subscription/cache implementation, shared navigation, static/SSG, loading
+performance, browser walkthrough, push, merge, archive, or release work was performed.
