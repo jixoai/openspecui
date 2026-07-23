@@ -7,6 +7,7 @@ Orthogonal intents (created 2026-07-23 Asia/Shanghai):
 Original request (2026-07-23): "走查任务直接到新的change中做。你目前的工作就是：review + interview + replan(write new openspec change)"
 Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
 Review correction (2026-07-24): A protected parent must not spawn an unprotected worktree backend, and a browser resource request must not borrow another client credential.
+Review correction (2026-07-24): Retained Root evidence keeps the identity that produced it; a new pending generation cannot relabel old evidence or combine with a replacement tab identity.
 -->
 
 # hosted-environment-delivery Delta Specification
@@ -77,9 +78,29 @@ projection.
   loading/error evidence from connected backends
 - **AND** a Root refresh or transport failure SHALL keep retained evidence explicitly stale until a
   replacement Root emission commits
+- **AND** retained Root and Reference evidence SHALL preserve the observation generation, backend-issued
+  `envUri`, health source, and observation time that produced it; a pending generation SHALL NOT relabel it
 - **AND** Reference warnings SHALL remain visible upstream evidence rather than being rewritten as healthy
 - **AND** duplicate tabs for one backend/project locator SHALL remain authority-distinct while counting as
   one connected project in environment-level grouping
+
+#### Scenario: Same-identity tab replacement cannot form hybrid authority
+
+- **GIVEN** selected tab A has a current observation
+- **AND** App state replaces it with another tab using the same id and locator but a different session or
+  creation identity
+- **WHEN** an environment-scoped operation is attempted before the replacement observation commits
+- **THEN** the operation SHALL have no current authority
+- **AND** it SHALL NOT combine A's observation generation with the replacement tab's identity
+
+#### Scenario: Refresh retains evidence without rewriting its source
+
+- **GIVEN** generation A produced Root and Reference evidence for environment A
+- **WHEN** generation B starts, fails, or reports a different backend-issued environment identity before a
+  replacement Root commits
+- **THEN** A's evidence MAY remain visible only as stale display evidence
+- **AND** its generation, environment identity, health source, and observation time SHALL remain those of A
+- **AND** B alone MAY authorize current operations while its own evidence is pending
 
 ### Requirement: Observable Backend-Owned Store Mutation Lifecycle
 

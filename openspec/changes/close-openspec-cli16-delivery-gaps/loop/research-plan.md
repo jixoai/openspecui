@@ -72,6 +72,30 @@ These findings do not require manager interview: the existing contract already f
 credential leakage, ungated advertised surfaces, stale authority, diagnostic reinterpretation, and
 same-locator authority inheritance. P1 and P2 corrections may proceed in parallel over disjoint owners.
 
+### P2 third independent review after `e22f960`
+
+The candidate passes its focused App suite, but it still proves the wrong provenance model at two
+production joins. Completion remains rejected; `3.1--3.6` stay open.
+
+```text
+pending observation generation       retained Root/Reference evidence
+             |                                      |
+             +-- current mutation authority         +-- original generation
+                                                    +-- original envUri/health
+                                                    +-- original observedAt
+```
+
+| Fixed point | Current evidence | Required correction |
+| --- | --- | --- |
+| Retained evidence provenance | `connection-observation.tsx` increments generation while copying old health/Root evidence. `use-environment.ts` then derives the old Root and References from the new generation, new health/envUri, and `Date.now()`. A refresh or failure can therefore relabel A evidence as B. | Separate pending/current observation identity from retained evidence identity. Preserve the exact generation, health/envUri source, and observed timestamp that produced retained Root/Reference data until a replacement Root commits. |
+| Atomic selected authority | `resolveActiveBackendAuthority` accepts an observation using only `tabId/apiBaseUrl`, then combines it with the selected tab's current `sessionId/createdAt`. Before the Provider effect retires a same-id/same-locator replacement, this creates a hybrid authority from old observation plus new tab. | The observation owner must correlate its generation with the full tab identity, or resolve authority from one atomic owner snapshot. A replaced tab gets no authority until its own health/Root observation is current. |
+| Real guard evidence | `connection-context.test.tsx` mutates a committed DOM `disabled` property and clicks it. React 19 still suppresses the committed handler, so an empty mutation list does not prove the production guard. | Invoke the real form/dialog owner while bypassing only presentation through a supported test surface, then remove the exact production guard and show the same fixture dispatches incorrectly. |
+| Test-only production output | `store-inspector.tsx` renders tab/generation data attributes solely for the test. | Remove lifecycle instrumentation from production DOM. Observe user-visible retired state and assert the real owner through checked fixtures instead. |
+| Destructive dialog contract | `StoreRemoveDialog.removeStore` is optional and the retired warning leaves `Remove Store` enabled; the missing callback or retired authority can therefore become a silent no-op. | Make the route-owned mutation function required. Lock submit while authority is retired, but retain a mutation-resistant owner test that reaches the real dispatch guard without relying on the disabled button. |
+
+This is a correction within the approved P2 owner boundary, not a new product decision. It must not grow
+into a general connection-store rewrite or start P3 lifecycle work.
+
 ## Decision & Plan (For Approval)
 
 ### P1: Hosted identity and Access Gate

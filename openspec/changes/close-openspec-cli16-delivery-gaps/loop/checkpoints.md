@@ -44,11 +44,11 @@ Focused reviewer acceptance is a hard predecessor of the next package and every 
 
 ## 3. P2 App Connection and Context Projection
 
-- [ ] 3.1 Bind selected environment authority to the exact selected `tabId` and its current observation generation, not only a matching normalized locator; no duplicate/replaced tab may inherit another tab generation's authority.
+- [ ] 3.1 Atomically bind selected environment authority to the full selected tab identity (`tabId`, locator, session, creation identity) and its current observation generation; no passive-effect window or duplicate/replaced tab may combine a prior observation with a new tab identity.
 - [ ] 3.2 Keep App-native per-locator credentials isolated across health and hosted HTTP clients; Project Web transport delivery is owned and accepted separately by 2.8--2.12.
-- [ ] 3.3 Collect health and Root Context from every retained, protocol-compatible connection while preserving source-labelled loading, typed Root error diagnostics, stale evidence, and credential state.
+- [ ] 3.3 Collect health and Root Context from every retained, protocol-compatible connection while preserving source-labelled loading, typed Root error diagnostics, stale evidence, credential state, and the original generation/envUri/observedAt that produced any retained Root/Reference evidence.
 - [ ] 3.4 Make Environment Center and Context Matrix group only observed backend-issued `envUri`, Store, Root, and exact Reference provenance; retain the explicit non-machine-wide-completeness boundary and grouped connected-project evidence.
-- [ ] 3.5 Prove a selected B action cannot dispatch using A or a retired same-locator B generation; removing the exact `tabId`/generation guard must turn the same real action-owner fixture red.
+- [ ] 3.5 Prove a selected B action cannot dispatch using A, a hybrid old-observation/new-tab authority, or a retired same-locator B generation. Real Register/Remove owner fixtures must turn red when the exact identity/generation guard is removed, without disabled-DOM bypasses or production test instrumentation.
 - [ ] 3.6 Obtain focused reviewer acceptance for P2 before P3/P4 or broad gates.
 
 ## 4. P3 Observable Store Mutation Ledger

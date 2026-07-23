@@ -291,3 +291,39 @@ P2 correction = honest stale/warning/group projection + real Register/Remove gua
 Each lane gets its own production commit and focused evidence. Do not mark any P1/P2 checkbox, run broad
 gates, begin P3/P4, update the PR, or request manager browser acceptance until the main reviewer accepts
 both corrected SHAs.
+
+### P2 third correction boundary: 2026-07-24 Asia/Shanghai
+
+Reviewed candidate: `e22f960`.
+
+Worker evidence independently rerun before review:
+
+- App: 24 files / 121 tests passed.
+- App typecheck passed.
+- Removing the selected-tab check or observation-generation check reportedly turns the real Register or
+  Remove route fixture red.
+
+Focused acceptance remains rejected. Passing tests do not cover these production defects:
+
+1. A refresh creates a new observation generation while retaining old Root/Reference evidence. Derivation
+   then relabels the retained evidence with the new generation, new health/envUri, and a new timestamp.
+2. The authority resolver checks old observation identity only by tab id and locator, then borrows
+   session/creation identity from the newly selected replacement tab. This hybrid can pass before passive
+   tab synchronization retires the old observation.
+3. One guard test mutates a committed `disabled` DOM property; React does not dispatch the click, so the
+   asserted non-mutation never reaches the production guard.
+4. The production Store Inspector exposes internal generation fields solely as test instrumentation.
+5. `StoreRemoveDialog` permits a missing mutation owner and leaves a retired destructive submit visibly
+   enabled, both of which degrade into silent rejection instead of an explicit interaction boundary.
+
+Required P2 correction:
+
+```text
+P2-E  full tab identity <-> generation atomic correlation
+P2-F  retained Root evidence keeps original generation/envUri/observedAt
+P2-G  real Register/Remove guard proof without disabled-DOM bypass or production test data
+```
+
+One scoped production commit plus focused App tests and App typecheck are required. `3.1--3.6` remain
+unchecked. P1 continues independently; P3/P4, broad gates, PR update, archive, merge, release, and browser
+walkthrough remain forbidden until both corrected lanes pass main-agent review.
