@@ -9419,3 +9419,13 @@ Open an independent issue against `accelerate-live-projection-loading` for the 7
 Until resolved, `10.14` (`pnpm test:ci`) and `11.3` (local checks before PR) remain blocked. This Change's
 own work (Sections 6-9) is not affected: core 465/465, web 928/928, app 96/96, and the
 `tool-subscription-router` 5/5 are green.
+
+### Independent supersession correction (2026-07-24)
+
+The successor review found that the prior `109/131` candidate overstated three product-chain facts:
+`8.12`, `9.4`, and `9.5` are reopened. The honest old tracker is `106/131`; all 25 unresolved obligations,
+including the three reopened claims, are mapped without synthetic completion in `loop/supersession.md`.
+This Change may use OpenSpec's partial archive only after manager confirmation. Its artifact graph is done,
+but strict generic validation fails because this historical loop Change has no delta specs; do not invent
+one retrospectively. `loop/supersession.md` records the required `--skip-specs --no-validate` path. The
+unchecked tasks and warning remain historical truth; delivery continues in the successor.

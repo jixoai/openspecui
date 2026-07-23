@@ -562,7 +562,7 @@ The independent browser attempt confirms the desktop source control and URL/quer
     Inline `--password=<secret>` warns about shell-history/process-inspection leak. Needs owner
     browser/TTY walkthrough before final acceptance.
 - [x] 8.11 Access Gate protects `/api/*`, HTTP tRPC, tRPC subscriptions, PTY WebSocket, files, terminals, notifications, and Store operations
-- [x] 8.12 Auto-launch credential fragment is consumed once and credentials never enter query parameters, persisted tabs, or `localStorage`
+- [ ] 8.12 Auto-launch credential fragment is consumed once and credentials never enter query parameters, persisted tabs, or `localStorage`
   - `consumeLaunchCredential` reads the `#credential=<bearer>` fragment once into `sessionStorage` (tab
     session memory, cleared on close), strips the fragment from the URL immediately, and preserves other
     fragment params. `main.tsx` consumes it at launch; `useActiveBackend` reads it into the App client.
@@ -592,11 +592,11 @@ The independent browser attempt confirms the desktop source control and URL/quer
     reconnect/open/remove/reorder flows need owner browser walkthrough.
 - [ ] 9.3 First-run App state connects the auto-launched backend or accepts another backend URL without a marketing page
   - `bootstrap.ts` exists; first-run auto-launch connection needs owner walkthrough.
-- [x] 9.4 Environment Center groups online backends by opaque `envUri` and shows connected projects, diagnostics, and capabilities
+- [ ] 9.4 Environment Center groups online backends by opaque `envUri` and shows connected projects, diagnostics, and capabilities
   - Wired: `useEnvironmentObservation` + `deriveEnvironments` group by envUri from health; route consumes
     it. `use-environment` 4/4 unit tests. Diagnostics/connected-projects detail still partial (8.6
     dependency), but the envUri grouping contract is proven.
-- [x] 9.5 Environment-scoped operations require an explicitly selected online environment
+- [ ] 9.5 Environment-scoped operations require an explicitly selected online environment
   - Wired: `useActiveBackend` selects the first online backend; Store views render empty/loading until one
     is online. Unit-tested via the hook contract.
 - [x] 9.6 Store Inspector owns Store identity, doctor evidence, and setup/register/unregister/remove controls

@@ -16,7 +16,7 @@ Original request (2026-07-21): "每项先明确一个生产 owner、一个精准
 | Fact | Evidence | Consequence |
 | --- | --- | --- |
 | The reviewed range is large and not covered by current PR evidence. | `git diff 24c313c...HEAD` has 23 commits / 114 files / +13,082 -958. PR #207's green checks predate it. | No merge, archive, or completion claim can rely on the existing PR status. |
-| The old Change remains unfinished. | `openspec status --change target-openspec-cli-16-line --json` reports `109/131`, with 22 unchecked 8.x--11.x entries. | It is frozen, not archived. New proof later reconciles it by explicit link. |
+| The old Change remains unfinished. | The initial audit reported `109/131`; independent correction reopens overstated 8.12/9.4/9.5, so current status is `106/131` with 25 unchecked entries. | Its transfer ledger is complete, but partial archive still requires strict validation and manager confirmation. |
 | Full gates are currently not green. | `pnpm format:check` fails on four concurrent documentation files; focused server Vitest for `git-repository-binding-router.test.ts` produced no results and remained live until terminated. `implementation.md:9365-9412` attributes the known emission failures to the separate loading Change. | The regression is a delivery blocker. It needs its own repair owner; this Change only consumes its green result. |
 
 ### Confirmed product and security defects
@@ -138,9 +138,10 @@ Change's reviewer for gate evidence and tracker reconciliation; manager for fina
 
 1. Do not repair the independent loading Change incidentally. Require its focused regression proof and
 passing affected server tests before P1--P4 broad gates run.
-2. Reconcile the 22 old tracker entries by exact proof link or explicit transfer. After manager
-confirmation, strict validation may archive the old Change as partial/superseded without changing its
-unchecked facts; it has no delta specs to sync. This is history management, not a completion claim.
+2. Reconcile all 25 old tracker entries by exact proof link or explicit transfer. After manager
+confirmation, archive the old Change as partial/superseded with `--skip-specs --no-validate` without
+changing its unchecked facts. Its loop artifacts are complete but it has no delta specs, so generic strict
+validation cannot pass without fabricating history. This is history management, not a completion claim.
 3. After P1--P4 are independently accepted, run the full local gates once and update PR evidence. The
 manager then performs the real end-to-end walkthroughs. Only after that may this corrective Change verify,
 merge, archive, and enter optional release sequencing.

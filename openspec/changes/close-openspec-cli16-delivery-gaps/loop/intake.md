@@ -20,7 +20,8 @@ Original request (2026-07-20): "以后任何需要最终端到端的浏览器走
 > 以后任何需要最终端到端的浏览器走查，就交给我来做。你最多负责到最基础的 vitest+playwright 的相关组件化的测试。
 
 The independent review baseline is `24c313c...HEAD` on `feat/openspec-cli-16-contract-baseline`.
-The reviewed old Change `target-openspec-cli-16-line` is at `109/131`; its 22 unchecked entries
+The reviewed old Change `target-openspec-cli-16-line` was at `109/131`; independent correction reopens
+three overstated claims, leaving an honest `106/131` and 25 unchecked entries. Those obligations
 remain real obligations. Current PR #207 checks predate the reviewed range and are not evidence for it.
 
 ## Objective Scope
@@ -57,7 +58,7 @@ The Change owns the following fixed points:
 - one owner-per-fixed-point implementation sequence and a final manual walkthrough ledger owned by the
   manager.
 
-`target-openspec-cli-16-line` remains frozen until its 22 unchecked items are mapped by proof or explicit
+`target-openspec-cli-16-line` remains frozen until its 25 unchecked items are mapped by proof or explicit
 transfer. With manager confirmation it may then be archived as an honestly partial/superseded record;
 unchecked items and warnings remain unchanged and the archive is not a completion claim.
 `accelerate-live-projection-loading` / `refine-live-projection-experience` remain separate work:

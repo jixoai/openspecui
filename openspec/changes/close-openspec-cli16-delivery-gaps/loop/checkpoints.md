@@ -89,7 +89,7 @@ Focused reviewer acceptance is a hard predecessor of the next package and every 
 
 ## 7. Old Change Reconciliation and Delivery
 
-- [ ] 7.1 Map each remaining `target-openspec-cli-16-line` item (8.6, 8.14; 9.1--9.3, 9.7--9.10, 9.13; 10.8--10.11, 10.14--10.15; 11.3--11.9) to exact P1--P5 evidence or retain it openly unresolved.
-- [ ] 7.2 Write an explicit supersession ledger into the old tracker/implementation notes. Keep transferred or abandoned items unchecked unless linked proof actually completes them.
-- [ ] 7.3 Strictly validate both Changes, then archive `target-openspec-cli-16-line` as an explicitly partial/superseded Change after manager confirmation. It has no delta specs to sync; archive warnings and `109/131` history remain part of the record and never imply completion.
+- [x] 7.1 Map all 25 unresolved `target-openspec-cli-16-line` items, including independently reopened 8.12/9.4/9.5, to exact P1--P5 evidence or retain them openly unresolved.
+- [x] 7.2 Write `target-openspec-cli-16-line/loop/supersession.md` and link it from the old implementation record. Every transferred or abandoned item remains unchecked unless linked proof actually completes it.
+- [ ] 7.3 Strictly validate this successor and recheck the old artifact/task status, then after manager confirmation archive `target-openspec-cli-16-line` with `-y --skip-specs --no-validate`. The old loop Change has no deltas, so generic strict validation predictably rejects it; the `109/131` pre-review baseline, corrected `106/131` state, and incomplete-task warning remain part of the record.
 - [ ] 7.4 Verify and archive this corrective Change only after its own code, focused/full gates, manager walkthrough, protected merge, and reconciliation are complete. Ask about release only after merge; follow changeversion/release automation only if explicitly approved.

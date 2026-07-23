@@ -16,8 +16,8 @@ Original request (2026-07-19): "不要在 6.11 这个任务上徘徊了。你得
 At its 2026-07-23 baseline, this Change contained planning artifacts only. Later P1/P2 candidates are
 recorded below; review baseline remains `24c313c...HEAD`.
 
-The prior `target-openspec-cli-16-line` Change remains active at `109/131`, frozen as an evidence source;
-it is neither merged nor archived. Its 22 unchecked delivery obligations are not checked here by assertion.
+The prior `target-openspec-cli-16-line` Change entered review at `109/131`; the later correction below
+reopens three overstated claims, leaving `106/131` and 25 unchecked obligations. It remains unarchived.
 `accelerate-live-projection-loading` was independently archived/replaced by
 `refine-live-projection-experience`; its server emission regression remains an external hard blocker.
 
@@ -158,7 +158,7 @@ named pre-fix red case -> review accepts cause -> implementation
    identity, but the App and router never construct the URI or parse it for display.
 5. The manager owns every final visual/end-to-end walkthrough. Agents may supply only focused Vitest and
    basic component/fixture Playwright preparation evidence.
-6. The original Change may be archived as an explicitly partial/superseded record after its 22 unchecked
+6. The original Change may be archived as an explicitly partial/superseded record after its 25 unchecked
    items are mapped and the manager confirms. Transfer never marks them complete; this corrective Change
    remains responsible for its own proof, gates, walkthrough, merge, and later archive.
 
