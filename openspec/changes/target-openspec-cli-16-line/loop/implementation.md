@@ -9250,3 +9250,26 @@ Honest checkpoint status: Section 8 is 9/14 (8.3/8.6/8.10/8.12/8.14 need App-cli
 Matrix, hidden prompt, auto-launch fragment, or protocol integration tests + owner walkthrough). Section 9
 is 4/13 (9.4/9.5/9.11/9.12 proven; the rest need mutation wiring, Context Matrix implementation, or owner
 browser walkthrough). No fabricated acceptance.
+
+### Section 10/11 verification + delivery-gate status (2026-07-23)
+
+Honest tracker reconciliation after running the full local gates:
+
+- Section 10: 10.1-10.7 + 10.12/10.13/10.16/10.17 checked (covered by existing core/server/web suites
+  plus Section 7/8/9 additions; typecheck 0 errors across 15 packages; lint 0 errors). 10.8 partial
+  (mutation UI flow not yet wired), 10.9 owner-only browser, 10.10 verified-once pending final rebuild,
+  10.11/10.14 blocked by a pre-existing unrelated regression, 10.15 pending final browser gate.
+- Section 11: 11.1 (feature-branch discipline) + 11.2 (changesets) checked; the rest are owner-only
+  merge/archive/release gates or blocked by the open items.
+
+Pre-existing server regression (NOT introduced by this Change): 9 server tests fail
+(`git-repository-binding-router` 2, `router` git 2, `tool-subscription-router` 2 + 3 others) — confirmed
+present at `6635e6a` (before this Change's Section 8 server work) and attributable to the parallel
+`accelerate-live-projection-loading` change's `runtimeInvalidation`/`context` effects. Core 465/465,
+web 928/928, app 89/89 are green. Also one unformatted unrelated file
+(`openspec/specs/live-projection-work/spec.md`) blocks `format:check`.
+
+Engagement totals: 66 -> 105/131 checked. Sections fully closed: 6, 7. Sections with code delivered but
+owner-gated items open: 8 (9/14), 9 (4/13), 10 (10/17), 11 (2/9). The remaining 26 unchecked items are
+either owner-only browser/multi-tab acceptance, blocked by the pre-existing server regression, or need
+further wiring (mutation controls, auto-launch fragment, hidden prompt, Context Matrix walkthrough).

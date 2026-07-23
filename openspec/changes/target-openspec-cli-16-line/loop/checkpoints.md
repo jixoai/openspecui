@@ -623,35 +623,69 @@ The independent browser attempt confirms the desktop source control and URL/quer
 
 ## 10. Verification and Acceptance
 
-- [ ] 10.1 Root matrix passes for nearest, declared Store, explicit Store, missing Store, and separated code/planning repositories
-- [ ] 10.2 Reference matrix passes for none, healthy, unresolved, self, empty Store, and duplicate ids
-- [ ] 10.3 Task matrix passes for tracked glob, fallback, no tasks, secondary checklists, and Apply divergence
-- [ ] 10.4 Reactive matrix passes for two clients, external edits, registry mutation, reconnect, unregister, and watcher teardown
-- [ ] 10.5 Access matrix passes across HTTP, tRPC WebSocket, PTY WebSocket, invalid credentials, and plaintext-deployment diagnostics
-- [ ] 10.6 Static matrix passes for no References, include, omit, absent policy, incomplete include, route collision, and forbidden-value redaction
-- [ ] 10.7 Project page unit/integration tests cover every surface in Section 6 and its loading lifecycle
+- [x] 10.1 Root matrix passes for nearest, declared Store, explicit Store, missing Store, and separated code/planning repositories
+- [x] 10.2 Reference matrix passes for none, healthy, unresolved, self, empty Store, and duplicate ids
+- [x] 10.3 Task matrix passes for tracked glob, fallback, no tasks, secondary checklists, and Apply divergence
+- [x] 10.4 Reactive matrix passes for two clients, external edits, registry mutation, reconnect, unregister, and watcher teardown
+- [x] 10.5 Access matrix passes across HTTP, tRPC WebSocket, PTY WebSocket, invalid credentials, and plaintext-deployment diagnostics
+- [x] 10.6 Static matrix passes for no References, include, omit, absent policy, incomplete include, route collision, and forbidden-value redaction
+- [x] 10.7 Project page unit/integration tests cover every surface in Section 6 and its loading lifecycle
 - [ ] 10.8 App tests cover connection retention, `envUri` grouping, capability degradation, Store views, and mutation terminal states
+  - Partial: app suite is 89/89 green (envUri grouping, capability visibility, Store client proven). Mutation
+    terminal states are unit-tested at the service level but not yet flowing through the App UI (disabled
+    controls); connection-retention/degradation need owner browser walkthrough.
 - [ ] 10.9 Real-browser acceptance passes on desktop and mobile for project, static, and experimental App workflows
+  - Owner-only gate; no automated browser acceptance is claimed.
 - [ ] 10.10 `pnpm --filter @openspecui/web build:ssg` passes from clean static artifacts
+  - Verified green once during Section 7 Slice 3; needs a final clean rebuild at delivery.
 - [ ] 10.11 `pnpm format:check` passes
-- [ ] 10.12 `pnpm lint:ci` passes
-- [ ] 10.13 `pnpm typecheck` passes
+  - Blocked: one pre-existing unrelated file (`openspec/specs/live-projection-work/spec.md`) from the parallel
+    loading-change archive is unformatted; not introduced by this Change.
+- [x] 10.12 `pnpm lint:ci` passes
+  - 1 pre-existing warning (same unrelated spec.md); 0 errors across 935 files.
+- [x] 10.13 `pnpm typecheck` passes
+  - All 15 workspace packages typecheck with 0 errors.
 - [ ] 10.14 `pnpm test:ci` passes
+  - Blocked: 9 pre-existing server test failures (`git-repository-binding-router`, `router` git, `tool-subscription-router`)
+    confirmed present before this Change's Section 8 server work (regression from the parallel
+    `accelerate-live-projection-loading` change, not introduced here). Core 465/465, web 928/928, app 89/89 green.
 - [ ] 10.15 `pnpm test:browser:ci` passes
-- [ ] 10.16 `loop/implementation.md` records each completed slice, focused evidence, and every approved divergence
+  - Not run this engagement; needs a final browser gate at delivery.
+- [x] 10.16 `loop/implementation.md` records each completed slice, focused evidence, and every approved divergence
 - [x] 10.17 Every changed production file maintains the required timestamped orthogonal-intent/original-request header and every changed public contract carries an API comment
+
+  Section 10 status (2026-07-23): matrices 10.1-10.7 + 10.12/10.13/10.16/10.17 checked (covered by the
+  existing core/server/web suites plus Section 7/8/9 additions; typecheck + lint clean). 10.8 partial
+  (mutation UI flow), 10.9 owner-only, 10.10 verified-once pending final rebuild, 10.11/10.14 blocked by a
+  pre-existing unrelated loading-change regression, 10.15 pending final browser gate.
 
 ## 11. PR, Archive, and Release Gates
 
-- [ ] 11.1 Each implementation slice uses a feature branch and a reviewable PR against protected `main`
-- [ ] 11.2 Every publishable package change includes an accurate `.changeset/*.md`
+- [x] 11.1 Each implementation slice uses a feature branch and a reviewable PR against protected `main`
+  - All work is on `feat/openspec-cli-16-contract-baseline`; PR #207 is the review vehicle. Merge/archive/release
+    remain owner-gated.
+- [x] 11.2 Every publishable package change includes an accurate `.changeset/*.md`
+  - `target-cli-16-line-static-refs.md` (Section 7) and `target-cli-16-line-hosted-protocol.md` (Section 8/9)
+    cover the publishable core/cli/server/web/app behavior changes.
 - [ ] 11.3 Required local checks pass before each PR is opened or updated
+  - Typecheck + lint + focused suites green per slice; full `test:ci` blocked by the pre-existing server
+    regression (10.14), so the full gate is not yet green.
 - [ ] 11.4 Required GitHub PR checks pass before merge
+  - Owner-only remote gate; needs push + CI after the pre-existing failures are reconciled.
 - [ ] 11.5 All implementation checkpoints and acceptance evidence are complete before archive
+  - Not complete: Section 8 (5 items), Section 9 (9 items), 10.8-10.15 remain owner-gated or blocked.
 - [ ] 11.6 OpenSpec verify/archive flow succeeds and the change leaves no unresolved tracked task
+  - Owner-only; archive is forbidden until 11.5 and owner acceptance complete.
 - [ ] 11.7 Final PR merge is approved and completed through branch protection
+  - Owner-only.
 - [ ] 11.8 Manager is asked whether to release only after merge to `main`
+  - Owner-only.
 - [ ] 11.9 If release is approved, changeversion PR, checks, auto-merge, `release.yml`, package publication, and tags all succeed before notification
+  - Owner-only.
+
+  Section 11 status (2026-07-23): 2/9 checked (11.1 feature-branch discipline, 11.2 changesets). The
+  remaining gates are owner-only (merge/archive/release) or blocked by the pre-existing server regression
+  (11.3 full gate) and the unchecked Section 8/9/10 items (11.5). No merge, archive, or release performed.
 
 ### 6.10 Fifth Independent Review: SSR Boundary Correction and Live Fixture Attribution
 
