@@ -8157,3 +8157,84 @@ Do not touch Archive mutation, Server/Router, `use-subscription`, shared `VTLink
 SpecList, ArchiveList, Git list projections, static export, or the independent
 `accelerate-live-projection-loading` Change. Parent checkpoint 6.17 remains open until 6.17-A has red/green
 and mutation-resistance evidence; later list families need their own research.
+
+### 6.17-A independent review correction after `102c382` (2026-07-23)
+
+`102c382` correctly limits the production diff to a `ChangeList`-local native transition. It no longer
+uses `route-top/main`, keeps reduced-motion/native-unavailable fallback, and has an id-keyed local display
+projection with a generation guard. The checkpoint remains open for two evidence gaps; do not replace the
+local owner or widen this correction into another list or the independent loading-performance Change.
+
+```text
+ChangeList click B
+  -> real VTLink
+  -> real prepareRouteDetailViewTransition
+  -> production navigation coordinator
+  -> exactly one /changes/b route update carrying changes:b handoff
+```
+
+1. The current navigation fixture replaces `detail-prepare` and TanStack Router primitives. It proves that
+   test doubles call one another, not that the actual `VTLink` preparation/coordinator path accepts the
+   Change handoff. Retain real `VTLink` and real `prepareRouteDetailViewTransition`; use a typed real Router
+   fixture or mock only their lowest deterministic transport/runtime dependencies. The fixed point must read
+   the actual route update and its `changes:b` handoff after clicking rendered Change B.
+2. Mutation resistance is not accepted until it is written here with command/result and restored commit
+   state. Remove only the local generation equality check and show the late-A test renders obsolete B/A
+   instead of current C. Separately replace only `key={change.id}` with an index key and show the named
+   removal/reorder DOM-identity test fail. Do not weaken the subscription, fake a downstream handler, or
+   mutate both protections in one run.
+3. `change-list.tsx` already has five declared orthogonal intents. Its header must keep that limit by
+   explicitly joining local list physical continuity with its existing collision-safe detail-navigation intent;
+   do not silently add a sixth intent or leave the new production responsibility undocumented.
+
+The local native helper currently relies on the app bootstrap's active-transition tracking when a browser
+does not natively expose `document.activeViewTransition`; its `try/catch` falls back to an immediate current
+snapshot if a concurrent native transition rejects. Record that residual coordination limit honestly, but
+do not create a new shared transition state machine in this correction.
+
+### 6.17-A evidence completion after `102c382` (2026-07-23)
+
+The navigation evidence now keeps the production `ChangeList`, `VTLink`,
+`prepareRouteDetailViewTransition`, and navigation coordinator intact. A typed TanStack memory Router fixture
+only mocks the lowest deterministic edges: the Change status query/cache prime, static-mode decision, and
+native `runViewTransition` runtime. Clicking rendered Change B therefore crosses the actual coordinator and
+resolves exactly one `/changes/b` route update. The resolved Router location retains:
+
+```text
+__vtHandoff = {
+  family: "changes",
+  entityId: "b",
+  title: "Change B",
+  subtitle: "b",
+}
+```
+
+The real preparation also calls `opsx.status.query({ change: "b" })` once and primes the production
+`opsx.subscribeStatus:b:undefined:0` identity. The test records one `onResolved` event for `/changes/b`,
+not merely a mock navigate call. The continuity-only tests retain their small Link replacement because they
+render outside a RouterProvider; that replacement is no longer used as navigation evidence.
+
+Both requested single-boundary mutations were run and restored:
+
+1. Removing only the `transitionGenerationRef.current === generation` guard inside the local transition
+   update made `change-list-continuity.test.tsx` fail its late-A fixed point: after `[A, B] -> [B]`, then
+   `[C]`, manually settling the retired A transition reintroduced obsolete B and the assertion for current C
+   failed. The generation guard was restored.
+2. Replacing only `key={change.id}` with an index key made the same focused file fail two identity fixed
+   points: `[A, B] -> [B]` remounted B after A removal, and `[A, B] -> [B, A]` reused the old B DOM node for
+   A. The id key was restored; no other continuity guard was changed.
+
+Restored focused verification:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/routes/change-list-continuity.test.tsx \
+  src/routes/change-list-continuity-fallback.test.tsx \
+  src/routes/change-list-navigation.test.tsx \
+  src/routes/change-list.test.tsx
+  -> 4 files / 16 tests passed
+```
+
+This slice does not claim to solve the independent global Loading-latency investigation. No Server/Router
+production code, shared `VTLink`, subscription owner, SSG, broad gate, browser walkthrough, merge, archive,
+or release was performed here; final visual and end-to-end acceptance remains with the owner.
