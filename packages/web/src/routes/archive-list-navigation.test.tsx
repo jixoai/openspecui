@@ -178,7 +178,7 @@ describe('ArchiveList detail navigation', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/archive/b'))
     expect(screen.getByTestId('archive-detail-probe')).toBeTruthy()
     expect(archiveGetQueryMock).toHaveBeenCalledExactlyOnceWith({ id: 'b' })
-    expect(primeSubscriptionCacheMock).toHaveBeenCalledWith(
+    expect(primeSubscriptionCacheMock).toHaveBeenCalledExactlyOnceWith(
       'archive.subscribeOne:b',
       preparedArchive
     )
