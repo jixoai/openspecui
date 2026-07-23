@@ -2,7 +2,7 @@
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Render backend connection discovery and retained entry actions.
  * 2. Keep credentials outside persisted connection state.
- * 3. Preserve authentication-required as a reachable connection state.
+ * 3. Consume shared authentication and reachability observations.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  */
@@ -12,6 +12,7 @@ import { Home, Loader2, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { EmptyView } from '../components/state-views'
 import { StatusDot } from '../components/status-badge'
+import { useConnectionObservations } from '../lib/connection-observation'
 import type { HostedTabReachability } from '../lib/reachability'
 import {
   applyHostedLaunchRequest,
@@ -20,11 +21,7 @@ import {
   removeHostedTab,
   type HostedShellTab,
 } from '../lib/shell-state'
-import {
-  useConnectionReachability,
-  useConnections,
-  useConnectionsActions,
-} from '../lib/use-connections'
+import { useConnections, useConnectionsActions } from '../lib/use-connections'
 
 /**
  * Home / Connections（App 首页）。
@@ -37,7 +34,10 @@ import {
  */
 export function ConnectionsRoute() {
   const state = useConnections()
-  const reachability = useConnectionReachability(state.tabs)
+  const { observations } = useConnectionObservations()
+  const reachability = Object.fromEntries(
+    observations.map((observation) => [observation.apiBaseUrl, observation.reachability])
+  )
   const actions = useConnectionsActions()
   const [addDialogOpen, setAddDialogOpen] = useState(false)
 

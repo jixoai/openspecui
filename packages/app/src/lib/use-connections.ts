@@ -1,19 +1,17 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Project persisted credential-free backend connection entries.
- * 2. Observe backend reachability without conflating it with environment identity.
+ * 2. Publish same-window and storage-driven shell-state changes.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  */
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { probeHostedBackend, type HostedTabReachability } from './reachability'
+import { useSyncExternalStore } from 'react'
 import {
   areHostedShellStatesEqual,
   createEmptyHostedShellState,
   loadHostedShellState,
   saveHostedShellState,
   type HostedShellState,
-  type HostedShellTab,
 } from './shell-state'
 
 const SHELL_STATE_STORE_KEY = 'openspecui-app:shell'
@@ -88,62 +86,4 @@ export function useConnections() {
 /** 触发 shell state 变更（add/remove/reorder）的命令入口。 */
 export function useConnectionsActions() {
   return shellStateStore
-}
-
-/** 单个 backend 的可达性（checking | online | offline）。 */
-/** Reachability fact observed for one retained backend connection. */
-export type ConnectionReachability = HostedTabReachability
-
-/** Reachability observations indexed by retained connection id. */
-export interface ConnectionReachabilityMap {
-  [apiBaseUrl: string]: ConnectionReachability
-}
-
-/**
- * 对所有连接条目探测可达性（复用 reachability.ts 的 /api/health 探测）。
- *
- * 注意：本轮骨架阶段 backend 不返回 envUri/capabilities，只返回 projectName/openspecuiVersion。
- * TODO(kernel): 后端 health 协议落地后，从同一探测结果提取 envUri + capabilities，
- *               并据 envUri 分组（Environment Center 使用），此处保留纯可达性职责。
- */
-/** Probe and subscribe to reachability for the supplied backend tabs. */
-export function useConnectionReachability(tabs: HostedShellTab[]): ConnectionReachabilityMap {
-  const [reachability, setReachability] = useState<ConnectionReachabilityMap>({})
-
-  const apiBaseUrls = useMemo(() => tabs.map((tab) => tab.apiBaseUrl), [tabs])
-  const cacheKey = apiBaseUrls.join(',')
-
-  useEffect(() => {
-    let cancelled = false
-    if (apiBaseUrls.length === 0) {
-      setReachability({})
-      return
-    }
-
-    // 先全部置 checking，保证 UI 立即反映加载态。
-    setReachability((prev) => {
-      const next: ConnectionReachabilityMap = {}
-      for (const url of apiBaseUrls) next[url] = 'checking'
-      // 保留上一轮已知的非 checking 结果以减少闪烁。
-      for (const url of apiBaseUrls) {
-        if (prev[url] && prev[url] !== 'checking') next[url] = prev[url]
-      }
-      return next
-    })
-
-    void Promise.all(
-      apiBaseUrls.map(async (url) => {
-        const result = await probeHostedBackend(url)
-        if (cancelled) return
-        setReachability((prev) => ({ ...prev, [url]: result.reachability }))
-      })
-    )
-
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cacheKey])
-
-  return reachability
 }

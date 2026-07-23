@@ -2,14 +2,14 @@
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Orchestrate persisted credential-free project tabs and embedded frame lifecycle.
  * 2. Coordinate browser/PWA launch relay, install, and update ownership.
- * 3. Project exact backend reachability including authentication-required state.
+ * 3. Consume exact backend reachability from the shared App observation owner.
  * 4. Keep refresh/retry feedback attached to the affected tab runtime.
  * 5. Preserve cross-window shell-state convergence.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Delivery correction (2026-07-24): bind launch credentials before forwarding credential-free tabs.
- * Compromise: these intents share one React owner because tab, frame, relay, and PWA browser lifecycles
- * must settle in one mounted shell; extracting them in P1 would expand beyond the credential fixed point.
+ * Compromise: tab, frame, relay, and PWA browser lifecycles remain co-located because they must settle in
+ * one mounted shell; health and Root observation are physically extracted into the App runtime owner.
  */
 import { Dialog } from '@openspecui/web-src/components/dialog'
 import { type Tab } from '@openspecui/web-src/components/tabs'
@@ -25,6 +25,11 @@ import {
   type FormEvent,
 } from 'react'
 import { consumeHostedLaunchUrl } from '../lib/bootstrap'
+import {
+  ConnectionObservationBoundary,
+  useConnectionObservationOwner,
+  useConnectionObservations,
+} from '../lib/connection-observation'
 import { createHostedShellSync } from '../lib/hosted-shell-sync'
 import { createHostedLaunchRelay } from '../lib/launch-relay'
 import {
@@ -37,7 +42,7 @@ import {
   type HostedAppTitlebarInsets,
   type HostedAppWindowControlsOverlayLike,
 } from '../lib/pwa-runtime'
-import { probeHostedBackend, type HostedTabReachability } from '../lib/reachability'
+import type { HostedTabReachability } from '../lib/reachability'
 import {
   activateHostedTab,
   applyHostedLaunchRequest,
@@ -54,7 +59,6 @@ import {
 } from '../lib/shell-state'
 import { HostedShellThemeBootstrap } from './hosted-shell-theme'
 
-const PROBE_INTERVAL_MS = 15000
 const REFRESH_FEEDBACK_MS = 1200
 const FORWARDED_LAUNCH_MESSAGE = 'Launch forwarded to the active OpenSpec UI App window.'
 const FORWARDED_SYNC_TIMEOUT_MS = 1600
@@ -441,7 +445,7 @@ function createHostedShellTab(props: {
   }
 }
 
-export function HostedShell({
+function HostedShellRuntime({
   initialLaunchRequest,
   fallbackLaunchRequest = null,
   initialError,
@@ -461,7 +465,8 @@ export function HostedShell({
     }
     return persisted
   })
-  const [tabRuntime, setTabRuntime] = useState<Record<string, HostedTabRuntimeState>>({})
+  const connectionOwner = useConnectionObservationOwner()
+  const connectionSnapshot = useConnectionObservations()
   const [tabFrames, setTabFrames] = useState<Record<string, HostedTabFrameState>>({})
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isRefreshFeedbackActive, setIsRefreshFeedbackActive] = useState(false)
@@ -470,7 +475,6 @@ export function HostedShell({
   const [addDialogError, setAddDialogError] = useState<string | null>(null)
   const [pwaState, setPwaState] = useState<HostedShellPwaState>(DEFAULT_PWA_STATE)
   const [updateState, setUpdateState] = useState<HostedAppUpdateState>(DEFAULT_UPDATE_STATE)
-  const tabRuntimeRef = useRef<Record<string, HostedTabRuntimeState>>({})
   const installPromptRef = useRef<BeforeInstallPromptEventLike | null>(null)
   const initialLaunchHandledRef = useRef(false)
   const refreshFeedbackTimerRef = useRef<number | null>(null)
@@ -607,11 +611,34 @@ export function HostedShell({
 
   useEffect(() => {
     shellSync.write(shellState)
-  }, [shellState, shellSync])
+    connectionOwner.setTabs(shellState.tabs)
+  }, [connectionOwner, shellState, shellSync])
 
-  useEffect(() => {
-    tabRuntimeRef.current = tabRuntime
-  }, [tabRuntime])
+  const tabRuntime = useMemo(() => {
+    const byApiBaseUrl = new Map(
+      connectionSnapshot.observations.map((observation) => [observation.apiBaseUrl, observation])
+    )
+    return Object.fromEntries(
+      shellState.tabs.map((tab) => {
+        const observation = byApiBaseUrl.get(tab.apiBaseUrl)
+        const health = observation?.health ?? null
+        const reachability = observation?.reachability ?? 'checking'
+        return [
+          tab.id,
+          {
+            reachability,
+            projectName: health?.projectName ?? null,
+            openspecuiVersion: health?.openspecuiVersion ?? null,
+            embeddedUiUrl:
+              reachability !== 'unsupported' && reachability !== 'authentication-required'
+                ? (health?.embeddedUiUrl ?? null)
+                : null,
+            errorMessage: observation?.healthError ?? null,
+          } satisfies HostedTabRuntimeState,
+        ]
+      })
+    )
+  }, [connectionSnapshot.observations, shellState.tabs])
 
   useEffect(() => {
     return () => {
@@ -645,16 +672,6 @@ export function HostedShell({
       stop()
     }
   }, [applySyncedShellState, shellSync])
-
-  useEffect(() => {
-    setTabRuntime((current) => {
-      const next: Record<string, HostedTabRuntimeState> = {}
-      for (const tab of shellState.tabs) {
-        next[tab.id] = current[tab.id] ?? DEFAULT_RUNTIME_STATE
-      }
-      return next
-    })
-  }, [shellState.tabs])
 
   useEffect(() => {
     setTabFrames((current) => {
@@ -826,58 +843,15 @@ export function HostedShell({
         setIsRefreshing(true)
       }
 
-      setTabRuntime((current) => {
-        const next = { ...current }
-        for (const tab of targets) {
-          next[tab.id] = {
-            ...(current[tab.id] ?? DEFAULT_RUNTIME_STATE),
-            reachability: 'checking',
-            errorMessage: null,
-          }
-        }
-        return next
-      })
-
       try {
-        const probeResults = await Promise.all(
-          targets.map(async (tab) => ({
-            tab,
-            probe: await probeHostedBackend(tab.apiBaseUrl),
-          }))
-        )
-
-        setTabRuntime((current) => {
-          const next = { ...current }
-          for (const { tab, probe } of probeResults) {
-            const previous = current[tab.id] ?? DEFAULT_RUNTIME_STATE
-
-            if (probe.reachability !== 'online') {
-              next[tab.id] = {
-                ...previous,
-                reachability: probe.reachability,
-                embeddedUiUrl: probe.reachability === 'offline' ? previous.embeddedUiUrl : null,
-                errorMessage: probe.errorMessage,
-              }
-              continue
-            }
-
-            next[tab.id] = {
-              reachability: 'online',
-              projectName: probe.health?.projectName ?? previous.projectName,
-              openspecuiVersion: probe.health?.openspecuiVersion ?? previous.openspecuiVersion,
-              embeddedUiUrl: probe.health?.embeddedUiUrl ?? previous.embeddedUiUrl,
-              errorMessage: probe.errorMessage,
-            }
-          }
-          return next
-        })
+        await connectionOwner.refresh(targets.map((tab) => tab.apiBaseUrl))
       } finally {
         if (options?.visualFeedback) {
           setIsRefreshing(false)
         }
       }
     },
-    [shellState.tabs, startRefreshFeedback]
+    [connectionOwner, shellState.tabs, startRefreshFeedback]
   )
 
   const activateWaitingHostedAppUpdate = useCallback((registration: ServiceWorkerRegistration) => {
@@ -1025,34 +999,6 @@ export function HostedShell({
     shellState.tabs.length,
     syncUpdateStateFromRegistration,
   ])
-
-  useEffect(() => {
-    if (shellState.tabs.length === 0) {
-      return
-    }
-
-    void probeTabs()
-    const interval = window.setInterval(() => {
-      void probeTabs()
-    }, PROBE_INTERVAL_MS)
-
-    const onFocus = () => {
-      void probeTabs()
-    }
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        void probeTabs()
-      }
-    }
-
-    window.addEventListener('focus', onFocus)
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    return () => {
-      window.clearInterval(interval)
-      window.removeEventListener('focus', onFocus)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-    }
-  }, [probeTabs, shellState.tabs.length])
 
   const activeHostedTab =
     shellState.tabs.find((tab) => tab.id === shellState.activeTabId) ?? shellState.tabs[0] ?? null
@@ -1280,5 +1226,14 @@ export function HostedShell({
         </form>
       </Dialog>
     </div>
+  )
+}
+
+/** Render Hosted Shell against the App owner, supplying one only for isolated component mounts. */
+export function HostedShell(props: HostedShellProps) {
+  return (
+    <ConnectionObservationBoundary>
+      <HostedShellRuntime {...props} />
+    </ConnectionObservationBoundary>
   )
 }

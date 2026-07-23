@@ -1,14 +1,15 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Group online backends by opaque backend-issued environment identity.
  * 2. Expose capabilities as compatibility facts rather than permissions.
+ * 3. Present all current observations independently from selected Store authority.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  */
 import { Link } from '@tanstack/react-router'
 import { Boxes, FlaskConical, MonitorSmartphone, Store } from 'lucide-react'
 import { EmptyView } from '../components/state-views'
-import { useActiveBackend } from '../lib/use-active-backend'
+import { useConnectionObservations } from '../lib/connection-observation'
 import { useEnvironmentObservation } from '../lib/use-environment'
 
 /**
@@ -25,10 +26,12 @@ import { useEnvironmentObservation } from '../lib/use-environment'
  * TODO(kernel): envUri + capabilities 协议落地前，本页为空态骨架。
  */
 export function EnvironmentRoute() {
-  const { active } = useActiveBackend()
-  const observations = active?.health
-    ? [{ apiBaseUrl: active.apiBaseUrl, health: active.health }]
-    : []
+  const { observations: connectionObservations } = useConnectionObservations()
+  const observations = connectionObservations.flatMap((observation) =>
+    observation.current && observation.reachability === 'online' && observation.health
+      ? [{ apiBaseUrl: observation.apiBaseUrl, health: observation.health }]
+      : []
+  )
   const { environments } = useEnvironmentObservation(observations)
 
   return (

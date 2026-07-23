@@ -1,14 +1,15 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Project observed project-to-Root and Reference relationships by environment.
  * 2. Avoid machine-wide completeness claims.
+ * 3. Join every current online backend independently from selected Store authority.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  */
 import { Columns3 } from 'lucide-react'
 import { EmptyView, ErrorView, LoadingView } from '../components/state-views'
 import { StoreManagerShell } from '../components/store-manager-shell'
-import { useActiveBackend } from '../lib/use-active-backend'
+import { useConnectionObservations } from '../lib/connection-observation'
 import { useEnvironmentObservation } from '../lib/use-environment'
 import type { ProjectContextObservation } from '../types/root-context'
 
@@ -25,23 +26,43 @@ import type { ProjectContextObservation } from '../types/root-context'
  *               按 envUri × storeId join。
  */
 export function ContextMatrixRoute() {
-  const { active } = useActiveBackend()
-  const observations = active?.health
-    ? [{ apiBaseUrl: active.apiBaseUrl, health: active.health }]
-    : []
-  const rootContextObservations = active?.health
-    ? [
-        {
-          apiBaseUrl: active.apiBaseUrl,
-          health: active.health,
-          rootContext: active.rootContext,
-        },
-      ]
-    : []
-  const { projectContexts, isLoading, error } = useEnvironmentObservation(
-    observations,
-    rootContextObservations
+  const { observations: connectionObservations } = useConnectionObservations()
+  const current = connectionObservations.filter(
+    (observation) =>
+      observation.current && observation.reachability === 'online' && observation.health
   )
+  const observations = current.flatMap((observation) =>
+    observation.health ? [{ apiBaseUrl: observation.apiBaseUrl, health: observation.health }] : []
+  )
+  const rootContextObservations = current.flatMap((observation) =>
+    observation.health
+      ? [
+          {
+            apiBaseUrl: observation.apiBaseUrl,
+            health: observation.health,
+            rootContext: observation.rootContext,
+            stale: observation.rootStatus !== 'ready',
+          },
+        ]
+      : []
+  )
+  const derived = useEnvironmentObservation(observations, rootContextObservations)
+  const projectContexts = derived.projectContexts
+  const isLoading =
+    derived.isLoading ||
+    connectionObservations.some(
+      (observation) =>
+        observation.reachability === 'checking' ||
+        (observation.current && observation.rootStatus === 'loading')
+    )
+  const error =
+    derived.error ??
+    connectionObservations.flatMap((observation) =>
+      observation.rootError
+        ? [new Error(`${observation.apiBaseUrl}: ${observation.rootError}`)]
+        : []
+    )[0] ??
+    null
 
   let body
   if (isLoading && projectContexts.length === 0) {

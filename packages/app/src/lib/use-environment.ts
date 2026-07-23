@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Build observed runtime environments from backend-issued health (opaque envUri + capabilities).
  * 2. Gate Store views through objective hosted-protocol capabilities.
+ * 3. Preserve source-labelled stale Root observations without granting authority.
  *
  * Original request (2026-07-15): "前端缺少的东西你可以通过注释补充。"
  * Migration (2026-07-23): wired to the backend health response (envUri/capabilities now emitted).
@@ -68,6 +69,7 @@ export function deriveEnvironments(observations: OnlineBackendObservation[]): Ho
 /** One backend's Root Context used to derive its project Context observation. */
 export interface BackendRootContextObservation extends OnlineBackendObservation {
   rootContext: RootContextState | null
+  stale?: boolean
 }
 
 /** Map a CLI Doctor reference diagnostic severity to a neutral Reference state. */
@@ -126,6 +128,7 @@ export function deriveProjectContexts(
       storeId: data?.storeId ?? data?.planningRoot?.store_id ?? undefined,
       references,
       observedAt: Date.now(),
+      stale: observation.stale,
     })
   }
   return contexts

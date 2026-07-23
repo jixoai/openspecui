@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Render a dense wide-screen projection of Store list facts.
  * 2. Keep Inventory secondary to Inspector and Context navigation.
+ * 3. Read only from the exact selected current backend.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  */
@@ -9,6 +10,7 @@ import type { StoreListEntry } from '@openspecui/core/store-types'
 import { EmptyView, ErrorView, LoadingView } from '../components/state-views'
 import { StatusBadge } from '../components/status-badge'
 import { StoreManagerShell } from '../components/store-manager-shell'
+import { useActiveBackend } from '../lib/use-active-backend'
 import { useStoreData } from '../lib/use-store-data'
 
 /**
@@ -25,7 +27,8 @@ import { useStoreData } from '../lib/use-store-data'
  *               (id + root) 渲染骨架，doctor 细节待 Inspector 视图承载。
  */
 export function StoreInventoryRoute() {
-  const { inventory, isLoading, error } = useStoreData()
+  const { active } = useActiveBackend()
+  const { inventory, isLoading, error } = useStoreData({ apiBaseUrl: active?.apiBaseUrl })
   const stores = inventory?.stores ?? []
 
   let body
