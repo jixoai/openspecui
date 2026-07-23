@@ -2,7 +2,7 @@
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Project observed project-to-Root and Reference relationships by environment.
  * 2. Avoid machine-wide completeness claims.
- * 3. Join every current online backend independently from selected Store authority.
+ * 3. Preserve each source's Root lifecycle, typed failure, and direct Reference provenance.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  */
@@ -32,16 +32,29 @@ export function ContextMatrixRoute() {
       observation.current && observation.reachability === 'online' && observation.health
   )
   const observations = current.flatMap((observation) =>
-    observation.health ? [{ apiBaseUrl: observation.apiBaseUrl, health: observation.health }] : []
+    observation.health
+      ? [
+          {
+            tabId: observation.tabId,
+            generation: observation.generation,
+            apiBaseUrl: observation.apiBaseUrl,
+            health: observation.health,
+          },
+        ]
+      : []
   )
   const rootContextObservations = current.flatMap((observation) =>
     observation.health
       ? [
           {
+            tabId: observation.tabId,
+            generation: observation.generation,
             apiBaseUrl: observation.apiBaseUrl,
             health: observation.health,
             rootContext: observation.rootContext,
-            stale: observation.rootStatus !== 'ready',
+            rootStatus: observation.rootStatus,
+            rootError: observation.rootError,
+            stale: observation.stale,
           },
         ]
       : []
@@ -59,7 +72,7 @@ export function ContextMatrixRoute() {
     derived.error ??
     connectionObservations.flatMap((observation) =>
       observation.rootError
-        ? [new Error(`${observation.apiBaseUrl}: ${observation.rootError}`)]
+        ? [new Error(`${observation.apiBaseUrl}: ${observation.rootError.message}`)]
         : []
     )[0] ??
     null
@@ -111,21 +124,18 @@ function renderContextMatrixBody(projectContexts: ProjectContextObservation[]) {
           </thead>
           <tbody>
             {projectContexts.map((context) => (
-              <tr key={`${context.envUri}:${context.apiBaseUrl}`}>
+              <tr key={`${context.tabId}:${context.generation}`}>
                 <td className="border-border border-b p-2">
                   <div className="font-medium">{context.projectName ?? context.apiBaseUrl}</div>
+                  <div className="text-muted-foreground font-mono text-xs">
+                    {context.apiBaseUrl}
+                  </div>
                   {context.stale ? (
-                    <div className="text-muted-foreground text-xs">stale snapshot</div>
+                    <div className="text-muted-foreground text-xs">retained stale snapshot</div>
                   ) : null}
                 </td>
                 <td className="border-border border-b p-2">
-                  {context.storeId ? (
-                    <span className="font-mono text-xs">{context.storeId}</span>
-                  ) : (
-                    <span className="text-muted-foreground text-xs">
-                      {context.rootSource ?? 'nearest'}
-                    </span>
-                  )}
+                  <RootEvidence context={context} />
                 </td>
                 {observedStoreIds.map((storeId) => (
                   <td key={storeId} className="border-border border-b p-2">
@@ -141,26 +151,49 @@ function renderContextMatrixBody(projectContexts: ProjectContextObservation[]) {
   )
 }
 
-function MatrixCell({
-  context,
-  storeId,
-}: {
-  context: { storeId?: string; references: { storeId: string; state: string }[] }
-  storeId: string
-}) {
+function MatrixCell({ context, storeId }: { context: ProjectContextObservation; storeId: string }) {
   if (context.storeId === storeId) {
     return <span className="bg-primary/15 text-primary rounded px-1.5 py-0.5 text-xs">Root</span>
   }
   const reference = context.references.find((reference) => reference.storeId === storeId)
   if (reference) {
     return (
-      <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-xs text-sky-700 dark:text-sky-300">
-        Reference
+      <span
+        className="rounded bg-sky-500/15 px-1.5 py-0.5 text-xs text-sky-700 dark:text-sky-300"
+        aria-label={`${context.projectName ?? context.apiBaseUrl} references ${storeId} (${reference.state})`}
+        title={reference.root ?? reference.note}
+      >
+        Reference · {reference.state}
       </span>
     )
   }
   // 中性表达：不是 "unreferenced"，而是 "no reference currently observed"。
   return <span className="text-muted-foreground text-xs">—</span>
+}
+
+function RootEvidence({ context }: { context: ProjectContextObservation }) {
+  if (context.rootStatus === 'error') {
+    const detail = context.rootError
+      ? context.rootError.source === 'root-context'
+        ? `${context.rootError.code}: ${context.rootError.message}`
+        : context.rootError.message
+      : 'Unknown Root Context failure.'
+    return (
+      <div className="space-y-1" role="status">
+        <div className="text-destructive text-xs font-medium">Root error</div>
+        <div className="text-destructive/80 text-xs">{detail}</div>
+        {context.storeId ? <div className="font-mono text-xs">{context.storeId}</div> : null}
+      </div>
+    )
+  }
+  if (context.rootStatus === 'loading' || context.rootStatus === 'idle') {
+    return <span className="text-muted-foreground text-xs">Root {context.rootStatus}</span>
+  }
+  return context.storeId ? (
+    <span className="font-mono text-xs">{context.storeId}</span>
+  ) : (
+    <span className="text-muted-foreground text-xs">{context.rootSource ?? 'unresolved'}</span>
+  )
 }
 
 function collectObservedStoreIds(

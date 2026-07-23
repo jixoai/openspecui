@@ -3,6 +3,7 @@
  * 1. Make Store Doctor evidence the primary Store Manager interaction.
  * 2. Reserve backend-owned mutation controls without inferring applicability.
  * 3. Keep Access Gate credentials outside route/component props.
+ * 4. Revalidate selected-tab generation at every Store mutation dispatch.
  *
  * Original request (2026-07-15): "Store Manager uses the Store Inspector as its primary interaction."
  */
@@ -13,7 +14,7 @@ import { EmptyView, ErrorView, LoadingView } from '../components/state-views'
 import { StatusBadge, StatusDot, type StatusVariant } from '../components/status-badge'
 import { StoreManagerShell } from '../components/store-manager-shell'
 import { StoreRemoveDialog } from '../components/store-remove-dialog'
-import { mutateBackendStore } from '../lib/backend-client'
+import { dispatchStoreMutation } from '../lib/store-action'
 import { deriveHealthFromDiagnostics, type StoreHealthSummary } from '../lib/store-health'
 import { useActiveBackend } from '../lib/use-active-backend'
 import { useStoreData } from '../lib/use-store-data'
@@ -62,9 +63,9 @@ export function StoreInspectorRoute() {
       kind: 'setup' | 'register' | 'unregister',
       input: Record<string, unknown>
     ): Promise<void> => {
-      if (!active?.apiBaseUrl) return
       const requestId = `${kind}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
-      await mutateBackendStore({ apiBaseUrl: active.apiBaseUrl }, { requestId, kind, ...input })
+      const result = await dispatchStoreMutation(active, { requestId, kind, ...input })
+      if (!result) return
       setRefreshNonce((n) => n + 1)
     },
     [active]
@@ -164,7 +165,7 @@ export function StoreInspectorRoute() {
           <StoreRemoveDialog
             store={removeTarget}
             envUri={active?.health?.envUri}
-            apiBaseUrl={active?.apiBaseUrl}
+            authority={active}
             onRemoved={() => setRefreshNonce((n) => n + 1)}
             onClose={() => setRemoveTarget(null)}
           />

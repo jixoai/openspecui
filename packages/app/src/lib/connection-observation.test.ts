@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (created 2026-07-24 Asia/Shanghai):
  * 1. Prove multi-source health and Root Context collection in one owner.
- * 2. Prove a late removed-and-readded locator generation cannot publish stale evidence.
+ * 2. Prove exact-tab generations retire late removed/replaced results.
  * 3. Preserve per-source authentication and error states without cross-source fallback.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
@@ -61,6 +61,39 @@ function deferred<T>(): {
 }
 
 describe('connection observation owner', () => {
+  it('keeps duplicate tabs at one locator in distinct observation generations', async () => {
+    const firstProbe = deferred<HostedBackendProbeResult>()
+    const secondProbe = deferred<HostedBackendProbeResult>()
+    let probeCount = 0
+    const owner = createConnectionObservationOwner({
+      probe: () => (++probeCount === 1 ? firstProbe.promise : secondProbe.promise),
+      fetchRootContext: async () => loadingRoot(1),
+      now: () => 1,
+    })
+
+    owner.setTabs([tab('first', API_A), tab('second', API_A)])
+    firstProbe.resolve(online(health(API_A, 'first-project')))
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(owner.getSnapshot().observations).toMatchObject([
+      { tabId: 'first', current: true, health: { projectName: 'first-project' } },
+      { tabId: 'second', current: false, reachability: 'checking', health: null },
+    ])
+    const firstGeneration = owner.getSnapshot().observations[0]?.generation
+    const secondGeneration = owner.getSnapshot().observations[1]?.generation
+    expect(firstGeneration).not.toBe(secondGeneration)
+
+    secondProbe.resolve(online(health(API_A, 'second-project')))
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(owner.getSnapshot().observations).toMatchObject([
+      { tabId: 'first', current: true, health: { projectName: 'first-project' } },
+      { tabId: 'second', current: true, health: { projectName: 'second-project' } },
+    ])
+  })
+
   it('collects independent health and Root Context states for every retained source', async () => {
     const owner = createConnectionObservationOwner({
       probe: async (apiBaseUrl) =>
@@ -138,5 +171,48 @@ describe('connection observation owner', () => {
         health: { projectName: 'current-project' },
       },
     ])
+  })
+
+  it('retires an action authority when the same tab publishes a replacement generation', async () => {
+    const initialProbe = deferred<HostedBackendProbeResult>()
+    let probeCount = 0
+    const owner = createConnectionObservationOwner({
+      probe: async () => {
+        probeCount += 1
+        return probeCount === 1
+          ? initialProbe.promise
+          : online(health(API_A, 'replacement-generation'))
+      },
+      fetchRootContext: async () => loadingRoot(4),
+      now: () => 4,
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    initialProbe.resolve(online(health(API_A, 'initial-generation')))
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    const initial = owner.getSnapshot().observations[0]
+    expect(initial?.current).toBe(true)
+
+    await owner.refresh(['a'])
+    const replacement = owner.getSnapshot().observations[0]
+    expect(replacement?.generation).not.toBe(initial?.generation)
+    expect(
+      initial &&
+        owner.isCurrentAuthority({
+          tabId: initial.tabId,
+          apiBaseUrl: initial.apiBaseUrl,
+          generation: initial.generation,
+        })
+    ).toBe(false)
+    expect(
+      replacement &&
+        owner.isCurrentAuthority({
+          tabId: replacement.tabId,
+          apiBaseUrl: replacement.apiBaseUrl,
+          generation: replacement.generation,
+        })
+    ).toBe(true)
   })
 })

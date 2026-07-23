@@ -16,6 +16,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react'
+import type { RootObservationError, RootObservationStatus } from '../types/root-context'
 import { fetchBackendRootContext } from './backend-client'
 import {
   probeHostedBackend,
@@ -27,7 +28,12 @@ import { useConnections } from './use-connections'
 
 const REFRESH_INTERVAL_MS = 15_000
 
-export type RootObservationStatus = 'idle' | 'loading' | 'ready' | 'error'
+/** Exact authority captured by an environment-scoped action. */
+export interface ConnectionObservationAuthority {
+  tabId: string
+  apiBaseUrl: string
+  generation: number
+}
 
 /** Current or retained evidence for one credential-free backend locator. */
 export interface ConnectionObservation {
@@ -39,7 +45,7 @@ export interface ConnectionObservation {
   healthError: string | null
   rootContext: RootContextState | null
   rootStatus: RootObservationStatus
-  rootError: string | null
+  rootError: RootObservationError | null
   /** True only after this generation's compatible health probe succeeds. */
   current: boolean
   /** Retained evidence exists but cannot authorize current operations. */
@@ -62,7 +68,17 @@ export interface ConnectionObservationOwner {
   getSnapshot(): ConnectionObservationSnapshot
   subscribe(listener: () => void): () => void
   setTabs(tabs: readonly HostedShellTab[]): void
-  refresh(apiBaseUrls?: readonly string[]): Promise<void>
+  refresh(tabIds?: readonly string[]): Promise<void>
+  isCurrentAuthority(authority: ConnectionObservationAuthority): boolean
+}
+
+function isSameTab(left: HostedShellTab, right: HostedShellTab): boolean {
+  return (
+    left.id === right.id &&
+    left.sessionId === right.sessionId &&
+    left.apiBaseUrl === right.apiBaseUrl &&
+    left.createdAt === right.createdAt
+  )
 }
 
 function createInitialObservation(
@@ -97,9 +113,9 @@ export function createConnectionObservationOwner(
     ...overrides,
   }
   const listeners = new Set<() => void>()
-  const retainedTabs = new Map<string, HostedShellTab>()
-  const generations = new Map<string, number>()
+  let retainedTabs = new Map<string, HostedShellTab>()
   const observations = new Map<string, ConnectionObservation>()
+  let nextGeneration = 0
   let revision = 0
   let snapshot: ConnectionObservationSnapshot = { revision, observations: [] }
 
@@ -107,39 +123,39 @@ export function createConnectionObservationOwner(
     revision += 1
     snapshot = {
       revision,
-      observations: [...retainedTabs.keys()].flatMap((apiBaseUrl) => {
-        const observation = observations.get(apiBaseUrl)
+      observations: [...retainedTabs.keys()].flatMap((tabId) => {
+        const observation = observations.get(tabId)
         return observation ? [observation] : []
       }),
     }
     listeners.forEach((listener) => listener())
   }
 
-  const isCurrentGeneration = (apiBaseUrl: string, generation: number): boolean =>
-    retainedTabs.has(apiBaseUrl) && generations.get(apiBaseUrl) === generation
+  const isCurrentGeneration = (tabId: string, generation: number): boolean =>
+    retainedTabs.has(tabId) && observations.get(tabId)?.generation === generation
 
   const update = (
-    apiBaseUrl: string,
+    tabId: string,
     generation: number,
     resolve: (previous: ConnectionObservation) => ConnectionObservation
   ): boolean => {
-    if (!isCurrentGeneration(apiBaseUrl, generation)) return false
-    const previous = observations.get(apiBaseUrl)
+    if (!isCurrentGeneration(tabId, generation)) return false
+    const previous = observations.get(tabId)
     if (!previous) return false
-    observations.set(apiBaseUrl, resolve(previous))
+    observations.set(tabId, resolve(previous))
     publish()
     return true
   }
 
-  const observe = async (apiBaseUrl: string): Promise<void> => {
-    const tab = retainedTabs.get(apiBaseUrl)
+  const observe = async (tabId: string): Promise<void> => {
+    const tab = retainedTabs.get(tabId)
     if (!tab) return
-    const generation = (generations.get(apiBaseUrl) ?? 0) + 1
-    generations.set(apiBaseUrl, generation)
-    const previous = observations.get(apiBaseUrl)
-    observations.set(apiBaseUrl, {
+    const generation = ++nextGeneration
+    const previous = observations.get(tabId)
+    observations.set(tabId, {
       ...(previous ?? createInitialObservation(tab, generation, dependencies.now())),
       tabId: tab.id,
+      apiBaseUrl: tab.apiBaseUrl,
       generation,
       reachability: 'checking',
       healthError: null,
@@ -149,9 +165,9 @@ export function createConnectionObservationOwner(
     })
     publish()
 
-    const probe = await dependencies.probe(apiBaseUrl)
+    const probe = await dependencies.probe(tab.apiBaseUrl)
     if (probe.reachability !== 'online' || !probe.health) {
-      update(apiBaseUrl, generation, (current) => ({
+      update(tabId, generation, (current) => ({
         ...current,
         reachability: probe.reachability,
         healthError: probe.errorMessage,
@@ -163,7 +179,7 @@ export function createConnectionObservationOwner(
     }
 
     if (
-      !update(apiBaseUrl, generation, (current) => ({
+      !update(tabId, generation, (current) => ({
         ...current,
         reachability: 'online',
         health: probe.health,
@@ -179,25 +195,31 @@ export function createConnectionObservationOwner(
     }
 
     try {
-      const rootContext = await dependencies.fetchRootContext(apiBaseUrl)
-      update(apiBaseUrl, generation, (current) => ({
+      const rootContext = await dependencies.fetchRootContext(tab.apiBaseUrl)
+      update(tabId, generation, (current) => ({
         ...current,
         rootContext,
-        rootStatus: rootContext
-          ? rootContext.state === 'error'
-            ? 'error'
-            : rootContext.state === 'ready'
-              ? 'ready'
-              : 'loading'
-          : 'error',
-        rootError: rootContext ? null : 'Root Context response is unavailable.',
+        rootStatus: rootContext?.state ?? 'error',
+        rootError:
+          rootContext?.state === 'error'
+            ? {
+                source: 'root-context',
+                code: rootContext.error.code,
+                message: rootContext.error.message,
+              }
+            : rootContext
+              ? null
+              : { source: 'transport', message: 'Root Context response is unavailable.' },
         observedAt: dependencies.now(),
       }))
     } catch (error) {
-      update(apiBaseUrl, generation, (current) => ({
+      update(tabId, generation, (current) => ({
         ...current,
         rootStatus: 'error',
-        rootError: error instanceof Error ? error.message : String(error),
+        rootError: {
+          source: 'transport',
+          message: error instanceof Error ? error.message : String(error),
+        },
         observedAt: dependencies.now(),
       }))
     }
@@ -210,50 +232,43 @@ export function createConnectionObservationOwner(
       return () => listeners.delete(listener)
     },
     setTabs(tabs) {
-      const nextByUrl = new Map(tabs.map((tab) => [tab.apiBaseUrl, tab] as const))
-      let changed = false
-      for (const apiBaseUrl of retainedTabs.keys()) {
-        if (nextByUrl.has(apiBaseUrl)) continue
-        retainedTabs.delete(apiBaseUrl)
-        generations.set(apiBaseUrl, (generations.get(apiBaseUrl) ?? 0) + 1)
-        observations.delete(apiBaseUrl)
-        changed = true
+      const nextTabs = new Map(tabs.map((tab) => [tab.id, tab] as const))
+      const previousTabIds = [...retainedTabs.keys()]
+      const nextTabIds = [...nextTabs.keys()]
+      const changedTabIds: string[] = []
+
+      for (const tabId of retainedTabs.keys()) {
+        if (nextTabs.has(tabId)) continue
+        observations.delete(tabId)
       }
 
-      const added: string[] = []
-      for (const [apiBaseUrl, tab] of nextByUrl) {
-        const retained = retainedTabs.get(apiBaseUrl)
-        retainedTabs.set(apiBaseUrl, tab)
-        if (!retained) {
-          const generation = (generations.get(apiBaseUrl) ?? 0) + 1
-          generations.set(apiBaseUrl, generation)
-          observations.set(
-            apiBaseUrl,
-            createInitialObservation(tab, generation, dependencies.now())
-          )
-          added.push(apiBaseUrl)
-          changed = true
-        } else if (retained.id !== tab.id) {
-          const generation = (generations.get(apiBaseUrl) ?? 0) + 1
-          generations.set(apiBaseUrl, generation)
-          observations.set(
-            apiBaseUrl,
-            createInitialObservation(tab, generation, dependencies.now())
-          )
-          added.push(apiBaseUrl)
-          changed = true
-        }
+      for (const [tabId, tab] of nextTabs) {
+        const retained = retainedTabs.get(tabId)
+        if (!retained || !isSameTab(retained, tab)) changedTabIds.push(tabId)
       }
 
-      if (changed) publish()
-      for (const apiBaseUrl of added) void observe(apiBaseUrl)
+      const reordered =
+        previousTabIds.length !== nextTabIds.length ||
+        previousTabIds.some((tabId, index) => tabId !== nextTabIds[index])
+      retainedTabs = nextTabs
+      if (changedTabIds.length === 0 && reordered) publish()
+      for (const tabId of changedTabIds) void observe(tabId)
     },
-    async refresh(apiBaseUrls) {
-      const targetSet = apiBaseUrls ? new Set(apiBaseUrls) : null
-      const targets = [...retainedTabs.keys()].filter(
-        (apiBaseUrl) => !targetSet || targetSet.has(apiBaseUrl)
-      )
+    async refresh(tabIds) {
+      const targetSet = tabIds ? new Set(tabIds) : null
+      const targets = [...retainedTabs.keys()].filter((tabId) => !targetSet || targetSet.has(tabId))
       await Promise.all(targets.map(observe))
+    },
+    isCurrentAuthority(authority) {
+      const observation = observations.get(authority.tabId)
+      return Boolean(
+        observation &&
+          observation.apiBaseUrl === authority.apiBaseUrl &&
+          observation.generation === authority.generation &&
+          observation.current &&
+          observation.reachability === 'online' &&
+          observation.health
+      )
     },
   }
 }

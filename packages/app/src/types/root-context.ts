@@ -2,6 +2,7 @@
  * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
  * 1. Define hosted environment and observed project Context projections.
  * 2. Preserve upstream Store payloads without browser-owned registry semantics.
+ * 3. Preserve source-labelled Root lifecycle and direct Reference provenance.
  *
  * Original request (2026-07-15): "前端缺少的东西你可以通过注释补充。"
  */
@@ -22,10 +23,12 @@
  */
 
 import type {
-  StoreDiagnostic,
-  StoreDoctorResult,
-  StoreListResult,
-} from '@openspecui/core/store-types'
+  CliDiagnostic,
+  CliRootSource,
+  RootContextErrorCode,
+  RootContextState,
+} from '@openspecui/core'
+import type { StoreDoctorResult, StoreListResult } from '@openspecui/core/store-types'
 import type { StoreCapabilitySet } from './capabilities'
 import type { EnvUri } from './env-uri'
 
@@ -37,15 +40,29 @@ import type { EnvUri } from './env-uri'
 export interface HostedEnvironment {
   /** opaque、stable、不可解引用的环境身份（backend 下发）。 */
   envUri: EnvUri
-  /** backend 实例定位符（与 envUri 不同：同 envUri 可有多个 backend 实例）。 */
-  apiBaseUrl: string
-  /** CLI 版本（provenance）。 */
-  cliVersion?: string
-  /** backend 实现的可选能力（兼容性事实，非权限）。 */
-  capabilities?: StoreCapabilitySet
+  /** 同一环境下每个已观察项目；不会折叠为一个无解释的代表 URL。 */
+  connectedProjects: HostedEnvironmentProject[]
   /** 观察时间戳（ms）。 */
   observedAt: number
 }
+
+/** One concrete connected project observed under a backend-issued environment identity. */
+export interface HostedEnvironmentProject {
+  tabId: string
+  generation: number
+  apiBaseUrl: string
+  projectName?: string
+  cliVersion?: string
+  capabilities?: StoreCapabilitySet
+}
+
+/** Exact Root lifecycle observed from one connected project source. */
+export type RootObservationStatus = 'idle' | RootContextState['state']
+
+/** Root contract and transport failures remain separate typed evidence. */
+export type RootObservationError =
+  | { source: 'root-context'; code: RootContextErrorCode; message: string }
+  | { source: 'transport'; message: string }
 
 /**
  * 一个在线已连接项目的 Context 投影（`openspec context --json` 的客观事实）。
@@ -55,6 +72,8 @@ export interface HostedEnvironment {
  */
 export interface ProjectContextObservation {
   envUri: EnvUri
+  tabId: string
+  generation: number
   /** backend 实例定位符。 */
   apiBaseUrl: string
   /** 项目显示名（来自 backend health，非 envUri 组成）。 */
@@ -65,13 +84,17 @@ export interface ProjectContextObservation {
   rootSource?: RootSource
   /** 生效 Store id（当 root 来自某个 Store 时）。 */
   storeId?: string
+  /** Root lifecycle is distinct from whether retained data is stale. */
+  rootStatus: RootObservationStatus
+  /** Source-labelled typed failure when rootStatus is error. */
+  rootError?: RootObservationError
   /**
    * 该项目观察到的直接 Reference Spec 索引（一层，不递归）。
    * 中性表达：observed references；空表示「no reference currently observed」，不是「无引用」。
    */
   references: ObservedReference[]
   /** CLI 诊断（保留上游 snake_case 事实，不重解释为健康/所有权/完整性结论）。 */
-  diagnostics?: StoreDiagnostic[]
+  diagnostics?: CliDiagnostic[]
   /** 观察时间戳（ms）。 */
   observedAt: number
   /** 是否为最后观察的 stale 快照（项目离线时）。 */
@@ -79,11 +102,15 @@ export interface ProjectContextObservation {
 }
 
 /** CLI root 选择来源。 */
-export type RootSource = 'nearest' | 'declared-store' | 'explicit-store'
+export type RootSource = CliRootSource
 
 /** 观察到的直接 Reference（一层，只读 Spec 源）。 */
 export interface ObservedReference {
   storeId: string
+  /** Exact resolved Reference root when Doctor reports it. */
+  root?: string
+  /** Raw direct Doctor diagnostics retained without reinterpretation. */
+  diagnostics: CliDiagnostic[]
   /** Reference 健康事实（客观保留 CLI 诊断，不推断为权限/完整性结论）。 */
   state: ReferenceState
   /** 诊断原文（若 missing/unhealthy/self-reference）。 */

@@ -1,7 +1,8 @@
 /**
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Project persisted credential-free backend connection entries.
- * 2. Publish same-window and storage-driven shell-state changes.
+ * 2. Own same-window and storage-driven shell-state publication.
+ * 3. Expose a synchronous snapshot for Store authority revalidation at dispatch time.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  */
@@ -42,6 +43,12 @@ function createShellStateStore() {
     }
   }
 
+  function publish(next: HostedShellState): void {
+    if (areHostedShellStatesEqual(cached, next)) return
+    cached = next
+    listeners.forEach((listener) => listener())
+  }
+
   // 跨窗口同步：hosted-shell-sync.ts 已有机制；这里订阅 storage 事件保持本地视图新鲜。
   if (typeof window !== 'undefined') {
     window.addEventListener('storage', (event) => {
@@ -69,7 +76,11 @@ function createShellStateStore() {
       if (typeof localStorage !== 'undefined') {
         saveHostedShellState(localStorage, next)
       }
-      refresh()
+      publish(next)
+    },
+    /** Publish a state already persisted by Hosted Shell's cross-window synchronization owner. */
+    publishPersistedState(next: HostedShellState) {
+      publish(next)
     },
   }
 }
@@ -86,4 +97,9 @@ export function useConnections() {
 /** 触发 shell state 变更（add/remove/reorder）的命令入口。 */
 export function useConnectionsActions() {
   return shellStateStore
+}
+
+/** Read the latest persisted selection synchronously before an environment-scoped dispatch. */
+export function getConnectionsSnapshot(): HostedShellState {
+  return shellStateStore.getState()
 }

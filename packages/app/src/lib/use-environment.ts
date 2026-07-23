@@ -2,19 +2,25 @@
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Build observed runtime environments from backend-issued health (opaque envUri + capabilities).
  * 2. Gate Store views through objective hosted-protocol capabilities.
- * 3. Preserve source-labelled stale Root observations without granting authority.
+ * 3. Preserve grouped connected projects and source-labelled Root/Reference evidence.
  *
  * Original request (2026-07-15): "前端缺少的东西你可以通过注释补充。"
  * Migration (2026-07-23): wired to the backend health response (envUri/capabilities now emitted).
  */
 import {
   asEnvUri,
+  type CliDiagnostic,
   type HostedBackendHealthResponse,
   type RootContextState,
   type StoreCapability,
 } from '@openspecui/core'
 import type { StoreCapabilitySet } from '../types/capabilities'
-import type { HostedEnvironment, ProjectContextObservation } from '../types/root-context'
+import type {
+  HostedEnvironment,
+  ProjectContextObservation,
+  RootObservationError,
+  RootObservationStatus,
+} from '../types/root-context'
 
 export interface EnvironmentObservation {
   /** Runtime environments grouped by envUri (observed-only). */
@@ -29,6 +35,8 @@ export interface EnvironmentObservation {
 
 /** One online backend health observation used to derive environments. */
 export interface OnlineBackendObservation {
+  tabId: string
+  generation: number
   apiBaseUrl: string
   health: HostedBackendHealthResponse
 }
@@ -38,8 +46,7 @@ export interface OnlineBackendObservation {
  *
  * Invariants:
  *  - envUri is taken verbatim from backend health; App never constructs it.
- *  - Multiple backends sharing the same envUri collapse into one environment entry (one apiBaseUrl
- *    is retained as the representative locator; App must not expose raw host/data-home values).
+ *  - Multiple backends sharing the same envUri remain distinct connected-project evidence.
  *  - Capabilities are compatibility facts only; they never authorize or infer workflow state.
  */
 export function deriveEnvironments(observations: OnlineBackendObservation[]): HostedEnvironment[] {
@@ -49,17 +56,22 @@ export function deriveEnvironments(observations: OnlineBackendObservation[]): Ho
     if (!envUriValue) continue
     const capabilities = (observation.health.hostedCapabilities ?? []) as StoreCapabilitySet
     const existing = byEnvUri.get(envUriValue)
+    const connectedProject = {
+      tabId: observation.tabId,
+      generation: observation.generation,
+      apiBaseUrl: observation.apiBaseUrl,
+      projectName: observation.health.projectName,
+      cliVersion: observation.health.cliVersion ?? undefined,
+      capabilities,
+    }
     if (existing) {
-      // Same envUri: keep the first representative locator, refresh observed time/capabilities.
       existing.observedAt = Date.now()
-      existing.capabilities = capabilities
+      existing.connectedProjects.push(connectedProject)
       continue
     }
     byEnvUri.set(envUriValue, {
       envUri: asEnvUri(envUriValue),
-      apiBaseUrl: observation.apiBaseUrl,
-      cliVersion: observation.health.cliVersion ?? undefined,
-      capabilities,
+      connectedProjects: [connectedProject],
       observedAt: Date.now(),
     })
   }
@@ -69,19 +81,19 @@ export function deriveEnvironments(observations: OnlineBackendObservation[]): Ho
 /** One backend's Root Context used to derive its project Context observation. */
 export interface BackendRootContextObservation extends OnlineBackendObservation {
   rootContext: RootContextState | null
+  rootStatus?: RootObservationStatus
+  rootError?: RootObservationError | null
   stale?: boolean
 }
 
 /** Map a CLI Doctor reference diagnostic severity to a neutral Reference state. */
-function referenceStateFor(diagnostics: { severity: string }[]): {
+function referenceStateFor(diagnostics: CliDiagnostic[]): {
   state: ProjectContextObservation['references'][number]['state']
   note?: string
 } {
   const hasError = diagnostics.some((d) => d.severity === 'error')
   if (hasError) {
-    const notes = diagnostics
-      .map((d) => ('message' in d && typeof d.message === 'string' ? d.message : ''))
-      .filter(Boolean)
+    const notes = diagnostics.map((diagnostic) => diagnostic.message).filter(Boolean)
     return { state: 'unhealthy', note: notes.join('; ') || undefined }
   }
   return { state: 'healthy' }
@@ -99,36 +111,45 @@ export function deriveProjectContexts(
     const envUriValue = observation.health.envUri
     if (!envUriValue) continue
     const root = observation.rootContext
-    const ready = root?.state === 'ready' && root.data ? true : false
-    const data = ready
-      ? (
-          root as {
-            data: {
-              planningRoot?: { source?: string; store_id?: string } | null
-              storeId?: string | null
-              references?: { store_id: string; status?: { severity: string; message?: string }[] }[]
-            }
+    const data = root?.state === 'loading' ? null : (root?.data ?? null)
+    const rootStatus = observation.rootStatus ?? root?.state ?? 'idle'
+    const rootError =
+      observation.rootError ??
+      (root?.state === 'error'
+        ? {
+            source: 'root-context' as const,
+            code: root.error.code,
+            message: root.error.message,
           }
-        ).data
-      : null
+        : undefined)
     const references = (data?.references ?? []).map((reference) => {
       const state = referenceStateFor(reference.status ?? [])
       return {
         storeId: reference.store_id,
+        root: reference.root,
+        diagnostics: reference.status ?? [],
         state: state.state,
         note: state.note,
       }
     })
     contexts.push({
       envUri: asEnvUri(envUriValue),
+      tabId: observation.tabId,
+      generation: observation.generation,
       apiBaseUrl: observation.apiBaseUrl,
       projectName: observation.health.projectName,
-      planningRoot: undefined,
-      rootSource: data?.planningRoot?.source as ProjectContextObservation['rootSource'] | undefined,
-      storeId: data?.storeId ?? data?.planningRoot?.store_id ?? undefined,
+      planningRoot: data?.planningRoot?.path,
+      rootSource: data?.planningRoot?.source,
+      storeId: data?.storeId ?? data?.planningRoot?.store_id,
+      rootStatus,
+      rootError: rootError ?? undefined,
       references,
+      diagnostics: data?.diagnostics.root,
       observedAt: Date.now(),
-      stale: observation.stale,
+      stale:
+        observation.stale === true ||
+        root?.state === 'refreshing' ||
+        (root?.state === 'error' && root.data !== null),
     })
   }
   return contexts

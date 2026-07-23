@@ -2,7 +2,7 @@
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Group online backends by opaque backend-issued environment identity.
  * 2. Expose capabilities as compatibility facts rather than permissions.
- * 3. Present all current observations independently from selected Store authority.
+ * 3. Present every grouped connected project without a representative-locator collapse.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  */
@@ -29,7 +29,14 @@ export function EnvironmentRoute() {
   const { observations: connectionObservations } = useConnectionObservations()
   const observations = connectionObservations.flatMap((observation) =>
     observation.current && observation.reachability === 'online' && observation.health
-      ? [{ apiBaseUrl: observation.apiBaseUrl, health: observation.health }]
+      ? [
+          {
+            tabId: observation.tabId,
+            generation: observation.generation,
+            apiBaseUrl: observation.apiBaseUrl,
+            health: observation.health,
+          },
+        ]
       : []
   )
   const { environments } = useEnvironmentObservation(observations)
@@ -71,22 +78,44 @@ export function EnvironmentRoute() {
                   <Boxes className="text-muted-foreground h-4 w-4" />
                   <span className="font-mono text-sm">{maskEnvUri(env.envUri)}</span>
                 </div>
-                {env.cliVersion ? (
-                  <span className="text-muted-foreground text-xs">CLI {env.cliVersion}</span>
-                ) : null}
+                <span className="text-muted-foreground text-xs">
+                  {env.connectedProjects.length} connected{' '}
+                  {env.connectedProjects.length === 1 ? 'project' : 'projects'}
+                </span>
               </header>
-              {env.capabilities && env.capabilities.length > 0 ? (
-                <div className="flex flex-wrap gap-1">
-                  {env.capabilities.map((capability) => (
-                    <span
-                      key={capability}
-                      className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs"
-                    >
-                      {capability}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
+              <div className="border-border divide-border divide-y rounded-md border">
+                {env.connectedProjects.map((project) => (
+                  <div key={project.tabId} className="space-y-2 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium">
+                          {project.projectName ?? project.apiBaseUrl}
+                        </div>
+                        <div className="text-muted-foreground truncate font-mono text-xs">
+                          {project.apiBaseUrl}
+                        </div>
+                      </div>
+                      {project.cliVersion ? (
+                        <span className="text-muted-foreground shrink-0 text-xs">
+                          CLI {project.cliVersion}
+                        </span>
+                      ) : null}
+                    </div>
+                    {project.capabilities && project.capabilities.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {project.capabilities.map((capability) => (
+                          <span
+                            key={capability}
+                            className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs"
+                          >
+                            {capability}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
             </article>
           ))}
         </div>

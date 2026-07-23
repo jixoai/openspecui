@@ -2,7 +2,7 @@
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Orchestrate persisted credential-free project tabs and embedded frame lifecycle.
  * 2. Coordinate browser/PWA launch relay, install, and update ownership.
- * 3. Consume exact backend reachability from the shared App observation owner.
+ * 3. Publish shell state once and consume exact-tab reachability from the shared observation owner.
  * 4. Keep refresh/retry feedback attached to the affected tab runtime.
  * 5. Preserve cross-window shell-state convergence.
  *
@@ -57,6 +57,7 @@ import {
   type HostedShellState,
   type HostedShellTab,
 } from '../lib/shell-state'
+import { useConnectionsActions } from '../lib/use-connections'
 import { HostedShellThemeBootstrap } from './hosted-shell-theme'
 
 const REFRESH_FEEDBACK_MS = 1200
@@ -467,6 +468,7 @@ function HostedShellRuntime({
   })
   const connectionOwner = useConnectionObservationOwner()
   const connectionSnapshot = useConnectionObservations()
+  const connectionActions = useConnectionsActions()
   const [tabFrames, setTabFrames] = useState<Record<string, HostedTabFrameState>>({})
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isRefreshFeedbackActive, setIsRefreshFeedbackActive] = useState(false)
@@ -611,16 +613,16 @@ function HostedShellRuntime({
 
   useEffect(() => {
     shellSync.write(shellState)
-    connectionOwner.setTabs(shellState.tabs)
-  }, [connectionOwner, shellState, shellSync])
+    connectionActions.publishPersistedState(shellState)
+  }, [connectionActions, shellState, shellSync])
 
   const tabRuntime = useMemo(() => {
-    const byApiBaseUrl = new Map(
-      connectionSnapshot.observations.map((observation) => [observation.apiBaseUrl, observation])
+    const byTabId = new Map(
+      connectionSnapshot.observations.map((observation) => [observation.tabId, observation])
     )
     return Object.fromEntries(
       shellState.tabs.map((tab) => {
-        const observation = byApiBaseUrl.get(tab.apiBaseUrl)
+        const observation = byTabId.get(tab.id)
         const health = observation?.health ?? null
         const reachability = observation?.reachability ?? 'checking'
         return [
@@ -844,7 +846,7 @@ function HostedShellRuntime({
       }
 
       try {
-        await connectionOwner.refresh(targets.map((tab) => tab.apiBaseUrl))
+        await connectionOwner.refresh(targets.map((tab) => tab.id))
       } finally {
         if (options?.visualFeedback) {
           setIsRefreshing(false)

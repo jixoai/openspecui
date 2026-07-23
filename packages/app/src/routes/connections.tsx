@@ -36,13 +36,13 @@ export function ConnectionsRoute() {
   const state = useConnections()
   const { observations } = useConnectionObservations()
   const reachability = Object.fromEntries(
-    observations.map((observation) => [observation.apiBaseUrl, observation.reachability])
+    observations.map((observation) => [observation.tabId, observation.reachability])
   )
   const actions = useConnectionsActions()
   const [addDialogOpen, setAddDialogOpen] = useState(false)
 
   const tabs = state.tabs
-  const isLoading = tabs.some((tab) => reachability[tab.apiBaseUrl] === 'checking')
+  const isLoading = tabs.some((tab) => reachability[tab.id] === 'checking')
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -75,7 +75,7 @@ export function ConnectionsRoute() {
             <ConnectionRow
               key={tab.id}
               tab={tab}
-              reachability={reachability[tab.apiBaseUrl]}
+              reachability={reachability[tab.id]}
               onRemove={() => {
                 actions.setState(removeHostedTab(state, tab.id))
               }}

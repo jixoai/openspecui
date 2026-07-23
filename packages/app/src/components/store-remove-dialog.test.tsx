@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Prove explicit destructive Store confirmation content and typing gate.
+ * 2. Prove removal crosses the backend client only with current selected authority.
+ *
+ * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
+ */
 // @vitest-environment jsdom
 
 import type { StoreDoctorStore } from '@openspecui/core/store-types'
@@ -128,8 +135,8 @@ describe('StoreRemoveDialog', () => {
         wrapInRouter(
           <StoreRemoveDialog
             store={STORE}
-            apiBaseUrl="http://localhost:3100"
             envUri="openspecui-env://1/aaa"
+            authority={{ apiBaseUrl: 'http://localhost:3100', isCurrent: () => true }}
             onClose={() => (closed = true)}
           />
         )
@@ -144,6 +151,39 @@ describe('StoreRemoveDialog', () => {
       })
       expect(closed).toBe(true)
       expect(fetchMock).toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('does not dispatch removal after selected authority is retired', async () => {
+    let closed = false
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await renderAt(
+        wrapInRouter(
+          <StoreRemoveDialog
+            store={STORE}
+            envUri="openspecui-env://1/aaa"
+            authority={{ apiBaseUrl: 'http://localhost:3100', isCurrent: () => false }}
+            onClose={() => (closed = true)}
+          />
+        )
+      )
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Type the Store id to confirm'), {
+          target: { value: 'design-system' },
+        })
+      })
+      expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Remove Store' }).disabled).toBe(
+        false
+      )
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Remove Store' }))
+      })
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(closed).toBe(false)
     } finally {
       vi.unstubAllGlobals()
     }
