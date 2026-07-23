@@ -1,4 +1,9 @@
 import {
+  generateAccessGateCredential,
+  normalizeAccessGatePassword,
+  type AccessGateCredential,
+} from '@openspecui/core'
+import {
   startServer as serverStartServer,
   type GitWorktreeHandoffService,
 } from '@openspecui/server'
@@ -36,6 +41,16 @@ export interface CLIOptions {
   enableWatcher?: boolean
   /** Extra CORS origins to allow for hosted app mode */
   corsOrigins?: string[]
+  /**
+   * Generate a high-entropy Bearer credential and protect the whole backend with it. Prints the
+   * complete Authorization header once. Mutually exclusive with `password`.
+   */
+  auth?: boolean
+  /**
+   * Normalize an operator secret into the same Bearer Access Gate. Prefers a hidden prompt when no
+   * inline value is given. Mutually exclusive with `auth`.
+   */
+  password?: string | true
   /** Optional handoff owner. Worker runtimes use this to delegate nested switches to their parent. */
   gitWorktreeHandoff?: GitWorktreeHandoffService
 }
@@ -162,6 +177,57 @@ function setupStaticFiles(app: Hono): void {
   })
 }
 
+/**
+ * Resolve the whole-backend Access Gate credential from `--auth` / `--password`.
+ *
+ * `--auth` generates a high-entropy Bearer credential; `--password` (with an inline value) normalizes
+ * an operator secret into the same Bearer form. The two flags are mutually exclusive. A `--password`
+ * with no inline value is accepted only in interactive contexts; this CLI entrypoint requires an
+ * inline value and warns that it can leak through shell history/process inspection.
+ */
+function resolveAccessGateCredential(options: CLIOptions): AccessGateCredential | null {
+  if (options.auth && options.password !== undefined) {
+    throw new Error(
+      '--auth and --password are mutually exclusive. Choose one Access Gate credential.'
+    )
+  }
+  if (options.auth) {
+    return generateAccessGateCredential()
+  }
+  if (options.password !== undefined) {
+    if (options.password === true) {
+      // No inline value: this entrypoint cannot prompt interactively in all runtimes.
+      console.warn(
+        '--password without an inline value is not supported here. Pass --password=<secret> and ' +
+          'note it can leak through shell history and process inspection.'
+      )
+      throw new Error('--password requires an inline secret value.')
+    }
+    console.warn(
+      'Warning: an inline --password can leak through shell history and process inspection. ' +
+        'Prefer --auth for a generated credential, or pass the secret through a secure mechanism.'
+    )
+    return normalizeAccessGatePassword(options.password)
+  }
+  return null
+}
+
+/** Print the Access Gate credential once so the operator can distribute the Authorization header. */
+function printAccessGateBanner(credential: AccessGateCredential): void {
+  console.log('')
+  console.log('╔══════════════════════════════════════════════════════════════╗')
+  console.log('║  Backend Access Gate enabled                                ║')
+  console.log('║  Every client must send this header on every transport:     ║')
+  console.log('╠══════════════════════════════════════════════════════════════╣')
+  console.log(`║  Authorization: ${credential.authorizationHeader}`.padEnd(63) + '║')
+  console.log(
+    '║  Credential fingerprint (safe to log): ' + credential.fingerprint + ''.padEnd(16) + '║'
+  )
+  console.log('║  Non-loopback deployments require HTTPS/WSS.                ║')
+  console.log('╚══════════════════════════════════════════════════════════════╝')
+  console.log('')
+}
+
 export async function startServer(options: CLIOptions = {}): Promise<RunningServer> {
   const { projectDir = process.cwd(), port = 3100, enableWatcher = true, corsOrigins } = options
   let worktreeManager: WorktreeInstanceManager | null = null
@@ -174,6 +240,9 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
     },
   }
 
+  // Resolve the whole-backend Access Gate credential from --auth or --password (mutually exclusive).
+  const accessGate = resolveAccessGateCredential(options)
+
   const server = await serverStartServer(
     {
       projectDir,
@@ -182,9 +251,14 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
       corsOrigins,
       previewAssetsDir: getPreviewAssetsDir(),
       gitWorktreeHandoff,
+      accessGate,
     },
     setupStaticFiles
   )
+
+  if (accessGate) {
+    printAccessGateBanner(accessGate)
+  }
 
   if (!options.gitWorktreeHandoff) {
     worktreeManager = createWorktreeInstanceManager({

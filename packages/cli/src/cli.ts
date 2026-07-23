@@ -73,6 +73,19 @@ async function main(): Promise<void> {
               'Launch the hosted app at the official or custom base URL. Uses the installed PWA when the browser captures that same-scope URL, otherwise falls back to a browser page. Supports --app and --app=<baseUrl>.',
             type: 'string',
           })
+          .option('auth', {
+            describe:
+              'Generate a high-entropy Bearer credential and protect the whole backend Access Gate. ' +
+              'Mutually exclusive with --password.',
+            type: 'boolean',
+          })
+          .option('password', {
+            describe:
+              'Normalize an operator secret into the same Bearer Access Gate (e.g. --password=secret). ' +
+              'Can leak through shell history/process inspection. Mutually exclusive with --auth.',
+            type: 'string',
+            coerce: (value) => (value === '' ? true : value),
+          })
       },
       async (argv) => {
         const rawDir = (argv['project-dir'] as string | undefined) || argv.dir || '.'
@@ -113,6 +126,13 @@ async function main(): Promise<void> {
             port: argv.port,
             open: false,
             corsOrigins: hostedBaseUrl ? buildHostedCorsOrigins(hostedBaseUrl) : undefined,
+            auth: argv.auth === true ? true : undefined,
+            password:
+              argv.password === true
+                ? true
+                : typeof argv.password === 'string'
+                  ? argv.password
+                  : undefined,
           })
 
           if (server.port !== server.preferredPort) {

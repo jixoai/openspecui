@@ -24,6 +24,7 @@ import { serve } from '@hono/node-server'
 import {
   buildBackendHealthPayload,
   CliExecutor,
+  computeEnvUri,
   ConfigManager,
   CustomSoundHashSchema,
   getExternalCodexCommandObservationRoot,
@@ -36,6 +37,8 @@ import {
   resolveOpenSpecDataScope,
   RuntimeInvalidationIndex,
   RuntimeRootInvalidationRegistry,
+  type AccessGateCredential,
+  type EnvUri,
   type RootContextState,
 } from '@openspecui/core'
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
@@ -61,6 +64,12 @@ function getServerPackageVersion(): string {
 
 const SERVER_PACKAGE_VERSION = getServerPackageVersion()
 
+import {
+  createAccessGate,
+  createAccessGateMiddleware,
+  extractBearerCredential,
+  type AccessGate,
+} from './access-gate.js'
 import { createChangesProjectionWorkOwner } from './changes-projection-service.js'
 import { Ct2ModelAssetService } from './ct2-model-asset-service.js'
 import {
@@ -126,6 +135,12 @@ export interface ServerConfig {
   enableWatcher?: boolean
   /** CORS origins (defaults to localhost dev servers) */
   corsOrigins?: string[]
+  /**
+   * Optional whole-backend Access Gate credential. When set, every HTTP, tRPC, PTY, file, terminal,
+   * and notification transport requires the matching Bearer credential. Absent by default so the
+   * unguarded dev workflow is unchanged.
+   */
+  accessGate?: AccessGateCredential | null
   /** Directory containing built preview entry assets */
   previewAssetsDir?: string
   /** Optional worktree handoff provider for runtimes that can spawn sibling instances */
@@ -158,6 +173,16 @@ export interface ServerConfig {
  * Create an OpenSpecUI HTTP server with optional WebSocket support
  */
 export function createServer(config: ServerConfig) {
+  // Whole-backend Access Gate. Default loopback; the live listener revises this once bound.
+  const accessGate: AccessGate = createAccessGate({
+    credential: config.accessGate ?? null,
+    loopback: true,
+  })
+  // Opaque runtime-environment identity for the hosted protocol (host identity + effective data home).
+  const envUri: EnvUri = computeEnvUri({
+    hostIdentity: `host:${config.projectDir}`,
+    dataHome: resolveOpenSpecDataScope().path,
+  })
   const adapter = new OpenSpecAdapter(config.projectDir)
   const configManager = new ConfigManager(config.projectDir)
   const globalSettingsManager = new GlobalSettingsManager(config.runtimePaths?.globalSettingsPath)
@@ -349,6 +374,9 @@ export function createServer(config: ServerConfig) {
     })
   )
 
+  // Whole-backend Access Gate middleware (HTTP). Pass-through when no gate is configured.
+  app.use('*', createAccessGateMiddleware(accessGate))
+
   // Health check
   app.get('/api/health', (c) => {
     return c.json(
@@ -490,6 +518,8 @@ export function createServer(config: ServerConfig) {
 
   return {
     app,
+    accessGate,
+    envUri,
     planningRootServices,
     gitRepositoryBindings,
     observationEnvironment,
@@ -546,6 +576,7 @@ export async function createWebSocketServer(
   const ptyManager = new PtyManager()
   const ptyWss = new WebSocketServer({ noServer: true })
   const ptyHandler = createPtyWebSocketHandler(ptyManager, server.notificationService, {
+    accessGate: server.accessGate,
     async withCwdTarget(cwdTarget, task, expectedRootGeneration) {
       if (cwdTarget === 'launch-project') {
         if (expectedRootGeneration) {
@@ -571,7 +602,27 @@ export async function createWebSocketServer(
 
   // Handle upgrade requests - route by URL path
   httpServer.on('upgrade', (...args: unknown[]) => {
-    const [request, socket, head] = args as [{ url?: string }, unknown, Buffer]
+    const [request, socket, head] = args as [
+      { url?: string; headers?: Record<string, string | string[] | undefined> },
+      { write: (data: string) => boolean; destroy: () => void },
+      Buffer,
+    ]
+    // Whole-backend Access Gate on the WS upgrade. The Authorization header is honored when present
+    // (app/non-browser clients). Browser WS clients cannot set headers, so tRPC connection params and
+    // the PTY first-message auth handshake remain the authoritative post-upgrade checks below.
+    if (server.accessGate) {
+      const authHeader = request.headers?.['authorization']
+      const headerValue = Array.isArray(authHeader) ? (authHeader[0] ?? null) : (authHeader ?? null)
+      if (headerValue) {
+        const presented = extractBearerCredential(headerValue)
+        const outcome = server.accessGate.check(presented)
+        if (!outcome.ok) {
+          socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+          socket.destroy()
+          return
+        }
+      }
+    }
     if (request.url?.startsWith('/ws/pty')) {
       ptyWss.handleUpgrade(
         request as Parameters<typeof ptyWss.handleUpgrade>[0],
@@ -584,7 +635,7 @@ export async function createWebSocketServer(
     } else if (request.url?.startsWith('/trpc')) {
       wss.handleUpgrade(
         request as Parameters<typeof wss.handleUpgrade>[0],
-        socket as Parameters<typeof wss.handleUpgrade>[1],
+        socket as Parameters<typeof ptyWss.handleUpgrade>[1],
         head,
         (ws) => {
           wss.emit('connection', ws, request)

@@ -183,6 +183,7 @@ export const PtyErrorCodeSchema = z.enum([
   'INVALID_MESSAGE',
   'SESSION_NOT_FOUND',
   'PTY_CREATE_FAILED',
+  'UNAUTHORIZED',
 ])
 
 export const PtyErrorResponseSchema = z.object({

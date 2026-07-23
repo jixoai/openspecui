@@ -21,12 +21,18 @@ import {
   type TerminalCwdTarget,
 } from '@openspecui/core'
 import type { WebSocket } from 'ws'
+import { parsePtyAuthFirstMessage, type AccessGate } from './access-gate.js'
 import type { NotificationService } from './notification-service.js'
 import type { PtyManager, PtySession } from './pty-manager.js'
 import { PtyOutputBatcher } from './pty-output-batcher.js'
 import { limitPtyReplayBuffer, PtySocketSender } from './pty-socket-sender.js'
 
-type PtyErrorCode = 'INVALID_JSON' | 'INVALID_MESSAGE' | 'SESSION_NOT_FOUND' | 'PTY_CREATE_FAILED'
+type PtyErrorCode =
+  | 'INVALID_JSON'
+  | 'INVALID_MESSAGE'
+  | 'SESSION_NOT_FOUND'
+  | 'PTY_CREATE_FAILED'
+  | 'UNAUTHORIZED'
 type PtyErrorMessage = {
   type: 'error'
   code: PtyErrorCode
@@ -87,6 +93,8 @@ export function createPtyWebSocketHandler(
       }) => Promise<T> | T,
       expectedRootGeneration?: string
     ) => Promise<T>
+    /** Optional whole-backend Access Gate. When set, the first PTY message must authenticate. */
+    accessGate?: AccessGate
   }
 ) {
   return (ws: WebSocket) => {
@@ -99,6 +107,11 @@ export function createPtyWebSocketHandler(
     const sendError = (code: PtyErrorCode, message: string, opts?: { sessionId?: string }) => {
       send({ type: 'error', code, message, sessionId: opts?.sessionId })
     }
+
+    // Access Gate: when configured, the connection must authenticate with one `{type:'auth',...}`
+    // message before any command is accepted. A failed/rejected auth closes the socket.
+    const gate = options.accessGate ?? null
+    let authenticated = gate === null
 
     const attachToSession = (session: PtySession, opts?: { cols?: number; rows?: number }) => {
       const sessionId = session.id
@@ -204,6 +217,27 @@ export function createPtyWebSocketHandler(
         parsed = JSON.parse(String(raw))
       } catch {
         sendError('INVALID_JSON', 'Invalid JSON payload')
+        return
+      }
+
+      // Access Gate first-message authentication. Until authenticated, only an `auth` message is
+      // accepted; any other message is rejected and the socket is closed.
+      if (!authenticated) {
+        const authMessage = parsePtyAuthFirstMessage(parsed)
+        if (!authMessage) {
+          sendError('UNAUTHORIZED', 'Authentication required before any terminal command.')
+          ws.close(4001, 'unauthorized')
+          return
+        }
+        const outcome = gate?.check(authMessage.credential)
+        if (!outcome || !outcome.ok) {
+          sendError('UNAUTHORIZED', outcome?.reason ?? 'Authorization credential was rejected.')
+          ws.close(4001, 'unauthorized')
+          return
+        }
+        // Authentication succeeded: subsequent messages are processed as terminal commands.
+        // No explicit ack is sent; the client proceeds once the socket remains open.
+        authenticated = true
         return
       }
 

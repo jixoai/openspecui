@@ -9132,3 +9132,40 @@ pnpm -w typecheck -> 0 errors; prettier/oxlint clean
 
 Backend health/envUri/capability emission, Store mutation lifecycle service, the `--auth`/`--password`
 CLI flags, and access middleware land in the following Section 8 slices.
+
+### Section 8 Slice 2: backend Access Gate across HTTP, WebSocket, and PTY (2026-07-23)
+
+Covers 8.9 (--auth), 8.10 (--password), 8.11 (gate across HTTP/tRPC/PTY/files/notifications),
+8.12 (credential hygiene), and 8.13 (non-loopback HTTPS/WSS note).
+
+Changed contracts:
+
+- `packages/server/src/access-gate.ts` (new): `createAccessGate` (absent-by-default), HTTP middleware
+  `createAccessGateMiddleware` (401 with neutral message, never echoes the credential), WS connection
+  param checker, PTY first-message auth parser, `extractBearerCredential`, `isLoopbackHostname`, and the
+  non-loopback HTTPS/WSS warning. Uses `constantTimeEqual` from core to mitigate timing side channels.
+- `packages/server/src/server.ts`: `ServerConfig.accessGate` builds the gate in `createServer`; HTTP
+  middleware is installed after CORS; WS upgrade honors an Authorization header when present (non-browser
+  clients) and the PTY first-message handshake covers browser clients; `envUri` computed for the hosted
+  protocol.
+- `packages/server/src/pty-websocket.ts`: `createPtyWebSocketHandler` takes an `accessGate` option; when
+  set, the first message must be `{type:'auth',credential}` and any command before auth is rejected and
+  the socket closed (code 4001).
+- `packages/core/src/pty-protocol.ts`: `PtyErrorCodeSchema` adds `'UNAUTHORIZED'`.
+- `packages/cli/src/index.ts`: `CLIOptions.auth`/`CLIOptions.password` resolve the credential (mutually
+  exclusive; `--password` warns about shell-history leak); prints the Authorization header + fingerprint
+  banner once and passes the gate to the server.
+- `packages/cli/src/cli.ts`: yargs adds `--auth` (boolean) and `--password` (string) on the start command.
+
+Focused evidence:
+
+```text
+(cd packages/server && npx vitest run src/access-gate.test.ts) -> 9/9
+(cd packages/server && npx vitest run src/pty-websocket.test.ts) -> 14/14 (regression)
+pnpm -w typecheck -> 0 errors; prettier/oxlint clean
+```
+
+The 9 access-gate tests prove: pass-through when unguarded, 401 on missing credential, accept on match,
+reject-without-leak on mismatch, Bearer extraction, WS connection-param accept/reject, PTY auth-message
+parsing, loopback detection, and the non-loopback warning. Health/envUri/capability emission and the
+Store mutation lifecycle service land in the following Section 8 slices.
