@@ -327,3 +327,41 @@ P2-G  real Register/Remove guard proof without disabled-DOM bypass or production
 One scoped production commit plus focused App tests and App typecheck are required. `3.1--3.6` remain
 unchecked. P1 continues independently; P3/P4, broad gates, PR update, archive, merge, release, and browser
 walkthrough remain forbidden until both corrected lanes pass main-agent review.
+
+### P1 third correction review: 2026-07-24 Asia/Shanghai
+
+Reviewed candidate: `acd092c`.
+
+Independent rerun:
+
+- Web resource/handoff: 2 files / 3 tests passed.
+- CLI worktree manager: 1 file / 16 tests passed.
+- Server terminating fixture: 1 file / 1 test passed.
+- CLI typecheck and checked P1 fixture typecheck passed.
+
+Accepted and closed:
+
+- `2.9`: the immutable Project Web shell is publicly loadable while health/data surfaces reject a missing
+  Gate. This is static admission only and grants no data authority.
+
+Rejected completion claims:
+
+1. Production always chooses `createWorktreeServerWorker`, but the bundle's translation and worktree
+   handlers both claim any non-main thread. The translation handler throws on Worktree data before the
+   guarded child Server can start. The process-only integration test bypasses this production path.
+2. The terminating fixture manually combines `startServer`'s callback credential with URL builders. It
+   does not execute `cli.ts`'s real callback-to-opened-target owner, so deleting that production binding
+   leaves the fixture green.
+3. The Service Worker fixture does not cover a non-empty retired initiating-client id. Deleting the exact
+   missing-client transition is therefore not mutation-resistant evidence.
+
+Correction atoms:
+
+```text
+P1-C1 typed worker-kind envelope -> real worker -> guarded child health
+P1-C2 real CLI start owner -> requested Direct/App browser target
+P1-C3 non-empty retired resource client -> no borrowed credential
+```
+
+`2.8`, `2.10`, `2.11`, and `2.12` remain unchecked. Each atom needs its own exact red/green/removal result;
+do not rerun broad gates or restart already accepted HTTP/WS/PTY implementation.

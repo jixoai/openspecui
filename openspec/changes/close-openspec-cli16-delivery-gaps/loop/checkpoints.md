@@ -37,9 +37,9 @@ Focused reviewer acceptance is a hard predecessor of the next package and every 
 - [x] 2.6 Bind a consumed launch credential to the parsed launch API locator before URL stripping; no locator means no arbitrary tab assignment.
 - [x] 2.7 Extend App-native reachability and HTTP clients with `authentication-required` and exact locator-scoped credentials; this evidence does not claim that an embedded Project Web can load or authenticate its own transports.
 - [ ] 2.8 Deliver the exact generated/manual Access Gate credential from CLI launch into both Direct Web and App launch fragments, and from the App's locator owner into only the matching Project Web iframe bootstrap.
-- [ ] 2.9 Separate the loadable static Project Web shell from protected backend data surfaces so gated navigation can start without granting API, file, tRPC, WebSocket, PTY, or notification access.
+- [x] 2.9 Separate the loadable static Project Web shell from protected backend data surfaces so gated navigation can start without granting API, file, tRPC, WebSocket, PTY, or notification access.
 - [ ] 2.10 Make Project Web consume and strip its credential before rendering, then supply it from one in-memory owner to tRPC HTTP, tRPC WS connection params, PTY auth-first, and every raw protected fetch/resource path without persistence or cross-locator leakage.
-- [ ] 2.11 Prove a real gated Direct/App Project Web fixture reaches one protected HTTP RPC, subscription, and PTY operation; missing/invalid credentials stay rejected, and removing each real transport supplier makes its named fixture fail.
+- [ ] 2.11 Prove the real CLI start-command browser-target owner and a production worktree worker reach guarded Project Web/health, then one protected HTTP RPC, subscription, and PTY operation; missing/invalid credentials stay rejected, and removing each real owner/supplier makes its named fixture fail.
 - [ ] 2.12 Obtain focused reviewer acceptance for the complete P1 browser delivery chain before P2/P3/P4 or broad gates.
 
 ## 3. P2 App Connection and Context Projection

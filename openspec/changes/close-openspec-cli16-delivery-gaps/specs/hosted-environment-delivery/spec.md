@@ -8,6 +8,7 @@ Original request (2026-07-23): "走查任务直接到新的change中做。你目
 Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
 Review correction (2026-07-24): A protected parent must not spawn an unprotected worktree backend, and a browser resource request must not borrow another client credential.
 Review correction (2026-07-24): Retained Root evidence keeps the identity that produced it; a new pending generation cannot relabel old evidence or combine with a replacement tab identity.
+Review correction (2026-07-24): Production worker kinds must not claim each other's payloads, and browser evidence must cross the CLI start-command target owner.
 -->
 
 # hosted-environment-delivery Delta Specification
@@ -43,6 +44,15 @@ pass-through.
 - **AND** a Project Web handoff to that child SHALL transfer the current in-memory credential only through
   the target child fragment, which the child SHALL consume and remove before rendering
 - **AND** the handoff payload, query state, storage, and logs SHALL remain credential-free
+
+#### Scenario: Worktree and translation workers cannot claim each other's payloads
+
+- **GIVEN** the shipped runtime contains more than one worker protocol
+- **WHEN** a worktree Server worker receives its typed launch payload
+- **THEN** only the worktree worker owner SHALL consume and validate it
+- **AND** unrelated worker handlers SHALL NOT reject, mutate, or execute that payload
+- **AND** the real worker SHALL start a child Server whose health rejects missing Gate credentials and
+  accepts the inherited parent Gate
 
 ### Requirement: Credential-Scoped Reachability and Explicit Environment Selection
 

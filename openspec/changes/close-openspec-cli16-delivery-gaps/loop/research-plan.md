@@ -96,6 +96,21 @@ pending observation generation       retained Root/Reference evidence
 This is a correction within the approved P2 owner boundary, not a new product decision. It must not grow
 into a general connection-store rewrite or start P3 lifecycle work.
 
+### P1 third independent review after `acd092c`
+
+The correction implements child Gate propagation and passes its focused tests, but the production worker
+path and two named evidence points remain invalid. Only static shell admission is accepted.
+
+| Fixed point | Current evidence | Required correction |
+| --- | --- | --- |
+| Worker-kind ownership | Production `startServer` always injects `createWorktreeServerWorker`. The resulting bundle also contains `translation-engine-worker`, and both handlers claim every `!isMainThread` process before validating their own payload. A Worktree payload is rejected as an invalid translation payload before its Server starts; the reverse collision also exists. | Give worker messages a typed kind envelope. Each handler consumes and validates only its own kind. Add a real production worker -> `startServer` -> guarded health fixture; the process fallback alone is not product evidence. |
+| CLI browser-target owner | The product-chain fixture gets a credential from `startServer`, then test code calls Direct/App URL builders itself. Removing `cli.ts`'s callback-to-browser-target binding leaves the fixture green. | Cross the actual CLI start-command owner through the browser target it requests, or a production command coordinator invoked by `cli.ts`. Removing the credential at the real Direct/App target construction must fail the same fixture. |
+| Retired initiating client | Resource-worker evidence covers empty `clientId` and one live initiating client, but not a non-empty retired id whose `clients.get(id)` returns no client. | Add the exact retired-client case and prove removing `!initiatingClient` makes the test borrow/fabricate authority or otherwise fail the named boundary. |
+
+Accepted independently: public immutable Project Web shell/assets load without data authority while health
+and protected transports reject missing credentials. This closes `2.9` only. `2.8`, `2.10--2.12` remain
+open; focused App/Web/CLI/Server green output cannot override the missing real-owner evidence.
+
 ## Decision & Plan (For Approval)
 
 ### P1: Hosted identity and Access Gate
