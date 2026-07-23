@@ -3,7 +3,7 @@
 /**
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Parse and dispatch start/export CLI commands through yargs.
- * 2. Coordinate local/hosted App runtime lifecycle and protected shutdown.
+ * 2. Coordinate local/hosted App and inherited worktree runtime lifecycle with protected shutdown.
  * 3. Keep printed locators credential-free while opening one private fragment-bearing target.
  *
  * Original request (2026-07-15): "新增一个 --auth 或者 --password。"
@@ -31,6 +31,7 @@ import {
   type LocalHostedAppDevSession,
 } from './local-hosted-app-dev.js'
 import { buildStartupBanner } from './startup-banner.js'
+import { consumeWorktreeProcessAccessGateCredential } from './worktree-server-worker.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DEFAULT_HOSTED_CORS_ORIGINS = ['http://localhost:5173', 'http://localhost:3000']
@@ -52,6 +53,7 @@ function buildHostedCorsOrigins(baseUrl: string): string[] {
 }
 
 async function main(): Promise<void> {
+  const inheritedAccessGateCredential = consumeWorktreeProcessAccessGateCredential(process.env)
   const originalCwd = process.env.INIT_CWD || process.cwd()
   const args = getCliArgs(process.argv)
 
@@ -151,6 +153,7 @@ async function main(): Promise<void> {
             onBrowserLaunchCredential: (credential) => {
               browserLaunchCredential = credential
             },
+            accessGateCredential: inheritedAccessGateCredential ?? undefined,
           })
 
           if (server.port !== server.preferredPort) {

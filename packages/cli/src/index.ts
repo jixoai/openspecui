@@ -1,8 +1,8 @@
 /**
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Start the embedded Server with packaged Project Web/preview assets.
- * 2. Resolve one Access Gate credential and deliver it to Server plus the private browser owner.
- * 3. Coordinate worktree Server workers and deterministic runtime teardown.
+ * 2. Resolve one Access Gate credential and deliver it to Server, private browser, and worktree children.
+ * 3. Keep inherited child credentials silent while coordinating deterministic runtime teardown.
  *
  * Original request (2026-07-15): "新增一个 --auth 或者 --password。"
  * Delivery correction (2026-07-24): one resolved credential must reach Server and Project Web.
@@ -60,6 +60,8 @@ export interface CLIOptions {
    * inline value is given. Mutually exclusive with `auth`.
    */
   password?: string | true
+  /** Private worktree bootstrap Gate. Child runtimes must not print or relay this credential. */
+  accessGateCredential?: AccessGateCredential
   /** Receives the resolved secret for a private browser fragment; never persist or log it. */
   onBrowserLaunchCredential?: (credential: string) => void
   /** Optional handoff owner. Worker runtimes use this to delegate nested switches to their parent. */
@@ -199,6 +201,10 @@ function setupStaticFiles(app: Hono): void {
 async function resolveAccessGateCredential(
   options: CLIOptions
 ): Promise<AccessGateCredential | null> {
+  if (options.accessGateCredential && (options.auth || options.password !== undefined)) {
+    throw new Error('An inherited Access Gate cannot be combined with --auth or --password.')
+  }
+  if (options.accessGateCredential) return options.accessGateCredential
   if (options.auth && options.password !== undefined) {
     throw new Error(
       '--auth and --password are mutually exclusive. Choose one Access Gate credential.'
@@ -295,7 +301,7 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
     setupStaticFiles
   )
 
-  if (accessGate) {
+  if (accessGate && !options.accessGateCredential) {
     printAccessGateBanner(accessGate)
     options.onBrowserLaunchCredential?.(accessGate.credential)
   }
@@ -306,6 +312,7 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
       currentServerUrl: server.url,
       runtimeDir: __dirname,
       createWorker: createWorktreeServerWorker,
+      accessGateCredential: accessGate,
     })
   }
 

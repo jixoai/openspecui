@@ -3,7 +3,7 @@
 /**
  * Orthogonal intents (created 2026-07-24 Asia/Shanghai):
  * 1. Intercept only protected same-origin native GET resources.
- * 2. Request transient Authorization from a live Project Web client for every intercepted fetch.
+ * 2. Request transient Authorization only from the Project Web client that initiated the fetch.
  * 3. Preserve missing/invalid credential rejection without caching authority.
  *
  * Original request (2026-07-24): "完整审计 Project Web 的 HTTP/tRPC WS/PTY/raw resource 网络路径。"
@@ -42,15 +42,10 @@ function requestAuthorization(client: Client): Promise<string | null> {
 }
 
 async function resolveAuthorization(clientId: string): Promise<string | null> {
-  const preferred = clientId ? await worker.clients.get(clientId) : undefined
-  const candidates = preferred
-    ? [preferred]
-    : await worker.clients.matchAll({ type: 'window', includeUncontrolled: true })
-  for (const client of candidates) {
-    const authorization = await requestAuthorization(client)
-    if (authorization) return authorization
-  }
-  return null
+  if (!clientId) return null
+  const initiatingClient = await worker.clients.get(clientId)
+  if (!initiatingClient) return null
+  return requestAuthorization(initiatingClient)
 }
 
 worker.addEventListener('install', ((event: ExtendableEvent) => {
