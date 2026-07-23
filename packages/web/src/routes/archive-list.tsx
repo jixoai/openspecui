@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. List only archives projected from the current writable Planning root.
- * 2. Preserve stable Archive detail navigation and empty/loading states.
- * 3. Render resolved Archive data immediately without an artificial first-frame gate.
+ * 2. Preserve Archive detail navigation and physical row continuity across reactive list changes.
+ * 3. Render resolved Archive data and empty/loading states without an artificial first-frame gate.
  * 4. Surface transport errors while retaining stale rows without false empty claims.
  * 5. Project real dependency-driven recomputation beside retained Archive data.
  *
@@ -13,10 +13,14 @@ import { formatRelativeTime } from '@/lib/format-time'
 import { useArchivesSubscription } from '@/lib/use-subscription'
 import { VTLink } from '@/lib/view-transitions/navigation'
 import { getSharedElementBinding } from '@/lib/view-transitions/shared-elements'
+import { useArchiveListContinuity } from '@/routes/archive-list-continuity'
 import { AlertCircle, Archive, ChevronRight, RefreshCw } from 'lucide-react'
+import { useRef } from 'react'
 
 export function ArchiveList() {
   const { data: archived, isLoading, isUpdating, error } = useArchivesSubscription()
+  const listRef = useRef<HTMLDivElement>(null)
+  const displayedArchives = useArchiveListContinuity(archived, listRef)
 
   if (isLoading && !archived && !error) {
     return <div className="route-loading animate-pulse">Loading archived changes...</div>
@@ -58,8 +62,12 @@ export function ArchiveList() {
       ) : null}
 
       {archived && (!error || archived.length > 0) ? (
-        <div className="border-border divide-border divide-y rounded-lg border">
-          {archived.map((change) => {
+        <div
+          ref={listRef}
+          data-archive-list-continuity
+          className="border-border divide-border divide-y rounded-lg border"
+        >
+          {displayedArchives?.map((change) => {
             const sharedDescriptor = { family: 'archive', entityId: change.id } as const
 
             return (
@@ -102,7 +110,7 @@ export function ArchiveList() {
               </VTLink>
             )
           })}
-          {archived.length === 0 && !isUpdating && (
+          {displayedArchives?.length === 0 && !isUpdating && (
             <div className="text-muted-foreground p-8 text-center">
               <Archive className="mx-auto mb-4 h-12 w-12 opacity-50" />
               <p>No archived changes yet.</p>
