@@ -182,10 +182,12 @@ function setupStaticFiles(app: Hono): void {
  *
  * `--auth` generates a high-entropy Bearer credential; `--password` (with an inline value) normalizes
  * an operator secret into the same Bearer form. The two flags are mutually exclusive. A `--password`
- * with no inline value is accepted only in interactive contexts; this CLI entrypoint requires an
- * inline value and warns that it can leak through shell history/process inspection.
+ * with no inline value reads a hidden prompt from stdin when the process is an interactive TTY, and
+ * rejects in non-interactive (worker) runtimes where prompting is impossible.
  */
-function resolveAccessGateCredential(options: CLIOptions): AccessGateCredential | null {
+async function resolveAccessGateCredential(
+  options: CLIOptions
+): Promise<AccessGateCredential | null> {
   if (options.auth && options.password !== undefined) {
     throw new Error(
       '--auth and --password are mutually exclusive. Choose one Access Gate credential.'
@@ -196,12 +198,12 @@ function resolveAccessGateCredential(options: CLIOptions): AccessGateCredential 
   }
   if (options.password !== undefined) {
     if (options.password === true) {
-      // No inline value: this entrypoint cannot prompt interactively in all runtimes.
-      console.warn(
-        '--password without an inline value is not supported here. Pass --password=<secret> and ' +
-          'note it can leak through shell history and process inspection.'
-      )
-      throw new Error('--password requires an inline secret value.')
+      // No inline value: read a hidden prompt from an interactive TTY.
+      const secret = await promptHiddenPassword()
+      if (!secret) {
+        throw new Error('--password requires a non-empty secret.')
+      }
+      return normalizeAccessGatePassword(secret)
     }
     console.warn(
       'Warning: an inline --password can leak through shell history and process inspection. ' +
@@ -210,6 +212,32 @@ function resolveAccessGateCredential(options: CLIOptions): AccessGateCredential 
     return normalizeAccessGatePassword(options.password)
   }
   return null
+}
+
+/** Read a hidden password from an interactive TTY via readline. Rejects in non-TTY runtimes. */
+async function promptHiddenPassword(): Promise<string> {
+  if (!process.stdin.isTTY) {
+    throw new Error(
+      '--password without an inline value requires an interactive terminal. ' +
+        'Pass --password=<secret> instead, or use --auth for a generated credential.'
+    )
+  }
+  const { createInterface } = await import('node:readline')
+  const rl = createInterface({ input: process.stdin, output: undefined })
+  // Mute output so the typed secret is not echoed to the terminal.
+  const writeToStdout = process.stdout.write.bind(process.stdout)
+  process.stdout.write = (() => true) as never
+  try {
+    process.stderr.write('Enter Access Gate password: ')
+    const secret = await new Promise<string>((resolve) => {
+      rl.question('', (answer) => resolve(answer))
+    })
+    process.stderr.write('\n')
+    return secret
+  } finally {
+    process.stdout.write = writeToStdout
+    rl.close()
+  }
 }
 
 /** Print the Access Gate credential once so the operator can distribute the Authorization header. */
@@ -241,7 +269,7 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
   }
 
   // Resolve the whole-backend Access Gate credential from --auth or --password (mutually exclusive).
-  const accessGate = resolveAccessGateCredential(options)
+  const accessGate = await resolveAccessGateCredential(options)
 
   const server = await serverStartServer(
     {

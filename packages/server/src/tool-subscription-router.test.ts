@@ -497,7 +497,10 @@ describe('public fixed global CLI installation stream', () => {
       const runnerAtExit: ReturnType<typeof fixture.server.configManager.getResolvedCliRunner>[] =
         []
 
-      expect(fixture.server.runtimeInvalidation.current('context')).toBe(0)
+      // Capture the baseline context invalidation generation. Async filesystem invalidation from the
+      // observation environment's watcher pool may advance it during setup; the assertion below proves
+      // the CLI installation invalidates exactly one additional generation before terminal settlement.
+      const baselineContext = fixture.server.runtimeInvalidation.current('context')
       await new Promise<void>((resolve, reject) => {
         stream.subscribe({
           next: (event) => {
@@ -515,9 +518,9 @@ describe('public fixed global CLI installation stream', () => {
         })
       })
 
-      expect(invalidationAtExit).toEqual([1])
-      expect(invalidationAtComplete).toEqual([1])
-      expect(fixture.server.runtimeInvalidation.current('context')).toBe(1)
+      expect(invalidationAtExit).toEqual([baselineContext + 1])
+      expect(invalidationAtComplete).toEqual([baselineContext + 1])
+      expect(fixture.server.runtimeInvalidation.current('context')).toBe(baselineContext + 1)
       await expect(Promise.all(runnerAtExit)).resolves.toMatchObject([{ version: 'runner-b' }])
       expect(events).toEqual([{ type: 'exit', exitCode: 0 }])
       expect(executeCommandStream).toHaveBeenCalledWith(
@@ -552,6 +555,8 @@ describe('public fixed global CLI installation stream', () => {
       const runnerAtError: ReturnType<typeof fixture.server.configManager.getResolvedCliRunner>[] =
         []
       const completes = vi.fn()
+      // Capture the baseline context generation (async watcher-pool invalidation may advance it).
+      const baselineContext = fixture.server.runtimeInvalidation.current('context')
       stream.subscribe({
         complete: completes,
         error: (error) => {
@@ -567,8 +572,8 @@ describe('public fixed global CLI installation stream', () => {
       rejectTerminal(failure)
 
       await vi.waitFor(() => expect(errors).toEqual([failure]), { timeout: 200 })
-      expect(invalidationAtError).toEqual([1])
-      expect(fixture.server.runtimeInvalidation.current('context')).toBe(1)
+      expect(invalidationAtError).toEqual([baselineContext + 1])
+      expect(fixture.server.runtimeInvalidation.current('context')).toBe(baselineContext + 1)
       await expect(Promise.all(runnerAtError)).resolves.toMatchObject([{ version: 'runner-b' }])
       expect(completes).not.toHaveBeenCalled()
     } finally {

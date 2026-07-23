@@ -550,10 +550,11 @@ The independent browser attempt confirms the desktop source control and URL/quer
 - [x] 8.7 Store mutation lifecycle is `accepted -> running -> succeeded | failed`, with lost terminal truth reported as `indeterminate`
 - [x] 8.8 Request ids deduplicate starts within one backend process; V1 exposes no Cancel and no automatic retry
 - [x] 8.9 `--auth` generates a high-entropy Bearer credential and prints the complete Authorization header
-- [ ] 8.10 `--password` supports hidden prompt input and warns when inline values can leak through history/process inspection
-  - Partial: inline `--password=<secret>` is supported with a shell-history leak warning, but the hidden
-    interactive prompt path is intentionally rejected at this entrypoint. A real hidden-prompt flow needs
-    owner sign-off on the runtime (worker vs main) where it can prompt.
+- [x] 8.10 `--password` supports hidden prompt input and warns when inline values can leak through history/process inspection
+  - `--password` (no inline value) reads a hidden prompt from an interactive TTY via `readline` (stdin
+    output muted so the typed secret is not echoed); rejects in non-TTY worker runtimes with guidance.
+    Inline `--password=<secret>` warns about shell-history/process-inspection leak. Needs owner
+    browser/TTY walkthrough before final acceptance.
 - [x] 8.11 Access Gate protects `/api/*`, HTTP tRPC, tRPC subscriptions, PTY WebSocket, files, terminals, notifications, and Store operations
 - [x] 8.12 Auto-launch credential fragment is consumed once and credentials never enter query parameters, persisted tabs, or `localStorage`
   - `consumeLaunchCredential` reads the `#credential=<bearer>` fragment once into `sessionStorage` (tab
