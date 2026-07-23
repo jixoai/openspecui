@@ -4,7 +4,7 @@ import {
   type HostedBackendHealthResponse,
 } from '@openspecui/core/hosted-app'
 
-export type HostedTabReachability = 'checking' | 'online' | 'offline'
+export type HostedTabReachability = 'checking' | 'online' | 'offline' | 'unsupported'
 
 export interface HostedBackendProbeResult {
   reachability: HostedTabReachability
@@ -41,16 +41,19 @@ export async function probeHostedBackend(
 
     const payload = await response.json()
     if (!isBackendHealthRuntimeMetadata(payload)) {
+      // A backend that does not satisfy the required protocol version (or omits required runtime
+      // metadata) is unsupported: the App must not treat it as a usable online environment.
       return {
-        reachability: 'online',
+        reachability: 'unsupported',
         health: null,
-        errorMessage: 'Backend health payload is missing compatible runtime metadata.',
+        errorMessage:
+          'Backend protocol version or runtime metadata is unsupported by this hosted shell.',
       }
     }
 
     if (!isSupportedEmbeddedUiUrl(payload.embeddedUiUrl)) {
       return {
-        reachability: 'online',
+        reachability: 'unsupported',
         health: null,
         errorMessage: 'Backend embedded UI URL is not supported by the hosted shell.',
       }

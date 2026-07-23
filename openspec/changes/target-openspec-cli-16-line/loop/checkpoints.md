@@ -534,11 +534,12 @@ The independent browser attempt confirms the desktop source control and URL/quer
 
 - [x] 8.1 Backend health separates protocol version, `apiBaseUrl`, server/CLI versions, Root Context summary, and optional capabilities
 - [x] 8.2 Backend issues opaque stable `envUri` for host identity plus effective OpenSpec data home without exposing either component
-- [ ] 8.3 Required protocol version gates connection while optional capabilities gate only dependent surfaces
-  - Partial: `hostedShellProtocolVersion` is emitted and `isBackendHealthRuntimeMetadata` validates it, but
-    a hard protocol-version-mismatch connection rejection on the App client side is not yet implemented;
-    capabilities gate App view rendering (`canRenderStoreInspector`) but do not gate individual operations.
-    Needs owner walkthrough + an App-side protocol-version rejection path.
+- [x] 8.3 Required protocol version gates connection while optional capabilities gate only dependent surfaces
+  - `probeHostedBackend` classifies a backend whose `hostedShellProtocolVersion` does not match (or whose
+    runtime metadata is incomplete) as `'unsupported'` rather than `'online'`; `useActiveBackend` selects
+    only `online` backends, so an incompatible-protocol backend never becomes the active environment.
+    Capabilities gate App view rendering (`canRenderStoreInspector`). `reachability` 4/4 unit tests cover
+    the unsupported-protocol and unsupported-embedded-UI paths.
 - [x] 8.4 Capability vocabulary is limited to `stores.inspect`, `stores.mutate`, and `contexts.inspect` and carries no permission meaning
 - [x] 8.5 Inventory, Inspector, and project Context envelopes preserve upstream Store list/doctor/context facts and provenance
 - [ ] 8.6 Context Matrix joins only currently observed online project contexts by `envUri` and Store id

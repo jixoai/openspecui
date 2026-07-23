@@ -32,7 +32,7 @@ describe('hosted reachability helpers', () => {
     expect(result.errorMessage).toBeNull()
   })
 
-  it('reports unsupported embedded UI URLs as online-but-incompatible', async () => {
+  it('reports unsupported embedded UI URLs as unsupported', async () => {
     const fetchImpl = vi.fn(
       async () =>
         new Response(
@@ -54,9 +54,36 @@ describe('hosted reachability helpers', () => {
 
     const result = await probeHostedBackend('http://localhost:3100', fetchImpl)
 
-    expect(result.reachability).toBe('online')
+    expect(result.reachability).toBe('unsupported')
     expect(result.health).toBeNull()
     expect(result.errorMessage).toContain('not supported')
+  })
+
+  it('reports an incompatible protocol version as unsupported', async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            status: 'ok',
+            projectDir: '/tmp/demo',
+            projectName: 'demo',
+            watcherEnabled: true,
+            openspecuiVersion: '2.0.2',
+            // Wrong protocol version must be rejected.
+            hostedShellProtocolVersion: 999,
+            embeddedUiUrl: 'http://localhost:4100',
+            runtimeCapabilities: ['notifications.subscribe', 'config.notifications'],
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }
+        )
+    ) as typeof fetch
+
+    const result = await probeHostedBackend('http://localhost:3100', fetchImpl)
+    expect(result.reachability).toBe('unsupported')
+    expect(result.health).toBeNull()
   })
 
   it('marks a backend as offline when health fetch fails', async () => {
