@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Select the first online backend connection for Store Manager / Environment views.
  * 2. Carry its health-derived envUri/capabilities to capability-gated routes.
+ * 3. Let backend clients resolve credentials only from the selected locator's runtime registry entry.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Section 9.5/9.6: an explicitly selected online environment is required before environment-scoped
@@ -10,7 +11,6 @@
 import type { HostedBackendHealthResponse, RootContextState } from '@openspecui/core'
 import { useEffect, useState } from 'react'
 import { fetchBackendRootContext } from './backend-client'
-import { readLaunchCredential } from './launch-credential'
 import { probeHostedBackend } from './reachability'
 import { useConnectionReachability, useConnections } from './use-connections'
 
@@ -19,8 +19,6 @@ export interface ActiveBackend {
   health: HostedBackendHealthResponse | null
   /** Project Root Context for the Context Matrix; null while loading or unavailable. */
   rootContext: RootContextState | null
-  /** Session-memory Access Gate credential (never persisted). */
-  credential: string | null
 }
 
 export interface UseActiveBackendResult {
@@ -40,9 +38,6 @@ export function useActiveBackend(): UseActiveBackendResult {
   const reachability = useConnectionReachability(tabs)
   const firstOnlineUrl =
     tabs.find((tab) => reachability[tab.apiBaseUrl] === 'online')?.apiBaseUrl ?? null
-  // Access Gate credential held in session memory only (never query params/localStorage/persisted tabs).
-  const credential = readLaunchCredential()
-
   const [health, setHealth] = useState<HostedBackendHealthResponse | null>(null)
   const [rootContext, setRootContext] = useState<RootContextState | null>(null)
 
@@ -60,7 +55,7 @@ export function useActiveBackend(): UseActiveBackendResult {
       .catch(() => {
         if (!cancelled) setHealth(null)
       })
-    fetchBackendRootContext({ apiBaseUrl: firstOnlineUrl, credential })
+    fetchBackendRootContext({ apiBaseUrl: firstOnlineUrl })
       .then((context) => {
         if (!cancelled) setRootContext(context)
       })
@@ -70,10 +65,10 @@ export function useActiveBackend(): UseActiveBackendResult {
     return () => {
       cancelled = true
     }
-  }, [firstOnlineUrl, credential])
+  }, [firstOnlineUrl])
 
   return {
-    active: firstOnlineUrl ? { apiBaseUrl: firstOnlineUrl, health, rootContext, credential } : null,
+    active: firstOnlineUrl ? { apiBaseUrl: firstOnlineUrl, health, rootContext } : null,
     hasConnections: tabs.length > 0,
   }
 }

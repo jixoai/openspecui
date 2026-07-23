@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Render backend connection discovery and retained entry actions.
  * 2. Keep credentials outside persisted connection state.
+ * 3. Preserve authentication-required as a reachable connection state.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  */
@@ -11,6 +12,7 @@ import { Home, Loader2, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { EmptyView } from '../components/state-views'
 import { StatusDot } from '../components/status-badge'
+import type { HostedTabReachability } from '../lib/reachability'
 import {
   applyHostedLaunchRequest,
   generateHostedSessionId,
@@ -115,7 +117,7 @@ function ConnectionRow({
   onRemove,
 }: {
   tab: HostedShellTab
-  reachability: 'checking' | 'online' | 'offline' | 'unsupported' | undefined
+  reachability: HostedTabReachability | undefined
   onRemove: () => void
 }) {
   return (
@@ -154,18 +156,14 @@ function getHostLabel(tab: HostedShellTab): string {
 
 /** 把后端可达性映射成统一 StatusDot variant（语义化状态徽章共用）。 */
 function reachabilityToVariant(
-  reachability: 'checking' | 'online' | 'offline' | 'unsupported' | undefined
+  reachability: HostedTabReachability | undefined
 ): 'healthy' | 'neutral' | 'pending' {
   if (reachability === 'online') return 'healthy'
   if (reachability === 'offline') return 'neutral'
   return 'pending'
 }
 
-function ReachabilityBadge({
-  reachability,
-}: {
-  reachability: 'checking' | 'online' | 'offline' | 'unsupported' | undefined
-}) {
+function ReachabilityBadge({ reachability }: { reachability: HostedTabReachability | undefined }) {
   const label =
     reachability === 'online'
       ? 'online'
@@ -173,15 +171,19 @@ function ReachabilityBadge({
         ? 'offline'
         : reachability === 'checking'
           ? 'checking'
-          : 'unknown'
+          : reachability === 'authentication-required'
+            ? 'authentication required'
+            : reachability === 'unsupported'
+              ? 'unsupported'
+              : 'unknown'
   return <StatusDot variant={reachabilityToVariant(reachability)} ariaLabel={`Backend ${label}`} />
 }
 
 /**
  * Add Backend 对话框（骨架）。
  *
- * 本轮骨架只收集 apiBaseUrl；凭据（可选 Bearer）尚未实现。
- * TODO(kernel): 后端 Access Gate 落地后，这里可接受一次性凭据（仅 session memory，不持久化）。
+ * 本轮只收集 apiBaseUrl；Access Gate credential 只能由 backend launch fragment 绑定，不能进入
+ * persisted connection 表单。
  */
 function AddBackendDialog({
   onClose,

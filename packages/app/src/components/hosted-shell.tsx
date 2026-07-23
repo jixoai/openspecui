@@ -1,3 +1,16 @@
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Orchestrate persisted credential-free project tabs and embedded frame lifecycle.
+ * 2. Coordinate browser/PWA launch relay, install, and update ownership.
+ * 3. Project exact backend reachability including authentication-required state.
+ * 4. Keep refresh/retry feedback attached to the affected tab runtime.
+ * 5. Preserve cross-window shell-state convergence.
+ *
+ * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ * Delivery correction (2026-07-24): bind launch credentials before forwarding credential-free tabs.
+ * Compromise: these intents share one React owner because tab, frame, relay, and PWA browser lifecycles
+ * must settle in one mounted shell; extracting them in P1 would expand beyond the credential fixed point.
+ */
 import { Dialog } from '@openspecui/web-src/components/dialog'
 import { type Tab } from '@openspecui/web-src/components/tabs'
 import { TerminalTabs } from '@openspecui/web-src/components/terminal/terminal-tabs'
@@ -11,7 +24,7 @@ import {
   type CSSProperties,
   type FormEvent,
 } from 'react'
-import { parseHostedLaunchParams } from '../lib/bootstrap'
+import { consumeHostedLaunchUrl } from '../lib/bootstrap'
 import { createHostedShellSync } from '../lib/hosted-shell-sync'
 import { createHostedLaunchRelay } from '../lib/launch-relay'
 import {
@@ -277,7 +290,10 @@ function HostedShellTabContent({
   const title = runtime.projectName ?? getHostedTabLabel(tab)
   const iframeTitle = `Hosted OpenSpec UI ${title}`
   const iframeSrc = buildHostedTabIframeSrc(tab, runtime)
-  const showInlineError = runtime.reachability === 'online' && runtime.errorMessage
+  const showInlineError =
+    runtime.reachability !== 'checking' &&
+    runtime.reachability !== 'offline' &&
+    runtime.errorMessage
   const isFrameLoading = iframeSrc !== null && frameState.status !== 'loaded'
   const showFrameError = iframeSrc !== null && frameState.status === 'error'
 
@@ -364,6 +380,9 @@ function HostedShellTabContent({
                 Waiting for this backend to come online.
               </p>
             )}
+            {runtime.reachability === 'authentication-required' && runtime.errorMessage && (
+              <p className="text-muted-foreground text-xs">{runtime.errorMessage}</p>
+            )}
             {runtime.reachability === 'online' && runtime.errorMessage && (
               <p className="text-muted-foreground text-xs">
                 This backend is reachable, but it does not expose a compatible embedded UI yet.
@@ -407,6 +426,9 @@ function createHostedShellTab(props: {
           )}
           {props.runtime.reachability === 'offline' && (
             <Unlink2 className="h-3 w-3 text-amber-500" />
+          )}
+          {props.runtime.reachability === 'authentication-required' && (
+            <AlertCircle className="h-3 w-3 text-amber-500" />
           )}
           <span className="font-nav min-w-0 truncate text-xs">{title}</span>
         </span>
@@ -774,7 +796,7 @@ export function HostedShell({
       if (!(targetUrl instanceof URL)) {
         return
       }
-      const launch = parseHostedLaunchParams(targetUrl.search)
+      const launch = consumeHostedLaunchUrl(targetUrl.href)
       if (launch.error) {
         setErrorMessage(launch.error)
         return
@@ -829,11 +851,12 @@ export function HostedShell({
           for (const { tab, probe } of probeResults) {
             const previous = current[tab.id] ?? DEFAULT_RUNTIME_STATE
 
-            if (probe.reachability === 'offline') {
+            if (probe.reachability !== 'online') {
               next[tab.id] = {
                 ...previous,
-                reachability: 'offline',
-                errorMessage: null,
+                reachability: probe.reachability,
+                embeddedUiUrl: probe.reachability === 'offline' ? previous.embeddedUiUrl : null,
+                errorMessage: probe.errorMessage,
               }
               continue
             }

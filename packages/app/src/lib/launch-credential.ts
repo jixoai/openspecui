@@ -1,83 +1,79 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
- * 1. Consume an auto-launched Access Gate credential from the URL fragment once.
- * 2. Keep the credential in session memory only (never query params, persisted tabs, or localStorage).
- * 3. Strip the fragment immediately so it is not retained in history or visible state.
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Bind a consumed launch credential to exactly one normalized backend API locator.
+ * 2. Keep credentials in process memory and out of URLs, persisted tabs, storage, and logs.
+ * 3. Return credential-free stripping/configuration evidence to launch owners.
  *
  * Original request (2026-07-15): "我们可以在 cli 上新增一个 --auth 或者 --password。"
- * Section 8.12: auto-launch credential fragment is consumed once and credentials never enter query
- * parameters, persisted tabs, or localStorage.
- *
- * Invariants (AGENTS.md):
- *  - Credentials are held in session memory (sessionStorage, scoped to the tab session, cleared on close)
- *    — never in the URL query, persisted tab entries, or localStorage.
- *  - The fragment is removed from the URL immediately after consumption.
+ * Delivery correction (2026-07-24): replace the global session credential with a per-locator registry.
  */
+import { normalizeHostedApiBaseUrl } from './shell-state'
 
-/** sessionStorage key for the in-session Access Gate credential. */
-export const LAUNCH_CREDENTIAL_SESSION_KEY = 'openspecui-app:launch-credential'
-
-/** Query param name carried in the URL fragment (never in the query string). */
 const CREDENTIAL_FRAGMENT_PARAM = 'credential'
+const credentialsByApiLocator = new Map<string, string>()
 
-function isStorageAvailable(storage: Storage | undefined | null): storage is Storage {
-  return typeof storage !== 'undefined' && storage !== null
+export type LaunchCredentialConsumeResult =
+  | { status: 'absent'; sanitizedHash: string }
+  | { status: 'bound'; apiBaseUrl: string; sanitizedHash: string }
+  | { status: 'configuration-error'; error: string; sanitizedHash: string }
+
+function sanitizeCredentialHash(params: URLSearchParams): string {
+  params.delete(CREDENTIAL_FRAGMENT_PARAM)
+  const remaining = params.toString()
+  return remaining ? `#${remaining}` : ''
+}
+
+/** Bind one credential to its normalized locator without exposing it in the returned launch evidence. */
+export function bindLaunchCredential(apiBaseUrl: string, credential: string): boolean {
+  const normalizedApiBaseUrl = normalizeHostedApiBaseUrl(apiBaseUrl)
+  if (!normalizedApiBaseUrl || credential.length === 0) return false
+  credentialsByApiLocator.set(normalizedApiBaseUrl, credential)
+  return true
 }
 
 /**
- * Read and consume the auto-launched credential from the URL fragment. When present, it is stored in
- * session memory and the fragment is stripped from the URL via the provided history hook. Returns the
- * credential (or null), and never throws on storage/history absence.
+ * Consume a fragment credential and bind it to the supplied launch locator. The caller owns applying
+ * `sanitizedHash` to a visible URL; the result deliberately never carries the credential value.
  */
 export function consumeLaunchCredential(options: {
-  hash?: string
-  replaceState?: (url: string) => void
-  sessionStorage?: Storage | null
-}): string | null {
-  const hash = options.hash ?? (typeof window !== 'undefined' ? window.location.hash : '')
-  if (!hash || !hash.startsWith('#')) return null
-  const params = new URLSearchParams(hash.slice(1))
-  const credential = params.get(CREDENTIAL_FRAGMENT_PARAM)
-  if (!credential) return null
-
-  const storage =
-    options.sessionStorage ?? (typeof window !== 'undefined' ? window.sessionStorage : null)
-  if (isStorageAvailable(storage)) {
-    storage.setItem(LAUNCH_CREDENTIAL_SESSION_KEY, credential)
+  apiBaseUrl: string | null | undefined
+  hash: string
+}): LaunchCredentialConsumeResult {
+  if (!options.hash.startsWith('#')) {
+    return { status: 'absent', sanitizedHash: options.hash }
   }
 
-  const replaceState =
-    options.replaceState ??
-    ((url: string) => {
-      if (typeof window !== 'undefined' && window.history) {
-        window.history.replaceState({}, '', url)
-      }
-    })
-  // Remove the credential fragment entirely so it does not persist in history or session restorations.
-  const url = new URL(
-    typeof window !== 'undefined' ? window.location.href : `http://localhost${hash}`
-  )
-  url.hash = ''
-  // Drop only the credential param if other fragment params exist; otherwise clear the whole hash.
-  params.delete(CREDENTIAL_FRAGMENT_PARAM)
-  const remaining = params.toString()
-  url.hash = remaining ? `#${remaining}` : ''
-  replaceState(url.pathname + url.search + url.hash)
-  return credential
+  const params = new URLSearchParams(options.hash.slice(1))
+  const credential = params.get(CREDENTIAL_FRAGMENT_PARAM)
+  if (credential === null) {
+    return { status: 'absent', sanitizedHash: options.hash }
+  }
+
+  const sanitizedHash = sanitizeCredentialHash(params)
+  const normalizedApiBaseUrl = options.apiBaseUrl
+    ? normalizeHostedApiBaseUrl(options.apiBaseUrl)
+    : null
+  if (!normalizedApiBaseUrl || credential.length === 0) {
+    return {
+      status: 'configuration-error',
+      error:
+        'The launch credential requires a valid ?api=<backend URL> locator. Relaunch from the backend or remove the credential fragment.',
+      sanitizedHash,
+    }
+  }
+
+  credentialsByApiLocator.set(normalizedApiBaseUrl, credential)
+  return { status: 'bound', apiBaseUrl: normalizedApiBaseUrl, sanitizedHash }
 }
 
-/** Read the in-session Access Gate credential without consuming it. Returns null when absent. */
-export function readLaunchCredential(
-  storage: Storage | null | undefined = typeof window !== 'undefined' ? window.sessionStorage : null
-): string | null {
-  if (!isStorageAvailable(storage)) return null
-  return storage.getItem(LAUNCH_CREDENTIAL_SESSION_KEY)
+/** Read the runtime-only credential associated with one normalized backend locator. */
+export function readLaunchCredential(apiBaseUrl: string): string | null {
+  const normalizedApiBaseUrl = normalizeHostedApiBaseUrl(apiBaseUrl)
+  return normalizedApiBaseUrl ? (credentialsByApiLocator.get(normalizedApiBaseUrl) ?? null) : null
 }
 
-/** Clear the in-session credential (e.g. on explicit disconnect). */
-export function clearLaunchCredential(
-  storage: Storage | null | undefined = typeof window !== 'undefined' ? window.sessionStorage : null
-): void {
-  if (!isStorageAvailable(storage)) return
-  storage.removeItem(LAUNCH_CREDENTIAL_SESSION_KEY)
+/** Clear only the credential associated with the supplied backend locator. */
+export function clearLaunchCredential(apiBaseUrl: string): void {
+  const normalizedApiBaseUrl = normalizeHostedApiBaseUrl(apiBaseUrl)
+  if (normalizedApiBaseUrl) credentialsByApiLocator.delete(normalizedApiBaseUrl)
 }

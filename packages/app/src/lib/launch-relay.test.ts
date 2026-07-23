@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Prove PWA/browser launch leadership and relay settlement.
+ * 2. Prove forwarded credentials bind only in runtime memory for the matching locator.
+ *
+ * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ * Delivery correction (2026-07-24): relay credentials transiently without persisted shell state.
+ */
 import { describe, expect, it, vi } from 'vitest'
 import { createHostedLaunchRelay, readHostedLaunchLeader } from './launch-relay'
 
@@ -146,6 +154,48 @@ describe('hosted launch relay', () => {
 
     expect(await resultPromise).toBe('forwarded-to-pwa')
     expect(launches).toEqual(['http://localhost:3100'])
+
+    stopBrowser()
+    stopPwa()
+    vi.useRealTimers()
+  })
+
+  it('binds a forwarded credential to the same locator in the PWA runtime only', async () => {
+    vi.useFakeTimers()
+    const storage = createMemoryStorage()
+    const pair = createChannelPair()
+    const pwaCredentials = new Map<string, string>()
+
+    const pwaRelay = createHostedLaunchRelay({
+      storage,
+      createChannel: () => pair.primary,
+      windowId: 'pwa-window',
+      role: 'pwa',
+      bindCredential(apiBaseUrl, credential) {
+        pwaCredentials.set(apiBaseUrl, credential)
+        return true
+      },
+      ...createNoHeartbeatRuntime(),
+    })
+    const browserRelay = createHostedLaunchRelay({
+      storage,
+      createChannel: () => pair.secondary,
+      windowId: 'browser-window',
+      role: 'browser',
+      readCredential(apiBaseUrl) {
+        return apiBaseUrl === 'http://localhost:3100' ? 'credential-a' : null
+      },
+      ...createNoHeartbeatRuntime(),
+    })
+
+    const stopPwa = pwaRelay.start(() => {})
+    const stopBrowser = browserRelay.start(() => {})
+    const resultPromise = browserRelay.dispatch({ apiBaseUrl: 'http://localhost:3100' })
+    await vi.advanceTimersByTimeAsync(450)
+
+    expect(await resultPromise).toBe('forwarded-to-pwa')
+    expect(pwaCredentials).toEqual(new Map([['http://localhost:3100', 'credential-a']]))
+    expect(storage.getItem('openspecui-app:pwa-leader')).not.toContain('credential-a')
 
     stopBrowser()
     stopPwa()

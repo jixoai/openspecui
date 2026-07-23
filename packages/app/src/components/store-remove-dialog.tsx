@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Confirm destructive Store removal with explicit environment and checkout identity.
  * 2. Reserve the backend-owned mutation seam without browser-side deletion.
+ * 3. Delegate Access Gate credential lookup to the locator-owned backend client.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  */
@@ -29,7 +30,6 @@ export function StoreRemoveDialog({
   store,
   envUri,
   apiBaseUrl,
-  credential,
   onRemoved,
   onClose,
 }: {
@@ -38,8 +38,6 @@ export function StoreRemoveDialog({
   envUri?: string
   /** Backend instance locator for the stores.mutate request. */
   apiBaseUrl?: string
-  /** Optional Bearer credential for an Access-Gated backend (session memory only). */
-  credential?: string | null
   onRemoved?: (storeId: string) => void
   onClose: () => void
 }) {
@@ -62,17 +60,16 @@ export function StoreRemoveDialog({
     setSubmitting(true)
     setError(null)
     const requestId = `remove:${storeId}:${Date.now()}`
-    mutateBackendStore(
-      { apiBaseUrl, credential },
-      { requestId, kind: 'remove', storeId, confirmDelete: true }
-    )
+    mutateBackendStore({ apiBaseUrl }, { requestId, kind: 'remove', storeId, confirmDelete: true })
       .then((mutation) => {
         if (mutation.status === 'succeeded') {
           onRemoved?.(storeId)
           onClose()
         } else if (mutation.status === 'indeterminate') {
           // Lost terminal truth: do not fabricate failure; report indeterminate and close.
-          setError('Result is indeterminate (lost during disconnect). Reopen the Store views to refresh.')
+          setError(
+            'Result is indeterminate (lost during disconnect). Reopen the Store views to refresh.'
+          )
           onRemoved?.(storeId)
           onClose()
         } else {
@@ -84,7 +81,7 @@ export function StoreRemoveDialog({
         setError(err instanceof Error ? err.message : String(err))
         setSubmitting(false)
       })
-  }, [canSubmit, apiBaseUrl, credential, store.id, onRemoved, onClose, store])
+  }, [canSubmit, apiBaseUrl, store.id, onRemoved, onClose, store])
 
   return (
     <Dialog
@@ -127,18 +124,18 @@ export function StoreRemoveDialog({
 
         <dl className="bg-muted/40 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 rounded-md p-3 text-xs">
           <dt className="text-muted-foreground">Environment</dt>
-          <dd className="font-mono break-all">{envUri ?? apiBaseUrl ?? 'selected environment'}</dd>
+          <dd className="break-all font-mono">{envUri ?? apiBaseUrl ?? 'selected environment'}</dd>
           <dt className="text-muted-foreground">Host</dt>
           {/* host identity 不通过 envUri 暴露原始值；展示 backend 实例定位符。 */}
-          <dd className="font-mono break-all">{apiBaseUrl ?? 'backend host'}</dd>
+          <dd className="break-all font-mono">{apiBaseUrl ?? 'backend host'}</dd>
           <dt className="text-muted-foreground">Store</dt>
           <dd className="font-mono">{store.id ?? '—'}</dd>
           <dt className="text-muted-foreground">Checkout</dt>
-          <dd className="font-mono break-all">{store.root ?? '—'}</dd>
+          <dd className="break-all font-mono">{store.root ?? '—'}</dd>
         </dl>
 
         {error ? (
-          <p className="border-destructive/40 text-destructive rounded-md border bg-destructive/5 px-3 py-2 text-xs">
+          <p className="border-destructive/40 text-destructive bg-destructive/5 rounded-md border px-3 py-2 text-xs">
             {error}
           </p>
         ) : null}

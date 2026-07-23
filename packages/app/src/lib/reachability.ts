@@ -1,10 +1,24 @@
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Classify hosted backend transport, authentication, and protocol reachability.
+ * 2. Send only the runtime credential bound to the probed normalized API locator.
+ *
+ * Original request (2026-07-15): "我们可以在 cli 上新增一个 --auth 或者 --password。"
+ * Delivery correction (2026-07-24): 401/403 is authentication-required rather than offline.
+ */
 import {
   isBackendHealthRuntimeMetadata,
   isSupportedEmbeddedUiUrl,
   type HostedBackendHealthResponse,
 } from '@openspecui/core/hosted-app'
+import { readLaunchCredential } from './launch-credential'
 
-export type HostedTabReachability = 'checking' | 'online' | 'offline' | 'unsupported'
+export type HostedTabReachability =
+  | 'checking'
+  | 'online'
+  | 'offline'
+  | 'unsupported'
+  | 'authentication-required'
 
 export interface HostedBackendProbeResult {
   reachability: HostedTabReachability
@@ -24,12 +38,25 @@ export async function probeHostedBackend(
     : null
 
   try {
+    const credential = readLaunchCredential(apiBaseUrl)
     const response = await fetchImpl(`${apiBaseUrl}/api/health`, {
       cache: 'no-store',
-      headers: { accept: 'application/json' },
+      headers: {
+        accept: 'application/json',
+        ...(credential ? { Authorization: `Bearer ${credential}` } : {}),
+      },
       mode: 'cors',
       signal: controller?.signal,
     })
+
+    if (response.status === 401 || response.status === 403) {
+      return {
+        reachability: 'authentication-required',
+        health: null,
+        errorMessage:
+          'Backend is reachable but requires a valid launch credential. Relaunch from the backend.',
+      }
+    }
 
     if (!response.ok) {
       return {

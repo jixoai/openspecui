@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Fetch Store Inventory/Inspector through the hosted REST boundary (observed-only).
  * 2. Keep Store truth and mutation lifecycle backend-owned.
+ * 3. Resolve hosted credentials inside the per-locator backend client boundary.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  * Migration (2026-07-23): wired to the backend Store procedures via backend-client.
@@ -30,8 +31,6 @@ export interface StoreDataState {
 export interface UseStoreDataOptions {
   /** Backend instance locator; undefined returns the empty non-loading state. */
   apiBaseUrl?: string | null
-  /** Optional Bearer credential for an Access-Gated backend (session memory only). */
-  credential?: string | null
   /** Change this value to force a re-fetch (e.g. after a mutation settles). */
   refreshNonce?: number
 }
@@ -42,7 +41,7 @@ export interface UseStoreDataOptions {
  * returned. Mutations remain backend-owned and surface through `activeMutations`/`recentMutations`.
  */
 export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState {
-  const { apiBaseUrl, credential, refreshNonce } = options
+  const { apiBaseUrl, refreshNonce } = options
   const [inspector, setInspector] = useState<StoreDoctorResult | undefined>(undefined)
   const [inventory, setInventory] = useState<StoreListResult | undefined>(undefined)
   const [isLoading, setIsLoading] = useState(false)
@@ -60,8 +59,8 @@ export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState 
     setIsLoading(true)
     setError(null)
     Promise.all([
-      fetchBackendStoreInventory({ apiBaseUrl, credential }),
-      fetchBackendStoreInspector({ apiBaseUrl, credential }),
+      fetchBackendStoreInventory({ apiBaseUrl }),
+      fetchBackendStoreInspector({ apiBaseUrl }),
     ])
       .then(([inventoryEnvelope, inspectorEnvelope]) => {
         if (cancelled) return
@@ -94,7 +93,7 @@ export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState 
     return () => {
       cancelled = true
     }
-  }, [apiBaseUrl, credential, refreshNonce])
+  }, [apiBaseUrl, refreshNonce])
 
   return {
     inspector: inspector as StoreInspectorProjection | undefined,

@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Project backend Store list/doctor through the hosted REST boundary without registry semantics.
  * 2. Preserve upstream Store facts and exit status; never invent health/completeness/ownership.
- * 3. Keep the App read-only over Stores it observes; mutations stay backend-owned.
+ * 3. Resolve Access Gate credentials only from the runtime registry for the request locator.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  * Section 9.6/9.8 App Store Inspector/Inventory wiring against the backend store procedures.
@@ -14,6 +14,7 @@
  */
 import type { RootContextState } from '@openspecui/core'
 import type { StoreDoctorResult, StoreListResult } from '@openspecui/core/store-types'
+import { readLaunchCredential } from './launch-credential'
 
 /** Minimal REST shapes returned by the backend Store feature envelope. */
 export interface BackendStoreListEnvelope {
@@ -32,11 +33,9 @@ export interface BackendStoreDoctorEnvelope {
   cliVersion?: string
 }
 
-/** Optional Bearer credential passed by the App when the backend Access Gate is enabled. */
+/** Hosted client locator; its optional Bearer credential is resolved from runtime memory at dispatch. */
 export interface BackendClientOptions {
   apiBaseUrl: string
-  /** Bearer credential held only in session memory; never persisted to localStorage/tabs. */
-  credential?: string | null
   fetchImpl?: typeof fetch
 }
 
@@ -44,7 +43,8 @@ function normalizeBaseUrl(apiBaseUrl: string): string {
   return apiBaseUrl.replace(/\/+$/, '')
 }
 
-function authHeaders(credential?: string | null): Record<string, string> {
+function authHeaders(apiBaseUrl: string): Record<string, string> {
+  const credential = readLaunchCredential(apiBaseUrl)
   return credential ? { Authorization: `Bearer ${credential}` } : {}
 }
 
@@ -55,7 +55,7 @@ export async function fetchBackendStoreInventory(
   const fetchImpl = options.fetchImpl ?? fetch
   const response = await fetchImpl(`${normalizeBaseUrl(options.apiBaseUrl)}/trpc/stores.list`, {
     cache: 'no-store',
-    headers: { accept: 'application/json', ...authHeaders(options.credential) },
+    headers: { accept: 'application/json', ...authHeaders(options.apiBaseUrl) },
   })
   if (!response.ok) {
     return {
@@ -89,7 +89,7 @@ export async function fetchBackendStoreInspector(
     `${normalizeBaseUrl(options.apiBaseUrl)}/trpc/stores.doctor?input=${input}`,
     {
       cache: 'no-store',
-      headers: { accept: 'application/json', ...authHeaders(options.credential) },
+      headers: { accept: 'application/json', ...authHeaders(options.apiBaseUrl) },
     }
   )
   if (!response.ok) {
@@ -118,7 +118,7 @@ export async function fetchBackendRootContext(
   const fetchImpl = options.fetchImpl ?? fetch
   const response = await fetchImpl(`${normalizeBaseUrl(options.apiBaseUrl)}/trpc/rootContext.get`, {
     cache: 'no-store',
-    headers: { accept: 'application/json', ...authHeaders(options.credential) },
+    headers: { accept: 'application/json', ...authHeaders(options.apiBaseUrl) },
   })
   if (!response.ok) return null
   const envelope = (await response.json()) as { result?: { data?: unknown } }
@@ -168,7 +168,7 @@ export async function mutateBackendStore(
     headers: {
       'content-type': 'application/json',
       accept: 'application/json',
-      ...authHeaders(options.credential),
+      ...authHeaders(options.apiBaseUrl),
     },
     body: JSON.stringify(input),
   })

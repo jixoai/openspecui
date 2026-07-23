@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Make Store Doctor evidence the primary Store Manager interaction.
  * 2. Reserve backend-owned mutation controls without inferring applicability.
+ * 3. Keep Access Gate credentials outside route/component props.
  *
  * Original request (2026-07-15): "Store Manager uses the Store Inspector as its primary interaction."
  */
@@ -37,7 +38,6 @@ export function StoreInspectorRoute() {
   const [refreshNonce, setRefreshNonce] = useState(0)
   const { inspector, isLoading, error } = useStoreData({
     apiBaseUrl: active?.apiBaseUrl,
-    credential: active?.credential,
     refreshNonce,
   })
   const stores = inspector?.stores ?? []
@@ -64,10 +64,7 @@ export function StoreInspectorRoute() {
     ): Promise<void> => {
       if (!active?.apiBaseUrl) return
       const requestId = `${kind}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
-      await mutateBackendStore(
-        { apiBaseUrl: active.apiBaseUrl, credential: active.credential },
-        { requestId, kind, ...input }
-      )
+      await mutateBackendStore({ apiBaseUrl: active.apiBaseUrl }, { requestId, kind, ...input })
       setRefreshNonce((n) => n + 1)
     },
     [active]
@@ -168,7 +165,6 @@ export function StoreInspectorRoute() {
             store={removeTarget}
             envUri={active?.health?.envUri}
             apiBaseUrl={active?.apiBaseUrl}
-            credential={active?.credential}
             onRemoved={() => setRefreshNonce((n) => n + 1)}
             onClose={() => setRemoveTarget(null)}
           />

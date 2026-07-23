@@ -1,3 +1,13 @@
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Elect one browser/PWA launch owner and relay credential-free tab requests.
+ * 2. Transfer a launch credential transiently to the owner without storing it in shell state/localStorage.
+ * 3. Preserve acknowledgement and local fallback behavior across window lifecycles.
+ *
+ * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ * Delivery correction (2026-07-24): forwarded PWA launches retain locator-scoped Access Gate credentials.
+ */
+import { bindLaunchCredential, readLaunchCredential } from './launch-credential'
 import { generateHostedSessionId, type HostedShellLaunchRequest } from './shell-state'
 
 const LEADER_STORAGE_KEY = 'openspecui-app:pwa-leader'
@@ -29,6 +39,7 @@ export interface HostedLaunchRelayMessageLaunch {
   id: string
   sourceWindowId: string
   request: HostedShellLaunchRequest
+  credential?: string
 }
 
 export interface HostedLaunchRelayMessageAck {
@@ -58,6 +69,10 @@ export interface HostedLaunchRelayRuntime {
   focusWindow?: () => void
   windowId?: string
   role?: HostedLaunchRole
+  /** Runtime-only credential reader for the sending window. */
+  readCredential?: (apiBaseUrl: string) => string | null
+  /** Runtime-only credential binder for the receiving window. */
+  bindCredential?: (apiBaseUrl: string, credential: string) => boolean
 }
 
 interface LeaderRecord {
@@ -112,7 +127,8 @@ function isLaunchMessage(value: unknown): value is HostedLaunchRelayMessageLaunc
     value.type === 'launch' &&
     typeof value.id === 'string' &&
     typeof value.sourceWindowId === 'string' &&
-    isHostedLaunchRequest(value.request)
+    isHostedLaunchRequest(value.request) &&
+    (value.credential === undefined || typeof value.credential === 'string')
   )
 }
 
@@ -213,6 +229,8 @@ export function createHostedLaunchRelay(runtime: HostedLaunchRelayRuntime) {
   const focusWindow = runtime.focusWindow ?? focusCurrentWindow
   const windowId = runtime.windowId ?? generateHostedSessionId()
   const role = runtime.role ?? detectHostedLaunchRole()
+  const readCredential = runtime.readCredential ?? readLaunchCredential
+  const bindCredential = runtime.bindCredential ?? bindLaunchCredential
   const pending = new Map<string, PendingLaunch>()
   let onLaunch: ((request: HostedShellLaunchRequest) => void) | null = null
   let isLeader = false
@@ -243,6 +261,9 @@ export function createHostedLaunchRelay(runtime: HostedLaunchRelayRuntime) {
       return
     }
 
+    if (message.credential !== undefined) {
+      bindCredential(message.request.apiBaseUrl, message.credential)
+    }
     onLaunch(message.request)
     focusWindow()
     channel?.postMessage({
@@ -332,6 +353,7 @@ export function createHostedLaunchRelay(runtime: HostedLaunchRelayRuntime) {
         id,
         sourceWindowId: windowId,
         request,
+        credential: readCredential(request.apiBaseUrl) ?? undefined,
       })
 
       return await new Promise<HostedLaunchDispatchResult>((resolve) => {

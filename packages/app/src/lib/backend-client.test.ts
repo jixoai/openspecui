@@ -1,25 +1,41 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
- * 1. Prove the Store Inventory/Inspector client parses backend envelopes and preserves upstream facts.
- * 2. Prove transport failure degrades to an unavailable envelope without crashing.
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Prove Store Inventory/Inspector transport preserves backend envelopes and failures.
+ * 2. Prove every hosted HTTP/RPC request resolves credentials by its own normalized locator.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
- * Section 9.6/9.8 App Store data wiring.
+ * Delivery correction (2026-07-24): callers cannot supply another locator's credential.
  */
-import { describe, expect, it, vi } from 'vitest'
-import { fetchBackendStoreInspector, fetchBackendStoreInventory } from './backend-client'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  fetchBackendRootContext,
+  fetchBackendStoreInspector,
+  fetchBackendStoreInventory,
+  mutateBackendStore,
+} from './backend-client'
+import { bindLaunchCredential, clearLaunchCredential } from './launch-credential'
 
-function mockFetch(response: unknown, ok = true): typeof fetch {
-  return vi.fn(async () => ({
-    ok,
-    status: ok ? 200 : 500,
-    json: async () => response,
-  })) as unknown as typeof fetch
+const API_A = 'http://localhost:3100'
+const API_B = 'http://localhost:3200'
+
+function createJsonFetch(response: unknown, status = 200): typeof fetch {
+  return vi.fn(
+    async () =>
+      new Response(JSON.stringify(response), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      })
+  )
 }
+
+afterEach(() => {
+  clearLaunchCredential(API_A)
+  clearLaunchCredential(API_B)
+})
 
 describe('backend-client store inventory', () => {
   it('parses an available tRPC envelope and preserves upstream stores', async () => {
-    const fetchImpl = mockFetch({
+    const fetchImpl = createJsonFetch({
       result: {
         data: {
           available: true,
@@ -29,7 +45,7 @@ describe('backend-client store inventory', () => {
       },
     })
     const envelope = await fetchBackendStoreInventory({
-      apiBaseUrl: 'http://localhost:3100/',
+      apiBaseUrl: `${API_A}/`,
       fetchImpl,
     })
     expect(envelope.available).toBe(true)
@@ -37,44 +53,20 @@ describe('backend-client store inventory', () => {
   })
 
   it('degrades to unavailable on a non-ok response without throwing', async () => {
-    const fetchImpl = mockFetch({}, false)
-    const envelope = await fetchBackendStoreInventory({
-      apiBaseUrl: 'http://localhost:3100',
-      fetchImpl,
-    })
+    const fetchImpl = createJsonFetch({}, 500)
+    const envelope = await fetchBackendStoreInventory({ apiBaseUrl: API_A, fetchImpl })
     expect(envelope.available).toBe(false)
     expect(envelope.error?.kind).toBe('transport')
-  })
-
-  it('sends the Authorization header when a credential is supplied', async () => {
-    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ result: { data: { available: true, stores: [] } } }),
-    })) as unknown as typeof fetch
-    await fetchBackendStoreInventory({
-      apiBaseUrl: 'http://localhost:3100',
-      credential: 'secret',
-      fetchImpl,
-    })
-    const init = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock
-      .calls[0]?.[1] as RequestInit
-    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer secret')
   })
 })
 
 describe('backend-client store inspector', () => {
   it('parses an available doctor envelope', async () => {
-    const fetchImpl = mockFetch({
-      result: {
-        data: {
-          available: true,
-          stores: [{ id: 'team', healthy: true }],
-        },
-      },
+    const fetchImpl = createJsonFetch({
+      result: { data: { available: true, stores: [{ id: 'team', healthy: true }] } },
     })
     const envelope = await fetchBackendStoreInspector({
-      apiBaseUrl: 'http://localhost:3100',
+      apiBaseUrl: API_A,
       storeId: 'team',
       fetchImpl,
     })
@@ -83,15 +75,55 @@ describe('backend-client store inspector', () => {
   })
 
   it('encodes the optional storeId input safely', async () => {
-    const fetchImpl = mockFetch({ result: { data: { available: true, stores: [] } } })
-    await fetchBackendStoreInspector({
-      apiBaseUrl: 'http://localhost:3100',
-      storeId: 'team id',
-      fetchImpl,
+    let requestedUrl = ''
+    const fetchImpl: typeof fetch = vi.fn(async (input) => {
+      requestedUrl = String(input)
+      return new Response(JSON.stringify({ result: { data: { available: true, stores: [] } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
     })
-    const url = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string
-    // The storeId is JSON-encoded then URL-encoded; spaces are never raw in the URL.
-    expect(url).not.toContain('team id')
-    expect(url).toContain('input=')
+    await fetchBackendStoreInspector({ apiBaseUrl: API_A, storeId: 'team id', fetchImpl })
+    expect(requestedUrl).not.toContain('team id')
+    expect(requestedUrl).toContain('input=')
+  })
+})
+
+describe('backend-client credential ownership', () => {
+  it('uses the matching locator credential for every existing hosted HTTP/RPC client', async () => {
+    bindLaunchCredential(API_A, 'credential-a')
+    bindLaunchCredential(API_B, 'credential-b')
+    const observed: Array<{ url: string; authorization: string | null }> = []
+    const fetchImpl: typeof fetch = vi.fn(async (input, init) => {
+      const url = String(input)
+      observed.push({
+        url,
+        authorization: new Headers(init?.headers).get('authorization'),
+      })
+      const data = url.includes('stores.mutate')
+        ? { requestId: 'request-b', kind: 'register', status: 'accepted', observedAt: 1 }
+        : url.includes('rootContext.get')
+          ? { status: 'loading' }
+          : { available: true, stores: [] }
+      return new Response(JSON.stringify({ result: { data } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+
+    await fetchBackendStoreInventory({ apiBaseUrl: API_A, fetchImpl })
+    await fetchBackendStoreInspector({ apiBaseUrl: API_B, fetchImpl })
+    await fetchBackendRootContext({ apiBaseUrl: API_A, fetchImpl })
+    await mutateBackendStore(
+      { apiBaseUrl: API_B, fetchImpl },
+      { requestId: 'request-b', kind: 'register', path: '/tmp/store-b' }
+    )
+
+    expect(observed.map(({ authorization }) => authorization)).toEqual([
+      'Bearer credential-a',
+      'Bearer credential-b',
+      'Bearer credential-a',
+      'Bearer credential-b',
+    ])
   })
 })
