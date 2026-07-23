@@ -386,6 +386,12 @@ export function createServer(config: ServerConfig) {
         watcherEnabled: !!watcher,
         openspecuiVersion: SERVER_PACKAGE_VERSION,
         embeddedUiUrl: buildEmbeddedUiUrlForPort(config.port ?? 3100),
+        // 1.6 hosted-protocol additions.
+        apiBaseUrl: `http://localhost:${config.port ?? 3100}`,
+        cliVersion: null,
+        envUri: envUri as string,
+        rootSummary: null,
+        accessGateEnabled: accessGate !== null,
       })
     )
   })

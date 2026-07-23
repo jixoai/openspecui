@@ -9169,3 +9169,33 @@ The 9 access-gate tests prove: pass-through when unguarded, 401 on missing crede
 reject-without-leak on mismatch, Bearer extraction, WS connection-param accept/reject, PTY auth-message
 parsing, loopback detection, and the non-loopback warning. Health/envUri/capability emission and the
 Store mutation lifecycle service land in the following Section 8 slices.
+
+### Section 8 Slice 3: health payload envUri/capabilities + Store mutation lifecycle (2026-07-23)
+
+Covers 8.1 (health: protocol version/apiBaseUrl/CLI version/Root summary/capabilities),
+8.2 (opaque envUri), 8.4 (capability vocabulary), 8.7 (mutation lifecycle), 8.8 (request dedup).
+
+Changed contracts:
+
+- `packages/core/src/hosted-app.ts`: `HostedBackendHealthResponse` gains additive 1.6 fields
+  (`apiBaseUrl`, `cliVersion`, `envUri`, `rootSummary`, `hostedCapabilities`, `accessGateEnabled`);
+  `HOSTED_STORE_CAPABILITIES` exports the three-fact vocabulary; `buildBackendHealthPayload` emits them.
+  The legacy validator remains tolerant (additive fields optional on older backends).
+- `packages/server/src/server.ts`: `/api/health` emits apiBaseUrl, cliVersion, envUri, accessGateEnabled.
+- `packages/server/src/store-mutation-service.ts` (new): `StoreMutationService` owns
+  `accepted -> running -> succeeded | failed | indeterminate`, deduplicates starts by request id,
+  preserves terminal CLI evidence, reports unrecoverable loss as `indeterminate` (never fabricated as
+  failure/cancellation), supports subscribe/prune. Exported from the server package.
+
+Focused evidence:
+
+```text
+(cd packages/core && npx vitest run src/hosted-app.test.ts)        -> 9/9
+(cd packages/server && npx vitest run src/store-mutation-service.test.ts) -> 6/6
+pnpm -w typecheck -> 0 errors; prettier/oxlint clean
+```
+
+The 6 store-mutation tests prove lifecycle transitions, nonzero-exit failure, indeterminate-on-throw,
+request-id deduplication (single run), and `markIndeterminate` for lost terminal results. Health
+emission now carries the 1.6 hosted-protocol additions. Capability gating of App surfaces, Context
+Matrix provenance envelopes, and the protocol/credential test matrix land with the App wiring slice.

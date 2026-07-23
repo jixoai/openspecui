@@ -1,3 +1,11 @@
+export {
+  checkWebSocketConnectionParams,
+  createAccessGate,
+  createAccessGateMiddleware,
+  extractBearerCredential,
+  isLoopbackHostname,
+  type AccessGate,
+} from './access-gate.js'
 export { DocumentService, type ReadSpecDocumentResult } from './document-service.js'
 export {
   OPENSPECUI_HOOKS_RELATIVE_PATH,
@@ -15,6 +23,11 @@ export {
   type RunningServer,
   type ServerConfig,
 } from './server.js'
+export {
+  StoreMutationService,
+  storeMutationEnvUri,
+  type StartStoreMutationInput,
+} from './store-mutation-service.js'
 export { TranslationEngineService } from './translation-engine-service.js'
 export { runManagedLocalTranslationChildProcess } from './translation-engine-worker.js'
 export {
