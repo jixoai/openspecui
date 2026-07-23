@@ -8,7 +8,7 @@
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  */
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
-import { RealtimeSkeletonInventory } from '@/components/realtime'
+import { SpecListSkeleton } from '@/components/realtime'
 import { navController } from '@/lib/nav-controller'
 import { useSearch } from '@/lib/use-search'
 import { vtNavController } from '@/lib/view-transitions/navigation'
@@ -156,9 +156,9 @@ export function SearchRoute() {
       </div>
 
       {isLoading && (
-        // Demand-driven search: a local skeleton result region replaces the routine "Searching..." copy.
+        // Demand-driven search: a local skeleton result region mirrors real result rows.
         <div aria-busy="true">
-          <RealtimeSkeletonInventory count={4} />
+          <SpecListSkeleton count={4} />
         </div>
       )}
 

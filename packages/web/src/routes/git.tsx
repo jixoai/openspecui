@@ -16,7 +16,7 @@ import {
   WorktreeRow,
 } from '@/components/git/git-shared'
 import { WorktreeCard } from '@/components/git/git-worktree-card'
-import { RealtimeSkeletonInventory } from '@/components/realtime'
+import { GitWorktreeSkeleton } from '@/components/realtime'
 import { Select, type SelectOption } from '@/components/select'
 import { Tooltip } from '@/components/tooltip'
 import {
@@ -422,7 +422,7 @@ export function GitRoute() {
         data-testid="git-loading-region"
       >
         <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">Git</h1>
-        <RealtimeSkeletonInventory count={4} />
+        <GitWorktreeSkeleton count={4} />
       </div>
     )
   }
@@ -436,7 +436,7 @@ export function GitRoute() {
         data-testid="git-loading-region"
       >
         <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">Git</h1>
-        <RealtimeSkeletonInventory count={4} />
+        <GitWorktreeSkeleton count={4} />
       </div>
     )
   }

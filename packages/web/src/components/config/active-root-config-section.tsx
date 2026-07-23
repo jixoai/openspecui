@@ -10,7 +10,7 @@
  */
 import { Button } from '@/components/button'
 import { CodeEditor } from '@/components/code-editor'
-import { RealtimeSkeletonInventory } from '@/components/realtime'
+import { ConfigFormSkeleton } from '@/components/realtime'
 import { RootActionNotice } from '@/components/root-action-notice'
 import { useViewportConstrainedHeight } from '@/components/scroll-spy'
 import { trpcClient } from '@/lib/trpc'
@@ -86,7 +86,7 @@ export function ActiveRootConfigSection({ isStatic }: { isStatic: boolean }) {
   if (isLoading && !config) {
     return (
       <div className="space-y-4" aria-busy="true">
-        <RealtimeSkeletonInventory count={4} />
+        <ConfigFormSkeleton fields={4} />
       </div>
     )
   }

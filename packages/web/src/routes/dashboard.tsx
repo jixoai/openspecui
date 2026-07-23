@@ -22,7 +22,11 @@ import {
   isHttpUrl,
   WorktreeRow,
 } from '@/components/git/git-shared'
-import { RealtimeSkeletonCard, RealtimeSkeletonInventory } from '@/components/realtime'
+import {
+  ChangeListSkeleton,
+  DashboardSummarySkeleton,
+  DashboardTrendsSkeleton,
+} from '@/components/realtime'
 import type { SelectOption } from '@/components/select'
 import {
   classifyChangeWorkflowPhase,
@@ -622,12 +626,8 @@ export function Dashboard() {
             Dashboard
           </h1>
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {Array.from({ length: 6 }, (_, index) => (
-            <RealtimeSkeletonCard key={index} />
-          ))}
-        </div>
-        <RealtimeSkeletonInventory count={3} />
+        <DashboardSummarySkeleton count={6} />
+        <ChangeListSkeleton count={3} />
       </div>
     )
   }
@@ -696,10 +696,8 @@ export function Dashboard() {
   const renderHistoryCards = () => (
     <div className="space-y-2">
       {trendsIsLoading && !trendsProjection ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-busy="true">
-          {Array.from({ length: 2 }, (_, index) => (
-            <RealtimeSkeletonCard key={index} />
-          ))}
+        <div aria-busy="true">
+          <DashboardTrendsSkeleton count={2} />
         </div>
       ) : trendsIsUpdating ? (
         <div className="text-muted-foreground text-xs" role="status">

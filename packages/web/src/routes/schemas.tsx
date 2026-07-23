@@ -1,4 +1,4 @@
-import { RealtimeSkeletonInventory } from '@/components/realtime'
+import { SpecListSkeleton } from '@/components/realtime'
 import { useOpsxConfigBundleSubscription } from '@/lib/use-opsx'
 import { Layers } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -29,7 +29,7 @@ export function Schemas() {
           <Layers className="h-6 w-6 shrink-0" />
           Schemas
         </h1>
-        <RealtimeSkeletonInventory count={5} />
+        <SpecListSkeleton count={5} />
       </div>
     )
   }

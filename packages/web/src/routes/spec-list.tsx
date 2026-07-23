@@ -8,7 +8,7 @@
  *
  * Original request (2026-07-15): "Specs defaults to Owned and provides a Store-grouped Referenced view with immutable entries."
  */
-import { RealtimeSkeletonInventory } from '@/components/realtime'
+import { SpecListSkeleton } from '@/components/realtime'
 import { formatRelativeTime } from '@/lib/format-time'
 import { useSpecsSubscription } from '@/lib/use-subscription'
 import { VTLink } from '@/lib/view-transitions/navigation'
@@ -85,7 +85,7 @@ export function SpecList() {
           <FileText className="h-6 w-6 shrink-0" />
           Specifications
         </h1>
-        <RealtimeSkeletonInventory count={5} />
+        <SpecListSkeleton count={5} />
       </div>
     )
   }

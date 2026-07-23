@@ -15,7 +15,7 @@ import {
   getGitEntrySharedDescriptor,
   GitFilesBadge,
 } from '@/components/git/git-shared'
-import { RealtimeSkeletonInventory } from '@/components/realtime'
+import { DetailPanelSkeleton, GitWorktreeSkeleton } from '@/components/realtime'
 import {
   buildGitRepositoryHref,
   getGitEntryFilesQueryKey,
@@ -117,7 +117,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
     return (
       <div className="space-y-4 p-4" aria-busy="true" data-testid="git-detail-loading">
         <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">Git</h1>
-        <RealtimeSkeletonInventory count={4} />
+        <GitWorktreeSkeleton count={4} />
       </div>
     )
   }
@@ -157,11 +157,8 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
               </p>
             </div>
           </div>
-          <div
-            className="vt-detail-content flex flex-col gap-3 rounded-lg border p-4"
-            aria-busy="true"
-          >
-            <RealtimeSkeletonInventory count={6} />
+          <div className="vt-detail-content rounded-lg border p-4" aria-busy="true">
+            <DetailPanelSkeleton count={6} />
           </div>
         </div>
       )
@@ -170,7 +167,7 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
     return (
       <div className="space-y-4 p-4" aria-busy="true" data-testid="git-detail-loading">
         <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">Git</h1>
-        <RealtimeSkeletonInventory count={4} />
+        <GitWorktreeSkeleton count={4} />
       </div>
     )
   }

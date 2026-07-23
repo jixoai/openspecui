@@ -1,13 +1,15 @@
 /**
- * Orthogonal intents (created 2026-07-24 Asia/Shanghai):
- * 1. Stable skeleton geometry atoms (line/row/card/panel) that do not flash per-chunk.
- * 2. An inventory skeleton that repeats a row template without manual scroll bookkeeping.
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Stable skeleton geometry atoms (line/row/card) that do not flash per-chunk.
+ * 2. Layout-aware inventory skeleton mirroring the project's real list/grid conventions.
  *
  * Original request (2026-07-23): "可以用光影来替代，将它做成一种视觉语言。"
+ * Owner direction (2026-07-24): skeleton 之间需要有 gap，结构需符合客观布局；参考 shadcn 组合思想，项目化定制。
+ *
  * The shimmer is a CSS luminance sweep (styles/realtime.css); reduced-motion keeps a static band.
  */
 import { cn } from '@/lib/utils'
-import { type CSSProperties } from 'react'
+import { Fragment, type CSSProperties, type ReactNode } from 'react'
 
 export interface RealtimeSkeletonProps {
   className?: string
@@ -19,7 +21,7 @@ export function RealtimeSkeleton({ className, style }: RealtimeSkeletonProps) {
   return <div className={cn('rt-skeleton', className)} style={style} aria-hidden="true" />
 }
 
-/** A text-line skeleton. */
+/** A text-line skeleton (defaults to a readable line height; pass width via className). */
 export function RealtimeSkeletonLine({ className, style }: RealtimeSkeletonProps) {
   return <RealtimeSkeleton className={cn('rt-skeleton-line', className)} style={style} />
 }
@@ -34,23 +36,50 @@ export function RealtimeSkeletonCard({ className, style }: RealtimeSkeletonProps
   return <RealtimeSkeleton className={cn('rt-skeleton-card', className)} style={style} />
 }
 
-export interface RealtimeSkeletonInventoryProps {
-  count?: number
-  rowClassName?: string
-  /** Render a custom row skeleton; defaults to RealtimeSkeletonRow. */
-  renderRow?: (index: number) => React.ReactNode
+/**
+ * Layout mode mirrors the project's real list/grid conventions so the skeleton geometry matches the settled
+ * content rather than a generic gray stack.
+ *
+ * - `list-divide`: `border + divide-y + rounded-lg` — rows touch, separated by divider lines (mirrors
+ *   change-list / archive-list / spec-list / git worktree lists).
+ * - `grid-cards`: `grid gap-3` — cards with spacing (mirrors dashboard metric/trend grids).
+ * - `plain`: `space-y-2` — stacked rows with a default gap (fallback, never clumped).
+ */
+export type RealtimeSkeletonMode = 'list-divide' | 'grid-cards' | 'plain'
+
+const MODE_CONTAINER_CLASS: Record<RealtimeSkeletonMode, string> = {
+  'list-divide': 'rt-anchor border-border divide-border divide-y rounded-lg border',
+  'grid-cards': 'rt-anchor grid gap-3',
+  plain: 'rt-anchor space-y-2',
 }
 
-/** A repeating inventory skeleton with native overflow anchoring for physical stability. */
+export interface RealtimeSkeletonInventoryProps {
+  /** Layout mode; defaults to `plain` (spaced, never clumped). */
+  mode?: RealtimeSkeletonMode
+  /** Extra container className (e.g. responsive column counts for grid-cards). */
+  containerClassName?: string
+  count?: number
+  rowClassName?: string
+  /** Render a custom row/card skeleton; defaults to RealtimeSkeletonRow. */
+  renderRow?: (index: number) => ReactNode
+}
+
+/** A repeating inventory skeleton whose container mirrors a real list/grid layout. */
 export function RealtimeSkeletonInventory({
+  mode = 'plain',
+  containerClassName,
   count = 4,
   rowClassName,
   renderRow,
 }: RealtimeSkeletonInventoryProps) {
   return (
-    <div className="rt-anchor" aria-hidden="true">
+    <div className={cn(MODE_CONTAINER_CLASS[mode], containerClassName)} aria-hidden="true">
       {Array.from({ length: count }, (_, index) =>
-        renderRow ? renderRow(index) : <RealtimeSkeletonRow key={index} className={rowClassName} />
+        renderRow ? (
+          <Fragment key={index}>{renderRow(index)}</Fragment>
+        ) : (
+          <RealtimeSkeletonRow key={index} className={rowClassName} />
+        )
       )}
     </div>
   )

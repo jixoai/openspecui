@@ -13,7 +13,7 @@
  * Original request (2026-07-21): "Changes页面的右上角没有 New,你要不要快速补一个"
  */
 import { Badge } from '@/components/badge'
-import { RealtimeProgress, RealtimeSkeletonInventory } from '@/components/realtime'
+import { ChangeListSkeleton, RealtimeProgress } from '@/components/realtime'
 import {
   classifyChangeWorkflowPhase,
   inferTrackedArtifactStatus,
@@ -77,7 +77,7 @@ export function ChangeList() {
         {progress && !changesError ? (
           <RealtimeProgress progress={progress} className="max-w-sm" />
         ) : null}
-        <RealtimeSkeletonInventory count={5} />
+        <ChangeListSkeleton count={5} />
       </div>
     )
   }

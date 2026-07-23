@@ -1,4 +1,4 @@
-import { RealtimeSkeletonInventory } from '@/components/realtime'
+import { DetailPanelSkeleton } from '@/components/realtime'
 import { Tabs, type Tab } from '@/components/tabs'
 import { cn } from '@/lib/utils'
 import { VTLink, type VTLinkProps } from '@/lib/view-transitions/navigation'
@@ -119,11 +119,11 @@ export function OpsxDetailLoadingPage({
       {/* The detail-loading body is a stable visual skeleton (luminance language) rather than routine copy.
           The shared-element header stays mounted so the detail View Transition does not snap. The hidden
           accessible equivalent preserves the loading semantic for assistive tech / reduced motion. */}
-      <div className="vt-detail-content flex min-h-[240px] flex-1 flex-col gap-3" aria-busy="true">
+      <div className="vt-detail-content flex min-h-[240px] flex-1 flex-col" aria-busy="true">
         <span className="rt-sr-status" role="status" aria-live="polite">
           {loadingMessage ?? 'loading'}
         </span>
-        <RealtimeSkeletonInventory count={6} />
+        <DetailPanelSkeleton count={6} />
       </div>
     </OpsxDetailPage>
   )
