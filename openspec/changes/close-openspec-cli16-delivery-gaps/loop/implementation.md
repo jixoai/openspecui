@@ -244,3 +244,48 @@ P2-D  source-labelled Root error + exact two-source Reference/group provenance
 Each package needs one real fixed-point red, green, and removal/bypass mutation result. P1-B and P2-C/D
 may be implemented in parallel because their production files are independent; focused review must accept
 all four before any P3/P4 work or broad workspace gate.
+
+### P1/P2 second correction boundary: 2026-07-24 Asia/Shanghai
+
+Reviewed candidates:
+
+- P1 browser delivery candidate: `40519c4..d041a34`.
+- P2 selected-provenance candidate: `40519c4..72b0b14`.
+- Worker-reported focused evidence: Web 2 tests, App 1 test, P1 package typechecks; App 24 files / 115
+  tests and App typecheck for P2. A broader accidental Web suite is not focused product-chain evidence.
+
+Accepted implementation facts:
+
+- Direct/App fragments, matching App iframe fragments, public immutable shell/assets, one Web in-memory
+  credential owner, tRPC HTTP/WS supply, PTY auth-first, and raw resource bridging now exist.
+- Selected authority now carries exact `activeTabId` plus observation generation; same-locator tabs retain
+  distinct generations; Store mutations share one dispatch owner; typed Root errors and A/B Reference
+  sources are represented; observation publication has one writer.
+
+Focused acceptance remains rejected for these exact reasons:
+
+1. The Service Worker can borrow the first credential returned by any window when the initiating client is
+   absent. This violates per-client authority and invalidates `2.10`.
+2. Worktree worker/process child Servers do not inherit the parent Gate and the readiness probe is
+   unauthenticated. A protected parent can therefore hand off to an unprotected child; `2.8--2.11` remain
+   open.
+3. P1 tests remain separate helper/transport proofs. No real gated Direct/App Project Web fixture crosses
+   private launch, public shell, protected HTTP, subscription, and PTY; per-supplier mutation removal is
+   absent. `2.11--2.12` remain open.
+4. P2 refresh can retain old Root/Reference data while marking it non-stale, and transport failure does not
+   restore stale. Retained offline evidence is filtered from Context Matrix. `3.3--3.4` remain open.
+5. P2 warning diagnostics are reinterpreted as healthy or hidden by a root title, and duplicate tabs at
+   one locator inflate connected-project counts. `3.4` remains open.
+6. P2 generation and Remove tests call/inject downstream authority helpers instead of crossing the real
+   Register/Remove mutation owner. They do not prove the exact guard; `3.5--3.6` remain open.
+
+Correction stop rule:
+
+```text
+P1 correction = client-bound resource authority + inherited child Gate + terminating product-chain proof
+P2 correction = honest stale/warning/group projection + real Register/Remove guard mutation proofs
+```
+
+Each lane gets its own production commit and focused evidence. Do not mark any P1/P2 checkbox, run broad
+gates, begin P3/P4, update the PR, or request manager browser acceptance until the main reviewer accepts
+both corrected SHAs.

@@ -1,11 +1,12 @@
 <!--
 Orthogonal intents (created 2026-07-23 Asia/Shanghai):
-1. Specify opaque hosted environment identity and full Access Gate admission.
+1. Specify opaque hosted environment identity and full inherited Access Gate admission.
 2. Specify credential-scoped connection reachability and explicit App environment selection.
 3. Specify the observable backend-owned Store mutation lifecycle.
 
 Original request (2026-07-23): "走查任务直接到新的change中做。你目前的工作就是：review + interview + replan(write new openspec change)"
 Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
+Review correction (2026-07-24): A protected parent must not spawn an unprotected worktree backend, and a browser resource request must not borrow another client credential.
 -->
 
 # hosted-environment-delivery Delta Specification
@@ -36,6 +37,8 @@ pass-through.
 - **THEN** the system SHALL reject it before any application procedure or subscription observes a context
 - **AND** a valid connection-parameter or supported non-browser Authorization credential SHALL proceed
 - **AND** a reconnect SHALL repeat the same admission rule
+- **AND** a worktree backend spawned by that protected backend SHALL inherit the same Access Gate policy
+- **AND** parent readiness checks SHALL authenticate to that child rather than weakening child admission
 
 ### Requirement: Credential-Scoped Reachability and Explicit Environment Selection
 
@@ -56,6 +59,8 @@ projection.
 - **AND** Direct Web or the matching App iframe SHALL consume and remove the fragment before rendering
 - **AND** the static Project Web shell MAY load without data authority while protected HTTP RPC, WebSocket,
   PTY, file, and notification traffic SHALL supply the same credential from one in-memory owner
+- **AND** a browser resource bridge SHALL accept a credential only from the initiating client and SHALL NOT
+  fall back to another open window or tab
 - **AND** persisted tabs, URL query state, logs, and other backend locators SHALL NOT receive it
 
 #### Scenario: Two online connections require an explicit operation target
@@ -67,6 +72,11 @@ projection.
 - **AND** replacing B with another tab or generation at the same locator SHALL retire the prior authority
 - **AND** Context Matrix SHALL group only observed current Root/Reference facts and retain source-labelled
   loading/error evidence from connected backends
+- **AND** a Root refresh or transport failure SHALL keep retained evidence explicitly stale until a
+  replacement Root emission commits
+- **AND** Reference warnings SHALL remain visible upstream evidence rather than being rewritten as healthy
+- **AND** duplicate tabs for one backend/project locator SHALL remain authority-distinct while counting as
+  one connected project in environment-level grouping
 
 ### Requirement: Observable Backend-Owned Store Mutation Lifecycle
 

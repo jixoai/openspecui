@@ -53,6 +53,25 @@ owner-only final browser acceptance. The implementation may choose the concrete 
 provider only if it keeps the stated equality relation; it may not use project path, port, process ID, or
 a new client-side identifier.
 
+### P1/P2 second independent review after `d041a34` and `72b0b14`
+
+The candidates now implement most intended production owners, but focused acceptance remains rejected.
+The remaining defects are narrower than the original packages and require correction, not a redesign.
+
+| Fixed point | Current evidence | Required correction |
+| --- | --- | --- |
+| Browser resource credential isolation | `packages/web/src/access-gate-resource-worker.ts` falls back from an absent `event.clientId` to all window clients and accepts the first credential response. | Remove cross-client fallback. A protected resource either receives the credential from its initiating client or fails with the real gated response. Prove one authenticated and one unauthenticated/retired client cannot lend authority to each other. |
+| Worktree child admission | `WorktreeServerWorkerData` and process launch plans carry project/port only; child `startServer` receives no parent Gate, while `assertWorktreeServerCompatible` sends no Authorization. | Propagate the exact parent Gate through worker and process child launch, keep it out of argv/logs, and authenticate readiness. A protected parent must never hand off to an unprotected child. |
+| Gated product-chain evidence | Existing tests prove helper fragments and individual Web suppliers, but no terminating fixture crosses actual CLI/private launch, public shell, Project Web consumption, protected HTTP, tRPC WS, and PTY. | Add one real Direct/App integration fixture. Independently removing CLI/iframe binding, HTTP supplier, WS params, or PTY auth-first must fail its named assertion. |
+| Root freshness | `connection-observation.tsx` retains prior Root data, sets `stale:false` at refresh start, and does not restore stale after transport failure. `ContextMatrixRoute` filters retained offline observations. | Retained Root/Reference evidence remains display-only and explicitly stale through checking, refresh, offline, auth failure, and transport error until replacement Root data commits. |
+| Store action evidence | Register crosses the form only for a replacement-tab case, while generation evidence calls `dispatchStoreMutation` directly; Remove injects a hand-authored `isCurrent`. | Use real Register and Remove surfaces. Removing/bypassing exact tab identity or generation retirement must make the same fixture dispatch incorrectly and fail for that intended reason. |
+| Reference warning truth | `use-environment.ts` rewrites every non-error Reference diagnostic as `healthy`; Context Matrix can replace diagnostic text with the root title. | Preserve Store id, root, diagnostic severity/code/message, and source label neutrally. Warnings remain visible and do not become errors or healthy claims. |
+| Connected-project count | Environment grouping counts duplicate same-locator tabs as separate connected projects. | Keep observation generations tab-distinct for authority, but deduplicate the environment-level connected-project projection by normalized backend/project locator. |
+
+These findings do not require manager interview: the existing contract already forbids cross-client
+credential leakage, ungated advertised surfaces, stale authority, diagnostic reinterpretation, and
+same-locator authority inheritance. P1 and P2 corrections may proceed in parallel over disjoint owners.
+
 ## Decision & Plan (For Approval)
 
 ### P1: Hosted identity and Access Gate
