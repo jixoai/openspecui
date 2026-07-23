@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Configure Project Web build, aliases, tests, and development backend proxies.
+ * 2. Emit preview entrypoints and one stable Access Gate resource-worker entrypoint.
+ *
+ * Original request (2026-07-24): "完整审计 Project Web 的 HTTP/tRPC WS/PTY/raw resource 网络路径。"
+ */
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
@@ -60,6 +67,16 @@ export default defineConfig(({ isSsrBuild }) => {
           'audio-preview': resolve(__dirname, 'audio-preview.html'),
           'video-preview': resolve(__dirname, 'video-preview.html'),
           'pdf-preview': resolve(__dirname, 'pdf-preview.html'),
+          'access-gate-resource-worker': resolve(
+            __dirname,
+            'src/access-gate-resource-worker.ts'
+          ),
+        },
+        output: {
+          entryFileNames: (chunk) =>
+            chunk.name === 'access-gate-resource-worker'
+              ? 'access-gate-resource-worker.js'
+              : 'assets/[name]-[hash].js',
         },
       },
     },

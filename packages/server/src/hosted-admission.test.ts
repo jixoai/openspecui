@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (created 2026-07-24 Asia/Shanghai):
  * 1. Prove the real tRPC WebSocket adapter enforces Access Gate admission before router execution.
- * 2. Prove HTTP and PTY transports preserve the same guarded/unguarded credential contract.
+ * 2. Prove immutable browser shell delivery is public while HTTP data and PTY remain guarded.
  * 3. Prove Server-issued environment identity is stable and reused by Store mutation ownership.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
@@ -54,6 +54,13 @@ async function startTestServer(options?: {
     enableWatcher: false,
     accessGate: options?.accessGate,
     hostIdentityProvider: hostIdentity === undefined ? undefined : () => hostIdentity,
+  }, (app) => {
+    app.get('/', (context) => context.html('<!doctype html><div id="root"></div>'))
+    app.get('/assets/project-web.js', (context) =>
+      context.body('globalThis.__projectWebLoaded = true', 200, {
+        'Content-Type': 'application/javascript',
+      })
+    )
   })
   runningServers.push(server)
   return server
@@ -141,6 +148,19 @@ async function readHealth(
 }
 
 describe('hosted transport admission', () => {
+  it('loads immutable Project Web shell assets without granting protected backend data', async () => {
+    const credential = generateAccessGateCredential()
+    const server = await startTestServer({ accessGate: credential })
+
+    const shell = await fetch(server.url)
+    const shellAsset = await fetch(`${server.url}/assets/project-web.js`)
+    const protectedHealth = await fetch(`${server.url}/api/health`)
+
+    expect(shell.status).toBe(200)
+    expect(shellAsset.status).toBe(200)
+    expect(protectedHealth.status).toBe(401)
+  })
+
   it('rejects missing and invalid WebSocket connection credentials before router execution', async () => {
     const credential = generateAccessGateCredential()
     const server = await startTestServer({ accessGate: credential })

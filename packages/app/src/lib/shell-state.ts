@@ -1,4 +1,14 @@
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Normalize and persist credential-free hosted project tab identity and ordering.
+ * 2. Build embedded Project Web URLs from backend-owned entrypoints and locator-owned credentials.
+ * 3. Preserve deterministic active-tab transitions across add/remove/reorder operations.
+ *
+ * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ * Delivery correction (2026-07-24): only the matching locator may seed an iframe credential fragment.
+ */
 import { buildEmbeddedUiLaunchUrl } from '@openspecui/core/hosted-app'
+import { readLaunchCredential } from './launch-credential'
 
 const SHELL_STORAGE_KEY = 'openspecui-app:shell'
 
@@ -245,6 +255,7 @@ export function buildHostedEmbeddedUiUrl(tab: HostedShellTab, embeddedUiUrl: str
     embeddedUiUrl,
     apiBaseUrl: tab.apiBaseUrl,
     sessionId: tab.sessionId,
+    credential: readLaunchCredential(tab.apiBaseUrl),
   })
 }
 

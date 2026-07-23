@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
  * 1. Enforce one shared Bearer credential across every backend transport boundary.
- * 2. Authenticate HTTP/tRPC requests via the Authorization header without leaking the secret.
+ * 2. Keep immutable browser shell assets public while authenticating every HTTP data request.
  * 3. Authenticate WebSocket transports via connection params / first message (never query params).
  * 4. Keep the gate absent by default so the unguarded dev workflow is unchanged.
  *
@@ -73,6 +73,10 @@ export function createAccessGateMiddleware(gate: AccessGate): MiddlewareHandler 
       await next()
       return
     }
+    if (!isAccessGateProtectedHttpPath(c.req.path)) {
+      await next()
+      return
+    }
     const presented = extractBearerCredential(c.req.header('Authorization'))
     const outcome = gate.check(presented)
     if (!outcome.ok) {
@@ -80,6 +84,17 @@ export function createAccessGateMiddleware(gate: AccessGate): MiddlewareHandler 
     }
     await next()
   }
+}
+
+/** True for every backend data surface; immutable Project Web shell/assets remain loadable. */
+export function isAccessGateProtectedHttpPath(pathname: string | undefined): boolean {
+  if (pathname === undefined) return true
+  return (
+    pathname === '/api' ||
+    pathname.startsWith('/api/') ||
+    pathname === '/trpc' ||
+    pathname.startsWith('/trpc/')
+  )
 }
 
 /**

@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
- * 1. Verify terminal controller PTY lifecycle, reconnect, rendering, input, and metadata behavior.
+ * 1. Verify terminal controller PTY lifecycle, Access Gate auth-first, reconnect, rendering, input, and metadata behavior.
  * 2. Verify explicit cwd target and initial cwd survive create, restore, and custom-title rename.
  * 3. Preserve terminal engine, theme, keybinding, and notification regression coverage.
  * 4. Prove PTY output bursts do not trigger one global React notification per chunk.
@@ -483,6 +483,24 @@ describe('terminal-controller PTY behavior', () => {
     const ws = getPtySocket(0)
 
     expect(ws.url).toBe('ws://127.0.0.1:3102/ws/pty')
+
+    terminalController.closeAll()
+    unsubscribe()
+  })
+
+  it('sends the fragment credential before every PTY discovery or create command', async () => {
+    window.history.replaceState({}, '', '/dashboard#credential=pty-secret')
+
+    const terminalController = await loadTerminalController()
+    const unsubscribe = terminalController.subscribe(() => {})
+    const ws = getPtySocket(0)
+    ws.emitOpen()
+
+    expect(parseSent(ws).slice(0, 2)).toEqual([
+      { type: 'auth', credential: 'pty-secret' },
+      { type: 'list' },
+    ])
+    expect(window.location.hash).toBe('')
 
     terminalController.closeAll()
     unsubscribe()

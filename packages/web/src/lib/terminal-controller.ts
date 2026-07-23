@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
- * 1. Own browser terminal renderers, input, lifecycle, reconnect, and bounded output activity.
+ * 1. Own browser terminal renderers, input, auth-first lifecycle, reconnect, and bounded output activity.
  * 2. Preserve explicit launch-project or planning-root cwd identity across PTY transport state.
  * 3. Project server-owned terminal metadata into stable React snapshots.
  * 4. Apply terminal appearance, input history, keybinding, and notification behavior.
@@ -31,6 +31,7 @@ import {
   type InputPanelSettingsPayload,
 } from 'xterm-input-panel'
 import { getPtyWsUrl } from './api-config'
+import { accessGateFetch, getAccessGateCredential } from './access-gate-credential'
 import { loadGoogleFontsStylesheet } from './google-font-loader'
 import { navController } from './nav-controller'
 import { TerminalBellSoundEngine } from './terminal-bell-sound-engine'
@@ -203,7 +204,7 @@ async function loadFontSource(source: string): Promise<string> {
   }
 
   try {
-    const resp = await fetch(trimmed, { method: 'HEAD' })
+    const resp = await accessGateFetch(trimmed, { method: 'HEAD' })
     const ct = resp.headers.get('content-type') ?? ''
 
     if (ct.includes('text/css')) {
@@ -1551,6 +1552,11 @@ class TerminalController {
     ws.onopen = () => {
       this.wsConnected = true
       this.reconnectDelay = RECONNECT_DELAY
+
+      const accessGateCredential = getAccessGateCredential()
+      if (accessGateCredential) {
+        ws.send(JSON.stringify({ type: 'auth', credential: accessGateCredential }))
+      }
 
       // Flush explicit close commands collected while offline.
       for (const sessionId of this.pendingCloseSessionIds) {

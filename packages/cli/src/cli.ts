@@ -1,5 +1,15 @@
 #!/usr/bin/env node
 
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Parse and dispatch start/export CLI commands through yargs.
+ * 2. Coordinate local/hosted App runtime lifecycle and protected shutdown.
+ * 3. Keep printed locators credential-free while opening one private fragment-bearing target.
+ *
+ * Original request (2026-07-15): "新增一个 --auth 或者 --password。"
+ * Delivery correction (2026-07-24): one resolved credential must reach Server and Project Web.
+ */
+
 import { ConfigManager } from '@openspecui/core'
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -8,7 +18,11 @@ import yargs from 'yargs'
 import { getCliArgs } from './argv.js'
 import type { ExportFormat } from './export.js'
 import { exportStaticSite } from './export.js'
-import { buildHostedAppLaunchUrl, resolveEffectiveHostedAppBaseUrl } from './hosted-app.js'
+import {
+  buildDirectWebLaunchUrl,
+  buildHostedAppLaunchUrl,
+  resolveEffectiveHostedAppBaseUrl,
+} from './hosted-app.js'
 import { startServer } from './index.js'
 import {
   resolveLocalHostedAppWorkspace,
@@ -98,6 +112,7 @@ async function main(): Promise<void> {
 
         let server: Awaited<ReturnType<typeof startServer>> | null = null
         let localHostedApp: LocalHostedAppDevSession | null = null
+        let browserLaunchCredential: string | null = null
 
         try {
           let hostedBaseUrl: string | null = null
@@ -133,6 +148,9 @@ async function main(): Promise<void> {
                 : typeof argv.password === 'string'
                   ? argv.password
                   : undefined,
+            onBrowserLaunchCredential: (credential) => {
+              browserLaunchCredential = credential
+            },
           })
 
           if (server.port !== server.preferredPort) {
@@ -140,15 +158,23 @@ async function main(): Promise<void> {
           }
           console.log(`✅ Server running at ${server.url}`)
 
-          let browserUrl = server.url
+          let browserUrl = buildDirectWebLaunchUrl({
+            baseUrl: server.url,
+            credential: browserLaunchCredential,
+          })
           if (useHostedApp && hostedBaseUrl) {
-            browserUrl = buildHostedAppLaunchUrl({
+            const publicHostedUrl = buildHostedAppLaunchUrl({
               baseUrl: hostedBaseUrl,
               apiBaseUrl: server.url,
             })
+            browserUrl = buildHostedAppLaunchUrl({
+              baseUrl: hostedBaseUrl,
+              apiBaseUrl: server.url,
+              credential: browserLaunchCredential,
+            })
 
             console.log(`🌐 Hosted app base: ${hostedBaseUrl}`)
-            console.log(`🔗 Hosted URL: ${browserUrl}`)
+            console.log(`🔗 Hosted URL: ${publicHostedUrl}`)
             console.log(
               '📦 Launch mode: prefer an installed hosted-app PWA on the same deployment scope; otherwise open the browser page.'
             )

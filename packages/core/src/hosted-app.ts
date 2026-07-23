@@ -1,5 +1,15 @@
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Define browser-safe hosted backend metadata and compatibility capability facts.
+ * 2. Normalize App/embedded launch locators and carry session-only credentials in fragments.
+ * 3. Validate embedded UI origins without inventing backend authority.
+ *
+ * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ * Delivery correction (2026-07-24): privately carry the exact Access Gate credential to Project Web.
+ */
 export const OFFICIAL_APP_BASE_URL = 'https://app.openspecui.com'
 export const HOSTED_SHELL_PROTOCOL_VERSION = 1
+export const ACCESS_GATE_CREDENTIAL_FRAGMENT_PARAM = 'credential'
 
 export const OPENSPECUI_RUNTIME_CAPABILITIES = [
   'notifications.subscribe',
@@ -152,9 +162,21 @@ export function isSupportedEmbeddedUiUrl(input: string): boolean {
   return parsed.protocol === 'http:' && isLoopbackHostname(parsed.hostname)
 }
 
-export function buildHostedLaunchUrl(options: { baseUrl: string; apiBaseUrl: string }): string {
+function setAccessGateCredentialFragment(url: URL, credential?: string | null): void {
+  if (!credential) return
+  const fragment = new URLSearchParams(url.hash.slice(1))
+  fragment.set(ACCESS_GATE_CREDENTIAL_FRAGMENT_PARAM, credential)
+  url.hash = fragment.toString()
+}
+
+export function buildHostedLaunchUrl(options: {
+  baseUrl: string
+  apiBaseUrl: string
+  credential?: string | null
+}): string {
   const url = new URL(normalizeHostedAppBaseUrl(options.baseUrl))
   url.searchParams.set('api', options.apiBaseUrl)
+  setAccessGateCredentialFragment(url, options.credential)
   return url.toString()
 }
 
@@ -162,10 +184,12 @@ export function buildEmbeddedUiLaunchUrl(options: {
   embeddedUiUrl: string
   apiBaseUrl: string
   sessionId: string
+  credential?: string | null
 }): string {
   const url = new URL(normalizeEmbeddedUiUrl(options.embeddedUiUrl))
   url.searchParams.set('api', options.apiBaseUrl)
   url.searchParams.set('session', options.sessionId)
+  setAccessGateCredentialFragment(url, options.credential)
   return url.toString()
 }
 

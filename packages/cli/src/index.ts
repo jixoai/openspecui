@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Start the embedded Server with packaged Project Web/preview assets.
+ * 2. Resolve one Access Gate credential and deliver it to Server plus the private browser owner.
+ * 3. Coordinate worktree Server workers and deterministic runtime teardown.
+ *
+ * Original request (2026-07-15): "新增一个 --auth 或者 --password。"
+ * Delivery correction (2026-07-24): one resolved credential must reach Server and Project Web.
+ */
 import {
   generateAccessGateCredential,
   normalizeAccessGatePassword,
@@ -51,6 +60,8 @@ export interface CLIOptions {
    * inline value is given. Mutually exclusive with `auth`.
    */
   password?: string | true
+  /** Receives the resolved secret for a private browser fragment; never persist or log it. */
+  onBrowserLaunchCredential?: (credential: string) => void
   /** Optional handoff owner. Worker runtimes use this to delegate nested switches to their parent. */
   gitWorktreeHandoff?: GitWorktreeHandoffService
 }
@@ -286,6 +297,7 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
 
   if (accessGate) {
     printAccessGateBanner(accessGate)
+    options.onBrowserLaunchCredential?.(accessGate.credential)
   }
 
   if (!options.gitWorktreeHandoff) {

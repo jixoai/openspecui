@@ -3,7 +3,7 @@
  * 1. Own main, bottom, and pop navigation as one deterministic state machine.
  * 2. Preserve hosted URL/base-path/session semantics across area navigation.
  * 3. Persist project-scoped tab layouts while rejecting retired route identities.
- * 4. Synchronize local and backend layout state without changing route ownership.
+ * 4. Synchronize local/backend layout state through authenticated health and typed mutation owners.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
@@ -12,6 +12,7 @@
  * machine must normalize all three before exposing a navigation snapshot.
  */
 import type { HistoryLocation, RouterHistory } from '@tanstack/react-router'
+import { accessGateFetch } from './access-gate-credential'
 import { getHealthUrl } from './api-config'
 import { getHostedScopedStorageKey } from './hosted-session'
 import { getBasePath, isStaticMode } from './static-mode'
@@ -1137,7 +1138,7 @@ export class NavController {
 
   private async resolveProjectScopedStorageKey(): Promise<string | null> {
     try {
-      const response = await fetch(getHealthUrl())
+      const response = await accessGateFetch(getHealthUrl())
       if (!response.ok) return null
       const payload = (await response.json()) as { projectDir?: unknown }
       if (typeof payload.projectDir !== 'string' || payload.projectDir.length === 0) return null

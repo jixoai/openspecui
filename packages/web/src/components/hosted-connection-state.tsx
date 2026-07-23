@@ -1,15 +1,27 @@
-export function HostedConnectionState() {
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Render actionable hosted bootstrap configuration errors.
+ * 2. Render protected-resource bootstrap failures without fabricating backend availability.
+ *
+ * Original request (2026-07-24): "missing/invalid credentials are rejected rather than reported offline/current."
+ */
+export function HostedConnectionState(props: { title?: string; message?: string }) {
   return (
     <main className="bg-background text-foreground flex min-h-screen items-center justify-center p-6">
       <section className="bg-card flex w-full max-w-lg flex-col gap-3 border p-6">
         <h1 className="font-nav text-sm uppercase tracking-[0.14em]">
-          Hosted Session Not Connected
+          {props.title ?? 'Hosted Session Not Connected'}
         </h1>
         <p className="text-muted-foreground text-sm leading-6">
-          This embedded UI session needs explicit <code className="bg-muted rounded px-1">api</code>{' '}
-          and <code className="bg-muted rounded px-1">session</code> query parameters from the app
-          shell. Open it through <code className="bg-muted rounded px-1">openspecui --app</code>{' '}
-          instead of loading the backend page directly.
+          {props.message ?? (
+            <>
+              This embedded UI session needs explicit{' '}
+              <code className="bg-muted rounded px-1">api</code> and{' '}
+              <code className="bg-muted rounded px-1">session</code> query parameters from the app
+              shell. Open it through <code className="bg-muted rounded px-1">openspecui --app</code>{' '}
+              instead of loading the backend page directly.
+            </>
+          )}
         </p>
       </section>
     </main>
