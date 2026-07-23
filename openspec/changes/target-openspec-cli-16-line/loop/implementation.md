@@ -9303,3 +9303,26 @@ oxlint -> 0 warnings/errors
 
 Honest checkpoints: 8.5/9.6/9.9/9.10 are wired (code-side) with unit tests but remain unchecked pending
 owner browser walkthrough of a live mutation. The setup/register UI affordances still need their forms.
+
+### Section 8 Slice 4: auto-launch credential fragment (8.12) (2026-07-23)
+
+Changed contracts:
+
+- `packages/app/src/lib/launch-credential.ts` (new): `consumeLaunchCredential` reads `#credential=<bearer>`
+  from the URL fragment once into `sessionStorage` (tab session memory, never localStorage/query/persisted
+  tabs), strips the fragment immediately (preserving other fragment params), and exposes read/clear.
+- `packages/app/src/main.tsx`: consumes the fragment at launch before rendering.
+- `packages/app/src/lib/use-active-backend.ts`: reads the session credential into the App client so
+  Store/Root-Context requests carry it when the backend is Access-Gated; passes it through to Store views.
+
+Focused evidence:
+
+```text
+(cd packages/app && npx vitest run) -> 21 files / 96 tests (incl. launch-credential 5/5)
+pnpm --filter @openspecui/app typecheck -> 0 errors; prettier/oxlint clean
+```
+
+8.12 is checked (code-side + unit tests). Owner browser walkthrough of the auto-launch handoff remains
+the final acceptance. After this slice, every Section 8 item that is code-implementable without owner
+browser acceptance is delivered; the remaining unchecked 8.x items need owner walkthrough (8.6/8.14) or
+the hidden-prompt runtime decision (8.10).

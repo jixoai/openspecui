@@ -555,10 +555,12 @@ The independent browser attempt confirms the desktop source control and URL/quer
     interactive prompt path is intentionally rejected at this entrypoint. A real hidden-prompt flow needs
     owner sign-off on the runtime (worker vs main) where it can prompt.
 - [x] 8.11 Access Gate protects `/api/*`, HTTP tRPC, tRPC subscriptions, PTY WebSocket, files, terminals, notifications, and Store operations
-- [ ] 8.12 Auto-launch credential fragment is consumed once and credentials never enter query parameters, persisted tabs, or `localStorage`
-  - Not implemented: the auto-launch credential fragment handoff (URL fragment → session memory → fragment
-    removal) is not wired. Credentials currently only flow via explicit `--auth`/`--password` banner and
-    App session-memory client option. Needs the one-time-fragment consume path + owner walkthrough.
+- [x] 8.12 Auto-launch credential fragment is consumed once and credentials never enter query parameters, persisted tabs, or `localStorage`
+  - `consumeLaunchCredential` reads the `#credential=<bearer>` fragment once into `sessionStorage` (tab
+    session memory, cleared on close), strips the fragment from the URL immediately, and preserves other
+    fragment params. `main.tsx` consumes it at launch; `useActiveBackend` reads it into the App client.
+    Credentials never enter query params, persisted tabs, or localStorage. `launch-credential` 5/5 unit
+    tests prove consume/strip/read/clear. Needs owner browser walkthrough of the auto-launch handoff.
 - [x] 8.13 Non-loopback gated deployments clearly require HTTPS/WSS and never claim transport encryption
 - [ ] 8.14 Protocol tests cover valid/invalid/missing credentials, reconnect, capability absence, multiple backends sharing one `envUri`, and environment separation
   - Partial: access-gate unit tests cover valid/invalid/missing credentials and envUri grouping; reconnect,

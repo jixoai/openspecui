@@ -7,6 +7,7 @@ import {
   registerHostedServiceWorker,
   stripHostedLaunchParams,
 } from './lib/bootstrap'
+import { consumeLaunchCredential } from './lib/launch-credential'
 import { normalizeHostedApiBaseUrl } from './lib/shell-state'
 
 const root = document.getElementById('app')
@@ -18,6 +19,10 @@ const launch = parseHostedLaunchParams(window.location.search)
 if (launch.hasLaunchParams) {
   window.history.replaceState({}, '', stripHostedLaunchParams(window.location.href))
 }
+
+// Consume an auto-launched Access Gate credential from the URL fragment once, into session memory,
+// then strip the fragment so it never persists in history or visible state.
+consumeLaunchCredential({})
 
 const fallbackApiBaseUrl = normalizeHostedApiBaseUrl(
   import.meta.env.VITE_OPENSPECUI_APP_DEFAULT_API_URL ?? ''

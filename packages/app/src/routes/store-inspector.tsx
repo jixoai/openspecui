@@ -36,6 +36,7 @@ export function StoreInspectorRoute() {
   const [refreshNonce, setRefreshNonce] = useState(0)
   const { inspector, isLoading, error } = useStoreData({
     apiBaseUrl: active?.apiBaseUrl,
+    credential: active?.credential,
     refreshNonce,
   })
   const stores = inspector?.stores ?? []
@@ -123,6 +124,7 @@ export function StoreInspectorRoute() {
             store={removeTarget}
             envUri={active?.health?.envUri}
             apiBaseUrl={active?.apiBaseUrl}
+            credential={active?.credential}
             onRemoved={() => setRefreshNonce((n) => n + 1)}
             onClose={() => setRemoveTarget(null)}
           />

@@ -10,6 +10,7 @@
 import type { HostedBackendHealthResponse, RootContextState } from '@openspecui/core'
 import { useEffect, useState } from 'react'
 import { fetchBackendRootContext } from './backend-client'
+import { readLaunchCredential } from './launch-credential'
 import { probeHostedBackend } from './reachability'
 import { useConnectionReachability, useConnections } from './use-connections'
 
@@ -18,6 +19,8 @@ export interface ActiveBackend {
   health: HostedBackendHealthResponse | null
   /** Project Root Context for the Context Matrix; null while loading or unavailable. */
   rootContext: RootContextState | null
+  /** Session-memory Access Gate credential (never persisted). */
+  credential: string | null
 }
 
 export interface UseActiveBackendResult {
@@ -37,6 +40,8 @@ export function useActiveBackend(): UseActiveBackendResult {
   const reachability = useConnectionReachability(tabs)
   const firstOnlineUrl =
     tabs.find((tab) => reachability[tab.apiBaseUrl] === 'online')?.apiBaseUrl ?? null
+  // Access Gate credential held in session memory only (never query params/localStorage/persisted tabs).
+  const credential = readLaunchCredential()
 
   const [health, setHealth] = useState<HostedBackendHealthResponse | null>(null)
   const [rootContext, setRootContext] = useState<RootContextState | null>(null)
@@ -55,7 +60,7 @@ export function useActiveBackend(): UseActiveBackendResult {
       .catch(() => {
         if (!cancelled) setHealth(null)
       })
-    fetchBackendRootContext({ apiBaseUrl: firstOnlineUrl })
+    fetchBackendRootContext({ apiBaseUrl: firstOnlineUrl, credential })
       .then((context) => {
         if (!cancelled) setRootContext(context)
       })
@@ -65,10 +70,10 @@ export function useActiveBackend(): UseActiveBackendResult {
     return () => {
       cancelled = true
     }
-  }, [firstOnlineUrl])
+  }, [firstOnlineUrl, credential])
 
   return {
-    active: firstOnlineUrl ? { apiBaseUrl: firstOnlineUrl, health, rootContext } : null,
+    active: firstOnlineUrl ? { apiBaseUrl: firstOnlineUrl, health, rootContext, credential } : null,
     hasConnections: tabs.length > 0,
   }
 }
