@@ -462,6 +462,12 @@ The independent browser attempt confirms the desktop source control and URL/quer
     preparation, and Router path for both source-distinct routes. Do not widen this slice into the shared
     subscription owner, Catalog/Server, static export, detail page, Git, Archive, or the loading-performance
     Change; parent `6.17` remains open.
+  - `6.17-C` accepted after `0fcea09`, `e66da01`, and `ee3f00a`: SpecList now owns a local native
+    transition snapshot for its current source scope. The direct tests cover compound id-key continuity,
+    metadata-only updates, late-callback retirement, StrictMode scope switching, unavailable/rejected native
+    transitions, and real Owned/Referenced detail preparation through Router. The independent review reran
+    continuity `6/6`, navigation `2/2`, and current source checks. Parent `6.17` remains open; final visual,
+    browser, and multi-tab acceptance remains owner-only.
 - [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns
 
 ## 7. Static Export Parity and Privacy

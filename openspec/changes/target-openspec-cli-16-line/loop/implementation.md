@@ -8669,3 +8669,50 @@ The scope-switch test uses the real tab click and is rendered under React Strict
 cannot restore Owned rows after Referenced becomes current. This is preparation evidence only. The owner still
 performs final browser, visual, and multi-tab acceptance. No broad gates, SSG, browser automation, push, merge,
 archive, or release was performed; parent checkpoint `6.17` remains open.
+
+### 6.17-C independent review acceptance (2026-07-23)
+
+The review initially rejected the first helper shape. Referenced `flatMap` produced a new array every render,
+which caused same-order state publication to loop; render-time scope ref writes also made StrictMode retirement
+unreliable. The accepted implementation memoizes the scope projection and advances scope/generation records in
+a layout commit. The review then found that the native callback still lacked its final generation check. The
+focused red cases were `late Owned -> C` and `Owned -> Referenced`; both failed before that exact callback
+guard was restored.
+
+Current-source independent evidence:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  --pool forks --no-file-parallelism --maxWorkers=1 \
+  src/routes/spec-list-continuity.test.tsx --reporter verbose
+-> 1 file / 6 tests passed
+
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  --pool forks --no-file-parallelism --maxWorkers=1 \
+  src/routes/spec-list-navigation.test.tsx --reporter verbose
+-> 1 file / 2 tests passed
+
+pnpm --filter @openspecui/web typecheck
+-> passed
+
+pnpm exec prettier --check \
+  packages/web/src/routes/spec-list.tsx \
+  packages/web/src/routes/spec-list-continuity.ts \
+  packages/web/src/routes/spec-list-continuity.test.tsx \
+  packages/web/src/routes/spec-list-navigation.test.tsx
+-> passed
+
+pnpm exec oxlint \
+  packages/web/src/routes/spec-list.tsx \
+  packages/web/src/routes/spec-list-continuity.ts \
+  packages/web/src/routes/spec-list-continuity.test.tsx \
+  packages/web/src/routes/spec-list-navigation.test.tsx --ignore-path .gitignore
+-> 0 warnings/errors
+
+git diff --check
+-> passed
+```
+
+This accepts only the SpecList owner. It does not claim continuity for Git, Dashboard, Search, static export,
+or the independent Loading-performance Change; checkpoint `6.17` remains open. The owner retains final
+browser, visual, and multi-tab acceptance.
