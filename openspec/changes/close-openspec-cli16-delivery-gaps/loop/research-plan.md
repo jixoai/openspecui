@@ -139,9 +139,10 @@ Change's reviewer for gate evidence and tracker reconciliation; manager for fina
 1. Do not repair the independent loading Change incidentally. Require its focused regression proof and
 passing affected server tests before P1--P4 broad gates run.
 2. Reconcile all 25 old tracker entries by exact proof link or explicit transfer. After manager
-confirmation, archive the old Change as partial/superseded with `--skip-specs --no-validate` without
-changing its unchecked facts. Its loop artifacts are complete but it has no delta specs, so generic strict
-validation cannot pass without fabricating history. This is history management, not a completion claim.
+confirmation, archive the old Change as partial/superseded with `--skip-specs` without changing its
+unchecked facts. Its loop artifacts are complete but it has no delta specs, so standalone strict change
+validation cannot pass without fabricating history; archive's own delta validation remains enabled and
+simply has no delta to inspect. This is history management, not a completion claim.
 3. After P1--P4 are independently accepted, run the full local gates once and update PR evidence. The
 manager then performs the real end-to-end walkthroughs. Only after that may this corrective Change verify,
 merge, archive, and enter optional release sequencing.

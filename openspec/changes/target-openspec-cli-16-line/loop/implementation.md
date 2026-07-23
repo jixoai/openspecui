@@ -9426,6 +9426,7 @@ The successor review found that the prior `109/131` candidate overstated three p
 `8.12`, `9.4`, and `9.5` are reopened. The honest old tracker is `106/131`; all 25 unresolved obligations,
 including the three reopened claims, are mapped without synthetic completion in `loop/supersession.md`.
 This Change may use OpenSpec's partial archive only after manager confirmation. Its artifact graph is done,
-but strict generic validation fails because this historical loop Change has no delta specs; do not invent
-one retrospectively. `loop/supersession.md` records the required `--skip-specs --no-validate` path. The
+but standalone strict change validation fails because this historical loop Change has no delta specs; do
+not invent one retrospectively. OpenSpec archive validation checks delta specs only when they exist, so
+`loop/supersession.md` records the required `--skip-specs` path without disabling archive validation. The
 unchecked tasks and warning remain historical truth; delivery continues in the successor.

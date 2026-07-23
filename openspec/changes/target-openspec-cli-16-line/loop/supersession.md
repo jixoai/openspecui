@@ -55,13 +55,15 @@ surface; the separate defect is browser credential delivery into those protected
 
 ## Partial Archive Boundary
 
-The old loop Change has no `specs/` delta directory. Its artifact graph is complete, but strict generic
-validation therefore reports `Change must have at least one delta`; creating a retrospective delta merely
-to silence that check would falsify its history. After manager confirmation, strictly validate the successor,
-recheck this old artifact/task status, and archive the old Change with:
+The old loop Change has no `specs/` delta directory. Its artifact graph is complete, but standalone strict
+change validation therefore reports `Change must have at least one delta`; creating a retrospective delta
+merely to silence that check would falsify its history. OpenSpec 1.6 archive validation checks delta specs
+only when they exist, so this known generic-validation result is not a reason to disable archive validation.
+After manager confirmation, strictly validate the successor, recheck this old artifact/task status, and
+archive the old Change with:
 
 ```bash
-openspec archive target-openspec-cli-16-line -y --skip-specs --no-validate
+openspec archive target-openspec-cli-16-line -y --skip-specs
 ```
 
 The incomplete-task warning and `106/131` state are intentional. The archive closes the active planning
