@@ -3,6 +3,7 @@
  * 1. Prove worktree runtime selection and source bootstrap normalization.
  * 2. Prove worker-thread and process children inherit the exact parent Access Gate without argv leakage.
  * 3. Prove readiness authenticates with the inherited Gate while unguarded readiness remains unchanged.
+ * 4. Cross the production worker bootstrap into the real guarded child Server.
  *
  * Original request (2026-07-24): "Propagate the exact parent Access Gate into worktree Servers."
  */
@@ -14,8 +15,10 @@ import {
 } from '@openspecui/core'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createWorktreeServerWorker } from './index'
 import { createTestHealthServer, type TestHealthServer } from './worktree-handoff-test-platform'
 import {
   assertWorktreeServerCompatible,
@@ -28,7 +31,10 @@ import {
   buildWorktreeServerStartOptions,
   consumeWorktreeProcessAccessGateCredential,
   normalizeSourceBootstrapEntryUrl,
+  readWorktreeServerWorkerData,
   WORKTREE_ACCESS_GATE_CREDENTIAL_ENV,
+  WORKTREE_SERVER_WORKER_KIND,
+  type WorktreeServerWorkerData,
 } from './worktree-server-worker'
 
 const tempDirs: string[] = []
@@ -89,6 +95,7 @@ describe('worktree instance manager helpers', () => {
     expect(plan.createWorker).toBe(createWorker)
     expect('entry' in plan).toBe(false)
     expect(plan.workerData).toEqual({
+      kind: WORKTREE_SERVER_WORKER_KIND,
       projectDir: '/tmp/feature-worktree',
       port: 3123,
     })
@@ -110,6 +117,7 @@ describe('worktree instance manager helpers', () => {
     expect(plan.kind).toBe('worker')
     if (plan.kind !== 'worker') throw new Error('Expected worker launch plan')
     expect(plan.workerData).toEqual({
+      kind: WORKTREE_SERVER_WORKER_KIND,
       projectDir: '/tmp/feature-worktree',
       port: 3123,
       accessGateCredential,
@@ -149,6 +157,7 @@ describe('worktree instance manager helpers', () => {
     expect(plan.createWorker).toBe(createWorker)
     expect(plan.execArgv).not.toContain('--conditions=development')
     expect(plan.workerData).toEqual({
+      kind: WORKTREE_SERVER_WORKER_KIND,
       projectDir: '/tmp/feature-worktree',
       port: 3123,
     })
@@ -308,16 +317,33 @@ describe('worktree server worker module loading', () => {
   it('normalizes worker data to the same startServer options as CLI start', () => {
     const accessGateCredential = generateAccessGateCredential()
     const workerData = {
+      kind: WORKTREE_SERVER_WORKER_KIND,
       projectDir: '/tmp/feature-worktree',
       port: 3123,
       accessGateCredential,
-    }
+    } satisfies WorktreeServerWorkerData
     expect(buildWorktreeServerStartOptions(workerData)).toEqual({
       projectDir: '/tmp/feature-worktree',
       port: 3123,
       open: false,
       accessGateCredential,
     })
+  })
+
+  it('ignores foreign worker kinds but rejects malformed worktree payloads', () => {
+    expect(
+      readWorktreeServerWorkerData({
+        kind: 'managed-local-translation',
+        projectDir: '/tmp/feature-worktree',
+        port: 3123,
+      })
+    ).toBeNull()
+    expect(() =>
+      readWorktreeServerWorkerData({
+        kind: WORKTREE_SERVER_WORKER_KIND,
+        projectDir: '/tmp/feature-worktree',
+      })
+    ).toThrow('Invalid worktree server worker data.')
   })
 
   it('consumes the process credential once and erases it before descendants inherit environment', () => {
@@ -368,6 +394,27 @@ describe('worktree child Access Gate integration', () => {
       currentProjectDir,
       currentServerUrl: 'http://127.0.0.1:1',
       runtimeDir,
+      accessGateCredential,
+    })
+
+    await expectGatedChild(manager, targetPath)
+    const handoff = await manager.ensureWorktreeServer({ targetPath })
+    const authenticated = await fetch(`${handoff.serverUrl}/api/health`, {
+      headers: { Authorization: accessGateCredential.authorizationHeader },
+    })
+    expect(authenticated.status).toBe(200)
+  }, 20_000)
+
+  it('starts the production worker child with the exact inherited Access Gate', async () => {
+    const currentProjectDir = await mkdtemp(join(tmpdir(), 'openspecui-worker-current-'))
+    const targetPath = await mkdtemp(join(tmpdir(), 'openspecui-worker-target-'))
+    tempDirs.push(currentProjectDir, targetPath)
+    const accessGateCredential = generateAccessGateCredential()
+    const manager = createWorktreeInstanceManager({
+      currentProjectDir,
+      currentServerUrl: 'http://127.0.0.1:1',
+      runtimeDir: dirname(fileURLToPath(import.meta.url)),
+      createWorker: createWorktreeServerWorker,
       accessGateCredential,
     })
 

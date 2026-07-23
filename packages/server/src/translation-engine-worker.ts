@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Build managed local translation requests and translator factories.
+ * 2. Execute translation engines in isolated worker-thread or process hosts.
+ * 3. Enforce cancellation and process memory limits while preserving batch evidence.
+ * 4. Route worker-thread payloads by an explicit translation protocol kind.
+ *
+ * Original request (2026-07-24): "Production worker kinds must not claim each other's payloads."
+ */
 import {
   normalizeBatchTranslationError,
   type BatchTranslateEvent,
@@ -14,6 +23,7 @@ import type { TranslationWorkerResourceLimits } from './translation-engine-runti
 
 const execFileAsync = promisify(execFile)
 const __dirname = dirname(fileURLToPath(import.meta.url))
+export const MANAGED_LOCAL_TRANSLATION_WORKER_KIND = 'managed-local-translation'
 
 export interface ManagedLocalTranslationWorkerRequest {
   engineId: ManagedLocalTranslationEngineId
@@ -27,6 +37,10 @@ export interface ManagedLocalTranslationWorkerRequest {
   context?: string
   timeoutMs?: number
   cacheDir: string
+}
+
+export interface ManagedLocalTranslationWorkerData extends ManagedLocalTranslationWorkerRequest {
+  kind: typeof MANAGED_LOCAL_TRANSLATION_WORKER_KIND
 }
 
 export interface ManagedLocalBatchTranslateExecutionInput
@@ -432,6 +446,7 @@ function createManagedLocalTranslationWorker(input: {
       eval: true,
       execArgv: withDevelopmentExecArgv(input.execArgv ?? []),
       workerData: {
+        kind: MANAGED_LOCAL_TRANSLATION_WORKER_KIND,
         ...input.request,
         [SOURCE_BOOTSTRAP_ENTRY_URL_KEY]: import.meta.url,
       },
@@ -441,7 +456,10 @@ function createManagedLocalTranslationWorker(input: {
 
   return new Worker(new URL(import.meta.url), {
     execArgv: input.execArgv,
-    workerData: input.request,
+    workerData: {
+      kind: MANAGED_LOCAL_TRANSLATION_WORKER_KIND,
+      ...input.request,
+    } satisfies ManagedLocalTranslationWorkerData,
     ...(resourceLimits ? { resourceLimits } : {}),
   })
 }
@@ -643,18 +661,43 @@ function isWorkerRequest(value: unknown): value is ManagedLocalTranslationWorker
   )
 }
 
-if (!isMainThread) {
-  if (!isWorkerRequest(workerData)) {
+export function isManagedLocalTranslationWorkerKind(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Reflect.get(value, 'kind') === MANAGED_LOCAL_TRANSLATION_WORKER_KIND
+  )
+}
+
+export function isManagedLocalTranslationWorkerData(
+  value: unknown
+): value is ManagedLocalTranslationWorkerData {
+  return isManagedLocalTranslationWorkerKind(value) && isWorkerRequest(value)
+}
+
+/** Return null for another worker protocol, but reject malformed payloads claiming this protocol. */
+export function readManagedLocalTranslationWorkerData(
+  value: unknown
+): ManagedLocalTranslationWorkerData | null {
+  if (!isManagedLocalTranslationWorkerKind(value)) return null
+  if (!isManagedLocalTranslationWorkerData(value)) {
     throw new Error('Invalid managed local translation worker payload.')
   }
-  void runManagedLocalTranslationHost(workerData, {
-    postMessage(message) {
-      parentPort?.postMessage(message)
-    },
-    onAbort(callback) {
-      parentPort?.on('message', (message: unknown) => {
-        if (message === 'abort') callback()
-      })
-    },
-  })
+  return value
+}
+
+if (!isMainThread) {
+  const data = readManagedLocalTranslationWorkerData(workerData)
+  if (data) {
+    void runManagedLocalTranslationHost(data, {
+      postMessage(message) {
+        parentPort?.postMessage(message)
+      },
+      onAbort(callback) {
+        parentPort?.on('message', (message: unknown) => {
+          if (message === 'abort') callback()
+        })
+      },
+    })
+  }
 }

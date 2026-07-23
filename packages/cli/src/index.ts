@@ -3,6 +3,7 @@
  * 1. Start the embedded Server with packaged Project Web/preview assets.
  * 2. Resolve one Access Gate credential and deliver it to Server, private browser, and worktree children.
  * 3. Keep inherited child credentials silent while coordinating deterministic runtime teardown.
+ * 4. Bootstrap only worker-thread payloads owned by the worktree Server protocol.
  *
  * Original request (2026-07-15): "新增一个 --auth 或者 --password。"
  * Delivery correction (2026-07-24): one resolved credential must reach Server and Project Web.
@@ -29,8 +30,8 @@ import {
 import { createParentPortWorktreeHandoffService } from './worktree-server-worker-handoff.js'
 import {
   buildWorktreeServerStartOptions,
-  isWorktreeServerWorkerData,
   normalizeSourceBootstrapEntryUrl,
+  readWorktreeServerWorkerData,
   toWorkerErrorMessage,
   type CreateWorktreeServerWorkerOptions,
   type WorktreeServerWorkerData,
@@ -325,17 +326,16 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
   }
 }
 
-async function runWorktreeServerWorker(): Promise<void> {
-  if (!isWorktreeServerWorkerData(workerData) || !parentPort) {
-    throw new Error('Invalid worktree server worker data.')
-  }
-
+async function runWorktreeServerWorker(
+  data: WorktreeServerWorkerData,
+  port: NonNullable<typeof parentPort>
+): Promise<void> {
   const server = await startServer({
-    ...buildWorktreeServerStartOptions(workerData),
-    gitWorktreeHandoff: createParentPortWorktreeHandoffService(parentPort),
+    ...buildWorktreeServerStartOptions(data),
+    gitWorktreeHandoff: createParentPortWorktreeHandoffService(port),
   })
-  parentPort?.postMessage({ type: 'ready', serverUrl: server.url })
-  parentPort.on('message', (message: unknown) => {
+  port.postMessage({ type: 'ready', serverUrl: server.url })
+  port.on('message', (message: unknown) => {
     if (message === 'close') {
       void server.close().finally(() => {
         process.exit(0)
@@ -345,10 +345,17 @@ async function runWorktreeServerWorker(): Promise<void> {
 }
 
 if (!isMainThread) {
-  runWorktreeServerWorker().catch((error) => {
-    parentPort?.postMessage(toWorkerErrorMessage(error))
-    process.exit(1)
-  })
+  Promise.resolve()
+    .then(async () => {
+      const data = readWorktreeServerWorkerData(workerData)
+      if (!data) return
+      if (!parentPort) throw new Error('Worktree server worker has no parent port.')
+      await runWorktreeServerWorker(data, parentPort)
+    })
+    .catch((error) => {
+      parentPort?.postMessage(toWorkerErrorMessage(error))
+      process.exit(1)
+    })
 }
 
 export { createServer } from '@openspecui/server'

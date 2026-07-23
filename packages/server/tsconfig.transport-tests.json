@@ -17,6 +17,7 @@
     "src/projection-work/scheduler.test.ts",
     "src/reactive-subscription.test.ts",
     "src/tool-subscription-router.test.ts",
+    "src/translation-engine-worker.test.ts",
     "../local-translator/src/huggingface-transformers.d.ts"
   ],
   "exclude": ["node_modules", "dist"]

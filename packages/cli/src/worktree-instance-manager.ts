@@ -24,7 +24,10 @@ import type {
   WorktreeServerWorkerData,
   WorktreeServerWorkerFactory,
 } from './worktree-server-worker'
-import { WORKTREE_ACCESS_GATE_CREDENTIAL_ENV } from './worktree-server-worker'
+import {
+  WORKTREE_ACCESS_GATE_CREDENTIAL_ENV,
+  WORKTREE_SERVER_WORKER_KIND,
+} from './worktree-server-worker'
 import {
   isWorktreeHandoffRequestMessage,
   postWorktreeHandoffError,
@@ -227,7 +230,8 @@ export function createWorktreeServerLaunchPlan(options: {
   createWorker?: WorktreeServerWorkerFactory
   accessGateCredential?: AccessGateCredential | null
 }): WorktreeServerLaunchPlan {
-  const workerData = {
+  const workerData: WorktreeServerWorkerData = {
+    kind: WORKTREE_SERVER_WORKER_KIND,
     projectDir: options.projectDir,
     port: options.port,
     ...(options.accessGateCredential ? { accessGateCredential: options.accessGateCredential } : {}),

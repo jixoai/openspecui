@@ -1,10 +1,38 @@
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Prove managed process-host terminal and restart behavior.
+ * 2. Prove managed process memory enforcement.
+ * 3. Prove translation worker-kind routing preserves selected-payload validation.
+ *
+ * Original request (2026-07-24): "Production worker kinds must not claim each other's payloads."
+ */
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createManagedLocalBatchTranslateWorkerExecutor,
+  MANAGED_LOCAL_TRANSLATION_WORKER_KIND,
+  readManagedLocalTranslationWorkerData,
   type ManagedLocalTranslationChildProcess,
   type ManagedLocalTranslationWorkerMessage,
 } from './translation-engine-worker.js'
+
+describe('managed local translation worker routing', () => {
+  it('ignores foreign worker kinds but rejects malformed selected payloads', () => {
+    expect(
+      readManagedLocalTranslationWorkerData({
+        kind: 'worktree-server',
+        projectDir: '/tmp/feature-worktree',
+        port: 3123,
+      })
+    ).toBeNull()
+    expect(() =>
+      readManagedLocalTranslationWorkerData({
+        kind: MANAGED_LOCAL_TRANSLATION_WORKER_KIND,
+        engineId: 'local-llama',
+      })
+    ).toThrow('Invalid managed local translation worker payload.')
+  })
+})
 
 class FakeTranslationChildProcess
   extends EventEmitter
