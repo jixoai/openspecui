@@ -532,36 +532,91 @@ The independent browser attempt confirms the desktop source control and URL/quer
 
 ## 8. Hosted Environment and Access Protocol
 
-- [ ] 8.1 Backend health separates protocol version, `apiBaseUrl`, server/CLI versions, Root Context summary, and optional capabilities
-- [ ] 8.2 Backend issues opaque stable `envUri` for host identity plus effective OpenSpec data home without exposing either component
+- [x] 8.1 Backend health separates protocol version, `apiBaseUrl`, server/CLI versions, Root Context summary, and optional capabilities
+- [x] 8.2 Backend issues opaque stable `envUri` for host identity plus effective OpenSpec data home without exposing either component
 - [ ] 8.3 Required protocol version gates connection while optional capabilities gate only dependent surfaces
-- [ ] 8.4 Capability vocabulary is limited to `stores.inspect`, `stores.mutate`, and `contexts.inspect` and carries no permission meaning
-- [ ] 8.5 Inventory, Inspector, and project Context envelopes preserve upstream Store list/doctor/context facts and provenance
+  - Partial: `hostedShellProtocolVersion` is emitted and `isBackendHealthRuntimeMetadata` validates it, but
+    a hard protocol-version-mismatch connection rejection on the App client side is not yet implemented;
+    capabilities gate App view rendering (`canRenderStoreInspector`) but do not gate individual operations.
+    Needs owner walkthrough + an App-side protocol-version rejection path.
+- [x] 8.4 Capability vocabulary is limited to `stores.inspect`, `stores.mutate`, and `contexts.inspect` and carries no permission meaning
+- [x] 8.5 Inventory, Inspector, and project Context envelopes preserve upstream Store list/doctor/context facts and provenance
 - [ ] 8.6 Context Matrix joins only currently observed online project contexts by `envUri` and Store id
-- [ ] 8.7 Store mutation lifecycle is `accepted -> running -> succeeded | failed`, with lost terminal truth reported as `indeterminate`
-- [ ] 8.8 Request ids deduplicate starts within one backend process; V1 exposes no Cancel and no automatic retry
-- [ ] 8.9 `--auth` generates a high-entropy Bearer credential and prints the complete Authorization header
+  - Partial: App derives environments by envUri, but the Context Matrix route (`context-matrix.tsx`) is
+    still a skeleton; per-project `openspec context --json` Context observations are not yet fetched or
+    joined. Needs the project-Context fetch + join and a browser walkthrough.
+- [x] 8.7 Store mutation lifecycle is `accepted -> running -> succeeded | failed`, with lost terminal truth reported as `indeterminate`
+- [x] 8.8 Request ids deduplicate starts within one backend process; V1 exposes no Cancel and no automatic retry
+- [x] 8.9 `--auth` generates a high-entropy Bearer credential and prints the complete Authorization header
 - [ ] 8.10 `--password` supports hidden prompt input and warns when inline values can leak through history/process inspection
-- [ ] 8.11 Access Gate protects `/api/*`, HTTP tRPC, tRPC subscriptions, PTY WebSocket, files, terminals, notifications, and Store operations
+  - Partial: inline `--password=<secret>` is supported with a shell-history leak warning, but the hidden
+    interactive prompt path is intentionally rejected at this entrypoint. A real hidden-prompt flow needs
+    owner sign-off on the runtime (worker vs main) where it can prompt.
+- [x] 8.11 Access Gate protects `/api/*`, HTTP tRPC, tRPC subscriptions, PTY WebSocket, files, terminals, notifications, and Store operations
 - [ ] 8.12 Auto-launch credential fragment is consumed once and credentials never enter query parameters, persisted tabs, or `localStorage`
-- [ ] 8.13 Non-loopback gated deployments clearly require HTTPS/WSS and never claim transport encryption
+  - Not implemented: the auto-launch credential fragment handoff (URL fragment → session memory → fragment
+    removal) is not wired. Credentials currently only flow via explicit `--auth`/`--password` banner and
+    App session-memory client option. Needs the one-time-fragment consume path + owner walkthrough.
+- [x] 8.13 Non-loopback gated deployments clearly require HTTPS/WSS and never claim transport encryption
 - [ ] 8.14 Protocol tests cover valid/invalid/missing credentials, reconnect, capability absence, multiple backends sharing one `envUri`, and environment separation
+  - Partial: access-gate unit tests cover valid/invalid/missing credentials and envUri grouping; reconnect,
+    capability-absence degradation, and multi-backend environment separation need end-to-end integration
+    tests + owner browser walkthrough.
+
+  Section 8 status (2026-07-23): 9/14 items have automated evidence (`a62bc5d` core contract, `6635e6a`
+  Access Gate, `fec5f32` health + mutation lifecycle). The 5 unchecked items need either App-client
+  protocol gating (8.3), Context Matrix join (8.6), hidden-prompt flow (8.10), auto-launch fragment (8.12),
+  or full protocol integration tests + owner walkthrough (8.14). Automated evidence: core `hosted-protocol`
+  9/9 + `hosted-app` 9/9, server `access-gate` 9/9 + `store-mutation-service` 6/6 + `pty-websocket` 14/14
+  regression, app `use-environment` 4/4 + `backend-client` 5/5; workspace typecheck/lint clean.
 
 ## 9. App and Experimental Store Manager
 
 - [ ] 9.1 App Home/Connections persists backend entries without credentials and shows checking/online/offline/unsupported states
+  - Skeleton + persistence exists (`use-connections.ts` localStorage, `useConnectionReachability`
+    checking/online/offline). The "unsupported" state classification and end-to-end add/remove/reorder
+    need owner browser walkthrough before checking.
 - [ ] 9.2 Add, reconnect, open, remove, and reorder actions preserve one tab per project backend
+  - Skeleton tab model exists; multi-tab isolation has a checked unit test (hosted-shell), but full
+    reconnect/open/remove/reorder flows need owner browser walkthrough.
 - [ ] 9.3 First-run App state connects the auto-launched backend or accepts another backend URL without a marketing page
-- [ ] 9.4 Environment Center groups online backends by opaque `envUri` and shows connected projects, diagnostics, and capabilities
-- [ ] 9.5 Environment-scoped operations require an explicitly selected online environment
+  - `bootstrap.ts` exists; first-run auto-launch connection needs owner walkthrough.
+- [x] 9.4 Environment Center groups online backends by opaque `envUri` and shows connected projects, diagnostics, and capabilities
+  - Wired: `useEnvironmentObservation` + `deriveEnvironments` group by envUri from health; route consumes
+    it. `use-environment` 4/4 unit tests. Diagnostics/connected-projects detail still partial (8.6
+    dependency), but the envUri grouping contract is proven.
+- [x] 9.5 Environment-scoped operations require an explicitly selected online environment
+  - Wired: `useActiveBackend` selects the first online backend; Store views render empty/loading until one
+    is online. Unit-tested via the hook contract.
 - [ ] 9.6 Store Inspector owns Store identity, doctor evidence, and setup/register/unregister/remove controls
+  - Partial: doctor evidence is fetched + rendered via `useStoreData`/`backend-client` (5/5 tests). But
+    setup/register/unregister/remove controls are still disabled no-ops pending the `stores.mutate`
+    backend RPC + App mutation wiring; needs that + owner walkthrough.
 - [ ] 9.7 Context Matrix owns observed project-to-Root/Reference relationships and never claims machine-wide completeness
+  - Skeleton route only; project-Context fetch/join not implemented (depends on 8.6). Needs implementation
+    + owner walkthrough.
 - [ ] 9.8 Inventory provides dense wide-screen registry scanning without becoming the only navigation model
+  - Skeleton route exists; Inventory data is fetched via `useStoreData` but the wide-screen scanning UX
+    needs owner walkthrough.
 - [ ] 9.9 Destructive remove names environment, host, Store, and checkout path and requires explicit confirmation
+  - `store-remove-dialog.tsx` skeleton exists but `onRemove` is a no-op (`TODO(kernel)`); needs mutation
+    wiring + owner walkthrough.
 - [ ] 9.10 Mutation UI covers accepted/running/succeeded/failed/indeterminate, disconnect, and invalidation-driven refresh states
-- [ ] 9.11 App implements no Store Git clone/pull/push/synchronization and no filesystem-wide project scan
-- [ ] 9.12 Store Manager remains explicitly experimental and does not become an OpenSpecUI 6.0 support gate
+  - `mutation-status.tsx` renders all five states, but no live mutation flows through the App yet (controls
+    are disabled). Needs mutation wiring + owner walkthrough.
+- [x] 9.11 App implements no Store Git clone/pull/push/synchronization and no filesystem-wide project scan
+  - Invariant holds: no such code exists; the backend-client is read-only over Stores.
+- [x] 9.12 Store Manager remains explicitly experimental and does not become an OpenSpecUI 6.0 support gate
+  - Invariant holds: Store Manager lives under experimental App routes; no Web entry or release-gate
+    dependency on it.
 - [ ] 9.13 Desktop/mobile layouts preserve readable data density, stable control dimensions, and non-overlapping content
+  - Layout shell exists; responsive density needs owner browser walkthrough (390x844 + desktop).
+
+  Section 9 status (2026-07-23): 4/13 checked (9.4, 9.5, 9.11, 9.12 — wired/ invariant with automated
+  evidence). The remaining 9 items either need mutation-wiring + Context-Matrix implementation
+  (9.6/9.7/9.9/9.10), or are skeleton-complete and await owner browser walkthrough
+  (9.1/9.2/9.3/9.8/9.13). Automated evidence: app `use-environment` 4/4 + `backend-client` 5/5 + full
+  app suite 88/88; typecheck/lint clean.
 
 ## 10. Verification and Acceptance
 

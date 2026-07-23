@@ -8,6 +8,7 @@
 import { Link } from '@tanstack/react-router'
 import { Boxes, FlaskConical, MonitorSmartphone, Store } from 'lucide-react'
 import { EmptyView } from '../components/state-views'
+import { useActiveBackend } from '../lib/use-active-backend'
 import { useEnvironmentObservation } from '../lib/use-environment'
 
 /**
@@ -24,7 +25,11 @@ import { useEnvironmentObservation } from '../lib/use-environment'
  * TODO(kernel): envUri + capabilities 协议落地前，本页为空态骨架。
  */
 export function EnvironmentRoute() {
-  const { environments } = useEnvironmentObservation()
+  const { active } = useActiveBackend()
+  const observations = active?.health
+    ? [{ apiBaseUrl: active.apiBaseUrl, health: active.health }]
+    : []
+  const { environments } = useEnvironmentObservation(observations)
 
   return (
     <div className="space-y-6 p-4 md:p-6">

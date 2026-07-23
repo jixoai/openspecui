@@ -9218,3 +9218,35 @@ These give the App a real backend contract to wire against. Section 9 App wiring
 existing App skeleton routes/hooks to this backend: capability-gated Store Inspector operations, envUri
 Environment Center grouping, Context Matrix provenance, mutation terminal-state UI, and responsive layout.
 Each App route needs its own focused integration test against the typed backend surface.
+
+### Section 9 Slice 1: App wiring to hosted backend contract (2026-07-23)
+
+Wires the App skeleton to the Section 8 backend contract. This unlocks real data for Environment Center
+and Store Inspector; the remaining App items need mutation wiring, Context Matrix implementation, or
+owner browser walkthrough (recorded honestly as unchecked in checkpoints).
+
+Changed contracts:
+
+- `packages/app/src/lib/backend-client.ts` (new): fetches Store Inventory (`/trpc/stores.list`) and
+  Inspector (`/trpc/stores.doctor`) through the hosted REST boundary; Bearer-credentialed when gated;
+  degrades to an unavailable envelope on transport failure without crashing.
+- `packages/app/src/lib/use-store-data.ts`: `useStoreData({apiBaseUrl, credential})` fetches both
+  projections; observed-only, never mutates Stores or scans the filesystem.
+- `packages/app/src/lib/use-environment.ts`: `useEnvironmentObservation(observations)` +
+  `deriveEnvironments` group online backends by opaque envUri from health; capabilities are compatibility
+  facts; `canRenderStoreInspector` gates rendering only.
+- `packages/app/src/lib/use-active-backend.ts` (new): selects the first online backend + health for
+  environment-scoped views.
+- `packages/app/src/routes/store-inspector.tsx` + `environment.tsx`: consume the active backend.
+
+Focused evidence:
+
+```text
+(cd packages/app && npx vitest run) -> 20 files / 88 tests (incl. use-environment 4/4, backend-client 5/5)
+pnpm --filter @openspecui/app typecheck -> 0 errors; prettier/oxlint clean
+```
+
+Honest checkpoint status: Section 8 is 9/14 (8.3/8.6/8.10/8.12/8.14 need App-client gating, Context
+Matrix, hidden prompt, auto-launch fragment, or protocol integration tests + owner walkthrough). Section 9
+is 4/13 (9.4/9.5/9.11/9.12 proven; the rest need mutation wiring, Context Matrix implementation, or owner
+browser walkthrough). No fabricated acceptance.

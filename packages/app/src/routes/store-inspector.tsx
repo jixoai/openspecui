@@ -13,6 +13,7 @@ import { StatusBadge, StatusDot, type StatusVariant } from '../components/status
 import { StoreManagerShell } from '../components/store-manager-shell'
 import { StoreRemoveDialog } from '../components/store-remove-dialog'
 import { deriveHealthFromDiagnostics, type StoreHealthSummary } from '../lib/store-health'
+import { useActiveBackend } from '../lib/use-active-backend'
 import { useStoreData } from '../lib/use-store-data'
 
 /** Store 健康态 → 统一 StatusVariant（语义化状态徽章共用，列表/详情复用）。 */
@@ -31,7 +32,10 @@ function healthVariant(health: StoreHealthSummary): StatusVariant {
  * TODO(kernel): stores.inspect 能力决定本视图是否渲染；stores.mutate 能力决定控件是否可操作。
  */
 export function StoreInspectorRoute() {
-  const { inspector, isLoading, error } = useStoreData()
+  const { active } = useActiveBackend()
+  const { inspector, isLoading, error } = useStoreData({
+    apiBaseUrl: active?.apiBaseUrl,
+  })
   const stores = inspector?.stores ?? []
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
