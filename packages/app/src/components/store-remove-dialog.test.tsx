@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Prove explicit destructive Store confirmation content and typing gate.
- * 2. Prove removal crosses the backend client only with current selected authority.
+ * 2. Prove the dialog submits its captured origin to the route-owned mutation operation.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
@@ -18,6 +18,7 @@ import { act, fireEvent, screen } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { StoreActionAuthority } from '../lib/store-action'
 import { StoreRemoveDialog } from './store-remove-dialog'
 
 const STORE: StoreDoctorStore = {
@@ -43,6 +44,14 @@ const STORE: StoreDoctorStore = {
     origin_url: 'git@github.com:test/design-system.git',
   },
   status: [],
+}
+
+const AUTHORITY: StoreActionAuthority = {
+  tabId: 'tab-a',
+  sessionId: 'session-a',
+  apiBaseUrl: 'http://localhost:3100',
+  tabCreatedAt: 1,
+  observationGeneration: 7,
 }
 
 async function renderAt(element: ReactElement): Promise<{ container: HTMLDivElement; root: Root }> {
@@ -114,78 +123,43 @@ describe('StoreRemoveDialog', () => {
 
   it('calls onClose when remove is confirmed', async () => {
     let closed = false
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        result: {
-          data: {
-            requestId: 'r1',
-            kind: 'remove',
-            status: 'succeeded',
-            storeId: 'design-system',
-            observedAt: 1,
-          },
-        },
-      }),
-    })) as unknown as typeof fetch
-    vi.stubGlobal('fetch', fetchMock)
-    try {
-      await renderAt(
-        wrapInRouter(
-          <StoreRemoveDialog
-            store={STORE}
-            envUri="openspecui-env://1/aaa"
-            authority={{ apiBaseUrl: 'http://localhost:3100', isCurrent: () => true }}
-            onClose={() => (closed = true)}
-          />
-        )
+    const removeStore = vi.fn(async () => ({
+      requestId: 'r1',
+      kind: 'remove' as const,
+      status: 'succeeded' as const,
+      storeId: 'design-system',
+      observedAt: 1,
+    }))
+    await renderAt(
+      wrapInRouter(
+        <StoreRemoveDialog
+          store={STORE}
+          envUri="openspecui-env://1/aaa"
+          authority={AUTHORITY}
+          authorityCurrent
+          removeStore={removeStore}
+          onClose={() => (closed = true)}
+        />
       )
-      await act(async () => {
-        fireEvent.change(screen.getByLabelText('Type the Store id to confirm'), {
-          target: { value: 'design-system' },
-        })
+    )
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Type the Store id to confirm'), {
+        target: { value: 'design-system' },
       })
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Remove Store' }))
-      })
-      expect(closed).toBe(true)
-      expect(fetchMock).toHaveBeenCalled()
-    } finally {
-      vi.unstubAllGlobals()
-    }
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Remove Store' }))
+    })
+    expect(closed).toBe(true)
+    expect(removeStore).toHaveBeenCalledWith(AUTHORITY, expect.any(String), 'design-system')
   })
 
-  it('does not dispatch removal after selected authority is retired', async () => {
-    let closed = false
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    try {
-      await renderAt(
-        wrapInRouter(
-          <StoreRemoveDialog
-            store={STORE}
-            envUri="openspecui-env://1/aaa"
-            authority={{ apiBaseUrl: 'http://localhost:3100', isCurrent: () => false }}
-            onClose={() => (closed = true)}
-          />
-        )
-      )
-      await act(async () => {
-        fireEvent.change(screen.getByLabelText('Type the Store id to confirm'), {
-          target: { value: 'design-system' },
-        })
-      })
-      expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Remove Store' }).disabled).toBe(
-        false
-      )
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Remove Store' }))
-      })
-      expect(fetchMock).not.toHaveBeenCalled()
-      expect(closed).toBe(false)
-    } finally {
-      vi.unstubAllGlobals()
-    }
+  it('renders an actionable message when its captured authority is retired', async () => {
+    await renderAt(
+      wrapInRouter(<StoreRemoveDialog store={STORE} authority={AUTHORITY} onClose={() => {}} />)
+    )
+    expect(document.body.textContent).toContain(
+      'The environment refreshed after this dialog opened. Close and reopen it before removing files.'
+    )
   })
 })

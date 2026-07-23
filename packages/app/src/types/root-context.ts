@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Define hosted environment and observed project Context projections.
  * 2. Preserve upstream Store payloads without browser-owned registry semantics.
  * 3. Preserve source-labelled Root lifecycle and direct Reference provenance.
@@ -109,6 +109,12 @@ export interface ObservedReference {
   storeId: string
   /** Exact resolved Reference root when Doctor reports it. */
   root?: string
+  /** Exact connected-project observation that supplied this direct Reference. */
+  source: {
+    tabId: string
+    generation: number
+    apiBaseUrl: string
+  }
   /** Raw direct Doctor diagnostics retained without reinterpretation. */
   diagnostics: CliDiagnostic[]
   /** Reference 健康事实（客观保留 CLI 诊断，不推断为权限/完整性结论）。 */
@@ -118,7 +124,7 @@ export interface ObservedReference {
 }
 
 /** Reference 客观状态（来自 CLI，不解释为所有权结论）。 */
-export type ReferenceState = 'healthy' | 'missing' | 'unhealthy' | 'self-reference'
+export type ReferenceState = 'observed' | CliDiagnostic['severity']
 
 /**
  * Store Inspector 投影来源：`openspec store doctor [id] --json`。

@@ -3,7 +3,7 @@
  * 1. Make Store Doctor evidence the primary Store Manager interaction.
  * 2. Reserve backend-owned mutation controls without inferring applicability.
  * 3. Keep Access Gate credentials outside route/component props.
- * 4. Revalidate selected-tab generation at every Store mutation dispatch.
+ * 4. Bind form/dialog intent to its origin tab generation and revalidate it at dispatch.
  *
  * Original request (2026-07-15): "Store Manager uses the Store Inspector as its primary interaction."
  */
@@ -14,7 +14,12 @@ import { EmptyView, ErrorView, LoadingView } from '../components/state-views'
 import { StatusBadge, StatusDot, type StatusVariant } from '../components/status-badge'
 import { StoreManagerShell } from '../components/store-manager-shell'
 import { StoreRemoveDialog } from '../components/store-remove-dialog'
-import { dispatchStoreMutation } from '../lib/store-action'
+import { useConnectionObservations } from '../lib/connection-observation'
+import {
+  isSameStoreActionAuthority,
+  useStoreMutationDispatcher,
+  type StoreActionAuthority,
+} from '../lib/store-action'
 import { deriveHealthFromDiagnostics, type StoreHealthSummary } from '../lib/store-health'
 import { useActiveBackend } from '../lib/use-active-backend'
 import { useStoreData } from '../lib/use-store-data'
@@ -36,6 +41,7 @@ function healthVariant(health: StoreHealthSummary): StatusVariant {
  */
 export function StoreInspectorRoute() {
   const { active } = useActiveBackend()
+  const { observations: connectionObservations } = useConnectionObservations()
   const [refreshNonce, setRefreshNonce] = useState(0)
   const { inspector, isLoading, error } = useStoreData({
     apiBaseUrl: active?.apiBaseUrl,
@@ -44,7 +50,12 @@ export function StoreInspectorRoute() {
   const stores = inspector?.stores ?? []
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
-  const [removeTarget, setRemoveTarget] = useState<StoreDoctorStore | null>(null)
+  const [removeTarget, setRemoveTarget] = useState<{
+    store: StoreDoctorStore
+    authority: StoreActionAuthority
+    envUri: string | undefined
+  } | null>(null)
+  const dispatchStoreMutation = useStoreMutationDispatcher()
 
   const visibleStores = useMemo(() => {
     const normalized = filter.trim().toLowerCase()
@@ -61,17 +72,25 @@ export function StoreInspectorRoute() {
   const runMutation = useCallback(
     async (
       kind: 'setup' | 'register' | 'unregister',
-      input: Record<string, unknown>
+      input: Record<string, unknown>,
+      authority: StoreActionAuthority | null = active
     ): Promise<void> => {
       const requestId = `${kind}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
-      const result = await dispatchStoreMutation(active, { requestId, kind, ...input })
+      const result = await dispatchStoreMutation(authority, { requestId, kind, ...input })
       if (!result) return
       setRefreshNonce((n) => n + 1)
     },
-    [active]
+    [active, dispatchStoreMutation]
   )
 
   const [mutationError, setMutationError] = useState<string | null>(null)
+  const removeTargetLatestObservation = removeTarget
+    ? connectionObservations.find(
+        (observation) =>
+          observation.tabId === removeTarget.authority.tabId &&
+          observation.apiBaseUrl === removeTarget.authority.apiBaseUrl
+      )
+    : undefined
 
   let body
   if (isLoading && !inspector) {
@@ -88,8 +107,9 @@ export function StoreInspectorRoute() {
           </p>
           <StoreSetupRegisterForm
             disabled={!active?.apiBaseUrl}
-            onSubmit={(kind, input) => {
-              runMutation(kind, input).catch((err: unknown) => {
+            authority={active}
+            onSubmit={(authority, kind, input) => {
+              runMutation(kind, input, authority).catch((err: unknown) => {
                 setMutationError(err instanceof Error ? err.message : String(err))
               })
             }}
@@ -149,7 +169,15 @@ export function StoreInspectorRoute() {
         {selected ? (
           <StoreInspectorDetail
             store={selected}
-            onRemove={() => setRemoveTarget(selected)}
+            onRemove={() => {
+              if (active) {
+                setRemoveTarget({
+                  store: selected,
+                  authority: active,
+                  envUri: active.health?.envUri,
+                })
+              }
+            }}
             onUnregister={() => {
               if (!selected?.id) return
               runMutation('unregister', { storeId: selected.id }).catch((err: unknown) => {
@@ -162,13 +190,33 @@ export function StoreInspectorRoute() {
         )}
 
         {removeTarget ? (
-          <StoreRemoveDialog
-            store={removeTarget}
-            envUri={active?.health?.envUri}
-            authority={active}
-            onRemoved={() => setRefreshNonce((n) => n + 1)}
-            onClose={() => setRemoveTarget(null)}
-          />
+          <div
+            data-testid="remove-authority-evidence"
+            data-authority-state={
+              isSameStoreActionAuthority(removeTarget.authority, active) ? 'current' : 'retired'
+            }
+            data-origin-tab-id={removeTarget.authority.tabId}
+            data-origin-generation={removeTarget.authority.observationGeneration}
+            data-latest-tab-id={removeTargetLatestObservation?.tabId}
+            data-latest-generation={removeTargetLatestObservation?.generation}
+          >
+            <StoreRemoveDialog
+              store={removeTarget.store}
+              envUri={removeTarget.envUri}
+              authority={removeTarget.authority}
+              authorityCurrent={isSameStoreActionAuthority(removeTarget.authority, active)}
+              removeStore={(authority, requestId, storeId) =>
+                dispatchStoreMutation(authority, {
+                  requestId,
+                  kind: 'remove',
+                  storeId,
+                  confirmDelete: true,
+                })
+              }
+              onRemoved={() => setRefreshNonce((n) => n + 1)}
+              onClose={() => setRemoveTarget(null)}
+            />
+          </div>
         ) : null}
       </div>
     )
@@ -266,26 +314,36 @@ function StoreInspectorDetail({
 /** Compact setup/register form for the empty-state. Both are stores.mutate operations (backend-owned). */
 function StoreSetupRegisterForm({
   disabled,
+  authority,
   onSubmit,
 }: {
   disabled: boolean
-  onSubmit: (kind: 'setup' | 'register', input: Record<string, unknown>) => void
+  authority: StoreActionAuthority | null
+  onSubmit: (
+    authority: StoreActionAuthority | null,
+    kind: 'setup' | 'register',
+    input: Record<string, unknown>
+  ) => void
 }) {
   const [kind, setKind] = useState<'setup' | 'register'>('register')
   const [id, setId] = useState('')
   const [path, setPath] = useState('')
   const [remote, setRemote] = useState('')
+  const [draftAuthority, setDraftAuthority] = useState<StoreActionAuthority | null>(null)
 
   const submit = () => {
     if (!path.trim()) return
     if (kind === 'setup') {
-      onSubmit('setup', {
+      onSubmit(draftAuthority ?? authority, 'setup', {
         storeId: id.trim() || undefined,
         path: path.trim(),
         remote: remote.trim() || undefined,
       })
     } else {
-      onSubmit('register', { path: path.trim(), id: id.trim() || undefined })
+      onSubmit(draftAuthority ?? authority, 'register', {
+        path: path.trim(),
+        id: id.trim() || undefined,
+      })
     }
   }
 
@@ -311,14 +369,20 @@ function StoreSetupRegisterForm({
         type="text"
         placeholder="Store id (optional override)"
         value={id}
-        onChange={(e) => setId(e.target.value)}
+        onChange={(e) => {
+          setDraftAuthority(authority)
+          setId(e.target.value)
+        }}
         className="border-border bg-background w-full rounded border px-2 py-1 text-xs"
       />
       <input
         type="text"
         placeholder="Path to Store root"
         value={path}
-        onChange={(e) => setPath(e.target.value)}
+        onChange={(e) => {
+          setDraftAuthority(authority)
+          setPath(e.target.value)
+        }}
         className="border-border bg-background w-full rounded border px-2 py-1 text-xs"
       />
       {kind === 'setup' ? (
@@ -326,9 +390,18 @@ function StoreSetupRegisterForm({
           type="text"
           placeholder="Git remote (optional)"
           value={remote}
-          onChange={(e) => setRemote(e.target.value)}
+          onChange={(e) => {
+            setDraftAuthority(authority)
+            setRemote(e.target.value)
+          }}
           className="border-border bg-background w-full rounded border px-2 py-1 text-xs"
         />
+      ) : null}
+      {draftAuthority && !isSameStoreActionAuthority(draftAuthority, authority) ? (
+        <p className="text-xs text-amber-700" role="status">
+          This draft belongs to a previous environment observation. Edit a field to bind the current
+          environment.
+        </p>
       ) : null}
       <button
         type="button"

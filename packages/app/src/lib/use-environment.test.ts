@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Prove environment derivation collapses backends by opaque envUri.
  * 2. Prove capability gating is a pure compatibility fact.
  * 3. Prove connected-project and direct Reference provenance remain source-distinct.
@@ -132,6 +132,30 @@ describe('deriveEnvironments', () => {
     expect(serialized).not.toMatch(/\/tmp\/data/)
     expect(serialized).not.toContain('host-a')
   })
+
+  it('deduplicates connected projects by normalized backend locator without merging tab authority', () => {
+    const envs = deriveEnvironments([
+      {
+        tabId: 'first-generation',
+        generation: 11,
+        apiBaseUrl: 'http://localhost:3100/',
+        health: health('openspecui-env://1/aaa', [], 'project-a', 'http://localhost:3100'),
+      },
+      {
+        tabId: 'second-generation',
+        generation: 12,
+        apiBaseUrl: 'http://localhost:3100',
+        health: health('openspecui-env://1/aaa', [], 'project-a', 'http://localhost:3100'),
+      },
+    ])
+
+    expect(envs).toHaveLength(1)
+    expect(envs[0]?.connectedProjects).toHaveLength(1)
+    expect(envs[0]?.connectedProjects[0]).toMatchObject({
+      apiBaseUrl: 'http://localhost:3100',
+      projectName: 'project-a',
+    })
+  })
 })
 
 describe('canRenderStoreInspector', () => {
@@ -177,15 +201,25 @@ describe('deriveProjectContexts', () => {
       {
         storeId: 'team',
         root: '/stores/team',
+        source: {
+          tabId: 'a',
+          generation: 1,
+          apiBaseUrl: 'http://localhost:3100',
+        },
         diagnostics: [],
-        state: 'healthy',
+        state: 'observed',
         note: undefined,
       },
       {
         storeId: 'broken',
         root: '/stores/broken',
+        source: {
+          tabId: 'a',
+          generation: 1,
+          apiBaseUrl: 'http://localhost:3100',
+        },
         diagnostics: [{ severity: 'error', code: 'x', message: 'unresolved' }],
-        state: 'unhealthy',
+        state: 'error',
         note: 'unresolved',
       },
     ])
@@ -202,5 +236,57 @@ describe('deriveProjectContexts', () => {
       },
     ])
     expect(contexts).toEqual([])
+  })
+
+  it('preserves warning severity, code, message, root, and source without a healthy rewrite', () => {
+    const contexts = deriveProjectContexts([
+      {
+        tabId: 'warning-tab',
+        generation: 7,
+        apiBaseUrl: 'http://localhost:3100',
+        health: health('openspecui-env://1/aaa', [], 'project-a'),
+        rootContext: {
+          state: 'ready',
+          data: rootData({
+            storeId: 'owned',
+            references: [
+              {
+                store_id: 'warning-store',
+                root: '/stores/warning-store',
+                status: [
+                  {
+                    severity: 'warning',
+                    code: 'reference-warning',
+                    message: 'Reference requires attention.',
+                  },
+                ],
+              },
+            ],
+          }),
+          attempt: null,
+          error: null,
+          observedAt: 1,
+        },
+      },
+    ])
+
+    expect(contexts[0]?.references[0]).toEqual({
+      storeId: 'warning-store',
+      root: '/stores/warning-store',
+      source: {
+        tabId: 'warning-tab',
+        generation: 7,
+        apiBaseUrl: 'http://localhost:3100',
+      },
+      diagnostics: [
+        {
+          severity: 'warning',
+          code: 'reference-warning',
+          message: 'Reference requires attention.',
+        },
+      ],
+      state: 'warning',
+      note: 'Reference requires attention.',
+    })
   })
 })

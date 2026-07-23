@@ -1,9 +1,8 @@
 /**
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Confirm destructive Store removal with explicit environment and checkout identity.
- * 2. Reserve the backend-owned mutation seam without browser-side deletion.
- * 3. Delegate Access Gate credential lookup to the locator-owned backend client.
- * 4. Revalidate selected-tab generation before destructive dispatch.
+ * 2. Submit through the route-owned Store mutation boundary without browser-side deletion.
+ * 3. Keep the dialog bound to the tab/generation that opened it.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  */
@@ -11,7 +10,8 @@ import type { StoreDoctorStore } from '@openspecui/core/store-types'
 import { Dialog } from '@openspecui/web-src/components/dialog'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { dispatchStoreMutation, type StoreActionAuthority } from '../lib/store-action'
+import type { BackendStoreMutationRecord } from '../lib/backend-client'
+import type { StoreActionAuthority } from '../lib/store-action'
 
 /**
  * Store Remove 确认对话框（9.9）。
@@ -31,6 +31,8 @@ export function StoreRemoveDialog({
   store,
   envUri,
   authority,
+  authorityCurrent = false,
+  removeStore,
   onRemoved,
   onClose,
 }: {
@@ -39,6 +41,14 @@ export function StoreRemoveDialog({
   envUri?: string
   /** Exact selected-tab/generation authority evaluated in the submit turn. */
   authority?: StoreActionAuthority | null
+  /** Whether the captured origin still equals the route's current authority. */
+  authorityCurrent?: boolean
+  /** Route-owned mutation operation; it performs the final production authority check. */
+  removeStore?: (
+    authority: StoreActionAuthority | null,
+    requestId: string,
+    storeId: string
+  ) => Promise<BackendStoreMutationRecord | null>
   onRemoved?: (storeId: string) => void
   onClose: () => void
 }) {
@@ -61,12 +71,12 @@ export function StoreRemoveDialog({
     setSubmitting(true)
     setError(null)
     const requestId = `remove:${storeId}:${Date.now()}`
-    dispatchStoreMutation(authority ?? null, {
-      requestId,
-      kind: 'remove',
-      storeId,
-      confirmDelete: true,
-    })
+    const operation = removeStore?.(authority ?? null, requestId, storeId)
+    if (!operation) {
+      setSubmitting(false)
+      return
+    }
+    operation
       .then((mutation) => {
         if (!mutation) {
           setSubmitting(false)
@@ -91,7 +101,7 @@ export function StoreRemoveDialog({
         setError(err instanceof Error ? err.message : String(err))
         setSubmitting(false)
       })
-  }, [canSubmit, authority, store.id, onRemoved, onClose, store])
+  }, [canSubmit, authority, removeStore, store.id, onRemoved, onClose, store])
 
   return (
     <Dialog
@@ -145,6 +155,13 @@ export function StoreRemoveDialog({
           <dt className="text-muted-foreground">Checkout</dt>
           <dd className="break-all font-mono">{store.root ?? '—'}</dd>
         </dl>
+
+        {authority && !authorityCurrent ? (
+          <p className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-700">
+            The environment refreshed after this dialog opened. Close and reopen it before removing
+            files.
+          </p>
+        ) : null}
 
         {error ? (
           <p className="border-destructive/40 text-destructive bg-destructive/5 rounded-md border px-3 py-2 text-xs">

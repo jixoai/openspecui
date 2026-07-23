@@ -9,9 +9,10 @@
 import {
   buildBackendHealthPayload,
   type HostedBackendHealthResponse,
+  type RootContext,
   type RootContextState,
 } from '@openspecui/core'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createConnectionObservationOwner } from './connection-observation'
 import type { HostedBackendProbeResult } from './reachability'
 import type { HostedShellTab } from './shell-state'
@@ -37,6 +38,41 @@ function health(apiBaseUrl: string, projectName: string): HostedBackendHealthRes
 
 function loadingRoot(observedAt: number): RootContextState {
   return { state: 'loading', data: null, attempt: null, error: null, observedAt }
+}
+
+function readyRoot(projectName: string, observedAt: number): RootContextState {
+  const data: RootContext = {
+    launchProject: { path: `/tmp/${projectName}` },
+    planningRoot: {
+      path: `/stores/${projectName}`,
+      source: 'store',
+      store_id: projectName,
+      healthy: true,
+      status: [],
+    },
+    storeId: projectName,
+    generation: `root-${projectName}`,
+    cli: { available: true, version: '1.6.0' },
+    references: [
+      {
+        store_id: `${projectName}-reference`,
+        root: `/stores/${projectName}-reference`,
+        status: [
+          {
+            severity: 'warning',
+            code: 'reference-stale',
+            message: 'Retained Reference evidence.',
+          },
+        ],
+      },
+    ],
+    contextMembers: [],
+    dataScope: { path: '/tmp/data/openspec', source: 'user-home-default' },
+    diagnostics: { root: [], doctor: [], context: [] },
+    evidence: { doctor: null, context: null },
+    observedAt,
+  }
+  return { state: 'ready', data, attempt: null, error: null, observedAt }
 }
 
 function online(backendHealth: HostedBackendHealthResponse): HostedBackendProbeResult {
@@ -214,5 +250,107 @@ describe('connection observation owner', () => {
           generation: replacement.generation,
         })
     ).toBe(true)
+  })
+
+  it('keeps retained Root and Reference evidence stale until replacement data commits', async () => {
+    const replacementRoot = deferred<RootContextState>()
+    let rootFetchCount = 0
+    const owner = createConnectionObservationOwner({
+      probe: async () => online(health(API_A, 'project-a')),
+      fetchRootContext: async () => {
+        rootFetchCount += 1
+        return rootFetchCount === 1 ? readyRoot('project-a', 1) : replacementRoot.promise
+      },
+      now: () => rootFetchCount + 1,
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootStatus).toBe('ready')
+    })
+    const retained = owner.getSnapshot().observations[0]?.rootContext
+    expect(retained?.data?.references[0]?.store_id).toBe('project-a-reference')
+
+    const refresh = owner.refresh(['a'])
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]).toMatchObject({
+        current: true,
+        rootStatus: 'loading',
+        stale: true,
+      })
+    })
+    expect(owner.getSnapshot().observations[0]?.rootContext).toBe(retained)
+
+    replacementRoot.resolve(loadingRoot(3))
+    await refresh
+    expect(owner.getSnapshot().observations[0]).toMatchObject({
+      rootStatus: 'loading',
+      stale: true,
+    })
+    expect(owner.getSnapshot().observations[0]?.rootContext).toBe(retained)
+  })
+
+  it('keeps retained Root provenance stale through a transport failure', async () => {
+    let rootFetchCount = 0
+    const owner = createConnectionObservationOwner({
+      probe: async () => online(health(API_A, 'project-a')),
+      fetchRootContext: async () => {
+        rootFetchCount += 1
+        if (rootFetchCount === 1) return readyRoot('project-a', 1)
+        throw new Error('websocket reconnect failed')
+      },
+      now: () => rootFetchCount + 1,
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootStatus).toBe('ready')
+    })
+    const retained = owner.getSnapshot().observations[0]?.rootContext
+    await owner.refresh(['a'])
+
+    expect(owner.getSnapshot().observations[0]).toMatchObject({
+      current: true,
+      rootStatus: 'error',
+      rootError: { source: 'transport', message: 'websocket reconnect failed' },
+      stale: true,
+    })
+    expect(owner.getSnapshot().observations[0]?.rootContext).toBe(retained)
+  })
+
+  it('keeps retained Root and Reference evidence stale after authentication is lost', async () => {
+    let probeCount = 0
+    const owner = createConnectionObservationOwner({
+      probe: async () => {
+        probeCount += 1
+        return probeCount === 1
+          ? online(health(API_A, 'project-a'))
+          : {
+              reachability: 'authentication-required',
+              health: null,
+              errorMessage: 'credential required',
+            }
+      },
+      fetchRootContext: async () => readyRoot('project-a', 1),
+      now: () => probeCount + 1,
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootStatus).toBe('ready')
+    })
+    const retained = owner.getSnapshot().observations[0]?.rootContext
+    await owner.refresh(['a'])
+
+    expect(owner.getSnapshot().observations[0]).toMatchObject({
+      reachability: 'authentication-required',
+      current: false,
+      healthError: 'credential required',
+      stale: true,
+    })
+    expect(owner.getSnapshot().observations[0]?.rootContext).toBe(retained)
+    expect(owner.getSnapshot().observations[0]?.rootContext?.data?.references[0]?.store_id).toBe(
+      'project-a-reference'
+    )
   })
 })

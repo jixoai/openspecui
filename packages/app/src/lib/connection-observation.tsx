@@ -187,7 +187,7 @@ export function createConnectionObservationOwner(
         rootStatus: 'loading',
         rootError: null,
         current: true,
-        stale: false,
+        stale: Boolean(current.rootContext),
         observedAt: dependencies.now(),
       }))
     ) {
@@ -198,7 +198,10 @@ export function createConnectionObservationOwner(
       const rootContext = await dependencies.fetchRootContext(tab.apiBaseUrl)
       update(tabId, generation, (current) => ({
         ...current,
-        rootContext,
+        rootContext:
+          !rootContext || rootContext.state === 'loading' || rootContext.data === null
+            ? current.rootContext
+            : rootContext,
         rootStatus: rootContext?.state ?? 'error',
         rootError:
           rootContext?.state === 'error'
@@ -210,6 +213,11 @@ export function createConnectionObservationOwner(
             : rootContext
               ? null
               : { source: 'transport', message: 'Root Context response is unavailable.' },
+        stale:
+          !rootContext ||
+          rootContext.state === 'loading' ||
+          rootContext.state === 'refreshing' ||
+          rootContext.state === 'error',
         observedAt: dependencies.now(),
       }))
     } catch (error) {
@@ -220,6 +228,7 @@ export function createConnectionObservationOwner(
           source: 'transport',
           message: error instanceof Error ? error.message : String(error),
         },
+        stale: Boolean(current.rootContext),
         observedAt: dependencies.now(),
       }))
     }

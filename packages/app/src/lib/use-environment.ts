@@ -21,11 +21,12 @@ import type {
   RootObservationError,
   RootObservationStatus,
 } from '../types/root-context'
+import { normalizeHostedApiBaseUrl } from './shell-state'
 
 export interface EnvironmentObservation {
   /** Runtime environments grouped by envUri (observed-only). */
   environments: HostedEnvironment[]
-  /** Per-online-project Context observations (observed references, never machine-wide completeness). */
+  /** Current or retained project Context evidence, never machine-wide completeness. */
   projectContexts: ProjectContextObservation[]
   /** Whether observation is loading. */
   isLoading: boolean
@@ -33,7 +34,7 @@ export interface EnvironmentObservation {
   error: Error | null
 }
 
-/** One online backend health observation used to derive environments. */
+/** One current backend health observation used to derive environments. */
 export interface OnlineBackendObservation {
   tabId: string
   generation: number
@@ -66,7 +67,18 @@ export function deriveEnvironments(observations: OnlineBackendObservation[]): Ho
     }
     if (existing) {
       existing.observedAt = Date.now()
-      existing.connectedProjects.push(connectedProject)
+      const normalizedLocator = normalizeHostedApiBaseUrl(observation.apiBaseUrl)
+      const duplicateIndex = existing.connectedProjects.findIndex(
+        (project) => normalizeHostedApiBaseUrl(project.apiBaseUrl) === normalizedLocator
+      )
+      if (duplicateIndex < 0) {
+        existing.connectedProjects.push(connectedProject)
+      } else if (
+        existing.connectedProjects[duplicateIndex] &&
+        existing.connectedProjects[duplicateIndex].generation < observation.generation
+      ) {
+        existing.connectedProjects[duplicateIndex] = connectedProject
+      }
       continue
     }
     byEnvUri.set(envUriValue, {
@@ -91,17 +103,20 @@ function referenceStateFor(diagnostics: CliDiagnostic[]): {
   state: ProjectContextObservation['references'][number]['state']
   note?: string
 } {
-  const hasError = diagnostics.some((d) => d.severity === 'error')
-  if (hasError) {
-    const notes = diagnostics.map((diagnostic) => diagnostic.message).filter(Boolean)
-    return { state: 'unhealthy', note: notes.join('; ') || undefined }
-  }
-  return { state: 'healthy' }
+  const state = diagnostics.some((diagnostic) => diagnostic.severity === 'error')
+    ? 'error'
+    : diagnostics.some((diagnostic) => diagnostic.severity === 'warning')
+      ? 'warning'
+      : diagnostics.some((diagnostic) => diagnostic.severity === 'info')
+        ? 'info'
+        : 'observed'
+  const notes = diagnostics.map((diagnostic) => diagnostic.message).filter(Boolean)
+  return { state, note: notes.join('; ') || undefined }
 }
 
 /**
- * Derive observed project Context observations from online backends' Root Contexts. Observed-only:
- * never claims machine-wide completeness. An offline backend is unknown unless a stale snapshot is shown.
+ * Derive current or retained project Context observations from backend Root Contexts. Observed-only:
+ * never claims machine-wide completeness. Offline evidence is projected only as an explicit stale snapshot.
  */
 export function deriveProjectContexts(
   observations: BackendRootContextObservation[]
@@ -127,6 +142,11 @@ export function deriveProjectContexts(
       return {
         storeId: reference.store_id,
         root: reference.root,
+        source: {
+          tabId: observation.tabId,
+          generation: observation.generation,
+          apiBaseUrl: observation.apiBaseUrl,
+        },
         diagnostics: reference.status ?? [],
         state: state.state,
         note: state.note,

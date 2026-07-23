@@ -43,7 +43,7 @@ export function ContextMatrixRoute() {
         ]
       : []
   )
-  const rootContextObservations = current.flatMap((observation) =>
+  const rootContextObservations = connectionObservations.flatMap((observation) =>
     observation.health
       ? [
           {
@@ -158,13 +158,26 @@ function MatrixCell({ context, storeId }: { context: ProjectContextObservation; 
   const reference = context.references.find((reference) => reference.storeId === storeId)
   if (reference) {
     return (
-      <span
-        className="rounded bg-sky-500/15 px-1.5 py-0.5 text-xs text-sky-700 dark:text-sky-300"
-        aria-label={`${context.projectName ?? context.apiBaseUrl} references ${storeId} (${reference.state})`}
-        title={reference.root ?? reference.note}
-      >
-        Reference · {reference.state}
-      </span>
+      <div className="space-y-1 text-xs">
+        <span
+          className="rounded bg-sky-500/15 px-1.5 py-0.5 text-sky-700 dark:text-sky-300"
+          aria-label={`${context.projectName ?? context.apiBaseUrl} references ${storeId} (${reference.state})`}
+          title={reference.root}
+        >
+          Reference · {reference.state}
+        </span>
+        <div className="text-muted-foreground font-mono" data-reference-source>
+          {reference.source.apiBaseUrl}
+        </div>
+        {reference.diagnostics.map((diagnostic, index) => (
+          <div key={`${diagnostic.severity}:${diagnostic.code}:${index}`} className="space-y-0.5">
+            <div className="font-mono">
+              [{diagnostic.severity}] {diagnostic.code}
+            </div>
+            <div>{diagnostic.message}</div>
+          </div>
+        ))}
+      </div>
     )
   }
   // 中性表达：不是 "unreferenced"，而是 "no reference currently observed"。

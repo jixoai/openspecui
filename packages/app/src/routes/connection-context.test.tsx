@@ -14,19 +14,42 @@ import {
   buildBackendHealthPayload,
   type HostedBackendHealthResponse,
 } from '@openspecui/core/hosted-app'
+import type { StoreDoctorStore } from '@openspecui/core/store-types'
 import { RouterProvider } from '@tanstack/react-router'
-import { act, fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAppRouter, type AppRouterContext } from '../app-router'
-import { createConnectionObservationOwner } from '../lib/connection-observation'
 import { bindLaunchCredential, clearLaunchCredential } from '../lib/launch-credential'
 import { getHostedShellStorageKey, type HostedShellState } from '../lib/shell-state'
-import { dispatchStoreMutation } from '../lib/store-action'
-import { resolveActiveBackendAuthority } from '../lib/use-active-backend'
+import { getConnectionsSnapshot } from '../lib/use-connections'
 
 const API_A = 'http://localhost:3100'
 const API_B = 'http://localhost:3200'
+
+const STORE: StoreDoctorStore = {
+  id: 'design-system',
+  root: '/stores/design-system',
+  metadata_path: '/stores/design-system/.openspec-store.json',
+  openspec_root: {
+    present: true,
+    config: { present: true },
+    specs: { present: true },
+    changes: { present: true },
+    archive: { present: true },
+    healthy: true,
+    status: [],
+  },
+  metadata: { present: true, valid: true, id: 'design-system', remote: null },
+  git: {
+    is_repository: true,
+    has_commits: true,
+    has_uncommitted_changes: false,
+    has_remote: false,
+    origin_url: null,
+  },
+  status: [],
+}
 
 const EMPTY_CONTEXT: AppRouterContext = {
   initialLaunchRequest: null,
@@ -68,13 +91,17 @@ function createBackendFetch(
     authenticationRequired?: string
     requests?: Array<{ url: string; authorization: string | null }>
     envUris?: ReadonlyMap<string, string>
+    envUrisAfterInitial?: ReadonlyMap<string, string>
     rootContexts?: ReadonlyMap<string, RootContextState>
+    stores?: StoreDoctorStore[]
+    offlineAfterInitial?: string
   } = {}
 ): typeof fetch {
   const health = new Map<string, HostedBackendHealthResponse>([
     [API_A, createHealth(API_A, 'project-a', options.envUris?.get(API_A) ?? 'env:a')],
     [API_B, createHealth(API_B, 'project-b', options.envUris?.get(API_B) ?? 'env:b')],
   ])
+  const healthRequestCounts = new Map<string, number>()
   return vi.fn(async (input, init) => {
     const url = String(input)
     const apiBaseUrl = url.startsWith(API_A) ? API_A : API_B
@@ -83,8 +110,23 @@ function createBackendFetch(
       authorization: new Headers(init?.headers).get('authorization'),
     })
     if (url.endsWith('/api/health')) {
+      const healthRequestCount = (healthRequestCounts.get(apiBaseUrl) ?? 0) + 1
+      healthRequestCounts.set(apiBaseUrl, healthRequestCount)
+      if (options.offlineAfterInitial === apiBaseUrl && healthRequestCount > 1) {
+        return new Response(null, { status: 503 })
+      }
       if (options.authenticationRequired === apiBaseUrl) {
         return new Response(null, { status: 401 })
+      }
+      const refreshedEnvUri = options.envUrisAfterInitial?.get(apiBaseUrl)
+      if (healthRequestCount > 1 && refreshedEnvUri) {
+        return Response.json(
+          createHealth(
+            apiBaseUrl,
+            apiBaseUrl === API_A ? 'project-a' : 'project-b',
+            refreshedEnvUri
+          )
+        )
       }
       return Response.json(health.get(apiBaseUrl))
     }
@@ -104,7 +146,9 @@ function createBackendFetch(
       })
     }
     if (url.includes('/trpc/stores.list') || url.includes('/trpc/stores.doctor')) {
-      return Response.json({ result: { data: { available: true, stores: [] } } })
+      return Response.json({
+        result: { data: { available: true, stores: options.stores ?? [] } },
+      })
     }
     if (url.includes('/trpc/stores.mutate')) {
       mutations.push(apiBaseUrl)
@@ -217,7 +261,7 @@ describe('App connection selection and observation routes', () => {
     await unmount(rendered)
   })
 
-  it('rejects a Store action while selected B is replaced at the same locator', async () => {
+  it('keeps a Register draft bound to B when another current tab becomes selected', async () => {
     const mutations: string[] = []
     vi.stubGlobal('fetch', createBackendFetch(mutations))
     const rendered = await renderRoute('/environment/stores/inspector')
@@ -225,91 +269,90 @@ describe('App connection selection and observation routes', () => {
     const path = await screen.findByPlaceholderText('Path to Store root')
     fireEvent.change(path, { target: { value: '/tmp/store-b' } })
     const submit = screen.getByRole<HTMLButtonElement>('button', { name: 'Register Store' })
-    await waitFor(() => expect(submit.disabled).toBe(false))
-
-    const replacement: HostedShellState = {
-      activeTabId: 'tab-b-replacement',
-      tabs: [
-        { id: 'tab-a', sessionId: 'session-a', apiBaseUrl: API_A, createdAt: 1 },
-        {
-          id: 'tab-b-replacement',
-          sessionId: 'session-b-replacement',
-          apiBaseUrl: API_B,
-          createdAt: 3,
-        },
-      ],
-    }
-    localStorage.setItem(getHostedShellStorageKey(), JSON.stringify(replacement))
-
-    await act(async () => {
-      window.dispatchEvent(
-        new StorageEvent('storage', {
-          key: getHostedShellStorageKey(),
-          newValue: JSON.stringify(replacement),
-        })
-      )
-      fireEvent.click(submit)
-    })
-
-    expect(mutations).toEqual([])
-    await unmount(rendered)
-  })
-
-  it('rejects a Store action captured from the prior observation generation', async () => {
-    const state: HostedShellState = {
-      activeTabId: 'tab-b',
+    const selectedA: HostedShellState = {
+      activeTabId: 'tab-a',
       tabs: [
         { id: 'tab-a', sessionId: 'session-a', apiBaseUrl: API_A, createdAt: 1 },
         { id: 'tab-b', sessionId: 'session-b', apiBaseUrl: API_B, createdAt: 2 },
       ],
     }
-    const owner = createConnectionObservationOwner({
-      probe: async (apiBaseUrl) => ({
-        reachability: 'online',
-        health: createHealth(
-          apiBaseUrl,
-          apiBaseUrl === API_A ? 'project-a' : 'project-b',
-          apiBaseUrl === API_A ? 'env:a' : 'env:b'
-        ),
-        errorMessage: null,
-      }),
-      fetchRootContext: async () => ({
-        state: 'loading',
-        data: null,
-        attempt: null,
-        error: null,
-        observedAt: 1,
-      }),
-      now: () => 1,
-    })
-    owner.setTabs(state.tabs)
-    await owner.refresh(['tab-b'])
-    const tab = state.tabs[1]
-    const observation = owner
-      .getSnapshot()
-      .observations.find((candidate) => candidate.tabId === 'tab-b')
-    expect(tab).toBeDefined()
-    expect(observation).toBeDefined()
-    if (!tab || !observation) throw new Error('Selected B fixture did not become observable.')
-    const authority = resolveActiveBackendAuthority({
-      selectedTab: tab,
-      observation,
-      owner,
-      readConnections: () => state,
-    })
-    expect(authority).not.toBeNull()
 
-    const mutations: string[] = []
-    vi.stubGlobal('fetch', createBackendFetch(mutations))
-    await owner.refresh(['tab-b'])
-    const result = await dispatchStoreMutation(authority, {
-      requestId: 'register-retired-generation',
-      kind: 'register',
-      path: '/tmp/store-b',
+    localStorage.setItem(getHostedShellStorageKey(), JSON.stringify(selectedA))
+    await act(async () => {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: getHostedShellStorageKey(),
+          newValue: JSON.stringify(selectedA),
+        })
+      )
     })
 
-    expect(result).toBeNull()
+    await waitFor(() => {
+      expect(screen.getByRole('status').textContent).toContain(
+        'This draft belongs to a previous environment observation.'
+      )
+      expect(submit.disabled).toBe(false)
+    })
+    fireEvent.click(submit)
+
     expect(mutations).toEqual([])
+    await unmount(rendered)
+  })
+
+  it('keeps an open Remove dialog bound to its retired observation generation', async () => {
+    const mutations: string[] = []
+    const requests: Array<{ url: string; authorization: string | null }> = []
+    vi.stubGlobal(
+      'fetch',
+      createBackendFetch(mutations, {
+        requests,
+        stores: [STORE],
+        envUrisAfterInitial: new Map([[API_B, 'env:b-refreshed']]),
+      })
+    )
+    const rendered = await renderRoute('/environment/stores/inspector')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove files' }))
+    const confirmation = await screen.findByLabelText('Type the Store id to confirm')
+    const authorityEvidence = screen.getByTestId('remove-authority-evidence')
+    const originGeneration = authorityEvidence.dataset.originGeneration
+    expect(originGeneration).toBeDefined()
+    expect(authorityEvidence.dataset.authorityState).toBe('current')
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+    })
+    await waitFor(() => {
+      const latestEvidence = screen.getByTestId('remove-authority-evidence')
+      expect(
+        requests.filter((request) => request.url.includes(`${API_B}/trpc/rootContext.get`)).length
+      ).toBeGreaterThanOrEqual(2)
+      expect(latestEvidence.dataset.authorityState).toBe('retired')
+      expect(latestEvidence.dataset.latestTabId).toBe('tab-b')
+      expect(latestEvidence.dataset.latestGeneration).toBeDefined()
+      expect(latestEvidence.dataset.latestGeneration).not.toBe(originGeneration)
+      expect(screen.getByText('env:b')).toBeTruthy()
+      expect(screen.queryByText('env:b-refreshed')).toBeNull()
+    })
+    expect(getConnectionsSnapshot().activeTabId).toBe('tab-b')
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(confirmation.isConnected).toBe(false)
+    const currentConfirmation = screen.getByLabelText('Type the Store id to confirm')
+    await act(async () => {
+      fireEvent.change(currentConfirmation, { target: { value: 'design-system' } })
+    })
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Remove Store' }).disabled).toBe(
+      false
+    )
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Remove Store' }))
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mutations).toEqual([])
+    await unmount(rendered)
   })
 
   it('renders every current environment rather than only the active backend', async () => {
@@ -390,14 +433,61 @@ describe('App connection selection and observation routes', () => {
     )
     const context = await renderRoute('/environment/stores/context')
 
-    const referenceA = await screen.findByLabelText('project-a references reference-a (healthy)')
+    const referenceA = await screen.findByLabelText('project-a references reference-a (observed)')
     expect(referenceA.getAttribute('title')).toBe('/stores/reference-a')
-    const referenceB = screen.getByLabelText('project-b references reference-b (healthy)')
-    expect(referenceB.getAttribute('title')).toBe('/stores/reference-b')
+    const referenceB = screen.getByLabelText('project-b references reference-b (warning)')
+    expect(referenceB.textContent).toContain('warning')
+    expect(screen.getByText('[warning] reference-b-warning')).toBeTruthy()
+    expect(
+      screen.getByText('Reference B is retained from the last successful observation.')
+    ).toBeTruthy()
+    expect(screen.getByText(API_B, { selector: '[data-reference-source]' })).toBeTruthy()
     expect(screen.getByText('Root error')).toBeTruthy()
     expect(screen.getByText('root-unhealthy: Project B root is unhealthy.')).toBeTruthy()
     expect(screen.getByText('retained stale snapshot')).toBeTruthy()
     expect(screen.getByText('Observed relationships only — not a machine-wide index.')).toBeTruthy()
+    await unmount(context)
+  })
+
+  it("keeps an offline source's retained Root and Reference provenance visibly stale", async () => {
+    const rootB = createRootData('project-b', 'root-b', [
+      {
+        store_id: 'reference-b',
+        root: '/stores/reference-b',
+        status: [
+          {
+            severity: 'warning',
+            code: 'reference-b-warning',
+            message: 'Reference B was retained before disconnect.',
+          },
+        ],
+      },
+    ])
+    vi.stubGlobal(
+      'fetch',
+      createBackendFetch([], {
+        rootContexts: new Map<string, RootContextState>([
+          [API_B, { state: 'ready', data: rootB, attempt: null, error: null, observedAt: 2 }],
+        ]),
+        offlineAfterInitial: API_B,
+      })
+    )
+    const context = await renderRoute('/environment/stores/context')
+    expect(await screen.findByText('project-b')).toBeTruthy()
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+    })
+
+    await waitFor(() => {
+      const projectB = screen.getByText('project-b').closest('tr')
+      expect(projectB).not.toBeNull()
+      if (!projectB) throw new Error('Project B row is unavailable.')
+      expect(within(projectB).getByText('retained stale snapshot')).toBeTruthy()
+      expect(
+        within(projectB).getByLabelText('project-b references reference-b (warning)')
+      ).toBeTruthy()
+    })
     await unmount(context)
   })
 
