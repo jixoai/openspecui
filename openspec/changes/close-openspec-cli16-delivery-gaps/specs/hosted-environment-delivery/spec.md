@@ -39,6 +39,9 @@ pass-through.
 - **AND** a reconnect SHALL repeat the same admission rule
 - **AND** a worktree backend spawned by that protected backend SHALL inherit the same Access Gate policy
 - **AND** parent readiness checks SHALL authenticate to that child rather than weakening child admission
+- **AND** a Project Web handoff to that child SHALL transfer the current in-memory credential only through
+  the target child fragment, which the child SHALL consume and remove before rendering
+- **AND** the handoff payload, query state, storage, and logs SHALL remain credential-free
 
 ### Requirement: Credential-Scoped Reachability and Explicit Environment Selection
 

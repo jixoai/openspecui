@@ -267,8 +267,10 @@ Focused acceptance remains rejected for these exact reasons:
 1. The Service Worker can borrow the first credential returned by any window when the initiating client is
    absent. This violates per-client authority and invalidates `2.10`.
 2. Worktree worker/process child Servers do not inherit the parent Gate and the readiness probe is
-   unauthenticated. A protected parent can therefore hand off to an unprotected child; `2.8--2.11` remain
-   open.
+   unauthenticated. A protected parent can therefore hand off to an unprotected child. Conversely, merely
+   protecting the child leaves Project Web unable to use it because `server-handoff.ts` navigates to a bare
+   child URL after the credential fragment has been consumed into page memory. Child admission, readiness,
+   and target-only fragment handoff must close together; `2.8--2.11` remain open.
 3. P1 tests remain separate helper/transport proofs. No real gated Direct/App Project Web fixture crosses
    private launch, public shell, protected HTTP, subscription, and PTY; per-supplier mutation removal is
    absent. `2.11--2.12` remain open.
@@ -282,7 +284,7 @@ Focused acceptance remains rejected for these exact reasons:
 Correction stop rule:
 
 ```text
-P1 correction = client-bound resource authority + inherited child Gate + terminating product-chain proof
+P1 correction = client-bound resource authority + inherited usable child Gate + terminating product-chain proof
 P2 correction = honest stale/warning/group projection + real Register/Remove guard mutation proofs
 ```
 
