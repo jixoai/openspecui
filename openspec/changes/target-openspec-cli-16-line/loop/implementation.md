@@ -8922,3 +8922,25 @@ Dashboard, Search, static export, the independent Loading-performance Change, or
 surface. Parent checkpoint `6.17` remains open. Final browser, visual, and multi-tab acceptance
 remains the owner's responsibility; no broad gates, SSG, browser automation, push, merge, archive,
 or release was performed, and `6.17-E` was not started.
+
+### 6.16 / 6.17 parent closure audit (2026-07-23)
+
+Audit of every recorded sub-slice against current source:
+
+- `6.16-A` through `6.16-R` are each independently accepted with focused red/green and mutation evidence.
+  The two earlier "keep open" notes (third subscription state machine; subscription/Root timing and
+  remaining page topology) are resolved by the accepted `6.16-M` Web lifecycle-owner extraction, `6.16-B`
+  detail-navigation timing, `6.16-C`/`6.16-D` artificial route-gate removals, and the `6.16-G`–`6.16-R`
+  page-topology packages. The pervasive-Loading optimization is owned by the separate
+  `accelerate-live-projection-loading` Change (`95bc2b9`/`7e20c90`) and is deliberately not folded into this
+  topology checkpoint.
+- `6.17-A` ChangeList, `6.17-B` ArchiveList, `6.17-C` SpecList, and `6.17-D` GitRoute each ship one
+  list-local native View Transition owner, semantic row identity, a current-generation guard inside the
+  actual deferred native callback, and real navigation evidence. `6.17-D` was previously recorded only as
+  `planned`; this audit records its acceptance at `db0d727` (continuity `8/8`, navigation `2/2`,
+  `git.test.tsx` `17/17` regression, three mutation runs, Web typecheck, exact Prettier/oxlint, diff clean).
+  The rotation-branch retirement is honestly recorded as defense-in-depth over the inner generation guard.
+
+Decision: parents `6.16` and `6.17` are checked in `loop/checkpoints.md`. No fabricated browser conclusion
+is made — only the owner's final browser/visual/mobile/multi-tab walkthrough remains as the closing gate,
+and automated evidence stops at focused Vitest and component-level fixtures.

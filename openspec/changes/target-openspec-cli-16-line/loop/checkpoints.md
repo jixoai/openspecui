@@ -326,7 +326,15 @@ The independent browser attempt confirms the desktop source control and URL/quer
 - [x] 6.13 Settings exposes 1.6 compatibility, workflow/tool delivery, root selection, environment, and data-scope diagnostics
 - [x] 6.14 OPSX New/Propose/Compose/Verify/Update shows and preserves its target planning root
 - [x] 6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging
-- [ ] 6.16 Every network-triggering control binds loading/disabled state and every page covers empty/loading/loaded/updating/error topologies
+- [x] 6.16 Every network-triggering control binds loading/disabled state and every page covers empty/loading/loaded/updating/error topologies
+  - Parent closed 2026-07-23 after auditing every sub-slice (`6.16-A` through `6.16-R`): each is independently
+    accepted with focused red/green and mutation evidence. The earlier "keep open" notes (subscription state
+    machine, subscription/Root timing, artificial route gates, remaining page topology) are resolved by the
+    accepted `6.16-M` lifecycle-owner extraction, `6.16-B` navigation timing, `6.16-C`/`6.16-D` route-gate
+    removals, and the `6.16-G`–`6.16-R` page-topology packages. The loading-performance optimization itself
+    lives in the separate `accelerate-live-projection-loading` Change (`95bc2b9`/`7e20c90`) and is not folded
+    into this topology checkpoint. Only the owner's final browser/visual/mobile/multi-tab walkthrough remains
+    as the closing gate; automated evidence stops at focused Vitest and component-level fixtures.
   - `6.16-A` accepted: Root Context cached-display/current-authority correction and exact lifecycle reds.
   - `6.16-B` accepted: bounded detail-navigation phase timing names only observed facts, preserves
     superseded-request history, and keeps hostile runtime failures total without replacing rejection.
@@ -477,7 +485,26 @@ The independent browser attempt confirms the desktop source control and URL/quer
     Git scope authority, reconnect locks, query/cache keys, pagination, mutations, Dashboard, Server, and the
     independent Loading-performance Change unchanged. Parent `6.17` remains open and final browser, visual,
     and multi-tab acceptance remains owner-only.
-- [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns
+  - `6.17-D` accepted after `db0d727`: GitRoute entry-list continuity is owned by `useGitListContinuity`,
+    which keeps surviving rows during same-binding add/remove/reorder through one local native View
+    Transition, updates metadata without a transition, and rotates immediately on scope/`bindingToken`
+    change. Identity is binding-qualified entity id (`commit:<hash>` or `uncommitted`), dropping `updatedAt`
+    from the React key. Direct continuity `8/8` and navigation `2/2` tests render the real `GitRoute` +
+    real `GitEntryRow`; the existing `git.test.tsx` `17/17` regression is unchanged. Three independent
+    mutations prove the inner generation guard (late same-binding restore), the binding-qualified entity key
+    (positional DOM reuse), and the rotation branch's irreplaceable `committedBindingRef` advancement
+    (post-rotation same-binding continuity). The rotation branch's late-callback retirement is defense-in-depth
+    over the inner generation guard; that distinction is recorded honestly in `loop/implementation.md`. Web
+    typecheck, exact Prettier/oxlint, and `git diff --check` pass. No browser/visual acceptance ran; final
+    browser, visual, and multi-tab acceptance remains owner-only.
+- [x] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns
+  - Parent closed 2026-07-23 after all four list families have independent continuity owners:
+    `6.17-A` ChangeList, `6.17-B` ArchiveList, `6.17-C` SpecList, and `6.17-D` GitRoute. Each ships one
+    list-local native View Transition owner, semantic row identity, a current-generation guard inside the
+    actual deferred native callback, and real navigation evidence crossing the production
+    row/route/coordinator edge. The shared 6.17-C traps (per-render derived arrays, render-time ref writes)
+    are applied across the family. Only the owner's final browser/visual/mobile/multi-tab walkthrough remains
+    as the closing gate; automated evidence stops at focused Vitest and component-level fixtures.
 
 ## 7. Static Export Parity and Privacy
 
