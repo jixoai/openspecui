@@ -9326,3 +9326,38 @@ pnpm --filter @openspecui/app typecheck -> 0 errors; prettier/oxlint clean
 the final acceptance. After this slice, every Section 8 item that is code-implementable without owner
 browser acceptance is delivered; the remaining unchecked 8.x items need owner walkthrough (8.6/8.14) or
 the hidden-prompt runtime decision (8.10).
+
+### Engagement final status (2026-07-23)
+
+This engagement delivered the full OpenSpec CLI 1.6 adaptation across Sections 6-11 in 15 commits
+(`a34d211`..`2863f04`), advancing the tracker from 66/131 to 106/131 checked.
+
+Honest status by section:
+- Section 6 (6.16/6.17): CLOSED (parent checkpoints accepted after sub-slice audit).
+- Section 7 (Static Export): CLOSED 11/11 (root-aware snapshot, --references include|omit, atomic failure,
+  redaction, static provider/search/SSG compound routes, parity tests, changeset).
+- Section 8 (Hosted Protocol): 12/14 checked. Core contract + Access Gate (HTTP/WS/PTY) + mutation
+  lifecycle + envUri/capabilities + auto-launch fragment + protocol-version gating all delivered with
+  unit tests. Remaining: 8.10 (hidden interactive prompt — needs owner runtime decision), 8.6/8.14
+  (wired but need owner browser walkthrough / full protocol integration tests).
+- Section 9 (App): 4/13 checked (9.4/9.5/9.11/9.12). Environment Center, Store Inspector, Context Matrix,
+  mutation lifecycle, and auto-launch credential are all wired with unit tests; the remaining 9 need owner
+  browser walkthrough (connection flows, responsive density, live mutation/disconnect).
+- Section 10 (Verification): 10/17 checked (matrices covered by existing suites; typecheck/lint clean).
+  10.8 partial, 10.9 owner-only browser, 10.10 verified-once pending rebuild, 10.11/10.14 blocked by a
+  pre-existing server regression (NOT introduced by this Change; from the parallel loading change),
+  10.15 pending browser gate.
+- Section 11 (Delivery): 2/9 checked (feature-branch discipline + changesets). Remaining are owner-only
+  merge/archive/release gates.
+
+Automated evidence totals: core 465/465, server 465/474 (9 pre-existing failures unrelated to this
+Change), web 928/928, app 96/96; workspace typecheck 0 errors across 15 packages; oxlint 0 errors.
+
+The 25 unchecked items fall into three honest categories:
+1. Owner-only browser/multi-tab acceptance (10.9, most of Section 9, parts of 8.6/8.14).
+2. Blocked by the pre-existing server regression from the parallel loading change (10.11, 10.14, 11.3).
+3. One owner decision (8.10 hidden prompt runtime) and a few UI forms (setup/register Store Inspector
+   affordances) that need their forms + walkthrough.
+
+No merge, archive, or release was performed. The candidate is ready for owner walkthrough and return to
+the original reviewer for independent review.
