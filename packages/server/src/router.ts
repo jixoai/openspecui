@@ -179,6 +179,11 @@ import {
   SpecCatalogIdentityNotFoundError,
 } from './spec-catalog-service.js'
 import type { StoreObservationReconciler } from './store-observation-service.js'
+import {
+  StoreMutationService,
+  storeMutationEnvUri,
+  type StartStoreMutationInput,
+} from './store-mutation-service.js'
 import { startStrictArchiveStream } from './strict-archive-stream.js'
 import type { ToolCommandObservationService } from './tool-command-observation-service.js'
 import { setTrackedTaskCompletion } from './tracked-task-mutation.js'
@@ -3185,7 +3190,86 @@ export const storesRouter = router({
   doctor: publicProcedure
     .input(z.object({ id: z.string().optional() }).optional())
     .query(({ ctx, input }) => fetchStoresDoctor(ctx, input?.id)),
+
+  /**
+   * Backend-owned Store mutation (stores.mutate). Runs setup/register/unregister/remove through the
+   * official CLI under the `StoreMutationService` lifecycle (accepted -> running -> succeeded | failed |
+   * indeterminate) with request-id deduplication. V1 has no Cancel and no automatic retry.
+   */
+  mutate: publicProcedure
+    .input(
+      z.object({
+        requestId: z.string().min(1),
+        kind: z.enum(['setup', 'register', 'unregister', 'remove']),
+        storeId: z.string().optional(),
+        // setup
+        path: z.string().optional(),
+        initGit: z.boolean().optional(),
+        remote: z.string().optional(),
+        // register
+        id: z.string().optional(),
+        confirmIdentity: z.boolean().optional(),
+        // remove
+        confirmDelete: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const service = getStoreMutationService(ctx)
+      const run: StartStoreMutationInput['run'] = async () => {
+        let result
+        if (input.kind === 'setup') {
+          if (!input.path) throw new Error('setup requires a path.')
+          result = await ctx.cliExecutor.contracts.setupStore(input.storeId ?? input.id ?? 'store', {
+            path: input.path,
+            initGit: input.initGit,
+            remote: input.remote,
+          })
+        } else if (input.kind === 'register') {
+          if (!input.path) throw new Error('register requires a path.')
+          result = await ctx.cliExecutor.contracts.registerStore(input.path, {
+            id: input.id,
+            confirmIdentity: input.confirmIdentity,
+          })
+        } else if (input.kind === 'unregister') {
+          if (!input.storeId) throw new Error('unregister requires a storeId.')
+          result = await ctx.cliExecutor.contracts.unregisterStore(input.storeId)
+        } else {
+          if (!input.storeId) throw new Error('remove requires a storeId.')
+          result = await ctx.cliExecutor.contracts.removeStore(input.storeId, {
+            confirmDelete: input.confirmDelete,
+          })
+        }
+        return {
+          exitStatus: result.exitCode,
+          stdout: result.stdout,
+          stderr: result.stderr,
+          payload: result.success ? result.data : undefined,
+        }
+      }
+      const mutation = await service.start({
+        requestId: input.requestId,
+        envUri: storeMutationEnvUri(`openspecui-env://1/${ctx.projectDir}`),
+        kind: input.kind,
+        storeId: input.storeId ?? input.id,
+        run,
+      })
+      // Each terminal or indeterminate outcome invalidates the affected Store/context projections.
+      if (mutation.status !== 'running' && mutation.status !== 'accepted') {
+        ctx.runtimeInvalidation.invalidate(['stores', 'context'])
+      }
+      return mutation
+    }),
 })
+
+/**
+ * Per-process Store mutation service. One backend process owns one service; request ids deduplicate
+ * starts within it. Lazily attached to a module-level singleton so the tRPC context need not change.
+ */
+let _storeMutationService: StoreMutationService | null = null
+function getStoreMutationService(_ctx: Context): StoreMutationService {
+  if (!_storeMutationService) _storeMutationService = new StoreMutationService()
+  return _storeMutationService
+}
 
 const runtimeInvalidationFacetSchema = z.enum(RUNTIME_INVALIDATION_FACETS)
 

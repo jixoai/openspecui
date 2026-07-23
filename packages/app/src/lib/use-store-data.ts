@@ -32,6 +32,8 @@ export interface UseStoreDataOptions {
   apiBaseUrl?: string | null
   /** Optional Bearer credential for an Access-Gated backend (session memory only). */
   credential?: string | null
+  /** Change this value to force a re-fetch (e.g. after a mutation settles). */
+  refreshNonce?: number
 }
 
 /**
@@ -40,7 +42,7 @@ export interface UseStoreDataOptions {
  * returned. Mutations remain backend-owned and surface through `activeMutations`/`recentMutations`.
  */
 export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState {
-  const { apiBaseUrl, credential } = options
+  const { apiBaseUrl, credential, refreshNonce } = options
   const [inspector, setInspector] = useState<StoreDoctorResult | undefined>(undefined)
   const [inventory, setInventory] = useState<StoreListResult | undefined>(undefined)
   const [isLoading, setIsLoading] = useState(false)
@@ -92,7 +94,7 @@ export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState 
     return () => {
       cancelled = true
     }
-  }, [apiBaseUrl, credential])
+  }, [apiBaseUrl, credential, refreshNonce])
 
   return {
     inspector: inspector as StoreInspectorProjection | undefined,

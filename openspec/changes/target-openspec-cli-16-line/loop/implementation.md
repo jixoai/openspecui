@@ -9273,3 +9273,33 @@ Engagement totals: 66 -> 105/131 checked. Sections fully closed: 6, 7. Sections 
 owner-gated items open: 8 (9/14), 9 (4/13), 10 (10/17), 11 (2/9). The remaining 26 unchecked items are
 either owner-only browser/multi-tab acceptance, blocked by the pre-existing server regression, or need
 further wiring (mutation controls, auto-launch fragment, hidden prompt, Context Matrix walkthrough).
+
+### Section 9 Slice 2: Store mutation operations wired end-to-end (2026-07-23)
+
+Wires backend-owned Store mutations (setup/register/unregister/remove) through the hosted protocol.
+
+Changed contracts:
+
+- `packages/server/src/router.ts`: `storesRouter.mutate` runs a Store mutation under the
+  `StoreMutationService` lifecycle (accepted -> running -> succeeded | failed | indeterminate) with
+  request-id dedup, calling the official CLI (`setupStore`/`registerStore`/`unregisterStore`/`removeStore`)
+  and invalidating the `stores`/`context` facets on terminal settlement. V1: no Cancel, no retry.
+- `packages/app/src/lib/backend-client.ts`: `mutateBackendStore` POSTs to `stores.mutate` and degrades to
+  `indeterminate` on transport failure (never fabricates failure/cancellation).
+- `packages/app/src/lib/use-store-data.ts`: `refreshNonce` option forces a re-fetch after a mutation settles.
+- `packages/app/src/components/store-remove-dialog.tsx`: wired to the real mutation client; names
+  envUri/apiBaseUrl/Store/checkout, requires typing the Store id to confirm, reports `indeterminate`
+  honestly, and invokes `onRemoved` on terminal settlement.
+- `packages/app/src/routes/store-inspector.tsx`: passes active backend + envUri to the dialog; refreshes
+  on removal.
+
+Focused evidence:
+
+```text
+(cd packages/app && npx vitest run) -> 20 files / 91 tests (incl. store-remove-dialog mutation flow)
+pnpm --filter @openspecui/app typecheck -> 0 errors
+oxlint -> 0 warnings/errors
+```
+
+Honest checkpoints: 8.5/9.6/9.9/9.10 are wired (code-side) with unit tests but remain unchecked pending
+owner browser walkthrough of a live mutation. The setup/register UI affordances still need their forms.

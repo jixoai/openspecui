@@ -126,3 +126,72 @@ export async function fetchBackendRootContext(
   if (!data || typeof data !== 'object') return null
   return data as RootContextState
 }
+
+/** Store mutation kind, mirroring the backend `stores.mutate` procedure. */
+export type BackendStoreMutationKind = 'setup' | 'register' | 'unregister' | 'remove'
+
+export interface BackendStoreMutateInput {
+  requestId: string
+  kind: BackendStoreMutationKind
+  storeId?: string
+  path?: string
+  initGit?: boolean
+  remote?: string
+  id?: string
+  confirmIdentity?: boolean
+  confirmDelete?: boolean
+}
+
+/** One backend-owned Store mutation lifecycle record returned by `stores.mutate`. */
+export interface BackendStoreMutationRecord {
+  requestId: string
+  kind: BackendStoreMutationKind
+  status: 'accepted' | 'running' | 'succeeded' | 'failed' | 'indeterminate'
+  storeId?: string
+  result?: { exitStatus: number | null; stdout?: string; stderr?: string; payload?: unknown }
+  observedAt: number
+}
+
+/**
+ * Start a backend-owned Store mutation via the hosted `stores.mutate` procedure. The mutation runs
+ * server-side under the `StoreMutationService` lifecycle; client disconnect only detaches observation
+ * and does not kill the CLI. V1 has no Cancel and no automatic retry.
+ */
+export async function mutateBackendStore(
+  options: BackendClientOptions,
+  input: BackendStoreMutateInput
+): Promise<BackendStoreMutationRecord> {
+  const fetchImpl = options.fetchImpl ?? fetch
+  const response = await fetchImpl(`${normalizeBaseUrl(options.apiBaseUrl)}/trpc/stores.mutate`, {
+    method: 'POST',
+    cache: 'no-store',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json',
+      ...authHeaders(options.credential),
+    },
+    body: JSON.stringify(input),
+  })
+  if (!response.ok) {
+    return {
+      requestId: input.requestId,
+      kind: input.kind,
+      status: 'indeterminate',
+      storeId: input.storeId,
+      result: { exitStatus: null, stderr: `Store mutation request failed: ${response.status}` },
+      observedAt: Date.now(),
+    }
+  }
+  const envelope = (await response.json()) as { result?: { data?: unknown } }
+  const data = envelope.result?.data
+  if (!data || typeof data !== 'object') {
+    return {
+      requestId: input.requestId,
+      kind: input.kind,
+      status: 'indeterminate',
+      storeId: input.storeId,
+      observedAt: Date.now(),
+    }
+  }
+  return data as BackendStoreMutationRecord
+}

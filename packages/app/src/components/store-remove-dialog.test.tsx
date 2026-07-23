@@ -10,7 +10,7 @@ import {
 import { act, fireEvent, screen } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StoreRemoveDialog } from './store-remove-dialog'
 
 const STORE: StoreDoctorStore = {
@@ -107,17 +107,45 @@ describe('StoreRemoveDialog', () => {
 
   it('calls onClose when remove is confirmed', async () => {
     let closed = false
-    await renderAt(
-      wrapInRouter(<StoreRemoveDialog store={STORE} onClose={() => (closed = true)} />)
-    )
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText('Type the Store id to confirm'), {
-        target: { value: 'design-system' },
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        result: {
+          data: {
+            requestId: 'r1',
+            kind: 'remove',
+            status: 'succeeded',
+            storeId: 'design-system',
+            observedAt: 1,
+          },
+        },
+      }),
+    })) as unknown as typeof fetch
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await renderAt(
+        wrapInRouter(
+          <StoreRemoveDialog
+            store={STORE}
+            apiBaseUrl="http://localhost:3100"
+            envUri="openspecui-env://1/aaa"
+            onClose={() => (closed = true)}
+          />
+        )
+      )
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Type the Store id to confirm'), {
+          target: { value: 'design-system' },
+        })
       })
-    })
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Remove Store' }))
-    })
-    expect(closed).toBe(true)
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Remove Store' }))
+      })
+      expect(closed).toBe(true)
+      expect(fetchMock).toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

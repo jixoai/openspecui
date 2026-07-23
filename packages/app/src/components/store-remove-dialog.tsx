@@ -8,7 +8,8 @@
 import type { StoreDoctorStore } from '@openspecui/core/store-types'
 import { Dialog } from '@openspecui/web-src/components/dialog'
 import { AlertTriangle, Loader2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { mutateBackendStore } from '../lib/backend-client'
 
 /**
  * Store Remove 确认对话框（9.9）。
@@ -26,13 +27,25 @@ import { useEffect, useRef, useState } from 'react'
  */
 export function StoreRemoveDialog({
   store,
+  envUri,
+  apiBaseUrl,
+  credential,
+  onRemoved,
   onClose,
 }: {
   store: StoreDoctorStore
+  /** Opaque environment identity from the active backend (display-only; never dereferenced). */
+  envUri?: string
+  /** Backend instance locator for the stores.mutate request. */
+  apiBaseUrl?: string
+  /** Optional Bearer credential for an Access-Gated backend (session memory only). */
+  credential?: string | null
+  onRemoved?: (storeId: string) => void
   onClose: () => void
 }) {
   const [confirmText, setConfirmText] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const expected = store.id ?? ''
   const confirmRef = useRef<HTMLInputElement>(null)
   const canSubmit = confirmText === expected && expected.length > 0 && !submitting
@@ -43,12 +56,35 @@ export function StoreRemoveDialog({
     return () => clearTimeout(timer)
   }, [])
 
-  const submit = () => {
-    if (!canSubmit) return
+  const submit = useCallback(() => {
+    const storeId = store.id
+    if (!canSubmit || !apiBaseUrl || !storeId) return
     setSubmitting(true)
-    // TODO(kernel): 发起 stores.mutate remove 变更（backend-owned）。当前骨架仅关闭对话框。
-    onClose()
-  }
+    setError(null)
+    const requestId = `remove:${storeId}:${Date.now()}`
+    mutateBackendStore(
+      { apiBaseUrl, credential },
+      { requestId, kind: 'remove', storeId, confirmDelete: true }
+    )
+      .then((mutation) => {
+        if (mutation.status === 'succeeded') {
+          onRemoved?.(storeId)
+          onClose()
+        } else if (mutation.status === 'indeterminate') {
+          // Lost terminal truth: do not fabricate failure; report indeterminate and close.
+          setError('Result is indeterminate (lost during disconnect). Reopen the Store views to refresh.')
+          onRemoved?.(storeId)
+          onClose()
+        } else {
+          setError(mutation.result?.stderr ?? `Store remove ${mutation.status}.`)
+          setSubmitting(false)
+        }
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : String(err))
+        setSubmitting(false)
+      })
+  }, [canSubmit, apiBaseUrl, credential, store.id, onRemoved, onClose, store])
 
   return (
     <Dialog
@@ -91,16 +127,21 @@ export function StoreRemoveDialog({
 
         <dl className="bg-muted/40 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 rounded-md p-3 text-xs">
           <dt className="text-muted-foreground">Environment</dt>
-          {/* TODO(kernel): envUri 由当前选中环境提供。 */}
-          <dd className="font-mono">selected environment</dd>
+          <dd className="font-mono break-all">{envUri ?? apiBaseUrl ?? 'selected environment'}</dd>
           <dt className="text-muted-foreground">Host</dt>
-          {/* TODO(kernel): host identity 不通过 envUri 暴露原始值；展示 backend 实例定位符。 */}
-          <dd className="font-mono">backend host</dd>
+          {/* host identity 不通过 envUri 暴露原始值；展示 backend 实例定位符。 */}
+          <dd className="font-mono break-all">{apiBaseUrl ?? 'backend host'}</dd>
           <dt className="text-muted-foreground">Store</dt>
           <dd className="font-mono">{store.id ?? '—'}</dd>
           <dt className="text-muted-foreground">Checkout</dt>
-          <dd className="font-mono">{store.root ?? '—'}</dd>
+          <dd className="font-mono break-all">{store.root ?? '—'}</dd>
         </dl>
+
+        {error ? (
+          <p className="border-destructive/40 text-destructive rounded-md border bg-destructive/5 px-3 py-2 text-xs">
+            {error}
+          </p>
+        ) : null}
 
         <div className="space-y-1.5">
           <label htmlFor="remove-confirm" className="text-sm font-medium">

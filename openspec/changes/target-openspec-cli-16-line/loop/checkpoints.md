@@ -591,9 +591,10 @@ The independent browser attempt confirms the desktop source control and URL/quer
   - Wired: `useActiveBackend` selects the first online backend; Store views render empty/loading until one
     is online. Unit-tested via the hook contract.
 - [ ] 9.6 Store Inspector owns Store identity, doctor evidence, and setup/register/unregister/remove controls
-  - Partial: doctor evidence is fetched + rendered via `useStoreData`/`backend-client` (5/5 tests). But
-    setup/register/unregister/remove controls are still disabled no-ops pending the `stores.mutate`
-    backend RPC + App mutation wiring; needs that + owner walkthrough.
+  - Wired (code-side): doctor evidence is fetched/rendered, and `stores.mutate` (setup/register/unregister/
+    remove) is wired end-to-end (server procedure → App client → destructive-confirm dialog). The remove
+    flow is exercised by `store-remove-dialog` tests; setup/register UI affordances remain disabled until
+    their forms land. Needs owner browser walkthrough before final acceptance.
 - [ ] 9.7 Context Matrix owns observed project-to-Root/Reference relationships and never claims machine-wide completeness
   - Wired (code-side): the route renders observed project-to-Root/Reference relationships with neutral
     "observed only — not a machine-wide index" copy and "no reference currently observed" cells. Proven
@@ -602,11 +603,13 @@ The independent browser attempt confirms the desktop source control and URL/quer
   - Skeleton route exists; Inventory data is fetched via `useStoreData` but the wide-screen scanning UX
     needs owner walkthrough.
 - [ ] 9.9 Destructive remove names environment, host, Store, and checkout path and requires explicit confirmation
-  - `store-remove-dialog.tsx` skeleton exists but `onRemove` is a no-op (`TODO(kernel)`); needs mutation
-    wiring + owner walkthrough.
+  - Wired (code-side): the remove dialog names envUri/apiBaseUrl/Store/checkout, requires typing the Store
+    id to confirm, and calls the backend-owned `stores.mutate` remove; `mutation-status` surfaces the
+    lifecycle. Proven by `store-remove-dialog` tests. Needs owner browser walkthrough.
 - [ ] 9.10 Mutation UI covers accepted/running/succeeded/failed/indeterminate, disconnect, and invalidation-driven refresh states
-  - `mutation-status.tsx` renders all five states, but no live mutation flows through the App yet (controls
-    are disabled). Needs mutation wiring + owner walkthrough.
+  - Wired (code-side): `stores.mutate` returns the full lifecycle; the App reports `indeterminate` honestly
+    and bumps a refresh nonce on terminal settlement. `mutation-status.tsx` renders all five states. Needs
+    owner browser walkthrough of a live mutation (including disconnect).
 - [x] 9.11 App implements no Store Git clone/pull/push/synchronization and no filesystem-wide project scan
   - Invariant holds: no such code exists; the backend-client is read-only over Stores.
 - [x] 9.12 Store Manager remains explicitly experimental and does not become an OpenSpecUI 6.0 support gate

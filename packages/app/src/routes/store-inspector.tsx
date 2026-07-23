@@ -33,8 +33,10 @@ function healthVariant(health: StoreHealthSummary): StatusVariant {
  */
 export function StoreInspectorRoute() {
   const { active } = useActiveBackend()
+  const [refreshNonce, setRefreshNonce] = useState(0)
   const { inspector, isLoading, error } = useStoreData({
     apiBaseUrl: active?.apiBaseUrl,
+    refreshNonce,
   })
   const stores = inspector?.stores ?? []
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -117,7 +119,13 @@ export function StoreInspectorRoute() {
         )}
 
         {removeTarget ? (
-          <StoreRemoveDialog store={removeTarget} onClose={() => setRemoveTarget(null)} />
+          <StoreRemoveDialog
+            store={removeTarget}
+            envUri={active?.health?.envUri}
+            apiBaseUrl={active?.apiBaseUrl}
+            onRemoved={() => setRefreshNonce((n) => n + 1)}
+            onClose={() => setRemoveTarget(null)}
+          />
         ) : null}
       </div>
     )
