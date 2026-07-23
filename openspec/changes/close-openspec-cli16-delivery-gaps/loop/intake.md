@@ -1,0 +1,92 @@
+<!--
+Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+1. Capture the independent review's confirmed OpenSpec 1.6 delivery gaps.
+2. Freeze the old adaptation Change as traceable source material while this Change closes its migrated obligations.
+3. Separate implementation proof, loading-change regression ownership, and owner-only browser walkthroughs.
+4. Define the product boundary for a neutral, backend-owned multi-environment projection.
+
+Original request (2026-07-23): "走查任务直接到新的change中做。你目前的工作就是：review + interview + replan(write new openspec change)"
+Original request (2026-07-20): "以后任何需要最终端到端的浏览器走查，就交给我来做。你最多负责到最基础的vitest+playwright的相关组件化的测试。"
+-->
+
+## User Input
+
+> 建议 review 后，关闭当前的 change，将所有问题在一个新开的 change 中展开，这样上下文更干净。
+>
+> 走查任务直接到新的 change 中做。你目前的工作就是：review + interview + replan(write new openspec change)。
+>
+> 对我进行采访提问的时候，我们需要高效一点，对于一般的共识没必要提问（你知道我的哲学）。
+>
+> 以后任何需要最终端到端的浏览器走查，就交给我来做。你最多负责到最基础的 vitest+playwright 的相关组件化的测试。
+
+The independent review baseline is `24c313c...HEAD` on `feat/openspec-cli-16-contract-baseline`.
+The reviewed old Change `target-openspec-cli-16-line` is at `109/131`; its 22 unchecked entries
+remain real obligations. Current PR #207 checks predate the reviewed range and are not evidence for it.
+
+## Objective Scope
+
+Close the confirmed correctness, security, protocol, App-projection, static-provenance, test-evidence,
+and delivery-gate gaps required before the OpenSpec CLI 1.6 adaptation can be accepted.
+
+```text
+backend host + effective data home
+                |
+                v
+     opaque, stable envUri --------------+
+                |                        |
+                v                        v
+Access Gate -> authenticated HTTP / WS   App: explicit selected environment
+                |                        |
+                +--> mutation accepted -> running -> terminal
+                           |                         |
+                           +--> invalidation ---------+--> current pull / truthful UI
+```
+
+The Change owns the following fixed points:
+
+- one backend-issued, opaque `envUri` for the same backend host and effective data home, reused by
+  health, Store mutations, and App grouping;
+- Access Gate enforcement on every advertised HTTP and WebSocket surface, with credential-scoped
+  reachability that never calls a reachable protected backend "offline";
+- App selection and observation of connected environments without silently redirecting a Store operation
+  to the first online backend;
+- Store mutation transport whose observable lifecycle is truly `accepted -> running -> terminal`, where
+  `indeterminate` means an unrecoverable post-start terminal loss rather than any rejected request;
+- typed decoding of untrusted hosted responses, static no-live-evidence provenance, reactive file-write
+  settlement, checked test fixtures, source headers, and passing delivery gates;
+- one owner-per-fixed-point implementation sequence and a final manual walkthrough ledger owned by the
+  manager.
+
+`target-openspec-cli-16-line` remains frozen and unarchived. This Change carries its remaining 8.x--11.x
+delivery obligations by reference; after proof is complete, its tracker may be reconciled with explicit
+links. `accelerate-live-projection-loading` / `refine-live-projection-experience` remain separate work:
+their known server emission regression is a hard delivery blocker but is not silently folded into this
+Change's implementation scope.
+
+## Non-Goals
+
+- Do not alter the established Project Web root/Store/Reference workflow semantics, add an account or
+  permission system, expose Store Git clone/pull/push/synchronization, or scan arbitrary filesystems.
+- Do not invent a second App data store, construct `envUri` in the App, infer health from URL strings, or
+  treat a failed authentication request as a completed Store mutation.
+- Do not implement the independent loading-experience redesign, pending Kanban layout work, or unrelated
+  performance optimization in this Change.
+- Do not claim user-facing desktop, mobile, multi-tab, static, WebSocket, or mutation walkthrough
+  acceptance from Vitest, component Playwright, Storybook, source inspection, or CI alone.
+- Do not archive the old Change, merge the branch, release packages, or mark an unchecked old task
+  complete merely because a replacement task list exists.
+
+## Acceptance Boundary
+
+This Change is implementation-ready only when its plan supplies one production owner, one public-boundary
+red case, one green case, and mutation-resistance evidence for every implementation package.
+
+It is implementation-complete only when all of the following are true:
+
+- the confirmed review defects are fixed with checked tests at their real HTTP/WS/RPC/UI owners;
+- `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`,
+  `pnpm test:browser:ci`, and fresh static SSG checks pass on the candidate;
+- the loading-change regression is independently repaired and no longer blocks those gates;
+- the manager records the final real-browser walkthroughs in this Change; and
+- the old Change's migrated entries are reconciled honestly, then both Changes follow strict
+  verify/archive and protected-branch delivery rules.

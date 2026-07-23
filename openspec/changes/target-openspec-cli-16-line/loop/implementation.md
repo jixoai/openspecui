@@ -16,6 +16,14 @@ Owner-reported debt (2026-07-22): "整个过程中，几乎都在 Loading，切�
 
 ## Implementation State
 
+> **Frozen migration notice (2026-07-23 Asia/Shanghai):** Independent review found that this Change is
+> still incomplete at `109/131` and its old PR checks predate the reviewed candidate. New corrective
+> implementation, focused evidence, and the manager-owned walkthrough ledger now live in
+> [`close-openspec-cli16-delivery-gaps`](../../close-openspec-cli16-delivery-gaps/loop/intake.md). This
+> Change remains active and unarchived as the historical obligation tracker. Do not check, archive, or
+> merge it by migration assertion: reconcile each remaining entry only after the linked new-Change proof
+> and delivery gates exist.
+
 Status: **PR #207 remains unmerged after the latest review-correction cycle; later checkpoints remain paused**.
 
 Completed before code execution:

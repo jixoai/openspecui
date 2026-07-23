@@ -16,6 +16,12 @@ Owner-reported debt (2026-07-22): "整个过程中，几乎都在 Loading，切�
 
 ## 1. Research and Planning
 
+> **Frozen migration notice (2026-07-23 Asia/Shanghai):** This tracker remains authoritative for its
+> unchecked obligations, but new corrective work and the manager-owned walkthrough ledger are planned in
+> [`close-openspec-cli16-delivery-gaps`](../../close-openspec-cli16-delivery-gaps/loop/checkpoints.md).
+> Do not close or archive this Change because the replacement exists. Each migrated item requires an
+> explicit linked proof, current delivery gates, and later reconciliation here.
+
 - [x] 1.1 User input, objective scope, non-goals, and acceptance boundary are captured in `loop/intake.md`
 - [x] 1.2 Official OpenSpec 1.4 through 1.6 source, tests, changelog, and agent contracts are audited
 - [x] 1.3 `references/openspec` is pinned to official `v1.6.0` (`e1b51d1`)

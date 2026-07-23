@@ -1,0 +1,91 @@
+<!--
+Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+1. Track independently verifiable delivery-gap corrections from focused proof through protected delivery.
+2. Separate external loading-regression recovery, automated preparation evidence, and manager walkthroughs.
+3. Preserve honest migration of the incomplete old Change rather than archival by assertion.
+4. Prevent full-gate churn before a named production boundary is accepted.
+
+Original request (2026-07-23): "走查任务直接到新的change中做。你目前的工作就是：review + interview + replan(write new openspec change)"
+Original request (2026-07-21): "focused review 未通过，不跑全量门禁。"
+-->
+
+## Checkpoint State
+
+Planning is complete and implementation has not started. Checkmarks in Section 1 describe this planning
+work only. They are not proof that code, tests, CI, owner walkthrough, merge, archive, or release passed.
+
+The worker must update `loop/implementation.md` after every accepted package with the actual changed owner,
+pre-fix red result, green result, mutation-resistance result, commands, output summary, and divergence.
+Focused reviewer acceptance is a hard predecessor of the next package and every broad gate.
+
+## 1. Review and Planning
+
+- [x] 1.1 Independently reviewed `24c313c...HEAD`; recorded confirmed product/security/type/static/reactive defects and current gate truth in `research-plan.md`.
+- [x] 1.2 Split remediation into P1 Hosted identity/Gate, P2 App connection/Context, P3 Store lifecycle, P4 contract/static/reactive repair, and P5 delivery/acceptance.
+- [x] 1.3 Recorded that existing owner decisions resolve ordinary design questions; loopback conditions are explicit in `implementation.md`.
+- [x] 1.4 Created the manager-owned final walkthrough ledger in Section 5; agent automation is preparation only.
+- [x] 1.5 Added `hosted-environment-delivery` and `projection-contract-truth` delta specifications; strict OpenSpec validation passed after the artifacts were complete.
+- [ ] 1.6 If a loopback trigger occurs, return to intake/research-plan and obtain the specific manager decision before more implementation.
+
+## 2. P1 Hosted Identity and Access Gate
+
+- [x] 2.1 Add/inject one stable Server host identity provider, compute one opaque `envUri` from host identity plus effective data home, and prove project/port/process do not affect equality while either equality input does.
+- [x] 2.2 Pass the issued `EnvUri` through Server context into Store mutation ownership; remove all router/path-derived `envUri` construction.
+- [x] 2.3 Write a checked real tRPC WS red fixture showing missing and invalid connection credentials can access the router before the fix; do not use only `checkWebSocketConnectionParams` unit calls.
+- [x] 2.4 Authenticate `info.connectionParams` in tRPC context before any guarded procedure/subscription; preserve unguarded pass-through and non-browser Authorization-header behavior.
+- [x] 2.5 Prove valid, missing, invalid, and reconnecting WS/HTTP/PTY credentials at production boundaries; remove the context gate and show the same protected WS case fails.
+- [x] 2.6 Bind a consumed launch credential to the parsed launch API locator before URL stripping; no locator means no arbitrary tab assignment.
+- [x] 2.7 Extend reachability with `authentication-required`; prove matching credentials reach health/HTTP/WS and unmatched/missing credentials do not leak, persist, or become `offline`.
+- [x] 2.8 Obtain focused reviewer acceptance for P1 before P2/P3/P4 or broad gates.
+
+## 3. P2 App Connection and Context Projection
+
+- [ ] 3.1 Add explicit selected tab/environment state without persisting credentials; no environment-scoped read/mutation may fall back to the first online backend.
+- [ ] 3.2 Make per-API-locator session credentials available only to that connection's health, HTTP, and WS clients; prove two backend URLs never receive each other's Authorization header.
+- [ ] 3.3 Collect health and Root Context from every currently online, protocol-compatible connection, retaining stale/error/credential truth per source.
+- [ ] 3.4 Make Environment Center and Context Matrix group only observed backend-issued `envUri`, Store, Root, and Reference facts; retain the explicit non-machine-wide-completeness boundary.
+- [ ] 3.5 Prove a selected B action cannot dispatch to online A, and that removing the selection guard turns the same real owner fixture red.
+- [ ] 3.6 Obtain focused reviewer acceptance for P2 before P3/P4 or broad gates.
+
+## 4. P3 Observable Store Mutation Ledger
+
+- [ ] 4.1 Refactor Server mutation admission to return/rejoin `accepted` before CLI terminal settlement, with request-id deduplication and no Cancel/automatic retry.
+- [ ] 4.2 Add a typed Server-owned lifecycle subscription/rejoin projection that emits known records then accepted/running/terminal changes without becoming Store inventory truth.
+- [ ] 4.3 Prove a delayed real router operation delivers `accepted` then `running` before terminal, exactly once; deleting stream publication or making start await terminal makes the test fail.
+- [ ] 4.4 Keep `indeterminate` only for post-admission lost terminal truth. Prove authentication/validation/HTTP rejection does not create a record or close a destructive UI as though it ran.
+- [ ] 4.5 Connect App Store Inspector/remove/setup/register/unregister controls to the lifecycle projection and invalidation-driven fresh Store/Context pulls; retain terminal evidence and disconnect/rejoin state.
+- [ ] 4.6 Add checked component-level Vitest/basic Playwright preparation evidence for all five lifecycle states without fake buttons or manually invoked downstream callbacks.
+- [ ] 4.7 Obtain focused reviewer acceptance for P3 before P4 or broad gates.
+
+## 5. P4 Typed, Static, Reactive, and Evidence Repair
+
+- [ ] 5.1 Publish/use browser-safe Zod hosted envelope schemas and one typed decoder; malformed health/Store/Root/mutation payloads become contract errors, never asserted public contracts.
+- [ ] 5.2 Remove fabricated static CLI result evidence and share source-aware mapping so static provenance explicitly carries no backend execution evidence.
+- [ ] 5.3 Move Dashboard Git refresh stamp reads/writes through the shared physical/reactive path; prove a committed refresh settles observation before a dependent projection reads it, and removing settlement fails.
+- [ ] 5.4 Replace `as any`/suppression-based public-boundary tests with checked fixtures and add accurate timestamped headers to every changed TS/TSX source and test file in the reviewed range.
+- [ ] 5.5 Run focused static-provider/SSG, App, Core, and Server tests for P4; obtain focused reviewer acceptance before broad gates.
+
+## 6. P5 External Regression, Gates, and Manager Walkthrough
+
+- [ ] 6.1 The owner of `refine-live-projection-experience` reproduces and repairs the exact server emission failures without weakening the assertion, timeout, or provenance contract; records evidence in that Change.
+- [ ] 6.2 Confirm the independent loading regression result against the candidate before broad gates. Do not copy its source fixes into this Change without a documented scope transfer.
+- [ ] 6.3 After P1--P4 and 6.1--6.2 focused review acceptance, run once: `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`, and `pnpm test:browser:ci`.
+- [ ] 6.4 For static-impacting changes, clean stale artifacts, run focused static-provider tests, and run `pnpm --filter @openspecui/web build:ssg`.
+- [ ] 6.5 Add an accurate changeset for changed publishable behavior, or record the precise docs/CI-only exemption.
+- [ ] 6.6 Update the feature PR only after 6.3--6.5 are green; record fresh required PR checks. Old PR checks that predate the candidate do not count.
+
+### Manager-only final walkthrough ledger
+
+- [ ] 6.7 Gated auto-launch: fragment credential binds to its launch backend, reaches health/RPC/WS, and is removed from visible URL/persisted tabs.
+- [ ] 6.8 Gate rejection: missing/invalid credential is visibly authentication-required, not offline/current/success; WS reconnect behaves equivalently.
+- [ ] 6.9 Multi-environment App: selected B remains operation target while A is online; same host/data home projects group by one opaque `envUri`, while a distinct environment does not.
+- [ ] 6.10 Store lifecycle: observe accepted/running/terminal, then disconnect/rejoin; a rejected destructive request does not claim indeterminate completion.
+- [ ] 6.11 Context Matrix: multiple connected projects show observed Root/Reference relationships only, with no completeness claim.
+- [ ] 6.12 Static and responsive App: referenced static output has no invented live evidence; desktop/mobile layouts are readable and non-overlapping.
+
+## 7. Old Change Reconciliation and Delivery
+
+- [ ] 7.1 Map each remaining `target-openspec-cli-16-line` item (8.6, 8.14; 9.1--9.3, 9.7--9.10, 9.13; 10.8--10.11, 10.14--10.15; 11.3--11.9) to exact P1--P5 evidence or retain it openly unresolved.
+- [ ] 7.2 Update the old tracker/implementation notes only after its linked proof exists; never mark a task done merely because it migrated to this Change.
+- [ ] 7.3 Run strict OpenSpec verification for both Changes after all tasks/evidence are complete. Archive neither while a task, gate, walkthrough, PR, or merge requirement is outstanding.
+- [ ] 7.4 Merge only through protected-branch approval after current PR checks and the manager walkthrough pass. Ask about release only after merge; follow changeversion/release automation only if explicitly approved.
