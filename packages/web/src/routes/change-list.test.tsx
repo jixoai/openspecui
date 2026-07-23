@@ -1,13 +1,14 @@
 /**
  * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
- * 1. Prove Changes retain formal tracked-task progress across current, loading, unavailable, and failed Status states.
+ * 1. Prove Changes render a primary row before admitting the lower-priority aggregate Status projection.
  * 2. Prove no-tasks and incomplete tasks cannot become workflow-complete.
  * 3. Prove completed tracked tasks and CLI Status converge on workflow completion.
  * 4. Prove the page-level New command remains available with active Changes.
- * 5. Distinguish main Change-subscription terminal errors from Loading and empty-list truth.
+ * 5. Distinguish main Change-subscription terminal errors and stale refresh from Loading and empty truth.
  *
  * Original request (2026-07-15): "0/0 means no-tasks, never complete."
  * Original request (2026-07-21): "Changes页面的右上角没有 New,你要不要快速补一个"
+ * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
@@ -133,6 +134,95 @@ describe('ChangeList', () => {
     expect(screen.getByText('0% task completion')).toBeTruthy()
     expect(screen.getByText('Loading workflow status…')).toBeTruthy()
     expect(container.querySelector('[style="width: 0%;"]')).toBeTruthy()
+  })
+
+  it('admits aggregate workflow Status only after the first Change row is renderable', () => {
+    useChangesSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    })
+
+    const view = render(<ChangeList />)
+
+    expect(useOpsxStatusListSubscriptionMock).toHaveBeenLastCalledWith(false)
+
+    useChangesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: 'first-renderable-change',
+          name: 'First renderable change',
+          trackedTaskProgress: { total: 1, completed: 0, phase: 'in-progress' },
+          updatedAt: Date.now(),
+        },
+      ],
+      isLoading: false,
+      error: null,
+    })
+    view.rerender(<ChangeList />)
+
+    expect(screen.getByText('First renderable change')).toBeTruthy()
+    expect(useOpsxStatusListSubscriptionMock).toHaveBeenLastCalledWith(true)
+  })
+
+  it('renders explicit batch progress with an unknown total without inventing a percentage', () => {
+    useChangesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: 'first-progressive-change',
+          name: 'First progressive change',
+          trackedTaskProgress: { total: 1, completed: 0, phase: 'in-progress' },
+          updatedAt: Date.now(),
+        },
+      ],
+      isLoading: false,
+      error: null,
+      rowErrors: [],
+      progress: { completed: 1, total: 'unknown' },
+    })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    })
+
+    render(<ChangeList />)
+
+    expect(screen.getByText('Loaded 1/unknown changes')).toBeTruthy()
+  })
+
+  it('keeps retained rows visible and labels their revalidation instead of returning to Loading', () => {
+    useChangesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: 'stale-change',
+          name: 'Stale Change',
+          trackedTaskProgress: { total: 1, completed: 0, phase: 'in-progress' },
+          updatedAt: Date.now(),
+        },
+      ],
+      isLoading: false,
+      isUpdating: true,
+      error: null,
+      rowErrors: [],
+      progress: null,
+    })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    })
+
+    render(<ChangeList />)
+
+    expect(screen.getByText('Stale Change')).toBeTruthy()
+    expect(screen.getByRole('status')).toHaveTextContent('Refreshing changes...')
+    expect(screen.queryByText('Loading changes...')).toBeNull()
   })
 
   it('renders a terminal workflow Status error without hiding Change progress', () => {

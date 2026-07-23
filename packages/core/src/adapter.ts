@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Read and mutate one CLI-selected planning root through reactive filesystem APIs.
  * 2. Project Specs, Changes, Archives, and schema-neutral entity files.
  * 3. Keep tracked workflow tasks distinct from document checklist analytics.
  * 4. Preserve filesystem provenance and mutation boundaries for server consumers.
+ * 5. Expose one bounded Change row projection for progressive list delivery without warming workflow details.
  *
  * Original request (2026-07-15): "Split formal tracked progress, document checklist statistics, and Apply instruction progress into non-interchangeable facts."
  */
@@ -149,6 +150,26 @@ export class OpenSpecAdapter {
     return reactiveReadDir(this.changesDir, { directoriesOnly: true, exclude: ['archive'] })
   }
 
+  /** Read one active Change row without resolving workflow Status, Apply, or artifact instructions. */
+  async readChangeMeta(id: string): Promise<ChangeMeta> {
+    const canonicalId = requireCanonicalOpenSpecEntityId(id, 'changeId')
+    const changeDir = join(this.changesDir, canonicalId)
+    const [change, taskProjection, timeInfo] = await Promise.all([
+      this.readChange(canonicalId),
+      this.readChangeTaskProjection(canonicalId),
+      this.getFileTimeInfo(changeDir),
+    ])
+    return {
+      id: canonicalId,
+      // Legacy parser can be unavailable for custom schemas; keep the change visible with objective fallback metadata.
+      name: change?.name ?? canonicalId,
+      trackedTaskProgress: taskProjection.trackedTaskProgress,
+      documentChecklistSummary: taskProjection.documentChecklistSummary,
+      createdAt: timeInfo?.createdAt ?? 0,
+      updatedAt: timeInfo?.updatedAt ?? 0,
+    }
+  }
+
   /**
    * List changes with metadata, separated task projections, and time info.
    * Returns every change directory, including schema-specific layouts that
@@ -157,26 +178,7 @@ export class OpenSpecAdapter {
    */
   async listChangesWithMeta(): Promise<ChangeMeta[]> {
     const ids = await this.listChanges()
-    const results = await Promise.all(
-      ids.map(async (id) => {
-        const changeDir = join(this.changesDir, id)
-        const [change, taskProjection, timeInfo] = await Promise.all([
-          this.readChange(id),
-          this.readChangeTaskProjection(id),
-          this.getFileTimeInfo(changeDir),
-        ])
-        return {
-          id,
-          // Legacy parser can be unavailable for custom schemas; keep the
-          // change visible with objective fallback metadata.
-          name: change?.name ?? id,
-          trackedTaskProgress: taskProjection.trackedTaskProgress,
-          documentChecklistSummary: taskProjection.documentChecklistSummary,
-          createdAt: timeInfo?.createdAt ?? 0,
-          updatedAt: timeInfo?.updatedAt ?? 0,
-        }
-      })
-    )
+    const results = await Promise.all(ids.map((id) => this.readChangeMeta(id)))
     return results.sort((a, b) => b.updatedAt - a.updatedAt)
   }
 

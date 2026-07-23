@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
- * 1. Prove Dashboard planning metrics and Code Git projections render independently.
+ * 1. Prove Dashboard planning metrics render before lower-priority workflow projections are admitted.
  * 2. Prove rendered A-to-B refresh/removal intents conflict visibly, settle, and resume on B.
  * 3. Prove live Code Git navigation carries the backend-issued binding token.
  * 4. Prove Dashboard snapshots cannot be relabeled across Code binding replacements.
@@ -8,6 +8,7 @@
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Dashboard Git provenance.
+ * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  */
 import type { DashboardGitRefreshControlProps } from '@/components/dashboard/git-refresh-control'
 import type { DashboardGitWorktree, GitRepositoryScopes } from '@openspecui/core'
@@ -351,6 +352,66 @@ describe('Dashboard', () => {
     expect(activeChangesHeading.compareDocumentPosition(specificationsHeading)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     )
+  })
+
+  it('keeps the Summary visible while independent Trends and Git regions are still loading', () => {
+    const overview = createOverviewData()
+    staticModeMock.mockReturnValue(false)
+    dashboardOverviewMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: null,
+      regions: {
+        summary: {
+          data: {
+            summary: overview.summary,
+            specifications: overview.specifications,
+            activeChanges: overview.activeChanges,
+          },
+          isLoading: false,
+          isUpdating: true,
+          error: null,
+        },
+        trends: { data: undefined, isLoading: true, isUpdating: false, error: null },
+        git: { data: undefined, isLoading: true, isUpdating: false, error: null },
+      },
+    })
+
+    render(<Dashboard />)
+
+    expect(screen.getByTestId('metric-card:Specifications / Requirements')).toHaveTextContent(
+      '12 / 24'
+    )
+    expect(screen.getByRole('heading', { name: 'Active Changes' })).toBeInTheDocument()
+    expect(screen.getByText('Updating dashboard summary...')).toBeInTheDocument()
+    expect(screen.getByText('Loading dashboard trends...')).toBeInTheDocument()
+    expect(screen.getByText('Loading Code Git snapshot...')).toBeInTheDocument()
+  })
+
+  it('admits lower-priority workflow projections only after Summary is renderable', () => {
+    staticModeMock.mockReturnValue(false)
+    dashboardOverviewMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    })
+
+    const view = render(<Dashboard />)
+
+    expect(opsxStatusListMock).toHaveBeenLastCalledWith(false)
+    expect(opsxConfigBundleMock).toHaveBeenLastCalledWith(false)
+    expect(gitScopesMock).toHaveBeenLastCalledWith(false)
+
+    dashboardOverviewMock.mockReturnValue({
+      data: createOverviewData(),
+      isLoading: false,
+      error: null,
+    })
+    view.rerender(<Dashboard />)
+
+    expect(opsxStatusListMock).toHaveBeenLastCalledWith(true)
+    expect(opsxConfigBundleMock).toHaveBeenLastCalledWith(true)
+    expect(gitScopesMock).toHaveBeenLastCalledWith(true)
   })
 
   it('retains the stable Overview content alongside a terminal subscription error', () => {

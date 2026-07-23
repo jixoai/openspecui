@@ -1,13 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Prove path-backed OPSX projections react to planning-root changes.
  * 2. Prove non-canonical Change ids are rejected before projection streams start.
+ * 3. Prove demand-driven Status does not require Apply/artifact warmup and retains CLI evidence.
  *
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
+ * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
  */
 import { mkdir, realpath, writeFile } from 'fs/promises'
 import { join } from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanupTempDir, createTempDir, waitFor, waitForDebounce } from './__tests__/test-utils.js'
 import { CliExecutor } from './cli-executor.js'
 import { ConfigManager } from './config.js'
@@ -127,6 +129,40 @@ if (args[0] === 'schema' && args[1] === 'which' && args.includes('--json')) {
   process.exit(0)
 }
 
+if (args[0] === 'instructions' && args[1] === 'artifact' && args.includes('--json')) {
+  const changeId = args[args.indexOf('--change') + 1]
+  const changeDir = join(process.cwd(), 'openspec', 'changes', changeId)
+  console.log(JSON.stringify({
+    changeName: changeId,
+    artifactId: 'artifact',
+    schemaName: 'test',
+    changeDir,
+    planningHome: {
+      kind: 'repo',
+      root: process.cwd(),
+      changesDir: join(process.cwd(), 'openspec', 'changes'),
+      defaultSchema: 'test',
+    },
+    outputPath,
+    resolvedOutputPath: join(changeDir, outputPath),
+    existingOutputPaths: [],
+    description: 'Test artifact.',
+    instruction: 'Write the test artifact.',
+    context: 'Fixture context.',
+    rules: [],
+    template: '# Test artifact',
+    dependencies: [],
+    unlocks: [],
+    references: [],
+    root: {
+      path: process.cwd(),
+      source: args.includes('--store') ? 'store' : 'nearest',
+      store_id: args.includes('--store') ? args[args.indexOf('--store') + 1] : undefined,
+    },
+  }))
+  process.exit(0)
+}
+
 if (args[0] === 'instructions' && args[1] === 'apply' && args.includes('--json')) {
   console.log(JSON.stringify({
     changeName: 'demo-change',
@@ -239,6 +275,7 @@ process.exit(1)
 
     await kernel.ensureStatus('demo-change')
     await kernel.ensureApplyInstructions('demo-change')
+    await kernel.ensureInstructions('demo-change', 'artifact')
 
     expect(kernel.getStatus('demo-change').provenance).toMatchObject({
       kind: 'cli',
@@ -256,9 +293,31 @@ process.exit(1)
         allowedEditRoots: [canonicalTempDir],
       },
       root: { source: 'store', store_id: 'shared' },
+      evidence: {
+        command: 'status',
+        success: true,
+        selector: { store: 'shared' },
+      },
     })
     expect(changeDir).toBe(join(tempDir, 'openspec', 'changes', 'demo-change'))
-    expect(kernel.getApplyInstructions('demo-change').instruction).toBe('Apply via Store shared.')
+    expect(kernel.getApplyInstructions('demo-change')).toMatchObject({
+      instruction: 'Apply via Store shared.',
+      evidence: {
+        command: 'instructions apply',
+        success: true,
+        selector: { store: 'shared' },
+        root: { source: 'store', store_id: 'shared' },
+      },
+    })
+    expect(kernel.getInstructions('demo-change', 'artifact')).toMatchObject({
+      artifactId: 'artifact',
+      evidence: {
+        command: 'instructions',
+        success: true,
+        selector: { store: 'shared' },
+        root: { source: 'store', store_id: 'shared' },
+      },
+    })
   })
 
   it('rejects non-canonical Change ids before starting path-backed projections', async () => {
@@ -282,6 +341,23 @@ process.exit(1)
     await expect(
       kernel.ensureGlobArtifactFiles('demo-change', '../outside/**/*.md')
     ).rejects.toThrow(/Invalid outputPath/)
+  })
+
+  it('delivers Status List without waiting for a pending full warmup', async () => {
+    const { kernel } = await prepareKernel('result.md')
+    const pendingWarmup = vi
+      .spyOn(kernel, 'waitForWarmup')
+      .mockImplementation(() => new Promise<void>(() => {}))
+
+    await Promise.race([
+      kernel.ensureStatusList(),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Status List remained behind full warmup.')), 250)
+      }),
+    ])
+
+    expect(kernel.getStatusList().map((status) => status.changeName)).toEqual(['demo-change'])
+    expect(pendingWarmup).not.toHaveBeenCalled()
   })
 
   it(

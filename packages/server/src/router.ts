@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
- * 1. Register lease-scoped planning-root document, OPSX, dashboard, and archive procedures.
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * 1. Register lease-scoped planning-root document, OPSX, regional Dashboard, and archive procedures.
  * 2. Register CLI, Root Context, reactive launch-tool initialization, configuration, Store, and terminal-result projections.
  * 3. Register binding-safe Git, terminal, system, notification, and recovery procedures.
  * 4. Register translation runtime, model, asset, and cache procedures.
@@ -12,6 +12,7 @@
  * Original request (2026-07-15): "你先负责后端（内核）的开发。"
  * Original request (2026-07-17): "Do not return a mutable Planning-root service capability that can outlive its admitted operation."
  * Original request (2026-07-18): "Remove duplicated profile/drift parsing and preserve the pinned Core workflow contract."
+ * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
@@ -20,10 +21,15 @@
  */
 import type {
   ChangeFile,
+  ChangeProjectionBatch,
+  ChangeProjectionData,
   CliExecutor,
   CliStreamEvent,
   CliStreamHandle,
   ConfigManager,
+  DashboardGitSnapshot,
+  DashboardSummaryProjection,
+  DashboardTrendsProjection,
   FileChangeEvent,
   GitEntriesPage,
   GitEntryFiles,
@@ -42,6 +48,9 @@ import {
   classifyStoreCliResult,
   CodeEditorThemeSchema,
   DashboardConfigSchema,
+  DashboardGitSnapshotSchema,
+  DashboardSummaryProjectionSchema,
+  DashboardTrendsProjectionSchema,
   DocumentTranslationConfigUpdateSchema,
   EnvironmentGlobalConfigValueSchema,
   getAllTools,
@@ -61,6 +70,7 @@ import {
   OpsxConfigSchema,
   OwnedSpecIdentitySchema,
   ProjectBindingUpdateSchema,
+  ReactiveContext,
   requireCanonicalOpenSpecEntityId,
   requireOpenSpecEntityRelativePath,
   resolveTerminalShellDefaults,
@@ -155,6 +165,7 @@ import {
 } from './planning-config-service.js'
 import type { PlanningRootServiceResolver, PlanningRootServices } from './planning-root-service.js'
 import type { ProjectRecoveryService } from './project-recovery-service.js'
+import type { ProjectionWorkEvent, ProjectionWorkSubscription } from './projection-work/index.js'
 import { reactiveKV } from './reactive-kv.js'
 import {
   createReactiveProjectionSubscription,
@@ -238,6 +249,277 @@ function createPlanningRootProjectionSubscription<T>(
   task: (services: PlanningRootServices) => Promise<T>
 ) {
   return createReactiveProjectionSubscription(() => runPlanningRoot(ctx, task, { reactive: true }))
+}
+
+/**
+ * Bind one regional Projection Work stream to the current Planning-root record. Root replacement retires the
+ * old regional listener before the next record is exposed; the Work identity still protects shared A/B caches.
+ */
+function createPlanningRootProjectionWorkSubscription<T, TBatch = never>(
+  ctx: Context,
+  subscribe: (
+    services: PlanningRootServices,
+    listener: (event: ProjectionWorkEvent<T, TBatch>) => void
+  ) => ProjectionWorkSubscription,
+  parseEvent: (event: ProjectionWorkEvent<T, TBatch>) => ProjectionWorkEvent<T, TBatch>
+) {
+  return observable<ProjectionWorkEvent<T, TBatch>>((emit) => {
+    const reactiveContext = new ReactiveContext()
+    const controller = new AbortController()
+    let regionalSubscription: ProjectionWorkSubscription | null = null
+    let active = true
+
+    const retireRegionalSubscription = () => {
+      regionalSubscription?.unsubscribe()
+      regionalSubscription = null
+    }
+
+    void (async () => {
+      try {
+        for await (const _ of reactiveContext.stream(
+          () => {
+            retireRegionalSubscription()
+            return ctx.planningRootServices.runReactiveOperation((services) => {
+              regionalSubscription = subscribe(services, (event) => {
+                if (!active) return
+                try {
+                  emit.next(parseEvent(event))
+                } catch (error: unknown) {
+                  emit.error(error instanceof Error ? error : new Error(String(error)))
+                }
+              })
+            })
+          },
+          controller.signal,
+          { onRecomputeStarted: retireRegionalSubscription }
+        )) {
+          // The inner regional subscription owns all meaningful payload events.
+        }
+      } catch (error: unknown) {
+        if (active && !controller.signal.aborted) {
+          emit.error(error instanceof Error ? error : new Error(String(error)))
+        }
+      }
+    })()
+
+    return () => {
+      active = false
+      controller.abort()
+      retireRegionalSubscription()
+    }
+  })
+}
+
+const projectionWorkIdentitySchema = z.object({
+  projectionKind: z.string(),
+  planningRoot: z.object({
+    identity: z.string(),
+    source: z.string(),
+    storeSelector: z.string().nullable(),
+  }),
+  owner: z.object({
+    generation: z.string().nullable(),
+    gitBindingToken: z.string().nullable(),
+  }),
+  selector: z.string(),
+  inputFingerprint: z.string(),
+  protocolVersion: z.number().int(),
+})
+
+function dashboardProjectionEventSchema<TData>(
+  dataSchema: z.ZodType<TData>
+): z.ZodType<ProjectionWorkEvent<TData, never>> {
+  const snapshotSchema = z.object({
+    data: dataSchema,
+    freshness: z.enum(['current', 'stale-display-only']),
+    identity: projectionWorkIdentitySchema,
+    workGeneration: z.number().int(),
+  })
+  const rawSchema = z.discriminatedUnion('type', [
+    z.object({
+      type: z.literal('snapshot'),
+      snapshot: snapshotSchema,
+    }),
+    z.object({
+      type: z.literal('stage'),
+      phase: z.enum([
+        'request',
+        'transport-start',
+        'root-ready',
+        'cache-hit',
+        'join',
+        'start',
+        'leaf-settled',
+        'first-stable-payload',
+        'complete',
+        'error',
+        'cancel',
+      ]),
+      workGeneration: z.number().int(),
+    }),
+    z.object({
+      type: z.literal('complete'),
+      snapshot: snapshotSchema,
+    }),
+    z.object({
+      type: z.literal('failed'),
+      error: z.unknown(),
+      retainedSnapshot: snapshotSchema.nullable(),
+      workGeneration: z.number().int(),
+    }),
+  ])
+  return z.custom<ProjectionWorkEvent<TData, never>>(
+    (value: unknown) => rawSchema.safeParse(value).success,
+    { message: 'Invalid Dashboard projection Work event.' }
+  )
+}
+
+const changeProjectionRowErrorSchema = z.object({
+  changeId: z.string(),
+  message: z.string(),
+})
+
+const changeProjectionTaskSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  completed: z.boolean(),
+  section: z.string().optional(),
+  location: z.object({
+    filePath: z.string(),
+    taskIndex: z.number().int().positive(),
+  }),
+})
+
+const changeProjectionSourceSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('artifact'),
+    artifactId: z.string(),
+    outputPath: z.string(),
+    filePaths: z.array(z.string()),
+  }),
+  z.object({
+    kind: z.literal('top-level-fallback'),
+    artifactId: z.null(),
+    outputPath: z.literal('tasks.md'),
+    filePaths: z.tuple([z.literal('tasks.md')]),
+  }),
+  z.object({
+    kind: z.literal('none'),
+    artifactId: z.null(),
+    outputPath: z.null(),
+    filePaths: z.tuple([]),
+  }),
+])
+
+const changeProjectionTaskProgressSchema = z.object({
+  tasks: z.array(changeProjectionTaskSchema),
+  total: z.number().int().nonnegative(),
+  completed: z.number().int().nonnegative(),
+  remaining: z.number().int().nonnegative(),
+  phase: z.enum(['no-tasks', 'in-progress', 'complete']),
+  source: changeProjectionSourceSchema,
+})
+
+const changeProjectionChecklistTaskSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  completed: z.boolean(),
+  section: z.string().optional(),
+})
+
+const changeProjectionDataSchema = z.object({
+  rows: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      trackedTaskProgress: changeProjectionTaskProgressSchema,
+      documentChecklistSummary: z.object({
+        groups: z.array(
+          z.object({
+            artifactIds: z.array(z.string()),
+            filePath: z.string(),
+            tasks: z.array(changeProjectionChecklistTaskSchema),
+            total: z.number().int().nonnegative(),
+            completed: z.number().int().nonnegative(),
+            remaining: z.number().int().nonnegative(),
+          })
+        ),
+        total: z.number().int().nonnegative(),
+        completed: z.number().int().nonnegative(),
+        remaining: z.number().int().nonnegative(),
+      }),
+      createdAt: z.number(),
+      updatedAt: z.number(),
+    })
+  ),
+  errors: z.array(changeProjectionRowErrorSchema),
+})
+
+const changeProjectionBatchSchema = z.object({
+  rows: changeProjectionDataSchema.shape.rows,
+  errors: z.array(changeProjectionRowErrorSchema),
+  progress: z.object({
+    completed: z.number().int().nonnegative(),
+    total: z.union([z.number().int().nonnegative(), z.literal('unknown')]),
+  }),
+})
+
+function changeProjectionEventSchema(): z.ZodType<
+  ProjectionWorkEvent<ChangeProjectionData, ChangeProjectionBatch>
+> {
+  const snapshotSchema = z.object({
+    data: changeProjectionDataSchema,
+    freshness: z.enum(['current', 'stale-display-only']),
+    identity: projectionWorkIdentitySchema,
+    workGeneration: z.number().int(),
+  })
+  const rawSchema = z.discriminatedUnion('type', [
+    z.object({
+      type: z.literal('snapshot'),
+      snapshot: snapshotSchema,
+    }),
+    z.object({
+      type: z.literal('stage'),
+      phase: z.enum([
+        'request',
+        'transport-start',
+        'root-ready',
+        'cache-hit',
+        'join',
+        'start',
+        'leaf-settled',
+        'first-stable-payload',
+        'complete',
+        'error',
+        'cancel',
+      ]),
+      workGeneration: z.number().int(),
+    }),
+    z.object({
+      type: z.literal('batch'),
+      batch: changeProjectionBatchSchema,
+      progress: z.object({
+        completed: z.number().int().nonnegative(),
+        total: z.union([z.number().int().nonnegative(), z.literal('unknown')]),
+      }),
+      identity: projectionWorkIdentitySchema,
+      workGeneration: z.number().int(),
+    }),
+    z.object({
+      type: z.literal('complete'),
+      snapshot: snapshotSchema,
+    }),
+    z.object({
+      type: z.literal('failed'),
+      error: z.unknown(),
+      retainedSnapshot: snapshotSchema.nullable(),
+      workGeneration: z.number().int(),
+    }),
+  ])
+  return z.custom<ProjectionWorkEvent<ChangeProjectionData, ChangeProjectionBatch>>(
+    (value: unknown) => rawSchema.safeParse(value).success,
+    { message: 'Invalid Change projection Work event.' }
+  )
 }
 
 function createPlanningRootCliStreamObservable(
@@ -1068,7 +1350,6 @@ async function fetchOpsxStatus(
   return runPlanningRoot(
     ctx,
     async ({ kernel }) => {
-      await kernel.waitForWarmup()
       await kernel.ensureStatus(changeId, input.schema)
       return kernel.getStatus(changeId, input.schema)
     },
@@ -1080,7 +1361,6 @@ async function fetchOpsxStatusList(ctx: Context, reactive = false): Promise<Chan
   return runPlanningRoot(
     ctx,
     async ({ kernel }) => {
-      await kernel.waitForWarmup()
       await kernel.ensureStatusList()
       return kernel.getStatusList()
     },
@@ -1097,7 +1377,6 @@ async function fetchOpsxInstructions(
   return runPlanningRoot(
     ctx,
     async ({ kernel }) => {
-      await kernel.waitForWarmup()
       await kernel.ensureInstructions(changeId, input.artifact, input.schema)
       return kernel.getInstructions(changeId, input.artifact, input.schema)
     },
@@ -1114,7 +1393,6 @@ async function fetchOpsxApplyInstructions(
   return runPlanningRoot(
     ctx,
     async ({ kernel }) => {
-      await kernel.waitForWarmup()
       await kernel.ensureApplyInstructions(changeId, input.schema)
       return kernel.getApplyInstructions(changeId, input.schema)
     },
@@ -1164,7 +1442,6 @@ async function fetchOpsxTemplates(
   return runPlanningRoot(
     ctx,
     async ({ kernel }) => {
-      await kernel.waitForWarmup()
       await kernel.ensureTemplates(schema)
       return kernel.getTemplates(schema)
     },
@@ -1180,7 +1457,6 @@ async function fetchOpsxTemplateContents(
   return runPlanningRoot(
     ctx,
     async ({ kernel }) => {
-      await kernel.waitForWarmup()
       await kernel.ensureTemplateContents(schema)
       return kernel.getTemplateContents(schema)
     },
@@ -1336,6 +1612,15 @@ export const changeRouter = router({
   subscribe: publicProcedure.subscription(({ ctx }) => {
     return createPlanningRootSubscription(ctx, ({ adapter }) => adapter.listChangesWithMeta())
   }),
+
+  /** Stream bounded Change rows before the complete inventory settles. */
+  subscribeBatches: publicProcedure.subscription(({ ctx }) =>
+    createPlanningRootProjectionWorkSubscription<ChangeProjectionData, ChangeProjectionBatch>(
+      ctx,
+      (services, listener) => services.changesProjectionService.subscribe(listener),
+      (event) => changeProjectionEventSchema().parse(event)
+    )
+  ),
 
   subscribeFiles: publicProcedure
     .input(z.object({ id: z.string() }))
@@ -2113,7 +2398,6 @@ export const opsxRouter = router({
     .input(z.object({ name: z.string() }))
     .query(async ({ ctx, input }): Promise<ChangeFile[]> => {
       return runPlanningRoot(ctx, async ({ kernel }) => {
-        await kernel.waitForWarmup()
         await kernel.ensureSchemaFiles(input.name)
         return kernel.getSchemaFiles(input.name)
       })
@@ -2123,7 +2407,6 @@ export const opsxRouter = router({
     .input(z.object({ name: z.string() }))
     .subscription(({ ctx, input }) => {
       return createPlanningRootSubscription(ctx, async ({ kernel }) => {
-        await kernel.waitForWarmup()
         await kernel.ensureSchemaFiles(input.name)
         return kernel.getSchemaFiles(input.name)
       })
@@ -2133,7 +2416,6 @@ export const opsxRouter = router({
     .input(z.object({ name: z.string() }))
     .query(async ({ ctx, input }) => {
       return runPlanningRoot(ctx, async ({ kernel }) => {
-        await kernel.waitForWarmup()
         await kernel.ensureSchemaYaml(input.name)
         return kernel.getSchemaYaml(input.name)
       })
@@ -2143,7 +2425,6 @@ export const opsxRouter = router({
     .input(z.object({ name: z.string() }))
     .subscription(({ ctx, input }) => {
       return createPlanningRootSubscription(ctx, async ({ kernel }) => {
-        await kernel.waitForWarmup()
         await kernel.ensureSchemaYaml(input.name)
         return kernel.getSchemaYaml(input.name)
       })
@@ -2273,7 +2554,6 @@ export const opsxRouter = router({
 
   listChanges: publicProcedure.query(async ({ ctx }) => {
     return runPlanningRoot(ctx, async ({ kernel }) => {
-      await kernel.waitForWarmup()
       await kernel.ensureChangeIds()
       return kernel.getChangeIds()
     })
@@ -2281,7 +2561,6 @@ export const opsxRouter = router({
 
   subscribeChanges: publicProcedure.subscription(({ ctx }) => {
     return createPlanningRootSubscription(ctx, async ({ kernel }) => {
-      await kernel.waitForWarmup()
       await kernel.ensureChangeIds()
       return kernel.getChangeIds()
     })
@@ -2292,7 +2571,6 @@ export const opsxRouter = router({
     .query(async ({ ctx, input }) => {
       const location = requireOpsxArtifactLocation(input)
       return runPlanningRoot(ctx, async ({ kernel, documentService }) => {
-        await kernel.waitForWarmup()
         await kernel.ensureArtifactOutput(location.changeId, location.outputPath)
         return documentService.readChangeArtifactOutput(
           location.changeId,
@@ -2308,7 +2586,6 @@ export const opsxRouter = router({
     .subscription(({ ctx, input }) => {
       const location = requireOpsxArtifactLocation(input)
       return createPlanningRootSubscription(ctx, async ({ kernel, documentService }) => {
-        await kernel.waitForWarmup()
         await kernel.ensureArtifactOutput(location.changeId, location.outputPath)
         return documentService.readChangeArtifactOutput(
           location.changeId,
@@ -2324,7 +2601,6 @@ export const opsxRouter = router({
     .query(async ({ ctx, input }) => {
       const location = requireOpsxArtifactLocation(input)
       return runPlanningRoot(ctx, async ({ kernel, documentService }) => {
-        await kernel.waitForWarmup()
         await kernel.ensureGlobArtifactFiles(location.changeId, location.outputPath)
         return documentService.readChangeGlobArtifactFiles(
           location.changeId,
@@ -2340,7 +2616,6 @@ export const opsxRouter = router({
     .subscription(({ ctx, input }) => {
       const location = requireOpsxArtifactLocation(input)
       return createPlanningRootSubscription(ctx, async ({ kernel, documentService }) => {
-        await kernel.waitForWarmup()
         await kernel.ensureGlobArtifactFiles(location.changeId, location.outputPath)
         return documentService.readChangeGlobArtifactFiles(
           location.changeId,
@@ -2470,9 +2745,60 @@ export const dashboardRouter = router({
 
   subscribe: publicProcedure.subscription(({ ctx }) => {
     return createPlanningRootSubscription(ctx, ({ dashboardOverviewService }) =>
-      dashboardOverviewService.refresh('subscription')
+      dashboardOverviewService.getCurrent()
     )
   }),
+
+  getSummary: publicProcedure.query(({ ctx }) => {
+    return runPlanningRoot(ctx, ({ dashboardProjectionService }) =>
+      dashboardProjectionService.getSummary()
+    )
+  }),
+
+  getTrends: publicProcedure.query(({ ctx }) => {
+    return runPlanningRoot(ctx, ({ dashboardProjectionService }) =>
+      dashboardProjectionService.getTrends()
+    )
+  }),
+
+  getGit: publicProcedure.query(({ ctx }) => {
+    return runPlanningRoot(ctx, ({ dashboardProjectionService }) =>
+      dashboardProjectionService.getGit()
+    )
+  }),
+
+  subscribeSummary: publicProcedure.subscription(({ ctx }) =>
+    createPlanningRootProjectionWorkSubscription<DashboardSummaryProjection>(
+      ctx,
+      (services, listener) => services.dashboardProjectionService.subscribeSummary(listener),
+      (event) =>
+        dashboardProjectionEventSchema<DashboardSummaryProjection>(
+          DashboardSummaryProjectionSchema
+        ).parse(event)
+    )
+  ),
+
+  subscribeTrends: publicProcedure.subscription(({ ctx }) =>
+    createPlanningRootProjectionWorkSubscription<DashboardTrendsProjection>(
+      ctx,
+      (services, listener) => services.dashboardProjectionService.subscribeTrends(listener),
+      (event) =>
+        dashboardProjectionEventSchema<DashboardTrendsProjection>(
+          DashboardTrendsProjectionSchema
+        ).parse(event)
+    )
+  ),
+
+  subscribeGit: publicProcedure.subscription(({ ctx }) =>
+    createPlanningRootProjectionWorkSubscription<DashboardGitSnapshot>(
+      ctx,
+      (services, listener) => services.dashboardProjectionService.subscribeGit(listener),
+      (event) =>
+        dashboardProjectionEventSchema<DashboardGitSnapshot>(DashboardGitSnapshotSchema).parse(
+          event
+        )
+    )
+  ),
 
   refreshGitSnapshot: publicProcedure
     .input(
@@ -2486,7 +2812,7 @@ export const dashboardRouter = router({
       const reason = input.reason?.trim() || 'manual-refresh'
       return runGitScope(ctx, input, async (codeRepository) => {
         await touchDashboardGitRefreshStamp(gitRepositoryCwd(codeRepository), reason)
-        refreshCurrentDashboardProjection(ctx, reason)
+        invalidateCurrentDashboardGitProjection(ctx)
         return { success: true }
       })
     }),
@@ -2508,25 +2834,17 @@ export const dashboardRouter = router({
         })
         invalidateGitPanelCache(projectDir)
         await touchDashboardGitRefreshStamp(projectDir, 'remove-detached-worktree')
-        refreshCurrentDashboardProjection(ctx, 'remove-detached-worktree')
+        invalidateCurrentDashboardGitProjection(ctx)
         return { success: true }
       })
     }),
 
-  gitTaskStatus: publicProcedure.query(async ({ ctx }) => {
-    await runPlanningRoot(ctx, ({ dashboardOverviewService }) =>
-      dashboardOverviewService.getCurrent()
-    )
+  gitTaskStatus: publicProcedure.query(() => {
     return getDashboardGitTaskStatus()
   }),
 
-  subscribeGitTaskStatus: publicProcedure.subscription(({ ctx }) => {
+  subscribeGitTaskStatus: publicProcedure.subscription(() => {
     return observable<DashboardGitTaskStatus>((emit) => {
-      void runPlanningRoot(ctx, ({ dashboardOverviewService }) =>
-        dashboardOverviewService.getCurrent()
-      ).catch(() => {
-        // Ignore warmup failures here; the overview query surfaces them.
-      })
       emit.next(getDashboardGitTaskStatus())
       const unsubscribe = subscribeDashboardGitTaskStatus((status) => {
         emit.next(status)
@@ -2539,9 +2857,9 @@ export const dashboardRouter = router({
   }),
 })
 
-function refreshCurrentDashboardProjection(ctx: Context, reason: string): void {
-  void runPlanningRoot(ctx, ({ dashboardOverviewService }) =>
-    dashboardOverviewService.refresh(reason)
+function invalidateCurrentDashboardGitProjection(ctx: Context): void {
+  void runPlanningRoot(ctx, ({ dashboardProjectionService }) =>
+    dashboardProjectionService.invalidateGit()
   ).catch(() => {
     // Code Git remains independent; Root Context surfaces planning projection failures.
   })
@@ -2912,6 +3230,9 @@ async function updateProjectBindingConfig(
     launchProjectDir: ctx.projectDir,
     update: input,
   })
+  // The physical writer has settled the launch configuration. Retire every current Root snapshot before
+  // reactive consumers can combine the new launch binding with an old Planning-root record.
+  ctx.runtimeInvalidation.invalidate(['project', 'context'])
   const rootPreview = await resolveServerRootContext({
     projectDir: ctx.projectDir,
     cliExecutor: ctx.cliExecutor,

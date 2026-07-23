@@ -50,6 +50,32 @@ async function settleReactivePromiseChain(): Promise<void> {
 }
 
 describe('createReactiveProjectionSubscription', () => {
+  it('keeps identity-less subscriptions independent', async () => {
+    const secondData = createDeferred()
+    let leafCalls = 0
+
+    const subscribe = () =>
+      createReactiveProjectionSubscription(async () => {
+        leafCalls += 1
+        return 'same-input'
+      }).subscribe({
+        next(event) {
+          if (event.type === 'data' && leafCalls === 2) secondData.resolve()
+        },
+        error: secondData.reject,
+      })
+
+    const first = subscribe()
+    const second = subscribe()
+    try {
+      await secondData.promise
+      expect(leafCalls).toBe(2)
+    } finally {
+      first.unsubscribe()
+      second.unsubscribe()
+    }
+  })
+
   it('emits completed projection data before completing', async () => {
     const completed = createDeferred()
     const errors: unknown[] = []

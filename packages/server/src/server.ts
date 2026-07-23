@@ -1,12 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Bootstrap the HTTP/tRPC server and launch-project runtime services.
  * 2. Delegate OpenSpec filesystem ownership to the CLI-selected planning-root manager.
  * 3. Host Server-local terminal/Root Context notifications, sound, preview-resource, and translation HTTP boundaries.
  * 4. Host tRPC and PTY WebSocket transports with deterministic teardown.
  *    PTY planning-root creation and workflow input verify opaque Root generation provenance.
- * 5. Own the runtime observation environment, external Codex command lease, and warm root-scoped
- *    services without blocking readiness.
+ * 5. Own the runtime observation environment and external Codex command lease while deferring expensive
+ *    root-scoped projections until a foreground consumer requests them.
  *
  * Original request (2026-07-15): "你先负责后端（内核）的开发。"
  * Original request (2026-07-17): "Every Planning-root execution surface uses the same operation lifetime owner."
@@ -15,6 +15,7 @@
  * released with the runtime environment.
  * Owner-reported defect (2026-07-21): Pre-created Agent terminals are absent from Compose Send.
  * Derived requirement (2026-07-22): Checkpoint 6.15 publishes Root Context health only through this Server instance.
+ * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  *
  * @module server
  */
@@ -60,6 +61,7 @@ function getServerPackageVersion(): string {
 
 const SERVER_PACKAGE_VERSION = getServerPackageVersion()
 
+import { createChangesProjectionWorkOwner } from './changes-projection-service.js'
 import { Ct2ModelAssetService } from './ct2-model-asset-service.js'
 import {
   getDefaultLocalCt2ModelCacheDir,
@@ -68,6 +70,7 @@ import {
   getDefaultLocalCt2ModelProfileManifestPath,
 } from './ct2-model-cache-path.js'
 import { CustomSoundService } from './custom-sound-service.js'
+import { createDashboardProjectionWorkOwner } from './dashboard-projection-service.js'
 import { GitRepositoryBindingService } from './git-repository-binding-service.js'
 import { LaunchGitRepositoryBindingOwner } from './launch-git-repository-binding.js'
 import { LlamaModelAssetService } from './llama-model-asset-service.js'
@@ -88,6 +91,7 @@ import { NotificationService } from './notification-service.js'
 import { PlanningRootServiceManager } from './planning-root-service.js'
 import { findAvailablePort } from './port-utils.js'
 import { ProjectRecoveryService } from './project-recovery-service.js'
+import { createServerProjectionWorkRuntime } from './projection-work/runtime.js'
 import { PtyManager } from './pty-manager.js'
 import { createPtyWebSocketHandler } from './pty-websocket.js'
 import { createRootContextNotificationBridge } from './root-context-notification-bridge.js'
@@ -186,6 +190,9 @@ export function createServer(config: ServerConfig) {
     getExternalCodexCommandObservationRoot()
   )
   const codeGitBinding = new LaunchGitRepositoryBindingOwner()
+  const projectionWorkRuntime = createServerProjectionWorkRuntime()
+  const dashboardProjectionWorkOwner = createDashboardProjectionWorkOwner(projectionWorkRuntime)
+  const changesProjectionWorkOwner = createChangesProjectionWorkOwner(projectionWorkRuntime)
   const planningRootServices = new PlanningRootServiceManager({
     launchProjectDir: config.projectDir,
     previewAssetsDir: config.previewAssetsDir ?? join(__dirname, '..', '..', 'web', 'dist'),
@@ -195,6 +202,8 @@ export function createServer(config: ServerConfig) {
     projectInvalidation,
     runtimeInvalidation,
     codeBinding: codeGitBinding,
+    dashboardProjectionWorkOwner,
+    changesProjectionWorkOwner,
   })
   const gitRepositoryBindings = new GitRepositoryBindingService({
     launchProjectDir: config.projectDir,
@@ -504,6 +513,7 @@ export function createServer(config: ServerConfig) {
     localModelAssetService,
     localCt2ModelAssetService,
     localLlamaModelAssetService,
+    projectionWorkRuntime,
     watcher,
     createContext,
     port: config.port ?? 3100,
@@ -615,6 +625,7 @@ export async function createWebSocketServer(
         ])
         await settleCleanupPhase(failures, [() => server.storeObservationFallback.dispose()])
         await settleCleanupPhase(failures, [() => server.rootContextNotificationBridge.dispose()])
+        await settleCleanupPhase(failures, [() => server.projectionWorkRuntime.clear()])
         await settleCleanupPhase(failures, [() => server.planningRootServices.dispose()])
         await settleCleanupPhase(failures, [() => server.storeObservation.dispose()])
         await settleCleanupPhase(failures, [() => server.dataHomeObserver.dispose()])
@@ -702,22 +713,6 @@ export async function startServer(
   let closePromise: Promise<void> | null = null
 
   const url = `http://localhost:${port}`
-
-  // Warm up the current CLI-selected planning-root services in the background.
-  deferBackgroundTask(() => {
-    if (runtimeClosing) return
-    server.planningRootServices
-      .runOperation(async (services) => {
-        await Promise.all([
-          services.kernel.warmup(),
-          services.searchService.init(),
-          services.dashboardOverviewService.init(),
-        ])
-      })
-      .catch((err) => {
-        console.error('Planning-root service warmup failed:', err)
-      })
-  })
 
   return {
     url,

@@ -3,12 +3,13 @@
  * 1. Prove filesystem services read and mutate only the CLI-selected planning root.
  * 2. Prove failed Root Context resolution creates no root-dependent actions.
  * 3. Prove root identity transitions await child settlement before retiring services, leases, and previews.
- * 4. Prove planning roots own reactive dependencies and leave zero observation/invalidation residue.
+ * 4. Prove planning roots own reactive dependencies, current snapshots, and leave zero observation/invalidation residue.
  * 5. Prove Change/Archive lists and Dashboard metrics remain scoped to the selected planning root.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Original request (2026-07-17): "A stream cancellation request is not child-process settlement."
  * Original request (2026-07-17): "Prove the transition was already blocked on A before disposal began."
+ * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  */
 import {
   CliExecutor,
@@ -290,7 +291,7 @@ describe('PlanningRootServiceManager', () => {
     expect(observationEnvironment.acquireRoot).toHaveBeenCalledWith(planningRootDir)
     expect(projectInvalidation.acquireRoot).toHaveBeenCalledTimes(1)
     expect(projectInvalidation.acquireRoot).toHaveBeenCalledWith(planningRootDir)
-    expect(trackInvalidation).toHaveBeenCalledWith('project', 'context')
+    expect(trackInvalidation).toHaveBeenCalledWith('project', 'stores', 'context')
     const disposePromise = manager.dispose()
     expect(manager.dispose()).toBe(disposePromise)
     await disposePromise
@@ -345,6 +346,7 @@ describe('PlanningRootServiceManager', () => {
     })
     vi.spyOn(cliExecutor.contracts, 'doctorRoot').mockResolvedValue(commandResult(doctor))
     vi.spyOn(cliExecutor.contracts, 'context').mockResolvedValue(commandResult(context))
+    const runtimeInvalidation = new RuntimeInvalidationIndex()
     const manager = new PlanningRootServiceManager({
       launchProjectDir,
       previewAssetsDir: join(tempDir, 'preview-assets'),
@@ -352,7 +354,7 @@ describe('PlanningRootServiceManager', () => {
       cliExecutor,
       observationEnvironment: { acquireRoot: vi.fn(async () => async () => {}) },
       projectInvalidation: { acquireRoot: vi.fn(() => () => {}) },
-      runtimeInvalidation: new RuntimeInvalidationIndex(),
+      runtimeInvalidation,
       codeBinding: { bindingToken: 'code-binding' },
     })
 
@@ -493,6 +495,7 @@ describe('PlanningRootServiceManager', () => {
         return release
       }),
     }
+    const runtimeInvalidation = new RuntimeInvalidationIndex()
     const manager = new PlanningRootServiceManager({
       launchProjectDir: tempDir,
       previewAssetsDir: join(tempDir, 'preview-assets'),
@@ -500,12 +503,13 @@ describe('PlanningRootServiceManager', () => {
       cliExecutor,
       observationEnvironment,
       projectInvalidation,
-      runtimeInvalidation: new RuntimeInvalidationIndex(),
+      runtimeInvalidation,
       codeBinding: { bindingToken: 'code-binding' },
     })
 
     const nearest = await manager.runOperation(({ rootContext }) => rootContext)
     storeId = 'shared'
+    runtimeInvalidation.invalidate(['stores', 'context'])
     const explicitStore = await manager.runOperation(({ rootContext }) => rootContext)
 
     expect(explicitStore).not.toBe(nearest)
@@ -578,6 +582,7 @@ describe('PlanningRootServiceManager', () => {
     const searchDispose = vi.spyOn(SearchService.prototype, 'dispose')
     const dashboardDispose = vi.spyOn(DashboardOverviewService.prototype, 'dispose')
     const previewDispose = vi.spyOn(FilePreviewService.prototype, 'dispose')
+    const runtimeInvalidation = new RuntimeInvalidationIndex()
     const manager = new PlanningRootServiceManager({
       launchProjectDir,
       previewAssetsDir: join(tempDir, 'preview-assets'),
@@ -585,7 +590,7 @@ describe('PlanningRootServiceManager', () => {
       cliExecutor,
       observationEnvironment,
       projectInvalidation,
-      runtimeInvalidation: new RuntimeInvalidationIndex(),
+      runtimeInvalidation,
       codeBinding: { bindingToken: 'code-binding' },
     })
 
@@ -601,6 +606,7 @@ describe('PlanningRootServiceManager', () => {
     )
 
     selectedRoot = rootB
+    runtimeInvalidation.invalidate(['context'])
     await manager.runOperation(() => undefined)
     expect(observationReleases[0]).toHaveBeenCalledOnce()
     expect(invalidationReleases[0]).toHaveBeenCalledOnce()
@@ -612,6 +618,7 @@ describe('PlanningRootServiceManager', () => {
     expect(manager.readPreviewRequest(preview.hash, 'index.html')).toBeNull()
 
     selectedRoot = rootA
+    runtimeInvalidation.invalidate(['context'])
     const secondPreview = await manager.runOperation(({ filePreviewService }) =>
       filePreviewService.prepareEntityFilePreview({
         stage: 'change',
@@ -647,6 +654,7 @@ describe('PlanningRootServiceManager', () => {
       payload: { status: [] },
       diagnostics: [],
     })
+    runtimeInvalidation.invalidate(['context'])
     await expect(manager.runOperation(() => undefined)).rejects.toBeInstanceOf(
       PlanningRootUnavailableError
     )
@@ -715,6 +723,7 @@ describe('PlanningRootServiceManager', () => {
         return release
       }),
     }
+    const runtimeInvalidation = new RuntimeInvalidationIndex()
     const manager = new PlanningRootServiceManager({
       launchProjectDir,
       previewAssetsDir: join(tempDir, 'preview-assets'),
@@ -722,7 +731,7 @@ describe('PlanningRootServiceManager', () => {
       cliExecutor,
       observationEnvironment,
       projectInvalidation,
-      runtimeInvalidation: new RuntimeInvalidationIndex(),
+      runtimeInvalidation,
       codeBinding: { bindingToken: 'code-binding' },
     })
 
@@ -732,6 +741,7 @@ describe('PlanningRootServiceManager', () => {
       return streamA.handle
     })
     selectedRoot = roots[1]!
+    runtimeInvalidation.invalidate(['context'])
     const replacementB = manager.resolveRootContext()
     const bExposedBeforeTerminal = await Promise.race([
       replacementB.then(() => true),
@@ -753,6 +763,7 @@ describe('PlanningRootServiceManager', () => {
       return streamB.handle
     })
     selectedRoot = roots[2]!
+    runtimeInvalidation.invalidate(['context'])
     const replacementC = manager.resolveRootContext()
     const cExposedBeforeCancel = await Promise.race([
       replacementC.then(() => true),
@@ -784,6 +795,7 @@ describe('PlanningRootServiceManager', () => {
     })
     await schemaStarted.promise
     selectedRoot = roots[3]!
+    runtimeInvalidation.invalidate(['context'])
     const replacementD = manager.resolveRootContext()
     const dExposedBeforeSchema = await Promise.race([
       replacementD.then(() => true),
@@ -800,6 +812,7 @@ describe('PlanningRootServiceManager', () => {
       })
     ).rejects.toThrow('stream startup failed')
     selectedRoot = roots[4]!
+    runtimeInvalidation.invalidate(['context'])
     await expect(manager.resolveRootContext()).resolves.toMatchObject({
       state: 'ready',
       data: { planningRoot: { path: roots[4] } },
@@ -857,6 +870,7 @@ describe('PlanningRootServiceManager', () => {
           status: [],
         })
       )
+      const runtimeInvalidation = new RuntimeInvalidationIndex()
       const manager = new PlanningRootServiceManager({
         launchProjectDir,
         previewAssetsDir: join(tempDir, 'preview-assets'),
@@ -864,7 +878,7 @@ describe('PlanningRootServiceManager', () => {
         cliExecutor,
         observationEnvironment: { acquireRoot: async () => async () => {} },
         projectInvalidation: { acquireRoot: () => () => {} },
-        runtimeInvalidation: new RuntimeInvalidationIndex(),
+        runtimeInvalidation,
         codeBinding: { bindingToken: 'code-binding' },
       })
       const childReady = Promise.withResolvers<void>()
@@ -893,6 +907,7 @@ describe('PlanningRootServiceManager', () => {
       await childReady.promise
 
       selectedRoot = rootB
+      runtimeInvalidation.invalidate(['context'])
       const replacement = manager.resolveRootContext()
       void stream.cancel()
       const firstSettlement = await Promise.race([
@@ -961,6 +976,7 @@ describe('PlanningRootServiceManager', () => {
       const projectInvalidation: RuntimeRootInvalidationOwner = {
         acquireRoot: vi.fn(() => invalidationRelease),
       }
+      const runtimeInvalidation = new RuntimeInvalidationIndex()
       const manager = new PlanningRootServiceManager({
         launchProjectDir,
         previewAssetsDir: join(tempDir, 'preview-assets'),
@@ -968,7 +984,7 @@ describe('PlanningRootServiceManager', () => {
         cliExecutor,
         observationEnvironment,
         projectInvalidation,
-        runtimeInvalidation: new RuntimeInvalidationIndex(),
+        runtimeInvalidation,
         codeBinding: { bindingToken: 'code-binding' },
       })
       const childReady = Promise.withResolvers<void>()
@@ -988,6 +1004,7 @@ describe('PlanningRootServiceManager', () => {
       await childReady.promise
 
       selectedRoot = rootB
+      runtimeInvalidation.invalidate(['context'])
       const replacement = manager.resolveRootContext()
       const bExposedBeforeDisposal = await Promise.race([
         replacement.then(() => true),
@@ -1065,6 +1082,7 @@ describe('PlanningRootServiceManager', () => {
     const projectInvalidation: RuntimeRootInvalidationOwner = {
       acquireRoot: vi.fn(() => releaseProjectInvalidation),
     }
+    const runtimeInvalidation = new RuntimeInvalidationIndex()
     const manager = new PlanningRootServiceManager({
       launchProjectDir,
       previewAssetsDir: join(tempDir, 'preview-assets'),
@@ -1072,7 +1090,7 @@ describe('PlanningRootServiceManager', () => {
       cliExecutor,
       observationEnvironment,
       projectInvalidation,
-      runtimeInvalidation: new RuntimeInvalidationIndex(),
+      runtimeInvalidation,
       codeBinding: { bindingToken: 'code-binding' },
     })
     const retirementWaitEntered = Promise.withResolvers<void>()
@@ -1124,6 +1142,7 @@ describe('PlanningRootServiceManager', () => {
     }))
 
     selectedRoot = rootB
+    runtimeInvalidation.invalidate(['context'])
     const replacement = manager.resolveRootContext()
     void replacement.catch(() => {})
     await retirementWaitEntered.promise
@@ -1433,6 +1452,7 @@ describe('PlanningRootServiceManager', () => {
     ])
 
     selectedRoot = rootB
+    runtimeInvalidation.invalidate(['context'])
     await manager.resolveRootContext()
     expect(observationEnvironment.getRoots()).toEqual([
       { rootPath: realpathSync(rootB), referenceCount: 1 },
@@ -1442,6 +1462,7 @@ describe('PlanningRootServiceManager', () => {
     ])
 
     available = false
+    runtimeInvalidation.invalidate(['context'])
     const missing = await manager.resolveRootContext()
     expect(missing.state).toBe('error')
     expect(observationEnvironment.getRoots()).toEqual([])
@@ -1501,6 +1522,7 @@ describe('PlanningRootServiceManager', () => {
     const projectInvalidation: RuntimeRootInvalidationOwner = {
       acquireRoot: vi.fn(() => () => {}),
     }
+    const runtimeInvalidation = new RuntimeInvalidationIndex()
     const manager = new PlanningRootServiceManager({
       launchProjectDir: tempDir,
       previewAssetsDir: join(tempDir, 'preview-assets'),
@@ -1508,12 +1530,13 @@ describe('PlanningRootServiceManager', () => {
       cliExecutor,
       observationEnvironment,
       projectInvalidation,
-      runtimeInvalidation: new RuntimeInvalidationIndex(),
+      runtimeInvalidation,
       codeBinding: { bindingToken: 'code-binding' },
     })
 
     const resolvingA = manager.runOperation(({ rootContext }) => rootContext)
     await vi.waitFor(() => expect(doctorRoot).toHaveBeenCalledTimes(1))
+    runtimeInvalidation.invalidate(['context'])
     const resolvingB = manager.resolveRootContextReactive()
     await new Promise((resolve) => setTimeout(resolve, 0))
     const callsBeforeFirstSettled = doctorRoot.mock.calls.length

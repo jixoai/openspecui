@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Own every root-scoped operation and project-Schema mutation for the CLI-selected Planning root.
  * 2. Serialize replacement and issue fresh record/generation provenance without reconstructing root selection.
  * 3. Acquire and retire observation/invalidation leases with each active root.
- * 4. Keep reactive subscriptions bound to Root Context dependencies and current root selection.
+ * 4. Keep reactive subscriptions and current-generation snapshots bound to Root Context dependencies and selection.
  * 5. Revoke leased service capabilities, cancel retiring streams outside blocked transitions, and
  *    dispose every root resource exactly once.
  *
@@ -11,6 +11,7 @@
  * Original request (2026-07-16): "PlanningRootServiceResolver.mutateSchema(action) owns the entire mutation inside the manager transition lane."
  * Original request (2026-07-17): "An admitted A operation settles before A is retired and B is exposed."
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
+ * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  */
 import {
   CliExecutor,
@@ -27,12 +28,31 @@ import {
   type WatcherRootRelease,
 } from '@openspecui/core'
 import { randomUUID } from 'node:crypto'
+import {
+  ChangesProjectionService,
+  createChangesProjectionWorkOwner,
+  type ChangesProjectionServiceContract,
+  type ChangesProjectionWorkOwner,
+} from './changes-projection-service.js'
+import { loadDashboardGitProjection } from './dashboard-git-projection.js'
 import { DashboardOverviewService } from './dashboard-overview-service.js'
 import { loadDashboardOverview } from './dashboard-overview.js'
+import {
+  createDashboardProjectionWorkOwner,
+  DashboardProjectionService,
+  type DashboardProjectionServiceContract,
+  type DashboardProjectionWorkOwner,
+} from './dashboard-projection-service.js'
+import { loadDashboardSummary } from './dashboard-summary.js'
+import { loadDashboardTrends } from './dashboard-trends.js'
 import { DocumentService } from './document-service.js'
 import { buildEntityReadOptions } from './entity-read-options.js'
 import { FilePreviewService } from './file-preview-service.js'
 import { createHookRuntime, type HookRuntime } from './hook-runtime.js'
+import {
+  createServerProjectionWorkRuntime,
+  type ProjectionWorkRuntime,
+} from './projection-work/runtime.js'
 import { resolveServerRootContext, trackRootContextDependencies } from './root-context-service.js'
 import { SchemaMutationService, type SchemaMutationAction } from './schema-mutation-service.js'
 import { SearchService } from './search-service.js'
@@ -50,6 +70,8 @@ export interface PlanningRootServices {
   filePreviewService: FilePreviewService
   searchService: SearchService
   dashboardOverviewService: DashboardOverviewService
+  dashboardProjectionService: DashboardProjectionServiceContract
+  changesProjectionService: ChangesProjectionServiceContract
   workflowInvocationService: WorkflowInvocationService
 }
 
@@ -64,6 +86,13 @@ interface PlanningRootServiceRecord extends PlanningRootServices {
   activeStreams: Set<CliStreamHandle>
   operationDrainListeners: Set<() => void>
   disposePromise: Promise<void> | null
+}
+
+/** A successful Root Context can only replay while its complete runtime invalidation identity remains current. */
+interface CurrentRootContextSnapshot {
+  invalidationKey: string
+  state: Extract<RootContextResolvedState, { state: 'ready' }>
+  services: PlanningRootServiceRecord
 }
 
 interface PlanningRootOperationLease {
@@ -122,17 +151,46 @@ export interface PlanningRootServiceManagerOptions {
   runtimeInvalidation: RuntimeInvalidationReader
   /** Launch-owned Code provenance injected into every Dashboard snapshot projection. */
   codeBinding: import('./launch-git-repository-binding.js').LaunchGitRepositoryBinding
+  /** Server-owned regional Dashboard registries shared across replaceable Planning-root records. */
+  dashboardProjectionWorkOwner?: DashboardProjectionWorkOwner
+  /** Server-owned progressive Change-row registry shared across replaceable Planning-root records. */
+  changesProjectionWorkOwner?: ChangesProjectionWorkOwner
 }
 
 /** Serialized deep owner for one replaceable Planning-root service record. */
 export class PlanningRootServiceManager implements PlanningRootServiceResolver {
   private activeRecord: PlanningRootServiceRecord | null = null
+  private currentRootContextSnapshot: CurrentRootContextSnapshot | null = null
   private readonly retiringRecords = new Set<PlanningRootServiceRecord>()
   private transitionTail: Promise<void> = Promise.resolve()
   private disposePromise: Promise<void> | null = null
   private disposed = false
+  private readonly dashboardProjectionWorkOwner: DashboardProjectionWorkOwner
+  private readonly changesProjectionWorkOwner: ChangesProjectionWorkOwner
+  private readonly ownedProjectionWorkRuntime: ProjectionWorkRuntime | null
 
-  constructor(private readonly options: PlanningRootServiceManagerOptions) {}
+  constructor(private readonly options: PlanningRootServiceManagerOptions) {
+    if (options.dashboardProjectionWorkOwner && options.changesProjectionWorkOwner) {
+      this.dashboardProjectionWorkOwner = options.dashboardProjectionWorkOwner
+      this.changesProjectionWorkOwner = options.changesProjectionWorkOwner
+      this.ownedProjectionWorkRuntime = null
+    } else {
+      const runtime = createServerProjectionWorkRuntime()
+      this.dashboardProjectionWorkOwner =
+        options.dashboardProjectionWorkOwner ?? createDashboardProjectionWorkOwner(runtime)
+      this.changesProjectionWorkOwner =
+        options.changesProjectionWorkOwner ?? createChangesProjectionWorkOwner(runtime)
+      this.ownedProjectionWorkRuntime = runtime
+    }
+  }
+
+  /** Track every generation that can change the CLI-selected Root Context and serialize it as a cache key. */
+  private currentRootContextInvalidationKey(): string {
+    return this.options.runtimeInvalidation
+      .track('project', 'stores', 'context')
+      .map(({ facet, generation }) => `${facet}:${generation}`)
+      .join('|')
+  }
 
   private createRecord(rootContext: RootContext): PlanningRootServiceRecord {
     const planningRoot = rootContext.planningRoot
@@ -146,11 +204,13 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     // Schema CLI commands resolve project-local schema paths from cwd and accept no Store selector.
     const rootCliExecutor = new CliExecutor(this.options.configManager, projectDir)
     const hookRuntime = createHookRuntime(projectDir)
+    const rootCliSelector = getRootContextCliSelector(rootContext)
+    const gitBindingToken = rootContext.generation ?? randomUUID()
     const kernel = new OpsxKernel(
       projectDir,
       rootCliExecutor,
       this.options.runtimeInvalidation,
-      getRootContextCliSelector(rootContext)
+      rootCliSelector
     )
     const documentService = new DocumentService(projectDir, adapter, hookRuntime)
     const entityReadOptionsContext = { adapter, kernel }
@@ -181,13 +241,45 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
         reason
       )
     )
+    const dashboardProjectionService = new DashboardProjectionService({
+      workOwner: this.dashboardProjectionWorkOwner,
+      root: {
+        path: projectDir,
+        source: planningRoot.source,
+        storeSelector: rootCliSelector.store ?? null,
+        generation: gitBindingToken,
+      },
+      codeGitBindingToken: this.options.codeBinding.bindingToken,
+      loaders: {
+        loadSummary: () => loadDashboardSummary({ adapter }),
+        loadTrends: () =>
+          loadDashboardTrends({ adapter, configManager: this.options.configManager }),
+        loadGit: () =>
+          loadDashboardGitProjection(
+            {
+              projectDir: this.options.launchProjectDir,
+              codeBindingToken: this.options.codeBinding.bindingToken,
+            },
+            'projection-work'
+          ),
+      },
+    })
+    const changesProjectionService = new ChangesProjectionService({
+      workOwner: this.changesProjectionWorkOwner,
+      root: {
+        path: projectDir,
+        source: planningRoot.source,
+        storeSelector: rootCliSelector.store ?? null,
+        generation: gitBindingToken,
+      },
+      adapter,
+    })
     const filePreviewService = new FilePreviewService(projectDir, this.options.previewAssetsDir)
     const schemaMutationService = new SchemaMutationService({
       planningRoot: projectDir,
       cliExecutor: rootCliExecutor,
       kernel,
     })
-    const gitBindingToken = rootContext.generation ?? randomUUID()
     const workflowInvocationService = new WorkflowInvocationService({
       getRootContext: () => rootContextRef.current,
       rootGeneration: gitBindingToken,
@@ -216,6 +308,8 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       filePreviewService,
       searchService,
       dashboardOverviewService,
+      dashboardProjectionService,
+      changesProjectionService,
       workflowInvocationService,
       rootContextRef,
       activeOperationCount: 0,
@@ -242,6 +336,8 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
         Promise.resolve().then(() => record.projectInvalidationRelease()),
         Promise.resolve().then(() => record.kernel.dispose()),
         Promise.resolve().then(() => record.dashboardOverviewService.dispose()),
+        Promise.resolve().then(() => record.dashboardProjectionService.dispose()),
+        Promise.resolve().then(() => record.changesProjectionService.dispose()),
         record.hookRuntime.dispose(),
         record.searchService.dispose(),
         record.observationRelease.then((releaseObservationRoot) => releaseObservationRoot?.()),
@@ -336,6 +432,8 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       filePreviewService: guardCapability(record.filePreviewService),
       searchService: guardCapability(record.searchService),
       dashboardOverviewService: guardCapability(record.dashboardOverviewService),
+      dashboardProjectionService: guardCapability(record.dashboardProjectionService),
+      changesProjectionService: guardCapability(record.changesProjectionService),
       workflowInvocationService: guardCapability(record.workflowInvocationService),
     }
 
@@ -435,9 +533,31 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     services: PlanningRootServiceRecord | null
   }> {
     if (this.disposed) throw new Error('Planning-root service manager is disposed.')
-    if (reactive) {
-      this.options.runtimeInvalidation.track('project', 'context')
+    const invalidationKey = this.currentRootContextInvalidationKey()
+    const cached = this.currentRootContextSnapshot
+
+    // Only reactive display work can replay a validated Root snapshot. Imperative queries, mutations, and
+    // PTY operations must re-confirm upstream CLI root selection because that selection can change outside
+    // the reactive filesystem invalidation graph.
+    if (
+      reactive &&
+      cached?.invalidationKey === invalidationKey &&
+      cached.services === this.activeRecord
+    ) {
+      if (reactive) {
+        await trackRootContextDependencies(
+          {
+            projectDir: this.options.launchProjectDir,
+            cliExecutor: this.options.cliExecutor,
+          },
+          cached.state
+        )
+      }
+      return { state: cached.state, services: cached.services }
     }
+
+    // A new Root/Store/context generation must never reuse or authorize the prior Root snapshot.
+    this.currentRootContextSnapshot = null
     const state = await resolveServerRootContext({
       projectDir: this.options.launchProjectDir,
       cliExecutor: this.options.cliExecutor,
@@ -454,8 +574,21 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     try {
       const services = await this.activate(state)
       if (state.state === 'ready' && services) {
+        const resolvedState: Extract<RootContextResolvedState, { state: 'ready' }> = {
+          ...state,
+          data: services.rootContext,
+        }
+        // If a dependency changed while CLI resolution or record retirement was in flight, the reactive caller
+        // will recompute B. Do not write an A result under B's identity.
+        if (reactive && this.currentRootContextInvalidationKey() === invalidationKey) {
+          this.currentRootContextSnapshot = {
+            invalidationKey,
+            state: resolvedState,
+            services,
+          }
+        }
         return {
-          state: { ...state, data: services.rootContext },
+          state: resolvedState,
           services,
         }
       }
@@ -586,6 +719,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
   dispose(): Promise<void> {
     if (this.disposePromise) return this.disposePromise
     this.disposed = true
+    this.currentRootContextSnapshot = null
     const active = this.activeRecord
     if (active) {
       this.activeRecord = null
@@ -597,6 +731,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     const teardown = this.runTransition(async () => {
       await cancellation
       for (const record of this.retiringRecords) await this.retireRecord(record)
+      this.ownedProjectionWorkRuntime?.clear()
     })
     void teardown.catch(() => {})
     this.disposePromise = cancellation.then(() => teardown)

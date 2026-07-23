@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Prove Change path and action context remain CLI-authored.
  * 2. Prove Reference diagnostics remain neutral evidence.
  * 3. Prove static mode does not fabricate backend provenance.
+ * 4. Keep checked live Status fixtures complete with their CLI evidence envelope.
  *
  * Original request (2026-07-15): "保持客观中立很重要。"
+ * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
  */
 import type { ChangeStatus } from '@openspecui/core'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -45,6 +47,16 @@ function cliStatus(): ChangeStatus {
         constraints: ['Repo-local edits only.'],
       },
       root: { path: '/planning', source: 'store', store_id: 'platform' },
+      evidence: {
+        command: 'status',
+        success: true,
+        stdout: '{"changeName":"add-auth"}',
+        stderr: '',
+        exitCode: 0,
+        payload: { changeName: 'add-auth' },
+        diagnostics: [],
+        selector: { store: 'platform' },
+      },
     },
   }
 }

@@ -2,7 +2,7 @@
  * Orthogonal intents (created 2026-07-19 Asia/Shanghai):
  * 1. Prove the typed public Router rejects stale Planning refresh intent.
  * 2. Prove the conflict happens before the rebound repository receives a refresh stamp.
- * 3. Preserve Dashboard projection refresh while Code Git remains Planning-failure independent.
+ * 3. Preserve Dashboard Git-region refresh while Code Git remains Planning-failure independent.
  *
  * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
@@ -12,7 +12,7 @@ import {
   CliDoctorSchema,
   parseCliCommandResult,
   type CliCommandResult,
-  type DashboardOverview,
+  type DashboardGitSnapshot,
   type GitRepositoryScopes,
 } from '@openspecui/core'
 import { execFile } from 'node:child_process'
@@ -358,17 +358,22 @@ describe('public Git repository binding Router', () => {
     }
   })
 
-  it('pushes a refreshed Dashboard projection after a successful Code Git refresh', async () => {
+  it('pushes a refreshed Dashboard Git region after a successful Code Git refresh', async () => {
     const fixture = await createRouterFixture()
-    const emissions: DashboardOverview[] = []
+    const emissions: DashboardGitSnapshot[] = []
     let unsubscribe: () => void = () => undefined
 
     try {
       const caller = appRouter.createCaller(fixture.server.createContext())
       const expectedBindingToken = (await caller.git.scopes()).code.bindingToken
-      await fixture.server.planningRootServices.runOperation(({ dashboardOverviewService }) => {
-        unsubscribe = dashboardOverviewService.subscribe((overview) => emissions.push(overview))
+      await fixture.server.planningRootServices.runOperation(({ dashboardProjectionService }) => {
+        unsubscribe = dashboardProjectionService.subscribeGit((event) => {
+          if (event.type === 'snapshot' && event.snapshot.freshness === 'current') {
+            emissions.push(event.snapshot.data)
+          }
+        }).unsubscribe
       })
+      await vi.waitFor(() => expect(emissions).toHaveLength(1))
 
       await expect(
         caller.dashboard.refreshGitSnapshot({
@@ -377,8 +382,8 @@ describe('public Git repository binding Router', () => {
           reason: 'dashboard-code-refresh',
         })
       ).resolves.toEqual({ success: true })
-      await vi.waitFor(() => expect(emissions).toHaveLength(1))
-      expect(emissions[0]?.git.bindingToken).toBe(expectedBindingToken)
+      await vi.waitFor(() => expect(emissions).toHaveLength(2))
+      expect(emissions.at(-1)?.bindingToken).toBe(expectedBindingToken)
     } finally {
       unsubscribe()
       await fixture.dispose()

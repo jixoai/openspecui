@@ -1,20 +1,24 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Maintain reactive CLI-backed schema, change, instruction, and artifact projections.
  * 2. Share and release per-entity streams through one planning-root kernel lifecycle.
  * 3. Keep OpenSpec configuration ownership outside the workflow projection cache.
  * 4. Preserve typed Status/Instructions provenance with the resolved root selector.
  * 5. Reject non-canonical Change ids before any path-backed projection starts.
+ * 6. Keep Status demand-driven and retain the complete CLI evidence envelope.
  *
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
+ * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
  */
 import { join, matchesGlob, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
-import type { CliCommandResult, CliRootSelector } from './cli-contracts/index.js'
 import {
   CliApplyInstructionsSuccessSchema,
   CliArtifactInstructionsSuccessSchema,
+  CliRootSchema,
   CliWorkflowStatusSuccessSchema,
+  type CliCommandResult,
+  type CliRootSelector,
 } from './cli-contracts/index.js'
 import type { CliExecutor } from './cli-executor.js'
 import { requireCanonicalOpenSpecEntityId, requireOpenSpecEntityRelativePath } from './entity-id.js'
@@ -25,6 +29,8 @@ import {
   ApplyInstructionsSchema,
   ArtifactInstructionsSchema,
   ChangeStatusSchema,
+  OpsxCliEvidenceSchema,
+  OpsxStatusEvidenceSchema,
   SchemaInfoSchema,
   SchemaResolutionSchema,
   TemplatesSchema,
@@ -287,6 +293,38 @@ function requireCommandData<TInput, TOutput>(
     result.stderr.trim() ||
     result.diagnostics.map((diagnostic) => diagnostic.message).join('\n')
   throw new Error(message || `${label} failed (exit ${result.exitCode ?? 'null'})`)
+}
+
+function readOpsxRoot(data: unknown) {
+  const parsed = z.object({ root: CliRootSchema }).passthrough().safeParse(data)
+  return parsed.success ? parsed.data.root : undefined
+}
+
+function createOpsxCliEvidence(
+  result: CliCommandResult<unknown>,
+  command: 'status' | 'instructions' | 'instructions apply',
+  rootSelector: CliRootSelector
+) {
+  const root = readOpsxRoot(result.data)
+  return OpsxCliEvidenceSchema.parse({
+    command,
+    success: result.success,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    exitCode: result.exitCode,
+    payload: result.payload,
+    diagnostics: result.diagnostics,
+    ...(result.contractError ? { contractError: result.contractError } : {}),
+    selector: rootSelector.store === undefined ? {} : { store: rootSelector.store },
+    ...(root ? { root } : {}),
+  })
+}
+
+function createOpsxStatusEvidence(
+  result: CliCommandResult<unknown>,
+  rootSelector: CliRootSelector
+) {
+  return OpsxStatusEvidenceSchema.parse(createOpsxCliEvidence(result, 'status', rootSelector))
 }
 
 // ---------------------------------------------------------------------------
@@ -942,6 +980,7 @@ export class OpsxKernel {
       ...this.rootSelector,
       ...(schema ? { schema } : {}),
     })
+    const evidence = createOpsxStatusEvidence(result, this.rootSelector)
     const data = requireCommandData('openspec status', result, CliWorkflowStatusSuccessSchema)
     const status = ChangeStatusSchema.parse({
       changeName: data.changeName,
@@ -957,6 +996,7 @@ export class OpsxKernel {
         nextSteps: data.nextSteps,
         actionContext: data.actionContext,
         root: data.root,
+        evidence,
       },
     })
     const changeRelDir = `openspec/changes/${changeId}`
@@ -991,7 +1031,10 @@ export class OpsxKernel {
       result,
       CliArtifactInstructionsSuccessSchema
     )
-    return ArtifactInstructionsSchema.parse(data)
+    return ArtifactInstructionsSchema.parse({
+      ...data,
+      evidence: createOpsxCliEvidence(result, 'instructions', this.rootSelector),
+    })
   }
 
   private async fetchApplyInstructions(
@@ -1010,7 +1053,10 @@ export class OpsxKernel {
       result,
       CliApplyInstructionsSuccessSchema
     )
-    const instructions = ApplyInstructionsSchema.parse(data)
+    const instructions = ApplyInstructionsSchema.parse({
+      ...data,
+      evidence: createOpsxCliEvidence(result, 'instructions apply', this.rootSelector),
+    })
     const changeDir = join(this.projectDir, 'openspec', 'changes', changeId)
     const [files, schemaDetail] = await Promise.all([
       readEntriesUnderRoot(changeDir),

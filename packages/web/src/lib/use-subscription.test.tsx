@@ -3,7 +3,7 @@
  * 1. Prove cached subscription data is display-only while a reconnect is pending.
  * 2. Preserve the loading gate until the replacement projection arrives.
  * 3. Prove direct unmount retires a pending static loader before it can write cache.
- * 4. Prove Archive projection recompute events retain data without impersonating transport loading.
+ * 4. Prove stale projection display remains visible without impersonating current cache data.
  * 5. Prove the shared lifecycle owner retires ordinary, reactive, and authoritative generations.
  *
  * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
@@ -490,6 +490,36 @@ describe('useReactiveProjectionSubscription', () => {
     expect(result.current).toEqual({
       data: 'B',
       isLoading: false,
+      isUpdating: false,
+      error: null,
+    })
+  })
+
+  it('displays a stale server snapshot as updating without caching it for a later hook', () => {
+    const callbacks: StringProjectionCallbacks[] = []
+    const subscribe = vi.fn((next: StringProjectionCallbacks) => {
+      callbacks.push(next)
+      return { unsubscribe: vi.fn() }
+    })
+    const cacheKey = 'reactive-projection-stale-display-test'
+    const first = renderHook(() =>
+      useReactiveProjectionSubscription((next) => subscribe(next), undefined, [], cacheKey)
+    )
+
+    act(() => callbacks[0]?.onEvent({ type: 'display-stale', data: 'stale A' }))
+    expect(first.result.current).toEqual({
+      data: 'stale A',
+      isLoading: false,
+      isUpdating: true,
+      error: null,
+    })
+
+    const second = renderHook(() =>
+      useReactiveProjectionSubscription((next) => subscribe(next), undefined, [], cacheKey)
+    )
+    expect(second.result.current).toEqual({
+      data: undefined,
+      isLoading: true,
       isUpdating: false,
       error: null,
     })

@@ -1,35 +1,204 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
- * 1. Subscribe to Planning-root Dashboard overview and Git task status.
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * 1. Admit Dashboard Summary first, then independently deliver trends and Code Git projections.
  * 2. Execute Dashboard Git mutations against the stable Launch-owned Code binding.
+ * 3. Translate current and stale Projection Work snapshots into honest region display and updating state.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git bindings.
+ * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  */
-import type { DashboardOverview } from '@openspecui/core'
-import { useCallback } from 'react'
+import type {
+  DashboardGitSnapshot,
+  DashboardOverview,
+  DashboardSummaryProjection,
+  DashboardTrendsProjection,
+} from '@openspecui/core'
+import { useCallback, useMemo } from 'react'
 import * as StaticProvider from './static-data-provider'
 import { isStaticMode } from './static-mode'
 import { trpcClient } from './trpc'
-import { useSubscription, type SubscriptionState } from './use-subscription'
+import {
+  useReactiveProjectionSubscription,
+  useSubscription,
+  type ReactiveProjectionEvent,
+  type ReactiveProjectionSubscriptionState,
+  type SubscriptionState,
+} from './use-subscription'
 
-/** Subscribe to the current Planning-owned Dashboard projection. */
-export function useDashboardOverviewSubscription(): SubscriptionState<DashboardOverview> {
-  const subscribe = useCallback(
-    (callbacks: { onData: (data: DashboardOverview) => void; onError: (err: Error) => void }) =>
-      trpcClient.dashboard.subscribe.subscribe(undefined, {
+interface Unsubscribable {
+  unsubscribe(): void
+}
+
+interface DashboardProjectionSnapshot<T> {
+  data: T
+  freshness: 'current' | 'stale-display-only'
+}
+
+type DashboardProjectionTransportEvent<T> =
+  | { type: 'snapshot'; snapshot: DashboardProjectionSnapshot<T> }
+  | { type: 'stage'; phase: string }
+  | {
+      type: 'batch'
+      progress: { completed: number; total: number | 'unknown' }
+      identity: unknown
+    }
+  | { type: 'complete'; snapshot: DashboardProjectionSnapshot<T> }
+  | { type: 'failed'; error: unknown; retainedSnapshot: DashboardProjectionSnapshot<T> | null }
+
+interface DashboardProjectionTransportCallbacks<T> {
+  onData(event: DashboardProjectionTransportEvent<T>): void
+  onError(error: Error): void
+}
+
+interface DashboardProjectionCallbacks<T> {
+  onEvent(event: ReactiveProjectionEvent<T>): void
+  onError(error: Error): void
+}
+
+type DashboardProjectionTransport<T> = (
+  callbacks: DashboardProjectionTransportCallbacks<T>
+) => Unsubscribable
+
+/** Regional states preserve stable data while unrelated Dashboard leaves remain pending or fail. */
+export interface DashboardOverviewSubscriptionState extends SubscriptionState<DashboardOverview> {
+  regions: {
+    summary: ReactiveProjectionSubscriptionState<DashboardSummaryProjection>
+    trends: ReactiveProjectionSubscriptionState<DashboardTrendsProjection>
+    git: ReactiveProjectionSubscriptionState<DashboardGitSnapshot>
+  }
+}
+
+function normalizeProjectionError(cause: unknown): Error {
+  if (cause instanceof Error) return cause
+  if (typeof cause === 'object' && cause !== null && 'message' in cause) {
+    const message = cause.message
+    if (typeof message === 'string') return new Error(message)
+  }
+  return new Error(String(cause))
+}
+
+function useDashboardProjectionRegion<T>(
+  subscribe: DashboardProjectionTransport<T>,
+  staticLoader: () => Promise<T>,
+  cacheKey: string,
+  enabled = true
+): ReactiveProjectionSubscriptionState<T> {
+  const adaptedSubscribe = useCallback(
+    (callbacks: DashboardProjectionCallbacks<T>) => {
+      if (!enabled) return { unsubscribe() {} }
+      let hasDisplayData = false
+      return subscribe({
+        onData(event) {
+          if (event.type === 'snapshot' || event.type === 'complete') {
+            hasDisplayData = true
+            if (event.snapshot.freshness === 'current') {
+              callbacks.onEvent({ type: 'data', data: event.snapshot.data })
+            } else {
+              callbacks.onEvent({ type: 'display-stale', data: event.snapshot.data })
+            }
+            return
+          }
+          if (event.type === 'stage') {
+            if (event.phase === 'start' && hasDisplayData) {
+              callbacks.onEvent({ type: 'recompute-started' })
+            }
+            return
+          }
+          if (event.type === 'failed') {
+            callbacks.onError(normalizeProjectionError(event.error))
+          }
+        },
+        onError: callbacks.onError,
+      })
+    },
+    [enabled, subscribe]
+  )
+
+  return useReactiveProjectionSubscription(adaptedSubscribe, staticLoader, [enabled], cacheKey)
+}
+
+async function loadStaticDashboardSummary(): Promise<DashboardSummaryProjection> {
+  const overview = await StaticProvider.getDashboardOverview()
+  return {
+    summary: overview.summary,
+    specifications: overview.specifications,
+    activeChanges: overview.activeChanges,
+  }
+}
+
+async function loadStaticDashboardTrends(): Promise<DashboardTrendsProjection> {
+  const overview = await StaticProvider.getDashboardOverview()
+  return {
+    trends: overview.trends,
+    triColorTrends: overview.triColorTrends,
+    trendKinds: overview.trendKinds,
+    cardAvailability: overview.cardAvailability,
+    trendMeta: overview.trendMeta,
+  }
+}
+
+async function loadStaticDashboardGit(): Promise<DashboardGitSnapshot> {
+  return (await StaticProvider.getDashboardOverview()).git
+}
+
+/** Subscribe to independently owned Dashboard regions and expose an aggregate compatibility snapshot. */
+export function useDashboardOverviewSubscription(): DashboardOverviewSubscriptionState {
+  const subscribeSummary = useCallback(
+    (callbacks: DashboardProjectionTransportCallbacks<DashboardSummaryProjection>) =>
+      trpcClient.dashboard.subscribeSummary.subscribe(undefined, {
+        onData: callbacks.onData,
+        onError: callbacks.onError,
+      }),
+    []
+  )
+  const subscribeTrends = useCallback(
+    (callbacks: DashboardProjectionTransportCallbacks<DashboardTrendsProjection>) =>
+      trpcClient.dashboard.subscribeTrends.subscribe(undefined, {
+        onData: callbacks.onData,
+        onError: callbacks.onError,
+      }),
+    []
+  )
+  const subscribeGit = useCallback(
+    (callbacks: DashboardProjectionTransportCallbacks<DashboardGitSnapshot>) =>
+      trpcClient.dashboard.subscribeGit.subscribe(undefined, {
         onData: callbacks.onData,
         onError: callbacks.onError,
       }),
     []
   )
 
-  return useSubscription<DashboardOverview>(
-    subscribe,
-    StaticProvider.getDashboardOverview,
-    [],
-    'dashboard.subscribe'
+  const summary = useDashboardProjectionRegion(
+    subscribeSummary,
+    loadStaticDashboardSummary,
+    'dashboard.subscribeSummary'
   )
+  const admitSecondaryRegions = summary.data !== undefined
+  const trends = useDashboardProjectionRegion(
+    subscribeTrends,
+    loadStaticDashboardTrends,
+    'dashboard.subscribeTrends',
+    admitSecondaryRegions
+  )
+  const git = useDashboardProjectionRegion(
+    subscribeGit,
+    loadStaticDashboardGit,
+    'dashboard.subscribeGit',
+    admitSecondaryRegions
+  )
+
+  const data = useMemo<DashboardOverview | undefined>(() => {
+    if (!summary.data || !trends.data || !git.data) return undefined
+    return { ...summary.data, ...trends.data, git: git.data }
+  }, [git.data, summary.data, trends.data])
+
+  return {
+    data,
+    isLoading: summary.isLoading,
+    error: summary.error,
+    regions: { summary, trends, git },
+  }
 }
 
 /** Observable status for background Dashboard Git snapshot work. */

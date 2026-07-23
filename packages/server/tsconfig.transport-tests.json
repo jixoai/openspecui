@@ -10,6 +10,10 @@
     "src/root-context-notification-bridge.test.ts",
     "src/server-startup.test.ts",
     "src/root-context-cold-start.integration.test.ts",
+    "src/planning-root-service.current-snapshot.test.ts",
+    "src/projection-work/registry.test.ts",
+    "src/projection-work/runtime.test.ts",
+    "src/projection-work/scheduler.test.ts",
     "src/reactive-subscription.test.ts",
     "src/tool-subscription-router.test.ts",
     "../local-translator/src/huggingface-transformers.d.ts"

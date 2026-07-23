@@ -1,3 +1,15 @@
+/**
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * 1. Adapt typed OPSX status, schema, template, instruction, and artifact projections to React subscriptions.
+ * 2. Let routes defer expensive aggregate Status and Config subscriptions until primary content is renderable.
+ * 3. Preserve live/static projection identity and cache keys across route remounts.
+ * 4. Keep optional Change, Schema, and artifact selectors from issuing unrelated projection work.
+ *
+ * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ *
+ * Compromise: these OPSX hooks remain in one physical module because routes already consume this public
+ * adapter surface; splitting every entity hook during the loading fix would create unrelated import churn.
+ */
 import type {
   ApplyInstructions,
   ArtifactInstructions,
@@ -107,38 +119,46 @@ export function useOpsxInstructionsSubscription(
   )
 }
 
-export function useOpsxConfigBundleSubscription(): SubscriptionState<OpsxConfigBundle> {
+/** Subscribe to the aggregate config projection only after its owning route admits the work. */
+export function useOpsxConfigBundleSubscription(
+  enabled = true
+): SubscriptionState<OpsxConfigBundle> {
   const subscribe = useCallback(
-    (callbacks: { onData: (data: OpsxConfigBundle) => void; onError: (err: Error) => void }) =>
-      trpcClient.opsx.subscribeConfigBundle.subscribe(undefined, {
+    (callbacks: { onData: (data: OpsxConfigBundle) => void; onError: (err: Error) => void }) => {
+      if (!enabled) return { unsubscribe() {} }
+      return trpcClient.opsx.subscribeConfigBundle.subscribe(undefined, {
         onData: callbacks.onData,
         onError: callbacks.onError,
-      }),
-    []
+      })
+    },
+    [enabled]
   )
 
   return useSubscription<OpsxConfigBundle>(
     subscribe,
     StaticProvider.getOpsxConfigBundle,
-    [],
+    [enabled],
     'opsx.subscribeConfigBundle'
   )
 }
 
-export function useOpsxStatusListSubscription(): SubscriptionState<ChangeStatus[]> {
+/** Subscribe to all Change statuses only after the route's primary projection is renderable. */
+export function useOpsxStatusListSubscription(enabled = true): SubscriptionState<ChangeStatus[]> {
   const subscribe = useCallback(
-    (callbacks: { onData: (data: ChangeStatus[]) => void; onError: (err: Error) => void }) =>
-      trpcClient.opsx.subscribeStatusList.subscribe(undefined, {
+    (callbacks: { onData: (data: ChangeStatus[]) => void; onError: (err: Error) => void }) => {
+      if (!enabled) return { unsubscribe() {} }
+      return trpcClient.opsx.subscribeStatusList.subscribe(undefined, {
         onData: callbacks.onData,
         onError: callbacks.onError,
-      }),
-    []
+      })
+    },
+    [enabled]
   )
 
   return useSubscription<ChangeStatus[]>(
     subscribe,
     StaticProvider.getOpsxStatusList,
-    [],
+    [enabled],
     'opsx.subscribeStatusList'
   )
 }

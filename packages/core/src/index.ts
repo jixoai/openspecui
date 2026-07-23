@@ -25,6 +25,11 @@
 
 // Filesystem adapter for reading/writing OpenSpec files
 export { OpenSpecAdapter, type ArchiveMeta, type ChangeMeta, type SpecMeta } from './adapter.js'
+export type {
+  ChangeProjectionBatch,
+  ChangeProjectionData,
+  ChangeProjectionRowError,
+} from './change-projection.js'
 
 // Markdown parser for spec and change documents
 export { MarkdownParser } from './parser.js'
@@ -120,6 +125,7 @@ export {
   ScenarioStepSchema,
   SpecSchema,
   TaskSchema,
+  TrackedTaskProgressSchema,
   type Change,
   type ChangeFile,
   type Delta,
@@ -706,6 +712,10 @@ export {
 // Export types for static site generation
 export {
   DASHBOARD_METRIC_KEYS,
+  DashboardGitSnapshotSchema,
+  DashboardOverviewSchema,
+  DashboardSummaryProjectionSchema,
+  DashboardTrendsProjectionSchema,
   type DashboardCardAvailability,
   type DashboardGitCommitEntry,
   type DashboardGitDiffStats,
@@ -716,9 +726,11 @@ export {
   type DashboardMetricKey,
   type DashboardOverview,
   type DashboardSummary,
+  type DashboardSummaryProjection,
   type DashboardTrendKind,
   type DashboardTrendMeta,
   type DashboardTrendPoint,
+  type DashboardTrendsProjection,
   type DashboardTriColorTrendPoint,
 } from './dashboard-types.js'
 export { type ExportSnapshot } from './export-types.js'
@@ -888,6 +900,8 @@ export {
   ArtifactStatusSchema,
   ChangeStatusSchema,
   DependencyInfoSchema,
+  OpsxCliEvidenceSchema,
+  OpsxStatusEvidenceSchema,
   SchemaArtifactSchema,
   SchemaDetailSchema,
   SchemaInfoSchema,
@@ -900,6 +914,8 @@ export {
   type ArtifactStatus,
   type ChangeStatus,
   type DependencyInfo,
+  type OpsxCliEvidence,
+  type OpsxStatusEvidence,
   type SchemaArtifact,
   type SchemaDetail,
   type SchemaInfo,

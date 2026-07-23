@@ -1,13 +1,14 @@
 /**
  * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
- * 1. Render the project Dashboard and its objective planning-root projections.
+ * 1. Render independent Dashboard Summary, trends, workflow, and Code Git projections.
  * 2. Keep Dashboard-owned Code Git actions separate from Planning-root readiness.
  * 3. Carry the Code Git binding token through dashboard detail handoff navigation.
  * 4. Bind refresh and detached-worktree removal to the rendered Code snapshot generation.
- * 5. Retain a stable Overview snapshot beside terminal subscription error evidence.
+ * 5. Retain stable regional snapshots beside their own loading, updating, and error evidence.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Git handoff and action provenance.
+ * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  */
 import { Badge } from '@/components/badge'
 import { DashboardContextSummary } from '@/components/dashboard/context-summary'
@@ -268,11 +269,48 @@ function getStepPalette(stepName: string): {
 
 export function Dashboard() {
   const staticMode = isStaticMode()
-  const { data: overview, isLoading, error } = useDashboardOverviewSubscription()
-  const { data: gitScopes, authority: gitScopesAuthority } = useGitRepositoryScopes(!staticMode)
+  const dashboardState = useDashboardOverviewSubscription()
+  const { data: overview, isLoading, error } = dashboardState
+  const summaryRegion = dashboardState.regions?.summary
+  const trendsRegion = dashboardState.regions?.trends
+  const gitRegion = dashboardState.regions?.git
+  const summaryProjection =
+    summaryRegion?.data ??
+    (overview
+      ? {
+          summary: overview.summary,
+          specifications: overview.specifications,
+          activeChanges: overview.activeChanges,
+        }
+      : undefined)
+  const trendsProjection =
+    trendsRegion?.data ??
+    (overview
+      ? {
+          trends: overview.trends,
+          triColorTrends: overview.triColorTrends,
+          trendKinds: overview.trendKinds,
+          cardAvailability: overview.cardAvailability,
+          trendMeta: overview.trendMeta,
+        }
+      : undefined)
+  const dashboardGit = gitRegion?.data ?? overview?.git ?? null
+  const summaryIsLoading = summaryRegion?.isLoading ?? isLoading
+  const summaryIsUpdating = summaryRegion?.isUpdating ?? false
+  const summaryError = summaryRegion?.error ?? error
+  const trendsIsLoading = trendsRegion?.isLoading ?? (isLoading && !overview)
+  const trendsIsUpdating = trendsRegion?.isUpdating ?? false
+  const trendsError = trendsRegion?.error ?? (overview ? null : error)
+  const gitIsLoading = gitRegion?.isLoading ?? (isLoading && !overview)
+  const gitIsUpdating = gitRegion?.isUpdating ?? false
+  const gitError = gitRegion?.error ?? (overview ? null : error)
+  const admitSecondaryProjections = summaryProjection !== undefined
+  const { data: gitScopes, authority: gitScopesAuthority } = useGitRepositoryScopes(
+    !staticMode && admitSecondaryProjections
+  )
   const { data: gitTaskStatus } = useDashboardGitTaskStatusSubscription()
-  const { data: statuses } = useOpsxStatusListSubscription()
-  const { data: configBundle } = useOpsxConfigBundleSubscription()
+  const { data: statuses } = useOpsxStatusListSubscription(admitSecondaryProjections)
+  const { data: configBundle } = useOpsxConfigBundleSubscription(admitSecondaryProjections)
   const [gitAutoRefreshPreset, setGitAutoRefreshPreset] = useState<DashboardGitAutoRefreshPreset>(
     () => loadDashboardGitAutoRefreshPreset()
   )
@@ -291,9 +329,9 @@ export function Dashboard() {
   const dashboardGitBindingToken =
     !staticMode &&
     gitScopesAuthority.state === 'current' &&
-    overview?.git.bindingToken !== null &&
-    overview?.git.bindingToken === gitScopes?.code.bindingToken
-      ? (overview?.git.bindingToken ?? null)
+    dashboardGit?.bindingToken !== null &&
+    dashboardGit?.bindingToken === gitScopes?.code.bindingToken
+      ? (dashboardGit?.bindingToken ?? null)
       : null
 
   const runPropose = useCallback(() => {
@@ -526,7 +564,7 @@ export function Dashboard() {
     }
   }, [gitAutoRefreshCycleStartedAt, gitAutoRefreshPreset, staticMode])
 
-  const activeChanges = overview?.activeChanges ?? []
+  const activeChanges = summaryProjection?.activeChanges ?? []
   const activeChangeIdSet = useMemo(
     () => new Set(activeChanges.map((change) => change.id)),
     [activeChanges]
@@ -572,20 +610,20 @@ export function Dashboard() {
     return tracked
   }, [configBundle])
 
-  if (isLoading && !overview) {
-    return <div className="route-loading animate-pulse">Loading dashboard...</div>
+  if (summaryIsLoading && !summaryProjection) {
+    return <div className="route-loading animate-pulse">Loading dashboard summary...</div>
   }
 
-  if (error && !overview) {
+  if (summaryError && !summaryProjection) {
     return (
       <div role="alert" className="text-destructive flex items-center gap-2">
         <AlertCircle className="h-5 w-5" />
-        Error loading dashboard: {error.message}
+        Error loading dashboard: {summaryError.message}
       </div>
     )
   }
 
-  const summary = overview?.summary ?? {
+  const summary = summaryProjection?.summary ?? {
     specifications: 0,
     requirements: 0,
     activeChanges: 0,
@@ -598,10 +636,9 @@ export function Dashboard() {
   }
 
   const cardAvailability =
-    overview?.cardAvailability ?? createDefaultCardAvailability(summary.taskCompletionPercent)
-  const trendKinds = overview?.trendKinds ?? createDefaultTrendKinds()
-
-  const dashboardGit = overview?.git ?? null
+    trendsProjection?.cardAvailability ??
+    createDefaultCardAvailability(summary.taskCompletionPercent)
+  const trendKinds = trendsProjection?.trendKinds ?? createDefaultTrendKinds()
   const dashboardGitIsCurrent =
     staticMode ||
     (gitScopesAuthority.state === 'current' &&
@@ -619,6 +656,7 @@ export function Dashboard() {
   const showGitSnapshot = staticMode
     ? git.worktrees.some((worktree) => worktree.entries.length > 0)
     : dashboardGitIsCurrent
+  const showGitRegion = staticMode ? showGitSnapshot : true
 
   const hasChanges = activeChanges.length > 0
   const currentWorktree = git.worktrees.find((worktree) => worktree.isCurrent) ?? null
@@ -638,32 +676,52 @@ export function Dashboard() {
   const disableRefreshButton = gitRefreshRequest !== null || dashboardGitBindingToken === null
 
   const renderHistoryCards = () => (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <DashboardMetricCard
-        label="Specifications / Requirements"
-        value={`${summary.specifications} / ${summary.requirements}`}
-        icon={FileText}
-        availability={cardAvailability.specifications}
-        trendKind={trendKinds.specifications}
-        points={overview?.trends.specifications ?? []}
-        triColorPoints={[]}
-        className="min-h-44 sm:min-h-48 lg:min-h-52 xl:min-h-56"
-      />
-      <DashboardMetricCard
-        label="Archived Changes / Completed Tasks"
-        value={`${summary.completedChanges} / ${summary.archivedTasksCompleted}`}
-        icon={Archive}
-        availability={cardAvailability.completedChanges}
-        trendKind={trendKinds.completedChanges}
-        points={overview?.trends.completedChanges ?? []}
-        triColorPoints={[]}
-        className="min-h-44 sm:min-h-48 lg:min-h-52 xl:min-h-56"
-      />
+    <div className="space-y-2">
+      {trendsIsLoading && !trendsProjection ? (
+        <div className="text-muted-foreground text-xs" role="status">
+          Loading dashboard trends...
+        </div>
+      ) : trendsIsUpdating ? (
+        <div className="text-muted-foreground text-xs" role="status">
+          Updating dashboard trends...
+        </div>
+      ) : null}
+      {trendsError ? (
+        <div
+          role="alert"
+          className="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-xs"
+        >
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>Dashboard trends failed: {trendsError.message}</span>
+        </div>
+      ) : null}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <DashboardMetricCard
+          label="Specifications / Requirements"
+          value={`${summary.specifications} / ${summary.requirements}`}
+          icon={FileText}
+          availability={cardAvailability.specifications}
+          trendKind={trendKinds.specifications}
+          points={trendsProjection?.trends.specifications ?? []}
+          triColorPoints={[]}
+          className="min-h-44 sm:min-h-48 lg:min-h-52 xl:min-h-56"
+        />
+        <DashboardMetricCard
+          label="Archived Changes / Completed Tasks"
+          value={`${summary.completedChanges} / ${summary.archivedTasksCompleted}`}
+          icon={Archive}
+          availability={cardAvailability.completedChanges}
+          trendKind={trendKinds.completedChanges}
+          points={trendsProjection?.trends.completedChanges ?? []}
+          triColorPoints={[]}
+          className="min-h-44 sm:min-h-48 lg:min-h-52 xl:min-h-56"
+        />
+      </div>
     </div>
   )
 
   const renderExecutionSnapshot = () => (
-    <div className={`grid min-w-0 gap-3 ${showGitSnapshot ? 'xl:grid-cols-2' : 'xl:grid-cols-1'}`}>
+    <div className={`grid min-w-0 gap-3 ${showGitRegion ? 'xl:grid-cols-2' : 'xl:grid-cols-1'}`}>
       <section className="@container min-w-0 space-y-2">
         <div>
           <h2 className="font-medium">Workflow Progress</h2>
@@ -749,13 +807,15 @@ export function Dashboard() {
         )}
       </section>
 
-      {showGitSnapshot ? (
+      {showGitRegion ? (
         <section className="min-w-0 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <h2 className="font-medium">Code Git Snapshot</h2>
               <p className="text-muted-foreground truncate text-xs">
-                Default branch: {git.defaultBranch}
+                {showGitSnapshot
+                  ? `Default branch: ${git.defaultBranch}`
+                  : 'Waiting for the current Code Git projection.'}
               </p>
             </div>
             {!staticMode ? (
@@ -771,77 +831,106 @@ export function Dashboard() {
               />
             ) : null}
           </div>
-          <div className="border-border/80 bg-card min-w-0 rounded-lg border p-3">
-            <div className="mb-2 flex items-center gap-1.5">
-              <GitBranch className="text-muted-foreground h-4 w-4 shrink-0" />
-              <span className="text-muted-foreground truncate text-xs">
-                Default branch: {git.defaultBranch}
-              </span>
+          {gitIsLoading && !dashboardGit ? (
+            <div
+              className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm"
+              role="status"
+            >
+              Loading Code Git snapshot...
             </div>
+          ) : null}
+          {gitIsUpdating && dashboardGit ? (
+            <div className="text-muted-foreground text-xs" role="status">
+              Updating Code Git snapshot...
+            </div>
+          ) : null}
+          {gitError ? (
+            <div
+              role="alert"
+              className="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-xs"
+            >
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>Code Git snapshot failed: {gitError.message}</span>
+            </div>
+          ) : null}
+          {!showGitSnapshot && dashboardGit && !gitIsLoading && !gitError ? (
+            <div className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm">
+              Waiting for the current Code Git binding.
+            </div>
+          ) : null}
+          {showGitSnapshot ? (
+            <div className="border-border/80 bg-card min-w-0 rounded-lg border p-3">
+              <div className="mb-2 flex items-center gap-1.5">
+                <GitBranch className="text-muted-foreground h-4 w-4 shrink-0" />
+                <span className="text-muted-foreground truncate text-xs">
+                  Default branch: {git.defaultBranch}
+                </span>
+              </div>
 
-            {currentWorktree ? (
-              <div className="space-y-0">
-                <WorktreeRow
-                  worktree={currentWorktree}
-                  emphasize
-                  removing={removingWorktreePath === currentWorktree.path}
-                  onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
-                />
-                <div className={`-mt-px space-y-1 border-l pl-3 pt-2 ${GIT_WORKTREE_LINE_CLASS}`}>
-                  {sortDashboardGitEntries(currentWorktree.entries).map((entry) => (
-                    <GitEntryRow
-                      key={
-                        entry.type === 'commit'
-                          ? entry.hash
-                          : `${entry.type}:${entry.updatedAt ?? 'none'}`
-                      }
-                      entry={entry}
-                      onSelect={
-                        staticMode
-                          ? undefined
-                          : (selectedEntry, sourceElement) => {
-                              if (git.bindingToken === null) return
-                              void vtNavController.push(
-                                'bottom',
-                                buildGitEntryHrefFromEntry(selectedEntry),
-                                withSharedElementHandoffState(
-                                  undefined,
-                                  getGitEntrySharedHandoff(selectedEntry, git.bindingToken)
-                                ),
-                                {
-                                  source: sourceElement,
-                                  sharedElements: getGitEntrySharedDescriptor(selectedEntry),
-                                }
-                              )
-                            }
-                      }
+              {currentWorktree ? (
+                <div className="space-y-0">
+                  <WorktreeRow
+                    worktree={currentWorktree}
+                    emphasize
+                    removing={removingWorktreePath === currentWorktree.path}
+                    onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
+                  />
+                  <div className={`-mt-px space-y-1 border-l pl-3 pt-2 ${GIT_WORKTREE_LINE_CLASS}`}>
+                    {sortDashboardGitEntries(currentWorktree.entries).map((entry) => (
+                      <GitEntryRow
+                        key={
+                          entry.type === 'commit'
+                            ? entry.hash
+                            : `${entry.type}:${entry.updatedAt ?? 'none'}`
+                        }
+                        entry={entry}
+                        onSelect={
+                          staticMode
+                            ? undefined
+                            : (selectedEntry, sourceElement) => {
+                                if (git.bindingToken === null) return
+                                void vtNavController.push(
+                                  'bottom',
+                                  buildGitEntryHrefFromEntry(selectedEntry),
+                                  withSharedElementHandoffState(
+                                    undefined,
+                                    getGitEntrySharedHandoff(selectedEntry, git.bindingToken)
+                                  ),
+                                  {
+                                    source: sourceElement,
+                                    sharedElements: getGitEntrySharedDescriptor(selectedEntry),
+                                  }
+                                )
+                              }
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-muted-foreground rounded-md border border-dashed px-2.5 py-2 text-xs">
+                  No worktree snapshot available.
+                </div>
+              )}
+
+              {otherWorktrees.length > 0 && (
+                <div className="border-border/70 mt-3 space-y-1 border-t pt-2">
+                  <div className="text-muted-foreground text-xs uppercase tracking-wide">
+                    Other Worktrees
+                  </div>
+                  {otherWorktrees.map((worktree) => (
+                    <WorktreeRow
+                      key={worktree.path}
+                      worktree={worktree}
+                      emphasize={false}
+                      removing={removingWorktreePath === worktree.path}
+                      onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
                     />
                   ))}
                 </div>
-              </div>
-            ) : (
-              <div className="text-muted-foreground rounded-md border border-dashed px-2.5 py-2 text-xs">
-                No worktree snapshot available.
-              </div>
-            )}
-
-            {otherWorktrees.length > 0 && (
-              <div className="border-border/70 mt-3 space-y-1 border-t pt-2">
-                <div className="text-muted-foreground text-xs uppercase tracking-wide">
-                  Other Worktrees
-                </div>
-                {otherWorktrees.map((worktree) => (
-                  <WorktreeRow
-                    key={worktree.path}
-                    worktree={worktree}
-                    emphasize={false}
-                    removing={removingWorktreePath === worktree.path}
-                    onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          ) : null}
         </section>
       ) : null}
     </div>
@@ -856,7 +945,7 @@ export function Dashboard() {
         </span>
       </div>
       <div className="bg-card divide-border min-w-0 divide-y">
-        {overview?.specifications.map((spec) => {
+        {summaryProjection?.specifications.map((spec) => {
           const identity = { kind: 'owned' as const, specId: spec.id }
           const sharedDescriptor = {
             family: 'specs',
@@ -902,7 +991,7 @@ export function Dashboard() {
             </VTLink>
           )
         })}
-        {overview?.specifications.length === 0 && (
+        {summaryProjection?.specifications.length === 0 && (
           <div className="text-muted-foreground px-4 py-6 text-center text-sm">
             No specifications found.
           </div>
@@ -1052,13 +1141,19 @@ export function Dashboard() {
 
       <DashboardContextSummary staticMode={staticMode} />
 
-      {error ? (
+      {summaryIsUpdating && summaryProjection ? (
+        <div className="text-muted-foreground text-sm" role="status">
+          Updating dashboard summary...
+        </div>
+      ) : null}
+
+      {summaryError ? (
         <div
           role="alert"
           className="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-sm"
         >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>Error loading dashboard: {error.message}</span>
+          <span>Error loading dashboard: {summaryError.message}</span>
         </div>
       ) : null}
 

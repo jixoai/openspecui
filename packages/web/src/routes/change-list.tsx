@@ -2,10 +2,11 @@
  * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. List only active Changes from the current writable Planning root.
  * 2. Derive workflow state and terminal evidence from CLI Status and formal tracked-task progress.
- * 3. Preserve ChangeList row continuity together with collision-safe detail navigation and explicit no-tasks presentation.
+ * 3. Preserve ChangeList row continuity and stale display together with collision-safe detail navigation.
  * 4. Keep the advanced New Change command reachable from the page header.
- * 5. Surface main Change-subscription failure without false list or empty truth.
+ * 5. Defer aggregate workflow Status until a primary Change row is renderable; preserve explicit failures.
  *
+ * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-23): "List mutations and route changes preserve physical continuity through existing motion/View Transition patterns."
  *
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
@@ -31,17 +32,24 @@ function buildStatusMap(statuses: ChangeStatus[] | undefined): Map<string, Chang
 }
 
 export function ChangeList() {
-  const { data: changes, isLoading, error: changesError } = useChangesSubscription()
+  const {
+    data: changes,
+    isLoading,
+    isUpdating,
+    error: changesError,
+    rowErrors = [],
+    progress = null,
+  } = useChangesSubscription()
   const listRef = useRef<HTMLDivElement>(null)
   const {
     data: statuses,
     isLoading: isStatusLoading,
     error: statusError,
-  } = useOpsxStatusListSubscription()
+  } = useOpsxStatusListSubscription((changes?.length ?? 0) > 0)
   const displayedChanges = useChangeListContinuity(changes, listRef)
   const statusMap = buildStatusMap(statuses)
 
-  const hasCurrentEmptyChanges = changes?.length === 0 && !changesError
+  const hasCurrentEmptyChanges = changes?.length === 0 && !changesError && !isUpdating
   const showChangesFrame = (changes?.length ?? 0) > 0 || hasCurrentEmptyChanges
 
   if (isLoading && !changes && !changesError) {
@@ -81,6 +89,32 @@ export function ChangeList() {
         >
           <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
           <span className="break-words">{changesError.message}</span>
+        </div>
+      ) : null}
+
+      {rowErrors.length > 0 ? (
+        <div
+          role="alert"
+          className="border-destructive/40 bg-destructive/10 text-destructive rounded-md border px-3 py-2 text-sm"
+        >
+          {rowErrors.map((rowError) => (
+            <div key={rowError.changeId} className="break-words">
+              {rowError.changeId}: {rowError.message}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {progress && !changesError ? (
+        <div className="text-muted-foreground text-sm" data-change-progress>
+          Loaded {progress.completed}/{progress.total === 'unknown' ? 'unknown' : progress.total}{' '}
+          changes
+        </div>
+      ) : null}
+
+      {isUpdating && changes ? (
+        <div className="text-muted-foreground text-sm" role="status">
+          Refreshing changes...
         </div>
       ) : null}
 

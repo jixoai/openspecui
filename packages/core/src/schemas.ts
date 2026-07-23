@@ -1,11 +1,9 @@
 /**
- * Zod schemas and TypeScript types for OpenSpec documents.
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * 1. Define Zod schemas and TypeScript types for OpenSpec documents and Change tasks.
+ * 2. Preserve tracked-task progress as a reusable typed contract for live Change projections.
  *
- * OpenSpec uses a structured format for specifications and change proposals:
- * - Spec: A specification document with requirements and scenarios
- * - Change: A change proposal with deltas and tasks
- * - Task: A trackable work item within a change
- *
+ * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * @module schemas
  */
 
@@ -194,7 +192,7 @@ const TrackedTaskSchema = TaskSchema.extend({
   }),
 })
 
-const TrackedTaskProgressSchema = z.object({
+export const TrackedTaskProgressSchema = z.object({
   tasks: z.array(TrackedTaskSchema),
   total: z.number(),
   completed: z.number(),

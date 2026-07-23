@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
 1. Gate the live-projection performance Change with independently reviewable work packages.
 2. Preserve measurable latency, provenance, currentness, and authority requirements at every package boundary.
 3. Keep final browser acceptance with the owner and prevent this Change from absorbing the active 1.6 correctness work.
@@ -14,34 +14,35 @@ Original request (2026-07-23): "请你深入调查，给出一份持有客观证
 - [x] 1.3 Define the Server-owned Projection Work protocol, complete identity, freshness/authority boundary, lifecycle events, and bounded resource classes.
 - [x] 1.4 Record independent production owners, red/green/mutation-resistance requirements, and stop conditions for Root Context, Dashboard, Changes, and OPSX.
 - [x] 1.5 Add the `live-projection-work` delta specification; strict Change validation must parse it.
-- [ ] 1.6 Obtain owner approval for the measured implementation order before production code begins.
+- [x] 1.6 Obtain owner approval for the measured implementation order before production code begins. Owner
+      explicitly requested `apply accelerate-live-projection-loading` on 2026-07-23 Asia/Shanghai.
 
 ## 2. Shared Projection Work
 
-- [ ] 2.1 Add bounded phase tracing at the subscription-to-projection boundary without creating user analytics or a second fact source.
-- [ ] 2.2 Implement same-identity single-flight work, current/stale display snapshots, explicit invalidation, cancellation, and generation retirement.
-- [ ] 2.3 Prove two same-identity subscribers share one owner work, while late Root/Store/Git A cannot publish into B.
-- [ ] 2.4 Define and enforce measured foreground/background concurrency and memory budgets before adding broad warmup.
+- [x] 2.1 Add bounded phase tracing at the subscription-to-projection boundary without creating user analytics or a second fact source.
+- [x] 2.2 Implement same-identity single-flight work, current/stale display snapshots, explicit invalidation, cancellation, and generation retirement.
+- [x] 2.3 Prove two same-identity subscribers share one owner work, while late Root/Store/Git A cannot publish into B.
+- [x] 2.4 Define and enforce measured foreground/background concurrency and memory budgets before adding broad warmup.
 
 ## 3. Root And Page Projections
 
-- [ ] 3.1 Make a current Root Context snapshot reusable within one generation without weakening Root action readiness after refresh, failure, reconnect, or retirement.
-- [ ] 3.2 Split Dashboard Summary, Git, trends, and workflow facts so a slow leaf cannot delay the first stable Summary.
-- [ ] 3.3 Stream Changes inventory and bounded row batches with honest progress; retain completed rows through later slow rows or terminal errors.
-- [ ] 3.4 Make OPSX Status demand-driven and independent from full Kernel warmup while preserving typed CLI evidence.
-- [ ] 3.5 Prove every package through its named production owner, exact red and green fixed points, and an unmasked mutation-resistance result.
+- [x] 3.1 Make a current Root Context snapshot reusable within one generation without weakening Root action readiness after refresh, failure, reconnect, or retirement. Checked Manager, Root subscription, and cold-start evidence proves one A resolution, one invalidated B resolution, no cached CLI error, and retained `refreshing` display state; mutation checks reject both removed cache sharing and ignored invalidation identity.
+- [x] 3.2 Split Dashboard Summary, Git, trends, and workflow facts so a slow leaf cannot delay the first stable Summary.
+- [x] 3.3 Stream Changes inventory and bounded row batches with honest progress; retain completed rows through later slow rows or terminal errors.
+- [x] 3.4 Make OPSX Status demand-driven and independent from full Kernel warmup while preserving typed CLI evidence.
+- [x] 3.5 Prove every package through its named production owner, exact red and green fixed points, and an unmasked mutation-resistance result.
 
 ## 4. Conditional Optimizations
 
-- [ ] 4.1 Measure content-fingerprint cost and hit rate before adding a bounded pure-projection cache.
-- [ ] 4.2 Add persistence only for revalidatable, non-sensitive data with complete identity/versioning and bounded eviction.
-- [ ] 4.3 Move only measured CPU-bound, cancelable work to a bounded Worker pool; keep CLI, Git, and reactive filesystem I/O in their resource classes.
+- [x] 4.1 Measure content-fingerprint cost and hit rate before adding a bounded pure-projection cache.
+- [x] 4.2 Measure persistence eligibility and deliberately do not add it: the controlled repeat is not a production hit rate, so no safe ROI/eviction case exists.
+- [x] 4.3 Measure Worker eligibility and deliberately do not add it: Worker transfer/digest is slower than the measured main-thread work.
 
 ## 5. Verification And Delivery
 
-- [ ] 5.1 Re-run the controlled benchmark and record before/after phase distributions and event order for every implemented package.
-- [ ] 5.2 Run checked focused Vitest, affected component-level Playwright fixtures, format, lint, typecheck, and scoped SSG evidence where applicable.
-- [ ] 5.3 Keep the owner-only final Dashboard and Changes browser/visual walkthrough separate from automated preparation evidence.
+- [x] 5.1 Re-run the controlled benchmark and record before/after phase distributions and event order for every implemented package.
+- [x] 5.2 Run checked focused Vitest, affected component-level Playwright fixtures, format, lint, typecheck, and scoped SSG evidence where applicable. `pnpm test:ci`, `pnpm test:browser:ci`, format, lint, typecheck, SSG, and strict Change validation passed on 2026-07-23 Asia/Shanghai; Dashboard/Changes final browser acceptance remains owner-only.
+- [x] 5.3 Keep the owner-only final Dashboard and Changes browser/visual walkthrough separate from automated preparation evidence.
 - [ ] 5.4 Deliver implementation and matching checkpoint evidence in independently reviewable commits; do not merge, archive, or release until the owner approves.
 
 ## 6. Per-Package Evidence Contracts
@@ -77,6 +78,9 @@ handler assertion, a disabled control, or a benchmark that only happens to be fa
 - Green: Summary replays first; Git, trends, and workflow facts settle independently; Git B cannot relabel Git A.
 - Mutation resistance: remove snapshot replay/independent Summary emission or binding-token validation and the red must fail.
 - Stop condition: do not weaken Static provider or Code/Planning Git authority to improve perceived loading.
+- Delivery proof: focused Server service/router and Web hook/route tests pass; Summary is admitted before Trends,
+  Git scope/Git, and OPSX. Removing the Git binding token from the Work identity returns A under B and fails the
+  exact service fixed point.
 
 ### P4 Changes Batches
 
@@ -85,6 +89,9 @@ handler assertion, a disabled control, or a benchmark that only happens to be fa
 - Green: bounded batches and honest `{ completed, total | unknown }` progress render earlier rows and preserve partial errors.
 - Mutation resistance: remove batch emission or unknown-total handling and the corresponding fixed-point test must fail.
 - Stop condition: list rows remain name/task/time only; Status, detail, Apply, and artifact work stay on demand.
+- Delivery proof: focused Server service/router and Web hook/route tests pass; first row and honest progress emit
+  before a pending later row. Fixing the Work generation returns A rows under B and fails the exact service fixed
+  point.
 
 ### P5 OPSX Demand Planner
 
@@ -93,6 +100,9 @@ handler assertion, a disabled control, or a benchmark that only happens to be fa
 - Green: typed Status arrives independently; lazy leaves retain full CLI evidence and settle separately.
 - Mutation resistance: restore Status warmup dependency or remove lazy Work identity and status-before-Apply/evidence tests must fail.
 - Stop condition: never trade CLI incompatibility, Store selector, diagnostics, or planning-root provenance for a fast empty list.
+- Delivery proof: focused Core/Router/Web tests pass; the real Kernel delivers Status while `waitForWarmup()` never
+  settles and retains the typed evidence envelope. Restoring the warmup await to the real Status method fails the
+  exact 250ms fixed point.
 
 ### P6 Hash/Worker Optimization
 
@@ -102,3 +112,6 @@ handler assertion, a disabled control, or a benchmark that only happens to be fa
 - Green: equivalent versioned non-sensitive input hits within bounds; changed input misses; disabling optimization preserves correctness.
 - Mutation resistance: remove one fingerprint/provenance component and the cross-input miss test must fail.
 - Stop condition: record “no optimization adopted” when ROI, sensitivity, eviction, or Worker resource proof is negative.
+- Delivery decision: metadata/content fingerprint timing is deterministic for controlled repeats but lacks a
+  production persistent-cache hit rate; Worker digest plus transfer is slower than main-thread hashing. No
+  persistent cache or Worker pool is adopted.

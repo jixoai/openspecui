@@ -1,16 +1,18 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
  * 1. Prove public Router queries and mutations preserve their typed owner boundaries.
  * 2. Prove Planning-root replacement and public stream routes preserve rejected settlement.
  * 3. Prove strict Archive identity, validation, diagnostics, and Store selection through its public route.
- * 4. Prove reactive, configuration, Git, notification, and runtime procedures retain scoped behavior.
+ * 4. Prove reactive, configuration, Dashboard, Git, notification, and runtime procedures retain scoped behavior.
  * 5. Prove stale Git binding intent conflicts before rebound repository side effects.
+ * 6. Prove OPSX Status and lazy leaves bypass full Kernel warmup while preserving typed evidence.
  *
  * Original request (2026-07-17): "Every public application mutation remains inside its Server-owned root and lifetime."
  * Original request (2026-07-17): "Rejected Validate and Update handles converge to one public terminal error."
  * Original request (2026-07-18): "Environment Global profile/drift must use one reactive CLI-owned projection."
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
  * Derived requirement (2026-07-19): Project Binding mutation exposes launch-write and convergence evidence.
+ * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  */
 import {
   CliExecutor,
@@ -38,13 +40,23 @@ import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DashboardOverviewService } from '../src/dashboard-overview-service.js'
 import { loadDashboardOverview } from '../src/dashboard-overview.js'
+import type {
+  DashboardProjectionServiceContract,
+  DashboardProjectionSubscription,
+} from '../src/dashboard-projection-service.js'
 import { resolveGitWorktreeSwitchTarget } from '../src/git-panel-data.js'
 import { GitRepositoryBindingService } from '../src/git-repository-binding-service.js'
 import { sameGitPath } from '../src/git-shared.js'
 import type { Context } from '../src/router.js'
 import { appRouter } from '../src/router.js'
+import type {
+  ChangeProjectionData,
+  ChangeProjectionEvent,
+  ChangesProjectionServiceContract,
+} from './changes-projection-service.js'
 import { FilePreviewService } from './file-preview-service.js'
 import { PlanningRootServiceManager, type PlanningRootServices } from './planning-root-service.js'
+import type { ProjectionWorkIdentity, ProjectionWorkSubscription } from './projection-work/index.js'
 import type { SchemaMutationAction } from './schema-mutation-service.js'
 
 function settledStreamHandle(exitCode: number | null): CliStreamHandle {
@@ -69,6 +81,89 @@ function controlledStreamHandle(): {
       },
     },
     settle: (exitCode) => terminal.resolve({ reason: 'exited', exitCode }),
+  }
+}
+
+function subscribeDashboardProjectionFixture<T>(
+  projectionKind: string,
+  load: () => Promise<T>,
+  listener: DashboardProjectionSubscription<T>
+): ProjectionWorkSubscription {
+  const identity: ProjectionWorkIdentity = {
+    projectionKind,
+    planningRoot: {
+      identity: '/tmp/openspecui-router-test',
+      source: 'nearest',
+      storeSelector: null,
+    },
+    owner: { generation: 'planning-binding', gitBindingToken: null },
+    selector: projectionKind,
+    inputFingerprint: 'router-fixture:v1',
+    protocolVersion: 1,
+  }
+  let active = true
+  void load().then(
+    (data) => {
+      if (!active) return
+      const snapshot = { data, freshness: 'current' as const, identity, workGeneration: 1 }
+      listener({ type: 'snapshot', snapshot })
+      listener({ type: 'complete', snapshot })
+    },
+    (cause: unknown) => {
+      if (!active) return
+      listener({
+        type: 'failed',
+        error: cause instanceof Error ? cause : new Error(String(cause)),
+        retainedSnapshot: null,
+        workGeneration: 1,
+      })
+    }
+  )
+  return {
+    unsubscribe() {
+      active = false
+    },
+  }
+}
+
+function subscribeChangesProjectionFixture(
+  load: () => Promise<ChangeProjectionData>,
+  listener: (event: ChangeProjectionEvent) => void
+): ProjectionWorkSubscription {
+  const identity: ProjectionWorkIdentity = {
+    projectionKind: 'changes-rows',
+    planningRoot: {
+      identity: '/tmp/openspecui-router-test',
+      source: 'nearest',
+      storeSelector: null,
+    },
+    owner: { generation: 'planning-binding', gitBindingToken: null },
+    selector: 'changes:list-with-meta',
+    inputFingerprint: 'router-fixture:v1',
+    protocolVersion: 1,
+  }
+  let active = true
+  void load().then(
+    (data) => {
+      if (!active) return
+      const snapshot = { data, freshness: 'current' as const, identity, workGeneration: 1 }
+      listener({ type: 'snapshot', snapshot })
+      listener({ type: 'complete', snapshot })
+    },
+    (cause: unknown) => {
+      if (!active) return
+      listener({
+        type: 'failed',
+        error: cause instanceof Error ? cause : new Error(String(cause)),
+        retainedSnapshot: null,
+        workGeneration: 1,
+      })
+    }
+  )
+  return {
+    unsubscribe: () => {
+      active = false
+    },
   }
 }
 
@@ -486,6 +581,17 @@ const createMockContext = (
         state: 'all_done',
         divergence: null,
       },
+      evidence: {
+        command: 'instructions apply',
+        success: true,
+        stdout: '{"changeName":"add-caching"}',
+        stderr: '',
+        exitCode: 0,
+        payload: { changeName: 'add-caching' },
+        diagnostics: [],
+        selector: {},
+        root: { path: '/tmp/openspecui-router-test', source: 'nearest' },
+      },
     }),
     ensureArtifactOutput: vi.fn().mockResolvedValue(undefined),
     getArtifactOutput: vi.fn().mockReturnValue('# Source artifact'),
@@ -574,6 +680,48 @@ artifacts:
       reason
     )
   )
+  const getDashboardSummary: DashboardProjectionServiceContract['getSummary'] = async () => {
+    const overview = await dashboardOverviewService.getCurrent()
+    return {
+      summary: overview.summary,
+      specifications: overview.specifications,
+      activeChanges: overview.activeChanges,
+    }
+  }
+  const getDashboardTrends: DashboardProjectionServiceContract['getTrends'] = async () => {
+    const overview = await dashboardOverviewService.getCurrent()
+    return {
+      trends: overview.trends,
+      triColorTrends: overview.triColorTrends,
+      trendKinds: overview.trendKinds,
+      cardAvailability: overview.cardAvailability,
+      trendMeta: overview.trendMeta,
+    }
+  }
+  const getDashboardGit: DashboardProjectionServiceContract['getGit'] = async () =>
+    (await dashboardOverviewService.getCurrent()).git
+  const dashboardProjectionService: DashboardProjectionServiceContract = {
+    getSummary: getDashboardSummary,
+    getTrends: getDashboardTrends,
+    getGit: getDashboardGit,
+    subscribeSummary: (listener) =>
+      subscribeDashboardProjectionFixture('dashboard-summary', getDashboardSummary, listener),
+    subscribeTrends: (listener) =>
+      subscribeDashboardProjectionFixture('dashboard-trends', getDashboardTrends, listener),
+    subscribeGit: (listener) =>
+      subscribeDashboardProjectionFixture('dashboard-git', getDashboardGit, listener),
+    invalidateGit: vi.fn(),
+    dispose: vi.fn(),
+  }
+  const getChangesProjection: ChangesProjectionServiceContract['getCurrent'] = async () => ({
+    rows: await adapter.listChangesWithMeta(),
+    errors: [],
+  })
+  const changesProjectionService: ChangesProjectionServiceContract = {
+    getCurrent: getChangesProjection,
+    subscribe: (listener) => subscribeChangesProjectionFixture(getChangesProjection, listener),
+    dispose: vi.fn(),
+  }
   const rootContext = {
     launchProject: { path: projectDir },
     planningRoot: {
@@ -604,6 +752,8 @@ artifacts:
     filePreviewService,
     searchService: searchService as unknown as PlanningRootServices['searchService'],
     dashboardOverviewService,
+    dashboardProjectionService,
+    changesProjectionService,
     workflowInvocationService:
       workflowInvocationService as unknown as PlanningRootServices['workflowInvocationService'],
   } satisfies PlanningRootServices
@@ -1541,6 +1691,57 @@ apply:
       expect(planning.kernel.ensureApplyInstructions).not.toHaveBeenCalled()
     })
 
+    it('exposes independently wired Dashboard regional projections', async () => {
+      const context = createMockContext()
+      const caller = appRouter.createCaller(context)
+
+      const [summary, trends, git] = await Promise.all([
+        caller.dashboard.getSummary(),
+        caller.dashboard.getTrends(),
+        caller.dashboard.getGit(),
+      ])
+
+      expect(summary.summary.specifications).toBe(2)
+      expect(trends.trendKinds.requirements).toBe('monotonic')
+      expect(git.defaultBranch).toBe('origin/main')
+    })
+
+    it('replays the legacy Dashboard subscription without forcing a refresh', async () => {
+      const context = createMockContext()
+      const planning = await resolveMockPlanningRoot(context)
+      await planning.dashboardOverviewService.getCurrent()
+      const refresh = vi.spyOn(planning.dashboardOverviewService, 'refresh')
+      const caller = appRouter.createCaller(context)
+      const observable = await caller.dashboard.subscribe()
+      const values: unknown[] = []
+      const subscription = observable.subscribe({ next: (value) => values.push(value) })
+
+      await vi.waitFor(() => expect(values).toHaveLength(1))
+      expect(refresh).not.toHaveBeenCalled()
+      subscription.unsubscribe()
+    })
+
+    it('invalidates only the Dashboard Git region after a Code refresh', async () => {
+      const projectDir = await createTempProjectDir('openspecui-dashboard-regional-refresh-')
+      await initGitRepo(projectDir)
+      const context = createMockContext(createMockAdapter(), { projectDir })
+      const planning = await resolveMockPlanningRoot(context)
+      const invalidateGit = planning.dashboardProjectionService.invalidateGit
+      const refresh = vi.spyOn(planning.dashboardOverviewService, 'refresh')
+      const caller = appRouter.createCaller(context)
+      const expectedBindingToken = (await caller.git.scopes()).code.bindingToken
+
+      await expect(
+        caller.dashboard.refreshGitSnapshot({
+          scope: 'code',
+          expectedBindingToken,
+          reason: 'regional-test',
+        })
+      ).resolves.toEqual({ success: true })
+      await vi.waitFor(() => expect(invalidateGit).toHaveBeenCalledOnce())
+      expect(refresh).not.toHaveBeenCalled()
+    })
+
     it('marks objective trend cards unavailable when timestamps are missing', async () => {
       const adapter = createMockAdapter()
       adapter.listSpecsWithMeta.mockResolvedValue([
@@ -2273,6 +2474,65 @@ apply:
       expect(change?.id).toBe('add-caching')
     })
 
+    it('forwards a completed Change row batch before the final inventory snapshot', async () => {
+      const context = createMockContext()
+      const planning = await resolveMockPlanningRoot(context)
+      const firstRow = {
+        id: 'add-caching',
+        name: 'Add caching',
+        trackedTaskProgress: trackedTaskProgress(1, 0),
+        documentChecklistSummary: documentChecklistSummary(),
+        createdAt: 1,
+        updatedAt: 1,
+      }
+      const batchIdentity = {
+        projectionKind: 'changes-rows',
+        planningRoot: {
+          identity: '/tmp/openspecui-router-test',
+          source: 'nearest',
+          storeSelector: null,
+        },
+        owner: { generation: 'planning-binding', gitBindingToken: null },
+        selector: 'changes:list-with-meta',
+        inputFingerprint: 'router-fixture:v1',
+        protocolVersion: 1,
+      }
+      planning.changesProjectionService.subscribe = (listener) => {
+        listener({
+          type: 'batch',
+          batch: {
+            rows: [firstRow],
+            errors: [],
+            progress: { completed: 1, total: 2 },
+          },
+          progress: { completed: 1, total: 2 },
+          identity: batchIdentity,
+          workGeneration: 1,
+        })
+        return { unsubscribe: vi.fn() }
+      }
+      const observable = await appRouter.createCaller(context).change.subscribeBatches()
+      const received: unknown[] = []
+      const subscription = observable.subscribe({
+        next: (event) => received.push(event),
+      })
+
+      await vi.waitFor(() =>
+        expect(received).toContainEqual(
+          expect.objectContaining({
+            type: 'batch',
+            batch: expect.objectContaining({ rows: [firstRow] }),
+            progress: { completed: 1, total: 2 },
+            identity: batchIdentity,
+          })
+        )
+      )
+      expect(
+        received.some((event) => typeof event === 'object' && event !== null && 'snapshot' in event)
+      ).toBe(false)
+      subscription.unsubscribe()
+    })
+
     it('rejects a non-canonical change id before Adapter mutation', async () => {
       const adapter = createMockAdapter()
       const caller = createCaller(adapter)
@@ -2990,6 +3250,98 @@ apply:
         name: 'derived-schema',
       })
       expect((context.runtimeInvalidation as RuntimeInvalidationIndex).current('schemas')).toBe(9)
+    })
+
+    it('delivers Status List while unrelated full Kernel warmup remains pending', async () => {
+      const context = createMockContext()
+      const planning = await resolveMockPlanningRoot(context)
+      const pendingWarmup = planning.kernel.waitForWarmup as unknown as ReturnType<typeof vi.fn>
+      pendingWarmup.mockImplementation(() => new Promise<void>(() => {}))
+      const status: ChangeStatus = {
+        changeName: 'add-caching',
+        schemaName: 'spec-driven',
+        isComplete: false,
+        applyRequires: [],
+        artifacts: [],
+        provenance: {
+          kind: 'cli',
+          planningHome: {
+            kind: 'repo',
+            root: '/tmp/openspecui-router-test',
+            changesDir: '/tmp/openspecui-router-test/openspec/changes',
+            defaultSchema: 'spec-driven',
+          },
+          changeRoot: '/tmp/openspecui-router-test/openspec/changes/add-caching',
+          artifactPaths: {},
+          nextSteps: [],
+          actionContext: {
+            mode: 'repo-local',
+            sourceOfTruth: 'repo',
+            planningArtifacts: [],
+            linkedContext: [],
+            allowedEditRoots: ['/tmp/openspecui-router-test'],
+            requiresAffectedAreaSelection: false,
+            constraints: [],
+          },
+          root: { path: '/tmp/openspecui-router-test', source: 'nearest' },
+          evidence: {
+            command: 'status',
+            success: true,
+            stdout: '{"changeName":"add-caching"}',
+            stderr: '',
+            exitCode: 0,
+            payload: { changeName: 'add-caching' },
+            diagnostics: [],
+            selector: {},
+          },
+        },
+      }
+      planning.kernel.getStatusList.mockReturnValue([status])
+      const caller = appRouter.createCaller(context)
+      const timeout = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Status List remained behind full warmup.')), 250)
+      })
+
+      const result = await Promise.race([caller.opsx.statusList(), timeout])
+
+      expect(result).toEqual([status])
+      expect(planning.kernel.ensureStatusList).toHaveBeenCalledTimes(1)
+      expect(pendingWarmup).not.toHaveBeenCalled()
+      expect(result[0]?.provenance).toMatchObject({
+        kind: 'cli',
+        evidence: {
+          command: 'status',
+          selector: {},
+          stdout: '{"changeName":"add-caching"}',
+        },
+      })
+    })
+
+    it('keeps Apply Instructions as an independent lazy leaf', async () => {
+      const context = createMockContext()
+      const planning = await resolveMockPlanningRoot(context)
+      const pendingWarmup = planning.kernel.waitForWarmup as unknown as ReturnType<typeof vi.fn>
+      pendingWarmup.mockImplementation(() => new Promise<void>(() => {}))
+      const caller = appRouter.createCaller(context)
+      const timeout = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Apply remained behind full warmup.')), 250)
+      })
+
+      const result = await Promise.race([
+        caller.opsx.applyInstructions({ change: 'add-caching' }),
+        timeout,
+      ])
+
+      expect(result.applyInstructionProgress).toMatchObject({
+        source: 'openspec-instructions-apply',
+      })
+      expect(result.evidence).toMatchObject({
+        command: 'instructions apply',
+        selector: {},
+        root: { source: 'nearest' },
+      })
+      expect(planning.kernel.ensureApplyInstructions).toHaveBeenCalledWith('add-caching', undefined)
+      expect(pendingWarmup).not.toHaveBeenCalled()
     })
 
     it('delegates workflow invocation preparation to the workflow service', async () => {

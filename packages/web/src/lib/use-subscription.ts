@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
- * 1. Consume one internal cached subscription lifecycle for live and static project projections.
- * 2. Bind Spec, Change, Archive, Config, Notification, and CLI projections to typed hooks.
+ * 1. Consume one internal cached subscription lifecycle and stale-display path for live and static projections.
+ * 2. Bind Spec, progressive Change, Archive, Config, Notification, and CLI projections to typed hooks.
  * 3. Preserve cache identity for detail projections across remounts and view transitions.
  * 4. Keep Git scope cache data non-authoritative until an opt-in reconnect emits a replacement.
  * 5. Expose Archive recompute lifecycle without relabeling transport loading as projection work.
@@ -18,6 +18,7 @@ import type {
   ArchiveMeta,
   ChangeFile,
   ChangeMeta,
+  ChangeProjectionRowError,
   NotificationRecord,
   OpenSpecUIConfig,
   OpenSpecUIConfigPresence,
@@ -45,12 +46,59 @@ export interface SubscriptionState<T> {
   error: Error | null
 }
 
-/** Opt-in subscription payload matching the Server recompute projection contract. */
-export type ReactiveProjectionEvent<T> = { type: 'recompute-started' } | { type: 'data'; data: T }
+/** Opt-in projection event; stale display never enters the browser cache or grants operation authority. */
+export type ReactiveProjectionEvent<T> =
+  | { type: 'recompute-started' }
+  | { type: 'display-stale'; data: T }
+  | { type: 'data'; data: T }
 
 /** Subscription state that distinguishes initial loading from dependency-driven recomputation. */
 export interface ReactiveProjectionSubscriptionState<T> extends SubscriptionState<T> {
   isUpdating: boolean
+}
+
+/** Explicit progress emitted by a bounded Projection Work batch stream. */
+export interface ProjectionWorkProgress {
+  completed: number
+  total: number | 'unknown'
+}
+
+/** Changes-specific state retains partial rows and row-level failures during progressive delivery. */
+export interface ChangesSubscriptionState extends SubscriptionState<ChangeMeta[]> {
+  isUpdating: boolean
+  rowErrors: ChangeProjectionRowError[]
+  progress: ProjectionWorkProgress | null
+}
+
+/** Canonical live Work identity needed to prevent cached rows from two Planning-root generations merging. */
+interface ChangeProjectionWorkIdentity {
+  projectionKind: string
+  planningRoot: {
+    identity: string
+    source: string
+    storeSelector: string | null
+  }
+  owner: {
+    generation: string | null
+    gitBindingToken: string | null
+  }
+  selector: string
+  inputFingerprint: string
+  protocolVersion: number
+}
+
+function changeProjectionWorkIdentityKey(identity: ChangeProjectionWorkIdentity): string {
+  return JSON.stringify([
+    identity.projectionKind,
+    identity.planningRoot.identity,
+    identity.planningRoot.source,
+    identity.planningRoot.storeSelector,
+    identity.owner.generation,
+    identity.owner.gitBindingToken,
+    identity.selector,
+    identity.inputFingerprint,
+    identity.protocolVersion,
+  ])
 }
 
 /** Explicit authority for projections whose cached data must never authorize live operations. */
@@ -291,6 +339,17 @@ export function useReactiveProjectionSubscription<T>(
           })
           return
         }
+        if (event.type === 'display-stale') {
+          generation.publish(() => {
+            setState({
+              data: event.data,
+              isLoading: false,
+              isUpdating: true,
+              error: null,
+            })
+          })
+          return
+        }
         generation.publishData(cacheKey, event.data, () => {
           setState({
             data: event.data,
@@ -496,17 +555,137 @@ export function useSpecDocumentSubscription(
 // Change subscriptions
 // =====================
 
-export function useChangesSubscription(): SubscriptionState<ChangeMeta[]> {
-  return useSubscription<ChangeMeta[]>(
-    (callbacks) =>
-      trpcClient.change.subscribe.subscribe(undefined, {
-        onData: callbacks.onData,
-        onError: callbacks.onError,
-      }),
-    StaticProvider.getChanges,
-    [],
-    'change.subscribe'
-  )
+export function useChangesSubscription(): ChangesSubscriptionState {
+  const lifecycleOwnerRef = useRef<SubscriptionLifecycleOwner | null>(null)
+  if (lifecycleOwnerRef.current === null) {
+    lifecycleOwnerRef.current = new SubscriptionLifecycleOwner()
+  }
+  const cacheKey = 'change.subscribe'
+  const initialSnapshot = lifecycleOwnerRef.current.snapshot<ChangeMeta[]>(cacheKey)
+  const [state, setState] = useState<ChangesSubscriptionState>(() => ({
+    data: initialSnapshot.data,
+    isLoading: !initialSnapshot.hasCached,
+    isUpdating: false,
+    error: null,
+    rowErrors: [],
+    progress: null,
+  }))
+  const inStaticMode = isStaticMode()
+
+  useEffect(() => {
+    const generation = lifecycleOwnerRef.current?.begin()
+    if (!generation) return
+    const snapshot = generation.snapshot<ChangeMeta[]>(cacheKey)
+    let rows = snapshot.data ?? []
+    let rowErrors: ChangeProjectionRowError[] = []
+    let workIdentityKey: string | null = null
+
+    generation.publish(() => {
+      setState({
+        data: rows.length > 0 ? rows : snapshot.data,
+        isLoading: !snapshot.hasCached,
+        isUpdating: false,
+        error: null,
+        rowErrors,
+        progress: null,
+      })
+    })
+
+    const publishRows = (
+      nextRows: ChangeMeta[],
+      nextErrors: ChangeProjectionRowError[],
+      progress: ProjectionWorkProgress | null,
+      options: { cache: boolean; isUpdating: boolean },
+      error: Error | null = null
+    ) => {
+      rows = nextRows
+      rowErrors = nextErrors
+      const publish = () => {
+        setState({
+          data: rows,
+          isLoading: false,
+          isUpdating: options.isUpdating,
+          error,
+          rowErrors,
+          progress,
+        })
+      }
+      if (options.cache) generation.publishData(cacheKey, rows, publish)
+      else generation.publish(publish)
+    }
+
+    if (inStaticMode) {
+      StaticProvider.getChanges()
+        .then((data) => publishRows(data, [], null, { cache: true, isUpdating: false }))
+        .catch((cause: unknown) => {
+          const error = cause instanceof Error ? cause : new Error(String(cause))
+          generation.publish(() => {
+            setState((previous) => ({ ...previous, isLoading: false, isUpdating: false, error }))
+          })
+        })
+      return () => generation.retire()
+    }
+
+    const subscription = trpcClient.change.subscribeBatches.subscribe(undefined, {
+      onData(event) {
+        if (event.type === 'batch') {
+          const nextWorkIdentityKey = changeProjectionWorkIdentityKey(event.identity)
+          if (workIdentityKey !== nextWorkIdentityKey) {
+            rows = []
+            rowErrors = []
+            workIdentityKey = nextWorkIdentityKey
+          }
+          const byId = new Map(rows.map((row) => [row.id, row] as const))
+          for (const row of event.batch.rows) byId.set(row.id, row)
+          const errorsById = new Map(rowErrors.map((item) => [item.changeId, item] as const))
+          for (const item of event.batch.errors) errorsById.set(item.changeId, item)
+          publishRows([...byId.values()], [...errorsById.values()], event.progress, {
+            cache: true,
+            isUpdating: true,
+          })
+          return
+        }
+        if (event.type === 'snapshot' || event.type === 'complete') {
+          workIdentityKey = changeProjectionWorkIdentityKey(event.snapshot.identity)
+          publishRows(event.snapshot.data.rows, event.snapshot.data.errors, null, {
+            cache: event.snapshot.freshness === 'current',
+            isUpdating: event.snapshot.freshness === 'stale-display-only',
+          })
+          return
+        }
+        if (event.type === 'failed') {
+          const retainedSnapshot = event.retainedSnapshot
+          const error = event.error instanceof Error ? event.error : new Error(String(event.error))
+          if (retainedSnapshot) {
+            const retained = retainedSnapshot.data
+            rows = retained.rows
+            rowErrors = retained.errors
+            workIdentityKey = changeProjectionWorkIdentityKey(retainedSnapshot.identity)
+          }
+          generation.publish(() => {
+            setState((previous) => ({
+              ...previous,
+              data: rows,
+              isLoading: false,
+              isUpdating: false,
+              error,
+              rowErrors,
+            }))
+          })
+        }
+      },
+      onError(error) {
+        generation.publish(() => {
+          setState((previous) => ({ ...previous, isLoading: false, isUpdating: false, error }))
+        })
+      },
+    })
+    generation.attach(subscription)
+    return () => generation.retire()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inStaticMode])
+
+  return state
 }
 
 export function useChangeFilesSubscription(id: string): SubscriptionState<ChangeFile[]> {
