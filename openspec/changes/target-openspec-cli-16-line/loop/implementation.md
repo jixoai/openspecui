@@ -8572,3 +8572,58 @@ dependency or extract a generic subscription lifecycle owner. Run only the SpecL
 the real Spec navigation fixture, Web typecheck, exact format/lint, and `git diff --check`; do not run broad
 gates, SSG, agent-browser, push, merge, archive, release, or final browser acceptance. If any parallel dirty
 file conflicts, preserve it and report the path and decision point.
+
+### 6.17-C implementation evidence (2026-07-23)
+
+SpecList now owns a small local continuity helper. Catalog order changes are held in the current display
+snapshot until one native list transition commits; same compound identities with metadata-only changes update
+without a list transition. Scope changes are rendered immediately and retire the prior generation in a
+commit-safe layout effect, so StrictMode discarded renders cannot consume the retirement. `scopeEntries` is
+memoized to avoid treating a stable Referenced projection as a new snapshot on every render. Rows continue to
+use the shared core `specIdentityKey`, and both Owned and Store-qualified Referenced links use the existing
+VTLink/detail-preparation/Router chain.
+
+Focused evidence:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  src/routes/spec-list-continuity.test.tsx \
+  src/routes/spec-list-navigation.test.tsx \
+  src/routes/spec-list.test.tsx --reporter=verbose
+-> 3 files, 18 tests passed
+
+pnpm --filter @openspecui/web typecheck
+-> passed
+
+pnpm exec prettier --check \
+  packages/web/src/routes/spec-list.tsx \
+  packages/web/src/routes/spec-list-continuity.ts \
+  packages/web/src/routes/spec-list-continuity.test.tsx \
+  packages/web/src/routes/spec-list-navigation.test.tsx
+-> passed
+
+pnpm exec oxlint \
+  packages/web/src/routes/spec-list.tsx \
+  packages/web/src/routes/spec-list-continuity.ts \
+  packages/web/src/routes/spec-list-continuity.test.tsx \
+  packages/web/src/routes/spec-list-navigation.test.tsx --ignore-path .gitignore
+-> 0 warnings/errors
+
+git diff --check
+-> passed
+```
+
+Mutation resistance was run independently and restored after each red run:
+
+1. Removed only the generation equality check inside the native transition `update` callback. The
+   `retires a late Owned transition when a newer Owned Catalog snapshot has committed` test failed because
+   the obsolete callback restored `Owned B` instead of current `Owned C`. The guard was restored exactly;
+   the focused continuity file returned to 6/6.
+2. Replaced only the Referenced row's `specIdentityKey(spec.identity)` key with an index key (and added the
+   map index solely for this mutation). The same-Store reorder test failed through positional href/shared
+   identity reuse (`Referenced A` received the `store-a/b` row). The compound key was restored exactly.
+
+The scope-switch test uses the real tab click and is rendered under React StrictMode; the late Owned callback
+cannot restore Owned rows after Referenced becomes current. This is preparation evidence only. The owner still
+performs final browser, visual, and multi-tab acceptance. No broad gates, SSG, browser automation, push, merge,
+archive, or release was performed; parent checkpoint `6.17` remains open.
