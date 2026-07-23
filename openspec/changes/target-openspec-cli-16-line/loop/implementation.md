@@ -8716,3 +8716,75 @@ git diff --check
 This accepts only the SpecList owner. It does not claim continuity for Git, Dashboard, Search, static export,
 or the independent Loading-performance Change; checkpoint `6.17` remains open. The owner retains final
 browser, visual, and multi-tab acceptance.
+
+### 6.17-D Git entry-list continuity research (2026-07-23)
+
+The next bounded list family is the live GitRoute commit/uncommitted entry list. Existing Git authority is
+already binding-aware: `useGitRepositoryScope` supplies the current semantic scope and opaque
+`bindingToken`, the infinite query key and every list RPC carry both, and non-current scope projections lock
+the route. This package must preserve those accepted 6.11 laws rather than introduce another Git authority.
+
+The production chain is:
+
+```text
+useGitRepositoryScope current { scope, bindingToken }
+          |
+          v
+binding-keyed useInfiniteQuery pages -> flattened entry snapshot
+          |
+          v
+GitRoute-local display continuity owner
+          |
+          v
+binding + entity keyed GitEntryRow
+          |
+          v
+real row click -> GitRoute.onSelect -> vtNavController.push
+          |
+          v
+scope-correct href + originating binding handoff + shared descriptor
+```
+
+Keep two transitions non-interchangeable:
+
+```text
+same binding, entry id sequence changes -> one local list transition; newest generation wins
+same binding, same ids, metadata changes -> update visible metadata without a list transition
+scope or bindingToken changes           -> immediate replacement/unknown commit; retire old callbacks
+detail row click                         -> existing direct push with originating binding provenance
+```
+
+Identity inside one binding is the existing Git entity id: a commit uses its full hash and the working tree
+uses `uncommitted`. `updatedAt` is metadata, not working-tree identity. Across bindings, even an identical
+commit hash is not the same physical row owner; the binding epoch must participate in the rendered key and
+continuity scope. The helper must receive unknown data as `undefined` rather than converting an unobserved
+query into a current empty list, but it must not change GitRoute's already accepted loading/error authority.
+
+Focused evidence must cross the real GitRoute owner. It covers initial immediate render, same-binding
+addition/removal/reorder, stable uncommitted identity across metadata changes, same-order metadata refresh,
+late same-binding callback retirement, immediate scope/binding rotation, a late A callback after B, and
+native-transition unavailable/throwing fallback. Navigation evidence keeps the real `GitEntryRow` and
+`GitRoute.onSelect`; mock only deterministic query/transport and the outer `vtNavController.push` edge. It
+asserts the exact Code and Planning href, origin `bindingToken`, entity id, and shared-element descriptor.
+
+Required independent mutation evidence:
+
+1. Remove only the generation check inside the deferred native update callback. The named late-A test must
+   fail because obsolete entries replace the current same-binding snapshot. Restore the exact guard.
+2. Replace only the binding-qualified entity React key with an index key. The named reorder/removal test must
+   fail through DOM/href/shared-element relabeling. Restore the binding-qualified entity key.
+3. Remove only the scope/binding rotation retirement branch. The named A-binding -> B-binding -> late-A test
+   must fail because A returns or B is displaced. Restore the rotation boundary.
+
+Do not modify `useGitRepositoryScope`, authoritative subscription/reconnect behavior, Git RPC/cache keys,
+infinite-query pagination semantics, refresh/worktree mutations, Git detail, shared navigation policy,
+Dashboard, Core, Server, static/SSG, or `accelerate-live-projection-loading`. Run only the GitRoute continuity
+and navigation Vitest files, existing directly adjacent GitRoute tests required by the change, Web typecheck,
+exact changed-file format/lint, and `git diff --check`. Do not run broad gates or browser automation. Final
+browser, visual, and multi-tab acceptance remains the owner's responsibility.
+
+The parallel Loading Change currently owns dirty Core/Server files, Dashboard, `use-dashboard`,
+`use-subscription`, ChangeList, and its own artifacts. Do not revert or stage those files. If a file overlaps,
+wait for the parallel fix to settle and reread it before editing. A necessary code/test/evidence mixed commit
+is allowed after focused checks; this permission does not authorize unrelated dirty files. Parent checkpoint
+`6.17` remains open.

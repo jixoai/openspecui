@@ -468,6 +468,15 @@ The independent browser attempt confirms the desktop source control and URL/quer
     transitions, and real Owned/Referenced detail preparation through Router. The independent review reran
     continuity `6/6`, navigation `2/2`, and current source checks. Parent `6.17` remains open; final visual,
     browser, and multi-tab acceptance remains owner-only.
+  - `6.17-D` planned: GitRoute is the next independent list owner. It may animate only same-binding entry
+    additions/removals/reorders from the existing binding-keyed infinite query. A repository scope or
+    `bindingToken` change commits the replacement binding immediately and retires every old local callback;
+    continuity must never bridge two repository bindings. Commit and uncommitted identities remain stable
+    within one binding, and the real `GitEntryRow -> GitRoute.onSelect -> vtNavController.push` path must
+    preserve the exact scope URL, originating binding token, entity id, and shared-element descriptor. Keep
+    Git scope authority, reconnect locks, query/cache keys, pagination, mutations, Dashboard, Server, and the
+    independent Loading-performance Change unchanged. Parent `6.17` remains open and final browser, visual,
+    and multi-tab acceptance remains owner-only.
 - [ ] 6.17 List mutations and route changes preserve physical continuity through existing motion/View Transition patterns
 
 ## 7. Static Export Parity and Privacy
