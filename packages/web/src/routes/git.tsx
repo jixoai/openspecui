@@ -29,6 +29,7 @@ import {
 import {
   buildGitEntryHrefFromEntry,
   buildGitRepositoryHref,
+  getGitEntryEntityId,
   GIT_ENTRY_PAGE_SIZE,
 } from '@/lib/git-panel'
 import { navigateToServerHandoff } from '@/lib/server-handoff'
@@ -48,6 +49,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useGitListContinuity } from './git-list-continuity'
 
 const GIT_AUTO_REFRESH_OPTIONS: SelectOption<DashboardGitAutoRefreshPreset>[] = [
   { value: '30s', label: '30s' },
@@ -132,6 +134,16 @@ export function GitRoute() {
   const gitEntries = useMemo(
     () => entriesQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [entriesQuery.data]
+  )
+
+  const gitEntriesContainerRef = useRef<HTMLDivElement>(null)
+  // Preserve physical row identity across same-binding entry mutations; rotate immediately on
+  // scope/bindingToken change. `gitEntries` is memoized so the hook can no-op on reference-equal
+  // snapshots and never fabricate `[]` for an unobserved query.
+  const displayedGitEntries = useGitListContinuity(
+    gitEntries,
+    { scope, bindingToken },
+    gitEntriesContainerRef
   )
 
   const focusRefreshAtRef = useRef(0)
@@ -554,10 +566,10 @@ export function GitRoute() {
           <span className="text-muted-foreground text-xs">{gitEntries.length} loaded</span>
         </div>
 
-        <div className="space-y-1">
-          {gitEntries.map((entry) => (
+        <div className="space-y-1" ref={gitEntriesContainerRef}>
+          {(displayedGitEntries ?? []).map((entry) => (
             <GitEntryRow
-              key={entry.type === 'commit' ? entry.hash : `uncommitted:${entry.updatedAt ?? '0'}`}
+              key={`${bindingToken ?? 'none'}:${getGitEntryEntityId(entry)}`}
               entry={entry}
               onSelect={(selectedEntry, sourceElement) => {
                 if (!bindingToken || scopeNonAuthoritativeRef.current) return

@@ -8788,3 +8788,137 @@ The parallel Loading Change currently owns dirty Core/Server files, Dashboard, `
 wait for the parallel fix to settle and reread it before editing. A necessary code/test/evidence mixed commit
 is allowed after focused checks; this permission does not authorize unrelated dirty files. Parent checkpoint
 `6.17` remains open.
+
+### 6.17-D Git entry-list continuity applied (2026-07-23)
+
+Changed contracts:
+
+- Added `packages/web/src/routes/git-list-continuity.ts` exporting
+  `useGitListContinuity(incomingEntries, binding, containerRef)`. The composite `binding` is
+  `{ scope, bindingToken }`; rotation fires when either field changes. Identity inside one
+  binding is `getGitEntryEntityId(entry)` (`commit:<full hash>` or `uncommitted`); `updatedAt`
+  is metadata and is not part of identity. Unknown (`undefined`) incoming stays display-only and
+  is never fabricated as `[]`.
+- `packages/web/src/routes/git.tsx` renders `displayedGitEntries` from the helper instead of raw
+  `gitEntries`, attaches `gitEntriesContainerRef` to the `Commits` list container, and uses the
+  binding-qualified row key `` `${bindingToken ?? 'none'}:${getGitEntryEntityId(entry)}` `` (the
+  previous key embedded `entry.updatedAt`, misusing metadata as uncommitted identity). The
+  `onSelect` navigation owner, pagination, loading/error/empty blocks, and all Git authority are
+  unchanged.
+
+The production chain, unchanged above and below the new local owner:
+
+```text
+useGitRepositoryScope current { scope, bindingToken }
+          |
+          v
+binding-keyed useInfiniteQuery pages -> flattened entry snapshot (memoized)
+          |
+          v
+useGitListContinuity -> displayedGitEntries
+          |
+          v
+binding + entity keyed GitEntryRow -> GitRoute.onSelect -> vtNavController.push
+```
+
+It preserves the two 6.17-C traps: `gitEntries` is already `useMemo`'d on `entriesQuery.data` so
+the hook's `previous === incoming` reference-identity early-return no-ops on reference-equal
+snapshots (trap a); the render path only reads `committedBindingRef`/`initializedRef` and all ref
+advancement happens inside `useLayoutEffect`, so StrictMode's discarded render cannot retire the
+wrong generation (trap b). Two generation checks remain: the `queueMicrotask` wrapper and the
+inner native `update` callback.
+
+Focused green evidence:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  --pool forks --no-file-parallelism --maxWorkers=1 \
+  src/routes/git-list-continuity.test.tsx src/routes/git-list-navigation.test.tsx \
+  --reporter verbose
+-> 2 files / 10 tests passed (8 continuity + 2 navigation)
+
+pnpm --filter @openspecui/web exec vitest run --project unit \
+  --pool forks --no-file-parallelism --maxWorkers=1 \
+  src/routes/git.test.tsx --reporter verbose
+-> 1 file / 17 tests passed (unchanged regression authority)
+
+pnpm --filter @openspecui/web typecheck
+-> passed
+
+pnpm exec prettier --check \
+  packages/web/src/routes/git-list-continuity.ts \
+  packages/web/src/routes/git-list-continuity.test.tsx \
+  packages/web/src/routes/git-list-navigation.test.tsx \
+  packages/web/src/routes/git.tsx
+-> All matched files use Prettier code style
+
+pnpm exec oxlint \
+  packages/web/src/routes/git-list-continuity.ts \
+  packages/web/src/routes/git-list-continuity.test.tsx \
+  packages/web/src/routes/git-list-navigation.test.tsx \
+  packages/web/src/routes/git.tsx --ignore-path .gitignore
+-> 0 warnings / 0 errors
+
+git diff --check
+-> passed
+```
+
+Mutation resistance (each restored before the next):
+
+1. Removed only the inner generation-equality check inside the native `update` callback in
+   `git-list-continuity.ts`:
+
+   ```text
+   update: () => { setDisplayedEntries(incomingEntries) }   // dropped the generation guard
+   pnpm ... vitest run ... src/routes/git-list-continuity.test.tsx -t "late same-binding"
+   -> failed as intended: `feat: C` was absent after invoking the deferred B callback;
+      the obsolete callback restored the B snapshot.
+   ```
+
+   Restoring `if (generationRef.current !== generation) return` returned the lane to 8/8 green.
+
+2. Replaced only the binding-qualified row key in `git.tsx` with `key={index}`:
+
+   ```text
+   pnpm ... vitest run ... src/routes/git-list-continuity.test.tsx -t "surviving commit row identity"
+   -> failed as intended: after [A, B] -> [B], the B row was a different DOM node
+      (tooltip id `base-ui-_r_4_` vs `base-ui-_r_2_`) — positional reuse relabeled the row.
+   ```
+
+   Restoring `` key={`${bindingToken ?? 'none'}:${getGitEntryEntityId(entry)}`} `` returned green.
+
+3. Removed only the scope/binding rotation retirement branch in `git-list-continuity.ts`. The
+   initial branch and same-binding branch were left intact. This mutation is defense-in-depth
+   for late-callback retirement (the inner generation guard already retires a late callback), so
+   its unique, non-redundant contribution is advancing `committedBindingRef`. The red evidence
+   targets that unique contribution:
+
+   ```text
+   pnpm ... vitest run ... src/routes/git-list-continuity.test.tsx \
+     -t "after a Code -> Planning rotation"
+   -> failed as intended: after rotating Code -> Planning and then doing a same-binding
+      planning removal, `plan: X` was immediately absent instead of being held by continuity.
+      Without the rotation branch, committedBindingRef never advances to planning, so
+      bindingChanged stays true on every subsequent render and continuity is bypassed.
+   ```
+
+   Restoring the rotation branch returned the lane to 8/8 green.
+
+Design note on mutation 3: a first attempt asserted `startViewTransition` was not called during
+rotation, but that stayed green because the same-binding fallback path is also short-circuited by
+the `doc.activeViewTransition` guard (the pending Code transition keeps it truthy). The accepted
+red instead proves the rotation branch's irreplaceable `committedBindingRef` advancement, which is
+what makes post-rotation same-binding continuity possible at all. The late-callback retirement
+itself is redundantly covered by the inner generation guard proven in mutation 1.
+
+Exclusions observed: `useGitRepositoryScope`, `useAuthoritativeSubscription`/`use-subscription`,
+Git Server/Router/Core contracts, React Query key/RPC shapes, refresh/worktree mutations,
+`git-view` detail, Dashboard, static export, and `view-transitions/*` internals were not modified.
+The working tree contained only the four slice files (`git.tsx` plus three new route files); no
+file owned by the parallel `accelerate-live-projection-loading` Change was staged or reverted.
+
+This accepts only the GitRoute entry-list continuity owner. It does not claim continuity for
+Dashboard, Search, static export, the independent Loading-performance Change, or any other Git
+surface. Parent checkpoint `6.17` remains open. Final browser, visual, and multi-tab acceptance
+remains the owner's responsibility; no broad gates, SSG, browser automation, push, merge, archive,
+or release was performed, and `6.17-E` was not started.
