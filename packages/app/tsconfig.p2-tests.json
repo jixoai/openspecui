@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/lib/connection-observation.test.ts", "src/routes/connection-context.test.tsx"],
+  "exclude": ["node_modules", "dist"]
+}

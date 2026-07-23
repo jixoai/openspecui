@@ -3,26 +3,29 @@
  * 1. Build observed runtime environments from backend-issued health (opaque envUri + capabilities).
  * 2. Gate Store views through objective hosted-protocol capabilities.
  * 3. Preserve grouped connected projects and source-labelled Root/Reference evidence.
- * 4. Project retained evidence from its original generation, health source, and observation time.
+ * 4. Project retained evidence and the current attempt as non-interchangeable full sources.
  *
  * Original request (2026-07-15): "前端缺少的东西你可以通过注释补充。"
  * Migration (2026-07-23): wired to the backend health response (envUri/capabilities now emitted).
+ * Correction request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
 import {
   asEnvUri,
   type CliDiagnostic,
   type HostedBackendHealthResponse,
-  type RootContextState,
   type StoreCapability,
 } from '@openspecui/core'
 import type { StoreCapabilitySet } from '../types/capabilities'
 import type {
   HostedEnvironment,
   ProjectContextObservation,
-  RootObservationError,
-  RootObservationStatus,
+  ProjectRootEvidence,
 } from '../types/root-context'
-import type { ConnectionObservation } from './connection-observation'
+import type {
+  ConnectionObservation,
+  ConnectionRootAttempt,
+  ConnectionRootEvidence,
+} from './connection-observation'
 import { normalizeHostedApiBaseUrl } from './shell-state'
 
 export interface EnvironmentObservation {
@@ -93,38 +96,26 @@ export function deriveEnvironments(observations: OnlineBackendObservation[]): Ho
 }
 
 /** One backend's Root Context used to derive its project Context observation. */
-export interface BackendRootContextObservation extends OnlineBackendObservation {
-  rootContext: RootContextState | null
-  observedAt: number
-  rootStatus?: RootObservationStatus
-  rootError?: RootObservationError | null
+export interface BackendRootContextObservation {
+  evidence: ConnectionRootEvidence | null
+  attempt: ConnectionRootAttempt
   stale?: boolean
 }
 
 /** Preserve committed Root evidence provenance while a replacement observation remains pending. */
 export function projectRootObservation(
   observation: ConnectionObservation
-): BackendRootContextObservation | null {
-  const evidence = observation.rootEvidence
-  const health = evidence?.health ?? observation.health
-  if (!health) return null
+): BackendRootContextObservation {
   return {
-    tabId: evidence?.tabId ?? observation.tabId,
-    generation: evidence?.generation ?? observation.generation,
-    apiBaseUrl: evidence?.apiBaseUrl ?? observation.apiBaseUrl,
-    health,
-    rootContext: evidence?.rootContext ?? null,
-    rootStatus: observation.rootStatus,
-    rootError: observation.rootError,
-    stale:
-      observation.stale || (evidence !== null && evidence.generation !== observation.generation),
-    observedAt: evidence?.observedAt ?? observation.observedAt,
+    evidence: observation.rootEvidence,
+    attempt: observation.rootAttempt,
+    stale: observation.stale,
   }
 }
 
 /** Map a CLI Doctor reference diagnostic severity to a neutral Reference state. */
 function referenceStateFor(diagnostics: CliDiagnostic[]): {
-  state: ProjectContextObservation['references'][number]['state']
+  state: ProjectRootEvidence['references'][number]['state']
   note?: string
 } {
   const state = diagnostics.some((diagnostic) => diagnostic.severity === 'error')
@@ -147,53 +138,62 @@ export function deriveProjectContexts(
 ): ProjectContextObservation[] {
   const contexts: ProjectContextObservation[] = []
   for (const observation of observations) {
-    const envUriValue = observation.health.envUri
-    if (!envUriValue) continue
-    const root = observation.rootContext
-    const data = root?.state === 'loading' ? null : (root?.data ?? null)
-    const rootStatus = observation.rootStatus ?? root?.state ?? 'idle'
-    const rootError =
-      observation.rootError ??
-      (root?.state === 'error'
-        ? {
-            source: 'root-context' as const,
-            code: root.error.code,
-            message: root.error.message,
+    const { attempt, evidence } = observation
+    if (!evidence?.health.envUri && !attempt.health?.envUri) continue
+    const evidenceData = evidence?.rootContext.data ?? null
+    const evidenceSource = evidence
+      ? {
+          tabId: evidence.tabId,
+          sessionId: evidence.sessionId,
+          generation: evidence.generation,
+          apiBaseUrl: evidence.apiBaseUrl,
+          tabCreatedAt: evidence.tabCreatedAt,
+          health: evidence.health,
+          observedAt: evidence.observedAt,
+        }
+      : null
+    const references = evidenceSource
+      ? (evidenceData?.references ?? []).map((reference) => {
+          const state = referenceStateFor(reference.status ?? [])
+          return {
+            storeId: reference.store_id,
+            root: reference.root,
+            source: evidenceSource,
+            diagnostics: reference.status ?? [],
+            state: state.state,
+            note: state.note,
           }
-        : undefined)
-    const references = (data?.references ?? []).map((reference) => {
-      const state = referenceStateFor(reference.status ?? [])
-      return {
-        storeId: reference.store_id,
-        root: reference.root,
-        source: {
-          tabId: observation.tabId,
-          generation: observation.generation,
-          apiBaseUrl: observation.apiBaseUrl,
-        },
-        diagnostics: reference.status ?? [],
-        state: state.state,
-        note: state.note,
-      }
-    })
+        })
+      : []
     contexts.push({
-      envUri: asEnvUri(envUriValue),
-      tabId: observation.tabId,
-      generation: observation.generation,
-      apiBaseUrl: observation.apiBaseUrl,
-      projectName: observation.health.projectName,
-      planningRoot: data?.planningRoot?.path,
-      rootSource: data?.planningRoot?.source,
-      storeId: data?.storeId ?? data?.planningRoot?.store_id,
-      rootStatus,
-      rootError: rootError ?? undefined,
-      references,
-      diagnostics: data?.diagnostics.root,
-      observedAt: observation.observedAt,
+      evidence:
+        evidence && evidenceSource
+          ? {
+              source: evidenceSource,
+              projectName: evidence.health.projectName,
+              planningRoot: evidenceData?.planningRoot?.path,
+              rootSource: evidenceData?.planningRoot?.source,
+              storeId: evidenceData?.storeId ?? evidenceData?.planningRoot?.store_id,
+              references,
+              diagnostics: evidenceData?.diagnostics.root,
+            }
+          : null,
+      attempt: {
+        source: {
+          tabId: attempt.tabId,
+          sessionId: attempt.sessionId,
+          generation: attempt.generation,
+          apiBaseUrl: attempt.apiBaseUrl,
+          tabCreatedAt: attempt.tabCreatedAt,
+          health: attempt.health,
+          observedAt: attempt.observedAt,
+        },
+        status: attempt.status,
+        error: attempt.error ?? undefined,
+      },
       stale:
         observation.stale === true ||
-        root?.state === 'refreshing' ||
-        (root?.state === 'error' && root.data !== null),
+        (evidence !== null && evidence.generation !== attempt.generation),
     })
   }
   return contexts

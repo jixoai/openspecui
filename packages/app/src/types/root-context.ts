@@ -2,9 +2,10 @@
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Define hosted environment and observed project Context projections.
  * 2. Preserve upstream Store payloads without browser-owned registry semantics.
- * 3. Preserve source-labelled Root lifecycle and direct Reference provenance.
+ * 3. Separate retained Root/Reference evidence from the current source-labelled attempt.
  *
  * Original request (2026-07-15): "前端缺少的东西你可以通过注释补充。"
+ * Correction request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
 /**
  * Hosted runtime environment + project Context observation projections.
@@ -25,6 +26,7 @@
 import type {
   CliDiagnostic,
   CliRootSource,
+  HostedBackendHealthResponse,
   RootContextErrorCode,
   RootContextState,
 } from '@openspecui/core'
@@ -70,12 +72,22 @@ export type RootObservationError =
  * TODO(kernel): `openspec context --json` 的精确字段集待用 v1.6 source 审计后确定；
  * 这里先以 root + references 的中性结构占位，backend 落地后替换为强类型适配器。
  */
-export interface ProjectContextObservation {
-  envUri: EnvUri
+export interface ProjectObservationSource {
   tabId: string
+  sessionId: string
   generation: number
   /** backend 实例定位符。 */
   apiBaseUrl: string
+  tabCreatedAt: number
+  /** Exact health payload observed for this source; null before health is known. */
+  health: HostedBackendHealthResponse | null
+  /** 观察时间戳（ms）。 */
+  observedAt: number
+}
+
+/** Last committed Root/Reference evidence with the exact source that produced it. */
+export interface ProjectRootEvidence {
+  source: ProjectObservationSource & { health: HostedBackendHealthResponse }
   /** 项目显示名（来自 backend health，非 envUri 组成）。 */
   projectName?: string
   /** CLI 解析出的可写 planning root（绝对路径仅用于诊断展示，前端不基于它重构路径）。 */
@@ -84,10 +96,6 @@ export interface ProjectContextObservation {
   rootSource?: RootSource
   /** 生效 Store id（当 root 来自某个 Store 时）。 */
   storeId?: string
-  /** Root lifecycle is distinct from whether retained data is stale. */
-  rootStatus: RootObservationStatus
-  /** Source-labelled typed failure when rootStatus is error. */
-  rootError?: RootObservationError
   /**
    * 该项目观察到的直接 Reference Spec 索引（一层，不递归）。
    * 中性表达：observed references；空表示「no reference currently observed」，不是「无引用」。
@@ -95,8 +103,19 @@ export interface ProjectContextObservation {
   references: ObservedReference[]
   /** CLI 诊断（保留上游 snake_case 事实，不重解释为健康/所有权/完整性结论）。 */
   diagnostics?: CliDiagnostic[]
-  /** 观察时间戳（ms）。 */
-  observedAt: number
+}
+
+/** Current generation's Root lifecycle and failure, kept separate from retained evidence. */
+export interface ProjectRootAttempt {
+  source: ProjectObservationSource
+  status: RootObservationStatus
+  error?: RootObservationError
+}
+
+/** One connected project's non-interchangeable committed evidence and current attempt. */
+export interface ProjectContextObservation {
+  evidence: ProjectRootEvidence | null
+  attempt: ProjectRootAttempt
   /** 是否为最后观察的 stale 快照（项目离线时）。 */
   stale?: boolean
 }
@@ -110,11 +129,7 @@ export interface ObservedReference {
   /** Exact resolved Reference root when Doctor reports it. */
   root?: string
   /** Exact connected-project observation that supplied this direct Reference. */
-  source: {
-    tabId: string
-    generation: number
-    apiBaseUrl: string
-  }
+  source: ProjectObservationSource & { health: HostedBackendHealthResponse }
   /** Raw direct Doctor diagnostics retained without reinterpretation. */
   diagnostics: CliDiagnostic[]
   /** Reference 健康事实（客观保留 CLI 诊断，不推断为权限/完整性结论）。 */

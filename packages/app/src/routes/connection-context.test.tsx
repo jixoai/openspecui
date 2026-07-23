@@ -94,6 +94,7 @@ function createBackendFetch(
     envUris?: ReadonlyMap<string, string>
     envUrisAfterInitial?: ReadonlyMap<string, string>
     rootContexts?: ReadonlyMap<string, RootContextState>
+    rootContextsAfterInitial?: ReadonlyMap<string, RootContextState>
     stores?: StoreDoctorStore[]
     offlineAfterInitial?: string
   } = {}
@@ -103,6 +104,7 @@ function createBackendFetch(
     [API_B, createHealth(API_B, 'project-b', options.envUris?.get(API_B) ?? 'env:b')],
   ])
   const healthRequestCounts = new Map<string, number>()
+  const rootRequestCounts = new Map<string, number>()
   return vi.fn(async (input, init) => {
     const url = String(input)
     const apiBaseUrl = url.startsWith(API_A) ? API_A : API_B
@@ -132,9 +134,14 @@ function createBackendFetch(
       return Response.json(health.get(apiBaseUrl))
     }
     if (url.includes('/trpc/rootContext.get')) {
+      const rootRequestCount = (rootRequestCounts.get(apiBaseUrl) ?? 0) + 1
+      rootRequestCounts.set(apiBaseUrl, rootRequestCount)
       return Response.json({
         result: {
           data:
+            (rootRequestCount > 1
+              ? options.rootContextsAfterInitial?.get(apiBaseUrl)
+              : undefined) ??
             options.rootContexts?.get(apiBaseUrl) ??
             ({
               state: 'loading',
@@ -477,6 +484,63 @@ describe('App connection selection and observation routes', () => {
     expect(screen.getByText('root-unhealthy: Project B root is unhealthy.')).toBeTruthy()
     expect(screen.getByText('retained stale snapshot')).toBeTruthy()
     expect(screen.getByText('Observed relationships only — not a machine-wide index.')).toBeTruthy()
+    await unmount(context)
+  })
+
+  it('renders retained A evidence separately from a failed B Root attempt', async () => {
+    const rootA = createRootData('project-a', 'root-a', [
+      { store_id: 'reference-a', root: '/stores/reference-a', status: [] },
+    ])
+    const failedB = createRootData('project-a', 'root-b', [])
+    localStorage.setItem(
+      getHostedShellStorageKey(),
+      JSON.stringify({
+        activeTabId: 'tab-a',
+        tabs: [{ id: 'tab-a', sessionId: 'session-a', apiBaseUrl: API_A, createdAt: 1 }],
+      } satisfies HostedShellState)
+    )
+    vi.stubGlobal(
+      'fetch',
+      createBackendFetch([], {
+        envUris: new Map([[API_A, 'env:a']]),
+        envUrisAfterInitial: new Map([[API_A, 'env:b']]),
+        rootContexts: new Map<string, RootContextState>([
+          [API_A, { state: 'ready', data: rootA, attempt: null, error: null, observedAt: 101 }],
+        ]),
+        rootContextsAfterInitial: new Map<string, RootContextState>([
+          [
+            API_A,
+            {
+              state: 'error',
+              data: failedB,
+              attempt: { ...failedB, planningRoot: null, observedAt: 202 },
+              error: { code: 'root-unhealthy', message: 'Root attempt B failed.' },
+              observedAt: 202,
+            },
+          ],
+        ]),
+      })
+    )
+    const context = await renderRoute('/environment/stores/context')
+    const referenceA = await screen.findByLabelText('project-a references reference-a (observed)')
+    expect(referenceA.getAttribute('title')).toBe('/stores/reference-a')
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+    })
+
+    const projectRow = await screen.findByText('Latest Root attempt failed')
+    const row = projectRow.closest('tr')
+    expect(row).not.toBeNull()
+    if (!row) throw new Error('Project Context row is unavailable.')
+    expect(within(row).getByText('root-a')).toBeTruthy()
+    expect(within(row).getByLabelText('project-a references reference-a (observed)')).toBeTruthy()
+    expect(within(row).getByText('root-unhealthy: Root attempt B failed.')).toBeTruthy()
+    const attemptSource = within(row).getByLabelText('Latest Root attempt source')
+    expect(within(attemptSource).getByText(API_A)).toBeTruthy()
+    expect(within(attemptSource).getByText('generation 2')).toBeTruthy()
+    expect(within(attemptSource).getByText('env:b')).toBeTruthy()
+    expect(within(attemptSource).getByText('observed 202')).toBeTruthy()
     await unmount(context)
   })
 

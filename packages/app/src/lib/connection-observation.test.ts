@@ -71,12 +71,28 @@ function readyRoot(projectName: string, observedAt: number): RootContextState {
       },
     ],
     contextMembers: [],
-    dataScope: { path: '/tmp/data/openspec', source: 'user-home-default' },
+    dataScope: {
+      path: '/tmp/data/openspec',
+      source: 'user-home-default',
+      environmentVariable: null,
+    },
     diagnostics: { root: [], doctor: [], context: [] },
     evidence: { doctor: null, context: null },
     observedAt,
   }
   return { state: 'ready', data, attempt: null, error: null, observedAt }
+}
+
+function failedRoot(projectName: string, observedAt: number): RootContextState {
+  const ready = readyRoot(projectName, observedAt)
+  if (ready.state !== 'ready') throw new Error('Ready Root fixture is unavailable.')
+  return {
+    state: 'error',
+    data: ready.data,
+    attempt: { ...ready.data, planningRoot: null, observedAt },
+    error: { code: 'root-unhealthy', message: 'Root attempt B failed.' },
+    observedAt,
+  }
 }
 
 function online(backendHealth: HostedBackendHealthResponse): HostedBackendProbeResult {
@@ -127,8 +143,17 @@ describe('connection observation owner', () => {
             rootContext: readyRoot('original-project', 101),
             observedAt: 101,
           },
-          rootStatus: 'ready',
-          rootError: null,
+          rootAttempt: {
+            tabId: original.id,
+            sessionId: original.sessionId,
+            apiBaseUrl: original.apiBaseUrl,
+            tabCreatedAt: original.createdAt,
+            generation: 1,
+            health: health(API_A, 'original-project'),
+            status: 'ready',
+            error: null,
+            observedAt: 101,
+          },
           current: true,
           stale: false,
           observedAt: 101,
@@ -193,14 +218,14 @@ describe('connection observation owner', () => {
         reachability: 'online',
         current: true,
         health: { projectName: 'project-a' },
-        rootStatus: 'loading',
+        rootAttempt: { status: 'loading' },
       },
       {
         apiBaseUrl: API_B,
         reachability: 'authentication-required',
         current: false,
         health: null,
-        rootStatus: 'idle',
+        rootAttempt: { status: 'idle' },
       },
     ])
   })
@@ -310,7 +335,7 @@ describe('connection observation owner', () => {
 
     owner.setTabs([tab('a', API_A)])
     await vi.waitFor(() => {
-      expect(owner.getSnapshot().observations[0]?.rootStatus).toBe('ready')
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
     })
     const retained = owner.getSnapshot().observations[0]?.rootEvidence
     expect(retained?.rootContext.data?.references[0]?.store_id).toBe('project-a-reference')
@@ -319,7 +344,7 @@ describe('connection observation owner', () => {
     await vi.waitFor(() => {
       expect(owner.getSnapshot().observations[0]).toMatchObject({
         current: true,
-        rootStatus: 'loading',
+        rootAttempt: { status: 'loading' },
         stale: true,
       })
     })
@@ -328,7 +353,7 @@ describe('connection observation owner', () => {
     replacementRoot.resolve(loadingRoot(3))
     await refresh
     expect(owner.getSnapshot().observations[0]).toMatchObject({
-      rootStatus: 'loading',
+      rootAttempt: { status: 'loading' },
       stale: true,
     })
     expect(owner.getSnapshot().observations[0]?.rootEvidence).toBe(retained)
@@ -359,7 +384,7 @@ describe('connection observation owner', () => {
 
     owner.setTabs([tab('a', API_A)])
     await vi.waitFor(() => {
-      expect(owner.getSnapshot().observations[0]?.rootStatus).toBe('ready')
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
     })
     const generationA = owner.getSnapshot().observations[0]?.generation
 
@@ -368,7 +393,7 @@ describe('connection observation owner', () => {
       const pending = owner.getSnapshot().observations[0]
       expect(pending?.generation).not.toBe(generationA)
       expect(pending).toMatchObject({
-        rootStatus: 'loading',
+        rootAttempt: { status: 'loading' },
         stale: true,
         health: { envUri: 'env:b' },
       })
@@ -376,15 +401,90 @@ describe('connection observation owner', () => {
     const pending = owner.getSnapshot().observations[0]
     if (!pending) throw new Error('Pending backend observation is unavailable.')
     const projected = projectRootObservation(pending)
-    if (!projected) throw new Error('Retained Root projection is unavailable.')
     const contexts = deriveProjectContexts([projected])
 
     expect(contexts[0]).toMatchObject({
-      generation: generationA,
-      envUri: 'env:a',
-      observedAt: 101,
-      references: [{ source: { generation: generationA } }],
+      evidence: {
+        source: { generation: generationA, health: { envUri: 'env:a' }, observedAt: 101 },
+        references: [{ source: { generation: generationA } }],
+      },
+      attempt: {
+        source: { health: { envUri: 'env:b' } },
+        status: 'loading',
+      },
     })
+  })
+
+  it('keeps A evidence and a failed B attempt as separately sourced facts', async () => {
+    let probeCount = 0
+    let rootFetchCount = 0
+    const owner = createConnectionObservationOwner({
+      probe: async () => {
+        probeCount += 1
+        return online(
+          buildBackendHealthPayload({
+            projectDir: '/tmp/project-a',
+            projectName: 'project-a',
+            watcherEnabled: true,
+            openspecuiVersion: '6.0.0',
+            embeddedUiUrl: API_A,
+            apiBaseUrl: API_A,
+            envUri: probeCount === 1 ? 'env:a' : 'env:b',
+          })
+        )
+      },
+      fetchRootContext: async () => {
+        rootFetchCount += 1
+        return rootFetchCount === 1 ? readyRoot('project-a', 101) : failedRoot('project-b', 202)
+      },
+      now: () => 999,
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
+    })
+    await owner.refresh(['a'])
+
+    const observation = owner.getSnapshot().observations[0]
+    if (!observation) throw new Error('Connection observation is unavailable.')
+    const contexts = deriveProjectContexts([projectRootObservation(observation)])
+    expect(contexts).toMatchObject([
+      {
+        evidence: {
+          source: {
+            tabId: 'a',
+            sessionId: 'session-a',
+            apiBaseUrl: API_A,
+            tabCreatedAt: 1,
+            generation: 1,
+            health: { envUri: 'env:a' },
+            observedAt: 101,
+          },
+          storeId: 'project-a',
+          references: [
+            {
+              storeId: 'project-a-reference',
+              source: { generation: 1, health: { envUri: 'env:a' }, observedAt: 101 },
+            },
+          ],
+        },
+        attempt: {
+          source: {
+            tabId: 'a',
+            sessionId: 'session-a',
+            apiBaseUrl: API_A,
+            tabCreatedAt: 1,
+            generation: 2,
+            health: { envUri: 'env:b' },
+            observedAt: 202,
+          },
+          status: 'error',
+          error: { source: 'root-context', code: 'root-unhealthy' },
+        },
+        stale: true,
+      },
+    ])
   })
 
   it('keeps retained Root provenance stale through a transport failure', async () => {
@@ -401,15 +501,17 @@ describe('connection observation owner', () => {
 
     owner.setTabs([tab('a', API_A)])
     await vi.waitFor(() => {
-      expect(owner.getSnapshot().observations[0]?.rootStatus).toBe('ready')
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
     })
     const retained = owner.getSnapshot().observations[0]?.rootEvidence
     await owner.refresh(['a'])
 
     expect(owner.getSnapshot().observations[0]).toMatchObject({
       current: true,
-      rootStatus: 'error',
-      rootError: { source: 'transport', message: 'websocket reconnect failed' },
+      rootAttempt: {
+        status: 'error',
+        error: { source: 'transport', message: 'websocket reconnect failed' },
+      },
       stale: true,
     })
     expect(owner.getSnapshot().observations[0]?.rootEvidence).toBe(retained)
@@ -434,7 +536,7 @@ describe('connection observation owner', () => {
 
     owner.setTabs([tab('a', API_A)])
     await vi.waitFor(() => {
-      expect(owner.getSnapshot().observations[0]?.rootStatus).toBe('ready')
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
     })
     const retained = owner.getSnapshot().observations[0]?.rootEvidence
     await owner.refresh(['a'])

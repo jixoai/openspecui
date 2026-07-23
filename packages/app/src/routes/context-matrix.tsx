@@ -3,16 +3,22 @@
  * 1. Project observed project-to-Root and Reference relationships by environment.
  * 2. Avoid machine-wide completeness claims.
  * 3. Preserve each source's Root lifecycle, typed failure, and direct Reference provenance.
- * 4. Keep retained Root evidence on its original generation, environment, and observation time.
+ * 4. Render retained evidence and current attempts without hybrid attribution.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
+ * Correction request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
 import { Columns3 } from 'lucide-react'
 import { EmptyView, ErrorView, LoadingView } from '../components/state-views'
 import { StoreManagerShell } from '../components/store-manager-shell'
 import { useConnectionObservations } from '../lib/connection-observation'
 import { projectRootObservation, useEnvironmentObservation } from '../lib/use-environment'
-import type { ProjectContextObservation } from '../types/root-context'
+import type {
+  ProjectContextObservation,
+  ProjectObservationSource,
+  ProjectRootAttempt,
+  ProjectRootEvidence,
+} from '../types/root-context'
 
 /**
  * Context Matrix（C 视图，兄弟 Context 视图）：项目 ↔ Root/Reference 关系表。
@@ -44,10 +50,7 @@ export function ContextMatrixRoute() {
         ]
       : []
   )
-  const rootContextObservations = connectionObservations.flatMap((observation) => {
-    const projected = projectRootObservation(observation)
-    return projected ? [projected] : []
-  })
+  const rootContextObservations = connectionObservations.map(projectRootObservation)
   const derived = useEnvironmentObservation(observations, rootContextObservations)
   const projectContexts = derived.projectContexts
   const isLoading =
@@ -55,13 +58,13 @@ export function ContextMatrixRoute() {
     connectionObservations.some(
       (observation) =>
         observation.reachability === 'checking' ||
-        (observation.current && observation.rootStatus === 'loading')
+        (observation.current && observation.rootAttempt.status === 'loading')
     )
   const error =
     derived.error ??
     connectionObservations.flatMap((observation) =>
-      observation.rootError
-        ? [new Error(`${observation.apiBaseUrl}: ${observation.rootError.message}`)]
+      observation.rootAttempt.error
+        ? [new Error(`${observation.apiBaseUrl}: ${observation.rootAttempt.error.message}`)]
         : []
     )[0] ??
     null
@@ -113,18 +116,21 @@ function renderContextMatrixBody(projectContexts: ProjectContextObservation[]) {
           </thead>
           <tbody>
             {projectContexts.map((context) => (
-              <tr key={`${context.tabId}:${context.generation}`}>
+              <tr key={projectContextKey(context)}>
                 <td className="border-border border-b p-2">
-                  <div className="font-medium">{context.projectName ?? context.apiBaseUrl}</div>
+                  <div className="font-medium">{projectLabel(context)}</div>
                   <div className="text-muted-foreground font-mono text-xs">
-                    {context.apiBaseUrl}
+                    {projectSource(context).apiBaseUrl}
                   </div>
                   {context.stale ? (
                     <div className="text-muted-foreground text-xs">retained stale snapshot</div>
                   ) : null}
                 </td>
                 <td className="border-border border-b p-2">
-                  <RootEvidence context={context} />
+                  <div className="space-y-2">
+                    <RootEvidence evidence={context.evidence} />
+                    <RootAttempt attempt={context.attempt} evidence={context.evidence} />
+                  </div>
                 </td>
                 {observedStoreIds.map((storeId) => (
                   <td key={storeId} className="border-border border-b p-2">
@@ -141,16 +147,17 @@ function renderContextMatrixBody(projectContexts: ProjectContextObservation[]) {
 }
 
 function MatrixCell({ context, storeId }: { context: ProjectContextObservation; storeId: string }) {
-  if (context.storeId === storeId) {
+  const evidence = context.evidence
+  if (evidence?.storeId === storeId) {
     return <span className="bg-primary/15 text-primary rounded px-1.5 py-0.5 text-xs">Root</span>
   }
-  const reference = context.references.find((reference) => reference.storeId === storeId)
+  const reference = evidence?.references.find((reference) => reference.storeId === storeId)
   if (reference) {
     return (
       <div className="space-y-1 text-xs">
         <span
           className="rounded bg-sky-500/15 px-1.5 py-0.5 text-sky-700 dark:text-sky-300"
-          aria-label={`${context.projectName ?? context.apiBaseUrl} references ${storeId} (${reference.state})`}
+          aria-label={`${projectLabel(context)} references ${storeId} (${reference.state})`}
           title={reference.root}
         >
           Reference · {reference.state}
@@ -173,41 +180,108 @@ function MatrixCell({ context, storeId }: { context: ProjectContextObservation; 
   return <span className="text-muted-foreground text-xs">—</span>
 }
 
-function RootEvidence({ context }: { context: ProjectContextObservation }) {
-  if (context.rootStatus === 'error') {
-    const detail = context.rootError
-      ? context.rootError.source === 'root-context'
-        ? `${context.rootError.code}: ${context.rootError.message}`
-        : context.rootError.message
-      : 'Unknown Root Context failure.'
-    return (
-      <div className="space-y-1" role="status">
-        <div className="text-destructive text-xs font-medium">Root error</div>
-        <div className="text-destructive/80 text-xs">{detail}</div>
-        {context.storeId ? <div className="font-mono text-xs">{context.storeId}</div> : null}
-      </div>
-    )
-  }
-  if (context.rootStatus === 'loading' || context.rootStatus === 'idle') {
-    return <span className="text-muted-foreground text-xs">Root {context.rootStatus}</span>
-  }
-  return context.storeId ? (
-    <span className="font-mono text-xs">{context.storeId}</span>
+function RootEvidence({ evidence }: { evidence: ProjectRootEvidence | null }) {
+  if (!evidence) return null
+  return evidence.storeId ? (
+    <span className="font-mono text-xs">{evidence.storeId}</span>
   ) : (
-    <span className="text-muted-foreground text-xs">{context.rootSource ?? 'unresolved'}</span>
+    <span className="text-muted-foreground text-xs">{evidence.rootSource ?? 'unresolved'}</span>
   )
 }
 
-function collectObservedStoreIds(
-  contexts: {
-    storeId?: string
-    references: { storeId: string }[]
-  }[]
-): string[] {
+function RootAttempt({
+  attempt,
+  evidence,
+}: {
+  attempt: ProjectRootAttempt
+  evidence: ProjectRootEvidence | null
+}) {
+  const isReplacement = Boolean(evidence && !isSameSource(evidence.source, attempt.source))
+  if (attempt.status === 'ready' && !isReplacement) return null
+  if (attempt.status === 'error') {
+    const detail = attempt.error
+      ? attempt.error.source === 'root-context'
+        ? `${attempt.error.code}: ${attempt.error.message}`
+        : attempt.error.message
+      : 'Unknown Root Context failure.'
+    return (
+      <div className="space-y-1" role="status">
+        <div className="text-destructive text-xs font-medium">
+          {isReplacement ? 'Latest Root attempt failed' : 'Root error'}
+        </div>
+        <div className="text-destructive/80 text-xs">{detail}</div>
+        <RootAttemptSource attempt={attempt} />
+      </div>
+    )
+  }
+  if (attempt.status === 'loading' || attempt.status === 'idle' || isReplacement) {
+    return (
+      <div className="text-muted-foreground space-y-1 text-xs">
+        <div>Root {attempt.status}</div>
+        {isReplacement ? <RootAttemptSource attempt={attempt} /> : null}
+      </div>
+    )
+  }
+  return null
+}
+
+function RootAttemptSource({ attempt }: { attempt: ProjectRootAttempt }) {
+  return (
+    <dl
+      aria-label="Latest Root attempt source"
+      className="text-muted-foreground space-y-0.5 font-mono text-xs"
+    >
+      <div>
+        <dt className="sr-only">Backend locator</dt>
+        <dd>{attempt.source.apiBaseUrl}</dd>
+      </div>
+      <div>
+        <dt className="sr-only">Observation generation</dt>
+        <dd>generation {attempt.source.generation}</dd>
+      </div>
+      {attempt.source.health?.envUri ? (
+        <div>
+          <dt className="sr-only">Environment identity</dt>
+          <dd>{attempt.source.health.envUri}</dd>
+        </div>
+      ) : null}
+      <div>
+        <dt className="sr-only">Observation time</dt>
+        <dd>observed {attempt.source.observedAt}</dd>
+      </div>
+    </dl>
+  )
+}
+
+function projectSource(context: ProjectContextObservation): ProjectObservationSource {
+  return context.evidence?.source ?? context.attempt.source
+}
+
+function projectLabel(context: ProjectContextObservation): string {
+  const source = projectSource(context)
+  return source.health?.projectName ?? source.apiBaseUrl
+}
+
+function projectContextKey(context: ProjectContextObservation): string {
+  const { source } = context.attempt
+  return `${source.tabId}:${source.sessionId}:${source.tabCreatedAt}:${source.generation}`
+}
+
+function isSameSource(left: ProjectObservationSource, right: ProjectObservationSource): boolean {
+  return (
+    left.tabId === right.tabId &&
+    left.sessionId === right.sessionId &&
+    left.apiBaseUrl === right.apiBaseUrl &&
+    left.tabCreatedAt === right.tabCreatedAt &&
+    left.generation === right.generation
+  )
+}
+
+function collectObservedStoreIds(contexts: ProjectContextObservation[]): string[] {
   const set = new Set<string>()
   for (const context of contexts) {
-    if (context.storeId) set.add(context.storeId)
-    for (const reference of context.references) set.add(reference.storeId)
+    if (context.evidence?.storeId) set.add(context.evidence.storeId)
+    for (const reference of context.evidence?.references ?? []) set.add(reference.storeId)
   }
   return Array.from(set).sort()
 }

@@ -6,6 +6,7 @@
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Section 8.6/9.4/9.5 App environment grouping + capability visibility.
+ * Correction request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
 import {
   buildBackendHealthPayload,
@@ -15,6 +16,7 @@ import {
 } from '@openspecui/core'
 import { describe, expect, it } from 'vitest'
 import {
+  type BackendRootContextObservation,
   canRenderStoreInspector,
   deriveEnvironments,
   deriveProjectContexts,
@@ -64,6 +66,38 @@ function rootData(options: {
     diagnostics: { root: [], doctor: [], context: [] },
     evidence: { doctor: null, context: null },
     observedAt: 1,
+  }
+}
+
+function rootObservation(options: {
+  tabId: string
+  generation: number
+  health: HostedBackendHealthResponse
+  rootContext: RootContextState | null
+}): BackendRootContextObservation {
+  const apiBaseUrl = 'http://localhost:3100'
+  const source = {
+    tabId: options.tabId,
+    sessionId: `session-${options.tabId}`,
+    generation: options.generation,
+    apiBaseUrl,
+    tabCreatedAt: 1,
+    health: options.health,
+    observedAt: options.rootContext?.observedAt ?? 1,
+  }
+  const rootError = options.rootContext?.state === 'error' ? options.rootContext.error : null
+  return {
+    evidence:
+      options.rootContext && options.rootContext.state !== 'loading' && options.rootContext.data
+        ? { ...source, rootContext: options.rootContext }
+        : null,
+    attempt: {
+      ...source,
+      status: options.rootContext?.state ?? 'idle',
+      error: rootError
+        ? { source: 'root-context', code: rootError.code, message: rootError.message }
+        : null,
+    },
   }
 }
 
@@ -186,37 +220,44 @@ describe('deriveProjectContexts', () => {
       observedAt: 1,
     }
     const contexts = deriveProjectContexts([
-      {
+      rootObservation({
         tabId: 'a',
         generation: 1,
-        apiBaseUrl: 'http://localhost:3100',
         health: health('openspecui-env://1/aaa', ['contexts.inspect']),
         rootContext,
-      },
+      }),
     ])
     expect(contexts).toHaveLength(1)
-    const ctx = contexts[0]!
-    expect(ctx.storeId).toBe('owned')
-    expect(ctx.references).toEqual([
+    const ctx = contexts[0]
+    if (!ctx?.evidence) throw new Error('Project Root evidence is unavailable.')
+    expect(ctx.evidence.storeId).toBe('owned')
+    expect(ctx.evidence.references).toMatchObject([
       {
         storeId: 'team',
         root: '/stores/team',
         source: {
           tabId: 'a',
+          sessionId: 'session-a',
           generation: 1,
           apiBaseUrl: 'http://localhost:3100',
+          tabCreatedAt: 1,
+          health: { envUri: 'openspecui-env://1/aaa' },
+          observedAt: 1,
         },
         diagnostics: [],
         state: 'observed',
-        note: undefined,
       },
       {
         storeId: 'broken',
         root: '/stores/broken',
         source: {
           tabId: 'a',
+          sessionId: 'session-a',
           generation: 1,
           apiBaseUrl: 'http://localhost:3100',
+          tabCreatedAt: 1,
+          health: { envUri: 'openspecui-env://1/aaa' },
+          observedAt: 1,
         },
         diagnostics: [{ severity: 'error', code: 'x', message: 'unresolved' }],
         state: 'error',
@@ -227,23 +268,21 @@ describe('deriveProjectContexts', () => {
 
   it('skips backends without an envUri and never claims machine-wide completeness', () => {
     const contexts = deriveProjectContexts([
-      {
+      rootObservation({
         tabId: 'a',
         generation: 1,
-        apiBaseUrl: 'http://localhost:3100',
         health: health(undefined, []),
         rootContext: null,
-      },
+      }),
     ])
     expect(contexts).toEqual([])
   })
 
   it('preserves warning severity, code, message, root, and source without a healthy rewrite', () => {
     const contexts = deriveProjectContexts([
-      {
+      rootObservation({
         tabId: 'warning-tab',
         generation: 7,
-        apiBaseUrl: 'http://localhost:3100',
         health: health('openspecui-env://1/aaa', [], 'project-a'),
         rootContext: {
           state: 'ready',
@@ -267,16 +306,20 @@ describe('deriveProjectContexts', () => {
           error: null,
           observedAt: 1,
         },
-      },
+      }),
     ])
 
-    expect(contexts[0]?.references[0]).toEqual({
+    expect(contexts[0]?.evidence?.references[0]).toMatchObject({
       storeId: 'warning-store',
       root: '/stores/warning-store',
       source: {
         tabId: 'warning-tab',
+        sessionId: 'session-warning-tab',
         generation: 7,
         apiBaseUrl: 'http://localhost:3100',
+        tabCreatedAt: 1,
+        health: { envUri: 'openspecui-env://1/aaa' },
+        observedAt: 1,
       },
       diagnostics: [
         {
