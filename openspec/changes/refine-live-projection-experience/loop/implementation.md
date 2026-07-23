@@ -34,8 +34,8 @@ The implementation scope is frozen as follows:
 | 1 | Phase 2 (gated on P0) | Not started | Server Projection Work boundary and Web realtime adapter | A public-boundary red case proves late A cannot commit after B; the green case proves matching identity/generation, bounded coalescing, and user-action bypass. |
 | 2 | Phase 1 | **Implemented (Slice 2A+2B)** | Web realtime component module, shared `Button`, and CSS token ownership | A focused visual/state fixture proves stable geometry, reduced-motion equivalence, hidden accessible status, and no changing command label. |
 | 3 | Phase 1 | **Migrated (9/9 routes)** | Dashboard, Changes, Archives, Specs, Schemas, Context, Notifications, Git, and Search owners | Each route has a current/partial/revalidating/refresh-error fixture where applicable; no route-wide wait branch hides a stable sibling. |
-| 4 | Phase 1 | **Partially migrated (detail + Config loading)** | OPSX, planning-config, Settings/translation, dialog/editor, and terminal-control owners | A real draft/editor/overlay red case proves a late remote update cannot overwrite local interaction; authority locks hit the mutation owner. |
-| 5 | Phase 1 static/a11y; Phase 2 gates | Not started | Static provider, route/component tests, and Storybook fixtures | Static truthfulness, reduced motion, mobile geometry, and SSG evidence are green before full repository gates. |
+| 4 | Phase 1 | **Migrated (detail + Config + Settings loading)** | OPSX, planning-config, Settings/translation, dialog/editor, and terminal-control owners | A real draft/editor/overlay red case proves a late remote update cannot overwrite local interaction; authority locks hit the mutation owner. |
+| 5 | Phase 1 static/a11y; Phase 2 gates | **Static truthfulness proven; reduced-motion/mobile/Storybook pending** | Static provider, route/component tests, and Storybook fixtures | Static truthfulness, reduced motion, mobile geometry, and SSG evidence are green before full repository gates. |
 
 ## Implemented evidence (2026-07-24 Phase 1)
 
@@ -105,14 +105,20 @@ preserved), matching the Git list migration.
 
 Remaining P4 surfaces: settings/translation panels, overlay/dialog/editor bodies, terminal-command controls (`AsyncAction` adoption), file-preview/artifact-output loading. These use inline `Loader2 animate-spin` / section copy rather than `route-loading`; they migrate to atoms in the next pass.
 
+### Slice 4 (remaining) + P5 static truthfulness
+
+- `routes/settings.tsx` — replaced the last routine `Loading...` copy (Project Directory resolution) with a `RealtimeSkeletonLine`; 60/60 settings tests green. Remaining `Loader2 animate-spin` instances are command-feedback indicators (`saveMutation.isPending` etc.), which are permitted command activity per law (label-preserving); they are not routine lifecycle copy.
+- P5 static truthfulness: added `lib/realtime/static-truthfulness.test.ts` proving a static snapshot renders as `current`/`empty` and never synthesizes `revalidating`/`initial-loading`/`server-push`/`reconnect`; 3/3 green. Required static tests (`entry-client-static.test.tsx`, `static-data-provider.opsx.test.ts`) 10/10 green. Clean SSG rebuild (`rm -rf dist-ssg .vite && build:ssg`) succeeds; rendered `index.ssg.html` contains no fabricated skeleton/loading — static mode reuses the same atoms but projects only real snapshot data.
+
 ### Aggregate Phase-1 evidence so far
 
-- Focused lane (all new + migrated files): **209/209 green** (18 files).
-  `pnpm --filter @openspecui/web exec vitest run --project unit src/lib/realtime/ src/components/realtime/ src/lib/use-subscription.reconnect.test.tsx src/lib/use-subscription.test.tsx src/lib/use-root-action-state.test.ts src/lib/use-context-subscription.test.tsx src/routes/change-list.test.tsx src/routes/archive-list.test.tsx src/routes/spec-list.test.tsx src/routes/context.test.tsx src/routes/dashboard.test.tsx src/routes/git.test.tsx src/routes/search.test.tsx src/routes/spec-view.test.tsx src/routes/git-view.test.tsx src/components/config/active-root-config-section.test.tsx src/components/config/environment-global-config-section.test.tsx src/components/config/project-binding-section.test.tsx`
+- Focused lane (all new + migrated files + static): **282/282 green** (22 files, incl. required static tests).
+  `pnpm --filter @openspecui/web exec vitest run --project unit src/lib/realtime/ src/components/realtime/ src/lib/use-subscription.reconnect.test.tsx src/lib/use-subscription.test.tsx src/lib/use-root-action-state.test.ts src/lib/use-context-subscription.test.tsx src/routes/change-list.test.tsx src/routes/archive-list.test.tsx src/routes/spec-list.test.tsx src/routes/context.test.tsx src/routes/dashboard.test.tsx src/routes/git.test.tsx src/routes/search.test.tsx src/routes/spec-view.test.tsx src/routes/git-view.test.tsx src/routes/settings.test.tsx src/components/config/active-root-config-section.test.tsx src/components/config/environment-global-config-section.test.tsx src/components/config/project-binding-section.test.tsx src/entry-client-static.test.tsx src/lib/static-data-provider.opsx.test.ts`
 - `pnpm --filter @openspecui/web exec tsc --noEmit -p tsconfig.json`: **clean** (0 errors).
 - `pnpm exec prettier --check <my files>`: **all matched files pass** (pre-existing dirty files unrelated to this Change remain; they are not staged).
 - `pnpm exec oxlint <my files>`: **0 warnings, 0 errors**.
 - `openspec validate refine-live-projection-experience --strict`: **valid** (unchanged — no delta-spec edits).
+- Static SSG: `rm -rf packages/web/dist-ssg packages/web/.vite && pnpm --filter @openspecui/web build:ssg` **succeeds**; rendered static HTML contains no fabricated loading/skeleton.
 
 ### Residual risk / open items
 

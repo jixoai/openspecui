@@ -16,6 +16,7 @@ import { CliTerminal } from '@/components/cli-terminal'
 import { CopyablePath } from '@/components/copyable-path'
 import { Dialog } from '@/components/dialog'
 import { NotificationSettings } from '@/components/notifications/notification-settings'
+import { RealtimeSkeletonLine } from '@/components/realtime'
 import { Select, type SelectOption } from '@/components/select'
 import { OpenSpecSettingsSections } from '@/components/settings/openspec-settings-section'
 import { SoundSettingControl } from '@/components/sound-setting-control'
@@ -1143,7 +1144,7 @@ export function Settings() {
                     {serverStatus.projectDir ? (
                       <CopyablePath path={serverStatus.projectDir} className="flex-1" />
                     ) : (
-                      <span className="text-muted-foreground text-sm">Loading...</span>
+                      <RealtimeSkeletonLine className="w-40" />
                     )}
                   </div>
                 </div>
