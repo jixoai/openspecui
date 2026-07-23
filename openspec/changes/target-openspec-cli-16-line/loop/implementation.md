@@ -9199,3 +9199,22 @@ The 6 store-mutation tests prove lifecycle transitions, nonzero-exit failure, in
 request-id deduplication (single run), and `markIndeterminate` for lost terminal results. Health
 emission now carries the 1.6 hosted-protocol additions. Capability gating of App surfaces, Context
 Matrix provenance envelopes, and the protocol/credential test matrix land with the App wiring slice.
+
+### Section 8 partial: core protocol + Access Gate + mutation lifecycle delivered (2026-07-23)
+
+Status: Section 8 core infrastructure (8.1, 8.2, 8.4, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13) is implemented
+with typed contracts, focused unit tests, and full-workspace type safety. The remaining Section 8 items
+(8.3 protocol-version connection gating, 8.5 Store/Context provenance envelopes, 8.6 Context Matrix,
+8.14 protocol test matrix) are coupled to the App consumer surface and are delivered together with the
+Section 9 App wiring, since they are exercised end-to-end only through the App's Store Inspector /
+Environment Center / Context Matrix routes.
+
+Delivered this engagement (Section 8):
+- `a62bc5d` core hosted-protocol contract (envUri, capabilities, mutation lifecycle, access gate credential)
+- `6635e6a` backend Access Gate across HTTP/WS/PTY + CLI `--auth`/`--password`
+- `fec5f32` health payload 1.6 fields + Store mutation lifecycle service
+
+These give the App a real backend contract to wire against. Section 9 App wiring (9.1-9.13) connects the
+existing App skeleton routes/hooks to this backend: capability-gated Store Inspector operations, envUri
+Environment Center grouping, Context Matrix provenance, mutation terminal-state UI, and responsive layout.
+Each App route needs its own focused integration test against the typed backend surface.
