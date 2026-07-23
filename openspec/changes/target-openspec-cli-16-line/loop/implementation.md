@@ -9099,3 +9099,36 @@ Section 7 (7.1-7.11) is checked in `loop/checkpoints.md`. Automated evidence cov
 focused unit tests, and a clean SSG bundle. Owner-only remaining gate: a real pinned-CLI
 (`references/openspec@e1b51d1`) include/omit end-to-end export with desktop and 390x844 mobile
 walkthrough confirming referenced routes render and omission copy is correct. No merge/archive/release.
+
+### Section 8 Slice 1: core hosted-protocol contract (2026-07-23)
+
+First slice of Section 8 (Hosted Environment and Access Protocol), establishing the shared typed
+contract before backend/server wiring.
+
+Changed contracts:
+
+- `packages/core/src/hosted-protocol.ts` (new): authoritative hosted-protocol contract migrated from
+  the App skeleton so the backend is the single producer.
+  - `EnvUri` opaque brand + `asEnvUri` + `computeEnvUri({hostIdentity, dataHome})` (stable SHA-256 over
+    host+data-home pair; opaque, never exposes either component).
+  - `StoreCapability` vocabulary (`stores.inspect | stores.mutate | contexts.inspect`) + `hasCapability`
+    (compatibility facts, not permissions).
+  - `StoreMutation` lifecycle (`accepted -> running -> succeeded | failed | indeterminate`),
+    `StoreMutationResult` (terminal CLI evidence), `isTerminalMutationStatus`.
+  - Access Gate credential contract: `generateAccessGateCredential` (--auth, 256-bit base64url),
+    `normalizeAccessGatePassword` (--password, verbatim), `AccessGateCredential` (credential +
+    fingerprint + `Bearer` header), `constantTimeEqual` (timing-safe comparison).
+- `packages/core/src/index.ts`: re-exports the new hosted-protocol surface.
+- `packages/app/src/types/{env-uri,capabilities,store-mutation}.ts`: re-export from
+  `@openspecui/core` (single source of truth); `isTerminalStatus` retained as a legacy alias.
+
+Focused evidence:
+
+```text
+(cd packages/core && npx vitest run src/hosted-protocol.test.ts) -> 9/9
+(cd packages/app && npx vitest run src/types/store-mutation.test.ts) -> 5/5 (re-export migration)
+pnpm -w typecheck -> 0 errors; prettier/oxlint clean
+```
+
+Backend health/envUri/capability emission, Store mutation lifecycle service, the `--auth`/`--password`
+CLI flags, and access middleware land in the following Section 8 slices.

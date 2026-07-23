@@ -733,8 +733,12 @@ export {
   type DashboardTrendsProjection,
   type DashboardTriColorTrendPoint,
 } from './dashboard-types.js'
-export { type ExportSnapshot, type ExportReferencePolicy, type ExportRootProvenance, type ExportRootSource } from './export-types.js'
-export { redactSnapshotForPublication, snapshotHasAbsolutePath } from './snapshot-redaction.js'
+export {
+  type ExportReferencePolicy,
+  type ExportRootProvenance,
+  type ExportRootSource,
+  type ExportSnapshot,
+} from './export-types.js'
 export {
   type GitEntriesPage,
   type GitEntryCursor,
@@ -799,6 +803,25 @@ export {
   type HostedBackendHealthResponse,
   type OpenSpecUIRuntimeCapability,
 } from './hosted-app.js'
+export {
+  ACCESS_GATE_CREDENTIAL_BYTES,
+  accessGateFingerprint,
+  asEnvUri,
+  computeEnvUri,
+  constantTimeEqual,
+  generateAccessGateCredential,
+  hasCapability,
+  isTerminalMutationStatus,
+  normalizeAccessGatePassword,
+  type AccessGateCredential,
+  type EnvUri,
+  type StoreCapability,
+  type StoreCapabilitySet,
+  type StoreMutation,
+  type StoreMutationKind,
+  type StoreMutationResult,
+  type StoreMutationStatus,
+} from './hosted-protocol.js'
 export { VIRTUAL_PROJECT_DIRNAME, toOpsxDisplayPath } from './opsx-display-path.js'
 export {
   OPSX_ALL_WORKFLOWS,
@@ -816,6 +839,7 @@ export {
   type OpsxWorkflowId,
 } from './opsx-workflows.js'
 export { type ProjectRecoveryStatus } from './runtime-types.js'
+export { redactSnapshotForPublication, snapshotHasAbsolutePath } from './snapshot-redaction.js'
 export {
   StoreDoctorResultSchema,
   StoreListResultSchema,
