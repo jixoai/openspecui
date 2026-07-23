@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Prove hosted App base resolution and credential-free public URLs.
- * 2. Prove private Direct/App browser targets carry credentials only in fragments.
+ * 2. Characterize the private Direct/App URL builders independently of the start-command owner.
  *
  * Original request (2026-07-15): "把 --app 模式提上日程。"
  * Delivery correction (2026-07-24): printed locators must not become another credential log.

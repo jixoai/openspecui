@@ -4,7 +4,7 @@
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Parse and dispatch start/export CLI commands through yargs.
  * 2. Coordinate local/hosted App and inherited worktree runtime lifecycle with protected shutdown.
- * 3. Keep printed locators credential-free while opening one private fragment-bearing target.
+ * 3. Delegate one credential-safe Direct/App target request to the start-command browser owner.
  *
  * Original request (2026-07-15): "新增一个 --auth 或者 --password。"
  * Delivery correction (2026-07-24): one resolved credential must reach Server and Project Web.
@@ -18,11 +18,7 @@ import yargs from 'yargs'
 import { getCliArgs } from './argv.js'
 import type { ExportFormat } from './export.js'
 import { exportStaticSite } from './export.js'
-import {
-  buildDirectWebLaunchUrl,
-  buildHostedAppLaunchUrl,
-  resolveEffectiveHostedAppBaseUrl,
-} from './hosted-app.js'
+import { resolveEffectiveHostedAppBaseUrl } from './hosted-app.js'
 import { startServer } from './index.js'
 import {
   resolveLocalHostedAppWorkspace,
@@ -30,6 +26,7 @@ import {
   startLocalHostedAppDev,
   type LocalHostedAppDevSession,
 } from './local-hosted-app-dev.js'
+import { coordinateStartCommandBrowserTarget } from './start-command-browser-target.js'
 import { buildStartupBanner } from './startup-banner.js'
 import { consumeWorktreeProcessAccessGateCredential } from './worktree-server-worker.js'
 
@@ -114,8 +111,6 @@ async function main(): Promise<void> {
 
         let server: Awaited<ReturnType<typeof startServer>> | null = null
         let localHostedApp: LocalHostedAppDevSession | null = null
-        let browserLaunchCredential: string | null = null
-
         try {
           let hostedBaseUrl: string | null = null
 
@@ -138,56 +133,52 @@ async function main(): Promise<void> {
             }
           }
 
-          server = await startServer({
-            projectDir,
-            port: argv.port,
-            open: false,
-            corsOrigins: hostedBaseUrl ? buildHostedCorsOrigins(hostedBaseUrl) : undefined,
-            auth: argv.auth === true ? true : undefined,
-            password:
-              argv.password === true
-                ? true
-                : typeof argv.password === 'string'
-                  ? argv.password
-                  : undefined,
-            onBrowserLaunchCredential: (credential) => {
-              browserLaunchCredential = credential
+          server = await coordinateStartCommandBrowserTarget(
+            {
+              serverOptions: {
+                projectDir,
+                port: argv.port,
+                corsOrigins: hostedBaseUrl ? buildHostedCorsOrigins(hostedBaseUrl) : undefined,
+                auth: argv.auth === true ? true : undefined,
+                password:
+                  argv.password === true
+                    ? true
+                    : typeof argv.password === 'string'
+                      ? argv.password
+                      : undefined,
+                accessGateCredential: inheritedAccessGateCredential ?? undefined,
+              },
+              hostedBaseUrl,
+              shouldOpen: argv.open,
+              onServerReady: ({ server: runningServer, publicHostedUrl }) => {
+                server = runningServer
+                if (runningServer.port !== runningServer.preferredPort) {
+                  console.log(
+                    `⚠️  Port ${runningServer.preferredPort} is in use, using ${runningServer.port} instead`
+                  )
+                }
+                console.log(`✅ Server running at ${runningServer.url}`)
+
+                if (hostedBaseUrl && publicHostedUrl) {
+                  console.log(`🌐 Hosted app base: ${hostedBaseUrl}`)
+                  console.log(`🔗 Hosted URL: ${publicHostedUrl}`)
+                  console.log(
+                    '📦 Launch mode: prefer an installed hosted-app PWA on the same deployment scope; otherwise open the browser page.'
+                  )
+                }
+                console.log('')
+              },
             },
-            accessGateCredential: inheritedAccessGateCredential ?? undefined,
-          })
-
-          if (server.port !== server.preferredPort) {
-            console.log(`⚠️  Port ${server.preferredPort} is in use, using ${server.port} instead`)
-          }
-          console.log(`✅ Server running at ${server.url}`)
-
-          let browserUrl = buildDirectWebLaunchUrl({
-            baseUrl: server.url,
-            credential: browserLaunchCredential,
-          })
-          if (useHostedApp && hostedBaseUrl) {
-            const publicHostedUrl = buildHostedAppLaunchUrl({
-              baseUrl: hostedBaseUrl,
-              apiBaseUrl: server.url,
-            })
-            browserUrl = buildHostedAppLaunchUrl({
-              baseUrl: hostedBaseUrl,
-              apiBaseUrl: server.url,
-              credential: browserLaunchCredential,
-            })
-
-            console.log(`🌐 Hosted app base: ${hostedBaseUrl}`)
-            console.log(`🔗 Hosted URL: ${publicHostedUrl}`)
-            console.log(
-              '📦 Launch mode: prefer an installed hosted-app PWA on the same deployment scope; otherwise open the browser page.'
-            )
-          }
-
-          console.log('')
+            {
+              startServer,
+              openBrowser: async (target) => {
+                const open = await import('open')
+                await open.default(target)
+              },
+            }
+          )
 
           if (argv.open) {
-            const open = await import('open')
-            await open.default(browserUrl)
             console.log(
               useHostedApp
                 ? '🌐 Hosted app launch requested (browser page or installed PWA, depending on browser capture).'
