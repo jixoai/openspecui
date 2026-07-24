@@ -602,6 +602,33 @@ P3-B adds no persisted mutation database, UI lifecycle rendering, Store/Context 
 retry, or browser walkthrough. P3-C will consume the owner in Store Inspector and perform terminal-driven
 invalidation pulls; P3-D will add focused component preparation evidence. `4.4--4.7` therefore remain open.
 
+### P3-B first candidate rejected: 2026-07-24 Asia/Shanghai
+
+Reviewed candidate: `f48d854`.
+
+The candidate establishes the locator-deduplicated owner, snapshot/cursor/reconnect/epoch state machine,
+flat admission decoder, typed request/contract errors, React provider, Core browser subpath, and a real
+guarded Server-to-App WebSocket fixture. Independent main and Terra reruns passed App `17/17`, Core `2/2`,
+Server `3/3`, App standard plus checked P3-B typecheck, scoped lint/format/diff, and strict Change
+validation. Those green results do not yet close the internal P3-B package.
+
+Independent source review rejected the candidate for two exact boundary gaps:
+
+1. Production uses `TRPCUntypedClient` and the string `stores.subscribeMutations`. Runtime event decoding
+   is correct, but a procedure rename or input/output drift bypasses compile-time Router evidence. The
+   production module must use a type-only `AppRouter` import and the typed tRPC client while retaining the
+   Core runtime decoder and no Server runtime import.
+2. The controlled two-locator fixture proves transport deduplication and record isolation but carries no
+   credentials. The real guarded fixture proves missing/wrong/matching credentials only for one locator in
+   sequence. It therefore cannot detect a global/latest-credential implementation that passes all current
+   cases. Add one checked A+B fixture with distinct simultaneous credentials and ledgers; borrowing either
+   credential must reject only the mismatched locator. Resolve the credential inside `connectionParams`
+   for each handshake so reconnect cannot retain an obsolete captured value.
+
+The worker-recorded destructive mutations for deduplication, credential lookup, snapshot replacement, and
+epoch retirement remain useful pending the corrected exact fixture. No checkpoint changes: P3-C/P3-D,
+`4.4--4.7`, broad gates, browser acceptance, PR delivery, merge, archive, and release remain open.
+
 ### 7.3 old Change partial archive: 2026-07-24 Asia/Shanghai
 
 The manager confirmed the documented supersession boundary. Strict validation of
