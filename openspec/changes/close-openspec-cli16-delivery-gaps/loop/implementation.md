@@ -709,6 +709,41 @@ handler in place of the real form submit, or add production-only test instrument
 focused App tests, checked test lane, scoped format/lint/diff, and strict Change validation. P3-D, broad
 gates, owner browser walkthroughs, PR delivery, merge, archive, and release remain outside this slice.
 
+### P3-C first candidate rejected: 2026-07-24 Asia/Shanghai
+
+Reviewed candidate: `3e18654`.
+
+The candidate correctly separates Store inventory from lifecycle evidence, removes admission-time pulls,
+renders retained active/recent/connection evidence, keeps HTTP rejection repairable, and closes Remove only
+from a matching succeeded ledger record. Independent focused rerun passed App `25/25`, App standard plus
+P3-B/P3-C checked typechecks, scoped Oxlint/Prettier/diff, and strict Change validation. Those green results
+do not close P3-C because the composer loses one production-valid settlement window:
+
+```text
+route mounts while ledger has no current snapshot
+        |
+HTTP admission accepts a new request
+        |
+first current ledger snapshot already contains its terminal record
+        |
+composer treats every terminal as historical baseline -> no Store/Context pull
+```
+
+The distinction cannot come from `baselined` alone. The Store surface must register the admitted request id
+and its exact normalized locator synchronously after the real dispatcher resolves. A later first current
+snapshot treats registered pending ids as current-session work, while unrelated terminal history remains
+baseline-only. Registration before a current snapshot, accepted/running-to-terminal, terminal first seen
+after baseline, disconnect/rejoin, duplicate emission, route locator change, and admission rejection must
+all preserve one terminal-driven pull and no fabricated record. Pending ids from locator A must never settle
+from B; retired/unmounted composition must not publish late work.
+
+The correction may keep the accepted HTTP record only as correlation evidence; it must not render it into
+the Server ledger, refresh, close Remove, or invent terminal status. The real setup/register/unregister and
+Remove dispatch paths must call the same registration owner. Add a checked red case for admission before
+the first current snapshot followed directly by terminal, and show that deleting registration makes it
+fail. Preserve the accepted evidence and mutations already recorded for `3e18654`. P3-C/P3-D, `4.4--4.7`,
+broad gates, browser acceptance, PR delivery, merge, archive, and release remain open.
+
 ### 7.3 old Change partial archive: 2026-07-24 Asia/Shanghai
 
 The manager confirmed the documented supersession boundary. Strict validation of
