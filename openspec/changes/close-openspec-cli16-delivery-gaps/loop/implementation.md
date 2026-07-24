@@ -629,6 +629,43 @@ The worker-recorded destructive mutations for deduplication, credential lookup, 
 epoch retirement remain useful pending the corrected exact fixture. No checkpoint changes: P3-C/P3-D,
 `4.4--4.7`, broad gates, browser acceptance, PR delivery, merge, archive, and release remain open.
 
+### P3-B final focused acceptance: 2026-07-24 Asia/Shanghai
+
+Accepted production commit `f48d854` plus correction `c5eb44d`; rejection evidence is recorded in
+`1c59a95`.
+
+The App now owns one process-memory mutation observation projection per normalized backend locator. Its
+public snapshot carries revision plus locator, owner epoch, lifecycle, current authority, cursor, records,
+error, and observation time. Initial/reconnect snapshots replace the complete process-local ledger;
+strictly advancing changes replace one request-id record. Connection/error/terminal states retain records
+as display-only evidence, and every retired locator epoch callback is inert.
+
+Production uses the typed `AppRouter` tRPC subscription with a type-only Server import, then runtime-decodes
+every event through the Core browser-safe schema. `connectionParams` resolves only that locator's current
+in-memory credential on every handshake. HTTP mutation admission separately decodes the flat
+`StoreMutationStartResponse`; request/auth/validation and contract failures throw typed errors and never
+synthesize mutation records or `indeterminate` outcomes.
+
+Focused evidence accepted by main and independently by Terra at `c5eb44d`:
+
+- App direct files: 3 files / 18 tests passed; Core protocol: 1 / 2; Server ledger transport: 1 / 3.
+- App standard typecheck, including the checked P3-B lane, passed.
+- Scoped Oxlint reported zero warnings/errors; Prettier, commit diff check, and strict Change validation
+  passed.
+- The real A+B guarded fixture proves one transport for duplicate A tabs, distinct credentials and ledgers,
+  then rejects a borrowed A credential during B reconnect while A remains current and uncontaminated.
+
+Worker mutation-resistance evidence, restored before the accepted commits:
+
+- removing locator deduplication created a second A transport;
+- bypassing locator credential lookup timed out the guarded A snapshot in the strengthened A+B fixture;
+- merging rather than replacing a reconnect snapshot retained A after an empty B snapshot;
+- bypassing epoch retirement let a removed A callback overwrite the replacement ledger.
+
+P3-B is an accepted internal package only. P3-C must compose this owner into Store Inspector and perform
+terminal-driven Store/Context pulls; P3-D owns component preparation evidence. Therefore `4.4--4.7` remain
+open, and no broad-gate, browser-acceptance, PR, merge, archive, or release claim is made.
+
 ### 7.3 old Change partial archive: 2026-07-24 Asia/Shanghai
 
 The manager confirmed the documented supersession boundary. Strict validation of
