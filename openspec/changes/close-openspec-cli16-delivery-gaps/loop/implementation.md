@@ -813,3 +813,59 @@ Independent review evidence:
 This closes 4.4 and 4.5 only. P3-D still owns checked component/basic Playwright preparation for all five
 lifecycle states. 4.6--4.7, broad gates, PR delivery, merge, archive, release, and every owner browser or
 visual walkthrough remain open.
+
+### P3-D focused component preparation: 2026-07-25 Asia/Shanghai
+
+Changed owner: `packages/app/src/routes/connection-context.test.tsx`. The fixture retains the real App
+Router, layout, selected-backend dispatcher, `MutationObservationProvider`,
+`ConnectionObservationProvider`, Store Inspector, Register form, and Remove dialog. It mocks only the
+typed lifecycle-transport connection and HTTP mutation edge. The HTTP fixture parses the production JSON
+request body, returns that exact request id/kind as Server admission evidence, then the real locator-scoped
+ledger receives the matching record.
+
+The new checked component evidence covers all Server-owned lifecycle states through real user actions:
+
+```text
+Register form -> accepted    -> Queued
+Register form -> running     -> Running
+Register form -> succeeded   -> Succeeded
+Remove dialog -> failed      -> Failed, dialog remains open
+Remove dialog -> indeterminate -> Indeterminate, dialog remains open
+```
+
+The existing real rejected Remove test remains separate: HTTP rejection creates no lifecycle record and
+does not fabricate `Indeterminate` or close the repair dialog. This is component-level Vitest preparation;
+the App package has no established deterministic component Playwright fixture, so no new Playwright test
+was introduced. It is not owner browser or end-to-end acceptance.
+
+Mutation-resistance red evidence temporarily removed only the production
+`<StoreMutationLifecycleEvidence lifecycle={mutationLifecycle} />` render from Store Inspector, then ran:
+
+```bash
+pnpm --filter @openspecui/app exec vitest run src/routes/connection-context.test.tsx -t 'renders backend-owned Register'
+```
+
+It failed `3` named Register cases (`accepted`, `running`, `succeeded`) because `Queued`, `Running`, and
+`Succeeded` respectively were absent at `connection-context.test.tsx:384`. Restoring the one real render
+line returned the fixture to green. This crosses the real lifecycle-render owner; it neither invokes a
+downstream handler directly nor relies on a fake button.
+
+Green and validation evidence:
+
+```bash
+pnpm --filter @openspecui/app exec vitest run src/routes/connection-context.test.tsx
+# 1 file / 20 tests passed
+
+pnpm --filter @openspecui/app exec vitest run src/routes/connection-context.test.tsx src/components/store-mutation-lifecycle.test.tsx src/components/store-remove-dialog.test.tsx src/lib/store-lifecycle-composer.test.ts src/lib/store-action-correlation.test.ts
+# 5 files / 42 tests passed
+
+pnpm --filter @openspecui/app typecheck
+pnpm exec oxlint packages/app/src/routes/connection-context.test.tsx
+pnpm exec prettier --check packages/app/src/routes/connection-context.test.tsx
+git diff --check
+openspec validate close-openspec-cli16-delivery-gaps --strict
+```
+
+All listed validation commands passed after formatting the test file. This closes 4.6 only. 4.7 focused
+review acceptance, P4, broad gates, PR delivery, merge, archive, release, and the owner browser walkthrough
+remain open.

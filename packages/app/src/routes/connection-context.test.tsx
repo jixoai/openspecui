@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
- * 1. Prove selected Store actions and terminal-only refresh cross the real route owner.
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * 1. Prove real Inspector/Register/Remove lifecycle rendering through the production route, dispatcher, and providers.
  * 2. Prove exact selected-tab and generation retirement at the real Store action owner.
  * 3. Prove grouped projects and two-source Root/Reference provenance remain visible.
  * 4. Preserve checked two-backend hosted fixtures and locator-scoped credentials.
- * 5. Cross real Register/Remove forms without disabled-DOM mutation or test-only instrumentation.
+ * 5. Retain rejection repair paths without fabricating backend lifecycle records.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
+ * P3-D evidence (2026-07-25): render all Server-owned Store mutation lifecycle states through real form/dialog actions.
  */
 // @vitest-environment jsdom
 
@@ -15,6 +16,7 @@ import {
   buildBackendHealthPayload,
   type HostedBackendHealthResponse,
 } from '@openspecui/core/hosted-app'
+import type { StoreMutationEnvelope } from '@openspecui/core/store-mutation-protocol'
 import type { StoreDoctorStore } from '@openspecui/core/store-types'
 import { RouterProvider } from '@tanstack/react-router'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
@@ -22,11 +24,61 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAppRouter, type AppRouterContext } from '../app-router'
 import { bindLaunchCredential, clearLaunchCredential } from '../lib/launch-credential'
+import type { MutationLifecycleCallbacks } from '../lib/mutation-observation'
 import { getHostedShellStorageKey, type HostedShellState } from '../lib/shell-state'
 import { getConnectionsSnapshot } from '../lib/use-connections'
 
+const lifecycleTransport = vi.hoisted(() => {
+  const callbacksByApiBaseUrl = new Map<string, MutationLifecycleCallbacks>()
+  return {
+    connect(apiBaseUrl: string, callbacks: MutationLifecycleCallbacks) {
+      callbacksByApiBaseUrl.set(apiBaseUrl, callbacks)
+      return {
+        unsubscribe() {
+          if (callbacksByApiBaseUrl.get(apiBaseUrl) === callbacks) {
+            callbacksByApiBaseUrl.delete(apiBaseUrl)
+          }
+        },
+      }
+    },
+    callbacks(apiBaseUrl: string): MutationLifecycleCallbacks {
+      const callbacks = callbacksByApiBaseUrl.get(apiBaseUrl)
+      if (!callbacks) throw new Error(`Missing lifecycle callbacks for ${apiBaseUrl}.`)
+      return callbacks
+    },
+    reset() {
+      callbacksByApiBaseUrl.clear()
+    },
+  }
+})
+
+vi.mock('../lib/mutation-observation-transport', () => ({
+  createTRPCMutationObservationTransportFactory: () => ({ connect: lifecycleTransport.connect }),
+}))
+
 const API_A = 'http://localhost:3100'
 const API_B = 'http://localhost:3200'
+
+function lifecycleRecord(
+  requestId: string,
+  kind: 'register' | 'remove',
+  status: StoreMutationEnvelope['status']
+): StoreMutationEnvelope {
+  const base = {
+    requestId,
+    envUri: 'env:project-b',
+    kind,
+    observedAt: 1,
+  }
+  if (status === 'succeeded' || status === 'failed' || status === 'indeterminate') {
+    return {
+      ...base,
+      status,
+      result: { exitStatus: status === 'succeeded' ? 0 : 1, stderr: `Store ${kind} ${status}.` },
+    }
+  }
+  return { ...base, status }
+}
 
 const STORE: StoreDoctorStore = {
   id: 'design-system',
@@ -86,6 +138,34 @@ function persistTwoBackends(): void {
   localStorage.setItem(getHostedShellStorageKey(), JSON.stringify(state))
 }
 
+type SubmittedMutationKind = 'setup' | 'register' | 'unregister' | 'remove'
+
+interface SubmittedMutation {
+  requestId: string
+  kind: SubmittedMutationKind
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function readSubmittedMutation(body: BodyInit | null | undefined): SubmittedMutation {
+  if (typeof body !== 'string')
+    throw new Error('Store mutation fixture requires a JSON request body.')
+  const parsed: unknown = JSON.parse(body)
+  if (!isRecord(parsed)) {
+    throw new Error('Store mutation fixture received a non-object request.')
+  }
+  const { requestId, kind } = parsed
+  if (typeof requestId !== 'string' || requestId.length === 0) {
+    throw new Error('Store mutation fixture received no request id.')
+  }
+  if (kind !== 'setup' && kind !== 'register' && kind !== 'unregister' && kind !== 'remove') {
+    throw new Error('Store mutation fixture received an unknown kind.')
+  }
+  return { requestId, kind }
+}
+
 function createBackendFetch(
   mutations: string[],
   options: {
@@ -97,6 +177,7 @@ function createBackendFetch(
     rootContextsAfterInitial?: ReadonlyMap<string, RootContextState>
     stores?: StoreDoctorStore[]
     storePulls?: string[]
+    mutationRequests?: SubmittedMutation[]
     mutationRejection?: { status: number; statusText: string }
     offlineAfterInitial?: string
   } = {}
@@ -162,16 +243,18 @@ function createBackendFetch(
       })
     }
     if (url.includes('/trpc/stores.mutate')) {
+      const mutation = readSubmittedMutation(init?.body)
       mutations.push(apiBaseUrl)
+      options.mutationRequests?.push(mutation)
       if (options.mutationRejection) {
         return new Response(null, options.mutationRejection)
       }
       return Response.json({
         result: {
           data: {
-            requestId: 'register-1',
+            requestId: mutation.requestId,
             envUri: health.get(apiBaseUrl)?.envUri ?? `env:${apiBaseUrl}`,
-            kind: 'register',
+            kind: mutation.kind,
             status: 'accepted',
             observedAt: 1,
             rejoined: false,
@@ -230,7 +313,34 @@ async function unmount(rendered: { root: Root; container: HTMLDivElement }): Pro
   rendered.container.remove()
 }
 
+async function establishCurrentMutationLedger(): Promise<MutationLifecycleCallbacks> {
+  await waitFor(() => lifecycleTransport.callbacks(API_B))
+  const callbacks = lifecycleTransport.callbacks(API_B)
+  await act(async () => {
+    callbacks.onData({ type: 'snapshot', cursor: 0, records: [] })
+  })
+  return callbacks
+}
+
+const REGISTER_LIFECYCLE_STATES = [
+  { status: 'accepted', label: 'Queued' },
+  { status: 'running', label: 'Running' },
+  { status: 'succeeded', label: 'Succeeded' },
+] as const satisfies ReadonlyArray<{
+  status: Extract<StoreMutationEnvelope['status'], 'accepted' | 'running' | 'succeeded'>
+  label: string
+}>
+
+const REMOVE_TERMINAL_STATES = [
+  { status: 'failed', label: 'Failed' },
+  { status: 'indeterminate', label: 'Indeterminate' },
+] as const satisfies ReadonlyArray<{
+  status: Extract<StoreMutationEnvelope['status'], 'failed' | 'indeterminate'>
+  label: string
+}>
+
 beforeEach(() => {
+  lifecycleTransport.reset()
   localStorage.clear()
   persistTwoBackends()
   bindLaunchCredential(API_A, 'credential-a')
@@ -246,6 +356,77 @@ afterEach(() => {
 })
 
 describe('App connection selection and observation routes', () => {
+  it.each(REGISTER_LIFECYCLE_STATES)(
+    'renders backend-owned Register $status lifecycle evidence through the real route dispatcher',
+    async ({ status, label }) => {
+      const mutations: string[] = []
+      const mutationRequests: SubmittedMutation[] = []
+      vi.stubGlobal('fetch', createBackendFetch(mutations, { mutationRequests }))
+      const rendered = await renderRoute('/environment/stores/inspector')
+      try {
+        const callbacks = await establishCurrentMutationLedger()
+        const path = await screen.findByPlaceholderText('Path to Store root')
+        fireEvent.change(path, { target: { value: `/tmp/${status}-store` } })
+        fireEvent.click(screen.getByRole('button', { name: 'Register Store' }))
+
+        await waitFor(() => expect(mutations).toEqual([API_B]))
+        const request = mutationRequests[0]
+        if (!request) throw new Error('Register route did not submit a Store mutation request.')
+        expect(request.kind).toBe('register')
+        await act(async () => {
+          callbacks.onData({
+            type: 'changed',
+            cursor: 1,
+            record: lifecycleRecord(request.requestId, 'register', status),
+          })
+        })
+
+        expect(await screen.findByText(label)).toBeTruthy()
+      } finally {
+        await unmount(rendered)
+      }
+    }
+  )
+
+  it.each(REMOVE_TERMINAL_STATES)(
+    'renders backend-owned Remove $status evidence and retains the repair dialog',
+    async ({ status, label }) => {
+      const mutations: string[] = []
+      const mutationRequests: SubmittedMutation[] = []
+      vi.stubGlobal('fetch', createBackendFetch(mutations, { mutationRequests, stores: [STORE] }))
+      const rendered = await renderRoute('/environment/stores/inspector')
+      try {
+        const callbacks = await establishCurrentMutationLedger()
+        fireEvent.click(await screen.findByRole('button', { name: 'Remove files' }))
+        fireEvent.change(screen.getByLabelText('Type the Store id to confirm'), {
+          target: { value: STORE.id },
+        })
+        fireEvent.click(screen.getByRole('button', { name: 'Remove Store' }))
+
+        await waitFor(() => expect(mutations).toEqual([API_B]))
+        const request = mutationRequests[0]
+        if (!request) throw new Error('Remove dialog did not submit a Store mutation request.')
+        expect(request.kind).toBe('remove')
+        await act(async () => {
+          await Promise.resolve()
+          await Promise.resolve()
+        })
+        await act(async () => {
+          callbacks.onData({
+            type: 'changed',
+            cursor: 1,
+            record: lifecycleRecord(request.requestId, 'remove', status),
+          })
+        })
+
+        expect(await screen.findByText(label)).toBeTruthy()
+        expect(screen.getByRole('form', { name: 'Remove Store files' })).toBeTruthy()
+      } finally {
+        await unmount(rendered)
+      }
+    }
+  )
+
   it('dispatches a real Store form action to selected B rather than first-online A', async () => {
     const mutations: string[] = []
     vi.stubGlobal('fetch', createBackendFetch(mutations))
