@@ -5,6 +5,7 @@
   },
   "include": [
     "src/components/store-remove-dialog.test.tsx",
+    "src/lib/store-action-correlation.test.ts",
     "src/lib/store-lifecycle-composer.test.ts",
     "src/routes/connection-context.test.tsx",
     "../server/src/huggingface-transformers.d.ts"

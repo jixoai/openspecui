@@ -21,6 +21,7 @@ import {
 import { StoreRemoveDialog } from '../components/store-remove-dialog'
 import { useMutationObservations } from '../lib/mutation-observation-provider'
 import {
+  correlateStoreMutationAdmissions,
   isSameStoreActionAuthority,
   useStoreMutationDispatcher,
   type StoreActionAuthority,
@@ -74,6 +75,12 @@ export function StoreInspectorRoute() {
   }, [stores, filter])
 
   const selected = stores.find((store) => store.id === selectedId) ?? visibleStores[0] ?? null
+  const registerAdmission = mutationLifecycle.registerAdmission
+
+  const dispatchAndCorrelate = useMemo(
+    () => correlateStoreMutationAdmissions(dispatchStoreMutation, registerAdmission),
+    [dispatchStoreMutation, registerAdmission]
+  )
 
   const runMutation = useCallback(
     async (
@@ -83,9 +90,9 @@ export function StoreInspectorRoute() {
     ): Promise<void> => {
       setMutationError(null)
       const requestId = `${kind}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
-      await dispatchStoreMutation(authority, { requestId, kind, ...input })
+      await dispatchAndCorrelate(authority, { requestId, kind, ...input })
     },
-    [active, dispatchStoreMutation]
+    [active, dispatchAndCorrelate]
   )
 
   let body
@@ -187,7 +194,7 @@ export function StoreInspectorRoute() {
             authority={removeTarget.authority}
             authorityCurrent={isSameStoreActionAuthority(removeTarget.authority, active)}
             removeStore={(authority, requestId, storeId) =>
-              dispatchStoreMutation(authority, {
+              dispatchAndCorrelate(authority, {
                 requestId,
                 kind: 'remove',
                 storeId,

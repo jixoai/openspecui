@@ -2,10 +2,11 @@
  * Orthogonal intents (created 2026-07-24 Asia/Shanghai):
  * 1. Join one Store Inspector locator to the shared mutation ledger and settlement composer.
  * 2. Render active, recent terminal, and connection evidence without inventing lifecycle state.
+ * 3. Register locator-scoped HTTP admissions for first-snapshot settlement correlation.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useConnectionObservationOwner } from '../lib/connection-observation'
 import { useMutationObservations } from '../lib/mutation-observation-provider'
 import {
@@ -21,7 +22,7 @@ import { MutationStatusBadge } from './mutation-status'
 export function useStoreMutationLifecycle(
   apiBaseUrl: string | null | undefined,
   refreshStore: () => void | Promise<void>
-): StoreLifecycleProjection {
+): StoreLifecycleProjection & { registerAdmission(apiBaseUrl: string, requestId: string): void } {
   const mutationSnapshot = useMutationObservations()
   const connections = useConnections()
   const connectionOwner = useConnectionObservationOwner()
@@ -37,11 +38,19 @@ export function useStoreMutationLifecycle(
   )
   const locator = selectStoreMutationLocator(mutationSnapshot, apiBaseUrl)
 
+  useLayoutEffect(() => {
+    composer.setLocator(apiBaseUrl)
+    return () => composer.setLocator(null)
+  }, [apiBaseUrl, composer])
+
   useEffect(() => {
     composer.observe(locator, connections.tabs)
   }, [composer, connections.tabs, locator, mutationSnapshot.revision])
 
-  return projectStoreLifecycle(locator)
+  return {
+    ...projectStoreLifecycle(locator),
+    registerAdmission: composer.registerAdmission,
+  }
 }
 
 /** Render backend-owned Store mutation and transport evidence without operation controls. */

@@ -3,6 +3,7 @@
  * 1. Prove the current, terminal, and once gates at the production lifecycle composer.
  * 2. Prove settlement refreshes Store plus only exact-locator Context tabs.
  * 3. Prove reconnect can settle a previously observed active request without replaying history.
+ * 4. Prove admitted identity survives until the first current ledger snapshot.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
@@ -54,6 +55,7 @@ describe('Store lifecycle composer', () => {
     const refreshStore = vi.fn()
     const refreshContexts = vi.fn()
     const composer = createStoreLifecycleComposer({ refreshStore, refreshContexts })
+    composer.setLocator(API_A)
 
     const initial = composer.observe(
       projection(true, [record('historical', 'succeeded'), record('active', 'accepted')]),
@@ -95,6 +97,7 @@ describe('Store lifecycle composer', () => {
     const refreshStore = vi.fn()
     const refreshContexts = vi.fn()
     const composer = createStoreLifecycleComposer({ refreshStore, refreshContexts })
+    composer.setLocator(API_A)
     composer.observe(projection(true, []), TABS)
     composer.observe(projection(true, [record('late', 'failed')]), TABS)
     composer.observe(projection(true, [record('late', 'failed')]), TABS)
@@ -108,6 +111,7 @@ describe('Store lifecycle composer', () => {
       throw new Error('Context refresh evidence remains owner-local.')
     })
     const composer = createStoreLifecycleComposer({ refreshStore, refreshContexts })
+    composer.setLocator(API_A)
     composer.observe(projection(true, [record('one', 'running'), record('two', 'accepted')]), TABS)
     composer.observe(
       projection(true, [record('one', 'succeeded'), record('two', 'indeterminate')]),
@@ -117,5 +121,105 @@ describe('Store lifecycle composer', () => {
     await Promise.resolve()
     expect(refreshStore).toHaveBeenCalledTimes(1)
     expect(refreshContexts).toHaveBeenCalledTimes(1)
+  })
+
+  it('settles a registered admission already terminal in the first current snapshot', () => {
+    const refreshStore = vi.fn()
+    const refreshContexts = vi.fn()
+    const composer = createStoreLifecycleComposer({ refreshStore, refreshContexts })
+
+    composer.setLocator(API_A)
+    composer.observe(null, TABS)
+    composer.registerAdmission(`${API_A}/`, 'current-session')
+    composer.observe(
+      projection(true, [record('historical', 'succeeded'), record('current-session', 'succeeded')]),
+      TABS
+    )
+
+    expect(refreshStore).toHaveBeenCalledTimes(1)
+    expect(refreshContexts).toHaveBeenCalledWith(['a-1', 'a-2'])
+  })
+
+  it('settles a late admission already present in the first current snapshot', () => {
+    const refreshStore = vi.fn()
+    const refreshContexts = vi.fn()
+    const composer = createStoreLifecycleComposer({ refreshStore, refreshContexts })
+
+    composer.setLocator(API_A)
+    composer.observe(
+      projection(true, [record('historical', 'succeeded'), record('late-admission', 'succeeded')]),
+      TABS
+    )
+    composer.registerAdmission(API_A, 'late-admission')
+    composer.registerAdmission(API_A, 'late-admission')
+
+    expect(refreshStore).toHaveBeenCalledTimes(1)
+    expect(refreshContexts).toHaveBeenCalledWith(['a-1', 'a-2'])
+  })
+
+  it('waits for reconnect current before settling a late admission from retained terminal evidence', () => {
+    const refreshStore = vi.fn()
+    const refreshContexts = vi.fn()
+    const composer = createStoreLifecycleComposer({ refreshStore, refreshContexts })
+    composer.setLocator(API_A)
+    composer.observe(projection(true, [record('late-disconnected', 'succeeded')]), TABS)
+    composer.observe(
+      projection(false, [record('late-disconnected', 'succeeded')], 'reconnecting'),
+      TABS
+    )
+    composer.registerAdmission(API_A, 'late-disconnected')
+    expect(refreshStore).not.toHaveBeenCalled()
+
+    composer.observe(projection(true, [record('late-disconnected', 'succeeded')]), TABS)
+    expect(refreshStore).toHaveBeenCalledTimes(1)
+    expect(refreshContexts).toHaveBeenCalledWith(['a-1', 'a-2'])
+  })
+
+  it('retires pending admission correlation when the Store surface unmounts', () => {
+    const refreshStore = vi.fn()
+    const refreshContexts = vi.fn()
+    const composer = createStoreLifecycleComposer({ refreshStore, refreshContexts })
+    composer.setLocator(API_A)
+    composer.registerAdmission(API_A, 'retired')
+    composer.setLocator(null)
+    composer.registerAdmission(API_A, 'retired')
+    composer.observe(projection(true, [record('retired', 'succeeded')]), TABS)
+
+    expect(refreshStore).not.toHaveBeenCalled()
+    expect(refreshContexts).not.toHaveBeenCalled()
+  })
+
+  it('retires A admission correlation when the Store surface changes to B', () => {
+    const refreshStore = vi.fn()
+    const refreshContexts = vi.fn()
+    const composer = createStoreLifecycleComposer({ refreshStore, refreshContexts })
+    composer.setLocator(API_A)
+    composer.registerAdmission(API_A, 'shared-id')
+    composer.setLocator(API_B)
+    composer.observe(
+      { ...projection(true, [record('shared-id', 'succeeded')]), apiBaseUrl: API_B },
+      TABS
+    )
+
+    expect(refreshStore).not.toHaveBeenCalled()
+    expect(refreshContexts).not.toHaveBeenCalled()
+  })
+
+  it('does not correlate a rejected request or another locator with terminal history', () => {
+    const refreshStore = vi.fn()
+    const refreshContexts = vi.fn()
+    const composer = createStoreLifecycleComposer({ refreshStore, refreshContexts })
+    composer.setLocator(API_A)
+    composer.registerAdmission(API_B, 'other-locator')
+    composer.observe(
+      projection(true, [
+        record('rejected-before-admission', 'indeterminate'),
+        record('other-locator', 'succeeded'),
+      ]),
+      TABS
+    )
+
+    expect(refreshStore).not.toHaveBeenCalled()
+    expect(refreshContexts).not.toHaveBeenCalled()
   })
 })

@@ -3,6 +3,7 @@
  * 1. Own the final selected-tab and observation-generation check for every App-native Store mutation.
  * 2. Recheck full tab identity and generation against one observation owner snapshot.
  * 3. Dispatch accepted inputs through the locator-scoped backend client.
+ * 4. Correlate resolved admissions without changing request, rejection, or lifecycle evidence.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
@@ -28,6 +29,18 @@ export type StoreMutationDispatcher = (
   authority: StoreActionAuthority | null,
   input: BackendStoreMutateInput
 ) => Promise<BackendStoreMutationRecord | null>
+
+/** Register only successfully resolved admissions against the exact authority locator. */
+export function correlateStoreMutationAdmissions(
+  dispatch: StoreMutationDispatcher,
+  register: (apiBaseUrl: string, requestId: string) => void
+): StoreMutationDispatcher {
+  return async (authority, input) => {
+    const admission = await dispatch(authority, input)
+    if (admission && authority) register(authority.apiBaseUrl, admission.requestId)
+    return admission
+  }
+}
 
 /** Create the route-level dispatcher that rechecks the real selection and observation owners. */
 export function useStoreMutationDispatcher(): StoreMutationDispatcher {
