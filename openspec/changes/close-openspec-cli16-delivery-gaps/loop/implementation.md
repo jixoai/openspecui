@@ -869,3 +869,36 @@ openspec validate close-openspec-cli16-delivery-gaps --strict
 All listed validation commands passed after formatting the test file. This closes 4.6 only. 4.7 focused
 review acceptance, P4, broad gates, PR delivery, merge, archive, release, and the owner browser walkthrough
 remain open.
+
+### P3-D independent focused acceptance: 2026-07-25 Asia/Shanghai
+
+Reviewer accepted `ef37175` after reading the production route and fixture. The test begins with the real
+Register form or Remove dialog, crosses the selected-backend dispatcher and locator-scoped lifecycle
+provider, parses the actual `stores.mutate` request body, and injects only the typed lifecycle-transport
+event with the exact admitted request id and kind. It does not replace either product action with a fake
+button or directly invoke a downstream rendering callback.
+
+The independent focused run passed:
+
+```bash
+pnpm --filter @openspecui/app exec vitest run \
+  src/routes/connection-context.test.tsx \
+  src/components/store-mutation-lifecycle.test.tsx \
+  src/components/store-remove-dialog.test.tsx \
+  src/lib/store-lifecycle-composer.test.ts \
+  src/lib/store-action-correlation.test.ts
+# 5 files / 42 tests passed
+
+pnpm --filter @openspecui/app typecheck
+# application plus checked P3-B/P3-C fixture lanes passed
+```
+
+The worker's mutation remained independently credible: removing the sole real
+`StoreMutationLifecycleEvidence` render from `StoreInspectorRoute` made the three Register cases fail for
+the missing `Queued`, `Running`, and `Succeeded` evidence; restoration passed. This proves the named
+production rendering owner, while the earlier P3-C evidence proves admission correlation and terminal
+settlement. The accepted P3 scope is automated component preparation only. No agent browser, visual,
+multi-tab, or end-to-end acceptance is implied; those final walkthroughs remain manager-owned.
+
+This closes 4.7. P4 begins with 5.1 only. P4.2--P4.5, broad gates, PR delivery, merge, archive, release,
+and all manager walkthroughs remain open.

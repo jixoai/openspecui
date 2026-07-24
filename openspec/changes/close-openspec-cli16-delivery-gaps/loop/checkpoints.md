@@ -59,7 +59,7 @@ Focused reviewer acceptance is a hard predecessor of the next package and every 
 - [x] 4.4 Keep `indeterminate` only for post-admission lost terminal truth. Prove authentication/validation/HTTP rejection does not create a record or close a destructive UI as though it ran.
 - [x] 4.5 Connect App Store Inspector/remove/setup/register/unregister controls to the lifecycle projection and invalidation-driven fresh Store/Context pulls; retain terminal evidence and disconnect/rejoin state.
 - [x] 4.6 Add checked component-level Vitest/basic Playwright preparation evidence for all five lifecycle states without fake buttons or manually invoked downstream callbacks.
-- [ ] 4.7 Obtain focused reviewer acceptance for P3 before P4 or broad gates.
+- [x] 4.7 Obtain focused reviewer acceptance for P3 before P4 or broad gates.
 
 ## 5. P4 Typed, Static, Reactive, and Evidence Repair
 
