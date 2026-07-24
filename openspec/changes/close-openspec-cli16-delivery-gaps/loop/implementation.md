@@ -365,3 +365,119 @@ P1-C3 non-empty retired resource client -> no borrowed credential
 
 `2.8`, `2.10`, `2.11`, and `2.12` remain unchecked. Each atom needs its own exact red/green/removal result;
 do not rerun broad gates or restart already accepted HTTP/WS/PTY implementation.
+
+### P2 fourth correction review: 2026-07-24 Asia/Shanghai
+
+Reviewed candidate: `cf57f76`.
+
+Independently accepted:
+
+- `3.1`: selected authority now correlates tab id, normalized locator, session id, creation identity, and the
+  current observation generation atomically.
+- `3.2`: App-native locator credentials remain isolated; Project Web supply stays owned by P1.
+- `3.5`: real Register/Remove route fixtures turn red when active-tab, session/creation, or generation
+  checks are removed. No disabled-DOM bypass or production test instrumentation is involved.
+- Candidate App evidence passed 24 files / 125 tests, App production typecheck, and `git diff --check`.
+
+Focused acceptance remains rejected for `3.3`, `3.4`, and therefore `3.6`:
+
+1. `projectRootObservation()` constructs one impossible hybrid record: retained A contributes tab,
+   generation, locator, health/envUri, Root/Reference data, and observation time, while current B contributes
+   `rootStatus/rootError`. Context Matrix then renders B's failed refresh as A's Root error without exposing
+   B provenance.
+2. The central provenance fixture is a `*.test.ts` excluded by the inherited TypeScript configuration. Its
+   passing Vitest transpilation is not typed public-boundary evidence.
+
+Required P2 correction:
+
+```text
+Root projection
+├─ evidence: A full source + A health/envUri + A Root/References + A observedAt
+└─ attempt:  B full source + B health/envUri when known + B status/error + B observedAt
+```
+
+Both source identities contain tab id, session id, API locator, tab creation identity, and generation. A
+ready `env:a/genA/at101` followed by a failed `env:b/genB/at202` refresh must preserve A as a stale evidence
+row and visibly attribute the latest failure to B. Hiding B or hanging its error on A is invalid. The exact
+fixture and its UI projection must enter a narrow checked P2 test-typecheck lane and fail if the hybrid join
+is restored. No P3/P4, broad gate, PR update, archive, merge, release, or browser walkthrough may start
+before this correction passes main-agent review.
+
+### P1 final focused acceptance: 2026-07-24 Asia/Shanghai
+
+Accepted correction commits:
+
+- `d34edca` (`P1-C1`): typed worktree/translation worker-kind envelopes; the real
+  `createWorktreeServerWorker` enters `startServer`, rejects missing child health authority with 401, and
+  accepts only the exact inherited parent Gate with 200.
+- `a565594` (`P1-C2/C3`): the `cli.ts`-invoked production browser-target coordinator receives the actual
+  `startServer` callback credential for Direct/App targets, and a non-empty retired Service Worker client
+  cannot borrow another window's Authorization.
+
+Independent focused rerun:
+
+- CLI target/builders: 2 files / 5 tests.
+- App matching iframe delivery: 1 file / 1 test.
+- Server guarded Project Web HTTP/subscription/PTY chain: 1 file / 1 test.
+- Web credential/HTTP/WS/PTY/resource/handoff: 6 files / 52 tests.
+- Real worktree worker: 1 file / 18 tests; translation routing: 1 file / 7 tests.
+- CLI, App, Server, and P1 checked-fixture typechecks passed.
+
+Mutation evidence is exact-owner evidence: removing Direct or App credential supply loses the required
+fragment; bypassing the retired-client guard borrows another client's Bearer value; removing foreign-kind
+routing makes the real worktree fixture fail from translation payload collision. Existing supplier removal
+evidence continues to cover matching iframe, Web HTTP/WS/PTY, raw resources, and child handoff. Therefore
+`2.8`, `2.10`, `2.11`, and focused-review gate `2.12` are closed. This does not close manager-only browser
+walkthroughs `6.7/6.8`, broad gates, PR delivery, merge, or release.
+
+### P2 final focused acceptance: 2026-07-24 Asia/Shanghai
+
+Accepted correction commit: `83933d5`.
+
+The production projection now preserves two non-interchangeable records:
+
+```text
+Root observation
+├─ evidence: A full tab source + health/envUri + Root/References + observedAt
+└─ attempt:  B full tab source + health/envUri + lifecycle/error + observedAt
+```
+
+The exact `env:a/gen1/at101` ready evidence followed by `env:b/gen2/at202` failed attempt remains one
+stale A row with A's Root and direct Reference, while the latest failure visibly exposes B's locator,
+generation, environment, timestamp, and typed error. The route uses an accessible description list rather
+than production test-only attributes. Restoring the old hybrid join makes both the central projection and
+route fixture fail because B becomes A or disappears.
+
+Independent focused evidence:
+
+- App exact affected files: 3 files / 31 tests passed.
+- App production typecheck and checked P2-test typecheck passed.
+- Scoped Prettier and Oxlint passed with zero warnings/errors; `git diff --check` passed.
+- Checked fixtures contain no `as any`, `as never`, suppression, or fabricated non-null public state.
+
+Therefore `3.3`, `3.4`, and focused-review gate `3.6` are closed. Manager-only multi-environment and Context
+Matrix walkthroughs `6.9/6.11` remain open; no broad-gate or browser-acceptance claim is made.
+
+### P3 research boundary: 2026-07-24 Asia/Shanghai
+
+No manager decision loopback is required. P3 is split into four independently reviewed atoms:
+
+```text
+P3-A  Server per-instance ledger + early admission + typed lifecycle transport
+P3-B  App locator-scoped reconnect/rejoin projection
+P3-C  Inspector lifecycle rendering + invalidation-driven Store/Context pulls
+P3-D  Terra focused Vitest/basic component Playwright preparation evidence
+```
+
+P3-A starts alone. `createServer` owns one `StoreMutationService` and injects it into HTTP/WS Context;
+Router module-global ownership is removed. Operation fields are decoded before admission. `start` returns
+or rejoins `accepted` before terminal settlement, publishes `accepted -> running -> one terminal`, dedupes
+one `requestId` to one CLI spawn, and invalidates Store/Context before terminal publication. The ledger is
+process-local, has no persistence/Cancel/retry, and never becomes Store inventory truth.
+
+The checked real-transport fixed point uses `startServer`, HTTP tRPC, WS subscription, and a delayed Node
+CLI child. Before releasing that child, HTTP must already return `accepted` and WS must observe
+`accepted -> running`; duplicate start writes one spawn marker. After release, invalidation precedes exactly
+one terminal record. Restoring terminal-await, removing transition publication, or deleting dedup must make
+that same fixture fail. Only the mutation runtime decoder portion of `5.1` may move forward with P3-A;
+health, Store inventory, and Root decoders remain P4 work.

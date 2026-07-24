@@ -11,8 +11,8 @@ Original request (2026-07-21): "focused review 未通过，不跑全量门禁。
 
 ## Checkpoint State
 
-Planning is complete and implementation has not started. Checkmarks in Section 1 describe this planning
-work only. They are not proof that code, tests, CI, owner walkthrough, merge, archive, or release passed.
+Planning is complete and focused implementation is active. Checkmarks prove only their named package and
+review boundary; they are not proof that broad gates, owner walkthrough, merge, archive, or release passed.
 
 The worker must update `loop/implementation.md` after every accepted package with the actual changed owner,
 pre-fix red result, green result, mutation-resistance result, commands, output summary, and divergence.
@@ -36,20 +36,20 @@ Focused reviewer acceptance is a hard predecessor of the next package and every 
 - [x] 2.5 Prove valid, missing, invalid, and reconnecting WS/HTTP/PTY credentials at production boundaries; remove the context gate and show the same protected WS case fails.
 - [x] 2.6 Bind a consumed launch credential to the parsed launch API locator before URL stripping; no locator means no arbitrary tab assignment.
 - [x] 2.7 Extend App-native reachability and HTTP clients with `authentication-required` and exact locator-scoped credentials; this evidence does not claim that an embedded Project Web can load or authenticate its own transports.
-- [ ] 2.8 Deliver the exact generated/manual Access Gate credential from CLI launch into both Direct Web and App launch fragments, and from the App's locator owner into only the matching Project Web iframe bootstrap.
+- [x] 2.8 Deliver the exact generated/manual Access Gate credential from CLI launch into both Direct Web and App launch fragments, and from the App's locator owner into only the matching Project Web iframe bootstrap.
 - [x] 2.9 Separate the loadable static Project Web shell from protected backend data surfaces so gated navigation can start without granting API, file, tRPC, WebSocket, PTY, or notification access.
-- [ ] 2.10 Make Project Web consume and strip its credential before rendering, then supply it from one in-memory owner to tRPC HTTP, tRPC WS connection params, PTY auth-first, and every raw protected fetch/resource path without persistence or cross-locator leakage.
-- [ ] 2.11 Prove the real CLI start-command browser-target owner and a production worktree worker reach guarded Project Web/health, then one protected HTTP RPC, subscription, and PTY operation; missing/invalid credentials stay rejected, and removing each real owner/supplier makes its named fixture fail.
-- [ ] 2.12 Obtain focused reviewer acceptance for the complete P1 browser delivery chain before P2/P3/P4 or broad gates.
+- [x] 2.10 Make Project Web consume and strip its credential before rendering, then supply it from one in-memory owner to tRPC HTTP, tRPC WS connection params, PTY auth-first, and every raw protected fetch/resource path without persistence or cross-locator leakage.
+- [x] 2.11 Prove the real CLI start-command browser-target owner and a production worktree worker reach guarded Project Web/health, then one protected HTTP RPC, subscription, and PTY operation; missing/invalid credentials stay rejected, and removing each real owner/supplier makes its named fixture fail.
+- [x] 2.12 Obtain focused reviewer acceptance for the complete P1 browser delivery chain before P2/P3/P4 or broad gates.
 
 ## 3. P2 App Connection and Context Projection
 
-- [ ] 3.1 Atomically bind selected environment authority to the full selected tab identity (`tabId`, locator, session, creation identity) and its current observation generation; no passive-effect window or duplicate/replaced tab may combine a prior observation with a new tab identity.
-- [ ] 3.2 Keep App-native per-locator credentials isolated across health and hosted HTTP clients; Project Web transport delivery is owned and accepted separately by 2.8--2.12.
-- [ ] 3.3 Collect health and Root Context from every retained, protocol-compatible connection while preserving source-labelled loading, typed Root error diagnostics, stale evidence, credential state, and the original generation/envUri/observedAt that produced any retained Root/Reference evidence.
-- [ ] 3.4 Make Environment Center and Context Matrix group only observed backend-issued `envUri`, Store, Root, and exact Reference provenance; retain the explicit non-machine-wide-completeness boundary and grouped connected-project evidence.
-- [ ] 3.5 Prove a selected B action cannot dispatch using A, a hybrid old-observation/new-tab authority, or a retired same-locator B generation. Real Register/Remove owner fixtures must turn red when the exact identity/generation guard is removed, without disabled-DOM bypasses or production test instrumentation.
-- [ ] 3.6 Obtain focused reviewer acceptance for P2 before P3/P4 or broad gates.
+- [x] 3.1 Atomically bind selected environment authority to the full selected tab identity (`tabId`, locator, session, creation identity) and its current observation generation; no passive-effect window or duplicate/replaced tab may combine a prior observation with a new tab identity.
+- [x] 3.2 Keep App-native per-locator credentials isolated across health and hosted HTTP clients; Project Web transport delivery is owned and accepted separately by 2.8--2.12.
+- [x] 3.3 Collect health and Root Context from every retained, protocol-compatible connection while preserving source-labelled loading, typed Root error diagnostics, stale evidence, credential state, and the original generation/envUri/observedAt that produced any retained Root/Reference evidence.
+- [x] 3.4 Make Environment Center and Context Matrix group only observed backend-issued `envUri`, Store, Root, and exact Reference provenance; retain the explicit non-machine-wide-completeness boundary and grouped connected-project evidence.
+- [x] 3.5 Prove a selected B action cannot dispatch using A, a hybrid old-observation/new-tab authority, or a retired same-locator B generation. Real Register/Remove owner fixtures must turn red when the exact identity/generation guard is removed, without disabled-DOM bypasses or production test instrumentation.
+- [x] 3.6 Obtain focused reviewer acceptance for P2 before P3/P4 or broad gates.
 
 ## 4. P3 Observable Store Mutation Ledger
 
