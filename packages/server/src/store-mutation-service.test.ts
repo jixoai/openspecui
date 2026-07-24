@@ -11,6 +11,7 @@
 import { asEnvUri } from '@openspecui/core'
 import { describe, expect, it, vi } from 'vitest'
 import { StoreMutationService } from './store-mutation-service.js'
+import { createDeferred } from './test-support/deferred.js'
 
 const envUri = asEnvUri('openspecui-env://1/abc')
 
@@ -23,7 +24,7 @@ describe('StoreMutationService', () => {
     const invalidate = vi.fn()
     const service = new StoreMutationService(invalidate)
     const events: string[] = []
-    const terminal = Promise.withResolvers<void>()
+    const terminal = createDeferred<void>()
     service.subscribe((event) => {
       if (event.type === 'changed') {
         events.push(event.record.status)
@@ -48,7 +49,7 @@ describe('StoreMutationService', () => {
 
   it('runs accepted -> running -> failed for a nonzero exit', async () => {
     const service = new StoreMutationService(() => {})
-    const terminal = Promise.withResolvers<void>()
+    const terminal = createDeferred<void>()
     service.subscribe((event) => {
       if (event.type === 'changed' && event.record.status === 'failed') terminal.resolve()
     })
@@ -65,7 +66,7 @@ describe('StoreMutationService', () => {
 
   it('reports exit-0 contract drift as deterministic failed evidence', async () => {
     const service = new StoreMutationService(() => {})
-    const terminal = Promise.withResolvers<void>()
+    const terminal = createDeferred<void>()
     service.subscribe((event) => {
       if (event.type === 'changed' && event.record.status === 'failed') terminal.resolve()
     })
@@ -84,7 +85,7 @@ describe('StoreMutationService', () => {
 
   it('reports a deterministic thrown operation as failed rather than indeterminate', async () => {
     const service = new StoreMutationService(() => {})
-    const terminal = Promise.withResolvers<void>()
+    const terminal = createDeferred<void>()
     service.subscribe((event) => {
       if (event.type === 'changed' && event.record.status === 'failed') terminal.resolve()
     })
@@ -118,26 +119,40 @@ describe('StoreMutationService', () => {
     expect(runCount).toBe(1)
   })
 
-  it('markIndeterminate records only explicit post-admission lost terminal truth', async () => {
+  it('does not lose an accepted operation before its queued CLI start runs', async () => {
     const service = new StoreMutationService(() => {})
-    // Seed an accepted mutation without awaiting run completion.
-    void service.start({
+    const ran = createDeferred<void>()
+    const terminal = createDeferred<void>()
+    const events: string[] = []
+    service.subscribe((event) => {
+      events.push(event.record.status)
+      if (event.record.status === 'succeeded') terminal.resolve()
+    })
+    service.start({
       requestId: 'r5',
       envUri,
       kind: 'unregister',
-      run: () => new Promise(() => {}),
+      run: async () => {
+        ran.resolve()
+        return result(0)
+      },
     })
-    const indeterminate = await service.markIndeterminate('r5', 'lost during disconnect')
-    expect(indeterminate?.status).toBe('indeterminate')
-    expect(service.list().find((m) => m.requestId === 'r5')?.status).toBe('indeterminate')
+    const accepted = await service.markIndeterminate('r5', 'too early to know terminal truth')
+    expect(accepted?.status).toBe('accepted')
+    await ran.promise
+    await terminal.promise
+    expect(events).toEqual(['accepted', 'running', 'succeeded'])
   })
 
   it('keeps exactly one terminal record when lost truth races a late CLI completion', async () => {
-    const service = new StoreMutationService(() => {})
     const events: string[] = []
-    const release = Promise.withResolvers<void>()
+    const release = createDeferred<void>()
+    const lateResultReady = createDeferred<void>()
+    const running = createDeferred<void>()
+    const service = new StoreMutationService(() => {})
     service.subscribe((event) => {
       if (event.type === 'changed') events.push(event.record.status)
+      if (event.record.status === 'running') running.resolve()
     })
     service.start({
       requestId: 'r6',
@@ -145,12 +160,15 @@ describe('StoreMutationService', () => {
       kind: 'remove',
       run: async () => {
         await release.promise
+        lateResultReady.resolve()
         return result(0)
       },
     })
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await service.markIndeterminate('r6', 'terminal result was lost')
+    await running.promise
+    // Queue the late CLI continuation, then synchronously retire ownership inside the loss transition.
     release.resolve()
+    await lateResultReady.promise
+    await service.markIndeterminate('r6', 'terminal result was lost')
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(events).toEqual(['accepted', 'running', 'indeterminate'])
     expect(service.list()).toEqual([

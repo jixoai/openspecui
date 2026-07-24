@@ -43,10 +43,9 @@ export const StoreMutationSchema = z.discriminatedUnion('status', [
 ])
 
 /** Runtime-decoded response for a mutation admission or a request-id rejoin. */
-export const StoreMutationStartResponseSchema = z.object({
-  record: StoreMutationSchema,
-  rejoined: z.boolean(),
-})
+export const StoreMutationStartResponseSchema = StoreMutationSchema.and(
+  z.object({ rejoined: z.boolean() })
+)
 
 /** Runtime-decoded Server lifecycle stream: a complete local-ledger snapshot or one changed record. */
 export const StoreMutationLifecycleEventSchema = z.discriminatedUnion('type', [

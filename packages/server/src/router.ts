@@ -110,6 +110,7 @@ import {
   type StoreDoctorStore,
   type StoreFeatureResult,
   type StoreListEntry,
+  type StoreMutationLifecycleEvent,
   type TemplateContentMap,
   type TemplatesMap,
   type WorkflowRequestedModeV1,
@@ -3197,7 +3198,7 @@ export const storesRouter = router({
 
   /** Snapshot then Server-local lifecycle changes for Store mutation evidence; never Store inventory. */
   subscribeMutations: publicProcedure.subscription(({ ctx }) =>
-    observable((emit) => {
+    observable<StoreMutationLifecycleEvent>((emit) => {
       const subscription = ctx.storeMutationService.subscribe((event) =>
         emit.next(StoreMutationLifecycleEventSchema.parse(event))
       )
@@ -3278,19 +3279,21 @@ export const storesRouter = router({
           stdout: result.stdout,
           stderr: result.stderr,
           diagnostics: result.diagnostics,
-          payload: result.success ? result.data : undefined,
+          payload: result.payload,
           contractError: result.contractError,
         }
       }
-      return StoreMutationStartResponseSchema.parse(
-        ctx.storeMutationService.start({
-          requestId: input.requestId,
-          envUri: ctx.envUri,
-          kind: input.kind,
-          storeId: input.storeId ?? input.id,
-          run,
-        })
-      )
+      const started = ctx.storeMutationService.start({
+        requestId: input.requestId,
+        envUri: ctx.envUri,
+        kind: input.kind,
+        storeId: input.storeId ?? input.id,
+        run,
+      })
+      return StoreMutationStartResponseSchema.parse({
+        ...started.record,
+        rejoined: started.rejoined,
+      })
     }),
 })
 

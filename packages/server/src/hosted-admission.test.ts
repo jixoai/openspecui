@@ -281,7 +281,7 @@ describe('Server-issued environment identity', () => {
       path: await createTempDir('openspecui-hosted-store-path-'),
     })
 
-    expect(mutation.record.envUri).toBe(health.envUri)
-    expect(mutation.record.status).toBe('accepted')
+    expect(mutation.envUri).toBe(health.envUri)
+    expect(mutation.status).toBe('accepted')
   })
 })

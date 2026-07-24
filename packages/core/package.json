@@ -166,7 +166,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck:store-mutation-tests": "tsc -p tsconfig.store-mutation-tests.json --noEmit",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.reactive-context-tests.json --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.reactive-context-tests.json --noEmit && tsc -p tsconfig.store-mutation-tests.json --noEmit"
   },
   "dependencies": {
     "@parcel/watcher": "^2.5.1",

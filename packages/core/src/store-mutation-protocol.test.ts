@@ -23,10 +23,13 @@ const record = {
 
 describe('Store mutation protocol', () => {
   it('decodes correlated admission/rejoin evidence', () => {
-    expect(StoreMutationStartResponseSchema.parse({ record, rejoined: true })).toEqual({
-      record,
+    expect(StoreMutationStartResponseSchema.parse({ ...record, rejoined: true })).toEqual({
+      ...record,
       rejoined: true,
     })
+    expect(StoreMutationStartResponseSchema.safeParse({ record, rejoined: true }).success).toBe(
+      false
+    )
   })
 
   it('decodes ledger snapshot and changed records but rejects malformed terminal evidence', () => {

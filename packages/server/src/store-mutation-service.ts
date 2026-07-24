@@ -36,7 +36,7 @@ export interface StartStoreMutationInput {
 
 /** One admitted operation's mutable Server-local ownership state. */
 interface ActiveStoreMutation {
-  settled: boolean
+  phase: 'accepted' | 'running' | 'settled'
 }
 
 /** Internal Server ledger event; Router runtime-decoding owns the browser protocol boundary. */
@@ -117,17 +117,22 @@ export class StoreMutationService {
   private async settle(requestId: string, terminal: StoreMutation): Promise<StoreMutation> {
     const active = this.active.get(requestId)
     const current = this.mutations.get(requestId)
-    if (!active || active.settled || !current || isTerminalMutationStatus(current.status)) {
+    if (
+      !active ||
+      active.phase === 'settled' ||
+      !current ||
+      isTerminalMutationStatus(current.status)
+    ) {
       return current ?? terminal
     }
-    active.settled = true
-    this.active.delete(requestId)
+    active.phase = 'settled'
     // Pull projections after invalidation; terminal lifecycle evidence is published second.
     this.onTerminal()
     // Runtime invalidation coalesces listener notifications into a microtask. Let that notification reach
     // its projection subscribers before exposing the terminal lifecycle record.
     await Promise.resolve()
     this.record(terminal)
+    this.active.delete(requestId)
     return terminal
   }
 
@@ -151,11 +156,12 @@ export class StoreMutationService {
       observedAt: Date.now(),
     }
     // Ownership exists before an observer can re-enter after the first lifecycle publication.
-    this.active.set(input.requestId, { settled: false })
+    this.active.set(input.requestId, { phase: 'accepted' })
     this.record(accepted)
     queueMicrotask(() => {
       const active = this.active.get(input.requestId)
-      if (!active || active.settled) return
+      if (!active || active.phase !== 'accepted') return
+      active.phase = 'running'
       const running: StoreMutation = { ...accepted, status: 'running', observedAt: Date.now() }
       this.record(running)
       void (async () => {
@@ -198,6 +204,8 @@ export class StoreMutationService {
     const current = this.mutations.get(requestId)
     if (!current) return null
     if (isTerminalMutationStatus(current.status)) return current
+    const active = this.active.get(requestId)
+    if (!active || active.phase !== 'running' || current.status !== 'running') return current
     const indeterminate: StoreMutation = {
       ...current,
       status: 'indeterminate',

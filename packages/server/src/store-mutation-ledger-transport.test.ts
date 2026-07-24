@@ -6,7 +6,7 @@
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
-import { ConfigManager } from '@openspecui/core'
+import { ConfigManager, type StoreMutationLifecycleEvent } from '@openspecui/core'
 import { createTRPCClient, createWSClient, httpBatchLink, wsLink } from '@trpc/client'
 import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -15,6 +15,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
 import { findAvailablePort } from './port-utils.js'
 import { startServer, type AppRouter, type RunningServer } from './server.js'
+import { createDeferred } from './test-support/deferred.js'
 
 const runningServers: RunningServer[] = []
 const wsClients: Array<ReturnType<typeof createWSClient>> = []
@@ -76,7 +77,10 @@ async function startDelayedCliServer() {
       "fs.appendFileSync(spawnMarker, 'spawn\\n')",
       'const id = args[2]',
       'const finish = () => {',
-      '  const payload = { store: null, registry: null, git: null, created_files: [], status: [] }',
+      "  const payload = id === 'contract-drift'",
+      "    ? { unexpected: 'retained raw fact', status: [{ severity: 'warning', code: 'STORE_DRIFT', message: 'Malformed Store payload.' }] }",
+      '    : { store: null, registry: null, git: null, created_files: [], status: [] }',
+      "  if (id === 'contract-drift') process.stderr.write('exit-zero contract drift\\n')",
       '  process.stdout.write(JSON.stringify(payload))',
       "  process.exit(id === 'failed' ? 1 : 0)",
       '}',
@@ -109,10 +113,10 @@ describe('Store mutation ledger transport', () => {
       links: [httpBatchLink({ url: `${fixture.server.url}/trpc` })],
     })
     const statuses: string[] = []
-    const ready = Promise.withResolvers<void>()
-    const invalidationReady = Promise.withResolvers<void>()
-    const acceptedRunning = Promise.withResolvers<void>()
-    const terminal = Promise.withResolvers<void>()
+    const ready = createDeferred<void>()
+    const invalidationReady = createDeferred<void>()
+    const acceptedRunning = createDeferred<void>()
+    const terminal = createDeferred<void>()
     let terminalInvalidationObserved = false
     const invalidation = subscriptions.runtimeInvalidation.subscribe.subscribe(
       { facets: ['stores', 'context'] },
@@ -152,7 +156,11 @@ describe('Store mutation ledger transport', () => {
       path: join(fixture.projectDir, 'store-a'),
     })
     expect(start).toEqual({
-      record: expect.objectContaining({ requestId: 'request-a', status: 'accepted' }),
+      requestId: 'request-a',
+      envUri: expect.stringMatching(/^openspecui-env:\/\/1\//),
+      kind: 'setup',
+      status: 'accepted',
+      observedAt: expect.any(Number),
       rejoined: false,
     })
     const rejoin = await mutations.stores.mutate.mutate({
@@ -160,13 +168,17 @@ describe('Store mutation ledger transport', () => {
       kind: 'setup',
       path: join(fixture.projectDir, 'store-a'),
     })
-    expect(rejoin).toEqual({
-      record: expect.objectContaining({ requestId: start.record.requestId }),
-      rejoined: true,
+    expect(rejoin).toMatchObject({
+      requestId: start.requestId,
+      envUri: start.envUri,
+      kind: start.kind,
     })
+    expect(['accepted', 'running']).toContain(rejoin.status)
     await withTimeout(acceptedRunning.promise, 'accepted then running lifecycle')
-    await waitForFile(fixture.spawnMarker)
+    await withTimeout(waitForFile(fixture.spawnMarker), 'CLI spawn marker')
+    await new Promise((resolve) => setTimeout(resolve, 50))
     expect((await readFile(fixture.spawnMarker, 'utf8')).trim().split('\n')).toEqual(['spawn'])
+    expect(rejoin.rejoined).toBe(true)
 
     await writeFile(fixture.releasePath, 'release', 'utf8')
     await withTimeout(terminal.promise, 'terminal lifecycle')
@@ -187,8 +199,8 @@ describe('Store mutation ledger transport', () => {
       links: [httpBatchLink({ url: `${fixture.server.url}/trpc` })],
     })
     const records: Array<{ requestId: string; status: string }> = []
-    const ready = Promise.withResolvers<void>()
-    const failed = Promise.withResolvers<void>()
+    const ready = createDeferred<void>()
+    const failed = createDeferred<void>()
     const subscription = subscriptions.stores.subscribeMutations.subscribe(undefined, {
       onData: (event) => {
         if (event.type === 'snapshot') {
@@ -219,8 +231,8 @@ describe('Store mutation ledger transport', () => {
       storeId: 'failed',
       path: join(fixture.projectDir, 'store-failed'),
     })
-    expect(start.record.status).toBe('accepted')
-    await waitForFile(fixture.spawnMarker)
+    expect(start.status).toBe('accepted')
+    await withTimeout(waitForFile(fixture.spawnMarker), 'CLI spawn marker')
     await writeFile(fixture.releasePath, 'release', 'utf8')
     await withTimeout(failed.promise, 'deterministic failed lifecycle')
     subscription.unsubscribe()
@@ -229,5 +241,88 @@ describe('Store mutation ledger transport', () => {
       { requestId: 'failed', status: 'running' },
       { requestId: 'failed', status: 'failed' },
     ])
+  })
+
+  it('retains real exit-zero Store contract drift as exactly one failed terminal', async () => {
+    const fixture = await startDelayedCliServer()
+    const wsClient = createWSClient({
+      url: `ws://localhost:${fixture.server.port}/trpc`,
+      WebSocket: WebSocket as unknown as typeof globalThis.WebSocket,
+    })
+    wsClients.push(wsClient)
+    const subscriptions = createTRPCClient<AppRouter>({ links: [wsLink({ client: wsClient })] })
+    const mutations = createTRPCClient<AppRouter>({
+      links: [httpBatchLink({ url: `${fixture.server.url}/trpc` })],
+    })
+    const ready = createDeferred<void>()
+    const terminal =
+      createDeferred<Extract<StoreMutationLifecycleEvent, { type: 'changed' }>['record']>()
+    const statuses: string[] = []
+    const subscription = subscriptions.stores.subscribeMutations.subscribe(undefined, {
+      onData: (event) => {
+        if (event.type === 'snapshot') {
+          ready.resolve()
+          return
+        }
+        if (event.record.requestId !== 'contract-drift') return
+        statuses.push(event.record.status)
+        if (event.record.status === 'failed') terminal.resolve(event.record)
+      },
+      onError: terminal.reject,
+    })
+    await withTimeout(ready.promise, 'lifecycle snapshot')
+
+    const start = await mutations.stores.mutate.mutate({
+      requestId: 'contract-drift',
+      kind: 'setup',
+      storeId: 'contract-drift',
+      path: join(fixture.projectDir, 'store-contract-drift'),
+    })
+    expect(start).toMatchObject({
+      requestId: 'contract-drift',
+      status: 'accepted',
+      rejoined: false,
+    })
+    await withTimeout(waitForFile(fixture.spawnMarker), 'CLI spawn marker')
+    await writeFile(fixture.releasePath, 'release', 'utf8')
+
+    const failed = await withTimeout(terminal.promise, 'exit-zero contract failure')
+    subscription.unsubscribe()
+    expect(statuses).toEqual(['accepted', 'running', 'failed'])
+    expect(failed).toMatchObject({
+      status: 'failed',
+      result: {
+        exitStatus: 0,
+        stdout: JSON.stringify({
+          unexpected: 'retained raw fact',
+          status: [
+            {
+              severity: 'warning',
+              code: 'STORE_DRIFT',
+              message: 'Malformed Store payload.',
+            },
+          ],
+        }),
+        stderr: 'exit-zero contract drift\n',
+        diagnostics: [
+          {
+            severity: 'warning',
+            code: 'STORE_DRIFT',
+            message: 'Malformed Store payload.',
+          },
+        ],
+        payload: {
+          unexpected: 'retained raw fact',
+          status: [
+            {
+              severity: 'warning',
+              code: 'STORE_DRIFT',
+              message: 'Malformed Store payload.',
+            },
+          ],
+        },
+        contractError: expect.stringMatching(/store|registry|git|created_files/i),
+      },
+    })
   })
 })
