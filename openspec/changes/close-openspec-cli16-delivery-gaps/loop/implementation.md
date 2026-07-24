@@ -729,20 +729,21 @@ first current ledger snapshot already contains its terminal record
 composer treats every terminal as historical baseline -> no Store/Context pull
 ```
 
-The distinction cannot come from `baselined` alone. The Store surface must register the admitted request id
-and its exact normalized locator synchronously after the real dispatcher resolves. A later first current
-snapshot treats registered pending ids as current-session work, while unrelated terminal history remains
-baseline-only. Registration before a current snapshot, accepted/running-to-terminal, terminal first seen
-after baseline, disconnect/rejoin, duplicate emission, route locator change, and admission rejection must
-all preserve one terminal-driven pull and no fabricated record. Pending ids from locator A must never settle
-from B; retired/unmounted composition must not publish late work.
+The distinction cannot come from `baselined` alone. The Store surface must correlate the admitted request id
+with its exact normalized locator through the real dispatcher. HTTP response delivery and the WebSocket
+snapshot have no cross-transport ordering guarantee: correlation must work both when admission becomes
+visible before the first current snapshot and when the first current snapshot already contains terminal R
+before the admission Promise resumes. Unrelated terminal history remains baseline-only. Accepted/running to
+terminal, terminal first seen after baseline, disconnect/rejoin, duplicate emission, route locator change,
+and admission rejection must all preserve one terminal-driven pull and no fabricated record. Pending ids
+from locator A must never settle from B; retired/unmounted composition must not publish late work.
 
 The correction may keep the accepted HTTP record only as correlation evidence; it must not render it into
 the Server ledger, refresh, close Remove, or invent terminal status. The real setup/register/unregister and
-Remove dispatch paths must call the same registration owner. Add a checked red case for admission before
-the first current snapshot followed directly by terminal, and show that deleting registration makes it
-fail. Preserve the accepted evidence and mutations already recorded for `3e18654`. P3-C/P3-D, `4.4--4.7`,
-broad gates, browser acceptance, PR delivery, merge, archive, and release remain open.
+Remove dispatch paths must call the same registration owner. Add checked red cases for both HTTP-first and
+WebSocket-first terminal correlation, and show that deleting the correlation transition makes them fail.
+Preserve the accepted evidence and mutations already recorded for `3e18654`. P3-C/P3-D, `4.4--4.7`, broad
+gates, browser acceptance, PR delivery, merge, archive, and release remain open.
 
 ### 7.3 old Change partial archive: 2026-07-24 Asia/Shanghai
 
