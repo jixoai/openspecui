@@ -2,12 +2,15 @@
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Prove Store Inventory/Inspector transport preserves backend envelopes and failures.
  * 2. Prove every hosted HTTP/RPC request resolves credentials by its own normalized locator.
+ * 3. Prove Store admission decodes flat accepted/rejoined responses and rejects pre-admission failures.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  * Delivery correction (2026-07-24): callers cannot supply another locator's credential.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  BackendStoreMutationContractError,
+  BackendStoreMutationRequestError,
   fetchBackendRootContext,
   fetchBackendStoreInspector,
   fetchBackendStoreInventory,
@@ -101,7 +104,14 @@ describe('backend-client credential ownership', () => {
         authorization: new Headers(init?.headers).get('authorization'),
       })
       const data = url.includes('stores.mutate')
-        ? { requestId: 'request-b', kind: 'register', status: 'accepted', observedAt: 1 }
+        ? {
+            requestId: 'request-b',
+            envUri: 'openspecui-env://1/b',
+            kind: 'register',
+            status: 'accepted',
+            observedAt: 1,
+            rejoined: false,
+          }
         : url.includes('rootContext.get')
           ? { status: 'loading' }
           : { available: true, stores: [] }
@@ -125,5 +135,71 @@ describe('backend-client credential ownership', () => {
       'Bearer credential-a',
       'Bearer credential-b',
     ])
+  })
+})
+
+describe('backend-client Store mutation admission', () => {
+  it.each([
+    {
+      status: 'accepted' as const,
+      rejoined: false,
+    },
+    {
+      status: 'running' as const,
+      rejoined: true,
+    },
+  ])('decodes a flat $status response with rejoined=$rejoined', async ({ status, rejoined }) => {
+    const data = {
+      requestId: 'request-a',
+      envUri: 'openspecui-env://1/a',
+      kind: 'setup',
+      status,
+      observedAt: 4,
+      rejoined,
+    }
+    const result = await mutateBackendStore(
+      {
+        apiBaseUrl: API_A,
+        fetchImpl: createJsonFetch({ result: { data } }),
+      },
+      { requestId: 'request-a', kind: 'setup', path: '/tmp/store-a' }
+    )
+
+    expect(result).toEqual(data)
+  })
+
+  it('throws a typed request error for HTTP/auth/validation rejection without a fake record', async () => {
+    const promise = mutateBackendStore(
+      { apiBaseUrl: API_A, fetchImpl: createJsonFetch({ error: 'Unauthorized' }, 401) },
+      { requestId: 'rejected', kind: 'remove', storeId: 'team', confirmDelete: true }
+    )
+
+    await expect(promise).rejects.toMatchObject({
+      name: 'BackendStoreMutationRequestError',
+      status: 401,
+    })
+    await expect(promise).rejects.toBeInstanceOf(BackendStoreMutationRequestError)
+  })
+
+  it('throws a typed contract error for malformed tRPC data without indeterminate evidence', async () => {
+    const promise = mutateBackendStore(
+      {
+        apiBaseUrl: API_A,
+        fetchImpl: createJsonFetch({
+          result: {
+            data: {
+              requestId: 'malformed',
+              kind: 'register',
+              status: 'indeterminate',
+              observedAt: Date.now(),
+            },
+          },
+        }),
+      },
+      { requestId: 'malformed', kind: 'register', path: '/tmp/store' }
+    )
+
+    await expect(promise).rejects.toBeInstanceOf(BackendStoreMutationContractError)
+    await expect(promise).rejects.toMatchObject({ name: 'BackendStoreMutationContractError' })
   })
 })

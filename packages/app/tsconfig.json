@@ -10,8 +10,11 @@
       "@openspecui/core/hosted-app": ["../core/src/hosted-app.ts"],
       "@openspecui/core/sounds": ["../core/src/sounds.ts"],
       "@openspecui/core/store-types": ["../core/src/store-types.ts"],
+      "@openspecui/core/store-mutation-protocol": ["../core/src/store-mutation-protocol.ts"],
+      "@openspecui/local-llama-translator": ["../local-llama-translator/src/index.ts"],
+      "@openspecui/server": ["../server/src/index.ts"],
       "@openspecui/web-src/*": ["../web/src/*"]
     }
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "vite.config.ts", "../server/src/huggingface-transformers.d.ts"]
 }

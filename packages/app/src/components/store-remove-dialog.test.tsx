@@ -141,10 +141,13 @@ describe('StoreRemoveDialog', () => {
     let closed = false
     const removeStore = vi.fn(async () => ({
       requestId: 'r1',
+      envUri: 'openspecui-env://1/aaa',
       kind: 'remove' as const,
       status: 'succeeded' as const,
       storeId: 'design-system',
+      result: { exitStatus: 0 },
       observedAt: 1,
+      rejoined: true,
     }))
     await renderAt(
       wrapInRouter(

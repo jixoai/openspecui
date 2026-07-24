@@ -3,6 +3,7 @@
  * 1. Project backend Store list/doctor through the hosted REST boundary without registry semantics.
  * 2. Preserve upstream Store facts and exit status; never invent health/completeness/ownership.
  * 3. Resolve Access Gate credentials only from the runtime registry for the request locator.
+ * 4. Decode Store mutation admission and reject pre-admission request/contract failures.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  * Section 9.6/9.8 App Store Inspector/Inventory wiring against the backend store procedures.
@@ -13,6 +14,10 @@
  *  - App 是 observed-only 投影；不做 Store Git clone/pull/push/sync，不做文件系统扫描。
  */
 import type { RootContextState } from '@openspecui/core'
+import {
+  StoreMutationStartResponseSchema,
+  type StoreMutationStartResponse,
+} from '@openspecui/core/store-mutation-protocol'
 import type { StoreDoctorResult, StoreListResult } from '@openspecui/core/store-types'
 import { readLaunchCredential } from './launch-credential'
 
@@ -142,14 +147,30 @@ export interface BackendStoreMutateInput {
   confirmDelete?: boolean
 }
 
-/** One backend-owned Store mutation lifecycle record returned by `stores.mutate`. */
-export interface BackendStoreMutationRecord {
-  requestId: string
-  kind: BackendStoreMutationKind
-  status: 'accepted' | 'running' | 'succeeded' | 'failed' | 'indeterminate'
-  storeId?: string
-  result?: { exitStatus: number | null; stdout?: string; stderr?: string; payload?: unknown }
-  observedAt: number
+/** Decoded backend admission/rejoin evidence; active/recent records come only from the lifecycle stream. */
+export type BackendStoreMutationRecord = StoreMutationStartResponse
+
+/** HTTP/auth/validation failure before Store mutation admission. */
+export class BackendStoreMutationRequestError extends Error {
+  readonly kind = 'request'
+
+  constructor(
+    readonly status: number,
+    readonly statusText: string
+  ) {
+    super(`Store mutation request failed: ${status}${statusText ? ` ${statusText}` : ''}.`)
+    this.name = 'BackendStoreMutationRequestError'
+  }
+}
+
+/** Browser contract failure while decoding a successful tRPC Store mutation response. */
+export class BackendStoreMutationContractError extends Error {
+  readonly kind = 'contract'
+
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'BackendStoreMutationContractError'
+  }
 }
 
 /**
@@ -173,25 +194,28 @@ export async function mutateBackendStore(
     body: JSON.stringify(input),
   })
   if (!response.ok) {
-    return {
-      requestId: input.requestId,
-      kind: input.kind,
-      status: 'indeterminate',
-      storeId: input.storeId,
-      result: { exitStatus: null, stderr: `Store mutation request failed: ${response.status}` },
-      observedAt: Date.now(),
-    }
+    throw new BackendStoreMutationRequestError(response.status, response.statusText)
   }
-  const envelope = (await response.json()) as { result?: { data?: unknown } }
-  const data = envelope.result?.data
-  if (!data || typeof data !== 'object') {
-    return {
-      requestId: input.requestId,
-      kind: input.kind,
-      status: 'indeterminate',
-      storeId: input.storeId,
-      observedAt: Date.now(),
-    }
+  let envelope: unknown
+  try {
+    envelope = await response.json()
+  } catch (error) {
+    throw new BackendStoreMutationContractError('Malformed Store mutation JSON response.', {
+      cause: error,
+    })
   }
-  return data as BackendStoreMutationRecord
+  if (typeof envelope !== 'object' || envelope === null || !('result' in envelope)) {
+    throw new BackendStoreMutationContractError('Malformed Store mutation tRPC envelope.')
+  }
+  const result = envelope.result
+  if (typeof result !== 'object' || result === null || !('data' in result)) {
+    throw new BackendStoreMutationContractError('Malformed Store mutation tRPC result.')
+  }
+  const decoded = StoreMutationStartResponseSchema.safeParse(result.data)
+  if (!decoded.success) {
+    throw new BackendStoreMutationContractError(
+      `Malformed Store mutation admission: ${decoded.error.message}`
+    )
+  }
+  return decoded.data
 }
