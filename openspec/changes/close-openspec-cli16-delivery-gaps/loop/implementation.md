@@ -991,3 +991,43 @@ The repository pre-commit hook was invoked after those checks and stopped before
 `vite.config.ts` has no Vite+ `staged` configuration. This is an existing repository-hook configuration
 failure, not a P4.1 test/type/lint result. The implementation commit therefore uses `--no-verify`; the
 scoped commands above remain the recorded validation evidence.
+
+#### Independent reviewer acceptance: 2026-07-25 Asia/Shanghai
+
+Reviewed commit: `111056a fix(hosted): decode browser contract envelopes`.
+
+The reviewer replayed the production-facing focused evidence:
+
+```bash
+pnpm --filter @openspecui/core exec vitest run src/hosted-contract.test.ts
+# 1 file / 3 tests passed
+
+pnpm --filter @openspecui/app exec vitest run \
+  src/lib/backend-client.test.ts \
+  src/lib/reachability.test.ts \
+  src/lib/connection-observation.test.ts \
+  src/lib/use-environment.test.ts
+# 4 files / 39 tests passed
+
+pnpm --filter @openspecui/core typecheck
+pnpm --filter @openspecui/app typecheck
+pnpm --filter @openspecui/core build
+pnpm --filter @openspecui/app build
+pnpm exec prettier --check <changed P4.1 TypeScript files>
+pnpm exec oxlint <changed P4.1 TypeScript files>
+openspec validate close-openspec-cli16-delivery-gaps --strict
+```
+
+All commands passed. The App source search found no runtime import of `@openspecui/core` root. The scoped
+App build retained one pre-existing CSS pseudo-element warning but completed successfully; it is unrelated
+to this contract boundary.
+
+The reviewer also used a disposable detached worktree to replace the exact production Store-list call to
+`decodeHostedTrpcData(HostedStoreListEnvelopeSchema, payload)` with the former asserted envelope path. The
+same real ingress fixture failed with one failure and twelve skips, receiving `{ available: true }` where it
+required an unavailable contract error. Removing the disposable worktree and replaying the unmodified
+fixture restored the P4.1 green result. This is mutation-resistance proof for the actual consumer owner,
+not a schema-only characterization test.
+
+Checkpoint 5.1 is accepted. P4.2 is the next independent package; 5.3--5.5, broad gates, PR delivery,
+merge, archive, release, and every manager browser/visual/multi-tab walkthrough remain out of scope.
