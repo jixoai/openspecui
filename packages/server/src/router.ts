@@ -81,6 +81,8 @@ import {
   SpecIdentitySchema,
   StoreDoctorResultSchema,
   StoreListResultSchema,
+  StoreMutationLifecycleEventSchema,
+  StoreMutationStartResponseSchema,
   subscribeWatcherRuntimeStatus,
   TerminalConfigSchema,
   TerminalRendererEngineSchema,
@@ -200,6 +202,8 @@ export interface Context {
   runtimeInvalidation: RuntimeInvalidationController
   /** CLI-truth reconciler for dynamic registered Store observation roots. */
   storeObservation: StoreObservationReconciler
+  /** Server-local Store mutation admission and lifecycle ledger. */
+  storeMutationService: StoreMutationService
   /** Runtime owner for environment-global tool command watcher leases. */
   toolCommandObservation: ToolCommandObservationService
   configManager: ConfigManager
@@ -3191,6 +3195,17 @@ export const storesRouter = router({
     .input(z.object({ id: z.string().optional() }).optional())
     .query(({ ctx, input }) => fetchStoresDoctor(ctx, input?.id)),
 
+  /** Snapshot then Server-local lifecycle changes for Store mutation evidence; never Store inventory. */
+  subscribeMutations: publicProcedure.subscription(({ ctx }) =>
+    observable((emit) => {
+      const subscription = ctx.storeMutationService.subscribe((event) =>
+        emit.next(StoreMutationLifecycleEventSchema.parse(event))
+      )
+      emit.next(StoreMutationLifecycleEventSchema.parse(subscription.snapshot))
+      return subscription.unsubscribe
+    })
+  ),
+
   /**
    * Backend-owned Store mutation (stores.mutate). Runs setup/register/unregister/remove through the
    * official CLI under the `StoreMutationService` lifecycle (accepted -> running -> succeeded | failed |
@@ -3198,23 +3213,39 @@ export const storesRouter = router({
    */
   mutate: publicProcedure
     .input(
-      z.object({
-        requestId: z.string().min(1),
-        kind: z.enum(['setup', 'register', 'unregister', 'remove']),
-        storeId: z.string().optional(),
-        // setup
-        path: z.string().optional(),
-        initGit: z.boolean().optional(),
-        remote: z.string().optional(),
-        // register
-        id: z.string().optional(),
-        confirmIdentity: z.boolean().optional(),
-        // remove
-        confirmDelete: z.boolean().optional(),
-      })
+      z
+        .object({
+          requestId: z.string().min(1),
+          kind: z.enum(['setup', 'register', 'unregister', 'remove']),
+          storeId: z.string().optional(),
+          // setup
+          path: z.string().optional(),
+          initGit: z.boolean().optional(),
+          remote: z.string().optional(),
+          // register
+          id: z.string().optional(),
+          confirmIdentity: z.boolean().optional(),
+          // remove
+          confirmDelete: z.boolean().optional(),
+        })
+        .superRefine((input, validation) => {
+          if ((input.kind === 'setup' || input.kind === 'register') && !input.path) {
+            validation.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['path'],
+              message: `${input.kind} requires a path.`,
+            })
+          }
+          if ((input.kind === 'unregister' || input.kind === 'remove') && !input.storeId) {
+            validation.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['storeId'],
+              message: `${input.kind} requires a storeId.`,
+            })
+          }
+        })
     )
     .mutation(async ({ ctx, input }) => {
-      const service = getStoreMutationService(ctx)
       const run: StartStoreMutationInput['run'] = async () => {
         let result
         if (input.kind === 'setup') {
@@ -3246,33 +3277,22 @@ export const storesRouter = router({
           exitStatus: result.exitCode,
           stdout: result.stdout,
           stderr: result.stderr,
+          diagnostics: result.diagnostics,
           payload: result.success ? result.data : undefined,
+          contractError: result.contractError,
         }
       }
-      const mutation = await service.start({
-        requestId: input.requestId,
-        envUri: ctx.envUri,
-        kind: input.kind,
-        storeId: input.storeId ?? input.id,
-        run,
-      })
-      // Each terminal or indeterminate outcome invalidates the affected Store/context projections.
-      if (mutation.status !== 'running' && mutation.status !== 'accepted') {
-        ctx.runtimeInvalidation.invalidate(['stores', 'context'])
-      }
-      return mutation
+      return StoreMutationStartResponseSchema.parse(
+        ctx.storeMutationService.start({
+          requestId: input.requestId,
+          envUri: ctx.envUri,
+          kind: input.kind,
+          storeId: input.storeId ?? input.id,
+          run,
+        })
+      )
     }),
 })
-
-/**
- * Per-process Store mutation service. One backend process owns one service; request ids deduplicate
- * starts within it. Lazily attached to a module-level singleton so the tRPC context need not change.
- */
-let _storeMutationService: StoreMutationService | null = null
-function getStoreMutationService(_ctx: Context): StoreMutationService {
-  if (!_storeMutationService) _storeMutationService = new StoreMutationService()
-  return _storeMutationService
-}
 
 const runtimeInvalidationFacetSchema = z.enum(RUNTIME_INVALIDATION_FACETS)
 

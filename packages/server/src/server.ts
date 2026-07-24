@@ -113,6 +113,7 @@ import {
   resolveDefaultServerHostIdentity,
   type ServerHostIdentityProvider,
 } from './server-host-identity.js'
+import { StoreMutationService } from './store-mutation-service.js'
 import { StoreObservationFallbackService } from './store-observation-fallback.js'
 import { StoreObservationService } from './store-observation-service.js'
 import { ToolCommandObservationService } from './tool-command-observation-service.js'
@@ -197,6 +198,11 @@ export function createServer(config: ServerConfig) {
   const cliExecutor = new CliExecutor(configManager, config.projectDir)
   const observationEnvironment = new ReactiveObservationEnvironment()
   const runtimeInvalidation = new RuntimeInvalidationIndex()
+  // One process-local ledger belongs to this Server, not the Router module. Closing subscriptions never
+  // cancels an already-admitted CLI process.
+  const storeMutationService = new StoreMutationService(() => {
+    runtimeInvalidation.invalidate(['stores', 'context'])
+  })
   const projectInvalidation = new RuntimeRootInvalidationRegistry(runtimeInvalidation, [
     'project',
     'context',
@@ -486,6 +492,7 @@ export function createServer(config: ServerConfig) {
         gitRepositoryBindings,
         runtimeInvalidation,
         storeObservation,
+        storeMutationService,
         toolCommandObservation,
         configManager,
         cliExecutor,
@@ -529,6 +536,7 @@ export function createServer(config: ServerConfig) {
       gitRepositoryBindings,
       runtimeInvalidation,
       storeObservation,
+      storeMutationService,
       toolCommandObservation,
       configManager,
       cliExecutor,
@@ -556,6 +564,7 @@ export function createServer(config: ServerConfig) {
     gitRepositoryBindings,
     observationEnvironment,
     runtimeInvalidation,
+    storeMutationService,
     projectInvalidation,
     dataHomeObserver,
     storeObservation,
@@ -707,6 +716,7 @@ export async function createWebSocketServer(
           () => server.watcher?.stop(),
         ])
         await settleCleanupPhase(failures, [() => server.storeObservationFallback.dispose()])
+        await settleCleanupPhase(failures, [() => server.storeMutationService.dispose()])
         await settleCleanupPhase(failures, [() => server.rootContextNotificationBridge.dispose()])
         await settleCleanupPhase(failures, [() => server.projectionWorkRuntime.clear()])
         await settleCleanupPhase(failures, [() => server.planningRootServices.dispose()])

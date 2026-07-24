@@ -48,20 +48,23 @@ async function startTestServer(options?: {
   const port = await findAvailablePort(nextPreferredPort, 100)
   nextPreferredPort = port + 1
   const hostIdentity = options?.hostIdentity
-  const server = await startServer({
-    projectDir,
-    port,
-    enableWatcher: false,
-    accessGate: options?.accessGate,
-    hostIdentityProvider: hostIdentity === undefined ? undefined : () => hostIdentity,
-  }, (app) => {
-    app.get('/', (context) => context.html('<!doctype html><div id="root"></div>'))
-    app.get('/assets/project-web.js', (context) =>
-      context.body('globalThis.__projectWebLoaded = true', 200, {
-        'Content-Type': 'application/javascript',
-      })
-    )
-  })
+  const server = await startServer(
+    {
+      projectDir,
+      port,
+      enableWatcher: false,
+      accessGate: options?.accessGate,
+      hostIdentityProvider: hostIdentity === undefined ? undefined : () => hostIdentity,
+    },
+    (app) => {
+      app.get('/', (context) => context.html('<!doctype html><div id="root"></div>'))
+      app.get('/assets/project-web.js', (context) =>
+        context.body('globalThis.__projectWebLoaded = true', 200, {
+          'Content-Type': 'application/javascript',
+        })
+      )
+    }
+  )
   runningServers.push(server)
   return server
 }
@@ -275,8 +278,10 @@ describe('Server-issued environment identity', () => {
     const mutation = await client.stores.mutate.mutate({
       requestId: `identity-${Date.now()}`,
       kind: 'setup',
+      path: await createTempDir('openspecui-hosted-store-path-'),
     })
 
-    expect(mutation.envUri).toBe(health.envUri)
+    expect(mutation.record.envUri).toBe(health.envUri)
+    expect(mutation.record.status).toBe('accepted')
   })
 })

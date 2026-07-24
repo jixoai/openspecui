@@ -841,6 +841,16 @@ export {
 export { type ProjectRecoveryStatus } from './runtime-types.js'
 export { redactSnapshotForPublication, snapshotHasAbsolutePath } from './snapshot-redaction.js'
 export {
+  StoreMutationLifecycleEventSchema,
+  StoreMutationResultSchema,
+  StoreMutationSchema,
+  StoreMutationStartResponseSchema,
+  type StoreMutationEnvelope,
+  type StoreMutationLifecycleEvent,
+  type StoreMutationResultEnvelope,
+  type StoreMutationStartResponse,
+} from './store-mutation-protocol.js'
+export {
   StoreDoctorResultSchema,
   StoreListResultSchema,
   classifyStoreCliResult,

@@ -79,6 +79,8 @@ export interface StoreMutationResult {
   diagnostics?: CliDiagnostic[]
   /** CLI-returned structured payload; upstream fact preserved without reinterpretation. */
   payload?: unknown
+  /** Typed CLI decoder drift; an exit-0 process is still a failed mutation when this is present. */
+  contractError?: string
 }
 
 /** Runtime projection of one backend-owned Store mutation. */
