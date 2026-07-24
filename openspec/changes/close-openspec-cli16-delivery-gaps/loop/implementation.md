@@ -481,3 +481,56 @@ CLI child. Before releasing that child, HTTP must already return `accepted` and 
 one terminal record. Restoring terminal-await, removing transition publication, or deleting dedup must make
 that same fixture fail. Only the mutation runtime decoder portion of `5.1` may move forward with P3-A;
 health, Store inventory, and Root decoders remain P4 work.
+
+### P3-A first candidate rejected: 2026-07-24 Asia/Shanghai
+
+Reviewed candidate: `0d6a36b`.
+
+The candidate establishes the intended per-Server service, early admission, request-id ownership,
+mutation-only schemas, HTTP/WS injection, pre-admission operation validation, invalidation-before-terminal
+ordering, and a delayed real CLI transport fixture. These are useful implementation facts, but they do not
+close `4.1--4.3`: the public consumer contract, lost-terminal state machine, and checked evidence boundary
+are not yet sound.
+
+```text
+HTTP start response                     Lost-terminal transition
+-------------------                     ------------------------
+mutation fields + rejoined              accepted  -- forbidden --> indeterminate
+        |                               running   -- server loss -> indeterminate
+        +-- existing App remains usable              |
+                                                    +-- late CLI result is ignored
+```
+
+Independent review rejected the candidate for five exact reasons:
+
+1. `stores.mutate` changed from the flat mutation record consumed by the current App to
+   `{ record, rejoined }`. P3-A may add `rejoined`, but it must preserve the flat record shape as
+   `{ ...record, rejoined }`; changing App decoding belongs to P3-B and cannot be used to hide this
+   regression.
+2. `markIndeterminate()` can settle an operation while it is only `accepted`, which suppresses the queued
+   CLI start and fabricates lost terminal truth. A Server-only loss transition must require an actually
+   `running` admitted operation. An accepted-phase attempt must reject or no-op without preventing the CLI;
+   a late real result after a valid running-phase loss still publishes no second terminal.
+3. The checked Server transport lane currently fails with 15 TypeScript errors: ES2022 has no
+   `Promise.withResolvers`, and the untyped Router `observable(...)` makes lifecycle `onData` values
+   `unknown`. The public subscription must carry the explicit lifecycle event type, and fixtures must use
+   an ES2022-compatible deferred helper.
+4. Core's mutation protocol fixture is excluded from the standard
+   `pnpm --filter @openspecui/core typecheck` command. The narrow config must be part of that standard
+   package lane. Server transport evidence likewise remains in the standard Server typecheck path.
+5. Exit-zero contract drift is only hand-authored at the service layer. The delayed real CLI must exit 0
+   with a malformed Store payload and prove `CLIExecutor -> Router -> HTTP/WS -> exactly one failed`
+   while retaining `contractError`, diagnostics, stdout/stderr, payload, and exit status.
+
+Candidate mutation-resistance results, recorded as worker evidence pending corrected independent rerun:
+
+- restoring terminal-await made both real service/router transport tests time out at 5000 ms; the
+  early-admission case stopped before writing its release file; restoration returned `2/2` green;
+- reordering invalidation made the ordering assertion fail;
+- removing `running` publication made the lifecycle assertion fail;
+- bypassing request-id deduplication produced two CLI spawns;
+- bypassing active/settled retirement published `indeterminate -> succeeded`.
+
+The correction must retain those exact-owner checks, add the real exit-zero malformed-payload case, and
+make both package-standard typechecks green. No P3 checkpoint is checked, and P3-B/P3-C/P3-D, P4, broad
+gates, PR delivery, archive, merge, release, and browser walkthrough remain outside this correction.
