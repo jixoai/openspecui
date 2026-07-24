@@ -601,3 +601,16 @@ retired callbacks, or another locator can never relabel or publish into the curr
 P3-B adds no persisted mutation database, UI lifecycle rendering, Store/Context refresh, Cancel, mutation
 retry, or browser walkthrough. P3-C will consume the owner in Store Inspector and perform terminal-driven
 invalidation pulls; P3-D will add focused component preparation evidence. `4.4--4.7` therefore remain open.
+
+### 7.3 old Change partial archive: 2026-07-24 Asia/Shanghai
+
+The manager confirmed the documented supersession boundary. Strict validation of
+`close-openspec-cli16-delivery-gaps` passed before the archive. The old Change's planning artifacts were
+complete, its corrected checkpoint state was `106/131`, and its 25 unresolved items remained mapped by the
+archived `loop/supersession.md`; no item was rewritten as complete.
+
+`openspec archive target-openspec-cli-16-line -y --skip-specs` reported the intentional incomplete-task
+warning, skipped no delta-spec synchronization, and moved the Change to
+`openspec/changes/archive/2026-07-24-target-openspec-cli-16-line/`. Archive closes the former active
+planning folder only. P3--P5, focused/full gates, manager walkthroughs, protected merge, and release remain
+open in this successor.
