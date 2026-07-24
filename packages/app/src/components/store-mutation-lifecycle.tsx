@@ -9,6 +9,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useConnectionObservationOwner } from '../lib/connection-observation'
 import { useMutationObservations } from '../lib/mutation-observation-provider'
+import { normalizeHostedApiBaseUrl } from '../lib/shell-state'
 import {
   createStoreLifecycleComposer,
   projectStoreLifecycle,
@@ -36,12 +37,13 @@ export function useStoreMutationLifecycle(
       refreshContexts: (tabIds) => connectionOwnerRef.current.refresh(tabIds),
     })
   )
-  const locator = selectStoreMutationLocator(mutationSnapshot, apiBaseUrl)
+  const locatorIdentity = apiBaseUrl ? normalizeHostedApiBaseUrl(apiBaseUrl) : null
+  const locator = selectStoreMutationLocator(mutationSnapshot, locatorIdentity)
 
   useLayoutEffect(() => {
-    composer.setLocator(apiBaseUrl)
+    composer.setLocator(locatorIdentity)
     return () => composer.setLocator(null)
-  }, [apiBaseUrl, composer])
+  }, [composer, locatorIdentity])
 
   useEffect(() => {
     composer.observe(locator, connections.tabs)
