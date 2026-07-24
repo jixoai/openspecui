@@ -53,9 +53,9 @@ Focused reviewer acceptance is a hard predecessor of the next package and every 
 
 ## 4. P3 Observable Store Mutation Ledger
 
-- [ ] 4.1 Refactor Server mutation admission to return/rejoin `accepted` before CLI terminal settlement, with request-id deduplication and no Cancel/automatic retry.
-- [ ] 4.2 Add a typed Server-owned lifecycle subscription/rejoin projection that emits known records then accepted/running/terminal changes without becoming Store inventory truth.
-- [ ] 4.3 Prove a delayed real router operation delivers `accepted` then `running` before terminal, exactly once; deleting stream publication or making start await terminal makes the test fail.
+- [x] 4.1 Refactor Server mutation admission to return/rejoin `accepted` before CLI terminal settlement, with request-id deduplication and no Cancel/automatic retry.
+- [x] 4.2 Add a typed Server-owned lifecycle subscription/rejoin projection that emits known records then accepted/running/terminal changes without becoming Store inventory truth.
+- [x] 4.3 Prove a delayed real router operation delivers `accepted` then `running` before terminal, exactly once; deleting stream publication or making start await terminal makes the test fail.
 - [ ] 4.4 Keep `indeterminate` only for post-admission lost terminal truth. Prove authentication/validation/HTTP rejection does not create a record or close a destructive UI as though it ran.
 - [ ] 4.5 Connect App Store Inspector/remove/setup/register/unregister controls to the lifecycle projection and invalidation-driven fresh Store/Context pulls; retain terminal evidence and disconnect/rejoin state.
 - [ ] 4.6 Add checked component-level Vitest/basic Playwright preparation evidence for all five lifecycle states without fake buttons or manually invoked downstream callbacks.

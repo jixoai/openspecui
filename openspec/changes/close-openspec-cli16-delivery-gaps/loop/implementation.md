@@ -534,3 +534,70 @@ Candidate mutation-resistance results, recorded as worker evidence pending corre
 The correction must retain those exact-owner checks, add the real exit-zero malformed-payload case, and
 make both package-standard typechecks green. No P3 checkpoint is checked, and P3-B/P3-C/P3-D, P4, broad
 gates, PR delivery, archive, merge, release, and browser walkthrough remain outside this correction.
+
+### P3-A final focused acceptance: 2026-07-24 Asia/Shanghai
+
+Accepted correction commit: `915de0b` after initial candidate `0d6a36b` and review record `993e00e`.
+
+The public start response is flat `{ ...StoreMutation, rejoined }`, so the existing App still receives
+`status` while a repeated request id exposes rejoin truth. Rejoin returns the operation's current record;
+it does not force a running operation back to accepted. Server ownership is explicitly
+`accepted | running | settled`. A loss report during accepted is a no-op and cannot suppress the queued
+CLI; only a running operation can become indeterminate, and its late real result cannot publish a second
+terminal.
+
+The real transport fixture now crosses `startServer -> CLIExecutor -> Router -> HTTP + WebSocket` with a
+delayed configured CLI runner. It proves flat early admission, accepted/running ordering, one spawn after
+rejoin, Store/Context invalidation before one terminal, pre-admission rejection with no record, and a real
+exit-zero malformed Store payload becoming one failed terminal while retaining exit 0, raw stdout/stderr,
+diagnostics, raw payload, and `contractError`.
+
+Worker mutation-resistance evidence, each restored before the accepted commit:
+
+- terminal-await timed out the early-admission fixture before release;
+- removing running publication timed out the lifecycle assertion;
+- bypassing deduplication wrote two spawn markers;
+- publishing terminal before invalidation exposed `terminalInvalidationObserved=false`;
+- bypassing settled retirement published `indeterminate -> succeeded`;
+- weakening the accepted/running loss guard converted accepted into indeterminate.
+
+Independent main-agent rerun:
+
+- Core focused: 2 files / 11 tests passed.
+- Server focused: 3 files / 16 tests passed.
+- Core standard typecheck, Server standard typecheck, and Server transport typecheck passed.
+- Scoped Oxlint reported zero warnings/errors; Prettier, commit diff check, and strict Change validation
+  passed.
+
+Independent Terra source/test review accepted `4.1--4.3` at exact HEAD `915de0b`: Core 11/11, Server
+16/16, Core and Server transport checked lanes, scoped Oxlint/Prettier, and commit diff checks passed. Terra
+did not independently replay the destructive mutants; their red results remain worker evidence accepted by
+the main source review. Broad gates and all browser acceptance remain deliberately unrun. The Vite+ staged
+hook still lacks repository configuration; the worker used `--no-verify` only after the focused checks.
+
+### P3-B research boundary: 2026-07-24 Asia/Shanghai
+
+P3-B owns only the App's backend-locator mutation observation kernel and mutation admission decoding. One
+normalized locator owns one tRPC WebSocket subscription even when multiple tabs point to it. The transport
+reads only that locator's in-memory Gate credential, runtime-decodes every lifecycle event, and exposes a
+process-memory snapshot suitable for later Store UI composition.
+
+```text
+retained App tabs -- normalize/dedupe --> locator owner --> tRPC WS lifecycle stream
+                                                |
+                                                +-- snapshot replaces process ledger
+                                                +-- changed advances cursor/record
+                                                +-- reconnect retains display-only evidence
+
+HTTP mutation start --> flat runtime decoder --> accepted/rejoined OR concrete request error
+```
+
+Connection callbacks are valid only for the current locator epoch. `connecting`, `pending`, transport
+error, stop, and complete make retained records non-current; only a newly decoded snapshot makes them
+current again. That snapshot replaces prior records, including with an empty list, because Server records
+are process-local and disappear on restart. Changed-before-snapshot, non-monotonic cursor, malformed data,
+retired callbacks, or another locator can never relabel or publish into the current ledger.
+
+P3-B adds no persisted mutation database, UI lifecycle rendering, Store/Context refresh, Cancel, mutation
+retry, or browser walkthrough. P3-C will consume the owner in Store Inspector and perform terminal-driven
+invalidation pulls; P3-D will add focused component preparation evidence. `4.4--4.7` therefore remain open.
