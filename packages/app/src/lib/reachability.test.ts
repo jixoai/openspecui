@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
- * 1. Prove hosted health metadata and embedded-UI protocol classification.
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * 1. Prove hosted health JSON is runtime-decoded before compatibility classification.
  * 2. Distinguish reachable authentication rejection from transport offline state.
  * 3. Prove locator-scoped credentials are sent only to their matching health endpoint.
  *
@@ -102,6 +102,23 @@ describe('hosted reachability helpers', () => {
     const result = await probeHostedBackend('http://localhost:3100', fetchImpl)
     expect(result.reachability).toBe('unsupported')
     expect(result.health).toBeNull()
+  })
+
+  it('retains typed contract evidence for malformed 200 health JSON instead of admitting it online', async () => {
+    const result = await probeHostedBackend(
+      API_A,
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ status: 'ok', projectName: 'missing-required-fields' }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+      )
+    )
+
+    expect(result.reachability).toBe('unsupported')
+    expect(result.health).toBeNull()
+    expect(Reflect.get(result, 'contractError')).toBeInstanceOf(Error)
   })
 
   it('marks a backend as offline when health fetch fails', async () => {

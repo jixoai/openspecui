@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Define hosted environment and observed project Context projections.
  * 2. Preserve upstream Store payloads without browser-owned registry semantics.
  * 3. Separate retained Root/Reference evidence from the current source-labelled attempt.
+ * 4. Reuse browser-safe hosted schema-inferred projections instead of asserted ingress contracts.
  *
  * Original request (2026-07-15): "前端缺少的东西你可以通过注释补充。"
  * Correction request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
@@ -24,13 +25,14 @@
  */
 
 import type {
-  CliDiagnostic,
-  CliRootSource,
   HostedBackendHealthResponse,
-  RootContextErrorCode,
-  RootContextState,
-} from '@openspecui/core'
-import type { StoreDoctorResult, StoreListResult } from '@openspecui/core/store-types'
+  HostedCliDiagnostic,
+  HostedRootContextErrorCode,
+  HostedRootContextState,
+  HostedRootSource,
+  HostedStoreDoctorEnvelope,
+  HostedStoreListEnvelope,
+} from '@openspecui/core/hosted-contract'
 import type { StoreCapabilitySet } from './capabilities'
 import type { EnvUri } from './env-uri'
 
@@ -59,11 +61,11 @@ export interface HostedEnvironmentProject {
 }
 
 /** Exact Root lifecycle observed from one connected project source. */
-export type RootObservationStatus = 'idle' | RootContextState['state']
+export type RootObservationStatus = 'idle' | HostedRootContextState['state']
 
 /** Root contract and transport failures remain separate typed evidence. */
 export type RootObservationError =
-  | { source: 'root-context'; code: RootContextErrorCode; message: string }
+  | { source: 'root-context'; code: HostedRootContextErrorCode; message: string }
   | { source: 'transport'; message: string }
 
 /**
@@ -102,7 +104,7 @@ export interface ProjectRootEvidence {
    */
   references: ObservedReference[]
   /** CLI 诊断（保留上游 snake_case 事实，不重解释为健康/所有权/完整性结论）。 */
-  diagnostics?: CliDiagnostic[]
+  diagnostics?: HostedCliDiagnostic[]
 }
 
 /** Current generation's Root lifecycle and failure, kept separate from retained evidence. */
@@ -121,7 +123,7 @@ export interface ProjectContextObservation {
 }
 
 /** CLI root 选择来源。 */
-export type RootSource = CliRootSource
+export type RootSource = HostedRootSource
 
 /** 观察到的直接 Reference（一层，只读 Spec 源）。 */
 export interface ObservedReference {
@@ -131,7 +133,7 @@ export interface ObservedReference {
   /** Exact connected-project observation that supplied this direct Reference. */
   source: ProjectObservationSource & { health: HostedBackendHealthResponse }
   /** Raw direct Doctor diagnostics retained without reinterpretation. */
-  diagnostics: CliDiagnostic[]
+  diagnostics: HostedCliDiagnostic[]
   /** Reference 健康事实（客观保留 CLI 诊断，不推断为权限/完整性结论）。 */
   state: ReferenceState
   /** 诊断原文（若 missing/unhealthy/self-reference）。 */
@@ -139,16 +141,16 @@ export interface ObservedReference {
 }
 
 /** Reference 客观状态（来自 CLI，不解释为所有权结论）。 */
-export type ReferenceState = 'observed' | CliDiagnostic['severity']
+export type ReferenceState = 'observed' | HostedCliDiagnostic['severity']
 
 /**
  * Store Inspector 投影来源：`openspec store doctor [id] --json`。
  * 复用 core 现有强类型（store-types.ts），不重定义上游事实。
  */
-export type StoreInspectorProjection = StoreDoctorResult
+export type StoreInspectorProjection = HostedStoreDoctorEnvelope
 
 /**
  * Store Inventory 投影来源：`openspec store list --json`。
  * 复用 core 现有强类型（store-types.ts）。
  */
-export type StoreInventoryProjection = StoreListResult
+export type StoreInventoryProjection = HostedStoreListEnvelope

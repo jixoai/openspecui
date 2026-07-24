@@ -6,10 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.p3b-tests.json --noEmit && tsc -p tsconfig.p3c-tests.json --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.p3b-tests.json --noEmit && tsc -p tsconfig.p3c-tests.json --noEmit && tsc -p tsconfig.p4-tests.json --noEmit",
     "typecheck:p3b-tests": "tsc -p tsconfig.p3b-tests.json --noEmit",
     "typecheck:p3c-tests": "tsc -p tsconfig.p3c-tests.json --noEmit",
     "typecheck:p2-tests": "tsc -p tsconfig.p2-tests.json --noEmit",
+    "typecheck:p4-tests": "tsc -p tsconfig.p4-tests.json --noEmit",
     "test": "vitest run",
     "cf:dev": "pnpm build && wrangler pages dev dist",
     "cf:deploy": "pnpm build && wrangler pages deploy dist --project-name openspecui-app",

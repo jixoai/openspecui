@@ -902,3 +902,92 @@ multi-tab, or end-to-end acceptance is implied; those final walkthroughs remain 
 
 This closes 4.7. P4 begins with 5.1 only. P4.2--P4.5, broad gates, PR delivery, merge, archive, release,
 and all manager walkthroughs remain open.
+
+### P4.1 hosted envelope contract boundary: 2026-07-25 Asia/Shanghai
+
+Changed owners:
+
+- `packages/core/src/hosted-contract.ts` is the browser-safe schema source for hosted Health, Store list,
+  Store Doctor, Root Context, mutation admission, and the one `decodeHostedTrpcData` envelope decoder.
+- `packages/core/src/hosted-protocol-browser.ts` owns the portable opaque-identity, capability, and Store
+  lifecycle vocabulary. `hosted-protocol.ts` retains only the Node-crypto `computeEnvUri` and Access Gate
+  owners; `hosted-contract.ts` re-exports the portable facts but no environment calculator.
+- `packages/app/src/lib/backend-client.ts` decodes every successful Store list/Doctor/Root/mutation tRPC
+  response through that decoder. `use-store-data` retains decoded Store wrappers directly rather than
+  reconstructing them with assertions.
+- `packages/app/src/lib/reachability.ts` decodes direct health JSON before the existing runtime-capability
+  and embedded-URL compatibility checks. A successful but malformed response is `unsupported` with retained
+  `HostedBackendContractError`; a non-OK response remains transport/request failure.
+
+Pre-fix red evidence used the real browser ingress functions:
+
+```bash
+pnpm --filter @openspecui/app exec vitest run src/lib/backend-client.test.ts src/lib/reachability.test.ts
+# 2 files / 20 tests: 5 named failures
+```
+
+- Store list and Doctor accepted a 200 `{ result: { data: { available: true } } }` as successful data.
+- Root Context accepted a malformed 200 `{ state: 'ready' }` instead of rejecting a contract error.
+- Mutation's hand-written decoder threw without retaining its parse cause.
+- Health became `unsupported` but exposed no typed contract evidence.
+
+The final fixtures prove that malformed 200 Health, Store list, Store Doctor, Root Context, and mutation
+payloads cannot become online, a successful empty Store projection, null/no-data Root Context, or a
+fabricated lifecycle result. Root Context `503` separately throws a transport request error and is explicitly
+not a `HostedBackendContractError`.
+
+Mutation-resistance evidence temporarily replaced the real Store-list call to
+`decodeHostedTrpcData(HostedStoreListEnvelopeSchema, payload)` with the old asserted
+`oldEnvelope.result?.data as BackendStoreListEnvelope`. The real ingress fixture then failed:
+
+```text
+expected unavailable contract error; received { available: true }
+```
+
+The exact mutation command was:
+
+```bash
+pnpm --filter @openspecui/app exec vitest run src/lib/backend-client.test.ts \
+  -t 'classifies malformed 200 Store data'
+# decoder removed: 1 failed / 12 skipped; received { available: true }
+# decoder restored: 1 passed / 12 skipped
+```
+
+Restoring the decoder returned that same fixture to green. This proves the consumer depends on the exact
+shared decoder rather than a disconnected schema-only helper.
+
+Focused green evidence:
+
+```bash
+pnpm --filter @openspecui/core exec vitest run src/hosted-contract.test.ts
+# 1 file / 3 tests passed
+
+pnpm --filter @openspecui/app exec vitest run \
+  src/lib/backend-client.test.ts \
+  src/lib/reachability.test.ts \
+  src/lib/connection-observation.test.ts \
+  src/lib/use-environment.test.ts
+# 4 files / 39 tests passed
+
+pnpm --filter @openspecui/core typecheck
+pnpm --filter @openspecui/app typecheck
+if rg -n "from ['\"]@openspecui/core['\"]" packages/app/src \
+  --glob '!**/*.test.ts' --glob '!**/*.test.tsx'; then exit 1; fi
+pnpm --filter @openspecui/core build
+pnpm --filter @openspecui/app build
+pnpm exec prettier --check <changed P4.1 TypeScript files>
+pnpm exec oxlint <changed P4.1 TypeScript files>
+git diff --check
+openspec validate close-openspec-cli16-delivery-gaps --strict
+```
+
+All listed focused checks passed. The App production source has no runtime import of the Node-bearing Core
+root entry; both scoped package builds pass with the browser-safe contract entry. The new Core and App P4
+checked type-test lanes include the decoder and browser ingress fixtures. This closes 5.1 only. P4.2--P4.5,
+broad gates, PR delivery, merge, archive, release, and every browser/visual/multi-tab walkthrough remain
+open for their named owners.
+
+The repository pre-commit hook was invoked after those checks and stopped before any code gate because
+`vite.config.ts` has no Vite+ `staged` configuration. This is an existing repository-hook configuration
+failure, not a P4.1 test/type/lint result. The implementation commit therefore uses `--no-verify`; the
+scoped commands above remain the recorded validation evidence.

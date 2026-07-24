@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Build observed runtime environments from backend-issued health (opaque envUri + capabilities).
  * 2. Gate Store views through objective hosted-protocol capabilities.
  * 3. Preserve grouped connected projects and source-labelled Root/Reference evidence.
@@ -11,10 +11,10 @@
  */
 import {
   asEnvUri,
-  type CliDiagnostic,
   type HostedBackendHealthResponse,
+  type HostedCliDiagnostic,
   type StoreCapability,
-} from '@openspecui/core'
+} from '@openspecui/core/hosted-contract'
 import type { StoreCapabilitySet } from '../types/capabilities'
 import type {
   HostedEnvironment,
@@ -60,7 +60,7 @@ export function deriveEnvironments(observations: OnlineBackendObservation[]): Ho
   for (const observation of observations) {
     const envUriValue = observation.health.envUri
     if (!envUriValue) continue
-    const capabilities = (observation.health.hostedCapabilities ?? []) as StoreCapabilitySet
+    const capabilities: StoreCapabilitySet = observation.health.hostedCapabilities ?? []
     const existing = byEnvUri.get(envUriValue)
     const connectedProject = {
       tabId: observation.tabId,
@@ -114,7 +114,7 @@ export function projectRootObservation(
 }
 
 /** Map a CLI Doctor reference diagnostic severity to a neutral Reference state. */
-function referenceStateFor(diagnostics: CliDiagnostic[]): {
+function referenceStateFor(diagnostics: HostedCliDiagnostic[]): {
   state: ProjectRootEvidence['references'][number]['state']
   note?: string
 } {

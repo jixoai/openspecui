@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Prove Store Inventory/Inspector transport preserves backend envelopes and failures.
  * 2. Prove every hosted HTTP/RPC request resolves credentials by its own normalized locator.
- * 3. Prove Store admission decodes flat accepted/rejoined responses and rejects pre-admission failures.
+ * 3. Prove successful hosted envelopes are decoded instead of asserted into Store/Root/Mutation contracts.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  * Delivery correction (2026-07-24): callers cannot supply another locator's credential.
  */
+import { HostedBackendContractError } from '@openspecui/core/hosted-contract'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   BackendStoreMutationContractError,
@@ -61,6 +62,19 @@ describe('backend-client store inventory', () => {
     expect(envelope.available).toBe(false)
     expect(envelope.error?.kind).toBe('transport')
   })
+
+  it('classifies malformed 200 Store data as a contract error instead of a successful empty inventory', async () => {
+    const envelope = await fetchBackendStoreInventory({
+      apiBaseUrl: API_A,
+      fetchImpl: createJsonFetch({ result: { data: { available: true } } }),
+    })
+
+    expect(envelope).toMatchObject({
+      available: false,
+      stores: [],
+      error: { kind: 'contract' },
+    })
+  })
 })
 
 describe('backend-client store inspector', () => {
@@ -90,6 +104,19 @@ describe('backend-client store inspector', () => {
     expect(requestedUrl).not.toContain('team id')
     expect(requestedUrl).toContain('input=')
   })
+
+  it('classifies malformed 200 Store doctor data as a contract error instead of a successful empty inspector', async () => {
+    const envelope = await fetchBackendStoreInspector({
+      apiBaseUrl: API_A,
+      fetchImpl: createJsonFetch({ result: { data: { available: true } } }),
+    })
+
+    expect(envelope).toMatchObject({
+      available: false,
+      stores: [],
+      error: { kind: 'contract' },
+    })
+  })
 })
 
 describe('backend-client credential ownership', () => {
@@ -113,7 +140,7 @@ describe('backend-client credential ownership', () => {
             rejoined: false,
           }
         : url.includes('rootContext.get')
-          ? { status: 'loading' }
+          ? { state: 'loading', data: null, attempt: null, error: null, observedAt: 1 }
           : { available: true, stores: [] }
       return new Response(JSON.stringify({ result: { data } }), {
         status: 200,
@@ -135,6 +162,28 @@ describe('backend-client credential ownership', () => {
       'Bearer credential-a',
       'Bearer credential-b',
     ])
+  })
+})
+
+describe('backend-client Root Context', () => {
+  it('rejects malformed 200 Root Context data instead of collapsing it to null', async () => {
+    await expect(
+      fetchBackendRootContext({
+        apiBaseUrl: API_A,
+        fetchImpl: createJsonFetch({ result: { data: { state: 'ready' } } }),
+      })
+    ).rejects.toThrow('Root Context contract')
+  })
+
+  it('keeps a non-ok Root Context response as a transport request failure, not a contract failure', async () => {
+    const failure = await fetchBackendRootContext({
+      apiBaseUrl: API_A,
+      fetchImpl: createJsonFetch({}, 503),
+    }).catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(Error)
+    expect(failure).not.toBeInstanceOf(HostedBackendContractError)
+    expect(failure).toMatchObject({ message: 'Root Context request failed: 503' })
   })
 })
 
@@ -201,5 +250,6 @@ describe('backend-client Store mutation admission', () => {
 
     await expect(promise).rejects.toBeInstanceOf(BackendStoreMutationContractError)
     await expect(promise).rejects.toMatchObject({ name: 'BackendStoreMutationContractError' })
+    await expect(promise).rejects.toMatchObject({ cause: expect.any(Error) })
   })
 })

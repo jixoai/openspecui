@@ -1,9 +1,7 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
- * 1. Define backend-issued opaque runtime-environment identity (`envUri`).
- * 2. Define the three product-level hosted capability facts (compatibility, not permissions).
- * 3. Define backend-owned Store mutation lifecycle and terminal CLI evidence.
- * 4. Define the single shared Backend Access Gate credential contract.
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * 1. Compute opaque environment identity and Access Gate credentials with Node crypto.
+ * 2. Re-export browser-safe hosted identity/capability/mutation facts without making this Node entry browser-safe.
  *
  * Original request (2026-07-15): "我们可以在 cli 上新增一个 --auth 或者 --password。"
  * Migrated from `packages/app/src/types/{env-uri,capabilities,store-mutation}.ts` so the backend is the
@@ -20,21 +18,20 @@
  *    account, role, ACL, or permission system, and it provides no transport confidentiality.
  */
 import { createHash, randomBytes } from 'node:crypto'
-import type { CliDiagnostic } from './cli-contracts/common.js'
+import { asEnvUri, type EnvUri } from './hosted-protocol-browser.js'
 
-/**
- * Opaque runtime-environment identity string. Branding prevents treating it as a plain string or
- * dereferencing it as a URL — it is never parsed by consumers.
- */
-export type EnvUri = string & { readonly __brand: 'EnvUri' }
-
-/**
- * Mark a backend-issued string as an `EnvUri`. This is the only legal construction point; actual
- * envUri values come only from backend health/protocol responses.
- */
-export function asEnvUri(value: string): EnvUri {
-  return value as EnvUri
-}
+export {
+  asEnvUri,
+  hasCapability,
+  isTerminalMutationStatus,
+  type EnvUri,
+  type StoreCapability,
+  type StoreCapabilitySet,
+  type StoreMutation,
+  type StoreMutationKind,
+  type StoreMutationResult,
+  type StoreMutationStatus,
+} from './hosted-protocol-browser.js'
 
 /**
  * Compute a stable opaque `envUri` from backend host identity plus effective OpenSpec data home.
@@ -46,62 +43,6 @@ export function computeEnvUri(options: { hostIdentity: string; dataHome: string 
     .update(`${options.hostIdentity}\u0000${dataHome}`)
     .digest('hex')
   return asEnvUri(`openspecui-env://1/${digest}`)
-}
-
-/** Product-level Store/Context capability vocabulary. Exactly three; do not mirror CLI subcommands. */
-export type StoreCapability = 'stores.inspect' | 'stores.mutate' | 'contexts.inspect'
-
-/** Read-only capability set emitted by the backend and consumed read-only by clients. */
-export type StoreCapabilitySet = readonly StoreCapability[]
-
-/** Whether a backend advertises a capability. A pure compatibility fact; it authorizes nothing. */
-export function hasCapability(
-  capabilities: StoreCapabilitySet | undefined,
-  capability: StoreCapability
-): boolean {
-  return Boolean(capabilities?.includes(capability))
-}
-
-/** Store mutation kind, mirroring the CLI subcommands setup/register/unregister/remove. */
-export type StoreMutationKind = 'setup' | 'register' | 'unregister' | 'remove'
-
-/**
- * Mutation lifecycle state. `indeterminate` is unrecoverable terminal-result loss (e.g. CLI ended
- * during disconnect and its result was not captured); it is never fabricated as failure or cancellation.
- */
-export type StoreMutationStatus = 'accepted' | 'running' | 'succeeded' | 'failed' | 'indeterminate'
-
-/** Terminal CLI evidence retained on a succeeded/failed/indeterminate mutation. */
-export interface StoreMutationResult {
-  exitStatus: number | null
-  stdout?: string
-  stderr?: string
-  diagnostics?: CliDiagnostic[]
-  /** CLI-returned structured payload; upstream fact preserved without reinterpretation. */
-  payload?: unknown
-  /** Typed CLI decoder drift; an exit-0 process is still a failed mutation when this is present. */
-  contractError?: string
-}
-
-/** Runtime projection of one backend-owned Store mutation. */
-export interface StoreMutation {
-  /** Request id used to deduplicate mutation starts within one backend process. */
-  requestId: string
-  /** Target runtime environment (backend-issued opaque identity). */
-  envUri: EnvUri
-  kind: StoreMutationKind
-  status: StoreMutationStatus
-  /** Target Store id (required for remove/unregister; may be undetermined during setup). */
-  storeId?: string
-  /** Terminal CLI evidence (backend-authoritative). */
-  result?: StoreMutationResult
-  /** Observation timestamp (ms, backend-issued). */
-  observedAt: number
-}
-
-/** Whether a mutation status is terminal (no further transition). */
-export function isTerminalMutationStatus(status: StoreMutationStatus): boolean {
-  return status === 'succeeded' || status === 'failed' || status === 'indeterminate'
 }
 
 /**

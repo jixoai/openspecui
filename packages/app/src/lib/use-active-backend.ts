@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Derive Store authority from one atomically correlated full tab identity and generation.
  * 2. Refuse offline, stale, incompatible, or missing selections without first-online fallback.
  * 3. Capture exact tab identity and generation for synchronous Store dispatch revalidation.
@@ -9,7 +9,10 @@
  * Section 9.5/9.6: an explicitly selected online environment is required before environment-scoped
  * operations and Store views render real data.
  */
-import type { HostedBackendHealthResponse, RootContextState } from '@openspecui/core'
+import type {
+  HostedBackendHealthResponse,
+  HostedRootContextState,
+} from '@openspecui/core/hosted-contract'
 import { useConnectionObservations, type ConnectionObservation } from './connection-observation'
 import type { HostedShellTab } from './shell-state'
 import type { StoreActionAuthority } from './store-action'
@@ -18,7 +21,7 @@ import { useConnections } from './use-connections'
 export interface ActiveBackend extends StoreActionAuthority {
   health: HostedBackendHealthResponse | null
   /** Project Root Context for the Context Matrix; null while loading or unavailable. */
-  rootContext: RootContextState | null
+  rootContext: HostedRootContextState | null
 }
 
 export interface UseActiveBackendResult {

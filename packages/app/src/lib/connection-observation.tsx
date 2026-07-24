@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Own health and Root Context observation for every retained backend tab identity.
  * 2. Retire late results when a locator is removed, replaced, or refreshed.
  * 3. Correlate mutation authority with the full tab identity and observation generation.
@@ -8,7 +8,10 @@
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
-import type { HostedBackendHealthResponse, RootContextState } from '@openspecui/core'
+import type {
+  HostedBackendHealthResponse,
+  HostedRootContextState,
+} from '@openspecui/core/hosted-contract'
 import {
   createContext,
   useContext,
@@ -46,7 +49,7 @@ export interface ConnectionRootEvidence {
   tabCreatedAt: number
   generation: number
   health: HostedBackendHealthResponse
-  rootContext: RootContextState
+  rootContext: HostedRootContextState
   observedAt: number
 }
 
@@ -89,7 +92,7 @@ export interface ConnectionObservationSnapshot {
 
 interface ConnectionObservationDependencies {
   probe: (apiBaseUrl: string) => Promise<HostedBackendProbeResult>
-  fetchRootContext: (apiBaseUrl: string) => Promise<RootContextState | null>
+  fetchRootContext: (apiBaseUrl: string) => Promise<HostedRootContextState>
   now: () => number
 }
 

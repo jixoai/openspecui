@@ -27,6 +27,12 @@
       "default": "./dist/hosted-app.mjs",
       "types": "./dist/hosted-app.d.mts"
     },
+    "./hosted-contract": {
+      "development": "./src/hosted-contract.ts",
+      "import": "./dist/hosted-contract.mjs",
+      "default": "./dist/hosted-contract.mjs",
+      "types": "./dist/hosted-contract.d.mts"
+    },
     "./store-mutation-protocol": {
       "development": "./src/store-mutation-protocol.ts",
       "import": "./dist/store-mutation-protocol.mjs",
@@ -167,12 +173,13 @@
     }
   },
   "scripts": {
-    "build": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/opsx-workflows.ts src/opsx-entity.ts src/opsx-schema-detail.ts src/task-progress.ts src/spec-catalog.ts src/hosted-app.ts src/store-mutation-protocol.ts src/openspec-compat.ts src/store-types.ts src/markdown-facts.ts src/markdown-reading.ts src/document-translation.ts src/translator.ts src/local-download-profiles.ts src/translation-language-pair.ts src/openspec-annotations.ts src/openspec-projection.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts",
-    "dev": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/opsx-workflows.ts src/opsx-entity.ts src/opsx-schema-detail.ts src/task-progress.ts src/spec-catalog.ts src/hosted-app.ts src/store-mutation-protocol.ts src/openspec-compat.ts src/store-types.ts src/markdown-facts.ts src/markdown-reading.ts src/document-translation.ts src/translator.ts src/local-download-profiles.ts src/translation-language-pair.ts src/openspec-annotations.ts src/openspec-projection.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts --watch",
+    "build": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/opsx-workflows.ts src/opsx-entity.ts src/opsx-schema-detail.ts src/task-progress.ts src/spec-catalog.ts src/hosted-app.ts src/hosted-contract.ts src/store-mutation-protocol.ts src/openspec-compat.ts src/store-types.ts src/markdown-facts.ts src/markdown-reading.ts src/document-translation.ts src/translator.ts src/local-download-profiles.ts src/translation-language-pair.ts src/openspec-annotations.ts src/openspec-projection.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts",
+    "dev": "tsdown src/index.ts src/dashboard-display.ts src/opsx-display-path.ts src/opsx-workflows.ts src/opsx-entity.ts src/opsx-schema-detail.ts src/task-progress.ts src/spec-catalog.ts src/hosted-app.ts src/hosted-contract.ts src/store-mutation-protocol.ts src/openspec-compat.ts src/store-types.ts src/markdown-facts.ts src/markdown-reading.ts src/document-translation.ts src/translator.ts src/local-download-profiles.ts src/translation-language-pair.ts src/openspec-annotations.ts src/openspec-projection.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck:store-mutation-tests": "tsc -p tsconfig.store-mutation-tests.json --noEmit",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.reactive-context-tests.json --noEmit && tsc -p tsconfig.store-mutation-tests.json --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.reactive-context-tests.json --noEmit && tsc -p tsconfig.store-mutation-tests.json --noEmit && tsc -p tsconfig.hosted-contract-tests.json --noEmit",
+    "typecheck:hosted-contract-tests": "tsc -p tsconfig.hosted-contract-tests.json --noEmit"
   },
   "dependencies": {
     "@parcel/watcher": "^2.5.1",

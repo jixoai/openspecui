@@ -1,65 +1,35 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Define browser-safe hosted backend metadata and compatibility capability facts.
  * 2. Normalize App/embedded launch locators and carry session-only credentials in fragments.
  * 3. Validate embedded UI origins without inventing backend authority.
+ * 4. Re-export the browser-safe hosted runtime schema source without a Node-bearing Core root import.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Delivery correction (2026-07-24): privately carry the exact Access Gate credential to Project Web.
  */
+import {
+  HOSTED_SHELL_PROTOCOL_VERSION,
+  HOSTED_STORE_CAPABILITIES,
+  HostedBackendHealthResponseSchema,
+  OPENSPECUI_RUNTIME_CAPABILITIES,
+  type HostedBackendHealthResponse,
+  type HostedBackendRootSummary,
+} from './hosted-contract.js'
+
+export {
+  HOSTED_SHELL_PROTOCOL_VERSION,
+  HOSTED_STORE_CAPABILITIES,
+  HostedBackendHealthResponseSchema,
+  OPENSPECUI_RUNTIME_CAPABILITIES,
+  type HostedBackendHealthResponse,
+  type HostedBackendRootSummary,
+} from './hosted-contract.js'
+
 export const OFFICIAL_APP_BASE_URL = 'https://app.openspecui.com'
-export const HOSTED_SHELL_PROTOCOL_VERSION = 1
 export const ACCESS_GATE_CREDENTIAL_FRAGMENT_PARAM = 'credential'
 
-export const OPENSPECUI_RUNTIME_CAPABILITIES = [
-  'notifications.subscribe',
-  'config.notifications',
-] as const
-
 export type OpenSpecUIRuntimeCapability = (typeof OPENSPECUI_RUNTIME_CAPABILITIES)[number]
-
-/** Hosted-protocol capability vocabulary emitted by the backend (compatibility facts only). */
-export const HOSTED_STORE_CAPABILITIES = [
-  'stores.inspect',
-  'stores.mutate',
-  'contexts.inspect',
-] as const
-
-/** Brief Root Context summary carried by the hosted health response. */
-export interface HostedBackendRootSummary {
-  /** Display-safe planning-root path; absolute paths are not exposed over the protocol. */
-  planningRootPath: string | null
-  /** How the CLI resolved the planning root. */
-  rootSource: 'nearest' | 'declared' | 'store' | 'implicit'
-  /** Effective Store id when the root was selected through an explicit Store. */
-  storeId: string | null
-  /** Whether the planning root is currently writable and ready. */
-  ready: boolean
-}
-
-export interface HostedBackendHealthResponse {
-  status: 'ok'
-  projectDir: string
-  projectName: string
-  watcherEnabled: boolean
-  openspecuiVersion: string
-  hostedShellProtocolVersion: typeof HOSTED_SHELL_PROTOCOL_VERSION
-  embeddedUiUrl: string
-  runtimeCapabilities: readonly OpenSpecUIRuntimeCapability[]
-  /**
-   * Protocol-version-gated additions (OpenSpec 1.6 hosted protocol). All fields are additive so the
-   * legacy validator tolerates their absence on older backends.
-   */
-  apiBaseUrl?: string
-  cliVersion?: string | null
-  /** Backend-issued opaque runtime-environment identity (host identity + effective data home). */
-  envUri?: string
-  rootSummary?: HostedBackendRootSummary | null
-  /** Product-level Store/Context capability vocabulary (compatibility, not permissions). */
-  hostedCapabilities?: readonly (typeof HOSTED_STORE_CAPABILITIES)[number][]
-  /** True when the whole-backend Access Gate is enabled. */
-  accessGateEnabled?: boolean
-}
 
 export interface BackendHealthPayloadInput {
   projectDir: string
@@ -73,10 +43,6 @@ export interface BackendHealthPayloadInput {
   envUri?: string
   rootSummary?: HostedBackendRootSummary | null
   accessGateEnabled?: boolean
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
 }
 
 function withHttpsProtocol(value: string): string {
@@ -204,7 +170,7 @@ export function buildBackendHealthPayload(
     openspecuiVersion: input.openspecuiVersion,
     hostedShellProtocolVersion: HOSTED_SHELL_PROTOCOL_VERSION,
     embeddedUiUrl: input.embeddedUiUrl,
-    runtimeCapabilities: OPENSPECUI_RUNTIME_CAPABILITIES,
+    runtimeCapabilities: [...OPENSPECUI_RUNTIME_CAPABILITIES],
     // 1.6 hosted-protocol additions. All additive so the legacy validator tolerates older backends.
     apiBaseUrl: input.apiBaseUrl,
     cliVersion: input.cliVersion,
@@ -224,17 +190,8 @@ function hasRequiredRuntimeCapabilities(value: unknown): value is OpenSpecUIRunt
 export function isBackendHealthRuntimeMetadata(
   value: unknown
 ): value is HostedBackendHealthResponse {
-  if (!isRecord(value)) return false
-  return (
-    value.status === 'ok' &&
-    typeof value.projectDir === 'string' &&
-    typeof value.projectName === 'string' &&
-    typeof value.watcherEnabled === 'boolean' &&
-    typeof value.openspecuiVersion === 'string' &&
-    value.hostedShellProtocolVersion === HOSTED_SHELL_PROTOCOL_VERSION &&
-    typeof value.embeddedUiUrl === 'string' &&
-    hasRequiredRuntimeCapabilities(value.runtimeCapabilities)
-  )
+  const decoded = HostedBackendHealthResponseSchema.safeParse(value)
+  return decoded.success && hasRequiredRuntimeCapabilities(decoded.data.runtimeCapabilities)
 }
 
 export function isHostedBackendHealthResponse(

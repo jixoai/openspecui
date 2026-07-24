@@ -1,10 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
- * 1. Re-export backend-owned Store mutation lifecycle facts from @openspecui/core.
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * 1. Re-export browser-safe backend-owned Store mutation lifecycle facts.
  * 2. Preserve the legacy `isTerminalStatus` name for existing App call sites.
  *
  * Original request (2026-07-15): "前端缺少的东西你可以通过注释补充。"
- * Migration (2026-07-23): authoritative contract now in @openspecui/core/hosted-protocol.
+ * Migration (2026-07-25): authoritative contract now in the browser-safe hosted contract entry.
  *
  * 关键不变式（AGENTS.md）：
  *  - Store 变更是 backend-owned 操作，生命周期：accepted -> running -> succeeded | failed。
@@ -14,14 +14,17 @@
  *  - 最终结果保留 CLI JSON、诊断、stdout/stderr 与 exit status。
  *  - 每个 terminal 或 indeterminate 结果在下次拉取前使受影响的投影失效。
  */
-import { isTerminalMutationStatus, type StoreMutationStatus } from '@openspecui/core'
+import {
+  isTerminalMutationStatus,
+  type StoreMutationStatus,
+} from '@openspecui/core/hosted-contract'
 
 export {
   type StoreMutation,
   type StoreMutationKind,
   type StoreMutationResult,
   type StoreMutationStatus,
-} from '@openspecui/core'
+} from '@openspecui/core/hosted-contract'
 
 /** Legacy alias for `isTerminalMutationStatus`; retained for existing App call sites. */
 export function isTerminalStatus(status: StoreMutationStatus): boolean {

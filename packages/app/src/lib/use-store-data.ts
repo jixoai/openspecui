@@ -1,14 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Fetch Store Inventory/Inspector through the hosted REST boundary (observed-only).
  * 2. Keep Store truth and mutation lifecycle backend-owned.
  * 3. Resolve hosted credentials inside the per-locator backend client boundary.
  * 4. Expose an imperative pull so every terminal settlement starts one fresh projection request.
+ * 5. Retain only browser-decoded hosted Store projections, never asserted reconstructed payloads.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  * Migration (2026-07-23): wired to the backend Store procedures via backend-client.
  */
-import type { StoreDoctorResult, StoreListResult } from '@openspecui/core/store-types'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { StoreInspectorProjection, StoreInventoryProjection } from '../types/root-context'
 import { fetchBackendStoreInspector, fetchBackendStoreInventory } from './backend-client'
@@ -38,8 +38,8 @@ export interface UseStoreDataOptions {
  */
 export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState {
   const { apiBaseUrl } = options
-  const [inspector, setInspector] = useState<StoreDoctorResult | undefined>(undefined)
-  const [inventory, setInventory] = useState<StoreListResult | undefined>(undefined)
+  const [inspector, setInspector] = useState<StoreInspectorProjection | undefined>(undefined)
+  const [inventory, setInventory] = useState<StoreInventoryProjection | undefined>(undefined)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const requestEpoch = useRef(0)
@@ -56,18 +56,12 @@ export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState 
       ])
       if (epoch !== requestEpoch.current) return
       if (inventoryEnvelope.available) {
-        setInventory({
-          stores: inventoryEnvelope.stores,
-          evidence: inventoryEnvelope.evidence ?? null,
-        } as StoreListResult)
+        setInventory(inventoryEnvelope)
       } else {
         setInventory(undefined)
       }
       if (inspectorEnvelope.available) {
-        setInspector({
-          stores: inspectorEnvelope.stores,
-          evidence: inspectorEnvelope.evidence ?? null,
-        } as StoreDoctorResult)
+        setInspector(inspectorEnvelope)
       } else {
         setInspector(undefined)
       }
@@ -97,8 +91,8 @@ export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState 
   }, [apiBaseUrl, refresh])
 
   return {
-    inspector: inspector as StoreInspectorProjection | undefined,
-    inventory: inventory as StoreInventoryProjection | undefined,
+    inspector,
+    inventory,
     isLoading,
     error,
     refresh,

@@ -30,7 +30,7 @@ import type { CliCommandResult } from './cli-contracts/index.js'
  * Spec: openspec-cli-integration › "Beta Feature Fault Tolerance".
  */
 
-const StoreDiagnosticSchema = z
+export const StoreDiagnosticSchema = z
   .object({
     severity: z.string().optional(),
     code: z.string().optional(),
@@ -40,7 +40,8 @@ const StoreDiagnosticSchema = z
   })
   .passthrough()
 
-const StoreListEntrySchema = z
+/** Browser-safe lenient fact for one Store inventory entry. */
+export const StoreListEntrySchema = z
   .object({
     id: z.string(),
     root: z.string(),
@@ -81,7 +82,8 @@ const StoreGitFactsSchema = z
   })
   .passthrough()
 
-const StoreDoctorStoreSchema = z
+/** Browser-safe lenient fact for one Store Doctor entry. */
+export const StoreDoctorStoreSchema = z
   .object({
     id: z.string().optional(),
     root: z.string().optional(),

@@ -8,6 +8,7 @@
       "@/*": ["src/*"],
       "@openspecui/core": ["../core/src/index.ts"],
       "@openspecui/core/hosted-app": ["../core/src/hosted-app.ts"],
+      "@openspecui/core/hosted-contract": ["../core/src/hosted-contract.ts"],
       "@openspecui/core/sounds": ["../core/src/sounds.ts"],
       "@openspecui/core/store-types": ["../core/src/store-types.ts"],
       "@openspecui/core/store-mutation-protocol": ["../core/src/store-mutation-protocol.ts"],
