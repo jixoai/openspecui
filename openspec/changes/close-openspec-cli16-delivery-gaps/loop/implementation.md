@@ -745,6 +745,32 @@ WebSocket-first terminal correlation, and show that deleting the correlation tra
 Preserve the accepted evidence and mutations already recorded for `3e18654`. P3-C/P3-D, `4.4--4.7`, broad
 gates, browser acceptance, PR delivery, merge, archive, and release remain open.
 
+### P3-C second review correction: 2026-07-25 Asia/Shanghai
+
+Independent review accepts the request-id + normalized-locator correlation added by `c8bf256` as the right
+answer for the two legal HTTP/WebSocket orderings, but finds one remaining lifecycle boundary in its React
+owner. `useStoreMutationLifecycle` has a raw `apiBaseUrl` layout-effect dependency and cleanup:
+
+```text
+pending R at normalized A
+        |
+raw A -> raw A/ rerender (same normalized locator)
+        |
+old layout cleanup: setLocator(null) -> clears pending R
+        |
+new layout setup: setLocator(A) -> terminal R is historical again
+```
+
+Normal App ingress currently canonicalizes launch, persisted, and manual URLs, but
+`applyHostedLaunchRequest` remains a raw-input internal boundary. The hook must therefore derive and depend
+on canonical locator identity before its layout effect instead of relying on all callers forever preserving
+that invariant. Equivalent raw formatting is a no-op and retains pending correlation; invalid/absent input,
+a changed normalized locator, and unmount still retire it. The proof must mount the real hook/provider,
+admit R, execute the equivalent raw rerender, then emit current terminal R. It must fail when the raw
+cleanup path is restored and pass only with one Store pull plus one exact-locator Context pull. This is still
+P3-C only: no checkpoint closes, and P3-D, broad gates, owner browser walkthroughs, PR delivery, merge,
+archive, and release remain outside the correction.
+
 ### 7.3 old Change partial archive: 2026-07-24 Asia/Shanghai
 
 The manager confirmed the documented supersession boundary. Strict validation of
