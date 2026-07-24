@@ -4,7 +4,7 @@
  * 2. Reserve backend-owned mutation controls without inferring applicability.
  * 3. Keep Access Gate credentials outside route/component props.
  * 4. Bind form/dialog intent to its full origin identity and revalidate it at dispatch.
- * 5. Keep authority retirement user-visible without exposing internal generations in the DOM.
+ * 5. Compose backend ledger evidence and terminal-driven Store/Context refreshes.
  *
  * Original request (2026-07-15): "Store Manager uses the Store Inspector as its primary interaction."
  */
@@ -14,13 +14,19 @@ import { useCallback, useMemo, useState } from 'react'
 import { EmptyView, ErrorView, LoadingView } from '../components/state-views'
 import { StatusBadge, StatusDot, type StatusVariant } from '../components/status-badge'
 import { StoreManagerShell } from '../components/store-manager-shell'
+import {
+  StoreMutationLifecycleEvidence,
+  useStoreMutationLifecycle,
+} from '../components/store-mutation-lifecycle'
 import { StoreRemoveDialog } from '../components/store-remove-dialog'
+import { useMutationObservations } from '../lib/mutation-observation-provider'
 import {
   isSameStoreActionAuthority,
   useStoreMutationDispatcher,
   type StoreActionAuthority,
 } from '../lib/store-action'
 import { deriveHealthFromDiagnostics, type StoreHealthSummary } from '../lib/store-health'
+import { selectStoreMutationLocator } from '../lib/store-lifecycle-composer'
 import { useActiveBackend } from '../lib/use-active-backend'
 import { useStoreData } from '../lib/use-store-data'
 
@@ -41,11 +47,11 @@ function healthVariant(health: StoreHealthSummary): StatusVariant {
  */
 export function StoreInspectorRoute() {
   const { active } = useActiveBackend()
-  const [refreshNonce, setRefreshNonce] = useState(0)
-  const { inspector, isLoading, error } = useStoreData({
+  const { inspector, isLoading, error, refresh } = useStoreData({
     apiBaseUrl: active?.apiBaseUrl,
-    refreshNonce,
   })
+  const mutationLifecycle = useStoreMutationLifecycle(active?.apiBaseUrl, refresh)
+  const mutationSnapshot = useMutationObservations()
   const stores = inspector?.stores ?? []
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
@@ -55,6 +61,7 @@ export function StoreInspectorRoute() {
     envUri: string | undefined
   } | null>(null)
   const dispatchStoreMutation = useStoreMutationDispatcher()
+  const [mutationError, setMutationError] = useState<string | null>(null)
 
   const visibleStores = useMemo(() => {
     const normalized = filter.trim().toLowerCase()
@@ -74,15 +81,13 @@ export function StoreInspectorRoute() {
       input: Record<string, unknown>,
       authority: StoreActionAuthority | null = active
     ): Promise<void> => {
+      setMutationError(null)
       const requestId = `${kind}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
-      const result = await dispatchStoreMutation(authority, { requestId, kind, ...input })
-      if (!result) return
-      setRefreshNonce((n) => n + 1)
+      await dispatchStoreMutation(authority, { requestId, kind, ...input })
     },
     [active, dispatchStoreMutation]
   )
 
-  const [mutationError, setMutationError] = useState<string | null>(null)
   let body
   if (isLoading && !inspector) {
     body = <LoadingView label="Loading store diagnostics..." />
@@ -105,11 +110,6 @@ export function StoreInspectorRoute() {
               })
             }}
           />
-          {mutationError ? (
-            <p className="border-destructive/40 text-destructive bg-destructive/5 rounded-md border px-3 py-2 text-xs">
-              {mutationError}
-            </p>
-          ) : null}
         </div>
       </EmptyView>
     )
@@ -194,7 +194,10 @@ export function StoreInspectorRoute() {
                 confirmDelete: true,
               })
             }
-            onRemoved={() => setRefreshNonce((n) => n + 1)}
+            mutationRecords={
+              selectStoreMutationLocator(mutationSnapshot, removeTarget.authority.apiBaseUrl)
+                ?.records ?? []
+            }
             onClose={() => setRemoveTarget(null)}
           />
         ) : null}
@@ -202,7 +205,20 @@ export function StoreInspectorRoute() {
     )
   }
 
-  return <StoreManagerShell>{body}</StoreManagerShell>
+  return (
+    <StoreManagerShell>
+      {body}
+      {mutationError ? (
+        <p
+          className="border-destructive/40 text-destructive bg-destructive/5 rounded-md border px-3 py-2 text-xs"
+          role="alert"
+        >
+          {mutationError}
+        </p>
+      ) : null}
+      <StoreMutationLifecycleEvidence lifecycle={mutationLifecycle} />
+    </StoreManagerShell>
+  )
 }
 
 function StoreInspectorDetail({

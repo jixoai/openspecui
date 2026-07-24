@@ -2,11 +2,16 @@
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
  * 1. Prove explicit destructive Store confirmation content and typing gate.
  * 2. Prove the dialog submits its captured origin to the route-owned mutation operation.
+ * 3. Prove HTTP rejection stays repairable and only matching ledger success closes the dialog.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
 // @vitest-environment jsdom
 
+import type {
+  StoreMutationEnvelope,
+  StoreMutationStartResponse,
+} from '@openspecui/core/store-mutation-protocol'
 import type { StoreDoctorStore } from '@openspecui/core/store-types'
 import {
   RouterProvider,
@@ -14,10 +19,11 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import { act, fireEvent, screen } from '@testing-library/react'
-import type { ReactElement } from 'react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
+import { useState, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { BackendStoreMutationRequestError } from '../lib/backend-client'
 import type { StoreActionAuthority } from '../lib/store-action'
 import { StoreRemoveDialog } from './store-remove-dialog'
 
@@ -137,18 +143,19 @@ describe('StoreRemoveDialog', () => {
     expect(removeButton.hasAttribute('disabled')).toBe(false)
   })
 
-  it('calls onClose when remove is confirmed', async () => {
+  it('does not close from terminal-looking HTTP admission without ledger settlement', async () => {
     let closed = false
-    const removeStore = vi.fn(async () => ({
+    const admission = {
       requestId: 'r1',
       envUri: 'openspecui-env://1/aaa',
-      kind: 'remove' as const,
-      status: 'succeeded' as const,
+      kind: 'remove',
+      status: 'succeeded',
       storeId: 'design-system',
       result: { exitStatus: 0 },
       observedAt: 1,
       rejoined: true,
-    }))
+    } satisfies StoreMutationStartResponse
+    const removeStore = vi.fn(async () => admission)
     await renderAt(
       wrapInRouter(
         <StoreRemoveDialog
@@ -169,8 +176,136 @@ describe('StoreRemoveDialog', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Remove Store' }))
     })
-    expect(closed).toBe(true)
+    expect(closed).toBe(false)
     expect(removeStore).toHaveBeenCalledWith(AUTHORITY, expect.any(String), 'design-system')
+  })
+
+  it('keeps the real form open with a typed rejection and creates no lifecycle evidence', async () => {
+    let closed = false
+    const removeStore = vi.fn(async () => {
+      throw new BackendStoreMutationRequestError(403, 'Forbidden')
+    })
+    await renderAt(
+      wrapInRouter(
+        <StoreRemoveDialog
+          store={STORE}
+          authority={AUTHORITY}
+          authorityCurrent
+          removeStore={removeStore}
+          onClose={() => (closed = true)}
+        />
+      )
+    )
+    fireEvent.change(screen.getByLabelText('Type the Store id to confirm'), {
+      target: { value: 'design-system' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Store' }))
+
+    await screen.findByText('Store mutation request failed: 403 Forbidden.')
+    expect(closed).toBe(false)
+    expect(screen.getByRole('form', { name: 'Remove Store files' })).toBeTruthy()
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('closes only after the matching ledger record is observed as succeeded', async () => {
+    let closed = false
+
+    function Harness() {
+      const [records, setRecords] = useState<readonly StoreMutationEnvelope[]>([])
+      return (
+        <StoreRemoveDialog
+          store={STORE}
+          authority={AUTHORITY}
+          authorityCurrent
+          mutationRecords={records}
+          removeStore={async (_authority, requestId) => {
+            queueMicrotask(() => {
+              setRecords([
+                {
+                  requestId,
+                  envUri: 'openspecui-env://1/aaa',
+                  kind: 'remove',
+                  status: 'succeeded',
+                  storeId: 'design-system',
+                  result: { exitStatus: 0 },
+                  observedAt: 2,
+                },
+              ])
+            })
+            return {
+              requestId,
+              envUri: 'openspecui-env://1/aaa',
+              kind: 'remove',
+              status: 'accepted',
+              storeId: 'design-system',
+              observedAt: 1,
+              rejoined: false,
+            }
+          }}
+          onClose={() => (closed = true)}
+        />
+      )
+    }
+
+    await renderAt(wrapInRouter(<Harness />))
+    fireEvent.change(screen.getByLabelText('Type the Store id to confirm'), {
+      target: { value: 'design-system' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Store' }))
+    await waitFor(() => expect(closed).toBe(true))
+  })
+
+  it('keeps failed ledger evidence visible without closing or automatic retry', async () => {
+    let closed = false
+    let attempts = 0
+
+    function Harness() {
+      const [records, setRecords] = useState<readonly StoreMutationEnvelope[]>([])
+      return (
+        <StoreRemoveDialog
+          store={STORE}
+          authority={AUTHORITY}
+          authorityCurrent
+          mutationRecords={records}
+          removeStore={async (_authority, requestId) => {
+            attempts += 1
+            queueMicrotask(() => {
+              setRecords([
+                {
+                  requestId,
+                  envUri: 'openspecui-env://1/aaa',
+                  kind: 'remove',
+                  status: 'failed',
+                  storeId: 'design-system',
+                  result: { exitStatus: 1, stderr: 'CLI remove failed.' },
+                  observedAt: 2,
+                },
+              ])
+            })
+            return {
+              requestId,
+              envUri: 'openspecui-env://1/aaa',
+              kind: 'remove',
+              status: 'accepted',
+              storeId: 'design-system',
+              observedAt: 1,
+              rejoined: false,
+            }
+          }}
+          onClose={() => (closed = true)}
+        />
+      )
+    }
+
+    await renderAt(wrapInRouter(<Harness />))
+    fireEvent.change(screen.getByLabelText('Type the Store id to confirm'), {
+      target: { value: 'design-system' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Store' }))
+    await screen.findByText('CLI remove failed.')
+    expect(screen.getByRole('status').textContent).toContain('Failed')
+    expect(closed).toBe(false)
+    expect(attempts).toBe(1)
   })
 
   it('renders an actionable message when its captured authority is retired', async () => {

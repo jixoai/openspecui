@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
- * 1. Prove selected Store actions cross the real route owner without first-online fallback.
+ * 1. Prove selected Store actions and terminal-only refresh cross the real route owner.
  * 2. Prove exact selected-tab and generation retirement at the real Store action owner.
  * 3. Prove grouped projects and two-source Root/Reference provenance remain visible.
  * 4. Preserve checked two-backend hosted fixtures and locator-scoped credentials.
@@ -96,6 +96,8 @@ function createBackendFetch(
     rootContexts?: ReadonlyMap<string, RootContextState>
     rootContextsAfterInitial?: ReadonlyMap<string, RootContextState>
     stores?: StoreDoctorStore[]
+    storePulls?: string[]
+    mutationRejection?: { status: number; statusText: string }
     offlineAfterInitial?: string
   } = {}
 ): typeof fetch {
@@ -154,19 +156,25 @@ function createBackendFetch(
       })
     }
     if (url.includes('/trpc/stores.list') || url.includes('/trpc/stores.doctor')) {
+      options.storePulls?.push(`${apiBaseUrl}:${url.includes('stores.list') ? 'list' : 'doctor'}`)
       return Response.json({
         result: { data: { available: true, stores: options.stores ?? [] } },
       })
     }
     if (url.includes('/trpc/stores.mutate')) {
       mutations.push(apiBaseUrl)
+      if (options.mutationRejection) {
+        return new Response(null, options.mutationRejection)
+      }
       return Response.json({
         result: {
           data: {
             requestId: 'register-1',
+            envUri: health.get(apiBaseUrl)?.envUri ?? `env:${apiBaseUrl}`,
             kind: 'register',
-            status: 'succeeded',
+            status: 'accepted',
             observedAt: 1,
+            rejoined: false,
           },
         },
       })
@@ -248,6 +256,52 @@ describe('App connection selection and observation routes', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Register Store' }))
 
     await waitFor(() => expect(mutations).toEqual([API_B]))
+    await unmount(rendered)
+  })
+
+  it('does not pull Store projections from HTTP admission before ledger terminal settlement', async () => {
+    const mutations: string[] = []
+    const storePulls: string[] = []
+    vi.stubGlobal('fetch', createBackendFetch(mutations, { storePulls }))
+    const rendered = await renderRoute('/environment/stores/inspector')
+
+    const path = await screen.findByPlaceholderText('Path to Store root')
+    await waitFor(() =>
+      expect(storePulls.filter((entry) => entry.startsWith(`${API_B}:`))).toHaveLength(2)
+    )
+    fireEvent.change(path, { target: { value: '/tmp/store-b' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Register Store' }))
+    await waitFor(() => expect(mutations).toEqual([API_B]))
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(storePulls.filter((entry) => entry.startsWith(`${API_B}:`))).toHaveLength(2)
+    await unmount(rendered)
+  })
+
+  it('keeps the real Remove form open with HTTP rejection and no fabricated lifecycle record', async () => {
+    const mutations: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      createBackendFetch(mutations, {
+        stores: [STORE],
+        mutationRejection: { status: 403, statusText: 'Forbidden' },
+      })
+    )
+    const rendered = await renderRoute('/environment/stores/inspector')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove files' }))
+    fireEvent.change(screen.getByLabelText('Type the Store id to confirm'), {
+      target: { value: 'design-system' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Store' }))
+
+    await screen.findByText('Store mutation request failed: 403 Forbidden.')
+    expect(screen.getByRole('form', { name: 'Remove Store files' })).toBeTruthy()
+    expect(document.body.textContent).not.toContain('Indeterminate')
+    expect(mutations).toEqual([API_B])
     await unmount(rendered)
   })
 

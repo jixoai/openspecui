@@ -3,16 +3,18 @@
  * 1. Confirm destructive Store removal with explicit environment and checkout identity.
  * 2. Submit through the route-owned Store mutation boundary without browser-side deletion.
  * 3. Keep the dialog bound to the full tab identity/generation that opened it.
- * 4. Lock destructive presentation when authority retires while retaining the dispatcher guard.
+ * 4. Close only from the matching Server-ledger succeeded record; retain rejection/failure evidence.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  */
+import type { StoreMutationEnvelope } from '@openspecui/core/store-mutation-protocol'
 import type { StoreDoctorStore } from '@openspecui/core/store-types'
 import { Dialog } from '@openspecui/web-src/components/dialog'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BackendStoreMutationRecord } from '../lib/backend-client'
 import type { StoreActionAuthority } from '../lib/store-action'
+import { MutationStatusBadge } from './mutation-status'
 
 const REMOVE_STORE_FORM_ID = 'remove-store-form'
 
@@ -26,9 +28,8 @@ const REMOVE_STORE_FORM_ID = 'remove-store-form'
  *  - remove 是 stores.mutate 能力的 backend-owned 操作；前端只发请求，不删文件。
  *  - 客户端断开只 detach 观察；不杀 CLI。丢失结果为 indeterminate，不伪造为失败/取消。
  *
- * TODO(kernel): remove 是 stores.mutate 能力。backend 落地后，此处发起变更请求并跟踪生命周期
- *               （accepted -> running -> succeeded | failed | indeterminate）。
- *               环境身份（envUri）由当前选中环境提供，不是前端构造。
+ * HTTP 仅返回 admission/rejoin 证据；关闭动作由 matching Server-ledger succeeded record 驱动。
+ * 环境身份（envUri）由当前选中环境提供，不是前端构造。
  */
 export function StoreRemoveDialog({
   store,
@@ -36,6 +37,7 @@ export function StoreRemoveDialog({
   authority,
   authorityCurrent = false,
   removeStore,
+  mutationRecords = [],
   onRemoved,
   onClose,
 }: {
@@ -52,16 +54,22 @@ export function StoreRemoveDialog({
     requestId: string,
     storeId: string
   ) => Promise<BackendStoreMutationRecord | null>
+  /** Server-owned ledger records for the dialog's captured locator. */
+  mutationRecords?: readonly StoreMutationEnvelope[]
   onRemoved?: (storeId: string) => void
   onClose: () => void
 }) {
   const [confirmText, setConfirmText] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [requestId, setRequestId] = useState<string | null>(null)
   const expected = store.id ?? ''
   const confirmRef = useRef<HTMLInputElement>(null)
   const hasConfirmation = confirmText === expected && expected.length > 0 && !submitting
   const canSubmit = hasConfirmation && Boolean(authority) && authorityCurrent
+  const observedMutation = requestId
+    ? (mutationRecords.find((record) => record.requestId === requestId) ?? null)
+    : null
 
   useEffect(() => {
     // Dialog 打开后聚焦确认输入，便于键盘操作。
@@ -81,26 +89,26 @@ export function StoreRemoveDialog({
           setSubmitting(false)
           return
         }
-        if (mutation.status === 'succeeded') {
-          onRemoved?.(storeId)
-          onClose()
-        } else if (mutation.status === 'indeterminate') {
-          // Lost terminal truth: do not fabricate failure; report indeterminate and close.
-          setError(
-            'Result is indeterminate (lost during disconnect). Reopen the Store views to refresh.'
-          )
-          onRemoved?.(storeId)
-          onClose()
-        } else {
-          setError(mutation.result?.stderr ?? `Store remove ${mutation.status}.`)
-          setSubmitting(false)
-        }
+        setRequestId(mutation.requestId)
       })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : String(err))
         setSubmitting(false)
       })
-  }, [hasConfirmation, authority, removeStore, store.id, onRemoved, onClose, store])
+  }, [hasConfirmation, authority, removeStore, store.id])
+
+  useEffect(() => {
+    if (!observedMutation) return
+    if (observedMutation.status === 'succeeded') {
+      onRemoved?.(store.id ?? '')
+      onClose()
+      return
+    }
+    if (observedMutation.status === 'failed' || observedMutation.status === 'indeterminate') {
+      setError(observedMutation.result.stderr ?? `Store remove ${observedMutation.status}.`)
+      setSubmitting(false)
+    }
+  }, [observedMutation, onClose, onRemoved, store.id])
 
   return (
     <Dialog
@@ -174,6 +182,13 @@ export function StoreRemoveDialog({
           <p className="border-destructive/40 text-destructive bg-destructive/5 rounded-md border px-3 py-2 text-xs">
             {error}
           </p>
+        ) : null}
+
+        {observedMutation ? (
+          <div className="flex items-center justify-between gap-3 text-xs" role="status">
+            <span className="text-muted-foreground font-mono">{observedMutation.requestId}</span>
+            <MutationStatusBadge status={observedMutation.status} />
+          </div>
         ) : null}
 
         <div className="space-y-1.5">
