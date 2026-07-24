@@ -101,13 +101,13 @@ Residual facts retained for later packages:
 
 ### Execution ledger
 
-| Order | Package | State | Production owner | Required focused proof before next package |
-| --- | --- | --- | --- | --- |
-| 1 | P1 Hosted identity + Gate | Partial; browser delivery correction open | Core hosted contract; Server bootstrap and tRPC WS context; CLI/App/Web credential handoff | Existing Server admission/identity proof plus real gated Direct/App Project Web HTTP RPC, subscription, and PTY proof. |
-| 2 | P2 Connection selection + Context Matrix | Candidate rejected; correction open | App credential registry, reachability, selected tab generation, Environment Center / Context Matrix | Exact tab/generation action guard plus source-labelled Root error and two-source Reference provenance. |
-| 3 | P3 Store mutation ledger | Not started | Server StoreMutationService/router; App operation subscription and Inspector | Delayed real CLI fixture observes accepted then running before terminal; denied pre-start call creates no mutation; removing transition publication fails. |
-| 4 | P4 Typed/static/reactive repair | Not started | Core schemas; App decoder; static provider; Server reactive Git stamp; affected tests | Malformed envelope cannot become current; static has no fabricated live evidence; removing physical/reactive settlement fails; all changed TS/TSX headers/types are valid. |
-| 5 | P5 Delivery recovery + acceptance | Blocked on P1--P4 and independent loading regression | Loading-change owner; reviewer; manager | Exact server emission failures are green in their own Change, then one complete local gate run and manager walkthrough ledger. |
+| Order | Package                                  | State                                                | Production owner                                                                                    | Required focused proof before next package                                                                                                                                 |
+| ----- | ---------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | P1 Hosted identity + Gate                | Partial; browser delivery correction open            | Core hosted contract; Server bootstrap and tRPC WS context; CLI/App/Web credential handoff          | Existing Server admission/identity proof plus real gated Direct/App Project Web HTTP RPC, subscription, and PTY proof.                                                     |
+| 2     | P2 Connection selection + Context Matrix | Candidate rejected; correction open                  | App credential registry, reachability, selected tab generation, Environment Center / Context Matrix | Exact tab/generation action guard plus source-labelled Root error and two-source Reference provenance.                                                                     |
+| 3     | P3 Store mutation ledger                 | Not started                                          | Server StoreMutationService/router; App operation subscription and Inspector                        | Delayed real CLI fixture observes accepted then running before terminal; denied pre-start call creates no mutation; removing transition publication fails.                 |
+| 4     | P4 Typed/static/reactive repair          | Not started                                          | Core schemas; App decoder; static provider; Server reactive Git stamp; affected tests               | Malformed envelope cannot become current; static has no fabricated live evidence; removing physical/reactive settlement fails; all changed TS/TSX headers/types are valid. |
+| 5     | P5 Delivery recovery + acceptance        | Blocked on P1--P4 and independent loading regression | Loading-change owner; reviewer; manager                                                             | Exact server emission failures are green in their own Change, then one complete local gate run and manager walkthrough ledger.                                             |
 
 Every package must use the following order. A green assertion from a fake control, direct downstream
 callback, disabled state, transpile-only test, or terminal result alone is not proof.
@@ -665,6 +665,49 @@ Worker mutation-resistance evidence, restored before the accepted commits:
 P3-B is an accepted internal package only. P3-C must compose this owner into Store Inspector and perform
 terminal-driven Store/Context pulls; P3-D owns component preparation evidence. Therefore `4.4--4.7` remain
 open, and no broad-gate, browser-acceptance, PR, merge, archive, or release claim is made.
+
+### P3-C research boundary: 2026-07-24 Asia/Shanghai
+
+P3-C owns the production join between the accepted P3-B locator ledger and the real Store Inspector
+controls. It does not change Server lifecycle semantics or put lifecycle records back into Store inventory.
+The existing `store-inspector.tsx` already carries five orthogonal intents, so lifecycle classification,
+terminal-edge bookkeeping, and presentation must live in focused physical modules rather than enlarging
+that route into a second state kernel.
+
+```text
+real form/dialog submit -- exact authority --> HTTP admission
+        |                                      |
+        | rejected ----------------------------+--> typed error; keep repair UI; no record
+        |
+        + accepted --> locator ledger --> running --> terminal
+                              |                      |
+                              | display-only while  +--> once: Store pull + matching Context refresh
+                              | disconnected
+                              +--> active/recent evidence in Store Inspector
+```
+
+The lifecycle composer baselines an initial current snapshot so historical terminal records do not cause
+mount-time refresh storms. It then recognizes each newly observed transition into
+`succeeded | failed | indeterminate` exactly once. Retained records remain visible through connecting,
+pending, reconnecting, error, stopped, complete, and contract-error states, but a non-current projection
+cannot emit a fresh terminal settlement. A reconnect snapshot may settle a request that was previously
+observed as accepted/running; that replacement current snapshot must emit the terminal once. All retained
+tabs for the exact normalized locator receive a Context refresh; other locators are untouched.
+
+The HTTP start response is admission evidence, never completion evidence. Setup, register, unregister, and
+remove remain pending until their request id is observed in the Server ledger. A rejected auth, validation,
+HTTP, or contract request shows its concrete error without synthesizing `indeterminate`. In particular the
+Remove dialog stays open with its confirmation/repair path after rejection, stays bound to its captured
+authority, and closes automatically only after an observed `succeeded` terminal. Failed or indeterminate
+terminals remain visible evidence and do not imply retry or cancellation.
+
+P3-C evidence must cover the production lifecycle composer and the real Remove form behavior. Removing the
+terminal-edge gate must expose premature/repeated pulls; restoring the current HTTP-admission refresh must
+expose a pull before terminal; and turning a typed rejected request into a record or dialog close must fail
+the named case. Tests must be compile-checked and must not use fake buttons, manually call a downstream
+handler in place of the real form submit, or add production-only test instrumentation. P3-C runs only its
+focused App tests, checked test lane, scoped format/lint/diff, and strict Change validation. P3-D, broad
+gates, owner browser walkthroughs, PR delivery, merge, archive, and release remain outside this slice.
 
 ### 7.3 old Change partial archive: 2026-07-24 Asia/Shanghai
 
