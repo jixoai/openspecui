@@ -783,3 +783,33 @@ warning, skipped no delta-spec synchronization, and moved the Change to
 `openspec/changes/archive/2026-07-24-target-openspec-cli-16-line/`. Archive closes the former active
 planning folder only. P3--P5, focused/full gates, manager walkthroughs, protected merge, and release remain
 open in this successor.
+
+### P3-C final focused acceptance: 2026-07-25 Asia/Shanghai
+
+Accepted production chain: `3e18654`, `c8bf256`, and `853d2ce`.
+
+The Store Inspector now renders the Server-owned locator ledger separately from Store inventory. Its shared
+dispatcher registers only a resolved HTTP admission for setup/register/unregister/remove, while the
+composer waits for current ledger evidence before a terminal edge initiates one Store pull and matching
+normalized-locator Context pulls. Rejected requests remain concrete repair errors: they create no record,
+do not synthesize `indeterminate`, and do not close a destructive dialog. Retained reconnect evidence stays
+display-only until a replacement current snapshot commits.
+
+The final correction keeps correlation identity at the normalized locator rather than raw URL spelling.
+Normal App ingress already canonicalizes user-facing URL paths, but the public internal
+`applyHostedLaunchRequest` boundary accepts raw input. A raw `A -> A/` React rerender is therefore a
+semantic no-op: it must not run a cleanup that retires the pending admitted request before the equivalent
+locator rebinds. Different normalized locators and unmount still retire local correlation.
+
+Independent review evidence:
+
+- `pnpm --filter @openspecui/app exec vitest run src/components/store-mutation-lifecycle.test.tsx src/lib/store-lifecycle-composer.test.ts src/lib/store-action-correlation.test.ts src/components/store-remove-dialog.test.tsx src/routes/connection-context.test.tsx` passed: 5 files / 37 tests.
+- `pnpm --filter @openspecui/app typecheck` passed, including the checked P3-B and P3-C test lanes.
+- Scoped Oxlint, Prettier check, `git diff --check`, and `openspec validate close-openspec-cli16-delivery-gaps --strict` passed.
+- The reviewer temporarily restored the raw layout-effect value/dependency, then ran the real Provider hook
+  fixture. Its terminal snapshot became current but `refreshStore` remained zero, failing the named
+  assertion. Restoring normalized locator identity returned the same fixture to green.
+
+This closes 4.4 and 4.5 only. P3-D still owns checked component/basic Playwright preparation for all five
+lifecycle states. 4.6--4.7, broad gates, PR delivery, merge, archive, release, and every owner browser or
+visual walkthrough remain open.
