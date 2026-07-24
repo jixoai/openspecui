@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (created 2026-07-24 Asia/Shanghai):
- * 1. Subscribe to one Server mutation ledger through the installed tRPC WebSocket protocol.
- * 2. Resolve only the connected locator's runtime-memory Access Gate credential.
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Subscribe to the typed Server mutation-ledger procedure through the installed tRPC protocol.
+ * 2. Resolve only the connected locator's current runtime-memory credential on every handshake.
  * 3. Translate tRPC transport lifecycle callbacks without decoding lifecycle payloads here.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
-import { TRPCUntypedClient, createWSClient, wsLink } from '@trpc/client'
+import type { AppRouter } from '@openspecui/server'
+import { createTRPCClient, createWSClient, wsLink } from '@trpc/client'
 import { readLaunchCredential } from './launch-credential'
 import type {
   MutationLifecycleTransport,
@@ -33,17 +34,17 @@ export function createTRPCMutationObservationTransportFactory(
 ): MutationObservationTransportFactory {
   return {
     connect(apiBaseUrl, callbacks): MutationLifecycleTransport {
-      const credential = readLaunchCredential(apiBaseUrl)
       const wsClient = createWSClient({
         url: toTRPCWebSocketUrl(apiBaseUrl),
-        ...(credential
-          ? { connectionParams: () => ({ authorization: `Bearer ${credential}` }) }
-          : {}),
+        connectionParams: () => {
+          const credential = readLaunchCredential(apiBaseUrl)
+          return credential ? { authorization: `Bearer ${credential}` } : {}
+        },
         ...(options.WebSocket ? { WebSocket: options.WebSocket } : {}),
         ...(options.retryDelayMs ? { retryDelayMs: options.retryDelayMs } : {}),
       })
-      const client = new TRPCUntypedClient({ links: [wsLink({ client: wsClient })] })
-      const subscription = client.subscription('stores.subscribeMutations', undefined, {
+      const client = createTRPCClient<AppRouter>({ links: [wsLink({ client: wsClient })] })
+      const subscription = client.stores.subscribeMutations.subscribe(undefined, {
         onData: callbacks.onData,
         onError: callbacks.onError,
         onConnectionStateChange(connection) {
