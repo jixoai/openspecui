@@ -1964,3 +1964,76 @@ a smaller artifact-inventory observation boundary if the evidence confirms that 
 legacy, Launch-local, and environment-global Codex semantics must remain unchanged. A generic reactive-kernel
 change, timeout increase, sleep, CI retry, or weakened public assertion remains unauthorized without a distinct
 fixed-point red. Checkpoints 6.6-6.12, merge, archive, and release remain open.
+
+#### P5.6b Tool observation scalability candidate: 2026-07-26 Asia/Shanghai
+
+The production correction is split into two commits:
+
+- `ace53a5 fix: bound tool artifact observation fanout`
+- `a9214ed test: cover tool observation root recovery`
+
+The old projection cleared every Tool artifact cache root on each recompute and called `reactiveExists` for every
+supported workflow artifact. Instrumentation of the real `commands/update` projection measured this initial fanout:
+
+```text
+cache states          720
+watcher subscriptions 401
+missing-path polls    720
+
+after explore.md replacement:
+missing-path polls    1439 cumulative
+```
+
+`getToolInitStates()` remains the fresh one-shot API. The Server subscription now creates one retained
+`createToolInitStateProjection()` task and executes it inside the existing `ReactiveContext`. Skills observe their
+physical `skills` inventory plus only present workflow directories; commands observe each distinct physical command
+directory, including the legacy OpenCode directory and environment-global Codex prompts. The corrected initial and
+post-`explore.md` projection both measure `60` cache states, `60` watcher subscriptions, and zero missing-path poll
+timers. No Tool payload, workflow set, timeout, generic reactive kernel, Launch/Planning scope, or Codex physical
+ownership changed.
+
+The committed Core fanout fixture is mutation-resistant at the new dependency boundary. Temporarily bypassing
+`readArtifactDirectory()`'s `reactiveReadDir()` dependency makes the same retained stream finish on its second
+`projection.next()` (`done: true`) instead of producing the expected `explore` replacement; restoring the directory
+inventory returns the fixture to green. A separate temporary cache-reset mutation restored
+`invalidateToolInitCaches(projectDir)` inside the retained projection and made its retained-inventory assertion read
+an uncommitted physical `update.md` early. This second result is supporting cache-lifecycle evidence; the named
+directory-dependency mutation is the required fixed-point proof.
+
+The first independent review accepted the code shape and all preserved Tool semantics but found that the Server
+fixture deleted only `opsx-update.md`, not the complete missing observation root. Commit `a9214ed` now deletes the
+environment-global Codex `prompts` directory, observes the same subscription become missing, recreates the directory
+and command, and observes it return to initialized. This crosses the Server-owned
+`ToolCommandObservationService -> cli.subscribeToolInitStates` path without a manual downstream callback.
+
+Focused evidence after the production commit and test correction:
+
+```text
+Core tool-init + reactive-fs             2 files / 40 tests passed
+Server Tool public subscription          1 file / 5 tests passed
+Core typecheck                           passed
+Server typecheck                         passed
+scoped Prettier and Oxlint               passed; 0 warnings / 0 errors
+git diff --check                         passed
+```
+
+Independent Terra also verified the production commit in a detached clean checkout: Core Tool/reactive coverage
+passed `3` files / `61` tests, Server Tool passed `5/5`, both affected typechecks and scoped format/lint/diff checks
+passed. That review intentionally kept 6.3b open until the mutation evidence was written here and the complete
+Codex observation-root removal/recreation case landed. Checkpoint 6.3b remains open pending the correction re-review;
+full workspace gates, PR update, manager walkthrough, merge, archive, and release have not started from this head.
+
+#### P5.6b correction re-review accepted: 2026-07-26 Asia/Shanghai
+
+Main review independently inspected `ace53a5` and `a9214ed`, replayed Core Tool/reactive coverage (`2` files /
+`40` tests), the complete Server Tool public subscription file (`5/5`), Core and Server typechecks, scoped
+Prettier/Oxlint, and diff checks. All passed. The correction review also confirms that the retained projection is
+created once outside the subscription task, executed only by the existing `ReactiveContext`, and preceded by the
+Server-owned external Codex observation lease.
+
+The first independent review's two blockers are now closed without changing production scope: this document records
+the directory-dependency mutation red, and the real Server fixture deletes and recreates the complete environment-
+global Codex command root. No timeout, sleep, retry, generic reactive-kernel change, payload change, test-only
+production branch, or manual downstream callback was added. Checkpoint 6.3b is accepted. The only next package is one
+complete corrected-head local gate replay for 6.3; PR update, manager walkthrough, merge, archive, and release remain
+open.
