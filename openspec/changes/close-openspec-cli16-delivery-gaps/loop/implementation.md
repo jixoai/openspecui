@@ -1217,3 +1217,23 @@ openspec validate close-openspec-cli16-delivery-gaps --strict
 All listed commands passed. `build:ssg` retained the existing CSS optimizer warning for `::scroll-button`
 and completed. No broad gate, PR action, archive/release action, or browser/visual/multi-tab walkthrough
 was run; final browser acceptance remains with the manager.
+
+#### P4.2 independent reviewer acceptance: 2026-07-25 Asia/Shanghai
+
+The reviewer replayed both new mutation proofs against the real production owners, then restored the
+candidate before the final focused run:
+
+1. Replacing `StaticProvider.getSpecCatalog()`'s loaded-snapshot mapper with
+   `{ provenance: 'live' }` failed the real provider assertion at `static/omit`: the fixture expected the
+   published `referenceSourceCount: 2` and received only `live` provenance.
+2. Replacing the `SpecView.referencePresentation()` omitted branch with route-derived Store wording failed
+   the real route fixture: neutral `Referenced Spec request · auth` disappeared and
+   `route-only-store` rendered as Store provenance.
+
+After restoration, the checked Web suite passed `3 files / 29 tests`; Core Catalog passed `4/4`; Core and
+Web typecheck, scoped Prettier/Oxlint, `git diff --check`, strict Change validation, and a fresh
+`build:ssg` passed. The SSG build retains the pre-existing `::scroll-button` CSS optimizer warning. The
+manual removal of generated SSG directories was rejected by the execution environment, but Vite rebuilt
+the configured SSG output successfully. P4.2 is accepted. P4.3 is the only next implementation package;
+P4.4--P4.5, broad gates, PR delivery, merge, archive/release, and final browser/visual/multi-tab
+acceptance remain out of scope.
