@@ -2079,3 +2079,35 @@ wait observes the Router lifecycle rather than hiding a missing event.
 Checkpoint 6.3c is accepted. One complete corrected-head local gate replay is the only next package. No production
 navigation, timeout, sleep, retry, browser fixture, PR, manual acceptance, merge, archive, or release action is
 included in this acceptance.
+
+#### P5.6 final corrected-head local gates accepted: 2026-07-26 Asia/Shanghai
+
+The ordered gate replay after accepted 6.3b/6.3c completed with zero exit:
+
+```text
+pnpm format:check      -> passed; 10 changed files
+pnpm lint:ci           -> passed; 994 files, 0 warnings / 0 errors
+pnpm typecheck         -> passed; all 15 workspace projects
+pnpm test:ci           -> passed
+  root                 -> 12 files / 43 tests
+  ai-provider          -> 2 files / 18 tests
+  Core                 -> 51 files / 471 tests
+  Server               -> 74 files / 493 tests
+  App                  -> 29 files / 170 tests
+  Web                  -> 154 files / 989 tests
+  CLI                  -> 13 files / 67 tests
+pnpm test:browser:ci   -> passed
+  xterm Storybook      -> 6 files / 60 passed / 1 skipped
+  Web Storybook        -> 4 files / 12 tests
+git diff --check       -> passed
+strict Change validate -> passed
+```
+
+The expected jsdom canvas-not-implemented diagnostics appeared during Web unit imports but did not fail the suite.
+The earlier Server teardown hook and Web `onResolved` capture interruptions did not recur. No timeout, retry,
+production navigation, or Server cleanup change was added. Test execution changed none of the protected concurrent
+workspace files and left no test process running.
+
+Checkpoint 6.3 is complete. The corrected commit series after PR #207 head `e7716a5` is ready for delivery; updating
+that PR and requiring fresh remote checks is the sole next action. Automated browser lanes remain component
+preparation evidence only and do not complete the manager-owned 6.7-6.12 walkthroughs.
