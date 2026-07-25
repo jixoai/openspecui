@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Expose the public Core package contract through one stable barrel.
- * 2. Keep filesystem, CLI, Root Context, workflow, and projection types source-distinct.
+ * 2. Keep filesystem, CLI, Root Context, workflow, live, and static projection types source-distinct.
  * 3. Publish browser-safe subpath contracts, including the external Codex command observation root,
  *    without forcing browser runtimes through this root.
  * 4. Export the typed Git repository binding and Dashboard provenance contracts.
@@ -165,6 +165,7 @@ export {
   ReferencedSpecIdentitySchema,
   SpecIdentitySchema,
   buildSpecCatalog,
+  createStaticSpecCatalogReferenceSource,
   getSpecCatalogEntry,
   isReferencedSpecIdentity,
   mergeSpecCatalog,
@@ -172,6 +173,8 @@ export {
   specIdentityKey,
   specRoutePath,
   type CliShowSpecDocument,
+  type LiveReferencedSpecDocumentProjection,
+  type LiveSpecCatalogReferenceSource,
   type OwnedSpecCatalogEntry,
   type OwnedSpecDocumentProjection,
   type OwnedSpecIdentity,
@@ -184,6 +187,8 @@ export {
   type SpecCommandEvidence,
   type SpecDocumentProjection,
   type SpecIdentity,
+  type StaticReferencedSpecDocumentProjection,
+  type StaticSpecCatalogReferenceSource,
 } from './spec-catalog.js'
 
 export {

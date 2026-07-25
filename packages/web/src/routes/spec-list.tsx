@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Default the project Spec Catalog to writable Owned Specs.
- * 2. Group direct read-only Referenced Specs by Store identity.
+ * 2. Group direct read-only Referenced Specs by Store identity and source-distinct provenance.
  * 3. Preserve compound routes, collision-safe View Transition identity, and local row continuity.
  * 4. Keep empty states source-specific without completeness claims.
  * 5. Surface transport failure without hiding retained Catalog truth or claiming source emptiness.
@@ -176,18 +176,29 @@ export function SpecList() {
               </div>
               {source.state === 'error' ? (
                 <div role="alert" className="text-destructive space-y-1 px-4 py-3 text-sm">
-                  <div>OpenSpec could not enumerate this observed Reference Store.</div>
-                  <div>Exit status: {source.evidence.exitCode ?? 'unknown'}</div>
-                  {source.evidence.contractError ? (
-                    <div>{source.evidence.contractError}</div>
-                  ) : null}
-                  {source.evidence.stderr ? <div>{source.evidence.stderr}</div> : null}
-                  {[...source.diagnostics, ...source.evidence.diagnostics].map(
-                    (diagnostic, index) => (
-                      <div key={`${diagnostic.code}:${index}`}>
-                        {diagnostic.code}: {diagnostic.message}
+                  {source.provenance === 'live' ? (
+                    <>
+                      <div>OpenSpec could not enumerate this observed Reference Store.</div>
+                      <div>Exit status: {source.evidence.exitCode ?? 'unknown'}</div>
+                      {source.evidence.contractError ? (
+                        <div>{source.evidence.contractError}</div>
+                      ) : null}
+                      {source.evidence.stderr ? <div>{source.evidence.stderr}</div> : null}
+                      {[...source.diagnostics, ...source.evidence.diagnostics].map(
+                        (diagnostic, index) => (
+                          <div key={`${diagnostic.code}:${index}`}>
+                            {diagnostic.code}: {diagnostic.message}
+                          </div>
+                        )
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        Published static snapshot records this Reference source as unavailable.
                       </div>
-                    )
+                      <div>{source.snapshot.specCount} published Specs.</div>
+                    </>
                   )}
                 </div>
               ) : (

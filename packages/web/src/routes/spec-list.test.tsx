@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Prove duplicate Catalog ids navigate through source-distinct compound links.
  * 2. Prove Owned is the default and Referenced entries group by Store.
  * 3. Prove Referenced groups remain visibly read-only with a neutral empty state.
- * 4. Distinguish transport errors from source-empty truth with and without retained Catalog data.
+ * 4. Distinguish transport errors and static snapshot conditions from source-empty truth.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
  */
@@ -102,12 +102,14 @@ describe('SpecList', () => {
       [
         {
           storeId: 'platform-a',
+          provenance: 'live',
           state: 'ready',
           diagnostics: [],
           evidence: { success: true, stdout: '{}', stderr: '', exitCode: 0, diagnostics: [] },
         },
         {
           storeId: 'platform-b',
+          provenance: 'live',
           state: 'ready',
           diagnostics: [],
           evidence: { success: true, stdout: '{}', stderr: '', exitCode: 0, diagnostics: [] },
@@ -227,6 +229,7 @@ describe('SpecList', () => {
         referenceSources: [
           {
             storeId: 'broken',
+            provenance: 'live',
             state: 'error',
             diagnostics: [
               {
@@ -256,6 +259,7 @@ describe('SpecList', () => {
     expect(alertText).toContain('catalog failed')
     expect(alertText).toContain('reference_root_unhealthy')
     expect(alertText).toContain('Store is unavailable.')
+    expect(alertText).toContain('Exit status: 1')
     expect(alerts).toHaveLength(2)
     expect(screen.queryByText('No Referenced Specs currently observed.')).toBeNull()
   })
@@ -287,6 +291,7 @@ describe('SpecList', () => {
         referenceSources: [
           {
             storeId: 'platform-a',
+            provenance: 'live',
             state: 'ready',
             diagnostics: [],
             evidence: { success: true, stdout: '{}', stderr: '', exitCode: 0, diagnostics: [] },
@@ -320,6 +325,7 @@ describe('SpecList', () => {
       [
         {
           storeId: 'platform-b',
+          provenance: 'live',
           state: 'ready',
           diagnostics: [],
           evidence: { success: true, stdout: '{}', stderr: '', exitCode: 0, diagnostics: [] },
@@ -344,6 +350,7 @@ describe('SpecList', () => {
       [
         {
           storeId: 'broken',
+          provenance: 'live',
           state: 'error',
           diagnostics: [
             {
@@ -370,5 +377,28 @@ describe('SpecList', () => {
     expect(screen.getByRole('alert').textContent).toContain('reference_root_unhealthy')
     expect(screen.getByRole('alert').textContent).toContain('Store is unavailable.')
     expect(screen.queryByText('No Referenced Specs currently observed.')).toBeNull()
+  })
+
+  it('renders a static Reference source condition without CLI evidence', () => {
+    locationState.current = { __specListScope: 'referenced' }
+    setCatalog(
+      [],
+      [
+        {
+          storeId: 'published-broken',
+          provenance: 'static',
+          state: 'error',
+          snapshot: { policy: 'include', specCount: 0 },
+        },
+      ]
+    )
+
+    render(<SpecList />)
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Published static snapshot records this Reference source as unavailable.'
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('0 published Specs.')
+    expect(screen.queryByText(/Exit status:/)).toBeNull()
   })
 })

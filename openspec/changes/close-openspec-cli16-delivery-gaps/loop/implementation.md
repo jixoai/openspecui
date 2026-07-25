@@ -1031,3 +1031,84 @@ not a schema-only characterization test.
 
 Checkpoint 5.1 is accepted. P4.2 is the next independent package; 5.3--5.5, broad gates, PR delivery,
 merge, archive, release, and every manager browser/visual/multi-tab walkthrough remain out of scope.
+
+### P4.2 static Reference provenance: 2026-07-25 Asia/Shanghai
+
+Production owners changed:
+
+- `packages/core/src/spec-catalog.ts` now owns a browser-safe live/static discriminated Reference source
+  and document contract. Live projections retain their real CLI command evidence; static projections carry
+  only published `include` source state/spec count or an explicit `omit`, `none`, absent-snapshot, or
+  missing-document fact.
+- `packages/server/src/spec-catalog-service.ts` explicitly produces `provenance: 'live'` and
+  `{ kind: 'live' }`, preserving the original CLI `success`, stdout, stderr, exit status, diagnostics, and
+  contract error unchanged.
+- `packages/web/src/lib/static-data-provider.ts` uses the Core static mapping for both actual
+  `getSpecCatalog()` and `getSpecDocument()` paths. It no longer creates command success/failure/evidence.
+  Static Reference list/detail renderers distinguish published snapshot conditions from live CLI errors;
+  included snapshot documents render their materialized Markdown without a CLI payload.
+
+Pre-fix red evidence used the real StaticProvider omission path:
+
+```bash
+pnpm --filter @openspecui/web exec vitest run \
+  src/lib/static-data-provider.references.test.ts \
+  -t 'reports an explicit omission error'
+# 1 failed / 3 skipped: expected fabricated evidence to be null; received
+# success:false, stdout:'', stderr:'', exitCode:null, diagnostics:[], and contractError.
+```
+
+Mutation resistance used the same real `StaticProvider.getSpecCatalog()` include fixture. The production
+mapper was temporarily changed to restore the former fabricated `evidence` object (`success`, stdout,
+stderr, exitCode, diagnostics). The fixture failed with the extra observable field, then passed after the
+final source-discriminated mapper was restored:
+
+```bash
+pnpm --filter @openspecui/web exec vitest run \
+  src/lib/static-data-provider.references.test.ts \
+  -t 'hydrates a referenced Spec catalog entry'
+# mutation: 1 failed / 4 skipped; received unexpected evidence with success/stdout/stderr/exitCode/diagnostics
+# restored: 1 passed / 4 skipped
+```
+
+Focused green evidence:
+
+```bash
+pnpm --filter @openspecui/web exec vitest run \
+  src/entry-client-static.test.tsx --no-file-parallelism
+# 1 file / 2 tests passed
+
+pnpm --filter @openspecui/web exec vitest run \
+  src/lib/static-data-provider.references.test.ts \
+  src/lib/static-data-provider.spec.test.ts \
+  src/routes/spec-list.test.tsx \
+  src/routes/spec-view.test.tsx \
+  src/routes/spec-list-continuity.test.tsx \
+  src/routes/spec-list-navigation.test.tsx \
+  --no-file-parallelism
+# 6 files / 34 tests passed
+
+pnpm --filter @openspecui/server exec vitest run \
+  src/spec-catalog-service.test.ts src/spec-catalog-service.integration.test.ts \
+  --no-file-parallelism
+# 2 files / 9 tests passed
+
+pnpm --filter @openspecui/core typecheck
+pnpm --filter @openspecui/server typecheck
+pnpm --filter @openspecui/web typecheck
+pnpm --filter @openspecui/web build:ssg
+pnpm exec prettier --check <changed P4.2 TypeScript files>
+pnpm exec oxlint <changed P4.2 TypeScript files>
+git diff --check
+openspec validate close-openspec-cli16-delivery-gaps --strict
+```
+
+All listed commands passed. `build:ssg` retained one existing CSS `scroll-button` pseudo-element warning
+and still completed. The prescribed wrapper command
+`pnpm --filter @openspecui/web test -- src/entry-client-static.test.tsx ...` was started but its
+`vitest run --project unit -- ...` process did not settle locally after runner startup; it was terminated
+without a pass/fail claim. The direct `vitest run` commands above replayed exactly the named unit files and
+completed green. This is a runner invocation divergence, not an assertion failure.
+
+Checkpoint 5.2 is complete. P4.3--P4.5, broad gates, PR delivery, merge, archive, release, and every
+browser/visual/multi-tab walkthrough remain out of scope.

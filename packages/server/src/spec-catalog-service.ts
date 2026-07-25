@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Build the project Spec Catalog from the active planning root and direct References.
  * 2. Read owned documents from planning-root services and referenced documents from CLI JSON.
- * 3. Preserve referenced command evidence without synthesizing document fields.
+ * 3. Preserve live referenced command provenance and evidence without synthesizing document fields.
  * 4. Reject Store/spec identities outside the current Root Context Reference index.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
@@ -20,8 +20,8 @@ import type {
 import {
   buildSpecCatalog,
   type CliShowSpecDocument,
+  type LiveSpecCatalogReferenceSource,
   type SpecCatalog,
-  type SpecCatalogReferenceSource,
   type SpecCommandEvidence,
   type SpecDocumentProjection,
   type SpecIdentity,
@@ -103,7 +103,7 @@ function referenceListContractError(
   return result.contractError
 }
 
-interface EnumeratedReference extends SpecCatalogReferenceSource {
+interface EnumeratedReference extends LiveSpecCatalogReferenceSource {
   specs: CliSpecList['specs']
 }
 
@@ -116,6 +116,7 @@ async function enumerateReference(
   const ready = result.success && result.data !== null && contractError === undefined
   return {
     storeId: reference.store_id,
+    provenance: 'live',
     state: ready ? 'ready' : 'error',
     diagnostics: reference.status,
     evidence: commandEvidence(result, contractError),
@@ -181,6 +182,7 @@ export async function readSpecDocument(
       spec: null,
       rawMarkdown: null,
       upstream: null,
+      provenance: { kind: 'live' },
       evidence: enumeration.evidence,
     }
   }
@@ -213,6 +215,7 @@ export async function readSpecDocument(
     spec: null,
     rawMarkdown: null,
     upstream: ready ? upstream : null,
+    provenance: { kind: 'live' },
     evidence: commandEvidence(result, identityError),
   }
 }

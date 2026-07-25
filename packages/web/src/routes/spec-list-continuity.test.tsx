@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Prove Owned and Referenced Catalog rows preserve compound identity across reactive mutations.
  * 2. Prove a scope switch retires an earlier local transition before it can restore old rows.
  * 3. Prove local native-transition fallback commits the current Catalog without fake state.
@@ -107,6 +107,7 @@ function createReferenced(storeId: string, specId: string, name: string): SpecCa
 function createReferenceSource(storeId: string): SpecCatalogReferenceSource {
   return {
     storeId,
+    provenance: 'live',
     state: 'ready',
     diagnostics: [],
     evidence: {

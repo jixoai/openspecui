@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Prove static provider hydrates compound referenced Spec routes and bodies.
- * 2. Prove omit/none policy produces an explicit omission error without leaking Store ids.
- * 3. Prove static search scopes referenced Specs to 'referenced-specs' only.
+ * 2. Prove static snapshot policy never becomes fabricated live CLI evidence.
+ * 3. Prove omit/none policy produces an explicit omission error without leaking Store ids.
+ * 4. Prove static search scopes referenced Specs to 'referenced-specs' only.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
  * Section 7.9/7.10 static parity coverage.
@@ -90,8 +91,15 @@ describe('static-data-provider references', () => {
       readOnly: true,
     })
     expect(catalog.referenceSources).toEqual([
-      expect.objectContaining({ storeId: 'team', state: 'ready' }),
+      {
+        storeId: 'team',
+        provenance: 'static',
+        state: 'ready',
+        snapshot: { policy: 'include', specCount: 1 },
+      },
     ])
+    expect(catalog.referenceSources[0]).not.toHaveProperty('evidence')
+    expect(catalog.referenceSources[0]).not.toHaveProperty('diagnostics')
   })
 
   it('returns the materialized referenced Spec document when included', async () => {
@@ -105,6 +113,63 @@ describe('static-data-provider references', () => {
     expect(doc.source).toBe('referenced')
     expect(doc.spec?.id).toBe('auth')
     expect(doc.rawMarkdown).toContain('Team Auth')
+    expect(doc.evidence).toBeNull()
+    expect(doc).toMatchObject({
+      provenance: {
+        kind: 'static',
+        state: 'included',
+        policy: 'include',
+        source: {
+          storeId: 'team',
+          provenance: 'static',
+          state: 'ready',
+          snapshot: { policy: 'include', specCount: 1 },
+        },
+      },
+    })
+  })
+
+  it('distinguishes none, unavailable snapshot, and included-policy missing document facts', async () => {
+    const identity = { kind: 'referenced' as const, storeId: 'team', specId: 'missing' }
+
+    staticState.snapshot = snapshotWith([], { kind: 'none' })
+    let provider = await import('./static-data-provider')
+    await expect(provider.getSpecDocument(identity)).resolves.toMatchObject({
+      state: 'error',
+      evidence: null,
+      provenance: { kind: 'static', state: 'none', policy: 'none' },
+    })
+
+    staticState.snapshot = null
+    vi.resetModules()
+    provider = await import('./static-data-provider')
+    await expect(provider.getSpecDocument(identity)).resolves.toMatchObject({
+      state: 'error',
+      evidence: null,
+      provenance: { kind: 'static', state: 'snapshot-unavailable', policy: 'absent' },
+    })
+
+    staticState.snapshot = snapshotWith([], {
+      kind: 'include',
+      referenceSources: [{ storeId: 'team', state: 'error', specCount: 0 }],
+    })
+    vi.resetModules()
+    provider = await import('./static-data-provider')
+    await expect(provider.getSpecDocument(identity)).resolves.toMatchObject({
+      state: 'error',
+      evidence: null,
+      provenance: {
+        kind: 'static',
+        state: 'missing',
+        policy: 'include',
+        source: {
+          storeId: 'team',
+          provenance: 'static',
+          state: 'error',
+          snapshot: { policy: 'include', specCount: 0 },
+        },
+      },
+    })
   })
 
   it('reports an explicit omission error without leaking bodies when policy is omit', async () => {
@@ -114,7 +179,15 @@ describe('static-data-provider references', () => {
     expect(doc.state).toBe('error')
     expect(doc.spec).toBeNull()
     if (doc.source === 'referenced') {
-      expect(doc.evidence?.contractError).toMatch(/omitted/)
+      expect(doc.evidence).toBeNull()
+      expect(doc).toMatchObject({
+        provenance: {
+          kind: 'static',
+          state: 'omitted',
+          policy: 'omit',
+          referenceSourceCount: 2,
+        },
+      })
     }
   })
 

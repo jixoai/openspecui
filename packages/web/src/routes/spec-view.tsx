@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Resolve owned and referenced Spec routes through compound identity.
  * 2. Render owned Markdown through the existing document pipeline.
- * 3. Render referenced CLI JSON as visibly read-only evidence without synthesizing fields.
+ * 3. Render live CLI evidence and static snapshot conditions without synthesizing either source.
  * 4. Preserve collision-safe View Transition identity across source-distinct documents.
  * 5. Retain successful detail content beside terminal document subscription errors.
  *
@@ -29,6 +29,7 @@ import {
   type CliShowSpecDocument,
   type ReferencedSpecDocumentProjection,
   type SpecIdentity,
+  type StaticReferencedSpecDocumentProjection,
 } from '@openspecui/core/spec-catalog'
 import { useLocation, useParams } from '@tanstack/react-router'
 import { ArrowLeft, FileText, LockKeyhole } from 'lucide-react'
@@ -217,7 +218,7 @@ function ReferencedSpecContent({
       {errorMessage ? <SpecTransportErrorAlert message={errorMessage} /> : null}
       <SpecHeader
         identity={document.identity}
-        title={document.upstream?.title ?? document.identity.specId}
+        title={document.upstream?.title ?? document.spec?.name ?? document.identity.specId}
         sourceRef={headerRef}
         sharedDescriptor={sharedDescriptor}
       />
@@ -225,8 +226,17 @@ function ReferencedSpecContent({
         <LockKeyhole className="h-4 w-4 shrink-0" aria-hidden />
         <span>Read-only Reference projected from OpenSpec Store {document.identity.storeId}.</span>
       </div>
-      {document.state === 'ready' && document.upstream ? (
+      {document.state === 'ready' && document.provenance.kind === 'live' && document.upstream ? (
         <ReferencedSpecDocument document={document.upstream} />
+      ) : document.state === 'ready' &&
+        isStaticReferencedDocument(document) &&
+        document.spec &&
+        document.rawMarkdown ? (
+        <MarkdownViewer
+          markdown={document.rawMarkdown}
+          path={`referenced:${document.identity.storeId}:specs/${document.identity.specId}/spec.md`}
+          className="vt-detail-content min-h-0 flex-1"
+        />
       ) : (
         <ReferencedSpecError document={document} />
       )}
@@ -267,14 +277,19 @@ function ReferencedSpecDocument({ document }: { document: CliShowSpecDocument })
 }
 
 function ReferencedSpecError({ document }: { document: ReferencedSpecDocumentProjection }) {
-  const evidence = document.evidence
-  if (!evidence) {
+  if (isStaticReferencedDocument(document)) {
     return (
       <div className="border-destructive/40 bg-destructive/5 space-y-3 rounded-md border p-4">
-        <h2 className="font-medium">OpenSpec could not project this Reference Spec.</h2>
+        <h2 className="font-medium">
+          Published static snapshot cannot render this Reference Spec.
+        </h2>
+        <div className="text-muted-foreground text-sm">
+          {staticSnapshotCondition(document.provenance)}
+        </div>
       </div>
     )
   }
+  const evidence = document.evidence
   return (
     <div className="border-destructive/40 bg-destructive/5 space-y-3 rounded-md border p-4">
       <h2 className="font-medium">OpenSpec could not project this Reference Spec.</h2>
@@ -292,4 +307,29 @@ function ReferencedSpecError({ document }: { document: ReferencedSpecDocumentPro
       ))}
     </div>
   )
+}
+
+function isStaticReferencedDocument(
+  document: ReferencedSpecDocumentProjection
+): document is StaticReferencedSpecDocumentProjection {
+  return document.provenance.kind === 'static'
+}
+
+function staticSnapshotCondition(
+  provenance: StaticReferencedSpecDocumentProjection['provenance']
+): string {
+  switch (provenance.state) {
+    case 'omitted':
+      return `Referenced content was omitted by the published snapshot policy (${provenance.referenceSourceCount} observed sources).`
+    case 'none':
+      return 'The published snapshot records no effective Reference sources.'
+    case 'snapshot-unavailable':
+      return 'No published static snapshot is available for this Reference Spec.'
+    case 'missing':
+      return provenance.source
+        ? `The published snapshot does not contain this Spec from ${provenance.source.storeId}.`
+        : 'The published snapshot does not contain this Reference Spec.'
+    case 'included':
+      return 'The published snapshot did not materialize this Reference Spec.'
+  }
 }

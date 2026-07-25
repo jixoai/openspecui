@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Define collision-safe owned and referenced Spec identity.
- * 2. Build one source-aware live/static Spec Catalog without bare-id deduplication.
- * 3. Define source-distinct Spec detail projections without inventing upstream fields.
+ * 2. Build one source-aware live/static Spec Catalog without bare-id deduplication or forged CLI evidence.
+ * 3. Define source-distinct Spec detail projections without inventing upstream or snapshot fields.
  * 4. Centralize route, cache, search, and provider lookup identity.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
@@ -79,12 +79,43 @@ export interface SpecCommandEvidence {
   contractError?: string
 }
 
-/** Per-Store Doctor and list evidence retained even when one Reference cannot be enumerated. */
-export interface SpecCatalogReferenceSource {
+/** Per-Store Doctor and list evidence retained even when one live Reference cannot be enumerated. */
+export interface LiveSpecCatalogReferenceSource {
   storeId: string
+  provenance: 'live'
   state: 'ready' | 'error'
   diagnostics: CliDiagnostic[]
   evidence: SpecCommandEvidence
+}
+
+/** Published per-Store snapshot facts; static export never runs a CLI command. */
+export interface StaticSpecCatalogReferenceSource {
+  storeId: string
+  provenance: 'static'
+  state: 'ready' | 'error'
+  snapshot: {
+    policy: 'include'
+    specCount: number
+  }
+}
+
+/** Per-Store Reference projection, distinguished by live execution or published snapshot provenance. */
+export type SpecCatalogReferenceSource =
+  | LiveSpecCatalogReferenceSource
+  | StaticSpecCatalogReferenceSource
+
+/** Map published Reference source facts without implying a CLI execution occurred. */
+export function createStaticSpecCatalogReferenceSource(input: {
+  storeId: string
+  state: 'ready' | 'error'
+  specCount: number
+}): StaticSpecCatalogReferenceSource {
+  return {
+    storeId: input.storeId,
+    provenance: 'static',
+    state: input.state,
+    snapshot: { policy: 'include', specCount: input.specCount },
+  }
 }
 
 /** Successful `show --type spec --json` document payload. */
@@ -103,7 +134,7 @@ export interface OwnedSpecDocumentProjection {
 }
 
 /** Read-only Store-qualified Spec document projection. */
-export interface ReferencedSpecDocumentProjection {
+interface ReferencedSpecDocumentProjectionBase {
   identity: ReferencedSpecIdentity
   source: 'referenced'
   readOnly: true
@@ -119,8 +150,39 @@ export interface ReferencedSpecDocumentProjection {
    */
   rawMarkdown: string | null
   upstream: CliShowSpecDocument | null
-  evidence: SpecCommandEvidence | null
 }
+
+/** Referenced document projected by a real OpenSpec CLI command. */
+export interface LiveReferencedSpecDocumentProjection extends ReferencedSpecDocumentProjectionBase {
+  provenance: { kind: 'live' }
+  evidence: SpecCommandEvidence
+}
+
+/** Referenced document projected solely from the published static snapshot. */
+export interface StaticReferencedSpecDocumentProjection
+  extends ReferencedSpecDocumentProjectionBase {
+  provenance:
+    | {
+        kind: 'static'
+        state: 'included' | 'missing'
+        policy: 'include' | 'unrecorded'
+        source: StaticSpecCatalogReferenceSource | null
+      }
+    | {
+        kind: 'static'
+        state: 'omitted'
+        policy: 'omit'
+        referenceSourceCount: number
+      }
+    | { kind: 'static'; state: 'none'; policy: 'none' }
+    | { kind: 'static'; state: 'snapshot-unavailable'; policy: 'absent' }
+  evidence: null
+}
+
+/** Read-only Store-qualified document with source-discriminated evidence. */
+export type ReferencedSpecDocumentProjection =
+  | LiveReferencedSpecDocumentProjection
+  | StaticReferencedSpecDocumentProjection
 
 /** Source-aware owned/referenced Spec document projection union. */
 export type SpecDocumentProjection = OwnedSpecDocumentProjection | ReferencedSpecDocumentProjection

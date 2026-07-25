@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Project one immutable export snapshot through the live provider-shaped API.
- * 2. Preserve compound Spec identity and source/read-only state in static routes and search.
+ * 2. Preserve compound Spec identity and published snapshot provenance without invented CLI evidence.
  * 3. Reconstruct Dashboard, workflow, schema, template, and entity reads without a backend.
  * 4. Keep unsupported live mutations and provenance explicitly absent in static mode.
  * 5. Keep static Git snapshots ineligible for live backend binding authority.
@@ -37,6 +37,7 @@ import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
 import { isOpsxGlobPattern, opsxPathMatchesPattern } from '@openspecui/core/opsx-entity'
 import { DEFAULT_BELL_SOUND_ID, DEFAULT_NOTIFICATION_SOUND_ID } from '@openspecui/core/sounds'
 import {
+  createStaticSpecCatalogReferenceSource,
   specIdentityKey,
   specRoutePath,
   type SpecCatalog,
@@ -616,18 +617,7 @@ export async function getSpecCatalog(): Promise<SpecCatalog> {
     entries,
     referenceSources:
       snapshot.meta.referencePolicy?.kind === 'include'
-        ? snapshot.meta.referencePolicy.referenceSources.map((source) => ({
-            storeId: source.storeId,
-            state: source.state,
-            diagnostics: [],
-            evidence: {
-              success: source.state === 'ready',
-              stdout: '',
-              stderr: '',
-              exitCode: source.state === 'ready' ? 0 : 1,
-              diagnostics: [],
-            },
-          }))
+        ? snapshot.meta.referencePolicy.referenceSources.map(createStaticSpecCatalogReferenceSource)
         : [],
     observedAt: snapshot.meta.observedAt || Date.parse(snapshot.meta.timestamp) || 0,
   }
@@ -776,10 +766,38 @@ export async function getSpecDocument(identity: SpecIdentity): Promise<SpecDocum
   }
 
   // Referenced Spec: only present when the snapshot was exported with --references include.
+  const referencePolicy = snapshot?.meta.referencePolicy
+  const staticSource =
+    referencePolicy?.kind === 'include'
+      ? (referencePolicy.referenceSources
+          .filter((source) => source.storeId === identity.storeId)
+          .map(createStaticSpecCatalogReferenceSource)[0] ?? null)
+      : null
   if (!snapSpec) {
-    const omitted =
-      snapshot?.meta.referencePolicy?.kind === 'omit' ||
-      snapshot?.meta.referencePolicy?.kind === 'none'
+    const provenance = !snapshot
+      ? {
+          kind: 'static' as const,
+          state: 'snapshot-unavailable' as const,
+          policy: 'absent' as const,
+        }
+      : referencePolicy?.kind === 'omit'
+        ? {
+            kind: 'static' as const,
+            state: 'omitted' as const,
+            policy: 'omit' as const,
+            referenceSourceCount: referencePolicy.referenceSourceCount,
+          }
+        : referencePolicy?.kind === 'none'
+          ? { kind: 'static' as const, state: 'none' as const, policy: 'none' as const }
+          : {
+              kind: 'static' as const,
+              state: 'missing' as const,
+              policy:
+                referencePolicy?.kind === 'include'
+                  ? ('include' as const)
+                  : ('unrecorded' as const),
+              source: staticSource,
+            }
     return {
       identity,
       source: 'referenced',
@@ -788,16 +806,8 @@ export async function getSpecDocument(identity: SpecIdentity): Promise<SpecDocum
       spec: null,
       rawMarkdown: null,
       upstream: null,
-      evidence: {
-        success: false,
-        stdout: '',
-        stderr: '',
-        exitCode: null,
-        diagnostics: [],
-        contractError: omitted
-          ? 'Referenced Spec content was omitted from this static snapshot.'
-          : 'Referenced Spec content is not present in this static snapshot.',
-      },
+      provenance,
+      evidence: null,
     }
   }
 
@@ -809,6 +819,12 @@ export async function getSpecDocument(identity: SpecIdentity): Promise<SpecDocum
     spec: snapshotSpecToSpec(snapSpec),
     rawMarkdown: snapSpec.content ?? snapSpec.sourceContent ?? null,
     upstream: null,
+    provenance: {
+      kind: 'static',
+      state: 'included',
+      policy: referencePolicy?.kind === 'include' ? 'include' : 'unrecorded',
+      source: staticSource,
+    },
     evidence: null,
   }
 }

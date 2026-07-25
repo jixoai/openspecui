@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Prove Owned SpecList rows cross real VTLink, detail preparation, and the Router.
  * 2. Prove Referenced rows preserve Store-qualified route, query, cache, and handoff identity.
  * 3. Stabilize only transport and native-transition runtime edges for a typed memory Router fixture.
@@ -58,6 +58,7 @@ function createReferenced(storeId: string, specId: string, name: string): SpecCa
 function createReferenceSource(storeId: string): SpecCatalogReferenceSource {
   return {
     storeId,
+    provenance: 'live',
     state: 'ready',
     diagnostics: [],
     evidence: {
@@ -187,6 +188,7 @@ describe('SpecList detail navigation', () => {
       metadata: { version: '1.0.0', format: 'openspec' },
       root: { path: '/stores/platform-a', source: 'store', store_id: 'platform-a' },
     },
+    provenance: { kind: 'live' },
     evidence: {
       success: true,
       stdout: '{}',
