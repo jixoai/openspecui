@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Prove public tool subscriptions preserve launch-local skills and physically scoped commands.
  * 2. Prove fixed global CLI installation retires runner authority and invalidates Root Context before public terminal settlement.
  *
  * Original request (2026-07-20): "Settings exposes 1.6 compatibility, workflow/tool delivery, root selection, environment, and data-scope diagnostics."
  * Derived requirement (2026-07-20): physically owned tool projections re-emit after external artifact creation and removal.
  * Derived requirement (2026-07-20): global CLI installation settlement refreshes Root Context availability.
+ * Derived requirement (2026-07-26): environment-owned command observation survives root removal and recreation.
  */
 import {
   CliContextSchema,
@@ -389,6 +390,7 @@ describe('public tool subscriptions', () => {
       'SKILL.md'
     )
     const externalCommand = join(fixture.codexHome, 'prompts', 'opsx-update.md')
+    const externalCommandRoot = dirname(externalCommand)
 
     try {
       await writeArtifact(planningSkill)
@@ -449,9 +451,9 @@ describe('public tool subscriptions', () => {
       })
 
       const commandRemoveStart = emissions.length
-      await rm(externalCommand)
+      await rm(externalCommandRoot, { recursive: true, force: true })
       const afterCommandRemove = await waitForEmission(
-        'environment-global Codex command removal',
+        'environment-global Codex command-root removal',
         emissions,
         errors,
         commandRemoveStart,
@@ -464,6 +466,23 @@ describe('public tool subscriptions', () => {
         missingCommandWorkflows: ['update'],
         presentExpectedSkillCount: 1,
         presentExpectedCommandCount: 0,
+      })
+
+      const commandRecreateStart = emissions.length
+      await writeArtifact(externalCommand)
+      const afterCommandRecreate = await waitForEmission(
+        'environment-global Codex command-root recreation',
+        emissions,
+        errors,
+        commandRecreateStart,
+        (value) => findToolState(value, 'codex')?.status === 'initialized'
+      )
+      expect(findToolState(afterCommandRecreate, 'codex')).toMatchObject({
+        status: 'initialized',
+        missingSkillWorkflows: [],
+        missingCommandWorkflows: [],
+        presentExpectedSkillCount: 1,
+        presentExpectedCommandCount: 1,
       })
     } finally {
       subscription?.unsubscribe()
