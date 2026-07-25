@@ -20,6 +20,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["packages/web/src/*"],
+      "@openspecui/web-src/*": ["packages/web/src/*"],
       "@openspecui/server": ["packages/server/src/index.ts"],
       "@openspecui/core": ["packages/core/src/index.ts"],
       "@openspecui/core/dashboard-display": ["packages/core/src/dashboard-display.ts"],
