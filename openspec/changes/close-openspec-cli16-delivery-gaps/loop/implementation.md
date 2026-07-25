@@ -1617,8 +1617,24 @@ lanes. `git diff --check` and strict Change validation also passed. The SSG buil
 non-fatal `::scroll-button(*)` CSS optimizer warning; it completed successfully and did not warrant a
 scope-expanding change. This accepts P4.5 and closes 5.5.
 
-P4 is fully accepted. The next Change checkpoint is intentionally external: 6.1 belongs to the owner of
-`refine-live-projection-experience`, and 6.2 consumes that owner's recorded result. This Change MUST NOT
-copy, rewrite, or preempt the user-owned loading-regression repair. It therefore stops at this dependency
-boundary: no broad gate, PR delivery, merge, archive/release, or manager walkthrough is authorized until
-6.1--6.2 receive their own evidence and focused acceptance.
+P4 is fully accepted. The next Change checkpoint is intentionally external: `refine-live-projection-experience`
+owns the realtime-projection contract. This Change MUST NOT copy, rewrite, or preempt that work. It therefore
+stops at this dependency boundary: no broad gate, PR delivery, merge, archive/release, or manager walkthrough
+is authorized until its current P1 evidence and this Change's 6.2 focused acceptance are complete.
+
+#### P5.1 external Server-emission revalidation: 2026-07-25 Asia/Shanghai
+
+The prior 6.1 blocker did not reproduce in the current tree. The cited `61612c3` commit is documentation-only;
+the current production path includes `95bc2b9`'s cache-hit dependency registration and invalidation-key
+retirement. Focused replay was run through the real Manager/Router owners:
+
+```text
+planning-root-service.current-snapshot.test.ts: 3/3 PASS
+git-repository-binding-router.test.ts:          7/7 PASS
+pnpm --filter @openspecui/server typecheck:git-tests: PASS
+```
+
+The default fork-pool local invocation remained running without producing a result, but the named tests pass
+deterministically in Vitest's single-worker thread pool. This is a runner characteristic, not a production
+failure. Checkpoint 6.1 is closed as a stale-blocker revalidation. Checkpoint 6.2 remains open: it must assess
+the applied P1 candidate from the loading Change and cannot be inferred from this replay.

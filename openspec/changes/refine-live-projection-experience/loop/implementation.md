@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
 1. Record the executable baseline for the owner's all-surface realtime waiting-experience Change.
 2. Keep actual source progress, scope, decisions, and evidence boundaries synchronized during application.
 3. Preserve the push-to-pull, authority, draft-protection, and visual-language decisions approved in research.
@@ -12,9 +12,12 @@ Original request (2026-07-23): "不用显示文字，可以用光影来替代，
 
 ## Implementation State
 
-### Pre-apply baseline
+### Historic planning baseline
 
-As of 2026-07-23 Asia/Shanghai, no production, test, CSS, or static-export source for this Change has been modified. `intake.md`, `research-plan.md`, and the planning checkpoints are complete. Six delta specs now define the durable behavioral scope, and `openspec validate refine-live-projection-experience --strict` passes. Production application starts with P1 only after its public-boundary red case is recorded.
+The 2026-07-23 baseline predates the unreviewed Web-first candidate recorded below. `intake.md`,
+`research-plan.md`, and the planning checkpoints define the durable behavioral scope; Change checkboxes remain
+unchecked until independent review accepts their named evidence. Production application resumes with the
+bounded P1-A public-boundary red case recorded in the current worker Goal.
 
 The implementation scope is frozen as follows:
 
@@ -24,18 +27,51 @@ The implementation scope is frozen as follows:
 
 ### Execution ledger
 
-> Execution order replanned 2026-07-24 (see `GOAL.md` "Execution Order"): **Phase 1** = P2 -> P3 -> P4 +
-> P5-static on the current v1 transport (worker advances now); **Phase 2** = P1 Server v2 protocol + adapter
-> upgrade, gated on the owner's P0 Server emission regression repair. The numbered order below is unchanged;
-> the phase column records implementation timing.
+> Execution order was replanned 2026-07-24: Phase 1 delivered the Web-first candidate on v1. The former P0
+> Server-emission blocker was revalidated on 2026-07-25 and is stale in the current tree. Phase 2 is now
+> eligible, but begins with one bounded vertical slice, P1-A Dashboard Summary, before Trends, Git, or Changes.
 
 | Order | Phase | Current state | Implementation owner | Mandatory evidence before moving on |
 | --- | --- | --- | --- | --- |
-| 1 | Phase 2 (gated on P0) | Not started | Server Projection Work boundary and Web realtime adapter | A public-boundary red case proves late A cannot commit after B; the green case proves matching identity/generation, bounded coalescing, and user-action bypass. |
+| 1 | Phase 2, P1-A | Authorized; not implemented | Dashboard Summary Projection Work boundary and its real Web adapter | A public-boundary red case proves late A cannot commit after B; the green case proves exact identity/generation acceptance and no-data subscription wake-up. |
 | 2 | Phase 1 | **Implemented (Slice 2A+2B)** | Web realtime component module, shared `Button`, and CSS token ownership | A focused visual/state fixture proves stable geometry, reduced-motion equivalence, hidden accessible status, and no changing command label. |
 | 3 | Phase 1 | **Migrated (9/9 routes)** | Dashboard, Changes, Archives, Specs, Schemas, Context, Notifications, Git, and Search owners | Each route has a current/partial/revalidating/refresh-error fixture where applicable; no route-wide wait branch hides a stable sibling. |
 | 4 | Phase 1 | **Migrated (detail + Config + Settings loading)** | OPSX, planning-config, Settings/translation, dialog/editor, and terminal-control owners | A real draft/editor/overlay red case proves a late remote update cannot overwrite local interaction; authority locks hit the mutation owner. |
 | 5 | Phase 1 static/a11y; Phase 2 gates | **Static truthfulness proven; reduced-motion/mobile/Storybook pending** | Static provider, route/component tests, and Storybook fixtures | Static truthfulness, reduced motion, mobile geometry, and SSG evidence are green before full repository gates. |
+
+### P0 Server-emission revalidation (2026-07-25 Asia/Shanghai)
+
+The asserted blocker was not a current source regression. `61612c3` is documentation-only; the relevant
+production correction is already present in `95bc2b9`:
+
+```text
+cache-hit reactive resolution
+  -> trackRootContextDependencies(cached state)
+  -> RuntimeInvalidationIndex context generation advances
+  -> invalidation-key mismatch retires the cache entry
+  -> reactive resolution returns B; B is the only cacheable snapshot
+```
+
+Focused replay used the current production owner, not a hand-called downstream callback:
+
+```text
+pnpm --filter @openspecui/server exec vitest run \
+  src/planning-root-service.current-snapshot.test.ts \
+  --pool=threads --maxWorkers=1 --testTimeout=10000 --hookTimeout=10000 --reporter=verbose
+  PASS: 3/3
+
+pnpm --filter @openspecui/server exec vitest run \
+  src/git-repository-binding-router.test.ts \
+  --pool=threads --maxWorkers=1 --testTimeout=15000 --hookTimeout=15000 --reporter=verbose
+  PASS: 7/7
+
+pnpm --filter @openspecui/server typecheck:git-tests
+  PASS
+```
+
+The default fork-pool invocation remained running without rendering a test result in this local harness;
+the single-worker thread-pool replay completed all named tests. This is runner behavior, not evidence of a
+failed Server assertion. No P0 source edit is authorized. P1 is unblocked, while broad gates remain closed.
 
 ## Implemented evidence (2026-07-24 Phase 1)
 
@@ -132,7 +168,8 @@ Owner feedback: skeleton 之间需要有 gap，结构需符合客观布局情况
 
 ### Residual risk / open items
 
-- P1 (Server v2 protocol) remains blocked on the owner's P0 Server emission regression repair; it is Phase 2 and was not touched.
+- P1 is no longer blocked by P0. P1-A is intentionally limited to the Dashboard Summary v2 vertical slice;
+  Trends, Git, Changes, P1 coalescing, and user-action bypass remain separate unchecked work.
 - P3 is complete (9/9 routes). P4 is partially done (detail routes + Config loading sections). Remaining P4: settings/translation panels, overlay/dialog/editor bodies, terminal-command controls (`AsyncAction`), file-preview/artifact-output. P5 static/a11y fixtures + Storybook + `build:ssg` + full `pnpm test:ci` remain open (Phase 1/2).
 - The inline `Loader2 animate-spin` / section-copy idiom persists in the remaining P4 surfaces; those migrate to atoms in the next pass.
 
@@ -140,7 +177,8 @@ Owner feedback: skeleton 之间需要有 gap，结构需符合客观布局情况
 
 - Added delta specs for `realtime-projection-experience`, `live-projection-work`, `web-rendering`, `opsx-ui-views`, `opsx-config-center`, and `opsx-terminal-panel`.
 - Ran `openspec validate refine-live-projection-experience --strict` successfully on 2026-07-23 Asia/Shanghai.
-- No source implementation task is complete yet; P1 remains the next active package.
+- The recorded Web-first candidate is not checkbox-complete until independent review accepts its named
+  evidence. P1-A is the next authorized applied-code package.
 
 Every TypeScript/TSX production and test file created by these packages must have its timestamped orthogonal-intent/original-request header. Each package starts with its named red case at the real public or mutation boundary, records its actual failure, then adds the green and mutation-resistance proof. A passing transpile-only fixture, a disabled-control assertion, or a manually invoked downstream callback does not satisfy that evidence requirement.
 
