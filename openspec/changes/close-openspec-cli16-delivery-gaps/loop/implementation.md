@@ -1908,3 +1908,25 @@ removing only the fixture asset handoff made the same product-chain case fail in
 `getWebAssetsDir -> startServer` with `Web assets not found`. No CLI mock, Web build, stale output, test-only bypass,
 worktree protocol expansion, broad gate, or browser walkthrough was used. Checkpoint 6.3a closes; 6.3 remains open
 for one complete corrected-head local gate replay, and 6.6 remains open for fresh PR checks.
+
+#### P5.6 corrected-head local gates accepted after clean-CI corrections: 2026-07-26 Asia/Shanghai
+
+After independent focused acceptance of 6.3a and 6.3b, Terra ran the complete local gate once in the required
+order. Every command completed without a failure:
+
+```text
+pnpm format:check     -> passed; 10 changed files checked
+pnpm lint:ci          -> passed; 994 files, 0 warnings / 0 errors
+pnpm typecheck        -> passed; all 15 workspace projects completed
+pnpm test:ci          -> passed; root 43/43 and ai-provider 18/18 counts retained
+pnpm test:browser:ci  -> passed; xterm 60 passed / 1 skipped; Web process exited zero
+git diff --check      -> passed
+strict Change validate -> passed
+```
+
+The detached serial test session did not retain every downstream unit-package total or the final Web Storybook
+count, so those unobserved counts are not asserted. The owning commands completed and allowed the ordered gate to
+advance. No file changed during verification, no generated Web output was created as fixture authority, and the
+Tool timeout remained unchanged. Automated browser lanes are component preparation evidence only; no manual,
+visual, multi-tab, or final end-to-end acceptance was performed. This closes 6.3. Checkpoint 6.6 remains open until
+the corrected commits and evidence are pushed to PR #207 and fresh remote checks pass.
