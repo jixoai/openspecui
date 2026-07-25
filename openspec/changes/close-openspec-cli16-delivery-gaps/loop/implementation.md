@@ -1325,3 +1325,19 @@ pnpm exec openspec validate close-openspec-cli16-delivery-gaps --strict
 All listed final commands passed; there was no runner divergence. No broad gate, PR action, archive/release
 action, static change, or browser/visual/multi-tab walkthrough was run. Checkpoint 5.3 is complete; P4.4
 and P4.5 remain independent and open.
+
+#### P4.3 independent reviewer acceptance: 2026-07-25 Asia/Shanghai
+
+Independent review confirms that the write root is the resolved Git metadata directory, not the launch
+project directory, and that the Router's current Code-binding validation plus explicit invalidation order
+is unchanged. The fixed-point fixture pre-caches the exact `reactiveReadFile` input before invoking the
+real Server-owned `touchDashboardGitRefreshStamp`; it does not rely on a watcher, a disabled UI control, or
+a hand-authored downstream callback. Replacing only the shared writer with the former native write leaves
+that cached input `null`, so the reported mutation evidence reaches the required cleanup transition.
+
+The reviewer independently reran `dashboard-git-projection.test.ts` and
+`git-repository-binding-router.test.ts` (`2 files / 8 tests`), Core typecheck, Server
+`typecheck:git-tests`, full Server typecheck, scoped Prettier/Oxlint, `git diff --check`, and strict Change
+validation. All passed. P4.3 is accepted; P4.4 is the sole next implementation package. P4.5, broad
+gates, PR delivery, merge, archive/release, and final browser/visual/multi-tab acceptance remain out of
+scope.
