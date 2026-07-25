@@ -69,6 +69,33 @@ The implementation scope is frozen as follows:
   visual atoms, layout, SSG work, broad gates, and owner browser walkthrough remain out of this slice. All P1-A
   checkboxes remain unchecked until independent review accepts the named evidence.
 
+### P1-A independent-review correction (2026-07-25 Asia/Shanghai)
+
+The first P1-A candidate is **not accepted**. The focused tests and typechecks passed, but they did not prove
+three production boundaries required by the v2 contract:
+
+1. **Cached A must become display-only on B's first wake.**
+   `useReactiveProjectionSubscription` restores the global fixed-key Summary cache as non-updating content.
+   The Summary adapter then initialized `hasDisplayData` as `false`, so its first B wake did not emit
+   `recompute-started`. A therefore remained visually current until B's deferred pull settled. The correction
+   must retain A but publish revalidation/display-only state immediately, and commit B as current only after the
+   matching B read returns. It must not key a client cache by a client-selected identity or create a second
+   Summary truth.
+2. **The loading benchmark must follow the migrated transport.**
+   `packages/server/bench/live-projection-loading.bench.ts` still predicates Dashboard cold/reload/page
+   completion on `isProjectionSnapshot(subscribeSummary)`. The v2 subscription deliberately has no snapshot, so
+   each affected scenario times out. It must measure `Summary wake -> Server-owned getSummary pull -> matching
+   typed read`, while Trends and Git retain their v1 benchmark paths.
+3. **The Web test must preserve its public input type.**
+   The A/B fixture models every tRPC subscription callback as `unknown`; it can inject an invalid Summary wake
+   without a compiler failure. Split the Summary callback fixture to use `DashboardSummaryInvalidation`, keep
+   legacy projection event typing separate for Trends/Git, and describe the fixture accurately as a mocked tRPC
+   callback boundary rather than a live transport.
+
+The existing v2-after-implementation A/B test remains useful mutation proof but not historical red evidence.
+The correction worker must add one named red/green/mutation proof for each listed production boundary before
+requesting another independent review. No P1-A checkbox may be closed during the correction.
+
 ### P0 Server-emission revalidation (2026-07-25 Asia/Shanghai)
 
 The asserted blocker was not a current source regression. `61612c3` is documentation-only; the relevant

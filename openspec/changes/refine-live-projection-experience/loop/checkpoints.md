@@ -44,10 +44,11 @@ outside P1-A.
 - [ ] 2.2 P1-A red evidence reaches the real Dashboard Summary adapter: A invalidates, B rebinds, A pull resolves late, and the pre-fix adapter can publish A incorrectly. _(Phase 2)_
 - [ ] 2.3 P1-A green and mutation-resistance evidence proves only a matching identity/generation pull commits; removing the exact acceptance gate fails the same late-A fixture. _(Phase 2)_
 
-P1-A evidence is recorded in `loop/implementation.md` as of 2026-07-25: the real Server/tRPC fixture and the
-v2-after-implementation Web acceptance fixed point pass, and bypassing the exact active-wake gate makes late A
-overwrite B. No historical pre-fix red was obtained, so 2.2 and every P1-A checkbox remain unchecked pending
-independent review; the remove-guard result is mutation resistance, not a substitute for that red.
+P1-A evidence is recorded in `loop/implementation.md` as of 2026-07-25. Independent review rejected the
+first candidate: a remounted cached A was not demoted to display-only on B's first wake, the loading benchmark
+still waited for the removed Summary snapshot payload, and the Web A/B fixture erased its public wake type.
+2.1-2.3 and every P1-A checkbox remain unchecked. The next correction is limited to those exact findings; the
+remove-guard result remains mutation resistance, not a substitute for 2.2's missing historical red.
 
 - [ ] 2.4 P2 visual primitives implemented and tested: composable root/data attributes, stable skeleton geometry, local revalidation/settle cues, truthful progress, reduced-motion path, hidden accessible status, and stable command labels. _(Phase 1; split 2A state law/adapters incl. the Web-side root-cause fix to `useAuthoritativeSubscription` reconnect/stopped/complete not flipping `isLoading` when cached data exists, then 2B atoms/CSS)_
 - [ ] 2.5 P3 inventory/regional routes migrated: Dashboard, Changes, Archives, Specs, Schemas, Context, Notifications, Git, and Search use the shared model without hiding current sibling content behind a route-wide wait branch. _(Phase 1; adapter targets v1 transport)_
