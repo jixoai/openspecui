@@ -66,7 +66,7 @@ Focused reviewer acceptance is a hard predecessor of the next package and every 
 - [x] 5.1 Publish/use browser-safe Zod hosted envelope schemas and one typed decoder; malformed health/Store/Root/mutation payloads become contract errors, never asserted public contracts.
 - [x] 5.2 Remove fabricated static CLI result evidence and share source-aware mapping so static provenance explicitly carries no backend execution evidence. Reopened 2026-07-25 corrections are complete: whole-Catalog static policy is explicit, route Store ids cannot become snapshot provenance, and every new provenance branch uses exhaustive `ts-pattern` evidence.
 - [x] 5.3 Move Dashboard Git refresh stamp reads/writes through the shared physical/reactive path; prove a committed refresh settles observation before a dependent projection reads it, and removing settlement fails.
-- [ ] 5.4 Replace `as any`/suppression-based public-boundary tests with checked fixtures and add accurate timestamped headers to every changed TS/TSX source and test file in the reviewed range.
+- [x] 5.4 Replace `as any`/suppression-based public-boundary tests with checked fixtures and add accurate timestamped headers to every changed TS/TSX source and test file in the reviewed range.
 - [ ] 5.5 Run focused static-provider/SSG, App, Core, and Server tests for P4; obtain focused reviewer acceptance before broad gates.
 
 ## 6. P5 External Regression, Gates, and Manager Walkthrough

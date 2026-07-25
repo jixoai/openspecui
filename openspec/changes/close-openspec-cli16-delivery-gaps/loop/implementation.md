@@ -1529,3 +1529,38 @@ cached `git diff --check` had passed, the same seven-file commit used `--no-veri
 
 Checkpoint 5.4 remains unchecked pending independent review of P4.4-B. P4.5, broad gates, PR delivery,
 merge, archive/release, and browser/visual/multi-tab/end-to-end walkthroughs remain out of scope.
+
+#### P4.4-B independent reviewer acceptance: 2026-07-25 Asia/Shanghai
+
+Independent review confirms that the raw eight-path audit correctly distinguishes the two legal directives
+from missing headers: the CLI shebang and Worker reference directive remain physically first and their
+existing headers follow. Each of the six correction paths now has an accurate timestamped header with no
+more than three orthogonal intents and an applicable quoted original request. In particular,
+`export.test.ts` truthfully describes its CLI-backed schema projection; it no longer claims that export
+avoids the CLI runner.
+
+For every corrected path, the reviewer removed the new initial `/** ... */` block in memory and compared
+the remainder byte-for-byte with the parent revision. All six comparisons passed, so the commit changes no
+runtime code, import/export, test, or whitespace after the header. The reviewer independently reran CLI,
+Core, and Web typechecks, scoped Prettier/Oxlint, `git diff --check`, and strict Change validation; all
+passed. This accepts P4.4-B and closes 5.4. P4.5 is now the sole next package; broad gates, PR delivery,
+merge, archive/release, and manager-owned final walkthroughs remain out of scope.
+
+### P4.5 focused P4 verification authorization: 2026-07-25 Asia/Shanghai
+
+P4.5 is a verification package, not permission to modify more production owners. It must replay the
+accepted contracts through their four direct surfaces:
+
+```text
+Core hosted contract      -> malformed hosted envelope is a typed contract error
+App browser ingress       -> malformed Health/Store/Root/Mutation cannot become a success projection
+Web static provider / SSG -> published static Reference provenance remains source-distinct
+Server projections        -> Catalog, Git refresh, and Access Gate retain their accepted owner boundaries
+```
+
+Run the recorded focused Vitest suites, checked P4 type lanes, and the required fresh Web SSG build for
+those owners. Do not run global format/lint/typecheck/test/browser gates, perform any browser/visual/multi-tab
+walkthrough, modify source merely to make a test pass, touch the loading Change, update a PR, merge,
+archive, or release. On the first failure, stop after recording the exact command, output, affected owner,
+and whether the failure arises in the concurrent user-owned tree; do not speculate or repair it. On green,
+record the exact command/result set and leave 5.5 unchecked for independent reviewer acceptance.
