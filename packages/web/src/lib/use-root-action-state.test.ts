@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-25 Asia/Shanghai):
+ * 1. Verify Root Context readiness selects the action authority state.
+ * 2. Keep stale, loading, failure, and static projections display-only for mutations.
+ *
+ * Original request (2026-07-15): "我们刻意开发了一个响应式内核，这是 openspecui 对 openspec 最大的增强。"
+ */
 import type { RootContext, RootContextState } from '@openspecui/core'
 import { describe, expect, it } from 'vitest'
 import { selectRootActionState } from './use-root-action-state'

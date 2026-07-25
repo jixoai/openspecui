@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-25 Asia/Shanghai):
+ * 1. Render the live OpenSpec schema workspace from its reactive configuration projection.
+ * 2. Preserve schema selection across refreshed data while exposing loading and error states.
+ *
+ * Original request (2026-07-23): "现在页面数据的加载数据非常慢。"
+ */
 import { SpecListSkeleton } from '@/components/realtime'
 import { useOpsxConfigBundleSubscription } from '@/lib/use-opsx'
 import { Layers } from 'lucide-react'

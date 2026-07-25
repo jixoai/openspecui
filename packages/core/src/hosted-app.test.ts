@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-25 Asia/Shanghai):
+ * 1. Verify normalized hosted App and embedded Project Web launch URLs.
+ * 2. Verify hosted-shell protocol capability and backend-health contracts.
+ *
+ * Original request (2026-07-15): "把 --app 模式提上日程。因为 app 模式提供了多标签管理。"
+ */
 import { describe, expect, it } from 'vitest'
 import {
   HOSTED_SHELL_PROTOCOL_VERSION,

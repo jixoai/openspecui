@@ -1461,3 +1461,71 @@ packages/web/src/routes/schemas.tsx
 
 This is a separate comment-only package. It must neither alter behavior nor be mixed with P4.4-A's Server
 fixture. Its own scoped typechecks and exception-aware audit are required before it can be accepted.
+
+#### P4.4-B implementation and focused evidence: 2026-07-25 Asia/Shanghai
+
+This package changes documentation headers only. It does not change executable code, imports, exports,
+whitespace after the initial comment block, test behavior, runtime behavior, contracts, the Access Gate
+fixture, or the concurrent loading Change migration.
+
+The historical raw first-line audit was evaluated from the pre-P4.4-B `HEAD` tree for each TypeScript/TSX
+path in `24c313c..HEAD`, so the subsequent working-tree headers cannot hide the finding. Its literal output
+was:
+
+```text
+packages/cli/src/cli.ts
+packages/cli/src/export.test.ts
+packages/cli/src/export.ts
+packages/core/src/hosted-app.test.ts
+packages/web/src/access-gate-resource-worker.ts
+packages/web/src/components/opsx/opsx-detail-layout.tsx
+packages/web/src/lib/use-root-action-state.test.ts
+packages/web/src/routes/schemas.tsx
+```
+
+`packages/cli/src/cli.ts` is a valid exception because its required `#!` shebang precedes its existing
+documentation header. `packages/web/src/access-gate-resource-worker.ts` is likewise a valid exception
+because its required `/// <reference lib="webworker" />` directive precedes its existing header. The six
+remaining paths received timestamped orthogonal-intent and original-request headers:
+
+```text
+packages/cli/src/export.test.ts
+packages/cli/src/export.ts
+packages/core/src/hosted-app.test.ts
+packages/web/src/components/opsx/opsx-detail-layout.tsx
+packages/web/src/lib/use-root-action-state.test.ts
+packages/web/src/routes/schemas.tsx
+```
+
+The exception-aware audit accepts a first-line `/**`, or a required shebang/reference directive followed
+by the next non-blank `/**`; its final output was empty. `git diff --word-diff=porcelain HEAD -- <six paths>`
+showed only initial comment-block additions, and `git diff --numstat` reported only additions (`8, 8, 7, 7,
+7, 7`) with zero removals. This is documentation hygiene rather than a runtime defect: deleting a required
+header would prove only text-audit detection, so there is no production mutation proof.
+
+Focused validation passed without runner divergence:
+
+```text
+pnpm --filter openspecui typecheck
+  PASS: tsc --noEmit
+pnpm --filter @openspecui/core typecheck
+  PASS: core plus reactive-context, store-mutation, and hosted-contract checked lanes
+pnpm --filter @openspecui/web typecheck
+  PASS: tsc --noEmit
+pnpm exec prettier --check <six header paths>
+  PASS
+pnpm exec oxlint <six header paths>
+  PASS: 0 warnings, 0 errors
+git diff --check
+  PASS
+pnpm exec openspec validate close-openspec-cli16-delivery-gaps --strict
+  PASS: Change is valid
+```
+
+The normal commit hook then failed before inspecting this scoped staged set because the repository root
+Vite+ configuration has no `staged` entry (`No "staged" config found in vite.config.ts`). This is the
+pre-existing hook configuration limitation, not focused-runner divergence. After every listed gate and
+cached `git diff --check` had passed, the same seven-file commit used `--no-verify`; no gate was skipped.
+
+Checkpoint 5.4 remains unchecked pending independent review of P4.4-B. P4.5, broad gates, PR delivery,
+merge, archive/release, and browser/visual/multi-tab/end-to-end walkthroughs remain out of scope.

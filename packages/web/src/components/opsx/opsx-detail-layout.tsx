@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-25 Asia/Shanghai):
+ * 1. Compose reusable OPSX detail headers, pages, tabs, diagnostics, and state panels.
+ * 2. Preserve shared-element navigation and geometry-stable loading presentation.
+ *
+ * Original request (2026-07-23): "现在页面数据的加载数据非常慢。"
+ */
 import { DetailPanelSkeleton } from '@/components/realtime'
 import { Tabs, type Tab } from '@/components/tabs'
 import { cn } from '@/lib/utils'

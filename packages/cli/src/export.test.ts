@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (created 2026-07-25 Asia/Shanghai):
+ * 1. Verify static export produces the expected OpenSpec project snapshot.
+ * 2. Verify export combines local planning artifacts with CLI-backed schema projection.
+ * 3. Cover Reference-aware export materialization and publication behavior.
+ *
+ * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
+ */
 import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

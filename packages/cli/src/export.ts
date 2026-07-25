@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * 1. Build a static OpenSpec project snapshot from its resolved planning artifacts.
+ * 2. Preserve Reference-aware export and publication-redaction policy.
+ * 3. Package and launch the static site with the locally resolved Web distribution.
+ *
+ * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
+ */
 import {
   CliExecutor,
   ConfigManager,
