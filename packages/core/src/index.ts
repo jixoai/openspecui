@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Expose the public Core package contract through one stable barrel.
  * 2. Keep filesystem, CLI, Root Context, workflow, live, and static projection types source-distinct.
  * 3. Publish browser-safe subpath contracts, including Dashboard Summary v2 and the external Codex command
@@ -709,6 +709,7 @@ export {
 // Tool initialization state detection
 export {
   TOOL_WORKFLOW_TO_SKILL_DIR,
+  createToolInitStateProjection,
   getExternalCodexCommandObservationRoot,
   getToolInitStates,
   type ToolInitDelivery,

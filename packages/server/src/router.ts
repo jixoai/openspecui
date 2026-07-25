@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Register lease-scoped planning-root document, OPSX, regional Dashboard, and archive procedures.
  * 2. Register CLI, Root Context, reactive launch-tool initialization, configuration, Store, and terminal-result projections.
  * 3. Register binding-safe Git, Dashboard Summary v2, terminal, system, notification, and recovery procedures.
@@ -48,6 +48,7 @@ import {
   BatchTranslateInputSchema,
   classifyStoreCliResult,
   CodeEditorThemeSchema,
+  createToolInitStateProjection,
   DashboardConfigSchema,
   DashboardGitSnapshotSchema,
   DashboardSummaryInvalidationSchema,
@@ -61,7 +62,6 @@ import {
   getDefaultCliCommandString,
   getDetectedProjectTools,
   getRootContextCliSelector,
-  getToolInitStates,
   getWatcherRuntimeStatus,
   GitConfigSchema,
   NotificationSettingsSchema,
@@ -2129,12 +2129,13 @@ export const cliRouter = router({
       })
     )
     .subscription(({ ctx, input }) => {
+      const projectToolInitStates = createToolInitStateProjection(ctx.projectDir, {
+        delivery: input.delivery,
+        workflows: input.workflows,
+      })
       return createReactiveSubscription(async () => {
         await ctx.toolCommandObservation.start()
-        return getToolInitStates(ctx.projectDir, {
-          delivery: input.delivery,
-          workflows: input.workflows,
-        })
+        return projectToolInitStates()
       })
     }),
 
