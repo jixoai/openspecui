@@ -1389,6 +1389,45 @@ and green commands/results in this file and leaves 5.4 unchecked for independent
 broad gates, PR delivery, merge, archive/release, and browser/visual/multi-tab/end-to-end walkthroughs
 remain out of scope.
 
+#### P4.4-A implementation and focused evidence: 2026-07-25 Asia/Shanghai
+
+This package changes test fixtures only. It does not change `access-gate.ts`, Server registration,
+protected-path policy, WebSocket, PTY, CLI, App, or loading behavior. The HTTP fixture now constructs a
+real `new Hono()` application, registers
+`app.use('*', createAccessGateMiddleware(gate))`, provides an actual `/api/protected` route, and submits a
+real `Request('http://openspecui.test/api/protected', ...)`. The missing-credential assertion proves the
+complete boundary result as `[response.status, protectedRouteCalls()] === [401, 0]`; the matching exact
+Bearer returns the protected JSON body, and a null gate reaches the same protected route.
+
+The pre-change hygiene observation was static, not a production defect: `rg` found the old fixture's
+`as any` at line 29 and its preceding ESLint suppression at line 28. That fabricated Context and direct
+middleware call passed the old 9-test Vitest suite, but it was not a checked public HTTP boundary and was
+absent from `tsconfig.transport-tests.json`.
+
+For mutation resistance, the worker temporarily removed only the fixture line
+`app.use('*', createAccessGateMiddleware(gate))`, without changing the route or assertions. The exact
+missing-credential test then failed at its named fixed point with received `[200, 1]` rather than expected
+`[401, 0]`: the request reached the real protected route. The registration was restored immediately before
+final verification. This is distinct from the hygiene observation and proves the fixture crosses Hono's
+actual middleware registration rather than a mocked `next` or direct downstream call.
+
+Final focused commands and outcomes:
+
+```text
+pnpm --filter @openspecui/server exec vitest run src/access-gate.test.ts --no-file-parallelism
+  PASS: 1 file, 9 tests
+pnpm --filter @openspecui/server typecheck:transport-tests
+  PASS: tsc -p tsconfig.transport-tests.json --noEmit
+pnpm exec prettier --check packages/server/src/access-gate.test.ts packages/server/tsconfig.transport-tests.json
+  PASS
+pnpm exec oxlint packages/server/src/access-gate.test.ts
+  PASS: 0 warnings, 0 errors
+```
+
+There was no runner divergence. Checkpoint 5.4 remains unchecked pending independent review of P4.4-A.
+P4.4-B, P4.5, broad gates, PR delivery, merge, archive/release, and browser/visual/multi-tab/end-to-end
+walkthroughs remain out of scope.
+
 #### P4.4-B Header audit deferral
 
 The raw reviewed-range header audit reports eight paths because it assumes the first physical line must be

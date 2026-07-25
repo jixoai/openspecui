@@ -1,16 +1,19 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
- * 1. Prove the Access Gate enforces the shared Bearer across HTTP middleware.
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * 1. Prove the Access Gate enforces the shared Bearer through a real Hono HTTP registration.
  * 2. Prove WebSocket connection params and PTY first-message auth reject bad/missing credentials.
  * 3. Prove the gate is absent-by-default (unguarded pass-through) and never leaks the secret.
  *
  * Original request (2026-07-15): "我们可以在 cli 上新增一个 --auth 或者 --password。这样后端接口就必须带上这个 http header。"
+ * Delivery correction (2026-07-24): "每项先明确一个生产 owner、一个精准红例、一个绿例。"
  * Section 8.9-8.14 coverage.
  */
 import { generateAccessGateCredential } from '@openspecui/core'
-import { describe, expect, it, vi } from 'vitest'
+import { Hono } from 'hono'
+import { describe, expect, it } from 'vitest'
 import {
   ACCESS_GATE_NON_LOOPBACK_WARNING,
+  type AccessGate,
   checkWebSocketConnectionParams,
   createAccessGate,
   createAccessGateMiddleware,
@@ -19,59 +22,77 @@ import {
   parsePtyAuthFirstMessage,
 } from './access-gate.js'
 
-function mockContext(authorization: string | undefined) {
+function createProtectedApp(gate: AccessGate) {
+  const app = new Hono()
+  let protectedRouteCalls = 0
+
+  app.use('*', createAccessGateMiddleware(gate))
+  app.get('/api/protected', (c) => {
+    protectedRouteCalls += 1
+    return c.json({ protected: true })
+  })
+
   return {
-    req: {
-      header: vi.fn((name: string) => (name === 'Authorization' ? authorization : undefined)),
-    },
-    json: vi.fn((body: unknown, status: number) => ({ body, status })),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any
+    app,
+    protectedRouteCalls: () => protectedRouteCalls,
+  }
 }
 
-async function runMiddleware(
-  authorization: string | undefined,
-  gate: ReturnType<typeof createAccessGate>
-) {
-  const c = mockContext(authorization)
-  const next = vi.fn()
-  const handler = createAccessGateMiddleware(gate)
-  await handler(c, next)
-  return { c, next }
+function protectedRequest(authorization?: string) {
+  return new Request('http://openspecui.test/api/protected', {
+    headers: authorization === undefined ? undefined : { Authorization: authorization },
+  })
 }
 
 describe('access gate', () => {
   const credential = generateAccessGateCredential()
 
   it('is a pass-through when no gate is configured', async () => {
-    const { c, next } = await runMiddleware(undefined, null)
-    expect(next).toHaveBeenCalled()
-    expect(c.json).not.toHaveBeenCalled()
+    const { app, protectedRouteCalls } = createProtectedApp(null)
+
+    const response = await app.request(protectedRequest())
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ protected: true })
+    expect(protectedRouteCalls()).toBe(1)
   })
 
   it('rejects HTTP requests without a credential with 401', async () => {
     const gate = createAccessGate({ credential, loopback: true })
-    const { c, next } = await runMiddleware(undefined, gate)
-    expect(next).not.toHaveBeenCalled()
-    expect(c.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Unauthorized' }), 401)
+    const { app, protectedRouteCalls } = createProtectedApp(gate)
+
+    const response = await app.request(protectedRequest())
+
+    expect([response.status, protectedRouteCalls()]).toEqual([401, 0])
+    expect(await response.json()).toEqual({
+      error: 'Unauthorized',
+      reason: 'Authorization credential is required.',
+    })
   })
 
   it('accepts HTTP requests with the matching Bearer credential', async () => {
     const gate = createAccessGate({ credential, loopback: true })
-    const { c, next } = await runMiddleware(credential.authorizationHeader, gate)
-    expect(next).toHaveBeenCalled()
-    expect(c.json).not.toHaveBeenCalled()
+    const { app, protectedRouteCalls } = createProtectedApp(gate)
+
+    const response = await app.request(protectedRequest(credential.authorizationHeader))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ protected: true })
+    expect(protectedRouteCalls()).toBe(1)
   })
 
   it('rejects an incorrect credential without echoing it', async () => {
     const gate = createAccessGate({ credential, loopback: true })
-    const { c, next } = await runMiddleware('Bearer wrong-secret', gate)
-    expect(next).not.toHaveBeenCalled()
-    expect(c.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Unauthorized' }), 401)
+    const { app, protectedRouteCalls } = createProtectedApp(gate)
+
+    const response = await app.request(protectedRequest('Bearer wrong-secret'))
+    const body = await response.text()
+
+    expect(response.status).toBe(401)
+    expect(protectedRouteCalls()).toBe(0)
     // The response must never contain the presented or real secret.
-    const body = c.json.mock.calls[0]?.[0] as Record<string, unknown>
-    expect(JSON.stringify(body)).not.toContain('wrong-secret')
-    expect(JSON.stringify(body)).not.toContain(credential.credential)
+    expect(body).not.toContain('wrong-secret')
+    expect(body).not.toContain(credential.credential)
   })
 
   it('extractBearerCredential accepts only a non-empty Bearer header', () => {

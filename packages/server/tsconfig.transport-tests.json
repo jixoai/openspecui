@@ -4,6 +4,7 @@
     "types": ["node"]
   },
   "include": [
+    "src/access-gate.test.ts",
     "src/archive-router-subscription.test.ts",
     "src/hosted-admission.test.ts",
     "src/store-mutation-ledger-transport.test.ts",
