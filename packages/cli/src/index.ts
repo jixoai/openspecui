@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Start the embedded Server with one resolved Project Web/preview asset root.
  * 2. Resolve one Access Gate credential and deliver it to Server, private browser, and worktree children.
  * 3. Keep inherited child credentials silent while coordinating deterministic runtime teardown.
@@ -7,6 +7,7 @@
  *
  * Original request (2026-07-15): "新增一个 --auth 或者 --password。"
  * Delivery correction (2026-07-24): one resolved credential must reach Server and Project Web.
+ * Review correction (2026-07-26): explicit Web asset roots are presence-sensitive.
  */
 import {
   generateAccessGateCredential,
@@ -134,7 +135,14 @@ export function createWorktreeServerWorker(options: CreateWorktreeServerWorkerOp
 }
 
 function getWebAssetsDir(configuredDir?: string): string {
-  const candidates = configuredDir ? [resolve(configuredDir)] : getWebAssetsDirCandidates(__dirname)
+  let candidates: string[]
+  if (configuredDir === undefined) {
+    candidates = getWebAssetsDirCandidates(__dirname)
+  } else if (configuredDir.length === 0) {
+    candidates = []
+  } else {
+    candidates = [resolve(configuredDir)]
+  }
   for (const candidate of candidates) {
     if (existsSync(candidate) && statSync(candidate).isDirectory()) {
       return candidate

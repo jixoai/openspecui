@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Cross real CLI private Direct/App launch and the public Project Web shell.
  * 2. Cross App locator binding, iframe bootstrap, and child-style fragment consumption/removal.
  * 3. Terminate after protected tRPC HTTP, tRPC subscription, and PTY auth-first succeed.
@@ -7,6 +7,7 @@
  *
  * Original request (2026-07-24): "Add the strongest feasible terminating gated Direct/App fixture."
  * Delivery correction (2026-07-25): the clean-CI fixture must own its physical Web assets.
+ * Review correction (2026-07-26): an explicit empty Web root must not select packaged assets.
  */
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -131,6 +132,34 @@ function installBrowserWindow(initialUrl: string): FixtureBrowserWindow {
 }
 
 describe('gated Direct/App Project Web product chain', () => {
+  it('rejects an explicitly empty Web asset root instead of using packaged candidates', async () => {
+    const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-empty-web-root-'))
+    tempDirs.push(projectDir)
+    const port = await findAvailablePort(nextPreferredPort, 100)
+    nextPreferredPort = port + 1
+
+    const outcome = await startServer({
+      projectDir,
+      port,
+      enableWatcher: false,
+      webAssetsDir: '',
+    }).then(
+      (server) => ({ kind: 'started' as const, server }),
+      (error: unknown) => ({ kind: 'rejected' as const, error })
+    )
+
+    if (outcome.kind === 'started') {
+      servers.push(outcome.server)
+      throw new Error('CLI silently replaced the explicit empty Web asset root with a default.')
+    }
+    if (!(outcome.error instanceof Error)) {
+      throw new Error('CLI rejected the empty Web asset root without an Error.')
+    }
+    expect(outcome.error.message).toBe(
+      'Web assets not found. Make sure to build the web package first.'
+    )
+  })
+
   it('terminates after private launch, public shell, HTTP, subscription, and PTY auth-first', async () => {
     const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-gated-product-chain-'))
     tempDirs.push(projectDir)
