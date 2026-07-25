@@ -1,9 +1,10 @@
 <!--
-Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
 1. Track independently verifiable delivery-gap corrections from focused proof through protected delivery.
 2. Separate external loading-regression recovery, automated preparation evidence, and manager walkthroughs.
 3. Preserve honest migration of the incomplete old Change rather than archival by assertion.
 4. Prevent full-gate churn before a named production boundary is accepted.
+5. Split clean-CI-only failures into independently reviewable correction packages.
 
 Original request (2026-07-23): "走查任务直接到新的change中做。你目前的工作就是：review + interview + replan(write new openspec change)"
 Original request (2026-07-21): "focused review 未通过，不跑全量门禁。"
@@ -73,10 +74,12 @@ Focused reviewer acceptance is a hard predecessor of the next package and every 
 
 - [x] 6.1 Revalidated the alleged `refine-live-projection-experience` Server-emission failure against the current owner. It is stale rather than an open repair: Root Snapshot 3/3, real Git Router 7/7, and the Git checked lane pass; the evidence and current `95bc2b9` cache/invalidation path are recorded in that Change.
 - [x] 6.2 Confirmed `refine-live-projection-experience` P1-A candidate `d1740335` through independent focused tests, static contract review, mutation evidence, and fresh isolated Dashboard benchmarks. No external source fix was copied into this Change.
-- [x] 6.3 Clean source-resolution correction `7f18cd9` is independently accepted: isolated no-`dist` App typecheck is green, restoring the old partial App `paths` makes the same fixture red, and restoring the correction is green again. The corrected head then passed format, lint, all workspace typechecks/tests, and both component browser lanes.
+- [ ] 6.3 Reconcile clean CI with the locally accepted candidate only after 6.3a and 6.3b receive focused review, then replay the complete local gate once without relying on generated Web output or widened timeouts.
+- [ ] 6.3a Make the real gated CLI product-chain fixture self-contained in a clean checkout by passing a physical minimal Web asset root through a legitimate CLI runtime owner; keep `startServer`, public shell, HTTP, WS, and PTY production paths real, and prove removing the asset-root handoff makes the same fixture red.
+- [ ] 6.3b Diagnose and correct the Tool `commands/update` reactive creation boundary in a clean or isolated environment. Preserve every missing-path dependency across recomputes; prove the exact owner defect with focused red/green and mutation-resistance evidence, or record deterministic CI timing evidence without increasing the timeout.
 - [x] 6.4 Removed existing generated Web outputs with the environment-compatible idempotent cleanup, then the focused static-provider tests and clean `pnpm --filter @openspecui/web build:ssg` completed with zero exit.
 - [x] 6.5 Audited the current publishable surface against the existing 6.x, Hosted, static References, Config, loading, and Summary-v2 changesets; every changed published package/behavior is covered and no duplicate changeset is required. App remains private.
-- [ ] 6.6 PR #207 was updated to `1e89435`: fresh Changeset Gate and CI Scope passed, while Fast Gate failed in clean App typecheck and the Browser aggregate failed because its shards were skipped behind Fast Gate. Correct the clean source-resolution boundary, replay focused/local gates, update the PR again, and require fresh checks for the corrected head.
+- [ ] 6.6 PR #207 head `231be60` passed Changeset Gate, CI Scope, and clean App typecheck, then Fast Gate failed only `browser-access-gate-product-chain.test.ts` and `tool-subscription-router.test.ts` (`2` failed / `490` passed). Browser shards were skipped behind Fast Gate. Land accepted 6.3a/6.3b corrections, replay 6.3 once, update the PR, and require fresh checks.
 
 ### Manager-only final walkthrough ledger
 

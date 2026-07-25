@@ -4,7 +4,7 @@ Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
 2. Define the evidence order that prevents recurrence of mock-only or terminal-only proof.
 3. Preserve external loading-change ownership and manager-only final walkthroughs.
 4. List the exact loopback conditions that require a new owner decision.
-5. Record accepted P4 production-owner fixed points and mutation-resistance evidence.
+5. Record accepted P4/P5 fixed points and clean-CI rejection evidence.
 
 Original request (2026-07-23): "走查任务直接到新的change中做。你目前的工作就是：review + interview + replan(write new openspec change)"
 Original request (2026-07-19): "不要在 6.11 这个任务上徘徊了。你得把它拆开成多个独立的小问题，然后把阻塞的问题发给我，我来决策推进。"
@@ -1819,3 +1819,40 @@ owning pnpm process completed normally. No file changed during verification, no 
 added by the typecheck configuration correction, and the existing changeset audit remains valid. This recloses
 6.3. Checkpoints 6.3-6.5 are green on the corrected local candidate; 6.6 now requires a fresh PR update and checks
 for the corrected head before the manager-only walkthrough can begin.
+
+#### P5.6 corrected-head clean CI rejection: 2026-07-25 Asia/Shanghai
+
+PR #207 was updated to `231be60`. Run `30163937799` passed Changeset Gate, CI Scope, dependency installation,
+pinned OpenSpec preparation, and the clean App typecheck that rejected the prior head. Fast Gate reached the Server
+unit suite and finished with `72` files / `490` tests passing and exactly two failures. Browser shards were skipped
+behind Fast Gate; the aggregate Browser failure is therefore orchestration evidence, not a browser-test failure.
+
+```text
+clean checkout
+   |
+   +-- gated product-chain fixture -> CLI startServer
+   |                                  -> getWebAssetsDir()
+   |                                  -> no packages/web/dist or cli/web
+   |                                  -> "Web assets not found"
+   |
+   +-- Tool subscription -> observe missing Launch update.md
+                       -> create unexpected explore.md -> replacement emission
+                       -> create expected update.md    -> no accepted emission in four fallback cycles
+```
+
+The first failure is not a product-chain contract failure. The fixture reaches the real CLI asset resolver but
+quietly relied on stale local `packages/web/dist`. Its correction must create a physical minimal Web asset root and
+pass it through a legitimate CLI runtime asset owner into the same real `startServer`; it may not mock the CLI,
+prebuild Web, accept stale output, or add a production test-only bypass. Removing the handoff must make the same
+fixture red at public-shell admission.
+
+The second failure may be a reactive dependency-retirement defect or clean-runner timing. Raising the four-cycle
+budget is not an accepted fix. The correction must first reproduce in an isolated/clean environment and inspect the
+dependency set after the `explore.md` recompute: the still-missing expected `update.md` must remain observable until
+creation. A production owner change is authorized only if that fixed point is red and removing/bypassing its exact
+transition makes the corrected focused test fail. If no owner defect is reproducible, record repeated timing and
+dependency evidence and stop for review rather than weakening the assertion.
+
+Checkpoint 6.3 is reopened and decomposed into 6.3a/6.3b. Checkpoint 6.6 remains open. No full gate, browser
+walkthrough, PR update, merge, archive, or release is authorized until both focused packages receive independent
+review.
