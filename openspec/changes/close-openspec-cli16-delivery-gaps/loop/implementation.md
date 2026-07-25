@@ -1930,3 +1930,37 @@ advance. No file changed during verification, no generated Web output was create
 Tool timeout remained unchanged. Automated browser lanes are component preparation evidence only; no manual,
 visual, multi-tab, or final end-to-end acceptance was performed. This closes 6.3. Checkpoint 6.6 remains open until
 the corrected commits and evidence are pushed to PR #207 and fresh remote checks pass.
+
+#### P5.6 repeated clean-CI Tool rejection: 2026-07-26 Asia/Shanghai
+
+PR #207 head `e7716a5` ran as CI `30165778790`. Changeset Gate and CI Scope passed, and Fast Gate passed the
+previously failing physical Web asset product-chain fixture. Fast Gate still failed after `4m11s` on exactly one
+test: `tool-subscription-router.test.ts` again missed `Launch update command creation` at line 85. The Browser shard
+was skipped behind Fast Gate and its aggregate failed as a dependency consequence.
+
+This is the same public subscription stage that failed at prior head `231be60`; two separate clean runners now
+provide the fixed-point red. The earlier evidence-only classification is therefore insufficient. It correctly
+proved that a normal isolated recompute retains the replacement `update.md` state and that focused settlement is
+usually below one second, but it did not model the complete Server suite's scheduling and filesystem load.
+
+Current source makes the scalability hypothesis concrete without yet claiming its final cause:
+
+```text
+subscribeToolInitStates(commands/update)
+              |
+              v
+getToolInitStates
+  -> clear every Tool artifact cache root on each recompute
+  -> reactiveExists for every workflow path of every supported Tool
+  -> one missing-path fallback timer per absent artifact
+              |
+              +-- focused run: current dependency, settles quickly
+              +-- full clean suite: same second creation misses four wall-clock cycles twice
+```
+
+Checkpoint 6.3b is reopened as an owner-scalability correction, and 6.3 is reopened because local green did not
+reconcile clean CI. The worker must first measure the Tool projection's cache/timer/dependency fanout and move it to
+a smaller artifact-inventory observation boundary if the evidence confirms that model. Expected, unexpected,
+legacy, Launch-local, and environment-global Codex semantics must remain unchanged. A generic reactive-kernel
+change, timeout increase, sleep, CI retry, or weakened public assertion remains unauthorized without a distinct
+fixed-point red. Checkpoints 6.6-6.12, merge, archive, and release remain open.
