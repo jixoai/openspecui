@@ -1237,3 +1237,31 @@ manual removal of generated SSG directories was rejected by the execution enviro
 the configured SSG output successfully. P4.2 is accepted. P4.3 is the only next implementation package;
 P4.4--P4.5, broad gates, PR delivery, merge, archive/release, and final browser/visual/multi-tab
 acceptance remain out of scope.
+
+### P4.3 Dashboard Git refresh-stamp settlement authorization: 2026-07-25 Asia/Shanghai
+
+The next package is limited to the Server-owned refresh input:
+
+```text
+Dashboard/Git refresh mutation
+  -> touchDashboardGitRefreshStamp()
+  -> shared writePhysicalReactiveFile() rooted at resolved Git metadata directory
+  -> settled reactiveReadFile(stamp)
+  -> existing Dashboard Git loader/invalidation
+```
+
+`dashboard-git-projection.ts` currently uses native `mkdir`/`writeFile`, so a previously cached
+`reactiveReadFile(stamp)` can remain stale when the mutation reports success. Replace only that write with
+the Core physical/reactive writer, rooted at the resolved Git metadata directory rather than the launch
+project because worktree metadata may live elsewhere. Preserve the existing Router order, Code binding
+token, and explicit invalidation.
+
+The real fixed point is an already-observed stamp in an actual temporary Git repository: after awaiting
+`touchDashboardGitRefreshStamp()`, an immediate reactive read must contain the new stamp before a watcher
+tick. The mutation replaces the exact shared-writer call with native `writeFile`; the same production-owner
+fixture must fail through stale reactive content, not by timeout or a mocked downstream callback. The
+existing Router refresh regression remains supporting public-path evidence, not the sole settlement proof.
+
+P4.3 must not add a cache, polling/refetch loop, public Dashboard timestamp, test-only output, static
+change, loading redesign, or Git scope/token change. P4.4--P4.5, broad gates, PR delivery, merge,
+archive/release, and final browser/visual/multi-tab acceptance remain out of scope.
