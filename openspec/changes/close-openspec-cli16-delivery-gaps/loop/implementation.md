@@ -2417,3 +2417,57 @@ The worker stops after the standard Web package run, Web typecheck, scoped forma
 validation, one implementation record, and a code/evidence commit. Full workspace, browser, SSG, PR update, push,
 manager walkthrough, merge, archive, and release remain outside 6.3e. Independent review must accept 6.3e before
 6.3 or 6.6 closes.
+
+#### P5.6e Web unit worker-budget candidate: 2026-07-26 Asia/Shanghai
+
+The owner explicitly retired the subagent-only dispatch restriction and authorized the main Agent to implement this
+bounded checkpoint directly. `packages/web/vite.config.ts` now sets `maxWorkers: '50%'` only inside the `unit`
+Vitest project. Storybook/browser workers, timeouts, retries, assertions, tests, package scripts, product behavior,
+and file isolation are unchanged. The file header timestamp was advanced to `2026-07-26`; Prettier also applied its
+current single-line layout to the existing Access Gate resource-worker entrypoint.
+
+The standard package command used no CLI worker override and completed with an explicit zero exit:
+
+```text
+pnpm --filter @openspecui/web test
+  Test Files  154 passed (154)
+  Tests       989 passed (989)
+  Duration    127.61s
+  exit        0
+```
+
+The run emitted the already recorded jsdom `HTMLCanvasElement.prototype.getContext` not-implemented diagnostics
+from xterm and pixi imports. They did not fail the suite. No timeout, retry, or assertion was changed to absorb them.
+
+Focused validation after the configuration change:
+
+```text
+pnpm --filter @openspecui/web typecheck
+  PASS: exit 0
+pnpm exec prettier --check packages/web/vite.config.ts
+  initial check requested formatting; scoped --write applied the current formatter layout
+pnpm exec oxlint packages/web/vite.config.ts
+  PASS: 0 warnings / 0 errors
+git diff --check
+  PASS
+openspec validate close-openspec-cli16-delivery-gaps --strict
+  PASS: Change is valid
+```
+
+Checkpoint 6.3e is complete as a focused candidate. Checkpoints 6.3 and 6.6 remain open pending main-agent review
+of the bounded patch and reconciliation with the already recorded corrected-head gate evidence. No full workspace,
+component browser, SSG, visual, multi-tab, end-to-end, PR, push, merge, archive, release, or changeversion action was
+performed in this checkpoint.
+
+#### P5.6e main-agent acceptance and 6.3 reconciliation: 2026-07-26 Asia/Shanghai
+
+Main-agent review accepts the bounded candidate. The diff places the sole worker policy inside the `unit` project;
+the separate Storybook project remains unchanged. The standard package command consumed that configuration and
+passed every Web unit file and test. Scoped typecheck, final Prettier check, Oxlint, diff check, and strict Change
+validation passed after the evidence record was written.
+
+The config change cannot affect Core, Server, App, CLI, xterm Storybook, Web Storybook, or SSG ownership. Their
+current-head green evidence was already recorded before 6.3e, and 6.3e supplies the only missing aggregate Web unit
+result without weakening a timeout or assertion. Checkpoints 6.3e and 6.3 are therefore complete. Checkpoint 6.6 is
+now the sole agent-owned delivery action: commit the bounded config/evidence patch, push PR #207, and require fresh
+remote checks. Manager-only walkthroughs 6.7-6.12 remain open and must not be inferred from automation.

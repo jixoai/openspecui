@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Configure Project Web build, aliases, tests, and development backend proxies.
  * 2. Emit preview entrypoints and one stable Access Gate resource-worker entrypoint.
  *
@@ -67,10 +67,7 @@ export default defineConfig(({ isSsrBuild }) => {
           'audio-preview': resolve(__dirname, 'audio-preview.html'),
           'video-preview': resolve(__dirname, 'video-preview.html'),
           'pdf-preview': resolve(__dirname, 'pdf-preview.html'),
-          'access-gate-resource-worker': resolve(
-            __dirname,
-            'src/access-gate-resource-worker.ts'
-          ),
+          'access-gate-resource-worker': resolve(__dirname, 'src/access-gate-resource-worker.ts'),
         },
         output: {
           entryFileNames: (chunk) =>
@@ -111,6 +108,7 @@ export default defineConfig(({ isSsrBuild }) => {
           },
           test: {
             name: 'unit',
+            maxWorkers: '50%',
             environment: 'jsdom',
             setupFiles: './src/test/setup.ts',
             include: ['src/**/*.test.{ts,tsx}'],
