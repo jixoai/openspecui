@@ -2235,3 +2235,51 @@ scoped git diff --check  passed
 Checkpoint 6.3d is complete as a focused candidate. Checkpoint 6.3 remains open for independent acceptance followed
 by one authorized full local replay. No full unit/browser gate, PR update, manager walkthrough, push, merge, archive,
 release, or changeversion action was performed.
+
+#### P5.6d independent review rejection and upstream-owner correction: 2026-07-26 Asia/Shanghai
+
+Independent review accepts the worker-data, private-process-environment, nested-process-Manager, physical marker,
+clean-checkout, and two downstream mutation results in `8af382a`. Main-checkout review also passed the `19/19`
+fixture, CLI typecheck, scoped Prettier/Oxlint, diff check, and strict Change validation. A second detached checkout
+without `packages/web/dist` or `packages/cli/web` reached the same real process/worker fixture before cleanup.
+
+The candidate is nevertheless rejected because it does not prove its first required production transition:
+
+```text
+required owner:
+  CLI startServer(resolved webAssetsDir)
+      -> createWorktreeInstanceManager({ webAssetsDir })
+
+candidate tests:
+  test
+      -> createWorktreeInstanceManager({ hand-authored webAssetsDir })
+      -> worker/process child
+
+mutation result:
+  remove startServer -> Manager webAssetsDir
+      -> both candidate fixtures remain green
+```
+
+This repeats the prohibited pattern of proving a downstream helper while bypassing the actual upstream owner. The
+existing CLI `tsc --noEmit` also excludes `*.test.ts`, so its green result does not make these fixtures checked
+TypeScript evidence. Checkpoint 6.3d is reopened; 6.3 and 6.6 remain open. No full gate or PR update is authorized.
+
+The correction is one new physical test owner, not a production redesign:
+
+1. Add a focused product-chain fixture under the Server package because that package already owns the typed tRPC
+   client and checked transport-test lane. Keep it physically separate from browser/Access-Gate fixtures.
+2. Create a real temporary Git repository plus sibling worktree and one minimal Web asset root outside the target
+   worktree. Start the parent through CLI `startServer({ webAssetsDir })`.
+3. Use a typed real tRPC HTTP client to obtain the Code binding token, observe the sibling in Git overview, and call
+   `git.switchWorktree`. Fetch the returned child root and assert the exact parent-owned marker; also verify child
+   health identifies the sibling worktree.
+4. Include the new fixture in `packages/server/tsconfig.transport-tests.json`. No fabricated context, direct Manager
+   construction, manually invoked callback, `as any`, `as never`, non-null assertion over fabricated state, or test
+   instrumentation may cross this boundary.
+5. Temporarily replace only the upstream `startServer -> WorktreeInstanceManager` asset argument with an invalid
+   value. The same named fixture must fail at child bootstrap before serving the marker. Restore it and rerun the
+   focused fixture, Server transport-test typecheck, existing CLI worktree fixture, CLI typecheck, scoped formatting
+   and lint, diff check, and strict Change validation.
+
+Do not rerun full unit/browser gates, push, merge, archive, release, or start manager walkthroughs. The correction
+must land as one focused implementation/evidence commit and stop for independent review.
