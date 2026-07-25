@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
 1. Track independently verifiable delivery-gap corrections from focused proof through protected delivery.
 2. Separate external loading-regression recovery, automated preparation evidence, and manager walkthroughs.
 3. Preserve honest migration of the incomplete old Change rather than archival by assertion.
@@ -74,13 +74,14 @@ Focused reviewer acceptance is a hard predecessor of the next package and every 
 
 - [x] 6.1 Revalidated the alleged `refine-live-projection-experience` Server-emission failure against the current owner. It is stale rather than an open repair: Root Snapshot 3/3, real Git Router 7/7, and the Git checked lane pass; the evidence and current `95bc2b9` cache/invalidation path are recorded in that Change.
 - [x] 6.2 Confirmed `refine-live-projection-experience` P1-A candidate `d1740335` through independent focused tests, static contract review, mutation evidence, and fresh isolated Dashboard benchmarks. No external source fix was copied into this Change.
-- [x] 6.3 Reconciled the corrected local candidate after accepted 6.3b and 6.3c: format, lint, all 15 workspace typechecks, complete unit tests, component browser lanes, diff check, and strict Change validation passed without generated Web output assumptions or widened timeouts.
+- [ ] 6.3 Reconcile the corrected local candidate only after accepted 6.3d: format, lint, all 15 workspace typechecks, complete unit tests, component browser lanes, diff check, and strict Change validation must pass without generated Web output assumptions or widened timeouts.
 - [x] 6.3a Made the real gated CLI product-chain fixture self-contained in a clean checkout through per-invocation `webAssetsDir`; one resolved directory owns the public shell and preview assets, explicit empty input cannot fall back, and removing the physical handoff makes the same real `startServer` fixture fail with missing-assets evidence.
 - [x] 6.3b Corrected the repeated clean-CI Tool `commands/update` observation failure through retained directory inventories: fanout fell from `720/401/720` states/subscriptions/polls to `60/60/0`, expected/unexpected/legacy and physical-scope semantics remain covered, bypassing the inventory dependency makes the named stream fixture fail, and the real Codex observation root survives deletion/recreation without timeout or generic-kernel changes.
 - [x] 6.3c Made the real Spec Router handoff fixture await its asynchronous `onResolved` lifecycle before asserting each emitted path. Production route/document/cache/transition/location evidence remains unchanged, and removing the actual event subscription makes the owned fixture fail at the named path assertion.
+- [ ] 6.3d Carry the parent CLI runtime's already resolved `webAssetsDir` through `WorktreeInstanceManager` into both typed worker data and a consumed private process environment value. Both real child fixtures must create one minimal physical asset root and pass in a clean checkout; removing either exact handoff must make its corresponding fixture fail with `Web assets not found`. Nested child Managers retain the same physical root; no public CLI option or target-worktree asset discovery is added.
 - [x] 6.4 Removed existing generated Web outputs with the environment-compatible idempotent cleanup, then the focused static-provider tests and clean `pnpm --filter @openspecui/web build:ssg` completed with zero exit.
 - [x] 6.5 Audited the current publishable surface against the existing 6.x, Hosted, static References, Config, loading, and Summary-v2 changesets; every changed published package/behavior is covered and no duplicate changeset is required. App remains private.
-- [ ] 6.6 PR #207 head `e7716a5` passed Changeset Gate and CI Scope; its physical Web asset fixture passed, but Fast Gate repeated only `tool-subscription-router.test.ts` at `Launch update command creation`. Browser shards were skipped behind Fast Gate. Land the accepted 6.3b scalability correction, replay 6.3 once, update the PR, and require fresh checks.
+- [ ] 6.6 PR #207 head `5dfff29` passed Changeset Gate and CI Scope, then Fast Gate run `30168547796` rejected two real worktree child fixtures because the already resolved parent `webAssetsDir` was not handed to process/worker children. Browser shards were skipped behind Fast Gate. Accept 6.3d, replay 6.3 once, update the PR, and require fresh checks.
 
 ### Manager-only final walkthrough ledger
 

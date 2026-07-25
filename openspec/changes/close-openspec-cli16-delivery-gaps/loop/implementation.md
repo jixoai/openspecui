@@ -2111,3 +2111,53 @@ workspace files and left no test process running.
 Checkpoint 6.3 is complete. The corrected commit series after PR #207 head `e7716a5` is ready for delivery; updating
 that PR and requiring fresh remote checks is the sole next action. Automated browser lanes remain component
 preparation evidence only and do not complete the manager-owned 6.7-6.12 walkthroughs.
+
+#### P5.6 clean-CI nested worktree asset rejection and 6.3d authorization: 2026-07-26 Asia/Shanghai
+
+PR #207 head `5dfff29` ran as CI `30168547796`. Changeset Gate and CI Scope passed. Fast Gate reached the CLI
+package after all earlier unit packages passed, then rejected exactly two real
+`worktree-instance-manager.test.ts` child fixtures:
+
+```text
+process child -> Worktree server exited before becoming ready
+              -> child stderr: Web assets not found
+worker child  -> getWebAssetsDir: Web assets not found
+```
+
+The failure exposes one production ownership gap rather than a formatting, Tool-observation, timeout, or browser
+defect:
+
+```text
+parent startServer
+  -> resolve + validate one webAssetsDir
+  -> create WorktreeInstanceManager without that root
+       |-- worker data: project + port + credential
+       `-- process env: credential only
+  -> child startServer guesses packaged candidates
+  -> clean checkout has no generated Web output
+  -> child exits before readiness
+```
+
+Local generated Web outputs allowed the same fixtures to pass and therefore cannot be accepted as clean-runtime
+evidence. Checkpoint 6.3 is reopened through independent package 6.3d; 6.6 remains open. Browser shards were skipped
+behind Fast Gate, so their aggregate failure is dependency evidence only.
+
+6.3d authorizes one physical-root handoff owned by the CLI runtime:
+
+1. `startServer()` gives its already resolved and validated `webAssetsDir` to `WorktreeInstanceManager`.
+2. The worker path carries the non-empty physical root through checked `WorktreeServerWorkerData`; the normalized
+   child start options pass it directly to child `startServer()`.
+3. The process path carries the same root through a private internal environment key. CLI startup consumes and
+   deletes that key before starting the child Server, just as it does for the inherited credential.
+4. A child `startServer()` passes the same resolved root to any nested Manager it creates. The target worktree never
+   discovers, overrides, or owns the CLI runtime's Web assets.
+5. The two existing real child fixtures each create one minimal physical Web asset directory and submit it through
+   the production Manager boundary. Removing the worker-data handoff must fail only the worker case with
+   `Web assets not found`; removing the private process handoff/consumption must fail only the process case for the
+   same reason.
+
+A public `--web-assets-dir`, argv secret/path transport, target-worktree discovery, Web build, generated-output
+fallback, timeout widening, retry, browser fixture, full gate, manual walkthrough, and unrelated cleanup are out of
+scope. The worker must stop after focused CLI tests, CLI typecheck, scoped formatting/lint, diff check, mutation
+evidence, one implementation record, and a code/test commit. Full gates remain stopped until independent review
+accepts 6.3d.
