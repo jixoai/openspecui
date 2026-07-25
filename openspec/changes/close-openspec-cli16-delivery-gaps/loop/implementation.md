@@ -1607,3 +1607,18 @@ evidence-only package did not inspect, suppress, or repair those unrelated warni
 This is focused automated preparation evidence only, not final browser, visual, multi-tab, or end-to-end
 acceptance. Checkpoint 5.5 remains unchecked pending independent review. P5, broad gates, PR delivery,
 merge, archive/release, and manager-owned walkthroughs remain out of scope.
+
+#### P4.5 independent reviewer acceptance: 2026-07-25 Asia/Shanghai
+
+The reviewer independently replayed the same four owner groups against the committed candidate: Core
+hosted-contract `3/3`; App browser-ingress `39/39` plus its P4 checked type lane; Web static/provider/route
+`41/41`, Web typecheck, and fresh SSG; Server Catalog/Git/Access Gate `26/26` plus all Server checked
+lanes. `git diff --check` and strict Change validation also passed. The SSG build again emitted the known
+non-fatal `::scroll-button(*)` CSS optimizer warning; it completed successfully and did not warrant a
+scope-expanding change. This accepts P4.5 and closes 5.5.
+
+P4 is fully accepted. The next Change checkpoint is intentionally external: 6.1 belongs to the owner of
+`refine-live-projection-experience`, and 6.2 consumes that owner's recorded result. This Change MUST NOT
+copy, rewrite, or preempt the user-owned loading-regression repair. It therefore stops at this dependency
+boundary: no broad gate, PR delivery, merge, archive/release, or manager walkthrough is authorized until
+6.1--6.2 receive their own evidence and focused acceptance.
