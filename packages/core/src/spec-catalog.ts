@@ -1,12 +1,13 @@
 /**
  * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Define collision-safe owned and referenced Spec identity.
- * 2. Build one source-aware live/static Spec Catalog without bare-id deduplication or forged CLI evidence.
+ * 2. Build one source-aware live/static Spec Catalog without bare-id deduplication, forged CLI evidence, or lost policy facts.
  * 3. Define source-distinct Spec detail projections without inventing upstream or snapshot fields.
  * 4. Centralize route, cache, search, and provider lookup identity.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
  */
+import { match } from 'ts-pattern'
 import { z } from 'zod'
 import type { CliDiagnostic, CliShowSpec, CliSpecList } from './cli-contracts/index.js'
 import type { Spec } from './schemas.js'
@@ -66,6 +67,7 @@ export type SpecCatalogEntry = OwnedSpecCatalogEntry | ReferencedSpecCatalogEntr
 export interface SpecCatalog {
   entries: SpecCatalogEntry[]
   referenceSources: SpecCatalogReferenceSource[]
+  referenceProjection: SpecCatalogReferenceProjection
   observedAt: number
 }
 
@@ -104,6 +106,23 @@ export type SpecCatalogReferenceSource =
   | LiveSpecCatalogReferenceSource
   | StaticSpecCatalogReferenceSource
 
+/** Whole-Catalog Reference provenance when live source inventory is present. */
+export interface LiveSpecCatalogReferenceProjection {
+  provenance: 'live'
+}
+
+/** Whole-Catalog published static policy without invented Store identity or CLI evidence. */
+export type StaticSpecCatalogReferenceProjection =
+  | { provenance: 'static'; policy: 'include' }
+  | { provenance: 'static'; policy: 'omit'; referenceSourceCount: number }
+  | { provenance: 'static'; policy: 'none' }
+  | { provenance: 'static'; policy: 'unavailable' }
+
+/** Whole-Catalog Reference inventory or published static policy fact. */
+export type SpecCatalogReferenceProjection =
+  | LiveSpecCatalogReferenceProjection
+  | StaticSpecCatalogReferenceProjection
+
 /** Map published Reference source facts without implying a CLI execution occurred. */
 export function createStaticSpecCatalogReferenceSource(input: {
   storeId: string
@@ -116,6 +135,29 @@ export function createStaticSpecCatalogReferenceSource(input: {
     state: input.state,
     snapshot: { policy: 'include', specCount: input.specCount },
   }
+}
+
+/** Map published static policy without converting omitted or unavailable facts into empty live inventory. */
+export function createStaticSpecCatalogReferenceProjection(
+  policy:
+    | { kind: 'include' }
+    | { kind: 'omit'; referenceSourceCount: number }
+    | { kind: 'none' }
+    | undefined
+): StaticSpecCatalogReferenceProjection {
+  return match(policy)
+    .with(undefined, () => ({ provenance: 'static' as const, policy: 'unavailable' as const }))
+    .with({ kind: 'include' }, () => ({
+      provenance: 'static' as const,
+      policy: 'include' as const,
+    }))
+    .with({ kind: 'omit' }, ({ referenceSourceCount }) => ({
+      provenance: 'static' as const,
+      policy: 'omit' as const,
+      referenceSourceCount,
+    }))
+    .with({ kind: 'none' }, () => ({ provenance: 'static' as const, policy: 'none' as const }))
+    .exhaustive()
 }
 
 /** Successful `show --type spec --json` document payload. */
@@ -215,11 +257,13 @@ export function mergeSpecCatalog(
   owned: readonly OwnedSpecCatalogEntry[],
   referenced: readonly ReferencedSpecCatalogEntry[],
   referenceSources: readonly SpecCatalogReferenceSource[],
-  observedAt: number
+  observedAt: number,
+  referenceProjection: SpecCatalogReferenceProjection = { provenance: 'live' }
 ): SpecCatalog {
   return {
     entries: [...owned, ...referenced],
     referenceSources: [...referenceSources],
+    referenceProjection,
     observedAt,
   }
 }

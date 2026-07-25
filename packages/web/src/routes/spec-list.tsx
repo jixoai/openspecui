@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Default the project Spec Catalog to writable Owned Specs.
- * 2. Group direct read-only Referenced Specs by Store identity and source-distinct provenance.
+ * 2. Group direct read-only Referenced Specs by Store identity and preserve source-distinct Catalog policy.
  * 3. Preserve compound routes, collision-safe View Transition identity, and local row continuity.
  * 4. Keep empty states source-specific without completeness claims.
  * 5. Surface transport failure without hiding retained Catalog truth or claiming source emptiness.
@@ -14,10 +14,15 @@ import { useSpecsSubscription } from '@/lib/use-subscription'
 import { VTLink } from '@/lib/view-transitions/navigation'
 import { getSharedElementBinding } from '@/lib/view-transitions/shared-elements'
 import { useSpecListContinuity } from '@/routes/spec-list-continuity'
-import { specIdentityKey, type SpecCatalogEntry } from '@openspecui/core/spec-catalog'
+import {
+  specIdentityKey,
+  type SpecCatalogEntry,
+  type SpecCatalogReferenceProjection,
+} from '@openspecui/core/spec-catalog'
 import { useLocation } from '@tanstack/react-router'
 import { AlertCircle, ChevronRight, FileText, LockKeyhole } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
+import { match } from 'ts-pattern'
 
 type SpecScope = 'owned' | 'referenced'
 
@@ -216,14 +221,43 @@ export function SpecList() {
             </section>
           ))}
           {referencedByStore.length === 0 && !error ? (
-            <div className="text-muted-foreground p-4 text-center">
-              No Referenced Specs currently observed.
-            </div>
+            <ReferenceCatalogEmptyState
+              referenceProjection={catalog?.referenceProjection ?? { provenance: 'live' }}
+            />
           ) : null}
         </div>
       )}
     </div>
   )
+}
+
+function ReferenceCatalogEmptyState({
+  referenceProjection,
+}: {
+  referenceProjection: SpecCatalogReferenceProjection
+}) {
+  const message = match(referenceProjection)
+    .with({ provenance: 'live' }, () => 'No Referenced Specs currently observed.')
+    .with(
+      { provenance: 'static', policy: 'include' },
+      () => 'Published static snapshot includes no Reference sources.'
+    )
+    .with(
+      { provenance: 'static', policy: 'omit' },
+      ({ referenceSourceCount }) =>
+        `Published static snapshot omitted Referenced Spec content from ${referenceSourceCount} sources.`
+    )
+    .with(
+      { provenance: 'static', policy: 'none' },
+      () => 'Published static snapshot records no effective Reference sources.'
+    )
+    .with(
+      { provenance: 'static', policy: 'unavailable' },
+      () => 'Published static snapshot does not include a Reference inventory.'
+    )
+    .exhaustive()
+
+  return <div className="text-muted-foreground p-4 text-center">{message}</div>
 }
 
 function ScopeButton({

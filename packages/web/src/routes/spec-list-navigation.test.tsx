@@ -75,6 +75,7 @@ function createCatalog(entries: SpecCatalogEntry[], stores: string[] = []): Spec
   return {
     entries,
     referenceSources: stores.map(createReferenceSource),
+    referenceProjection: { provenance: 'live' },
     observedAt: 1,
   }
 }

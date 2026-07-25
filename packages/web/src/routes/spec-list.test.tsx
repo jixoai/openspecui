@@ -4,6 +4,7 @@
  * 2. Prove Owned is the default and Referenced entries group by Store.
  * 3. Prove Referenced groups remain visibly read-only with a neutral empty state.
  * 4. Distinguish transport errors and static snapshot conditions from source-empty truth.
+ * 5. Preserve whole-Catalog static Reference policy instead of claiming live/current emptiness.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
  */
@@ -400,5 +401,28 @@ describe('SpecList', () => {
     )
     expect(screen.getByRole('alert')).toHaveTextContent('0 published Specs.')
     expect(screen.queryByText(/Exit status:/)).toBeNull()
+  })
+
+  it('renders a published omitted policy instead of a live empty Reference claim', () => {
+    locationState.current = { __specListScope: 'referenced' }
+    useSpecsSubscriptionMock.mockReturnValue({
+      data: {
+        observedAt: 1,
+        entries: [],
+        referenceSources: [],
+        referenceProjection: {
+          provenance: 'static',
+          policy: 'omit',
+          referenceSourceCount: 2,
+        },
+      },
+      isLoading: false,
+      error: null,
+    })
+
+    render(<SpecList />)
+
+    expect(screen.getByText(/omitted Referenced Spec content from 2 sources/i)).toBeInTheDocument()
+    expect(screen.queryByText('No Referenced Specs currently observed.')).toBeNull()
   })
 })

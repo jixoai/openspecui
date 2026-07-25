@@ -40,6 +40,23 @@ catalog mapping SHALL share one browser-safe representation where their real fac
 - **AND** it SHALL carry no fabricated live CLI execution result
 - **AND** it SHALL NOT grant live mutation authority
 
+#### Scenario: Omitted or unavailable static catalog preserves only its published policy fact
+
+- **GIVEN** a static snapshot records `omit`, `none`, or has no Reference-policy inventory
+- **WHEN** the static provider renders the Referenced Spec List
+- **THEN** it SHALL render the exact published omission, absence, or unavailable-inventory condition
+- **AND** it SHALL NOT rewrite that condition as a live empty/current Reference observation
+- **AND** it SHALL NOT invent per-Store source identity, diagnostics, or execution evidence
+
+#### Scenario: Unrecorded Store route identity does not become published provenance
+
+- **GIVEN** a static Referenced Spec route names a Store but the applicable snapshot fact retains no Store
+  identity
+- **WHEN** the static Spec detail renders its unavailable condition
+- **THEN** it SHALL describe only the snapshot condition
+- **AND** it SHALL NOT label the route Store as a published/observed Reference Store
+- **AND** it SHALL carry no fabricated live execution result
+
 ### Requirement: Reactive Projection Input Settlement
 
 The system SHALL perform data-bearing writes that invalidate reusable projections through the shared

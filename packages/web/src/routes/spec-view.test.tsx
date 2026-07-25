@@ -2,7 +2,7 @@
  * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Prove Owned routes render local Markdown and Reference routes render exact read-only CLI data.
  * 2. Prove initial loading, retained-document errors, and no-data errors at the real SpecView owner.
- * 3. Prove static snapshot content and errors never render invented live CLI evidence.
+ * 3. Prove static snapshot content and errors never render invented live CLI evidence or route Store provenance.
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  */
@@ -269,6 +269,100 @@ describe('SpecView', () => {
     expect(screen.getByText(/Published static snapshot cannot render/)).toBeInTheDocument()
     expect(screen.getByText(/omitted by the published snapshot policy/)).toBeInTheDocument()
     expect(screen.queryByText(/Exit status:/)).toBeNull()
+  })
+
+  it('does not present an omitted static route Store as published Reference provenance', () => {
+    paramsState.current = { storeId: 'route-only-store', specId: 'auth' }
+    const document: ReferencedSpecDocumentProjection = {
+      identity: { kind: 'referenced', storeId: 'route-only-store', specId: 'auth' },
+      source: 'referenced',
+      readOnly: true,
+      state: 'error',
+      spec: null,
+      rawMarkdown: null,
+      upstream: null,
+      provenance: {
+        kind: 'static',
+        state: 'omitted',
+        policy: 'omit',
+        referenceSourceCount: 2,
+      },
+      evidence: null,
+    }
+    useSpecDocumentSubscriptionMock.mockReturnValue({
+      data: document,
+      isLoading: false,
+      error: null,
+    })
+
+    render(<SpecView />)
+
+    expect(screen.getByText('Referenced Spec request · auth')).toBeInTheDocument()
+    expect(screen.queryByText(/route-only-store/)).toBeNull()
+  })
+
+  it('does not present a route Store for an included static policy without a published source', () => {
+    paramsState.current = { storeId: 'route-only-store', specId: 'auth' }
+    const document: ReferencedSpecDocumentProjection = {
+      identity: { kind: 'referenced', storeId: 'route-only-store', specId: 'auth' },
+      source: 'referenced',
+      readOnly: true,
+      state: 'error',
+      spec: null,
+      rawMarkdown: null,
+      upstream: null,
+      provenance: {
+        kind: 'static',
+        state: 'missing',
+        policy: 'include',
+        source: null,
+      },
+      evidence: null,
+    }
+    useSpecDocumentSubscriptionMock.mockReturnValue({
+      data: document,
+      isLoading: false,
+      error: null,
+    })
+
+    render(<SpecView />)
+
+    expect(screen.getByText('Referenced Spec request · auth')).toBeInTheDocument()
+    expect(screen.queryByText(/route-only-store/)).toBeNull()
+  })
+
+  it('does not claim an unpublished static snapshot for an unavailable Reference inventory', () => {
+    paramsState.current = { storeId: 'route-only-store', specId: 'auth' }
+    const document: ReferencedSpecDocumentProjection = {
+      identity: { kind: 'referenced', storeId: 'route-only-store', specId: 'auth' },
+      source: 'referenced',
+      readOnly: true,
+      state: 'error',
+      spec: null,
+      rawMarkdown: null,
+      upstream: null,
+      provenance: {
+        kind: 'static',
+        state: 'snapshot-unavailable',
+        policy: 'absent',
+      },
+      evidence: null,
+    }
+    useSpecDocumentSubscriptionMock.mockReturnValue({
+      data: document,
+      isLoading: false,
+      error: null,
+    })
+
+    render(<SpecView />)
+
+    expect(
+      screen.getByRole('heading', {
+        name: 'Static Reference inventory cannot render this Referenced Spec request.',
+      })
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/published static snapshot/i)).toBeNull()
+    expect(screen.queryByText(/route-only-store/)).toBeNull()
   })
 
   it('renders included static Reference content without a CLI document result', () => {

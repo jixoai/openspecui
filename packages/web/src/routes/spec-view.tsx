@@ -2,7 +2,7 @@
  * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Resolve owned and referenced Spec routes through compound identity.
  * 2. Render owned Markdown through the existing document pipeline.
- * 3. Render live CLI evidence and static snapshot conditions without synthesizing either source.
+ * 3. Render live CLI evidence and static snapshot conditions without synthesizing CLI or route-derived Store provenance.
  * 4. Preserve collision-safe View Transition identity across source-distinct documents.
  * 5. Retain successful detail content beside terminal document subscription errors.
  *
@@ -34,6 +34,7 @@ import {
 import { useLocation, useParams } from '@tanstack/react-router'
 import { ArrowLeft, FileText, LockKeyhole } from 'lucide-react'
 import { useMemo, useRef } from 'react'
+import { match, P } from 'ts-pattern'
 
 export function SpecView() {
   const { specId, storeId } = useParams({ strict: false })
@@ -212,6 +213,7 @@ function ReferencedSpecContent({
     family: 'specs',
     entityId: specIdentityKey(document.identity),
   } as const
+  const presentation = referencePresentation(document)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 p-4">
@@ -219,12 +221,13 @@ function ReferencedSpecContent({
       <SpecHeader
         identity={document.identity}
         title={document.upstream?.title ?? document.spec?.name ?? document.identity.specId}
+        subtitle={presentation.subtitle}
         sourceRef={headerRef}
         sharedDescriptor={sharedDescriptor}
       />
       <div className="border-border bg-muted/30 flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
         <LockKeyhole className="h-4 w-4 shrink-0" aria-hidden />
-        <span>Read-only Reference projected from OpenSpec Store {document.identity.storeId}.</span>
+        <span>{presentation.readOnlyLabel}</span>
       </div>
       {document.state === 'ready' && document.provenance.kind === 'live' && document.upstream ? (
         <ReferencedSpecDocument document={document.upstream} />
@@ -280,9 +283,7 @@ function ReferencedSpecError({ document }: { document: ReferencedSpecDocumentPro
   if (isStaticReferencedDocument(document)) {
     return (
       <div className="border-destructive/40 bg-destructive/5 space-y-3 rounded-md border p-4">
-        <h2 className="font-medium">
-          Published static snapshot cannot render this Reference Spec.
-        </h2>
+        <h2 className="font-medium">{staticSnapshotErrorHeading(document.provenance)}</h2>
         <div className="text-muted-foreground text-sm">
           {staticSnapshotCondition(document.provenance)}
         </div>
@@ -318,18 +319,99 @@ function isStaticReferencedDocument(
 function staticSnapshotCondition(
   provenance: StaticReferencedSpecDocumentProjection['provenance']
 ): string {
-  switch (provenance.state) {
-    case 'omitted':
-      return `Referenced content was omitted by the published snapshot policy (${provenance.referenceSourceCount} observed sources).`
-    case 'none':
-      return 'The published snapshot records no effective Reference sources.'
-    case 'snapshot-unavailable':
-      return 'No published static snapshot is available for this Reference Spec.'
-    case 'missing':
-      return provenance.source
-        ? `The published snapshot does not contain this Spec from ${provenance.source.storeId}.`
-        : 'The published snapshot does not contain this Reference Spec.'
-    case 'included':
-      return 'The published snapshot did not materialize this Reference Spec.'
+  return match(provenance)
+    .with(
+      { state: 'omitted' },
+      ({ referenceSourceCount }) =>
+        `Referenced content was omitted by the published snapshot policy (${referenceSourceCount} observed sources).`
+    )
+    .with({ state: 'none' }, () => 'The published snapshot records no effective Reference sources.')
+    .with(
+      { state: 'snapshot-unavailable' },
+      () => 'Static Reference inventory is unavailable for this Referenced Spec request.'
+    )
+    .with(
+      { state: P.union('missing', 'included'), source: P.not(P.nullish) },
+      ({ source }) => `The published snapshot does not contain this Spec from ${source.storeId}.`
+    )
+    .with(
+      { state: P.union('missing', 'included'), source: null },
+      () => 'The published snapshot does not contain this Reference Spec.'
+    )
+    .exhaustive()
+}
+
+function staticSnapshotErrorHeading(
+  provenance: StaticReferencedSpecDocumentProjection['provenance']
+): string {
+  return match(provenance)
+    .with(
+      { state: 'snapshot-unavailable' },
+      () => 'Static Reference inventory cannot render this Referenced Spec request.'
+    )
+    .with(
+      { state: P.union('included', 'missing', 'omitted', 'none') },
+      () => 'Published static snapshot cannot render this Reference Spec.'
+    )
+    .exhaustive()
+}
+
+function referencePresentation(document: ReferencedSpecDocumentProjection): {
+  subtitle: string
+  readOnlyLabel: string
+} {
+  return match(document)
+    .with({ provenance: { kind: 'live' } }, ({ identity }) => ({
+      subtitle: `Referenced from ${identity.storeId} · ${identity.specId}`,
+      readOnlyLabel: `Read-only Reference projected from OpenSpec Store ${identity.storeId}.`,
+    }))
+    .with(
+      {
+        provenance: {
+          kind: 'static',
+          state: P.union('included', 'missing'),
+          source: P.not(P.nullish),
+        },
+      },
+      ({ identity, provenance: { source } }) => ({
+        subtitle: `Referenced from ${source.storeId} · ${identity.specId}`,
+        readOnlyLabel: `Read-only Reference projected from OpenSpec Store ${source.storeId}.`,
+      })
+    )
+    .with(
+      {
+        provenance: { kind: 'static', state: P.union('included', 'missing'), source: null },
+      },
+      ({ identity }) => staticReferenceRequestPresentation(identity.specId)
+    )
+    .with({ provenance: { kind: 'static', state: 'omitted' } }, ({ identity }) =>
+      staticReferenceRequestPresentation(identity.specId)
+    )
+    .with({ provenance: { kind: 'static', state: 'none' } }, ({ identity }) =>
+      staticReferenceRequestPresentation(identity.specId)
+    )
+    .with({ provenance: { kind: 'static', state: 'snapshot-unavailable' } }, ({ identity }) =>
+      staticUnavailableReferenceRequestPresentation(identity.specId)
+    )
+    .exhaustive()
+}
+
+function staticReferenceRequestPresentation(specId: string): {
+  subtitle: string
+  readOnlyLabel: string
+} {
+  return {
+    subtitle: `Referenced Spec request · ${specId}`,
+    readOnlyLabel: 'Read-only Referenced Spec request from published static snapshot.',
+  }
+}
+
+function staticUnavailableReferenceRequestPresentation(specId: string): {
+  subtitle: string
+  readOnlyLabel: string
+} {
+  return {
+    subtitle: `Referenced Spec request · ${specId}`,
+    readOnlyLabel: 'Read-only Referenced Spec request. Static Reference inventory is unavailable.',
   }
 }

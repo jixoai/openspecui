@@ -1110,5 +1110,110 @@ and still completed. The prescribed wrapper command
 without a pass/fail claim. The direct `vitest run` commands above replayed exactly the named unit files and
 completed green. This is a runner invocation divergence, not an assertion failure.
 
-Checkpoint 5.2 is complete. P4.3--P4.5, broad gates, PR delivery, merge, archive, release, and every
-browser/visual/multi-tab walkthrough remain out of scope.
+#### P4.2 standards correction: 2026-07-25 Asia/Shanghai
+
+Independent standards review of `08795ce` found one required Style correction: the new
+`staticSnapshotCondition` renderer uses a `switch`, despite this repository's declared `ts-pattern`
+preference for exhaustive discriminated branches. The behavior and P4.2 provenance contract are accepted
+in principle, but checkpoint 5.2 remains open until that owner is converted to an exhaustive
+`match(...).with(...).exhaustive()` and its exact render/type evidence is rerun. This correction must not
+change snapshot facts, widen P4.2, or begin P4.3.
+
+Checkpoint 5.2 is pending this standards correction. P4.3--P4.5, broad gates, PR delivery, merge,
+archive, release, and every browser/visual/multi-tab walkthrough remain out of scope.
+
+#### P4.2 contract reopening: 2026-07-25 Asia/Shanghai
+
+The independent spec review found two production facts that the first P4.2 candidate still loses:
+
+1. `StaticProvider.getSpecCatalog()` returns an empty `referenceSources` array for snapshot `omit`, `none`,
+   and no snapshot. `SpecList` consequently says "No Referenced Specs currently observed," which asserts
+   live/current emptiness instead of preserving the published aggregate omission, none, or unavailable
+   inventory fact.
+2. For an `omit`, `none`, or absent-snapshot Referenced Spec deep link, `getSpecDocument()` must retain the
+   route identity internally, but `SpecView` turns its caller-supplied `storeId` into "Referenced from" and
+   "projected from OpenSpec Store" presentation. Those policies do not publish Store identity, so the UI
+   fabricates provenance from untrusted route input.
+
+The corrective package remains 5.2 and is now three joined, but source-distinct, owners:
+
+```text
+Core Catalog contract -> static whole-catalog policy fact
+StaticProvider         -> exact include/omit/none/unavailable fact
+SpecList / SpecView    -> source-aware wording with no route-derived Store claim
+```
+
+Required proof is a real static provider/list fixed point for `omit`, `none`, and unavailable policy, plus
+a real static SpecView deep-link fixed point that rejects the route Store as published provenance. The
+existing no-fabricated-CLI mutation proof remains required. Convert `staticSnapshotCondition` to exhaustive
+`ts-pattern` while making this correction. Do not begin P4.3, or use this reopen as authority for a broad
+gate or browser walkthrough.
+
+#### P4.2 reopen completion: 2026-07-25 Asia/Shanghai
+
+The reopened red suite against `08795ce` reported `3 failed / 24 passed`: the real static Catalog lacked
+the omit policy projection, the real `SpecList` rendered live/current empty wording, and the real
+`SpecView` presented a route-only Store as Reference provenance.
+
+The completed correction keeps one browser-safe Core Catalog contract:
+
+```text
+Core SpecCatalog.referenceProjection
+  live          -> live source inventory
+  static include -> published per-Store source facts
+  static omit    -> published aggregate source count
+  static none    -> published no-effective-References fact
+  unavailable    -> no Reference inventory fact
+```
+
+`StaticProvider.getSpecCatalog()` now maps that policy through the Core contract. `SpecList` renders the
+published policy rather than a live empty claim. `SpecView` matches the complete referenced-document
+projection with `ts-pattern`; only live projections and static `included|missing` projections with a
+non-null published source render Store wording. Route-only, source-null requests remain neutral. The
+snapshot-unavailable branch says only that the static Reference inventory is unavailable; it does not claim
+that a published snapshot exists.
+
+Mutation resistance used real production owners and their named fixtures:
+
+```bash
+# 1. Replace the real loaded-snapshot Catalog policy mapper with { provenance: 'live' }
+pnpm --filter @openspecui/web exec vitest run \
+  src/lib/static-data-provider.references.test.ts \
+  src/routes/spec-list.test.tsx \
+  --no-file-parallelism \
+  -t 'preserves omit, none, and unavailable Reference policy|renders a published omitted policy'
+# mutation: provider fixture failed at omit; expected static/omit/referenceSourceCount=2,
+# received { provenance: 'live' }; restored immediately.
+
+# 2. Restore real omitted-route Store presentation in SpecView.referencePresentation()
+pnpm --filter @openspecui/web exec vitest run \
+  src/routes/spec-view.test.tsx \
+  --no-file-parallelism \
+  -t 'does not present an omitted static route Store as published Reference provenance'
+# mutation: fixture failed because neutral "Referenced Spec request · auth" disappeared and
+# route-only-store was rendered; restored immediately.
+```
+
+The earlier `08795ce` fabricated-CLI-evidence mutation proof remains recorded above. Final focused green
+evidence after restoration:
+
+```bash
+pnpm --filter @openspecui/web exec vitest run \
+  src/lib/static-data-provider.references.test.ts \
+  src/routes/spec-list.test.tsx \
+  src/routes/spec-view.test.tsx \
+  --no-file-parallelism
+# 3 files / 29 tests passed
+
+pnpm --filter @openspecui/core typecheck
+pnpm --filter @openspecui/web typecheck
+pnpm --filter @openspecui/web build:ssg
+pnpm exec prettier --check <changed P4.2 TypeScript files>
+pnpm exec oxlint <changed P4.2 TypeScript files>
+git diff --check
+openspec validate close-openspec-cli16-delivery-gaps --strict
+```
+
+All listed commands passed. `build:ssg` retained the existing CSS optimizer warning for `::scroll-button`
+and completed. No broad gate, PR action, archive/release action, or browser/visual/multi-tab walkthrough
+was run; final browser acceptance remains with the manager.

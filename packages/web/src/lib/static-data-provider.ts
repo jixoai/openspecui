@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Project one immutable export snapshot through the live provider-shaped API.
- * 2. Preserve compound Spec identity and published snapshot provenance without invented CLI evidence.
+ * 2. Preserve compound Spec identity and published snapshot policy/provenance without invented CLI evidence.
  * 3. Reconstruct Dashboard, workflow, schema, template, and entity reads without a backend.
  * 4. Keep unsupported live mutations and provenance explicitly absent in static mode.
  * 5. Keep static Git snapshots ineligible for live backend binding authority.
@@ -37,6 +37,7 @@ import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
 import { isOpsxGlobPattern, opsxPathMatchesPattern } from '@openspecui/core/opsx-entity'
 import { DEFAULT_BELL_SOUND_ID, DEFAULT_NOTIFICATION_SOUND_ID } from '@openspecui/core/sounds'
 import {
+  createStaticSpecCatalogReferenceProjection,
   createStaticSpecCatalogReferenceSource,
   specIdentityKey,
   specRoutePath,
@@ -588,7 +589,14 @@ function snapshotChangeToChange(snapChange: ExportSnapshot['changes'][0]): Chang
 /** Get the source-aware static Spec Catalog. */
 export async function getSpecCatalog(): Promise<SpecCatalog> {
   const snapshot = await loadSnapshot()
-  if (!snapshot) return { entries: [], referenceSources: [], observedAt: 0 }
+  if (!snapshot) {
+    return {
+      entries: [],
+      referenceSources: [],
+      referenceProjection: createStaticSpecCatalogReferenceProjection(undefined),
+      observedAt: 0,
+    }
+  }
 
   const entries: SpecCatalogEntry[] = snapshot.specs.map((spec) =>
     spec.identity.kind === 'owned'
@@ -619,6 +627,7 @@ export async function getSpecCatalog(): Promise<SpecCatalog> {
       snapshot.meta.referencePolicy?.kind === 'include'
         ? snapshot.meta.referencePolicy.referenceSources.map(createStaticSpecCatalogReferenceSource)
         : [],
+    referenceProjection: createStaticSpecCatalogReferenceProjection(snapshot.meta.referencePolicy),
     observedAt: snapshot.meta.observedAt || Date.parse(snapshot.meta.timestamp) || 0,
   }
 }

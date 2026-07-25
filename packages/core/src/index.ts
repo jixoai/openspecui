@@ -165,6 +165,7 @@ export {
   ReferencedSpecIdentitySchema,
   SpecIdentitySchema,
   buildSpecCatalog,
+  createStaticSpecCatalogReferenceProjection,
   createStaticSpecCatalogReferenceSource,
   getSpecCatalogEntry,
   isReferencedSpecIdentity,
@@ -183,11 +184,13 @@ export {
   type ReferencedSpecIdentity,
   type SpecCatalog,
   type SpecCatalogEntry,
+  type SpecCatalogReferenceProjection,
   type SpecCatalogReferenceSource,
   type SpecCommandEvidence,
   type SpecDocumentProjection,
   type SpecIdentity,
   type StaticReferencedSpecDocumentProjection,
+  type StaticSpecCatalogReferenceProjection,
   type StaticSpecCatalogReferenceSource,
 } from './spec-catalog.js'
 

@@ -3,7 +3,8 @@
  * 1. Prove static provider hydrates compound referenced Spec routes and bodies.
  * 2. Prove static snapshot policy never becomes fabricated live CLI evidence.
  * 3. Prove omit/none policy produces an explicit omission error without leaking Store ids.
- * 4. Prove static search scopes referenced Specs to 'referenced-specs' only.
+ * 4. Prove static Catalog retains omit, none, and unavailable Reference policy facts.
+ * 5. Prove static search scopes referenced Specs to 'referenced-specs' only.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
  * Section 7.9/7.10 static parity coverage.
@@ -189,6 +190,32 @@ describe('static-data-provider references', () => {
         },
       })
     }
+  })
+
+  it('preserves omit, none, and unavailable Reference policy at the static Catalog boundary', async () => {
+    staticState.snapshot = snapshotWith([], { kind: 'omit', referenceSourceCount: 2 })
+    let provider = await import('./static-data-provider')
+    await expect(provider.getSpecCatalog()).resolves.toMatchObject({
+      referenceProjection: {
+        provenance: 'static',
+        policy: 'omit',
+        referenceSourceCount: 2,
+      },
+    })
+
+    staticState.snapshot = snapshotWith([], { kind: 'none' })
+    vi.resetModules()
+    provider = await import('./static-data-provider')
+    await expect(provider.getSpecCatalog()).resolves.toMatchObject({
+      referenceProjection: { provenance: 'static', policy: 'none' },
+    })
+
+    staticState.snapshot = null
+    vi.resetModules()
+    provider = await import('./static-data-provider')
+    await expect(provider.getSpecCatalog()).resolves.toMatchObject({
+      referenceProjection: { provenance: 'static', policy: 'unavailable' },
+    })
   })
 
   it('scopes referenced Specs to the referenced-specs search scope only', async () => {
