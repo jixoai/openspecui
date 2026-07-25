@@ -23,6 +23,7 @@
     "src/live-projection-loading-summary.test.ts",
     "src/tool-subscription-router.test.ts",
     "src/translation-engine-worker.test.ts",
+    "src/worktree-web-assets-product-chain.test.ts",
     "../local-translator/src/huggingface-transformers.d.ts"
   ],
   "exclude": ["node_modules", "dist"]

@@ -2283,3 +2283,49 @@ The correction is one new physical test owner, not a production redesign:
 
 Do not rerun full unit/browser gates, push, merge, archive, release, or start manager walkthroughs. The correction
 must land as one focused implementation/evidence commit and stop for independent review.
+
+#### P5.6d upstream-owner correction accepted: 2026-07-26 Asia/Shanghai
+
+The correction adds `packages/server/src/worktree-web-assets-product-chain.test.ts` and includes it in the existing
+checked `tsconfig.transport-tests.json` lane. The fixture owns a temporary Git repository, real sibling worktree,
+and minimal Web asset root outside the target worktree. It starts the parent through CLI `startServer`, then uses a
+typed tRPC HTTP client to cross `git.scopes`, `git.overview`, and `git.switchWorktree`. The returned child health must
+identify the canonical sibling path, and the child shell must contain the exact parent-runtime marker.
+
+The first fixture run failed before the production boundary because macOS exposed `/var` and `/private/var` aliases.
+That was harness evidence only. The corrected fixture selects the exact test branch and compares physical paths via
+`realpath`; it does not weaken the repository or child identity contract.
+
+The restored production head passed the same named product-chain fixture:
+
+```text
+pnpm --filter @openspecui/server exec vitest run \
+  src/worktree-web-assets-product-chain.test.ts --no-file-parallelism --reporter=verbose
+  PASS: 1 file / 1 test; named chain 10.72s
+```
+
+For upstream mutation evidence, only the real CLI owner at `startServer -> createWorktreeInstanceManager` was
+changed from its resolved `webAssetsDir` to an empty root. The same test then failed before marker delivery:
+
+```text
+git.switchWorktree
+  -> child worker bootstrap
+  -> readWorktreeServerWorkerData
+  -> TRPCClientError: Invalid worktree server worker data.
+RED: 1 file / 1 test failed; named chain 8.44s
+```
+
+The mutation was restored before all green evidence. Focused review gates passed:
+
+```text
+new upstream product chain      1 file / 1 test passed
+existing CLI branch fixtures    1 file / 19 tests passed
+Server transport-test typecheck passed
+CLI typecheck                   passed
+```
+
+This closes the exact evidence gap from independent review: deleting or invalidating the upstream owner transition
+can no longer leave downstream Manager fixtures green. No production behavior beyond `8af382a`, direct Manager
+test injection, public CLI flag, target-owned asset lookup, fabricated context, full unit/browser gate, PR update,
+manager walkthrough, push, merge, archive, release, or changeversion action was added. Checkpoint 6.3d is accepted;
+6.3 remains open for one corrected-head full local replay, and 6.6 remains open for fresh PR checks.
