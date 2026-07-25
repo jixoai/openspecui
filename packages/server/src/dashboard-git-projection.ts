@@ -1,16 +1,21 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Load Dashboard Code Git snapshots independently from planning Summary and trends.
  * 2. Preserve backend-issued Code binding provenance and observable Git task lifecycle.
  * 3. Trigger explicit Git snapshot invalidation through a reactive stamp without broad Dashboard reloads.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Derived requirement (2026-07-25): P4.3 settles a cached refresh stamp before Dashboard Git refresh returns.
  */
-import { reactiveReadFile, type DashboardGitSnapshot } from '@openspecui/core'
+import {
+  reactiveReadFile,
+  writePhysicalReactiveFile,
+  type DashboardGitSnapshot,
+} from '@openspecui/core'
 import { execFile } from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import { mkdir, stat, writeFile } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { stat } from 'node:fs/promises'
+import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { buildDashboardGitSnapshot } from './dashboard-git-snapshot.js'
 
@@ -107,9 +112,11 @@ export async function touchDashboardGitRefreshStamp(
 ): Promise<{ skipped: boolean }> {
   const gitMetadataDir = await resolveGitMetadataDir(projectDir)
   if (!gitMetadataDir) return { skipped: true }
-  const stampPath = join(gitMetadataDir, DASHBOARD_GIT_REFRESH_STAMP_NAME)
-  await mkdir(dirname(stampPath), { recursive: true })
-  await writeFile(stampPath, `${Date.now()} ${reason}\n`, 'utf8')
+  await writePhysicalReactiveFile({
+    rootPath: gitMetadataDir,
+    relativePath: DASHBOARD_GIT_REFRESH_STAMP_NAME,
+    content: `${Date.now()} ${reason}\n`,
+  })
   return { skipped: false }
 }
 

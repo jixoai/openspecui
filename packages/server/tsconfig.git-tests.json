@@ -2,6 +2,7 @@
   "extends": "./tsconfig.check.json",
   "include": [
     "src/huggingface-transformers.d.ts",
+    "src/dashboard-git-projection.test.ts",
     "src/dashboard-git-snapshot.test.ts",
     "src/dashboard-overview-service.test.ts",
     "src/git-repository-binding-router.test.ts",

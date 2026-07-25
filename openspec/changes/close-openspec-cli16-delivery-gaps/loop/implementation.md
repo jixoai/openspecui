@@ -1,9 +1,10 @@
 <!--
-Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
 1. Record the pre-apply review baseline and work-package ownership for delivery-gap closure.
 2. Define the evidence order that prevents recurrence of mock-only or terminal-only proof.
 3. Preserve external loading-change ownership and manager-only final walkthroughs.
 4. List the exact loopback conditions that require a new owner decision.
+5. Record accepted P4 production-owner fixed points and mutation-resistance evidence.
 
 Original request (2026-07-23): "走查任务直接到新的change中做。你目前的工作就是：review + interview + replan(write new openspec change)"
 Original request (2026-07-19): "不要在 6.11 这个任务上徘徊了。你得把它拆开成多个独立的小问题，然后把阻塞的问题发给我，我来决策推进。"
@@ -1270,3 +1271,57 @@ it). This is test-contract hygiene only; it must not weaken a production type or
 P4.3 must not add a cache, polling/refetch loop, public Dashboard timestamp, test-only output, static
 change, loading redesign, or Git scope/token change. P4.4--P4.5, broad gates, PR delivery, merge,
 archive/release, and final browser/visual/multi-tab acceptance remain out of scope.
+
+#### P4.3 implementation and focused evidence: 2026-07-25 Asia/Shanghai
+
+`touchDashboardGitRefreshStamp()` now calls the shared Core
+`writePhysicalReactiveFile({ rootPath: gitMetadataDir, relativePath: stampName, content })`. The physical
+root is the resolved Git metadata directory, so a linked worktree cannot redirect the write through its
+launch directory. Router ordering, Code binding validation, and Dashboard projection invalidation remain
+unchanged.
+
+The checked `dashboard-git-projection.test.ts` creates an actual temporary Git repository, pre-caches the
+absent metadata stamp with `reactiveReadFile`, then awaits the real Server owner. It intentionally does
+not acquire a watcher root: its immediate post-return read can pass only when the production writer settles
+the cached reactive input. The test is included in `tsconfig.git-tests.json`, because the default Server
+typecheck excludes test files.
+
+Fixed-point and mutation-resistance evidence:
+
+```bash
+# Initial red against the former native mkdir/writeFile owner.
+pnpm --filter @openspecui/server exec vitest run \
+  src/dashboard-git-projection.test.ts \
+  --no-file-parallelism
+# 1 test failed: expected StringMatching /^\\d+ settlement-fixed-point\\n$/;
+# received null after touchDashboardGitRefreshStamp() returned.
+
+# Exact mutation: replace writePhysicalReactiveFile in touchDashboardGitRefreshStamp()
+# with native mkdir/writeFile, retaining the same stamp content and Git metadata path.
+pnpm --filter @openspecui/server exec vitest run \
+  src/dashboard-git-projection.test.ts \
+  --no-file-parallelism
+# 1 test failed with the same post-return stale cached value: received null.
+# The shared writer was restored immediately.
+
+# Final focused green after restoration.
+pnpm --filter @openspecui/server exec vitest run \
+  src/dashboard-git-projection.test.ts \
+  src/git-repository-binding-router.test.ts \
+  --no-file-parallelism
+# 2 files / 8 tests passed
+
+pnpm --filter @openspecui/core typecheck
+pnpm --filter @openspecui/server typecheck:git-tests
+pnpm --filter @openspecui/server typecheck
+pnpm exec prettier --check packages/server/src/dashboard-git-projection.ts \
+  packages/server/src/dashboard-git-projection.test.ts
+pnpm exec oxlint packages/server/src/dashboard-git-projection.ts \
+  packages/server/src/dashboard-git-projection.test.ts
+git diff --check
+pnpm exec openspec validate close-openspec-cli16-delivery-gaps --strict
+```
+
+All listed final commands passed; there was no runner divergence. No broad gate, PR action, archive/release
+action, static change, or browser/visual/multi-tab walkthrough was run. Checkpoint 5.3 is complete; P4.4
+and P4.5 remain independent and open.
