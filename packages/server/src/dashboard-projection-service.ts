@@ -1,24 +1,31 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Own Dashboard Summary, trends, and Code Git regional Projection Work requests.
  * 2. Bind every regional snapshot to Planning-root and Code Git provenance before reuse.
  * 3. Retain reusable display snapshots without allowing a retired root service to keep subscribers alive.
  * 4. Keep explicit Git invalidation separate from broad Dashboard aggregate reloads.
+ * 5. Issue data-free Dashboard Summary v2 invalidations and correlated opaque typed pulls.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-07-23): "在已有content的时候，服务端推送变更，然后客户端收到推送通知，于是开始加载更新数据。"
  */
 import type {
   DashboardGitSnapshot,
+  DashboardSummaryInvalidation,
   DashboardSummaryProjection,
+  DashboardSummaryRead,
   DashboardTrendsProjection,
 } from '@openspecui/core'
 import { Buffer } from 'node:buffer'
+import { createHash } from 'node:crypto'
 import {
+  projectionWorkIdentityKey,
   ProjectionWorkRegistry,
   type ProjectionWorkEvent,
   type ProjectionWorkIdentity,
   type ProjectionWorkRequest,
   type ProjectionWorkRuntime,
+  type ProjectionWorkSnapshot,
   type ProjectionWorkSubscription,
 } from './projection-work/index.js'
 
@@ -52,8 +59,8 @@ export type DashboardProjectionSubscription<T> = (event: ProjectionWorkEvent<T, 
 
 /** Public capability exposed by one active Planning-root record. */
 export interface DashboardProjectionServiceContract {
-  subscribeSummary(
-    listener: DashboardProjectionSubscription<DashboardSummaryProjection>
+  subscribeSummaryInvalidation(
+    listener: (event: DashboardSummaryInvalidation) => void
   ): ProjectionWorkSubscription
   subscribeTrends(
     listener: DashboardProjectionSubscription<DashboardTrendsProjection>
@@ -61,7 +68,7 @@ export interface DashboardProjectionServiceContract {
   subscribeGit(
     listener: DashboardProjectionSubscription<DashboardGitSnapshot>
   ): ProjectionWorkSubscription
-  getSummary(): Promise<DashboardSummaryProjection>
+  getSummary(): Promise<DashboardSummaryRead>
   getTrends(): Promise<DashboardTrendsProjection>
   getGit(): Promise<DashboardGitSnapshot>
   invalidateGit(): void
@@ -102,11 +109,17 @@ export class DashboardProjectionService implements DashboardProjectionServiceCon
 
   constructor(private readonly options: DashboardProjectionServiceOptions) {}
 
-  /** Subscribe to first-screen Summary work; Git and trends cannot delay this request. */
-  subscribeSummary(
-    listener: DashboardProjectionSubscription<DashboardSummaryProjection>
+  /** Subscribe to data-free Summary invalidation; browser clients pull replacement content separately. */
+  subscribeSummaryInvalidation(
+    listener: (event: DashboardSummaryInvalidation) => void
   ): ProjectionWorkSubscription {
-    return this.subscribeRegistry(this.options.workOwner.summary, this.summaryRequest(), listener)
+    let lastWakeGeneration: number | null = null
+    return this.subscribeSummaryWork((event) => {
+      const invalidation = this.toSummaryInvalidation(event, lastWakeGeneration)
+      if (!invalidation) return
+      lastWakeGeneration = invalidation.workGeneration
+      listener(invalidation)
+    })
   }
 
   /** Subscribe to optional historical trend work. */
@@ -123,9 +136,17 @@ export class DashboardProjectionService implements DashboardProjectionServiceCon
     return this.subscribeRegistry(this.options.workOwner.git, this.gitRequest(), listener)
   }
 
-  /** Query one current Summary snapshot through the same bounded work identity as subscriptions. */
-  getSummary(): Promise<DashboardSummaryProjection> {
-    return this.getCurrent((listener) => this.subscribeSummary(listener))
+  /** Pull one current Summary snapshot through the same bounded work identity as invalidations. */
+  async getSummary(): Promise<DashboardSummaryRead> {
+    const snapshot = await this.getCurrentSnapshot<DashboardSummaryProjection>((listener) =>
+      this.subscribeSummaryWork(listener)
+    )
+    return {
+      identity: this.summaryIdentity(),
+      workGeneration: snapshot.workGeneration,
+      freshness: 'current',
+      data: snapshot.data,
+    }
   }
 
   /** Query one current trends snapshot through the same bounded work identity as subscriptions. */
@@ -185,6 +206,43 @@ export class DashboardProjectionService implements DashboardProjectionServiceCon
     }
   }
 
+  private subscribeSummaryWork(
+    listener: DashboardProjectionSubscription<DashboardSummaryProjection>
+  ): ProjectionWorkSubscription {
+    return this.subscribeRegistry(this.options.workOwner.summary, this.summaryRequest(), listener)
+  }
+
+  private summaryIdentity(): DashboardSummaryInvalidation['identity'] {
+    const key = projectionWorkIdentityKey(this.identity('summary'))
+    return `dashboard-summary-v2:${createHash('sha256').update(key).digest('base64url')}`
+  }
+
+  private toSummaryInvalidation(
+    event: ProjectionWorkEvent<DashboardSummaryProjection, never>,
+    lastWakeGeneration: number | null
+  ): DashboardSummaryInvalidation | null {
+    if (event.type === 'snapshot') {
+      if (event.snapshot.freshness !== 'current' || lastWakeGeneration !== null) return null
+      return {
+        identity: this.summaryIdentity(),
+        workGeneration: event.snapshot.workGeneration,
+        cause: 'initial',
+      }
+    }
+    if (
+      event.type === 'stage' &&
+      event.phase === 'start' &&
+      event.workGeneration !== lastWakeGeneration
+    ) {
+      return {
+        identity: this.summaryIdentity(),
+        workGeneration: event.workGeneration,
+        cause: lastWakeGeneration === null ? 'initial' : 'server-push',
+      }
+    }
+    return null
+  }
+
   private trendsRequest(): ProjectionWorkRequest<DashboardTrendsProjection, never> {
     return {
       identity: this.identity('trends'),
@@ -239,6 +297,14 @@ export class DashboardProjectionService implements DashboardProjectionServiceCon
       listener: (event: ProjectionWorkEvent<T, never>) => void
     ) => ProjectionWorkSubscription
   ): Promise<T> {
+    return this.getCurrentSnapshot(subscribe).then((snapshot) => snapshot.data)
+  }
+
+  private getCurrentSnapshot<T>(
+    subscribe: (
+      listener: (event: ProjectionWorkEvent<T, never>) => void
+    ) => ProjectionWorkSubscription
+  ): Promise<ProjectionWorkSnapshot<T>> {
     return new Promise((resolve, reject) => {
       let settled = false
       let subscription: ProjectionWorkSubscription | null = null
@@ -253,7 +319,7 @@ export class DashboardProjectionService implements DashboardProjectionServiceCon
       }
       subscription = subscribe((event) => {
         if (event.type === 'snapshot' && event.snapshot.freshness === 'current') {
-          settle(() => resolve(event.snapshot.data))
+          settle(() => resolve(event.snapshot))
           return
         }
         if (event.type === 'failed') {

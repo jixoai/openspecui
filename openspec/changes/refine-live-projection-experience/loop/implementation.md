@@ -31,13 +31,43 @@ The implementation scope is frozen as follows:
 > Server-emission blocker was revalidated on 2026-07-25 and is stale in the current tree. Phase 2 is now
 > eligible, but begins with one bounded vertical slice, P1-A Dashboard Summary, before Trends, Git, or Changes.
 
-| Order | Phase | Current state | Implementation owner | Mandatory evidence before moving on |
-| --- | --- | --- | --- | --- |
-| 1 | Phase 2, P1-A | Authorized; not implemented | Dashboard Summary Projection Work boundary and its real Web adapter | A public-boundary red case proves late A cannot commit after B; the green case proves exact identity/generation acceptance and no-data subscription wake-up. |
-| 2 | Phase 1 | **Implemented (Slice 2A+2B)** | Web realtime component module, shared `Button`, and CSS token ownership | A focused visual/state fixture proves stable geometry, reduced-motion equivalence, hidden accessible status, and no changing command label. |
-| 3 | Phase 1 | **Migrated (9/9 routes)** | Dashboard, Changes, Archives, Specs, Schemas, Context, Notifications, Git, and Search owners | Each route has a current/partial/revalidating/refresh-error fixture where applicable; no route-wide wait branch hides a stable sibling. |
-| 4 | Phase 1 | **Migrated (detail + Config + Settings loading)** | OPSX, planning-config, Settings/translation, dialog/editor, and terminal-control owners | A real draft/editor/overlay red case proves a late remote update cannot overwrite local interaction; authority locks hit the mutation owner. |
-| 5 | Phase 1 static/a11y; Phase 2 gates | **Static truthfulness proven; reduced-motion/mobile/Storybook pending** | Static provider, route/component tests, and Storybook fixtures | Static truthfulness, reduced motion, mobile geometry, and SSG evidence are green before full repository gates. |
+| Order | Phase                              | Current state                                                           | Implementation owner                                                                         | Mandatory evidence before moving on                                                                                                                                         |
+| ----- | ---------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | Phase 2, P1-A                      | Implemented; pending independent review                                 | Dashboard Summary Projection Work boundary and its real Web adapter                          | The v2-after-implementation acceptance fixed point is green. No historical pre-fix red was obtained; the same Web fixture fails after bypassing the exact active-wake gate. |
+| 2     | Phase 1                            | **Implemented (Slice 2A+2B)**                                           | Web realtime component module, shared `Button`, and CSS token ownership                      | A focused visual/state fixture proves stable geometry, reduced-motion equivalence, hidden accessible status, and no changing command label.                                 |
+| 3     | Phase 1                            | **Migrated (9/9 routes)**                                               | Dashboard, Changes, Archives, Specs, Schemas, Context, Notifications, Git, and Search owners | Each route has a current/partial/revalidating/refresh-error fixture where applicable; no route-wide wait branch hides a stable sibling.                                     |
+| 4     | Phase 1                            | **Migrated (detail + Config + Settings loading)**                       | OPSX, planning-config, Settings/translation, dialog/editor, and terminal-control owners      | A real draft/editor/overlay red case proves a late remote update cannot overwrite local interaction; authority locks hit the mutation owner.                                |
+| 5     | Phase 1 static/a11y; Phase 2 gates | **Static truthfulness proven; reduced-motion/mobile/Storybook pending** | Static provider, route/component tests, and Storybook fixtures                               | Static truthfulness, reduced motion, mobile geometry, and SSG evidence are green before full repository gates.                                                              |
+
+### P1-A Dashboard Summary v2 applied evidence (2026-07-25 Asia/Shanghai)
+
+- **Production owners**: `packages/core/src/dashboard-summary-transport.ts` defines strict browser-safe
+  wake/read contracts; `packages/server/src/dashboard-projection-service.ts` derives a SHA-256 opaque identity
+  from the Server-owned Summary Work and issues a data-free wake; `packages/server/src/router.ts` bridges
+  root replacement and owns the typed pull; `packages/web/src/lib/use-dashboard.ts` accepts a pull only when
+  its identity and work generation still equal the active wake.
+- **Public Server green**: `dashboard-summary-router.test.ts` starts a real `createServer` with watcher off,
+  uses its real Context and `appRouter` caller, replaces only typed CLI availability/Doctor/Context results,
+  and proves `subscribeSummary` contains no data/snapshot/batch/progress while `getSummary` correlates to its
+  opaque identity and generation. `dashboard-projection-service.test.ts` additionally proves cold/cache start
+  has one initial wake and recomputation adds one `server-push` wake. Command:
+  `pnpm --filter @openspecui/server exec vitest run src/dashboard-projection-service.test.ts src/dashboard-summary-router.test.ts --pool=threads --maxWorkers=1 --testTimeout=15000 --hookTimeout=15000` -> 2 files, 7 tests passed.
+- **Web acceptance fixed point**: `use-dashboard.test.ts` was added after v2 implementation and drives the
+  actual mocked tRPC subscription/query callback boundary: A wake -> deferred A pull -> root-rebind B wake -> B
+  commit -> late A resolution. The final Summary remains B.
+  Command: `pnpm --filter @openspecui/web exec vitest run --project unit src/lib/use-dashboard.test.ts` -> 1 file, 3 tests passed.
+- **Remove-guard mutation proof, not historical red**: no pre-fix implementation was available to produce a
+  historical red. Temporarily replacing `!isActiveWake(wake)` with `!active` in the real adapter acceptance
+  condition made the same late-A fixture fail at `use-dashboard.test.ts:176`: received Summary A
+  (`specifications: 1`) instead of B (`2`). The exact gate was restored before final green runs. This is mutation
+  evidence only; it does not satisfy checkpoint 2.2's requested historical pre-fix red.
+- **Checked boundary**: `pnpm --filter @openspecui/server typecheck` and
+  `pnpm --filter @openspecui/web typecheck` passed. The existing broad `router.test.ts` transport lane remains
+  excluded from P1-A evidence because its pre-existing unrelated checked-fixture errors are not this contract;
+  the new public fixture is included in `tsconfig.git-tests.json` and has no fabricated Context or unsafe cast.
+- **Scope**: Trends, Git, Changes, generic Projection Work transports, burst coalescing, user-action bypass,
+  visual atoms, layout, SSG work, broad gates, and owner browser walkthrough remain out of this slice. All P1-A
+  checkboxes remain unchecked until independent review accepts the named evidence.
 
 ### P0 Server-emission revalidation (2026-07-25 Asia/Shanghai)
 

@@ -40,13 +40,19 @@ Phase 2 begins only with P1-A Dashboard Summary: a data-free v2 subscription, a 
 and its identity/generation-safe Web adapter. Trends, Git, Changes, coalescing, and user-action bypass stay
 outside P1-A.
 
-- [ ] 2.1 P1-A starts the version-2 Dashboard Summary invalidation/pull contract and its typed Web adapter. The migrated Summary subscription carries identity/generation/cause but no business data; no v1 alias or parallel client truth exists for that route. *(Phase 2)*
-- [ ] 2.2 P1-A red evidence reaches the real Dashboard Summary adapter: A invalidates, B rebinds, A pull resolves late, and the pre-fix adapter can publish A incorrectly. *(Phase 2)*
-- [ ] 2.3 P1-A green and mutation-resistance evidence proves only a matching identity/generation pull commits; removing the exact acceptance gate fails the same late-A fixture. *(Phase 2)*
-- [ ] 2.4 P2 visual primitives implemented and tested: composable root/data attributes, stable skeleton geometry, local revalidation/settle cues, truthful progress, reduced-motion path, hidden accessible status, and stable command labels. *(Phase 1; split 2A state law/adapters incl. the Web-side root-cause fix to `useAuthoritativeSubscription` reconnect/stopped/complete not flipping `isLoading` when cached data exists, then 2B atoms/CSS)*
-- [ ] 2.5 P3 inventory/regional routes migrated: Dashboard, Changes, Archives, Specs, Schemas, Context, Notifications, Git, and Search use the shared model without hiding current sibling content behind a route-wide wait branch. *(Phase 1; adapter targets v1 transport)*
-- [ ] 2.6 P4 details, workflows, Config, Settings, translation, overlays, editors, and terminal controls migrated with local update availability and no dirty-draft/overlay overwrite. *(Phase 1; adapter targets v1 transport)*
-- [ ] 2.7 P5 static, accessibility, and visual-regression evidence completed: static mode has no fabricated Live/revalidation effect; mobile and reduced-motion fixtures are green; SSG uses shared display mapping. *(Phase 1 static/a11y deliverable; Phase 2 adds the full-gate closing evidence after P1)*
+- [ ] 2.1 P1-A starts the version-2 Dashboard Summary invalidation/pull contract and its typed Web adapter. The migrated Summary subscription carries identity/generation/cause but no business data; no v1 alias or parallel client truth exists for that route. _(Phase 2)_
+- [ ] 2.2 P1-A red evidence reaches the real Dashboard Summary adapter: A invalidates, B rebinds, A pull resolves late, and the pre-fix adapter can publish A incorrectly. _(Phase 2)_
+- [ ] 2.3 P1-A green and mutation-resistance evidence proves only a matching identity/generation pull commits; removing the exact acceptance gate fails the same late-A fixture. _(Phase 2)_
+
+P1-A evidence is recorded in `loop/implementation.md` as of 2026-07-25: the real Server/tRPC fixture and the
+v2-after-implementation Web acceptance fixed point pass, and bypassing the exact active-wake gate makes late A
+overwrite B. No historical pre-fix red was obtained, so 2.2 and every P1-A checkbox remain unchecked pending
+independent review; the remove-guard result is mutation resistance, not a substitute for that red.
+
+- [ ] 2.4 P2 visual primitives implemented and tested: composable root/data attributes, stable skeleton geometry, local revalidation/settle cues, truthful progress, reduced-motion path, hidden accessible status, and stable command labels. _(Phase 1; split 2A state law/adapters incl. the Web-side root-cause fix to `useAuthoritativeSubscription` reconnect/stopped/complete not flipping `isLoading` when cached data exists, then 2B atoms/CSS)_
+- [ ] 2.5 P3 inventory/regional routes migrated: Dashboard, Changes, Archives, Specs, Schemas, Context, Notifications, Git, and Search use the shared model without hiding current sibling content behind a route-wide wait branch. _(Phase 1; adapter targets v1 transport)_
+- [ ] 2.6 P4 details, workflows, Config, Settings, translation, overlays, editors, and terminal controls migrated with local update availability and no dirty-draft/overlay overwrite. _(Phase 1; adapter targets v1 transport)_
+- [ ] 2.7 P5 static, accessibility, and visual-regression evidence completed: static mode has no fabricated Live/revalidation effect; mobile and reduced-motion fixtures are green; SSG uses shared display mapping. _(Phase 1 static/a11y deliverable; Phase 2 adds the full-gate closing evidence after P1)_
 - [ ] 2.8 Each package's implementation state, exact source/test owner, command output, red/green result, and mutation-resistance result are synchronized in `loop/implementation.md`.
 - [ ] 2.9 Any loopback trigger is recorded before further code work: missing typed provenance, invented lifecycle state, global draft ownership, layout/Kanban collision, divergent SSG mapping, invalid red test, or newly discovered cache/worker/polling product decision.
 

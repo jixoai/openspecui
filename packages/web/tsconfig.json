@@ -13,6 +13,9 @@
       "@openspecui/server": ["../server/src/index.ts"],
       "@openspecui/core": ["../core/src/index.ts"],
       "@openspecui/core/dashboard-display": ["../core/src/dashboard-display.ts"],
+      "@openspecui/core/dashboard-summary-transport": [
+        "../core/src/dashboard-summary-transport.ts"
+      ],
       "@openspecui/core/hosted-app": ["../core/src/hosted-app.ts"],
       "@openspecui/core/markdown-facts": ["../core/src/markdown-facts.ts"],
       "@openspecui/core/markdown-reading": ["../core/src/markdown-reading.ts"],

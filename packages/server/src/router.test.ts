@@ -1,11 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
- * 1. Prove public Router queries and mutations preserve their typed owner boundaries.
- * 2. Prove Planning-root replacement and public stream routes preserve rejected settlement.
- * 3. Prove strict Archive identity, validation, diagnostics, and Store selection through its public route.
- * 4. Prove reactive, configuration, Dashboard, Git, notification, and runtime procedures retain scoped behavior.
- * 5. Prove stale Git binding intent conflicts before rebound repository side effects.
- * 6. Prove OPSX Status and lazy leaves bypass full Kernel warmup while preserving typed evidence.
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * 1. Prove public Router owner boundaries and Planning-root stream settlement.
+ * 2. Prove strict Archive identity, validation, diagnostics, and Store selection through its public route.
+ * 3. Prove reactive configuration, Dashboard Summary v2, Git, notification, and runtime procedures retain scoped behavior.
+ * 4. Prove stale Git binding intent conflicts before rebound repository side effects.
+ * 5. Prove OPSX Status and lazy leaves bypass full Kernel warmup while preserving typed evidence.
  *
  * Original request (2026-07-17): "Every public application mutation remains inside its Server-owned root and lifetime."
  * Original request (2026-07-17): "Rejected Validate and Update handles converge to one public terminal error."
@@ -683,9 +682,14 @@ artifacts:
   const getDashboardSummary: DashboardProjectionServiceContract['getSummary'] = async () => {
     const overview = await dashboardOverviewService.getCurrent()
     return {
-      summary: overview.summary,
-      specifications: overview.specifications,
-      activeChanges: overview.activeChanges,
+      identity: 'dashboard-summary-v2:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      workGeneration: 1,
+      freshness: 'current',
+      data: {
+        summary: overview.summary,
+        specifications: overview.specifications,
+        activeChanges: overview.activeChanges,
+      },
     }
   }
   const getDashboardTrends: DashboardProjectionServiceContract['getTrends'] = async () => {
@@ -704,8 +708,18 @@ artifacts:
     getSummary: getDashboardSummary,
     getTrends: getDashboardTrends,
     getGit: getDashboardGit,
-    subscribeSummary: (listener) =>
-      subscribeDashboardProjectionFixture('dashboard-summary', getDashboardSummary, listener),
+    subscribeSummaryInvalidation: (listener) => {
+      let active = true
+      void getDashboardSummary().then((summary) => {
+        if (!active) return
+        listener({
+          identity: summary.identity,
+          workGeneration: summary.workGeneration,
+          cause: 'initial',
+        })
+      })
+      return { unsubscribe: () => (active = false) }
+    },
     subscribeTrends: (listener) =>
       subscribeDashboardProjectionFixture('dashboard-trends', getDashboardTrends, listener),
     subscribeGit: (listener) =>
@@ -1701,7 +1715,7 @@ apply:
         caller.dashboard.getGit(),
       ])
 
-      expect(summary.summary.specifications).toBe(2)
+      expect(summary.data.summary.specifications).toBe(2)
       expect(trends.trendKinds.requirements).toBe('monotonic')
       expect(git.defaultBranch).toBe('origin/main')
     })

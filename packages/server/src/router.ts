@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Register lease-scoped planning-root document, OPSX, regional Dashboard, and archive procedures.
  * 2. Register CLI, Root Context, reactive launch-tool initialization, configuration, Store, and terminal-result projections.
- * 3. Register binding-safe Git, terminal, system, notification, and recovery procedures.
+ * 3. Register binding-safe Git, Dashboard Summary v2, terminal, system, notification, and recovery procedures.
  * 4. Register translation runtime, model, asset, and cache procedures.
  * 5. Compose the public tRPC application router and shared procedure schemas.
  *
@@ -29,7 +29,7 @@ import type {
   CliStreamHandle,
   ConfigManager,
   DashboardGitSnapshot,
-  DashboardSummaryProjection,
+  DashboardSummaryInvalidation,
   DashboardTrendsProjection,
   FileChangeEvent,
   GitEntriesPage,
@@ -50,7 +50,8 @@ import {
   CodeEditorThemeSchema,
   DashboardConfigSchema,
   DashboardGitSnapshotSchema,
-  DashboardSummaryProjectionSchema,
+  DashboardSummaryInvalidationSchema,
+  DashboardSummaryReadSchema,
   DashboardTrendsProjectionSchema,
   DocumentTranslationConfigUpdateSchema,
   EnvironmentGlobalConfigValueSchema,
@@ -304,6 +305,69 @@ function createPlanningRootProjectionWorkSubscription<T, TBatch = never>(
           { onRecomputeStarted: retireRegionalSubscription }
         )) {
           // The inner regional subscription owns all meaningful payload events.
+        }
+      } catch (error: unknown) {
+        if (active && !controller.signal.aborted) {
+          emit.error(error instanceof Error ? error : new Error(String(error)))
+        }
+      }
+    })()
+
+    return () => {
+      active = false
+      controller.abort()
+      retireRegionalSubscription()
+    }
+  })
+}
+
+/**
+ * Bridge the migrated Summary v2 wake-up stream across Planning-root replacement without exposing the
+ * underlying Projection Work identity or data. The first event for a replacement is a root-rebind wake.
+ */
+function createPlanningRootSummaryInvalidationSubscription(ctx: Context) {
+  return observable<DashboardSummaryInvalidation>((emit) => {
+    const reactiveContext = new ReactiveContext()
+    const controller = new AbortController()
+    let regionalSubscription: ProjectionWorkSubscription | null = null
+    let active = true
+    let bindingCount = 0
+
+    const retireRegionalSubscription = () => {
+      regionalSubscription?.unsubscribe()
+      regionalSubscription = null
+    }
+
+    void (async () => {
+      try {
+        for await (const _ of reactiveContext.stream(
+          () => {
+            retireRegionalSubscription()
+            const cause = bindingCount === 0 ? 'initial' : 'root-rebind'
+            bindingCount += 1
+            let emittedForBinding = false
+            return ctx.planningRootServices.runReactiveOperation((services) => {
+              regionalSubscription =
+                services.dashboardProjectionService.subscribeSummaryInvalidation((event) => {
+                  if (!active) return
+                  try {
+                    emit.next(
+                      DashboardSummaryInvalidationSchema.parse({
+                        ...event,
+                        cause: emittedForBinding ? event.cause : cause,
+                      })
+                    )
+                    emittedForBinding = true
+                  } catch (error: unknown) {
+                    emit.error(error instanceof Error ? error : new Error(String(error)))
+                  }
+                })
+            })
+          },
+          controller.signal,
+          { onRecomputeStarted: retireRegionalSubscription }
+        )) {
+          // The current root-scoped Summary service owns wake-up production.
         }
       } catch (error: unknown) {
         if (active && !controller.signal.aborted) {
@@ -2759,11 +2823,13 @@ export const dashboardRouter = router({
     )
   }),
 
-  getSummary: publicProcedure.query(({ ctx }) => {
-    return runPlanningRoot(ctx, ({ dashboardProjectionService }) =>
-      dashboardProjectionService.getSummary()
+  getSummary: publicProcedure.query(async ({ ctx }) =>
+    DashboardSummaryReadSchema.parse(
+      await runPlanningRoot(ctx, ({ dashboardProjectionService }) =>
+        dashboardProjectionService.getSummary()
+      )
     )
-  }),
+  ),
 
   getTrends: publicProcedure.query(({ ctx }) => {
     return runPlanningRoot(ctx, ({ dashboardProjectionService }) =>
@@ -2778,14 +2844,7 @@ export const dashboardRouter = router({
   }),
 
   subscribeSummary: publicProcedure.subscription(({ ctx }) =>
-    createPlanningRootProjectionWorkSubscription<DashboardSummaryProjection>(
-      ctx,
-      (services, listener) => services.dashboardProjectionService.subscribeSummary(listener),
-      (event) =>
-        dashboardProjectionEventSchema<DashboardSummaryProjection>(
-          DashboardSummaryProjectionSchema
-        ).parse(event)
-    )
+    createPlanningRootSummaryInvalidationSubscription(ctx)
   ),
 
   subscribeTrends: publicProcedure.subscription(({ ctx }) =>

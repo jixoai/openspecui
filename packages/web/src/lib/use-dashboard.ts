@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Admit Dashboard Summary first, then independently deliver trends and Code Git projections.
  * 2. Execute Dashboard Git mutations against the stable Launch-owned Code binding.
  * 3. Translate current and stale Projection Work snapshots into honest region display and updating state.
+ * 4. Commit Dashboard Summary v2 pulls only when their wake-up identity and generation remain current.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git bindings.
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-07-23): "在已有content的时候，服务端推送变更，然后客户端收到推送通知，于是开始加载更新数据。"
  */
 import type {
   DashboardGitSnapshot,
@@ -14,6 +16,10 @@ import type {
   DashboardSummaryProjection,
   DashboardTrendsProjection,
 } from '@openspecui/core'
+import type {
+  DashboardSummaryInvalidation,
+  DashboardSummaryRead,
+} from '@openspecui/core/dashboard-summary-transport'
 import { useCallback, useMemo } from 'react'
 import * as StaticProvider from './static-data-provider'
 import { isStaticMode } from './static-mode'
@@ -56,8 +62,17 @@ interface DashboardProjectionCallbacks<T> {
   onError(error: Error): void
 }
 
+interface DashboardSummaryInvalidationCallbacks {
+  onData(event: DashboardSummaryInvalidation): void
+  onError(error: Error): void
+}
+
 type DashboardProjectionTransport<T> = (
   callbacks: DashboardProjectionTransportCallbacks<T>
+) => Unsubscribable
+
+type DashboardSummaryInvalidationTransport = (
+  callbacks: DashboardSummaryInvalidationCallbacks
 ) => Unsubscribable
 
 /** Regional states preserve stable data while unrelated Dashboard leaves remain pending or fail. */
@@ -118,6 +133,69 @@ function useDashboardProjectionRegion<T>(
   return useReactiveProjectionSubscription(adaptedSubscribe, staticLoader, [enabled], cacheKey)
 }
 
+function isCurrentSummaryRead(
+  activeWake: DashboardSummaryInvalidation,
+  read: DashboardSummaryRead
+): boolean {
+  return read.identity === activeWake.identity && read.workGeneration === activeWake.workGeneration
+}
+
+/**
+ * Migrate only Summary to the v2 wake-up/pull transport. The subscription never contains business data;
+ * an active opaque identity plus work generation must match before a typed query may commit.
+ */
+function useDashboardSummaryProjectionRegion(
+  subscribe: DashboardSummaryInvalidationTransport,
+  staticLoader: () => Promise<DashboardSummaryProjection>
+): ReactiveProjectionSubscriptionState<DashboardSummaryProjection> {
+  const adaptedSubscribe = useCallback(
+    (callbacks: DashboardProjectionCallbacks<DashboardSummaryProjection>) => {
+      let active = true
+      let hasDisplayData = false
+      let activeWake: DashboardSummaryInvalidation | null = null
+      const isActiveWake = (wake: DashboardSummaryInvalidation) =>
+        active &&
+        activeWake !== null &&
+        activeWake.identity === wake.identity &&
+        activeWake.workGeneration === wake.workGeneration
+      const pull = async (wake: DashboardSummaryInvalidation) => {
+        try {
+          const read = await trpcClient.dashboard.getSummary.query()
+          if (!isActiveWake(wake) || !isCurrentSummaryRead(wake, read)) return
+          hasDisplayData = true
+          callbacks.onEvent({ type: 'data', data: read.data })
+        } catch (cause: unknown) {
+          if (!isActiveWake(wake)) return
+          callbacks.onError(normalizeProjectionError(cause))
+        }
+      }
+      const subscription = subscribe({
+        onData(wake) {
+          const wasDisplaying = hasDisplayData
+          activeWake = wake
+          if (wasDisplaying) callbacks.onEvent({ type: 'recompute-started' })
+          void pull(wake)
+        },
+        onError: callbacks.onError,
+      })
+      return {
+        unsubscribe() {
+          active = false
+          subscription.unsubscribe()
+        },
+      }
+    },
+    [subscribe]
+  )
+
+  return useReactiveProjectionSubscription(
+    adaptedSubscribe,
+    staticLoader,
+    [],
+    'dashboard.subscribeSummary.v2'
+  )
+}
+
 async function loadStaticDashboardSummary(): Promise<DashboardSummaryProjection> {
   const overview = await StaticProvider.getDashboardOverview()
   return {
@@ -145,7 +223,7 @@ async function loadStaticDashboardGit(): Promise<DashboardGitSnapshot> {
 /** Subscribe to independently owned Dashboard regions and expose an aggregate compatibility snapshot. */
 export function useDashboardOverviewSubscription(): DashboardOverviewSubscriptionState {
   const subscribeSummary = useCallback(
-    (callbacks: DashboardProjectionTransportCallbacks<DashboardSummaryProjection>) =>
+    (callbacks: DashboardSummaryInvalidationCallbacks) =>
       trpcClient.dashboard.subscribeSummary.subscribe(undefined, {
         onData: callbacks.onData,
         onError: callbacks.onError,
@@ -169,11 +247,7 @@ export function useDashboardOverviewSubscription(): DashboardOverviewSubscriptio
     []
   )
 
-  const summary = useDashboardProjectionRegion(
-    subscribeSummary,
-    loadStaticDashboardSummary,
-    'dashboard.subscribeSummary'
-  )
+  const summary = useDashboardSummaryProjectionRegion(subscribeSummary, loadStaticDashboardSummary)
   const admitSecondaryRegions = summary.data !== undefined
   const trends = useDashboardProjectionRegion(
     subscribeTrends,

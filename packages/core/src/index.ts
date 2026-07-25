@@ -2,8 +2,8 @@
  * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Expose the public Core package contract through one stable barrel.
  * 2. Keep filesystem, CLI, Root Context, workflow, live, and static projection types source-distinct.
- * 3. Publish browser-safe subpath contracts, including the external Codex command observation root,
- *    without forcing browser runtimes through this root.
+ * 3. Publish browser-safe subpath contracts, including Dashboard Summary v2 and the external Codex command
+ *    observation root, without forcing browser runtimes through this root.
  * 4. Export the typed Git repository binding and Dashboard provenance contracts.
  *
  * Original request (2026-07-15): "用强类型合同承载 OpenSpec 1.6 的客观事实。"
@@ -718,6 +718,16 @@ export {
 } from './tool-init-state.js'
 
 // Export types for static site generation
+export {
+  DashboardSummaryIdentitySchema,
+  DashboardSummaryInvalidationCauseSchema,
+  DashboardSummaryInvalidationSchema,
+  DashboardSummaryReadSchema,
+  type DashboardSummaryIdentity,
+  type DashboardSummaryInvalidation,
+  type DashboardSummaryInvalidationCause,
+  type DashboardSummaryRead,
+} from './dashboard-summary-transport.js'
 export {
   DASHBOARD_METRIC_KEYS,
   DashboardGitSnapshotSchema,

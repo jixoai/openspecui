@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
- * 1. Prove Dashboard Summary is independently deliverable while Git remains slow.
- * 2. Prove a dormant regional snapshot replays as display-only before revalidation.
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * 1. Prove Dashboard Summary emits a data-free v2 wake while Git remains slow.
+ * 2. Prove the typed Summary pull retains opaque identity and current work generation.
  * 3. Prove a changed Code Git binding cannot reuse the previous Git snapshot.
  * 4. Prove one-shot Dashboard queries retire their listener before later invalidation.
+ * 5. Prove Summary v2 emits exactly one data-free wake for each work generation.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-07-23): "在已有content的时候，服务端推送变更，然后客户端收到推送通知，于是开始加载更新数据。"
  */
 import type {
   DashboardGitSnapshot,
@@ -136,27 +138,34 @@ function createService(options: {
 }
 
 describe('DashboardProjectionService', () => {
-  it('delivers Summary before a slow Git leaf settles', async () => {
+  it('emits a data-free Summary wake before a slow Git leaf settles', async () => {
     const runtime = createServerProjectionWorkRuntime()
     const owner = createDashboardProjectionWorkOwner(runtime)
     const slowGit = createDeferred<DashboardGitSnapshot>()
     const summaryData = createDeferred<DashboardSummaryProjection>()
-    const summaries: DashboardSummaryProjection[] = []
+    const summaryInvalidations: unknown[] = []
     const gitSnapshots: DashboardGitSnapshot[] = []
     const service = createService({
       owner,
       loadSummary: () => summaryData.promise,
       loadGit: () => slowGit.promise,
     })
-    const summarySubscription = service.subscribeSummary((event) => {
-      if (event.type === 'snapshot') summaries.push(event.snapshot.data)
-    })
+    const summarySubscription = service.subscribeSummaryInvalidation((event) =>
+      summaryInvalidations.push(event)
+    )
     const gitSubscription = service.subscribeGit((event) => {
       if (event.type === 'snapshot') gitSnapshots.push(event.snapshot.data)
     })
 
+    await vi.waitFor(() => expect(summaryInvalidations).toHaveLength(1))
+    expect(summaryInvalidations[0]).toEqual({
+      identity: expect.stringMatching(/^dashboard-summary-v2:/),
+      workGeneration: 1,
+      cause: 'initial',
+    })
+    expect(summaryInvalidations[0]).not.toHaveProperty('data')
     summaryData.resolve(createSummary(7))
-    await vi.waitFor(() => expect(summaries).toEqual([createSummary(7)]))
+    await vi.waitFor(() => expect(summaryInvalidations).toHaveLength(1))
     expect(gitSnapshots).toEqual([])
 
     slowGit.resolve(createGit('code-binding-a'))
@@ -168,24 +177,62 @@ describe('DashboardProjectionService', () => {
     runtime.clear()
   })
 
-  it('replays a dormant Summary snapshot as display-only before revalidation', async () => {
+  it('emits one initial wake from a current Summary cache hit', async () => {
+    const runtime = createServerProjectionWorkRuntime()
+    const owner = createDashboardProjectionWorkOwner(runtime)
+    const loadSummary = vi.fn(async () => createSummary(8))
+    const service = createService({ owner, loadSummary })
+
+    const firstSubscription = service.subscribeSummaryInvalidation(() => {})
+    await vi.waitFor(() => expect(loadSummary).toHaveBeenCalledOnce())
+    const invalidations: unknown[] = []
+    const subscription = service.subscribeSummaryInvalidation((event) => invalidations.push(event))
+
+    await vi.waitFor(() => expect(invalidations).toHaveLength(1))
+    expect(invalidations[0]).toMatchObject({ cause: 'initial', workGeneration: 1 })
+    expect(loadSummary).toHaveBeenCalledOnce()
+
+    subscription.unsubscribe()
+    firstSubscription.unsubscribe()
+    service.dispose()
+    runtime.clear()
+  })
+
+  it('emits one new server-push wake only when Summary recomputes', async () => {
+    const runtime = createServerProjectionWorkRuntime()
+    const owner = createDashboardProjectionWorkOwner(runtime)
+    const loadSummary = vi.fn(async () => createSummary(9))
+    const service = createService({ owner, loadSummary })
+    const invalidations: Array<{ cause: string; workGeneration: number }> = []
+    const subscription = service.subscribeSummaryInvalidation((event) => invalidations.push(event))
+
+    await vi.waitFor(() => expect(invalidations).toHaveLength(1))
+    owner.summary.invalidate(createSummaryIdentity())
+    await vi.waitFor(() => expect(invalidations).toHaveLength(2))
+    expect(invalidations[0]).toMatchObject({ cause: 'initial', workGeneration: 1 })
+    expect(invalidations[1]).toMatchObject({ cause: 'server-push', workGeneration: 2 })
+
+    subscription.unsubscribe()
+    service.dispose()
+    runtime.clear()
+  })
+
+  it('returns an opaque current Summary read through the same work owner', async () => {
     const runtime = createServerProjectionWorkRuntime()
     const owner = createDashboardProjectionWorkOwner(runtime)
     const loadSummary = vi.fn(async () => createSummary(3))
     const service = createService({ owner, loadSummary })
 
-    await service.getSummary()
-    const replayed: Array<{ data: DashboardSummaryProjection; freshness: string }> = []
-    const subscription = service.subscribeSummary((event) => {
-      if (event.type === 'snapshot') {
-        replayed.push({ data: event.snapshot.data, freshness: event.snapshot.freshness })
-      }
+    const read = await service.getSummary()
+
+    expect(read).toMatchObject({
+      identity: expect.stringMatching(/^dashboard-summary-v2:/),
+      workGeneration: 1,
+      freshness: 'current',
+      data: createSummary(3),
     })
-
-    expect(replayed).toContainEqual({ data: createSummary(3), freshness: 'stale-display-only' })
-    await vi.waitFor(() => expect(loadSummary).toHaveBeenCalledTimes(2))
-
-    subscription.unsubscribe()
+    expect(read.identity).not.toContain('/planning-root')
+    expect(loadSummary).toHaveBeenCalledOnce()
     service.dispose()
     runtime.clear()
   })

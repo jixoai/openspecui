@@ -18,6 +18,7 @@
     "src/projection-work/runtime.test.ts",
     "src/projection-work/scheduler.test.ts",
     "src/reactive-subscription.test.ts",
+    "src/dashboard-projection-service.test.ts",
     "src/tool-subscription-router.test.ts",
     "src/translation-engine-worker.test.ts",
     "../local-translator/src/huggingface-transformers.d.ts"
