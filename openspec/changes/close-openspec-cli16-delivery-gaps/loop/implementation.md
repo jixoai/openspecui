@@ -1693,3 +1693,46 @@ Core/Server/CLI behavior by `target-cli-16-line-hosted-protocol.md`; static Core
 `target-cli-16-line-static-refs.md`; and Config Web behavior by `config-ownership-sections.md`. The App package is
 private, though its hosted behavior is still named in the hosted-protocol note. No duplicate changeset is
 authorized. Resume 6.3 only after the concurrent owner has formatted or otherwise settled both blocking paths.
+
+#### P5.3-P5.5 local delivery gates accepted: 2026-07-25 Asia/Shanghai
+
+The manager explicitly authorized mechanical formatting of the two concurrent Markdown files. Independent Terra
+verification ran Prettier write/check against only those paths, reviewed the resulting layout-only transformation,
+and left them unstaged for their existing owner. The complete local gate package then produced zero exit:
+
+```text
+pnpm format:check          -> passed
+pnpm lint:ci               -> passed; 0 warnings / 0 errors
+pnpm typecheck             -> passed across the workspace
+pnpm test:ci               -> passed; serial Core/Server/App/Web/CLI process exited normally
+pnpm test:browser:ci       -> passed; xterm 60 passed / 1 skipped was observed
+focused static Web tests   -> passed
+clean Web SSG build        -> passed
+git diff --check           -> passed
+strict Change validation   -> passed
+```
+
+The long-running command session detached while child processes continued, so it did not retain the final aggregate
+line for `test:ci`, the Web Storybook count, or the focused static-test count. Their owning top-level processes
+exited normally with no failure output; no exact count is asserted where it was not observed. The browser lane is
+only component/Storybook preparation evidence and does not close any manager walkthrough item.
+
+The original `rm -rf` clean command was rejected by the execution environment, while plain `rm -r` correctly
+returned non-zero after both paths were already absent. The accepted equivalent used bounded `find` selection to
+remove only existing `packages/web/dist-ssg` or `packages/web/.vite` directories, then rebuilt from that clean
+state. SSG emitted only the existing `::scroll-button` CSS optimization and dynamic-import chunking notices.
+
+The release-note audit reconfirmed exact coverage without adding a duplicate changeset:
+
+| Surface                             | Existing changeset                         |
+| ----------------------------------- | ------------------------------------------ |
+| Core/Server/Web Summary v2          | `refine-live-projection-experience-p1a.md` |
+| Core/Server/Web loading work        | `accelerate-live-projection-loading.md`    |
+| Core/Search/Server/Web/CLI 6.x line | `target-cli-16-line-6x.md`                 |
+| Core/Server/CLI/App Hosted behavior | `target-cli-16-line-hosted-protocol.md`    |
+| Core/Web/CLI static References      | `target-cli-16-line-static-refs.md`        |
+| Web Config ownership                | `config-ownership-sections.md`             |
+
+App remains private; the publishable CLI package is `openspecui` and is covered by the changesets that declare
+`openspecui: major`. This closes 6.3-6.5. Checkpoint 6.6 (fresh PR update/checks) is the only delivery action before
+the manager-only 6.7-6.12 walkthrough; no walkthrough, merge, archive, or release is implied by these local gates.
