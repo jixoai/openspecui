@@ -2368,7 +2368,52 @@ Web component browser     4 files / 12 tests passed
 ```
 
 This is environment/suite-pressure evidence, not permission to call the complete local gate green. Checkpoint 6.3
-and PR checkpoint 6.6 remain open, and the candidate commit series remains unpushed. After host pressure subsides, rerun
-only the Web unit package once. If the same named case then fails under normal load, reopen that exact test owner;
-if it passes, record the completed 6.3 evidence, update PR #207, and require fresh remote checks. Do not repeat the
-already-green packages or widen timeouts merely to obtain a green aggregate.
+and PR checkpoint 6.6 remain open, and the candidate commit series remains unpushed. After host pressure subsides,
+rerun only the Web unit package once. If the same named case then fails under normal load, reopen that exact test
+owner; if it passes, record the completed 6.3 evidence, update PR #207, and require fresh remote checks. Do not
+repeat the already-green packages or widen timeouts merely to obtain a green aggregate.
+
+#### P5.6e Web unit worker-budget authorization: 2026-07-26 Asia/Shanghai
+
+The first independent tester report after the stop-loss wait is rejected as evidence. It claimed a zero exit after
+approximately `25.2s` without a Vitest summary; a later collection command was still present in the process table
+after the tester reported completion. Tool yield and elapsed wait are not process exit evidence. The leaked
+collection process was retired before a replacement run.
+
+The replacement standard command retained a complete log and finished with one aggregate-only failure:
+
+```text
+pnpm --filter @openspecui/web test
+  153/154 files passed
+  988/989 tests passed
+  ChangeList real-Router handoff timed out at 5s
+
+exact ChangeList file
+  1/1 file and 1/1 test passed
+  test body 173ms; total duration 2.28s
+```
+
+This fourth default-worker failure has a different owner from the prior OPSX, SSG, and Settings timeouts. The unit
+project has no worker budget, so Vitest uses all `8` available logical CPUs while each isolated worker loads the
+jsdom, Router, translation, xterm, and preview graph. A command-line experiment on the same `691fda3` candidate
+changed only the worker budget:
+
+```text
+pnpm --filter @openspecui/web exec vitest run --project unit --maxWorkers=50%
+  154/154 files passed
+  989/989 tests passed
+  duration 74.01s
+  exit 0
+```
+
+Checkpoint 6.3e authorizes one test-infrastructure correction: set `maxWorkers: '50%'` only on the Web `unit`
+Vitest project. The portable percentage preserves parallelism while preventing the heavy unit graph from claiming
+every host CPU. Do not change `testTimeout`, hook timeout, assertions, production code, test code, browser/Storybook
+worker policy, package scripts, retry policy, or file isolation. The standard package command, without a CLI worker
+override, must then pass before 6.3e can close. The four default-worker failures plus exact-file greens are the
+pre-fix/removal evidence; do not rerun the unstable default merely to reproduce it again.
+
+The worker stops after the standard Web package run, Web typecheck, scoped format/lint, diff check, strict Change
+validation, one implementation record, and a code/evidence commit. Full workspace, browser, SSG, PR update, push,
+manager walkthrough, merge, archive, and release remain outside 6.3e. Independent review must accept 6.3e before
+6.3 or 6.6 closes.

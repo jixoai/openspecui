@@ -79,15 +79,16 @@ Focused reviewer acceptance is a hard predecessor of the next package and every 
 - [x] 6.3b Corrected the repeated clean-CI Tool `commands/update` observation failure through retained directory inventories: fanout fell from `720/401/720` states/subscriptions/polls to `60/60/0`, expected/unexpected/legacy and physical-scope semantics remain covered, bypassing the inventory dependency makes the named stream fixture fail, and the real Codex observation root survives deletion/recreation without timeout or generic-kernel changes.
 - [x] 6.3c Made the real Spec Router handoff fixture await its asynchronous `onResolved` lifecycle before asserting each emitted path. Production route/document/cache/transition/location evidence remains unchanged, and removing the actual event subscription makes the owned fixture fail at the named path assertion.
 - [x] 6.3d Carried the parent CLI runtime's already resolved `webAssetsDir` through `WorktreeInstanceManager`, checked worker data, and a consumed private process environment value. The accepted worker/process branch fixtures are joined by a typechecked real `startServer -> tRPC Git switchWorktree -> child Server` fixture that serves the parent-owned marker and verifies sibling health. Replacing the exact upstream `startServer -> Manager` argument with an invalid root fails that named fixture at worker-data admission; no public CLI option, target-worktree asset discovery, generated-output fallback, or hand-authored Manager injection satisfies the proof.
+- [ ] 6.3e Bound only the Web unit Vitest project to `50%` of available workers after four default-worker aggregate runs timed out in changing owners while every exact file passed; require the standard package command to pass without timeout, retry, assertion, product, test, browser-worker, or serialization changes.
 - [x] 6.4 Removed existing generated Web outputs with the environment-compatible idempotent cleanup, then the focused static-provider tests and clean `pnpm --filter @openspecui/web build:ssg` completed with zero exit.
 - [x] 6.5 Audited the current publishable surface against the existing 6.x, Hosted, static References, Config, loading, and Summary-v2 changesets; every changed published package/behavior is covered and no duplicate changeset is required. App remains private.
 - [ ] 6.6 PR #207 head `5dfff29` passed Changeset Gate and CI Scope, then Fast Gate run `30168547796` rejected two real worktree child fixtures because the already resolved parent `webAssetsDir` was not handed to process/worker children. Browser shards were skipped behind Fast Gate. Accept 6.3d, replay 6.3 once, update the PR, and require fresh checks.
 
 Current 6.3 gate state (2026-07-26): format, lint, all typechecks, pre-Web unit packages, CLI `68/68`,
-xterm component browser `60 passed / 1 skipped`, and Web component browser `12/12` pass. The required full Web
-unit package remains open after resource-pressure attempts produced changing timeout owners; the exact 13 affected
-files pass `194/194`. No timeout was widened and no PR update is authorized until one normal-load Web package run
-passes. Exact evidence and the stop-loss rule are recorded in `implementation.md`.
+xterm component browser `60 passed / 1 skipped`, and Web component browser `12/12` pass. Four default-worker Web
+aggregate runs failed in changing owners while every exact file passed. The same candidate passed `154/154` files
+and `989/989` tests with a `50%` unit-worker budget, authorizing 6.3e. No timeout was widened and no PR update is
+authorized until 6.3e and the standard Web package command pass. Exact evidence is recorded in `implementation.md`.
 
 ### Manager-only final walkthrough ledger
 
