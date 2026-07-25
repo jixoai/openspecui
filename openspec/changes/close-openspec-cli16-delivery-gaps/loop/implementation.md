@@ -1428,6 +1428,21 @@ There was no runner divergence. Checkpoint 5.4 remains unchecked pending indepen
 P4.4-B, P4.5, broad gates, PR delivery, merge, archive/release, and browser/visual/multi-tab/end-to-end
 walkthroughs remain out of scope.
 
+#### P4.4-A independent reviewer acceptance: 2026-07-25 Asia/Shanghai
+
+Independent standards and contract review found no issue. The fixture has one compact real Hono owner:
+`new Hono()` installs the exact middleware registration, serves `/api/protected`, and receives an absolute
+`Request`. It has no fabricated Context, `as any`, `as never`, suppression, test-only production path, or
+unchecked-only proof. Its changed TypeScript file has the required timestamped intent/original-request
+header and `tsconfig.transport-tests.json` includes it in a checked Server lane.
+
+The reviewer independently performed the exact mutation, then restored it: removing only
+`app.use('*', createAccessGateMiddleware(gate))` made the named missing-credential fixture fail with
+received `[200, 1]` versus required `[401, 0]`. The restored candidate independently passed the 9-test
+Access Gate Vitest suite, `typecheck:transport-tests`, scoped Prettier/Oxlint, `git diff --check`, and
+strict Change validation. This accepts P4.4-A only. Checkpoint 5.4 remains open until P4.4-B is accepted;
+P4.4-B is now the sole next implementation package.
+
 #### P4.4-B Header audit deferral
 
 The raw reviewed-range header audit reports eight paths because it assumes the first physical line must be
