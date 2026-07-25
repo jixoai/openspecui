@@ -2062,3 +2062,20 @@ path. It must keep the real Router, link interaction, document request, cache pr
 state; removing the actual subscription/callback must still fail. Production navigation, timeout widening, sleeps,
 retries, browser fixtures, and unrelated test cleanup are out of scope. Full gates remain stopped until 6.3c receives
 focused review.
+
+#### P5.6c Spec Router event evidence accepted: 2026-07-26 Asia/Shanghai
+
+Commit `39743c3 test: await spec router resolution evidence` changes only
+`packages/web/src/routes/spec-list-navigation.test.tsx`. Both owned and Referenced real-Router fixtures now await
+their subscribed `onResolved` path before asserting it. The link interaction, document query, cache prime, view
+transition, target location, and exact handoff state remain unchanged.
+
+The focused file passed `2/2`; Web typecheck, scoped Prettier/Oxlint, and diff check passed. For mutation evidence,
+the actual owned `router.subscribe('onResolved', ...)` registration was temporarily removed without pushing a fake
+path. The same named fixture failed after `1.12s`, receiving `[]` instead of `['/specs/owned/auth']` while its rendered
+detail probe remained visible. Restoring the real subscription returned the file to `2/2`. This proves the corrected
+wait observes the Router lifecycle rather than hiding a missing event.
+
+Checkpoint 6.3c is accepted. One complete corrected-head local gate replay is the only next package. No production
+navigation, timeout, sleep, retry, browser fixture, PR, manual acceptance, merge, archive, or release action is
+included in this acceptance.
