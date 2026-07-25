@@ -1262,6 +1262,11 @@ tick. The mutation replaces the exact shared-writer call with native `writeFile`
 fixture must fail through stale reactive content, not by timeout or a mocked downstream callback. The
 existing Router refresh regression remains supporting public-path evidence, not the sole settlement proof.
 
+The new Git-stamp test must be included in `packages/server/tsconfig.git-tests.json`: the default Server
+typecheck excludes `*.test.ts`, so a transpile-only passing Vitest result is not P4.3 boundary evidence.
+The focused validation explicitly includes `typecheck:git-tests` (or the full Server typecheck that invokes
+it). This is test-contract hygiene only; it must not weaken a production type or add suppressions.
+
 P4.3 must not add a cache, polling/refetch loop, public Dashboard timestamp, test-only output, static
 change, loading redesign, or Git scope/token change. P4.4--P4.5, broad gates, PR delivery, merge,
 archive/release, and final browser/visual/multi-tab acceptance remain out of scope.
