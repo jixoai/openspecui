@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
- * 1. Consume one internal cached subscription lifecycle and stale-display path for live and static projections.
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * 1. Consume one internal cached subscription lifecycle and cache-aware revalidation path for live and static projections.
  * 2. Bind Spec, progressive Change, Archive, Config, Notification, and CLI projections to typed hooks.
  * 3. Preserve cache identity for detail projections across remounts and view transitions.
  * 4. Keep Git scope cache data non-authoritative until an opt-in reconnect emits a replacement.
@@ -124,6 +124,11 @@ interface SubscriptionCallbacks<T> {
 interface ReactiveProjectionSubscriptionCallbacks<T> {
   onEvent: (event: ReactiveProjectionEvent<T>) => void
   onError: (err: Error) => void
+}
+
+/** Read-only cache fact supplied to a projection adapter when its live generation begins. */
+interface ReactiveProjectionSubscriptionLifecycle {
+  hasCached: boolean
 }
 
 /** Transport lifecycle projected by a typed subscription observer. */
@@ -265,7 +270,10 @@ export function useSubscription<T>(
  * facts. Each effect generation owns its callbacks and cache writes, so retired work cannot publish.
  */
 export function useReactiveProjectionSubscription<T>(
-  subscribe: (callbacks: ReactiveProjectionSubscriptionCallbacks<T>) => Unsubscribable,
+  subscribe: (
+    callbacks: ReactiveProjectionSubscriptionCallbacks<T>,
+    lifecycle: ReactiveProjectionSubscriptionLifecycle
+  ) => Unsubscribable,
   staticLoader?: () => Promise<T>,
   deps: unknown[] = [],
   cacheKey?: string
@@ -326,50 +334,53 @@ export function useReactiveProjectionSubscription<T>(
       return () => generation.retire()
     }
 
-    const subscription = subscribe({
-      onEvent(event) {
-        if (event.type === 'recompute-started') {
+    const subscription = subscribe(
+      {
+        onEvent(event) {
+          if (event.type === 'recompute-started') {
+            generation.publish(() => {
+              setState((previous) => ({
+                ...previous,
+                isLoading: false,
+                isUpdating: true,
+                error: null,
+              }))
+            })
+            return
+          }
+          if (event.type === 'display-stale') {
+            generation.publish(() => {
+              setState({
+                data: event.data,
+                isLoading: false,
+                isUpdating: true,
+                error: null,
+              })
+            })
+            return
+          }
+          generation.publishData(cacheKey, event.data, () => {
+            setState({
+              data: event.data,
+              isLoading: false,
+              isUpdating: false,
+              error: null,
+            })
+          })
+        },
+        onError(error) {
           generation.publish(() => {
             setState((previous) => ({
               ...previous,
               isLoading: false,
-              isUpdating: true,
-              error: null,
+              isUpdating: false,
+              error,
             }))
           })
-          return
-        }
-        if (event.type === 'display-stale') {
-          generation.publish(() => {
-            setState({
-              data: event.data,
-              isLoading: false,
-              isUpdating: true,
-              error: null,
-            })
-          })
-          return
-        }
-        generation.publishData(cacheKey, event.data, () => {
-          setState({
-            data: event.data,
-            isLoading: false,
-            isUpdating: false,
-            error: null,
-          })
-        })
+        },
       },
-      onError(error) {
-        generation.publish(() => {
-          setState((previous) => ({
-            ...previous,
-            isLoading: false,
-            isUpdating: false,
-            error,
-          }))
-        })
-      },
-    })
+      { hasCached: snapshot.hasCached }
+    )
     generation.attach(subscription)
     return () => generation.retire()
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -4,6 +4,7 @@
  * 2. Execute Dashboard Git mutations against the stable Launch-owned Code binding.
  * 3. Translate current and stale Projection Work snapshots into honest region display and updating state.
  * 4. Commit Dashboard Summary v2 pulls only when their wake-up identity and generation remain current.
+ * 5. Demote a remounted cached Summary to display-only when its first replacement wake arrives.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git bindings.
@@ -149,9 +150,12 @@ function useDashboardSummaryProjectionRegion(
   staticLoader: () => Promise<DashboardSummaryProjection>
 ): ReactiveProjectionSubscriptionState<DashboardSummaryProjection> {
   const adaptedSubscribe = useCallback(
-    (callbacks: DashboardProjectionCallbacks<DashboardSummaryProjection>) => {
+    (
+      callbacks: DashboardProjectionCallbacks<DashboardSummaryProjection>,
+      lifecycle: { hasCached: boolean }
+    ) => {
       let active = true
-      let hasDisplayData = false
+      let hasDisplayData = lifecycle.hasCached
       let activeWake: DashboardSummaryInvalidation | null = null
       const isActiveWake = (wake: DashboardSummaryInvalidation) =>
         active &&

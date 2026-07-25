@@ -4,6 +4,7 @@ Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
 2. Keep actual source progress, scope, decisions, and evidence boundaries synchronized during application.
 3. Preserve the push-to-pull, authority, draft-protection, and visual-language decisions approved in research.
 4. Define the concrete conditions that require a return to research before implementation can proceed.
+5. Record the independently requested P1-A correction evidence without closing its review-owned checkpoints.
 
 Original request (2026-07-23): "布局方面暂时不需要改动，后续社区有一个PR我会合并进来，那是关于kanban 的一个pr。所以本次change的主要优化点，在于更友好的UIUX，优化用户等待信息的时间感知。"
 Original request (2026-07-23): "一次性把现有的页面都统一整改，因为这涉及到统一组件的封装和开发。全部改动，才能在中途暴露出所有隐含的可能、状态。这对于我们组件化的封装和开发非常重要。"
@@ -85,7 +86,7 @@ three production boundaries required by the v2 contract:
    `packages/server/bench/live-projection-loading.bench.ts` still predicates Dashboard cold/reload/page
    completion on `isProjectionSnapshot(subscribeSummary)`. The v2 subscription deliberately has no snapshot, so
    each affected scenario times out. It must measure `Summary wake -> Server-owned getSummary pull -> matching
-   typed read`, while Trends and Git retain their v1 benchmark paths.
+typed read`, while Trends and Git retain their v1 benchmark paths.
 3. **The Web test must preserve its public input type.**
    The A/B fixture models every tRPC subscription callback as `unknown`; it can inject an invalid Summary wake
    without a compiler failure. Split the Summary callback fixture to use `DashboardSummaryInvalidation`, keep
@@ -95,6 +96,45 @@ three production boundaries required by the v2 contract:
 The existing v2-after-implementation A/B test remains useful mutation proof but not historical red evidence.
 The correction worker must add one named red/green/mutation proof for each listed production boundary before
 requesting another independent review. No P1-A checkbox may be closed during the correction.
+
+### P1-A correction candidate evidence (2026-07-25 Asia/Shanghai)
+
+- **Cached-A production owner and red**: `useReactiveProjectionSubscription` now supplies the existing cache
+  fact to the real Summary adapter; only that adapter initializes its display fact from `hasCached`. With this
+  line temporarily restored to the rejected `false`, the named cached-A test failed after B's first wake:
+  expected `isUpdating: true`, received `false` (1 failed, 5 skipped). This is both a direct pre-correction replay
+  and the exact mutation-resistance proof for the cache demotion transition; no cache key, cache store, or other
+  projection policy changed.
+- **Cached-A green and late-A retirement**:
+  `pnpm --filter @openspecui/web exec vitest run --project unit src/lib/use-dashboard.test.ts` -> 1 file,
+  6 tests passed. The fixed point primes cache A, mounts the real Summary hook, sends typed root-rebind wake B,
+  observes readable A with `isUpdating: true` while B is deferred, then observes current B. Separate tests prove
+  both late A resolve and late A reject cannot change B data, updating state, or error state.
+- **Checked mocked callback boundary**: `dashboard-summary-test-fixture.ts` is part of the regular Web
+  `src` typecheck and defines Summary `onData` as `DashboardSummaryInvalidation`; Trends/Git retain their legacy
+  fixture. Its exact-type assertion failed with `TS2344: Type 'false' does not satisfy the constraint 'true'`
+  when only that input was mutated to `unknown`. This proves checked mocked callback injection, not real tRPC
+  serialization; the existing checked `dashboard-summary-router.test.ts` separately owns real Server/tRPC
+  wake/read serialization evidence.
+- **Benchmark correlation red/green/mutation**: the new checked pair fixture initially failed because the
+  mismatch helper returned instead of rejecting (`expected [Function] to throw an error`). After correction,
+  identity and generation mismatches both throw; removing those exact throws made the same fixture fail 2/2.
+  `pnpm --filter @openspecui/server exec vitest run src/dashboard-projection-service.test.ts src/dashboard-summary-router.test.ts src/live-projection-loading-summary.test.ts --pool=threads --maxWorkers=1 --testTimeout=15000 --hookTimeout=15000`
+  -> 3 files, 9 tests passed. `tsconfig.transport-tests.json` checks both the benchmark and pair fixture.
+- **Isolated real benchmark evidence**: OpenSpec 1.6 initialized
+  `/tmp/openspecui-p1a-bench.YQBn5s/project` with an isolated `XDG_DATA_HOME`; each scenario used its own Server
+  port and a 60,000ms per-measurement timeout. `dashboard` returned `fatalError: null`: cold wake 9,142.10ms ->
+  matching `dashboard.getSummary.first-renderable` 10,823.57ms; reload wake 1,901.73ms -> matching pull
+  3,694.22ms. `dashboard-page` returned `fatalError: null`: wake 7,060.04ms -> matching pull 9,288.44ms,
+  followed by unchanged v1 Trends/Git snapshot measurements. Every Summary read reported the same opaque
+  identity/generation as its wake, `freshness: current`, and no Summary measurement timed out.
+- **Final checked lanes**: `pnpm --filter @openspecui/web typecheck` and
+  `pnpm --filter @openspecui/server typecheck` passed after all mutations were restored. No browser, static,
+  broad workspace, PR, merge, archive, or release action ran.
+- **Residual limitation**: this remains one Summary-only correction candidate. Trends, Git, Changes, burst
+  coalescing, user-action bypass, and generic cache behavior remain unchanged. The original P1-A A/B fixture was
+  added after v2 implementation, so it remains acceptance/mutation evidence rather than a historical 2.2 red;
+  2.1-2.3 stay unchecked pending independent review.
 
 ### P0 Server-emission revalidation (2026-07-25 Asia/Shanghai)
 

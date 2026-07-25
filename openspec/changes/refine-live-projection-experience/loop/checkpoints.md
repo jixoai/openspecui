@@ -4,8 +4,7 @@ Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
 2. Make every completion claim evidence-backed and synchronized with implementation reality.
 3. Preserve the all-surface scope while preventing schema completion from being confused with code, CI, or owner acceptance.
 4. Record the required delta-spec and strict-validation gate before this Change may be treated as implementation-ready.
-5. Record the Web-first execution replan and the current P0 revalidation, then authorize only the bounded
-   P1-A Dashboard Summary v2 vertical slice.
+5. Record the Web-first replan, P0 revalidation, and bounded P1-A correction without closing review-owned work.
 
 Original request (2026-07-23): "布局方面暂时不需要改动，后续社区有一个PR我会合并进来，那是关于kanban 的一个pr。所以本次change的主要优化点，在于更友好的UIUX，优化用户等待信息的时间感知。"
 Original request (2026-07-23): "一次性把现有的页面都统一整改，因为这涉及到统一组件的封装和开发。全部改动，才能在中途暴露出所有隐含的可能、状态。这对于我们组件化的封装和开发非常重要。"
@@ -47,8 +46,11 @@ outside P1-A.
 P1-A evidence is recorded in `loop/implementation.md` as of 2026-07-25. Independent review rejected the
 first candidate: a remounted cached A was not demoted to display-only on B's first wake, the loading benchmark
 still waited for the removed Summary snapshot payload, and the Web A/B fixture erased its public wake type.
-2.1-2.3 and every P1-A checkbox remain unchecked. The next correction is limited to those exact findings; the
-remove-guard result remains mutation resistance, not a substitute for 2.2's missing historical red.
+The correction candidate now has direct cached-A red/green/mutation evidence, an exact checked mocked callback
+input, mismatch-resistant wake-to-pull benchmark measurement, two isolated real benchmark scenarios with
+`fatalError: null`, and final focused Server/Web type/test greens. It remains pending independent review.
+2.1-2.3 and every P1-A checkbox stay unchecked; neither the original remove-guard result nor the new correction
+replay substitutes for checkpoint 2.2's missing historical pre-v2 red.
 
 - [ ] 2.4 P2 visual primitives implemented and tested: composable root/data attributes, stable skeleton geometry, local revalidation/settle cues, truthful progress, reduced-motion path, hidden accessible status, and stable command labels. _(Phase 1; split 2A state law/adapters incl. the Web-side root-cause fix to `useAuthoritativeSubscription` reconnect/stopped/complete not flipping `isLoading` when cached data exists, then 2B atoms/CSS)_
 - [ ] 2.5 P3 inventory/regional routes migrated: Dashboard, Changes, Archives, Specs, Schemas, Context, Notifications, Git, and Search use the shared model without hiding current sibling content behind a route-wide wait branch. _(Phase 1; adapter targets v1 transport)_
