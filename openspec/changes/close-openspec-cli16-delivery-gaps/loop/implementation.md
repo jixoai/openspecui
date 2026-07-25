@@ -1856,3 +1856,55 @@ dependency evidence and stop for review rather than weakening the assertion.
 Checkpoint 6.3 is reopened and decomposed into 6.3a/6.3b. Checkpoint 6.6 remains open. No full gate, browser
 walkthrough, PR update, merge, archive, or release is authorized until both focused packages receive independent
 review.
+
+#### P5.6b Tool missing-path investigation accepted: 2026-07-25 Asia/Shanghai
+
+The untouched Server Tool suite passed in ten independent processes: an initial `5/5`, eight repetitions of the
+named `commands/update` case, and one final `5/5`. Independent Terra verification observed another eight named
+green runs with durations from `1.45s` to `4.06s`. No timeout, sleep, assertion, or production path changed.
+
+Temporary timing instrumentation then measured the expected Launch `update.md` settlement in five independent
+runs at `683ms`, `402ms`, `404ms`, `761ms`, and `935ms`; every stage remained under the unchanged four-second
+budget. A temporary Core cache snapshot taken after the normal `explore.md` replacement emission reported the exact
+missing `update.md` state as cached, refresh-registered, watched, missing-path-polled, and subscribed by one active
+`ReactiveContext`. The instrumentation and snapshot API were removed before final verification.
+
+Closing the entire process-level watcher pool after the replacement emission can make the Tool stage red, while the
+existing single-path Core teardown fallback stays green. That explicit global teardown is not present in the CI
+trace and does not prove the reported normal-runtime failure. Source review also confirms that
+`getToolInitStates()` clears and rebuilds legacy artifact caches on every recompute, but the replacement missing path
+is current and observable before the accepted emission. There is therefore no fixed-point evidence authorizing an
+explicit reactive mode or a ReactiveContext/cache-owner correction in this package.
+
+Final focused verification passed the Server Tool file (`1` file / `5` tests), Core tool-init/reactive-fs files
+(`2` files / `39` tests), and scoped diff check. Package B left no code, test, diagnostic, staged, or committed
+change. Checkpoint 6.3b closes as an evidence-only scheduling classification. The original CI miss remains recorded;
+6.3, 6.3a, and 6.6 remain open.
+
+#### P5.6a physical Web asset root accepted: 2026-07-26 Asia/Shanghai
+
+Package A landed as two bounded commits:
+
+- `f071ab6 fix: make CLI web asset root explicit`
+- `3286d13 fix: reject empty CLI web asset roots`
+
+Exported `startServer` now accepts a typed, per-invocation `webAssetsDir`. It resolves and validates that physical
+directory once, then passes the same value to the public-shell static middleware and Server `previewAssetsDir`.
+Only an absent option selects the unchanged packaged candidate order; an explicitly empty or invalid root fails
+rather than borrowing generated/stale output. Worktree children remain independent `startServer` invocations that
+resolve their own packaged assets; propagating an arbitrary parent override had no fixed-point red and was not added
+to worker/process protocols.
+
+The product-chain fixture now creates a physical minimal `index.html`, supplies it through the typed runtime owner,
+and verifies its marker while continuing across real CLI private credential delivery, public shell, protected HTTP,
+tRPC WebSocket subscription, and PTY auth-first. The empty-root correction has its own terminating public-boundary
+case: before `3286d13`, it incorrectly started from a packaged fallback and failed with
+`CLI silently replaced the explicit empty Web asset root with a default`; after correction it rejects with the exact
+missing-assets error.
+
+Independent Terra verification at detached `3286d13` passed the product-chain file (`2/2`), adjacent CLI files
+(`10/10`), CLI and Server checked typechecks, scoped Prettier/Oxlint, and diff check. In a clean no-`dist` mutation,
+removing only the fixture asset handoff made the same product-chain case fail in `8ms` at
+`getWebAssetsDir -> startServer` with `Web assets not found`. No CLI mock, Web build, stale output, test-only bypass,
+worktree protocol expansion, broad gate, or browser walkthrough was used. Checkpoint 6.3a closes; 6.3 remains open
+for one complete corrected-head local gate replay, and 6.6 remains open for fresh PR checks.
