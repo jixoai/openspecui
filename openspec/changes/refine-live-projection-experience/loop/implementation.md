@@ -136,6 +136,35 @@ requesting another independent review. No P1-A checkbox may be closed during the
   added after v2 implementation, so it remains acceptance/mutation evidence rather than a historical 2.2 red;
   2.1-2.3 stay unchecked pending independent review.
 
+### P1-A correction independent reviewer acceptance (2026-07-25 Asia/Shanghai)
+
+Independent contract and architecture review found no production defect in `d1740335`. The data-free wake
+remains Server-owned, `getSummary` remains an input-free current pull, the shared subscription hook exposes only
+the read-only cache-presence fact, and only the Summary adapter uses that fact to demote retained A on B's first
+wake. Its local active-wake gate rejects both late A resolution and rejection after B becomes current. The
+checked mocked callback truthfully proves injected `DashboardSummaryInvalidation` shape without claiming live
+tRPC serialization, and the benchmark holds the subscription through an identity/generation-matching pull.
+
+An independent Terra verification passed the committed Web fixture `6/6`, Server fixtures `9/9`, both package
+typechecks, scoped Prettier/Oxlint, commit/diff checks, and strict Change validation. A transient model-service
+503 interrupted only Terra's planned duplicate benchmark replay; it did not occur in a test or product process.
+The main reviewer therefore created a fresh OpenSpec 1.6 fixture under an isolated `XDG_DATA_HOME` and replayed
+both real scenarios:
+
+```text
+dashboard:      fatalError=null
+  cold   wake 1,613.47ms -> matching pull 2,989.63ms
+  reload wake 1,345.75ms -> matching pull 2,680.25ms
+dashboard-page: fatalError=null
+  wake 2,620.63ms -> matching pull 4,920.40ms
+  Trends current v1 snapshot 1,372.21ms; Git current v1 snapshot 1,507.91ms
+```
+
+Every Summary pair carried the same opaque identity and work generation, `freshness: current`, and no timeout.
+The correction candidate is accepted for downstream dependency review. Checkpoints 2.1-2.3 remain open because
+this review cannot manufacture checkpoint 2.2's missing historical pre-v2 red; that truthful ledger limitation
+does not invalidate the current runtime contract or the downstream loading-regression confirmation.
+
 ### P0 Server-emission revalidation (2026-07-25 Asia/Shanghai)
 
 The asserted blocker was not a current source regression. `61612c3` is documentation-only; the relevant

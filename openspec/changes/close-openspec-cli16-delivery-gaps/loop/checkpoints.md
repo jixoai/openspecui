@@ -72,7 +72,7 @@ Focused reviewer acceptance is a hard predecessor of the next package and every 
 ## 6. P5 External Regression, Gates, and Manager Walkthrough
 
 - [x] 6.1 Revalidated the alleged `refine-live-projection-experience` Server-emission failure against the current owner. It is stale rather than an open repair: Root Snapshot 3/3, real Git Router 7/7, and the Git checked lane pass; the evidence and current `95bc2b9` cache/invalidation path are recorded in that Change.
-- [ ] 6.2 Confirm the independent loading regression result against the candidate before broad gates. Do not copy its source fixes into this Change without a documented scope transfer.
+- [x] 6.2 Confirmed `refine-live-projection-experience` P1-A candidate `d1740335` through independent focused tests, static contract review, mutation evidence, and fresh isolated Dashboard benchmarks. No external source fix was copied into this Change.
 - [ ] 6.3 After P1--P4 and 6.1--6.2 focused review acceptance, run once: `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`, and `pnpm test:browser:ci`.
 - [ ] 6.4 For static-impacting changes, clean stale artifacts, run focused static-provider tests, and run `pnpm --filter @openspecui/web build:ssg`.
 - [ ] 6.5 Add an accurate changeset for changed publishable behavior, or record the precise docs/CI-only exemption.

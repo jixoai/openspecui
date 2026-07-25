@@ -48,9 +48,10 @@ first candidate: a remounted cached A was not demoted to display-only on B's fir
 still waited for the removed Summary snapshot payload, and the Web A/B fixture erased its public wake type.
 The correction candidate now has direct cached-A red/green/mutation evidence, an exact checked mocked callback
 input, mismatch-resistant wake-to-pull benchmark measurement, two isolated real benchmark scenarios with
-`fatalError: null`, and final focused Server/Web type/test greens. It remains pending independent review.
-2.1-2.3 and every P1-A checkbox stay unchecked; neither the original remove-guard result nor the new correction
-replay substitutes for checkpoint 2.2's missing historical pre-v2 red.
+`fatalError: null`, and final focused Server/Web type/test greens. Independent review accepted the current
+runtime contract in `d1740335` and reproduced both isolated scenarios. 2.1-2.3 and every P1-A checkbox stay
+unchecked; neither the original remove-guard result nor the correction replay substitutes for checkpoint 2.2's
+missing historical pre-v2 red.
 
 - [ ] 2.4 P2 visual primitives implemented and tested: composable root/data attributes, stable skeleton geometry, local revalidation/settle cues, truthful progress, reduced-motion path, hidden accessible status, and stable command labels. _(Phase 1; split 2A state law/adapters incl. the Web-side root-cause fix to `useAuthoritativeSubscription` reconnect/stopped/complete not flipping `isLoading` when cached data exists, then 2B atoms/CSS)_
 - [ ] 2.5 P3 inventory/regional routes migrated: Dashboard, Changes, Archives, Specs, Schemas, Context, Notifications, Git, and Search use the shared model without hiding current sibling content behind a route-wide wait branch. _(Phase 1; adapter targets v1 transport)_

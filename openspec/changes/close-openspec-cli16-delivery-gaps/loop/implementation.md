@@ -1638,3 +1638,35 @@ The default fork-pool local invocation remained running without producing a resu
 deterministically in Vitest's single-worker thread pool. This is a runner characteristic, not a production
 failure. Checkpoint 6.1 is closed as a stale-blocker revalidation. Checkpoint 6.2 remains open: it must assess
 the applied P1 candidate from the loading Change and cannot be inferred from this replay.
+
+#### P5.2 external P1-A loading acceptance: 2026-07-25 Asia/Shanghai
+
+The external `refine-live-projection-experience` owner committed its bounded correction as `d1740335`. No
+production, test, or contract source from that Change was copied into this Change. Independent review confirmed
+the three previously rejected boundaries:
+
+```text
+cached Summary A + first B wake -> retained A isUpdating=true -> only matching B pull becomes current
+mocked Web Summary onData        -> checked DashboardSummaryInvalidation, never unknown
+real Dashboard benchmark         -> typed wake -> matching getSummary read -> first-renderable Summary
+```
+
+Independent Terra verification passed the committed Web fixture `6/6`, Server fixtures `9/9`, Web and Server
+package typechecks, scoped Prettier/Oxlint, commit/diff checks, and strict external Change validation. Its model
+service returned 503 only before the planned duplicate benchmark replay; this was not a product or test
+failure. The main reviewer then replayed both scenarios against a fresh OpenSpec 1.6 project and isolated
+`XDG_DATA_HOME`:
+
+```text
+dashboard:      fatalError=null; cold pull 2,989.63ms; reload pull 2,680.25ms
+dashboard-page: fatalError=null; Summary pull 4,920.40ms; Trends/Git current v1 snapshots followed
+```
+
+Every Summary read matched its wake identity/generation and no measurement timed out. Static contract review
+found no further production defect: the push remains data-free, clients cannot select provenance, retired A
+success/failure cannot change B, and the benchmark retains its subscription until the pair is verified. The
+external Change truthfully keeps P1-A checkboxes open because its historical pre-v2 red cannot be reconstructed;
+that evidence limitation does not contradict the accepted current candidate.
+
+This closes 6.2. P1-P4 and 6.1-6.2 are now focused-review complete, so 6.3-6.5 are the sole next local delivery
+package. PR update, manager walkthrough, merge, corrective-Change archive, and release remain unauthorized.
