@@ -1798,3 +1798,24 @@ checks also passed: both JSON files match Prettier, App Oxlint reports zero warn
 the two CLI conditional-export/local-hosted-app-dev files pass `10/10`, and `git diff --check` passes. No code finding
 or residual type-safety bypass remains. The only residual scope is the full workspace/CI composition, so checkpoint
 6.3 stays open for one corrected-head broad replay before PR #207 is updated again.
+
+#### P5.6 corrected-head local gate replay accepted: 2026-07-25 Asia/Shanghai
+
+Independent Terra verification replayed the complete local gate against head `4460947`, which contains the
+accepted `7f18cd9` configuration correction and its review record. Every command exited zero:
+
+```text
+pnpm format:check     -> passed; 10 changed files checked
+pnpm lint:ci          -> passed; 994 files, 0 warnings / 0 errors
+pnpm typecheck        -> passed; 15 workspace projects, Website 0 errors / 0 warnings
+pnpm test:ci          -> passed; root 43/43 and ai-provider 18/18 observed, full serial process zero exit
+pnpm test:browser:ci  -> passed; xterm 60 passed / 1 skipped, Web Storybook 12/12
+git diff --check      -> passed
+strict Change validate -> passed
+```
+
+The serial unit command did not retain every downstream package count, so no unobserved count is asserted; its
+owning pnpm process completed normally. No file changed during verification, no publishable runtime behavior was
+added by the typecheck configuration correction, and the existing changeset audit remains valid. This recloses
+6.3. Checkpoints 6.3-6.5 are green on the corrected local candidate; 6.6 now requires a fresh PR update and checks
+for the corrected head before the manager-only walkthrough can begin.
