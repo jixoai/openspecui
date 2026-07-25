@@ -1769,3 +1769,32 @@ workspace `dist`, preserve the App-only Web-source alias without copying a growi
 show the old partial override makes the same fixture red, then replay affected formatting/lint/typecheck tests. No
 full workspace tests, browser fixture, PR update, manager walkthrough, merge, archive, or release is authorized
 before independent review accepts that fixed point.
+
+#### P5.6 clean App source-resolution correction accepted: 2026-07-25 Asia/Shanghai
+
+Sol committed the bounded correction as `7f18cd9` with only `tsconfig.base.json` and
+`packages/app/tsconfig.json`: the root source map now owns `@openspecui/web-src/*`, while App no longer replaces the
+complete inherited workspace map with its partial `baseUrl`/`paths` object. The typed `AppRouter` transport and
+package ownership remain unchanged; no CI prebuild, generated declaration, relaxed compiler option, alias-list copy,
+cast, or suppression was introduced.
+
+Main review confirmed App has no `@/*` source import that depended on the removed local alias, all four real Web
+source imports use `@openspecui/web-src/*`, and App's effective `tsc --showConfig` retains Core translator,
+notifications, spec-catalog, Search/node, private translators, Server, and Web source aliases.
+
+Independent Terra verification created detached checkout
+`/tmp/openspecui-app-source-review.N6o2jt@7f18cd9`, installed offline with scripts disabled, and proved no
+`packages/**/dist` existed:
+
+```text
+corrected App typecheck                       -> passed
+restore parent 28e2578 App partial paths map -> exit 2; intended TS2307 modules returned
+restore 7f18cd9 with no workspace dist        -> passed again
+```
+
+The mutation red included `@openspecui/core/translator`, Core notifications/spec-catalog, Search/node, and private
+translator packages, matching the clean PR failure rather than a different lifecycle phase. Main-worktree focused
+checks also passed: both JSON files match Prettier, App Oxlint reports zero warnings/errors, App typecheck passes,
+the two CLI conditional-export/local-hosted-app-dev files pass `10/10`, and `git diff --check` passes. No code finding
+or residual type-safety bypass remains. The only residual scope is the full workspace/CI composition, so checkpoint
+6.3 stays open for one corrected-head broad replay before PR #207 is updated again.
