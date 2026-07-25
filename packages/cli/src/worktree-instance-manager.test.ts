@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Prove worktree runtime selection and source bootstrap normalization.
- * 2. Prove worker-thread and process children inherit the exact parent Access Gate without argv leakage.
+ * 2. Prove worker-thread and process children inherit the exact parent Access Gate and Web asset root without argv leakage.
  * 3. Prove readiness authenticates with the inherited Gate while unguarded readiness remains unchanged.
- * 4. Cross the production worker bootstrap into the real guarded child Server.
+ * 4. Cross both production bootstraps into real guarded child Servers with self-contained Web assets.
  *
  * Original request (2026-07-24): "Propagate the exact parent Access Gate into worktree Servers."
+ * Delivery correction (2026-07-26): clean child fixtures own one minimal physical Web asset root.
  */
 import {
   buildBackendHealthPayload,
@@ -30,16 +31,19 @@ import {
 import {
   buildWorktreeServerStartOptions,
   consumeWorktreeProcessAccessGateCredential,
+  consumeWorktreeProcessWebAssetsDir,
   normalizeSourceBootstrapEntryUrl,
   readWorktreeServerWorkerData,
   WORKTREE_ACCESS_GATE_CREDENTIAL_ENV,
   WORKTREE_SERVER_WORKER_KIND,
+  WORKTREE_WEB_ASSETS_DIR_ENV,
   type WorktreeServerWorkerData,
 } from './worktree-server-worker'
 
 const tempDirs: string[] = []
 const healthServers: TestHealthServer[] = []
 const managers: WorktreeInstanceManager[] = []
+const TEST_WEB_ASSETS_DIR = '/tmp/openspecui-test-web-assets'
 const createWorker = (): never => {
   throw new Error('Test worker factory should not be called by launch-plan tests.')
 }
@@ -70,6 +74,17 @@ async function createWorkspaceFixture(): Promise<{ repoRoot: string; runtimeDir:
   }
 }
 
+async function createMinimalWebAssetsDir(prefix: string, marker: string): Promise<string> {
+  const webAssetsDir = await mkdtemp(join(tmpdir(), prefix))
+  tempDirs.push(webAssetsDir)
+  await writeFile(
+    join(webAssetsDir, 'index.html'),
+    `<!doctype html><title>${marker}</title>\n`,
+    'utf8'
+  )
+  return webAssetsDir
+}
+
 describe('worktree instance manager helpers', () => {
   it('resolves the monorepo workspace from the CLI runtime directory', async () => {
     const fixture = await createWorkspaceFixture()
@@ -87,6 +102,7 @@ describe('worktree instance manager helpers', () => {
       runtimeDir: fixture.runtimeDir,
       projectDir: '/tmp/feature-worktree',
       port: 3123,
+      webAssetsDir: TEST_WEB_ASSETS_DIR,
       createWorker,
     })
 
@@ -98,6 +114,7 @@ describe('worktree instance manager helpers', () => {
       kind: WORKTREE_SERVER_WORKER_KIND,
       projectDir: '/tmp/feature-worktree',
       port: 3123,
+      webAssetsDir: TEST_WEB_ASSETS_DIR,
     })
   })
 
@@ -108,6 +125,7 @@ describe('worktree instance manager helpers', () => {
       runtimeDir: fixture.runtimeDir,
       projectDir: '/tmp/feature-worktree',
       port: 3123,
+      webAssetsDir: TEST_WEB_ASSETS_DIR,
       createWorker,
       accessGateCredential,
     }
@@ -120,6 +138,7 @@ describe('worktree instance manager helpers', () => {
       kind: WORKTREE_SERVER_WORKER_KIND,
       projectDir: '/tmp/feature-worktree',
       port: 3123,
+      webAssetsDir: TEST_WEB_ASSETS_DIR,
       accessGateCredential,
     })
     expect(plan.execArgv.join(' ')).not.toContain(accessGateCredential.credential)
@@ -133,6 +152,7 @@ describe('worktree instance manager helpers', () => {
       runtimeDir: fixture.runtimeDir,
       projectDir: '/tmp/feature-worktree',
       port: 3123,
+      webAssetsDir: TEST_WEB_ASSETS_DIR,
       createWorker,
     })
 
@@ -149,6 +169,7 @@ describe('worktree instance manager helpers', () => {
       runtimeDir: join(fixture.repoRoot, 'packages', 'cli', 'dist'),
       projectDir: '/tmp/feature-worktree',
       port: 3123,
+      webAssetsDir: TEST_WEB_ASSETS_DIR,
       createWorker,
     })
 
@@ -160,6 +181,7 @@ describe('worktree instance manager helpers', () => {
       kind: WORKTREE_SERVER_WORKER_KIND,
       projectDir: '/tmp/feature-worktree',
       port: 3123,
+      webAssetsDir: TEST_WEB_ASSETS_DIR,
     })
   })
 
@@ -168,6 +190,7 @@ describe('worktree instance manager helpers', () => {
       runtimeDir: '/pkg/runtime',
       projectDir: '/tmp/feature-worktree',
       port: 3123,
+      webAssetsDir: TEST_WEB_ASSETS_DIR,
       createWorker,
     })
 
@@ -182,6 +205,7 @@ describe('worktree instance manager helpers', () => {
       runtimeDir: '/pkg/runtime',
       projectDir: '/tmp/feature-worktree',
       port: 3123,
+      webAssetsDir: TEST_WEB_ASSETS_DIR,
     })
 
     expect(plan.kind).toBe('process')
@@ -198,12 +222,13 @@ describe('worktree instance manager helpers', () => {
     expect(plan.cwd).toBe('/tmp/feature-worktree')
   })
 
-  it('carries the exact Access Gate through private process environment without argv leakage', () => {
+  it('carries exact private process inputs through environment without argv leakage', () => {
     const accessGateCredential = generateAccessGateCredential()
     const launchOptions = {
       runtimeDir: '/pkg/runtime',
       projectDir: '/tmp/feature-worktree',
       port: 3123,
+      webAssetsDir: TEST_WEB_ASSETS_DIR,
       accessGateCredential,
     }
 
@@ -212,6 +237,8 @@ describe('worktree instance manager helpers', () => {
     expect(plan.kind).toBe('process')
     if (plan.kind !== 'process') throw new Error('Expected process launch plan')
     expect(plan.args.join(' ')).not.toContain(accessGateCredential.credential)
+    expect(plan.args.join(' ')).not.toContain(TEST_WEB_ASSETS_DIR)
+    expect(plan.env[WORKTREE_WEB_ASSETS_DIR_ENV]).toBe(TEST_WEB_ASSETS_DIR)
     expect(
       Object.entries(plan.env).some(
         ([key, value]) =>
@@ -320,12 +347,14 @@ describe('worktree server worker module loading', () => {
       kind: WORKTREE_SERVER_WORKER_KIND,
       projectDir: '/tmp/feature-worktree',
       port: 3123,
+      webAssetsDir: TEST_WEB_ASSETS_DIR,
       accessGateCredential,
     } satisfies WorktreeServerWorkerData
     expect(buildWorktreeServerStartOptions(workerData)).toEqual({
       projectDir: '/tmp/feature-worktree',
       port: 3123,
       open: false,
+      webAssetsDir: TEST_WEB_ASSETS_DIR,
       accessGateCredential,
     })
   })
@@ -342,6 +371,8 @@ describe('worktree server worker module loading', () => {
       readWorktreeServerWorkerData({
         kind: WORKTREE_SERVER_WORKER_KIND,
         projectDir: '/tmp/feature-worktree',
+        port: 3123,
+        webAssetsDir: '',
       })
     ).toThrow('Invalid worktree server worker data.')
   })
@@ -356,6 +387,17 @@ describe('worktree server worker module loading', () => {
     expect(consumeWorktreeProcessAccessGateCredential(env)).toEqual(accessGateCredential)
     expect(env).toEqual({ SAFE_PARENT_VALUE: 'retained' })
     expect(consumeWorktreeProcessAccessGateCredential(env)).toBeNull()
+  })
+
+  it('consumes the process Web asset root once and erases it before nested Managers inherit environment', () => {
+    const env: NodeJS.ProcessEnv = {
+      SAFE_PARENT_VALUE: 'retained',
+      [WORKTREE_WEB_ASSETS_DIR_ENV]: TEST_WEB_ASSETS_DIR,
+    }
+
+    expect(consumeWorktreeProcessWebAssetsDir(env)).toBe(TEST_WEB_ASSETS_DIR)
+    expect(env).toEqual({ SAFE_PARENT_VALUE: 'retained' })
+    expect(consumeWorktreeProcessWebAssetsDir(env)).toBeNull()
   })
 })
 
@@ -372,7 +414,7 @@ describe('worktree child Access Gate integration', () => {
     return Promise.resolve()
   }
 
-  it('starts a process child through the private env contract and authenticated readiness', async () => {
+  it('starts a process child with the private Gate and exact Web asset root', async () => {
     const currentProjectDir = await mkdtemp(join(tmpdir(), 'openspecui-process-current-'))
     const targetPath = await mkdtemp(join(tmpdir(), 'openspecui-process-target-'))
     const runtimeDir = await mkdtemp(join(tmpdir(), 'openspecui-process-runtime-'))
@@ -386,6 +428,11 @@ describe('worktree child Access Gate integration', () => {
       'utf8'
     )
     const accessGateCredential = generateAccessGateCredential()
+    const webAssetMarker = 'process-child-web-assets'
+    const webAssetsDir = await createMinimalWebAssetsDir(
+      'openspecui-process-web-assets-',
+      webAssetMarker
+    )
     vi.stubEnv(
       'NODE_OPTIONS',
       `${process.env.NODE_OPTIONS ? `${process.env.NODE_OPTIONS} ` : ''}--conditions=development`
@@ -394,6 +441,7 @@ describe('worktree child Access Gate integration', () => {
       currentProjectDir,
       currentServerUrl: 'http://127.0.0.1:1',
       runtimeDir,
+      webAssetsDir,
       accessGateCredential,
     })
 
@@ -403,18 +451,26 @@ describe('worktree child Access Gate integration', () => {
       headers: { Authorization: accessGateCredential.authorizationHeader },
     })
     expect(authenticated.status).toBe(200)
+    const shell = await fetch(handoff.serverUrl)
+    expect(await shell.text()).toContain(webAssetMarker)
   }, 20_000)
 
-  it('starts the production worker child with the exact inherited Access Gate', async () => {
+  it('starts the production worker child with the exact inherited Gate and Web asset root', async () => {
     const currentProjectDir = await mkdtemp(join(tmpdir(), 'openspecui-worker-current-'))
     const targetPath = await mkdtemp(join(tmpdir(), 'openspecui-worker-target-'))
     tempDirs.push(currentProjectDir, targetPath)
     const accessGateCredential = generateAccessGateCredential()
+    const webAssetMarker = 'worker-child-web-assets'
+    const webAssetsDir = await createMinimalWebAssetsDir(
+      'openspecui-worker-web-assets-',
+      webAssetMarker
+    )
     const manager = createWorktreeInstanceManager({
       currentProjectDir,
       currentServerUrl: 'http://127.0.0.1:1',
       runtimeDir: dirname(fileURLToPath(import.meta.url)),
       createWorker: createWorktreeServerWorker,
+      webAssetsDir,
       accessGateCredential,
     })
 
@@ -424,5 +480,7 @@ describe('worktree child Access Gate integration', () => {
       headers: { Authorization: accessGateCredential.authorizationHeader },
     })
     expect(authenticated.status).toBe(200)
+    const shell = await fetch(handoff.serverUrl)
+    expect(await shell.text()).toContain(webAssetMarker)
   }, 20_000)
 })

@@ -1,23 +1,26 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Define the typed worker/process bootstrap contract for a worktree Server.
- * 2. Carry and runtime-validate an inherited Access Gate without putting it in argv.
- * 3. Consume process-only credential transfer before descendant processes can inherit it.
+ * 2. Carry and runtime-validate inherited Access Gate and Web asset inputs without putting them in argv.
+ * 3. Consume process-only bootstrap transfers before descendant processes can inherit them.
  * 4. Route worker-thread payloads by an explicit protocol kind before full validation.
  *
  * Original request (2026-07-24): "Propagate the exact parent Access Gate into worktree Servers."
+ * Delivery correction (2026-07-26): child Servers inherit the parent runtime's resolved Web asset root.
  */
 import { normalizeAccessGatePassword, type AccessGateCredential } from '@openspecui/core'
 import type { Worker } from 'node:worker_threads'
 
 export const WORKTREE_ACCESS_GATE_CREDENTIAL_ENV =
   'OPENSPECUI_INTERNAL_WORKTREE_ACCESS_GATE_CREDENTIAL'
+export const WORKTREE_WEB_ASSETS_DIR_ENV = 'OPENSPECUI_INTERNAL_WORKTREE_WEB_ASSETS_DIR'
 export const WORKTREE_SERVER_WORKER_KIND = 'worktree-server'
 
 export interface WorktreeServerStartOptions {
   projectDir: string
   port: number
   open: false
+  webAssetsDir: string
   accessGateCredential?: AccessGateCredential
 }
 
@@ -25,6 +28,7 @@ export interface WorktreeServerWorkerData {
   kind: typeof WORKTREE_SERVER_WORKER_KIND
   projectDir: string
   port: number
+  webAssetsDir: string
   accessGateCredential?: AccessGateCredential
 }
 
@@ -61,6 +65,8 @@ export function isWorktreeServerWorkerData(value: unknown): value is WorktreeSer
     data.kind === WORKTREE_SERVER_WORKER_KIND &&
     typeof data.projectDir === 'string' &&
     typeof data.port === 'number' &&
+    typeof data.webAssetsDir === 'string' &&
+    data.webAssetsDir.length > 0 &&
     (data.accessGateCredential === undefined || isAccessGateCredential(data.accessGateCredential))
   )
 }
@@ -94,6 +100,17 @@ export function consumeWorktreeProcessAccessGateCredential(
   return credential ? normalizeAccessGatePassword(credential) : null
 }
 
+/** Consume the private process Web asset root and erase it before nested Managers inherit environment. */
+export function consumeWorktreeProcessWebAssetsDir(env: NodeJS.ProcessEnv): string | null {
+  const webAssetsDir = env[WORKTREE_WEB_ASSETS_DIR_ENV]
+  delete env[WORKTREE_WEB_ASSETS_DIR_ENV]
+  if (webAssetsDir === undefined) return null
+  if (webAssetsDir.length === 0) {
+    throw new Error('Invalid inherited worktree Web asset root.')
+  }
+  return webAssetsDir
+}
+
 export function toWorkerErrorMessage(error: unknown): WorkerErrorMessage {
   if (error instanceof Error) {
     return { type: 'error', message: error.message, stack: error.stack }
@@ -115,6 +132,7 @@ export function buildWorktreeServerStartOptions(
     projectDir: data.projectDir,
     port: data.port,
     open: false,
+    webAssetsDir: data.webAssetsDir,
     ...(data.accessGateCredential ? { accessGateCredential: data.accessGateCredential } : {}),
   }
 }

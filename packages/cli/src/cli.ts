@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Parse and dispatch start/export CLI commands through yargs.
- * 2. Coordinate local/hosted App and inherited worktree runtime lifecycle with protected shutdown.
+ * 2. Coordinate local/hosted App and consumed worktree runtime bootstrap with protected shutdown.
  * 3. Delegate one credential-safe Direct/App target request to the start-command browser owner.
  *
  * Original request (2026-07-15): "新增一个 --auth 或者 --password。"
  * Delivery correction (2026-07-24): one resolved credential must reach Server and Project Web.
+ * Delivery correction (2026-07-26): process children consume the parent's resolved Web asset root.
  */
 
 import { ConfigManager } from '@openspecui/core'
@@ -28,7 +29,10 @@ import {
 } from './local-hosted-app-dev.js'
 import { coordinateStartCommandBrowserTarget } from './start-command-browser-target.js'
 import { buildStartupBanner } from './startup-banner.js'
-import { consumeWorktreeProcessAccessGateCredential } from './worktree-server-worker.js'
+import {
+  consumeWorktreeProcessAccessGateCredential,
+  consumeWorktreeProcessWebAssetsDir,
+} from './worktree-server-worker.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DEFAULT_HOSTED_CORS_ORIGINS = ['http://localhost:5173', 'http://localhost:3000']
@@ -51,6 +55,7 @@ function buildHostedCorsOrigins(baseUrl: string): string[] {
 
 async function main(): Promise<void> {
   const inheritedAccessGateCredential = consumeWorktreeProcessAccessGateCredential(process.env)
+  const inheritedWebAssetsDir = consumeWorktreeProcessWebAssetsDir(process.env)
   const originalCwd = process.env.INIT_CWD || process.cwd()
   const args = getCliArgs(process.argv)
 
@@ -147,6 +152,7 @@ async function main(): Promise<void> {
                       ? argv.password
                       : undefined,
                 accessGateCredential: inheritedAccessGateCredential ?? undefined,
+                webAssetsDir: inheritedWebAssetsDir ?? undefined,
               },
               hostedBaseUrl,
               shouldOpen: argv.open,

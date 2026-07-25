@@ -2161,3 +2161,77 @@ fallback, timeout widening, retry, browser fixture, full gate, manual walkthroug
 scope. The worker must stop after focused CLI tests, CLI typecheck, scoped formatting/lint, diff check, mutation
 evidence, one implementation record, and a code/test commit. Full gates remain stopped until independent review
 accepts 6.3d.
+
+#### P5.6d nested worktree Web asset handoff candidate: 2026-07-26 Asia/Shanghai
+
+The implementation keeps one runtime-owned physical root across every child bootstrap:
+
+```text
+parent startServer
+  -> resolve + validate webAssetsDir once
+  -> WorktreeInstanceManager(webAssetsDir)
+       |-- worker -> checked WorktreeServerWorkerData.webAssetsDir
+       |             -> buildWorktreeServerStartOptions
+       |             -> child startServer(webAssetsDir)
+       `-- process -> OPENSPECUI_INTERNAL_WORKTREE_WEB_ASSETS_DIR
+                     -> CLI consumes + deletes private env
+                     -> child startServer(webAssetsDir)
+                     -> nested Manager(webAssetsDir)
+```
+
+`webAssetsDir` is required in Manager launch options and worker data. The worker runtime validator rejects an empty
+or absent root. The process launch plan deletes any inherited value before setting the parent's resolved root; CLI
+startup consumes and deletes it before starting the Server. No CLI option, argv value, target-owned config, target
+worktree lookup, generated-output fallback, Access Gate change, or worker/process protocol outside this private
+handoff was added.
+
+Both existing real child fixtures now create one temporary directory containing a minimal `index.html`. Process and
+worker use different marker text, reach authenticated health, then fetch `/` and assert the exact marker. This proves
+the child serves the supplied physical root rather than merely finding some local generated output. The full focused
+file passed in the main checkout:
+
+```text
+pnpm --filter openspecui exec vitest run src/worktree-instance-manager.test.ts --no-file-parallelism
+  PASS: 1 file / 19 tests
+```
+
+Clean-checkout proof used detached worktree `/tmp/openspecui-6.3d-clean.4HqJlM` at `2674688`, applied only the five
+CLI production/test paths, and asserted both `packages/web/dist` and `packages/cli/web` were absent. An offline, script-disabled frozen install exited zero; it emitted only the expected warning that the absent `dist-ssg` could not
+provide its optional bin. The same complete fixture then passed `1` file / `19` tests in `6.77s`. The temporary
+worktree was removed after the run.
+
+Two temporary production mutations proved the exact handoffs:
+
+```text
+worker mutation:
+  buildWorktreeServerStartOptions -> webAssetsDir: ''
+  pnpm --filter openspecui exec vitest run src/worktree-instance-manager.test.ts \
+    -t "starts the production worker child with the exact inherited Gate and Web asset root" \
+    --no-file-parallelism
+  RED: getWebAssetsDir -> startServer -> runWorktreeServerWorker
+       Error: Web assets not found. Make sure to build the web package first.
+
+process mutation:
+  consumeWorktreeProcessWebAssetsDir -> discard valid private value and return ''
+  pnpm --filter openspecui exec vitest run src/worktree-instance-manager.test.ts \
+    -t "starts a process child with the private Gate and exact Web asset root" \
+    --no-file-parallelism
+  RED: child stderr getWebAssetsDir -> startServer -> coordinateStartCommandBrowserTarget
+       Error: Web assets not found. Make sure to build the web package first.
+       parent fixture then reported Worktree server exited before becoming ready.
+```
+
+Each mutation changed only the named handoff, failed its corresponding real child fixture, and was restored before
+the full green replay. Final focused gates passed:
+
+```text
+CLI worktree fixture     1 file / 19 tests passed
+CLI typecheck            passed
+scoped Prettier          passed
+scoped Oxlint            passed; 0 warnings / 0 errors
+scoped git diff --check  passed
+```
+
+Checkpoint 6.3d is complete as a focused candidate. Checkpoint 6.3 remains open for independent acceptance followed
+by one authorized full local replay. No full unit/browser gate, PR update, manager walkthrough, push, merge, archive,
+release, or changeversion action was performed.

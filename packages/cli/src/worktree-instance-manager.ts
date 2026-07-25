@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Own reusable worktree Server instances and their readiness lifecycle.
- * 2. Select worker-thread or process bootstrap without exposing credentials through argv or URLs.
- * 3. Propagate one parent Access Gate through child launch, health readiness, and reuse checks.
+ * 2. Select worker-thread or process bootstrap without exposing private runtime inputs through argv or URLs.
+ * 3. Propagate one parent Access Gate and resolved Web asset root through child launch and readiness.
  * 4. Preserve nested worker handoff delegation and deterministic child teardown.
  *
  * Original request (2026-07-24): "Propagate the exact parent Access Gate into worktree Servers."
+ * Delivery correction (2026-07-26): nested worktree Servers reuse the parent runtime's Web assets.
  */
 import { findAvailablePort } from '@openspecui/server'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -27,6 +28,7 @@ import type {
 import {
   WORKTREE_ACCESS_GATE_CREDENTIAL_ENV,
   WORKTREE_SERVER_WORKER_KIND,
+  WORKTREE_WEB_ASSETS_DIR_ENV,
 } from './worktree-server-worker'
 import {
   isWorktreeHandoffRequestMessage,
@@ -55,6 +57,7 @@ interface WorktreeInstanceManagerOptions {
   createWorker?: WorktreeServerWorkerFactory
   readinessTimeoutMs?: number
   preferredPortStart?: number
+  webAssetsDir: string
   accessGateCredential?: AccessGateCredential | null
 }
 
@@ -200,10 +203,13 @@ function createNodeCliCommandPlan(options: {
   projectDir: string
   port: number
   cwd: string
+  webAssetsDir: string
   accessGateCredential?: AccessGateCredential | null
 }): WorktreeServerProcessLaunchPlan {
   const env = { ...process.env }
   delete env[WORKTREE_ACCESS_GATE_CREDENTIAL_ENV]
+  delete env[WORKTREE_WEB_ASSETS_DIR_ENV]
+  env[WORKTREE_WEB_ASSETS_DIR_ENV] = options.webAssetsDir
   if (options.accessGateCredential) {
     env[WORKTREE_ACCESS_GATE_CREDENTIAL_ENV] = options.accessGateCredential.credential
   }
@@ -227,6 +233,7 @@ export function createWorktreeServerLaunchPlan(options: {
   runtimeDir: string
   projectDir: string
   port: number
+  webAssetsDir: string
   createWorker?: WorktreeServerWorkerFactory
   accessGateCredential?: AccessGateCredential | null
 }): WorktreeServerLaunchPlan {
@@ -234,6 +241,7 @@ export function createWorktreeServerLaunchPlan(options: {
     kind: WORKTREE_SERVER_WORKER_KIND,
     projectDir: options.projectDir,
     port: options.port,
+    webAssetsDir: options.webAssetsDir,
     ...(options.accessGateCredential ? { accessGateCredential: options.accessGateCredential } : {}),
   }
   const workspace = resolveLocalCliWorkspace(options.runtimeDir)
@@ -260,6 +268,7 @@ export function createWorktreeServerLaunchPlan(options: {
     projectDir: options.projectDir,
     port: options.port,
     cwd: options.projectDir,
+    webAssetsDir: options.webAssetsDir,
     accessGateCredential: options.accessGateCredential,
   })
 }
@@ -605,6 +614,7 @@ export function createWorktreeInstanceManager(
         runtimeDir: options.runtimeDir,
         projectDir: targetPath,
         port,
+        webAssetsDir: options.webAssetsDir,
         createWorker: options.createWorker,
         accessGateCredential: options.accessGateCredential,
       })

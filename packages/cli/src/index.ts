@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
- * 1. Start the embedded Server with one resolved Project Web/preview asset root.
+ * 1. Start the embedded Server and its worktree children with one resolved Project Web/preview asset root.
  * 2. Resolve one Access Gate credential and deliver it to Server, private browser, and worktree children.
  * 3. Keep inherited child credentials silent while coordinating deterministic runtime teardown.
  * 4. Bootstrap only worker-thread payloads owned by the worktree Server protocol.
@@ -8,6 +8,7 @@
  * Original request (2026-07-15): "新增一个 --auth 或者 --password。"
  * Delivery correction (2026-07-24): one resolved credential must reach Server and Project Web.
  * Review correction (2026-07-26): explicit Web asset roots are presence-sensitive.
+ * Delivery correction (2026-07-26): nested worktree Servers inherit the resolved parent asset root.
  */
 import {
   generateAccessGateCredential,
@@ -319,6 +320,7 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
       currentServerUrl: server.url,
       runtimeDir: __dirname,
       createWorker: createWorktreeServerWorker,
+      webAssetsDir,
       accessGateCredential: accessGate,
     })
   }
