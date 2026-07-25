@@ -83,6 +83,12 @@ Focused reviewer acceptance is a hard predecessor of the next package and every 
 - [x] 6.5 Audited the current publishable surface against the existing 6.x, Hosted, static References, Config, loading, and Summary-v2 changesets; every changed published package/behavior is covered and no duplicate changeset is required. App remains private.
 - [ ] 6.6 PR #207 head `5dfff29` passed Changeset Gate and CI Scope, then Fast Gate run `30168547796` rejected two real worktree child fixtures because the already resolved parent `webAssetsDir` was not handed to process/worker children. Browser shards were skipped behind Fast Gate. Accept 6.3d, replay 6.3 once, update the PR, and require fresh checks.
 
+Current 6.3 gate state (2026-07-26): format, lint, all typechecks, pre-Web unit packages, CLI `68/68`,
+xterm component browser `60 passed / 1 skipped`, and Web component browser `12/12` pass. The required full Web
+unit package remains open after resource-pressure attempts produced changing timeout owners; the exact 13 affected
+files pass `194/194`. No timeout was widened and no PR update is authorized until one normal-load Web package run
+passes. Exact evidence and the stop-loss rule are recorded in `implementation.md`.
+
 ### Manager-only final walkthrough ledger
 
 - [ ] 6.7 Gated auto-launch: fragment credential binds to its launch backend, reaches health/RPC/WS, and is removed from visible URL/persisted tabs.

@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
 1. Record the pre-apply review baseline and work-package ownership for delivery-gap closure.
 2. Define the evidence order that prevents recurrence of mock-only or terminal-only proof.
 3. Preserve external loading-change ownership and manager-only final walkthroughs.
@@ -2329,3 +2329,46 @@ can no longer leave downstream Manager fixtures green. No production behavior be
 test injection, public CLI flag, target-owned asset lookup, fabricated context, full unit/browser gate, PR update,
 manager walkthrough, push, merge, archive, release, or changeversion action was added. Checkpoint 6.3d is accepted;
 6.3 remains open for one corrected-head full local replay, and 6.6 remains open for fresh PR checks.
+
+#### P5.6 corrected-head replay blocked by Web suite pressure: 2026-07-26 Asia/Shanghai
+
+The corrected-head replay passed format, lint, all 15 workspace typechecks, the sequential unit packages before
+Web, and all focused 6.3d evidence. The first `pnpm test:ci` attempt then failed inside the Web package with a broad
+timeout fanout rather than a changed-owner assertion:
+
+```text
+Web unit attempt 1  -> 13 failed / 140 passed files
+                    -> 71 failed / 904 passed tests
+                    -> 1 Vitest fork failed to start before its test file
+```
+
+The failures spanned translation, Select, SSG, Config, Dashboard, Git transitions, OPSX, Settings, Terminal, and
+View Transition fixtures. During that attempt another repository was running a high-concurrency Vitest suite on the
+same host. After that process exited, the exact 13 affected Web files passed `13/13` files and `194/194` tests in
+`11.04s`. No file under `packages/web` changed in `5dfff29..b4249e5`.
+
+Two bounded Web-package replays did not produce a stable product red:
+
+```text
+Web unit attempt 2  -> 153/154 files and 988/989 tests passed
+                    -> only the pending-A-to-B OPSX generation case timed out at 5s
+Web unit attempt 3  -> 152/154 files and 987/989 tests passed
+                    -> only SSG entry import timed out at 20s
+                    -> one unrelated Settings translation case timed out at 5s
+```
+
+The OPSX and SSG files had passed in the exact affected-file replay; the failing owner changed between the two full
+replays. No timeout, retry policy, Web production code, or test assertion was changed. The portions that had not run
+after Web stopped were executed once and passed:
+
+```text
+CLI unit                 13 files / 68 tests passed
+xterm component browser   6 files / 60 passed / 1 skipped
+Web component browser     4 files / 12 tests passed
+```
+
+This is environment/suite-pressure evidence, not permission to call the complete local gate green. Checkpoint 6.3
+and PR checkpoint 6.6 remain open, and the candidate commit series remains unpushed. After host pressure subsides, rerun
+only the Web unit package once. If the same named case then fails under normal load, reopen that exact test owner;
+if it passes, record the completed 6.3 evidence, update PR #207, and require fresh remote checks. Do not repeat the
+already-green packages or widen timeouts merely to obtain a green aggregate.
