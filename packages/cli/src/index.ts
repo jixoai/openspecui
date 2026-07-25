@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
- * 1. Start the embedded Server with packaged Project Web/preview assets.
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * 1. Start the embedded Server with one resolved Project Web/preview asset root.
  * 2. Resolve one Access Gate credential and deliver it to Server, private browser, and worktree children.
  * 3. Keep inherited child credentials silent while coordinating deterministic runtime teardown.
  * 4. Bootstrap only worker-thread payloads owned by the worktree Server protocol.
@@ -19,7 +19,7 @@ import {
 } from '@openspecui/server'
 import type { Hono } from 'hono'
 import { existsSync, readFileSync, statSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads'
 import { getWebAssetsDirCandidates } from './web-assets.js'
@@ -51,6 +51,8 @@ export interface CLIOptions {
   enableWatcher?: boolean
   /** Extra CORS origins to allow for hosted app mode */
   corsOrigins?: string[]
+  /** Physical Web asset root used by both the public shell and built file-preview entrypoints. */
+  webAssetsDir?: string
   /**
    * Generate a high-entropy Bearer credential and protect the whole backend with it. Prints the
    * complete Authorization header once. Mutually exclusive with `password`.
@@ -131,9 +133,10 @@ export function createWorktreeServerWorker(options: CreateWorktreeServerWorkerOp
   })
 }
 
-function getWebAssetsDir(): string {
-  for (const candidate of getWebAssetsDirCandidates(__dirname)) {
-    if (existsSync(candidate)) {
+function getWebAssetsDir(configuredDir?: string): string {
+  const candidates = configuredDir ? [resolve(configuredDir)] : getWebAssetsDirCandidates(__dirname)
+  for (const candidate of candidates) {
+    if (existsSync(candidate) && statSync(candidate).isDirectory()) {
       return candidate
     }
   }
@@ -141,13 +144,7 @@ function getWebAssetsDir(): string {
   throw new Error('Web assets not found. Make sure to build the web package first.')
 }
 
-function getPreviewAssetsDir(): string {
-  return getWebAssetsDir()
-}
-
-function setupStaticFiles(app: Hono): void {
-  const webDir = getWebAssetsDir()
-
+function setupStaticFiles(app: Hono, webDir: string): void {
   const mimeTypes: Record<string, string> = {
     html: 'text/html',
     js: 'application/javascript',
@@ -276,6 +273,7 @@ function printAccessGateBanner(credential: AccessGateCredential): void {
 
 export async function startServer(options: CLIOptions = {}): Promise<RunningServer> {
   const { projectDir = process.cwd(), port = 3100, enableWatcher = true, corsOrigins } = options
+  const webAssetsDir = getWebAssetsDir(options.webAssetsDir)
   let worktreeManager: WorktreeInstanceManager | null = null
   const gitWorktreeHandoff = options.gitWorktreeHandoff ?? {
     ensureWorktreeServer: async ({ targetPath }: { targetPath: string }) => {
@@ -295,11 +293,11 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
       port,
       enableWatcher,
       corsOrigins,
-      previewAssetsDir: getPreviewAssetsDir(),
+      previewAssetsDir: webAssetsDir,
       gitWorktreeHandoff,
       accessGate,
     },
-    setupStaticFiles
+    (app) => setupStaticFiles(app, webAssetsDir)
   )
 
   if (accessGate && !options.accessGateCredential) {

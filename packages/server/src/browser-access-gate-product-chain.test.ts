@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (created 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
  * 1. Cross real CLI private Direct/App launch and the public Project Web shell.
  * 2. Cross App locator binding, iframe bootstrap, and child-style fragment consumption/removal.
  * 3. Terminate after protected tRPC HTTP, tRPC subscription, and PTY auth-first succeed.
+ * 4. Supply a physical minimal Web root without relying on generated workspace assets.
  *
  * Original request (2026-07-24): "Add the strongest feasible terminating gated Direct/App fixture."
+ * Delivery correction (2026-07-25): the clean-CI fixture must own its physical Web assets.
  */
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -132,6 +134,13 @@ describe('gated Direct/App Project Web product chain', () => {
   it('terminates after private launch, public shell, HTTP, subscription, and PTY auth-first', async () => {
     const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-gated-product-chain-'))
     tempDirs.push(projectDir)
+    const webAssetsDir = join(projectDir, 'web-assets')
+    await mkdir(webAssetsDir)
+    await writeFile(
+      join(webAssetsDir, 'index.html'),
+      '<!doctype html><html><body data-product-chain-shell></body></html>',
+      'utf8'
+    )
     const port = await findAvailablePort(nextPreferredPort, 100)
     nextPreferredPort = port + 1
     let launchCredential: string | null = null
@@ -143,6 +152,7 @@ describe('gated Direct/App Project Web product chain', () => {
       port,
       enableWatcher: false,
       password: 'product-chain-secret',
+      webAssetsDir,
       onBrowserLaunchCredential: (credential) => {
         launchCredential = credential
       },
@@ -164,6 +174,7 @@ describe('gated Direct/App Project Web product chain', () => {
     const publicShell = await fetch(server.url)
     const rejectedHealth = await fetch(`${server.url}/api/health`)
     expect(publicShell.status).toBe(200)
+    expect(await publicShell.text()).toContain('data-product-chain-shell')
     expect(rejectedHealth.status).toBe(401)
 
     const directCredentialOwner = await import('../../web/src/lib/access-gate-credential')
